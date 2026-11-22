@@ -48,11 +48,10 @@ async function createArchiveFixture() {
     "logs/cumulative/harvester.log": Array.from({ length: 20 }, (_, index) => JSON.stringify({
       context: { runtimeSessionId: index % 2 === 0 ? RUNTIME_SESSION_ID : "a1e2c3d4-e5f6-4789-8123-123456789abc" },
       data: { message: index % 2 === 0 ? "TESTNET_STRUCTURED_EVIDENCE" : "LIVE_STRUCTURED_SECRET" },
-    })).join("\\n") + "\\n",
+    })).join("\n") + "\n",
     "data/testnet/harvester.db": "sqlite main file",
     "data/testnet/harvester.db-wal": "sqlite wal evidence",
     "data/testnet/harvester.db-shm": "sqlite shm evidence",
-    "data/production/harvester.db": "LIVE PRODUCTION SENTINEL MUST NEVER BE ARCHIVED",
     "data/production/harvester.db": "LIVE PRODUCTION SENTINEL MUST NEVER BE ARCHIVED",
     "data/operational-state/facts.jsonl": "operational facts",
     "recovery-facts/facts.jsonl": Array.from({ length: 49 }, (_, sequence) => JSON.stringify({
@@ -99,7 +98,7 @@ test("names each local snapshot from its UTC archive time and unique ID", () => 
   )
 })
 
-test("archives the final cumulative tails and newest session with complete data trees", async (t) => {
+test("archives only completed TESTNET session evidence and excludes LIVE data", async (t) => {
   const fixture = await createArchiveFixture()
   t.after(() => rm(fixture.packageDirectory, { recursive: true, force: true }))
   let publishedDirectory
@@ -115,7 +114,6 @@ test("archives the final cumulative tails and newest session with complete data 
       assert.equal(manifest.snapshotType, "selected-log-evidence", "the manifest must identify this as a selected-log evidence snapshot")
       assert.deepEqual(manifest.includedDirectories, ["logs", "data", "recovery-facts"], "the manifest must declare all included source trees")
       assert.deepEqual(manifest.excludedPaths, ["data/production", "logs/cumulative/terminal.log"], "The manifest must list every production/unclassified source exclusion.")
-      assert.deepEqual(manifest.excludedPaths, ["data/production"], "the manifest must explicitly record that production data is excluded")
       assert.deepEqual(manifest.logSelection, { cumulative: "final-5-percent-of-selected-TESTNET-session-structured-records", sessions: "newest-completed-TESTNET-session-only; gzip-compressed" }, "the manifest must describe the reduced log selection")
       assert.equal(manifest.logRuntimeSessionId, RUNTIME_SESSION_ID, "The archive manifest must identify the completed TESTNET log session.")
       assert.equal(manifest.dataCommitHash, DATA_COMMIT_HASH, "the archive manifest must identify the last committed recovery-facts digest")
