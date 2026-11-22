@@ -21,6 +21,20 @@ import { makeConservativeTradingEngine } from "../../src/use-cases/conservative-
 import { updateTradingAccounting as applyTradingAccounting } from "../../src/use-cases/update-trading-accounting.js"
 import { validateCancellationEligibility } from "../../src/domain/orders/validate-cancellation-eligibility.js"
 
+async function waitForDeferred({ promise, label, timeoutMs = 10_000 }) {
+  let timeout
+  try {
+    return await Promise.race([
+      promise,
+      new Promise((_, reject) => {
+        timeout = setTimeout(() => reject(new Error(`Timed out waiting for ${label}`)), timeoutMs)
+      }),
+    ])
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
 const createDeferred = () => {
   let resolve
   let reject
@@ -865,7 +879,7 @@ asset: fixture.market.baseAsset }),
     }),
   });
   const placingRecoveryOrders = engine.evaluateLatest({ symbol: "ZROUSDT" });
-  const pendingSellOrder = await pendingSellStarted.promise;
+  const pendingSellOrder = await waitForDeferred({\n    promise: pendingSellStarted.promise,\n    label: "initial recovery SELL submission",\n  });
   assert.equal(
     submittedIntents.some((intent) => intent.side === "BUY" && intent.clientOrderId !== initialBuy.clientOrderId),
     false,
@@ -913,7 +927,7 @@ async function completeDeferredRecoverySellCancellation({ fixture, secondBuy, pe
       status: "FILLED",
     }),
   });
-  await cancelStarted.promise;
+  await waitForDeferred({\n    promise: cancelStarted.promise,\n    label: "recovery SELL cancellation after partial BUY fill",\n  });
   assert.deepEqual(
     cancellations,
     [pendingSellOrder.brokerOrderId],
