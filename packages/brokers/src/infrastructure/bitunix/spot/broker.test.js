@@ -498,34 +498,63 @@ test("Bitunix Spot placement reports unknown after a dispatched transport failur
   assert.match(result.errors[0].message, /placement response timeout/i)
 })
 
-test("Bitunix Spot placement reports confirmed acceptance if order-detail reconciliation fails", async () => {
-  const { broker } = createBroker({
+test("Bitunix Spot accepted LIVE placement remains successful when order-detail signing is rejected", async () => {
+  const detailError = Object.assign(new Error("result.api.parameter.sign.illegal"), {
+    code: "BITUNIX_REST_EXCHANGE_REJECTED",
+    exchangeCode: "100005",
+    kind: "exchange",
+    status: 200,
+  })
+  const { broker, calls } = createBroker({
     responses: {
       "/api/spot/v1/order/place_order": {
-        orderId: "125",
-        symbol: "BTCUSDT",
+        orderId: "2124329325141426176",
+        clientId: null,
+        symbol: "HYPEUSDT",
         side: 2,
         type: 1,
-        volume: "1",
-        price: "100",
-        placeStatus: "1",
+        volume: "0.366",
+        price: "30",
+        placeStatus: 1,
+        placeCode: 0,
+        placeMsg: "成功",
       },
-      "/api/spot/v1/order/detail": new Error("order detail unavailable"),
+      "/api/spot/v1/order/detail": detailError,
     },
   })
 
   const result = await broker.createOrder({
-    symbol: "BTCUSDT",
+    symbol: "HYPEUSDT",
     side: "BUY",
     type: "LIMIT",
-    quantity: "1",
-    price: "100",
+    quantity: "0.366",
+    price: "30",
   })
 
-  assert.equal(result.ok, false)
-  assert.equal(result.data.orderId, "125")
-  assert.equal(result.mutationOutcome, "CONFIRMED")
-  assert.match(result.errors[0].message, /order detail unavailable/i)
+  assert.equal(result.ok, true, "a definitive successful placement acknowledgement must remain a successful createOrder result")
+  assert.equal(result.data.orderId, "2124329325141426176", "the exact string order ID must survive the failed follow-up read")
+  assert.equal(result.data.placeStatus, 1, "the original exchange placement status must be preserved")
+  assert.equal(result.data.placeCode, 0, "the original exchange placement code must be preserved")
+  assert.equal(result.mutationOutcome, "CONFIRMED", "detail-read failure must not downgrade confirmed placement")
+  assert.deepEqual(result.reconciliation, {
+    status: "UNAVAILABLE",
+    source: "PLACEMENT_ACKNOWLEDGEMENT",
+    endpoint: "/api/spot/v1/order/detail",
+    error: {
+      code: "BITUNIX_REST_EXCHANGE_REJECTED",
+      exchangeCode: "100005",
+      kind: "exchange",
+      status: 200,
+    },
+  }, "the failed detail lookup must remain visible as structured reconciliation metadata")
+  assert.deepEqual(result.errors, [], "a post-acceptance read failure must not make the placement result unsuccessful")
+  assert.equal(calls.length, 2, "one placement and one detail read are allowed; no request is retried")
+  assert.equal(calls[0].method, "POST")
+  assert.equal(calls[0].path, "/api/spot/v1/order/place_order")
+  assert.equal(calls[1].method, "GET")
+  assert.equal(calls[1].path, "/api/spot/v1/order/detail")
+  assert.equal(calls[1].options.authenticated, true)
+  assert.deepEqual(calls[1].options.queryParams, { orderId: "2124329325141426176" })
 })
 
 test("Bitunix Spot createOrder classifies non-JSON HTTP failures through the real REST client", async () => {
@@ -2899,4 +2928,16 @@ test("Bitunix Spot createOrder completes signed REST placement and order-detail 
   assert.equal(requests[1].url.pathname, "/api/spot/v1/order/detail")
   assert.equal(requests[1].url.searchParams.get("orderId"), "12345678901234567890")
   assert.equal(requests[1].options.method, "GET")
+  assert.equal(requests[1].options.headers["api-key"], "test-api-key")
+  assert.equal(
+    requests[1].options.headers.sign,
+    createRestSignature({
+      nonce: "test-nonce-1",
+      timestamp: "1795262400000",
+      apiKey: "test-api-key",
+      secretKey: "test-api-secret",
+      queryParams: { orderId: "12345678901234567890" },
+    }),
+    "GET order-detail signature must cover the exact string orderId query parameter",
+  )
 })
