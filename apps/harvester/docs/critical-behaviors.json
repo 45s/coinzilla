@@ -774,7 +774,7 @@
         {
           "path": "src/infrastructure/journal/project-harvester-journal-closing-open-orders.test.js",
           "name": "projects a CLOSING open-order snapshot in an active started Journal session",
-          "kind": "integration"
+          "kind": "normal"
         },
         {
           "path": "src/application/events/lifecycle-event-dtos.test.js",
@@ -794,6 +794,11 @@
         {
           "path": "src/infrastructure/journal/project-harvester-journal-closing-open-orders.test.js",
           "name": "rejects a CLOSING open-order snapshot after the Journal session has stopped",
+          "kind": "failure"
+        },
+        {
+          "path": "src/bootstrap/account/create-account-snapshot-manager.closing.test.js",
+          "name": "fails the CLOSING open-order audit when its Journal flush is not durable",
           "kind": "failure"
         }
       ],
