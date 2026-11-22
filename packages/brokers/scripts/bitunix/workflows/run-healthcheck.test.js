@@ -707,6 +707,10 @@ test("explicit cancellation mode runs one cancel before the existing order-read 
         calls.push("getOpenOrders")
         return { ok: true, data: [], errors: [] }
       },
+      getOrder: async ({ symbol, orderId }) => {
+        calls.push(`getOrder:${symbol}:${orderId}`)
+        return { ok: true, data: { id: orderId, symbol, status: "CANCELED" }, errors: [] }
+      },
       disconnect: async () => calls.push(mutation ? "disconnect-mutation" : "disconnect-read"),
     }
   }
@@ -719,10 +723,13 @@ test("explicit cancellation mode runs one cancel before the existing order-read 
     brokerFactory,
     publishDiagnostics: createPublisher({ events: [], publishedReports }),
   })
-  assert.deepEqual(calls, ["connect-mutation", "cancel", "disconnect-mutation", "connect-read", "getOpenOrders", "disconnect-read"])
+  assert.deepEqual(calls, ["connect-mutation", "cancel", "disconnect-mutation", "connect-read", "getOpenOrders", "getOrder:HYPEUSDT:2124329325141426176", "disconnect-read"])
   const cancellation = publishedReports[0].results.find((entry) => entry.operation === "Broker API cancelOrder")
   assert.equal(cancellation.status, "passed")
   assert.equal(cancellation.response.cancellationOutcome, "CONFIRMED")
+  const finalDetail = publishedReports[0].results.find((entry) => entry.operation === "Broker API getOrder after cancellation")
+  assert.equal(finalDetail.request.arguments[0].orderId, "2124329325141426176")
+  assert.equal(finalDetail.response.data.status, "CANCELED")
   assert.equal(exitCode, 0)
 })
 
