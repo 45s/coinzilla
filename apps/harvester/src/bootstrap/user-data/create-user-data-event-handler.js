@@ -348,25 +348,6 @@ async function processQueuedUserDataEvent({
   return orderUpdate.reevaluateSymbol
 }
 
-function notifyMonitoringObserver({ event, onMonitoringEvent, logger }) {
-  if (typeof onMonitoringEvent !== "function") {
-    return
-  }
-  try {
-    onMonitoringEvent({ event })
-  } catch (error) {
-    try {
-      logger?.warn?.({
-        message: "exchange account monitoring observer failed",
-        eventType: event.eventType ?? "UNKNOWN",
-        errorName: error?.name ?? "Error",
-      })
-    } catch {
-      // Monitoring diagnostics must not affect user-data processing.
-    }
-  }
-}
-
 function handleUserDataQueueFailure({ error, state, logger }) {
   state.accountingFailed = true
   state.ready = false
@@ -444,7 +425,6 @@ export function createUserDataEventHandler({
   cancelOwnedBuysAfterAccountingFailure,
   resumeDeferredStrategyEvaluations,
   onSafetyBlockerRaised,
-  onMonitoringEvent,
 } = {}) {
   return ({ event } = {}) => {
     const tradingEngine = getTradingEngine()
@@ -493,11 +473,6 @@ export function createUserDataEventHandler({
         resumeDeferredStrategyEvaluations,
         tradingEngine,
         reevaluateSymbol,
-        logger,
-      }))
-      .finally(() => notifyMonitoringObserver({
-        event,
-        onMonitoringEvent,
         logger,
       }))
     state.eventQueue = task
