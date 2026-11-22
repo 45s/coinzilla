@@ -42,7 +42,7 @@ export class AppComponent {
   ] as const;
 
   readonly themeOptions = THEMES;
-  readonly theme = signal<DashboardTheme>(this.readSavedTheme());
+  readonly theme = signal<DashboardTheme>('current');
   readonly activePage = signal<DashboardPage>('overview');
   readonly activeLabel = computed(() =>
     this.navigationItems.find((item) => item.page === this.activePage())?.label ?? 'Overview',
@@ -53,6 +53,8 @@ export class AppComponent {
   });
 
   constructor() {
+    this.theme.set(this.readSavedTheme());
+
     effect(() => {
       const selectedTheme = this.theme();
       if (typeof document !== 'undefined') {
