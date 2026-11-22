@@ -94,6 +94,7 @@ const appConfig = {
       pairs: {
     DOGEUSDT: {
       enabled: true,
+      enableVolatilityProtection: true,
       investment: 1000,
       orderQuantity: 1,
       keepQuantity: 0.1,
@@ -11491,3 +11492,68 @@ test("failed owned BUY cancellation leaves the emergency BUY gate active and rep
   assert.equal(harness.engine.getActiveOrders().some((order) => order.side === "BUY"), true, "The unresolved owned BUY must remain visible for reconciliation.")
   assert.equal(harness.pauses.length, 0, "The emergency BUY-only pause must not convert an unresolved cancellation into a broad strategy pause.")
 })
+
+
+test("does not apply CG volatility protection to markets owned only by RS", async () => {
+  const rsOnlyMarketSymbol = "LINEAUSDT";
+  const rsOnlyMarketSnapshot = {
+    ok: true,
+    data: {
+      status: {
+        isReady: true,
+        isFresh: true,
+        reason: null,
+        lastClosedCandleOpenTime: 60_000,
+        observedAt: 60_000,
+      },
+      metrics: {
+        openTime: 60_000,
+        atr: "1",
+        natr: "2",
+        referenceNatr: "1",
+        volatilityRatio: "2",
+      },
+    },
+  };
+  const configuration = structuredClone(appConfig);
+  configuration.strategies[StrategyId.RECOVERY_SELLER] = {
+    enabled: true,
+    pairs: {
+      [rsOnlyMarketSymbol]: {
+        enabled: true,
+        enableVolatilityProtection: false,
+      },
+    },
+  };
+  const emittedSystemLogs = [];
+  const harness = await createHarness({
+    appConfig: configuration,
+    getVolatilityData: () => rsOnlyMarketSnapshot,
+    logger: {
+      system: (record) => emittedSystemLogs.push(record),
+    },
+  });
+
+  const result = await harness.engine.processVolatilitySnapshot({
+    symbol: rsOnlyMarketSymbol,
+    snapshot: rsOnlyMarketSnapshot,
+  });
+
+  assert.equal(result.ok, true, "A market without CG ownership must be ignored by the CG volatility workflow.");
+  assert.equal(result.data.skipped, true, "The CG engine must skip volatility snapshots for RS-only markets.");
+  assert.equal(
+    result.data.reason,
+    "VOLATILITY_PROTECTION_DISABLED_FOR_PAIR",
+    "A market absent from the effective CG pair map must be treated as volatility protection disabled.",
+  );
+  assert.equal(
+    harness.engine.getVolatilityProtectionState({ symbol: rsOnlyMarketSymbol }),
+    undefined,
+    "CG must not allocate a volatility state for a market owned only by RS.",
+  );
+  assert.deepEqual(
+    emittedSystemLogs,
+    [],
+    "CG must not emit volatility state-change diagnostics for an RS-only market.",
+  );
+});

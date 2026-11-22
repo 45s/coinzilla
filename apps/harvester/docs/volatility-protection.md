@@ -28,6 +28,7 @@ export const appConfig = {
 
 - `true`: retain the existing protection behavior, including startup warm-up, freshness checks, submission gating and owned-BUY cancellation. The key is mandatory; omission is a configuration error.
 - `false`: skip this pair's volatility state machine, Kline subscription/history warm-up, periodic refresh, volatility submission gate and volatility-triggered BUY cancellation.
+- CG volatility processing requires an explicitly configured CG pair with `enableVolatilityProtection: true`. Shared market-data availability or an RS-only pair does not grant CG volatility ownership; symbols absent from the effective CG pair map are skipped.
 - The setting must be present and must be a JavaScript boolean. Missing keys, `null`, strings and numbers are rejected during config validation with a `ConfigValidationError` containing the offending pair path.
 - The opt-out is strictly scoped to volatility protection. It does not disable market-price/order-book freshness, account-integrity checks, unowned-order blocking, durable intent requirements, exchange filters, shutdown BUY cancellation, or other safety controls.
 - Recovery/accounting behavior is unchanged. No recovery SELL exception is broadened; the normal Conservative recovery-purpose and accounting rules continue to apply.
