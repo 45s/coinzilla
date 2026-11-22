@@ -65,21 +65,47 @@ test("initializes an empty remote with a tracked archives placeholder and pushes
   assert.deepEqual(removed, ["/tmp/archive-init-test"])
 })
 
-test("refuses a non-empty remote without writing or pushing", async () => {
+test("recognizes an existing main branch without modifying the archive repository", async () => {
+  const calls = []
+  let writeCount = 0
+  const removed = []
+  const result = await initializePrivateArchiveRepository({
+    env: { HARVESTER_ARCHIVE_REMOTE: "git@github.com:45s/coinzilla-archive.git" },
+    createTemporaryDirectory: async () => "/tmp/archive-init-test",
+    removeTemporaryDirectory: async (directory) => removed.push(directory),
+    write: async () => { writeCount += 1 },
+    runCommand: async (args) => {
+      calls.push(args)
+      return "abc123 refs/heads/main"
+    },
+  })
+
+  assert.deepEqual(result, {
+    remote: "git@github.com:45s/coinzilla-archive.git",
+    branch: "main",
+    initialized: false,
+    alreadyInitialized: true,
+  })
+  assert.deepEqual(calls, [["ls-remote", "--heads", "git@github.com:45s/coinzilla-archive.git"]])
+  assert.equal(writeCount, 0)
+  assert.deepEqual(removed, ["/tmp/archive-init-test"])
+})
+
+test("refuses a remote with refs but no main branch", async () => {
   const calls = []
   let writeCount = 0
   await assert.rejects(
     initializePrivateArchiveRepository({
-      env: { HARVESTER_ARCHIVE_REMOTE: "git@github.com:45s/harvester-archives.git" },
+      env: { HARVESTER_ARCHIVE_REMOTE: "git@github.com:45s/coinzilla-archive.git" },
       createTemporaryDirectory: async () => "/tmp/archive-init-test",
       removeTemporaryDirectory: async () => {},
       write: async () => { writeCount += 1 },
       runCommand: async (args) => {
         calls.push(args)
-        return "abc123 refs/heads/main"
+        return "abc123 refs/heads/develop"
       },
     }),
-    /repository is not empty/,
+    /does not have the expected main branch/,
   )
   assert.equal(calls.length, 1)
   assert.equal(writeCount, 0)
