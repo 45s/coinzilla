@@ -489,13 +489,14 @@
       "id": "PERSISTENCE_RESTART_SAFETY_BOUNDARY",
       "title": "Operational State Store integrity and offline crash/restart projection",
       "sourceModules": [
-        "src/infrastructure/operational-state/create-file-operational-state-store.js",
+        "src/infrastructure/operational-state/create-file-store.js",
         "src/use-cases/restore-harvester-operational-state.js",
-        "src/infrastructure/operational-state/project-harvester-operational-state.js",
+        "src/infrastructure/operational-state/project-harvester.js",
         "src/infrastructure/operational-state/helpers/operational-state-fact-schema.js",
         "src/infrastructure/operational-state/helpers/validate-operational-state-recovery-seller-facts.js",
-        "src/infrastructure/operational-state/operational-state-fact-validation.js",
-        "src/infrastructure/operational-state/operational-state-record-validation.js"
+        "src/infrastructure/operational-state/fact-validation.js",
+        "src/infrastructure/operational-state/record-validation.js",
+        "src/infrastructure/operational-state/resolve-directory.js"
       ],
       "integrationRequired": true,
       "tests": [
@@ -1059,7 +1060,7 @@
       }
     },
     {
-      "path": "src/infrastructure/operational-state/create-file-operational-state-store.js",
+      "path": "src/infrastructure/operational-state/create-file-store.js",
       "baseline": {
         "lines": 96.07,
         "branches": 89.34,
@@ -1071,13 +1072,13 @@
         "functions": 95
       },
       "latestObserved": {
-        "lines": 96.07,
-        "branches": 89.34,
-        "functions": 98.08
+        "lines": 95.1,
+        "branches": 87.86,
+        "functions": 98.25
       }
     },
     {
-      "path": "src/infrastructure/operational-state/project-harvester-operational-state.js",
+      "path": "src/infrastructure/operational-state/project-harvester.js",
       "baseline": {
         "lines": 81.97,
         "branches": 76.39,
@@ -1401,7 +1402,7 @@
       }
     },
     {
-      "path": "src/infrastructure/operational-state/operational-state-fact-validation.js",
+      "path": "src/infrastructure/operational-state/fact-validation.js",
       "baseline": {
         "lines": 97.4,
         "branches": 85.71,
@@ -1413,13 +1414,13 @@
         "functions": 95
       },
       "latestObserved": {
-        "lines": 97.4,
+        "lines": 98.1,
         "branches": 85.71,
         "functions": 100
       }
     },
     {
-      "path": "src/infrastructure/operational-state/operational-state-record-validation.js",
+      "path": "src/infrastructure/operational-state/record-validation.js",
       "baseline": {
         "lines": 99.21,
         "branches": 96.59,
@@ -1435,35 +1436,53 @@
         "branches": 96.59,
         "functions": 100
       }
+    },
+    {
+      "path": "src/infrastructure/operational-state/resolve-directory.js",
+      "baseline": {
+        "lines": 100,
+        "branches": 100,
+        "functions": 100
+      },
+      "minimum": {
+        "lines": 95,
+        "branches": 95,
+        "functions": 95
+      },
+      "latestObserved": {
+        "lines": 100,
+        "branches": 100,
+        "functions": 100
+      }
     }
   ],
   "runtimeScope": {
-    "activeStrategy": "CG_coinGrabber",
+    "activeStrategy": "RS_recoverySeller",
     "active": true,
     "conservativeEnabled": true,
     "aggressiveEnabled": false,
     "recoveryRestorationEnabled": false,
-    "recoverySellerStrategyEnabled": false,
-    "recoverySellerConfiguredPairCount": 0,
+    "recoverySellerStrategyEnabled": true,
+    "recoverySellerConfiguredPairCount": 1,
     "notes": [
-      "The inventory covers the active CG_coinGrabber Conservative execution path.",
-      "CG_coinGrabber Aggressive mode is disabled in the current configuration.",
-      "RS_recoverySeller is disabled and its operator pair map is empty; its inactive modules are not represented as active runtime guarantees.",
+      "The current default configuration enables Recovery Seller with LINEAUSDT routed to TESTNET.",
+      "Conservative remains enabled independently; Conservative restart restoration remains disabled.",
+      "The contract includes 40 critical modules shared with safety/recovery runtime responsibilities; coverage is measured and gated independently from strategy activation.",
       "Process-restart restoration remains disabled; the operational-state crash matrix is offline evidence only."
     ]
   },
   "latestCoverageMeasurement": {
-    "measuredAt": "2026-11-22T01:20:41Z",
-    "branch": "fix/release-1662-readiness",
-    "prHeadSha": "b82868cd1c916698f5369773d2105199033857fa",
-    "workflowRunId": 44970952498,
-    "harvesterJobId": 137050397783,
+    "measuredAt": "2026-11-22T08:21:10Z",
+    "branch": "fix/harvester/rs-operational-state-bootstrap",
+    "prHeadSha": "52ff824b6c0bfe1318e0dea5126c3ca10adf8789",
+    "workflowRunId": 45002232384,
+    "harvesterJobId": 137146078765,
     "aggregate": {
-      "lines": 90.44,
-      "branches": 83.4,
-      "functions": 96.04
+      "lines": 90.45,
+      "branches": 83.45,
+      "functions": 95.95
     },
-    "checkedCriticalModuleCount": 39,
+    "checkedCriticalModuleCount": 40,
     "gatePassed": true
   }
 }

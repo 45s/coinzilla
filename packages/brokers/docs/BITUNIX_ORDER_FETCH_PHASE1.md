@@ -2,7 +2,7 @@
 
 Issue: [#1704](https://github.com/45s/coinzilla/issues/1704)
 
-This phase verifies Spot pending-order discovery and specific-order reads through the existing LIVE read-only healthcheck. It does not place, modify, or cancel orders.
+The read-only phase verifies Spot pending-order discovery and specific-order reads. The explicit one-shot cancellation mode below cancels only the previously approved HYPEUSDT order, records the result, then runs the same read-only order scan.
 
 ## Operator command
 
@@ -12,11 +12,23 @@ Run the existing healthcheck; by default it runs only the order-read workflow. N
 pnpm --filter @coinzilla/brokers bitunix:healthcheck
 ```
 
-For a private local report instead of publishing the sanitized report branch (also order-read only):
+For a private local report instead of publishing the sanitized report branch (read-only only):
 
 ```bash
 pnpm --filter @coinzilla/brokers bitunix:healthcheck --local
 ```
+
+## One-shot cancellation followed by the existing order scan
+
+The default command remains read-only. To perform the explicitly approved cancellation of the existing order and then run the unchanged open-order/detail scan, use:
+
+```bash
+pnpm --filter @coinzilla/brokers bitunix:healthcheck --cancel-existing-order
+```
+
+This mode is interactive-terminal-only and targets exactly `HYPEUSDT / 2124329325141426176`. It creates a mutation-enabled Broker solely for one `cancelOrder({ symbol, orderId })` call, waits for the Broker result (including its exchange detail verification), records the sanitized request/response/error, disconnects that Broker, and then creates the normal read-only Broker for `getOpenOrders()`, `getOrder()` for every discovered open order, and a final `getOrder()` for the approved target ID even if it no longer appears in the open-order list. It does not call `cancelAllOpenOrders()`, does not cancel any other order, and never retries. If cancellation is ambiguous or fails, the script still runs the read-only scan to capture the resulting state; the cancellation failure remains visible and the overall workflow fails. A connection/pre-dispatch failure is recorded as NOT_SENT.
+
+Do not rerun this mode after the one-shot attempt without reviewing its published report. Ordinary `bitunix:healthcheck` remains read-only.
 
 ## Focused versus full diagnostics
 
@@ -31,7 +43,7 @@ The existing account, REST, WebSocket, ping, and user-info diagnostics are **not
 pnpm --filter @coinzilla/brokers bitunix:healthcheck --full-diagnostics
 ```
 
-The `--place-order` workflow retains its broader read-only preflight. No live placement or cancellation is part of the default order-read scan.
+The `--place-order` workflow retains its broader read-only preflight. `--cancel-existing-order` is a separate, explicitly invoked one-shot cancellation workflow and is not part of the default command. No live placement or cancellation is part of the default order-read scan.
 
 ## Order-read sequence
 
@@ -71,16 +83,16 @@ Bitunix documents `POST /api/spot/v1/order/pending/list` with a required symbol.
 - Credentials, signatures, nonces and private user fields are redacted.
 - Pending-order market reads use at most four concurrent requests; results/errors are restored to catalog order. Specific-order detail reads remain sequential.
 - Requests are never automatically retried; a failed market read remains visible and does not suppress other symbols.
-- Live order mutations are disabled in the scan Broker. No placement, cancellation, transfer or withdrawal methods are called.
+- Live order mutations are disabled in the normal scan Broker. Only the explicit `--cancel-existing-order` mode constructs a separate mutation-enabled Broker, and it invokes one `cancelOrder` for the fixed approved identity. No placement, bulk cancellation, transfer or withdrawal methods are called.
 
 ## Diagnostic privacy boundary
 
-- Terminal output is progress and summary only; it must never print raw exchange request/response bodies.
+- Terminal output shows each discovered order as `symbol / orderId` and prints the matching `getOrder` result with that identity; it never prints raw exchange request/response bodies.
 - REST response log events record response shape (type, item count, field names) rather than response values. Free-form exchange and transport messages are withheld.
 - Private REST/WebSocket diagnostic results store structural summaries only. The local diagnostic report is private and created with restrictive file permissions; it is not a substitute for safe logging.
 - Sanitization explicitly redacts balances, locked balances, amounts, fees, wallet/from/to addresses, transaction hashes, withdrawal/deposit identifiers, recipient IDs, phone/email, memos and remarks.
-- The published GitHub report uses a separate strict allowlist and excludes request/response payloads and diagnostic events entirely.
-- Tests assert that realistic account and withdrawal fixtures cannot leak through REST logger events or the diagnostic sanitizer.
+- The published GitHub report uses a separate strict allowlist. For the explicitly approved `Broker API getOpenOrders`, `Broker API getOrder`, `Broker API cancelOrder`, and `Broker API getOrder after cancellation` operations, it includes the sanitized request arguments, normalized response data, and structured errors so the operator can verify each `symbol / orderId` pair and the cancellation outcome. Other diagnostic operations still omit request/response payloads, and diagnostic events remain excluded.
+- Tests assert that realistic account and withdrawal fixtures cannot leak through REST logger events or the diagnostic sanitizer; order-read publication tests prove that symbol/orderId and normalized order fields remain visible while balances, account identifiers, credentials, signatures and non-order diagnostic payloads remain excluded.
 
 ## Regression coverage
 
@@ -94,6 +106,29 @@ The operator's read-only healthcheck report `bitunix-health-20261122T064933913Z.
 
 The operator's accepted HYPEUSDT BUY LIMIT from 2026-11-22 has exchange order ID `2124329325141426176`, quantity `0.366`, price `30` USDT. The healthcheck discovers this ID from pending-order results; it is not supplied to the script.
 
+## Published order-read evidence
+
+The terminal and both local/published report files intentionally show order identity. The published report includes:
+
+- Every order returned by `getOpenOrders()`, including its `symbol` and exchange `orderId` (`id` in the Broker DTO).
+- The exact `getOrder({ symbol, orderId })` arguments for every discovered order.
+- The complete sanitized normalized result and structured errors for each corresponding detail read.
+- Per-operation status and duration.
+
+The current accepted-order identity is `HYPEUSDT / 2124329325141426176`. This explicit publication policy is limited to the order-read operations; broad account diagnostics remain metadata-only.
+
+## Observed live cancellation verification — 2026-11-22
+
+The operator explicitly ran the one-shot cancellation workflow after the open-order discovery and specific-order detail phases had succeeded. The exact published report is [bitunix-health-20261122T092438681Z.json](https://github.com/45s/coinzilla/blob/diagnostics/bitunix-health-20261122T092438681Z/packages/brokers/diagnostics/reports/bitunix-health-20261122T092438681Z.json).
+
+| Operation | Result | Duration | Evidence |
+|---|---:|---:|---|
+| `cancelOrder({ symbol: "HYPEUSDT", orderId: "2124329325141426176" })` | Passed; `CONFIRMED` | 961 ms | Exchange detail reported `CANCELED`, original price `30` USDT, original quantity `0.366` HYPE, executed quantity `0`, remaining quantity `0.366` |
+| `getOpenOrders()` | Passed; empty result | 39,843 ms | `data: []` after cancellation |
+| `getOrder({ symbol: "HYPEUSDT", orderId: "2124329325141426176" })` | Passed; independently confirmed `CANCELED` | 293 ms | Same order ID, symbol, price and quantities; executed quantity remained `0` |
+
+The workflow summary was **3 passed, 0 failed, 0 skipped** and the order-read gate was **READY**. This proves the one approved test order was cancelled with no execution; it is not a general claim that every Bitunix cancellation or account-wide scan is exhaustive. Do not rerun the one-shot cancellation mode: its fixed target is already canceled.
+
 ## Acceptance gate
 
-Review the healthcheck report for the HYPEUSDT order and its corresponding detail-read result. A failed `getOrder` is evidence for the next investigation phase, not permission to retry or cancel. Do not proceed to cancellation until order-read findings are reviewed and that phase is explicitly approved.
+Review the healthcheck report for the HYPEUSDT order and its corresponding detail-read result. A failed `getOrder` remains visible and blocks the order-read gate. Cancellation is separately gated by the explicit `--cancel-existing-order` mode and the approved fixed order identity; never retry an ambiguous cancellation.

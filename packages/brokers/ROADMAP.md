@@ -10,7 +10,7 @@ This roadmap tracks work owned by `@coinzilla/brokers`. Historical entries may r
 
 ## Bitunix Spot account-wide pending-order scan latency — #1704
 
-**Status: IN PROGRESS** — [issue #1704](https://github.com/45s/coinzilla/issues/1704) / [PR #1719](https://github.com/45s/coinzilla/pull/1719). The no-argument `getOpenOrders()` convenience scan previously queried every active Spot market serially; the operator's 2026-11-22 report measured 156,985 ms. The current change uses a four-worker bounded pool, deterministic catalog-order aggregation, and preserves partial results/errors. The healthcheck now reads details for orders returned by successful symbols even when another symbol fails, while keeping the overall gate blocked. This improves latency but does not establish complete/atomic account-wide coverage: the official endpoint remains symbol-scoped and the active market catalog may omit closed markets. The existing HYPE order remains untouched; no LIVE mutations or retries are part of this work.
+**Status: COMPLETE (implementation and one-off live verification)** — [issue #1704](https://github.com/45s/coinzilla/issues/1704), [PR #1719](https://github.com/45s/coinzilla/pull/1719) (bounded scan), and [PR #1727](https://github.com/45s/coinzilla/pull/1727) (explicit cancellation workflow). The no-argument `getOpenOrders()` convenience scan previously queried every active Spot market serially; the operator's 2026-11-22 report measured 156,985 ms. The merged implementation uses a four-worker bounded pool, deterministic catalog-order aggregation, and preserves partial results/errors; the order-read workflow continues detail reads for successful-symbol results even when another symbol fails, while keeping the aggregate gate blocked. The live operator run discovered and fetched details for the exact `HYPEUSDT / 2124329325141426176` order. The separately approved one-shot `--cancel-existing-order` workflow then made exactly one cancellation attempt, received a confirmed `CANCELED` result, and independently verified that status with `getOrder()`. The post-cancel account-wide scan returned no open orders. The published evidence is [the 2026-11-22 cancellation report](https://github.com/45s/coinzilla/blob/diagnostics/bitunix-health-20261122T092438681Z/packages/brokers/diagnostics/reports/bitunix-health-20261122T092438681Z.json). This completes the investigation for the known test order; it does not establish complete/atomic account-wide coverage because Bitunix's official pending-order endpoint remains symbol-scoped and the active market catalog may omit closed markets. The default healthcheck remains read-only.
 
 ## Bitunix Spot one-at-a-time LIVE order probe matrix — #1690
 
@@ -1593,3 +1593,14 @@ See [the private polling contract](./docs/BITUNIX_SPOT_POLLING.md) and [the Bitu
 - [x] Added the cumulative [Bitunix live order-probe evidence log](./BITUNIX_ORDER_PROBE_LOG.md), including the proven behavior, unresolved protocol questions, and next investigation steps.
 
 **Finding:** Spot LIMIT BUY/SELL dispatch and nested rejection parsing are empirically exercised. The operator confirmed the account lacked the required Spot assets, so both `10034` insufficient-balance rejections were expected. No accepted order or fill has yet been observed. A funded `limit-buy-11-usdt` probe is added: BUY `HYPEUSDT` LIMIT at `30 USDT`, spending up to `11 USDT`; quantity is calculated from live `basePrecision`, with `0.24 USDT` reserved. The script displays the exact order snapshot and accepts only `y/N`. This will test actual acceptance after merge and funding. Broader lifecycle/Harvester blockers remain.
+
+## 2026-11-22 — Publish Bitunix order-read identity evidence
+
+**Status: implementation in PR; CI verification pending.** The operator explicitly approved publishing and displaying the order symbol and exchange order ID.
+
+- Publish sanitized `getOpenOrders` and `getOrder` request/response evidence, including `symbol`, exchange order ID, normalized order fields, operation status, duration, and structured errors.
+- Keep the strict metadata-only allowlist for all other diagnostic operations; do not publish account diagnostics or logger events.
+- Continue redacting API credentials, signatures, nonces, account identifiers, balances, amounts, fees, wallet addresses, personal fields, and free-form error messages.
+- Print each discovered `symbol / orderId` and its matching `getOrder` status in the operator's terminal output.
+- Add regression coverage for sanitizer boundaries, published report payloads, exact order identity preservation, and terminal output.
+- No live exchange calls, order placement, cancellation, or other mutations are part of this implementation.

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict"
 import test from "node:test"
+import { sanitizeDiagnosticValue } from "./sanitize-diagnostic-data.js"
 import {
   createSanitizedHealthReport,
   evaluateOperatorOrderProbeHealthCheck,
@@ -255,4 +256,181 @@ test("operator probe health gate treats an explicit operator decline as a safe s
 
   assert.equal(result.healthy, true)
   assert.deepEqual(result.missingRequiredOperations, [])
+})
+
+
+function createSanitizedOpenOrdersResult({ orderId, symbol }) {
+  const order = {
+    id: orderId,
+    symbol,
+    status: "OPEN",
+  }
+  return {
+    operation: "Broker API getOpenOrders",
+    status: "passed",
+    durationMs: 41438,
+    response: sanitizeDiagnosticValue({
+      value: {
+        ok: true,
+        data: [order],
+        errors: [],
+      },
+    }),
+  }
+}
+
+function createSanitizedOrderDetailResult({ orderId, symbol }) {
+  return {
+    operation: "Broker API getOrder",
+    status: "passed",
+    durationMs: 304,
+    request: sanitizeDiagnosticValue({
+      value: {
+        method: "getOrder",
+        arguments: [{
+          symbol,
+          orderId,
+        }],
+      },
+    }),
+    response: sanitizeDiagnosticValue({
+      value: {
+        ok: true,
+        data: {
+          id: orderId,
+          symbol,
+          status: "OPEN",
+          price: "30",
+          volume: "0.366",
+          balance: "must-be-redacted",
+          uid: "must-also-be-redacted",
+        },
+        errors: [],
+      },
+    }),
+    errors: [{
+      name: "BitunixRestError",
+      code: "E_DETAIL",
+      exchangeCode: "100005",
+      message: "[error message withheld]",
+    }],
+  }
+}
+
+function createSanitizedOrderReadFixture({ orderId, symbol }) {
+  return {
+    schemaVersion: 1,
+    startedAt: "2026-11-22T00:00:00.000Z",
+    finishedAt: "2026-11-22T00:00:01.000Z",
+    runtime: {
+      node: "v26.13.0",
+      platform: "win32",
+    },
+    summary: {
+      total: 3,
+      passed: 3,
+      failed: 0,
+      skipped: 0,
+    },
+    healthCheck: {
+      scope: "bitunix-order-read",
+      requiredOperations: [
+        "Broker API getOpenOrders",
+        "Broker API getOrder for every discovered order",
+      ],
+      missingRequiredOperations: [],
+      nonBlockingFailedOperations: [],
+      healthy: true,
+    },
+    results: [
+      createSanitizedOpenOrdersResult({
+        orderId,
+        symbol,
+      }),
+      createSanitizedOrderDetailResult({
+        orderId,
+        symbol,
+      }),
+      {
+        operation: "user.account",
+        status: "passed",
+        request: {
+          apiKey: "must-not-publish",
+        },
+        response: {
+          balance: "must-not-publish",
+        },
+      },
+    ],
+    events: [{
+      payload: "must-not-publish",
+    }],
+  }
+}
+
+test("published order-read evidence includes symbol and orderId but keeps other diagnostics private", () => {
+  const orderId = "2124329325141426176"
+  const symbol = "HYPEUSDT"
+  const published = createSanitizedHealthReport({
+    report: createSanitizedOrderReadFixture({
+      orderId,
+      symbol,
+    }),
+  })
+  const open = published.results.find((result) =>
+    result.operation === "Broker API getOpenOrders")
+  const detail = published.results.find((result) =>
+    result.operation === "Broker API getOrder")
+
+  assert.equal(open.response.data[0].id, orderId)
+  assert.equal(open.response.data[0].symbol, symbol)
+  assert.equal(detail.request.arguments[0].orderId, orderId)
+  assert.equal(detail.request.arguments[0].symbol, symbol)
+  assert.equal(detail.response.data.id, orderId)
+  assert.equal(detail.response.data.symbol, symbol)
+  assert.equal(detail.response.data.price, "30")
+  assert.equal(detail.response.data.volume, "0.366")
+  assert.equal(detail.response.data.balance, "[REDACTED]")
+  assert.equal(detail.response.data.uid, "[REDACTED]")
+  assert.equal(detail.errors[0].code, "E_DETAIL")
+  assert.equal(detail.errors[0].exchangeCode, "100005")
+  const publicJson = JSON.stringify(published)
+  assert.equal(publicJson.includes("must-not-publish"), false)
+  assert.equal(Object.hasOwn(published.results[2], "request"), false)
+  assert.equal(Object.hasOwn(published.results[2], "response"), false)
+  assert.equal(Object.hasOwn(published, "events"), false)
+})
+
+
+test("published cancellation evidence retains the exact order identity and structured outcome", () => {
+  const report = createSanitizedOrderReadFixture({
+    orderId: "2124329325141426176",
+    symbol: "HYPEUSDT",
+  })
+  report.results.push({
+    operation: "Broker API cancelOrder",
+    status: "passed",
+    request: {
+      method: "cancelOrder",
+      arguments: [{
+        symbol: "HYPEUSDT",
+        orderId: "2124329325141426176",
+      }],
+    },
+    response: {
+      ok: true,
+      mutationOutcome: "CONFIRMED",
+      cancellationOutcome: "CONFIRMED",
+      data: {
+        status: "CANCELED",
+      },
+    },
+  })
+  const published = createSanitizedHealthReport({ report })
+  const cancellation = published.results.find((result) =>
+    result.operation === "Broker API cancelOrder")
+  assert.equal(cancellation.request.arguments[0].symbol, "HYPEUSDT")
+  assert.equal(cancellation.request.arguments[0].orderId, "2124329325141426176")
+  assert.equal(cancellation.response.cancellationOutcome, "CONFIRMED")
+  assert.equal(cancellation.response.data.status, "CANCELED")
 })

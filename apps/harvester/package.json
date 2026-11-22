@@ -51,6 +51,7 @@
       "test/bootstrap/user-data-event-reconciliation.test.js",
       "test/bootstrap/account-preflight.test.js",
       "test/bootstrap/process-lifecycle-recovery.test.js",
+      "src/bootstrap/operational-state/prepare-process-operational-state-store.test.js",
       "test/bootstrap/account-snapshot-history.test.js",
       "src/infrastructure/telegram/telegram-operator-keyboard.test.js",
       "test/bootstrap/start-harvester.test.js",

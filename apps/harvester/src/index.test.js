@@ -10,6 +10,7 @@ import { appConfig as defaultAppConfig } from "../config/index.js"
 import { main as startMain } from "./index.js"
 import { prepareOptionalJournal } from "./infrastructure/journal/prepare-optional-journal.js"
 import { UnvalidatedMarketExchangeConstraintsError } from "./domain/market/errors/unvalidated-market-exchange-constraints-error.js"
+import { StrategyId } from "./domain/strategies/strategy-ids.js"
 
 const disabledJournalService = () => ({
   ready: Promise.resolve({ ok: true,
@@ -33,6 +34,13 @@ const main = (options = {}) => {
   return startMain({
     acquireProcessLock,
     createOperationalStateStore: () => ({
+      initializeIfEmpty: async () => ({
+        ok: true,
+        data: {
+          ready: true,
+          initialized: false,
+        },
+      }),
       verify: async () => ({ ok: true,
         data: { valid: true,
           durableWriteSupported: true } }),
@@ -68,14 +76,29 @@ const createTestAppConfig = ({ operatorControlEnabled = false, allowedUserIds = 
   return config
 }
 
-test("does not create or inject durable recovery facts while recovery is disabled", async () => {
+test("constructs and injects durable operational state for enabled RS while CG restart recovery is disabled", async () => {
   let storeCreated = false
   let startupInput
   await runMain({
     loadConfig: async () => createTestAppConfig(),
     createOperationalStateStore: () => {
       storeCreated = true
-      throw new Error("disabled recovery and operator control must not construct a Operational State Store")
+      return {
+        initializeIfEmpty: async () => ({
+          ok: true,
+          data: {
+            ready: true,
+            initialized: false,
+          },
+        }),
+        verify: async () => ({
+          ok: true,
+          data: {
+            valid: true,
+            durableWriteSupported: true,
+          },
+        }),
+      }
     },
     start: async (input) => {
       startupInput = input
@@ -88,8 +111,8 @@ test("does not create or inject durable recovery facts while recovery is disable
       system() {},
       error() {} },
   })
-  assert.equal(storeCreated, false, "Disabled restart recovery must not create or verify a ADR-0001 ledger.")
-  assert.equal(startupInput.operationalStateStore, undefined, "Disabled restart recovery must not inject a Operational State Store into runtime startup.")
+  assert.equal(storeCreated, true, "Enabled RS must construct and verify the ADR-0001 Operational State Store.")
+  assert.ok(startupInput.operationalStateStore, "Enabled RS runtime startup must receive the verified durable STOP store.")
 })
 
 test("does not create or inject recovery storage when Telegram operator control is enabled without recovery", async () => {
@@ -97,6 +120,7 @@ test("does not create or inject recovery storage when Telegram operator control 
     operatorControlEnabled: true,
     allowedUserIds: ["12345"],
   })
+  configuredApp.strategies[StrategyId.RECOVERY_SELLER].enabled = false
   let storeFactoryCalls = 0
   let startupInput
 
@@ -1892,12 +1916,16 @@ test("preserves typed market-readiness diagnostics in fatal startup logs", async
 })
 
 
-test("does not construct, verify, or inject Operational State Store records even when a stale ledger path is configured", async () => {
+test("does not construct the Operational State Store for a stale ledger path when CG recovery and RS are disabled", async () => {
   let storeCreated = false
   let journalCreated = false
   let runtimeStarted = false
   await runMain({
-    loadConfig: async () => createTestAppConfig(),
+    loadConfig: async () => {
+      const configuredApp = createTestAppConfig()
+      configuredApp.strategies[StrategyId.RECOVERY_SELLER].enabled = false
+      return configuredApp
+    },
     env: { OPERATIONAL_STATE_DIRECTORY: "relative/recovery-facts" },
     createOperationalStateStore: () => {
       storeCreated = true

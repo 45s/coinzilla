@@ -42,6 +42,14 @@ function printLocalDiagnosticSummary({ report, outputPath, stdout }) {
   ].join("\n"))
 }
 
+function getOrderIdentityLabel({ request }) {
+  const orderArguments = ["getOrder", "cancelOrder"].includes(request?.method) ? request.arguments?.[0] : null
+  if (!orderArguments?.symbol || !orderArguments?.orderId) {
+    return ""
+  }
+  return ` [${orderArguments.symbol} / ${orderArguments.orderId}]`
+}
+
 function recordOrderReadResult({
   report,
   stdout,
@@ -73,7 +81,8 @@ function recordOrderReadResult({
   report.summary.total += 1
   report.summary[entry.status] += 1
   const duration = Number.isFinite(durationMs) ? ` (${durationMs} ms)` : ""
-  stdout.write(`      ${operation}: ${entry.status.toUpperCase()}${duration}\n`)
+  const identity = getOrderIdentityLabel({ request })
+  stdout.write(`      ${operation}${identity}: ${entry.status.toUpperCase()}${duration}\n`)
 }
 
 async function fetchAndRecordOpenOrders({ broker, report, stdout, secrets }) {
@@ -93,6 +102,11 @@ async function fetchAndRecordOpenOrders({ broker, report, stdout, secrets }) {
       durationMs: Date.now() - started,
       request,
     })
+    if (Array.isArray(result?.data)) {
+      for (const order of result.data) {
+        stdout.write(`      Discovered open order: ${order.symbol} / ${order.id}\n`)
+      }
+    }
     return result
   } catch (error) {
     recordOrderReadResult({
@@ -111,7 +125,7 @@ async function fetchAndRecordOpenOrders({ broker, report, stdout, secrets }) {
   }
 }
 
-async function fetchAndRecordOrderDetails({ broker, orders, report, stdout, secrets }) {
+async function fetchAndRecordOrderDetails({ broker, orders, report, stdout, secrets, operation = "Broker API getOrder" }) {
   for (const order of orders) {
     const started = Date.now()
     const request = {
@@ -130,7 +144,7 @@ async function fetchAndRecordOrderDetails({ broker, orders, report, stdout, secr
         report,
         stdout,
         secrets,
-        operation: "Broker API getOrder",
+        operation,
         result,
         durationMs: Date.now() - started,
         request,
@@ -140,7 +154,7 @@ async function fetchAndRecordOrderDetails({ broker, orders, report, stdout, secr
         report,
         stdout,
         secrets,
-        operation: "Broker API getOrder",
+        operation,
         result: {
           ok: false,
           errors: [error],
@@ -222,11 +236,131 @@ async function disconnectOrderReadBroker({ broker, connected, report, stdout, se
   }
 }
 
+const CANCELLATION_TARGET = Object.freeze({
+  symbol: "HYPEUSDT",
+  orderId: "2124329325141426176",
+})
+
+function createCancellationBroker({ env, report, secrets, brokerFactory }) {
+  return brokerFactory({
+    provider: "bitunix",
+    apiKey: env.BITUNIX_API_KEY,
+    apiSecret: env.BITUNIX_API_SECRET,
+    tradingMode: "live",
+    logger: createOrderReadLogger({
+      report,
+      secrets,
+    }),
+    providerOptions: {
+      allowLiveOrderMutations: true,
+    },
+  })
+}
+
+async function cancelAndRecordExistingOrder({ broker, report, stdout, secrets }) {
+  const started = Date.now()
+  let result
+  try {
+    result = await broker.cancelOrder({ ...CANCELLATION_TARGET })
+  } catch (error) {
+    result = {
+      ok: false,
+      mutationOutcome: "OUTCOME_UNKNOWN",
+      cancellationOutcome: "OUTCOME_UNKNOWN",
+      errors: [error],
+    }
+  }
+  recordOrderReadResult({
+    report,
+    stdout,
+    secrets,
+    operation: "Broker API cancelOrder",
+    result,
+    durationMs: Date.now() - started,
+    request: {
+      method: "cancelOrder",
+      arguments: [{ ...CANCELLATION_TARGET }],
+    },
+  })
+  return result
+}
+
+async function runBitunixExistingOrderCancellation({ env, report, stdout, brokerFactory = (options) => new Broker(options) }) {
+  const secrets = [env.BITUNIX_API_KEY, env.BITUNIX_API_SECRET].filter(Boolean)
+  let broker
+  let connected = false
+  try {
+    broker = createCancellationBroker({
+      env,
+      report,
+      secrets,
+      brokerFactory,
+    })
+    await broker.connect()
+    connected = true
+    return await cancelAndRecordExistingOrder({
+      broker,
+      report,
+      stdout,
+      secrets,
+    })
+  } catch (error) {
+    recordOrderReadResult({
+      report,
+      stdout,
+      secrets,
+      operation: "Broker API cancelOrder",
+      result: {
+        ok: false,
+        mutationOutcome: "NOT_SENT",
+        cancellationOutcome: "NOT_SENT",
+        errors: [error],
+      },
+      request: {
+        method: "cancelOrder",
+        arguments: [{ ...CANCELLATION_TARGET }],
+      },
+    })
+    return null
+  } finally {
+    await disconnectOrderReadBroker({
+      broker,
+      connected,
+      report,
+      stdout,
+      secrets,
+    })
+  }
+}
+
+async function fetchAdditionalOrderDetails({ broker, openOrders, additionalOrders, report, stdout, secrets }) {
+  const discoveredKeys = new Set(
+    openOrders.map((order) => `${order.symbol}:${order.id}`),
+  )
+  const pendingOrders = additionalOrders.filter((order) =>
+    !discoveredKeys.has(`${order.symbol}:${order.orderId ?? order.id}`))
+  if (pendingOrders.length === 0) {
+    return
+  }
+  await fetchAndRecordOrderDetails({
+    broker,
+    orders: pendingOrders.map((order) => ({
+      ...order,
+      id: order.orderId ?? order.id,
+    })),
+    report,
+    stdout,
+    secrets,
+    operation: "Broker API getOrder after cancellation",
+  })
+}
+
 async function runBitunixOrderReadScan({
   env,
   report,
   stdout,
   brokerFactory = (options) => new Broker(options),
+  additionalOrders = [],
 }) {
   const { broker, secrets } = createOrderReadBroker({
     env,
@@ -252,6 +386,14 @@ async function runBitunixOrderReadScan({
         secrets,
       })
     }
+    await fetchAdditionalOrderDetails({
+      broker,
+      openOrders: openOrdersResult?.data ?? [],
+      additionalOrders,
+      report,
+      stdout,
+      secrets,
+    })
   } catch (error) {
     recordOrderReadScanFailure({
       report,
@@ -302,7 +444,13 @@ async function runLocalDiagnostics({ brokersRoot, env, stdout, brokerFactory, in
   return report.summary.failed > 0 ? 1 : 0
 }
 
-function createModeStatusLines({ result, probeMode, includeGeneralDiagnostics }) {
+function createModeStatusLines({ result, probeMode, includeGeneralDiagnostics, cancelExistingOrder }) {
+  if (cancelExistingOrder) {
+    return [
+      "Cancellation attempt recorded before the read-only order scan.",
+      `Order-read gate: ${result.healthCheck.healthy ? "READY" : "BLOCKED"}`,
+    ]
+  }
   if (probeMode) {
     return [
       "General diagnostics: SKIPPED (focused order-probe mode)",
@@ -323,11 +471,12 @@ function createModeStatusLines({ result, probeMode, includeGeneralDiagnostics })
   ]
 }
 
-function createPublishedStatusLines({ result, operatorAttempt, probeMode, includeGeneralDiagnostics }) {
+function createPublishedStatusLines({ result, operatorAttempt, probeMode, includeGeneralDiagnostics, cancelExistingOrder }) {
   const lines = createModeStatusLines({
     result,
     probeMode,
     includeGeneralDiagnostics,
+    cancelExistingOrder,
   })
   if (operatorAttempt?.probeId) {
     lines.push(`Order probe: ${operatorAttempt.probeId}`)
@@ -360,10 +509,15 @@ function isWorkflowProgressMessage({ message }) {
     message.startsWith("Returning the local checkout") ||
     message.startsWith("Local checkout is back") ||
     message.startsWith("Broker API getOpenOrders:") ||
-    message.startsWith("Broker API getOrder:")
+    message.startsWith("Broker API getOrder:") ||
+    message.startsWith("Broker API getOrder [") ||
+    message.startsWith("Broker API getOrder after cancellation") ||
+    message.startsWith("Discovered open order:") ||
+    message.startsWith("Broker API cancelOrder") ||
+    message.startsWith("Cancelling existing order")
 }
 
-function printPublishedResult({ result, stdout, probeMode = false, includeGeneralDiagnostics = false }) {
+function printPublishedResult({ result, stdout, probeMode = false, includeGeneralDiagnostics = false, cancelExistingOrder = false }) {
   const { passed, failed, skipped, total } = result.report.summary
   const operatorAttempt = result.report.results.find((entry) =>
     entry.operation === "operator order attempt" || entry.operation === "operator order probe")
@@ -375,6 +529,7 @@ function printPublishedResult({ result, stdout, probeMode = false, includeGenera
       operatorAttempt,
       probeMode,
       includeGeneralDiagnostics,
+      cancelExistingOrder,
     }),
     ...createPublishedReportLines({
       result,
@@ -450,7 +605,7 @@ function appendSelectedOperatorResult({
   })
 }
 
-async function runGeneralOrderReadScan({ env, report, onProgress, brokerFactory }) {
+async function runGeneralOrderReadScan({ env, report, onProgress, brokerFactory, additionalOrders = [] }) {
   await runBitunixOrderReadScan({
     env,
     report,
@@ -458,6 +613,7 @@ async function runGeneralOrderReadScan({ env, report, onProgress, brokerFactory 
       write: (message) => onProgress?.({ message: message.trim() }),
     },
     brokerFactory,
+    additionalOrders,
   })
 }
 
@@ -489,15 +645,15 @@ async function runOperatorAndAppendResult({
   })
 }
 
-async function runDiagnosticsWithOperatorAttempt({
+async function prepareOrderReadReport({
   env,
   onProgress,
   runDiagnostics,
   runOperatorOrder,
   runOperatorProbe,
-  probeId,
   brokerFactory,
   includeGeneralDiagnostics,
+  cancelExistingOrder,
 }) {
   const startedAt = Date.now()
   const shouldRunGeneralDiagnostics = includeGeneralDiagnostics || Boolean(runOperatorOrder)
@@ -508,14 +664,55 @@ async function runDiagnosticsWithOperatorAttempt({
       onProgress,
       brokerApiRestClientFactory: (options) => new BitunixRestClient(options),
     })
+  if (cancelExistingOrder) {
+    onProgress?.({
+      message: `      Cancelling existing order ${CANCELLATION_TARGET.symbol} / ${CANCELLATION_TARGET.orderId} before order reads`,
+    })
+    await runBitunixExistingOrderCancellation({
+      env,
+      report,
+      stdout: {
+        write: (message) => onProgress?.({ message: message.trim() }),
+      },
+      brokerFactory,
+    })
+  }
   if (!runOperatorProbe) {
     await runGeneralOrderReadScan({
       env,
       report,
       onProgress,
       brokerFactory,
+      additionalOrders: cancelExistingOrder ? [CANCELLATION_TARGET] : [],
     })
   }
+  return {
+    report,
+    startedAt,
+  }
+}
+
+async function runDiagnosticsWithOperatorAttempt({
+  env,
+  onProgress,
+  runDiagnostics,
+  runOperatorOrder,
+  runOperatorProbe,
+  probeId,
+  brokerFactory,
+  includeGeneralDiagnostics,
+  cancelExistingOrder = false,
+}) {
+  const { report, startedAt } = await prepareOrderReadReport({
+    env,
+    onProgress,
+    runDiagnostics,
+    runOperatorOrder,
+    runOperatorProbe,
+    brokerFactory,
+    includeGeneralDiagnostics,
+    cancelExistingOrder,
+  })
   if (!runOperatorOrder && !runOperatorProbe) {
     return report
   }
@@ -549,7 +746,14 @@ async function runDiagnosticsWithOperatorAttempt({
     : appendedReport
 }
 
-function createOperatorWarning({ runOperatorOrder, runOperatorProbe, probeId }) {
+function createOperatorWarning({ runOperatorOrder, runOperatorProbe, probeId, cancelExistingOrder }) {
+  if (cancelExistingOrder) {
+    return [
+      `WARNING: this mode sends ONE LIVE cancellation request for ${CANCELLATION_TARGET.symbol} / ${CANCELLATION_TARGET.orderId}.`,
+      "The cancellation response is recorded before the existing read-only order scan. No retry.",
+      "",
+    ].join("\n")
+  }
   if (runOperatorProbe) {
     return `WARNING: this mode runs a targeted LIVE read-only HYPEUSDT preflight, then may submit exactly one separately confirmed ${probeId} order probe.\n`
   }
@@ -580,8 +784,10 @@ async function runPublishedHealthCheck({
   probeId,
   brokerFactory,
   includeGeneralDiagnostics,
+  cancelExistingOrder = false,
 }) {
   stdout.write(createOperatorWarning({
+    cancelExistingOrder,
     runOperatorOrder,
     runOperatorProbe,
     probeId,
@@ -601,6 +807,7 @@ async function runPublishedHealthCheck({
       probeId,
       brokerFactory,
       includeGeneralDiagnostics,
+      cancelExistingOrder,
     }),
     env,
     onProgress: ({ message }) => {
@@ -614,6 +821,7 @@ async function runPublishedHealthCheck({
     stdout,
     probeMode: Boolean(runOperatorProbe),
     includeGeneralDiagnostics: includeGeneralDiagnostics || Boolean(runOperatorOrder),
+    cancelExistingOrder,
   })
   return result.exitCode
 }
@@ -621,7 +829,7 @@ async function runPublishedHealthCheck({
 /**
  * Run a read-only health-check mode or a human-controlled order mode inside the report workflow.
  *
- * @param {{mode: "local"|"publish"|"place-order"|"probe-order", includeGeneralDiagnostics?: boolean, probeId?: string, brokersRoot: string, repositoryRoot: string, env: NodeJS.ProcessEnv, stdout?: NodeJS.WriteStream, runOperatorOrder?: (input: {env: NodeJS.ProcessEnv}) => Promise<object>, runOperatorProbe?: (input: {env: NodeJS.ProcessEnv, probeId: string}) => Promise<object>}} input
+ * @param {{mode: "local"|"publish"|"place-order"|"probe-order"|"cancel-existing-order", includeGeneralDiagnostics?: boolean, probeId?: string, brokersRoot: string, repositoryRoot: string, env: NodeJS.ProcessEnv, stdout?: NodeJS.WriteStream, runOperatorOrder?: (input: {env: NodeJS.ProcessEnv}) => Promise<object>, runOperatorProbe?: (input: {env: NodeJS.ProcessEnv, probeId: string}) => Promise<object>}} input
  * @returns {Promise<number>} Process exit code.
  */
 function validatePublishedHealthcheckMode({ mode, runOperatorOrder, runOperatorProbe, probeId }) {
@@ -657,7 +865,7 @@ export async function runHealthcheckWorkflow({
       includeGeneralDiagnostics,
     })
   }
-  if (!["publish", "place-order", "probe-order"].includes(mode)) {
+  if (!["publish", "place-order", "probe-order", "cancel-existing-order"].includes(mode)) {
     throw new TypeError(`Unsupported Bitunix health-check mode: ${mode}`)
   }
   validatePublishedHealthcheckMode({
@@ -677,5 +885,6 @@ export async function runHealthcheckWorkflow({
     probeId,
     brokerFactory,
     includeGeneralDiagnostics,
+    cancelExistingOrder: mode === "cancel-existing-order",
   })
 }
