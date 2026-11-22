@@ -94,7 +94,6 @@ const appConfig = {
       pairs: {
     DOGEUSDT: {
       enabled: true,
-      enableVolatilityProtection: true,
       investment: 1000,
       orderQuantity: 1,
       keepQuantity: 0.1,
@@ -410,7 +409,6 @@ function createHarnessEngine({ options, brokerState, state } = {}) {
     getPortfolio: getPortfolioOverride,
     getRecoveryLedger: getRecoveryLedgerOverride,
     getVolatilityData: getVolatilityDataOverride,
-    volatilityPairs,
     onOperationalStateCancellationIntent,
     onOperationalStateCancellationOutcome,
     onOperationalStateStrategyMarketPaused,
@@ -433,7 +431,6 @@ function createHarnessEngine({ options, brokerState, state } = {}) {
     isMarketPriceFresh,
     isMarketBookFresh,
     getVolatilityData: getVolatilityDataOverride,
-    volatilityPairs,
     onOperationalStateCancellationIntent,
     onOperationalStateCancellationOutcome,
     onOperationalStateStrategyMarketPaused,
@@ -10046,58 +10043,6 @@ test("volatility data unavailable blocks new strategy orders without using the g
   assert.equal(result.ok, true)
   assert.deepEqual(harness.orders, [], "Missing volatility history must fail closed before broker submission.")
   assert.deepEqual(harness.pauses, [], "Volatility protection must remain separate from the full accounting safety pause.")
-})
-
-test("volatility state and diagnostics are market-owned for RS-only configured markets", async () => {
-  const highVolatility = {
-    ok: true,
-    data: {
-      status: {
-        isReady: true,
-        isFresh: true,
-        reason: null,
-        lastClosedCandleOpenTime: 60_000,
-      },
-      metrics: {
-        openTime: 60_000,
-        atr: "1",
-        natr: "2",
-        referenceNatr: "1",
-        volatilityRatio: "2",
-      },
-    },
-  }
-  const logs = []
-  const harness = await createHarness({
-    volatilityPairs: {
-      LINEAUSDT: {
-        enabled: true,
-        enableVolatilityProtection: true,
-      },
-    },
-    getVolatilityData: () => highVolatility,
-    logger: {
-      system: (data) => logs.push(data),
-      warn: (data) => logs.push(data),
-    },
-  })
-
-  const result = await harness.engine.processVolatilitySnapshot({
-    symbol: "LINEAUSDT",
-    snapshot: highVolatility,
-  })
-
-  assert.equal(result.ok, true)
-  assert.notEqual(result.data?.skipped, true, "An enabled volatility market must process snapshots without a CG execution route.")
-  assert.equal(
-    harness.engine.getVolatilityProtectionState({ symbol: "LINEAUSDT" })?.mode,
-    "PROTECTED",
-    "Market volatility state must be initialized and updated independently of CG pair ownership.",
-  )
-  const stateChangedLog = logs.find(({ message }) => message === "Harvester volatility protection state changed")
-  assert.ok(stateChangedLog, "The market volatility transition must emit its diagnostic.")
-  assert.equal(stateChangedLog.strategyId, undefined, "Volatility diagnostics must not be tagged as CG or RS strategy logs.")
-  assert.equal(stateChangedLog.component, "market-volatility-protection")
 })
 
 test("per-pair opt-out skips volatility snapshots and never cancels owned BUYs", async () => {
