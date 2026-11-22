@@ -8,7 +8,7 @@ created: 2026-11-14
 
 # Recovery Seller (RS) — Domain Specification
 
-**Status: DRAFT — RS-3 pure policy and RS-4 shared-engine runtime composition are implemented in PR #1515, including production dispatch, engine-owned order submission, account-wide quote/base authorization, terminal mixed-SELL reconciliation and durable STOP composition. `RECOVERY_SELLER_RUNTIME_ACCEPTANCE_COMPLETE` is `true` after scoped RS-5 offline lifecycle/concurrency/failure acceptance. RS remains disabled by default through `RS_RECOVERY_SELLER_CONFIG.enabled = false`; explicit configuration is required before any RS route can activate. Restart/replay and third-asset commission valuation are deferred from this initial runtime acceptance.**
+**Status: DRAFT domain contract —** RS-3 pure policy and RS-4 shared-engine runtime composition are implemented in PR #1515, including production dispatch, engine-owned order submission, account-wide quote/base authorization, terminal mixed-SELL reconciliation and durable STOP composition. `RECOVERY_SELLER_RUNTIME_ACCEPTANCE_COMPLETE` is `true` after scoped RS-5 offline lifecycle/concurrency/failure acceptance. PR #1696 completes legacy single-provider routing, RS-only startup and the deduplicated CG/RS market-data union. RS remains disabled by default through `RS_RECOVERY_SELLER_CONFIG.enabled = false`; explicit configuration and a separately approved bounded TESTNET session are required before exchange operations. Restart/replay and third-asset commission valuation are deferred from this initial runtime acceptance.
 
 **Authority:** This draft becomes the canonical RS contract after formal acceptance. Until then it records the agreed direction, hard safety invariants, accounting boundaries, and remaining implementation requirements. It does not amend the [Conservative Domain Specification](./CONSERVATIVE_DOMAIN_SPECIFICATION.md).
 
@@ -468,7 +468,7 @@ The prose is authoritative. BUY cadence and tranche sizing follow the owner-appr
 
 ## 15. Implementation boundary
 
-RS-4 shared Trading Engine integration and scoped RS-5 offline lifecycle verification are complete in PR #1515. The runtime acceptance gate is open; exact-head required CI and final specification review are the remaining merge checks. RS remains disabled by default. Before any RS route can activate:
+RS-4 shared Trading Engine integration and scoped RS-5 offline lifecycle verification are complete in PR #1515. PR #1696 completes legacy single-provider routing and RS-only startup. `RECOVERY_SELLER_RUNTIME_ACCEPTANCE_COMPLETE` is `true`, and required exact-head CI passed. RS remains disabled by default; the controlled TESTNET runbook remains CLOSED / PAUSED pending a separate bounded session plan and explicit joint start. Before any RS route can activate:
 
 - Keep `RECOVERY_SELLER_RUNTIME_ACCEPTANCE_COMPLETE` true after offline acceptance; keep `RS_RECOVERY_SELLER_CONFIG.enabled` false by default. Configuration must be explicitly changed before any RS route can activate.
 - Restart/replay recovery and third-asset commission valuation are explicitly deferred. A third-asset fee without an approved quote value must fail closed.
