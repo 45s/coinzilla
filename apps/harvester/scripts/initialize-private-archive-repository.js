@@ -64,8 +64,8 @@ export async function initializePrivateArchiveRepository({
     const existingBranches = await runCommand(["ls-remote", "--heads", remote], { cwd: workingDirectory })
     if (existingBranches) {
       const branchReferences = existingBranches
-        .split("\\n")
-        .map((line) => line.trim().split(/\\s+/).at(-1))
+        .split("\n")
+        .map((line) => line.trim().split(/\s+/).at(-1))
         .filter(Boolean)
       if (branchReferences.length !== 1 || branchReferences[0] !== "refs/heads/main") {
         throw new Error(
@@ -114,9 +114,10 @@ export async function initializePrivateArchiveRepository({
 
 async function main() {
   const result = await initializePrivateArchiveRepository()
-  process.stdout.write(
-    `Private archive repository initialized and push access verified: ${result.remote} (main)\n`,
-  )
+  const status = result.alreadyInitialized
+    ? "already initialized; no changes made"
+    : "initialized and push access verified"
+  process.stdout.write(`Private archive repository ${status}: ${result.remote} (main)\n`)
 }
 
 const isDirectExecution = process.argv[1]
