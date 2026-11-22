@@ -102,7 +102,7 @@ function formatOrderProbePreflight({ preflight }) {
     `Probe: ${probe.id}`,
     `Order: ${probe.side} ${probe.type} ${probe.symbol}`,
     `Coinzilla input: ${probe.quantity === undefined ? `quoteQuantity ${probe.quoteQuantity} USDT` : `quantity ${probe.quantity} HYPE`}`,
-    `Price: ${probe.price ?? "omitted (MARKET wire price is 0")}`,
+    `Price: ${probe.price ?? "omitted (MARKET wire price is 0)")}`,
     `Expected wire body: ${JSON.stringify(preflight.wireRequest)}`,
     `Exchange minimum quantity (minVolume): ${preflight.minimumQuantity} HYPE`,
     `Exchange minimum notional (minPrice): ${preflight.minimumNotional} USDT`,
@@ -118,7 +118,7 @@ function formatOrderProbePreflight({ preflight }) {
   ].join("\n")
 }
 
-function formatOrderProbeResult({ result, capture, secrets }) {
+function formatOrderProbeResult({ result, capture, secrets = [] }) {
   const error = result?.errors?.[0]
   const lines = [
     `Broker result: ${result?.ok === true ? "success" : "not successful"}`,
@@ -158,7 +158,7 @@ async function createProbeMarker({ markerPath, preflight, now = Date.now }) {
   }
 }
 
-async function persistProbeOutcome({ markerPath, outcome, capture, result, error, now = Date.now }) {
+async function persistProbeOutcome({ markerPath, outcome, capture, result, error, secrets = [], now = Date.now }) {
   const marker = JSON.parse(await readFile(markerPath, "utf8"))
   if (marker.status !== "DISPATCH_STARTED") {
     throw new Error("Bitunix order probe marker is not awaiting a result")
@@ -167,12 +167,32 @@ async function persistProbeOutcome({ markerPath, outcome, capture, result, error
     ? outcome
     : "OUTCOME_UNKNOWN"
   marker.completedAt = new Date(now()).toISOString()
-  marker.capture = capture
+  marker.capture = {
+    ...capture,
+    ...(capture.response?.body === undefined ? {} : {
+      response: {
+        ...capture.response,
+        body: redactApiSecrets({
+          message: capture.response.body,
+          secrets,
+        }),
+      },
+    }),
+    ...(capture.transportError?.message === undefined ? {} : {
+      transportError: {
+        ...capture.transportError,
+        message: redactApiSecrets({
+          message: capture.transportError.message,
+          secrets,
+        }),
+      },
+    }),
+  }
   const sourceError = error ?? result?.errors?.[0]
   if (sourceError) {
     marker.error = {
       name: sourceError.name ?? "Error",
-      message: String(sourceError.message ?? sourceError).slice(0, 500),
+      message: redactApiSecrets({\n        message: String(sourceError.message ?? sourceError).slice(0, 500),\n        secrets,\n      }),
       code: sourceError.code ?? null,
       exchangeCode: sourceError.exchangeCode ?? null,
       status: sourceError.status ?? null,
