@@ -251,7 +251,7 @@ function writeUpgradeResponse({ socket, key } = {}) {
   ].join("\r\n"))
 }
 
-function handleUpgrade({ request, socket, head, clients } = {}) {
+function handleUpgrade({ request, socket, head, clients, exchangeAccounts } = {}) {
   const key = getUpgradeKey({
     request,
     socket,
@@ -267,6 +267,10 @@ function handleUpgrade({ request, socket, head, clients } = {}) {
   const client = createClient({
     socket,
     clients,
+  })
+  sendInitialExchangeAccountSnapshot({
+    client,
+    exchangeAccounts,
   })
   if (head.length > 0) {
     handleSocketData({
@@ -298,19 +302,125 @@ function broadcastHistoryUpdate({ clients, event } = {}) {
   }
 }
 
-function broadcastExchangeAccountUpdate({ clients } = {}) {
-  const message = { type: "exchange-account.updated" }
-  for (const client of clients) {
-    sendJson({
-      client,
-      message,
-    })
+function serializeAccountSnapshot(snapshot) {
+  if (!snapshot || !Array.isArray(snapshot.balances)) {
+    return null
+  }
+  return {
+    sourceTime: snapshot.sourceTime ?? null,
+    balances: snapshot.balances.map((balance) => balance?.value ?? balance),
   }
 }
 
-function subscribeToExchangeAccountUpdates({ eventBus, clients, subscribeExchangeAccountUpdates } = {}) {
+function serializeOpenOrders(orders) {
+  if (!Array.isArray(orders)) {
+    return null
+  }
+  return orders.map((order) => order?.value ?? order)
+}
+
+function resolveSnapshotRead({ result, serializer, key, errors, errorMessage } = {}) {
+  if (result.status === "fulfilled" && result.value?.ok === true) {
+    try {
+      const serialized = serializer(result.value.data)
+      if (serialized !== null) {
+        return serialized
+      }
+    } catch {
+      errors[key] = errorMessage
+      return null
+    }
+  }
+  errors[key] = errorMessage
+  return null
+}
+
+/**
+ * Read one provider independently so failures cannot hide other account snapshots.
+ */
+async function createExchangeAccountSnapshot({ account } = {}) {
+  const results = await Promise.allSettled([
+    Promise.resolve().then(() => account.readAccountSnapshot()),
+    Promise.resolve().then(() => account.readOpenOrders()),
+  ])
+  const errors = {}
+  const accountSnapshot = resolveSnapshotRead({
+    result: results[0],
+    serializer: serializeAccountSnapshot,
+    key: "accountSnapshot",
+    errors,
+    errorMessage: "Account snapshot is unavailable.",
+  })
+  const openOrders = resolveSnapshotRead({
+    result: results[1],
+    serializer: serializeOpenOrders,
+    key: "openOrders",
+    errors,
+    errorMessage: "Open orders are unavailable.",
+  })
+  return {
+    providerInstanceId: account.providerInstanceId,
+    providerType: account.providerType,
+    accountId: account.accountId,
+    environment: account.environment,
+    connected: account.connected === true,
+    accountSnapshot,
+    openOrders,
+    errors,
+  }
+}
+
+async function createExchangeAccountsSnapshot({ exchangeAccounts } = {}) {
+  return Promise.all(exchangeAccounts.map((account) => createExchangeAccountSnapshot({ account })))
+}
+
+function createExchangeAccountsMessage({ accounts, type } = {}) {
+  return {
+    type,
+    observedAt: new Date().toISOString(),
+    accounts,
+  }
+}
+
+function sendInitialExchangeAccountSnapshot({ client, exchangeAccounts } = {}) {
+  void createExchangeAccountsSnapshot({ exchangeAccounts }).then((accounts) => {
+    sendJson({
+      client,
+      message: createExchangeAccountsMessage({
+        accounts,
+        type: "exchange-accounts.snapshot",
+      }),
+    })
+  }, () => {
+    closeClient({
+      client,
+      code: 1011,
+      reason: "Could not read Harvester account snapshots.",
+    })
+  })
+}
+
+function broadcastExchangeAccountUpdate({ clients, exchangeAccounts } = {}) {
+  void createExchangeAccountsSnapshot({ exchangeAccounts }).then((accounts) => {
+    const message = createExchangeAccountsMessage({
+      accounts,
+      type: "exchange-accounts.updated",
+    })
+    for (const client of clients) {
+      sendJson({
+        client,
+        message,
+      })
+    }
+  }, () => undefined)
+}
+
+function subscribeToExchangeAccountUpdates({ eventBus, clients, exchangeAccounts, subscribeExchangeAccountUpdates } = {}) {
   if (typeof subscribeExchangeAccountUpdates === "function") {
-    const unsubscribe = subscribeExchangeAccountUpdates(() => broadcastExchangeAccountUpdate({ clients }))
+    const unsubscribe = subscribeExchangeAccountUpdates(() => broadcastExchangeAccountUpdate({
+      clients,
+      exchangeAccounts,
+    }))
     if (typeof unsubscribe !== "function") {
       throw new TypeError("Trading-history WebSocket requires an exchange-account update unsubscribe function.")
     }
@@ -321,7 +431,10 @@ function subscribeToExchangeAccountUpdates({ eventBus, clients, subscribeExchang
     for (const name of ACCOUNT_UPDATE_EVENTS) {
       const result = eventBus.subscribe({
         name,
-        handler: () => broadcastExchangeAccountUpdate({ clients }),
+        handler: () => broadcastExchangeAccountUpdate({
+          clients,
+          exchangeAccounts,
+        }),
       })
       if (result?.ok !== true || typeof result.subscription?.unsubscribe !== "function") {
         throw new TypeError("Trading-history WebSocket could not subscribe to Harvester account updates.")
@@ -357,12 +470,15 @@ function subscribeToHistoryUpdates({ eventBus, clients } = {}) {
 /**
  * Attach the local trading-history WebSocket endpoint to the existing HTTP server.
  *
- * The socket carries resource invalidation hints only. REST snapshots remain authoritative.
+ * The socket carries persisted-history invalidation hints and read-only provider account snapshots.
+ * Account readers are sampled on initial connection and after account-monitor notifications.
+ * Failed provider reads remain explicit and never become fabricated empty snapshots.
+ * An empty provider list is a valid snapshot for a Harvester with no active accounts.
  *
  * @param {{server: object, eventBus: object}} input
  * @returns {Readonly<{close: () => Promise<void>}>}
  */
-export function attachTradingHistoryWebSocket({ server, eventBus, subscribeExchangeAccountUpdates } = {}) {
+export function attachTradingHistoryWebSocket({ server, eventBus, exchangeAccounts = [], subscribeExchangeAccountUpdates } = {}) {
   if (!server || typeof server.on !== "function" || typeof server.off !== "function") {
     throw new TypeError("Trading-history WebSocket requires the existing HTTP server.")
   }
@@ -376,6 +492,7 @@ export function attachTradingHistoryWebSocket({ server, eventBus, subscribeExcha
     accountSubscriptions = subscribeToExchangeAccountUpdates({
       eventBus,
       clients,
+      exchangeAccounts,
       subscribeExchangeAccountUpdates,
     })
   } catch (error) {
@@ -389,6 +506,7 @@ export function attachTradingHistoryWebSocket({ server, eventBus, subscribeExcha
       socket,
       head,
       clients,
+      exchangeAccounts,
     })
   }
   server.on("upgrade", onUpgrade)
