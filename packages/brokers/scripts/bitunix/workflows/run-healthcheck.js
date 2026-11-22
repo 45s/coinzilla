@@ -373,6 +373,12 @@ async function runLocalDiagnostics({ brokersRoot, env, stdout, brokerFactory, in
 }
 
 function createModeStatusLines({ result, probeMode, includeGeneralDiagnostics, cancelExistingOrder }) {
+  if (cancelExistingOrder) {
+    return [
+      "Cancellation attempt recorded before the read-only order scan.",
+      `Order-read gate: ${result.healthCheck.healthy ? "READY" : "BLOCKED"}`,
+    ]
+  }
   if (probeMode) {
     return [
       "General diagnostics: SKIPPED (focused order-probe mode)",
@@ -398,6 +404,7 @@ function createPublishedStatusLines({ result, operatorAttempt, probeMode, includ
     result,
     probeMode,
     includeGeneralDiagnostics,
+    cancelExistingOrder,
   })
   if (operatorAttempt?.probeId) {
     lines.push(`Order probe: ${operatorAttempt.probeId}`)
@@ -449,6 +456,7 @@ function printPublishedResult({ result, stdout, probeMode = false, includeGenera
       operatorAttempt,
       probeMode,
       includeGeneralDiagnostics,
+      cancelExistingOrder,
     }),
     ...createPublishedReportLines({
       result,
