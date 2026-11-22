@@ -260,6 +260,11 @@ test("operator probe health gate treats an explicit operator decline as a safe s
 
 
 function createSanitizedOrderReadFixture({ orderId, symbol }) {
+  const order = {
+    id: orderId,
+    symbol,
+    status: "OPEN",
+  }
   return {
     schemaVersion: 1,
     startedAt: "2026-11-22T00:00:00.000Z",
@@ -292,7 +297,7 @@ function createSanitizedOrderReadFixture({ orderId, symbol }) {
         response: sanitizeDiagnosticValue({
           value: {
             ok: true,
-            data: [{ id: orderId, symbol, status: "OPEN" }],
+            data: [order],
             errors: [],
           },
         }),
@@ -304,7 +309,10 @@ function createSanitizedOrderReadFixture({ orderId, symbol }) {
         request: sanitizeDiagnosticValue({
           value: {
             method: "getOrder",
-            arguments: [{ symbol, orderId }],
+            arguments: [{
+              symbol,
+              orderId,
+            }],
           },
         }),
         response: sanitizeDiagnosticValue({
@@ -326,11 +334,17 @@ function createSanitizedOrderReadFixture({ orderId, symbol }) {
       {
         operation: "user.account",
         status: "passed",
-        request: { apiKey: "must-not-publish" },
-        response: { balance: "must-not-publish" },
+        request: {
+          apiKey: "must-not-publish",
+        },
+        response: {
+          balance: "must-not-publish",
+        },
       },
     ],
-    events: [{ payload: "must-not-publish" }],
+    events: [{
+      payload: "must-not-publish",
+    }],
   }
 }
 
