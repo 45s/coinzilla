@@ -320,6 +320,7 @@ function getPublishExitCode({ execution }) {
   const operatorResult = execution.report.results.find((entry) =>
     entry.operation === "operator order attempt" || entry.operation === "operator order probe")
   const failed = !execution.healthCheck.healthy ||
+    execution.report.summary.failed > 0 ||
     operatorResult?.status === "failed" ||
     Boolean(execution.pushError)
   return failed ? 1 : 0
