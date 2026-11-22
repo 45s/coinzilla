@@ -26,7 +26,6 @@ Exit codes: `0` integrity and projection both succeed; `1` CLI/configuration err
 
 The command is strictly diagnostic: it does not initialize, append, repair, truncate, or delete the store; connect to Binance; read exchange credentials; start Harvester; or submit/cancel orders. It does not enable recovery or restore trading state. Do not use the initialization command as a repair mechanism. Preserve the original files and investigate the reported failure.
 
-
 ## Purpose and limits
 
 Harvester uses one in-process EventBus to publish selected operational and trading-lifecycle facts. The Journal subscribes to that bus and appends event records to local JSONL files. Journal persistence is optional in configuration-only/no-broker mode; it is a required startup dependency for every broker-connected mode because the account PREFLIGHT audit must be durably recorded before market subscriptions.
