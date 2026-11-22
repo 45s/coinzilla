@@ -359,37 +359,48 @@ test("Bitunix order probe stops with the explicit unknown outcome and does not r
   }
 })
 
-test("Bitunix probe capture records only the place-order request and raw response, never auth headers", async () => {
-  let receivedOptions
-  const capture = {}
+function createPlacementResponse() {
+  return new Response(JSON.stringify({
+    code: 0,
+    msg: "success",
+    data: {
+      orderId: "probe-order-1",
+      symbol: "HYPEUSDT",
+      side: 2,
+      type: 1,
+      volume: "1",
+      price: "30",
+      placeStatus: "1",
+    },
+  }), {
+    status: 200,
+    headers: { "content-type": "application/json" },
+  })
+}
+
+function createTestRestClient({ capture, fetchFn }) {
   const factory = createCaptureRestClientFactory({
     capture,
-    fetchFn: async (url, options) => {
-      receivedOptions = options
-      assert.equal(new URL(url).pathname, "/api/spot/v1/order/place_order")
-      return new Response(JSON.stringify({
-        code: 0,
-        msg: "success",
-        data: {
-          orderId: "probe-order-1",
-          symbol: "HYPEUSDT",
-          side: 2,
-          type: 1,
-          volume: "1",
-          price: "30",
-          placeStatus: "1",
-        },
-      }), {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      })
-    },
+    fetchFn,
   })
-  const client = factory({
+  return factory({
     apiKey: "test-key",
     apiSecret: "test-secret",
     baseUrl: "https://openapi.bitunix.com",
     requestTimeout: 1000,
+  })
+}
+
+test("Bitunix probe capture records the placement request and raw response, never auth headers", async () => {
+  let receivedOptions
+  const capture = {}
+  const client = createTestRestClient({
+    capture,
+    fetchFn: async (url, options) => {
+      receivedOptions = options
+      assert.equal(new URL(url).pathname, "/api/spot/v1/order/place_order")
+      return createPlacementResponse()
+    },
   })
   await client.request({
     method: "POST",
@@ -419,7 +430,6 @@ test("Bitunix probe capture records only the place-order request and raw respons
   assert.equal(receivedOptions.headers["api-key"], "test-key")
   assert.equal(receivedOptions.headers.sign !== undefined, true)
 })
-
 
 test("Bitunix order probe classifies preflight failure as NOT_SENT", async () => {
   const directory = await mkdtemp(join(tmpdir(), "bitunix-order-probe-not-sent-"))
