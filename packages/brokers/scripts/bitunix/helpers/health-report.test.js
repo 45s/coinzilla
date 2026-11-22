@@ -122,7 +122,7 @@ test("public health reports copy only allowlisted fields and omit private accoun
     events: [{ payload: "private-event" }],
   }
   const published = createSanitizedHealthReport({ report })
-  assert.equal(published.results[0].error.code, "BITUNIX_ACCOUNT_READ_FAILED")
+  assert.equal(published.results[0].error.code, "BITUNIX_ACCOUNT_READ_FAILED")\n  assert.equal(published.results[0].probeId, "limit-buy-1")
   assert.equal(published.healthCheck.scope, "operator-order-preflight", "the public report must identify that this verdict gates only the guarded operator preflight")
   assert.deepEqual(published.healthCheck.nonBlockingFailedOperations, ["Broker API getOrderHistory"], "the public report must preserve names of non-blocking failures without exposing their response data")
   assert.equal(Object.hasOwn(published.results[0], "request"), false)
