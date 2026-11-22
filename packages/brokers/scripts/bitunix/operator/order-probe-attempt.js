@@ -430,7 +430,65 @@ async function disconnectMutationBroker({ orderBroker, writeLine }) {
   try {
     await orderBroker.disconnect()
   } catch (error) {
-    writeLine(`Warning: mutation Broker disconnect failed after probe: ${error.message}`)
+    try {
+      writeLine(`Warning: mutation Broker disconnect failed after probe: ${error.message}`)
+    } catch {
+      // Disconnect warnings must not overwrite the known order outcome.
+    }
+  }
+}
+
+async function prepareAndRunProbe({
+  probeId,
+  readBroker,
+  createOrderBroker,
+  confirm,
+  createMarker,
+  assertMatrixCanContinue,
+  writeLine,
+  capture,
+  secrets,
+}) {
+  await assertMatrixCanContinue({ probeId })
+  const preflight = await readOrderProbePreflight({
+    readBroker,
+    probeId,
+  })
+  writeLine(formatOrderProbePreflight({
+    preflight,
+  }))
+  const approved = await confirm({
+    preflight,
+  })
+  if (approved !== true) {
+    writeLine("Operator declined. No order was sent.")
+    return Object.freeze({
+      ok: false,
+      mutationOutcome: "NOT_SENT",
+      declined: true,
+    })
+  }
+  const orderBroker = createOrderBroker({
+    capture,
+  })
+  assertOrderMutationBroker({
+    broker: orderBroker,
+  })
+  await orderBroker.connect()
+  try {
+    return await runConfirmedProbeMutation({
+      orderBroker,
+      preflight,
+      createMarker,
+      capture,
+      secrets,
+      writeLine,
+    })
+  } finally {
+    await disconnectMutationBroker({
+      orderBroker,
+      writeLine,
+    })
   }
 }
 
@@ -460,43 +518,17 @@ export async function runBitunixOrderProbeAttempt({
     assertMatrixCanContinue,
     writeLine,
   })
-  let orderBroker
-  let connected = false
   try {
-    await assertMatrixCanContinue({ probeId })
-    const preflight = await readOrderProbePreflight({
-      readBroker,
+    return await prepareAndRunProbe({
       probeId,
-    })
-    writeLine(formatOrderProbePreflight({
-      preflight,
-    }))
-    const approved = await confirm({
-      preflight,
-    })
-    if (approved !== true) {
-      writeLine("Operator declined. No order was sent.")
-      return Object.freeze({
-        ok: false,
-        mutationOutcome: "NOT_SENT",
-        declined: true,
-      })
-    }
-    orderBroker = createOrderBroker({
-      capture,
-    })
-    assertOrderMutationBroker({
-      broker: orderBroker,
-    })
-    await orderBroker.connect()
-    connected = true
-    return await runConfirmedProbeMutation({
-      orderBroker,
-      preflight,
+      readBroker,
+      createOrderBroker,
+      confirm,
       createMarker,
+      assertMatrixCanContinue,
+      writeLine,
       capture,
       secrets,
-      writeLine,
     })
   } catch (error) {
     if (error?.mutationOutcome === "OUTCOME_UNKNOWN") {
@@ -505,13 +537,6 @@ export async function runBitunixOrderProbeAttempt({
     throw createNotSentProbeError({
       error,
     })
-  } finally {
-    if (connected) {
-      await disconnectMutationBroker({
-        orderBroker,
-        writeLine,
-      })
-    }
   }
 }
 
