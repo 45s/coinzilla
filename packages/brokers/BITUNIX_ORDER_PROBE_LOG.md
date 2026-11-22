@@ -63,7 +63,6 @@ This log records operator-authorized LIVE order-placement probes against Bitunix
 4. The funded BUY probe is complete and must never be repeated. Its order ID is `2124329325141426176`; the operator reports it remains waiting/open.
 5. Keep broader Bitunix Spot lifecycle/Harvester admission blockers tracked independently; the later successful order-read and cancellation verification in [PR #1727](https://github.com/45s/coinzilla/pull/1727) does not make Bitunix trading-ready.
 
-
 ## 2026-11-22 — Accepted HYPE placement and readback follow-up
 
 - Operator-confirmed Spot LIMIT BUY: HYPEUSDT, quantity `0.366`, price `30 USDT`; Bitunix returned successful placement acknowledgement and exact string order ID `2124329325141426176`.
