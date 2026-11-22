@@ -77,3 +77,14 @@ This log records operator-authorized LIVE order-placement probes against Bitunix
 3. Resolve the LIMIT/MARKET `volume` contract from authoritative endpoint-specific evidence before enabling additional probes.
 4. The funded BUY probe is complete and must never be repeated. Its order ID is `2124329325141426176`; the operator reports it remains waiting/open.
 5. Investigate the `100005 result.api.parameter.sign.illegal` response for the signed GET order-detail endpoint in [issue #1704](https://github.com/45s/coinzilla/issues/1704). Compare the exact canonical query string, URL encoding, and official signing example. Prefer already-working signed POST pending/history reads for safe reconciliation if justified by tests. Keep broader Bitunix Spot lifecycle/Harvester admission blockers tracked independently; one accepted LIMIT order does not make Bitunix trading-ready.
+
+
+## 2026-11-22 — Existing HYPE order readback (#1704)
+
+- Code audit confirms `getOpenOrders({ symbol: "HYPEUSDT" })` uses authenticated, read-only `POST /api/spot/v1/order/pending/list` with the required symbol body.
+- The endpoint has no documented pagination or account-wide mode. The method validates response rows against HYPEUSDT and the adapter retains the order ID as an exact string.
+- Added the dedicated read-only command:
+  `pnpm --filter @coinzilla/brokers bitunix:verify-existing-order`
+- The command searches the current HYPEUSDT pending-order response for exact order ID `2124329325141426176`, prints the normalized order facts if found, and performs no placement or cancellation.
+- Offline tests cover exact large-string ID matching and a miss without mutation.
+- Live result: **pending operator execution**. Do not mark Phase 1 complete until the command finds the exact ID and symbol on the configured account.
