@@ -27,9 +27,11 @@ async function disconnectSubscription({ subscription, broker, scheduler }) {
       tradingMode: "testnet",
       apiKey: "test-key",
       apiSecret: "test-secret",
-      logger: { error() {},
-info() {},
-warn() {} },
+      logger: {
+        error() {},
+        info() {},
+        warn() {},
+      },
     }, {
       apiClientFactory: () => {
         client = createFakeRpcClient({
@@ -364,9 +366,11 @@ wasClean: false })
     assert.equal(clients[1].closeListenerCount, 0)
     assert.equal(scheduler.pendingCount, 1)
 
-    await disconnectSubscription({ subscription,
+    await disconnectSubscription({
+      subscription,
       broker,
-      scheduler })
+      scheduler,
+    })
   })
 
 
