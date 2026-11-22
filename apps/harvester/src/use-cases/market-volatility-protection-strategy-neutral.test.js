@@ -44,7 +44,10 @@ function createMarketVolatilityWorkflow({ symbol, activeOrders, cancellations })
       activeOrders.length = 0
       return { ok: true }
     },
-    evaluateLatest: async () => ({ ok: true, data: { actions: [] } }),
+    evaluateLatest: async () => ({
+      ok: true,
+      data: { actions: [] },
+    }),
     logger: {
       system() {},
       warn() {},
