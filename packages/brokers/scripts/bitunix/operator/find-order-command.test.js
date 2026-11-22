@@ -279,3 +279,31 @@ test("scan records thrown catalog failures and still writes a report", async () 
     })
   }
 })
+
+
+test("scan records Broker construction failures and still writes a report", async () => {
+  const reportDirectory = await mkdtemp(join(tmpdir(), "bitunix-order-scan-"))
+  try {
+    const result = await runFindBitunixSpotOrder({
+      env: CREDENTIALS,
+      orderId: ORDER_ID,
+      stdout: createOutput().stream,
+      stderr: createOutput().stream,
+      reportDirectory,
+      brokerFactory: () => {
+        throw Object.assign(new Error("broker construction failed"), {
+          code: "E_BROKER_CREATE",
+        })
+      },
+    })
+    assert.equal(result.exitCode, 1)
+    assert.ok(result.report.fatalError)
+    assert.equal(result.report.fatalError.code, "E_BROKER_CREATE")
+    assert.ok(result.reportPath)
+  } finally {
+    await rm(reportDirectory, {
+      recursive: true,
+      force: true,
+    })
+  }
+})
