@@ -461,7 +461,7 @@ test("Bitunix order probe classifies preflight failure as NOT_SENT", async () =>
       }],
     })
     await assert.rejects(
-      run(),
+      run("market-buy-1"),
       (error) => error.mutationOutcome === "NOT_SENT" &&
         /explicit HYPE balance row/i.test(error.message),
     )
