@@ -24,7 +24,7 @@ export function parseHealthcheckMode({ args = [] } = {}) {
     return "probe-order"
   }
   if (args.length !== 1 || !Object.hasOwn(MODE_BY_ARGUMENT, args[0])) {
-    throw new Error("Use one Bitunix mode: --help, --version, --local, --publish, --place-order, or --probe-order=<probe-id>")
+    throw new Error("Use only one Bitunix mode: --help, --version, --local, --publish, --place-order, or --probe-order=<probe-id>")
   }
   return MODE_BY_ARGUMENT[args[0]]
 }
