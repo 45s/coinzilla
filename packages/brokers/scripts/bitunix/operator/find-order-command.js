@@ -374,7 +374,7 @@ async function executeScan({ context }) {
       logger: context.logger,
     })
     context.connected = await connectBroker({
-      broker,
+      broker: context.broker,
       report,
       stdout,
       secrets,
@@ -395,7 +395,7 @@ async function executeScan({ context }) {
   } finally {
     if (context.connected && context.broker) {
       await disconnectBroker({
-        broker,
+        broker: context.broker,
         report,
         stdout,
         secrets,
