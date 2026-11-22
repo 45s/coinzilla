@@ -67,7 +67,7 @@ test("names each local snapshot from its UTC archive time and unique ID", () => 
   )
 })
 
-test("archives complete logs and data trees without requiring process markers", async (t) => {
+test("archives the final cumulative tails and newest session with complete data trees", async (t) => {
   const fixture = await createArchiveFixture()
   t.after(() => rm(fixture.packageDirectory, { recursive: true, force: true }))
   let publishedDirectory
@@ -79,7 +79,7 @@ test("archives complete logs and data trees without requiring process markers", 
       publishedDirectory = directory
       assert.equal(remote, ARCHIVE_REMOTE, "the archive must be sent only to the configured private repository")
       const manifest = JSON.parse(await readFile(path.join(directory, "manifest.json"), "utf8"))
-      assert.equal(manifest.snapshotType, "selected-log-evidence", "the manifest must identify this as a raw evidence snapshot")
+      assert.equal(manifest.snapshotType, "selected-log-evidence", "the manifest must identify this as a selected-log evidence snapshot")
       assert.deepEqual(manifest.includedDirectories, ["logs", "data", "recovery-facts"], "the manifest must declare all included source trees")
       assert.deepEqual(manifest.logSelection, { cumulative: "final-5-percent-of-each-file", sessions: "newest-session-directory-only" }, "the manifest must describe the reduced log selection")
       assert.equal(manifest.dataCommitHash, DATA_COMMIT_HASH, "the archive manifest must identify the last committed recovery-facts digest")
