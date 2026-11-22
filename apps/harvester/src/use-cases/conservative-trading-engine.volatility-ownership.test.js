@@ -55,7 +55,10 @@ const appConfig = {
 function createEngine({ emittedSystemLogs } = {}) {
   return makeConservativeTradingEngine({
     broker: {
-      placeOrder: async () => ({ ok: false, errors: [new Error("No order submission expected in this test.")] }),
+      placeOrder: async () => ({
+        ok: false,
+        errors: [new Error("No order submission expected in this test.")],
+      }),
     },
     strategyPolicy: conservativeStrategyPolicy,
     appConfig,
