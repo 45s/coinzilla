@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url"
 import { captureBuildMetadata } from "@coinzilla/utils"
 import packageMetadata from "../package.json" with { type: "json" }
 import { resolveOperationalStateDirectory } from "../src/infrastructure/operational-state/resolve-directory.js"
+import { assertHarvesterProcessStopped } from "./assert-harvester-process-stopped.js"
 
 const PACKAGE_DIRECTORY = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const DEFAULT_PROCESS_LOCK_DIRECTORY = path.join(os.homedir(), ".coinzilla", "harvester", "process-locks")
@@ -23,28 +24,6 @@ function createResetIdentity({ env = process.env } = {}) {
     `worktree ${source.workingTree}`,
     `node ${process.version}`,
   ].join(" | ")
-}
-
-async function assertNoProcessLocks({ lockDirectory = DEFAULT_PROCESS_LOCK_DIRECTORY } = {}) {
-  let directoryStats
-  try {
-    directoryStats = await lstat(lockDirectory)
-  } catch (error) {
-    if (error?.code === "ENOENT") {
-      return
-    }
-    throw error
-  }
-  if (directoryStats.isSymbolicLink() || !directoryStats.isDirectory()) {
-    throw new Error("Harvester process-lock directory is not a regular directory; refusing operational-state reset.")
-  }
-  const entries = await readdir(lockDirectory, { withFileTypes: true })
-  const lockFiles = entries.filter((entry) => entry.name.endsWith(".lock"))
-  if (lockFiles.length > 0) {
-    throw new Error(
-      "A Harvester process lock exists; stop Harvester and verify stale lock ownership before resetting operational state.",
-    )
-  }
 }
 
 function resolveResetDirectory({ env } = {}) {
@@ -73,7 +52,7 @@ export async function runHarvesterOperationalStateReset({
     throw new TypeError("Usage: operational-state:reset:dev -- --confirm")
   }
 
-  await assertNoProcessLocks({ lockDirectory })
+  await assertHarvesterProcessStopped({ lockDirectory })
   const directory = resolveResetDirectory({ env })
   let directoryStats
   try {
