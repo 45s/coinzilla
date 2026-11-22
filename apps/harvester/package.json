@@ -67,6 +67,7 @@
       "src/domain/strategies/recovery-seller/lifecycle-state.test.js",
       "src/domain/strategies/recovery-seller/recovery-seller-accounting-error.test.js",
       "src/domain/orders/order-registry.test.js",
+      "src/domain/orders/recovery-seller-submission-ownership.test.js",
       "src/domain/strategies/recovery-seller/recovery-seller-lifecycle.test.js",
       "src/domain/account/calculate-account-snapshot-baselines.test.js",
       "src/bootstrap/account/create-account-snapshot-manager.test.js",
