@@ -60,7 +60,7 @@ The production provider-factory map currently registers Binance only. Bitunix Sp
 
 ## Backward compatibility
 
-When brokers.instances, executionRouting, and marketDataRouting are absent, the documented single-Binance environment configuration remains the compatibility path. Multi-provider mode requires explicit routing tables; there is no first-connected-broker fallback.
+When brokers.instances, executionRouting, and marketDataRouting are absent, the single-provider Binance compatibility path infers execution routes for every enabled executable strategy from that strategy's own pair map. The market-data subscription set is the deduplicated union of enabled markets from those strategies. This includes RS-only configurations and does not require enabling or adding a Conservative route for the same symbol. A market is inferred only when its configured trading environment is compatible with the sole provider; there is no cross-environment fallback. Multi-provider mode still requires explicit execution and market-data routing tables; there is no first-connected-broker fallback.
 
 ## Deferred boundaries
 
@@ -70,6 +70,6 @@ Process-restart restoration remains disabled under issue #654. Recovery Seller r
 
 Provider routing preserves the `{ strategyId, symbol }` owner while market and user-data subscriptions are deduplicated by symbol. A provider account with CG routes may also receive explicitly configured RS routes; the effective runtime keeps CG and RS pair maps separate and builds a union market map for canonical exchange metadata and subscriptions.
 
-RS routes are rejected unless `strategies.RS_recoverySeller.enabled` is true and every routed market is enabled for the selected `TRADING_MODE`. RS markets require an explicit positive per-market `investment` budget and an operator-declared legacy `invested` basis, original `quantity`, and per-cycle `sellQuantity`. An RS-only provider account remains rejected until the shared engine can be composed without a CG route.
+RS routes are rejected unless `strategies.RS_recoverySeller.enabled` is true and every routed market is enabled for the selected `TRADING_MODE`. RS markets require an explicit positive per-market `investment` budget and an operator-declared legacy `invested` basis, original `quantity`, and per-cycle `sellQuantity`. An RS-only provider account is supported by the legacy single-provider routing path: its enabled RS pair map supplies the execution routes and contributes to the market-data union without synthesizing a CG route. In multi-provider mode, RS execution and its market-data symbol still require explicit routes. This routing compatibility does not enable RS by default or authorize TESTNET/LIVE exchange operations.
 
 At startup, canonical exchange metadata is loaded before the RS legacy basis is initialized in the provider-account state. The RS pair is validated against its own order quantity, investment, precision, and order-type requirements even when CG owns the same market. The declared legacy quantity is not treated as available inventory: the account snapshot and shared reservation accounting must independently prove unreserved Spot custody before an RS SELL can be authorized. RS remains disabled by default.
