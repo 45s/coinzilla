@@ -2,6 +2,7 @@
 
 Start with the procedure matching the task. Do not treat a runbook as standing authorization to interact with TESTNET or place/cancel orders.
 
+- [Operational State Store diagnostics and incident investigation](operational-state-store-diagnostics.md) — diagnostic script, ledger file locations, read-only behavior, exit codes, current #1743 evidence, and safe investigation procedure.
 - [Journal Operations](../JOURNAL_OPERATIONS.md) — Journal lifecycle, event inventory, PREFLIGHT/RECOVERY/CLOSING and targeted COMMISSION_BASELINE durability, process locks, shutdown ordering, failure diagnosis, and read-only Operational State integrity/projection diagnostics.
 - [One-market recovery reconciliation](../recovery/README.md) — offline ADR-0001 Step 7 evidence bundle, audit-only CLI and explicit coverage confirmation.
 - [Error vocabulary](../error-vocabulary.md) — stable diagnostic identifiers, meanings and safe recovery steps.
