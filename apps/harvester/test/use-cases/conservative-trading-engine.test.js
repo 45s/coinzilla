@@ -116,9 +116,18 @@ function createFixturePlaceOrder({ state, market, baseAsset, quoteAsset, pending
       market,
       side: order.side,
       type: order.type,
-      limitPrice: new Money({\n        amount: order.price,\n        asset: quoteAsset,\n      }),
-      originalQuantity: new Quantity({\n        amount: order.quantity,\n        asset: baseAsset,\n      }),
-      executedQuantity: new Quantity({\n        amount: "0",\n        asset: baseAsset,\n      }),
+      limitPrice: new Money({
+        amount: order.price,
+        asset: quoteAsset,
+      }),
+      originalQuantity: new Quantity({
+        amount: order.quantity,
+        asset: baseAsset,
+      }),
+      executedQuantity: new Quantity({
+        amount: "0",
+        asset: baseAsset,
+      }),
       status: "OPEN",
     })
     if (order.side === "SELL" && state.deferSell) {
@@ -154,7 +163,13 @@ function createFixtureCancelOrder({ state, market, pendingCancel, cancelStarted,
   }
 }
 
-function createFixtureBroker({\n    market,\n    baseAsset,\n    quoteAsset,\n    deferFirstSell,\n    deferCancellation,\n  }) {
+function createFixtureBroker({
+    market,
+    baseAsset,
+    quoteAsset,
+    deferFirstSell,
+    deferCancellation,
+  }) {
   const state = {
     orderSequence: 0,
     deferSell: deferFirstSell,
@@ -169,10 +184,20 @@ function createFixtureBroker({\n    market,\n    baseAsset,\n    quoteAsset,\n  
   const cancelStarted = createDeferred()
   const broker = {
     placeOrder: createFixturePlaceOrder({
-      state,\n      market,\n      baseAsset,\n      quoteAsset,\n      pendingSell,\n      pendingSellStarted,\n      submittedIntents,
+      state,
+      market,
+      baseAsset,
+      quoteAsset,
+      pendingSell,
+      pendingSellStarted,
+      submittedIntents,
     }),
     cancelOrder: createFixtureCancelOrder({
-      state,\n      market,\n      pendingCancel,\n      cancelStarted,\n      cancellations,
+      state,
+      market,
+      pendingCancel,
+      cancelStarted,
+      cancellations,
     }),
     getFills: async ({ orderId } = {}) => toResult({ data: fillsByOrder.get(orderId) ?? [] }),
   }
@@ -216,7 +241,11 @@ function createFixtureAppConfig(externalOrdersPolicy) {
   };
 }
 
-function createTradeEventFactory({\n      market,\n      baseAsset,\n      quoteAsset,\n    }) {
+function createTradeEventFactory({
+      market,
+      baseAsset,
+      quoteAsset,
+    }) {
   return ({ acknowledgedOrder, tradeId, quantity, executedQuantity, status }) => {
     const fill = new Fill({
       tradeId,
@@ -305,7 +334,11 @@ function createFixtureAccounting({ market }) {
     getPortfolio: () => portfolio,
     getRecoveryLedger: () => recoveryLedger,
     updateTradingAccounting: ({ fill } = {}) => {
-      const result = applyTradingAccounting({\n        portfolio,\n        recoveryLedger,\n        fill,\n      })
+      const result = applyTradingAccounting({
+        portfolio,
+        recoveryLedger,
+        fill,
+      })
       if (result.ok) {
         ({ portfolio, recoveryLedger } = result.data)
       }
@@ -713,7 +746,10 @@ retryable: false },
 
 test("PENDING orders remain explicitly uncancellable", () => {
   const result = validateCancellationEligibility({
-    order: {\n      status: "PENDING",\n      brokerOrderId: undefined,\n    },
+    order: {
+      status: "PENDING",
+      brokerOrderId: undefined,
+    },
   })
   assert.equal(result.ok, false)
   assert.match(result.errors[0].message, /not cancellable/)
@@ -757,9 +793,18 @@ function createScenarioOrder({ fixture, intent, brokerOrderId }) {
     market: fixture.market,
     side: intent.side,
     type: "LIMIT_MAKER",
-    limitPrice: new Money({\n      amount: intent.price,\n      asset: fixture.market.quoteAsset,\n    }),
-    originalQuantity: new Quantity({\n      amount: intent.quantity,\n      asset: fixture.market.baseAsset,\n    }),
-    executedQuantity: new Quantity({\n      amount: "0",\n      asset: fixture.market.baseAsset,\n    }),
+    limitPrice: new Money({
+      amount: intent.price,
+      asset: fixture.market.quoteAsset,
+    }),
+    originalQuantity: new Quantity({
+      amount: intent.quantity,
+      asset: fixture.market.baseAsset,
+    }),
+    executedQuantity: new Quantity({
+      amount: "0",
+      asset: fixture.market.baseAsset,
+    }),
     status: "OPEN",
   })
 }
@@ -789,7 +834,10 @@ async function awaitInitialRecoverySell({ engine, pendingSellStarted }) {
     ]),
     label: "initial recovery SELL submission",
   })
-  return {\n    pendingSellOrder,\n    placingRecoveryOrders,\n  }
+  return {
+    pendingSellOrder,
+    placingRecoveryOrders,
+  }
 }
 
 async function startDeferredRecoveryScenario(fixture) {
@@ -798,7 +846,11 @@ async function startDeferredRecoveryScenario(fixture) {
   await engine.processBookTicker(createScenarioBookTicker())
   await engine.processMarketPrice({
     symbol: "ZROUSDT",
-    priceEvent: {\n      symbol: "ZROUSDT",\n      price: "1",\n      timestamp: 1,\n    },
+    priceEvent: {
+      symbol: "ZROUSDT",
+      price: "1",
+      timestamp: 1,
+    },
   })
   const [initialBuyIntent] = submittedIntents
   assert.ok(initialBuyIntent, "The initial market evaluation must submit its BUY before fill reconciliation.")
