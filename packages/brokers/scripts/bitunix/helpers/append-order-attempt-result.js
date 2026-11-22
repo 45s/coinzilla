@@ -21,7 +21,7 @@ function createOperatorAttemptError({ result, codeOverride }) {
  * Append only a sanitized operator outcome to the diagnostic report.
  * Exchange order IDs, request/response payloads and free-form messages are never copied.
  *
- * @param {{report: object, operatorResult: object, durationMs: number, probeId?: string, secrets?: string[]}} input
+ * @param {{report: object, operatorResult: object, durationMs: number, probeId?: string, probeMode?: boolean, secrets?: string[]}} input
  * @returns {object}
  */
 export function appendOrderAttemptResult({
@@ -29,6 +29,7 @@ export function appendOrderAttemptResult({
   operatorResult,
   durationMs,
   probeId,
+  probeMode = false,
   secrets = [],
 }) {
   let status = "failed"
@@ -36,12 +37,15 @@ export function appendOrderAttemptResult({
     status = "skipped"
   } else if (operatorResult.ok === true && operatorResult.mutationOutcome === "CONFIRMED") {
     status = "passed"
+  } else if (probeMode && operatorResult.mutationOutcome === "REJECTED") {
+    status = "passed"
   }
+  const sourceError = operatorResult.errors?.[0]
   const result = createDiagnosticResult({
-    operation: "operator order attempt",
+    operation: probeMode ? "operator order probe" : "operator order attempt",
     status,
     durationMs,
-    error: status === "failed" || operatorResult.skipCode
+    error: sourceError || operatorResult.skipCode
       ? createOperatorAttemptError({
         result: operatorResult,
         codeOverride: operatorResult.skipCode,
@@ -60,6 +64,9 @@ export function appendOrderAttemptResult({
     results: [...report.results, {
       ...result,
       ...(typeof probeId === "string" && probeId ? { probeId } : {}),
+      ...(typeof operatorResult.mutationOutcome === "string"
+        ? { mutationOutcome: operatorResult.mutationOutcome }
+        : {}),
     }],
   }
 }
