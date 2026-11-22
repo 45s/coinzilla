@@ -386,3 +386,57 @@ test("Bitunix order probe classifies an existing one-shot marker as NOT_SENT", a
     await rm(directory, { recursive: true, force: true })
   }
 })
+
+
+test("Bitunix probe capture records sanitized order-detail follow-up responses", async () => {
+  const capture = {}
+  const factory = createCaptureRestClientFactory({
+    capture,
+    fetchFn: async (url) => {
+      const path = new URL(url).pathname
+      const data = path.endsWith("/order/detail")
+        ? { orderId: "probe-order-1", userId: "private-user-id", symbol: "HYPEUSDT" }
+        : { orderId: "probe-order-1", symbol: "HYPEUSDT", side: 2, type: 1, volume: "1", price: "30", placeStatus: "1" }
+      return new Response(JSON.stringify({
+        code: 0,
+        msg: "success",
+        data,
+      }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      })
+    },
+  })
+  const client = factory({
+    apiKey: "test-key",
+    apiSecret: "test-secret",
+    baseUrl: "https://openapi.bitunix.com",
+    requestTimeout: 1000,
+  })
+  await client.request({
+    method: "POST",
+    path: "/api/spot/v1/order/place_order",
+    body: {
+      symbol: "HYPEUSDT",
+      side: 2,
+      type: 1,
+      volume: "1",
+      price: "30",
+    },
+    authenticated: true,
+    stateChanging: true,
+  })
+  await client.request({
+    method: "GET",
+    path: "/api/spot/v1/order/detail",
+    queryParams: { orderId: "probe-order-1" },
+    authenticated: true,
+    stateChanging: false,
+  })
+
+  assert.equal(capture.requests.length, 2)
+  assert.equal(capture.followUpResponses.length, 1)
+  assert.equal(capture.followUpResponses[0].body.data.userId, "[REDACTED]")
+  assert.equal(JSON.stringify(capture).includes("private-user-id"), false)
+  assert.equal(Object.hasOwn(capture.requests[1], "body"), false)
+})
