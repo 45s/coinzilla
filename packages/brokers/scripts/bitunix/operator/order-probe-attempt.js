@@ -12,13 +12,14 @@ function isCapturedOrderPath({ path }) {
     path === BITUNIX_SPOT_ORDER_API.orderDetail
 }
 
-function createCapturedRequest({ path, options, isPlacement }) {
+function createCapturedRequest({ url, path, options, isPlacement }) {
+  const query = Object.fromEntries(new URL(url).searchParams.entries())
   return {
     method: options.method,
     path,
     ...(isPlacement
       ? { body: options.body ?? null }
-      : { query: sanitizeDiagnosticValue({ value: options.queryParams ?? {} }) }),
+      : { query: sanitizeDiagnosticValue({ value: query }) }),
   }
 }
 
@@ -66,6 +67,7 @@ async function captureFetch({ url, options, capture, fetchFn }) {
   }
   const isPlacement = path === BITUNIX_SPOT_ORDER_API.placeOrder
   const request = createCapturedRequest({
+    url,
     path,
     options,
     isPlacement,
