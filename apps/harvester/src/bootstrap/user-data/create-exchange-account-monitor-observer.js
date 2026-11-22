@@ -1,6 +1,6 @@
 export function createExchangeAccountMonitorObserver({
   onUserDataEvent,
-  listeners,
+  listeners = new Set(),
   logger,
 } = {}) {
   return async (input) => {
