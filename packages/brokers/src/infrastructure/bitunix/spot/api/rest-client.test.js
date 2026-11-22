@@ -39,9 +39,58 @@ test("Bitunix REST client signs authenticated requests and unwraps successful da
   assert.equal(captured.url, "https://openapi.bitunix.com/api/spot/v1/market/last_price?symbol=BTCUSDT")
   assert.equal(captured.options.headers["api-key"], "api-key")
   assert.equal(captured.options.headers.timestamp, "1700000000000")
-  assert.equal(captured.options.headers.sign, "20fbd51d82ca634dfd00238d8e56ed67c355290378c465629cdf8c08530c9700")
+  assert.equal(captured.options.headers.sign, "d355761041a87afc6e1e8becaddb727a866eafce76c6d12a0763d12cfde65932")
   assert.ok(captured.options.signal instanceof AbortSignal)
   assert.equal(result.data, "10000.00")
+})
+
+test("Bitunix REST client signs the Spot order-detail GET exactly like the reference client", async () => {
+  const orderId = "2124329325141426176"
+  let captured
+  const client = new BitunixRestClient({
+    apiKey: "api-key",
+    apiSecret: "secret",
+    now: () => 1700000000000,
+    nonceFactory: () => "nonce",
+    fetchFn: async (...request) => {
+      const [url, options] = request
+      captured = {
+        url,
+        options,
+      }
+      return {
+        ok: true,
+        status: 200,
+        async json() {
+          return {
+            code: "0",
+            msg: "result.success",
+            data: {
+              orderId,
+              symbol: "HYPEUSDT",
+            },
+          }
+        },
+      }
+    },
+  })
+
+  const result = await client.request({
+    method: "GET",
+    path: "/api/spot/v1/order/detail",
+    queryParams: { orderId },
+    authenticated: true,
+    stateChanging: false,
+  })
+
+  assert.equal(result.data.orderId, orderId)
+  assert.equal(
+    captured.url,
+    `https://openapi.bitunix.com/api/spot/v1/order/detail?orderId=${orderId}`,
+  )
+  assert.equal(captured.options.method, "GET")
+  assert.equal(captured.options.body, undefined)
+  assert.equal(captured.options.headers.sign, "263b87d50ccf9d41f1381af7eba6a4274d821fec0c33a2ae7c99600577dbbc9f")
 })
 
 test("Bitunix REST client preserves balance precision from JSON number tokens", async () => {
@@ -1100,7 +1149,11 @@ test("Bitunix REST diagnostics log request and response while redacting credenti
   assert.equal(events[0].layer, "rest")
   assert.equal(events[0].path, "/api/spot/v1/order/pending/list")
   assert.equal(events[0].body.symbol, "HYPEUSDT")
-  assert.equal(events[1].data[0].userId, "[REDACTED]")
+  assert.deepEqual(events[1].dataSummary, {
+    type: "array",
+    itemCount: 1,
+    fields: ["orderId", "symbol", "userId"],
+  })
   const serialized = JSON.stringify(events)
   assert.equal(serialized.includes("never-log-api-key"), false)
   assert.equal(serialized.includes("never-log-api-secret"), false)
@@ -1140,3 +1193,100 @@ test("Bitunix REST diagnostics record exchange rejection details without retryin
   assert.equal(events[1].exchangeCode, "100005")
   assert.equal(events[2].error.exchangeCode, "100005")
 })
+
+
+function createPrivateResponseLoggingFixture() {
+  const events = []
+  const responses = [
+    {
+      code: "0",
+      msg: "success",
+      data: [{
+        id: "withdrawal-private-id",
+        amount: "9876.54321",
+        fee: "0.123",
+        address: "wallet-address-secret",
+        fromAddress: "source-address-secret",
+        toAddress: "destination-address-secret",
+        transactionHash: "private-transaction-hash",
+        toUid: "private-recipient-uid",
+        toPhoneNumber: "private-phone",
+        toEmail: "private-email@example.invalid",
+        remark: "private withdrawal note",
+      }],
+    },
+    {
+      code: "0",
+      msg: "success",
+      data: [{
+        coin: "USDT",
+        balance: "123456.789",
+        balanceLocked: "10.00",
+      }],
+    },
+  ]
+  const client = new BitunixRestClient({
+    apiKey: "api-key",
+    apiSecret: "api-secret",
+    logger: {
+      debug: (event) => events.push(event),
+      warn: (event) => events.push(event),
+      error: (event) => events.push(event),
+    },
+    fetchFn: async () => ({
+      ok: true,
+      status: 200,
+      async text() {
+        return JSON.stringify(responses.shift())
+      },
+    }),
+  })
+  return {
+    client,
+    events,
+  }
+}
+
+async function readPrivateDiagnosticResponses({ client }) {
+  await client.request({
+    method: "POST",
+    path: "/api/spot/v1/withdraw_transfer/page",
+    body: { limit: 1 },
+    stateChanging: false,
+  })
+  await client.request({
+    method: "GET",
+    path: "/api/spot/v1/user/account",
+  })
+}
+
+test("Bitunix REST diagnostics log only response shape and never financial or wallet values", async () => {
+  const fixture = createPrivateResponseLoggingFixture()
+  await readPrivateDiagnosticResponses(fixture)
+  const serializedEvents = JSON.stringify(fixture.events)
+  for (const privateValue of [
+    "9876.54321",
+    "0.123",
+    "wallet-address-secret",
+    "source-address-secret",
+    "destination-address-secret",
+    "private-transaction-hash",
+    "private-recipient-uid",
+    "private-phone",
+    "private-email@example.invalid",
+    "private withdrawal note",
+    "123456.789",
+    "10.00",
+    "withdrawal-private-id",
+  ]) {
+    assert.equal(serializedEvents.includes(privateValue), false, "REST diagnostic events must not expose private values")
+  }
+  const responseEvents = fixture.events.filter((event) => event.event === "response.received")
+  assert.equal(responseEvents.length, 2)
+  assert.deepEqual(responseEvents[0].dataSummary.fields, [
+    "address", "amount", "fee", "fromAddress", "id", "remark",
+    "toAddress", "toEmail", "toPhoneNumber", "toUid", "transactionHash",
+  ])
+  assert.deepEqual(responseEvents[1].dataSummary.fields, ["balance", "balanceLocked", "coin"])
+})
+

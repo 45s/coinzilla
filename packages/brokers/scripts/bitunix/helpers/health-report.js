@@ -62,6 +62,37 @@ export function createSanitizedHealthReport({ report }) {
   }
 }
 
+export function evaluateOrderReadHealthCheck({ report }) {
+  const openOrders = report.results.find((result) =>
+    result.operation === "Broker API getOpenOrders")
+  const orderDetails = report.results.filter((result) =>
+    result.operation === "Broker API getOrder")
+  const orders = openOrders?.response?.data
+  const hasValidOpenOrders = openOrders?.status === "passed" &&
+    openOrders.response?.ok === true &&
+    Array.isArray(orders)
+  const detailsComplete = hasValidOpenOrders &&
+    orderDetails.length === orders.length &&
+    orderDetails.every((result) => result.status === "passed")
+  const missingRequiredOperations = []
+  if (!hasValidOpenOrders) {
+    missingRequiredOperations.push("Broker API getOpenOrders")
+  }
+  if (hasValidOpenOrders && !detailsComplete) {
+    missingRequiredOperations.push("Broker API getOrder for every discovered order")
+  }
+  return {
+    scope: "bitunix-order-read",
+    requiredOperations: [
+      "Broker API getOpenOrders",
+      "Broker API getOrder for every discovered order",
+    ],
+    missingRequiredOperations,
+    nonBlockingFailedOperations: [],
+    healthy: hasValidOpenOrders && detailsComplete,
+  }
+}
+
 export function evaluateReadOnlyHealthCheck({ report }) {
   const passedOperations = new Set(
     report.results
