@@ -214,21 +214,23 @@ function groupRoutesByProvider({ providers, routeByStrategyMarket }) {
   return routesByProvider
 }
 
-function createLegacyRouteAssignments({ provider, pairs }) {
+function createLegacyRouteAssignments({ provider, pairsByStrategy }) {
   const assignments = new Map()
-  for (const [symbol, pair] of Object.entries(pairs)) {
-    if (pair?.enabled !== true) {
-      continue
+  for (const [strategyId, pairs] of pairsByStrategy) {
+    for (const [symbol, pair] of Object.entries(pairs)) {
+      if (pair?.enabled !== true) {
+        continue
+      }
+      if (pair.tradingEnvironment &&
+          pair.tradingEnvironment !== "both" &&
+          pair.tradingEnvironment !== provider.environment) {
+        continue
+      }
+      assignments.set(createRouteKey({
+        strategyId,
+        symbol,
+      }), provider.providerInstanceId)
     }
-    if (pair.tradingEnvironment &&
-        pair.tradingEnvironment !== "both" &&
-        pair.tradingEnvironment !== provider.environment) {
-      continue
-    }
-    assignments.set(createRouteKey({
-      strategyId: StrategyId.COIN_GRABBER,
-      symbol,
-    }), provider.providerInstanceId)
   }
   return assignments
 }
@@ -252,13 +254,10 @@ function resolveRouteAssignments({ appConfig, providers, pairsByStrategy, provid
       "Multi-provider Harvester configuration requires explicit executionRouting.routes",
     )
   }
-  if (pairsByStrategy.has(StrategyId.RECOVERY_SELLER)) {
-    throw new TypeError("Recovery Seller requires explicit executionRouting.routes")
-  }
   const [provider] = providers
   return createLegacyRouteAssignments({
     provider,
-    pairs: pairsByStrategy.get(StrategyId.COIN_GRABBER) ?? {},
+    pairsByStrategy,
   })
 }
 

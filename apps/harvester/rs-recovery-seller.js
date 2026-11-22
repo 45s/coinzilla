@@ -1,8 +1,26 @@
+import { TRADING_ENVIRONMENTS } from "./src/domain/trading-environment.js";
+
 /**
  * Operator-authorized Recovery Seller markets.
  *
- * Keep this map empty until each market has an explicitly declared legacy
- * historical basis and sell quantity. A configured entry is authorization,
- * not proof of current Spot custody or available inventory.
+ * Configured entries declare a historical legacy basis and permitted sell
+ * quantity; they do not prove current Spot custody or available inventory.
  */
-export const recoverySellerPairs = {};
+export const recoverySellerPairs = {
+  LINEAUSDT: {
+    enabled: true,
+    tradingEnvironment: TRADING_ENVIRONMENTS.TESTNET,
+    enableVolatilityProtection: false,
+    legacyPosition: {
+      invested: 400,
+      quantity: 25000,
+    },
+    sellQuantity: 10,
+    investment: 100,
+    orderQuantity: 7000,
+    minProfit: 0.01,
+    priceStepPercent: 0.5,
+    makerPercent: 0.1,
+    takerPercent: 0.1,
+  },
+};
