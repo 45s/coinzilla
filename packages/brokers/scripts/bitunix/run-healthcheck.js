@@ -65,7 +65,7 @@ function printHelp() {
     "--help: show this help without loading credentials or contacting Bitunix.",
     "",
     "The default mode never places or cancels orders, transfers funds, or withdraws.",
-    "The order-read scan records the complete getOpenOrders result and every getOrder result/error; order IDs come from getOpenOrders data, never CLI arguments."
+    "The order-read scan records the complete getOpenOrders result and every getOrder result/error; order IDs come from getOpenOrders data, never CLI arguments.",
     "LIVE order modes are human-only and must never be invoked by AI agents, tests, CI, or scheduled jobs.",
     "",
   ].join("\n"))
