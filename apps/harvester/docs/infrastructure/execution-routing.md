@@ -90,7 +90,7 @@ type ExecutionRoutesByProvider = ReadonlyMap<providerInstanceId, readonly Execut
 type SymbolsByProvider = ReadonlyMap<providerInstanceId, readonly string[]>;
 ```
 
-- Execution route records preserve one owner per `(strategyId, symbol)`. The symbol resolver deduplicates symbols only after ownership has been resolved.
+- Execution route records preserve one owner per `(strategyId, symbol)`. The symbol resolver deduplicates symbols only after ownership has been resolved; the market-data regression verifies that a symbol shared by CG and RS produces exactly one subscription per provider.
 - In legacy single-provider mode, enabled CG and enabled RS pairs are read from their separate pair maps and assigned to the one already-resolved provider only when their `tradingEnvironment` is `both` or matches that provider.
 - The market-data symbol set is the union of enabled, environment-compatible markets across enabled strategies, deduplicated by symbol. Disabled pairs remain visible to explicit-route validation so an explicit route to a disabled market fails with the correct reason, but they are never subscribed.
 - In explicit multi-provider mode, every enabled strategy-market requires an explicit execution route and every enabled market requires an explicit market-data source. There is no inferred provider, first-provider fallback, or cross-environment fallback.
