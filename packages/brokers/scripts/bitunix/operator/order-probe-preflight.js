@@ -1,7 +1,7 @@
 import { assertDecimalString, compareDecimal } from "@coinzilla/utils"
 import { createSpotOrderRequest } from "../../../src/infrastructure/bitunix/spot/adapters/order-requests.js"
 import { assertSuccessfulBrokerResult } from "../helpers/create-hypeusdt-order-preflight.js"
-import { getBitunixOrderProbe } from "./order-probe-matrix.js"
+import { createBitunixOrderProbeInput, getBitunixOrderProbe } from "./order-probe-matrix.js"
 
 function requireArrayResult({ result, operation }) {
   const value = assertSuccessfulBrokerResult({
@@ -133,16 +133,6 @@ function assertNoOpenOrders({ openOrders }) {
   }
 }
 
-function createOrderInput({ probe }) {
-  return Object.freeze({
-    symbol: probe.symbol,
-    side: probe.side,
-    type: probe.type,
-    ...(probe.quantity === undefined ? {} : { quantity: probe.quantity }),
-    ...(probe.quoteQuantity === undefined ? {} : { quoteQuantity: probe.quoteQuantity }),
-    ...(probe.price === undefined ? {} : { price: probe.price }),
-  })
-}
 
 function createPreflightResult({
   probe,
@@ -228,8 +218,8 @@ export function createBitunixOrderProbePreflight({
   assertNoOpenOrders({
     openOrders,
   })
-  const orderInput = createOrderInput({
-    probe,
+  const orderInput = createBitunixOrderProbeInput({
+    probeId,
   })
   const request = createSpotOrderRequest({
     input: orderInput,
