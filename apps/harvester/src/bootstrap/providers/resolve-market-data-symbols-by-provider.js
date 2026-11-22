@@ -150,7 +150,7 @@ function mergeConfiguredMarketPair({ pairs, symbol, pair }) {
   }
 }
 
-function createEnabledMarketMap(pairsByStrategy) {
+function createConfiguredMarketMap(pairsByStrategy) {
   const pairs = {}
   for (const [, strategyPairs] of pairsByStrategy) {
     for (const [symbol, pair] of Object.entries(strategyPairs)) {
@@ -175,13 +175,14 @@ function createEnabledMarketMap(pairsByStrategy) {
 export function resolveMarketDataSymbolsByProvider({ appConfig, providers } = {}) {
   const providerIds = assertProviderInstances(providers)
   const pairsByStrategy = getEnabledStrategyPairs(appConfig)
-  const pairs = createEnabledMarketMap(pairsByStrategy)
+  const pairs = createConfiguredMarketMap(pairsByStrategy)
   if (appConfig?.marketDataRouting === undefined) {
     if (providers.length !== 1) {
       throw new TypeError("Multi-provider Harvester configuration requires explicit marketDataRouting.routes")
     }
     const [provider] = providers
     const enabledSymbols = Object.entries(pairs)
+      .filter(([, pair]) => pair.enabled === true)
       .filter(([, pair]) => {
         const environment = pair.tradingEnvironment
         return environment === undefined || environment === "both" || environment === provider.environment
