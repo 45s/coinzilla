@@ -361,10 +361,16 @@ export function attachTradingHistoryWebSocket({ server, eventBus } = {}) {
     eventBus,
     clients,
   })
-  const accountSubscriptions = subscribeToExchangeAccountUpdates({
-    eventBus,
-    clients,
-  })
+  let accountSubscriptions
+  try {
+    accountSubscriptions = subscribeToExchangeAccountUpdates({
+      eventBus,
+      clients,
+    })
+  } catch (error) {
+    subscription.unsubscribe()
+    throw error
+  }
   const onUpgrade = (...upgradeArguments) => {
     const [request, socket, head] = upgradeArguments
     handleUpgrade({
