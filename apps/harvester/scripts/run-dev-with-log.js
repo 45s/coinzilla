@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto"
 import { once } from "node:events"
 import { finished } from "node:stream/promises"
 import { createWriteStream, mkdirSync } from "node:fs"
+import { writeFile } from "node:fs/promises"
 import { dirname, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import { spawn } from "node:child_process"
@@ -184,6 +185,22 @@ childProcess.current.on("close", async (...closeArguments) => {
     .reduce((...values) => values[0] + values[1], 0)
 
   await closeLogStreams()
+
+  try {
+    await writeFile(
+      resolve(sessionPaths.sessionDirectory, "process-completed.json"),
+      `${JSON.stringify({
+        runtimeSessionId,
+        endedAt: new Date().toISOString(),
+        exitCode: code,
+        signal,
+      }, null, 2)}\\n`,
+      { encoding: "utf8", flag: "wx", mode: 0o600 },
+    )
+  } catch (error) {
+    process.stderr.write(`Failed to persist Harvester session completion: ${error.message}\\n`)
+    process.exitCode = 1
+  }
 
   if (
     droppedChunks > 0

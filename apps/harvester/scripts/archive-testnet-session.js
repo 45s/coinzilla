@@ -69,6 +69,25 @@ export function createHarvesterArchiveDirectoryName(identity) {
   return `${timestamp}_${identity.source.commit.slice(0, 8).toLowerCase()}`
 }
 
+async function assertSessionCompleted(directory, runtimeSessionId) {
+  const filename = path.join(directory, "process-completed.json")
+  const fileStats = await lstat(filename)
+  if (fileStats.isSymbolicLink() || !fileStats.isFile()) {
+    throw new Error(`Session completion marker is not a regular file: ${filename}`)
+  }
+  const completion = JSON.parse(await readFile(filename, "utf8"))
+  if (
+    completion.runtimeSessionId !== runtimeSessionId
+    || typeof completion.endedAt !== "string"
+    || Number.isNaN(Date.parse(completion.endedAt))
+    || new Date(completion.endedAt).toISOString() !== completion.endedAt
+    || (completion.exitCode !== null && !Number.isInteger(completion.exitCode))
+    || (completion.signal !== null && typeof completion.signal !== "string")
+  ) {
+    throw new Error(`Session completion marker is invalid or belongs to another process: ${filename}`)
+  }
+}
+
 async function readSessionIdentity(directory) {
   const identityFilename = path.join(directory, "process-identity.json")
   const identityStats = await lstat(identityFilename)
@@ -111,6 +130,13 @@ async function resolveSessionIdentity({ sessionId } = {}) {
     if (path.resolve(expected) !== path.resolve(directory)) {
       throw new Error(`Session identity does not match its directory: ${directory}`)
     }
+    for (const candidateDirectory of [LOG_DIRECTORY, SESSION_DIRECTORY, directory]) {
+      const directoryStats = await lstat(candidateDirectory)
+      if (directoryStats.isSymbolicLink() || !directoryStats.isDirectory()) {
+        throw new Error(`Session path must be a real directory, not a symlink: ${candidateDirectory}`)
+      }
+    }
+    await assertSessionCompleted(directory, identity.runtimeSessionId)
     candidates.push({ directory, identity })
   }
 
