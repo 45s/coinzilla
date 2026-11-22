@@ -110,7 +110,7 @@ Other strategy-owned pair fields remain under `tradingPairs.<SYMBOL>`: `enabled`
 
 ### Recovery Seller configuration
 
-RS remains globally disabled by default. The operator-owned market map is `apps/harvester/rs-recovery-seller.js`; it currently declares LINEAUSDT for TESTNET, but that pair does not activate RS while `RS_RECOVERY_SELLER_CONFIG.enabled` remains false. Keep the global switch false unless runtime execution is separately authorized.
+**RS runtime activation — 2026-11-22:** `RS_RECOVERY_SELLER_CONFIG.enabled` is explicitly `true`, and the only configured RS pair is LINEAUSDT on Binance Spot TESTNET. The pair retains the operator-approved 400 USDT / 25,000 LINEA legacy basis and configured cycle values below. This enables RS in the application configuration; it does not authorize starting Harvester or placing exchange orders. The controlled TESTNET runbook remains CLOSED / PAUSED until a separate bounded LINEAUSDT session is agreed and explicitly started by the operator and assistant.
 
 An enabled RS market requires the following fields:
 
