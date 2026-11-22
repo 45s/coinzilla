@@ -349,25 +349,44 @@ async function initializeOperationalStateStoreIfEmpty({ store, assertNoUncertain
       if (error.code !== "ENOENT") {
         throw error
       }
-      return await createInitialOperationalStateLedger({ store, assertNoUncertainWrite, syncStreams, verifyState })
+      return await createInitialOperationalStateLedger({
+        store,
+        assertNoUncertainWrite,
+        syncStreams,
+        verifyState,
+      })
     }
     if (directoryStat.isSymbolicLink() || !directoryStat.isDirectory()) {
-      throw createError("Operational State Store path must be a real directory, not a symlink", "DURABLE_FACTS_DIRECTORY_INVALID")
+      throw createError(
+        "Operational State Store path must be a real directory, not a symlink",
+        "DURABLE_FACTS_DIRECTORY_INVALID",
+      )
     }
     const entries = await store.fileSystem.readdir(store.absoluteDirectory)
     if (entries.length === 0) {
-      return await createInitialOperationalStateLedger({ store, assertNoUncertainWrite, syncStreams, verifyState })
+      return await createInitialOperationalStateLedger({
+        store,
+        assertNoUncertainWrite,
+        syncStreams,
+        verifyState,
+      })
     }
     const hasBothStreams = entries.length === 2 &&
       entries.includes(FACTS_FILE_NAME) &&
       entries.includes(MANIFEST_FILE_NAME)
     if (!hasBothStreams) {
       throw createError(
-        "Operational State Store directory is non-empty but does not contain exactly facts.jsonl and manifest.jsonl; refusing to initialize or overwrite it",
+        "Operational State Store directory must contain exactly facts.jsonl and manifest.jsonl; " +
+          "refusing to initialize or overwrite unexpected or partial contents",
         "DURABLE_FACTS_LEDGER_INCOMPLETE",
       )
     }
-    return toResult({ data: { ready: true, initialized: false } })
+    return toResult({
+      data: {
+        ready: true,
+        initialized: false,
+      },
+    })
   } catch (error) {
     if (!error.code) {
       error.code = "DURABLE_FACTS_INITIALIZATION_FAILED"
@@ -377,11 +396,22 @@ async function initializeOperationalStateStoreIfEmpty({ store, assertNoUncertain
 }
 
 async function createInitialOperationalStateLedger({ store, assertNoUncertainWrite, syncStreams, verifyState }) {
-  const initialized = await initializeOperationalStateStore({ store, assertNoUncertainWrite, syncStreams, verifyState })
+  const initialized = await initializeOperationalStateStore({
+    store,
+    assertNoUncertainWrite,
+    syncStreams,
+    verifyState,
+  })
   if (initialized?.ok !== true) {
     return initialized
   }
-  return toResult({ data: { ...initialized.data, ready: true, initialized: true } })
+  return toResult({
+    data: {
+      ...initialized.data,
+      ready: true,
+      initialized: true,
+    },
+  })
 }
 
 function createOperationalStateStoreInitializeIfEmpty({ store, serialize, assertNoUncertainWrite, syncStreams, verifyState }) {

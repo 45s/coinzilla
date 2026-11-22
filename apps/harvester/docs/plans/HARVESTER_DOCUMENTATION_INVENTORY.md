@@ -223,3 +223,11 @@ The current count is a path-completeness result. Historical audits and session r
 All 94 current Harvester Markdown/MDX paths have a path-level inventory entry or dated historical addition/removal disposition. The six additions since the 89-path checkpoint have individual source/status evidence; the interim observer guide is retired with PR #1455. Existing source-verification records from PRs #883, #895, #906, #909, #964, #968, #1037, #1041 and #1415 remain the evidence for their respective documents. The S-10 pass also corrected the Recovery Seller implementation roadmap to reflect merged PR #1515 and its successful exact-head workflows, and fixed the Conservative Domain Specification's duplicate section number plus all three inbound anchors.
 
 **Not verified:** a KEEP disposition alone does not prove every statement in the remaining maintained Harvester docs. Documents without one of the source-verification records above or a later explicit S-10 evidence row remain not independently revalidated; preserve them, do not rewrite them speculatively, and require owner/source review before future behavior changes.
+
+## Pending addition — PR #1718 (2026-11-22)
+
+| Path | Initial classification / disposition |
+| --- | --- |
+| `apps/harvester/docs/architecture/decisions/0007-initialize-empty-operational-state-ledger.md` | **KEEP — accepted decision, pending merge.** Normal startup initializes only a missing or empty Operational State Store directory, verifies a complete existing ledger, and refuses partial, unexpected, or corrupt contents without repair. It supersedes only ADR-0001's explicit-only genesis rule. |
+
+The recursive counts above remain the 2026-11-21 `develop` checkpoint; PR #1718 is listed separately until merged.

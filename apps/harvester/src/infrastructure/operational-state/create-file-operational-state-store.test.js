@@ -597,6 +597,13 @@ force: true }))
 
 function createInvalidMarketHistoryCoverageFacts() {
   return [
+    ...createInvalidCoverageEvidenceFacts(),
+    ...createInvalidCoverageMetadataFacts(),
+  ]
+}
+
+function createInvalidCoverageEvidenceFacts() {
+  return [
     {
       factId: "coverage:missing-digest",
       data: {
@@ -636,6 +643,11 @@ function createInvalidMarketHistoryCoverageFacts() {
         verifiedBy: "operator:trader",
       },
     },
+  ]
+}
+
+function createInvalidCoverageMetadataFacts() {
+  return [
     {
       factId: "coverage:bad-symbol",
       data: {
@@ -668,6 +680,7 @@ function createInvalidMarketHistoryCoverageFacts() {
     },
   ]
 }
+
 test("rejects malformed market-history coverage facts", async (t) => {
   const directory = await createDirectory()
   t.after(() => rm(directory, { recursive: true,
@@ -704,7 +717,10 @@ force: true }))
 
 test("automatically initializes a missing Operational State Store directory", async (t) => {
   const directory = path.join(os.tmpdir(), `harvester-Operational State Store-auto-missing-${  process.pid  }-${  Date.now()}`)
-  t.after(() => rm(directory, { recursive: true, force: true }))
+  t.after(() => rm(directory, {
+    recursive: true,
+    force: true,
+  }))
   const store = createStore(directory)
   const initialized = await store.initializeIfEmpty()
   assert.equal(initialized.ok, true, "A missing ledger directory must be initialized on first startup.")
@@ -715,7 +731,10 @@ test("automatically initializes a missing Operational State Store directory", as
 
 test("automatically initializes an existing empty Operational State Store directory", async (t) => {
   const directory = await createDirectory()
-  t.after(() => rm(directory, { recursive: true, force: true }))
+  t.after(() => rm(directory, {
+    recursive: true,
+    force: true,
+  }))
   const store = createStore(directory)
   const initialized = await store.initializeIfEmpty()
   assert.equal(initialized.ok, true, "An existing empty directory is a valid first-start state.")
@@ -725,7 +744,10 @@ test("automatically initializes an existing empty Operational State Store direct
 
 test("verifies an existing complete ledger without changing either stream", async (t) => {
   const directory = await createDirectory()
-  t.after(() => rm(directory, { recursive: true, force: true }))
+  t.after(() => rm(directory, {
+    recursive: true,
+    force: true,
+  }))
   const store = createStore(directory)
   assert.equal((await store.initialize()).ok, true)
   const factsBefore = await readFile(path.join(directory, "facts.jsonl"), "utf8")
@@ -740,7 +762,10 @@ test("verifies an existing complete ledger without changing either stream", asyn
 
 test("refuses to initialize a partially present ledger and preserves existing files", async (t) => {
   const directory = await createDirectory()
-  t.after(() => rm(directory, { recursive: true, force: true }))
+  t.after(() => rm(directory, {
+    recursive: true,
+    force: true,
+  }))
   const factsPath = path.join(directory, "facts.jsonl")
   await writeFile(factsPath, "partial\n")
   const result = await createStore(directory).initializeIfEmpty()
@@ -752,7 +777,10 @@ test("refuses to initialize a partially present ledger and preserves existing fi
 
 test("refuses unexpected existing directory contents without modifying them", async (t) => {
   const directory = await createDirectory()
-  t.after(() => rm(directory, { recursive: true, force: true }))
+  t.after(() => rm(directory, {
+    recursive: true,
+    force: true,
+  }))
   const unexpectedPath = path.join(directory, "operator-backup.txt")
   await writeFile(unexpectedPath, "keep")
   const result = await createStore(directory).initializeIfEmpty()
@@ -764,7 +792,10 @@ test("refuses unexpected existing directory contents without modifying them", as
 
 test("does not repair or replace an existing corrupt ledger", async (t) => {
   const directory = await createDirectory()
-  t.after(() => rm(directory, { recursive: true, force: true }))
+  t.after(() => rm(directory, {
+    recursive: true,
+    force: true,
+  }))
   const store = createStore(directory)
   assert.equal((await store.initialize()).ok, true)
   const factsPath = path.join(directory, "facts.jsonl")

@@ -23,7 +23,13 @@ const config = ({
   operatorControl: { telegram: { enabled: operator } },
 })
 const store = () => ({
-  initializeIfEmpty: async () => ({ ok: true, data: { ready: true, initialized: false } }),
+  initializeIfEmpty: async () => ({
+    ok: true,
+    data: {
+      ready: true,
+      initialized: false,
+    },
+  }),
   verify: async () => ({
     ok: true,
     data: {
@@ -165,7 +171,13 @@ test("rejects invalid stores and stores without verification support", async () 
       appConfig: config({ recovery: true }),
       runtimeSessionId: "session",
       createOperationalStateStore: () => ({
-        initializeIfEmpty: async () => ({ ok: true, data: { ready: true, initialized: false } }),
+        initializeIfEmpty: async () => ({
+          ok: true,
+          data: {
+            ready: true,
+            initialized: false,
+          },
+        }),
       }),
     }),
     (error) => error.code === "PROCESS_OPERATIONAL_STATE_VERIFY_UNAVAILABLE",
@@ -179,7 +191,13 @@ test("fails closed when recovery ledger verification fails or throws", async () 
       appConfig: config({ recovery: true }),
       runtimeSessionId: "session",
       createOperationalStateStore: () => ({
-        initializeIfEmpty: async () => ({ ok: true, data: { ready: true, initialized: false } }),
+        initializeIfEmpty: async () => ({
+          ok: true,
+          data: {
+            ready: true,
+            initialized: false,
+          },
+        }),
         verify: async () => ({
           ok: false,
           errors: [invalid],
@@ -194,7 +212,13 @@ test("fails closed when recovery ledger verification fails or throws", async () 
       appConfig: config({ recovery: true }),
       runtimeSessionId: "session",
       createOperationalStateStore: () => ({
-        initializeIfEmpty: async () => ({ ok: true, data: { ready: true, initialized: false } }),
+        initializeIfEmpty: async () => ({
+          ok: true,
+          data: {
+            ready: true,
+            initialized: false,
+          },
+        }),
         verify: async () => { throw thrown },
       }),
     }),
@@ -255,7 +279,13 @@ test("initializes an empty store before verifying the process-owned ledger", asy
     },
     verify: async () => {
       operations.push("verify")
-      return { ok: true, data: { valid: true, durableWriteSupported: true } }
+      return {
+        ok: true,
+        data: {
+          valid: true,
+          durableWriteSupported: true,
+        },
+      }
     },
   }
   await prepareProcessOperationalStateStore({
@@ -274,10 +304,19 @@ test("fails closed without verification when an existing partial ledger cannot b
       appConfig: config({ recoverySeller: true }),
       runtimeSessionId: "session",
       createOperationalStateStore: () => ({
-        initializeIfEmpty: async () => ({ ok: false, errors: [cause] }),
+        initializeIfEmpty: async () => ({
+          ok: false,
+          errors: [cause],
+        }),
         verify: async () => {
           verificationCalls += 1
-          return { ok: true, data: { valid: true, durableWriteSupported: true } }
+          return {
+            ok: true,
+            data: {
+              valid: true,
+              durableWriteSupported: true,
+            },
+          }
         },
       }),
     }),

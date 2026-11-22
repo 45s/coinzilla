@@ -157,7 +157,10 @@ export async function prepareProcessOperationalStateStore({
     runtimeSessionId,
     createOperationalStateStore,
   })
-  await initializeProcessStoreIfEmpty({ store, directory })
+  await initializeProcessStoreIfEmpty({
+    store,
+    directory,
+  })
   await verifyProcessStore({
     store,
     directory,
