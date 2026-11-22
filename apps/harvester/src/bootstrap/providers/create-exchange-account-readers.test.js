@@ -6,8 +6,16 @@ import {
 } from "./create-exchange-account-readers.js"
 
 test("creates immutable readers for a single active provider runtime", async () => {
-  const accountSnapshot = { ok: true, data: { balances: [] } }
-  const openOrders = { ok: true, data: [] }
+  const accountSnapshot = {
+    ok: true,
+    data: {
+      balances: [],
+    },
+  }
+  const openOrders = {
+    ok: true,
+    data: [],
+  }
   const runtime = {
     providerInstanceId: "binance-spot",
     providerType: "binance",
@@ -36,14 +44,26 @@ test("filters multi-provider runtimes without both account read capabilities", (
     accountId: "account-1",
     environment: "live",
     connected: false,
-    getExchangeAccountSnapshot: () => ({ ok: true, data: {} }),
-    getExchangeOpenOrders: () => ({ ok: true, data: [] }),
+    getExchangeAccountSnapshot: () => ({
+      ok: true,
+      data: {},
+    }),
+    getExchangeOpenOrders: () => ({
+      ok: true,
+      data: [],
+    }),
   }
   const missingSnapshot = {
-    getExchangeOpenOrders: () => ({ ok: true, data: [] }),
+    getExchangeOpenOrders: () => ({
+      ok: true,
+      data: [],
+    }),
   }
   const missingOrders = {
-    getExchangeAccountSnapshot: () => ({ ok: true, data: {} }),
+    getExchangeAccountSnapshot: () => ({
+      ok: true,
+      data: {},
+    }),
   }
 
   const readers = createExchangeAccountReaders({
@@ -131,7 +151,8 @@ test("rolls back earlier subscriptions when a later provider subscription throws
 
   const subscribe = createExchangeAccountUpdateSubscription({ runtime })
 
-  assert.throws(() => subscribe(() => undefined), /subscription failed/)
+  const listener = () => undefined
+  assert.throws(() => subscribe(listener), /subscription failed/)
   assert.deepEqual(calls, ["first-subscribe", "first-unsubscribe"])
 })
 
