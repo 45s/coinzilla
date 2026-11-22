@@ -60,6 +60,7 @@ function printHelp() {
     "--local: run LIVE read-only diagnostics and save a private local report without creating or pushing a branch.",
     "--place-order: run read-only health checks, then (only if healthy) the guarded one-shot LIVE HYPEUSDT BUY LIMIT attempt.",
     "--probe-order=<id>: run targeted read-only HYPEUSDT preflight and one separately confirmed LIVE order probe; publish its sanitized result and return to develop.",
+    "--probe-order=limit-buy-11-usdt: BUY HYPEUSDT LIMIT at 30 USDT, spend up to 11 USDT; quantity is calculated from live basePrecision. Confirm with y/N.",
     "--version: print package version, source commit, worktree state, and Node version without loading credentials or contacting Bitunix.",
     "--help: show this help without loading credentials or contacting Bitunix.",
     "",
