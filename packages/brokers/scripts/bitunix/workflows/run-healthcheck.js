@@ -210,6 +210,7 @@ async function runPublishedHealthCheck({
   printPublishedResult({
     result,
     stdout,
+    probeMode: Boolean(runOperatorProbe),
   })
   return result.exitCode
 }
