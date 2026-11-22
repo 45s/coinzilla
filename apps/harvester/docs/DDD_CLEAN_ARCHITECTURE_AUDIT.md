@@ -1,6 +1,6 @@
 # Harvester DDD and Clean Architecture Audit
 
-> **Original audit:** 2026-11-03; baseline `3ad32af9285db23f1f4f587e56f534f7871730aa` (historical assessment).  
+> **Original audit:** 2026-11-03; baseline `3ad32af9285db23f1f4e587e56f534f7871730aa` (historical assessment).  
 > **Current re-audit:** 2026-11-22, `develop`; strategy composition reviewed after RS-4/RS-5 runtime integration and enablement (PRs #1515, #1696, #1711).  
 > **Scope:** current CG/RS strategy boundaries, shared execution orchestration, configuration/routing, and documentation consistency. This re-audit updates the original assessment; it does not claim a complete line-by-line review of every Harvester module or live/testnet validation.
 
