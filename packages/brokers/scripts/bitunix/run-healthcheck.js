@@ -54,10 +54,10 @@ function printCliIdentity({ stdout = process.stdout } = {}) {
 
 function printHelp() {
   process.stdout.write([
-    "Usage: pnpm --filter @coinzilla/brokers bitunix:healthcheck [--version|--local|--publish|--place-order|--probe-order=<probe-id>]",
+    "Usage: pnpm --filter @coinzilla/brokers bitunix:healthcheck [--version|--local|--publish|--full-diagnostics|--place-order|--probe-order=<probe-id>]",
     "",
-    "Default / --publish: run LIVE read-only diagnostics, fetch all open orders through Broker.getOpenOrders(), read each returned order through Broker.getOrder(), and publish a sanitized report branch.",
-    "--local: run LIVE read-only diagnostics and save a private local report without creating or pushing a branch.",
+    "Default / --publish: run only the LIVE read-only order scan (getOpenOrders, then getOrder for every discovered order) and publish a sanitized report branch.\n    "--full-diagnostics: run the broader existing account, REST, and WebSocket diagnostics in addition to the order scan.\n    "--local: run only the LIVE read-only order scan and save a private local report without creating or pushing a branch.",
+    
     "--place-order: run read-only health checks, then (only if healthy) the guarded one-shot LIVE HYPEUSDT BUY LIMIT attempt.",
     "--probe-order=<id>: run targeted read-only HYPEUSDT preflight and one separately confirmed LIVE order probe; publish its sanitized result and return to develop.",
     "--probe-order=limit-buy-11-usdt: BUY HYPEUSDT LIMIT at 30 USDT, spend up to 11 USDT; quantity is calculated from live basePrecision. Confirm with y/N.",
@@ -144,7 +144,7 @@ async function runFixedOrderMode() {
   })
 }
 
-async function runReadOnlyMode({ mode }) {
+async function runReadOnlyMode({ mode, includeGeneralDiagnostics = false }) {
   loadLocalEnvironment({
     allowMissing: mode === "local",
   })
@@ -166,7 +166,7 @@ async function runHealthcheck({ args = process.argv.slice(2) } = {}) {
   if (mode === "version") {
     return
   }
-  if (mode === "probe-order") {
+  if (mode === "full-diagnostics") {\n    await runReadOnlyMode({ mode: "publish", includeGeneralDiagnostics: true })\n    return\n  }\n  if (mode === "probe-order") {
     await runProbeOrderMode({ args })
     return
   }
