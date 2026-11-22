@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "startedAt": "2026-11-22T07:55:32.945Z",
+  "finishedAt": "2026-11-22T07:55:32.945Z",
+  "runtime": {
+    "node": "v26.13.0",
+    "platform": "win32"
+  },
+  "summary": {
+    "total": 2,
+    "passed": 2,
+    "failed": 0,
+    "skipped": 0
+  },
+  "healthCheck": {
+    "scope": "bitunix-order-read",
+    "requiredOperations": [
+      "Broker API getOpenOrders",
+      "Broker API getOrder for every discovered order"
+    ],
+    "missingRequiredOperations": [],
+    "nonBlockingFailedOperations": [],
+    "healthy": true
+  },
+  "results": [
+    {
+      "operation": "Broker API getOpenOrders",
+      "status": "passed",
+      "durationMs": 41438
+    },
+    {
+      "operation": "Broker API getOrder",
+      "status": "passed",
+      "durationMs": 304
+    }
+  ]
+}
