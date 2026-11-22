@@ -84,14 +84,17 @@ loopback-only and read-only.
 
 The Operational State Store is a separate Harvester-owned append-only recovery-facts ledger. It is not the SQLite history database and is not interchangeable with Journal.
 
-**Current default:** `config/strategies/cg-coin-grabber.js` sets `recovery.enabled: false`. `prepareProcessOperationalStateStore` returns no store unless recovery is enabled. Telegram-only operator control accepts an explicitly supplied store but deliberately does not create or require one. Therefore the default `main()` path does not construct, verify, or write ADR-0001 facts. The runtime starts with fresh in-memory Portfolio/RecoveryLedger/OrderRegistry state; no automatic restoration is enabled.
+**Current default (2026-11-22):** Conservative restart recovery remains disabled (`CG_coinGrabber.settings.recovery.enabled: false`), but Recovery Seller is enabled with an enabled LINEAUSDT TESTNET market. Therefore `prepareProcessOperationalStateStore` now constructs and verifies the process-owned ADR-0001 store when either CG restart recovery is enabled **or** RS is enabled with at least one enabled market. Telegram-only operator control still does not create or require the store.
 
-When a store is explicitly supplied or restart recovery is enabled in a separately authorized task, startup verifies the existing ledger before broker-capable runtime startup. Runtime never creates a missing ledger, repairs a corrupt chain, or treats missing history as empty. Fact recorders write only when a store is supplied. A prior PROCESS_STARTED fact is handled by the existing fail-closed/observation-only rules; this document does not enable those paths.
+The store is required by RS for durable STOP state and process-boundary facts; this does **not** enable automatic Portfolio/RecoveryLedger/OrderRegistry restoration. Startup verifies the existing ledger before broker-capable runtime startup. It never creates a missing genesis ledger, repairs a corrupt chain, or treats missing history as empty. Fact recorders write only after a verified store is injected. Prior process history remains subject to the existing fail-closed/observation-only startup rules; unattended restart is not enabled.
 
 The default directory is `apps/harvester/recovery-facts/`, resolved relative to the Harvester package. `OPERATIONAL_STATE_DIRECTORY` selects an alternate absolute local-filesystem directory. The one-time initializer is explicit:
 
 ```sh
 pnpm --filter @coinzilla/harvester operational-state:init -- --confirm-initialize
+
+# Development environment (.env.development)
+pnpm --filter @coinzilla/harvester operational-state:init:dev -- --confirm-initialize
 ```
 
 The initializer creates a private directory (0700) and record/manifest files (0600), refuses to overwrite an existing store, and uses the same resolver as runtime. Do not initialize, move, delete, or manually edit these files as part of #1327. Restart restoration remains separately gated by [#654](https://github.com/45s/coinzilla/issues/654).
