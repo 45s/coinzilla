@@ -340,3 +340,49 @@ test("Bitunix probe capture records only the place-order request and raw respons
   assert.equal(receivedOptions.headers["api-key"], "test-key")
   assert.equal(receivedOptions.headers.sign !== undefined, true)
 })
+
+
+test("Bitunix order probe classifies preflight failure as NOT_SENT", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "bitunix-order-probe-not-sent-"))
+  try {
+    const { events, run } = createDependencies({
+      directory,
+      balances: [{
+        free: { amount: "0", asset: { code: "USDT" } },
+        locked: { amount: "0", asset: { code: "USDT" } },
+      }],
+    })
+    await assert.rejects(
+      run(),
+      (error) => error.mutationOutcome === "NOT_SENT" &&
+        /explicit HYPE balance row/i.test(error.message),
+    )
+    assert.equal(events.some((event) => event.operation === "confirm"), false)
+    assert.equal(events.includes("mutation.construct"), false)
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
+test("Bitunix order probe classifies an existing one-shot marker as NOT_SENT", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "bitunix-order-probe-marker-exists-"))
+  try {
+    const { run, markerPath, events } = createDependencies({
+      directory,
+    })
+    await createProbeMarker({
+      markerPath,
+      preflight: {
+        probe: { id: "limit-buy-1" },
+        wireRequest: { symbol: "HYPEUSDT", side: 2, type: 1, volume: "1", price: "30" },
+      },
+    })
+    await assert.rejects(
+      run(),
+      (error) => error.mutationOutcome === "NOT_SENT" && error.code === "EEXIST",
+    )
+    assert.equal(events.some((event) => event.operation === "createOrder"), false)
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
+})
