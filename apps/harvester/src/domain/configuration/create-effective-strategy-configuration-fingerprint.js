@@ -13,10 +13,14 @@ export class EffectiveConfigurationError extends ConfigValidationError {
 }
 
 function canonicalizeArray({ value, path }) {
-  return value.map((item, index) => canonicalize({
-    value: item,
-    path: `${path}[${index}]`,
-  }))
+  const result = []
+  for (let index = 0; index < value.length; index += 1) {
+    result.push(canonicalize({
+      value: value[index],
+      path: `${path}[${index}]`,
+    }))
+  }
+  return result
 }
 
 function canonicalizeObject({ value, path }) {
@@ -61,12 +65,21 @@ function canonicalizePrimitive({ value, path }) {
 
 function canonicalize({ value, path } = {}) {
   if (Array.isArray(value)) {
-    return canonicalizeArray({ value, path })
+    return canonicalizeArray({
+      value,
+      path,
+    })
   }
   if (value !== null && typeof value === "object") {
-    return canonicalizeObject({ value, path })
+    return canonicalizeObject({
+      value,
+      path,
+    })
   }
-  return canonicalizePrimitive({ value, path })
+  return canonicalizePrimitive({
+    value,
+    path,
+  })
 }
 
 function getEnabledMarketSymbols({ pairs, strategyName } = {}) {
