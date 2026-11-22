@@ -370,6 +370,38 @@ test("probe-order mode uses only its dedicated preflight, even if generic diagno
 
 
 
+function createOrderScanBroker({ calls, order }) {
+  return ({ logger, providerOptions }) => {
+    assert.equal(providerOptions.allowLiveOrderMutations, false)
+    return {
+      connect: async () => calls.push("connect"),
+      getOpenOrders: async () => {
+        calls.push("getOpenOrders")
+        logger.debug({
+          event: "pending.orders.received",
+          orderCount: 1,
+        })
+        return {
+          ok: true,
+          data: [order],
+          errors: [],
+        }
+      },
+      getOrder: async ({ symbol, orderId }) => {
+        calls.push(`getOrder:${symbol}:${orderId}`)
+        return {
+          ok: false,
+          data: null,
+          errors: [Object.assign(new Error("detail failed"), {
+            code: "E_DETAIL",
+          })],
+        }
+      },
+      disconnect: async () => calls.push("disconnect"),
+    }
+  }
+}
+
 test("healthcheck captures full open-orders result and every detail response", async () => {
   const events = []
   const publishedReports = []
@@ -385,35 +417,7 @@ test("healthcheck captures full open-orders result and every detail response", a
     repositoryRoot: "/repo",
     env,
     stdout,
-    brokerFactory: ({ logger, providerOptions }) => {
-      assert.equal(providerOptions.allowLiveOrderMutations, false)
-      return {
-        connect: async () => calls.push("connect"),
-        getOpenOrders: async () => {
-          calls.push("getOpenOrders")
-          logger.debug({
-            event: "pending.orders.received",
-            orderCount: 1,
-          })
-          return {
-            ok: true,
-            data: [order],
-            errors: [],
-          }
-        },
-        getOrder: async ({ symbol, orderId }) => {
-          calls.push(`getOrder:${symbol}:${orderId}`)
-          return {
-            ok: false,
-            data: null,
-            errors: [Object.assign(new Error("detail failed"), {
-              code: "E_DETAIL",
-            })],
-          }
-        },
-        disconnect: async () => calls.push("disconnect"),
-      }
-    },
+    brokerFactory: createOrderScanBroker({ calls, order }),
     runDiagnostics: async () => createDiagnosticReport(),
     publishDiagnostics: createPublisher({
       events,
