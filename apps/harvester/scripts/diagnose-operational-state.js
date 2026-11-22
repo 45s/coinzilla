@@ -48,14 +48,22 @@ function parseDiagnosticArguments(args) {
   return parsed
 }
 
-function createIdentityLine({ metadata, runtimeVersion }) {
-  const commit = metadata.source.commit ?? "unknown"
-  const workingTree = metadata.source.workingTree ?? "unknown"
+function createIdentitySummary({ metadata }) {
+  return {
+    application: metadata.application,
+    version: metadata.version,
+    commit: metadata.source.commit ?? "unknown",
+    workingTree: metadata.source.workingTree ?? "unknown",
+    metadataSource: metadata.source.metadataSource ?? "unavailable",
+  }
+}
+
+function createIdentityLine({ identity, runtimeVersion }) {
   return [
-    `command=${metadata.application}`,
-    `version=${metadata.version}`,
-    `commit=${commit}`,
-    `workingTree=${workingTree}`,
+    `command=${identity.application}`,
+    `version=${identity.version}`,
+    `commit=${identity.commit}`,
+    `workingTree=${identity.workingTree}`,
     `runtime=${runtimeVersion}`,
   ].join(" ")
 }
@@ -187,8 +195,9 @@ export async function runOperationalStateDiagnostic({
     writeError(`Unable to capture diagnostic source identity: ${error.message}`)
     return 1
   }
+  const identity = createIdentitySummary({ metadata })
   const identityLine = createIdentityLine({
-    metadata,
+    identity,
     runtimeVersion: process.version,
   })
   if (parsed.version) {
@@ -219,7 +228,7 @@ export async function runOperationalStateDiagnostic({
   } catch (error) {
     const report = createIntegrityFailureReport({
       error,
-      identity: metadata,
+      identity,
     })
     writeOutput(JSON.stringify(report, null, 2))
     return 2
@@ -227,7 +236,7 @@ export async function runOperationalStateDiagnostic({
   if (readResult?.ok !== true || !Array.isArray(readResult.data?.records)) {
     const report = createIntegrityFailureReport({
       error: readResult?.errors?.[0] ?? new Error("Operational State Store readAll returned no verified records"),
-      identity: metadata,
+      identity,
     })
     writeOutput(JSON.stringify(report, null, 2))
     return 2
@@ -239,11 +248,20 @@ export async function runOperationalStateDiagnostic({
     lastCommittedSequence: readResult.data.lastCommittedSequence,
     lastCommittedDigest: readResult.data.lastCommittedDigest,
   })
+  let projectionResult
+  try {
+    projectionResult = project({ records })
+  } catch (error) {
+    projectionResult = {
+      ok: false,
+      errors: [error],
+    }
+  }
   const projection = summarizeProjection({
-    projection: project({ records }),
+    projection: projectionResult,
   })
   const report = {
-    identity: metadata,
+    identity,
     storeIntegrity,
     projection,
   }
