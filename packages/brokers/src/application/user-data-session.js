@@ -585,7 +585,11 @@ recoveryRequired: true })
       await port.connect()
     } catch (error) {
       if (this.getClient() === client) {this.#detachClientListeners()}
-      this.#failedReconnectClient = { client, port, error }
+      this.#failedReconnectClient = {
+        client,
+        port,
+        error,
+      }
       if (await this.#disposeFailedReconnectClient({ port })) {
         this.#failedReconnectClient = null
       }
