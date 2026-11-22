@@ -116,8 +116,7 @@ test("starts an RS-only provider account without a Conservative execution route"
   }
 })
 
-test("captures the CLOSING account-wide open-order set before broker disconnect without mutating external SELLs", async () => {
-  const calls = []
+async function startHarvesterWithExternalClosingSell({ calls, publishedEvents }) {
   const externalSell = {
     id: "manual-closing-sell",
     symbol: "BTCUSDT",
@@ -144,7 +143,6 @@ test("captures the CLOSING account-wide open-order set before broker disconnect 
     calls.push("cancel-order")
     return originalCancelOrder(...args)
   }
-  const publishedEvents = []
   const result = await startHarvesterForTest({
     loadConfig: async () => appConfig,
     env: binanceEnv,
@@ -154,21 +152,38 @@ test("captures the CLOSING account-wide open-order set before broker disconnect 
         publishedEvents.push(event)
         return { ok: true }
       },
-      flush: async () => ({ ok: true, durable: true }),
+      flush: async () => ({
+        ok: true,
+        durable: true,
+      }),
     },
     logger: {
       info() {},
       error() {},
     },
   })
+  return {
+    result,
+    openOrderReads,
+  }
+}
 
-  await result.stop()
+test("captures the CLOSING account-wide open-order set before broker disconnect without mutating external SELLs", async () => {
+  const calls = []
+  const publishedEvents = []
+  const fixture = await startHarvesterWithExternalClosingSell({
+    calls,
+    publishedEvents,
+  })
+
+  await fixture.result.stop()
 
   const openOrderEvents = publishedEvents.filter((event) => event.name === "account.open_orders_captured")
   const closingOpenOrders = openOrderEvents.find((event) => event.data.phase === "CLOSING")
   const closingBalances = publishedEvents.find((event) =>
     event.name === "account.snapshot_captured" && event.data.phase === "CLOSING")
   assert.ok(closingOpenOrders, "The runtime must publish a CLOSING account-wide open-order event.")
+  assert.ok(closingBalances, "The runtime must publish a CLOSING balance event.")
   assert.equal(closingOpenOrders.data.readiness, "BLOCKED", "The external SELL remains unowned rather than being adopted.")
   assert.deepEqual(closingOpenOrders.data.orders.map(({ brokerOrderId, clientOrderId, side }) => ({
     brokerOrderId,
@@ -185,8 +200,8 @@ test("captures the CLOSING account-wide open-order set before broker disconnect 
     "CLOSING open-order evidence must be durably published before the CLOSING balance audit.",
   )
   assert.equal(calls.includes("cancel-order"), false, "The external recovery SELL must remain untouched.")
-  assert.ok(openOrderReads >= 2, "The runtime must perform the startup audit and a separate CLOSING read.")
-  assert.ok(calls.lastIndexOf(`open-orders:${openOrderReads}:account`) < calls.indexOf("disconnect"))
+  assert.ok(fixture.openOrderReads >= 2, "The runtime must perform the startup audit and a separate CLOSING read.")
+  assert.ok(calls.lastIndexOf(`open-orders:${fixture.openOrderReads}:account`) < calls.indexOf("disconnect"))
 })
 
 test("blocks trading after execution accounting failure", async () => {
