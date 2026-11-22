@@ -12,6 +12,7 @@ import { acquireHarvesterProcessLocks } from "./infrastructure/process-lock/acqu
 import { createBinanceBrokerAdapter } from "./infrastructure/brokers/binance-broker-adapter.js"
 import { resolveProviderInstances } from "./bootstrap/providers/resolve-provider-instances.js"
 import { startProviderAccounts } from "./bootstrap/providers/start-provider-accounts.js"
+import { createExchangeAccountReaders, createExchangeAccountUpdateSubscription } from "./bootstrap/providers/create-exchange-account-readers.js"
 import { HARVESTER_EVENT_NAMES } from "./application/events/event-names.js"
 import { publishLifecycleEvent } from "./application/events/publish-lifecycle-event.js"
 import { mapHarvesterProcessStartedData, mapHarvesterStartedData, mapHarvesterStartupFailedData } from "./application/events/lifecycle-event-dtos.js"
@@ -845,59 +846,6 @@ function logOptionalTradingHistoryApi({ logger, level, details } = {}) {
     logger?.[level]?.(details)
   } catch {
     // Optional API diagnostics must never block trading startup or shutdown.
-  }
-}
-
-function createExchangeAccountReaders({ runtime } = {}) {
-  const runtimes = Array.isArray(runtime?.accountRuntimes)
-    ? runtime.accountRuntimes
-    : [runtime]
-  return Object.freeze(runtimes.flatMap((accountRuntime) => {
-    if (
-      typeof accountRuntime?.getExchangeAccountSnapshot !== "function" ||
-      typeof accountRuntime?.getExchangeOpenOrders !== "function"
-    ) {
-      return []
-    }
-    return [Object.freeze({
-      providerInstanceId: accountRuntime.providerInstanceId,
-      providerType: accountRuntime.providerType,
-      accountId: accountRuntime.accountId,
-      environment: accountRuntime.tradingMode ?? accountRuntime.environment,
-      connected: accountRuntime.connected === true,
-      readAccountSnapshot: () => accountRuntime.getExchangeAccountSnapshot(),
-      readOpenOrders: () => accountRuntime.getExchangeOpenOrders(),
-    })]
-  }))
-}
-
-function createExchangeAccountUpdateSubscription({ runtime } = {}) {
-  const runtimes = Array.isArray(runtime?.accountRuntimes)
-    ? runtime.accountRuntimes
-    : [runtime]
-  return (listener) => {
-    const unsubscribe = []
-    try {
-      for (const accountRuntime of runtimes) {
-        if (typeof accountRuntime?.subscribeExchangeAccountUpdates === "function") {
-          unsubscribe.push(accountRuntime.subscribeExchangeAccountUpdates(listener))
-        }
-      }
-    } catch (error) {
-      for (const dispose of unsubscribe.reverse()) {
-        if (typeof dispose === "function") {
-          dispose()
-        }
-      }
-      throw error
-    }
-    return () => {
-      for (const dispose of unsubscribe.reverse()) {
-        if (typeof dispose === "function") {
-          dispose()
-        }
-      }
-    }
   }
 }
 
