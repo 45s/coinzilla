@@ -5,18 +5,38 @@ import { join } from "node:path"
 import test from "node:test"
 import { assertBitunixOrderProbeMatrixCanContinue } from "./order-probe-matrix-guard.js"
 
-test("Bitunix probe matrix allows the first probe and allows another only after REJECTED", async () => {
+test("Bitunix probe matrix allows the first probe and another probe only after REJECTED", async () => {
   const directory = await mkdtemp(join(tmpdir(), "bitunix-probe-matrix-"))
   try {
     await assertBitunixOrderProbeMatrixCanContinue({
       diagnosticsDirectory: directory,
+      probeId: "limit-buy-1",
     })
     await writeFile(join(directory, "bitunix-order-probe-limit-buy-1.json"), JSON.stringify({
       status: "REJECTED",
     }))
     await assertBitunixOrderProbeMatrixCanContinue({
       diagnosticsDirectory: directory,
+      probeId: "limit-buy-2",
     })
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
+test("Bitunix probe matrix blocks reuse of a probe ID even after REJECTED", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "bitunix-probe-matrix-reuse-"))
+  try {
+    await writeFile(join(directory, "bitunix-order-probe-limit-buy-1.json"), JSON.stringify({
+      status: "REJECTED",
+    }))
+    await assert.rejects(
+      assertBitunixOrderProbeMatrixCanContinue({
+        diagnosticsDirectory: directory,
+        probeId: "limit-buy-1",
+      }),
+      /already has a one-shot marker/i,
+    )
   } finally {
     await rm(directory, { recursive: true, force: true })
   }
@@ -31,6 +51,7 @@ test("Bitunix probe matrix blocks after DISPATCH_STARTED, CONFIRMED, OUTCOME_UNK
       await assert.rejects(
         assertBitunixOrderProbeMatrixCanContinue({
           diagnosticsDirectory: directory,
+          probeId: "limit-buy-2",
         }),
         new RegExp(status),
       )
@@ -48,6 +69,7 @@ test("Bitunix probe matrix blocks on malformed or unknown prior marker state", a
     await assert.rejects(
       assertBitunixOrderProbeMatrixCanContinue({
         diagnosticsDirectory: directory,
+        probeId: "limit-buy-2",
       }),
       /cannot verify prior marker/i,
     )
@@ -64,6 +86,7 @@ test("Bitunix probe matrix ignores unrelated diagnostics artifacts", async () =>
     }))
     await assertBitunixOrderProbeMatrixCanContinue({
       diagnosticsDirectory: directory,
+      probeId: "limit-buy-1",
     })
   } finally {
     await rm(directory, { recursive: true, force: true })
