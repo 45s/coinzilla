@@ -178,8 +178,16 @@ test("sanitized health report retains only safe selected probe identity and outc
       schemaVersion: 1,
       startedAt: "2026-11-21T00:00:00.000Z",
       finishedAt: "2026-11-21T00:00:01.000Z",
-      runtime: {\n        node: "v24.0.0",\n        platform: "linux",\n      },
-      summary: {\n        total: 1,\n        passed: 1,\n        failed: 0,\n        skipped: 0,\n      },
+      runtime: {
+        node: "v24.0.0",
+        platform: "linux",
+      },
+      summary: {
+        total: 1,
+        passed: 1,
+        failed: 0,
+        skipped: 0,
+      },
       healthCheck: {
         scope: "operator-order-probe",
         requiredOperations: ["operator order probe"],
