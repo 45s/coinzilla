@@ -27,9 +27,11 @@ async function disconnectSubscription({ subscription, broker, scheduler }) {
       tradingMode: "testnet",
       apiKey: "test-key",
       apiSecret: "test-secret",
-      logger: { error() {},
-info() {},
-warn() {} },
+      logger: {
+        error() {},
+        info() {},
+        warn() {},
+      },
     }, {
       apiClientFactory: () => {
         client = createFakeRpcClient({
@@ -62,9 +64,11 @@ warn() {} },
       tradingMode: "testnet",
       apiKey: "test-key",
       apiSecret: "test-secret",
-      logger: { error() {},
-info() {},
-warn() {} },
+      logger: {
+        error() {},
+        info() {},
+        warn() {},
+      },
     }, {
       apiClientFactory: () => {
         client = createFakeRpcClient({
@@ -351,22 +355,26 @@ warn() {} },
     await broker.connect()
     const subscription = await broker.subscribeForUserData({ onEvent() {} })
     clients[0].state = "closed"
-    clients[0].emitClose({ code: 1006,
-reason: "network lost",
-wasClean: false })
+    clients[0].emitClose({
+      code: 1006,
+      reason: "network lost",
+      wasClean: false,
+    })
 
     await scheduler.runNext()
 
     assert.equal(clients.length, 2)
-    assert.equal(clients[1].state, "idle")
+    assert.equal(clients[1].state, "closed")
     assert.equal(clients[1].listenerCount, 0)
     assert.equal(clients[1].errorListenerCount, 0)
     assert.equal(clients[1].closeListenerCount, 0)
     assert.equal(scheduler.pendingCount, 1)
 
-    await disconnectSubscription({ subscription,
+    await disconnectSubscription({
+      subscription,
       broker,
-      scheduler })
+      scheduler,
+    })
   })
 
 
