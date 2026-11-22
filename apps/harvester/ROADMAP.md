@@ -1988,7 +1988,6 @@ The current rationale, filter mapping, deliberately excluded order-type-specific
 
 - **Policy fixture:** current-filter integration tests pass the seeded completed-BUY VWAP to both policy evaluation paths; production VWAP reconciliation behavior remains separately guarded.
 
-
 ## 2026-11-22 — RS first-start Operational State Store wiring
 
 Enabled RS startup exposed that the process entrypoint prepared the ADR-0001 Operational State Store only for Conservative restart recovery, despite RS requiring the store for its durable STOP latch and process-boundary facts. The focused fix and offline regression coverage are in [PR #1718](https://github.com/45s/coinzilla/pull/1718), tracked under [issue #1713](https://github.com/45s/coinzilla/issues/1713). The fix preserves explicit one-time ledger genesis and keeps automatic restart restoration disabled. The operator must initialize the ledger once while Harvester is stopped before the first RS run. Controlled TESTNET acceptance remains a separate paused operational gate.
