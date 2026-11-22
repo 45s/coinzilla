@@ -1212,7 +1212,7 @@ function getInitialStateArray({ initialState, key }) {
 
 function createInitialVolatilityProtection({ markets }) {
   return new Map(Object.entries(markets)
-    .filter(([, marketConfig]) => marketConfig?.enabled === true && marketConfig?.enableVolatilityProtection === true)
+    .filter(([, marketConfig]) => marketConfig?.enabled === true && marketConfig?.enableVolatilityProtection !== false)
     .map(([symbol]) => [symbol, createVolatilityProtectionState({ symbol })]))
 }
 
