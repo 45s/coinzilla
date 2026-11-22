@@ -12,6 +12,10 @@ import { acquireHarvesterProcessLocks } from "./infrastructure/process-lock/acqu
 import { createBinanceBrokerAdapter } from "./infrastructure/brokers/binance-broker-adapter.js"
 import { resolveProviderInstances } from "./bootstrap/providers/resolve-provider-instances.js"
 import { startProviderAccounts } from "./bootstrap/providers/start-provider-accounts.js"
+import {
+  createExchangeAccountReaders,
+  createExchangeAccountUpdateSubscription,
+} from "./bootstrap/providers/create-exchange-account-readers.js"
 import { HARVESTER_EVENT_NAMES } from "./application/events/event-names.js"
 import { publishLifecycleEvent } from "./application/events/publish-lifecycle-event.js"
 import { mapHarvesterProcessStartedData, mapHarvesterStartedData, mapHarvesterStartupFailedData } from "./application/events/lifecycle-event-dtos.js"
@@ -848,7 +852,7 @@ function logOptionalTradingHistoryApi({ logger, level, details } = {}) {
   }
 }
 
-function createTradingHistoryApiStartInput({ options, resources, database, environment, operator } = {}) {
+function createTradingHistoryApiStartInput({ options, resources, database, environment, operator, exchangeAccounts, subscribeExchangeAccountUpdates } = {}) {
   return {
     database,
     environment,
@@ -856,10 +860,12 @@ function createTradingHistoryApiStartInput({ options, resources, database, envir
     logger: options.logger,
     eventBus: resources.eventBus,
     ...(operator === undefined ? {} : { operator }),
+    exchangeAccounts,
+    subscribeExchangeAccountUpdates,
   }
 }
 
-async function startTradingHistoryApiService({ options, resources, database, environment, operator } = {}) {
+async function startTradingHistoryApiService({ options, resources, database, environment, operator, exchangeAccounts, subscribeExchangeAccountUpdates } = {}) {
   try {
     const service = await options.startTradingHistoryApi(
       createTradingHistoryApiStartInput({
@@ -868,6 +874,8 @@ async function startTradingHistoryApiService({ options, resources, database, env
         database,
         environment,
         operator,
+        exchangeAccounts,
+        subscribeExchangeAccountUpdates,
       }),
     )
     resources.tradingHistoryApi = service
@@ -919,6 +927,8 @@ async function startOptionalTradingHistoryApi({ options, resources, runtime } = 
     database,
     environment,
     operator: runtime.getOperator?.() ?? runtime.accountRuntimes?.[0]?.getOperator?.(),
+    exchangeAccounts: createExchangeAccountReaders({ runtime }),
+    subscribeExchangeAccountUpdates: createExchangeAccountUpdateSubscription({ runtime }),
   })
 }
 

@@ -20,6 +20,7 @@ import { cleanupBroker } from "./broker/cleanup-broker.js"
 import { createAccountSnapshotManager } from "./account/create-account-snapshot-manager.js"
 import { loadMarketMetadata } from "./market/load-market-metadata.js"
 import { createUserDataEventHandler } from "./user-data/create-user-data-event-handler.js"
+import { createExchangeAccountMonitorObserver } from "./user-data/create-exchange-account-monitor-observer.js"
 import { createUserDataObservationHandler } from "./user-data/create-user-data-observation-handler.js"
 import { createUserDataStatusHandler } from "./user-data/create-user-data-status-handler.js"
 import { createUserDataRecoveryHandler } from "./user-data/create-user-data-recovery-handler.js"
@@ -596,6 +597,7 @@ async function createHarvesterRuntimeResources({ startup } = {}) {
     userDataSubscription: undefined,
     lastReportedUserDataReady: undefined,
     userDataState: createHarvesterUserDataState(),
+    exchangeAccountUpdateListeners: new Set(),
     tradingEngine: undefined,
     hasCanonicalOwnershipReconciliation: false,
   }
@@ -677,7 +679,11 @@ function createHarvesterUserDataEventRuntime({ startup,
     isTradingEnabled: () => startup.tradingEnabled,
     isStopped: () => userDataState.stopped || userDataState.shutdownRequested,
     logger: startup.logger,
-    onUserDataEvent: startup.onUserDataEvent,
+    onUserDataEvent: createExchangeAccountMonitorObserver({
+      onUserDataEvent: startup.onUserDataEvent,
+      listeners: resources.exchangeAccountUpdateListeners,
+      logger: startup.logger,
+    }),
     getPortfolio: portfolio.getPortfolio,
     getRecoveryLedger: portfolio.getRecoveryLedger,
     updatePortfolio: portfolio.updatePortfolio,
@@ -1441,6 +1447,15 @@ function createHarvesterRuntimeResult({
     getRecoveryLedger: portfolio.getRecoveryLedger,
     getMarketMetadata: portfolio.getMarketMetadata,
     getAccountSnapshot: portfolio.getAccountSnapshot,
+    getExchangeAccountSnapshot: () => resources.broker.getAccountSnapshot(),
+    getExchangeOpenOrders: () => resources.broker.getOpenOrders(),
+    subscribeExchangeAccountUpdates: (listener) => {
+      if (typeof listener !== "function") {
+        throw new TypeError("Exchange account update listener must be a function")
+      }
+      resources.exchangeAccountUpdateListeners.add(listener)
+      return () => resources.exchangeAccountUpdateListeners.delete(listener)
+    },
     get subscriptions() {
       return [...new Set(resources.subscriptions.map(({ symbol }) => symbol))]
     },
