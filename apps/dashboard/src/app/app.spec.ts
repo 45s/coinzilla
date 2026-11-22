@@ -77,17 +77,24 @@ describe('AppComponent', () => {
     expect(window.localStorage.getItem('coinzilla.dashboard.theme')).toBe('light');
 
     fixture.destroy();
+    window.localStorage.removeItem('coinzilla.dashboard.theme');
+  });
 
-    const reloadedFixture = TestBed.createComponent(AppComponent);
-    reloadedFixture.detectChanges();
-    const reloadedSelect = reloadedFixture.nativeElement.querySelector('select[aria-label="Dashboard theme"]') as HTMLSelectElement;
-    expect(reloadedSelect.value).toBe('light');
-    reloadedFixture.destroy();
+  it('initializes from a previously saved theme', async () => {
+    window.localStorage.setItem('coinzilla.dashboard.theme', 'light');
+    await TestBed.configureTestingModule({
+      imports: [AppComponent],
+      providers: [provideHttpClient()],
+    }).compileComponents();
 
-    reloadedSelect.value = 'current';
-    reloadedSelect.dispatchEvent(new Event('change'));
-    reloadedFixture.detectChanges();
-    expect(window.localStorage.getItem('coinzilla.dashboard.theme')).toBe('current');
+    const fixture = TestBed.createComponent(AppComponent);
+    fixture.detectChanges();
+
+    const select = fixture.nativeElement.querySelector('select[aria-label="Dashboard theme"]') as HTMLSelectElement;
+    expect(select.value).toBe('light');
+    expect(document.documentElement.dataset['theme']).toBe('light');
+
+    fixture.destroy();
     window.localStorage.removeItem('coinzilla.dashboard.theme');
   });
 });
