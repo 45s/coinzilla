@@ -1691,8 +1691,12 @@ function createConservativeEngineBaseContext({ dependencies } = {}) {
   } = dependencies
   const { settings, pairs } = appConfig.strategies[StrategyId.COIN_GRABBER]
   const volatilityProtectionEnabled = typeof getVolatilityData === "function"
-  const isVolatilityProtectionEnabledForSymbol = (symbol) =>
-    volatilityProtectionEnabled && pairs[symbol]?.enableVolatilityProtection !== false
+  const isVolatilityProtectionEnabledForSymbol = (symbol) => {
+    const pairConfig = pairs[symbol]
+    return volatilityProtectionEnabled &&
+      pairConfig?.enabled === true &&
+      pairConfig.enableVolatilityProtection !== false
+  }
   const hasBlockingOpenOrdersForSymbol = ({ symbol } = {}) =>
     pairs[symbol]?.externalOrdersPolicy === EXTERNAL_ORDERS_POLICIES.BLOCK &&
     hasUnownedOpenOrdersForSymbol({ symbol })
