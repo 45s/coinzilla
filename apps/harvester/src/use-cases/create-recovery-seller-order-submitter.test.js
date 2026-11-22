@@ -142,6 +142,7 @@ function createSubmitter({
   onSellReserved,
   onDurableSubmissionIntent,
   onDurableSubmissionOutcome,
+  canSubmit = () => true,
 } = {}) {
   const workflow = createRecoverySellerAccountingWorkflow({
     sharedState,
@@ -178,7 +179,7 @@ function createSubmitter({
       }
     }),
     onSellReserved,
-    canSubmit: () => true,
+    canSubmit,
   })
   return {
     submit,
@@ -264,6 +265,38 @@ test("submits one RS order through the shared executor and registers immutable R
       brokerOrderId: "broker-rs-1",
     },
   )
+})
+
+test("shared volatility gate defers an RS BUY before broker submission", async () => {
+  const sharedState = createSharedState()
+  const unresolved = []
+  const brokerCalls = []
+  const broker = createBroker({
+    onPlaceOrder: ({ order }) => brokerCalls.push(order),
+  })
+  const { submit, workflow } = createSubmitter({
+    sharedState,
+    broker,
+    unresolved,
+    canSubmit: () => ({
+      allowed: false,
+      reason: "VOLATILITY_PROTECTION_ACTIVE",
+    }),
+  })
+
+  const result = await submit({
+    lifecycleDecision: {
+      outcome: "SUBMIT",
+      reasonCode: "BUY_TRANCHE_ELIGIBLE",
+    },
+    action: createAction({ side: "BUY" }),
+    marketMetadata,
+  })
+
+  assert.equal(result.ok, true, "A market-protection deferral must be a handled result.")
+  assert.deepEqual(brokerCalls, [], "An RS BUY must not reach the broker while shared market volatility protection is active.")
+  assert.equal(workflow.getActiveOrders().length, 0, "A deferred RS BUY must not be registered as an active order.")
+  assert.equal(unresolved.length, 0, "A known volatility deferral is not an unresolved submission.")
 })
 
 test("retains an unknown RS submission and persists sticky STOP without retry", async () => {
