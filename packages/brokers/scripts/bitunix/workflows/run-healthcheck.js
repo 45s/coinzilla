@@ -1,9 +1,11 @@
 import { mkdir, writeFile } from "node:fs/promises"
 import { dirname, resolve } from "node:path"
 import { BitunixRestClient } from "../../../src/infrastructure/bitunix/spot/api/rest-client.js"
+import { Broker } from "../../../src/index.js"
+import { sanitizeDiagnosticError, sanitizeDiagnosticValue } from "../helpers/sanitize-diagnostic-data.js"
 import { runDiagnostics as runReadOnlyDiagnostics } from "../diagnostics/run-diagnostics.js"
 import { publishHealthReport } from "./publish-health-report.js"
-import { evaluateReadOnlyHealthCheck, evaluateOperatorOrderProbeHealthCheck } from "../helpers/health-report.js"
+import { evaluateOrderReadHealthCheck, evaluateReadOnlyHealthCheck, evaluateOperatorOrderProbeHealthCheck } from "../helpers/health-report.js"
 import { appendOrderAttemptResult } from "../helpers/append-order-attempt-result.js"
 import { createDiagnosticReport } from "../helpers/create-diagnostic-report.js"
 
@@ -40,11 +42,248 @@ function printLocalDiagnosticSummary({ report, outputPath, stdout }) {
   ].join("\n"))
 }
 
-async function runLocalDiagnostics({ brokersRoot, env, stdout }) {
-  stdout.write("WARNING: this contacts the configured LIVE Bitunix Spot account using read-only requests.\n")
-  const report = await runReadOnlyDiagnostics({
+function recordOrderReadResult({
+  report,
+  stdout,
+  secrets,
+  operation,
+  result,
+  durationMs = null,
+  request = null,
+}) {
+  const entry = {
+    operation,
+    status: result?.ok === true ? "passed" : "failed",
+    durationMs,
+    request,
+    response: sanitizeDiagnosticValue({
+      value: result,
+      secrets,
+    }),
+    ...(result?.errors?.length
+      ? {
+        errors: result.errors.map((error) => sanitizeDiagnosticError({
+          error,
+          secrets,
+        })),
+      }
+      : {}),
+  }
+  report.results.push(entry)
+  report.summary.total += 1
+  report.summary[entry.status] += 1
+  stdout.write(`      ${operation}: ${entry.status.toUpperCase()}\n`)
+}
+
+async function fetchAndRecordOpenOrders({ broker, report, stdout, secrets }) {
+  const started = Date.now()
+  const request = {
+    method: "getOpenOrders",
+    arguments: [],
+  }
+  try {
+    const result = await broker.getOpenOrders()
+    recordOrderReadResult({
+      report,
+      stdout,
+      secrets,
+      operation: "Broker API getOpenOrders",
+      result,
+      durationMs: Date.now() - started,
+      request,
+    })
+    return result
+  } catch (error) {
+    recordOrderReadResult({
+      report,
+      stdout,
+      secrets,
+      operation: "Broker API getOpenOrders",
+      result: {
+        ok: false,
+        errors: [error],
+      },
+      durationMs: Date.now() - started,
+      request,
+    })
+    return null
+  }
+}
+
+async function fetchAndRecordOrderDetails({ broker, orders, report, stdout, secrets }) {
+  for (const order of orders) {
+    const started = Date.now()
+    const request = {
+      method: "getOrder",
+      arguments: [{
+        symbol: order.symbol,
+        orderId: order.id,
+      }],
+    }
+    try {
+      const result = await broker.getOrder({
+        symbol: order.symbol,
+        orderId: order.id,
+      })
+      recordOrderReadResult({
+        report,
+        stdout,
+        secrets,
+        operation: "Broker API getOrder",
+        result,
+        durationMs: Date.now() - started,
+        request,
+      })
+    } catch (error) {
+      recordOrderReadResult({
+        report,
+        stdout,
+        secrets,
+        operation: "Broker API getOrder",
+        result: {
+          ok: false,
+          errors: [error],
+        },
+        durationMs: Date.now() - started,
+        request,
+      })
+    }
+  }
+}
+
+function createOrderReadLogger({ report, secrets }) {
+  return Object.fromEntries(["debug", "info", "warn", "error"].map((level) => [
+    level,
+    (event) => report.events.push(sanitizeDiagnosticValue({
+      value: {
+        timestamp: new Date().toISOString(),
+        level,
+        ...event,
+      },
+      secrets,
+    })),
+  ]))
+}
+
+function createOrderReadBroker({ env, report, brokerFactory }) {
+  const secrets = [env.BITUNIX_API_KEY, env.BITUNIX_API_SECRET].filter(Boolean)
+  return {
+    broker: brokerFactory({
+      provider: "bitunix",
+      apiKey: env.BITUNIX_API_KEY,
+      apiSecret: env.BITUNIX_API_SECRET,
+      tradingMode: "live",
+      logger: createOrderReadLogger({
+        report,
+        secrets,
+      }),
+      providerOptions: {
+        allowLiveOrderMutations: false,
+      },
+    }),
+    secrets,
+  }
+}
+
+function recordOrderReadScanFailure({ report, stdout, secrets, error }) {
+  recordOrderReadResult({
+    report,
+    stdout,
+    secrets,
+    operation: "Broker API order-read scan",
+    result: {
+      ok: false,
+      errors: [error],
+    },
+    request: {
+      method: "Broker.connect",
+    },
+  })
+}
+
+async function disconnectOrderReadBroker({ broker, connected, report, stdout, secrets }) {
+  if (!connected) {
+    return
+  }
+  try {
+    await broker.disconnect()
+  } catch (error) {
+    recordOrderReadResult({
+      report,
+      stdout,
+      secrets,
+      operation: "Broker API disconnect",
+      result: {
+        ok: false,
+        errors: [error],
+      },
+    })
+  }
+}
+
+async function runBitunixOrderReadScan({
+  env,
+  report,
+  stdout,
+  brokerFactory = (options) => new Broker(options),
+}) {
+  const { broker, secrets } = createOrderReadBroker({
     env,
-    brokerApiRestClientFactory: (options) => new BitunixRestClient(options),
+    report,
+    brokerFactory,
+  })
+  let connected = false
+  try {
+    await broker.connect()
+    connected = true
+    const openOrdersResult = await fetchAndRecordOpenOrders({
+      broker,
+      report,
+      stdout,
+      secrets,
+    })
+    if (openOrdersResult?.ok) {
+      await fetchAndRecordOrderDetails({
+        broker,
+        orders: openOrdersResult.data ?? [],
+        report,
+        stdout,
+        secrets,
+      })
+    }
+  } catch (error) {
+    recordOrderReadScanFailure({
+      report,
+      stdout,
+      secrets,
+      error,
+    })
+  } finally {
+    await disconnectOrderReadBroker({
+      broker,
+      connected,
+      report,
+      stdout,
+      secrets,
+    })
+  }
+}
+
+async function runLocalDiagnostics({ brokersRoot, env, stdout, brokerFactory, includeGeneralDiagnostics = false }) {
+  stdout.write("WARNING: this contacts the configured LIVE Bitunix Spot account using read-only requests.\n")
+  const report = includeGeneralDiagnostics
+    ? await runReadOnlyDiagnostics({
+      env,
+      brokerApiRestClientFactory: (options) => new BitunixRestClient(options),
+    })
+    : createEmptyProbeReport({
+      startedAt: Date.now(),
+    })
+  await runBitunixOrderReadScan({
+    env,
+    report,
+    stdout,
+    brokerFactory,
   })
   const outputPath = createLocalDiagnosticReportPath({
     brokersRoot,
@@ -62,18 +301,33 @@ async function runLocalDiagnostics({ brokersRoot, env, stdout }) {
   return report.summary.failed > 0 ? 1 : 0
 }
 
-function createPublishedStatusLines({ result, operatorAttempt, probeMode }) {
-  const lines = [
-    probeMode
-      ? "General diagnostics: SKIPPED (focused order-probe mode)"
-      : `Diagnostics: ${result.report.summary.failed === 0 ? "HEALTHY" : "DEGRADED"}`,
-    probeMode
-      ? `Operator probe gate: ${result.healthCheck.healthy ? "READY" : "BLOCKED"}`
-      : `Diagnostic safety/configuration gate: ${result.healthCheck.healthy ? "READY" : "BLOCKED"}`,
-  ]
+function createModeStatusLines({ result, probeMode, includeGeneralDiagnostics }) {
   if (probeMode) {
-    lines.push("The selected probe uses its own fresh Broker preflight; general diagnostics do not gate dispatch.")
+    return [
+      "General diagnostics: SKIPPED (focused order-probe mode)",
+      `Operator probe gate: ${result.healthCheck.healthy ? "READY" : "BLOCKED"}`,
+      "The selected probe uses its own fresh Broker preflight; general diagnostics do not gate dispatch.",
+    ]
   }
+  if (!includeGeneralDiagnostics) {
+    return [
+      "General diagnostics: SKIPPED (focused order-read mode)",
+      `Order-read gate: ${result.healthCheck.healthy ? "READY" : "BLOCKED"}`,
+      "Only getOpenOrders() and the corresponding getOrder() reads were run; other diagnostics remain available with --full-diagnostics.",
+    ]
+  }
+  return [
+    `Diagnostics: ${result.report.summary.failed === 0 ? "HEALTHY" : "DEGRADED"}`,
+    `Diagnostic safety/configuration gate: ${result.healthCheck.healthy ? "READY" : "BLOCKED"}`,
+  ]
+}
+
+function createPublishedStatusLines({ result, operatorAttempt, probeMode, includeGeneralDiagnostics }) {
+  const lines = createModeStatusLines({
+    result,
+    probeMode,
+    includeGeneralDiagnostics,
+  })
   if (operatorAttempt?.probeId) {
     lines.push(`Order probe: ${operatorAttempt.probeId}`)
   }
@@ -98,7 +352,15 @@ function createPublishedReportLines({ result }) {
   ]
 }
 
-function printPublishedResult({ result, stdout, probeMode = false }) {
+function isWorkflowProgressMessage({ message }) {
+  return ["[1/5]", "[2/5]", "[3/5]", "[4/5]", "[5/5]"]
+    .some((prefix) => message.startsWith(prefix)) ||
+    message.startsWith("Creating report branch ") ||
+    message.startsWith("Returning the local checkout") ||
+    message.startsWith("Local checkout is back")
+}
+
+function printPublishedResult({ result, stdout, probeMode = false, includeGeneralDiagnostics = false }) {
   const { passed, failed, skipped, total } = result.report.summary
   const operatorAttempt = result.report.results.find((entry) =>
     entry.operation === "operator order attempt" || entry.operation === "operator order probe")
@@ -109,6 +371,7 @@ function printPublishedResult({ result, stdout, probeMode = false }) {
       result,
       operatorAttempt,
       probeMode,
+      includeGeneralDiagnostics,
     }),
     ...createPublishedReportLines({
       result,
@@ -184,6 +447,45 @@ function appendSelectedOperatorResult({
   })
 }
 
+async function runGeneralOrderReadScan({ env, report, onProgress, brokerFactory }) {
+  await runBitunixOrderReadScan({
+    env,
+    report,
+    stdout: {
+      write: (message) => onProgress?.({ message: message.trim() }),
+    },
+    brokerFactory,
+  })
+}
+
+function shouldSkipOperatorOrder({ report, runOperatorOrder }) {
+  return runOperatorOrder && !evaluateReadOnlyHealthCheck({ report }).healthy
+}
+
+async function runOperatorAndAppendResult({
+  report,
+  runOperatorOrder,
+  runOperatorProbe,
+  env,
+  probeId,
+  startedAt,
+}) {
+  const operatorResult = await runSelectedOperator({
+    runOperatorOrder,
+    runOperatorProbe,
+    env,
+    probeId,
+  })
+  return appendSelectedOperatorResult({
+    report,
+    operatorResult,
+    startedAt,
+    env,
+    runOperatorProbe,
+    probeId,
+  })
+}
+
 async function runDiagnosticsWithOperatorAttempt({
   env,
   onProgress,
@@ -191,19 +493,33 @@ async function runDiagnosticsWithOperatorAttempt({
   runOperatorOrder,
   runOperatorProbe,
   probeId,
+  brokerFactory,
+  includeGeneralDiagnostics,
 }) {
   const startedAt = Date.now()
-  const report = runOperatorProbe
+  const shouldRunGeneralDiagnostics = includeGeneralDiagnostics || Boolean(runOperatorOrder)
+  const report = runOperatorProbe || !shouldRunGeneralDiagnostics
     ? createEmptyProbeReport({ startedAt })
     : await runDiagnostics({
       env,
       onProgress,
       brokerApiRestClientFactory: (options) => new BitunixRestClient(options),
     })
+  if (!runOperatorProbe) {
+    await runGeneralOrderReadScan({
+      env,
+      report,
+      onProgress,
+      brokerFactory,
+    })
+  }
   if (!runOperatorOrder && !runOperatorProbe) {
     return report
   }
-  if (runOperatorOrder && !evaluateReadOnlyHealthCheck({ report }).healthy) {
+  if (shouldSkipOperatorOrder({
+    report,
+    runOperatorOrder,
+  })) {
     return createHealthCheckSkippedResult({
       report,
       env,
@@ -214,19 +530,13 @@ async function runDiagnosticsWithOperatorAttempt({
       ? `      General diagnostics skipped; running focused HYPEUSDT preflight for ${probeId}`
       : "      Read-only health checks passed; starting the guarded HYPEUSDT operator attempt",
   })
-  const operatorResult = await runSelectedOperator({
+  const appendedReport = await runOperatorAndAppendResult({
+    report,
     runOperatorOrder,
     runOperatorProbe,
     env,
     probeId,
-  })
-  const appendedReport = appendSelectedOperatorResult({
-    report,
-    operatorResult,
     startedAt,
-    env,
-    runOperatorProbe,
-    probeId,
   })
   return runOperatorProbe
     ? {
@@ -246,6 +556,16 @@ function createOperatorWarning({ runOperatorOrder, runOperatorProbe, probeId }) 
   return "WARNING: this contacts the configured LIVE Bitunix Spot API using read-only requests.\n"
 }
 
+function selectHealthCheckEvaluator({ runOperatorProbe, includeGeneralDiagnostics, runOperatorOrder }) {
+  if (runOperatorProbe) {
+    return evaluateOperatorOrderProbeHealthCheck
+  }
+  if (includeGeneralDiagnostics || runOperatorOrder) {
+    return evaluateReadOnlyHealthCheck
+  }
+  return evaluateOrderReadHealthCheck
+}
+
 async function runPublishedHealthCheck({
   repositoryRoot,
   env,
@@ -255,6 +575,8 @@ async function runPublishedHealthCheck({
   runOperatorOrder,
   runOperatorProbe,
   probeId,
+  brokerFactory,
+  includeGeneralDiagnostics,
 }) {
   stdout.write(createOperatorWarning({
     runOperatorOrder,
@@ -263,23 +585,32 @@ async function runPublishedHealthCheck({
   }))
   const result = await publishDiagnostics({
     repositoryRoot,
-    healthCheckEvaluator: runOperatorProbe
-      ? evaluateOperatorOrderProbeHealthCheck
-      : evaluateReadOnlyHealthCheck,
+    healthCheckEvaluator: selectHealthCheckEvaluator({
+      runOperatorProbe,
+      includeGeneralDiagnostics,
+      runOperatorOrder,
+    }),
     runDiagnostics: (input) => runDiagnosticsWithOperatorAttempt({
       ...input,
       runDiagnostics,
       runOperatorOrder,
       runOperatorProbe,
       probeId,
+      brokerFactory,
+      includeGeneralDiagnostics,
     }),
     env,
-    onProgress: ({ message }) => stdout.write(`${message}\n`),
+    onProgress: ({ message }) => {
+      if (isWorkflowProgressMessage({ message })) {
+        stdout.write(`${message}\n`)
+      }
+    },
   })
   printPublishedResult({
     result,
     stdout,
     probeMode: Boolean(runOperatorProbe),
+    includeGeneralDiagnostics: includeGeneralDiagnostics || Boolean(runOperatorOrder),
   })
   return result.exitCode
 }
@@ -287,12 +618,23 @@ async function runPublishedHealthCheck({
 /**
  * Run a read-only health-check mode or a human-controlled order mode inside the report workflow.
  *
- * @param {{mode: "local"|"publish"|"place-order"|"probe-order", probeId?: string, brokersRoot: string, repositoryRoot: string, env: NodeJS.ProcessEnv, stdout?: NodeJS.WriteStream, runOperatorOrder?: (input: {env: NodeJS.ProcessEnv}) => Promise<object>, runOperatorProbe?: (input: {env: NodeJS.ProcessEnv, probeId: string}) => Promise<object>}} input
+ * @param {{mode: "local"|"publish"|"place-order"|"probe-order", includeGeneralDiagnostics?: boolean, probeId?: string, brokersRoot: string, repositoryRoot: string, env: NodeJS.ProcessEnv, stdout?: NodeJS.WriteStream, runOperatorOrder?: (input: {env: NodeJS.ProcessEnv}) => Promise<object>, runOperatorProbe?: (input: {env: NodeJS.ProcessEnv, probeId: string}) => Promise<object>}} input
  * @returns {Promise<number>} Process exit code.
  */
+function validatePublishedHealthcheckMode({ mode, runOperatorOrder, runOperatorProbe, probeId }) {
+  if (mode === "place-order" && typeof runOperatorOrder !== "function") {
+    throw new TypeError("The Bitunix place-order mode requires an operator order runner")
+  }
+  if (mode === "probe-order" &&
+      (typeof runOperatorProbe !== "function" || typeof probeId !== "string" || !probeId.trim())) {
+    throw new TypeError("The Bitunix probe-order mode requires a probe id and operator probe runner")
+  }
+}
+
 export async function runHealthcheckWorkflow({
   mode,
   probeId,
+  includeGeneralDiagnostics = false,
   brokersRoot,
   repositoryRoot,
   env,
@@ -301,32 +643,36 @@ export async function runHealthcheckWorkflow({
   publishDiagnostics = publishHealthReport,
   runOperatorOrder,
   runOperatorProbe,
+  brokerFactory,
 } = {}) {
   if (mode === "local") {
     return runLocalDiagnostics({
       brokersRoot,
       env,
       stdout,
+      brokerFactory,
+      includeGeneralDiagnostics,
     })
   }
-  if (mode === "publish" || mode === "place-order" || mode === "probe-order") {
-    if (mode === "place-order" && typeof runOperatorOrder !== "function") {
-      throw new TypeError("The Bitunix place-order mode requires an operator order runner")
-    }
-    if (mode === "probe-order" &&
-        (typeof runOperatorProbe !== "function" || typeof probeId !== "string" || !probeId.trim())) {
-      throw new TypeError("The Bitunix probe-order mode requires a probe id and operator probe runner")
-    }
-    return runPublishedHealthCheck({
-      repositoryRoot,
-      env,
-      stdout,
-      runDiagnostics,
-      publishDiagnostics,
-      runOperatorOrder,
-      runOperatorProbe,
-      probeId,
-    })
+  if (!["publish", "place-order", "probe-order"].includes(mode)) {
+    throw new TypeError(`Unsupported Bitunix health-check mode: ${mode}`)
   }
-  throw new TypeError(`Unsupported Bitunix health-check mode: ${mode}`)
+  validatePublishedHealthcheckMode({
+    mode,
+    runOperatorOrder,
+    runOperatorProbe,
+    probeId,
+  })
+  return runPublishedHealthCheck({
+    repositoryRoot,
+    env,
+    stdout,
+    runDiagnostics,
+    publishDiagnostics,
+    runOperatorOrder,
+    runOperatorProbe,
+    probeId,
+    brokerFactory,
+    includeGeneralDiagnostics,
+  })
 }

@@ -67,8 +67,72 @@ const LOSSLESS_NUMERIC_FIELDS = Object.freeze({
   "/api/spot/v1/deposit/page": Object.freeze(["id", "amount"]),
   "/api/spot/v1/withdraw_transfer/page": Object.freeze(["id", "toUid", "amount", "fee"]),
   "/api/spot/v1/order/deal/list": Object.freeze(["id", "volume", "price", "fee", "role"]),
+  "/api/spot/v1/order/pending/list": Object.freeze(["orderId"]),
+  "/api/spot/v1/order/history/page": Object.freeze(["orderId"]),
+  "/api/spot/v1/order/detail": Object.freeze(["orderId"]),
+  "/api/spot/v1/order/place_order": Object.freeze(["orderId"]),
   "/api/spot/v1/user/info": Object.freeze(["uid"]),
 })
+
+const SENSITIVE_DIAGNOSTIC_FIELD = /api.?key|secret|sign|nonce|email|phone|address|wallet|user.?id|uid|account|balance|amount|fee|transaction.?hash|txid|memo|remark|out.?biz.?id/i
+
+function normalizeDiagnosticField({ key }) {
+  return key.replaceAll(/[-_]/g, "").toLowerCase()
+}
+
+function redactDiagnosticValue({ value, key = "" }) {
+  if (SENSITIVE_DIAGNOSTIC_FIELD.test(normalizeDiagnosticField({ key }))) {
+    return "[REDACTED]"
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => redactDiagnosticValue({ value: item }))
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.entries(value).map(([childKey, childValue]) => [
+      childKey,
+      redactDiagnosticValue({
+        value: childValue,
+        key: childKey,
+      }),
+    ]))
+  }
+  return value
+}
+
+function summarizeDiagnosticPayload({ value }) {
+  if (Array.isArray(value)) {
+    return {
+      type: "array",
+      itemCount: value.length,
+      fields: [...new Set(value.flatMap((item) =>
+        item && typeof item === "object" && !Array.isArray(item)
+          ? Object.keys(item)
+          : []))].sort().slice(0, 50),
+    }
+  }
+  if (value && typeof value === "object") {
+    return {
+      type: "object",
+      fields: Object.keys(value).sort().slice(0, 50),
+    }
+  }
+  return {
+    type: value === null ? "null" : typeof value,
+  }
+}
+
+function logRestDiagnostic({ logger, level = "debug", event }) {
+  try {
+    logger?.[level]?.({
+      provider: "bitunix",
+      product: "spot",
+      layer: "rest",
+      ...event,
+    })
+  } catch {
+    // Diagnostics must never change exchange request behavior.
+  }
+}
 
 function stringifyNumericJsonFields({ text, fields }) {
   const fieldPattern = fields.join("|")
@@ -513,9 +577,108 @@ function createPreparedRequest({ client, method, path, queryParams, body, authen
   }
 }
 
+async function dispatchRestRequest({ client, requestInput }) {
+  const {
+    method,
+    path,
+    queryParams,
+    body,
+    stateChanging,
+    authenticated,
+  } = requestInput
+  const request = createPreparedRequest({
+    client,
+    method,
+    path,
+    queryParams,
+    body,
+    authenticated,
+    stateChanging,
+  })
+  const response = await sendRequest({
+    client,
+    request,
+    path,
+    stateChanging,
+  })
+  const payload = await readResponsePayload({
+    response,
+    path,
+    stateChanging,
+  })
+  logRestDiagnostic({
+    logger: client.logger,
+    level: response.ok ? "debug" : "warn",
+    event: {
+      event: "response.received",
+      method,
+      path,
+      status: response.status,
+      ok: response.ok,
+      exchangeCode: payload?.code === undefined ? null : String(payload.code),
+      message: typeof payload?.msg === "string" ? "[exchange message withheld]" : null,
+      dataSummary: summarizeDiagnosticPayload({ value: payload?.data }),
+    },
+  })
+  return validateResponse({
+    response,
+    payload,
+    path,
+    stateChanging,
+  })
+}
+
+async function executeRestRequest({ client, requestInput }) {
+  const {
+    method,
+    path,
+    queryParams,
+    body,
+    stateChanging,
+    authenticated,
+  } = requestInput
+  logRestDiagnostic({
+    logger: client.logger,
+    event: {
+      event: "request.started",
+      method,
+      path,
+      queryParams: redactDiagnosticValue({ value: queryParams }),
+      body: redactDiagnosticValue({ value: body }),
+      authenticated,
+      stateChanging,
+    },
+  })
+  try {
+    return await dispatchRestRequest({
+      client,
+      requestInput,
+    })
+  } catch (error) {
+    logRestDiagnostic({
+      logger: client.logger,
+      level: "error",
+      event: {
+        event: "request.failed",
+        method,
+        path,
+        error: {
+          name: error?.name ?? "Error",
+          code: error?.code ?? null,
+          kind: error?.kind ?? null,
+          exchangeCode: error?.exchangeCode ?? null,
+          status: error?.status ?? null,
+          message: "[error message withheld]",
+        },
+      },
+    })
+    throw error
+  }
+}
+
 export class BitunixRestClient {
   /**
-   * @param {{apiKey?: string, apiSecret?: string, baseUrl?: string, requestTimeout?: number, fetchFn?: typeof fetch, now?: () => number, nonceFactory?: () => string}} options
+   * @param {{apiKey?: string, apiSecret?: string, baseUrl?: string, requestTimeout?: number, fetchFn?: typeof fetch, now?: () => number, nonceFactory?: () => string, logger?: object}} options
    */
   constructor(options = {}) {
     const {
@@ -526,6 +689,7 @@ export class BitunixRestClient {
       fetchFn = fetch,
       now = Date.now,
       nonceFactory = () => randomBytes(16).toString("hex"),
+      logger,
     } = options
     validateClientOptions({
       apiKey,
@@ -544,6 +708,7 @@ export class BitunixRestClient {
     this.fetch = fetchFn
     this.now = now
     this.nonceFactory = nonceFactory
+    this.logger = logger
   }
 
   /**
@@ -553,47 +718,18 @@ export class BitunixRestClient {
    * @returns {Promise<{data: unknown}>}
    */
   async request(input = {}) {
-    const {
-      method,
-      path,
-      queryParams = {},
-      body,
-      stateChanging = false,
-      authenticated = true,
-    } = validateRequest(input)
-    if (authenticated && (!this.apiKey || !this.apiSecret)) {
+    const requestInput = validateRequest(input)
+    if (requestInput.authenticated && (!this.apiKey || !this.apiSecret)) {
       throw new BitunixRestError({
         message: "Bitunix REST credentials are required for authenticated requests",
         kind: "authentication",
-        path,
+        path: requestInput.path,
         outcomeUnknown: false,
       })
     }
-    const request = createPreparedRequest({
+    return executeRestRequest({
       client: this,
-      method,
-      path,
-      queryParams,
-      body,
-      authenticated,
-      stateChanging,
-    })
-    const response = await sendRequest({
-      client: this,
-      request,
-      path,
-      stateChanging,
-    })
-    const payload = await readResponsePayload({
-      response,
-      path,
-      stateChanging,
-    })
-    return validateResponse({
-      response,
-      payload,
-      path,
-      stateChanging,
+      requestInput,
     })
   }
 }

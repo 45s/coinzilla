@@ -72,7 +72,7 @@ function createSignedPlacementTestBroker({ requests, responses, fetchFn, nonceFa
   })
 }
 
-function createBroker({ responses = {}, allowLiveOrderMutations = true, reconcilerFactory } = {}) {
+function createBroker({ responses = {}, allowLiveOrderMutations = true, reconcilerFactory, logger } = {}) {
   const calls = []
   const restClient = {
     async request(input = {}) {
@@ -83,10 +83,18 @@ function createBroker({ responses = {}, allowLiveOrderMutations = true, reconcil
         options,
       })
       const key = path
-      if (responses[key] instanceof Error) {
-        throw responses[key]
+      const configuredResponse = responses[key]
+      if (configuredResponse instanceof Error) {
+        throw configuredResponse
       }
-      return { data: responses[key] }
+      if (typeof configuredResponse === "function") {
+        const value = await configuredResponse(input)
+        if (value instanceof Error) {
+          throw value
+        }
+        return { data: value }
+      }
+      return { data: configuredResponse }
     },
   }
   const broker = new BitunixSpotBroker({
@@ -94,6 +102,7 @@ function createBroker({ responses = {}, allowLiveOrderMutations = true, reconcil
     apiSecret: "secret",
     tradingMode: "live",
     allowLiveOrderMutations,
+    logger,
     dependencies: {
       restClientFactory: () => restClient,
       ...(reconcilerFactory ? { reconcilerFactory } : {}),
@@ -152,17 +161,64 @@ test("Bitunix Spot broker reads balances without inventing an account snapshot t
   assert.equal(calls.length, 1)
 })
 
-test("Bitunix Spot broker requires a symbol for open orders and history", async () => {
-  const { broker, calls } = createBroker()
+test("Bitunix Spot getOpenOrders() enumerates markets and preserves partial symbol failures", async () => {
+  const { broker, calls } = createBroker({
+    responses: {
+      "/api/spot/v1/common/coin_pair/list": [
+        {
+          base: "BTC",
+          quote: "USDT",
+          isOpen: "1",
+        },
+        {
+          base: "ETH",
+          quote: "USDT",
+          isOpen: "1",
+        },
+        {
+          base: "OLD",
+          quote: "USDT",
+          isOpen: "0",
+        },
+      ],
+      "/api/spot/v1/order/pending/list": async ({ body }) => {
+        if (body.symbol === "ETHUSDT") {
+          throw new Error("synthetic ETH pending failure")
+        }
+        return [{
+          orderId: "1234567890123456789",
+          symbol: "BTCUSDT",
+          side: "2",
+          type: "1",
+          status: "1",
+          volume: "0.5",
+          dealVolume: "0",
+          price: "100",
+          ctime: "2026-11-22T00:00:00Z",
+          utime: "2026-11-22T00:00:00Z",
+        }]
+      },
+    },
+  })
 
   const openOrders = await broker.getOpenOrders()
   const history = await broker.getOrderHistory()
 
-  assert.equal(openOrders.ok, false)
-  assert.equal(history.ok, false)
-  assert.match(openOrders.errors[0].message, /symbol/i)
+  assert.equal(openOrders.ok, false, "a partial market failure must remain visible")
+  assert.equal(openOrders.data.length, 1, "successful symbols must still contribute their orders")
+  assert.equal(openOrders.data[0].id, "1234567890123456789")
+  assert.equal(openOrders.data[0].symbol, "BTCUSDT")
+  assert.match(openOrders.errors[0].message, /synthetic ETH pending failure/)
+  assert.equal(history.ok, false, "history remains symbol-scoped")
   assert.match(history.errors[0].message, /symbol/i)
-  assert.equal(calls.length, 0)
+  assert.deepEqual(calls.map(({ path, options }) => [
+    path,
+    options.body?.symbol ?? null,
+  ]), [
+    ["/api/spot/v1/common/coin_pair/list", null],
+    ["/api/spot/v1/order/pending/list", "BTCUSDT"],
+    ["/api/spot/v1/order/pending/list", "ETHUSDT"],
+  ])
 })
 
 test("Bitunix Spot symbol-scoped order reads reject rows for a different symbol", async () => {
@@ -1181,6 +1237,83 @@ test("Bitunix Spot broker normalizes a single pending-order response row", async
   assert.equal(result.ok, true)
   assert.equal(result.data.length, 1)
   assert.equal(result.data[0].id, "123")
+})
+
+test("Bitunix Spot pending-order fetch preserves the exact accepted HYPEUSDT order identity", async () => {
+  const orderId = "2124329325141426176"
+  const order = {
+    orderId,
+    symbol: "HYPEUSDT",
+    side: "2",
+    type: "1",
+    status: "1",
+    volume: "0.366",
+    dealVolume: "0",
+    price: "30",
+    ctime: "2026-11-22T02:28:54Z",
+    utime: "2026-11-22T02:28:54Z",
+  }
+  const requests = []
+  const broker = createSignedPlacementTestBroker({
+    requests,
+    responses: [{
+      code: "0",
+      msg: "success",
+      data: [order],
+    }],
+  })
+
+  const result = await broker.getOpenOrders({ symbol: "hypeusdt" })
+  const matchedOrder = result.data?.find(({ id }) => id === orderId)
+
+  assert.equal(result.ok, true, "a valid pending-order response must normalize successfully")
+  assert.equal(result.data.length, 1, "the pending endpoint must return the expected HYPE order row")
+  assert.ok(matchedOrder, "the exact 19-digit exchange order ID must be found without numeric coercion")
+  assert.equal(matchedOrder.id, orderId, "the exchange order ID must remain an exact string")
+  assert.equal(matchedOrder.symbol, "HYPEUSDT")
+  assert.equal(matchedOrder.side, "BUY")
+  assert.equal(matchedOrder.status, "OPEN")
+  assert.equal(matchedOrder.originalQuantity, "0.366")
+  assert.equal(matchedOrder.price, 30)
+  assert.equal(requests.length, 1, "fetching pending orders must issue exactly one read")
+  assert.equal(requests[0].url.pathname, "/api/spot/v1/order/pending/list")
+  assert.equal(requests[0].options.method, "POST")
+  assert.equal(requests[0].options.headers["api-key"], "test-api-key")
+  assert.equal(requests[0].options.body, '{"symbol":"HYPEUSDT"}')
+  assert.equal(
+    requests[0].options.headers.sign,
+    createRestSignature({
+      nonce: "test-nonce-0",
+      timestamp: "1795262400000",
+      apiKey: "test-api-key",
+      secretKey: "test-api-secret",
+      body: requests[0].options.body,
+      bodyIsSerialized: true,
+    }),
+    "the pending-order POST must be signed over the exact serialized request body",
+  )
+})
+
+test("Bitunix Spot pending-order fetch preserves a 64-bit numeric JSON order ID token", async () => {
+  const requests = []
+  const rawResponse = '{"code":"0","msg":"success","data":[{"orderId":2124329325141426176,"symbol":"HYPEUSDT","side":"2","type":"1","status":"1","volume":"0.366","dealVolume":"0","price":"30","ctime":"2026-11-22T00:00:00Z","utime":"2026-11-22T00:00:00Z"}]}'
+  const broker = createSignedPlacementTestBroker({
+    requests,
+    responses: [],
+    fetchFn: async () => new Response(rawResponse, {
+      status: 200,
+      headers: {
+        "content-type": "application/json",
+      },
+    }),
+  })
+
+  const result = await broker.getOpenOrders({ symbol: "HYPEUSDT" })
+
+  assert.equal(result.ok, true, "a numeric 64-bit orderId token must be normalized losslessly")
+  assert.equal(result.data[0].id, "2124329325141426176")
+  assert.equal(typeof result.data[0].id, "string")
+  assert.equal(requests.length, 1, "the pending-order read must not retry")
 })
 
 test("Bitunix Spot broker supports explicit history page selection", async () => {
@@ -2899,4 +3032,87 @@ test("Bitunix Spot createOrder completes signed REST placement and order-detail 
   assert.equal(requests[1].url.pathname, "/api/spot/v1/order/detail")
   assert.equal(requests[1].url.searchParams.get("orderId"), "12345678901234567890")
   assert.equal(requests[1].options.method, "GET")
+})
+
+
+test("Bitunix Spot Broker API emits structured order-read diagnostics", async () => {
+  const events = []
+  const logger = {
+    debug: (event) => events.push(event),
+    error: (event) => events.push(event),
+  }
+  const { broker } = createBroker({
+    logger,
+    responses: {
+      "/api/spot/v1/common/coin_pair/list": [
+        {
+          base: "HYPE",
+          quote: "USDT",
+          isOpen: "1",
+        },
+      ],
+      "/api/spot/v1/order/pending/list": [{
+        orderId: "2124329325141426176",
+        symbol: "HYPEUSDT",
+        side: "2",
+        type: "1",
+        status: "1",
+        volume: "0.366",
+        dealVolume: "0",
+        price: "30",
+        ctime: "2026-11-22T00:00:00Z",
+        utime: "2026-11-22T00:00:00Z",
+      }],
+      "/api/spot/v1/order/detail": new Error("synthetic detail lookup failure"),
+    },
+  })
+
+  const markets = await broker.getExchangeMarkets()
+  const pending = await broker.getOpenOrders({ symbol: "HYPEUSDT" })
+  const detail = await broker.getOrder({
+    symbol: "HYPEUSDT",
+    orderId: "2124329325141426176",
+  })
+
+  assert.equal(markets.ok, true)
+  assert.equal(pending.ok, true)
+  assert.equal(detail.ok, false)
+  assert.ok(events.some((event) => event.event === "getExchangeMarkets.completed" && event.marketCount === 1))
+  assert.ok(events.some((event) => event.event === "getOpenOrders.completed" && event.orderIds[0] === "2124329325141426176"))
+  assert.ok(events.some((event) => event.event === "getOrder.failed" && event.orderId === "2124329325141426176"))
+  assert.ok(events.every((event) => event.layer === "broker-api" && event.provider === "bitunix"))
+})
+
+
+test("Bitunix Spot Broker passes the common logger into its REST client factory", async () => {
+  const events = []
+  const logger = {
+    debug: (event) => events.push(event),
+    error: (event) => events.push(event),
+  }
+  let restClientLogger
+  const broker = new BitunixSpotBroker({
+    apiKey: "key",
+    apiSecret: "secret",
+    tradingMode: "live",
+    logger,
+    dependencies: {
+      restClientFactory: (config) => {
+        restClientLogger = config.logger
+        return {
+          request: async () => ({
+            data: [],
+          }),
+        }
+      },
+    },
+  })
+
+  const result = await broker.getOpenOrders({
+    symbol: "HYPEUSDT",
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(restClientLogger, logger)
+  assert.ok(events.some((event) => event.event === "getOpenOrders.completed"))
 })

@@ -54,17 +54,20 @@ function printCliIdentity({ stdout = process.stdout } = {}) {
 
 function printHelp() {
   process.stdout.write([
-    "Usage: pnpm --filter @coinzilla/brokers bitunix:healthcheck [--version|--local|--publish|--place-order|--probe-order=<probe-id>]",
+    "Usage: pnpm --filter @coinzilla/brokers bitunix:healthcheck [--version|--local|--publish|--full-diagnostics|--place-order|--probe-order=<probe-id>]",
     "",
-    "Default / --publish: run LIVE read-only diagnostics and publish only an allowlisted sanitized report branch.",
-    "--local: run LIVE read-only diagnostics and save a private local report without creating or pushing a branch.",
-    "--place-order: run read-only health checks, then (only if healthy) the guarded one-shot LIVE HYPEUSDT BUY LIMIT attempt.",
+    "Default / --publish: run only the LIVE read-only order scan (getOpenOrders, then getOrder for every discovered order) and publish a sanitized report branch.",
+    "--local: run only the LIVE read-only order scan and save a private local report without creating or pushing a branch.",
+    "--full-diagnostics: run the broader existing account, REST, and WebSocket diagnostics in addition to the order scan.",
+    "--place-order: run the existing read-only health checks, then (only if healthy) the guarded one-shot LIVE HYPEUSDT BUY LIMIT attempt.",
     "--probe-order=<id>: run targeted read-only HYPEUSDT preflight and one separately confirmed LIVE order probe; publish its sanitized result and return to develop.",
     "--probe-order=limit-buy-11-usdt: BUY HYPEUSDT LIMIT at 30 USDT, spend up to 11 USDT; quantity is calculated from live basePrecision. Confirm with y/N.",
     "--version: print package version, source commit, worktree state, and Node version without loading credentials or contacting Bitunix.",
     "--help: show this help without loading credentials or contacting Bitunix.",
     "",
     "The default mode never places or cancels orders, transfers funds, or withdraws.",
+    "The order-read scan records the complete getOpenOrders result and every getOrder result/error; order IDs come from getOpenOrders data, never CLI arguments.",
+    "The broader diagnostics remain implemented and tested; they are not deleted, only skipped by default.",
     "LIVE order modes are human-only and must never be invoked by AI agents, tests, CI, or scheduled jobs.",
     "",
   ].join("\n"))
@@ -143,12 +146,13 @@ async function runFixedOrderMode() {
   })
 }
 
-async function runReadOnlyMode({ mode }) {
+async function runReadOnlyMode({ mode, includeGeneralDiagnostics = false }) {
   loadLocalEnvironment({
     allowMissing: mode === "local",
   })
   process.exitCode = await runHealthcheckWorkflow({
     mode,
+    includeGeneralDiagnostics,
     brokersRoot,
     repositoryRoot,
     env: process.env,
@@ -163,6 +167,13 @@ async function runHealthcheck({ args = process.argv.slice(2) } = {}) {
     return
   }
   if (mode === "version") {
+    return
+  }
+  if (mode === "full-diagnostics") {
+    await runReadOnlyMode({
+      mode: "publish",
+      includeGeneralDiagnostics: true,
+    })
     return
   }
   if (mode === "probe-order") {
