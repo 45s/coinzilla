@@ -215,7 +215,6 @@ Trading-enabled graceful shutdown emits a separate `account.open_orders_captured
 
 Unmatched/external orders remain unowned and untouched. A BLOCKED ownership classification does not mean the account-wide read was incomplete and does not alone prevent shutdown. A failed, partial, or malformed CLOSING read is recorded as BLOCKED with `CLOSING_OPEN_ORDERS_CAPTURE_FAILED`; the paired CLOSING balance event is marked INCOMPLETE. If either fact or Journal barrier cannot be made durable, shutdown remains incomplete and the process must not report STOPPED. This evidence is audit-only and does not enable process-restart restoration or order adoption.
 
-
 ## Backup and restore
 
 A Journal backup is a byte-preserving copy of the complete set of session `.jsonl` files. Take backups only after the writer has stopped and `close()` has returned `ok: true` and `durable: true`. Do not copy an active session or treat the directory lock as backup data.
