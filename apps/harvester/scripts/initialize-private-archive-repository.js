@@ -4,6 +4,8 @@ import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
+import { captureBuildMetadata } from "@coinzilla/utils"
+import packageMetadata from "../package.json" with { type: "json" }
 
 const execFileAsync = promisify(execFile)
 const REPOSITORY_ENVIRONMENT_VARIABLE = "HARVESTER_ARCHIVE_REMOTE"
@@ -14,7 +16,7 @@ Private repository for locally generated Harvester operational-state archives.
 
 The repository is initialized with an empty \`archives/\` directory only.
 Do not commit plaintext operational data to the public Coinzilla source repository.
-Archive encryption and the reset workflow are being implemented separately.
+TESTNET archive snapshots exclude the LIVE production database directory.
 `
 
 export function validateArchiveRemote(remote) {
@@ -113,6 +115,27 @@ export async function initializePrivateArchiveRepository({
 }
 
 async function main() {
+  const metadata = captureBuildMetadata({
+    application: "harvester-archive-repository-init",
+    version: packageMetadata.version,
+    cwd: path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."),
+    env: process.env,
+  })
+  const identity = [
+    `harvester-archive-repository-init ${packageMetadata.version}`,
+    `commit ${metadata.source.commit ?? "unknown"}`,
+    `worktree ${metadata.source.workingTree}`,
+    `node ${process.version}`,
+  ].join(" | ")
+  const args = process.argv.slice(2)
+  if (args.length === 1 && args[0] === "--version") {
+    process.stdout.write(identity + "\\n")
+    return
+  }
+  if (args.length > 0) {
+    throw new TypeError("Usage: archive:repo:init [--version]")
+  }
+  process.stdout.write(identity + "\\n")
   const result = await initializePrivateArchiveRepository()
   const status = result.alreadyInitialized
     ? "already initialized; no changes made"
