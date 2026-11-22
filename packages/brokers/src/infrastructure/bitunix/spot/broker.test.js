@@ -1183,6 +1183,61 @@ test("Bitunix Spot broker normalizes a single pending-order response row", async
   assert.equal(result.data[0].id, "123")
 })
 
+test("Bitunix Spot pending-order fetch preserves the exact accepted HYPEUSDT order identity", async () => {
+  const orderId = "2124329325141426176"
+  const order = {
+    orderId,
+    symbol: "HYPEUSDT",
+    side: "2",
+    type: "1",
+    status: "1",
+    volume: "0.366",
+    dealVolume: "0",
+    price: "30",
+    ctime: "2026-11-22T02:28:54Z",
+    utime: "2026-11-22T02:28:54Z",
+  }
+  const requests = []
+  const broker = createSignedPlacementTestBroker({
+    requests,
+    responses: [{
+      code: "0",
+      msg: "success",
+      data: [order],
+    }],
+  })
+
+  const result = await broker.getOpenOrders({ symbol: "hypeusdt" })
+  const matchedOrder = result.data?.find(({ id }) => id === orderId)
+
+  assert.equal(result.ok, true, "a valid pending-order response must normalize successfully")
+  assert.equal(result.data.length, 1, "the pending endpoint must return the expected HYPE order row")
+  assert.ok(matchedOrder, "the exact 19-digit exchange order ID must be found without numeric coercion")
+  assert.equal(matchedOrder.id, orderId, "the exchange order ID must remain an exact string")
+  assert.equal(matchedOrder.symbol, "HYPEUSDT")
+  assert.equal(matchedOrder.side, "BUY")
+  assert.equal(matchedOrder.status, "OPEN")
+  assert.equal(matchedOrder.originalQuantity, "0.366")
+  assert.equal(matchedOrder.price, 30)
+  assert.equal(requests.length, 1, "fetching pending orders must issue exactly one read")
+  assert.equal(requests[0].url.pathname, "/api/spot/v1/order/pending/list")
+  assert.equal(requests[0].options.method, "POST")
+  assert.equal(requests[0].options.headers["api-key"], "test-api-key")
+  assert.equal(requests[0].options.body, '{"symbol":"HYPEUSDT"}')
+  assert.equal(
+    requests[0].options.headers.sign,
+    createRestSignature({
+      nonce: "test-nonce-0",
+      timestamp: "1795262400000",
+      apiKey: "test-api-key",
+      secretKey: "test-api-secret",
+      body: requests[0].options.body,
+      bodyIsSerialized: true,
+    }),
+    "the pending-order POST must be signed over the exact serialized request body",
+  )
+})
+
 test("Bitunix Spot broker supports explicit history page selection", async () => {
   const { broker, calls } = createBroker({
     responses: {
