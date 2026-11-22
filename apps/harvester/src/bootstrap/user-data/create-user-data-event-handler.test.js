@@ -445,7 +445,10 @@ test("notifies the read-only exchange monitor for every accepted user-data event
   const { handler, state } = createHandler({
     onMonitoringEvent: ({ event }) => monitored.push(event),
   })
-  const event = { eventType: "accountUpdate", balances: [] }
+  const event = {
+    eventType: "accountUpdate",
+    balances: [],
+  }
   handler({ event })
   await state.eventQueue
 
