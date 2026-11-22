@@ -90,21 +90,21 @@ The private remote was initialized successfully by the operator with:
 
 ```bash
 pnpm run archive:repo:init
+```
 
-After stopping the Harvester DEV process, publish its TESTNET DB snapshot and matching session evidence with:
+After stopping the Harvester DEV process, publish its TESTNET database snapshot and matching session evidence with:
 
 ```bash
 pnpm run archive:push
 ```
 
-To select a specific prior TESTNET session rather than the newest one:
+To select a specific prior TESTNET session rather than the newest eligible TESTNET session:
 
 ```bash
 pnpm run archive:push -- --session <runtime-session-id>
 ```
 
-The local archive is retained under `apps/harvester/data/archives/<timestamp>_<short-commit>/`. The remote receives the same directory under `archives/`. A failed push leaves the local directory in place; retry is safe only after confirming the remote directory was not created.
-```
+The local archive is retained under `apps/harvester/data/archives/<timestamp>_<short-commit>/`. The private remote receives the same directory under `archives/`. A failed push leaves the local directory in place. A complete local archive can be retried; a partial or mismatched local directory is never overwritten.
 
 Configured local environment value:
 
@@ -112,7 +112,7 @@ Configured local environment value:
 HARVESTER_ARCHIVE_REMOTE=https://github.com/45s/coinzilla-archive.git
 ```
 
-This bootstrap success verifies the operator's local HTTPS Git push access. It does not verify that the archive copy/publish workflow exists.
+The bootstrap success verifies the operator's local HTTPS Git push access. It does not constitute a completed operational archive upload.
 
 ## 5. Safety invariants
 
@@ -158,12 +158,10 @@ Completed:
 - Existing process-session logging, Journal co-location, database isolation and online SQLite backup implementations were inspected.
 - Operator narrowed the milestone to copy + push logs/database only, explicitly without encryption and without reset.
 
-Not completed:
-- Startup commit/worktree snapshot is not yet captured by the launcher as an immutable archive identity.
-- `archive:push` now implements TESTNET-only session selection, WAL-aware DB snapshot, session-log/Journal copy, manifest/checksum verification, non-overwriting remote push and remote blob verification.
-- Archive naming uses the persisted process-start timestamp and startup source commit; missing provenance fails closed.
-- Regression tests cover archive naming and fail-closed identity validation.
-- End-to-end execution, package tests and a real private-remote publication have not been run from this assistant environment. The operator must run the command locally after pulling the branch.
+Not yet verified:
+- The new archive script and focused tests have not been executed in a local workspace or by a branch CI run in this task.
+- The operator has not yet run `pnpm run archive:push`; no operational data has been copied or uploaded by the assistant.
+- The first local archive and private-remote publication must be confirmed by the operator after pulling the branch.
 
 ## 9. Resume checklist
 
@@ -171,6 +169,7 @@ A new contributor should:
 
 - Read repository `AGENTS.md`, `ENGINEERING_STANDARDS.md`, `AI_AGENT_WORKFLOW.md`, Harvester `AGENTS.md`, `TRADING_FIRST.md`, `ROADMAP.md`, and the Harvester persistence/logging/Journal operations docs.
 - Read issue [#1742](https://github.com/45s/coinzilla/issues/1742) and this document.
-- Start from the task branch and latest `develop` per repository workflow; preserve the single-branch/single-PR task contract.
-- Continue at implementation sequence step 1. Do not reopen settled scope decisions unless the operator changes them.
+- Pull `feat/harvester-local-dev-reset-archive` and run the focused archive test plus package checks before the first local archive.
+- Run `pnpm run archive:push` only after the Harvester DEV process has exited cleanly and the completion marker exists.
+- Record the first local/remote archive result and any operator-discovered issue here and in #1742. Do not reopen settled scope decisions unless the operator changes them.
 - Record every implementation decision, command, test/CI result, commit, PR and remaining limitation in this document and the issue so the work is never dependent on chat history.
