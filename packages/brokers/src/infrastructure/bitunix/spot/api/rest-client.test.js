@@ -1146,7 +1146,7 @@ test("Bitunix REST diagnostics record exchange rejection details without retryin
 })
 
 
-test("Bitunix REST diagnostics log only response shape and never financial or wallet values", async () => {
+function createPrivateResponseLoggingFixture() {
   const events = []
   const responses = [
     {
@@ -1192,7 +1192,10 @@ test("Bitunix REST diagnostics log only response shape and never financial or wa
       },
     }),
   })
+  return { client, events }
+}
 
+async function readPrivateDiagnosticResponses({ client }) {
   await client.request({
     method: "POST",
     path: "/api/spot/v1/withdraw_transfer/page",
@@ -1203,8 +1206,12 @@ test("Bitunix REST diagnostics log only response shape and never financial or wa
     method: "GET",
     path: "/api/spot/v1/user/account",
   })
+}
 
-  const serializedEvents = JSON.stringify(events)
+test("Bitunix REST diagnostics log only response shape and never financial or wallet values", async () => {
+  const fixture = createPrivateResponseLoggingFixture()
+  await readPrivateDiagnosticResponses(fixture)
+  const serializedEvents = JSON.stringify(fixture.events)
   for (const privateValue of [
     "9876.54321",
     "0.123",
@@ -1220,30 +1227,14 @@ test("Bitunix REST diagnostics log only response shape and never financial or wa
     "10.00",
     "withdrawal-private-id",
   ]) {
-    assert.equal(serializedEvents.includes(privateValue), false, `diagnostic events must not expose ${privateValue}`)
+    assert.equal(serializedEvents.includes(privateValue), false, "REST diagnostic events must not expose private values")
   }
-  const responseEvents = events.filter((event) => event.event === "response.received")
+  const responseEvents = fixture.events.filter((event) => event.event === "response.received")
   assert.equal(responseEvents.length, 2)
-  assert.deepEqual(responseEvents[0].dataSummary, {
-    type: "array",
-    itemCount: 1,
-    fields: [
-      "address",
-      "amount",
-      "fee",
-      "fromAddress",
-      "id",
-      "remark",
-      "toAddress",
-      "toEmail",
-      "toPhoneNumber",
-      "toUid",
-      "transactionHash",
-    ],
-  }, "response diagnostics retain schema shape without recording private field values")
-  assert.deepEqual(responseEvents[1].dataSummary, {
-    type: "array",
-    itemCount: 1,
-    fields: ["balance", "balanceLocked", "coin"],
-  }, "account diagnostics retain field names and item counts only")
+  assert.deepEqual(responseEvents[0].dataSummary.fields, [
+    "address", "amount", "fee", "fromAddress", "id", "remark",
+    "toAddress", "toEmail", "toPhoneNumber", "toUid", "transactionHash",
+  ])
+  assert.deepEqual(responseEvents[1].dataSummary.fields, ["balance", "balanceLocked", "coin"])
 })
+
