@@ -13,6 +13,7 @@ import {
 import { execFile } from "node:child_process"
 import { promisify } from "node:util"
 import path from "node:path"
+import os from "node:os"
 import { fileURLToPath } from "node:url"
 import { createHarvesterTradingHistoryBackupService } from "../src/infrastructure/persistence/trading-history-backups/index.js"
 import { createHarvesterLogSessionPaths } from "../src/infrastructure/logging/create-harvester-log-session-paths.js"
@@ -128,6 +129,7 @@ async function resolveSessionIdentity({ sessionId } = {}) {
 }
 
 async function copyRegularTree({ sourceDirectory, destinationDirectory, relative = "" } = {}) {
+  await mkdir(destinationDirectory, { recursive: true, mode: 0o700 })
   const source = relative ? path.join(sourceDirectory, relative) : sourceDirectory
   const destination = relative ? path.join(destinationDirectory, relative) : destinationDirectory
   const entries = await readdir(source, { withFileTypes: true })
@@ -231,7 +233,7 @@ async function publishArchive({
   archiveName,
   remote,
   runGit = runGitDefault,
-  createTemporaryDirectory = (prefix) => mkdtemp(path.join(PACKAGE_DIRECTORY, "data", prefix)),
+  createTemporaryDirectory = (prefix) => mkdtemp(path.join(os.tmpdir(), prefix)),
   removeTemporaryDirectory = (filename) => rm(filename, { recursive: true, force: true }),
 } = {}) {
   const temporaryRoot = await createTemporaryDirectory(".archive-push-")
@@ -297,35 +299,59 @@ export async function runHarvesterArchivePush({
   const archiveName = createHarvesterArchiveDirectoryName(identity)
   await mkdir(LOCAL_ARCHIVE_DIRECTORY, { recursive: true, mode: 0o700 })
   const localArchive = path.join(LOCAL_ARCHIVE_DIRECTORY, archiveName)
-  await mkdir(localArchive, { recursive: false, mode: 0o700 })
+  let existingManifest = null
+  try {
+    await mkdir(localArchive, { recursive: false, mode: 0o700 })
+  } catch (error) {
+    if (error.code !== "EEXIST") {
+      throw error
+    }
+    const manifestFilename = path.join(localArchive, "manifest.json")
+    try {
+      existingManifest = JSON.parse(await readFile(manifestFilename, "utf8"))
+    } catch {
+      throw new Error(`A partial or unreadable local archive already exists at ${localArchive}; refusing to overwrite it.`)
+    }
+    if (
+      existingManifest.process?.startedAt !== identity.startedAt
+      || existingManifest.process?.runtimeSessionId !== identity.runtimeSessionId
+      || existingManifest.process?.source?.commit !== identity.source.commit
+      || existingManifest.environment !== "testnet"
+    ) {
+      throw new Error(`The existing local archive does not match the selected process identity: ${localArchive}`)
+    }
+    await verifyArchive({ directory: localArchive, manifest: existingManifest })
+  }
 
   try {
-    const backupService = backupServiceFactory({ env })
-    const backupResult = await backupService.createBackup({ keep: 3650 })
-    if (!backupResult.verified || backupResult.environment !== "testnet") {
-      throw new Error("The existing SQLite backup service did not return a verified TESTNET backup.")
+    if (!existingManifest) {
+      const backupService = backupServiceFactory({ env })
+      const backupResult = await backupService.createBackup({ keep: 3650 })
+      if (!backupResult.verified || backupResult.environment !== "testnet") {
+        throw new Error("The existing SQLite backup service did not return a verified TESTNET backup.")
+      }
+      const databaseDirectory = path.join(localArchive, "database")
+      const logsDestination = path.join(localArchive, "logs")
+      await mkdir(databaseDirectory, { mode: 0o700 })
+      await mkdir(logsDestination, { mode: 0o700 })
+      await copyFile(backupResult.backupFilename, path.join(databaseDirectory, "harvester.sqlite"))
+      await copyFile(backupResult.manifestFilename, path.join(databaseDirectory, "backup-manifest.json"))
+      await copyRegularTree({
+        sourceDirectory: selected.directory,
+        destinationDirectory: path.join(logsDestination, path.basename(selected.directory)),
+      })
+      const manifest = await createArchiveManifest({
+        directory: localArchive,
+        identity,
+        backupResult,
+      })
+      await writeFile(path.join(localArchive, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\\n`, {
+        encoding: "utf8",
+        flag: "wx",
+        mode: 0o600,
+      })
+      await verifyArchive({ directory: localArchive, manifest })
     }
-    const databaseDirectory = path.join(localArchive, "database")
-    const logsDestination = path.join(localArchive, "logs")
-    await mkdir(databaseDirectory, { mode: 0o700 })
-    await mkdir(logsDestination, { mode: 0o700 })
-    await copyFile(backupResult.backupFilename, path.join(databaseDirectory, "harvester.sqlite"))
-    await copyFile(backupResult.manifestFilename, path.join(databaseDirectory, "backup-manifest.json"))
-    await copyRegularTree({
-      sourceDirectory: selected.directory,
-      destinationDirectory: path.join(logsDestination, path.basename(selected.directory)),
-    })
-    const manifest = await createArchiveManifest({
-      directory: localArchive,
-      identity,
-      backupResult,
-    })
-    await writeFile(path.join(localArchive, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`, {
-      encoding: "utf8",
-      flag: "wx",
-      mode: 0o600,
-    })
-    await verifyArchive({ directory: localArchive, manifest })
     const published = await publishArchive({
       directory: localArchive,
       archiveName,
