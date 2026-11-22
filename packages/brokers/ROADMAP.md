@@ -1605,7 +1605,6 @@ See [the private polling contract](./docs/BITUNIX_SPOT_POLLING.md) and [the Bitu
 - Add regression coverage for sanitizer boundaries, published report payloads, exact order identity preservation, and terminal output.
 - No live exchange calls, order placement, cancellation, or other mutations are part of this implementation.
 
-
 ## 2026-11-22 — Bitunix accepted-placement reconciliation
 
 **Status: reconciliation contract and offline regression coverage carried forward from PR #1703; exact-head CI is the merge gate.**
