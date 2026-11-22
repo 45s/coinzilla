@@ -627,6 +627,7 @@ export async function startTradingHistoryApiServer({
   operator,
   marketData,
   exchangeAccounts = [],
+  subscribeExchangeAccountUpdates,
 } = {}) {
   const configuration = validateApiServerConfiguration({
     queries,
@@ -646,6 +647,7 @@ export async function startTradingHistoryApiServer({
     ? attachTradingHistoryWebSocket({
         server,
         eventBus,
+        subscribeExchangeAccountUpdates,
       })
     : null
   try {
