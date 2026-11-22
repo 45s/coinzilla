@@ -125,8 +125,8 @@
     ]
   },
   "scripts": {
-    "test": "node --test --test-force-exit --test-reporter=spec",
-    "test:coverage": "node --test --test-force-exit --experimental-test-coverage --test-coverage-include=src/**/*.js --test-coverage-exclude=src/**/*.test.js --test-coverage-lines=80 --test-coverage-branches=80 --test-coverage-functions=80",
+    "test": "node --test --test-concurrency=1 --test-force-exit --test-reporter=spec",
+    "test:coverage": "node --test --test-concurrency=1 --test-force-exit --experimental-test-coverage --test-coverage-include=src/**/*.js --test-coverage-exclude=src/**/*.test.js --test-coverage-lines=80 --test-coverage-branches=80 --test-coverage-functions=80",
     "start": "node --env-file=.env src/index.js",
     "dev": "node --env-file=.env.development scripts/run-dev-with-log.js",
     "testnet:orders": "node --env-file=.env.development scripts/list-testnet-open-orders.js",
