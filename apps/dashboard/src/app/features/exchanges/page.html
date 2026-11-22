@@ -1,0 +1,117 @@
+<section class="exchanges-page">
+  <header class="page-heading">
+    <div>
+      <div class="eyebrow">HARVESTER / ACTIVE PROVIDERS</div>
+      <h1>Exchanges<span>.</span></h1>
+      <p class="page-description">Read-only balances and open orders from provider accounts already running inside Harvester.</p>
+    </div>
+    <button type="button" class="refresh-button" (click)="refresh()" [disabled]="loading()">
+      {{ loading() ? 'Refreshing…' : 'Refresh' }}
+    </button>
+  </header>
+
+  <div class="connection-strip">
+    <span class="connection-indicator" [class.live]="liveStatus() === 'live'" [class.reconnecting]="liveStatus() === 'connecting' || liveStatus() === 'reconnecting'" [class.offline]="liveStatus() === 'offline'"></span>
+    <span>{{ liveStatus() === 'live' ? 'Live updates connected' : liveStatus() === 'reconnecting' ? 'Reconnecting to Harvester…' : liveStatus() === 'offline' ? 'Live updates offline' : 'Connecting to Harvester…' }}</span>
+    <span class="strip-divider">·</span>
+    <span>{{ totalOpenOrders() }} open orders</span>
+    @if (lastUpdated(); as updated) {
+      <span class="strip-divider">·</span>
+      <span>Snapshot {{ updated | date:'mediumTime' }}</span>
+    }
+  </div>
+
+  @if (errorMessage(); as message) {
+    <div class="request-error" role="alert">{{ message }}</div>
+  }
+
+  @if (loading() && accounts().length === 0) {
+    <div class="state-panel" role="status">
+      <span class="loading-mark"></span>
+      <strong>Loading active Harvester providers…</strong>
+    </div>
+  } @else if (!loading() && accounts().length === 0 && connected()) {
+    <div class="state-panel empty-state">
+      <span class="empty-mark">—</span>
+      <strong>No account-monitoring providers are active.</strong>
+      <p>Only successfully started Harvester providers with account snapshot and open-order reads appear here. No separate exchange connections are created.</p>
+    </div>
+  }
+
+  @for (account of accounts(); track account.metadata.providerInstanceId) {
+    <section class="exchange-card">
+      <header class="exchange-heading">
+        <div>
+          <div class="eyebrow">{{ account.metadata.environment.toUpperCase() }} · {{ account.metadata.accountId }}</div>
+          <h2>{{ account.metadata.providerType }}</h2>
+          <p>{{ account.metadata.providerInstanceId }}</p>
+        </div>
+        <span class="provider-status" [class.offline]="!account.metadata.connected">
+          {{ account.metadata.connected ? 'CONNECTED' : 'DISCONNECTED' }}
+        </span>
+      </header>
+
+      @if (account.error; as message) {
+        <div class="request-error" role="alert">{{ message }}</div>
+      } @else if (account.data; as data) {
+        <div class="section-heading">
+          <div>
+            <h3>Account balances</h3>
+            <p>Exchange-reported amounts · source time {{ data.accountSnapshot.sourceTime }}</p>
+          </div>
+          <span class="count-label">{{ balances(account).length }} assets</span>
+        </div>
+        @if (balances(account).length === 0) {
+          <div class="empty-inline">Harvester returned no balance rows.</div>
+        } @else {
+          <div class="table-scroll">
+            <table>
+              <thead><tr><th>Asset</th><th>Free</th><th>Locked</th><th>Total</th></tr></thead>
+              <tbody>
+                @for (balance of balances(account); track balance.code) {
+                  <tr>
+                    <td><strong>{{ balance.code }}</strong></td>
+                    <td class="numeric">{{ balance.free }}</td>
+                    <td class="numeric">{{ balance.locked }}</td>
+                    <td class="numeric">{{ balance.total }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+
+        <div class="section-heading orders-heading">
+          <div>
+            <h3>Open orders</h3>
+            <p>Current open-order snapshot from the same Harvester provider</p>
+          </div>
+          <span class="count-label">{{ orders(account).length }} orders</span>
+        </div>
+        @if (orders(account).length === 0) {
+          <div class="empty-inline">No open orders reported.</div>
+        } @else {
+          <div class="table-scroll">
+            <table>
+              <thead><tr><th>Symbol</th><th>Side</th><th>Type</th><th>Price</th><th>Quantity</th><th>Status</th></tr></thead>
+              <tbody>
+                @for (order of orders(account); track $index) {
+                  <tr>
+                    <td><strong>{{ order.symbol }}</strong></td>
+                    <td><span class="side-tag" [class.sell]="order.side === 'SELL'">{{ order.side }}</span></td>
+                    <td>{{ order.type }}</td>
+                    <td class="numeric">{{ order.price }}</td>
+                    <td class="numeric">{{ order.quantity }}</td>
+                    <td>{{ order.status }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      }
+    </section>
+  }
+
+  <footer class="page-note">Data source: Harvester only. This page does not connect to exchanges or submit, cancel, or modify orders.</footer>
+</section>
