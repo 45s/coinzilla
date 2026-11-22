@@ -39,9 +39,54 @@ test("Bitunix REST client signs authenticated requests and unwraps successful da
   assert.equal(captured.url, "https://openapi.bitunix.com/api/spot/v1/market/last_price?symbol=BTCUSDT")
   assert.equal(captured.options.headers["api-key"], "api-key")
   assert.equal(captured.options.headers.timestamp, "1700000000000")
-  assert.equal(captured.options.headers.sign, "20fbd51d82ca634dfd00238d8e56ed67c355290378c465629cdf8c08530c9700")
+  assert.equal(captured.options.headers.sign, "d355761041a87afc6e1e8becaddb727a866eafce76c6d12a0763d12cfde65932")
   assert.ok(captured.options.signal instanceof AbortSignal)
   assert.equal(result.data, "10000.00")
+})
+
+test("Bitunix REST client signs the Spot order-detail GET exactly like the reference client", async () => {
+  const orderId = "2124329325141426176"
+  let captured
+  const client = new BitunixRestClient({
+    apiKey: "api-key",
+    apiSecret: "secret",
+    now: () => 1700000000000,
+    nonceFactory: () => "nonce",
+    fetchFn: async (url, options) => {
+      captured = { url, options }
+      return {
+        ok: true,
+        status: 200,
+        async json() {
+          return {
+            code: "0",
+            msg: "result.success",
+            data: {
+              orderId,
+              symbol: "HYPEUSDT",
+            },
+          }
+        },
+      }
+    },
+  })
+
+  const result = await client.request({
+    method: "GET",
+    path: "/api/spot/v1/order/detail",
+    queryParams: { orderId },
+    authenticated: true,
+    stateChanging: false,
+  })
+
+  assert.equal(result.data.orderId, orderId)
+  assert.equal(
+    captured.url,
+    `https://openapi.bitunix.com/api/spot/v1/order/detail?orderId=${orderId}`,
+  )
+  assert.equal(captured.options.method, "GET")
+  assert.equal(captured.options.body, undefined)
+  assert.equal(captured.options.headers.sign, "263b87d50ccf9d41f1381af7eba6a4274d821fec0c33a2ae7c99600577dbbc9f")
 })
 
 test("Bitunix REST client preserves balance precision from JSON number tokens", async () => {
