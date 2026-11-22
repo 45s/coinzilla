@@ -33,7 +33,13 @@ pnpm --filter @coinzilla/dashboard test:coverage
 
 ## Exchanges workspace
 
-The read-only **Exchanges** page lists only provider accounts that Harvester has successfully started and exposed through its local account-monitor API. Balances and open orders are fetched from Harvester's existing broker runtimes; browser code never opens exchange connections or handles exchange credentials. Live WebSocket messages are invalidation hints emitted from Harvester's existing user-data subscription, and REST snapshots remain authoritative. Providers or products not configured and supported by Harvester are not displayed (currently Binance Spot only; no Binance Futures or Bitunix account provider).
+The read-only **Exchanges** page lists only provider accounts that Harvester has successfully
+started and exposed through its local account-monitor API. Balances and open orders are fetched
+from Harvester's existing broker runtimes; browser code never opens exchange connections or
+handles exchange credentials. Live WebSocket messages are invalidation hints emitted from
+Harvester's existing user-data subscription, and REST snapshots remain authoritative. Providers
+or products not configured and supported by Harvester are not displayed (currently Binance Spot
+only; no Binance Futures or Bitunix account provider).
 
 ## Architecture boundary
 
