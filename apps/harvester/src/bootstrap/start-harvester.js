@@ -678,23 +678,10 @@ function createHarvesterUserDataEventRuntime({ startup,
     isTradingEnabled: () => startup.tradingEnabled,
     isStopped: () => userDataState.stopped || userDataState.shutdownRequested,
     logger: startup.logger,
-    onUserDataEvent: startup.onUserDataEvent,
-    onMonitoringEvent: () => {
-      for (const listener of [...resources.exchangeAccountUpdateListeners]) {
-        try {
-          listener()
-        } catch (error) {
-          try {
-            startup.logger?.warn?.({
-              message: "exchange account update listener failed",
-              errorName: error?.name ?? "Error",
-            })
-          } catch {
-            // Optional monitoring diagnostics must not affect Harvester.
-          }
-        }
-      }
-    },
+    onUserDataEvent: createUserDataMonitoringObserver({
+      startup,
+      resources,
+    }),
     getPortfolio: portfolio.getPortfolio,
     getRecoveryLedger: portfolio.getRecoveryLedger,
     updatePortfolio: portfolio.updatePortfolio,
@@ -1419,6 +1406,29 @@ function resolveHarvesterRuntimeMarketDataMetadata({ startup }) {
     marketDataProviderTypes,
     marketDataProviderInstanceId: startup.marketDataProviderInstanceId
       ?? (sourceProviderIds.length === 1 ? sourceProviderIds[0] : null),
+  }
+}
+
+function createUserDataMonitoringObserver({ startup, resources } = {}) {
+  return async (input) => {
+    try {
+      await startup.onUserDataEvent?.(input)
+    } finally {
+      for (const listener of [...resources.exchangeAccountUpdateListeners]) {
+        try {
+          listener()
+        } catch (error) {
+          try {
+            startup.logger?.warn?.({
+              message: "exchange account update listener failed",
+              errorName: error?.name ?? "Error",
+            })
+          } catch {
+            // Optional monitoring diagnostics must not affect Harvester.
+          }
+        }
+      }
+    }
   }
 }
 
