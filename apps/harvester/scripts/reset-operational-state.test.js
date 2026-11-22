@@ -122,6 +122,29 @@ test("requires explicit confirmation and TESTNET mode before deleting anything",
   )
 })
 
+
+test("refuses to reset when the configured recovery-facts directory is missing", async (t) => {
+  const fixture = await createResetFixture()
+  t.after(() => rm(fixture.root, {
+    recursive: true,
+    force: true,
+  }))
+  await rm(fixture.recoveryFactsDirectory, { recursive: true })
+
+  await assert.rejects(
+    runHarvesterOperationalStateReset(createResetArguments({ fixture })),
+    /does not exist/i,
+  )
+  assert.equal(
+    await readFile(path.join(fixture.logsDirectory, "terminal.log"), "utf8"),
+    "keep logs",
+  )
+  assert.equal(
+    await readFile(path.join(fixture.dataDirectory, "harvester.db"), "utf8"),
+    "keep database",
+  )
+})
+
 test("refuses a symlink as the recovery-facts reset target", async (t) => {
   const fixture = await createResetFixture()
   t.after(() => rm(fixture.root, { recursive: true, force: true }))
