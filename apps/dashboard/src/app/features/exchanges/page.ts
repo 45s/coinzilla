@@ -1,4 +1,4 @@
-import { HttpErrorResponse } from '@angular/common/http';
+import { DatePipe, HttpErrorResponse } from '@angular/common/http';
 import { ChangeDetectionStrategy, Component, computed, inject, OnDestroy, OnInit, signal } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 
@@ -74,6 +74,7 @@ function readOpenOrders(data: ExchangeAccountData | null): readonly OpenOrderRow
   standalone: true,
   templateUrl: './page.html',
   styleUrl: './page.css',
+  imports: [DatePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ExchangesComponent implements OnInit, OnDestroy {
