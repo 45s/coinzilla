@@ -369,32 +369,64 @@ test("probe-order mode uses only its dedicated preflight, even if generic diagno
 })
 
 
+
 test("healthcheck captures full open-orders result and every detail response", async () => {
-  const events = [], publishedReports = [], calls = []
-  const order = { id: "2124329325141426176", symbol: "HYPEUSDT", status: "OPEN" }
+  const events = []
+  const publishedReports = []
+  const calls = []
+  const order = {
+    id: "2124329325141426176",
+    symbol: "HYPEUSDT",
+    status: "OPEN",
+  }
   const exitCode = await runHealthcheckWorkflow({
-    mode: "publish", brokersRoot: "/repo/packages/brokers", repositoryRoot: "/repo", env, stdout,
+    mode: "publish",
+    brokersRoot: "/repo/packages/brokers",
+    repositoryRoot: "/repo",
+    env,
+    stdout,
     brokerFactory: ({ logger, providerOptions }) => {
       assert.equal(providerOptions.allowLiveOrderMutations, false)
       return {
         connect: async () => calls.push("connect"),
         getOpenOrders: async () => {
           calls.push("getOpenOrders")
-          logger.debug({ event: "pending.orders.received", orderCount: 1 })
-          return { ok: true, data: [order], errors: [] }
+          logger.debug({
+            event: "pending.orders.received",
+            orderCount: 1,
+          })
+          return {
+            ok: true,
+            data: [order],
+            errors: [],
+          }
         },
         getOrder: async ({ symbol, orderId }) => {
           calls.push(`getOrder:${symbol}:${orderId}`)
-          return { ok: false, data: null, errors: [Object.assign(new Error("detail failed"), { code: "E_DETAIL" })] }
+          return {
+            ok: false,
+            data: null,
+            errors: [Object.assign(new Error("detail failed"), {
+              code: "E_DETAIL",
+            })],
+          }
         },
         disconnect: async () => calls.push("disconnect"),
       }
     },
     runDiagnostics: async () => createDiagnosticReport(),
-    publishDiagnostics: createPublisher({ events, publishedReports }),
+    publishDiagnostics: createPublisher({
+      events,
+      publishedReports,
+    }),
   })
-  assert.deepEqual(calls, ["connect", "getOpenOrders", "getOrder:HYPEUSDT:2124329325141426176", "disconnect"])
-  const report = publishedReports[0]
+  assert.deepEqual(calls, [
+    "connect",
+    "getOpenOrders",
+    "getOrder:HYPEUSDT:2124329325141426176",
+    "disconnect",
+  ])
+  const [report] = publishedReports
   const open = report.results.find((entry) => entry.operation === "Broker API getOpenOrders")
   const detail = report.results.find((entry) => entry.operation === "Broker API getOrder")
   assert.equal(open.status, "passed")
@@ -407,20 +439,39 @@ test("healthcheck captures full open-orders result and every detail response", a
 })
 
 test("healthcheck records failed getOpenOrders response and skips detail reads", async () => {
-  const events = [], publishedReports = [], calls = []
+  const events = []
+  const publishedReports = []
+  const calls = []
   const exitCode = await runHealthcheckWorkflow({
-    mode: "publish", brokersRoot: "/repo/packages/brokers", repositoryRoot: "/repo", env, stdout,
+    mode: "publish",
+    brokersRoot: "/repo/packages/brokers",
+    repositoryRoot: "/repo",
+    env,
+    stdout,
     brokerFactory: () => ({
       connect: async () => {},
-      getOpenOrders: async () => ({ ok: false, data: [{ id: "123", symbol: "HYPEUSDT" }], errors: [Object.assign(new Error("pending failed"), { code: "E_PENDING" })] }),
+      getOpenOrders: async () => ({
+        ok: false,
+        data: [{
+          id: "123",
+          symbol: "HYPEUSDT",
+        }],
+        errors: [Object.assign(new Error("pending failed"), {
+          code: "E_PENDING",
+        })],
+      }),
       getOrder: async () => calls.push("getOrder"),
       disconnect: async () => {},
     }),
     runDiagnostics: async () => createDiagnosticReport(),
-    publishDiagnostics: createPublisher({ events, publishedReports }),
+    publishDiagnostics: createPublisher({
+      events,
+      publishedReports,
+    }),
   })
   assert.deepEqual(calls, [])
-  const open = publishedReports[0].results.find((entry) => entry.operation === "Broker API getOpenOrders")
+  const [report] = publishedReports
+  const open = report.results.find((entry) => entry.operation === "Broker API getOpenOrders")
   assert.equal(open.status, "failed")
   assert.equal(open.response.data[0].id, "123")
   assert.equal(open.errors[0].code, "E_PENDING")
