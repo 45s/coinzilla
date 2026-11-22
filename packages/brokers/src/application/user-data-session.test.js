@@ -274,7 +274,7 @@ function createRecoveryFixture({ failReconnect = false, logger = {} } = {}) {
       session,
     }),
     reconnect: () => runNextRecoveryTimer({
-      timers,
+      timers: scheduler.timers,
       session,
     }),
   }
