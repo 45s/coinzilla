@@ -81,12 +81,17 @@ function validateActiveHypeUsdtMarket({ markets, filters }) {
 
 function decimalParts(value) {
   const [whole, fraction = ""] = String(value).split(".")
-  return { integer: BigInt(`${whole}${fraction}`), scale: fraction.length }
+  return {
+    integer: BigInt(`${whole}${fraction}`),
+    scale: fraction.length,
+  }
 }
 
-function formatScaled(value, scale) {
+function formatScaled({ value, scale }) {
   const digits = value.toString().padStart(scale + 1, "0")
-  if (scale === 0) return digits
+  if (scale === 0) {
+    return digits
+  }
   return `${digits.slice(0, -scale)}.${digits.slice(-scale)}`.replace(/\.?0+$/, "")
 }
 
@@ -99,27 +104,39 @@ function divideToPrecision({ numerator, denominator, precision }) {
   const exponent = precision + b.scale - a.scale
   const dividend = exponent >= 0 ? a.integer * (10n ** BigInt(exponent)) : a.integer
   const divisor = exponent < 0 ? b.integer * (10n ** BigInt(-exponent)) : b.integer
-  return formatScaled(dividend / divisor, precision)
+  return formatScaled({
+    value: dividend / divisor,
+    scale: precision,
+  })
 }
 
-function multiplyDecimals(left, right) {
+function multiplyDecimals({ left, right }) {
   const a = decimalParts(left)
   const b = decimalParts(right)
-  return formatScaled(a.integer * b.integer, a.scale + b.scale)
+  return formatScaled({
+    value: a.integer * b.integer,
+    scale: a.scale + b.scale,
+  })
 }
 
-function addDecimals(left, right) {
+function addDecimals({ left, right }) {
   const a = decimalParts(left)
   const b = decimalParts(right)
   const scale = Math.max(a.scale, b.scale)
   const leftValue = a.integer * (10n ** BigInt(scale - a.scale))
   const rightValue = b.integer * (10n ** BigInt(scale - b.scale))
-  return formatScaled(leftValue + rightValue, scale)
+  return formatScaled({
+    value: leftValue + rightValue,
+    scale,
+  })
 }
 
 function assertProbeBalanceIsInsufficient({ probe, freeBase, freeQuote }) {
   if (probe.spendingAmount !== undefined) {
-    const required = addDecimals(probe.spendingAmount, probe.feeReserve)
+    const required = addDecimals({
+      left: probe.spendingAmount,
+      right: probe.feeReserve,
+    })
     if (compareDecimal({ left: freeQuote, right: required }) < 0) {
       throw new Error(`Bitunix funded BUY blocked: free USDT ${freeQuote} is below ${required} USDT (11 USDT spend plus 0.24 USDT reserve)`)
     }
@@ -151,6 +168,48 @@ function assertProbeBalanceIsInsufficient({ probe, freeBase, freeQuote }) {
       }) >= 0)) {
     throw new Error("Bitunix order probe blocked: an asset balance could satisfy one of the conflicting documented MARKET volume denominations")
   }
+}
+
+function resolveProbeForPreflight({ probe, metadata, balanceSummary }) {
+  if (probe.spendingAmount === undefined) {
+    assertProbeBalanceIsInsufficient({
+      probe,
+      freeBase: balanceSummary.freeBaseBalance,
+      freeQuote: balanceSummary.freeQuoteBalance,
+    })
+    return probe
+  }
+  if (!Number.isSafeInteger(metadata.basePrecision) || metadata.basePrecision < 0 ||
+      !Number.isSafeInteger(metadata.quotePrecision) || metadata.quotePrecision < 0) {
+    throw new Error("Bitunix HYPEUSDT basePrecision/quotePrecision metadata is missing or invalid; refusing to guess order precision")
+  }
+  if ((probe.price.split(".")[1]?.length ?? 0) > metadata.quotePrecision) {
+    throw new Error("Configured HYPEUSDT price exceeds live quotePrecision")
+  }
+  const quantity = divideToPrecision({
+    numerator: probe.spendingAmount,
+    denominator: probe.price,
+    precision: metadata.basePrecision,
+  })
+  const quoteNotional = multiplyDecimals({
+    left: quantity,
+    right: probe.price,
+  })
+  const resolvedProbe = Object.freeze({
+    ...probe,
+    quantity,
+    quoteNotional,
+  })
+  if (compareDecimal({ left: quantity, right: metadata.minimumQuantity }) < 0 ||
+      compareDecimal({ left: quoteNotional, right: metadata.minimumNotional }) < 0) {
+    throw new Error("Calculated HYPEUSDT order is below Bitunix live minimum quantity or notional")
+  }
+  assertProbeBalanceIsInsufficient({
+    probe: resolvedProbe,
+    freeBase: balanceSummary.freeBaseBalance,
+    freeQuote: balanceSummary.freeQuoteBalance,
+  })
+  return resolvedProbe
 }
 
 function createBalanceSummary({ balances, probe }) {
@@ -257,32 +316,10 @@ export function createBitunixOrderProbePreflight({
     balances,
     probe,
   })
-  let resolvedProbe = probe
-  let calculatedQuantity
-  if (probe.spendingAmount !== undefined) {
-    if (!Number.isSafeInteger(metadata.basePrecision) || metadata.basePrecision < 0 ||
-        !Number.isSafeInteger(metadata.quotePrecision) || metadata.quotePrecision < 0) {
-      throw new Error("Bitunix HYPEUSDT basePrecision/quotePrecision metadata is missing or invalid; refusing to guess order precision")
-    }
-    if ((probe.price.split(".")[1]?.length ?? 0) > metadata.quotePrecision) {
-      throw new Error("Configured HYPEUSDT price exceeds live quotePrecision")
-    }
-    calculatedQuantity = divideToPrecision({
-      numerator: probe.spendingAmount,
-      denominator: probe.price,
-      precision: metadata.basePrecision,
-    })
-    const actualNotional = multiplyDecimals(calculatedQuantity, probe.price)
-    resolvedProbe = Object.freeze({ ...probe, quantity: calculatedQuantity, quoteNotional: actualNotional })
-    if (compareDecimal({ left: calculatedQuantity, right: metadata.minimumQuantity }) < 0 ||
-        compareDecimal({ left: actualNotional, right: metadata.minimumNotional }) < 0) {
-      throw new Error("Calculated HYPEUSDT order is below Bitunix live minimum quantity or notional")
-    }
-  }
-  assertProbeBalanceIsInsufficient({
-    probe: resolvedProbe,
-    freeBase: balanceSummary.freeBaseBalance,
-    freeQuote: balanceSummary.freeQuoteBalance,
+  const resolvedProbe = resolveProbeForPreflight({
+    probe,
+    metadata,
+    balanceSummary,
   })
   const openOrders = requireArrayResult({
     result: openOrdersResult,
