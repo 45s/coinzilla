@@ -259,12 +259,59 @@ test("operator probe health gate treats an explicit operator decline as a safe s
 })
 
 
-function createSanitizedOrderReadFixture({ orderId, symbol }) {
+function createSanitizedOpenOrdersResult({ orderId, symbol }) {
   const order = {
     id: orderId,
     symbol,
     status: "OPEN",
   }
+  return {
+    operation: "Broker API getOpenOrders",
+    status: "passed",
+    durationMs: 41438,
+    response: sanitizeDiagnosticValue({
+      value: {
+        ok: true,
+        data: [order],
+        errors: [],
+      },
+    }),
+  }
+}
+
+function createSanitizedOrderDetailResult({ orderId, symbol }) {
+  return {
+    operation: "Broker API getOrder",
+    status: "passed",
+    durationMs: 304,
+    request: sanitizeDiagnosticValue({
+      value: {
+        method: "getOrder",
+        arguments: [{
+          symbol,
+          orderId,
+        }],
+      },
+    }),
+    response: sanitizeDiagnosticValue({
+      value: {
+        ok: true,
+        data: {
+          id: orderId,
+          symbol,
+          status: "OPEN",
+          price: "30",
+          volume: "0.366",
+          balance: "must-be-redacted",
+          uid: "must-also-be-redacted",
+        },
+        errors: [],
+      },
+    }),
+  }
+}
+
+function createSanitizedOrderReadFixture({ orderId, symbol }) {
   return {
     schemaVersion: 1,
     startedAt: "2026-11-22T00:00:00.000Z",
@@ -290,47 +337,8 @@ function createSanitizedOrderReadFixture({ orderId, symbol }) {
       healthy: true,
     },
     results: [
-      {
-        operation: "Broker API getOpenOrders",
-        status: "passed",
-        durationMs: 41438,
-        response: sanitizeDiagnosticValue({
-          value: {
-            ok: true,
-            data: [order],
-            errors: [],
-          },
-        }),
-      },
-      {
-        operation: "Broker API getOrder",
-        status: "passed",
-        durationMs: 304,
-        request: sanitizeDiagnosticValue({
-          value: {
-            method: "getOrder",
-            arguments: [{
-              symbol,
-              orderId,
-            }],
-          },
-        }),
-        response: sanitizeDiagnosticValue({
-          value: {
-            ok: true,
-            data: {
-              id: orderId,
-              symbol,
-              status: "OPEN",
-              price: "30",
-              volume: "0.366",
-              balance: "must-be-redacted",
-              uid: "must-also-be-redacted",
-            },
-            errors: [],
-          },
-        }),
-      },
+      createSanitizedOpenOrdersResult({ orderId, symbol }),
+      createSanitizedOrderDetailResult({ orderId, symbol }),
       {
         operation: "user.account",
         status: "passed",
