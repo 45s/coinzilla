@@ -2,11 +2,17 @@ import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 import { UserDataSession } from "./user-data-session.js"
 
-function shouldFailReconnect({ isReconnectClient, failReconnect }) {
+function shouldFailReconnect({
+        isReconnectClient,
+        failReconnect,
+      }) {
   return isReconnectClient && (typeof failReconnect === "function" ? failReconnect() : failReconnect)
 }
 
-function shouldFailReconnectCleanup({ isReconnectClient, failDisconnect }) {
+function shouldFailReconnectCleanup({
+        isReconnectClient,
+        failDisconnect,
+      }) {
   return isReconnectClient && (typeof failDisconnect === "function" ? failDisconnect() : failDisconnect)
 }
 
@@ -538,30 +544,29 @@ async function verifyFailedReconnectRetriesAndEventuallyRecovers() {
 }
 
 async function verifyFailedReconnectCleanupFailureBlocksNextClient() {
-  const statuses = []
+  const errors = []
   const warnings = []
   const fixture = createRecoveryFixture({
     failReconnect: true,
     failDisconnect: true,
     logger: {
+      error(...args) {
+        errors.push(args)
+      },
       warn(...args) {
         warnings.push(args)
       },
     },
   })
   fixture.session.start()
-  await fixture.session.subscribe({
-    onEvent() {},
-    onStatus: createStatusRecorder(statuses),
-  })
+  await fixture.session.subscribe({ onEvent() {} })
 
   fixture.closeInitialConnection()
   await fixture.reconnect()
   await fixture.reconnect()
 
-  assert.equal(
-    statuses.find((status) => status.type === "recovering")?.error?.message,
-    "reconnect unavailable",
+  assert.ok(
+    errors.every(([, context]) => context?.error?.message === "reconnect unavailable"),
     "Cleanup failure must not replace the original reconnect error.",
   )
   assert.equal(
