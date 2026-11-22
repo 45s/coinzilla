@@ -251,12 +251,12 @@ async function runBitunixExistingOrderCancellation({ env, report, stdout, broker
   let connected = false
   try {
     broker = brokerFactory({
-    provider: "bitunix",
-    apiKey: env.BITUNIX_API_KEY,
-    apiSecret: env.BITUNIX_API_SECRET,
-    tradingMode: "live",
-    logger: createOrderReadLogger({ report, secrets }),
-    providerOptions: { allowLiveOrderMutations: true },
+      provider: "bitunix",
+      apiKey: env.BITUNIX_API_KEY,
+      apiSecret: env.BITUNIX_API_SECRET,
+      tradingMode: "live",
+      logger: createOrderReadLogger({ report, secrets }),
+      providerOptions: { allowLiveOrderMutations: true },
     })
     await broker.connect()
     connected = true
@@ -372,7 +372,7 @@ async function runLocalDiagnostics({ brokersRoot, env, stdout, brokerFactory, in
   return report.summary.failed > 0 ? 1 : 0
 }
 
-function createModeStatusLines({ result, probeMode, includeGeneralDiagnostics }) {
+function createModeStatusLines({ result, probeMode, includeGeneralDiagnostics, cancelExistingOrder }) {
   if (probeMode) {
     return [
       "General diagnostics: SKIPPED (focused order-probe mode)",
@@ -393,7 +393,7 @@ function createModeStatusLines({ result, probeMode, includeGeneralDiagnostics })
   ]
 }
 
-function createPublishedStatusLines({ result, operatorAttempt, probeMode, includeGeneralDiagnostics }) {
+function createPublishedStatusLines({ result, operatorAttempt, probeMode, includeGeneralDiagnostics, cancelExistingOrder }) {
   const lines = createModeStatusLines({
     result,
     probeMode,
@@ -437,7 +437,7 @@ function isWorkflowProgressMessage({ message }) {
     message.startsWith("Cancelling existing order")
 }
 
-function printPublishedResult({ result, stdout, probeMode = false, includeGeneralDiagnostics = false }) {
+function printPublishedResult({ result, stdout, probeMode = false, includeGeneralDiagnostics = false, cancelExistingOrder = false }) {
   const { passed, failed, skipped, total } = result.report.summary
   const operatorAttempt = result.report.results.find((entry) =>
     entry.operation === "operator order attempt" || entry.operation === "operator order probe")
