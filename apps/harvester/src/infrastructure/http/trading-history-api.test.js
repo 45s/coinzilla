@@ -302,10 +302,19 @@ test("serves only active Harvester provider accounts through the read-only excha
     }),
     readOpenOrders: async () => ({
       ok: true,
-      data: [{ value: { symbol: "BTCUSDT", side: "BUY" } }],
+      data: [{
+        value: {
+          symbol: "BTCUSDT",
+          side: "BUY",
+        },
+      }],
     }),
   }]
-  const { baseUrl } = await startApi({ t, queries, exchangeAccounts })
+  const { baseUrl } = await startApi({
+    t,
+    queries,
+    exchangeAccounts,
+  })
 
   const list = await fetch(`${baseUrl}/api/v1/exchanges/accounts`)
   assert.equal(list.status, 200)
@@ -322,7 +331,10 @@ test("serves only active Harvester provider accounts through the read-only excha
   const payload = await detail.json()
   assert.equal(payload.data.accountSnapshot.sourceTime, 123)
   assert.equal(payload.data.accountSnapshot.balances[0].total.amount, "12.5")
-  assert.deepEqual(payload.data.openOrders, [{ symbol: "BTCUSDT", side: "BUY" }])
+  assert.deepEqual(payload.data.openOrders, [{
+    symbol: "BTCUSDT",
+    side: "BUY",
+  }])
 
   const missing = await fetch(`${baseUrl}/api/v1/exchanges/accounts/bitunix-live`)
   assert.equal(missing.status, 404)
