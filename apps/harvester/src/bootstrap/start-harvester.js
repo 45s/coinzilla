@@ -596,6 +596,7 @@ async function createHarvesterRuntimeResources({ startup } = {}) {
     userDataSubscription: undefined,
     lastReportedUserDataReady: undefined,
     userDataState: createHarvesterUserDataState(),
+    exchangeAccountUpdateListeners: new Set(),
     tradingEngine: undefined,
     hasCanonicalOwnershipReconciliation: false,
   }
@@ -678,6 +679,18 @@ function createHarvesterUserDataEventRuntime({ startup,
     isStopped: () => userDataState.stopped || userDataState.shutdownRequested,
     logger: startup.logger,
     onUserDataEvent: startup.onUserDataEvent,
+    onMonitoringEvent: () => {
+      for (const listener of [...resources.exchangeAccountUpdateListeners]) {
+        try {
+          listener()
+        } catch (error) {
+          startup.logger.warn?.({
+            message: "exchange account update listener failed",
+            errorName: error?.name ?? "Error",
+          })
+        }
+      }
+    },
     getPortfolio: portfolio.getPortfolio,
     getRecoveryLedger: portfolio.getRecoveryLedger,
     updatePortfolio: portfolio.updatePortfolio,
@@ -1443,6 +1456,13 @@ function createHarvesterRuntimeResult({
     getAccountSnapshot: portfolio.getAccountSnapshot,
     getExchangeAccountSnapshot: () => resources.broker.getAccountSnapshot(),
     getExchangeOpenOrders: () => resources.broker.getOpenOrders(),
+    subscribeExchangeAccountUpdates: (listener) => {
+      if (typeof listener !== "function") {
+        throw new TypeError("Exchange account update listener must be a function")
+      }
+      resources.exchangeAccountUpdateListeners.add(listener)
+      return () => resources.exchangeAccountUpdateListeners.delete(listener)
+    },
     get subscriptions() {
       return [...new Set(resources.subscriptions.map(({ symbol }) => symbol))]
     },
