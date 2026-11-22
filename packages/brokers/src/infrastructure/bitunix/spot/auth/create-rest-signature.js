@@ -16,7 +16,7 @@ function serializeQueryParams({ queryParams }) {
 
   return Object.keys(queryParams)
     .sort()
-    .map((key) => `${key}=${String(queryParams[key])}`)
+    .map((key) => `${key}${String(queryParams[key])}`)
     .join("")
 }
 

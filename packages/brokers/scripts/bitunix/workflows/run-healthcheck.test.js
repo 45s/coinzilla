@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { evaluateReadOnlyHealthCheck } from "../helpers/health-report.js"
+import { evaluateOrderReadHealthCheck, evaluateReadOnlyHealthCheck } from "../helpers/health-report.js"
 import { runHealthcheckWorkflow } from "./run-healthcheck.js"
 
 const requiredOperations = [
@@ -502,4 +502,170 @@ test("healthcheck records failed getOpenOrders response and skips detail reads",
   assert.equal(open.response.data[0].id, "123")
   assert.equal(open.errors[0].code, "E_PENDING")
   assert.equal(exitCode, 1)
+})
+
+
+function createOrderReadGateFixture() {
+  const openOrders = {
+    operation: "Broker API getOpenOrders",
+    status: "passed",
+    response: {
+      ok: true,
+      data: [
+        {
+          id: "order-1",
+          symbol: "HYPEUSDT",
+        },
+        {
+          id: "order-2",
+          symbol: "BTCUSDT",
+        },
+      ],
+    },
+  }
+  const detail = ({ orderId, status }) => ({
+    operation: "Broker API getOrder",
+    status,
+    request: {
+      arguments: [{
+        orderId,
+      }],
+    },
+  })
+  return {
+    openOrders,
+    detail,
+  }
+}
+
+test("focused order-read health gate accepts every discovered order detail", () => {
+  const { openOrders, detail } = createOrderReadGateFixture()
+  const result = evaluateOrderReadHealthCheck({
+    report: {
+      results: [
+        openOrders,
+        detail({
+          orderId: "order-1",
+          status: "passed",
+        }),
+        detail({
+          orderId: "order-2",
+          status: "passed",
+        }),
+      ],
+    },
+  })
+  assert.equal(result.healthy, true)
+  assert.deepEqual(result.missingRequiredOperations, [])
+})
+
+test("focused order-read health gate rejects any failed order detail", () => {
+  const { openOrders, detail } = createOrderReadGateFixture()
+  const result = evaluateOrderReadHealthCheck({
+    report: {
+      results: [
+        openOrders,
+        detail({
+          orderId: "order-1",
+          status: "passed",
+        }),
+        detail({
+          orderId: "order-2",
+          status: "failed",
+        }),
+      ],
+    },
+  })
+  assert.equal(result.healthy, false)
+  assert.deepEqual(result.missingRequiredOperations, [
+    "Broker API getOrder for every discovered order",
+  ])
+})
+
+test("focused order-read health gate rejects an undiscovered order detail result", () => {
+  const { openOrders, detail } = createOrderReadGateFixture()
+  const result = evaluateOrderReadHealthCheck({
+    report: {
+      results: [
+        openOrders,
+        detail({
+          orderId: "order-1",
+          status: "passed",
+        }),
+      ],
+    },
+  })
+  assert.equal(result.healthy, false, "the gate must detect an order whose detail read was skipped")
+})
+
+test("focused order-read health gate accepts an explicit empty open-order list", () => {
+  const result = evaluateOrderReadHealthCheck({
+    report: {
+      results: [{
+        operation: "Broker API getOpenOrders",
+        status: "passed",
+        response: {
+          ok: true,
+          data: [],
+        },
+      }],
+    },
+  })
+  assert.equal(result.healthy, true)
+})
+
+test("default publish healthcheck skips broad diagnostics but still runs order reads", async () => {
+  const events = []
+  const publishedReports = []
+  let broadDiagnosticCalls = 0
+  const exitCode = await runWorkflow({
+    mode: "publish",
+    brokersRoot: "/repo/packages/brokers",
+    repositoryRoot: "/repo",
+    env,
+    stdout,
+    runDiagnostics: async () => {
+      broadDiagnosticCalls += 1
+      throw new Error("broad diagnostics must be opt-in")
+    },
+    publishDiagnostics: createPublisher({
+      events,
+      publishedReports,
+    }),
+  })
+
+  assert.equal(broadDiagnosticCalls, 0)
+  assert.equal(exitCode, 0)
+  assert.equal(publishedReports[0].healthCheck.scope, "bitunix-order-read")
+  assert.equal(publishedReports[0].healthCheck.healthy, true)
+  assert.equal(
+    publishedReports[0].results.some((entry) => entry.operation === "Broker API getOpenOrders"),
+    true,
+  )
+})
+
+test("full-diagnostics healthcheck keeps the existing broad diagnostic suite available", async () => {
+  const events = []
+  const publishedReports = []
+  let broadDiagnosticCalls = 0
+  const exitCode = await runWorkflow({
+    mode: "publish",
+    includeGeneralDiagnostics: true,
+    brokersRoot: "/repo/packages/brokers",
+    repositoryRoot: "/repo",
+    env,
+    stdout,
+    runDiagnostics: async () => {
+      broadDiagnosticCalls += 1
+      return createDiagnosticReport()
+    },
+    publishDiagnostics: createPublisher({
+      events,
+      publishedReports,
+    }),
+  })
+
+  assert.equal(broadDiagnosticCalls, 1)
+  assert.equal(exitCode, 0)
+  assert.equal(publishedReports[0].healthCheck.scope, "operator-order-preflight")
 })
