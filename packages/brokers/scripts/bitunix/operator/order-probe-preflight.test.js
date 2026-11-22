@@ -171,6 +171,7 @@ test("Bitunix order probe preflight rejects open orders and missing explicit ass
 
   assert.throws(
     () => createBitunixOrderProbePreflight(createPreflightInput({
+      probeId: "market-buy-1",
       overrides: {
         balancesResult: {
           ok: true,
@@ -218,5 +219,56 @@ test("Bitunix order probe preflight fails closed on unsuccessful reads and close
       },
     })),
     /explicitly open/i,
+  )
+})
+
+
+test("Bitunix LIMIT probes require only the balance asset they can spend", () => {
+  const buy = createBitunixOrderProbePreflight(createPreflightInput({
+    probeId: "limit-buy-1",
+    overrides: {
+      balancesResult: {
+        ok: true,
+        data: [{
+          free: { amount: "0.01", asset: { code: "USDT" } },
+          locked: { amount: "0", asset: { code: "USDT" } },
+        }],
+      },
+    },
+  }))
+  const sell = createBitunixOrderProbePreflight(createPreflightInput({
+    probeId: "limit-sell-1",
+    overrides: {
+      balancesResult: {
+        ok: true,
+        data: [{
+          free: { amount: "0.01", asset: { code: "HYPE" } },
+          locked: { amount: "0", asset: { code: "HYPE" } },
+        }],
+      },
+    },
+  }))
+
+  assert.equal(buy.freeBaseBalance, null)
+  assert.equal(sell.freeQuoteBalance, null)
+})
+
+test("Bitunix MARKET probes require both balances while volume denomination is unresolved", () => {
+  const input = createPreflightInput({
+    probeId: "market-buy-1",
+    overrides: {
+      balancesResult: {
+        ok: true,
+        data: [{
+          free: { amount: "0.01", asset: { code: "USDT" } },
+          locked: { amount: "0", asset: { code: "USDT" } },
+        }],
+      },
+    },
+  })
+
+  assert.throws(
+    () => createBitunixOrderProbePreflight(input),
+    /explicit HYPE balance row/i,
   )
 })
