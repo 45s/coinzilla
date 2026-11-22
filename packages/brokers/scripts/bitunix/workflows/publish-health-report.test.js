@@ -538,6 +538,9 @@ test("publisher uses the focused operator-probe health evaluator when supplied",
     assert.equal(result.healthCheck.healthy, true)
     assert.equal(result.exitCode, 0)
   } finally {
-    await rm(repositoryRoot, { recursive: true, force: true })
+    await rm(repositoryRoot, {
+      recursive: true,
+      force: true,
+    })
   }
 })
