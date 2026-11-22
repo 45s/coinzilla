@@ -448,25 +448,39 @@
       "title": "User-data disconnect, reconnect, event draining and readiness recovery",
       "sourceModules": [
         "src/bootstrap/start-harvester.js",
+        "src/bootstrap/harvester-runtime-helpers.js",
+        "src/bootstrap/user-data/create-user-data-event-handler.js",
+        "src/bootstrap/user-data/create-user-data-status-handler.js",
+        "src/bootstrap/user-data/create-user-data-recovery-handler.js",
         "src/use-cases/create-user-data-event-transition.js",
         "src/infrastructure/brokers/binance-broker-adapter.js"
       ],
       "integrationRequired": true,
       "tests": [
         {
-          "path": "test/bootstrap/user-data-recovery.test.js",
-          "name": "starts application reconciliation on transport recovery and acknowledges only after durable audits",
+          "path": "src/bootstrap/start-harvester.test.js",
+          "name": "explicit TESTNET trading drains its first BUY fill once after 254 recovery reminders and completes the cycle",
+          "kind": "integration"
+        },
+        {
+          "path": "src/bootstrap/user-data/create-user-data-status-handler.test.js",
+          "name": "a transport disconnect invalidates recovery generation and closes readiness",
           "kind": "normal"
         },
         {
-          "path": "test/bootstrap/user-data-recovery.test.js",
-          "name": "keeps recovery blocked and does not acknowledge when the fresh account snapshot fails",
+          "path": "src/bootstrap/user-data/create-user-data-status-handler.test.js",
+          "name": "an actual connection close after a diagnostic RPC error invalidates recovery exactly once",
           "kind": "failure"
         },
         {
-          "path": "test/bootstrap/user-data-event-reconciliation.test.js",
-          "name": "reconciles the in-memory order registry before reopening trading after stream recovery",
-          "kind": "integration"
+          "path": "src/bootstrap/user-data/create-user-data-recovery-handler.test.js",
+          "name": "recovers safely when a second disconnect supersedes a later retry",
+          "kind": "failure"
+        },
+        {
+          "path": "src/bootstrap/user-data/create-user-data-recovery-handler.test.js",
+          "name": "does not drain queued user-data events after recovery is superseded during the open-orders audit",
+          "kind": "failure"
         }
       ],
       "runtimeStatus": "active",
