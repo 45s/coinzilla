@@ -748,6 +748,10 @@ test("ambiguous cancellation is recorded once and does not prevent the subsequen
         calls.push("getOpenOrders")
         return { ok: true, data: [], errors: [] }
       },
+      getOrder: async ({ symbol, orderId }) => {
+        calls.push(`getOrder:${symbol}:${orderId}`)
+        return { ok: true, data: { id: orderId, symbol, status: "CANCELED" }, errors: [] }
+      },
       disconnect: async () => {},
     }
   }
@@ -760,7 +764,7 @@ test("ambiguous cancellation is recorded once and does not prevent the subsequen
     brokerFactory,
     publishDiagnostics: createPublisher({ events: [], publishedReports }),
   })
-  assert.deepEqual(calls, ["cancel", "getOpenOrders"])
+  assert.deepEqual(calls, ["cancel", "getOpenOrders", "getOrder:HYPEUSDT:2124329325141426176"])
   const cancellation = publishedReports[0].results.find((entry) => entry.operation === "Broker API cancelOrder")
   assert.equal(cancellation.response.cancellationOutcome, "OUTCOME_UNKNOWN")
   assert.equal(cancellation.errors[0].code, "E_UNKNOWN")
