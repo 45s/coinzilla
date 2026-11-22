@@ -406,7 +406,7 @@ async function copySessionFilteredTailFile({ source, destination, runtimeSession
       filename: source,
       runtimeSessionId,
       visit: async (line) => {
-        const recordBytes = Buffer.from(line + "\n")
+        const recordBytes = Buffer.from(`${line}\n`)
         const recordStart = currentOffset
         currentOffset += recordBytes.length
         if (currentOffset <= startOffset) {
@@ -1047,18 +1047,18 @@ async function main() {
   if (args.length > 0) {
     throw new TypeError("Usage: archive:push [--version]")
   }
-  process.stdout.write(createArchiveCliIdentity() + "\n")
+  process.stdout.write(`${createArchiveCliIdentity()}\n`)
   const result = await runHarvesterArchivePush({ args })
   process.stdout.write([
     "Harvester local logs/data archive published and remotely verified.",
     `Archive: archives/${result.archiveName}`,
-    "Created: " + result.createdAt,
+    `Created: ${result.createdAt}`,
     "Included: selected TESTNET session logs, TESTNET-safe cumulative records, non-production data/, recovery-facts/ and data_commit_hash",
     "Excluded: data/production/, logs/cumulative/terminal.log and unclassified log-root entries",
     `Remote commit: ${result.remoteCommit}`,
     `Local copy: ${result.localArchive}`,
     `Files verified: ${result.fileCount}`,
-  ].join("\n") + "\n")
+  ].join("\n") + "\n`)
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
