@@ -75,3 +75,46 @@ test("diagnostic errors preserve stable classification while redacting messages"
   assert.equal(sanitized.exchangeCode, "10001", "The opaque Bitunix response code must remain available for investigation")
   assert.equal(sanitized.message, "[error message withheld]", "Free-form errors must never be persisted, even after credential redaction")
 })
+
+
+test("diagnostic sanitization redacts all funds-history amounts, wallet identifiers and personal fields", () => {
+  const privatePayload = {
+    amount: "9876.54321",
+    fee: "0.123",
+    address: "wallet-address-secret",
+    fromAddress: "source-address-secret",
+    toAddress: "destination-address-secret",
+    transactionHash: "private-transaction-hash",
+    toUid: "private-recipient-uid",
+    toPhoneNumber: "private-phone",
+    toEmail: "private-email@example.invalid",
+    remark: "private withdrawal note",
+    balance: "123456.789",
+    balanceLocked: "10.00",
+    safe: "USDT",
+  }
+  const sanitized = sanitizeDiagnosticValue({ value: privatePayload })
+
+  for (const key of [
+    "amount",
+    "fee",
+    "address",
+    "fromAddress",
+    "toAddress",
+    "transactionHash",
+    "toUid",
+    "toPhoneNumber",
+    "toEmail",
+    "remark",
+    "balance",
+    "balanceLocked",
+  ]) {
+    assert.equal(sanitized[key], "[REDACTED]", `${key} must be redacted`)
+  }
+  assert.equal(sanitized.safe, "USDT", "non-sensitive asset metadata remains useful")
+  for (const value of Object.values(privatePayload)) {
+    if (value !== "USDT") {
+      assert.equal(JSON.stringify(sanitized).includes(value), false, "sanitized output must not contain any private fixture value")
+    }
+  }
+})
