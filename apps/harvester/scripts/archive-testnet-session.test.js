@@ -20,8 +20,33 @@ async function createArchiveFixture() {
   const packageDirectory = await mkdtemp(path.join(os.tmpdir(), "harvester-archive-test-"))
   const files = {
     "logs/sessions/2026-11-20_old/terminal.log": "older session must be excluded",
-    "logs/sessions/2026-11-22_latest/terminal.log": "latest session evidence",
+    "logs/sessions/2026-11-22_latest/terminal.log": "latest TESTNET session evidence",
+    "logs/sessions/2026-11-22_latest/process-identity.json": JSON.stringify({
+      formatVersion: 1,
+      application: "harvester",
+      environment: "testnet",
+      runtimeSessionId: RUNTIME_SESSION_ID,
+    }),
+    "logs/sessions/2026-11-22_latest/process-completed.json": JSON.stringify({
+      runtimeSessionId: RUNTIME_SESSION_ID,
+      logStreamsComplete: true,
+    }),
+    "logs/sessions/2026-11-23_live/terminal.log": "LIVE session must never be archived",
+    "logs/sessions/2026-11-23_live/process-identity.json": JSON.stringify({
+      formatVersion: 1,
+      application: "harvester",
+      environment: "live",
+      runtimeSessionId: "a1e2c3d4-e5f6-4789-8123-123456789abc",
+    }),
+    "logs/sessions/2026-11-23_live/process-completed.json": JSON.stringify({
+      runtimeSessionId: "a1e2c3d4-e5f6-4789-8123-123456789abc",
+      logStreamsComplete: true,
+    }),
     "logs/cumulative/terminal.log": "x".repeat(100),
+    "logs/cumulative/harvester.log": Array.from({ length: 20 }, (_, index) => JSON.stringify({
+      context: { runtimeSessionId: index % 2 === 0 ? RUNTIME_SESSION_ID : "a1e2c3d4-e5f6-4789-8123-123456789abc" },
+      data: { message: index % 2 === 0 ? "TESTNET_STRUCTURED_EVIDENCE" : "LIVE_STRUCTURED_SECRET" },
+    })).join("\\n") + "\\n",
     "data/testnet/harvester.db": "sqlite main file",
     "data/testnet/harvester.db-wal": "sqlite wal evidence",
     "data/testnet/harvester.db-shm": "sqlite shm evidence",
@@ -74,6 +99,7 @@ test("archives the final cumulative tails and newest session with complete data 
   const fixture = await createArchiveFixture()
   t.after(() => rm(fixture.packageDirectory, { recursive: true, force: true }))
   let publishedDirectory
+  let expectedFileCount
   const progressMessages = []
   const result = await runHarvesterArchivePush(createArchiveDependencies({
     packageDirectory: fixture.packageDirectory,
@@ -85,7 +111,8 @@ test("archives the final cumulative tails and newest session with complete data 
       assert.equal(manifest.snapshotType, "selected-log-evidence", "the manifest must identify this as a selected-log evidence snapshot")
       assert.deepEqual(manifest.includedDirectories, ["logs", "data", "recovery-facts"], "the manifest must declare all included source trees")
       assert.deepEqual(manifest.excludedPaths, ["data/production"], "the manifest must explicitly record that production data is excluded")
-      assert.deepEqual(manifest.logSelection, { cumulative: "final-5-percent-of-each-file", sessions: "newest-session-directory-only; gzip-compressed" }, "the manifest must describe the reduced log selection")
+      assert.deepEqual(manifest.logSelection, { cumulative: "final-5-percent-of-each-file", sessions: "newest-completed-TESTNET-session-only; gzip-compressed" }, "the manifest must describe the reduced log selection")
+      assert.equal(manifest.logRuntimeSessionId, RUNTIME_SESSION_ID, "The archive manifest must identify the completed TESTNET log session.")
       assert.equal(manifest.dataCommitHash, DATA_COMMIT_HASH, "the archive manifest must identify the last committed recovery-facts digest")
       assert.equal(manifest.recoveryRuntimeSessionId, RUNTIME_SESSION_ID, "the archive manifest must identify the session owning the last committed fact")
       assert.equal(await readFile(path.join(directory, "data_commit_hash"), "utf8"), DATA_COMMIT_HASH + "\n", "the archive must contain the standalone data_commit_hash file")
@@ -96,14 +123,22 @@ test("archives the final cumulative tails and newest session with complete data 
       )
       assert.equal(
         gunzipSync(await readFile(path.join(directory, "logs/sessions/2026-11-22_latest/terminal.log.gz"))).toString("utf8"),
-        "latest session evidence",
-        "the newest session must be retained in full",
+        "latest TESTNET session evidence",
+        "the newest completed TESTNET session must be retained in full",
       )
       await assert.rejects(
         readFile(path.join(directory, "logs/sessions/2026-11-20_old/terminal.log")),
         { code: "ENOENT" },
         "older session directories must be excluded",
       )
+      await assert.rejects(
+        readFile(path.join(directory, "logs/sessions/2026-11-23_live/terminal.log.gz")),
+        { code: "ENOENT" },
+        "A newer LIVE session must not displace or enter the TESTNET archive.",
+      )
+      const structuredLog = await readFile(path.join(directory, "logs/cumulative/harvester.log"), "utf8")
+      assert.match(structuredLog, /TESTNET_STRUCTURED_EVIDENCE/, "Cumulative structured logs must retain records for the selected TESTNET session.")
+      assert.doesNotMatch(structuredLog, /LIVE_STRUCTURED_SECRET/, "Cumulative structured logs must filter out records from LIVE sessions.")
       await assert.rejects(
         readFile(path.join(directory, "data/production/harvester.db")),
         { code: "ENOENT" },
@@ -117,7 +152,8 @@ test("archives the final cumulative tails and newest session with complete data 
           "data and recovery facts must be copied unchanged",
         )
       }
-      return { commit: REMOTE_COMMIT, fileCount: manifest.files.length + 1 }
+      expectedFileCount = manifest.files.length + 1
+      return { commit: REMOTE_COMMIT, fileCount: expectedFileCount }
     },
   }))
   assert.equal(
@@ -135,7 +171,7 @@ test("archives the final cumulative tails and newest session with complete data 
   assert.ok(progressMessages.includes("Local archive verified."), "the operator must see local verification completion")
   assert.equal(result.remoteCommit, REMOTE_COMMIT, "the command must return the verified remote commit")
   assert.equal(result.localArchive, publishedDirectory, "the verified local snapshot must be the published artifact")
-  assert.equal(result.fileCount, Object.keys(fixture.files).length, "the published inventory must include selected logs, TESTNET data, recovery facts, data_commit_hash and the manifest, excluding the production sentinel")
+  assert.equal(result.fileCount, expectedFileCount, "The published inventory must match the verified TESTNET-only archive manifest.")
 })
 
 test("keeps the completed local snapshot when remote publication fails", async (t) => {
