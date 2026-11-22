@@ -165,25 +165,72 @@ function createOrderReadLogger({ report, secrets }) {
   ]))
 }
 
+function createOrderReadBroker({ env, report, brokerFactory }) {
+  const secrets = [env.BITUNIX_API_KEY, env.BITUNIX_API_SECRET].filter(Boolean)
+  return {
+    broker: brokerFactory({
+      provider: "bitunix",
+      apiKey: env.BITUNIX_API_KEY,
+      apiSecret: env.BITUNIX_API_SECRET,
+      tradingMode: "live",
+      logger: createOrderReadLogger({
+        report,
+        secrets,
+      }),
+      providerOptions: {
+        allowLiveOrderMutations: false,
+      },
+    }),
+    secrets,
+  }
+}
+
+function recordOrderReadScanFailure({ report, stdout, secrets, error }) {
+  recordOrderReadResult({
+    report,
+    stdout,
+    secrets,
+    operation: "Broker API order-read scan",
+    result: {
+      ok: false,
+      errors: [error],
+    },
+    request: {
+      method: "Broker.connect",
+    },
+  })
+}
+
+async function disconnectOrderReadBroker({ broker, connected, report, stdout, secrets }) {
+  if (!connected) {
+    return
+  }
+  try {
+    await broker.disconnect()
+  } catch (error) {
+    recordOrderReadResult({
+      report,
+      stdout,
+      secrets,
+      operation: "Broker API disconnect",
+      result: {
+        ok: false,
+        errors: [error],
+      },
+    })
+  }
+}
+
 async function runBitunixOrderReadScan({
   env,
   report,
   stdout,
   brokerFactory = (options) => new Broker(options),
 }) {
-  const secrets = [env.BITUNIX_API_KEY, env.BITUNIX_API_SECRET].filter(Boolean)
-  const broker = brokerFactory({
-    provider: "bitunix",
-    apiKey: env.BITUNIX_API_KEY,
-    apiSecret: env.BITUNIX_API_SECRET,
-    tradingMode: "live",
-    logger: createOrderReadLogger({
-      report,
-      secrets,
-    }),
-    providerOptions: {
-      allowLiveOrderMutations: false,
-    },
+  const { broker, secrets } = createOrderReadBroker({
+    env,
+    report,
+    brokerFactory,
   })
   let connected = false
   try {
@@ -205,36 +252,20 @@ async function runBitunixOrderReadScan({
       })
     }
   } catch (error) {
-    recordOrderReadResult({
+    recordOrderReadScanFailure({
       report,
       stdout,
       secrets,
-      operation: "Broker API order-read scan",
-      result: {
-        ok: false,
-        errors: [error],
-      },
-      request: {
-        method: "Broker.connect",
-      },
+      error,
     })
   } finally {
-    if (connected) {
-      try {
-        await broker.disconnect()
-      } catch (error) {
-        recordOrderReadResult({
-          report,
-          stdout,
-          secrets,
-          operation: "Broker API disconnect",
-          result: {
-            ok: false,
-            errors: [error],
-          },
-        })
-      }
-    }
+    await disconnectOrderReadBroker({
+      broker,
+      connected,
+      report,
+      stdout,
+      secrets,
+    })
   }
 }
 
@@ -388,6 +419,17 @@ function appendSelectedOperatorResult({
   })
 }
 
+async function runGeneralOrderReadScan({ env, report, onProgress, brokerFactory }) {
+  await runBitunixOrderReadScan({
+    env,
+    report,
+    stdout: {
+      write: (message) => onProgress?.({ message: message.trim() }),
+    },
+    brokerFactory,
+  })
+}
+
 async function runDiagnosticsWithOperatorAttempt({
   env,
   onProgress,
@@ -406,12 +448,10 @@ async function runDiagnosticsWithOperatorAttempt({
       brokerApiRestClientFactory: (options) => new BitunixRestClient(options),
     })
   if (!runOperatorProbe) {
-    await runBitunixOrderReadScan({
+    await runGeneralOrderReadScan({
       env,
       report,
-      stdout: {
-        write: (message) => onProgress?.({ message: message.trim() }),
-      },
+      onProgress,
       brokerFactory,
     })
   }
