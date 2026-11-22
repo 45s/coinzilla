@@ -496,7 +496,8 @@
         "src/infrastructure/operational-state/helpers/validate-operational-state-recovery-seller-facts.js",
         "src/infrastructure/operational-state/fact-validation.js",
         "src/infrastructure/operational-state/record-validation.js",
-        "src/infrastructure/operational-state/resolve-directory.js"
+        "src/infrastructure/operational-state/resolve-directory.js",
+        "src/infrastructure/operational-state/helpers/validate-operational-state-account-facts.js"
       ],
       "integrationRequired": true,
       "tests": [

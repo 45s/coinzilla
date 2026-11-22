@@ -27,7 +27,7 @@ function createTestEventPublisher({ publishedEvents, onFlush, flush }) {
       return { ok: true }
     },
     flush: async () => {
-      onFlush()
+      onFlush?.()
       if (flush) {
         return flush()
       }
