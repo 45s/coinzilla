@@ -606,7 +606,10 @@ recoveryRequired: true })
       level: "error",
       args: [
         "Binance user-data recovery attempt failed",
-        { attempt, error },
+        {
+          attempt,
+          error,
+        },
       ],
     })
     this.#notify({
