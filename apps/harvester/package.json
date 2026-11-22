@@ -153,6 +153,9 @@
     "persistence:restore-check": "node scripts/trading-history-backups.js verify",
     "check:reliability": "node scripts/check-critical-behavior-contract.js",
     "check:critical-coverage": "node scripts/check-critical-module-coverage.js",
-    "operational-state:diagnose": "node scripts/diagnose-operational-state.js"
+    "operational-state:diagnose": "node scripts/diagnose-operational-state.js",
+    "operational-state:reset:dev": "node --env-file=.env.development scripts/reset-operational-state.js",
+    "archive:repo:init": "node --env-file=.env.development scripts/initialize-private-archive-repository.js",
+    "archive:push": "node --env-file=.env.development scripts/archive-testnet-session.js"
   }
 }
