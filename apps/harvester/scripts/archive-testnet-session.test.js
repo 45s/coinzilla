@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { createHarvesterArchiveDirectoryName } from "./archive-testnet-session.js"
+import { createHarvesterArchiveDirectoryName, runHarvesterArchivePush } from "./archive-testnet-session.js"
 
 const identity = {
   formatVersion: 1,
@@ -46,5 +46,32 @@ test("rejects a non-TESTNET process identity", () => {
     }),
     /process-start identity and full source commit/,
     "LIVE process identity must never produce a TESTNET archive name",
+  )
+})
+
+test("rejects LIVE and unspecified modes before inspecting sessions or creating backups", async () => {
+  await assert.rejects(
+    runHarvesterArchivePush({
+      args: [],
+      env: {
+        TRADING_MODE: "live",
+        HARVESTER_ARCHIVE_REMOTE: "https://github.com/45s/coinzilla-archive.git",
+      },
+      backupServiceFactory: () => {
+        throw new Error("The backup service must not be constructed for LIVE mode.")
+      },
+    }),
+    /requires TRADING_MODE=testnet/,
+    "the archive command must reject LIVE before touching session or database state",
+  )
+  await assert.rejects(
+    runHarvesterArchivePush({
+      args: [],
+      env: {
+        HARVESTER_ARCHIVE_REMOTE: "https://github.com/45s/coinzilla-archive.git",
+      },
+    }),
+    /requires TRADING_MODE=testnet/,
+    "an unspecified trading mode must fail closed before any filesystem or database work",
   )
 })
