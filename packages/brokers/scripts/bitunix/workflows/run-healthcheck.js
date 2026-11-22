@@ -164,7 +164,12 @@ async function runPublishedHealthCheck({
   runOperatorProbe,
   probeId,
 }) {
-  stdout.write(createOperatorWarning({\n    runOperatorOrder,\n    runOperatorProbe,\n    probeId,\n  }))\n  const result = await publishDiagnostics({
+  stdout.write(createOperatorWarning({
+    runOperatorOrder,
+    runOperatorProbe,
+    probeId,
+  }))
+  const result = await publishDiagnostics({
     repositoryRoot,
     runDiagnostics: (input) => runDiagnosticsWithOperatorAttempt({
       ...input,
