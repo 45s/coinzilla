@@ -572,3 +572,144 @@
   background: transparent;
   cursor: pointer;
 }
+
+
+/* Friendly, directly clickable label filters */
+.market-count {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+}
+
+.active-filter-count {
+  display: inline-flex;
+  padding: 3px 7px;
+  border: 1px solid rgba(101, 214, 173, .25);
+  border-radius: 999px;
+  background: rgba(101, 214, 173, .08);
+  color: #83e3c0 !important;
+  font-size: 9px !important;
+  font-weight: 700 !important;
+}
+
+.clear-filters-button {
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid #39475b;
+  border-radius: 6px;
+  background: transparent;
+  color: #a9b6c8;
+  font: inherit;
+  font-size: 9px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.clear-filters-button:hover {
+  border-color: #72d9b4;
+  color: #83e3c0;
+}
+
+.label-filter {
+  display: grid;
+  flex: 1 1 320px;
+  min-width: 240px;
+  gap: 9px;
+  color: #8491a5;
+  font-size: 8px;
+  font-weight: 800;
+}
+
+.label-filter-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.label-filter-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.label-filter-actions button {
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: #8ed9bd;
+  font: inherit;
+  font-size: 9px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.label-filter-actions button:disabled {
+  color: #5d6b7f;
+  cursor: not-allowed;
+}
+
+.filter-label-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.filter-label-chip {
+  display: inline-flex;
+  min-height: 31px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border: 1px solid #344258;
+  border-radius: 999px;
+  background: #151e2b;
+  color: #aab7c8;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.filter-label-chip:hover {
+  border-color: var(--label-color);
+  color: #e3ebf5;
+}
+
+.filter-label-chip.selected {
+  border-color: var(--label-color);
+  background: color-mix(in srgb, var(--label-color) 16%, #151e2b);
+  color: var(--label-color);
+}
+
+.chip-check {
+  display: inline-grid;
+  width: 14px;
+  height: 14px;
+  place-items: center;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  font-size: 9px;
+  line-height: 1;
+}
+
+.label-filter-help {
+  color: #738198;
+  font-size: 9px;
+  font-weight: 400;
+}
+
+@media (max-width: 760px) {
+  .market-count {
+    margin-left: 0;
+  }
+
+  .label-filter {
+    flex-basis: 100%;
+    min-width: 0;
+  }
+
+  .clear-filters-button {
+    flex: 0 0 auto;
+  }
+}

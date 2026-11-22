@@ -58,7 +58,13 @@
         <option value="all">All</option><option value="positive">Non-negative</option><option value="negative">Negative</option>
       </select>
     </label>
-    <div class="market-count">{{ visibleMarkets().length }} <span>markets</span></div>
+    <div class="market-count">
+      {{ visibleMarkets().length }} <span>markets</span>
+      @if (activeFilterCount() > 0) { <span class="active-filter-count">{{ activeFilterCount() }} filters</span> }
+    </div>
+    @if (activeFilterCount() > 0) {
+      <button class="clear-filters-button" type="button" (click)="clearAllFilters()">Clear filters</button>
+    }
   </section>
 
   <section class="filter-workspace" aria-label="Advanced market filters">
@@ -72,11 +78,32 @@
       <label><span>MAX %</span><input aria-label="Maximum change" type="number" step="any" [value]="maxChange()" (input)="updateRange($event, 'maxChange')" placeholder="Any" /></label>
     </div>
     <div class="filter-bottom">
-      <label class="label-filter"><span>LABELS · ALL SELECTED</span>
-        <select aria-label="Filter by labels" multiple (change)="updateSelectedLabels($event)">
-          @for (label of labels(); track label.id) { <option [value]="label.id" [selected]="selectedLabels().has(label.id)">{{ label.name }}</option> }
-        </select>
-      </label>
+      <div class="label-filter" aria-label="Filter markets by labels">
+        <div class="label-filter-heading">
+          <span>FILTER BY LABELS</span>
+          <div class="label-filter-actions">
+            <button type="button" (click)="selectAllLabels()" [disabled]="labels().length === 0">Select all</button>
+            <button type="button" (click)="clearSelectedLabels()" [disabled]="selectedLabels().size === 0">Clear</button>
+          </div>
+        </div>
+        @if (labels().length > 0) {
+          <div class="filter-label-chips">
+            @for (label of labels(); track label.id) {
+              <button class="filter-label-chip" type="button"
+                [class.selected]="selectedLabels().has(label.id)"
+                [style.--label-color]="label.color"
+                [attr.aria-pressed]="selectedLabels().has(label.id)"
+                (click)="toggleFilterLabel(label.id)">
+                <span class="chip-check" aria-hidden="true">{{ selectedLabels().has(label.id) ? '✓' : '+' }}</span>
+                {{ label.name }}
+              </button>
+            }
+          </div>
+          <span class="label-filter-help">Click a label to include it. Selected labels use AND matching.</span>
+        } @else {
+          <span class="muted-hint">Create a label in “My market labels” below to filter markets.</span>
+        }
+      </div>
       <div class="preset-controls">
         <label><span>SAVED FILTERS</span>
           <select aria-label="Load filter preset" (change)="loadPreset($event)">
