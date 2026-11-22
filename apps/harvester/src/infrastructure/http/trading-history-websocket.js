@@ -12,6 +12,10 @@ const ALLOWED_BROWSER_ORIGINS = new Set([
   "http://localhost:4200",
 ])
 const HISTORY_UPDATED_EVENT = "trading-history.updated"
+const ACCOUNT_UPDATE_EVENTS = Object.freeze([
+  "account.snapshot_captured",
+  "account.open_orders_captured",
+])
 const ALLOWED_RESOURCES = new Set(["orders", "fills", "commissions"])
 
 function encodeFrame({ opcode, payload = Buffer.alloc(0) } = {}) {
@@ -294,6 +298,35 @@ function broadcastHistoryUpdate({ clients, event } = {}) {
   }
 }
 
+function broadcastExchangeAccountUpdate({ clients } = {}) {
+  const message = { type: "exchange-account.updated" }
+  for (const client of clients) {
+    sendJson({ client, message })
+  }
+}
+
+function subscribeToExchangeAccountUpdates({ eventBus, clients } = {}) {
+  const subscriptions = []
+  try {
+    for (const name of ACCOUNT_UPDATE_EVENTS) {
+      const result = eventBus.subscribe({
+        name,
+        handler: () => broadcastExchangeAccountUpdate({ clients }),
+      })
+      if (result?.ok !== true || typeof result.subscription?.unsubscribe !== "function") {
+        throw new TypeError("Trading-history WebSocket could not subscribe to Harvester account updates.")
+      }
+      subscriptions.push(result.subscription)
+    }
+  } catch (error) {
+    for (const subscription of subscriptions) {
+      subscription.unsubscribe()
+    }
+    throw error
+  }
+  return subscriptions
+}
+
 function subscribeToHistoryUpdates({ eventBus, clients } = {}) {
   if (!eventBus || typeof eventBus.subscribe !== "function") {
     throw new TypeError("Trading-history WebSocket requires an EventBus subscription.")
@@ -328,6 +361,10 @@ export function attachTradingHistoryWebSocket({ server, eventBus } = {}) {
     eventBus,
     clients,
   })
+  const accountSubscriptions = subscribeToExchangeAccountUpdates({
+    eventBus,
+    clients,
+  })
   const onUpgrade = (...upgradeArguments) => {
     const [request, socket, head] = upgradeArguments
     handleUpgrade({
@@ -342,6 +379,9 @@ export function attachTradingHistoryWebSocket({ server, eventBus } = {}) {
     close: async () => {
       server.off("upgrade", onUpgrade)
       subscription.unsubscribe()
+      for (const accountSubscription of accountSubscriptions) {
+        accountSubscription.unsubscribe()
+      }
       for (const client of [...clients]) {
         closeClient({
           client,
