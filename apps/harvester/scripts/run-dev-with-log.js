@@ -5,15 +5,51 @@ import { createWriteStream, mkdirSync } from "node:fs"
 import { dirname, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import { spawn } from "node:child_process"
+import { captureBuildMetadata } from "@coinzilla/utils"
+import packageMetadata from "../package.json" with { type: "json" }
+import {
+  createHarvesterArchiveProcessIdentity,
+  persistHarvesterArchiveProcessIdentity,
+} from "./capture-harvester-archive-process-identity.js"
 import { forwardChildOutput } from "./forward-child-output.js"
 import { createHarvesterLogSessionPaths } from "../src/infrastructure/logging/create-harvester-log-session-paths.js"
 
 const packageDirectory = resolve(dirname(fileURLToPath(import.meta.url)), "..")
+const cliArguments = process.argv.slice(2)
+const buildMetadata = captureBuildMetadata({
+  application: "harvester-dev-runner",
+  version: packageMetadata.version,
+  cwd: packageDirectory,
+  env: process.env,
+})
+const runnerIdentity = [
+  `harvester-dev-runner ${packageMetadata.version}`,
+  `commit ${buildMetadata.source.commit ?? "unknown"}`,
+  `worktree ${buildMetadata.source.workingTree}`,
+  `node ${process.version}`,
+].join(" | ")
+if (cliArguments.length === 1 && cliArguments[0] === "--version") {
+  process.stdout.write(runnerIdentity + "\\n")
+  process.exit(0)
+}
+if (cliArguments.length > 0) {
+  throw new TypeError("Usage: dev [--version]")
+}
+if (process.env.TRADING_MODE !== "testnet") {
+  throw new Error("The Harvester DEV runner requires TRADING_MODE=testnet; LIVE execution must use the explicit production entrypoint.")
+}
+process.stdout.write(runnerIdentity + "\\n")
 const logDirectory = resolve(packageDirectory, "logs")
 const cumulativeDirectory = resolve(logDirectory, "cumulative")
 const logPath = resolve(cumulativeDirectory, "terminal.log")
 const sessionStartedAt = new Date().toISOString()
 const runtimeSessionId = randomUUID()
+const archiveProcessIdentity = createHarvesterArchiveProcessIdentity({
+  startedAt: sessionStartedAt,
+  runtimeSessionId,
+  tradingMode: process.env.TRADING_MODE,
+  source: buildMetadata.source,
+})
 const sessionPaths = createHarvesterLogSessionPaths({
   directory: logDirectory,
   startedAt: sessionStartedAt,
@@ -22,6 +58,10 @@ const sessionPaths = createHarvesterLogSessionPaths({
 
 mkdirSync(cumulativeDirectory, { recursive: true })
 mkdirSync(sessionPaths.sessionDirectory, { recursive: true })
+await persistHarvesterArchiveProcessIdentity({
+  filename: resolve(sessionPaths.sessionDirectory, "process-identity.json"),
+  identity: archiveProcessIdentity,
+})
 
 const logStreams = [
   createWriteStream(logPath, { flags: "a" }),
@@ -91,9 +131,11 @@ const closeLogStreams = async () => {
     stream.end()
     await completion
   }))
-  if (results.some((result) => result.status === "rejected")) {
+  const streamsClosed = results.every((result) => result.status === "fulfilled")
+  if (!streamsClosed) {
     process.exitCode = 1
   }
+  return streamsClosed
 }
 
 const handleSignal = (signal) => {
@@ -154,7 +196,24 @@ childProcess.current.on("close", async (...closeArguments) => {
   const droppedChunks = (await Promise.all(outputForwarding))
     .reduce((...values) => values[0] + values[1], 0)
 
-  await closeLogStreams()
+  const logStreamsClosed = await closeLogStreams()
+
+  try {
+    await writeFile(
+      resolve(sessionPaths.sessionDirectory, "process-completed.json"),
+      `${JSON.stringify({
+        runtimeSessionId,
+        endedAt: new Date().toISOString(),
+        exitCode: code,
+        signal,
+        logStreamsComplete: !logStreamFailed && logStreamsClosed,
+      }, null, 2)}\\n`,
+      { encoding: "utf8", flag: "wx", mode: 0o600 },
+    )
+  } catch (error) {
+    process.stderr.write(`Failed to persist Harvester session completion: ${error.message}\\n`)
+    process.exitCode = 1
+  }
 
   if (
     droppedChunks > 0
