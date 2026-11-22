@@ -11,7 +11,6 @@ import {
   writeFile,
 } from "node:fs/promises"
 import { spawn } from "node:child_process"
-import { promisify } from "node:util"
 import path from "node:path"
 import os from "node:os"
 import { fileURLToPath } from "node:url"
