@@ -879,7 +879,10 @@ asset: fixture.market.baseAsset }),
     }),
   });
   const placingRecoveryOrders = engine.evaluateLatest({ symbol: "ZROUSDT" });
-  const pendingSellOrder = await waitForDeferred({\n    promise: pendingSellStarted.promise,\n    label: "initial recovery SELL submission",\n  });
+  const pendingSellOrder = await waitForDeferred({
+    promise: pendingSellStarted.promise,
+    label: "initial recovery SELL submission",
+  });
   assert.equal(
     submittedIntents.some((intent) => intent.side === "BUY" && intent.clientOrderId !== initialBuy.clientOrderId),
     false,
@@ -927,7 +930,10 @@ async function completeDeferredRecoverySellCancellation({ fixture, secondBuy, pe
       status: "FILLED",
     }),
   });
-  await waitForDeferred({\n    promise: cancelStarted.promise,\n    label: "recovery SELL cancellation after partial BUY fill",\n  });
+  await waitForDeferred({
+    promise: cancelStarted.promise,
+    label: "recovery SELL cancellation after partial BUY fill",
+  });
   assert.deepEqual(
     cancellations,
     [pendingSellOrder.brokerOrderId],
