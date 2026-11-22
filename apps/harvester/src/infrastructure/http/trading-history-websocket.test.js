@@ -209,3 +209,22 @@ test("closes local WebSocket clients before the shared HTTP listener shuts down"
   assert.equal(socket.readyState, WebSocket.CLOSED, "API shutdown must close local WebSocket clients.")
   assert.equal(eventBus.getDiagnostics().closed, false, "The API must not own or close Harvester's EventBus.")
 })
+
+test("broadcasts exchange-account invalidations from Harvester snapshot events", async (t) => {
+  const eventBus = new EventBus()
+  const api = await startApi({ t, eventBus })
+  const socket = new WebSocket(`ws://127.0.0.1:${api.address.port}/api/v1/trading/events`)
+  t.after(() => socket.close())
+
+  await waitForSocketOpen(socket)
+  const publication = eventBus.publish({
+    name: "account.snapshot_captured",
+    source: "harvester.account-snapshot",
+    data: { phase: "LIVE" },
+  })
+  assert.equal(publication.ok, true)
+  assert.deepEqual(await waitForMessage(socket), {
+    type: "exchange-account.updated",
+  })
+})
+
