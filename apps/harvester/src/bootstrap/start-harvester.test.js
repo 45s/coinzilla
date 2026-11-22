@@ -107,6 +107,7 @@ test("starts an RS-only provider account without a Conservative execution route"
       symbol: "LINEAUSDT",
     }], "The account must retain RS ownership without inventing a Conservative route.")
     assert.ok(calls.includes("subscribe:LINEAUSDT"), "The RS-only market must receive its market-data subscription.")
+    assert.equal(result.getVolatilityProtectionState({ symbol: "LINEAUSDT" }), undefined, "An RS-only market with volatility disabled must not allocate protection state.")
     await result.stop()
   } finally {
     await rm(directory, {
@@ -155,6 +156,7 @@ test("starts market-owned volatility history for an RS-only market when market c
 
     assert.ok(calls.includes("candle-subscribe:LINEAUSDT"), "Volatility candle subscription must follow market config, not CG ownership.")
     assert.ok(calls.includes("candle-history:LINEAUSDT"), "Volatility history warm-up must run for an RS-only market with protection enabled.")
+    assert.equal(result.getVolatilityProtectionState({ symbol: "LINEAUSDT" })?.mode, "PROTECTED", "Enabled market volatility state must initialize independently of CG strategy ownership.")
     await result.stop()
   } finally {
     await rm(directory, { recursive: true, force: true })
