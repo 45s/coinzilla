@@ -1238,6 +1238,28 @@ test("Bitunix Spot pending-order fetch preserves the exact accepted HYPEUSDT ord
   )
 })
 
+test("Bitunix Spot pending-order fetch preserves a 64-bit numeric JSON order ID token", async () => {
+  const requests = []
+  const rawResponse = '{"code":"0","msg":"success","data":[{"orderId":2124329325141426176,"symbol":"HYPEUSDT","side":"2","type":"1","status":"1","volume":"0.366","dealVolume":"0","price":"30"}]}'
+  const broker = createSignedPlacementTestBroker({
+    requests,
+    responses: [],
+    fetchFn: async () => new Response(rawResponse, {
+      status: 200,
+      headers: {
+        "content-type": "application/json",
+      },
+    }),
+  })
+
+  const result = await broker.getOpenOrders({ symbol: "HYPEUSDT" })
+
+  assert.equal(result.ok, true, "a numeric 64-bit orderId token must be normalized losslessly")
+  assert.equal(result.data[0].id, "2124329325141426176")
+  assert.equal(typeof result.data[0].id, "string")
+  assert.equal(requests.length, 1, "the pending-order read must not retry")
+})
+
 test("Bitunix Spot broker supports explicit history page selection", async () => {
   const { broker, calls } = createBroker({
     responses: {
