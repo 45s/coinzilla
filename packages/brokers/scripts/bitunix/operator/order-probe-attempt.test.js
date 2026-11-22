@@ -511,42 +511,40 @@ test("Bitunix order probe classifies an existing one-shot marker as NOT_SENT", a
 })
 
 
+function createOrderDetailFetch() {
+  return async (url) => {
+    const path = new URL(url).pathname
+    const data = path.endsWith("/order/detail")
+      ? {
+        orderId: "probe-order-1",
+        userId: "private-user-id",
+        symbol: "HYPEUSDT",
+      }
+      : {
+        orderId: "probe-order-1",
+        symbol: "HYPEUSDT",
+        side: 2,
+        type: 1,
+        volume: "1",
+        price: "30",
+        placeStatus: "1",
+      }
+    return new Response(JSON.stringify({
+      code: 0,
+      msg: "success",
+      data,
+    }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    })
+  }
+}
+
 test("Bitunix probe capture records sanitized order-detail follow-up responses", async () => {
   const capture = {}
-  const factory = createCaptureRestClientFactory({
+  const client = createTestRestClient({
     capture,
-    fetchFn: async (url) => {
-      const path = new URL(url).pathname
-      const data = path.endsWith("/order/detail")
-        ? {
-          orderId: "probe-order-1",
-          userId: "private-user-id",
-          symbol: "HYPEUSDT",
-        }
-        : {
-          orderId: "probe-order-1",
-          symbol: "HYPEUSDT",
-          side: 2,
-          type: 1,
-          volume: "1",
-          price: "30",
-          placeStatus: "1",
-        }
-      return new Response(JSON.stringify({
-        code: 0,
-        msg: "success",
-        data,
-      }), {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      })
-    },
-  })
-  const client = factory({
-    apiKey: "test-key",
-    apiSecret: "test-secret",
-    baseUrl: "https://openapi.bitunix.com",
-    requestTimeout: 1000,
+    fetchFn: createOrderDetailFetch(),
   })
   await client.request({
     method: "POST",
@@ -575,7 +573,6 @@ test("Bitunix probe capture records sanitized order-detail follow-up responses",
   assert.equal(JSON.stringify(capture).includes("private-user-id"), false)
   assert.equal(Object.hasOwn(capture.requests[1], "body"), false)
 })
-
 
 test("Bitunix order probe blocks before reads when an earlier probe has an unknown outcome", async () => {
   const directory = await mkdtemp(join(tmpdir(), "bitunix-order-probe-matrix-stop-"))
