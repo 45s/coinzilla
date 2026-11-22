@@ -42,48 +42,136 @@ function printLocalDiagnosticSummary({ report, outputPath, stdout }) {
   ].join("\n"))
 }
 
-async function runBitunixOrderReadScan({ env, report, stdout, brokerFactory = (options) => new Broker(options) }) {
+async function runBitunixOrderReadScan({
+  env,
+  report,
+  stdout,
+  brokerFactory = (options) => new Broker(options),
+}) {
   const secrets = [env.BITUNIX_API_KEY, env.BITUNIX_API_SECRET].filter(Boolean)
   const record = (operation, result, extra = {}) => {
-    const entry = { operation, status: result?.ok === true ? "passed" : "failed",
-      durationMs: extra.durationMs ?? null, request: extra.request ?? null,
-      response: sanitizeDiagnosticValue({ value: result, secrets }),
-      ...(result?.errors?.length ? { errors: result.errors.map((error) => sanitizeDiagnosticError({ error, secrets })) } : {}) }
-    report.results.push(entry); report.summary.total += 1; report.summary[entry.status] += 1
-    stdout.write(`      ${operation}: ${entry.status.toUpperCase()}\n`)
+    const entry = {
+      operation,
+      status: result?.ok === true ? "passed" : "failed",
+      durationMs: extra.durationMs ?? null,
+      request: extra.request ?? null,
+      response: sanitizeDiagnosticValue({
+        value: result,
+        secrets,
+      }),
+      ...(result?.errors?.length
+        ? {
+          errors: result.errors.map((error) => sanitizeDiagnosticError({
+            error,
+            secrets,
+          })),
+        }
+        : {}),
+    }
+    report.results.push(entry)
+    report.summary.total += 1
+    report.summary[entry.status] += 1
+    stdout.write(`      ${operation}: ${entry.status.toUpperCase()}\\n`)
   }
-  const logger = Object.fromEntries(["debug", "info", "warn", "error"].map((level) => [level,
-    (event) => report.events.push(sanitizeDiagnosticValue({ value: { timestamp: new Date().toISOString(), level, ...event }, secrets }))]))
-  const broker = new Broker({ provider: "bitunix", apiKey: env.BITUNIX_API_KEY, apiSecret: env.BITUNIX_API_SECRET,
-    tradingMode: "live", logger, providerOptions: { allowLiveOrderMutations: false } })
+  const logger = Object.fromEntries(["debug", "info", "warn", "error"].map((level) => [
+    level,
+    (event) => report.events.push(sanitizeDiagnosticValue({
+      value: {
+        timestamp: new Date().toISOString(),
+        level,
+        ...event,
+      },
+      secrets,
+    })),
+  ]))
+  const broker = brokerFactory({
+    provider: "bitunix",
+    apiKey: env.BITUNIX_API_KEY,
+    apiSecret: env.BITUNIX_API_SECRET,
+    tradingMode: "live",
+    logger,
+    providerOptions: {
+      allowLiveOrderMutations: false,
+    },
+  })
   let connected = false
   try {
-    await broker.connect(); connected = true
+    await broker.connect()
+    connected = true
     const started = Date.now()
     let openOrdersResult
     try {
       openOrdersResult = await broker.getOpenOrders()
-      record("Broker API getOpenOrders", openOrdersResult, { durationMs: Date.now() - started, request: { method: "getOpenOrders", arguments: [] } })
+      record("Broker API getOpenOrders", openOrdersResult, {
+        durationMs: Date.now() - started,
+        request: {
+          method: "getOpenOrders",
+          arguments: [],
+        },
+      })
     } catch (error) {
-      record("Broker API getOpenOrders", { ok: false, errors: [error] }, { durationMs: Date.now() - started, request: { method: "getOpenOrders", arguments: [] } })
+      record("Broker API getOpenOrders", {
+        ok: false,
+        errors: [error],
+      }, {
+        durationMs: Date.now() - started,
+        request: {
+          method: "getOpenOrders",
+          arguments: [],
+        },
+      })
       return
     }
-    if (!openOrdersResult?.ok) return
+    if (!openOrdersResult?.ok) {
+      return
+    }
     for (const order of openOrdersResult.data ?? []) {
       const detailStarted = Date.now()
-      const request = { method: "getOrder", arguments: [{ symbol: order.symbol, orderId: order.id }] }
+      const request = {
+        method: "getOrder",
+        arguments: [{
+          symbol: order.symbol,
+          orderId: order.id,
+        }],
+      }
       try {
-        const detailResult = await broker.getOrder({ symbol: order.symbol, orderId: order.id })
-        record("Broker API getOrder", detailResult, { durationMs: Date.now() - detailStarted, request })
+        const detailResult = await broker.getOrder({
+          symbol: order.symbol,
+          orderId: order.id,
+        })
+        record("Broker API getOrder", detailResult, {
+          durationMs: Date.now() - detailStarted,
+          request,
+        })
       } catch (error) {
-        record("Broker API getOrder", { ok: false, errors: [error] }, { durationMs: Date.now() - detailStarted, request })
+        record("Broker API getOrder", {
+          ok: false,
+          errors: [error],
+        }, {
+          durationMs: Date.now() - detailStarted,
+          request,
+        })
       }
     }
   } catch (error) {
-    record("Broker API order-read scan", { ok: false, errors: [error] }, { request: { method: "Broker.connect" } })
+    record("Broker API order-read scan", {
+      ok: false,
+      errors: [error],
+    }, {
+      request: {
+        method: "Broker.connect",
+      },
+    })
   } finally {
     if (connected) {
-      try { await broker.disconnect() } catch (error) { record("Broker API disconnect", { ok: false, errors: [error] }) }
+      try {
+        await broker.disconnect()
+      } catch (error) {
+        record("Broker API disconnect", {
+          ok: false,
+          errors: [error],
+        })
+      }
     }
   }
 }
@@ -222,7 +310,6 @@ function appendSelectedOperatorResult({
   env,
   runOperatorProbe,
   probeId,
-  brokerFactory,
 }) {
   return appendOrderAttemptResult({
     report,
@@ -252,7 +339,14 @@ async function runDiagnosticsWithOperatorAttempt({
       brokerApiRestClientFactory: (options) => new BitunixRestClient(options),
     })
   if (!runOperatorProbe) {
-    await runBitunixOrderReadScan({ env, report, stdout: { write: (message) => onProgress?.({ message: message.trim() }) }, brokerFactory })
+    await runBitunixOrderReadScan({
+      env,
+      report,
+      stdout: {
+        write: (message) => onProgress?.({ message: message.trim() }),
+      },
+      brokerFactory,
+    })
   }
   if (!runOperatorOrder && !runOperatorProbe) {
     return report
