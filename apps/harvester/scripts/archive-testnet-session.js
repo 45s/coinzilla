@@ -881,13 +881,13 @@ function createArchiveCliIdentity({ env = process.env } = {}) {
 async function main() {
   const args = process.argv.slice(2)
   if (args.length === 1 && args[0] === "--version") {
-    process.stdout.write(createArchiveCliIdentity() + "\\n")
+    process.stdout.write(createArchiveCliIdentity() + "\n")
     return
   }
   if (args.length > 0) {
     throw new TypeError("Usage: archive:push [--version]")
   }
-  process.stdout.write(createArchiveCliIdentity() + "\\n")
+  process.stdout.write(createArchiveCliIdentity() + "\n")
   const result = await runHarvesterArchivePush({ args })
   process.stdout.write([
     "Harvester local logs/data archive published and remotely verified.",
