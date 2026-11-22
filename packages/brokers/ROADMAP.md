@@ -1589,3 +1589,13 @@ See [the private polling contract](./docs/BITUNIX_SPOT_POLLING.md) and [the Bitu
 - [x] Added the cumulative [Bitunix live order-probe evidence log](./BITUNIX_ORDER_PROBE_LOG.md), including the proven behavior, unresolved protocol questions, and next investigation steps.
 
 **Finding:** Spot LIMIT BUY/SELL dispatch and nested rejection parsing are empirically exercised. The operator confirmed the account lacked the required Spot assets, so both `10034` insufficient-balance rejections were expected. No accepted order or fill has yet been observed. A funded `limit-buy-11-usdt` probe is added: BUY `HYPEUSDT` LIMIT at `30 USDT`, spending up to `11 USDT`; quantity is calculated from live `basePrecision`, with `0.24 USDT` reserved. The script displays the exact order snapshot and accepts only `y/N`. This will test actual acceptance after merge and funding. Broader lifecycle/Harvester blockers remain.
+## 2026-11-22 — Bitunix accepted-placement reconciliation
+
+**Status: reconciliation contract and offline regression coverage carried forward from PR #1703; exact-head CI is the merge gate.**
+
+- Preserve `mutationOutcome: "CONFIRMED"` when Bitunix explicitly accepts placement even if the subsequent read-only order-detail request fails.
+- Keep the overall Broker result `ok: false` until a normalized Order is returned; retain the raw placement acknowledgement, original read error, and structured `reconciliation` metadata.
+- Successful detail reads report `reconciliation.status: "VERIFIED"`; failed detail reads report `"UNAVAILABLE"`, with source, endpoint, and sanitized error classification.
+- The operator probe prints placement confirmation separately from reconciliation health and persists reconciliation metadata in its private one-shot marker. A confirmed placement must never be retried because a later read failed.
+- Tests cover verified/unavailable reconciliation metadata, the exact signed order-detail query, and persistence of confirmed placement evidence when readback fails.
+- No live exchange mutation is part of CI. The existing HYPE order's later cancellation and independent status verification are documented under [PR #1727](https://github.com/45s/coinzilla/pull/1727).
