@@ -139,8 +139,16 @@ test("keeps markets with fewer than 74 completed candles unavailable for the 60-
 
 test("keeps readiness isolated per market when one symbol has insufficient history", async () => {
   const fixture = createFixture({
-    pairs: { BTCUSDT: { enabled: true, enableVolatilityProtection: true },
-DOGEUSDT: { enabled: true, enableVolatilityProtection: true } },
+    pairs: {
+      BTCUSDT: {
+        enabled: true,
+        enableVolatilityProtection: true,
+      },
+      DOGEUSDT: {
+        enabled: true,
+        enableVolatilityProtection: true,
+      },
+    },
     historyBySymbol: {
       BTCUSDT: createHistory("BTCUSDT", 100),
       DOGEUSDT: createHistory("DOGEUSDT", 73),
