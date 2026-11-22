@@ -65,6 +65,14 @@
           <span class="demo-pill persisted-pill"><span></span> READ ONLY</span>
           <span class="environment-pill">HARVESTER</span>
         }
+        <label class="theme-picker">
+          <span class="visually-hidden">Dashboard theme</span>
+          <select aria-label="Dashboard theme" [value]="theme()" (change)="setTheme($any($event.target).value)">
+            @for (option of themeOptions; track option.value) {
+              <option [value]="option.value">{{ option.label }}</option>
+            }
+          </select>
+        </label>
         <button class="avatar" type="button" disabled aria-label="User profile unavailable">CZ</button>
       </div>
     </header>

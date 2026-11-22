@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, signal } from '@angular/core';
 
 import { OverviewComponent } from './features/overview/overview';
 import { TradingHistoryComponent } from './features/trading-history/page';
@@ -7,6 +7,33 @@ import { MarketScreenerComponent } from './features/market-screener/page';
 import type { TradingHistoryResource } from './features/trading-history/api';
 
 type DashboardPage = 'overview' | 'operator' | 'markets' | TradingHistoryResource;
+type DashboardTheme = 'current' | 'midnight' | 'light' | 'oled' | 'green' | 'arctic' | 'warm' | 'system';
+
+const THEME_STORAGE_KEY = 'coinzilla.dashboard.theme';
+const THEMES: readonly { value: DashboardTheme; label: string }[] = [
+  { value: 'current', label: 'Current · Emerald' },
+  { value: 'midnight', label: 'Midnight Terminal' },
+  { value: 'light', label: 'Clean Light' },
+  { value: 'oled', label: 'OLED / Neon' },
+  { value: 'green', label: 'Green Terminal' },
+  { value: 'arctic', label: 'Arctic' },
+  { value: 'warm', label: 'Warm Graphite' },
+  { value: 'system', label: 'System' },
+];
+
+export function readSavedDashboardTheme(
+  storage: Pick<Storage, 'getItem'> | null | undefined,
+): DashboardTheme {
+  if (!storage) return 'current';
+  try {
+    const saved = storage.getItem(THEME_STORAGE_KEY);
+    return THEMES.some((theme) => theme.value === saved)
+      ? (saved as DashboardTheme)
+      : 'current';
+  } catch {
+    return 'current';
+  }
+}
 
 @Component({
   selector: 'app-root',
@@ -28,6 +55,8 @@ export class AppComponent {
     { label: 'Diagnostics', icon: '⌘', page: null, enabled: false },
   ] as const;
 
+  readonly themeOptions = THEMES;
+  readonly theme = signal<DashboardTheme>('current');
   readonly activePage = signal<DashboardPage>('overview');
   readonly activeLabel = computed(() =>
     this.navigationItems.find((item) => item.page === this.activePage())?.label ?? 'Overview',
@@ -37,9 +66,39 @@ export class AppComponent {
     return page === 'overview' || page === 'operator' || page === 'markets' ? 'orders' : page;
   });
 
-  selectPage(page: DashboardPage | null): void {
-    if (page) {
-      this.activePage.set(page);
+  constructor() {
+    this.theme.set(readSavedDashboardTheme(
+      typeof window === 'undefined' ? undefined : window.localStorage,
+    ));
+
+    effect(() => {
+      const selectedTheme = this.theme();
+      if (typeof document !== 'undefined') {
+        document.documentElement.dataset['theme'] = selectedTheme;
+      }
+    });
+  }
+
+  setTheme(value: string): void {
+    if (!THEMES.some((theme) => theme.value === value)) return;
+
+    const selectedTheme = value as DashboardTheme;
+    this.theme.set(selectedTheme);
+
+    // Apply and persist immediately; Angular effects may flush after the change event.
+    if (typeof document !== 'undefined') {
+      document.documentElement.dataset['theme'] = selectedTheme;
     }
+    if (typeof window !== 'undefined') {
+      try {
+        window.localStorage.setItem(THEME_STORAGE_KEY, selectedTheme);
+      } catch {
+        // Keep the selected theme usable when browser storage is unavailable.
+      }
+    }
+  }
+
+  selectPage(page: DashboardPage | null): void {
+    if (page) this.activePage.set(page);
   }
 }
