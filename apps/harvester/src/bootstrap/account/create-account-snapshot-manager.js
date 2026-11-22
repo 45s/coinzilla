@@ -704,10 +704,13 @@ async function persistOpenOrdersAuditFact({ operationalStateStore, dataResult })
   }
 }
 
-async function flushOpenOrdersAuditEvent({ eventPublisher }) {
+async function flushOpenOrdersAuditEvent({ eventPublisher, phase }) {
+  const auditName = phase === "CLOSING"
+    ? "CLOSING account open-orders snapshot"
+    : "account open-orders audit"
   if (typeof eventPublisher?.flush !== "function") {
     throw withRecoveryFailure({
-      error: new Error("Harvester requires a durable open-orders audit before advancing its lifecycle"),
+      error: new Error(`Harvester requires a durable ${auditName} before advancing its lifecycle`),
       category: "ACCOUNTING_INTEGRITY",
       stage: "ACCOUNT_OPEN_ORDERS_AUDIT_FLUSH_CAPABILITY",
       retryable: false,
@@ -729,7 +732,7 @@ async function flushOpenOrdersAuditEvent({ eventPublisher }) {
     const details = flushed?.errors?.map((error) => error?.message ?? String(error)).join("; ")
     throw createAuditFlushError({
       flushed,
-      message: `Unable to durably persist account open-orders audit${details ? `: ${details}` : ""}`,
+      message: `Unable to durably persist ${auditName}${details ? `: ${details}` : ""}`,
       stage: "ACCOUNT_OPEN_ORDERS_AUDIT_FLUSH",
     })
   }
@@ -750,7 +753,10 @@ async function publishOpenOrdersAuditEvent({ eventPublisher, dataResult }) {
       retryable: true,
     })
   }
-  await flushOpenOrdersAuditEvent({ eventPublisher })
+  await flushOpenOrdersAuditEvent({
+    eventPublisher,
+    phase: dataResult.data?.phase,
+  })
 }
 
 function createOpenOrdersGuardState({ unownedOrders }) {
