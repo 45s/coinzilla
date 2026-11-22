@@ -21,13 +21,14 @@ function createOperatorAttemptError({ result, codeOverride }) {
  * Append only a sanitized operator outcome to the diagnostic report.
  * Exchange order IDs, request/response payloads and free-form messages are never copied.
  *
- * @param {{report: object, operatorResult: object, durationMs: number, secrets?: string[]}} input
+ * @param {{report: object, operatorResult: object, durationMs: number, probeId?: string, secrets?: string[]}} input
  * @returns {object}
  */
 export function appendOrderAttemptResult({
   report,
   operatorResult,
   durationMs,
+  probeId,
   secrets = [],
 }) {
   let status = "failed"
@@ -56,6 +57,9 @@ export function appendOrderAttemptResult({
       failed: report.summary.failed + (status === "failed" ? 1 : 0),
       skipped: report.summary.skipped + (status === "skipped" ? 1 : 0),
     },
-    results: [...report.results, {\n      ...result,\n      ...(typeof probeId === "string" && probeId ? { probeId } : {}),\n    }],
+    results: [...report.results, {
+      ...result,
+      ...(typeof probeId === "string" && probeId ? { probeId } : {}),
+    }],
   }
 }
