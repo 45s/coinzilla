@@ -149,7 +149,10 @@ test("infers the enabled RS-only route in legacy single-provider TESTNET mode", 
         RS_recoverySeller: {
           enabled: true,
           pairs: {
-            LINEAUSDT: { enabled: true, tradingEnvironment: "testnet" },
+            LINEAUSDT: {
+              enabled: true,
+              tradingEnvironment: "testnet",
+            },
           },
         },
       },

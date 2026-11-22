@@ -74,7 +74,10 @@ test("subscribes to enabled RS-only markets in legacy single-provider mode", () 
         RS_recoverySeller: {
           enabled: true,
           pairs: {
-            LINEAUSDT: { enabled: true, tradingEnvironment: "testnet" },
+            LINEAUSDT: {
+              enabled: true,
+              tradingEnvironment: "testnet",
+            },
           },
         },
       },
