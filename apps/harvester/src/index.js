@@ -863,7 +863,7 @@ function createExchangeAccountReaders({ runtime } = {}) {
       providerInstanceId: accountRuntime.providerInstanceId,
       providerType: accountRuntime.providerType,
       accountId: accountRuntime.accountId,
-      environment: accountRuntime.environment ?? accountRuntime.tradingMode,
+      environment: accountRuntime.tradingMode ?? accountRuntime.environment,
       connected: accountRuntime.connected === true,
       readAccountSnapshot: () => accountRuntime.getExchangeAccountSnapshot(),
       readOpenOrders: () => accountRuntime.getExchangeOpenOrders(),
