@@ -140,9 +140,15 @@ export async function runFindBitunixSpotOrder({
 
   try {
     broker = brokerFactory({ credentials, logger })
-    await broker.connect()
-    connected = true
-    record({ operation: "broker.connect", ok: true })
+    record({ operation: "broker.connect", started: true, ok: null })
+    try {
+      await broker.connect()
+      connected = true
+      record({ operation: "broker.connect", ok: true })
+    } catch (error) {
+      record({ ...createFailure({ operation: "broker.connect", error }), thrown: true })
+      throw error
+    }
 
     let marketsResult
     try {
