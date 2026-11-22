@@ -508,3 +508,36 @@ test("runs the real Git branch, report-only commit, push and return workflow", a
     })
   }
 })
+
+
+test("publisher uses the focused operator-probe health evaluator when supplied", async () => {
+  const repositoryRoot = await mkdtemp(join(tmpdir(), "bitunix-probe-health-evaluator-"))
+  const { runGit } = createFakeGit({
+    repositoryRoot,
+  })
+  try {
+    const result = await publishHealthReport({
+      repositoryRoot,
+      runGit,
+      env: {
+        BITUNIX_API_KEY: apiKey,
+        BITUNIX_API_SECRET: apiSecret,
+      },
+      now: () => fixedTimestamp,
+      runDiagnostics: async () => createDiagnosticReport(),
+      healthCheckEvaluator: () => ({
+        scope: "operator-order-probe",
+        requiredOperations: ["operator order probe"],
+        missingRequiredOperations: [],
+        nonBlockingFailedOperations: [],
+        healthy: true,
+      }),
+    })
+
+    assert.equal(result.healthCheck.scope, "operator-order-probe")
+    assert.equal(result.healthCheck.healthy, true)
+    assert.equal(result.exitCode, 0)
+  } finally {
+    await rm(repositoryRoot, { recursive: true, force: true })
+  }
+})
