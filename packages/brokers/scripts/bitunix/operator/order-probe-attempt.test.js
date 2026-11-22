@@ -408,7 +408,8 @@ test("Bitunix probe capture records the placement request and raw response, neve
   const capture = {}
   const client = createTestRestClient({
     capture,
-    fetchFn: async (url, options) => {
+    fetchFn: async (...args) => {
+      const [url, options] = args
       receivedOptions = options
       assert.equal(new URL(url).pathname, "/api/spot/v1/order/place_order")
       return createPlacementResponse()
