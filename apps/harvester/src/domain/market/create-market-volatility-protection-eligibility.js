@@ -14,6 +14,6 @@ export function createMarketVolatilityProtectionEligibility({
       return false
     }
     const marketConfig = markets?.[symbol]
-    return marketConfig?.enabled === true && marketConfig.enableVolatilityProtection === true
+    return marketConfig?.enabled === true && marketConfig.enableVolatilityProtection !== false
   }
 }
