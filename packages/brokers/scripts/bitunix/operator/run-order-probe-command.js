@@ -54,18 +54,26 @@ function askForOrderProbeConfirmation({ preflight, stdin, stdout }) {
       resolveAnswer(approved)
     }
     readline.once("close", () => finish(false))
-    const question = fundedBuy
-      ? "Submit LIVE order? [y/N]: "
-      : unknownSellBalance
-        ? `HYPE balance was not returned. Type "I ACCEPT UNKNOWN HYPE BALANCE" to submit this LIVE SELL probe "${probe.id}", or anything else to decline: `
-        : `Press ENTER to submit this LIVE ${probe.side} ${probe.type} HYPEUSDT probe "${probe.id}", or type anything to decline: `
+    let question
+    if (fundedBuy) {
+      question = "Submit LIVE order? [y/N]: "
+    } else if (unknownSellBalance) {
+      question = `HYPE balance was not returned. Type "I ACCEPT UNKNOWN HYPE BALANCE" to submit this LIVE SELL probe "${probe.id}", or anything else to decline: `
+    } else {
+      question = `Press ENTER to submit this LIVE ${probe.side} ${probe.type} HYPEUSDT probe "${probe.id}", or type anything to decline: `
+    }
+    const isApproved = (answer) => {
+      if (fundedBuy) {
+        return answer.trim().toLowerCase() === "y"
+      }
+      if (unknownSellBalance) {
+        return answer === "I ACCEPT UNKNOWN HYPE BALANCE"
+      }
+      return answer === ""
+    }
     readline.question(
       question,
-      (answer) => finish(fundedBuy
-        ? answer.trim().toLowerCase() === "y"
-        : unknownSellBalance
-          ? answer === "I ACCEPT UNKNOWN HYPE BALANCE"
-          : answer === ""),
+      (answer) => finish(isApproved(answer)),
     )
   })
 }
