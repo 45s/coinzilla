@@ -65,15 +65,11 @@ function createMainOptions({ database, calls, handlers, startTradingHistoryApi }
     prepareOrderHistoryPersistence: async () => ({
       relationalDatabase: database,
     }),
-    startTradingHistoryApi: startTradingHistoryApi ?? (async ({ database: suppliedDatabase, environment, eventBus, operator, exchangeAccounts, subscribeExchangeAccountUpdates }) => {
+    startTradingHistoryApi: startTradingHistoryApi ?? (async ({ database: suppliedDatabase, environment, eventBus, operator }) => {
       assert.deepEqual(operator, { facade: "shared-harvester-operator" }, "The local API must receive the same operator facade exposed by the running Harvester runtime.");
       assert.equal(suppliedDatabase, database, "The API must reuse Harvester's existing relational database connection.")
       assert.equal(environment, "testnet", "The API environment must come from Harvester's selected runtime configuration.")
       assert.equal(typeof eventBus?.subscribe, "function", "The WebSocket adapter must share Harvester's existing EventBus.")
-      assert.equal(exchangeAccounts.length, 1, "The API must receive only successfully started Harvester provider runtimes.")
-      assert.equal(exchangeAccounts[0].providerType, "binance", "Provider identity must come from the active Harvester runtime.")
-      assert.equal(typeof exchangeAccounts[0].readAccountSnapshot, "function", "Account reads must remain behind the Harvester runtime.")
-      assert.equal(typeof subscribeExchangeAccountUpdates, "function", "The API must receive an observer subscription backed by Harvester user-data events.")
       calls.push("api-start")
       return {
         address: {
@@ -84,23 +80,6 @@ function createMainOptions({ database, calls, handlers, startTradingHistoryApi }
       }
     }),
     start: async () => ({
-      providerInstanceId: "binanceTestnet",
-      providerType: "binance",
-      accountId: "binance-primary",
-      environment: "testnet",
-      tradingMode: "testnet",
-      connected: true,
-      getExchangeAccountSnapshot: async () => ({
-        ok: true,
-        data: {
-          sourceTime: 1,
-          balances: [],
-        },
-      }),
-      getExchangeOpenOrders: async () => ({
-        ok: true,
-        data: [],
-      }),
       getOperator: () => ({ facade: "shared-harvester-operator" }),
       stop: async () => { calls.push("runtime-stop") },
     }),
