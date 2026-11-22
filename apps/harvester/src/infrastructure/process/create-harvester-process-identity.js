@@ -33,7 +33,75 @@ function resolveRuntimeSessionId({ env, generateRuntimeSessionId }) {
   return runtimeSessionId
 }
 
+function normalizeSourceSnapshot(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return UNAVAILABLE_SOURCE
+  }
+
+  const fields = [
+    "branch",
+    "commit",
+    "shortCommit",
+    "commitMessage",
+    "commitDate",
+    "workingTree",
+    "metadataSource",
+  ]
+  const keys = Object.keys(value).sort()
+  if (keys.length !== fields.length || !fields.every((field) => keys.includes(field))) {
+    return UNAVAILABLE_SOURCE
+  }
+
+  const {
+    branch,
+    commit,
+    shortCommit,
+    commitMessage,
+    commitDate,
+    workingTree,
+    metadataSource,
+  } = value
+  const nullableStrings = [branch, commitMessage, commitDate]
+  if (nullableStrings.some((item) => item !== null && typeof item !== "string")) {
+    return UNAVAILABLE_SOURCE
+  }
+  if (
+    commit !== null
+    && (typeof commit !== "string" || !/^[a-f0-9]{40,64}$/i.test(commit))
+  ) {
+    return UNAVAILABLE_SOURCE
+  }
+  if (
+    shortCommit !== (commit ? commit.slice(0, 8) : null)
+    || !["clean", "dirty", "unknown"].includes(workingTree)
+    || !["git", "environment", "unavailable"].includes(metadataSource)
+  ) {
+    return UNAVAILABLE_SOURCE
+  }
+  if (metadataSource === "unavailable" && (commit !== null || workingTree !== "unknown")) {
+    return UNAVAILABLE_SOURCE
+  }
+
+  return {
+    branch,
+    commit: commit?.toLowerCase() ?? null,
+    shortCommit: shortCommit?.toLowerCase() ?? null,
+    commitMessage,
+    commitDate,
+    workingTree,
+    metadataSource,
+  }
+}
+
 function captureSource({ captureBuildMetadata, cwd, env }) {
+  if (env.COINZILLA_PROCESS_SOURCE_METADATA !== undefined) {
+    try {
+      return normalizeSourceSnapshot(JSON.parse(env.COINZILLA_PROCESS_SOURCE_METADATA))
+    } catch {
+      return UNAVAILABLE_SOURCE
+    }
+  }
+
   try {
     const metadata = captureBuildMetadata({
       application: APPLICATION,
