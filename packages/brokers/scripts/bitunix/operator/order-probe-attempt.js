@@ -391,6 +391,7 @@ async function runConfirmedProbeMutation({
   const markerPath = await createMarker({
     preflight,
   })
+  writeLine(`Private probe evidence: ${markerPath}`)
   let result
   try {
     result = await orderBroker.createOrder(preflight.orderInput)
