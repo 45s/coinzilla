@@ -5,11 +5,11 @@ import { loadAppConfig } from "../../src/infrastructure/config/load-app-config.j
 import { TRADING_ENVIRONMENTS } from "../../src/domain/trading-environment.js"
 import { RS_RECOVERY_SELLER_CONFIG } from "./rs-recovery-seller.js"
 
-test("keeps Recovery Seller disabled in the default Harvester configuration", () => {
+test("enables Recovery Seller runtime only with the explicitly configured TESTNET market", () => {
   assert.equal(
     RS_RECOVERY_SELLER_CONFIG.enabled,
-    false,
-    "Opening the runtime acceptance gate must not enable RS without an explicit configuration change.",
+    true,
+    "The operator-authorized Recovery Seller runtime must be enabled.",
   )
 })
 
@@ -36,8 +36,8 @@ test("declares the approved LINEAUSDT Recovery Seller configuration and resolves
   )
   assert.equal(
     RS_RECOVERY_SELLER_CONFIG.enabled,
-    false,
-    "Adding an authorized market must not enable the global Recovery Seller runtime switch.",
+    true,
+    "The approved LINEAUSDT pair must be active under the explicit global enablement.",
   )
 
   const config = await loadAppConfig()
