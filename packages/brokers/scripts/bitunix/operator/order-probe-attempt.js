@@ -289,7 +289,7 @@ export async function runBitunixOrderProbeAttempt({
   let dispatchStarted = false
   let result
   try {
-    await assertMatrixCanContinue()
+    await assertMatrixCanContinue({ probeId })
     const preflight = await readOrderProbePreflight({
       readBroker,
       probeId,
