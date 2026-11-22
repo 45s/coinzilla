@@ -14,10 +14,18 @@ const test = (...[name, ...args]) => nodeTest(`[create-candle-history-service.te
 test("subscribes every enabled market before requesting approximately 100 completed candles", async () => {
   const fixture = createFixture({
     pairs: {
-      BTCUSDT: { enabled: true, enableVolatilityProtection: true },
-      DOGEUSDT: { enabled: true, enableVolatilityProtection: true },
-      UNCONFIGUREDUSDT: { enabled: true },
-      ZROUSDT: { enabled: false, enableVolatilityProtection: true },
+      BTCUSDT: {
+        enabled: true,
+        enableVolatilityProtection: true,
+      },
+      DOGEUSDT: {
+        enabled: true,
+        enableVolatilityProtection: true,
+      },
+      ZROUSDT: {
+        enabled: false,
+        enableVolatilityProtection: true,
+      },
     },
   })
 
@@ -53,10 +61,22 @@ limit: 101 },
 })
 
 test("does not subscribe to or warm candle history for an enabled pair with volatility protection disabled", async () => {
-  const fixture = createFixture({ pairs: { BTCUSDT: { enabled: true, enableVolatilityProtection: true },
-DOGEUSDT: { enabled: true,
-enableVolatilityProtection: false },
-ZROUSDT: { enabled: false, enableVolatilityProtection: true } } })
+  const fixture = createFixture({
+    pairs: {
+      BTCUSDT: {
+        enabled: true,
+        enableVolatilityProtection: true,
+      },
+      DOGEUSDT: {
+        enabled: true,
+        enableVolatilityProtection: false,
+      },
+      ZROUSDT: {
+        enabled: false,
+        enableVolatilityProtection: true,
+      },
+    },
+  })
   await fixture.start()
   assert.deepEqual(fixture.calls.filter((call) => call.method === "subscribeForCandles").map(({ symbol }) => symbol), ["BTCUSDT"], "Only enabled pairs that retain volatility protection may receive Kline subscriptions.")
   assert.deepEqual(fixture.calls.filter((call) => call.method === "getCandles").map(({ symbol }) => symbol), ["BTCUSDT"], "Opted-out pairs must not incur historical candle requests or warm-up work.")
