@@ -27,14 +27,20 @@ function createBroker({ credentials, logger }) {
 
 function safeValue({ value, secrets }) {
   if (Array.isArray(value)) {
-    return value.map((item) => safeValue({ value: item, secrets }))
+    return value.map((item) => safeValue({
+      value: item,
+      secrets,
+    }))
   }
   if (value && typeof value === "object") {
     return Object.fromEntries(Object.entries(value).map(([key, child]) => [
       key,
       isPrivateField({ key })
         ? "[REDACTED]"
-        : safeValue({ value: child, secrets }),
+        : safeValue({
+          value: child,
+          secrets,
+        }),
     ]))
   }
   if (typeof value !== "string") {
@@ -344,7 +350,10 @@ async function saveReport({ report, reportDirectory, stdout, stderr, secrets }) 
     })
     await writeFile(
       reportPath,
-      `${JSON.stringify(safeValue({ value: report, secrets }), null, 2)}\n`,
+      `${JSON.stringify(safeValue({
+        value: report,
+        secrets,
+      }), null, 2)}\n`,
       {
         encoding: "utf8",
         flag: "wx",
