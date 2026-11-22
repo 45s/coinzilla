@@ -1,6 +1,6 @@
 # Local Harvester DEV archive — decisions and implementation record
 
-> Status: `archive:push` snapshots the complete local `logs/`, `data/`, and `recovery-facts/` directories, derives `data_commit_hash` from the last committed recovery-facts checkpoint, verifies the copied files, and publishes to the private archive repository. Focused tests and local publication still require operator execution.
+> Status: `archive:push` snapshots the complete local `logs/`, `data/`, and `recovery-facts/` directories, derives `data_commit_hash` from the last committed recovery-facts checkpoint, reports file/byte progress during copying and hashing, streams Git clone/push transfer progress, verifies the copied files, and publishes to the private archive repository. Focused tests and local publication still require operator execution.
 > Tracking issue: [#1742](https://github.com/45s/coinzilla/issues/1742).
 > Task branch: `feat/harvester-local-dev-reset-archive`.
 > Private destination: `45s/coinzilla-archive` (private repository).
@@ -28,6 +28,8 @@ archives/<archive-id>/
 ```
 
 The command does not require process identity/completion markers and does not start a new Harvester process. It preserves all files under the three source directories without selecting sessions or filtering the `data/` tree by environment. It does not mutate or reset source files. The archive is a raw folder snapshot, not a transactional SQLite backup.
+
+Progress output shows the total file count and byte size before copying, per-file copy and checksum counts/bytes, local verification, remote clone/staging/push/verification phases, and Git's own transfer percentage during clone and push. The command remains `pnpm run archive:push`; no additional script or arguments are required.
 
 Safety boundaries:
 - Require `TRADING_MODE=testnet` for invoking the archive command and restrict publication to the private `45s/coinzilla-archive` repository.
