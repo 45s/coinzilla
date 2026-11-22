@@ -81,11 +81,14 @@ describe('AppComponent', () => {
   });
 
   it('initializes from a previously saved theme', async () => {
-    window.localStorage.setItem('coinzilla.dashboard.theme', 'light');
     await TestBed.configureTestingModule({
       imports: [AppComponent],
       providers: [provideHttpClient()],
     }).compileComponents();
+
+    // Seed storage after Angular's async test compilation/setup has completed.
+    window.localStorage.setItem('coinzilla.dashboard.theme', 'light');
+    expect(window.localStorage.getItem('coinzilla.dashboard.theme')).toBe('light');
 
     const fixture = TestBed.createComponent(AppComponent);
     fixture.detectChanges();
