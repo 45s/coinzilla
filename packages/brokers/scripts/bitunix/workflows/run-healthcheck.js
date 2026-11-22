@@ -564,7 +564,11 @@ async function runPublishedHealthCheck({
       brokerFactory,
     }),
     env,
-    onProgress: ({ message }) => stdout.write(`${message}\n`),
+    onProgress: ({ message }) => {
+      if (isWorkflowProgressMessage({ message })) {
+        stdout.write(`${message}\n`)
+      }
+    },
   })
   printPublishedResult({
     result,
