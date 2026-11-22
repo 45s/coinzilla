@@ -486,7 +486,10 @@ async function runDiagnosticsWithOperatorAttempt({
   if (!runOperatorOrder && !runOperatorProbe) {
     return report
   }
-  if (shouldSkipOperatorOrder({ report, runOperatorOrder })) {
+  if (shouldSkipOperatorOrder({
+    report,
+    runOperatorOrder,
+  })) {
     return createHealthCheckSkippedResult({
       report,
       env,
