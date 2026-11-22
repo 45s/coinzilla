@@ -9,7 +9,7 @@ This log records operator-authorized LIVE order-placement probes against Bitunix
 - A successful diagnostic workflow means the probe harness completed; inspect the nested placement acknowledgement to determine whether Bitunix accepted or rejected the order. A later read-only reconciliation failure does not undo a definitive placement acknowledgement.
 - A placement-level rejection is distinct from an HTTP/transport failure. In particular, Bitunix can return HTTP 200 and outer `success: true` while the nested placement result rejects the order.
 - Missing asset rows in the Spot account response remain **unknown**, not zero. An explicitly confirmed SELL probe may proceed with an extra typed acknowledgment; MARKET probes remain blocked while their volume denomination is unresolved.
-- These probes do not establish order acceptance, fills, quantity denomination, precision/tick rules, or complete order lifecycle behavior.
+- The funded BUY below establishes one accepted order, but these probes do not establish fills, complete quantity/precision rules, or the full order lifecycle.
 
 ## Confirmed observations
 
@@ -49,7 +49,7 @@ This log records operator-authorized LIVE order-placement probes against Bitunix
 
 **Not proven:**
 
-- That order-detail GET authentication/signature construction is accepted by Bitunix; the first post-placement detail lookup returned exchange code `100005`.
+- The first post-placement order-detail GET returned exchange code `100005`; subsequent order-read and cancellation verification succeeded under [PR #1727](https://github.com/45s/coinzilla/pull/1727). The original failure remains historical evidence, not the current readback status.
 - That LIMIT `volume` denomination is correct. Official English/Chinese Spot documentation and other endpoint families disagree; an insufficient-balance rejection does not resolve that conflict.
 - That MARKET order quantity denomination is safe. MARKET probes remain disabled until this is resolved.
 - That HYPE balance rows omitted by the account endpoint mean a zero balance.
@@ -61,7 +61,7 @@ This log records operator-authorized LIVE order-placement probes against Bitunix
 2. The operator confirmed the Spot account lacked the required assets; both `10034` insufficient-balance rejections were expected. Do not spend further effort investigating those rejections.
 3. Resolve the LIMIT/MARKET `volume` contract from authoritative endpoint-specific evidence before enabling additional probes.
 4. The funded BUY probe is complete and must never be repeated. Its order ID is `2124329325141426176`; the operator reports it remains waiting/open.
-5. Investigate the `100005 result.api.parameter.sign.illegal` response for the signed GET order-detail endpoint in [issue #1704](https://github.com/45s/coinzilla/issues/1704). Compare the exact canonical query string, URL encoding, and official signing example. Prefer already-working signed POST pending/history reads for safe reconciliation if justified by tests. Keep broader Bitunix Spot lifecycle/Harvester admission blockers tracked independently; one accepted LIMIT order does not make Bitunix trading-ready.
+5. Keep broader Bitunix Spot lifecycle/Harvester admission blockers tracked independently; the later successful order-read and cancellation verification in [PR #1727](https://github.com/45s/coinzilla/pull/1727) does not make Bitunix trading-ready.
 
 
 ## 2026-11-22 — Accepted HYPE placement and readback follow-up
