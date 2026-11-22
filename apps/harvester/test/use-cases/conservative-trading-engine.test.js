@@ -22,16 +22,15 @@ import { updateTradingAccounting as applyTradingAccounting } from "../../src/use
 import { validateCancellationEligibility } from "../../src/domain/orders/validate-cancellation-eligibility.js"
 
 async function waitForDeferred({ promise, label, timeoutMs = 10_000 }) {
-  let timeout
+  const timeout = Promise.withResolvers()
+  const timer = setTimeout(
+    () => timeout.reject(new Error(`Timed out waiting for ${label}`)),
+    timeoutMs,
+  )
   try {
-    return await Promise.race([
-      promise,
-      new Promise((_, reject) => {
-        timeout = setTimeout(() => reject(new Error(`Timed out waiting for ${label}`)), timeoutMs)
-      }),
-    ])
+    return await Promise.race([promise, timeout.promise])
   } finally {
-    clearTimeout(timeout)
+    clearTimeout(timer)
   }
 }
 
@@ -108,64 +107,75 @@ marketMetadata,
 accountSnapshot };
 }
 
-function createFixtureBroker({ market, baseAsset, quoteAsset, deferFirstSell, deferCancellation }) {
-  let orderSequence = 0;
-  let deferSell = deferFirstSell;
-  let deferCancel = deferCancellation;
-  const fillsByOrder = new Map();
-  const submittedIntents = [];
-  const cancellations = [];
-  const pendingSell = createDeferred();
-  const pendingSellStarted = createDeferred();
-  const pendingCancel = createDeferred();
-  const cancelStarted = createDeferred();
-  const broker = {
-    placeOrder: async ({ order } = {}) => {
-      submittedIntents.push(order);
-      const acknowledgedOrder = new CanonicalOrder({
+function createFixturePlaceOrder({ state, market, baseAsset, quoteAsset, pendingSell, pendingSellStarted, submittedIntents }) {
+  return async ({ order } = {}) => {
+    submittedIntents.push(order)
+    const acknowledgedOrder = new CanonicalOrder({
+      clientOrderId: order.clientOrderId,
+      brokerOrderId: String(++state.orderSequence),
+      market,
+      side: order.side,
+      type: order.type,
+      limitPrice: new Money({ amount: order.price, asset: quoteAsset }),
+      originalQuantity: new Quantity({ amount: order.quantity, asset: baseAsset }),
+      executedQuantity: new Quantity({ amount: "0", asset: baseAsset }),
+      status: "OPEN",
+    })
+    if (order.side === "SELL" && state.deferSell) {
+      state.deferSell = false
+      pendingSellStarted.resolve(acknowledgedOrder)
+      return pendingSell.promise
+    }
+    return toResult({ data: acknowledgedOrder })
+  }
+}
+
+function createFixtureCancelOrder({ state, market, pendingCancel, cancelStarted, cancellations }) {
+  return async ({ order } = {}) => {
+    cancellations.push(order.brokerOrderId)
+    if (state.deferCancel) {
+      state.deferCancel = false
+      cancelStarted.resolve(order)
+      return pendingCancel.promise
+    }
+    return toResult({
+      data: new CanonicalOrder({
         clientOrderId: order.clientOrderId,
-        brokerOrderId: String(++orderSequence),
+        brokerOrderId: order.brokerOrderId,
         market,
         side: order.side,
         type: order.type,
-        limitPrice: new Money({ amount: order.price,
-asset: quoteAsset }),
-        originalQuantity: new Quantity({ amount: order.quantity,
-asset: baseAsset }),
-        executedQuantity: new Quantity({ amount: "0",
-asset: baseAsset }),
-        status: "OPEN",
-      });
-      if (order.side === "SELL" && deferSell) {
-        deferSell = false;
-        pendingSellStarted.resolve(acknowledgedOrder);
-        return pendingSell.promise;
-      }
-      return toResult({ data: acknowledgedOrder });
-    },
-    cancelOrder: async ({ order } = {}) => {
-      cancellations.push(order.brokerOrderId);
-      if (deferCancel) {
-        deferCancel = false;
-        cancelStarted.resolve(order);
-        return pendingCancel.promise;
-      }
-      return toResult({
-        data: new CanonicalOrder({
-          clientOrderId: order.clientOrderId,
-          brokerOrderId: order.brokerOrderId,
-          market,
-          side: order.side,
-          type: order.type,
-          limitPrice: order.limitPrice,
-          originalQuantity: order.originalQuantity,
-          executedQuantity: order.executedQuantity,
-          status: "CANCELED",
-        }),
-      });
-    },
+        limitPrice: order.limitPrice,
+        originalQuantity: order.originalQuantity,
+        executedQuantity: order.executedQuantity,
+        status: "CANCELED",
+      }),
+    })
+  }
+}
+
+function createFixtureBroker({ market, baseAsset, quoteAsset, deferFirstSell, deferCancellation }) {
+  const state = {
+    orderSequence: 0,
+    deferSell: deferFirstSell,
+    deferCancel: deferCancellation,
+  }
+  const fillsByOrder = new Map()
+  const submittedIntents = []
+  const cancellations = []
+  const pendingSell = createDeferred()
+  const pendingSellStarted = createDeferred()
+  const pendingCancel = createDeferred()
+  const cancelStarted = createDeferred()
+  const broker = {
+    placeOrder: createFixturePlaceOrder({
+      state, market, baseAsset, quoteAsset, pendingSell, pendingSellStarted, submittedIntents,
+    }),
+    cancelOrder: createFixtureCancelOrder({
+      state, market, pendingCancel, cancelStarted, cancellations,
+    }),
     getFills: async ({ orderId } = {}) => toResult({ data: fillsByOrder.get(orderId) ?? [] }),
-  };
+  }
   return {
     broker,
     pendingSell,
@@ -174,10 +184,8 @@ asset: baseAsset }),
     cancelStarted,
     submittedIntents,
     cancellations,
-    setFillsForOrder: ({ orderId, fills } = {}) => {
-      fillsByOrder.set(orderId, fills);
-    },
-  };
+    setFillsForOrder: ({ orderId, fills } = {}) => fillsByOrder.set(orderId, fills),
+  }
 }
 
 function createFixtureAppConfig(externalOrdersPolicy) {
@@ -289,6 +297,22 @@ function createFixtureEngine({
   });
 }
 
+function createFixtureAccounting({ market }) {
+  let portfolio = new Portfolio()
+  let recoveryLedger = RecoveryLedger.empty({ market })
+  return {
+    getPortfolio: () => portfolio,
+    getRecoveryLedger: () => recoveryLedger,
+    updateTradingAccounting: ({ fill } = {}) => {
+      const result = applyTradingAccounting({ portfolio, recoveryLedger, fill })
+      if (result.ok) {
+        ({ portfolio, recoveryLedger } = result.data)
+      }
+      return result
+    },
+  }
+}
+
 const createFixture = ({
   initiallyReady = true,
   deferFirstSell = false,
@@ -301,45 +325,19 @@ const createFixture = ({
   getVolatilityData,
   pausedMarkets = [],
 } = {}) => {
-  const { baseAsset, quoteAsset, market, marketMetadata, accountSnapshot } = createMarketFixture();
-  const brokerState = createFixtureBroker({
-    market,
-    baseAsset,
-    quoteAsset,
-    deferFirstSell,
-    deferCancellation,
-  });
-  const {
-    broker,
-    pendingSell,
-    pendingSellStarted,
-    pendingCancel,
-    cancelStarted,
-    submittedIntents,
-    cancellations,
-  } = brokerState;
-  let portfolio = new Portfolio();
-  let recoveryLedger = RecoveryLedger.empty({ market });
-  let ready = initiallyReady;
-  const appConfig = createFixtureAppConfig(externalOrdersPolicy);
+  const { baseAsset, quoteAsset, market, marketMetadata, accountSnapshot } = createMarketFixture()
+  const brokerState = createFixtureBroker({ market, baseAsset, quoteAsset, deferFirstSell, deferCancellation })
+  const accounting = createFixtureAccounting({ market })
+  let ready = initiallyReady
+  const appConfig = createFixtureAppConfig(externalOrdersPolicy)
   const engine = createFixtureEngine({
-    broker,
+    broker: brokerState.broker,
     appConfig,
     marketMetadata,
     accountSnapshot,
-    getPortfolio: () => portfolio,
-    getRecoveryLedger: () => recoveryLedger,
-    updateTradingAccounting: ({ fill } = {}) => {
-      const result = applyTradingAccounting({
-        portfolio,
-        recoveryLedger,
-        fill,
-      });
-      if (result.ok) {
-        ({ portfolio, recoveryLedger } = result.data);
-      }
-      return result;
-    },
+    getPortfolio: accounting.getPortfolio,
+    getRecoveryLedger: accounting.getRecoveryLedger,
+    updateTradingAccounting: accounting.updateTradingAccounting,
     canTrade: () => ready,
     hasUnownedOpenOrdersForSymbol,
     hasUnresolvedHarvesterOpenOrdersForSymbol,
@@ -347,27 +345,25 @@ const createFixture = ({
     isMarketBookFresh,
     getVolatilityData,
     pausedMarkets,
-  });
+  })
   return {
     engine,
     market,
     marketMetadata,
-    broker,
-    submittedIntents,
-    cancellations,
-    pendingSell,
-    pendingSellStarted,
-    pendingCancel,
-    cancelStarted,
+    broker: brokerState.broker,
+    submittedIntents: brokerState.submittedIntents,
+    cancellations: brokerState.cancellations,
+    pendingSell: brokerState.pendingSell,
+    pendingSellStarted: brokerState.pendingSellStarted,
+    pendingCancel: brokerState.pendingCancel,
+    cancelStarted: brokerState.cancelStarted,
     setFillsForOrder: brokerState.setFillsForOrder,
-    createTradeEvent: createTradeEventFactory({ market,
-baseAsset,
-quoteAsset }),
-    setReady: ({ value } = {}) => { ready = value; },
-    getPortfolio: () => portfolio,
-    getRecoveryLedger: () => recoveryLedger,
-  };
-};
+    createTradeEvent: createTradeEventFactory({ market, baseAsset, quoteAsset }),
+    setReady: ({ value } = {}) => { ready = value },
+    getPortfolio: accounting.getPortfolio,
+    getRecoveryLedger: accounting.getRecoveryLedger,
+  }
+}
 
 test("readiness closing after PENDING registration removes the local order without calling the broker", async () => {
   const fixture = createFixture()
@@ -714,90 +710,10 @@ retryable: false },
     "The block policy must retain the established ownership-integrity failure.")
 })
 
-test("PENDING orders remain explicitly uncancellable", () => {test("ignores unmatched manual execution reports without mutating Harvester accounting", async () => {
-  const fixture = createFixture()
-  const portfolio = fixture.getPortfolio()
-  const recoveryLedger = fixture.getRecoveryLedger()
-  const externalOrder = new CanonicalOrder({
-    clientOrderId: "manual-web-order-1",
-    brokerOrderId: "manual-web-broker-order-1",
-    market: fixture.market,
-    side: "SELL",
-    type: "LIMIT_MAKER",
-    limitPrice: new Money({ amount: "1.01",
-asset: fixture.market.quoteAsset }),
-    originalQuantity: new Quantity({ amount: "1",
-asset: fixture.market.baseAsset }),
-    executedQuantity: new Quantity({ amount: "0",
-asset: fixture.market.baseAsset }),
-    status: "OPEN",
-  })
-
-  const result = await fixture.engine.processUserDataEvent({ event: { executedOrder: externalOrder } })
-
-  assert.equal(result.ok, true)
-  assert.equal(result.data.ignored, true)
-  assert.equal(result.data.externalOrder, true)
-  assert.equal(fixture.getPortfolio(), portfolio, "Manual execution reports must not mutate Harvester Portfolio.")
-  assert.equal(fixture.getRecoveryLedger(), recoveryLedger, "Manual execution reports must not mutate Harvester RecoveryLedger.")
-})
-
-test("keeps unmatched Harvester client IDs fail-closed under the default external-order policy", async () => {
-  const fixture = createFixture()
-  const harvesterOrder = new CanonicalOrder({
-    clientOrderId: "h-0123456789abcdef012345-7",
-    brokerOrderId: "prior-harvester-order",
-    market: fixture.market,
-    side: "SELL",
-    type: "LIMIT_MAKER",
-    limitPrice: new Money({ amount: "1.01",
-asset: fixture.market.quoteAsset }),
-    originalQuantity: new Quantity({ amount: "1",
-asset: fixture.market.baseAsset }),
-    executedQuantity: new Quantity({ amount: "0",
-asset: fixture.market.baseAsset }),
-    status: "OPEN",
-  })
-
-  const result = await fixture.engine.processUserDataEvent({ event: { executedOrder: harvesterOrder } })
-
-  assert.equal(result.ok, false, "An unmatched Harvester-generated ID must not be ignored as a manual order.")
-  assert.deepEqual(result.failure, { category: "OWNERSHIP_INTEGRITY",
-stage: "ORDER_REGISTRY_MATCH",
-retryable: false })
-})
-
-test("retains fail-closed handling for manual external execution reports when policy is block", async () => {
-  const fixture = createFixture({ externalOrdersPolicy: "block" })
-  const externalOrder = new CanonicalOrder({
-    clientOrderId: "manual-cscalp-order-1",
-    brokerOrderId: "manual-cscalp-broker-order-1",
-    market: fixture.market,
-    side: "SELL",
-    type: "LIMIT_MAKER",
-    limitPrice: new Money({ amount: "1.01",
-asset: fixture.market.quoteAsset }),
-    originalQuantity: new Quantity({ amount: "1",
-asset: fixture.market.baseAsset }),
-    executedQuantity: new Quantity({ amount: "0",
-asset: fixture.market.baseAsset }),
-    status: "OPEN",
-  })
-
-  const result = await fixture.engine.processUserDataEvent({ event: { executedOrder: externalOrder } })
-
-  assert.equal(result.ok, false)
-  assert.deepEqual(result.failure, { category: "OWNERSHIP_INTEGRITY",
-stage: "ORDER_REGISTRY_MATCH",
-retryable: false })
-})
-
-
+test("PENDING orders remain explicitly uncancellable", () => {
   const result = validateCancellationEligibility({
-    order: { status: "PENDING",
-brokerOrderId: undefined },
+    order: { status: "PENDING", brokerOrderId: undefined },
   })
-
   assert.equal(result.ok, false)
   assert.match(result.errors[0].message, /not cancellable/)
 })
@@ -833,9 +749,22 @@ timestamp: 1 },
   assert.equal(submittedIntents.filter(({ side }) => side === "BUY").length, 1)
 })
 
-async function startDeferredRecoveryScenario(fixture) {
-  const { engine, submittedIntents, pendingSell, pendingSellStarted } = fixture;
-  const createBookTickerEvent = () => ({
+function createScenarioOrder({ fixture, intent, brokerOrderId }) {
+  return new CanonicalOrder({
+    clientOrderId: intent.clientOrderId,
+    brokerOrderId,
+    market: fixture.market,
+    side: intent.side,
+    type: "LIMIT_MAKER",
+    limitPrice: new Money({ amount: intent.price, asset: fixture.market.quoteAsset }),
+    originalQuantity: new Quantity({ amount: intent.quantity, asset: fixture.market.baseAsset }),
+    executedQuantity: new Quantity({ amount: "0", asset: fixture.market.baseAsset }),
+    status: "OPEN",
+  })
+}
+
+function createScenarioBookTicker() {
+  return {
     symbol: "ZROUSDT",
     bookTicker: {
       symbol: "ZROUSDT",
@@ -845,31 +774,39 @@ async function startDeferredRecoveryScenario(fixture) {
       bestAskQuantity: "1",
       timestamp: 1,
     },
-  });
-  await engine.processBookTicker(createBookTickerEvent());
-  await engine.processBookTicker(createBookTickerEvent());
+  }
+}
+
+async function awaitInitialRecoverySell({ engine, pendingSellStarted }) {
+  const placingRecoveryOrders = engine.evaluateLatest({ symbol: "ZROUSDT" })
+  const pendingSellOrder = await waitForDeferred({
+    promise: Promise.race([
+      pendingSellStarted.promise,
+      placingRecoveryOrders.then((result) => {
+        throw new Error(`Recovery evaluation completed without submitting the expected SELL: ${JSON.stringify(result)}`)
+      }),
+    ]),
+    label: "initial recovery SELL submission",
+  })
+  return { pendingSellOrder, placingRecoveryOrders }
+}
+
+async function startDeferredRecoveryScenario(fixture) {
+  const { engine, submittedIntents, pendingSell, pendingSellStarted } = fixture
+  await engine.processBookTicker(createScenarioBookTicker())
+  await engine.processBookTicker(createScenarioBookTicker())
   await engine.processMarketPrice({
     symbol: "ZROUSDT",
-    priceEvent: { symbol: "ZROUSDT",
-price: "1",
-timestamp: 1 },
-  });
-  const [initialBuyIntent] = submittedIntents;
-  const initialBuy = new CanonicalOrder({
-    clientOrderId: initialBuyIntent.clientOrderId,
+    priceEvent: { symbol: "ZROUSDT", price: "1", timestamp: 1 },
+  })
+  const [initialBuyIntent] = submittedIntents
+  assert.ok(initialBuyIntent, "The initial market evaluation must submit its BUY before fill reconciliation.")
+  const initialBuy = createScenarioOrder({
+    fixture,
+    intent: initialBuyIntent,
     brokerOrderId: "1",
-    market: fixture.market,
-    side: "BUY",
-    type: "LIMIT_MAKER",
-    limitPrice: new Money({ amount: initialBuyIntent.price,
-asset: fixture.market.quoteAsset }),
-    originalQuantity: new Quantity({ amount: initialBuyIntent.quantity,
-asset: fixture.market.baseAsset }),
-    executedQuantity: new Quantity({ amount: "0",
-asset: fixture.market.baseAsset }),
-    status: "OPEN",
-  });
-  await engine.processUserDataEvent({
+  })
+  const initialBuyFillResult = await engine.processUserDataEvent({
     event: fixture.createTradeEvent({
       acknowledgedOrder: initialBuy,
       tradeId: "trade-1",
@@ -877,37 +814,29 @@ asset: fixture.market.baseAsset }),
       executedQuantity: "10",
       status: "FILLED",
     }),
-  });
-  const placingRecoveryOrders = engine.evaluateLatest({ symbol: "ZROUSDT" });
-  const pendingSellOrder = await waitForDeferred({
-    promise: pendingSellStarted.promise,
-    label: "initial recovery SELL submission",
-  });
+  })
+  assert.equal(initialBuyFillResult.ok, true, `Initial BUY fill must reconcile before recovery evaluation: ${JSON.stringify(initialBuyFillResult)}`)
+  const { pendingSellOrder, placingRecoveryOrders } = await awaitInitialRecoverySell({
+    engine,
+    pendingSellStarted,
+  })
   assert.equal(
     submittedIntents.some((intent) => intent.side === "BUY" && intent.clientOrderId !== initialBuy.clientOrderId),
     false,
     "A second BUY must not be submitted while the initial recovery SELL acknowledgement is pending.",
-  );
-  pendingSell.resolve(toResult({ data: pendingSellOrder }));
-  await placingRecoveryOrders;
-  const secondBuyIntent = submittedIntents.find((intent) => intent.side === "BUY" && intent.clientOrderId !== initialBuy.clientOrderId);
-  assert.ok(secondBuyIntent, "The next standing BUY must wait until the initial recovery SELL is acknowledged.");
-  const secondBuy = new CanonicalOrder({
-    clientOrderId: secondBuyIntent.clientOrderId,
-    brokerOrderId: "3",
-    market: fixture.market,
-    side: "BUY",
-    type: "LIMIT_MAKER",
-    limitPrice: new Money({ amount: secondBuyIntent.price,
-asset: fixture.market.quoteAsset }),
-    originalQuantity: new Quantity({ amount: secondBuyIntent.quantity,
-asset: fixture.market.baseAsset }),
-    executedQuantity: new Quantity({ amount: "0",
-asset: fixture.market.baseAsset }),
-    status: "OPEN",
-  });
-  return { secondBuy,
-pendingSellOrder };
+  )
+  pendingSell.resolve(toResult({ data: pendingSellOrder }))
+  await placingRecoveryOrders
+  const secondBuyIntent = submittedIntents.find((intent) => intent.side === "BUY" && intent.clientOrderId !== initialBuy.clientOrderId)
+  assert.ok(secondBuyIntent, "The next standing BUY must wait until the initial recovery SELL is acknowledged.")
+  return {
+    secondBuy: createScenarioOrder({
+      fixture,
+      intent: secondBuyIntent,
+      brokerOrderId: "3",
+    }),
+    pendingSellOrder,
+  }
 }
 
 async function completeDeferredRecoverySellCancellation({ fixture, secondBuy, pendingSellOrder }) {
