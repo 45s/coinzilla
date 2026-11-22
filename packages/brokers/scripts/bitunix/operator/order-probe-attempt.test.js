@@ -98,6 +98,46 @@ function createMutationBroker({ events, result }) {
   }
 }
 
+function createAttemptCallbacks({
+  events,
+  capture,
+  markerPath,
+  mutationBroker,
+  confirmation,
+  matrixGuard,
+}) {
+  return {
+    createOrderBroker({ capture: providedCapture }) {
+      assert.equal(providedCapture, capture)
+      events.push("mutation.construct")
+      return mutationBroker
+    },
+    async assertMatrixCanContinue() {
+      events.push("matrix.check")
+      await matrixGuard?.()
+    },
+    async confirm({ preflight }) {
+      events.push({
+        operation: "confirm",
+        probeId: preflight.probe.id,
+      })
+      return confirmation
+    },
+    async createMarker({ preflight }) {
+      return createProbeMarker({
+        markerPath,
+        preflight,
+      })
+    },
+    writeLine(message) {
+      events.push({
+        operation: "output",
+        message,
+      })
+    },
+  }
+}
+
 function createDependencies({
   directory,
   result,
@@ -127,6 +167,14 @@ function createDependencies({
     },
   })
   const markerPath = join(directory, "probe.json")
+  const callbacks = createAttemptCallbacks({
+    events,
+    capture,
+    markerPath,
+    mutationBroker,
+    confirmation,
+    matrixGuard,
+  })
   return {
     events,
     capture,
@@ -134,34 +182,7 @@ function createDependencies({
     run: (probeId = "limit-buy-1") => runBitunixOrderProbeAttempt({
       probeId,
       readBroker,
-      createOrderBroker({ capture: providedCapture }) {
-        assert.equal(providedCapture, capture)
-        events.push("mutation.construct")
-        return mutationBroker
-      },
-      async assertMatrixCanContinue() {
-        events.push("matrix.check")
-        await matrixGuard?.()
-      },
-      async confirm({ preflight }) {
-        events.push({
-          operation: "confirm",
-          probeId: preflight.probe.id,
-        })
-        return confirmation
-      },
-      async createMarker({ preflight }) {
-        return createProbeMarker({
-          markerPath,
-          preflight,
-        })
-      },
-      writeLine(message) {
-        events.push({
-          operation: "output",
-          message,
-        })
-      },
+      ...callbacks,
       capture,
     }),
   }
