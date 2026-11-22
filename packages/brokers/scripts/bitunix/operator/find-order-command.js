@@ -92,6 +92,7 @@ function createLogger({ stdout, secrets, report }) {
     (event) => {
       const safeEvent = safeValue({
         value: {
+          timestamp: new Date().toISOString(),
           level,
           ...event,
         },
@@ -105,7 +106,10 @@ function createLogger({ stdout, secrets, report }) {
 
 function writeEvent({ stdout, event, secrets }) {
   const safeEvent = safeValue({
-    value: event,
+    value: {
+      timestamp: new Date().toISOString(),
+      ...event,
+    },
     secrets,
   })
   stdout.write(`${JSON.stringify(safeEvent)}\n`)
@@ -123,7 +127,11 @@ function createFailure({ operation, error, secrets }) {
 }
 
 function recordStage({ report, stdout, secrets, stage }) {
-  report.stages.push(stage)
+  const recordedStage = {
+    timestamp: new Date().toISOString(),
+    ...stage,
+  }
+  report.stages.push(recordedStage)
   if (stage.ok === false) {
     report.summary.failedRequestCount += 1
   }
@@ -132,7 +140,7 @@ function recordStage({ report, stdout, secrets, stage }) {
     secrets,
     event: {
       event: "scan.stage",
-      ...stage,
+      ...recordedStage,
     },
   })
 }
