@@ -318,6 +318,25 @@ Every Bitunix Spot implementation task must follow the mandatory [Bitunix Spot d
 
 All Bitunix local workflows now use one entry point: `pnpm --filter @coinzilla/brokers bitunix:healthcheck` (default read-only report publishing), `pnpm --filter @coinzilla/brokers bitunix:healthcheck -- --local` (local-only diagnostics), or the human-only `pnpm --filter @coinzilla/brokers bitunix:healthcheck -- --place-order` mode. The `--place-order` mode first verifies the explicit diagnostic safety/configuration prerequisites, then starts the guarded one-shot order attempt inside the same report-branch workflow. That attempt independently re-reads markets, symbol filters, balances and open orders through the Broker API; any failed read or invalid preflight blocks confirmation and dispatch. Other diagnostic failures remain visible in the report but do not block this fresh guarded preflight. It must never be run by AI agents, CI, or scheduled jobs. Its fixed order and safety gates are tracked in [issue #1608](https://github.com/45s/coinzilla/issues/1608) / [PR #1609](https://github.com/45s/coinzilla/pull/1609), with CLI consolidation tracked in [issue #1614](https://github.com/45s/coinzilla/issues/1614) / [PR #1616](https://github.com/45s/coinzilla/pull/1616).
 
+### One-at-a-time Bitunix Spot order probes
+
+A separately reviewed, human-only probe mode is available through the same CLI:
+
+```sh
+pnpm --filter @coinzilla/brokers bitunix:healthcheck -- --probe-order=limit-buy-1
+pnpm --filter @coinzilla/brokers bitunix:healthcheck -- --probe-order=limit-buy-2
+pnpm --filter @coinzilla/brokers bitunix:healthcheck -- --probe-order=limit-sell-1
+pnpm --filter @coinzilla/brokers bitunix:healthcheck -- --probe-order=limit-sell-2
+pnpm --filter @coinzilla/brokers bitunix:healthcheck -- --probe-order=market-buy-1
+pnpm --filter @coinzilla/brokers bitunix:healthcheck -- --probe-order=market-buy-2
+pnpm --filter @coinzilla/brokers bitunix:healthcheck -- --probe-order=market-sell-1
+pnpm --filter @coinzilla/brokers bitunix:healthcheck -- --probe-order=market-sell-2
+```
+
+Unlike the generic health-check and fixed `--place-order` modes, each probe invocation skips unrelated diagnostics and selects exactly one HYPEUSDT BUY/SELL LIMIT/MARKET probe (amount 1 or 2). It performs only the fresh read-only market/filter/relevant-balance/open-order preflight, displays the exact Coinzilla input and REST wire body, and requires a fresh ENTER confirmation. It dispatches through the common `Broker.createOrder()` method. A unique exclusive marker under ignored `.diagnostics/` records the dispatch state and captured place-order HTTP status/raw response body, request body, Broker outcome and error metadata. The local evidence file is private (mode 0600); the report branch contains only the existing allowlisted sanitized diagnostic summary. A definitive `REJECTED` marker is the only outcome that allows a different next probe; the same probe ID can never be repeated. Any `DISPATCH_STARTED`, `CONFIRMED`, `OUTCOME_UNKNOWN`, `NOT_SENT` or malformed marker blocks the entire matrix pending manual review. The runner never loops, retries, cancels, transfers or withdraws.
+
+The matrix is a controlled first pass, not a combinatorial fuzzer. Bitunix's official English and Chinese Spot docs disagree about LIMIT/MARKET volume denomination; the probe is intended to gather LIVE observations, not to assert a new protocol guarantee. Any accepted order may rest or fill immediately. The operator alone may execute this mode; never run it from an AI agent, test, CI or scheduled job. See [issue #1690](https://github.com/45s/coinzilla/issues/1690).
+
 ## Bitunix Spot local diagnostics
 
 The Bitunix diagnostic runner is an explicitly invoked, non-mutating local tool. Application-level read checks run through the same public `Broker` constructor used by consumers (market catalog, price, balances, and open orders); REST and WebSocket clients are accessed directly only for separate transport-level endpoint, request-correlation, connection, and cleanup probes. The diagnostic does not change broker runtime composition or enable trading.
