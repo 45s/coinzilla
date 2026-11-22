@@ -265,3 +265,63 @@ test("pre-dispatch operator failures are recorded as NOT_SENT, not OUTCOME_UNKNO
   assert.equal(operatorResult.error.message, "[error message withheld]")
   assert.equal(JSON.stringify(publishedReports[0]).includes("private balance preflight failure"), false)
 })
+
+
+test("probe-order mode runs one selected probe even when unrelated diagnostics are degraded", async () => {
+  const events = []
+  const publishedReports = []
+  let probeCalls = 0
+  const exitCode = await runHealthcheckWorkflow({
+    mode: "probe-order",
+    probeId: "limit-buy-1",
+    brokersRoot: "/repo/packages/brokers",
+    repositoryRoot: "/repo",
+    env,
+    stdout,
+    runDiagnostics: async () => {
+      events.push("read-only diagnostics")
+      return createDiagnosticReport({ failed: 1 })
+    },
+    publishDiagnostics: createPublisher({
+      events,
+      publishedReports,
+    }),
+    runOperatorProbe: async ({ probeId }) => {
+      events.push(`operator probe:${probeId}`)
+      probeCalls += 1
+      return {
+        ok: false,
+        mutationOutcome: "REJECTED",
+        errors: [Object.assign(new Error("exchange rejected"), {
+          code: "BITUNIX_REST_EXCHANGE_REJECTED",
+          exchangeCode: "10005",
+          status: 200,
+          kind: "exchange",
+        })],
+      }
+    },
+  })
+
+  assert.equal(probeCalls, 1)
+  assert.deepEqual(events, [
+    "report branch workflow",
+    "read-only diagnostics",
+    "operator probe:limit-buy-1",
+  ])
+  assert.equal(publishedReports[0].results.at(-1).operation, "operator order attempt")
+  assert.equal(publishedReports[0].results.at(-1).error.exchangeCode, "10005")
+  assert.equal(exitCode, 1)
+})
+
+test("probe-order mode requires a probe id and an operator callback", async () => {
+  await assert.rejects(
+    runHealthcheckWorkflow({
+      mode: "probe-order",
+      brokersRoot: "/repo/packages/brokers",
+      repositoryRoot: "/repo",
+      env,
+      stdout,
+    }),
+    /probe id and operator probe runner/i,
+  )
+})
