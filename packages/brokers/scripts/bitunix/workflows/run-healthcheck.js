@@ -72,7 +72,8 @@ function recordOrderReadResult({
   report.results.push(entry)
   report.summary.total += 1
   report.summary[entry.status] += 1
-  stdout.write(`      ${operation}: ${entry.status.toUpperCase()}\n`)
+  const duration = Number.isFinite(durationMs) ? ` (${durationMs} ms)` : ""
+  stdout.write(`      ${operation}: ${entry.status.toUpperCase()}${duration}\n`)
 }
 
 async function fetchAndRecordOpenOrders({ broker, report, stdout, secrets }) {
@@ -242,10 +243,10 @@ async function runBitunixOrderReadScan({
       stdout,
       secrets,
     })
-    if (openOrdersResult?.ok) {
+    if (Array.isArray(openOrdersResult?.data)) {
       await fetchAndRecordOrderDetails({
         broker,
-        orders: openOrdersResult.data ?? [],
+        orders: openOrdersResult.data,
         report,
         stdout,
         secrets,
