@@ -1,0 +1,52 @@
+name: Temporary Harvester ESLint autofix
+
+on:
+  push:
+    branches:
+      - feat/harvester-safe-local-reset-archive
+
+permissions:
+  contents: write
+
+jobs:
+  autofix:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: feat/harvester-safe-local-reset-archive
+          fetch-depth: 0
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115
+        with:
+          version: 10.15.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Apply safe ESLint autofixes to touched JavaScript
+        run: |
+          pnpm exec eslint --fix \
+            apps/harvester/scripts/archive-testnet-session.js \
+            apps/harvester/scripts/archive-testnet-session.test.js \
+            apps/harvester/scripts/capture-harvester-archive-process-identity.js \
+            apps/harvester/scripts/capture-harvester-archive-process-identity.test.js \
+            apps/harvester/scripts/initialize-private-archive-repository.js \
+            apps/harvester/scripts/initialize-private-archive-repository.test.js \
+            apps/harvester/scripts/reset-operational-state.js \
+            apps/harvester/scripts/reset-operational-state.test.js \
+            apps/harvester/scripts/run-dev-with-log.js \
+            apps/harvester/src/infrastructure/logging/configure-harvester-logging.test.js \
+            apps/harvester/src/infrastructure/persistence/harvester-database-isolation.test.js
+      - name: Commit formatting-only fixes
+        run: |
+          if git diff --quiet; then
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/harvester
+          git commit -m "style(harvester): apply safe ESLint autofixes"
+          git push origin HEAD:feat/harvester-safe-local-reset-archive
