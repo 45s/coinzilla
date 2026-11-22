@@ -358,6 +358,14 @@ export async function runHarvesterArchivePush({
     throw new Error("Archive publication requires TRADING_MODE=testnet. LIVE and unspecified modes are rejected.")
   }
   const remote = validateArchiveRemote(env.HARVESTER_ARCHIVE_REMOTE)
+  const canonicalRemote = remote
+    .replace(/^git@github\\.com:/, "https://github.com/")
+    .replace(/^ssh:\\/\\/git@github\\.com\\//, "https://github.com/")
+    .replace(/\\.git$/, "")
+    .replace(/\\/$/, "")
+  if (canonicalRemote !== "https://github.com/45s/coinzilla-archive") {
+    throw new Error("HARVESTER_ARCHIVE_REMOTE must target the private https://github.com/45s/coinzilla-archive repository.")
+  }
   if (args.length > 2 || (args.length > 0 && args[0] !== "--session") || (args.length === 2 && !UUID_PATTERN.test(args[1]))) {
     throw new TypeError("Usage: archive:push [--session <runtime-session-id>]")
   }

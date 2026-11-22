@@ -75,3 +75,17 @@ test("rejects LIVE and unspecified modes before inspecting sessions or creating 
     "an unspecified trading mode must fail closed before any filesystem or database work",
   )
 })
+
+test("refuses to publish to any repository other than the configured private archive repository", async () => {
+  await assert.rejects(
+    runHarvesterArchivePush({
+      args: [],
+      env: {
+        TRADING_MODE: "testnet",
+        HARVESTER_ARCHIVE_REMOTE: "https://github.com/45s/coinzilla.git",
+      },
+    }),
+    /must target the private/,
+    "operational data must never be published to the source repository or an arbitrary GitHub remote",
+  )
+})
