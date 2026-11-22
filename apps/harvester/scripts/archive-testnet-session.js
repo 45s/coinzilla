@@ -641,6 +641,113 @@ async function verifyArchive({ directory, manifest } = {}) {
   }
 }
 
+async function createRemoteArchiveDirectory({ checkout, archiveName } = {}) {
+  const remoteDirectory = path.join(checkout, "archives", archiveName)
+  try {
+    await mkdir(remoteDirectory, { recursive: false, mode: 0o700 })
+    return {
+      directory: remoteDirectory,
+      alreadyExists: false,
+    }
+  } catch (error) {
+    if (error.code !== "EEXIST") {
+      throw error
+    }
+    const existingStats = await lstat(remoteDirectory)
+    if (existingStats.isSymbolicLink() || !existingStats.isDirectory()) {
+      throw new Error(`Remote archive destination is not a regular directory: archives/${archiveName}`, {
+        cause: error,
+      })
+    }
+    return {
+      directory: remoteDirectory,
+      alreadyExists: true,
+    }
+  }
+}
+
+async function verifyRemoteArchiveFiles({ directory, archiveName, localFiles, checkout, runGit } = {}) {
+  for (const relativePath of localFiles) {
+    const localBlob = await runGit(["hash-object", path.join(directory, relativePath)])
+    const remotePath = `HEAD:archives/${archiveName}/${relativePath.split(path.sep).join("/")}`
+    const remoteBlob = await runGit(["rev-parse", remotePath], { cwd: checkout })
+    if (localBlob !== remoteBlob) {
+      throw new Error(`Remote archive content verification failed: ${relativePath}`)
+    }
+  }
+}
+
+async function verifyExistingArchive({
+  directory,
+  archiveName,
+  remote,
+  runGit,
+  checkout,
+  onProgress,
+} = {}) {
+  const localFiles = await listRegularFiles({ directory })
+  const remoteFilesOutput = await runGit(
+    ["ls-tree", "-r", "--name-only", "HEAD", "--", `archives/${archiveName}`],
+    { cwd: checkout },
+  )
+  const remotePrefix = `archives/${archiveName}/`
+  const remoteFiles = remoteFilesOutput
+    ? remoteFilesOutput.split("\n").map((filename) => filename.slice(remotePrefix.length)).sort()
+    : []
+  if (JSON.stringify(localFiles) !== JSON.stringify(remoteFiles)) {
+    throw new Error("Remote archive already exists with a different file inventory; refusing to overwrite.")
+  }
+  await verifyRemoteArchiveFiles({ directory, archiveName, localFiles, checkout, runGit })
+  const existingCommit = await runGit(["rev-parse", "HEAD"], { cwd: checkout })
+  const remoteHead = await runGit(["ls-remote", "--heads", remote, "refs/heads/main"])
+  if (remoteHead.split(/\s+/)[0] !== existingCommit) {
+    throw new Error("The archive exists in the cloned remote history, but remote main advanced during verification.")
+  }
+  reportProgress(onProgress, "Publishing: existing archive verified; no upload needed.")
+  return {
+    commit: existingCommit,
+    fileCount: localFiles.length,
+    alreadyPublished: true,
+  }
+}
+
+async function publishNewArchive({
+  directory,
+  archiveName,
+  remote,
+  runGit,
+  checkout,
+  remoteArchiveDirectory,
+  onProgress,
+} = {}) {
+  await copyRegularTree({
+    sourceDirectory: directory,
+    destinationDirectory: remoteArchiveDirectory,
+  })
+  reportProgress(onProgress, "Publishing: copied archive into checkout; staging files...")
+  await runGit(["add", "--", `archives/${archiveName}`], { cwd: checkout })
+  await runGit([
+    "-c", "user.name=Coinzilla Harvester",
+    "-c", "user.email=harvester-archive@users.noreply.github.com",
+    "commit", "-m", `chore(archive): add Harvester session ${archiveName}`,
+  ], { cwd: checkout })
+  const localCommit = await runGit(["rev-parse", "HEAD"], { cwd: checkout })
+  reportProgress(onProgress, "Publishing: pushing to GitHub (Git transfer progress follows)...")
+  await runGit(["push", "--progress", "origin", "main"], { cwd: checkout })
+  reportProgress(onProgress, "Publishing: push finished; verifying remote commit and file contents...")
+  const remoteHead = await runGit(["ls-remote", "--heads", remote, "refs/heads/main"])
+  if (remoteHead.split(/\s+/)[0] !== localCommit) {
+    throw new Error("The archive push completed but remote main does not point to the published commit.")
+  }
+  const localFiles = await listRegularFiles({ directory })
+  await verifyRemoteArchiveFiles({ directory, archiveName, localFiles, checkout, runGit })
+  return {
+    commit: localCommit,
+    fileCount: localFiles.length,
+    alreadyPublished: false,
+  }
+}
+
 async function publishArchive({
   directory,
   archiveName,
@@ -656,75 +763,26 @@ async function publishArchive({
     reportProgress(onProgress, "Publishing: cloning the private archive repository...")
     await runGit(["clone", "--progress", "--branch", "main", "--single-branch", remote, checkout])
     reportProgress(onProgress, "Publishing: repository cloned; preparing archive files...")
-    const remoteArchiveDirectory = path.join(checkout, "archives", archiveName)
-    let archiveAlreadyExists = false
-    try {
-      await mkdir(remoteArchiveDirectory, { recursive: false, mode: 0o700 })
-    } catch (error) {
-      if (error.code !== "EEXIST") {
-        throw error
-      }
-      const existingStats = await lstat(remoteArchiveDirectory)
-      if (existingStats.isSymbolicLink() || !existingStats.isDirectory()) {
-        throw new Error(`Remote archive destination is not a regular directory: archives/${archiveName}`)
-      }
-      archiveAlreadyExists = true
+    const remoteDirectory = await createRemoteArchiveDirectory({ checkout, archiveName })
+    if (remoteDirectory.alreadyExists) {
+      return await verifyExistingArchive({
+        directory,
+        archiveName,
+        remote,
+        runGit,
+        checkout,
+        onProgress,
+      })
     }
-
-    if (archiveAlreadyExists) {
-      const localFiles = await listRegularFiles(directory)
-      const remoteFilesOutput = await runGit(
-        ["ls-tree", "-r", "--name-only", "HEAD", "--", `archives/${archiveName}`],
-        { cwd: checkout },
-      )
-      const remoteFiles = remoteFilesOutput ? remoteFilesOutput.split("\n").map((filename) => filename.slice(`archives/${archiveName}/`.length)).sort() : []
-      if (JSON.stringify(localFiles) !== JSON.stringify(remoteFiles)) {
-        throw new Error(`Remote archive already exists with a different file inventory; refusing to overwrite: archives/${archiveName}`)
-      }
-      for (const relativePath of localFiles) {
-        const localBlob = await runGit(["hash-object", path.join(directory, relativePath)])
-        const remoteBlob = await runGit(["rev-parse", `HEAD:archives/${archiveName}/${relativePath.split(path.sep).join("/")}`], { cwd: checkout })
-        if (localBlob !== remoteBlob) {
-          throw new Error(`Remote archive already exists with different content; refusing to overwrite: ${relativePath}`)
-        }
-      }
-      const existingCommit = await runGit(["rev-parse", "HEAD"], { cwd: checkout })
-      const remoteHead = await runGit(["ls-remote", "--heads", remote, "refs/heads/main"])
-      if (remoteHead.split(/\s+/)[0] !== existingCommit) {
-        throw new Error("The archive exists in the cloned remote history, but remote main advanced during verification.")
-      }
-      reportProgress(onProgress, "Publishing: existing archive verified; no upload needed.")
-      return { commit: existingCommit, fileCount: localFiles.length, alreadyPublished: true }
-    }
-
-    await copyRegularTree({
-      sourceDirectory: directory,
-      destinationDirectory: remoteArchiveDirectory,
+    return await publishNewArchive({
+      directory,
+      archiveName,
+      remote,
+      runGit,
+      checkout,
+      remoteArchiveDirectory: remoteDirectory.directory,
+      onProgress,
     })
-    reportProgress(onProgress, "Publishing: copied archive into checkout; staging files...")
-    await runGit(["add", "--", `archives/${archiveName}`], { cwd: checkout })
-    await runGit([
-      "-c", "user.name=Coinzilla Harvester",
-      "-c", "user.email=harvester-archive@users.noreply.github.com",
-      "commit", "-m", `chore(archive): add Harvester session ${archiveName}`,
-    ], { cwd: checkout })
-    const localCommit = await runGit(["rev-parse", "HEAD"], { cwd: checkout })
-    reportProgress(onProgress, "Publishing: pushing to GitHub (Git transfer progress follows)...")
-    await runGit(["push", "--progress", "origin", "main"], { cwd: checkout })
-    reportProgress(onProgress, "Publishing: push finished; verifying remote commit and file contents...")
-    const remoteHead = await runGit(["ls-remote", "--heads", remote, "refs/heads/main"])
-    if (remoteHead.split(/\s+/)[0] !== localCommit) {
-      throw new Error("The archive push completed but remote main does not point to the published commit.")
-    }
-    const files = await listRegularFiles(directory)
-    for (const relativePath of files) {
-      const localBlob = await runGit(["hash-object", path.join(directory, relativePath)])
-      const remoteBlob = await runGit(["rev-parse", `HEAD:archives/${archiveName}/${relativePath.split(path.sep).join("/")}`], { cwd: checkout })
-      if (localBlob !== remoteBlob) {
-        throw new Error(`Remote archive content verification failed: ${relativePath}`)
-      }
-    }
-    return { commit: localCommit, fileCount: files.length }
   } finally {
     await removeTemporaryDirectory(temporaryRoot)
   }
