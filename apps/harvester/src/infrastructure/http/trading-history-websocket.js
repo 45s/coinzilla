@@ -268,7 +268,10 @@ function handleUpgrade({ request, socket, head, clients, exchangeAccounts } = {}
     socket,
     clients,
   })
-  sendInitialExchangeAccountSnapshot({ client, exchangeAccounts })
+  sendInitialExchangeAccountSnapshot({
+    client,
+    exchangeAccounts,
+  })
   if (head.length > 0) {
     handleSocketData({
       client,
@@ -401,14 +404,20 @@ function broadcastExchangeAccountUpdate({ clients, exchangeAccounts } = {}) {
       type: "exchange-accounts.updated",
     })
     for (const client of clients) {
-      sendJson({ client, message })
+      sendJson({
+        client,
+        message,
+      })
     }
   }, () => undefined)
 }
 
 function subscribeToExchangeAccountUpdates({ eventBus, clients, exchangeAccounts, subscribeExchangeAccountUpdates } = {}) {
   if (typeof subscribeExchangeAccountUpdates === "function") {
-    const unsubscribe = subscribeExchangeAccountUpdates(() => broadcastExchangeAccountUpdate({ clients, exchangeAccounts }))
+    const unsubscribe = subscribeExchangeAccountUpdates(() => broadcastExchangeAccountUpdate({
+      clients,
+      exchangeAccounts,
+    }))
     if (typeof unsubscribe !== "function") {
       throw new TypeError("Trading-history WebSocket requires an exchange-account update unsubscribe function.")
     }
@@ -419,7 +428,10 @@ function subscribeToExchangeAccountUpdates({ eventBus, clients, exchangeAccounts
     for (const name of ACCOUNT_UPDATE_EVENTS) {
       const result = eventBus.subscribe({
         name,
-        handler: () => broadcastExchangeAccountUpdate({ clients, exchangeAccounts }),
+        handler: () => broadcastExchangeAccountUpdate({
+          clients,
+          exchangeAccounts,
+        }),
       })
       if (result?.ok !== true || typeof result.subscription?.unsubscribe !== "function") {
         throw new TypeError("Trading-history WebSocket could not subscribe to Harvester account updates.")

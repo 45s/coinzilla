@@ -276,7 +276,14 @@ function createExchangeAccount({ providerInstanceId = "binance-testnet", provide
       ok: true,
       data: {
         sourceTime: "2026-11-22T10:00:00.000Z",
-        balances: [{ asset: { code: "USDT" }, free: "125.50000000", locked: "2.00000000", total: "127.50000000" }],
+        balances: [{
+          asset: {
+            code: "USDT",
+          },
+          free: "125.50000000",
+          locked: "2.00000000",
+          total: "127.50000000",
+        }],
       },
     }),
     readOpenOrders: async () => ordersResult ?? ({
@@ -319,7 +326,14 @@ test("sends the initial provider account and complete open-order snapshot over W
     connected: true,
     accountSnapshot: {
       sourceTime: "2026-11-22T10:00:00.000Z",
-      balances: [{ asset: { code: "USDT" }, free: "125.50000000", locked: "2.00000000", total: "127.50000000" }],
+      balances: [{
+        asset: {
+          code: "USDT",
+        },
+        free: "125.50000000",
+        locked: "2.00000000",
+        total: "127.50000000",
+      }],
     },
     openOrders: [{
       symbol: "BTCUSDT",
@@ -376,7 +390,16 @@ test("broadcasts refreshed account and open-order snapshots after monitor update
   const account = createExchangeAccount();
   account.readOpenOrders = async () => ({
     ok: true,
-    data: [{ value: { symbol: "BTCUSDT", side: "BUY", type: "LIMIT", price: orderPrice, originalQuantity: "0.01", status: "NEW" } }],
+    data: [{
+      value: {
+        symbol: "BTCUSDT",
+        side: "BUY",
+        type: "LIMIT",
+        price: orderPrice,
+        originalQuantity: "0.01",
+        status: "NEW",
+      },
+    }],
   });
   const api = await startApi({
     t,
