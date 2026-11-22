@@ -38,7 +38,6 @@
       "src/application/events/lifecycle-event-dtos.order-history.test.js",
       "src/domain/trading-session/trading-session.test.js",
       "src/infrastructure/persistence/trading-session-repository.test.js",
-      "src/infrastructure/persistence/harvester-database-isolation.test.js",
       "src/infrastructure/persistence/trading-session-history-observer.test.js",
       "src/use-cases/create-market-price-transition-handler.test.js",
       "src/use-cases/synchronize-account-history/sync-acc-history.test.js",
