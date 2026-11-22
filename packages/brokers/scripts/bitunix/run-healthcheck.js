@@ -4,7 +4,8 @@ import { loadEnvFile } from "node:process"
 import { dirname, resolve } from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
 import { assertInteractiveTerminal } from "./helpers/validate-order-attempt.js"
-import { runOperatorOrderCommand, reportOperatorFailure } from "./operator/run-order-command.js"\nimport { runOperatorOrderProbeCommand, reportOrderProbeFailure } from "./operator/run-order-probe-command.js"
+import { runOperatorOrderCommand, reportOperatorFailure } from "./operator/run-order-command.js"
+import { runOperatorOrderProbeCommand, reportOrderProbeFailure } from "./operator/run-order-probe-command.js"
 import { runHealthcheckWorkflow } from "./workflows/run-healthcheck.js"
 import { parseHealthcheckMode } from "./helpers/parse-healthcheck-mode.js"
 import { sanitizeDiagnosticError } from "./helpers/sanitize-diagnostic-data.js"
@@ -52,16 +53,17 @@ function printCliIdentity({ stdout = process.stdout } = {}) {
 
 function printHelp() {
   process.stdout.write([
-    "Usage: pnpm --filter @coinzilla/brokers bitunix:healthcheck [--version|--local|--publish|--place-order]",
+    "Usage: pnpm --filter @coinzilla/brokers bitunix:healthcheck [--version|--local|--publish|--place-order|--probe-order=<probe-id>]",
     "",
     "Default / --publish: run LIVE read-only diagnostics and publish only an allowlisted sanitized report branch.",
     "--local: run LIVE read-only diagnostics and save a private local report without creating or pushing a branch.",
-    "--place-order: run read-only health checks, then (only if healthy) the guarded one-shot LIVE HYPEUSDT BUY LIMIT attempt; publish its sanitized result and return to develop.",
+    "--place-order: run read-only health checks, then (only if healthy) the guarded one-shot LIVE HYPEUSDT BUY LIMIT attempt.",
+    "--probe-order=<id>: run read-only diagnostics and one separately confirmed HYPEUSDT LIVE order probe; publish its sanitized result and return to develop.",
     "--version: print package version, source commit, worktree state, and Node version without loading credentials or contacting Bitunix.",
     "--help: show this help without loading credentials or contacting Bitunix.",
     "",
     "The default mode never places or cancels orders, transfers funds, or withdraws.",
-    "The LIVE order mode is human-only and must never be invoked by AI agents, tests, CI, or scheduled jobs.",
+    "LIVE order modes are human-only and must never be invoked by AI agents, tests, CI, or scheduled jobs.",
     "",
   ].join("\n"))
 }
@@ -89,7 +91,38 @@ async function runHealthcheck({ args = process.argv.slice(2) } = {}) {
   if (mode === "version") {
     return
   }
-  if (mode === "probe-order") {\n    assertInteractiveTerminal({\n      stdin: process.stdin,\n      stdout: process.stdout,\n    })\n    loadLocalEnvironment()\n    const probeId = args[0].slice("--probe-order=".length)\n    process.exitCode = await runHealthcheckWorkflow({\n      mode,\n      probeId,\n      brokersRoot,\n      repositoryRoot,\n      env: process.env,\n      runOperatorProbe: async ({ env, probeId: selectedProbeId }) => {\n        try {\n          return await runOperatorOrderProbeCommand({\n            env,\n            brokersRoot,\n            probeId: selectedProbeId,\n          })\n        } catch (error) {\n          reportOrderProbeFailure({\n            error,\n            env,\n          })\n          throw error\n        }\n      },\n    })\n    return\n  }\n  if (mode === "place-order") {
+  if (mode === "probe-order") {
+    assertInteractiveTerminal({
+      stdin: process.stdin,
+      stdout: process.stdout,
+    })
+    loadLocalEnvironment()
+    const probeId = args[0].slice("--probe-order=".length)
+    process.exitCode = await runHealthcheckWorkflow({
+      mode,
+      probeId,
+      brokersRoot,
+      repositoryRoot,
+      env: process.env,
+      runOperatorProbe: async ({ env, probeId: selectedProbeId }) => {
+        try {
+          return await runOperatorOrderProbeCommand({
+            env,
+            brokersRoot,
+            probeId: selectedProbeId,
+          })
+        } catch (error) {
+          reportOrderProbeFailure({
+            error,
+            env,
+          })
+          throw error
+        }
+      },
+    })
+    return
+  }
+  if (mode === "place-order") {
     assertInteractiveTerminal({
       stdin: process.stdin,
       stdout: process.stdout,
@@ -132,7 +165,15 @@ const isMainModule = process.argv[1] &&
 if (isMainModule) {
   const args = process.argv.slice(2)
   runHealthcheck({ args }).catch((error) => {
-    if (args.includes("--place-order") || args.some((argument) => argument.startsWith("--probe-order="))) {
+    if (args.some((argument) => argument.startsWith("--probe-order="))) {
+      reportOrderProbeFailure({
+        error,
+        env: process.env,
+      })
+      process.exitCode = 1
+      return
+    }
+    if (args.includes("--place-order")) {
       reportOperatorFailure({
         error,
         env: process.env,
