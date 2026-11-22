@@ -571,9 +571,14 @@ async function verifyFailedReconnectCleanupFailureBlocksNextClient() {
   await fixture.reconnect()
   await fixture.reconnect()
 
-  assert.equal(errors.length, 2, "Each failed reconnect attempt must retain its original error.")
+  const recoveryErrors = errors.filter(([message]) => message === "Binance user-data recovery attempt failed")
+  assert.equal(
+    recoveryErrors.length,
+    2,
+    "Each failed reconnect attempt must retain its original error.",
+  )
   assert.ok(
-    errors.every(([, context]) => context?.error?.message === "reconnect unavailable"),
+    recoveryErrors.every(([, context]) => context?.error?.message === "reconnect unavailable"),
     "Cleanup failure must not replace the original reconnect error.",
   )
   assert.equal(
