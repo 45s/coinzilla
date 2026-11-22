@@ -1,12 +1,37 @@
 # Harvester DDD and Clean Architecture Audit
 
-> **Audit date:** 2026-11-03  
-> **Audited branch:** `develop`  
-> **Audited source revision:** `3ad32af9285db23f1f4e587e56f534f7871730aa`  
-> **Scope:** source-code and documentation review of Harvester's application/domain boundaries, with emphasis on the Conservative trading workflow.  
-> **Overall assessment:** **7.5/10 — sound foundations; application orchestration and domain-boundary clarity need focused improvement.**
+> **Original audit:** 2026-11-03; baseline `3ad32af9285db23f1f4f587e56f534f7871730aa` (historical assessment).  
+> **Current re-audit:** 2026-11-22, `develop`; strategy composition reviewed after RS-4/RS-5 runtime integration and enablement (PRs #1515, #1696, #1711).  
+> **Scope:** current CG/RS strategy boundaries, shared execution orchestration, configuration/routing, and documentation consistency. This re-audit updates the original assessment; it does not claim a complete line-by-line review of every Harvester module or live/testnet validation.
 
 This is an architectural assessment, not a production-readiness certification. The audit did not execute the test suite, run a broker simulation, or verify a live/testnet session. Findings describe design visible in the audited source snapshot; verify the current branch before implementing follow-up work.
+
+## Current strategy architecture re-audit — 2026-11-22
+
+This section supersedes the strategy-runtime and workflow assumptions in the 2026-11-03 snapshot below. The earlier findings remain historical evidence; they are not current work items unless revalidated.
+
+### Current verified direction
+
+- **Conservative (CG) and Recovery Seller (RS) are different strategies** with distinct trading policies, pair configuration, strategy-owned Position attribution, and accounting semantics. That is a valid reason to retain separate strategy policy/accounting code.
+- **They are not required to have separate end-to-end execution workflows.** Both use the shared Harvester Trading Engine, broker execution boundary, order registry/ownership, order-event processing, market/account readiness, and shared account-wide commitment allocation. Strategy identity selects policy and ownership, not a second copy of broker/order infrastructure.
+- **RS runtime composition is implemented and enabled by configuration.** PR #1515 completed shared-engine RS runtime composition and scoped RS-5 offline lifecycle/failure/concurrency acceptance. PR #1696 added legacy single-provider RS route inference and the enabled-strategy market-data union. PR #1711 enabled RS globally and configured LINEAUSDT for TESTNET only; the pair's environment selector excludes it from LIVE. Configuration does not authorize or initiate an exchange operation, and the controlled TESTNET runbook remains CLOSED / PAUSED.
+- **Shared workflow versus strategy policy is the audit boundary:** investigate duplicate orchestration and state-transition mechanics for concrete duplication; preserve CG and RS policy/accounting differences. Do not propose separate workflows solely because the strategy IDs differ, and do not force strategy-specific rules into a generic policy abstraction without a demonstrated reuse/correctness benefit.
+
+### Updated assessment
+
+The original audit's broad recommendation to extract accounting/recovery workflows from bootstrap is partially superseded by source changes already merged. The current source has dedicated accounting and STOP workflows and a shared engine dispatch path. The remaining source audit should focus on concrete, current duplication or correctness gaps in the shared runtime and its strategy-specific policy adapters. No new code defect is asserted by this documentation re-audit.
+
+### CG versus RS — business differences that must remain
+
+| Concern | Conservative (CG) | Recovery Seller (RS) |
+| --- | --- | --- |
+| Strategy policy | Conservative acquisition and recovery policy | Recovery acquisition plus authorized legacy-inventory release |
+| Inventory policy | keepQuantity retained at cycle completion | sellQuantity legacy slice allocated alongside recovery inventory |
+| Accounting | CG Position/RecoveryLedger cycle basis | RS recovery/legacy allocation and combined-cycle profitability gates |
+| Lifecycle policy | CG recovery lifecycle | RS recovery/legacy lifecycle and sticky STOP requirements |
+| Shared mechanics | Broker submission, canonical order/fill identity, order lifecycle, reconciliation barriers, account reservations, market routing, runtime serialization | Same shared mechanics |
+
+The distinction is policy and accounting ownership. Shared execution/lifecycle mechanics should be reused when their contracts are genuinely strategy-neutral.
 
 ## 1. Reference and interpretation
 
