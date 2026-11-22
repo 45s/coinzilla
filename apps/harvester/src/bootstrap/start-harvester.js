@@ -1107,11 +1107,7 @@ async function startHarvesterMarketServices({ startup,
     marketPriceIntake: resources.marketPriceIntake,
   })
   await resources.candleHistoryService.start({
-    pairs: resolveStrategyMarketDataPairs({
-      pairs: marketDataPairs,
-      strategyPolicy: conservativeStrategyPolicy,
-      hasUnownedOpenOrdersForSymbol: startup.accountSnapshotManagerRef.current.hasUnownedOpenOrdersForSymbol,
-    }),
+    pairs: marketDataPairs,
     subscriptions: resources.subscriptions,
   })
 }
