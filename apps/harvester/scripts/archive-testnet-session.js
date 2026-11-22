@@ -171,7 +171,6 @@ async function copySelectedLogs({ sourceDirectory, destinationDirectory, onFileC
       throw new Error(`Refusing to archive a symbolic link: ${sourcePath}`)
     }
     if (entry.name === "sessions" && sourceStats.isDirectory()) {
-      if (!latestSessionName) continue
       await copyRegularTree({
         sourceDirectory,
         destinationDirectory,
@@ -504,7 +503,7 @@ export async function runHarvesterArchivePush({
     let retainedFiles = 0
     let copiedBytes = 0
     await mkdir(localArchive, { recursive: false, mode: 0o700 })
-    const onFileCopied = ({ relativePath, size }) => {
+    const onFileCopied = ({ size }) => {
       retainedFiles += 1
       copiedBytes += size
       reportProgress(onProgress, `  retained/copied ${retainedFiles} files — ${formatBytes(copiedBytes)}`)
@@ -535,7 +534,7 @@ export async function runHarvesterArchivePush({
       throw new Error("The logs and data directories contain no regular files to archive.")
     }
 
-    reportProgress(onProgress, `Hashing ${copiedFiles + 1} archive files for manifest...`)
+    reportProgress(onProgress, `Hashing ${copiedFiles.length + 1} archive files for manifest...`)
     const manifest = await createArchiveManifest({
       directory: localArchive,
       createdAt,
