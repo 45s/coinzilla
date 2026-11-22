@@ -221,7 +221,11 @@ lineNumber: 1 },
 function assertInvalidJournalData({ label, data }) {
   assert.throws(
     () => serializeJournalRecord({
-      event: { id: "event-invalid-value", name: "journal.invalid_value", data },
+      event: {
+        id: "event-invalid-value",
+        name: "journal.invalid_value",
+        data,
+      },
     }),
     { name: "TypeError" },
     `Journal must reject ${label} before JSON.stringify can omit, coerce, or execute it.`,
@@ -237,16 +241,46 @@ test("rejects JSON values that would be omitted, coerced, or cyclic", () => {
   cyclicData.self = cyclicData
 
   const invalidValues = [
-    { label: "undefined object property", data: { nested: { value: undefined } } },
-    { label: "undefined array entry", data: { values: [undefined] } },
-    { label: "sparse array hole", data: { values: sparseArray } },
-    { label: "BigInt", data: { amount: 1n } },
-    { label: "NaN", data: { amount: NaN } },
-    { label: "positive infinity", data: { amount: Infinity } },
-    { label: "negative infinity", data: { amount: -Infinity } },
-    { label: "negative zero", data: { amount: -0 } },
-    { label: "cyclic graph", data: cyclicData },
-    { label: "nested toJSON hook", data: { nested: { toJSON() { return { rewritten: true } } } } },
+    {
+      label: "undefined object property",
+      data: { nested: { value: undefined } },
+    },
+    {
+      label: "undefined array entry",
+      data: { values: [undefined] },
+    },
+    {
+      label: "sparse array hole",
+      data: { values: sparseArray },
+    },
+    {
+      label: "BigInt",
+      data: { amount: 1n },
+    },
+    {
+      label: "NaN",
+      data: { amount: NaN },
+    },
+    {
+      label: "positive infinity",
+      data: { amount: Infinity },
+    },
+    {
+      label: "negative infinity",
+      data: { amount: -Infinity },
+    },
+    {
+      label: "negative zero",
+      data: { amount: -0 },
+    },
+    {
+      label: "cyclic graph",
+      data: cyclicData,
+    },
+    {
+      label: "nested toJSON hook",
+      data: { nested: { toJSON() { return { rewritten: true } } } },
+    },
   ]
 
   for (const invalid of invalidValues) {
@@ -281,11 +315,26 @@ test("rejects unsupported object properties without invoking getters", () => {
   customPrototypeData.own = "value"
 
   const invalidValues = [
-    { label: "symbol-keyed property", data: symbolKeyedData },
-    { label: "accessor property", data: accessorData },
-    { label: "non-enumerable property", data: nonEnumerableData },
-    { label: "custom array property", data: { values: arrayWithCustomProperty } },
-    { label: "custom prototype", data: customPrototypeData },
+    {
+      label: "symbol-keyed property",
+      data: symbolKeyedData,
+    },
+    {
+      label: "accessor property",
+      data: accessorData,
+    },
+    {
+      label: "non-enumerable property",
+      data: nonEnumerableData,
+    },
+    {
+      label: "custom array property",
+      data: { values: arrayWithCustomProperty },
+    },
+    {
+      label: "custom prototype",
+      data: customPrototypeData,
+    },
   ]
 
   for (const invalid of invalidValues) {
