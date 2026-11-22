@@ -9,7 +9,6 @@ import {
   MAX_RECORD_BYTES,
   SHA256_PATTERN,
   SEQUENCE_PATTERN,
-  FACT_TYPES,
 } from "./operational-state-fact-schema.js"
 import { FACT_TYPES } from "../fact-validation.js"
 
