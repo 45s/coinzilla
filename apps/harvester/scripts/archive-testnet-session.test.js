@@ -1,5 +1,5 @@
 import assert from "node:assert/strict"
-import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises"
+import { mkdtemp, mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import test from "node:test"
@@ -313,6 +313,35 @@ test("rejects LIVE mode before reading or copying local evidence", async (t) => 
   )
 })
 
+
+
+test("archives the configured external database directory", async (t) => {
+  const fixture = await createArchiveFixture()
+  t.after(() => rm(fixture.packageDirectory, {
+    recursive: true,
+    force: true,
+  }))
+  const externalDatabaseDirectory = path.join(fixture.packageDirectory, "external-database")
+  await rename(path.join(fixture.packageDirectory, "data"), externalDatabaseDirectory)
+
+  await runHarvesterArchivePush(createArchiveDependencies({
+    packageDirectory: fixture.packageDirectory,
+    envOverrides: {
+      HARVESTER_DATABASE_DIRECTORY: externalDatabaseDirectory,
+    },
+    publishArchiveFn: async ({ directory }) => {
+      await assertArchiveContainsNoProductionData(directory)
+      return {
+        commit: REMOTE_COMMIT,
+        fileCount: (JSON.parse(await readFile(path.join(directory, "manifest.json"), "utf8"))).files.length + 1,
+      }
+    },
+  }))
+  assert.equal(
+    await readFile(path.join(externalDatabaseDirectory, "testnet/harvester.db"), "utf8"),
+    "sqlite main file",
+  )
+})
 
 test("rejects database archive paths that overlap logs or archive output", async (t) => {
   const fixture = await createArchiveFixture()
