@@ -120,13 +120,50 @@ function adaptSymbolOrderRows({ rows, symbol, operation }) {
   })
 }
 
-async function fetchOpenOrdersForSymbol({ broker, symbol }) {
+function logOpenOrdersStarted({ broker, symbol }) {
   logBrokerDiagnostic({
     logger: broker.logger,
     event: {
       event: "getOpenOrders.started",
       symbol,
     },
+  })
+}
+
+function logOpenOrdersCompleted({ broker, symbol, orders }) {
+  logBrokerDiagnostic({
+    logger: broker.logger,
+    event: {
+      event: "getOpenOrders.completed",
+      ok: true,
+      symbol,
+      orderCount: orders.length,
+      orderIds: orders.map((order) => order.id),
+    },
+  })
+}
+
+function logOpenOrdersFailed({ broker, symbol, error }) {
+  logBrokerDiagnostic({
+    logger: broker.logger,
+    level: "error",
+    event: {
+      event: "getOpenOrders.failed",
+      symbol,
+      error: {
+        name: error?.name,
+        code: error?.code,
+        exchangeCode: error?.exchangeCode,
+        message: error?.message,
+      },
+    },
+  })
+}
+
+async function fetchOpenOrdersForSymbol({ broker, symbol }) {
+  logOpenOrdersStarted({
+    broker,
+    symbol,
   })
   try {
     const normalizedSymbol = requireSymbol({
@@ -149,33 +186,19 @@ async function fetchOpenOrdersForSymbol({ broker, symbol }) {
       symbol: normalizedSymbol,
       operation: "open orders",
     })
-    logBrokerDiagnostic({
-      logger: broker.logger,
-      event: {
-        event: "getOpenOrders.completed",
-        ok: true,
-        symbol: normalizedSymbol,
-        orderCount: orders.length,
-        orderIds: orders.map((order) => order.id),
-      },
+    logOpenOrdersCompleted({
+      broker,
+      symbol: normalizedSymbol,
+      orders,
     })
     return toResult({
       data: orders,
     })
   } catch (error) {
-    logBrokerDiagnostic({
-      logger: broker.logger,
-      level: "error",
-      event: {
-        event: "getOpenOrders.failed",
-        symbol,
-        error: {
-          name: error?.name,
-          code: error?.code,
-          exchangeCode: error?.exchangeCode,
-          message: error?.message,
-        },
-      },
+    logOpenOrdersFailed({
+      broker,
+      symbol,
+      error,
     })
     handleErr({
       where: "BitunixSpotBroker.getOpenOrders()",
