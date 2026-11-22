@@ -71,7 +71,7 @@ async function runBitunixOrderReadScan({
     report.results.push(entry)
     report.summary.total += 1
     report.summary[entry.status] += 1
-    stdout.write(`      ${operation}: ${entry.status.toUpperCase()}\\n`)
+    stdout.write(`      ${operation}: ${entry.status.toUpperCase()}\n`)
   }
   const logger = Object.fromEntries(["debug", "info", "warn", "error"].map((level) => [
     level,
