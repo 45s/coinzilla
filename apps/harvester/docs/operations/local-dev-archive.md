@@ -1,6 +1,6 @@
 # Local Harvester DEV archive — decisions and implementation record
 
-> Status: `archive:push` snapshots the complete local `logs/`, `data/`, and `recovery-facts/` directories, derives `data_commit_hash` from the last committed recovery-facts checkpoint, reports file/byte progress during copying and hashing, streams Git clone/push transfer progress, verifies the copied files, and publishes to the private archive repository. Focused tests and local publication still require operator execution.
+> Status: `archive:push` retains the final 5% of each cumulative log, includes only the newest timestamp-named session directory, copies `data/` and `recovery-facts/` completely, derives `data_commit_hash` from the last committed recovery-facts checkpoint, streams checksums, verifies the selected evidence, and publishes to the private archive repository. Focused tests and local publication still require operator execution.
 > Tracking issue: [#1742](https://github.com/45s/coinzilla/issues/1742).
 > Task branch: `feat/harvester-local-dev-reset-archive`.
 > Private destination: `45s/coinzilla-archive` (private repository).
@@ -9,12 +9,14 @@ This document is the durable handoff for this work. A future contributor must co
 
 ## 1. Confirmed scope (current operator decision, 2026-11-22)
 
-The existing `pnpm run archive:push` command copies the following into one uniquely named archive directory:
+The existing `pnpm run archive:push` command creates one uniquely named archive directory with this evidence selection:
 
-1. Complete `logs/` directory, including legacy sessions and cumulative logs.
-2. Complete `data/` directory, including database files and SQLite WAL/SHM sidecars.
-3. Complete `recovery-facts/` directory, preserving `facts.jsonl` and `manifest.jsonl`.
-4. Root-level `data_commit_hash`, derived from the final committed recovery-facts manifest/fact records.
+1. `logs/cumulative/`: retain only the final 5% of each regular file (tail bytes).
+2. `logs/sessions/`: retain only the lexicographically newest session directory; session directory names use sortable timestamps. Keep every file in that selected session.
+3. Other top-level log entries: copy unchanged.
+4. Complete `data/` directory, including database files and SQLite WAL/SHM sidecars.
+5. Complete `recovery-facts/` directory, preserving `facts.jsonl` and `manifest.jsonl`.
+6. Root-level `data_commit_hash`, derived from the final committed recovery-facts manifest/fact records.
 
 The remote layout is:
 
@@ -27,7 +29,7 @@ archives/<archive-id>/
 └── manifest.json
 ```
 
-The command does not require process identity/completion markers and does not start a new Harvester process. It preserves all files under the three source directories without selecting sessions or filtering the `data/` tree by environment. It does not mutate or reset source files. The archive is a raw folder snapshot, not a transactional SQLite backup.
+The command does not require process identity/completion markers and does not start a new Harvester process. Log selection is intentionally lossy: older sessions are excluded and cumulative files are byte-trimmed. The source `logs/`, `data/`, and `recovery-facts/` directories are never modified. The complete `data/` and `recovery-facts/` trees are retained. The archive is not a transactional SQLite backup.
 
 Progress output shows the total file count and byte size before copying, per-file copy and checksum counts/bytes, local verification, remote clone/staging/push/verification phases, and Git's own transfer percentage during clone and push. The command remains `pnpm run archive:push`; no additional script or arguments are required.
 
@@ -215,13 +217,15 @@ Do not weaken the resolver to accept legacy sessions. Do not synthesize metadata
 The operator explicitly changed the archive requirement after the first command rejected the legacy run. This section supersedes the earlier process-marker, exact-session-only, shared-log exclusion, facts exclusion and per-process provenance requirements for the current archive command.
 
 - Keep and use the existing `pnpm run archive:push` command. Do not add a second command or ask the operator to start another Harvester process.
-- Copy the complete `apps/harvester/logs/` and `apps/harvester/data/` directory trees as they exist when the command runs.
-- Include legacy sessions without `process-identity.json` or `process-completed.json`, cumulative logs, Journal files, Operational State Store facts, database files, and SQLite `-wal` / `-shm` sidecars when present.
+- Under `logs/cumulative/`, keep only the final 5% of each regular file by byte length.
+- Under `logs/sessions/`, keep only the lexicographically newest timestamp-named session directory, including all files within that session. Fail closed if no session directory exists.
+- Copy other top-level log entries unchanged.
+- Copy the complete `data/` and `recovery-facts/` trees, including database files, SQLite `-wal` / `-shm` sidecars, Journal evidence and Operational State Store facts when present.
 - Do not select a process session, synthesize identity markers, call the SQLite backup service, or claim SQLite integrity verification. The manifest verifies copied file inventory, sizes and SHA-256 checksums only.
 - Keep the explicit `TRADING_MODE=testnet` command guard and exact private remote restriction. The mode describes the command invocation; it does not classify every file inside the complete `data/` tree.
 - Write the local archive outside the source trees under `apps/harvester/archive-output/` to prevent the archive from copying itself. Publish a unique directory under the private remote's `archives/` path without overwriting an existing destination.
 - Never mutate, reset, delete or clean the source `logs/` or `data/` folders. Do not start, stop or control a Harvester process. Do not make exchange API calls.
-- The previous exclusions of cumulative logs, facts and non-TESTNET subdirectories are intentionally superseded by this explicit operator instruction to preserve the whole `logs/` and `data/` folders.
+- The latest operator selection explicitly supersedes the earlier complete-logs requirement: cumulative logs are tailed to 5%, and only the newest session directory is retained. Data and recovery facts remain complete.
 
 The command's archive timestamp is the time the snapshot is created, not a claim about the archived process start time. The archive is a raw evidence copy; if Harvester is still writing to the database during the copy, the checksums prove only the bytes copied, not transactional SQLite consistency. Run it against the already-stopped process when possible. No new process is needed.
 
