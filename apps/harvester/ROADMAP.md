@@ -12,7 +12,6 @@
 - The controlled TESTNET runbook remains CLOSED / PAUSED. A separate bounded LINEAUSDT session plan, authoritative account/open-order baseline, fee verification and explicit joint session start are required before any exchange write.
 - Restart/replay and third-asset commission valuation remain deferred; durable STOP remains terminal and cannot be cleared through CC-operator.
 
-
 ## Public Bitunix Futures market data (#1660)
 
 - **In progress in Dashboard PR [#1661](https://github.com/45s/coinzilla/pull/1661):** expose Bitunix Futures public contract and ticker REST data through the existing loopback-only Harvester API for the Dashboard Market Screener.

@@ -30,7 +30,6 @@ For any refactoring or code-audit task, use the canonical [AI Refactoring and Co
 8. Never merge any task or release PR on the user's behalf. Never merge task work directly into `main`.
 9. When the agreed milestone is ready, prepare one release PR from `develop` to `main`. The user reviews and approves that release PR.
 
-
 ### Local execution is optional — remote implementation remains mandatory
 
 Local tooling is a convenience, not an authorization or execution gate. When a task can be implemented and reviewed through the GitHub repository APIs, an agent MUST continue using remote file inspection and Git-data operations even if it has no local checkout, shell, package manager, dependencies, or runnable local environment. Do not report any of those missing local facilities as a task blocker, and do not ask the user to provide a checkout merely to avoid using the supported remote workflow.
