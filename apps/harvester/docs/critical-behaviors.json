@@ -262,14 +262,26 @@
           "path": "src/domain/strategies/strategy-id-normalization.test.js",
           "name": "rejects missing, blank, and non-string strategy IDs",
           "kind": "failure"
+        },
+        {
+          "path": "test/replays/doge-zro-conservative-replay.test.js",
+          "name": "accounts streamed partial BUY executions before advancing the completed-BUY lifecycle",
+          "kind": "integration"
+        },
+        {
+          "path": "test/replays/doge-zro-conservative-replay.test.js",
+          "name": "accounts partial recovery SELL executions and completes only after the terminal fill",
+          "kind": "integration"
         }
       ],
       "runtimeStatus": "active",
       "invariants": [
         "Portfolio and RecoveryLedger consume the same canonical fill exactly once and preserve consistent quote basis/proceeds.",
         "Strategy IDs are normalized to non-empty trimmed strings for Position ownership and derived identity; normalization does not restrict IDs to the current strategy registry.",
-        "Reset cycle basis only after verified profitable SELL completion and retained-inventory allocation."
-      ]
+        "Reset cycle basis only after verified profitable SELL completion and retained-inventory allocation.",
+        "Incremental recovery SELL fills add actual net quote proceeds while preserving the full spent basis; a partial order cannot complete the recovery cycle."
+      ],
+      "integrationRequired": true
     },
     {
       "id": "STRATEGY_BUY_SELL_SAFETY_GATES",
@@ -300,6 +312,11 @@
           "path": "src/domain/strategies/conservative/state-predicates.test.js",
           "name": "matches active orders by symbol and side",
           "kind": "normal"
+        },
+        {
+          "path": "test/replays/doge-zro-conservative-replay.test.js",
+          "name": "accounts partial recovery SELL executions and completes only after the terminal fill",
+          "kind": "integration"
         }
       ],
       "runtimeStatus": "active",
@@ -329,6 +346,11 @@
         {
           "path": "test/replays/doge-zro-conservative-replay.test.js",
           "name": "combines four completed BUY fills into one profitable recovery SELL and retains the configured inventory",
+          "kind": "integration"
+        },
+        {
+          "path": "test/replays/doge-zro-conservative-replay.test.js",
+          "name": "accounts partial recovery SELL executions and completes only after the terminal fill",
           "kind": "integration"
         }
       ],
