@@ -82,7 +82,14 @@ function createCaptureRestClientFactory({ capture, fetchFn = fetch }) {
   })
 }
 
-function assertProbeAttemptDependencies({ readBroker, createOrderBroker, confirm, createMarker, assertMatrixCanContinue, writeLine }) {
+function assertProbeAttemptDependencies({
+  readBroker,
+  createOrderBroker,
+  confirm,
+  createMarker,
+  assertMatrixCanContinue,
+  writeLine,
+}) {
   const readMethods = ["connect", "getExchangeMarkets", "getSymbolFilters", "getBalances", "getOpenOrders", "disconnect"]
   if (!readBroker || readMethods.some((method) => typeof readBroker[method] !== "function")) {
     throw new TypeError("Bitunix order probe requires a read-only Broker with market, filter, balance and open-order methods")
@@ -91,6 +98,7 @@ function assertProbeAttemptDependencies({ readBroker, createOrderBroker, confirm
     ["createOrderBroker", createOrderBroker],
     ["confirm", confirm],
     ["createMarker", createMarker],
+    ["assertMatrixCanContinue", assertMatrixCanContinue],
     ["writeLine", writeLine],
   ]) {
     if (typeof value !== "function") {
