@@ -247,6 +247,32 @@ test("archives only completed TESTNET evidence and excludes LIVE data", async (t
   assert.equal(result.fileCount, expectedFileCount)
 })
 
+
+test("refuses to combine a TESTNET log session with different recovery-facts", async (t) => {
+  const fixture = await createArchiveFixture()
+  t.after(() => rm(fixture.packageDirectory, {
+    recursive: true,
+    force: true,
+  }))
+  const factsFilename = path.join(fixture.packageDirectory, "recovery-facts/facts.jsonl")
+  const facts = (await readFile(factsFilename, "utf8"))
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line))
+  facts.at(-1).runtimeSessionId = LIVE_SESSION_ID
+  await writeFile(factsFilename, createJsonLines(facts), "utf8")
+
+  await assert.rejects(
+    runHarvesterArchivePush(createArchiveDependencies({
+      packageDirectory: fixture.packageDirectory,
+      publishArchiveFn: async () => {
+        throw new Error("publication must not be reached for mixed-session evidence")
+      },
+    })),
+    /runtime identities do not match/i,
+  )
+})
+
 test("refuses to archive while a Harvester process lock exists", async (t) => {
   const fixture = await createArchiveFixture()
   t.after(() => rm(fixture.packageDirectory, {
