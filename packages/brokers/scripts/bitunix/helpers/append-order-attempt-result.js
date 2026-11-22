@@ -56,6 +56,6 @@ export function appendOrderAttemptResult({
       failed: report.summary.failed + (status === "failed" ? 1 : 0),
       skipped: report.summary.skipped + (status === "skipped" ? 1 : 0),
     },
-    results: [...report.results, result],
+    results: [...report.results, {\n      ...result,\n      ...(typeof probeId === "string" && probeId ? { probeId } : {}),\n    }],
   }
 }
