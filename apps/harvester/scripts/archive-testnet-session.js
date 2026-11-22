@@ -251,8 +251,11 @@ async function listRegularFiles(directory, relative = "") {
 }
 
 async function sha256File(filename) {
-  const content = await readFile(filename)
-  return createHash("sha256").update(content).digest("hex")
+  const hash = createHash("sha256")
+  for await (const chunk of createReadStream(filename)) {
+    hash.update(chunk)
+  }
+  return hash.digest("hex")
 }
 
 async function readLatestRecoveryCheckpoint(recoveryFactsDirectory) {
@@ -321,9 +324,13 @@ async function createArchiveManifest({ directory, createdAt, onFileHashed } = {}
     formatVersion: 1,
     application: "harvester",
     commandTradingMode: "testnet",
-    snapshotType: "raw-directory-copy",
+    snapshotType: "selected-log-evidence",
     createdAt,
     includedDirectories: [...SOURCE_DIRECTORIES],
+    logSelection: {
+      cumulative: "final-5-percent-of-each-file",
+      sessions: "newest-session-directory-only",
+    },
     dataCommitHash,
     recoveryRuntimeSessionId: recoveryCheckpoint.runtimeSessionId,
     recoveryFactSequence: recoveryCheckpoint.sequence,
