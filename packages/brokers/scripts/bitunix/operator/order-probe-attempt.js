@@ -250,9 +250,17 @@ function formatProbeStopLines({ mutationOutcome }) {
 }
 
 function formatOrderProbeResult({ result, capture, secrets = [] }) {
+  const reconciliationUnavailable = result?.reconciliation?.status === "UNAVAILABLE"
   return [
-    `Broker result: ${result?.ok === true ? "success" : "not successful"}`,
+    `Broker result: ${result?.ok === true
+      ? "success"
+      : reconciliationUnavailable && result?.mutationOutcome === "CONFIRMED"
+        ? "not successful (placement confirmed; reconciliation unavailable)"
+        : "not successful"}`,
     `Mutation outcome: ${result?.mutationOutcome ?? "OUTCOME_UNKNOWN"}`,
+    ...(result?.reconciliation
+      ? [`Reconciliation: ${result.reconciliation.status} (${result.reconciliation.source})`]
+      : []),
     ...formatProbeErrorLines({
       error: result?.errors?.[0],
       secrets,
@@ -303,6 +311,12 @@ function createBrokerResultEvidence({ result, markerStatus, secrets }) {
     ...(result.data === undefined ? {} : {
       data: sanitizeDiagnosticValue({
         value: result.data,
+        secrets,
+      }),
+    }),
+    ...(result.reconciliation === undefined ? {} : {
+      reconciliation: sanitizeDiagnosticValue({
+        value: result.reconciliation,
         secrets,
       }),
     }),
