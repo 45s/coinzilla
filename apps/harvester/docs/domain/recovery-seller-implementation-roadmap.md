@@ -19,7 +19,7 @@ The exact `{ strategyId, symbol }` assignments survive provider-account startup 
 
 The strict ESLint findings in the already changed route and Telegram test fixtures were corrected as formatting-only changes; no test coverage or lint rules were weakened, and runtime behavior is unchanged.
 
-The latest routing guard and regression tests ensure that a provider account's RS-only symbol is never passed into the CG Conservative pair map. Until the RS runtime is registered, a provider account with no CG-owned route fails startup explicitly rather than silently running an idle or misattributed strategy. This guard was temporary before runtime integration. PR #1515 replaces it with production RS strategy dispatch through the shared Trading Engine; do not weaken the CG ownership boundary.
+The routing guard ensures that an RS-only provider account's symbol is never passed into the CG Conservative pair map. PR #1696 removes the former no-CG-route startup rejection for an account that has enabled RS routes: the Conservative evaluator skips symbols absent from its own pair map, then the shared transition evaluator dispatches to the RS evaluator. The bootstrap regression proves an RS-only TESTNET account starts, records the multi-strategy durable configuration baseline, and subscribes to LINEAUSDT without synthesizing a CG route. Preserve the separate CG/RS pair maps and the shared-engine ownership boundary.
 
 ### Shared transition queue integration regression
 
@@ -420,7 +420,8 @@ The diagrams do not override the [RS Domain Specification](./recovery-seller-dom
 - [x] Validate explicit per-market legacy historical basis, additive `sellQuantity`, strategy BUY sizing/budget, fee and environment settings.
 - [x] Resolve RS exchange precision from the same token specification registry as CG.
 - [x] Preserve strategy identity in provider execution routes while keeping market subscriptions deduplicated (resolver contract only).
-- [x] Resolve strategy-owned CG/RS execution routes into separate effective pair maps and a deduplicated market subscription set; RS-only provider accounts remain fail-closed.
+- [x] Resolve strategy-owned CG/RS execution routes into separate effective pair maps and a deduplicated market subscription set.
+- [x] Start an RS-only provider account with an empty Conservative pair map, durable multi-strategy configuration baseline, and RS-only market-data subscription.
 - [x] Validate RS markets against canonical exchange trading rules and initialize explicitly configured legacy basis in the shared provider-account state before engine activation.
 - [x] Wire RS additional tracked Spot-base and realized quote-cash-flow providers into account snapshots and CG account-baseline evaluation; authoritative unreserved Spot custody is still required before SELL planning.
 - [x] Correct the exact-head validator-ordering regression and align offline bootstrap/notification fixtures with the explicit execution-route contract; retain fail-closed route validation.

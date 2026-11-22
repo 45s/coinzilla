@@ -7,6 +7,7 @@
 - [x] Infer `(strategyId, symbol)` execution ownership for each enabled strategy in legacy single-provider mode, preserving separate CG/RS pair maps.
 - [x] Subscribe once per symbol to the union of enabled strategy markets in legacy single-provider mode; retain strict provider-environment checks.
 - [x] Keep explicit execution and market-data routes mandatory in multi-provider mode.
+- [x] Prove RS-only provider startup and LINEAUSDT market-data subscription without creating a Conservative route.
 - [ ] Keep the global RS switch disabled until the separate bounded TESTNET runbook, account/open-order baseline, fee verification and explicit joint session start are approved.
 - The controlled TESTNET runbook remains CLOSED / PAUSED. A separate bounded LINEAUSDT session plan, authoritative account/open-order baseline, fee verification and explicit joint session start are required before any exchange write.
 - Restart/replay and third-asset commission valuation remain deferred; durable STOP remains terminal and cannot be cleared through CC-operator.
