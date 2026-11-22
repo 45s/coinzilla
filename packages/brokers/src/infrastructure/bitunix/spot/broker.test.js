@@ -3059,6 +3059,7 @@ test("Bitunix Spot Broker API emits structured order-read diagnostics", async ()
         volume: "0.366",
         dealVolume: "0",
         price: "30",
+        ctime: "2026-11-22T00:00:00Z",
       }],
       "/api/spot/v1/order/detail": new Error("synthetic detail lookup failure"),
     },
