@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "startedAt": "2026-11-22T01:37:08.954Z",
+  "finishedAt": "2026-11-22T01:37:37.931Z",
+  "runtime": {
+    "node": "v26.13.0",
+    "platform": "win32"
+  },
+  "summary": {
+    "total": 1,
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0
+  },
+  "healthCheck": {
+    "scope": "operator-order-probe",
+    "requiredOperations": [
+      "operator order probe"
+    ],
+    "missingRequiredOperations": [],
+    "nonBlockingFailedOperations": [],
+    "healthy": true
+  },
+  "results": [
+    {
+      "operation": "operator order probe",
+      "status": "passed",
+      "durationMs": 28977,
+      "probeId": "limit-sell-1",
+      "mutationOutcome": "REJECTED",
+      "error": {
+        "name": "BitunixRestError",
+        "code": "BITUNIX_REST_EXCHANGE_REJECTED",
+        "kind": "exchange",
+        "exchangeCode": "10034"
+      }
+    }
+  ]
+}
