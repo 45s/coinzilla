@@ -540,3 +540,13 @@ For state-changing Bitunix REST calls, an HTTP-success response with an unusable
 ### Bitunix Spot deposit and withdrawal diagnostics
 
 When credentials are configured, the read-only diagnostic runner also exercises `getDeposits({ limit: 1 })` and `getWithdrawalHistory({ limit: 1 })` through the public Broker facade. These are single bounded page probes only; they do not establish complete history. Reports retain structural schema observations and never persist deposit amounts, withdrawal amounts, addresses, transaction hashes, or record values. Public-only mode skips both private reads.
+
+### Read-only lookup of the accepted HYPEUSDT order
+
+After configuring `packages/brokers/.env.development`, run:
+
+```bash
+pnpm --filter @coinzilla/brokers bitunix:find-order --order-id=2124329325141426176
+```
+
+This command makes one authenticated, read-only `getOpenOrders({ symbol: "HYPEUSDT" })` request and matches the exact exchange order ID as a string. It does not place, modify, or cancel orders. Exit code `0` means the exact order was found in the current pending-order response; exit code `2` means it was not in that response, **not** that the order is absent from Bitunix (it may have filled or otherwise left the pending set). A failed query returns exit code `1`. Do not repeat placement or proceed to cancellation based on a missing pending row.
