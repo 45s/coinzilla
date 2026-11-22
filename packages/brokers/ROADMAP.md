@@ -1604,3 +1604,24 @@ See [the private polling contract](./docs/BITUNIX_SPOT_POLLING.md) and [the Bitu
 - Print each discovered `symbol / orderId` and its matching `getOrder` status in the operator's terminal output.
 - Add regression coverage for sanitizer boundaries, published report payloads, exact order identity preservation, and terminal output.
 - No live exchange calls, order placement, cancellation, or other mutations are part of this implementation.
+
+
+## Bitunix signing CodeQL trace reference — #1674
+
+**Classification:** `js/insufficient-password-hash` is a false positive for the Bitunix Spot REST and WebSocket request-signing preimages. In both protocols, `apiKey` is the public API-key identifier included by Bitunix in its authentication preimage; it is not a password. The double-SHA-256 construction authenticates requests and is mandated by the [official Bitunix Spot signing documentation](https://www.bitunix.com/api-docs/spots/en_us/sign/). It is not password storage or password verification.
+
+**Confirmed CodeQL sinks from the 2026-11-22 taint traces:**
+- REST: `packages/brokers/src/infrastructure/bitunix/spot/auth/create-rest-signature.js:74` — SHA-256 of the preimage containing nonce, timestamp, public API key, sorted query and body.
+- WebSocket: `packages/brokers/src/infrastructure/bitunix/spot/auth/create-websocket-signature.js:62` — SHA-256 of the preimage containing nonce, timestamp, public API key and serialized parameters.
+
+The traces begin at the public `apiKey` constructor options in the REST and WebSocket clients, follow the client fields into their respective signer functions, and terminate at these two independent SHA-256 sinks. They also include deterministic tests that instantiate the clients with fixed dummy keys; these fixtures are not production credentials. Full source-to-sink propagation and test call paths are recorded in [issue #1674](https://github.com/45s/coinzilla/issues/1674).
+
+**Implementation rules:**
+- Preserve the exact exchange-mandated double-SHA-256 algorithm and deterministic signature vectors. Do not replace it with bcrypt, scrypt, PBKDF2, or HMAC.
+- Suppress only the exact `js/insufficient-password-hash` findings at their reported sink lines, with REST-/WebSocket-specific rationale. Treat the two sinks independently.
+- Follow CodeQL's documented blank-line directive placement; validate against the alert's actual SARIF physical location. A nearby annotation is not proof that the finding is suppressed.
+- Keep fixed test signature vectors literal; do not calculate expected values by hashing credential-bearing fixtures.
+- Require a fresh CodeQL scan of release PR #1662 after the fix reaches `develop`. Record the exact scanned commit, run, alert IDs and locations. Do not infer clearance from a successful workflow or SARIF upload alone.
+- This is an offline source-analysis/documentation task. No LIVE/TESTNET requests or account mutations are needed.
+
+Tracking and acceptance remain in [issue #1674](https://github.com/45s/coinzilla/issues/1674); keep it open until the fresh release scan confirms both signer findings are absent.
