@@ -58,13 +58,6 @@ export class AppComponent {
       if (typeof document !== 'undefined') {
         document.documentElement.dataset['theme'] = selectedTheme;
       }
-      if (typeof window !== 'undefined') {
-        try {
-          window.localStorage.setItem(THEME_STORAGE_KEY, selectedTheme);
-        } catch {
-          // Keep the theme usable when browser storage is unavailable.
-        }
-      }
     });
   }
 
