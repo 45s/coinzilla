@@ -401,7 +401,11 @@ const createFixture = ({
     pendingCancel: brokerState.pendingCancel,
     cancelStarted: brokerState.cancelStarted,
     setFillsForOrder: brokerState.setFillsForOrder,
-    createTradeEvent: createTradeEventFactory({ market, baseAsset, quoteAsset }),
+    createTradeEvent: createTradeEventFactory({
+      market,
+      baseAsset,
+      quoteAsset,
+    }),
     setReady: ({ value } = {}) => { ready = value },
     getPortfolio: accounting.getPortfolio,
     getRecoveryLedger: accounting.getRecoveryLedger,
