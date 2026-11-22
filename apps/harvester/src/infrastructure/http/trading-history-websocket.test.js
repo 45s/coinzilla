@@ -78,13 +78,14 @@ function waitForMessage(socket) {
   })
 }
 
-async function startApi({ t, eventBus } = {}) {
+async function startApi({ t, eventBus, subscribeExchangeAccountUpdates } = {}) {
   const api = await startTradingHistoryApiServer({
     queries: createQueries(),
     environment: "testnet",
     host: "127.0.0.1",
     port: 0,
     eventBus,
+    subscribeExchangeAccountUpdates,
     logger: {
       error() {},
     },
@@ -209,3 +210,50 @@ test("closes local WebSocket clients before the shared HTTP listener shuts down"
   assert.equal(socket.readyState, WebSocket.CLOSED, "API shutdown must close local WebSocket clients.")
   assert.equal(eventBus.getDiagnostics().closed, false, "The API must not own or close Harvester's EventBus.")
 })
+
+test("broadcasts exchange-account invalidations from Harvester snapshot events", async (t) => {
+  const eventBus = new EventBus()
+  const api = await startApi({
+    t,
+    eventBus,
+  })
+  const socket = new WebSocket(`ws://127.0.0.1:${api.address.port}/api/v1/trading/events`)
+  t.after(() => socket.close())
+
+  await waitForSocketOpen(socket)
+  const publication = eventBus.publish({
+    name: "account.snapshot_captured",
+    source: "harvester.account-snapshot",
+    data: { phase: "LIVE" },
+  })
+  assert.equal(publication.ok, true)
+  assert.deepEqual(await waitForMessage(socket), {
+    type: "exchange-account.updated",
+  })
+})
+
+
+test("broadcasts live updates from Harvester's existing user-data subscription", async (t) => {
+  const eventBus = new EventBus()
+  let notify
+  let unsubscribed = false
+  const api = await startApi({
+    t,
+    eventBus,
+    subscribeExchangeAccountUpdates: (listener) => {
+      notify = listener
+      return () => { unsubscribed = true }
+    },
+  })
+  const socket = new WebSocket(`ws://127.0.0.1:${api.address.port}/api/v1/trading/events`)
+  t.after(() => socket.close())
+
+  await waitForSocketOpen(socket)
+  notify()
+  assert.deepEqual(await waitForMessage(socket), {
+    type: "exchange-account.updated",
+  })
+  await api.close()
+  assert.equal(unsubscribed, true, "Closing the API must detach the monitor listener without managing the exchange stream.")
+})
+

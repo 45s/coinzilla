@@ -31,6 +31,16 @@ pnpm --filter @coinzilla/dashboard test
 pnpm --filter @coinzilla/dashboard test:coverage
 ```
 
+## Exchanges workspace
+
+The read-only **Exchanges** page lists only provider accounts that Harvester has successfully
+started and exposed through its local account-monitor API. Balances and open orders are fetched
+from Harvester's existing broker runtimes; browser code never opens exchange connections or
+handles exchange credentials. Live WebSocket messages are invalidation hints emitted from
+Harvester's existing user-data subscription, and REST snapshots remain authoritative. Providers
+or products not configured and supported by Harvester are not displayed (currently Binance Spot
+only; no Binance Futures or Bitunix account provider).
+
 ## Architecture boundary
 
 The dashboard is a separate client application. Trading-history data access uses a typed local Harvester API client. Browser code must not open Harvester database files, import Harvester internals, or call exchange APIs. Financial decimal values remain strings and missing values remain null. Order entry remains out of scope. The local Operator workspace routes commands through Harvester's existing application facade and safety gates; its runtime/API integration is complete in [merged PR #1654](https://github.com/45s/coinzilla/pull/1654). The Market Screener also calls Harvester only; browser code never calls exchange endpoints.
