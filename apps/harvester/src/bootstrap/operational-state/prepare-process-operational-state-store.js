@@ -1,3 +1,4 @@
+import { StrategyId } from "../../domain/strategies/strategy-ids.js"
 import { createFileOperationalStateStore } from "../../infrastructure/operational-state/create-file-operational-state-store.js"
 import { resolveOperationalStateDirectory } from "../../infrastructure/operational-state/resolve-operational-state-directory.js"
 
@@ -88,17 +89,32 @@ async function verifyProcessStore({ store, directory } = {}) {
   )
 }
 
+function hasEnabledRecoverySellerMarket({ recoverySellerConfig } = {}) {
+  return recoverySellerConfig?.enabled === true &&
+    Object.values(recoverySellerConfig.pairs ?? {}).some((pairConfig) => pairConfig?.enabled === true)
+}
+
+function requiresOperationalStateStore({ appConfig } = {}) {
+  const conservativeRecoveryEnabled =
+    appConfig?.strategies?.[StrategyId.COIN_GRABBER]?.settings?.recovery?.enabled === true
+  const recoverySellerEnabled = hasEnabledRecoverySellerMarket({
+    recoverySellerConfig: appConfig?.strategies?.[StrategyId.RECOVERY_SELLER],
+  })
+  return conservativeRecoveryEnabled || recoverySellerEnabled
+}
+
 /**
- * Compose the process-owned ADR-0001 store only for CoinGrabber restart recovery.
+ * Prepare and verify the process-owned ADR-0001 store when CG restart recovery
+ * or an enabled Recovery Seller market requires durable operational facts.
  *
- * TEMPORARY: Telegram CC alone must not create or require this store. Without an
- * independently supplied store, its pause/resume commands remain process-local.
+ * Telegram-only operator control does not create or require this store.
+ * Store genesis remains an explicit one-time operation; startup never
+ * initializes, repairs, or replaces a missing or corrupt ledger.
  */
 export async function prepareProcessOperationalStateStore({
   appConfig, env = process.env, runtimeSessionId, createOperationalStateStore = createFileOperationalStateStore,
 } = {}) {
-  const recoveryEnabled = appConfig?.strategies?.CG_coinGrabber?.settings?.recovery?.enabled === true
-  if (!recoveryEnabled) {
+  if (!requiresOperationalStateStore({ appConfig })) {
     return undefined
   }
   assertStoreDependencies({
