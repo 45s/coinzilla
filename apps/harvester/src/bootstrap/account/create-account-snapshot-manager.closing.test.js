@@ -262,7 +262,7 @@ test("fails the CLOSING open-order audit when its Journal flush is not durable",
       ownershipReconciled: true,
     }),
     (error) => {
-      assert.equal(error.recoveryFailure.stage, "ACCOUNT_OPEN_ORDERS_AUDIT_FLUSH")
+      assert.equal(error.recoveryFailure.stage, "ACCOUNT_OPEN_ORDERS_AUDIT_FLUSH_UNCLASSIFIED")
       assert.match(error.message, /Unable to durably persist CLOSING account open-orders snapshot/)
       return true
     },
