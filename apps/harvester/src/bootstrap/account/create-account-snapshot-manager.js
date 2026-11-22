@@ -1229,27 +1229,6 @@ function createExternalOrderReconciliation({ state, context, logger } = {}) {
   }
 }
 
-/**
- * Coordinate account-wide balance/open-order snapshots and their required durable audit events.
- *
- * This is a bootstrap lifecycle manager: it performs broker reads and enforces the
- * PREFLIGHT/RECOVERY account and open-order audit barriers, paired CLOSING account and open-order audits, and targeted COMMISSION_BASELINE publication.
- *
- * @param {object} options
- * @param {object} options.broker Broker port.
- * @param {object} options.eventPublisher Lifecycle event publisher with durable flush capability.
- * @param {Map<string, object>} options.marketMetadata Metadata for configured markets.
- * @param {Function} options.getPortfolio Current Portfolio accessor.
- * @param {Function} [options.getAdditionalTrackedBaseQuantity] Verified non-Portfolio Spot allocations by asset.
- * @param {Function} [options.getAdditionalTrackedQuoteCashFlow] Signed quote cash flow from tracked inventory outside Portfolio.
- * @param {Function} options.getTradingEngine Current trading-engine accessor.
- * @param {Function} options.getRecoveredState Current in-memory recovered-state accessor.
- * @param {Function} options.getHasCanonicalOwnershipReconciliation Ownership reconciliation predicate.
- * @param {object} options.logger Structured logger.
- * @param {object} [options.operationalStateStore] Optional initialized ADR-0001 Operational State Store.
- * @param {Function} [options.now] Clock returning epoch milliseconds.
- * @returns {object} Account snapshot read and durable audit operations.
- */
 function createAccountSnapshotManagerContext({
   broker,
   eventPublisher,
@@ -1294,6 +1273,27 @@ function createAccountSnapshotManagerContext({
   }
 }
 
+/**
+ * Coordinate account-wide balance/open-order snapshots and their required durable audit events.
+ *
+ * This is a bootstrap lifecycle manager: it performs broker reads and enforces the
+ * PREFLIGHT/RECOVERY account and open-order audit barriers, paired CLOSING account and open-order audits, and targeted COMMISSION_BASELINE publication.
+ *
+ * @param {object} options
+ * @param {object} options.broker Broker port.
+ * @param {object} options.eventPublisher Lifecycle event publisher with durable flush capability.
+ * @param {Map<string, object>} options.marketMetadata Metadata for configured markets.
+ * @param {Function} options.getPortfolio Current Portfolio accessor.
+ * @param {Function} [options.getAdditionalTrackedBaseQuantity] Verified non-Portfolio Spot allocations by asset.
+ * @param {Function} [options.getAdditionalTrackedQuoteCashFlow] Signed quote cash flow from tracked inventory outside Portfolio.
+ * @param {Function} options.getTradingEngine Current trading-engine accessor.
+ * @param {Function} options.getRecoveredState Current in-memory recovered-state accessor.
+ * @param {Function} options.getHasCanonicalOwnershipReconciliation Ownership reconciliation predicate.
+ * @param {object} options.logger Structured logger.
+ * @param {object} [options.operationalStateStore] Optional initialized ADR-0001 Operational State Store.
+ * @param {Function} [options.now] Clock returning epoch milliseconds.
+ * @returns {object} Account snapshot read and durable audit operations.
+ */
 export function createAccountSnapshotManager(options = {}) {
   const { context, state } = createAccountSnapshotManagerContext(options)
   const { publishOrders, observeExternalOrder } = createExternalOrderReconciliation({
@@ -1322,76 +1322,6 @@ export function createAccountSnapshotManager(options = {}) {
   const publishCommissionBaseline = (baselineOptions = {}) => publishCommissionAssetBaseline({
     context,
     options: baselineOptions,
-  })
-
-  return Object.freeze({
-    getAccountSnapshot: () => state.accountSnapshot,
-    hasUnownedOpenOrdersForSymbol: ({ symbol } = {}) =>
-      typeof symbol === "string" && (
-        state.unownedOpenOrderSymbols.has(symbol) ||
-        state.pendingExternalOrderVersions.has(symbol)
-      ),
-    observeExternalOrder,
-    refreshAccountSnapshot: refresh,
-    publishOpenOrdersSnapshot: publishOrders,
-    publishClosingOpenOrdersSnapshot: publishClosingOrdersSnapshot,
-    publishAccountSnapshot: publishSnapshot,
-    publishCommissionAssetBaseline: publishCommissionBaseline,
-  })
-}
-
-} = {}) {
-  const additionalTrackedBaseQuantityGetter = resolveAdditionalTrackedBaseQuantityGetter({
-    getter: getAdditionalTrackedBaseQuantity,
-  })
-  const additionalTrackedQuoteCashFlowGetter = resolveAdditionalTrackedQuoteCashFlowGetter({
-    getter: getAdditionalTrackedQuoteCashFlow,
-  })
-  const state = createInitialAccountSnapshotManagerState()
-  const context = {
-    broker,
-    eventPublisher,
-    marketMetadata,
-    getPortfolio,
-    getAdditionalTrackedBaseQuantity: additionalTrackedBaseQuantityGetter,
-    getAdditionalTrackedQuoteCashFlow: additionalTrackedQuoteCashFlowGetter,
-    getTradingEngine,
-    getRecoveredState,
-    getHasCanonicalOwnershipReconciliation,
-    logger,
-    now,
-    monotonicNow,
-    runtimeSessionId,
-    operationalStateStore,
-    state,
-  }
-  const refresh = (options = {}) => refreshAccountSnapshot({
-    context,
-    ...options,
-  })
-  const { publishOrders, observeExternalOrder } = createExternalOrderReconciliation({
-    state,
-    context,
-    getHasCanonicalOwnershipReconciliation,
-    logger,
-  })
-  const publishSnapshot = (options = {}) => publishAccountSnapshot({
-    context,
-    options: {
-      phase: options.phase,
-      auditStatus: options.auditStatus === undefined ? "COMPLETE" : options.auditStatus,
-      auditReasons: options.auditReasons === undefined ? [] : options.auditReasons,
-      snapshot: options.snapshot,
-      allowedAssetCodes: options.allowedAssetCodes,
-    },
-  })
-  const publishClosingOrdersSnapshot = (options = {}) => publishClosingOpenOrdersSnapshot({
-    context,
-    options,
-  })
-  const publishCommissionBaseline = (options = {}) => publishCommissionAssetBaseline({
-    context,
-    options,
   })
 
   return Object.freeze({
