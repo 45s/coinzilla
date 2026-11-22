@@ -287,6 +287,7 @@ async function executeReportBranchWorkflow({ repositoryRoot, runGit, branch, pat
       paths,
       publishedReportPath,
       runDiagnostics,
+      healthCheckEvaluator,
       env,
       now,
       onProgress,
@@ -318,6 +319,7 @@ async function executeReportBranchWorkflow({ repositoryRoot, runGit, branch, pat
 export async function publishHealthReport({
   repositoryRoot,
   runDiagnostics,
+  healthCheckEvaluator = evaluateReadOnlyHealthCheck,
   runGit = executeGitCommand,
   env = process.env,
   now = Date.now,
@@ -351,6 +353,7 @@ export async function publishHealthReport({
     paths,
     publishedReportPath,
     runDiagnostics,
+    healthCheckEvaluator,
     env,
     now,
     onProgress,
