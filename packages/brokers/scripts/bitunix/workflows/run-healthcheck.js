@@ -4,7 +4,7 @@ import { BitunixRestClient } from "../../../src/infrastructure/bitunix/spot/api/
 import { runDiagnostics as runReadOnlyDiagnostics } from "../diagnostics/run-diagnostics.js"
 import { publishHealthReport } from "./publish-health-report.js"
 import { evaluateReadOnlyHealthCheck } from "../helpers/health-report.js"
-import { appendOrderAttemptResult } from "../helpers/append-order-attempt-result.js"
+import { appendOrderAttemptResult } from "../helpers/append-order-attempt-result.js"\nimport { createDiagnosticReport, createDiagnosticResult } from "../helpers/create-diagnostic-report.js"
 
 function createLocalDiagnosticReportPath({ brokersRoot, now }) {
   const timestamp = new Date(now()).toISOString().replaceAll(/[:.]/g, "-")
@@ -95,11 +95,33 @@ async function runDiagnosticsWithOperatorAttempt({
   runOperatorProbe,
   probeId,
 }) {
-  const report = await runDiagnostics({
-    env,
-    onProgress,
-    brokerApiRestClientFactory: (options) => new BitunixRestClient(options),
-  })
+  let report
+  try {
+    report = await runDiagnostics({
+      env,
+      onProgress,
+      brokerApiRestClientFactory: (options) => new BitunixRestClient(options),
+    })
+  } catch (error) {
+    if (!runOperatorProbe) {
+      throw error
+    }
+    const timestamp = new Date().toISOString()
+    report = createDiagnosticReport({
+      startedAt: timestamp,
+      finishedAt: timestamp,
+      runtime: {
+        node: process.version,
+        platform: process.platform,
+      },
+      results: [createDiagnosticResult({
+        operation: "diagnostic runner",
+        status: "failed",
+        error,
+        secrets: [env.BITUNIX_API_KEY, env.BITUNIX_API_SECRET].filter(Boolean),
+      })],
+    })
+  }
   if (!runOperatorOrder && !runOperatorProbe) {
     return report
   }
