@@ -989,7 +989,11 @@ runDogeTradingReplayTest("accounts distinct partial BUY fills when their cumulat
   });
   assertPartialBuyAccountingAfterOutOfOrderExecutions({ dogeTradingReplay });
 
-  await completeOutOfOrderBuyCycle({ dogeTradingReplay, initialBuyOrder, firstExecutionTimestamp });
+  await completeOutOfOrderBuyCycle({
+    dogeTradingReplay,
+    initialBuyOrder,
+    firstExecutionTimestamp,
+  });
   assertFinalOutOfOrderBuyAccounting({ dogeTradingReplay });
   assert.deepEqual(
     dogeTradingReplay.receivedExecutionReports.map(({ executedOrder }) => executedOrder.executedQuantity),
