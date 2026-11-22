@@ -110,16 +110,17 @@ test("archives the final cumulative tails and newest session with complete data 
       const manifest = JSON.parse(await readFile(path.join(directory, "manifest.json"), "utf8"))
       assert.equal(manifest.snapshotType, "selected-log-evidence", "the manifest must identify this as a selected-log evidence snapshot")
       assert.deepEqual(manifest.includedDirectories, ["logs", "data", "recovery-facts"], "the manifest must declare all included source trees")
+      assert.deepEqual(manifest.excludedPaths, ["data/production", "logs/cumulative/terminal.log"], "The manifest must list every production/unclassified source exclusion.")
       assert.deepEqual(manifest.excludedPaths, ["data/production"], "the manifest must explicitly record that production data is excluded")
-      assert.deepEqual(manifest.logSelection, { cumulative: "final-5-percent-of-each-file", sessions: "newest-completed-TESTNET-session-only; gzip-compressed" }, "the manifest must describe the reduced log selection")
+      assert.deepEqual(manifest.logSelection, { cumulative: "final-5-percent-of-selected-TESTNET-session-structured-records", sessions: "newest-completed-TESTNET-session-only; gzip-compressed" }, "the manifest must describe the reduced log selection")
       assert.equal(manifest.logRuntimeSessionId, RUNTIME_SESSION_ID, "The archive manifest must identify the completed TESTNET log session.")
       assert.equal(manifest.dataCommitHash, DATA_COMMIT_HASH, "the archive manifest must identify the last committed recovery-facts digest")
       assert.equal(manifest.recoveryRuntimeSessionId, RUNTIME_SESSION_ID, "the archive manifest must identify the session owning the last committed fact")
       assert.equal(await readFile(path.join(directory, "data_commit_hash"), "utf8"), DATA_COMMIT_HASH + "\n", "the archive must contain the standalone data_commit_hash file")
-      assert.equal(
-        await readFile(path.join(directory, "logs/cumulative/terminal.log"), "utf8"),
-        "x".repeat(5),
-        "cumulative logs must retain only their final five percent",
+      await assert.rejects(
+        readFile(path.join(directory, "logs/cumulative/terminal.log")),
+        { code: "ENOENT" },
+        "The shared terminal cumulative log must be omitted because it has no reliable environment marker.",
       )
       assert.equal(
         gunzipSync(await readFile(path.join(directory, "logs/sessions/2026-11-22_latest/terminal.log.gz"))).toString("utf8"),
