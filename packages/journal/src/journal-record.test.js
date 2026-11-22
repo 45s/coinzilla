@@ -140,10 +140,11 @@ id: "different-id" },
 })
 
 test("accepts CRLF session lines while preserving the original record position", () => {
-  const serialized = serializeJournalRecord({
+  const serializedRecord = serializeJournalRecord({
     event: { id: "event-crlf",
 name: "order.created" },
-  }).replace("\n", "\r\n")
+  })
+  const serialized = `${serializedRecord.slice(0, -1)}\r\n`
 
   const [recovered] = parseJournalSession({
     content: serialized,
@@ -217,11 +218,77 @@ lineNumber: 1 },
 })
 
 
-test("rejects nested values that JSONL would omit, coerce, or execute", () => {
+function assertInvalidJournalData({ label, data }) {
+  assert.throws(
+    () => serializeJournalRecord({
+      event: {
+        id: "event-invalid-value",
+        name: "journal.invalid_value",
+        data,
+      },
+    }),
+    { name: "TypeError" },
+    `Journal must reject ${label} before JSON.stringify can omit, coerce, or execute it.`,
+  )
+}
+
+test("rejects JSON values that would be omitted, coerced, or cyclic", () => {
   const sparseArray = []
   sparseArray.length = 2
   sparseArray[1] = "present"
 
+  const cyclicData = {}
+  cyclicData.self = cyclicData
+
+  const invalidValues = [
+    {
+      label: "undefined object property",
+      data: { nested: { value: undefined } },
+    },
+    {
+      label: "undefined array entry",
+      data: { values: [undefined] },
+    },
+    {
+      label: "sparse array hole",
+      data: { values: sparseArray },
+    },
+    {
+      label: "BigInt",
+      data: { amount: 1n },
+    },
+    {
+      label: "NaN",
+      data: { amount: NaN },
+    },
+    {
+      label: "positive infinity",
+      data: { amount: Infinity },
+    },
+    {
+      label: "negative infinity",
+      data: { amount: -Infinity },
+    },
+    {
+      label: "negative zero",
+      data: { amount: -0 },
+    },
+    {
+      label: "cyclic graph",
+      data: cyclicData,
+    },
+    {
+      label: "nested toJSON hook",
+      data: { nested: { toJSON() { return { rewritten: true } } } },
+    },
+  ]
+
+  for (const invalid of invalidValues) {
+    assertInvalidJournalData(invalid)
+  }
+})
+
+test("rejects unsupported object properties without invoking getters", () => {
   const arrayWithCustomProperty = []
   arrayWithCustomProperty.extra = "not part of the JSON array contract"
 
@@ -247,54 +314,32 @@ test("rejects nested values that JSONL would omit, coerce, or execute", () => {
   const customPrototypeData = Object.create({ inherited: "value" })
   customPrototypeData.own = "value"
 
-  const cyclicData = {}
-  cyclicData.self = cyclicData
-
   const invalidValues = [
-    { label: "undefined object property",
-data: { nested: { value: undefined } } },
-    { label: "undefined array entry",
-data: { values: [undefined] } },
-    { label: "sparse array hole",
-data: { values: sparseArray } },
-    { label: "BigInt",
-data: { amount: 1n } },
-    { label: "NaN",
-data: { amount: NaN } },
-    { label: "positive infinity",
-data: { amount: Infinity } },
-    { label: "negative infinity",
-data: { amount: -Infinity } },
-    { label: "negative zero",
-data: { amount: -0 } },
-    { label: "cyclic graph",
-data: cyclicData },
-    { label: "nested toJSON hook",
-data: { nested: { toJSON() { return { rewritten: true } } } } },
-    { label: "symbol-keyed property",
-data: symbolKeyedData },
-    { label: "accessor property",
-data: accessorData },
-    { label: "non-enumerable property",
-data: nonEnumerableData },
-    { label: "custom array property",
-data: { values: arrayWithCustomProperty } },
-    { label: "custom prototype",
-data: customPrototypeData },
+    {
+      label: "symbol-keyed property",
+      data: symbolKeyedData,
+    },
+    {
+      label: "accessor property",
+      data: accessorData,
+    },
+    {
+      label: "non-enumerable property",
+      data: nonEnumerableData,
+    },
+    {
+      label: "custom array property",
+      data: { values: arrayWithCustomProperty },
+    },
+    {
+      label: "custom prototype",
+      data: customPrototypeData,
+    },
   ]
 
-  for (const [index, invalid] of invalidValues.entries()) {
-    assert.throws(
-      () => serializeJournalRecord({
-        event: { id: `event-invalid-${  index}`,
-name: "journal.invalid_value",
-data: invalid.data },
-      }),
-      { name: "TypeError" },
-      `Journal must reject ${invalid.label} before JSON.stringify can omit, coerce, or execute it.`,
-    )
+  for (const invalid of invalidValues) {
+    assertInvalidJournalData(invalid)
   }
-
   assert.equal(
     getterCalls,
     0,
