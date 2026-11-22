@@ -349,6 +349,39 @@ function createFixtureAccounting({ market }) {
   }
 }
 
+function createFixturePublicApi({
+  engine,
+  market,
+  marketMetadata,
+  baseAsset,
+  quoteAsset,
+  brokerState,
+  accounting,
+  setReady,
+}) {
+  return {
+    engine,
+    market,
+    marketMetadata,
+    broker: brokerState.broker,
+    submittedIntents: brokerState.submittedIntents,
+    cancellations: brokerState.cancellations,
+    pendingSell: brokerState.pendingSell,
+    pendingSellStarted: brokerState.pendingSellStarted,
+    pendingCancel: brokerState.pendingCancel,
+    cancelStarted: brokerState.cancelStarted,
+    setFillsForOrder: brokerState.setFillsForOrder,
+    createTradeEvent: createTradeEventFactory({
+      market,
+      baseAsset,
+      quoteAsset,
+    }),
+    setReady,
+    getPortfolio: accounting.getPortfolio,
+    getRecoveryLedger: accounting.getRecoveryLedger,
+  }
+}
+
 const createFixture = ({
   initiallyReady = true,
   deferFirstSell = false,
@@ -389,27 +422,16 @@ const createFixture = ({
     getVolatilityData,
     pausedMarkets,
   })
-  return {
+  return createFixturePublicApi({
     engine,
     market,
     marketMetadata,
-    broker: brokerState.broker,
-    submittedIntents: brokerState.submittedIntents,
-    cancellations: brokerState.cancellations,
-    pendingSell: brokerState.pendingSell,
-    pendingSellStarted: brokerState.pendingSellStarted,
-    pendingCancel: brokerState.pendingCancel,
-    cancelStarted: brokerState.cancelStarted,
-    setFillsForOrder: brokerState.setFillsForOrder,
-    createTradeEvent: createTradeEventFactory({
-      market,
-      baseAsset,
-      quoteAsset,
-    }),
+    baseAsset,
+    quoteAsset,
+    brokerState,
+    accounting,
     setReady: ({ value } = {}) => { ready = value },
-    getPortfolio: accounting.getPortfolio,
-    getRecoveryLedger: accounting.getRecoveryLedger,
-  }
+  })
 }
 
 test("readiness closing after PENDING registration removes the local order without calling the broker", async () => {
