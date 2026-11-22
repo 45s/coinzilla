@@ -585,7 +585,11 @@ async function runPublishedHealthCheck({
   }))
   const result = await publishDiagnostics({
     repositoryRoot,
-    healthCheckEvaluator: selectHealthCheckEvaluator({\n      runOperatorProbe,\n      includeGeneralDiagnostics,\n      runOperatorOrder,\n    }),
+    healthCheckEvaluator: selectHealthCheckEvaluator({
+      runOperatorProbe,
+      includeGeneralDiagnostics,
+      runOperatorOrder,
+    }),
     runDiagnostics: (input) => runDiagnosticsWithOperatorAttempt({
       ...input,
       runDiagnostics,
@@ -671,36 +675,4 @@ export async function runHealthcheckWorkflow({
     brokerFactory,
     includeGeneralDiagnostics,
   })
-} = {}) {
-  if (mode === "local") {
-    return runLocalDiagnostics({
-      brokersRoot,
-      env,
-      stdout,
-      brokerFactory,
-      includeGeneralDiagnostics,
-    })
-  }
-  if (mode === "publish" || mode === "place-order" || mode === "probe-order") {
-    if (mode === "place-order" && typeof runOperatorOrder !== "function") {
-      throw new TypeError("The Bitunix place-order mode requires an operator order runner")
-    }
-    if (mode === "probe-order" &&
-        (typeof runOperatorProbe !== "function" || typeof probeId !== "string" || !probeId.trim())) {
-      throw new TypeError("The Bitunix probe-order mode requires a probe id and operator probe runner")
-    }
-    return runPublishedHealthCheck({
-      repositoryRoot,
-      env,
-      stdout,
-      runDiagnostics,
-      publishDiagnostics,
-      runOperatorOrder,
-      runOperatorProbe,
-      probeId,
-      brokerFactory,
-      includeGeneralDiagnostics,
-    })
-  }
-  throw new TypeError(`Unsupported Bitunix health-check mode: ${mode}`)
 }
