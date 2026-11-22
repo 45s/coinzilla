@@ -85,6 +85,7 @@ function assertProbeBalanceIsInsufficient({ probe, freeBase, freeQuote }) {
     throw new Error("Bitunix order probe blocked: free USDT can cover this BUY LIMIT notional")
   }
   if (probe.type === "LIMIT" && probe.side === "SELL" &&
+      freeBase !== null &&
       compareDecimal({
         left: freeBase,
         right: probe.quantity,
@@ -105,8 +106,7 @@ function assertProbeBalanceIsInsufficient({ probe, freeBase, freeQuote }) {
 }
 
 function createBalanceSummary({ balances, probe }) {
-  const baseRequired = probe.type === "MARKET" ||
-    (probe.type === "LIMIT" && probe.side === "SELL")
+  const baseRequired = probe.type === "MARKET"
   const quoteRequired = probe.type === "MARKET" ||
     (probe.type === "LIMIT" && probe.side === "BUY")
   const base = findAssetBalance({
@@ -159,6 +159,9 @@ function createPreflightResult({
       right: minimumNotional,
     }) < 0,
     ...balanceSummary,
+    baseBalanceUnreported: probe.type === "LIMIT" &&
+      probe.side === "SELL" &&
+      balanceSummary.freeBaseBalance === null,
     openOrderCount,
   })
 }
