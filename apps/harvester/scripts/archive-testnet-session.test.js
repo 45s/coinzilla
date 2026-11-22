@@ -111,7 +111,7 @@ test("archives complete logs and data trees without requiring process markers", 
       return { commit: REMOTE_COMMIT, fileCount: manifest.files.length + 1 }
     },
   }))
-  assert.ok(progressMessages.some((message) => message.startsWith("Archive: copying ")), "the operator must see the source-copy size and file count")
+  assert.ok(progressMessages.some((message) => message.startsWith("Archive: selecting log evidence ")), "the operator must see the source-copy size and file count")
   assert.ok(progressMessages.some((message) => message.startsWith("Hashing ")), "the operator must see checksum-generation progress")
   assert.ok(progressMessages.includes("Local archive verified."), "the operator must see local verification completion")
   assert.equal(result.remoteCommit, REMOTE_COMMIT, "the command must return the verified remote commit")
