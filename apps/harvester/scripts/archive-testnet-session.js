@@ -10,26 +10,67 @@ import {
   stat,
   writeFile,
 } from "node:fs/promises"
-import { execFile } from "node:child_process"
+import { spawn } from "node:child_process"
 import { promisify } from "node:util"
 import path from "node:path"
 import os from "node:os"
 import { fileURLToPath } from "node:url"
 import { validateArchiveRemote } from "./initialize-private-archive-repository.js"
 
-const execFileAsync = promisify(execFile)
 const PACKAGE_DIRECTORY = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const SOURCE_DIRECTORIES = Object.freeze(["logs", "data", "recovery-facts"])
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
-const runGitDefault = async (args, { cwd } = {}) => {
-  const { stdout } = await execFileAsync("git", args, {
+const runGitDefault = (args, { cwd } = {}) => new Promise((resolve, reject) => {
+  const child = spawn("git", args, {
     cwd,
     windowsHide: true,
-    encoding: "utf8",
-    maxBuffer: 10 * 1024 * 1024,
+    stdio: ["ignore", "pipe", "pipe"],
   })
-  return stdout.trim()
+  let stdout = ""
+  let stderr = ""
+  const streamProgress = args[0] === "clone" || args[0] === "push"
+
+  child.stdout.setEncoding("utf8")
+  child.stdout.on("data", (chunk) => {
+    stdout += chunk
+  })
+  child.stderr.setEncoding("utf8")
+  child.stderr.on("data", (chunk) => {
+    if (streamProgress) {
+      process.stderr.write(chunk)
+    } else {
+      stderr += chunk
+    }
+  })
+  child.on("error", reject)
+  child.on("close", (code) => {
+    if (code === 0) {
+      resolve(stdout.trim())
+      return
+    }
+    reject(new Error(
+      `git ${args[0]} failed with exit code ${code}: ${stderr.trim()}`,
+    ))
+  })
+})
+
+const formatBytes = (bytes) => {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`
+}
+
+const reportProgress = (onProgress, message) => onProgress?.(message)
+
+const getTreeSize = async (directory) => {
+  const files = await listRegularFiles(directory)
+  let totalBytes = 0
+  for (const relativePath of files) {
+    totalBytes += (await stat(path.join(directory, relativePath))).size
+  }
+  return { files, totalBytes }
 }
 
 export function createHarvesterArchiveDirectoryName({ createdAt, archiveId } = {}) {
@@ -54,7 +95,12 @@ async function assertRealDirectory(directory) {
   }
 }
 
-async function copyRegularTree({ sourceDirectory, destinationDirectory, relative = "" } = {}) {
+async function copyRegularTree({
+  sourceDirectory,
+  destinationDirectory,
+  relative = "",
+  onFileCopied,
+} = {}) {
   await mkdir(destinationDirectory, { recursive: true, mode: 0o700 })
   const source = relative ? path.join(sourceDirectory, relative) : sourceDirectory
   const destination = relative ? path.join(destinationDirectory, relative) : destinationDirectory
@@ -72,9 +118,14 @@ async function copyRegularTree({ sourceDirectory, destinationDirectory, relative
         sourceDirectory,
         destinationDirectory,
         relative: path.join(relative, entry.name),
+        onFileCopied,
       })
     } else if (sourceStats.isFile()) {
       await copyFile(sourcePath, destinationPath)
+      await onFileCopied?.({
+        relativePath: path.join(relative, entry.name).split(path.sep).join("/"),
+        size: sourceStats.size,
+      })
     } else {
       throw new Error(`Refusing to archive a non-regular session entry: ${sourcePath}`)
     }
@@ -146,9 +197,11 @@ async function readLatestRecoveryCheckpoint(recoveryFactsDirectory) {
   }
 }
 
-async function createArchiveManifest({ directory, createdAt } = {}) {
+async function createArchiveManifest({ directory, createdAt, onFileHashed } = {}) {
   const files = await listRegularFiles(directory)
   const entries = []
+  let completedBytes = 0
+  const totalBytes = (await getTreeSize(directory)).totalBytes
   for (const relativePath of files) {
     const filename = path.join(directory, relativePath)
     const fileStats = await stat(filename)
@@ -156,6 +209,14 @@ async function createArchiveManifest({ directory, createdAt } = {}) {
       path: relativePath,
       size: fileStats.size,
       sha256: await sha256File(filename),
+    })
+    completedBytes += fileStats.size
+    await onFileHashed?.({
+      relativePath,
+      completedFiles: entries.length,
+      totalFiles: files.length,
+      completedBytes,
+      totalBytes,
     })
   }
   const recoveryCheckpoint = await readLatestRecoveryCheckpoint(path.join(directory, "recovery-facts"))
@@ -197,11 +258,14 @@ async function publishArchive({
   runGit = runGitDefault,
   createTemporaryDirectory = (prefix) => mkdtemp(path.join(os.tmpdir(), prefix)),
   removeTemporaryDirectory = (filename) => rm(filename, { recursive: true, force: true }),
+  onProgress,
 } = {}) {
   const temporaryRoot = await createTemporaryDirectory(".archive-push-")
   const checkout = path.join(temporaryRoot, "checkout")
   try {
-    await runGit(["clone", "--branch", "main", "--single-branch", remote, checkout])
+    reportProgress(onProgress, "Publishing: cloning the private archive repository...")
+    await runGit(["clone", "--progress", "--branch", "main", "--single-branch", remote, checkout])
+    reportProgress(onProgress, "Publishing: repository cloned; preparing archive files...")
     const remoteArchiveDirectory = path.join(checkout, "archives", archiveName)
     let archiveAlreadyExists = false
     try {
@@ -239,6 +303,7 @@ async function publishArchive({
       if (remoteHead.split(/\s+/)[0] !== existingCommit) {
         throw new Error("The archive exists in the cloned remote history, but remote main advanced during verification.")
       }
+      reportProgress(onProgress, "Publishing: existing archive verified; no upload needed.")
       return { commit: existingCommit, fileCount: localFiles.length, alreadyPublished: true }
     }
 
@@ -246,6 +311,7 @@ async function publishArchive({
       sourceDirectory: directory,
       destinationDirectory: remoteArchiveDirectory,
     })
+    reportProgress(onProgress, "Publishing: copied archive into checkout; staging files...")
     await runGit(["add", "--", `archives/${archiveName}`], { cwd: checkout })
     await runGit([
       "-c", "user.name=Coinzilla Harvester",
@@ -253,7 +319,9 @@ async function publishArchive({
       "commit", "-m", `chore(archive): add Harvester session ${archiveName}`,
     ], { cwd: checkout })
     const localCommit = await runGit(["rev-parse", "HEAD"], { cwd: checkout })
-    await runGit(["push", "origin", "main"], { cwd: checkout })
+    reportProgress(onProgress, "Publishing: pushing to GitHub (Git transfer progress follows)...")
+    await runGit(["push", "--progress", "origin", "main"], { cwd: checkout })
+    reportProgress(onProgress, "Publishing: push finished; verifying remote commit and file contents...")
     const remoteHead = await runGit(["ls-remote", "--heads", remote, "refs/heads/main"])
     if (remoteHead.split(/\s+/)[0] !== localCommit) {
       throw new Error("The archive push completed but remote main does not point to the published commit.")
@@ -280,6 +348,7 @@ export async function runHarvesterArchivePush({
   now = () => new Date(),
   createArchiveId = randomUUID,
   publishArchiveFn = publishArchive,
+  onProgress = (message) => process.stdout.write(message + "\n"),
 } = {}) {
   if (env.TRADING_MODE !== "testnet") {
     throw new Error("Archive publication requires TRADING_MODE=testnet. LIVE and unspecified modes are rejected.")
@@ -316,13 +385,29 @@ export async function runHarvesterArchivePush({
   const localArchive = path.join(outputDirectory, archiveName)
 
   try {
+    const sourceSizes = await Promise.all(sourcePaths.map(async (source) => ({
+      ...source,
+      ...(await getTreeSize(source.sourceDirectory)),
+    })))
+    const totalFiles = sourceSizes.reduce((total, source) => total + source.files.length, 0)
+    const totalBytes = sourceSizes.reduce((total, source) => total + source.totalBytes, 0)
+    let copiedFiles = 0
+    let copiedBytes = 0
+    reportProgress(onProgress, `Archive: copying ${totalFiles} files (${formatBytes(totalBytes)})...`)
     await mkdir(localArchive, { recursive: false, mode: 0o700 })
-    for (const source of sourcePaths) {
+    for (const source of sourceSizes) {
+      reportProgress(onProgress, `Copying ${source.directoryName}/ (${source.files.length} files, ${formatBytes(source.totalBytes)})...`)
       await copyRegularTree({
         sourceDirectory: source.sourceDirectory,
         destinationDirectory: path.join(localArchive, source.directoryName),
+        onFileCopied: ({ size }) => {
+          copiedFiles += 1
+          copiedBytes += size
+          reportProgress(onProgress, `  copied ${copiedFiles}/${totalFiles} files — ${formatBytes(copiedBytes)} / ${formatBytes(totalBytes)}`)
+        },
       })
     }
+    reportProgress(onProgress, `Copy complete: ${copiedFiles} files, ${formatBytes(copiedBytes)}.`)
     const recoveryCheckpoint = await readLatestRecoveryCheckpoint(path.join(localArchive, "recovery-facts"))
     await writeFile(path.join(localArchive, "data_commit_hash"), recoveryCheckpoint.dataCommitHash + "\n", {
       encoding: "utf8",
@@ -334,20 +419,31 @@ export async function runHarvesterArchivePush({
       throw new Error("The logs and data directories contain no regular files to archive.")
     }
 
-    const manifest = await createArchiveManifest({ directory: localArchive, createdAt })
+    reportProgress(onProgress, `Hashing ${copiedFiles + 1} archive files for manifest...`)
+    const manifest = await createArchiveManifest({
+      directory: localArchive,
+      createdAt,
+      onFileHashed: ({ completedFiles, totalFiles: hashTotal, completedBytes: hashBytes, totalBytes: hashTotalBytes }) => {
+        reportProgress(onProgress, `  hashed ${completedFiles}/${hashTotal} files — ${formatBytes(hashBytes)} / ${formatBytes(hashTotalBytes)}`)
+      },
+    })
     await writeFile(path.join(localArchive, "manifest.json"), JSON.stringify(manifest, null, 2) + "\n", {
       encoding: "utf8",
       flag: "wx",
       mode: 0o600,
     })
+    reportProgress(onProgress, "Verifying local archive checksums...")
     await verifyArchive({ directory: localArchive, manifest })
+    reportProgress(onProgress, "Local archive verified.")
 
     const published = await publishArchiveFn({
       directory: localArchive,
       archiveName,
       remote,
       runGit,
+      onProgress,
     })
+    reportProgress(onProgress, "Remote archive verified successfully.")
     return {
       archiveName,
       localArchive,
