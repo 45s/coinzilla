@@ -686,7 +686,10 @@ async function prepareOrderReadReport({
       additionalOrders: cancelExistingOrder ? [CANCELLATION_TARGET] : [],
     })
   }
-  return {\n    report,\n    startedAt,\n  }
+  return {
+    report,
+    startedAt,
+  }
 }
 
 async function runDiagnosticsWithOperatorAttempt({
