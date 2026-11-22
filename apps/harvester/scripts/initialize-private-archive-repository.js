@@ -46,8 +46,8 @@ async function runGit(args, { cwd } = {}) {
 }
 
 /**
- * Initialize an empty private archive repository with a tracked archives/ placeholder.
- * This deliberately refuses non-empty repositories and never force-pushes.
+ * Initialize an empty private archive repository, or safely recognize its existing main branch.
+ * Existing repositories are never cloned, modified, or pushed to by this command.
  */
 export async function initializePrivateArchiveRepository({
   env = process.env,
@@ -61,11 +61,24 @@ export async function initializePrivateArchiveRepository({
   const workingDirectory = await createTemporaryDirectory("coinzilla-harvester-archive-init-")
 
   try {
-    const existingRefs = await runCommand(["ls-remote", "--refs", remote], { cwd: workingDirectory })
-    if (existingRefs) {
-      throw new Error(
-        "Archive repository is not empty; refusing to initialize or modify existing refs. Verify the configured repository before retrying.",
-      )
+    const existingBranches = await runCommand(["ls-remote", "--heads", remote], { cwd: workingDirectory })
+    if (existingBranches) {
+      const branchReferences = existingBranches
+        .split("\\n")
+        .map((line) => line.trim().split(/\\s+/).at(-1))
+        .filter(Boolean)
+      if (branchReferences.length !== 1 || branchReferences[0] !== "refs/heads/main") {
+        throw new Error(
+          "Archive repository contains unexpected branches; refusing to initialize or modify existing refs.",
+        )
+      }
+
+      return Object.freeze({
+        remote,
+        branch: "main",
+        initialized: false,
+        alreadyInitialized: true,
+      })
     }
 
     await runCommand(["init", "--initial-branch=main"], { cwd: workingDirectory })
