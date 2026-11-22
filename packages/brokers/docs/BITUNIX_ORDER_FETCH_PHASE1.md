@@ -6,17 +6,32 @@ This phase verifies Spot pending-order discovery and specific-order reads throug
 
 ## Operator command
 
-Run the existing healthcheck; no order ID or extra command is required:
+Run the existing healthcheck; by default it runs only the order-read workflow. No order ID or extra command is required:
 
 ```bash
 pnpm --filter @coinzilla/brokers bitunix:healthcheck
 ```
 
-For a private local report instead of publishing the sanitized report branch:
+For a private local report instead of publishing the sanitized report branch (also order-read only):
 
 ```bash
 pnpm --filter @coinzilla/brokers bitunix:healthcheck --local
 ```
+
+## Focused versus full diagnostics
+
+The default healthcheck and `--local` run only:
+
+1. `broker.getOpenOrders()` with no arguments.
+2. If that result is successful, `broker.getOrder({ symbol, orderId })` for every discovered order.
+
+The existing account, REST, WebSocket, ping, and user-info diagnostics are **not deleted**. They are temporarily skipped by default to avoid repeating checks that have already been completed. Run them explicitly when needed:
+
+```bash
+pnpm --filter @coinzilla/brokers bitunix:healthcheck --full-diagnostics
+```
+
+The `--place-order` workflow retains its broader read-only preflight. No live placement or cancellation is part of the default order-read scan.
 
 ## Order-read sequence
 
@@ -44,7 +59,7 @@ Order IDs are discovered from `getOpenOrders().data`; they are never passed as C
 
 ## Bitunix Spot API behavior
 
-Bitunix documents `POST /api/spot/v1/order/pending/list` with a required symbol. The Broker API's no-argument `getOpenOrders()` enumerates active Spot markets and sequentially aggregates symbol-scoped reads. Per-symbol errors and partial data remain visible. The specific-order detail endpoint is `GET /api/spot/v1/order/detail`.
+Bitunix documents `POST /api/spot/v1/order/pending/list` with a required symbol. The Broker API's no-argument `getOpenOrders()` enumerates active Spot markets and sequentially aggregates symbol-scoped reads. Per-symbol errors and partial data remain visible. The specific-order detail endpoint is `GET /api/spot/v1/order/detail`, with `orderId` in the URL query string. Its REST signature uses the sorted query key/value concatenation (for example, `orderId2124329325141426176`) without separators. This matches the established [JKorf Bitunix.Net REST authentication implementation](https://github.com/JKorf/Bitunix.Net/blob/main/Bitunix.Net/BitunixAuthenticationProvider.cs), which is used as the compatibility reference for this GET request. The official Spot signing page's query example is ambiguous against that implementation, so keep a regression vector for the known-working client format.
 
 ## Diagnostics and safety
 
@@ -66,7 +81,7 @@ Bitunix documents `POST /api/spot/v1/order/pending/list` with a required symbol.
 
 ## Regression coverage
 
-Workflow tests inject a read-only Broker stub for ordinary publish and operator-mode scenarios, so they do not contact Bitunix or wait on network timeouts. Dedicated scan tests verify the complete successful pending-orders result, every detail response, failed pending-order results, and that detail reads are skipped when the pending-order request fails.
+Workflow tests inject a read-only Broker stub for ordinary publish and operator-mode scenarios, so they do not contact Bitunix or wait on network timeouts. Dedicated scan tests verify the complete successful pending-orders result, every detail response, failed pending-order results, and that detail reads are skipped when the pending-order request fails. Signature tests cover the exact 19-digit HYPE order ID and the query serialization used by the established .NET client. Healthcheck tests verify that default mode skips broad diagnostics, still requires every discovered order detail to succeed, and that `--full-diagnostics` preserves access to the existing checks.
 
 ## Known accepted order
 
