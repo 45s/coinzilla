@@ -79,7 +79,7 @@ test("refuses reset while any Harvester process lock exists", async (t) => {
   await writeFile(path.join(fixture.lockDirectory, ".harvester-trading-test.lock"), "active process")
 
   await assert.rejects(
-    runHarvesterOperationalStateReset(createResetArguments(fixture)),
+    runHarvesterOperationalStateReset(createResetArguments({ fixture })),
     /process lock exists/i,
     "The reset must fail closed while a Harvester process lock is present.",
   )
@@ -101,7 +101,7 @@ test("requires explicit confirmation and TESTNET mode before deleting anything",
   )
   await assert.rejects(
     runHarvesterOperationalStateReset(createResetArguments(fixture, {
-      env: { ...createResetArguments(fixture).env, TRADING_MODE: "live" },
+      env: { ...createResetArguments({ fixture }).env, TRADING_MODE: "live" },
     })),
     /TRADING_MODE=testnet/,
     "The reset command must reject LIVE mode.",
@@ -123,7 +123,7 @@ test("refuses a symlink as the recovery-facts reset target", async (t) => {
   await symlink(actualDirectory, fixture.recoveryFactsDirectory, "junction")
 
   await assert.rejects(
-    runHarvesterOperationalStateReset(createResetArguments(fixture)),
+    runHarvesterOperationalStateReset(createResetArguments({ fixture })),
     /symbolic link/i,
     "The reset must not follow a symbolic link to another directory.",
   )
