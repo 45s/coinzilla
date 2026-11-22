@@ -98,6 +98,19 @@ test("rejects malformed process-start identity and source commit values", () => 
   )
 })
 
+
+test("refuses to create an archive identity for LIVE mode", () => {
+  assert.throws(
+    () => createHarvesterArchiveProcessIdentity({
+      startedAt: PROCESS_STARTED_AT,
+      runtimeSessionId: RUNTIME_SESSION_ID,
+      tradingMode: "live",
+      source,
+    }),
+    /tradingMode must be testnet/,
+  )
+})
+
 test("persists one process identity without overwriting an existing session record", async () => {
   const directory = await mkdtemp(join(tmpdir(), "harvester-archive-identity-"))
   const filename = join(directory, "process-identity.json")
