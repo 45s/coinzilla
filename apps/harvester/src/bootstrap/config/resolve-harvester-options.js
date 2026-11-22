@@ -5,7 +5,7 @@ import { resolveRuntimeConfig, selectPairsForTradingMode } from "../../domain/ap
 import { StrategyId } from "../../domain/strategies/strategy-ids.js"
 import { TRADING_ENVIRONMENTS } from "../../domain/trading-environment.js"
 import {
-  createEffectiveStrategyConfigurationFingerprint,
+  createEffectiveHarvesterConfigurationFingerprint,
   EffectiveConfigurationError,
 } from "../../domain/configuration/create-effective-strategy-configuration-fingerprint.js"
 import { resolveTelegramOperatorConfig } from "../operator-control/resolve-telegram-operator-config.js"
@@ -85,10 +85,8 @@ function resolveExecutionRouteSymbols({ executionRoutes, executionSymbols } = {}
   }
   const conservativeExecutionSymbols = symbolsByStrategy.get(StrategyId.COIN_GRABBER)
   const recoverySellerExecutionSymbols = symbolsByStrategy.get(StrategyId.RECOVERY_SELLER)
-  if (conservativeExecutionSymbols.length === 0) {
-    throw new Error(
-      "This provider account has no Conservative execution route; RS-only runtime dispatch is not integrated yet",
-    )
+  if (conservativeExecutionSymbols.length === 0 && recoverySellerExecutionSymbols.length === 0) {
+    throw new Error("This provider account has no enabled strategy execution routes")
   }
   const routeSymbols = [...new Set([
     ...conservativeExecutionSymbols,
@@ -139,8 +137,11 @@ function selectExecutionPairs({ pairs, executionSymbols }) {
   if (executionSymbols === undefined) {
     return pairs
   }
-  if (!Array.isArray(executionSymbols) || executionSymbols.length === 0) {
-    throw new TypeError("executionSymbols must be a non-empty array when supplied")
+  if (!Array.isArray(executionSymbols)) {
+    throw new TypeError("executionSymbols must be an array when supplied")
+  }
+  if (executionSymbols.length === 0) {
+    return {}
   }
   const selectedPairs = {}
   for (const symbol of executionSymbols) {
@@ -172,7 +173,7 @@ function resolveEffectivePairs({ strategyConfig, tradingMode, executionSymbols }
     pairs: environmentPairs,
     executionSymbols,
   })
-  if (Object.keys(pairs).length === 0) {
+  if (Object.keys(pairs).length === 0 && executionSymbols === undefined) {
     throw new Error(`No CG_coinGrabber pairs configured for TRADING_MODE=${tradingMode}`)
   }
   return pairs
@@ -243,9 +244,8 @@ function createEffectiveAppConfig({
 }
 
 function createConfigurationEvidence({ appConfig, tradingMode, tradingEnabled }) {
-  const effectiveConfiguration = createEffectiveStrategyConfigurationFingerprint({
-    strategyName: "CG_coinGrabber",
-    strategy: appConfig.strategies.CG_coinGrabber,
+  const effectiveConfiguration = createEffectiveHarvesterConfigurationFingerprint({
+    strategies: appConfig.strategies,
   })
   const enabledSymbols = [...effectiveConfiguration.enabledMarkets]
   const validatedConfigurationData = mapConfigValidatedData({

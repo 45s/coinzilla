@@ -126,3 +126,44 @@ export function createEffectiveStrategyConfigurationFingerprint({ strategyName, 
     enabledMarkets: Object.freeze(enabledMarkets),
   })
 }
+
+
+/**
+ * Fingerprint the effective Harvester account configuration across all enabled
+ * strategies while retaining one durable baseline contract for the process.
+ */
+export function createEffectiveHarvesterConfigurationFingerprint({ strategies } = {}) {
+  if (!isRecord(strategies) || Object.keys(strategies).length === 0) {
+    throw new EffectiveConfigurationError({
+      path: "strategies",
+      expected: "a non-empty validated strategy map",
+    })
+  }
+  const pairs = {}
+  for (const strategy of Object.values(strategies)) {
+    if (!isRecord(strategy) || !isRecord(strategy.pairs)) {
+      throw new EffectiveConfigurationError({
+        path: "strategies",
+        expected: "each configured strategy to contain a market-pair map",
+      })
+    }
+    for (const [symbol, pair] of Object.entries(strategy.pairs)) {
+      if (!isRecord(pair) || typeof pair.enabled !== "boolean") {
+        throw new EffectiveConfigurationError({
+          path: `strategies.pairs.${symbol}`,
+          expected: "a market pair with an explicit boolean enabled flag",
+        })
+      }
+      if (!Object.hasOwn(pairs, symbol) || pair.enabled === true) {
+        pairs[symbol] = { enabled: pair.enabled }
+      }
+    }
+  }
+  return createEffectiveStrategyConfigurationFingerprint({
+    strategyName: "Harvester",
+    strategy: {
+      strategies,
+      pairs,
+    },
+  })
+}

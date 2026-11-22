@@ -1,5 +1,5 @@
 import { toResult } from "@coinzilla/utils"
-import { createEffectiveStrategyConfigurationFingerprint } from "../domain/configuration/create-effective-strategy-configuration-fingerprint.js"
+import { createEffectiveHarvesterConfigurationFingerprint } from "../domain/configuration/create-effective-strategy-configuration-fingerprint.js"
 
 /** Persist a deterministic, non-secret fingerprint of all strategy decision settings. */
 export async function recordConfigurationBaseline({ operationalStateStore, appConfig } = {}) {
@@ -9,13 +9,10 @@ export async function recordConfigurationBaseline({ operationalStateStore, appCo
     if (!strategies || typeof strategies !== "object" || Array.isArray(strategies)) {
       throw new TypeError("Configuration baseline requires the validated strategies object")
     }
-    const strategyNames = Object.keys(strategies).sort()
-    if (strategyNames.length !== 1) { throw new TypeError("Configuration baseline requires exactly one configured strategy") }
-    const [strategyName] = strategyNames
-    const { fingerprint, enabledMarkets: markets } = createEffectiveStrategyConfigurationFingerprint({
-      strategyName,
-      strategy: strategies[strategyName],
+    const { fingerprint, enabledMarkets: markets } = createEffectiveHarvesterConfigurationFingerprint({
+      strategies,
     })
+    const strategyName = "Harvester"
     const result = await operationalStateStore.append({
       factId: `configuration-baseline:${  fingerprint}`,
       factType: "CONFIGURATION_BASELINE",
