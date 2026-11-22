@@ -74,6 +74,35 @@ const LOSSLESS_NUMERIC_FIELDS = Object.freeze({
   "/api/spot/v1/user/info": Object.freeze(["uid"]),
 })
 
+function redactDiagnosticValue(value, key = "") {
+  if (/api.?key|secret|sign|nonce|email|phone|address|uid/i.test(key)) {
+    return "[REDACTED]"
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => redactDiagnosticValue(item))
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.entries(value).map(([childKey, childValue]) => [
+      childKey,
+      redactDiagnosticValue(childValue, childKey),
+    ]))
+  }
+  return value
+}
+
+function logRestDiagnostic({ logger, level = "debug", event }) {
+  try {
+    logger?.[level]?.({
+      provider: "bitunix",
+      product: "spot",
+      layer: "rest",
+      ...event,
+    })
+  } catch {
+    // Diagnostics must never change exchange request behavior.
+  }
+}
+
 function stringifyNumericJsonFields({ text, fields }) {
   const fieldPattern = fields.join("|")
   const numericFieldPattern = new RegExp(
@@ -519,7 +548,7 @@ function createPreparedRequest({ client, method, path, queryParams, body, authen
 
 export class BitunixRestClient {
   /**
-   * @param {{apiKey?: string, apiSecret?: string, baseUrl?: string, requestTimeout?: number, fetchFn?: typeof fetch, now?: () => number, nonceFactory?: () => string}} options
+   * @param {{apiKey?: string, apiSecret?: string, baseUrl?: string, requestTimeout?: number, fetchFn?: typeof fetch, now?: () => number, nonceFactory?: () => string, logger?: object}} options
    */
   constructor(options = {}) {
     const {
@@ -530,6 +559,7 @@ export class BitunixRestClient {
       fetchFn = fetch,
       now = Date.now,
       nonceFactory = () => randomBytes(16).toString("hex"),
+      logger,
     } = options
     validateClientOptions({
       apiKey,
@@ -548,6 +578,7 @@ export class BitunixRestClient {
     this.fetch = fetchFn
     this.now = now
     this.nonceFactory = nonceFactory
+    this.logger = logger
   }
 
   /**
@@ -573,32 +604,79 @@ export class BitunixRestClient {
         outcomeUnknown: false,
       })
     }
-    const request = createPreparedRequest({
-      client: this,
-      method,
-      path,
-      queryParams,
-      body,
-      authenticated,
-      stateChanging,
+    logRestDiagnostic({
+      logger: this.logger,
+      event: {
+        event: "request.started",
+        method,
+        path,
+        queryParams: redactDiagnosticValue(queryParams),
+        body: redactDiagnosticValue(body),
+        authenticated,
+        stateChanging,
+      },
     })
-    const response = await sendRequest({
-      client: this,
-      request,
-      path,
-      stateChanging,
-    })
-    const payload = await readResponsePayload({
-      response,
-      path,
-      stateChanging,
-    })
-    return validateResponse({
-      response,
-      payload,
-      path,
-      stateChanging,
-    })
+    try {
+      const request = createPreparedRequest({
+        client: this,
+        method,
+        path,
+        queryParams,
+        body,
+        authenticated,
+        stateChanging,
+      })
+      const response = await sendRequest({
+        client: this,
+        request,
+        path,
+        stateChanging,
+      })
+      const payload = await readResponsePayload({
+        response,
+        path,
+        stateChanging,
+      })
+      logRestDiagnostic({
+        logger: this.logger,
+        level: response.ok ? "debug" : "warn",
+        event: {
+          event: "response.received",
+          method,
+          path,
+          status: response.status,
+          ok: response.ok,
+          exchangeCode: payload?.code === undefined ? null : String(payload.code),
+          message: typeof payload?.msg === "string" ? payload.msg : null,
+          data: redactDiagnosticValue(payload?.data),
+        },
+      })
+      return validateResponse({
+        response,
+        payload,
+        path,
+        stateChanging,
+      })
+    } catch (error) {
+      logRestDiagnostic({
+        logger: this.logger,
+        level: "error",
+        event: {
+          event: "request.failed",
+          method,
+          path,
+          error: {
+            name: error?.name ?? "Error",
+            code: error?.code ?? null,
+            kind: error?.kind ?? null,
+            exchangeCode: error?.exchangeCode ?? null,
+            status: error?.status ?? null,
+            message: error?.message ?? String(error),
+          },
+        },
+      })
+      throw error
+    }
   }
 }
 
