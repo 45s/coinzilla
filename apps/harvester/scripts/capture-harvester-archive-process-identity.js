@@ -116,7 +116,7 @@ function normalizeSource(value) {
  * @param {object} input
  * @param {string} input.startedAt Canonical process-start UTC timestamp.
  * @param {string} input.runtimeSessionId UUID assigned by the launcher.
- * @param {"testnet"|"live"|null} [input.tradingMode]
+ * @param {string|null} [input.tradingMode]
  * @param {object|null} [input.source] Allowlisted captureBuildMetadata source.
  * @returns {object}
  */
@@ -128,8 +128,8 @@ export function createHarvesterArchiveProcessIdentity({
 } = {}) {
   const normalizedStartedAt = requireStartedAt(startedAt)
   const normalizedRuntimeSessionId = requireRuntimeSessionId(runtimeSessionId)
-  if (tradingMode !== null && tradingMode !== "testnet" && tradingMode !== "live") {
-    throw new TypeError("tradingMode must be testnet, live or null")
+  if (tradingMode !== null && typeof tradingMode !== "string") {
+    throw new TypeError("tradingMode must be a string or null")
   }
 
   return Object.freeze({
