@@ -1587,17 +1587,17 @@
     ]
   },
   "latestCoverageMeasurement": {
-    "measuredAt": "2026-11-22T08:21:10Z",
-    "branch": "fix/harvester/rs-operational-state-bootstrap",
-    "prHeadSha": "52ff824b6c0bfe1318e0dea5126c3ca10adf8789",
-    "workflowRunId": 45002232384,
-    "harvesterJobId": 137146078765,
+    "measuredAt": "2026-11-22T10:28:51Z",
+    "branch": "fix/harvester/closing-open-orders-audit-764-replay",
+    "prHeadSha": "05f64a9a2e7a561998a90bd0f103922b75acce46",
+    "workflowRunId": 45012574117,
+    "harvesterJobId": 137177911888,
     "aggregate": {
-      "lines": 90.45,
-      "branches": 83.45,
-      "functions": 95.95
+      "lines": 90.48,
+      "branches": 83.49,
+      "functions": 95.97
     },
-    "checkedCriticalModuleCount": 40,
+    "checkedCriticalModuleCount": 41,
     "gatePassed": true
   }
 }
