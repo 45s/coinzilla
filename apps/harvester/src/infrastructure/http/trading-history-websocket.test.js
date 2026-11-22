@@ -78,13 +78,14 @@ function waitForMessage(socket) {
   })
 }
 
-async function startApi({ t, eventBus } = {}) {
+async function startApi({ t, eventBus, subscribeExchangeAccountUpdates } = {}) {
   const api = await startTradingHistoryApiServer({
     queries: createQueries(),
     environment: "testnet",
     host: "127.0.0.1",
     port: 0,
     eventBus,
+    subscribeExchangeAccountUpdates,
     logger: {
       error() {},
     },
@@ -226,5 +227,30 @@ test("broadcasts exchange-account invalidations from Harvester snapshot events",
   assert.deepEqual(await waitForMessage(socket), {
     type: "exchange-account.updated",
   })
+})
+
+
+test("broadcasts live updates from Harvester's existing user-data subscription", async (t) => {
+  const eventBus = new EventBus()
+  let notify
+  let unsubscribed = false
+  const api = await startApi({
+    t,
+    eventBus,
+    subscribeExchangeAccountUpdates: (listener) => {
+      notify = listener
+      return () => { unsubscribed = true }
+    },
+  })
+  const socket = new WebSocket(`ws://127.0.0.1:${api.address.port}/api/v1/trading/events`)
+  t.after(() => socket.close())
+
+  await waitForSocketOpen(socket)
+  notify()
+  assert.deepEqual(await waitForMessage(socket), {
+    type: "exchange-account.updated",
+  })
+  await api.close()
+  assert.equal(unsubscribed, true, "Closing the API must detach the monitor listener without managing the exchange stream.")
 })
 
