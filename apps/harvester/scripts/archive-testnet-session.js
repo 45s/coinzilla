@@ -102,9 +102,9 @@ async function copyRegularTree({
   relative = "",
   onFileCopied,
 } = {}) {
-  await mkdir(destinationDirectory, { recursive: true, mode: 0o700 })
   const source = relative ? path.join(sourceDirectory, relative) : sourceDirectory
   const destination = relative ? path.join(destinationDirectory, relative) : destinationDirectory
+  await mkdir(destination, { recursive: true, mode: 0o700 })
   const entries = await readdir(source, { withFileTypes: true })
   for (const entry of entries) {
     const sourcePath = path.join(source, entry.name)
