@@ -482,4 +482,12 @@ Initialize the empty repository and verify write access with:
 pnpm --filter @coinzilla/harvester archive:repo:init
 ```
 
-The command only initializes a repository with an `archives/.gitkeep` placeholder and a README, then pushes `main`. It refuses any repository that already contains refs, never force-pushes, and does not read or upload Harvester databases, facts, logs, Journal sessions, API credentials, or other operational data. The actual archive/reset workflow is a separate implementation step.
+The command only initializes a repository with an `archives/.gitkeep` placeholder and a README, then pushes `main`. It refuses any repository that already contains refs and never force-pushes.
+
+After the existing Harvester process has stopped, archive the current local evidence with:
+
+```bash
+pnpm run archive:push
+```
+
+The command requires `TRADING_MODE=testnet` and the configured private archive remote. It copies the complete `logs/` and `data/` directory trees, including legacy sessions, cumulative logs, Operational State Store facts, SQLite database files and any WAL/SHM sidecars. It does not require process identity/completion markers and does not start or stop Harvester. A SHA-256 manifest verifies the copied files before publication. The local artifact is retained under `archive-output/`; the remote receives it under `archives/`. This is a raw file snapshot, not a SQLite online backup or an SQLite integrity check. The command does not modify the source folders or make exchange API calls.

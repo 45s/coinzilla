@@ -1,6 +1,6 @@
 # Local Harvester DEV archive — decisions and implementation record
 
-> Status: archive command implemented on the task branch; local execution and end-to-end private-remote verification remain pending.
+> Status: the original process-scoped archive contract is superseded by the operator's 2026-11-22 decision to snapshot the complete local `logs/` and `data/` directories through the existing `archive:push` command.
 > Tracking issue: [#1742](https://github.com/45s/coinzilla/issues/1742).
 > Task branch: `feat/harvester-local-dev-reset-archive`.
 > Private destination: `45s/coinzilla-archive` (private repository).
@@ -197,3 +197,20 @@ Do not weaken the resolver to accept legacy sessions. Do not synthesize metadata
 5. Only after those checks, run `pnpm run archive:push`; verify the local archive and private-remote publication.
 
 **Current status:** the operator reports the focused archive tests passed (5/5). The first archive attempt created/published nothing. No legacy session was modified and no operational data was uploaded. End-to-end validation remains pending a session created by the updated launcher.
+
+## 11. Operator scope change — complete local folder snapshot (2026-11-22)
+
+The operator explicitly changed the archive requirement after the first command rejected the legacy run. This section supersedes the earlier process-marker, exact-session-only, shared-log exclusion, facts exclusion and per-process provenance requirements for the current archive command.
+
+- Keep and use the existing `pnpm run archive:push` command. Do not add a second command or ask the operator to start another Harvester process.
+- Copy the complete `apps/harvester/logs/` and `apps/harvester/data/` directory trees as they exist when the command runs.
+- Include legacy sessions without `process-identity.json` or `process-completed.json`, cumulative logs, Journal files, Operational State Store facts, database files, and SQLite `-wal` / `-shm` sidecars when present.
+- Do not select a process session, synthesize identity markers, call the SQLite backup service, or claim SQLite integrity verification. The manifest verifies copied file inventory, sizes and SHA-256 checksums only.
+- Keep the explicit `TRADING_MODE=testnet` command guard and exact private remote restriction. The mode describes the command invocation; it does not classify every file inside the complete `data/` tree.
+- Write the local archive outside the source trees under `apps/harvester/archive-output/` to prevent the archive from copying itself. Publish a unique directory under the private remote's `archives/` path without overwriting an existing destination.
+- Never mutate, reset, delete or clean the source `logs/` or `data/` folders. Do not start, stop or control a Harvester process. Do not make exchange API calls.
+- The previous exclusions of cumulative logs, facts and non-TESTNET subdirectories are intentionally superseded by this explicit operator instruction to preserve the whole `logs/` and `data/` folders.
+
+The command's archive timestamp is the time the snapshot is created, not a claim about the archived process start time. The archive is a raw evidence copy; if Harvester is still writing to the database during the copy, the checksums prove only the bytes copied, not transactional SQLite consistency. Run it against the already-stopped process when possible. No new process is needed.
+
+The first archive attempt remains a historical observation: the legacy session was not changed and no archive was uploaded. The new command is intended to make that existing evidence eligible without fabricating process metadata.

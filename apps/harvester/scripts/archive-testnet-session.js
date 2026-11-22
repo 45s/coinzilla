@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto"
+import { createHash, randomUUID } from "node:crypto"
 import {
   copyFile,
   lstat,
@@ -15,17 +15,11 @@ import { promisify } from "node:util"
 import path from "node:path"
 import os from "node:os"
 import { fileURLToPath } from "node:url"
-import { createHarvesterTradingHistoryBackupService } from "../src/infrastructure/persistence/trading-history-backups/index.js"
-import { createHarvesterLogSessionPaths } from "../src/infrastructure/logging/create-harvester-log-session-paths.js"
 import { validateArchiveRemote } from "./initialize-private-archive-repository.js"
-import { createHarvesterArchiveProcessIdentity } from "./capture-harvester-archive-process-identity.js"
 
 const execFileAsync = promisify(execFile)
 const PACKAGE_DIRECTORY = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
-const LOG_DIRECTORY = path.join(PACKAGE_DIRECTORY, "logs")
-const SESSION_DIRECTORY = path.join(LOG_DIRECTORY, "sessions")
-const LOCAL_ARCHIVE_DIRECTORY = path.join(PACKAGE_DIRECTORY, "data", "archives")
-const COMMIT_PATTERN = /^[a-f0-9]{40,64}$/i
+const SOURCE_DIRECTORIES = Object.freeze(["logs", "data"])
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 const runGitDefault = async (args, { cwd } = {}) => {
@@ -38,121 +32,19 @@ const runGitDefault = async (args, { cwd } = {}) => {
   return stdout.trim()
 }
 
-function assertProcessIdentity(identity) {
-  let normalized
-  try {
-    normalized = createHarvesterArchiveProcessIdentity({
-      startedAt: identity?.startedAt,
-      runtimeSessionId: identity?.runtimeSessionId,
-      tradingMode: identity?.environment,
-      source: identity?.source,
-    })
-  } catch (cause) {
-    throw new Error(
-      "The selected session has no valid TESTNET process-start identity and full source commit; refusing to guess from the current checkout.",
-      { cause },
-    )
-  }
-  if (normalized.environment !== "testnet" || !normalized.source.commit) {
-    throw new Error(
-      "The selected session has no valid TESTNET process-start identity and full source commit; refusing to guess from the current checkout.",
-    )
-  }
-  return normalized
-}
-
-export function createHarvesterArchiveDirectoryName(identity) {
-  assertProcessIdentity(identity)
-  const timestamp = identity.startedAt
-    .replace(/\.\d{3}Z$/, "Z")
-    .replaceAll(":", "-")
-  return `${timestamp}_${identity.source.commit.slice(0, 8).toLowerCase()}`
-}
-
-async function assertSessionCompleted(directory, runtimeSessionId) {
-  const filename = path.join(directory, "process-completed.json")
-  const fileStats = await lstat(filename)
-  if (fileStats.isSymbolicLink() || !fileStats.isFile()) {
-    throw new Error(`Session completion marker is not a regular file: ${filename}`)
-  }
-  const completion = JSON.parse(await readFile(filename, "utf8"))
+export function createHarvesterArchiveDirectoryName({ createdAt, archiveId } = {}) {
   if (
-    completion.runtimeSessionId !== runtimeSessionId
-    || typeof completion.endedAt !== "string"
-    || Number.isNaN(Date.parse(completion.endedAt))
-    || new Date(completion.endedAt).toISOString() !== completion.endedAt
-    || (completion.exitCode !== null && !Number.isInteger(completion.exitCode))
-    || (completion.signal !== null && typeof completion.signal !== "string")
-    || completion.logStreamsComplete !== true
+    typeof createdAt !== "string"
+    || Number.isNaN(Date.parse(createdAt))
+    || new Date(createdAt).toISOString() !== createdAt
   ) {
-    throw new Error(`Session completion marker is invalid or belongs to another process: ${filename}`)
+    throw new TypeError("Archive creation time must be a valid UTC ISO timestamp.")
   }
-}
-
-async function readSessionIdentity(directory) {
-  const identityFilename = path.join(directory, "process-identity.json")
-  const identityStats = await lstat(identityFilename)
-  if (identityStats.isSymbolicLink() || !identityStats.isFile()) {
-    throw new Error(`Process identity is not a regular file: ${identityFilename}`)
+  if (!UUID_PATTERN.test(archiveId ?? "")) {
+    throw new TypeError("Archive ID must be a valid UUID.")
   }
-  return JSON.parse(await readFile(identityFilename, "utf8"))
-}
-
-async function resolveSessionIdentity({ sessionId } = {}) {
-  const entries = await readdir(SESSION_DIRECTORY, { withFileTypes: true })
-  const candidates = []
-  for (const entry of entries) {
-    if (!entry.isDirectory()) {
-      continue
-    }
-    const directory = path.join(SESSION_DIRECTORY, entry.name)
-    const identityFilename = path.join(directory, "process-identity.json")
-    try {
-      await lstat(identityFilename)
-    } catch (error) {
-      if (error.code === "ENOENT") {
-        continue
-      }
-      throw error
-    }
-    const identity = await readSessionIdentity(directory)
-    if (identity.environment !== "testnet") {
-      continue
-    }
-    assertProcessIdentity(identity)
-    if (sessionId && identity.runtimeSessionId !== sessionId) {
-      continue
-    }
-    const expected = createHarvesterLogSessionPaths({
-      directory: LOG_DIRECTORY,
-      startedAt: identity.startedAt,
-      runtimeSessionId: identity.runtimeSessionId,
-    }).sessionDirectory
-    if (path.resolve(expected) !== path.resolve(directory)) {
-      throw new Error(`Session identity does not match its directory: ${directory}`)
-    }
-    for (const candidateDirectory of [LOG_DIRECTORY, SESSION_DIRECTORY, directory]) {
-      const directoryStats = await lstat(candidateDirectory)
-      if (directoryStats.isSymbolicLink() || !directoryStats.isDirectory()) {
-        throw new Error(`Session path must be a real directory, not a symlink: ${candidateDirectory}`)
-      }
-    }
-    await assertSessionCompleted(directory, identity.runtimeSessionId)
-    candidates.push({ directory, identity })
-  }
-
-  if (sessionId && candidates.length !== 1) {
-    throw new Error(`Expected exactly one TESTNET session for runtime session ID ${sessionId}; found ${candidates.length}.`)
-  }
-  if (candidates.length === 0) {
-    throw new Error("No eligible TESTNET process session was found under logs/sessions.")
-  }
-  candidates.sort((left, right) => right.identity.startedAt.localeCompare(left.identity.startedAt))
-  if (!sessionId && candidates.length > 1
-    && candidates[0].identity.startedAt === candidates[1].identity.startedAt) {
-    throw new Error("The latest TESTNET sessions have the same start timestamp; pass --session <runtime-session-id>.")
-  }
-  return candidates[0]
+  const timestamp = createdAt.replace(/\.\d{3}Z$/, "Z").replaceAll(":", "-")
+  return timestamp + "_" + archiveId.slice(0, 8)
 }
 
 async function assertRealDirectory(directory) {
@@ -216,7 +108,7 @@ async function sha256File(filename) {
   return createHash("sha256").update(content).digest("hex")
 }
 
-async function createArchiveManifest({ directory, identity, backupResult } = {}) {
+async function createArchiveManifest({ directory, createdAt } = {}) {
   const files = await listRegularFiles(directory)
   const entries = []
   for (const relativePath of files) {
@@ -231,26 +123,15 @@ async function createArchiveManifest({ directory, identity, backupResult } = {})
   return {
     formatVersion: 1,
     application: "harvester",
-    environment: "testnet",
-    process: {
-      startedAt: identity.startedAt,
-      runtimeSessionId: identity.runtimeSessionId,
-      source: identity.source,
-    },
-    database: {
-      backupCreatedAt: backupResult.createdAt,
-      schemaVersion: backupResult.schemaVersion,
-      sha256: backupResult.sha256,
-    },
+    commandTradingMode: "testnet",
+    snapshotType: "raw-directory-copy",
+    createdAt,
+    includedDirectories: [...SOURCE_DIRECTORIES],
     files: entries,
   }
 }
 
 async function verifyArchive({ directory, manifest } = {}) {
-  const databaseEntry = manifest.files.find((entry) => entry.path === "database/harvester.sqlite")
-  if (!databaseEntry || databaseEntry.sha256 !== manifest.database?.sha256) {
-    throw new Error("Archive database checksum does not match the verified SQLite backup metadata.")
-  }
   const expectedPaths = manifest.files.map((entry) => entry.path).sort()
   const actualPaths = (await listRegularFiles(directory))
     .filter((filename) => filename !== "manifest.json")
@@ -261,7 +142,7 @@ async function verifyArchive({ directory, manifest } = {}) {
     const filename = path.join(directory, entry.path)
     const fileStats = await stat(filename)
     if (fileStats.size !== entry.size || await sha256File(filename) !== entry.sha256) {
-      throw new Error(`Archive checksum or size verification failed: ${entry.path}`)
+      throw new Error("Archive checksum or size verification failed: " + entry.path)
     }
   }
 }
@@ -351,8 +232,11 @@ async function publishArchive({
 export async function runHarvesterArchivePush({
   args = process.argv.slice(2),
   env = process.env,
-  backupServiceFactory = createHarvesterTradingHistoryBackupService,
   runGit = runGitDefault,
+  packageDirectory = PACKAGE_DIRECTORY,
+  now = () => new Date(),
+  createArchiveId = randomUUID,
+  publishArchiveFn = publishArchive,
 } = {}) {
   if (env.TRADING_MODE !== "testnet") {
     throw new Error("Archive publication requires TRADING_MODE=testnet. LIVE and unspecified modes are rejected.")
@@ -366,81 +250,50 @@ export async function runHarvesterArchivePush({
   if (canonicalRemote !== "https://github.com/45s/coinzilla-archive") {
     throw new Error("HARVESTER_ARCHIVE_REMOTE must target the private https://github.com/45s/coinzilla-archive repository.")
   }
-  if (args.length > 2 || (args.length > 0 && args[0] !== "--session") || (args.length === 2 && !UUID_PATTERN.test(args[1]))) {
-    throw new TypeError("Usage: archive:push [--session <runtime-session-id>]")
-  }
-  const selected = await resolveSessionIdentity({
-    sessionId: args.length === 2 ? args[1] : undefined,
-  })
-  const identity = assertProcessIdentity(selected.identity)
-  const archiveName = createHarvesterArchiveDirectoryName(identity)
-  await assertRealDirectory(path.join(PACKAGE_DIRECTORY, "data"))
-  await mkdir(LOCAL_ARCHIVE_DIRECTORY, { recursive: true, mode: 0o700 })
-  await assertRealDirectory(LOCAL_ARCHIVE_DIRECTORY)
-  const localArchive = path.join(LOCAL_ARCHIVE_DIRECTORY, archiveName)
-  let existingManifest = null
-  try {
-    await mkdir(localArchive, { recursive: false, mode: 0o700 })
-  } catch (error) {
-    if (error.code !== "EEXIST") {
-      throw error
-    }
-    await assertRealDirectory(localArchive)
-    const manifestFilename = path.join(localArchive, "manifest.json")
-    try {
-      const manifestStats = await lstat(manifestFilename)
-      if (manifestStats.isSymbolicLink() || !manifestStats.isFile()) {
-        throw new Error("Archive manifest must be a regular file.")
-      }
-      existingManifest = JSON.parse(await readFile(manifestFilename, "utf8"))
-    } catch {
-      throw new Error(`A partial or unreadable local archive already exists at ${localArchive}; refusing to overwrite it.`)
-    }
-    if (
-      existingManifest.process?.startedAt !== identity.startedAt
-      || existingManifest.process?.runtimeSessionId !== identity.runtimeSessionId
-      || existingManifest.process?.source?.commit !== identity.source.commit
-      || existingManifest.environment !== "testnet"
-    ) {
-      throw new Error(`The existing local archive does not match the selected process identity: ${localArchive}`)
-    }
-    await verifyArchive({ directory: localArchive, manifest: existingManifest })
+  if (args.length !== 0) {
+    throw new TypeError("Usage: archive:push")
   }
 
+  const sourcePaths = SOURCE_DIRECTORIES.map((directoryName) => ({
+    directoryName,
+    sourceDirectory: path.join(packageDirectory, directoryName),
+  }))
+  for (const source of sourcePaths) {
+    await assertRealDirectory(source.sourceDirectory)
+  }
+
+  const createdAt = now().toISOString()
+  const archiveName = createHarvesterArchiveDirectoryName({
+    createdAt,
+    archiveId: createArchiveId(),
+  })
+  const outputDirectory = path.join(packageDirectory, "archive-output")
+  await mkdir(outputDirectory, { recursive: true, mode: 0o700 })
+  await assertRealDirectory(outputDirectory)
+  const localArchive = path.join(outputDirectory, archiveName)
+
   try {
-    if (!existingManifest) {
-      const backupService = backupServiceFactory({ env })
-      const backupResult = await backupService.createBackup({ keep: 3650 })
-      if (!backupResult.verified || backupResult.environment !== "testnet") {
-        throw new Error("The existing SQLite backup service did not return a verified TESTNET backup.")
-      }
-      const databaseDirectory = path.join(localArchive, "database")
-      const logsDestination = path.join(localArchive, "logs")
-      await mkdir(databaseDirectory, { mode: 0o700 })
-      await mkdir(logsDestination, { mode: 0o700 })
-      const copiedDatabaseFilename = path.join(databaseDirectory, "harvester.sqlite")
-      await copyFile(backupResult.backupFilename, copiedDatabaseFilename)
-      if (await sha256File(copiedDatabaseFilename) !== backupResult.sha256) {
-        throw new Error("Copied SQLite backup checksum does not match the backup service result.")
-      }
-      await copyFile(backupResult.manifestFilename, path.join(databaseDirectory, "backup-manifest.json"))
+    await mkdir(localArchive, { recursive: false, mode: 0o700 })
+    for (const source of sourcePaths) {
       await copyRegularTree({
-        sourceDirectory: selected.directory,
-        destinationDirectory: path.join(logsDestination, path.basename(selected.directory)),
+        sourceDirectory: source.sourceDirectory,
+        destinationDirectory: path.join(localArchive, source.directoryName),
       })
-      const manifest = await createArchiveManifest({
-        directory: localArchive,
-        identity,
-        backupResult,
-      })
-      await writeFile(path.join(localArchive, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`, {
-        encoding: "utf8",
-        flag: "wx",
-        mode: 0o600,
-      })
-      await verifyArchive({ directory: localArchive, manifest })
     }
-    const published = await publishArchive({
+    const copiedFiles = await listRegularFiles(localArchive)
+    if (copiedFiles.length === 0) {
+      throw new Error("The logs and data directories contain no regular files to archive.")
+    }
+
+    const manifest = await createArchiveManifest({ directory: localArchive, createdAt })
+    await writeFile(path.join(localArchive, "manifest.json"), JSON.stringify(manifest, null, 2) + "\n", {
+      encoding: "utf8",
+      flag: "wx",
+      mode: 0o600,
+    })
+    await verifyArchive({ directory: localArchive, manifest })
+
+    const published = await publishArchiveFn({
       directory: localArchive,
       archiveName,
       remote,
@@ -452,22 +305,24 @@ export async function runHarvesterArchivePush({
       remote,
       remoteCommit: published.commit,
       fileCount: published.fileCount,
-      sourceCommit: identity.source.commit,
-      startedAt: identity.startedAt,
+      createdAt,
     }
   } catch (error) {
-    // Keep the partial/local artifact for diagnosis and safe retry; never clean source data.
-    throw new Error(`Archive ${archiveName} was not published. Local files were retained at ${localArchive}. ${error.message}`, { cause: error })
+    throw new Error(
+      "Archive " + archiveName + " was not published. The source folders were left unchanged; any local archive files were retained at "
+        + localArchive + ". " + error.message,
+      { cause: error },
+    )
   }
 }
 
 async function main() {
   const result = await runHarvesterArchivePush()
   process.stdout.write([
-    "Harvester TESTNET archive published and remotely verified.",
+    "Harvester local logs/data archive published and remotely verified.",
     `Archive: archives/${result.archiveName}`,
-    `Process started: ${result.startedAt}`,
-    `Source commit: ${result.sourceCommit}`,
+    "Created: " + result.createdAt,
+    "Included: logs/ and data/ (complete directory trees)",
     `Remote commit: ${result.remoteCommit}`,
     `Local copy: ${result.localArchive}`,
     `Files verified: ${result.fileCount}`,

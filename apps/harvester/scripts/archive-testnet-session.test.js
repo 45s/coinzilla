@@ -1,82 +1,132 @@
 import assert from "node:assert/strict"
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises"
+import os from "node:os"
+import path from "node:path"
 import test from "node:test"
-import { createHarvesterArchiveDirectoryName, runHarvesterArchivePush } from "./archive-testnet-session.js"
+import {
+  createHarvesterArchiveDirectoryName,
+  runHarvesterArchivePush,
+} from "./archive-testnet-session.js"
 
-const identity = {
-  formatVersion: 1,
-  application: "harvester",
-  environment: "testnet",
-  startedAt: "2026-11-22T14:43:00.123Z",
-  runtimeSessionId: "123e4567-e89b-42d3-a456-426614174000",
-  source: {
-    branch: "feat/harvester-local-dev-reset-archive",
-    commit: "a1b2c3d4".padEnd(40, "e"),
-    shortCommit: "a1b2c3d4",
-    commitMessage: "feat(harvester): capture process provenance",
-    commitDate: "2026-11-22T14:40:00.000Z",
-    workingTree: "clean",
-    metadataSource: "git",
-  },
+const ARCHIVE_REMOTE = "https://github.com/45s/coinzilla-archive.git"
+const CREATED_AT = "2026-11-22T18:30:00.123Z"
+const ARCHIVE_ID = "123e4567-e89b-42d3-a456-426614174000"
+const REMOTE_COMMIT = "a".repeat(40)
+
+async function createArchiveFixture() {
+  const packageDirectory = await mkdtemp(path.join(os.tmpdir(), "harvester-archive-test-"))
+  const files = {
+    "logs/sessions/legacy/terminal.log": "legacy run without process markers",
+    "logs/cumulative/terminal.log": "cumulative terminal evidence",
+    "data/testnet/harvester.db": "sqlite main file",
+    "data/testnet/harvester.db-wal": "sqlite wal evidence",
+    "data/testnet/harvester.db-shm": "sqlite shm evidence",
+    "data/operational-state/facts.jsonl": "operational facts",
+  }
+  for (const [relativePath, content] of Object.entries(files)) {
+    const filename = path.join(packageDirectory, relativePath)
+    await mkdir(path.dirname(filename), { recursive: true })
+    await writeFile(filename, content, "utf8")
+  }
+  return { packageDirectory, files }
 }
 
-test("names the archive from the immutable process-start timestamp and source commit", () => {
+function createArchiveDependencies({ packageDirectory, publishArchiveFn }) {
+  return {
+    packageDirectory,
+    env: {
+      TRADING_MODE: "testnet",
+      HARVESTER_ARCHIVE_REMOTE: ARCHIVE_REMOTE,
+    },
+    args: [],
+    now: () => new Date(CREATED_AT),
+    createArchiveId: () => ARCHIVE_ID,
+    publishArchiveFn,
+  }
+}
+
+test("names each local snapshot from its UTC archive time and unique ID", () => {
   assert.equal(
-    createHarvesterArchiveDirectoryName(identity),
-    "2026-11-22T14-43-00Z_a1b2c3d4",
-    "the folder name must use process-start UTC time and the captured short source SHA",
+    createHarvesterArchiveDirectoryName({ createdAt: CREATED_AT, archiveId: ARCHIVE_ID }),
+    "2026-11-22T18-30-00Z_123e4567",
+    "the archive name must be deterministic from its UTC timestamp and unique archive ID",
   )
 })
 
-test("does not accept a missing startup commit and cannot fall back to current HEAD", () => {
-  assert.throws(
-    () => createHarvesterArchiveDirectoryName({
-      ...identity,
-      source: { ...identity.source, commit: null, shortCommit: null },
-    }),
-    /process-start identity and full source commit/,
-    "an unavailable process-start commit must fail closed instead of using the archive command checkout",
+test("archives complete logs and data trees without requiring process markers", async (t) => {
+  const fixture = await createArchiveFixture()
+  t.after(() => rm(fixture.packageDirectory, { recursive: true, force: true }))
+  let publishedDirectory
+  const result = await runHarvesterArchivePush(createArchiveDependencies({
+    packageDirectory: fixture.packageDirectory,
+    publishArchiveFn: async ({ directory, remote }) => {
+      publishedDirectory = directory
+      assert.equal(remote, ARCHIVE_REMOTE, "the archive must be sent only to the configured private repository")
+      const manifest = JSON.parse(await readFile(path.join(directory, "manifest.json"), "utf8"))
+      assert.equal(manifest.snapshotType, "raw-directory-copy", "the manifest must identify this as a raw evidence snapshot")
+      assert.deepEqual(manifest.includedDirectories, ["logs", "data"], "the manifest must declare both complete source trees")
+      for (const [relativePath, content] of Object.entries(fixture.files)) {
+        assert.equal(
+          await readFile(path.join(directory, relativePath), "utf8"),
+          content,
+          "every nested source file, including legacy logs, facts and SQLite sidecars, must be copied unchanged",
+        )
+      }
+      return { commit: REMOTE_COMMIT, fileCount: manifest.files.length + 1 }
+    },
+  }))
+  assert.equal(result.remoteCommit, REMOTE_COMMIT, "the command must return the verified remote commit")
+  assert.equal(result.localArchive, publishedDirectory, "the verified local snapshot must be the published artifact")
+  assert.equal(result.fileCount, Object.keys(fixture.files).length + 1, "the published inventory must include all source files and the manifest")
+})
+
+test("keeps the completed local snapshot when remote publication fails", async (t) => {
+  const fixture = await createArchiveFixture()
+  t.after(() => rm(fixture.packageDirectory, { recursive: true, force: true }))
+  let attemptedDirectory
+  await assert.rejects(
+    runHarvesterArchivePush(createArchiveDependencies({
+      packageDirectory: fixture.packageDirectory,
+      publishArchiveFn: async ({ directory }) => {
+        attemptedDirectory = directory
+        throw new Error("simulated remote push failure")
+      },
+    })),
+    /simulated remote push failure/,
+    "a remote failure must be reported to the operator",
+  )
+  assert.equal(
+    await readFile(path.join(attemptedDirectory, "logs/sessions/legacy/terminal.log"), "utf8"),
+    fixture.files["logs/sessions/legacy/terminal.log"],
+    "the complete local snapshot must remain available after a failed push",
   )
 })
 
-test("rejects a non-TESTNET process identity", () => {
-  assert.throws(
-    () => createHarvesterArchiveDirectoryName({
-      ...identity,
-      environment: "live",
-    }),
-    /process-start identity and full source commit/,
-    "LIVE process identity must never produce a TESTNET archive name",
-  )
-})
-
-test("rejects LIVE and unspecified modes before inspecting sessions or creating backups", async () => {
+test("rejects LIVE and unspecified trading modes before reading local folders", async () => {
   await assert.rejects(
     runHarvesterArchivePush({
       args: [],
       env: {
         TRADING_MODE: "live",
-        HARVESTER_ARCHIVE_REMOTE: "https://github.com/45s/coinzilla-archive.git",
+        HARVESTER_ARCHIVE_REMOTE: ARCHIVE_REMOTE,
       },
-      backupServiceFactory: () => {
-        throw new Error("The backup service must not be constructed for LIVE mode.")
-      },
+      packageDirectory: path.join(os.tmpdir(), "missing-harvester-folder"),
     }),
     /requires TRADING_MODE=testnet/,
-    "the archive command must reject LIVE before touching session or database state",
+    "LIVE mode must be rejected before local data is inspected",
   )
   await assert.rejects(
     runHarvesterArchivePush({
       args: [],
-      env: {
-        HARVESTER_ARCHIVE_REMOTE: "https://github.com/45s/coinzilla-archive.git",
-      },
+      env: { HARVESTER_ARCHIVE_REMOTE: ARCHIVE_REMOTE },
+      packageDirectory: path.join(os.tmpdir(), "missing-harvester-folder"),
     }),
     /requires TRADING_MODE=testnet/,
-    "an unspecified trading mode must fail closed before any filesystem or database work",
+    "an unspecified trading mode must be rejected before local data is inspected",
   )
 })
 
-test("refuses to publish to any repository other than the configured private archive repository", async () => {
+test("refuses to publish to any repository other than the private archive repository", async () => {
   await assert.rejects(
     runHarvesterArchivePush({
       args: [],
@@ -84,8 +134,9 @@ test("refuses to publish to any repository other than the configured private arc
         TRADING_MODE: "testnet",
         HARVESTER_ARCHIVE_REMOTE: "https://github.com/45s/coinzilla.git",
       },
+      packageDirectory: path.join(os.tmpdir(), "missing-harvester-folder"),
     }),
     /must target the private/,
-    "operational data must never be published to the source repository or an arbitrary GitHub remote",
+    "operational data must never be published to the public source repository",
   )
 })
