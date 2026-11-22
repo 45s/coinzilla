@@ -18,7 +18,8 @@
     "src/use-cases/collect-owned-order-snapshots.js",
     "src/use-cases/reconcile-terminal-order-fills.js",
     "src/use-cases/fetch-account-trade-history.js",
-    "src/use-cases/create-user-data-event-transition.js"
+    "src/use-cases/create-user-data-event-transition.js",
+    "src/domain/strategies/strategy-ids.js"
   ],
   "behaviors": [
     {
@@ -205,7 +206,9 @@
       "sourceModules": [
         "src/domain/portfolio/portfolio.js",
         "src/domain/strategies/conservative/recovery-ledger.js",
-        "src/domain/portfolio/position-accounting.js"
+        "src/domain/portfolio/position-accounting.js",
+        "src/domain/portfolio/position.js",
+        "src/domain/strategies/strategy-ids.js"
       ],
       "tests": [
         {
@@ -217,11 +220,22 @@
           "path": "src/domain/strategies/conservative/recovery-ledger.test.js",
           "name": "rejects a reused Fill ID when recovery execution facts differ",
           "kind": "failure"
+        },
+        {
+          "path": "src/domain/strategies/strategy-id-normalization.test.js",
+          "name": "Position normalizes its strategy owner and derived identity",
+          "kind": "normal"
+        },
+        {
+          "path": "src/domain/strategies/strategy-id-normalization.test.js",
+          "name": "rejects missing, blank, and non-string strategy IDs",
+          "kind": "failure"
         }
       ],
       "runtimeStatus": "active",
       "invariants": [
         "Portfolio and RecoveryLedger consume the same canonical fill exactly once and preserve consistent quote basis/proceeds.",
+        "Strategy IDs are normalized to non-empty trimmed strings for Position ownership and derived identity; normalization does not restrict IDs to the current strategy registry.",
         "Reset cycle basis only after verified profitable SELL completion and retained-inventory allocation."
       ]
     },
@@ -1143,6 +1157,42 @@
       "latestObserved": {
         "lines": 98.08,
         "branches": 83.33,
+        "functions": 100
+      }
+    },
+    {
+      "path": "src/domain/portfolio/position.js",
+      "baseline": {
+        "lines": 88.03,
+        "branches": 62.5,
+        "functions": 100
+      },
+      "minimum": {
+        "lines": 85,
+        "branches": 60,
+        "functions": 95
+      },
+      "latestObserved": {
+        "lines": 92.01,
+        "branches": 70.73,
+        "functions": 100
+      }
+    },
+    {
+      "path": "src/domain/strategies/strategy-ids.js",
+      "baseline": {
+        "lines": 100,
+        "branches": 100,
+        "functions": 100
+      },
+      "minimum": {
+        "lines": 95,
+        "branches": 95,
+        "functions": 95
+      },
+      "latestObserved": {
+        "lines": 100,
+        "branches": 100,
         "functions": 100
       }
     }
