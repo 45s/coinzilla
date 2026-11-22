@@ -201,27 +201,10 @@ async function persistProbeOutcome({ markerPath, outcome, capture, result, error
     ? outcome
     : "OUTCOME_UNKNOWN"
   marker.completedAt = new Date(now()).toISOString()
-  marker.capture = {
-    ...capture,
-    ...(capture.response?.body === undefined ? {} : {
-      response: {
-        ...capture.response,
-        body: redactApiSecrets({
-          message: capture.response.body,
-          secrets,
-        }),
-      },
-    }),
-    ...(capture.transportError?.message === undefined ? {} : {
-      transportError: {
-        ...capture.transportError,
-        message: redactApiSecrets({
-          message: capture.transportError.message,
-          secrets,
-        }),
-      },
-    }),
-  }
+  marker.capture = sanitizeDiagnosticValue({
+    value: capture,
+    secrets,
+  })
   const sourceError = error ?? result?.errors?.[0]
   if (sourceError) {
     marker.error = {
