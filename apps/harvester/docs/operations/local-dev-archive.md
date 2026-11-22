@@ -214,3 +214,26 @@ The operator explicitly changed the archive requirement after the first command 
 The command's archive timestamp is the time the snapshot is created, not a claim about the archived process start time. The archive is a raw evidence copy; if Harvester is still writing to the database during the copy, the checksums prove only the bytes copied, not transactional SQLite consistency. Run it against the already-stopped process when possible. No new process is needed.
 
 The first archive attempt remains a historical observation: the legacy session was not changed and no archive was uploaded. The new command is intended to make that existing evidence eligible without fabricating process metadata.
+
+
+## 12. Recovery checkpoint and archive layout (2026-11-22)
+
+Each archive directory contains the complete \`logs/\`, \`data/\`, and \`recovery-facts/\` trees plus a root-level \`data_commit_hash\` file:
+
+\`\`\`text
+archives/<archive-id>/
+├── data_commit_hash
+├── logs/
+├── data/
+├── recovery-facts/
+└── manifest.json
+\`\`\`
+
+The archive command reads the final JSONL record from \`recovery-facts/manifest.jsonl\` and the final record from \`recovery-facts/facts.jsonl\`. It requires the manifest \`lastCommittedDigest\` to equal the final fact \`digest\`, requires their sequence values to match, verifies \`recordCount\` against the facts line count, and validates the final fact's \`runtimeSessionId\`. The root \`data_commit_hash\` file contains that committed digest. The archive manifest records the digest, runtime session ID and fact sequence. No hash is inferred from the current Git HEAD or archive creation commit.
+
+For the existing last session identified during the 2026-11-22 recovery-facts inspection:
+- Runtime session: \`ebe7c1d3-ff7d-47db-b2fe-2e5ec9594c1c\`
+- Final committed fact sequence: \`48\`
+- \`data_commit_hash\`: \`154720ef4b575e5a189fc6aa78fd9575917537d02e808403593ab4c09c8dd4b8\`
+
+The command derives these values from the local copied JSONL ledgers at runtime; the values above document the previously inspected last session and are not hard-coded into the archive implementation.

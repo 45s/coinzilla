@@ -12,6 +12,8 @@ const ARCHIVE_REMOTE = "https://github.com/45s/coinzilla-archive.git"
 const CREATED_AT = "2026-11-22T18:30:00.123Z"
 const ARCHIVE_ID = "123e4567-e89b-42d3-a456-426614174000"
 const REMOTE_COMMIT = "a".repeat(40)
+const DATA_COMMIT_HASH = "154720ef4b575e5a189fc6aa78fd9575917537d02e808403593ab4c09c8dd4b8"
+const RUNTIME_SESSION_ID = "ebe7c1d3-ff7d-47db-b2fe-2e5ec9594c1c"
 
 async function createArchiveFixture() {
   const packageDirectory = await mkdtemp(path.join(os.tmpdir(), "harvester-archive-test-"))
@@ -22,6 +24,16 @@ async function createArchiveFixture() {
     "data/testnet/harvester.db-wal": "sqlite wal evidence",
     "data/testnet/harvester.db-shm": "sqlite shm evidence",
     "data/operational-state/facts.jsonl": "operational facts",
+    "recovery-facts/facts.jsonl": Array.from({ length: 49 }, (_, sequence) => JSON.stringify({
+      sequence: String(sequence),
+      digest: sequence === 48 ? DATA_COMMIT_HASH : String(sequence).padStart(64, "0"),
+      runtimeSessionId: RUNTIME_SESSION_ID,
+    })).join("\\n") + "\\n",
+    "recovery-facts/manifest.jsonl": Array.from({ length: 49 }, (_, sequence) => JSON.stringify({
+      sequence: String(sequence),
+      recordCount: String(sequence + 1),
+      lastCommittedDigest: sequence === 48 ? DATA_COMMIT_HASH : String(sequence).padStart(64, "0"),
+    })).join("\\n") + "\\n",
   }
   for (const [relativePath, content] of Object.entries(files)) {
     const filename = path.join(packageDirectory, relativePath)
@@ -64,12 +76,15 @@ test("archives complete logs and data trees without requiring process markers", 
       assert.equal(remote, ARCHIVE_REMOTE, "the archive must be sent only to the configured private repository")
       const manifest = JSON.parse(await readFile(path.join(directory, "manifest.json"), "utf8"))
       assert.equal(manifest.snapshotType, "raw-directory-copy", "the manifest must identify this as a raw evidence snapshot")
-      assert.deepEqual(manifest.includedDirectories, ["logs", "data"], "the manifest must declare both complete source trees")
+      assert.deepEqual(manifest.includedDirectories, ["logs", "data", "recovery-facts"], "the manifest must declare all copied source trees")
+      assert.equal(manifest.dataCommitHash, DATA_COMMIT_HASH, "the archive manifest must identify the last committed recovery-facts digest")
+      assert.equal(manifest.recoveryRuntimeSessionId, RUNTIME_SESSION_ID, "the archive manifest must identify the session owning the last committed fact")
+      assert.equal(await readFile(path.join(directory, "data_commit_hash"), "utf8"), DATA_COMMIT_HASH + "\\n", "the archive must contain the standalone data_commit_hash file")
       for (const [relativePath, content] of Object.entries(fixture.files)) {
         assert.equal(
           await readFile(path.join(directory, relativePath), "utf8"),
           content,
-          "every nested source file, including legacy logs, facts and SQLite sidecars, must be copied unchanged",
+          "every nested source file, including legacy logs, recovery facts and SQLite sidecars, must be copied unchanged",
         )
       }
       return { commit: REMOTE_COMMIT, fileCount: manifest.files.length + 1 }
@@ -77,7 +92,7 @@ test("archives complete logs and data trees without requiring process markers", 
   }))
   assert.equal(result.remoteCommit, REMOTE_COMMIT, "the command must return the verified remote commit")
   assert.equal(result.localArchive, publishedDirectory, "the verified local snapshot must be the published artifact")
-  assert.equal(result.fileCount, Object.keys(fixture.files).length + 1, "the published inventory must include all source files and the manifest")
+  assert.equal(result.fileCount, Object.keys(fixture.files).length + 2, "the published inventory must include all source files, data_commit_hash and the manifest")
 })
 
 test("keeps the completed local snapshot when remote publication fails", async (t) => {
@@ -94,6 +109,11 @@ test("keeps the completed local snapshot when remote publication fails", async (
     })),
     /simulated remote push failure/,
     "a remote failure must be reported to the operator",
+  )
+  assert.equal(
+    await readFile(path.join(attemptedDirectory, "data_commit_hash"), "utf8"),
+    DATA_COMMIT_HASH + "\\n",
+    "the complete local snapshot must retain the last committed data hash",
   )
   assert.equal(
     await readFile(path.join(attemptedDirectory, "logs/sessions/legacy/terminal.log"), "utf8"),

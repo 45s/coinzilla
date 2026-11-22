@@ -19,7 +19,7 @@ import { validateArchiveRemote } from "./initialize-private-archive-repository.j
 
 const execFileAsync = promisify(execFile)
 const PACKAGE_DIRECTORY = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
-const SOURCE_DIRECTORIES = Object.freeze(["logs", "data"])
+const SOURCE_DIRECTORIES = Object.freeze(["logs", "data", "recovery-facts"])
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 const runGitDefault = async (args, { cwd } = {}) => {
@@ -108,6 +108,43 @@ async function sha256File(filename) {
   return createHash("sha256").update(content).digest("hex")
 }
 
+async function readLatestRecoveryCheckpoint(recoveryFactsDirectory) {
+  const manifestContent = await readFile(path.join(recoveryFactsDirectory, "manifest.jsonl"), "utf8")
+  const factsContent = await readFile(path.join(recoveryFactsDirectory, "facts.jsonl"), "utf8")
+  const manifestLines = manifestContent.split("\n").filter((line) => line.length > 0)
+  const factLines = factsContent.split("\n").filter((line) => line.length > 0)
+  if (manifestLines.length === 0 || factLines.length === 0) {
+    throw new Error("Recovery-facts manifest and facts ledger must both contain committed records.")
+  }
+
+  let latestManifest
+  let latestFact
+  try {
+    latestManifest = JSON.parse(manifestLines.at(-1))
+    latestFact = JSON.parse(factLines.at(-1))
+  } catch (error) {
+    throw new Error("The final recovery-facts manifest/fact record is not valid JSON.", { cause: error })
+  }
+
+  const dataCommitHash = latestManifest.lastCommittedDigest
+  if (
+    typeof dataCommitHash !== "string"
+    || !/^[a-f0-9]{64}$/i.test(dataCommitHash)
+    || latestFact.digest !== dataCommitHash
+    || String(latestManifest.sequence) !== String(latestFact.sequence)
+    || Number(latestManifest.recordCount) !== factLines.length
+    || !UUID_PATTERN.test(latestFact.runtimeSessionId ?? "")
+  ) {
+    throw new Error("The latest recovery-facts manifest does not match the final committed fact record.")
+  }
+
+  return {
+    dataCommitHash,
+    runtimeSessionId: latestFact.runtimeSessionId,
+    sequence: String(latestFact.sequence),
+  }
+}
+
 async function createArchiveManifest({ directory, createdAt } = {}) {
   const files = await listRegularFiles(directory)
   const entries = []
@@ -120,6 +157,8 @@ async function createArchiveManifest({ directory, createdAt } = {}) {
       sha256: await sha256File(filename),
     })
   }
+  const recoveryCheckpoint = await readLatestRecoveryCheckpoint(path.join(directory, "recovery-facts"))
+  const dataCommitHash = (await readFile(path.join(directory, "data_commit_hash"), "utf8")).trim()
   return {
     formatVersion: 1,
     application: "harvester",
@@ -127,6 +166,9 @@ async function createArchiveManifest({ directory, createdAt } = {}) {
     snapshotType: "raw-directory-copy",
     createdAt,
     includedDirectories: [...SOURCE_DIRECTORIES],
+    dataCommitHash,
+    recoveryRuntimeSessionId: recoveryCheckpoint.runtimeSessionId,
+    recoveryFactSequence: recoveryCheckpoint.sequence,
     files: entries,
   }
 }
@@ -280,6 +322,12 @@ export async function runHarvesterArchivePush({
         destinationDirectory: path.join(localArchive, source.directoryName),
       })
     }
+    const recoveryCheckpoint = await readLatestRecoveryCheckpoint(path.join(localArchive, "recovery-facts"))
+    await writeFile(path.join(localArchive, "data_commit_hash"), recoveryCheckpoint.dataCommitHash + "\n", {
+      encoding: "utf8",
+      flag: "wx",
+      mode: 0o600,
+    })
     const copiedFiles = await listRegularFiles(localArchive)
     if (copiedFiles.length === 0) {
       throw new Error("The logs and data directories contain no regular files to archive.")
@@ -322,7 +370,7 @@ async function main() {
     "Harvester local logs/data archive published and remotely verified.",
     `Archive: archives/${result.archiveName}`,
     "Created: " + result.createdAt,
-    "Included: logs/ and data/ (complete directory trees)",
+    "Included: logs/, data/, recovery-facts/ and data_commit_hash",
     `Remote commit: ${result.remoteCommit}`,
     `Local copy: ${result.localArchive}`,
     `Files verified: ${result.fileCount}`,

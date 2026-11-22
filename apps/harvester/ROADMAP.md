@@ -2009,5 +2009,5 @@ Enabled RS startup exposed that the process entrypoint prepared the ADR-0001 Ope
 
 ## Local DEV archive workflow (#1742)
 
-- **In progress:** simplify the existing `archive:push` command to preserve the operator's existing local run by copying the complete `logs/` and `data/` trees, including legacy sessions and SQLite sidecar files, then verifying file checksums and publishing to the private archive repository.
+- **In progress:** simplify the existing `archive:push` command to preserve the operator's existing local run by copying the complete `logs/`, `data/`, and `recovery-facts/` trees, writing `data_commit_hash` from the last matching committed recovery-facts checkpoint, then verifying file checksums and publishing to the private archive repository.
 - No new Harvester process, reset, source-data mutation, or exchange API operation is part of this archive step. See [issue #1742](https://github.com/45s/coinzilla/issues/1742) for the current operator-approved scope.
