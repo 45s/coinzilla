@@ -863,11 +863,15 @@ side,
 occurrence });
     },
     waitForRecoveryCycleCompletion: () => waitForRecoveryCycleCompletion(state),
-    waitForLifecycleEvent: ({ eventName, occurrence = 1 } = {}) => waitForLifecycleEvent({
-      state,
-      eventName,
-      occurrence,
-    }),
+    waitForLifecycleEvent: (options) => {
+      const normalizedOptions = typeof options === "string"
+        ? { eventName: options }
+        : options
+      return waitForLifecycleEvent({
+        state,
+        ...normalizedOptions,
+      })
+    },
     publishMarketPrice: (price) => publishDogeReplayMarketPrice({
       state,
       price,
