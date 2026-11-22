@@ -461,6 +461,9 @@ test("Bitunix order probe blocks before reads when an earlier probe has an unkno
   try {
     const { events, run } = createDependencies({
       directory,
+      matrixGuard: async () => {
+        throw new Error("prior probe outcome unknown")
+      },
     })
     const error = await run().catch((caught) => caught)
 
