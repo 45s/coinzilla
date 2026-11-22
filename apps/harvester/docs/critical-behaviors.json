@@ -614,7 +614,7 @@
       "branches": 83.22,
       "functions": 96
     },
-    "note": "At the measured PR head, the PR changed no apps/harvester/src files; the coverage command includes src/**/*.js and excludes src/**/*.test.js, so these module measurements are the exact develop production-source baseline. Later PR commits add a narrowly scoped process-lock input-validation fix; the recorded baseline provenance remains unchanged."
+    "note": "The original 30 critical-module floors retain their measured baseline provenance. The seven additional critical modules introduced by release PR #1662 were measured from its develop source head and then re-measured with all 37 modules enforced in workflow run 44966859719; their per-module baseline and minimum values are recorded in moduleCoverage."
   },
   "moduleCoverage": [
     {
@@ -1336,17 +1336,16 @@
     ]
   },
   "latestCoverageMeasurement": {
-    "measuredAt": "2026-11-21T08:44:16Z",
-    "branch": "reliability/harvester-critical-behavior-gates-1639",
-    "prHeadSha": "d261eed395d8a32263bc274d457117287621e086",
-    "workflowRunId": 44886211302,
-    "harvesterJobId": 136791946328,
+    "measuredAt": "2026-11-22T00:32:02Z",
+    "branch": "fix/harvester-critical-behavior-ownership-1662",
+    "prHeadSha": "2f13f0a7929afc14255316c3c7cae5e521a8231c",
+    "workflowRunId": 44966859719,
+    "harvesterJobId": 137037851920,
     "aggregate": {
       "lines": 90.42,
-      "branches": 83.4,
-      "functions": 96.01
+      "branches": 83.34,
+      "functions": 96.02
     },
-    "checkedCriticalModuleCount": 30,
-    "gatePassed": true
+    "checkedCriticalModuleCount": 37
   }
 }
