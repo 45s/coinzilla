@@ -40,6 +40,9 @@ import {
   validateSpotOrderPlacementResponse,
 } from "./adapters/order-requests.js"
 
+// Keep account-wide symbol fan-out bounded; Bitunix does not publish a Spot limit for this endpoint.
+const OPEN_ORDERS_SYMBOL_CONCURRENCY = 4
+
 const API = Object.freeze({
   markets: "/api/spot/v1/common/coin_pair/list",
   balances: "/api/spot/v1/user/account",
@@ -243,28 +246,49 @@ async function getActiveSpotSymbols({ broker }) {
 }
 
 async function collectOpenOrdersForSymbols({ broker, symbols }) {
-  const orders = []
-  const errors = []
-  for (const symbol of symbols) {
-    try {
-      const result = await fetchOpenOrdersForSymbol({
-        broker,
-        symbol,
-      })
-      if (Array.isArray(result?.data)) {
-        orders.push(...result.data)
-      } else if (result?.ok === true) {
-        errors.push(new TypeError(
-          `Bitunix Spot getOpenOrders() returned invalid data for ${symbol}`,
-        ))
+  const results = new Array(symbols.length)
+  let nextIndex = 0
+
+  async function fetchNextSymbol() {
+    while (nextIndex < symbols.length) {
+      const index = nextIndex
+      nextIndex += 1
+      const symbol = symbols[index]
+      try {
+        results[index] = await fetchOpenOrdersForSymbol({
+          broker,
+          symbol,
+        })
+      } catch (error) {
+        results[index] = toResult({
+          errors: [error],
+        })
       }
-      if (result?.ok !== true) {
-        errors.push(...(result?.errors ?? []))
-      }
-    } catch (error) {
-      errors.push(error)
     }
   }
+
+  const workerCount = Math.min(OPEN_ORDERS_SYMBOL_CONCURRENCY, symbols.length)
+  await Promise.all(Array.from({
+    length: workerCount,
+  }, () => fetchNextSymbol()))
+
+  const orders = []
+  const errors = []
+  for (let index = 0; index < results.length; index += 1) {
+    const result = results[index]
+    const symbol = symbols[index]
+    if (Array.isArray(result?.data)) {
+      orders.push(...result.data)
+    } else if (result?.ok === true) {
+      errors.push(new TypeError(
+        `Bitunix Spot getOpenOrders() returned invalid data for ${symbol}`,
+      ))
+    }
+    if (result?.ok !== true) {
+      errors.push(...(result?.errors ?? []))
+    }
+  }
+
   return {
     orders,
     errors,
@@ -276,6 +300,7 @@ async function fetchAllOpenOrders({ broker }) {
     logger: broker.logger,
     event: {
       event: "getOpenOrders.accountWide.started",
+      concurrencyLimit: OPEN_ORDERS_SYMBOL_CONCURRENCY,
     },
   })
   const marketResult = await getActiveSpotSymbols({ broker })
@@ -303,6 +328,7 @@ async function fetchAllOpenOrders({ broker }) {
     event: {
       event: "getOpenOrders.accountWide.completed",
       marketCount: marketResult.symbols.length,
+      concurrencyLimit: OPEN_ORDERS_SYMBOL_CONCURRENCY,
       orderCount: orders.length,
       errorCount: errors.length,
       symbols: marketResult.symbols,

@@ -8,6 +8,10 @@ owner: brokers
 
 This roadmap tracks work owned by `@coinzilla/brokers`. Historical entries may retain consumer-integration context for provenance, but application ports, adapters, routing, and runtime composition remain owned by each consuming application.
 
+## Bitunix Spot account-wide pending-order scan latency — #1704
+
+**Status: IN PROGRESS** — [issue #1704](https://github.com/45s/coinzilla/issues/1704) / [PR #1719](https://github.com/45s/coinzilla/pull/1719). The no-argument `getOpenOrders()` convenience scan previously queried every active Spot market serially; the operator's 2026-11-22 report measured 156,985 ms. The current change uses a four-worker bounded pool, deterministic catalog-order aggregation, and preserves partial results/errors. The healthcheck now reads details for orders returned by successful symbols even when another symbol fails, while keeping the overall gate blocked. This improves latency but does not establish complete/atomic account-wide coverage: the official endpoint remains symbol-scoped and the active market catalog may omit closed markets. The existing HYPE order remains untouched; no LIVE mutations or retries are part of this work.
+
 ## Bitunix Spot one-at-a-time LIVE order probe matrix — #1690
 
 **Status: IN PROGRESS** — [issue #1690](https://github.com/45s/coinzilla/issues/1690). Add a human-operated, one-probe-per-invocation mode to the unified Bitunix CLI. The reviewed first pass covers HYPEUSDT LIMIT BUY/SELL quantities 1/2 and MARKET BUY/SELL quote quantities 1/2. Every invocation re-reads market metadata, balances and open orders; shows the exact common Broker input and wire body; requires fresh interactive confirmation; writes a unique exclusive marker; and captures the place-order request/response locally with restrictive permissions. The existing #1608 fixed HYPEUSDT order and marker remain untouched. The command uses the common `Broker.createOrder()` path, publishes only the existing sanitized diagnostic result, and never loops, retries, cancels or performs another mutation. A confirmed or unknown result requires manual review. This is a human-only LIVE investigation, not a test or production-readiness milestone; issue #1185 remains unchanged.
@@ -43,6 +47,10 @@ The agent, tests, CI and scheduled jobs must never invoke the LIVE operator mode
 **Status: COMPLETE and merged** — [issue #1602](https://github.com/45s/coinzilla/issues/1602) / [PR #1606](https://github.com/45s/coinzilla/pull/1606), merge commit `92de48c01f48fa343b12b735b6b2d9fcebc34fda`. Exact-head unit, coverage, syntax, dependency, Harvester targeted and advisory documentation-link workflows passed.
 
 The direct Application suite now characterizes subscriber event filtering/deduplication, callback isolation, RPC error notification, recovery reminders, subscriber removal during recovery, concurrent subscription coalescing, and cleanup when a remote subscription resolves after session shutdown. Supporting port and recovery-policy tests include scenario-specific assertion diagnostics. Tests remain offline and exercise the injected application port; existing Binance composition coverage remains in its infrastructure test suites. No production behavior or public contract changes are intended.
+
+## Failed user-data reconnect client cleanup — #1714
+
+**Status: IN PROGRESS** — [Harvester Reliability Initiative #1639](https://github.com/45s/coinzilla/issues/1639), child [#1714](https://github.com/45s/coinzilla/issues/1714). The Application `UserDataSession` now explicitly detaches listeners and attempts to disconnect a client whose reconnect handshake fails before a later retry can replace it. If cleanup fails, subsequent retries continue disposing the same client and do not open a replacement socket until closure succeeds. Cleanup errors are logged without masking the original connection failure. Direct injected-port regressions assert successful disposal and fail-closed behavior while cleanup remains unsuccessful. This is an internal lifecycle correction: public Broker signatures, event/status semantics, state-changing request gates, and the no-replay contract remain unchanged. Offline only; no TESTNET/LIVE exchange operations.
 
 ## S-7 naming remediation — COMPLETE
 

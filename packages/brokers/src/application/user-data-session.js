@@ -43,6 +43,7 @@ export class UserDataSession {
   #eventIdentities = new Set()
   #generation = 0
   #clientPorts = new WeakMap()
+  #failedReconnectClient = null
 
   /**
    * @param {{getClient: () => object|null, createClient: () => object, createUserDataClientPort: (client: object) => import("./ports/user-data-client-port.js").UserDataClientPort, setClient: (client: object) => void, setConnected: (connected: boolean) => void, setUnavailable: (unavailable: boolean) => void, logger?: object, reconnectDelay?: number, recoveryWarningThreshold?: number, setTimeoutFn?: (callback: () => void, delay: number) => ReturnType<typeof setTimeout>, clearTimeoutFn?: (timer: ReturnType<typeof setTimeout>) => void}} options
@@ -61,16 +62,15 @@ export class UserDataSession {
     setTimeoutFn = setTimeout,
     clearTimeoutFn = clearTimeout,
   }) {
-    if (typeof getClient !== "function" || typeof createClient !== "function" ||
-        typeof setClient !== "function" || typeof setConnected !== "function" ||
-        typeof setUnavailable !== "function") {
+    const requiredCallbacks = [getClient, createClient, setClient, setConnected, setUnavailable]
+    if (requiredCallbacks.some((callback) => typeof callback !== "function")) {
       throw new TypeError("User-data session requires client and state callbacks")
     }
-    if (!Number.isInteger(reconnectDelay) || reconnectDelay < 0 ||
-        !Number.isInteger(recoveryWarningThreshold) || recoveryWarningThreshold < 1) {
+    const invalidReconnectPolicy = !Number.isInteger(reconnectDelay) || reconnectDelay < 0 ||
+      !Number.isInteger(recoveryWarningThreshold) || recoveryWarningThreshold < 1
+    if (invalidReconnectPolicy) {
       throw new RangeError("Invalid user-data reconnect policy")
     }
-
     if (typeof createUserDataClientPort !== "function") {
       throw new TypeError("User-data session requires a client port factory")
     }
@@ -526,60 +526,14 @@ recoveryRequired: true })
         this.#reconnectPromise) {return}
 
     const generation = this.#generation
-    let retryDelay = null
-    this.#reconnectPromise = (async () => {
-      const attempt = ++this.#reconnectAttempts
-      try {
-        let client = this.getClient()
-        let port = client ? this.#portFor(client) : null
-        if (!client || port.state !== "open") {
-          client = this.createClient()
-          this.setClient(client)
-          port = this.#portFor(client)
-          this.#bindClient({ client })
-          try {
-            await port.connect()
-          } catch (error) {
-            if (this.getClient() === client) {this.#detachClientListeners()}
-            throw error
-          }
-          if (this.#stopped || generation !== this.#generation || this.#subscribers.size === 0 ||
-              this.getClient() !== client) {
-            await port.disconnect()
-            return
-          }
-          this.setConnected(true)
-        }
-        if (this.#stopped || generation !== this.#generation) {return}
-        await this.#ensureRemoteSubscription()
-      } catch (error) {
-        if (this.#stopped || generation !== this.#generation) {return}
-        this.setUnavailable(true)
-        logSafely({
-          logger: this.logger,
-          level: "error",
-          args: ["Binance user-data recovery attempt failed", { attempt,
-            error }],
-        })
-        this.#notify({ type: "recovering",
-attempt,
-error,
-recoveryRequired: true })
-        if (attempt === this.recoveryWarningThreshold) {
-          this.#notify({
-            type: "recoveryFailed",
-            attempt,
-            error,
-            recoveryRequired: true,
-          })
-        }
-        const exponent = Math.min(attempt - 1, 10)
-        retryDelay = Math.min(this.reconnectDelay * (2 ** exponent), 30_000)
-      }
-    })()
-
+    const attempt = ++this.#reconnectAttempts
+    this.#reconnectPromise = this.#performRecovery({
+      generation,
+      attempt,
+    })
+    let retryDelay
     try {
-      await this.#reconnectPromise
+      retryDelay = await this.#reconnectPromise
     } finally {
       this.#reconnectPromise = null
     }
@@ -591,6 +545,108 @@ recoveryRequired: true })
                !this.#stopped && this.#subscribers.size > 0) {
       this.#scheduleRecovery()
     }
+  }
+
+  async #performRecovery({ generation, attempt }) {
+    try {
+      const connected = await this.#connectClientForRecovery({ generation })
+      if (!connected || this.#stopped || generation !== this.#generation ||
+          this.#subscribers.size === 0) {return null}
+      await this.#ensureRemoteSubscription()
+      return null
+    } catch (error) {
+      if (this.#stopped || generation !== this.#generation) {return null}
+      return this.#handleRecoveryFailure({
+        error,
+        attempt,
+      })
+    }
+  }
+
+  async #connectClientForRecovery({ generation }) {
+    let client = this.getClient()
+    let port = client ? this.#portFor(client) : null
+    if (this.#failedReconnectClient) {
+      const failedClient = this.#failedReconnectClient
+      if (!await this.#disposeFailedReconnectClient({ port: failedClient.port })) {
+        throw failedClient.error
+      }
+      this.#failedReconnectClient = null
+      client = null
+      port = null
+    }
+    if (client && port.state === "open") {return true}
+
+    client = this.createClient()
+    this.setClient(client)
+    port = this.#portFor(client)
+    this.#bindClient({ client })
+    try {
+      await port.connect()
+    } catch (error) {
+      if (this.getClient() === client) {this.#detachClientListeners()}
+      this.#failedReconnectClient = {
+        client,
+        port,
+        error,
+      }
+      if (await this.#disposeFailedReconnectClient({ port })) {
+        this.#failedReconnectClient = null
+      }
+      throw error
+    }
+    if (this.#stopped || generation !== this.#generation ||
+        this.#subscribers.size === 0 || this.getClient() !== client) {
+      await port.disconnect()
+      return false
+    }
+    this.setConnected(true)
+    return true
+  }
+
+  async #disposeFailedReconnectClient({ port }) {
+    try {
+      await port.disconnect()
+      return true
+    } catch (cleanupError) {
+      logSafely({
+        logger: this.logger,
+        level: "warn",
+        args: ["Unable to close Binance user-data client after reconnect failure", cleanupError],
+      })
+      return false
+    }
+  }
+
+  #handleRecoveryFailure({ error, attempt }) {
+    this.setUnavailable(true)
+    logSafely({
+      logger: this.logger,
+      level: "error",
+      args: [
+        "Binance user-data recovery attempt failed",
+        {
+          attempt,
+          error,
+        },
+      ],
+    })
+    this.#notify({
+      type: "recovering",
+      attempt,
+      error,
+      recoveryRequired: true,
+    })
+    if (attempt === this.recoveryWarningThreshold) {
+      this.#notify({
+        type: "recoveryFailed",
+        attempt,
+        error,
+        recoveryRequired: true,
+      })
+    }
+    const exponent = Math.min(attempt - 1, 10)
+    return Math.min(this.reconnectDelay * (2 ** exponent), 30_000)
   }
 
   #notifyRecoveryReady() {
