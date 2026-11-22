@@ -464,16 +464,19 @@ test("healthcheck captures full open-orders result and every detail response", a
   assert.equal(exitCode, 1)
 })
 
-test("healthcheck records failed getOpenOrders response and skips detail reads", async () => {
+test("healthcheck records partial getOpenOrders data and still reads discovered order details", async () => {
   const events = []
   const publishedReports = []
   const calls = []
+  const output = []
   const exitCode = await runWorkflow({
     mode: "publish",
     brokersRoot: "/repo/packages/brokers",
     repositoryRoot: "/repo",
     env,
-    stdout,
+    stdout: {
+      write: (value) => output.push(value),
+    },
     brokerFactory: () => ({
       connect: async () => {},
       getOpenOrders: async () => ({
@@ -486,7 +489,17 @@ test("healthcheck records failed getOpenOrders response and skips detail reads",
           code: "E_PENDING",
         })],
       }),
-      getOrder: async () => calls.push("getOrder"),
+      getOrder: async ({ symbol, orderId }) => {
+        calls.push(`getOrder:${symbol}:${orderId}`)
+        return {
+          ok: true,
+          data: {
+            id: orderId,
+            symbol,
+          },
+          errors: [],
+        }
+      },
       disconnect: async () => {},
     }),
     runDiagnostics: async () => createDiagnosticReport(),
@@ -495,13 +508,17 @@ test("healthcheck records failed getOpenOrders response and skips detail reads",
       publishedReports,
     }),
   })
-  assert.deepEqual(calls, [])
+  assert.deepEqual(calls, ["getOrder:HYPEUSDT:123"])
   const [report] = publishedReports
   const open = report.results.find((entry) => entry.operation === "Broker API getOpenOrders")
+  const detail = report.results.find((entry) => entry.operation === "Broker API getOrder")
   assert.equal(open.status, "failed")
   assert.equal(open.response.data[0].id, "123")
   assert.equal(open.errors[0].code, "E_PENDING")
-  assert.equal(exitCode, 1)
+  assert.equal(detail.status, "passed")
+  assert.equal(detail.request.arguments[0].orderId, "123")
+  assert.ok(output.some((value) => value.includes("Broker API getOpenOrders: FAILED (")))
+  assert.equal(exitCode, 1, "partial market coverage must keep the order-read gate failed")
 })
 
 
