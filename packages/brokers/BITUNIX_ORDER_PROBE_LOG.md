@@ -62,3 +62,13 @@ This log records operator-authorized LIVE order-placement probes against Bitunix
 3. Resolve the LIMIT/MARKET `volume` contract from authoritative endpoint-specific evidence before enabling additional probes.
 4. A funded BUY probe is prepared: LIMIT BUY `HYPEUSDT` at `30 USDT`, spending up to `11 USDT`, with quantity calculated from live `basePrecision` and a `0.24 USDT` reserve. It requires a short `y/N` confirmation. Do not run it until the operator has funded Spot and merged the PR.
 5. Keep the broader Bitunix Spot lifecycle/Harvester admission blockers tracked independently; these two placement rejections do not make Bitunix trading-ready.
+
+## 2026-11-22 — Issue #1704 Phase 1: pending-order fetch audit
+
+- Audited `BitunixSpotBroker.getOpenOrders({ symbol })`: it requires an explicit symbol, normalizes it to uppercase, and makes one read-only `POST /api/spot/v1/order/pending/list`. The request is authenticated by the REST client's default and explicitly sets `stateChanging: false`.
+- The response adapter accepts the documented single-row object and array shapes, rejects missing/invalid row data, validates every returned row against the requested symbol, and normalizes the exchange order through `adaptOrder()`.
+- This is a **symbol-scoped** query, not an account-wide order enumeration. Querying HYPEUSDT is the correct supported route; do not claim that one response covers other symbols.
+- The existing tests covered empty results, a generic order ID, single-row normalization, and symbol mismatch, but did not prove exact preservation of the accepted 19-digit HYPE order ID.
+- Added an offline regression fixture for order ID `"2124329325141426176"`. It asserts exact string identity, HYPEUSDT/BUY/OPEN fields, quantity and price normalization, one POST only, and the signature over the exact serialized `{"symbol":"HYPEUSDT"}` body.
+- **Not yet live-verified:** the fixture proves the local adapter contract only. Phase 1 remains open until the operator runs the read-only HYPEUSDT pending-order query and the returned rows contain the exact order ID and matching symbol. No placement or cancellation is part of this check.
+
