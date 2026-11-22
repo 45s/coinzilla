@@ -1,7 +1,10 @@
-import { StrategyId } from "../../domain/strategies/strategy-ids.js"
+import { strategyMetadataById } from "./strategy-metadata.js"
 
-export const strategyLogMarkers = Object.freeze({
-  [StrategyId.COIN_GRABBER]: "🪙 CG",
-  [StrategyId.RECOVERY_SELLER]: "🔴 RS",
-})
-
+export const strategyLogMarkers = Object.freeze(
+  Object.fromEntries(
+    Object.entries(strategyMetadataById).map(([strategyId, metadata]) => [
+      strategyId,
+      metadata.logMarker,
+    ]),
+  ),
+)

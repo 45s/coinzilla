@@ -1,15 +1,86 @@
 import { addDecimal, assertDecimalString, compareDecimal, subtractDecimal } from "@coinzilla/utils"
 import { Fill, Market, Money, Quantity } from "@coinzilla/entities"
 import { calculatePositionFill, calculatePositionSellAllocation } from "./position-accounting.js"
+import { normalizeStrategyId } from "../strategies/strategy-ids.js"
+
+function normalizePositionFreeBaseQuantity({ freeBaseQuantity, market } = {}) {
+  const normalizedFreeBaseQuantity = freeBaseQuantity ?? new Quantity({
+    amount: "0",
+    asset: market.baseAsset,
+  })
+  if (
+    !(normalizedFreeBaseQuantity instanceof Quantity) ||
+    normalizedFreeBaseQuantity.asset.id !== market.baseAsset.id
+  ) {
+    throw new TypeError("Position.freeBaseQuantity must use the market base Asset")
+  }
+  return normalizedFreeBaseQuantity
+}
+
+function normalizePositionSpent({ spent, market } = {}) {
+  const normalizedSpent = spent ?? new Money({
+    amount: "0",
+    asset: market.quoteAsset,
+  })
+  if (!(normalizedSpent instanceof Money) || normalizedSpent.asset.id !== market.quoteAsset.id) {
+    throw new TypeError("Position.spent must use the market quote Asset")
+  }
+  if (normalizedSpent.amount.startsWith("-")) {
+    throw new RangeError("Position.spent must be non-negative")
+  }
+  return normalizedSpent
+}
+
+function validatePositionConstructorInput({
+  positionId,
+  strategyId,
+  market,
+  baseQuantity,
+  freeBaseQuantity,
+  quoteNetCashFlow,
+  spent,
+} = {}) {
+  if (!(market instanceof Market)) {
+    throw new TypeError("Position.market must be a canonical Market")
+  }
+  const normalizedStrategyId = normalizeStrategyId({
+    strategyId,
+    errorMessage: "Position.strategyId must be a non-empty string",
+  })
+  if (typeof positionId !== "string" || !positionId.trim()) {
+    throw new TypeError("Position.positionId must be a non-empty string")
+  }
+  if (!(baseQuantity instanceof Quantity) || baseQuantity.asset.id !== market.baseAsset.id) {
+    throw new TypeError("Position.baseQuantity must use the market base Asset")
+  }
+  const normalizedFreeBaseQuantity = normalizePositionFreeBaseQuantity({
+    freeBaseQuantity,
+    market,
+  })
+  if (!(quoteNetCashFlow instanceof Money) || quoteNetCashFlow.asset.id !== market.quoteAsset.id) {
+    throw new TypeError("Position.quoteNetCashFlow must use the market quote Asset")
+  }
+  const normalizedSpent = normalizePositionSpent({
+    spent,
+    market,
+  })
+
+  return {
+    normalizedStrategyId,
+    normalizedFreeBaseQuantity,
+    normalizedSpent,
+  }
+}
 
 export function createPositionId({ marketId, strategyId } = {}) {
   if (typeof marketId !== "string" || !marketId.trim()) {
     throw new TypeError("createPositionId requires a non-empty marketId")
   }
-  if (typeof strategyId !== "string" || !strategyId.trim()) {
-    throw new TypeError("createPositionId requires a non-empty strategyId")
-  }
-  return JSON.stringify([marketId.trim(), strategyId.trim()])
+  const normalizedStrategyId = normalizeStrategyId({
+    strategyId,
+    errorMessage: "createPositionId requires a non-empty strategyId",
+  })
+  return JSON.stringify([marketId.trim(), normalizedStrategyId])
 }
 
 export class Position {
@@ -30,42 +101,22 @@ export class Position {
     quoteNetCashFlow,
     spent,
   } = {}) {
-    if (!(market instanceof Market)) {
-      throw new TypeError("Position.market must be a canonical Market")
-    }
-    if (typeof strategyId !== "string" || !strategyId.trim()) {
-      throw new TypeError("Position.strategyId must be a non-empty string")
-    }
-    if (typeof positionId !== "string" || !positionId.trim()) {
-      throw new TypeError("Position.positionId must be a non-empty string")
-    }
-    if (!(baseQuantity instanceof Quantity) || baseQuantity.asset.id !== market.baseAsset.id) {
-      throw new TypeError("Position.baseQuantity must use the market base Asset")
-    }
-    const normalizedFreeBaseQuantity = freeBaseQuantity ?? new Quantity({
-      amount: "0",
-      asset: market.baseAsset,
+    const {
+      normalizedStrategyId,
+      normalizedFreeBaseQuantity,
+      normalizedSpent,
+    } = validatePositionConstructorInput({
+      positionId,
+      strategyId,
+      market,
+      baseQuantity,
+      freeBaseQuantity,
+      quoteNetCashFlow,
+      spent,
     })
-    if (
-      !(normalizedFreeBaseQuantity instanceof Quantity) ||
-      normalizedFreeBaseQuantity.asset.id !== market.baseAsset.id
-    ) {
-      throw new TypeError("Position.freeBaseQuantity must use the market base Asset")
-    }
-    if (!(quoteNetCashFlow instanceof Money) || quoteNetCashFlow.asset.id !== market.quoteAsset.id) {
-      throw new TypeError("Position.quoteNetCashFlow must use the market quote Asset")
-    }
-    const normalizedSpent = spent ?? new Money({ amount: "0",
-asset: market.quoteAsset })
-    if (!(normalizedSpent instanceof Money) || normalizedSpent.asset.id !== market.quoteAsset.id) {
-      throw new TypeError("Position.spent must use the market quote Asset")
-    }
-    if (normalizedSpent.amount.startsWith("-")) {
-      throw new RangeError("Position.spent must be non-negative")
-    }
 
     this.#positionId = positionId.trim()
-    this.#strategyId = strategyId.trim()
+    this.#strategyId = normalizedStrategyId
     this.#market = market
     this.#baseQuantity = baseQuantity
     this.#freeBaseQuantity = normalizedFreeBaseQuantity
@@ -238,13 +289,16 @@ right: quantity }) < 0) {
     if (!(market instanceof Market)) {
       throw new TypeError("Position.empty requires a canonical Market")
     }
-    if (typeof strategyId !== "string" || !strategyId.trim()) {
-      throw new TypeError("Position.empty requires a non-empty strategyId")
-    }
-    return new Position({
-      positionId: positionId ?? createPositionId({ marketId: market.id,
-strategyId }),
+    const normalizedStrategyId = normalizeStrategyId({
       strategyId,
+      errorMessage: "Position.empty requires a non-empty strategyId",
+    })
+    return new Position({
+      positionId: positionId ?? createPositionId({
+        marketId: market.id,
+        strategyId: normalizedStrategyId,
+      }),
+      strategyId: normalizedStrategyId,
       market,
       baseQuantity: new Quantity({ amount: "0",
 asset: market.baseAsset }),
