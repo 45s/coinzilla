@@ -123,13 +123,18 @@ test("starts market-owned volatility history for an RS-only market when market c
   const broker = createRsOnlyStartupBroker({ calls })
   broker.getCandles = async ({ symbol }) => {
     calls.push(`candle-history:${symbol}`)
-    return { ok: true, data: [] }
+    return {
+      ok: true,
+      data: [],
+    }
   }
   broker.subscribeForCandles = async ({ symbol }) => {
     calls.push(`candle-subscribe:${symbol}`)
     return {
       ok: true,
-      data: { unsubscribe: async () => {} },
+      data: {
+        unsubscribe: async () => {},
+      },
     }
   }
   try {
@@ -159,7 +164,10 @@ test("starts market-owned volatility history for an RS-only market when market c
     assert.equal(result.getVolatilityProtectionState({ symbol: "LINEAUSDT" })?.mode, "PROTECTED", "Enabled market volatility state must initialize independently of CG strategy ownership.")
     await result.stop()
   } finally {
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
   }
 })
 
