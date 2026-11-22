@@ -823,6 +823,37 @@ function assertPartialRecoverySellAccounting({ dogeTradingReplay }) {
   assert.equal(dogeTradingReplay.submittedCanonicalOrders.filter(({ side }) => side === "BUY").length, 2, "A partial recovery SELL must not create another standing BUY.");
 }
 
+function assertPartialRecoverySellExecutionReports({ dogeTradingReplay }) {
+  const sellExecutionReports = dogeTradingReplay.receivedExecutionReports
+    .filter(({ executedOrder }) => executedOrder.side === "SELL")
+    .map(({ executedOrder, fill }) => ({
+      cumulativeExecutedQuantity: executedOrder.executedQuantity,
+      orderStatus: executedOrder.status,
+      fillQuantity: fill.quantity,
+      quoteQuantity: fill.quoteQuantity,
+      commissionAmount: fill.commissionAmount,
+      commissionAsset: fill.commissionAsset,
+    }));
+  assert.deepEqual(sellExecutionReports, [
+    {
+      cumulativeExecutedQuantity: "200",
+      orderStatus: "PARTIALLY_FILLED",
+      fillQuantity: "200",
+      quoteQuantity: "14.408",
+      commissionAmount: "0.014408",
+      commissionAsset: "USDT",
+    },
+    {
+      cumulativeExecutedQuantity: "398",
+      orderStatus: "FILLED",
+      fillQuantity: "198",
+      quoteQuantity: "14.26392",
+      commissionAmount: "0.01426392",
+      commissionAsset: "USDT",
+    },
+  ], "The recovery SELL replay must preserve incremental fills, cumulative order quantities, and actual quote-asset commissions.");
+}
+
 runDogeTradingReplayTest("accounts partial recovery SELL executions and completes only after the terminal fill", async (dogeTradingReplay) => {
   const { recoverySellOrder } = await submitFirstBuyAndWaitForRecoveryOrders(dogeTradingReplay);
   const firstExecutionTimestamp = Math.max(Date.now(), recoverySellOrder.createdAt + 1);
@@ -856,36 +887,11 @@ runDogeTradingReplayTest("accounts partial recovery SELL executions and complete
     },
   });
   const recoveryCycleResult = await recoveryCompletion;
-  assertSingleCycleCompletionResult({ dogeTradingReplay, recoveryCycleResult });
+  assertSingleCycleCompletionResult({
+    dogeTradingReplay,
+    recoveryCycleResult,
+  });
   assertSingleCyclePosition(dogeTradingReplay);
-
-  const sellExecutionReports = dogeTradingReplay.receivedExecutionReports
-    .filter(({ executedOrder }) => executedOrder.side === "SELL")
-    .map(({ executedOrder, fill }) => ({
-      cumulativeExecutedQuantity: executedOrder.executedQuantity,
-      orderStatus: executedOrder.status,
-      fillQuantity: fill.quantity,
-      quoteQuantity: fill.quoteQuantity,
-      commissionAmount: fill.commissionAmount,
-      commissionAsset: fill.commissionAsset,
-    }));
-  assert.deepEqual(sellExecutionReports, [
-    {
-      cumulativeExecutedQuantity: "200",
-      orderStatus: "PARTIALLY_FILLED",
-      fillQuantity: "200",
-      quoteQuantity: "14.408",
-      commissionAmount: "0.014408",
-      commissionAsset: "USDT",
-    },
-    {
-      cumulativeExecutedQuantity: "398",
-      orderStatus: "FILLED",
-      fillQuantity: "198",
-      quoteQuantity: "14.26392",
-      commissionAmount: "0.01426392",
-      commissionAsset: "USDT",
-    },
-  ], "The recovery SELL replay must preserve incremental fills, cumulative order quantities, and actual quote-asset commissions.");
+  assertPartialRecoverySellExecutionReports({ dogeTradingReplay });
   assert.equal(dogeTradingReplay.harvesterRuntimeErrors.length, 0, "A valid partial-to-terminal recovery SELL sequence must not produce runtime accounting or lifecycle errors.");
 });
