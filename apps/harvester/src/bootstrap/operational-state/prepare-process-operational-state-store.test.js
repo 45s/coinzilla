@@ -56,6 +56,24 @@ test("prepares the verified store for enabled RS markets without enabling CG res
   assert.equal(options.runtimeSessionId, "session", "the store must be bound to the current process session")
 })
 
+test("constructs only one store when both CG restart recovery and RS are enabled", async () => {
+  let calls = 0
+  const expected = store()
+  const actual = await prepareProcessOperationalStateStore({
+    appConfig: config({
+      recovery: true,
+      recoverySeller: true,
+    }),
+    runtimeSessionId: "session",
+    createOperationalStateStore: () => {
+      calls += 1
+      return expected
+    },
+  })
+  assert.strictEqual(actual, expected, "both strategies must share the process-owned Operational State Store")
+  assert.equal(calls, 1, "the process must construct the shared store exactly once")
+})
+
 test("does not prepare the store for globally disabled RS or RS without enabled markets", async () => {
   let calls = 0
   const createOperationalStateStore = () => { calls += 1; return store() }
