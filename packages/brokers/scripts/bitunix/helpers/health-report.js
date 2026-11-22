@@ -21,7 +21,7 @@ export function withholdFreeFormErrorMessages({ value }) {
 }
 
 function createPublishedOrderReadResult({ result }) {
-  // These two operations are explicitly approved for publication by the
+  // These order operations are explicitly approved for publication by the
   // account owner. Their payloads have already passed sanitizeDiagnosticValue;
   // keep the rest of the report on the strict metadata-only allowlist.
   return {
@@ -33,7 +33,7 @@ function createPublishedOrderReadResult({ result }) {
 
 export function createSanitizedHealthReport({ report }) {
   // General diagnostics remain metadata-only. The operator explicitly opted
-  // to publish order identity and order-read payloads for these two operations.
+  // to publish order identity and payloads for these order operations.
   return {
     schemaVersion: report.schemaVersion,
     startedAt: report.startedAt,
@@ -61,7 +61,7 @@ export function createSanitizedHealthReport({ report }) {
       durationMs: result.durationMs ?? null,
       ...(typeof result.probeId === "string" ? { probeId: result.probeId } : {}),
       ...(typeof result.mutationOutcome === "string" ? { mutationOutcome: result.mutationOutcome } : {}),
-      ...(result.operation === "Broker API getOpenOrders" || result.operation === "Broker API getOrder"
+      ...(result.operation === "Broker API getOpenOrders" || result.operation === "Broker API getOrder" || result.operation === "Broker API getOrder after cancellation" || result.operation === "Broker API cancelOrder"
         ? createPublishedOrderReadResult({ result })
         : {}),
       ...(result.error ? {

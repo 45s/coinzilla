@@ -689,3 +689,133 @@ test("full-diagnostics healthcheck keeps the existing broad diagnostic suite ava
   assert.equal(exitCode, 0)
   assert.equal(publishedReports[0].healthCheck.scope, "operator-order-preflight")
 })
+
+
+function createCancellationBrokerFactory({ calls, cancelResult }) {
+  return ({ providerOptions }) => {
+    const mutation = providerOptions.allowLiveOrderMutations === true
+    return {
+      connect: async () => calls.push(mutation ? "connect-mutation" : "connect-read"),
+      cancelOrder: async (input) => {
+        calls.push("cancel")
+        return cancelResult(input)
+      },
+      getOpenOrders: async () => {
+        calls.push("getOpenOrders")
+        return {
+          ok: true,
+          data: [],
+          errors: [],
+        }
+      },
+      getOrder: async ({ symbol, orderId }) => {
+        calls.push(`getOrder:${symbol}:${orderId}`)
+        return {
+          ok: true,
+          data: {
+            id: orderId,
+            symbol,
+            status: "CANCELED",
+          },
+          errors: [],
+        }
+      },
+      disconnect: async () => calls.push(mutation ? "disconnect-mutation" : "disconnect-read"),
+    }
+  }
+}
+
+test("explicit cancellation mode runs one cancel before the existing order-read scan", async () => {
+  const publishedReports = []
+  const calls = []
+  const brokerFactory = createCancellationBrokerFactory({
+    calls,
+    cancelResult: async (input) => {
+      assert.deepEqual(input, {
+        symbol: "HYPEUSDT",
+        orderId: "2124329325141426176",
+      })
+      return {
+        ok: true,
+        mutationOutcome: "CONFIRMED",
+        cancellationOutcome: "CONFIRMED",
+        data: { status: "CANCELED" },
+        errors: [],
+      }
+    },
+  })
+  const exitCode = await runWorkflow({
+    mode: "cancel-existing-order",
+    brokersRoot: "/repo/packages/brokers",
+    repositoryRoot: "/repo",
+    env,
+    stdout,
+    brokerFactory,
+    publishDiagnostics: createPublisher({
+      events: [],
+      publishedReports,
+    }),
+  })
+  assert.deepEqual(calls, [
+    "connect-mutation",
+    "cancel",
+    "disconnect-mutation",
+    "connect-read",
+    "getOpenOrders",
+    "getOrder:HYPEUSDT:2124329325141426176",
+    "disconnect-read",
+  ])
+  const cancellation = publishedReports[0].results.find((entry) =>
+    entry.operation === "Broker API cancelOrder")
+  assert.equal(cancellation.status, "passed")
+  assert.equal(cancellation.response.cancellationOutcome, "CONFIRMED")
+  const finalDetail = publishedReports[0].results.find((entry) =>
+    entry.operation === "Broker API getOrder after cancellation")
+  assert.equal(finalDetail.request.arguments[0].orderId, "2124329325141426176")
+  assert.equal(finalDetail.response.data.status, "CANCELED")
+  assert.equal(exitCode, 0)
+})
+
+test("ambiguous cancellation is recorded once and does not prevent the subsequent order scan", async () => {
+  const publishedReports = []
+  const calls = []
+  const brokerFactory = createCancellationBrokerFactory({
+    calls,
+    cancelResult: async () => ({
+      ok: false,
+      mutationOutcome: "OUTCOME_UNKNOWN",
+      cancellationOutcome: "OUTCOME_UNKNOWN",
+      errors: [
+        Object.assign(new Error("unknown"), {
+          code: "E_UNKNOWN",
+        }),
+      ],
+    }),
+  })
+  const exitCode = await runWorkflow({
+    mode: "cancel-existing-order",
+    brokersRoot: "/repo/packages/brokers",
+    repositoryRoot: "/repo",
+    env,
+    stdout,
+    brokerFactory,
+    publishDiagnostics: createPublisher({
+      events: [],
+      publishedReports,
+    }),
+  })
+  assert.deepEqual(calls, [
+    "connect-mutation",
+    "cancel",
+    "disconnect-mutation",
+    "connect-read",
+    "getOpenOrders",
+    "getOrder:HYPEUSDT:2124329325141426176",
+    "disconnect-read",
+  ])
+  const cancellation = publishedReports[0].results.find((entry) =>
+    entry.operation === "Broker API cancelOrder")
+  assert.equal(cancellation.response.cancellationOutcome, "OUTCOME_UNKNOWN")
+  assert.equal(cancellation.errors[0].code, "E_UNKNOWN")
+  assert.equal(exitCode, 1)
+})

@@ -11,6 +11,7 @@ test("explicit CLI arguments select each supported mode", () => {
   assert.equal(parseHealthcheckMode({ args: ["--publish"] }), "publish")
   assert.equal(parseHealthcheckMode({ args: ["--full-diagnostics"] }), "full-diagnostics")
   assert.equal(parseHealthcheckMode({ args: ["--place-order"] }), "place-order")
+  assert.equal(parseHealthcheckMode({ args: ["--cancel-existing-order"] }), "cancel-existing-order")
   assert.equal(parseHealthcheckMode({ args: ["--probe-order=limit-buy-1"] }), "probe-order")
   assert.equal(parseHealthcheckMode({ args: ["--help"] }), "help")
   assert.equal(parseHealthcheckMode({ args: ["--version"] }), "version")
