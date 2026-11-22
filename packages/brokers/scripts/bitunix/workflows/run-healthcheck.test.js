@@ -52,11 +52,11 @@ function createDiagnosticReport({ failed = 0, failedOperation = requiredOperatio
 }
 
 function createPublisher({ events, publishedReports }) {
-  return async ({ runDiagnostics, healthCheckEvaluator = evaluateReadOnlyHealthCheck, env }) => {
+  return async ({ runDiagnostics, healthCheckEvaluator = evaluateReadOnlyHealthCheck, env, onProgress }) => {
     events.push("report branch workflow")
     const report = await runDiagnostics({
       env,
-      onProgress: () => {},
+      onProgress,
     })
     const healthCheck = healthCheckEvaluator({ report })
     report.healthCheck = healthCheck
@@ -515,6 +515,7 @@ test("healthcheck records partial getOpenOrders data and still reads discovered 
   assert.equal(open.status, "failed")
   assert.equal(open.response.data[0].id, "123")
   assert.equal(open.errors[0].code, "E_PENDING")
+  assert.equal(Number.isFinite(open.durationMs), true)
   assert.equal(detail.status, "passed")
   assert.equal(detail.request.arguments[0].orderId, "123")
   assert.ok(output.some((value) => value.includes("Broker API getOpenOrders: FAILED (")))
