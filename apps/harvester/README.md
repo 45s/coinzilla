@@ -110,27 +110,27 @@ Other strategy-owned pair fields remain under `tradingPairs.<SYMBOL>`: `enabled`
 
 ### Recovery Seller configuration
 
-RS is explicitly disabled by default. Keep `RS_RECOVERY_SELLER_CONFIG.enabled` false until each enabled market has an explicit legacy basis and the complete RS-4/RS-5 runtime acceptance is merged. The operator-owned market map is `apps/harvester/rs-recovery-seller.js`; it is empty by default.
+RS remains globally disabled by default. The operator-owned market map is `apps/harvester/rs-recovery-seller.js`; it currently declares LINEAUSDT for TESTNET, but that pair does not activate RS while `RS_RECOVERY_SELLER_CONFIG.enabled` remains false. Keep the global switch false unless runtime execution is separately authorized.
 
 An enabled RS market requires the following fields:
 
 ```js
 export const recoverySellerPairs = {
-  ZROUSDT: {
+  LINEAUSDT: {
     enabled: true,
     tradingEnvironment: TRADING_ENVIRONMENTS.TESTNET,
-    enableVolatilityProtection: true,
-    investment: 100,
-    orderQuantity: 5,
-    sellQuantity: 0.01,
-    minProfit: 0.01,
-    priceStepPercent: 0.05,
-    makerPercent: 0,
-    takerPercent: 0.1,
+    enableVolatilityProtection: false,
     legacyPosition: {
-      invested: 100,
-      quantity: 50,
+      invested: 400,
+      quantity: 25000,
     },
+    sellQuantity: 10,
+    investment: 100,
+    orderQuantity: 7000,
+    minProfit: 0.01,
+    priceStepPercent: 0.5,
+    makerPercent: 0.1,
+    takerPercent: 0.1,
   },
 }
 ```
