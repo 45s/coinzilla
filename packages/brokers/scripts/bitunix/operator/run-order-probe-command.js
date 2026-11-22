@@ -95,9 +95,11 @@ export async function runOperatorOrderProbeCommand({
   })
   const secrets = [credentials.apiKey, credentials.apiSecret]
   const capture = {}
-  stdout.write(
-    "WARNING: this command can submit one real Bitunix Spot LIVE order. Each probe is a separate one-shot operation.\n",
-  )
+  if (probe.spendingAmount === undefined) {
+    stdout.write(
+      "WARNING: this command can submit one real Bitunix Spot LIVE order. Each probe is a separate one-shot operation.\n",
+    )
+  }
   return runBitunixOrderProbeAttempt({
     probeId,
     readBroker: createBroker({
