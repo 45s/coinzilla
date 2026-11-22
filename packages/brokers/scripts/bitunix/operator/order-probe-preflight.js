@@ -97,8 +97,9 @@ function divideToPrecision({ numerator, denominator, precision }) {
   const a = decimalParts(numerator)
   const b = decimalParts(denominator)
   const exponent = precision + b.scale - a.scale
-  const dividend = exponent >= 0 ? a.integer * (10n ** BigInt(exponent)) : a.integer / (10n ** BigInt(-exponent))
-  return formatScaled(dividend / b.integer, precision)
+  const dividend = exponent >= 0 ? a.integer * (10n ** BigInt(exponent)) : a.integer
+  const divisor = exponent < 0 ? b.integer * (10n ** BigInt(-exponent)) : b.integer
+  return formatScaled(dividend / divisor, precision)
 }
 
 function multiplyDecimals(left, right) {
