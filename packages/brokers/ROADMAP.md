@@ -44,6 +44,10 @@ The agent, tests, CI and scheduled jobs must never invoke the LIVE operator mode
 
 The direct Application suite now characterizes subscriber event filtering/deduplication, callback isolation, RPC error notification, recovery reminders, subscriber removal during recovery, concurrent subscription coalescing, and cleanup when a remote subscription resolves after session shutdown. Supporting port and recovery-policy tests include scenario-specific assertion diagnostics. Tests remain offline and exercise the injected application port; existing Binance composition coverage remains in its infrastructure test suites. No production behavior or public contract changes are intended.
 
+## Failed user-data reconnect client cleanup — #1714
+
+**Status: IN PROGRESS** — [Harvester Reliability Initiative #1639](https://github.com/45s/coinzilla/issues/1639), child [#1714](https://github.com/45s/coinzilla/issues/1714). The Application `UserDataSession` now explicitly detaches listeners and attempts to disconnect a client whose reconnect handshake fails before a later retry can replace it. Cleanup errors are logged without masking the original connection failure. The direct injected-port regression asserts disposal of the failed client. This is an internal lifecycle correction: public Broker signatures, event/status semantics, state-changing request gates, and the no-replay contract remain unchanged. Offline only; no TESTNET/LIVE exchange operations.
+
 ## S-7 naming remediation — COMPLETE
 
 Tracking: [repository standards issue #1568](https://github.com/45s/coinzilla/issues/1568) and [naming audit issue #1582](https://github.com/45s/coinzilla/issues/1582).
