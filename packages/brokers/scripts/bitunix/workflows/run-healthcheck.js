@@ -255,7 +255,10 @@ async function runBitunixExistingOrderCancellation({ env, report, stdout, broker
       apiKey: env.BITUNIX_API_KEY,
       apiSecret: env.BITUNIX_API_SECRET,
       tradingMode: "live",
-      logger: createOrderReadLogger({ report, secrets }),
+      logger: createOrderReadLogger({
+        report,
+        secrets,
+      }),
       providerOptions: { allowLiveOrderMutations: true },
     })
     await broker.connect()
@@ -265,7 +268,12 @@ async function runBitunixExistingOrderCancellation({ env, report, stdout, broker
     try {
       result = await broker.cancelOrder({ ...CANCELLATION_TARGET })
     } catch (error) {
-      result = { ok: false, mutationOutcome: "OUTCOME_UNKNOWN", cancellationOutcome: "OUTCOME_UNKNOWN", errors: [error] }
+      result = {
+        ok: false,
+        mutationOutcome: "OUTCOME_UNKNOWN",
+        cancellationOutcome: "OUTCOME_UNKNOWN",
+        errors: [error],
+      }
     }
     recordOrderReadResult({
       report,
@@ -283,12 +291,23 @@ async function runBitunixExistingOrderCancellation({ env, report, stdout, broker
       stdout,
       secrets,
       operation: "Broker API cancelOrder",
-      result: { ok: false, mutationOutcome: "NOT_SENT", cancellationOutcome: "NOT_SENT", errors: [error] },
+      result: {
+        ok: false,
+        mutationOutcome: "NOT_SENT",
+        cancellationOutcome: "NOT_SENT",
+        errors: [error],
+      },
       request,
     })
     return null
   } finally {
-    await disconnectOrderReadBroker({ broker, connected, report, stdout, secrets })
+    await disconnectOrderReadBroker({
+      broker,
+      connected,
+      report,
+      stdout,
+      secrets,
+    })
   }
 }
 
@@ -323,12 +342,18 @@ async function runBitunixOrderReadScan({
         secrets,
       })
     }
-    const discoveredKeys = new Set((openOrdersResult?.data ?? []).map((order) => `${order.symbol}:${order.id}`))
-    const pendingAdditionalOrders = additionalOrders.filter((order) => !discoveredKeys.has(`${order.symbol}:${order.orderId ?? order.id}`))
+    const discoveredKeys = new Set(
+      (openOrdersResult?.data ?? []).map((order) => `${order.symbol}:${order.id}`),
+    )
+    const pendingAdditionalOrders = additionalOrders.filter((order) =>
+      !discoveredKeys.has(`${order.symbol}:${order.orderId ?? order.id}`))
     if (pendingAdditionalOrders.length > 0) {
       await fetchAndRecordOrderDetails({
         broker,
-        orders: pendingAdditionalOrders.map((order) => ({ ...order, id: order.orderId ?? order.id })),
+        orders: pendingAdditionalOrders.map((order) => ({
+          ...order,
+          id: order.orderId ?? order.id,
+        })),
         report,
         stdout,
         secrets,
@@ -586,16 +611,15 @@ async function runOperatorAndAppendResult({
   })
 }
 
-async function runDiagnosticsWithOperatorAttempt({
+async function prepareOrderReadReport({
   env,
   onProgress,
   runDiagnostics,
   runOperatorOrder,
   runOperatorProbe,
-  probeId,
   brokerFactory,
   includeGeneralDiagnostics,
-  cancelExistingOrder = false,
+  cancelExistingOrder,
 }) {
   const startedAt = Date.now()
   const shouldRunGeneralDiagnostics = includeGeneralDiagnostics || Boolean(runOperatorOrder)
@@ -607,8 +631,17 @@ async function runDiagnosticsWithOperatorAttempt({
       brokerApiRestClientFactory: (options) => new BitunixRestClient(options),
     })
   if (cancelExistingOrder) {
-    onProgress?.({ message: `      Cancelling existing order ${CANCELLATION_TARGET.symbol} / ${CANCELLATION_TARGET.orderId} before order reads` })
-    await runBitunixExistingOrderCancellation({ env, report, stdout: { write: (message) => onProgress?.({ message: message.trim() }) }, brokerFactory })
+    onProgress?.({
+      message: `      Cancelling existing order ${CANCELLATION_TARGET.symbol} / ${CANCELLATION_TARGET.orderId} before order reads`,
+    })
+    await runBitunixExistingOrderCancellation({
+      env,
+      report,
+      stdout: {
+        write: (message) => onProgress?.({ message: message.trim() }),
+      },
+      brokerFactory,
+    })
   }
   if (!runOperatorProbe) {
     await runGeneralOrderReadScan({
@@ -619,6 +652,30 @@ async function runDiagnosticsWithOperatorAttempt({
       additionalOrders: cancelExistingOrder ? [CANCELLATION_TARGET] : [],
     })
   }
+  return { report, startedAt }
+}
+
+async function runDiagnosticsWithOperatorAttempt({
+  env,
+  onProgress,
+  runDiagnostics,
+  runOperatorOrder,
+  runOperatorProbe,
+  probeId,
+  brokerFactory,
+  includeGeneralDiagnostics,
+  cancelExistingOrder = false,
+}) {
+  const { report, startedAt } = await prepareOrderReadReport({
+    env,
+    onProgress,
+    runDiagnostics,
+    runOperatorOrder,
+    runOperatorProbe,
+    brokerFactory,
+    includeGeneralDiagnostics,
+    cancelExistingOrder,
+  })
   if (!runOperatorOrder && !runOperatorProbe) {
     return report
   }
