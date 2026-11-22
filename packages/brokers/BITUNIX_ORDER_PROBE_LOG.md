@@ -51,6 +51,7 @@ This log records operator-authorized LIVE order-placement probes against Bitunix
 - The CLI showed `Broker result: not successful` and exited non-zero because the detail reconciliation error was included in the broker result. This was misleading: the mutation outcome remained `CONFIRMED` and the exchange had already accepted the order.
 - Safety: do not repeat this placement. Reconcile the existing order using read-only exchange queries. No cancellation, retry, or second mutation was performed.
 - Local private evidence: `packages/brokers/.diagnostics/bitunix-order-probe-limit-buy-11-usdt.json`. Published sanitized report: `packages/brokers/diagnostics/reports/bitunix-health-20261122T022854989Z.json`; report commit `72619cad577301b293454d3c3f82fda5190b5743`.
+- Operator output and probe evidence are being hardened so the accepted mutation and unavailable reconciliation are printed/persisted as separate fields (`mutationOutcome`, `reconciliation.status`, source, endpoint, and structured error). The original report remains historical evidence and is not rewritten.
 
 ## What is proven — and what is not
 
