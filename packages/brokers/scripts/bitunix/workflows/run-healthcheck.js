@@ -488,7 +488,7 @@ function createHealthCheckSkippedResult({ report, env }) {
 async function runSelectedOperator({ runOperatorOrder, runOperatorProbe, env, probeId }) {
   try {
     if (cancelExistingOrder) {
-    return `WARNING: this mode sends ONE LIVE cancellation request for ${CANCELLATION_TARGET.symbol} / ${CANCELLATION_TARGET.orderId}, records its response, then runs the existing read-only order scan. No retry.\\n`
+    return `WARNING: this mode sends ONE LIVE cancellation request for ${CANCELLATION_TARGET.symbol} / ${CANCELLATION_TARGET.orderId}, records its response, then runs the existing read-only order scan. No retry.\n`
   }
   if (runOperatorProbe) {
       return await runOperatorProbe({
