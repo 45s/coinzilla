@@ -333,6 +333,13 @@ function createPublishedReportLines({ result }) {
   ]
 }
 
+function isWorkflowProgressMessage({ message }) {
+  return /^\\[[1-5]\\/5\\]/.test(message) ||
+    message.startsWith("Creating report branch ") ||
+    message.startsWith("Returning the local checkout") ||
+    message.startsWith("Local checkout is back")
+}
+
 function printPublishedResult({ result, stdout, probeMode = false }) {
   const { passed, failed, skipped, total } = result.report.summary
   const operatorAttempt = result.report.results.find((entry) =>
