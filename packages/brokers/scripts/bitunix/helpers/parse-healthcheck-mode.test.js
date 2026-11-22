@@ -8,7 +8,8 @@ test("default Bitunix health-check mode remains read-only report publishing", ()
 
 test("explicit CLI arguments select each supported mode", () => {
   assert.equal(parseHealthcheckMode({ args: ["--local"] }), "local")
-  assert.equal(parseHealthcheckMode({ args: ["--publish"] }), "publish")\n  assert.equal(parseHealthcheckMode({ args: ["--full-diagnostics"] }), "full-diagnostics")
+  assert.equal(parseHealthcheckMode({ args: ["--publish"] }), "publish")
+  assert.equal(parseHealthcheckMode({ args: ["--full-diagnostics"] }), "full-diagnostics")
   assert.equal(parseHealthcheckMode({ args: ["--place-order"] }), "place-order")
   assert.equal(parseHealthcheckMode({ args: ["--probe-order=limit-buy-1"] }), "probe-order")
   assert.equal(parseHealthcheckMode({ args: ["--help"] }), "help")
