@@ -1,5 +1,11 @@
 # Harvester Roadmap
 
+## Read-only Operational State diagnostics (#1740)
+
+- **In progress in [PR #1741](https://github.com/45s/coinzilla/pull/1741):** add `pnpm run operational-state:diagnose` to verify the existing facts/manifest streams with the production store reader, then independently report the offline recovery-projection result.
+- The command is read-only, prints a safe fact-type/candidate summary and exact source identity, and never initializes, repairs, truncates, or mutates the ledger. It does not connect to Binance or enable process-restart restoration.
+
+
 ## Recovery Seller activation — 2026-11-22
 
 - RS is enabled by default. LINEAUSDT is enabled with `tradingEnvironment: TESTNET`; the existing per-market selector includes it only for TESTNET and excludes it from LIVE.
