@@ -58,12 +58,8 @@ export function createBitunixWebSocketSignature(input = {}) {
     name: "secretKey" })
 
   const parameterString = serializeBitunixWebSocketParams({ params })
-  const digest = createHash("sha256")
-    // codeql[js/insufficient-password-hash] Bitunix requires SHA-256 here for WebSocket request authentication.
-    .update(`${nonce}${timestamp}${publicApiKey}${parameterString}`, "utf8")
-    .digest("hex")
-  return createHash("sha256")
-    // codeql[js/insufficient-password-hash] Bitunix requires SHA-256 here for WebSocket request authentication.
-    .update(`${digest}${signingSecret}`, "utf8")
-    .digest("hex")
+  // codeql[js/insufficient-password-hash] Bitunix requires SHA-256 here for WebSocket request authentication.
+  const digest = createHash("sha256").update(`${nonce}${timestamp}${publicApiKey}${parameterString}`, "utf8").digest("hex")
+  // codeql[js/insufficient-password-hash] Bitunix requires SHA-256 here for WebSocket request authentication.
+  return createHash("sha256").update(`${digest}${signingSecret}`, "utf8").digest("hex")
 }
