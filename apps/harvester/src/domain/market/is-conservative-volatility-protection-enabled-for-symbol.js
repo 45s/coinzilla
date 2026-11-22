@@ -7,7 +7,11 @@
  * @param {boolean} volatilityProtectionEnabled Whether candle snapshots are available.
  * @returns {boolean} True when this enabled Conservative pair is eligible for protection.
  */
-export function isConservativeVolatilityProtectionEnabledForSymbol(pairs, symbol, volatilityProtectionEnabled) {
+export function isConservativeVolatilityProtectionEnabledForSymbol({
+  pairs,
+  symbol,
+  volatilityProtectionEnabled,
+} = {}) {
   if (volatilityProtectionEnabled !== true) {
     return false;
   }
