@@ -643,16 +643,27 @@ function validateOpenOrderSnapshotReadiness({ readiness, orders, blockReasons })
   }
 }
 
-function validateOpenOrderSnapshotMetadata({ data, fileName, session }) {
-  if (!["OPENING", "PREFLIGHT", "RECOVERY"].includes(data.phase)) {
-    throw new TypeError("Open-order snapshot phase is invalid")
+function validateOpenOrderSnapshotPhase({ phase, fileName, session }) {
+  if (phase === "CLOSING" && (!session.started || session.stoppedOutcome !== undefined)) {
+    throw new Error(`CLOSING open-order snapshot requires a started Journal session that has not stopped ${fileName}`)
   }
-  if (data.phase === "RECOVERY" && !session.started) {
+  if (phase === "RECOVERY" && !session.started) {
     throw new Error(`RECOVERY open-order snapshot requires a started Journal session ${fileName}`)
   }
-  if (data.phase === "PREFLIGHT" && (session.started || session.hasTradingActivity)) {
+  if (phase === "PREFLIGHT" && (session.started || session.hasTradingActivity)) {
     throw new Error(`PREFLIGHT open-order snapshot must precede trading activity in Journal session ${fileName}`)
   }
+}
+
+function validateOpenOrderSnapshotMetadata({ data, fileName, session }) {
+  if (!["OPENING", "CLOSING", "PREFLIGHT", "RECOVERY"].includes(data.phase)) {
+    throw new TypeError("Open-order snapshot phase is invalid")
+  }
+  validateOpenOrderSnapshotPhase({
+    phase: data.phase,
+    fileName,
+    session,
+  })
   if (!Number.isSafeInteger(data.observedAt) || data.observedAt < 0) {
     throw new TypeError("Open-order snapshot observedAt must be a non-negative safe integer")
   }

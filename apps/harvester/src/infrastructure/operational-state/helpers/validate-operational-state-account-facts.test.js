@@ -93,6 +93,20 @@ blockReasons: [],
   }))
 })
 
+test("validates a BLOCKED CLOSING open-order snapshot as explicit incomplete evidence", () => {
+  assert.doesNotThrow(() => validateAccountOpenOrdersCapturedFact({
+    factType: "ACCOUNT_OPEN_ORDERS_CAPTURED",
+    canonicalData: {
+      phase: "CLOSING",
+      observedAt: 200,
+      readiness: "BLOCKED",
+      orderCount: 0,
+      orders: [],
+      blockReasons: ["CLOSING_OPEN_ORDERS_CAPTURE_FAILED"],
+    },
+  }))
+})
+
 test("rejects inconsistent or duplicated open-order snapshot identities", () => {
   const order = {
     brokerOrderId: "123",

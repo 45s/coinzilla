@@ -1307,6 +1307,28 @@ test("maps complete account-wide open orders and classifies unowned orders witho
   assertAccountOpenOrderReadiness({ order })
 })
 
+test("maps a BLOCKED CLOSING open-order snapshot without implying an empty account", () => {
+  const result = mapAccountOpenOrdersCapturedData({
+    phase: "CLOSING",
+    observedAt: 1793830000001,
+    orders: [],
+    readiness: "BLOCKED",
+    blockReasons: ["CLOSING_OPEN_ORDERS_CAPTURE_FAILED"],
+  })
+
+  assert.deepEqual(result, {
+    ok: true,
+    data: {
+      phase: "CLOSING",
+      observedAt: 1793830000001,
+      readiness: "BLOCKED",
+      orderCount: 0,
+      orders: [],
+      blockReasons: ["CLOSING_OPEN_ORDERS_CAPTURE_FAILED"],
+    },
+  })
+})
+
 test("maps versioned broker execution evidence and rejects untrusted payloads", () => {
   const result = mapBrokerExecutionReportData({ evidence: {
     schemaVersion: 1,
