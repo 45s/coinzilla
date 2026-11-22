@@ -173,34 +173,42 @@ function waitForRecoveryCycleCompletion(state) {
 }
 
 function notifyLifecycleEventWaiters({ state, event }) {
-  const matchingWaiters = state.lifecycleEventWaiters.filter(({ eventName }) => eventName === event.name);
-  state.lifecycleEventWaiters = state.lifecycleEventWaiters.filter(({ eventName }) => eventName !== event.name);
+  const matchingEvents = state.receivedLifecycleEvents.filter(({ name }) => name === event.name)
+  const matchingWaiters = state.lifecycleEventWaiters.filter(({ eventName, occurrence }) =>
+    eventName === event.name && matchingEvents.length >= occurrence)
+  state.lifecycleEventWaiters = state.lifecycleEventWaiters.filter(
+    (waiter) => !matchingWaiters.includes(waiter),
+  )
   for (const waiter of matchingWaiters) {
-    clearTimeout(waiter.timeout);
-    waiter.resolve(event);
+    clearTimeout(waiter.timeout)
+    waiter.resolve(matchingEvents[waiter.occurrence - 1])
   }
 }
 
-function waitForLifecycleEvent({ state, eventName }) {
-  const existing = state.receivedLifecycleEvents.find(({ name }) => name === eventName);
-  if (existing) {
-    return Promise.resolve(existing);
+function waitForLifecycleEvent({ state, eventName, occurrence = 1 }) {
+  if (!Number.isInteger(occurrence) || occurrence < 1) {
+    throw new RangeError("Lifecycle event occurrence must be a positive integer")
+  }
+  const existing = state.receivedLifecycleEvents.filter(({ name }) => name === eventName)
+  if (existing.length >= occurrence) {
+    return Promise.resolve(existing[occurrence - 1])
   }
   return new Promise((...settlers) => {
-    const [resolve, reject] = settlers;
+    const [resolve, reject] = settlers
     const waiter = {
       eventName,
+      occurrence,
       resolve,
       timeout: undefined,
-    };
+    }
     waiter.timeout = setTimeout(() => {
-      state.lifecycleEventWaiters = state.lifecycleEventWaiters.filter((candidate) => candidate !== waiter);
+      state.lifecycleEventWaiters = state.lifecycleEventWaiters.filter((candidate) => candidate !== waiter)
       reject(new Error(
-        `Timed out waiting for ${eventName} for ${state.marketSymbol}; observed events: ${state.receivedLifecycleEvents.map(({ name }) => name).join(", ")}; runtime errors: ${state.harvesterRuntimeErrors.map((error) => error.message ?? String(error)).join("; ")} `,
-      ));
-    }, 5000);
-    state.lifecycleEventWaiters.push(waiter);
-  });
+        `Timed out waiting for ${eventName} occurrence ${occurrence} for ${state.marketSymbol}; observed events: ${state.receivedLifecycleEvents.map(({ name }) => name).join(", ")}; runtime errors: ${state.harvesterRuntimeErrors.map((error) => error.message ?? String(error)).join("; ")} `,
+      ))
+    }, 5000)
+    state.lifecycleEventWaiters.push(waiter)
+  })
 }
 
 function createDogeReplayTradingRequest(state) {
@@ -705,6 +713,128 @@ async function publishDogeReplayFullOrderFill({
   });
 }
 
+function createDogeReplayOrderSnapshot({
+  order,
+  cumulativeExecutedQuantity,
+  timestamp,
+}) {
+  const status = cumulativeExecutedQuantity === order.originalQuantity.amount
+    ? "FILLED"
+    : "PARTIALLY_FILLED"
+  return new CanonicalOrder({
+    clientOrderId: order.clientOrderId,
+    brokerOrderId: order.brokerOrderId,
+    market: order.market,
+    side: order.side,
+    type: order.type,
+    limitPrice: order.limitPrice,
+    originalQuantity: order.originalQuantity,
+    executedQuantity: new Quantity({
+      amount: cumulativeExecutedQuantity,
+      asset: order.market.baseAsset,
+    }),
+    status,
+    createdAt: order.createdAt,
+    acknowledgedAt: order.acknowledgedAt,
+    updatedAt: timestamp,
+    ...(status === "FILLED" ? { completedAt: timestamp } : {}),
+  })
+}
+
+function createDogeReplayOrderExecutionReport({
+  state,
+  order,
+  price,
+  tradeId,
+  fillQuantity,
+  cumulativeExecutedQuantity,
+  quoteQuantity,
+  commission,
+  orderStatus,
+  timestamp,
+}) {
+  return {
+    eventType: "executionReport",
+    executionType: "TRADE",
+    executedOrder: {
+      symbol: state.marketSymbol,
+      id: order.brokerOrderId,
+      clientOrderId: order.clientOrderId,
+      type: order.type,
+      side: order.side,
+      quantity: order.originalQuantity.amount,
+      executedQuantity: cumulativeExecutedQuantity,
+      price: order.limitPrice.amount,
+      status: orderStatus,
+      createdAt: order.createdAt,
+      updatedAt: timestamp,
+    },
+    fill: {
+      symbol: state.marketSymbol,
+      id: tradeId,
+      orderId: order.brokerOrderId,
+      side: order.side,
+      commissionAmount: commission.commissionAmount,
+      commissionAsset: commission.commissionAsset,
+      isMaker: order.type === "LIMIT_MAKER",
+      price,
+      quantity: fillQuantity,
+      quoteQuantity,
+      time: timestamp,
+    },
+  }
+}
+
+async function publishDogeReplayOrderFill({
+  state,
+  order,
+  price,
+  tradeId,
+  fillQuantity,
+  cumulativeExecutedQuantity,
+  quoteQuantity,
+  commissionAmount,
+  commissionAsset,
+  timestamp = Date.now(),
+}) {
+  const orderStatus = cumulativeExecutedQuantity === order.originalQuantity.amount
+    ? "FILLED"
+    : "PARTIALLY_FILLED"
+  const commission = createDogeReplayCommission({
+    state,
+    order,
+    executedBaseQuantity: fillQuantity,
+    executedQuoteQuantity: quoteQuantity,
+    commissionAmount,
+    commissionAsset,
+  })
+  const updatedOrder = createDogeReplayOrderSnapshot({
+    order,
+    cumulativeExecutedQuantity,
+    timestamp,
+  })
+  state.exchangeOrderHistory.set(order.brokerOrderId, updatedOrder)
+  if (orderStatus === "FILLED") {
+    state.exchangeOpenOrders.delete(order.clientOrderId)
+  } else {
+    state.exchangeOpenOrders.set(order.clientOrderId, updatedOrder)
+  }
+  return state.publishUserDataEvent({
+    event: createDogeReplayOrderExecutionReport({
+      state,
+      order,
+      price,
+      tradeId,
+      fillQuantity,
+      cumulativeExecutedQuantity,
+      quoteQuantity,
+      commission,
+      orderStatus,
+      timestamp,
+    }),
+  })
+}
+
 export async function createDogeTradingReplay({ marketSymbol, appConfig, exchangeFilters, scenarioExpectations }) {
   const state = createDogeReplayState({ marketSymbol,
 appConfig,
@@ -733,15 +863,24 @@ side,
 occurrence });
     },
     waitForRecoveryCycleCompletion: () => waitForRecoveryCycleCompletion(state),
-    waitForLifecycleEvent: (eventName) => waitForLifecycleEvent({
-      state,
-      eventName,
-    }),
+    waitForLifecycleEvent: (options) => {
+      const normalizedOptions = typeof options === "string"
+        ? { eventName: options }
+        : options
+      return waitForLifecycleEvent({
+        state,
+        ...normalizedOptions,
+      })
+    },
     publishMarketPrice: (price) => publishDogeReplayMarketPrice({
       state,
       price,
     }),
     publishFullOrderFill: (fillOptions) => publishDogeReplayFullOrderFill({
+      state,
+      ...fillOptions,
+    }),
+    publishOrderFill: (fillOptions) => publishDogeReplayOrderFill({
       state,
       ...fillOptions,
     }),

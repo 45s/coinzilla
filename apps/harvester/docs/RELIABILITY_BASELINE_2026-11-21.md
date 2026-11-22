@@ -14,7 +14,7 @@
 - The package coverage command includes `src/**/*.js` and excludes `src/**/*.test.js`; the additional test and validation scripts in PR #1642 do not alter production-source coverage.
 - The run completed successfully with **90.35% lines, 83.22% branches, and 96.00% functions** across the Harvester package.
 
-The full measured baseline, latest PR observation and per-module minimums are machine-readable in [critical-behaviors.json](./critical-behaviors.json). It currently records 14 critical behaviors and 30 production modules. Latest PR measurement: [Test Coverage run #44886211302](https://github.com/45s/coinzilla/actions/runs/44886211302), Harvester job `136791946328`, PR head `d261eed395d8a32263bc274d457117287621e086`: 90.42% lines / 83.40% branches / 96.01% functions; all 30 critical module floors passed. The floors are rounded down to five-percentage-point increments and capped at 95% where a baseline is 100%; this leaves bounded room for new branches while preventing larger regressions. A floor is never set above its measured baseline.
+The full measured baseline, latest PR observation and per-module minimums are machine-readable in [critical-behaviors.json](./critical-behaviors.json). It currently records 15 critical behaviors and 39 production modules. Latest expanded measurement: [Test Coverage run #44970952498](https://github.com/45s/coinzilla/actions/runs/44970952498), Harvester job `137050397783`, synchronized head `b82868cd1c916698f5369773d2105199033857fa`: 90.44% lines / 83.40% branches / 96.04% functions; all 39 critical module floors passed. The measurement and each module's latestObserved values are recorded in critical-behaviors.json. The floors are rounded down to five-percentage-point increments and capped at 95% where a baseline is 100%; this leaves bounded room for new branches while preventing larger regressions. A floor is never set above its measured baseline.
 
 ## Critical coverage gaps
 
@@ -79,3 +79,5 @@ Recorded baseline-run results: Unit Tests, Test Coverage, and Harvester Targeted
 5. Keep actual TESTNET validation separate and paused until the runbook's pair-scope and regional-eligibility blockers are resolved by an explicitly authorized session.
 
 This report is a dated baseline checkpoint, not a completion certificate for issue #1639.
+
+The release-readiness follow-up adds direct unit regressions for the Recovery Seller submission-ownership guard: strategy mismatch, purpose mismatch, and prohibited ownership metadata on unowned submissions. These tests target the two previously uncovered throw paths in recovery-seller-submission-ownership.js; the exact PR coverage run must confirm the 95% line/branch floor.

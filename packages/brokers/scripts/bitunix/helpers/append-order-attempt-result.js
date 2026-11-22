@@ -17,35 +17,73 @@ function createOperatorAttemptError({ result, codeOverride }) {
   return error
 }
 
+function getOperatorAttemptStatus({ operatorResult, probeMode }) {
+  if (operatorResult.declined === true || operatorResult.skipped === true) {
+    return "skipped"
+  }
+  if (operatorResult.ok === true && operatorResult.mutationOutcome === "CONFIRMED") {
+    return "passed"
+  }
+  if (probeMode && operatorResult.mutationOutcome === "REJECTED") {
+    return "passed"
+  }
+  return "failed"
+}
+
+function createOperatorAttemptResult({ operatorResult, durationMs, probeMode, secrets }) {
+  const sourceError = operatorResult.errors?.[0]
+  const hasError = Boolean(sourceError || operatorResult.skipCode)
+  return createDiagnosticResult({
+    operation: probeMode ? "operator order probe" : "operator order attempt",
+    status: getOperatorAttemptStatus({
+      operatorResult,
+      probeMode,
+    }),
+    durationMs,
+    error: hasError
+      ? createOperatorAttemptError({
+        result: operatorResult,
+        codeOverride: operatorResult.skipCode,
+      })
+      : null,
+    secrets,
+  })
+}
+
+function createOptionalOperatorFields({ probeId, mutationOutcome }) {
+  const fields = {}
+  if (typeof probeId === "string" && probeId) {
+    fields.probeId = probeId
+  }
+  if (typeof mutationOutcome === "string") {
+    fields.mutationOutcome = mutationOutcome
+  }
+  return fields
+}
+
 /**
  * Append only a sanitized operator outcome to the diagnostic report.
  * Exchange order IDs, request/response payloads and free-form messages are never copied.
  *
- * @param {{report: object, operatorResult: object, durationMs: number, secrets?: string[]}} input
+ * @param {{report: object, operatorResult: object, durationMs: number, probeId?: string, probeMode?: boolean, secrets?: string[]}} input
  * @returns {object}
  */
 export function appendOrderAttemptResult({
   report,
   operatorResult,
   durationMs,
+  probeId,
+  probeMode = false,
   secrets = [],
 }) {
-  let status = "failed"
-  if (operatorResult.declined === true || operatorResult.skipped === true) {
-    status = "skipped"
-  } else if (operatorResult.ok === true && operatorResult.mutationOutcome === "CONFIRMED") {
-    status = "passed"
-  }
-  const result = createDiagnosticResult({
-    operation: "operator order attempt",
-    status,
+  const status = getOperatorAttemptStatus({
+    operatorResult,
+    probeMode,
+  })
+  const result = createOperatorAttemptResult({
+    operatorResult,
     durationMs,
-    error: status === "failed" || operatorResult.skipCode
-      ? createOperatorAttemptError({
-        result: operatorResult,
-        codeOverride: operatorResult.skipCode,
-      })
-      : null,
+    probeMode,
     secrets,
   })
   return {
@@ -56,6 +94,12 @@ export function appendOrderAttemptResult({
       failed: report.summary.failed + (status === "failed" ? 1 : 0),
       skipped: report.summary.skipped + (status === "skipped" ? 1 : 0),
     },
-    results: [...report.results, result],
+    results: [...report.results, {
+      ...result,
+      ...createOptionalOperatorFields({
+        probeId,
+        mutationOutcome: operatorResult.mutationOutcome,
+      }),
+    }],
   }
 }

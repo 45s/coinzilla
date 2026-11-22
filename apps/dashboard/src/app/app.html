@@ -61,10 +61,21 @@
         } @else if (activePage() === 'markets') {
           <span class="demo-pill persisted-pill"><span></span> PUBLIC DATA</span>
           <span class="environment-pill">BITUNIX FUTURES</span>
+        } @else if (activePage() === 'exchanges') {
+          <span class="demo-pill persisted-pill"><span></span> LIVE READ ONLY</span>
+          <span class="environment-pill">HARVESTER</span>
         } @else {
           <span class="demo-pill persisted-pill"><span></span> READ ONLY</span>
           <span class="environment-pill">HARVESTER</span>
         }
+        <label class="theme-picker">
+          <span class="visually-hidden">Dashboard theme</span>
+          <select aria-label="Dashboard theme" [value]="theme()" (change)="setTheme($any($event.target).value)">
+            @for (option of themeOptions; track option.value) {
+              <option [value]="option.value">{{ option.label }}</option>
+            }
+          </select>
+        </label>
         <button class="avatar" type="button" disabled aria-label="User profile unavailable">CZ</button>
       </div>
     </header>
@@ -76,6 +87,8 @@
         <app-operator />
       } @else if (activePage() === 'markets') {
         <app-market-screener />
+      } @else if (activePage() === 'exchanges') {
+        <app-exchanges />
       } @else {
         <app-trading-history [resource]="historyResource()" />
       }
@@ -87,6 +100,8 @@
           <span>Local operator controls · Commands require confirmation</span>
         } @else if (activePage() === 'markets') {
           <span>Public Bitunix Futures market data · No order functionality</span>
+        } @else if (activePage() === 'exchanges') {
+          <span>Live read-only account data · Sourced only from Harvester</span>
         } @else {
           <span>Read-only persisted Harvester records</span>
         }

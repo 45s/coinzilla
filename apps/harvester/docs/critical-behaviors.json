@@ -27,7 +27,9 @@
       "title": "Order submission intent, acknowledgement and unknown outcomes",
       "sourceModules": [
         "src/use-cases/conservative-trading-engine.js",
-        "src/infrastructure/brokers/binance-broker-adapter.js"
+        "src/infrastructure/brokers/binance-broker-adapter.js",
+        "src/domain/orders/recovery-seller-submission-ownership.js",
+        "src/infrastructure/operational-state/helpers/validate-operational-state-order-facts.js"
       ],
       "integrationRequired": true,
       "tests": [
@@ -45,6 +47,36 @@
           "path": "test/replays/doge-zro-conservative-replay.test.js",
           "name": "submits the recovery SELL before the next standing BUY after the actual BUY fill",
           "kind": "integration"
+        },
+        {
+          "path": "src/infrastructure/operational-state/helpers/validate-operational-state-order-facts.test.js",
+          "name": "requires complete Position and cycle identity for an RS-owned durable SELL intent",
+          "kind": "normal"
+        },
+        {
+          "path": "src/infrastructure/operational-state/helpers/validate-operational-state-order-facts.test.js",
+          "name": "preserves the original cause when durable Recovery Seller ownership is invalid",
+          "kind": "failure"
+        },
+        {
+          "path": "src/domain/orders/recovery-seller-submission-ownership.test.js",
+          "name": "returns immutable ownership for a matching Recovery Seller submission",
+          "kind": "normal"
+        },
+        {
+          "path": "src/domain/orders/recovery-seller-submission-ownership.test.js",
+          "name": "rejects ownership metadata from a different strategy",
+          "kind": "failure"
+        },
+        {
+          "path": "src/domain/orders/recovery-seller-submission-ownership.test.js",
+          "name": "rejects ownership metadata for a different submission purpose",
+          "kind": "failure"
+        },
+        {
+          "path": "src/domain/orders/recovery-seller-submission-ownership.test.js",
+          "name": "rejects Recovery Seller ownership metadata for an unowned submission",
+          "kind": "failure"
         }
       ],
       "runtimeStatus": "active",
@@ -230,21 +262,34 @@
           "path": "src/domain/strategies/strategy-id-normalization.test.js",
           "name": "rejects missing, blank, and non-string strategy IDs",
           "kind": "failure"
+        },
+        {
+          "path": "test/replays/doge-zro-conservative-replay.test.js",
+          "name": "accounts streamed partial BUY executions before advancing the completed-BUY lifecycle",
+          "kind": "integration"
+        },
+        {
+          "path": "test/replays/doge-zro-conservative-replay.test.js",
+          "name": "accounts partial recovery SELL executions and completes only after the terminal fill",
+          "kind": "integration"
         }
       ],
       "runtimeStatus": "active",
       "invariants": [
         "Portfolio and RecoveryLedger consume the same canonical fill exactly once and preserve consistent quote basis/proceeds.",
         "Strategy IDs are normalized to non-empty trimmed strings for Position ownership and derived identity; normalization does not restrict IDs to the current strategy registry.",
-        "Reset cycle basis only after verified profitable SELL completion and retained-inventory allocation."
-      ]
+        "Reset cycle basis only after verified profitable SELL completion and retained-inventory allocation.",
+        "Incremental recovery SELL fills add actual net quote proceeds while preserving the full spent basis; a partial order cannot complete the recovery cycle."
+      ],
+      "integrationRequired": true
     },
     {
       "id": "STRATEGY_BUY_SELL_SAFETY_GATES",
       "title": "Conservative BUY/SELL ordering and active-position trailing gates",
       "sourceModules": [
         "src/domain/strategies/conservative/strategy.js",
-        "src/use-cases/conservative-trading-engine.js"
+        "src/use-cases/conservative-trading-engine.js",
+        "src/domain/strategies/conservative/state-predicates.js"
       ],
       "integrationRequired": true,
       "tests": [
@@ -261,6 +306,16 @@
         {
           "path": "test/replays/doge-zro-conservative-replay.test.js",
           "name": "submits the recovery SELL before the next standing BUY after the actual BUY fill",
+          "kind": "integration"
+        },
+        {
+          "path": "src/domain/strategies/conservative/state-predicates.test.js",
+          "name": "matches active orders by symbol and side",
+          "kind": "normal"
+        },
+        {
+          "path": "test/replays/doge-zro-conservative-replay.test.js",
+          "name": "accounts partial recovery SELL executions and completes only after the terminal fill",
           "kind": "integration"
         }
       ],
@@ -291,6 +346,11 @@
         {
           "path": "test/replays/doge-zro-conservative-replay.test.js",
           "name": "combines four completed BUY fills into one profitable recovery SELL and retains the configured inventory",
+          "kind": "integration"
+        },
+        {
+          "path": "test/replays/doge-zro-conservative-replay.test.js",
+          "name": "accounts partial recovery SELL executions and completes only after the terminal fill",
           "kind": "integration"
         }
       ],
@@ -401,7 +461,11 @@
       "sourceModules": [
         "src/infrastructure/operational-state/create-file-operational-state-store.js",
         "src/use-cases/restore-harvester-operational-state.js",
-        "src/infrastructure/operational-state/project-harvester-operational-state.js"
+        "src/infrastructure/operational-state/project-harvester-operational-state.js",
+        "src/infrastructure/operational-state/helpers/operational-state-fact-schema.js",
+        "src/infrastructure/operational-state/helpers/validate-operational-state-recovery-seller-facts.js",
+        "src/infrastructure/operational-state/operational-state-fact-validation.js",
+        "src/infrastructure/operational-state/operational-state-record-validation.js"
       ],
       "integrationRequired": true,
       "tests": [
@@ -438,6 +502,26 @@
         {
           "path": "src/use-cases/restore-harvester-operational-state.test.js",
           "name": "converts a thrown Operational State projection into a failure result",
+          "kind": "failure"
+        },
+        {
+          "path": "src/infrastructure/operational-state/helpers/operational-state-fact-schema.test.js",
+          "name": "exports stable schema limits and fact type allowlist",
+          "kind": "normal"
+        },
+        {
+          "path": "src/infrastructure/operational-state/helpers/validate-operational-state-recovery-seller-facts.test.js",
+          "name": "accepts an explicit durable terminal mixed-SELL accounting boundary",
+          "kind": "normal"
+        },
+        {
+          "path": "src/infrastructure/operational-state/helpers/validate-operational-state-recovery-seller-facts.test.js",
+          "name": "rejects non-terminal, uncommitted, ambiguous and malformed mixed-SELL boundaries",
+          "kind": "failure"
+        },
+        {
+          "path": "src/infrastructure/operational-state/operational-state-record-validation.test.js",
+          "name": "rejects malformed record envelopes, sequence chains, digests and payloads",
           "kind": "failure"
         }
       ],
@@ -557,6 +641,51 @@
         }
       ],
       "integrationRequired": true
+    },
+    {
+      "id": "RECOVERY_SELL_MARKET_METADATA_FRESHNESS",
+      "title": "Fresh exchange trading rules before Conservative recovery SELL planning",
+      "sourceModules": [
+        "src/use-cases/conservative-trading-engine.js"
+      ],
+      "integrationRequired": true,
+      "tests": [
+        {
+          "path": "src/use-cases/conservative-trading-engine.multi-market.test.js",
+          "name": "uses refreshed exchange filters when planning a recovery SELL",
+          "kind": "integration"
+        },
+        {
+          "path": "src/use-cases/conservative-trading-engine.multi-market.test.js",
+          "name": "blocks recovery SELL planning when current exchange filters cannot be retrieved",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/conservative-trading-engine.multi-market.test.js",
+          "name": "submits a valid recovery SELL when refreshed exchange filters remain valid",
+          "kind": "normal"
+        },
+        {
+          "path": "src/use-cases/create-market-metadata-cache.test.js",
+          "name": "rejects a refreshed filter snapshot for a different market",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/create-latest-transition-evaluator.test.js",
+          "name": "refreshes recovery filters before Conservative strategy evaluation",
+          "kind": "normal"
+        },
+        {
+          "path": "src/use-cases/create-latest-transition-evaluator.test.js",
+          "name": "stops Conservative evaluation when recovery filter refresh fails",
+          "kind": "failure"
+        }
+      ],
+      "runtimeStatus": "active",
+      "invariants": [
+        "Before an evaluation can plan a new recovery SELL or classify recovery dust for an active Conservative Position, require a validated same-market filter snapshot no older than 30,000 milliseconds. An owned active recovery SELL suppresses duplicate intents and remains untouched, so no refresh is required until it becomes terminal or is reconciled.",
+        "If current filters are unavailable, invalid, stale, or belong to another market, pause the affected market and do not submit a recovery SELL."
+      ]
     }
   ],
   "coverageBaseline": {
@@ -572,7 +701,7 @@
       "branches": 83.22,
       "functions": 96
     },
-    "note": "At the measured PR head, the PR changed no apps/harvester/src files; the coverage command includes src/**/*.js and excludes src/**/*.test.js, so these module measurements are the exact develop production-source baseline. Later PR commits add a narrowly scoped process-lock input-validation fix; the recorded baseline provenance remains unchanged."
+    "note": "The original 30 critical-module floors retain their measured baseline provenance. The seven additional critical modules introduced by release PR #1662 were measured from its develop source head and then re-measured with all 37 modules enforced in workflow run 44966859719; their per-module baseline and minimum values are recorded in moduleCoverage."
   },
   "moduleCoverage": [
     {
@@ -588,8 +717,8 @@
         "functions": 95
       },
       "latestObserved": {
-        "lines": 94.05,
-        "branches": 89.84,
+        "lines": 93.99,
+        "branches": 90.1,
         "functions": 100
       }
     },
@@ -606,8 +735,8 @@
         "functions": 95
       },
       "latestObserved": {
-        "lines": 86.5,
-        "branches": 81.03,
+        "lines": 100,
+        "branches": 100,
         "functions": 100
       }
     },
@@ -642,8 +771,8 @@
         "functions": 95
       },
       "latestObserved": {
-        "lines": 85.54,
-        "branches": 75.65,
+        "lines": 90.11,
+        "branches": 79.03,
         "functions": 100
       }
     },
@@ -751,7 +880,7 @@
       },
       "latestObserved": {
         "lines": 93.64,
-        "branches": 86.93,
+        "branches": 87.01,
         "functions": 97.5
       }
     },
@@ -786,9 +915,9 @@
         "functions": 95
       },
       "latestObserved": {
-        "lines": 85.51,
-        "branches": 79.6,
-        "functions": 95.65
+        "lines": 85.83,
+        "branches": 79.98,
+        "functions": 95.76
       }
     },
     {
@@ -805,7 +934,7 @@
       },
       "latestObserved": {
         "lines": 83.9,
-        "branches": 87.41,
+        "branches": 87.5,
         "functions": 96.67
       }
     },
@@ -859,7 +988,7 @@
       },
       "latestObserved": {
         "lines": 83.47,
-        "branches": 81.92,
+        "branches": 81.54,
         "functions": 95.18
       }
     },
@@ -876,9 +1005,9 @@
         "functions": 90
       },
       "latestObserved": {
-        "lines": 90,
-        "branches": 83.53,
-        "functions": 92.54
+        "lines": 91.17,
+        "branches": 83.59,
+        "functions": 92.7
       }
     },
     {
@@ -894,8 +1023,8 @@
         "functions": 95
       },
       "latestObserved": {
-        "lines": 83.37,
-        "branches": 90.09,
+        "lines": 83.88,
+        "branches": 90.91,
         "functions": 100
       }
     },
@@ -966,9 +1095,9 @@
         "functions": 90
       },
       "latestObserved": {
-        "lines": 84.57,
-        "branches": 81.14,
-        "functions": 93.75
+        "lines": 85.67,
+        "branches": 80.93,
+        "functions": 93.9
       }
     },
     {
@@ -1039,7 +1168,7 @@
       },
       "latestObserved": {
         "lines": 92.02,
-        "branches": 82.63,
+        "branches": 82.7,
         "functions": 93.67
       }
     },
@@ -1150,6 +1279,132 @@
         "branches": 100,
         "functions": 100
       }
+    },
+    {
+      "path": "src/domain/orders/recovery-seller-submission-ownership.js",
+      "baseline": {
+        "lines": 97.14,
+        "branches": 95,
+        "functions": 100
+      },
+      "minimum": {
+        "lines": 95,
+        "branches": 95,
+        "functions": 95
+      },
+      "latestObserved": {
+        "lines": 100,
+        "branches": 100,
+        "functions": 100
+      }
+    },
+    {
+      "path": "src/domain/strategies/conservative/state-predicates.js",
+      "baseline": {
+        "lines": 100,
+        "branches": 100,
+        "functions": 100
+      },
+      "minimum": {
+        "lines": 95,
+        "branches": 95,
+        "functions": 95
+      },
+      "latestObserved": {
+        "lines": 100,
+        "branches": 100,
+        "functions": 100
+      }
+    },
+    {
+      "path": "src/infrastructure/operational-state/helpers/operational-state-fact-schema.js",
+      "baseline": {
+        "lines": 100,
+        "branches": 100,
+        "functions": 100
+      },
+      "minimum": {
+        "lines": 95,
+        "branches": 95,
+        "functions": 95
+      },
+      "latestObserved": {
+        "lines": 100,
+        "branches": 100,
+        "functions": 100
+      }
+    },
+    {
+      "path": "src/infrastructure/operational-state/helpers/validate-operational-state-order-facts.js",
+      "baseline": {
+        "lines": 100,
+        "branches": 100,
+        "functions": 100
+      },
+      "minimum": {
+        "lines": 95,
+        "branches": 95,
+        "functions": 95
+      },
+      "latestObserved": {
+        "lines": 100,
+        "branches": 100,
+        "functions": 100
+      }
+    },
+    {
+      "path": "src/infrastructure/operational-state/helpers/validate-operational-state-recovery-seller-facts.js",
+      "baseline": {
+        "lines": 96.85,
+        "branches": 90.91,
+        "functions": 100
+      },
+      "minimum": {
+        "lines": 95,
+        "branches": 90,
+        "functions": 95
+      },
+      "latestObserved": {
+        "lines": 96.85,
+        "branches": 90.91,
+        "functions": 100
+      }
+    },
+    {
+      "path": "src/infrastructure/operational-state/operational-state-fact-validation.js",
+      "baseline": {
+        "lines": 97.4,
+        "branches": 85.71,
+        "functions": 100
+      },
+      "minimum": {
+        "lines": 95,
+        "branches": 85,
+        "functions": 95
+      },
+      "latestObserved": {
+        "lines": 97.4,
+        "branches": 85.71,
+        "functions": 100
+      }
+    },
+    {
+      "path": "src/infrastructure/operational-state/operational-state-record-validation.js",
+      "baseline": {
+        "lines": 99.21,
+        "branches": 96.59,
+        "functions": 100
+      },
+      "minimum": {
+        "lines": 95,
+        "branches": 95,
+        "functions": 95
+      },
+      "latestObserved": {
+        "lines": 99.21,
+        "branches": 96.59,
+        "functions": 100
+      }
     }
   ],
   "runtimeScope": {
@@ -1168,17 +1423,17 @@
     ]
   },
   "latestCoverageMeasurement": {
-    "measuredAt": "2026-11-21T08:44:16Z",
-    "branch": "reliability/harvester-critical-behavior-gates-1639",
-    "prHeadSha": "d261eed395d8a32263bc274d457117287621e086",
-    "workflowRunId": 44886211302,
-    "harvesterJobId": 136791946328,
+    "measuredAt": "2026-11-22T01:20:41Z",
+    "branch": "fix/release-1662-readiness",
+    "prHeadSha": "b82868cd1c916698f5369773d2105199033857fa",
+    "workflowRunId": 44970952498,
+    "harvesterJobId": 137050397783,
     "aggregate": {
-      "lines": 90.42,
+      "lines": 90.44,
       "branches": 83.4,
-      "functions": 96.01
+      "functions": 96.04
     },
-    "checkedCriticalModuleCount": 30,
+    "checkedCriticalModuleCount": 39,
     "gatePassed": true
   }
 }

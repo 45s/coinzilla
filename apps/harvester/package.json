@@ -68,6 +68,7 @@
       "src/domain/strategies/recovery-seller/lifecycle-state.test.js",
       "src/domain/strategies/recovery-seller/recovery-seller-accounting-error.test.js",
       "src/domain/orders/order-registry.test.js",
+      "src/domain/orders/recovery-seller-submission-ownership.test.js",
       "src/domain/strategies/recovery-seller/recovery-seller-lifecycle.test.js",
       "src/domain/account/calculate-account-snapshot-baselines.test.js",
       "src/bootstrap/account/create-account-snapshot-manager.test.js",
@@ -108,6 +109,7 @@
       "src/infrastructure/persistence/trading-history-backups/backup-schema.test.js",
       "src/infrastructure/persistence/trading-history-backups/backup-sqlite.test.js",
       "src/use-cases/create-latest-transition-evaluator.test.js",
+      "src/use-cases/create-market-metadata-cache.test.js",
       "src/use-cases/conservative-engine-order-event-composition.test.js",
       "src/use-cases/order-event-workflow.test.js",
       "src/use-cases/create-recovery-seller-order-submitter.test.js",
@@ -121,7 +123,8 @@
       "src/infrastructure/http/trading-history-api.test.js",
       "src/infrastructure/http/start-trading-history-api.test.js",
       "src/infrastructure/http/market-data-api.test.js",
-      "src/infrastructure/http/bitunix-futures-market-data.test.js"
+      "src/infrastructure/http/bitunix-futures-market-data.test.js",
+      "test/use-cases/conservative-trading-engine.test.js"
     ]
   },
   "scripts": {

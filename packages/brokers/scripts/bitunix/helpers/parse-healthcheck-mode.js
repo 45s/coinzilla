@@ -7,10 +7,10 @@ const MODE_BY_ARGUMENT = Object.freeze({
 })
 
 /**
- * Parse the single supported Bitunix health-check mode.
+ * Parse one supported Bitunix health-check or order-probe mode.
  *
  * @param {{args?: string[]}} input
- * @returns {"help"|"version"|"local"|"publish"|"place-order"}
+ * @returns {"help"|"version"|"local"|"publish"|"place-order"|"probe-order"}
  */
 export function parseHealthcheckMode({ args = [] } = {}) {
   if (!Array.isArray(args) || args.some((argument) => typeof argument !== "string")) {
@@ -19,8 +19,12 @@ export function parseHealthcheckMode({ args = [] } = {}) {
   if (args.length === 0) {
     return "publish"
   }
+  if (args.length === 1 && args[0].startsWith("--probe-order=") &&
+      args[0].slice("--probe-order=".length).trim()) {
+    return "probe-order"
+  }
   if (args.length !== 1 || !Object.hasOwn(MODE_BY_ARGUMENT, args[0])) {
-    throw new Error("Use only one Bitunix health-check mode: --help, --version, --local, --publish, or --place-order")
+    throw new Error("Use only one Bitunix mode: --help, --version, --local, --publish, --place-order, or --probe-order=<probe-id>")
   }
   return MODE_BY_ARGUMENT[args[0]]
 }

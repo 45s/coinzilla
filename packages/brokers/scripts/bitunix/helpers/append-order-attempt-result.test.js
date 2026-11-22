@@ -114,3 +114,52 @@ test("rejected and unknown outcomes expose safe codes but withhold messages and 
   assert.equal(unknown.results[2].error.code, "OUTCOME_UNKNOWN")
   assert.equal(unknown.results[2].error.message, "[error message withheld]")
 })
+
+
+test("a deterministic exchange rejection is a passed probe observation with safe identity and outcome", () => {
+  const report = appendOrderAttemptResult({
+    report: createReport(),
+    operatorResult: {
+      ok: false,
+      mutationOutcome: "REJECTED",
+      data: { orderId: "private-order-id" },
+      errors: [Object.assign(new Error("private exchange message"), {
+        code: "BITUNIX_REST_EXCHANGE_REJECTED",
+        exchangeCode: "10005",
+        status: 200,
+        kind: "exchange",
+      })],
+    },
+    durationMs: 50,
+    probeId: "limit-buy-1",
+    probeMode: true,
+  })
+
+  assert.equal(report.summary.passed, 3)
+  assert.equal(report.results[2].operation, "operator order probe")
+  assert.equal(report.results[2].status, "passed")
+  assert.equal(report.results[2].probeId, "limit-buy-1")
+  assert.equal(report.results[2].mutationOutcome, "REJECTED")
+  assert.equal(report.results[2].error.exchangeCode, "10005")
+  assert.equal(report.results[2].error.message, "[error message withheld]")
+  assert.equal(JSON.stringify(report).includes("private-order-id"), false)
+})
+
+test("an unknown order probe outcome remains failed and cannot be reported as a rejection", () => {
+  const report = appendOrderAttemptResult({
+    report: createReport(),
+    operatorResult: {
+      ok: false,
+      mutationOutcome: "OUTCOME_UNKNOWN",
+      errors: [new Error("private dispatch detail")],
+    },
+    durationMs: 50,
+    probeId: "market-buy-1",
+    probeMode: true,
+  })
+
+  assert.equal(report.summary.failed, 1)
+  assert.equal(report.results[2].operation, "operator order probe")
+  assert.equal(report.results[2].status, "failed")
+  assert.equal(report.results[2].mutationOutcome, "OUTCOME_UNKNOWN")
+})

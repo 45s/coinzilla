@@ -4,7 +4,7 @@ Angular + TypeScript client for the Coinzilla operational dashboard.
 
 ## Current state
 
-The Overview screen remains an explicitly labeled fictional preview. Orders, Fills, and Commissions are separate read-only pages that request actual persisted Harvester records through the unauthenticated loopback-only `/api/v1` HTTP contract. The Market Screener displays Bitunix Futures public REST market data through Harvester; Bitunix Spot and Binance markets are visible future source options but are not enabled. The native rolling 24h percentage is displayed from Bitunix's public WebSocket ticker field; missing 5m, 1h, and 4h fields stay N/A. The Dashboard performs no movement calculations. Favourites are stored in source-specific one-year browser cookies. The screener fetches on page load and explicit refresh only; it does not poll in the background.
+The dashboard includes a persistent theme picker with the original Emerald appearance as the default, six alternate palettes (Midnight Terminal, Clean Light, OLED / Neon, Green Terminal, Arctic, and Warm Graphite), and System mode. Theme choice is stored in browser local storage. The Overview screen remains an explicitly labeled fictional preview. Orders, Fills, and Commissions are separate read-only pages that request actual persisted Harvester records through the unauthenticated loopback-only `/api/v1` HTTP contract. The Market Screener displays Bitunix Futures public REST market data through Harvester; Bitunix Spot and Binance markets are visible future source options but are not enabled. The native rolling 24h percentage is displayed from Bitunix's public WebSocket ticker field; missing 5m, 1h, and 4h fields stay N/A. The Dashboard performs no movement calculations. Favourites are stored in source-specific one-year browser cookies. The screener fetches on page load and explicit refresh only; it does not poll in the background.
 
 ## Requirements
 
@@ -30,6 +30,16 @@ pnpm --filter @coinzilla/dashboard build
 pnpm --filter @coinzilla/dashboard test
 pnpm --filter @coinzilla/dashboard test:coverage
 ```
+
+## Exchanges workspace
+
+The read-only **Exchanges** page lists only provider accounts that Harvester has successfully
+started and exposed through its local account-monitor API. Balances and open orders are fetched
+from Harvester's existing broker runtimes; browser code never opens exchange connections or
+handles exchange credentials. Live WebSocket messages are invalidation hints emitted from
+Harvester's existing user-data subscription, and REST snapshots remain authoritative. Providers
+or products not configured and supported by Harvester are not displayed (currently Binance Spot
+only; no Binance Futures or Bitunix account provider).
 
 ## Architecture boundary
 

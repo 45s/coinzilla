@@ -336,3 +336,45 @@
     flex-direction: column;
   }
 }
+
+.theme-picker {
+  display: inline-flex;
+  align-items: center;
+}
+
+.theme-picker select {
+  max-width: 174px;
+  min-height: 30px;
+  padding: 0 26px 0 9px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--control-bg, #151e2b);
+  color: var(--text, #e7edf5);
+  font: inherit;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.theme-picker select:focus-visible {
+  outline: 2px solid var(--accent, #65d6ad);
+  outline-offset: 2px;
+}
+
+@media (max-width: 760px) {
+  .theme-picker select {
+    max-width: 122px;
+  }
+}
+
+
+.theme-picker .visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

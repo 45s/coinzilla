@@ -70,8 +70,10 @@ export function createRestSignature(options = {}) {
   })
   const payload = `${nonce}${timestamp}${publicApiKey}${query}${body}`
   // codeql[js/insufficient-password-hash] Bitunix mandates SHA-256 here for REST request authentication; this is not password storage.
+
   const digest = createHash("sha256").update(payload).digest("hex")
 
   // codeql[js/insufficient-password-hash] Bitunix mandates SHA-256 here for REST request authentication; this is not password storage.
+
   return createHash("sha256").update(`${digest}${signingSecret}`).digest("hex")
 }

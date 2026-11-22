@@ -96,6 +96,43 @@ asset: quoteAsset }) },
   }
 }
 
+function makeMarketMetadataWithMinimumNotional({ market, minimumNotional } = {}) {
+  const metadata = makeMarketMetadata(market)
+  return {
+    ...metadata,
+    tradingRules: new TradingRules({
+      market,
+      constraints: metadata.tradingRules.constraints.map((constraint) =>
+        constraint.type === "MIN_NOTIONAL"
+          ? {
+            ...constraint,
+            value: new Money({
+              amount: minimumNotional,
+              asset: quoteAsset,
+            }),
+          }
+          : constraint,
+      ),
+    }),
+  }
+}
+
+function createRecoverySellTestStrategyPolicy({ onEvaluate, lastBuyPrice = "100" } = {}) {
+  const withSeededVwap = (input = {}) => ({
+    ...input,
+    lastBuyPrice,
+  })
+  return {
+    ...conservativeStrategyPolicy,
+    evaluate: (input) => {
+      onEvaluate?.(input)
+      return conservativeStrategyPolicy.evaluate(withSeededVwap(input))
+    },
+    evaluateTrailingBuyRepricing: (input) =>
+      conservativeStrategyPolicy.evaluateTrailingBuyRepricing(withSeededVwap(input)),
+  }
+}
+
 function createHarnessAppConfig({
   externalOrdersPolicyBySymbol = {},
   symbols = ["DOGEUSDT", "SOLUSDT"],
@@ -174,6 +211,10 @@ asset: market.baseAsset }),
     getFills: async () => ({ ok: true,
 data: [] }),
     ...brokerOverrides,
+    getSymbolFilters: brokerOverrides.getSymbolFilters ?? (async ({ symbol }) => ({
+      ok: true,
+      data: makeMarketMetadata(marketsBySymbol.get(symbol)),
+    })),
   }
 }
 
@@ -1001,8 +1042,10 @@ function createOperatorPauseRecoveryPosition({ market }) {
     ,
     strategyId: StrategyId.COIN_GRABBER,
   }).ledger
-  return { portfolio, 
-    recoveryLedger }
+  return {
+    portfolio,
+    recoveryLedger,
+  }
 }
 
 function createOperatorPauseStrategyPolicy() {
@@ -1927,5 +1970,135 @@ test("unfiltered REST reconciliation retains global registry race detection", as
     engine.getPausedMarkets(),
     ["SOLUSDT"],
     "A global reconciliation failure must identify and pause the market with the newer execution fact.",
+  )
+})
+
+
+test("uses refreshed exchange filters when planning a recovery SELL", async () => {
+  const market = marketsBySymbol.get("DOGEUSDT")
+  const seeded = createOperatorPauseRecoveryPosition({ market })
+  const recoveryLedgersByMarket = new Map([[market.id, seeded.recoveryLedger]])
+  const refreshedMetadata = makeMarketMetadataWithMinimumNotional({
+    market,
+    minimumNotional: "200",
+  })
+  let evaluatedMetadata
+  let refreshedRuleReads = 0
+  const harness = await createHarness({
+    symbols: ["DOGEUSDT"],
+    portfolio: seeded.portfolio,
+    recoveryLedgersByMarket,
+    strategyPolicy: createRecoverySellTestStrategyPolicy({
+      onEvaluate: (input) => {
+        evaluatedMetadata = input.marketMetadata
+      },
+      lastBuyPrice: "100",
+    }),
+    brokerOverrides: {
+      getSymbolFilters: async ({ symbol }) => {
+        refreshedRuleReads += 1
+        assert.equal(symbol, market.symbol, "Recovery planning must refresh the exact active market's filters")
+        return {
+          ok: true,
+          data: refreshedMetadata,
+        }
+      },
+    },
+  })
+
+  await harness.engine.processMarketPrice({
+    symbol: market.symbol,
+    priceEvent: {
+      symbol: market.symbol,
+      price: "101",
+      timestamp: 1,
+    },
+  })
+
+  const refreshedMinimumNotional = evaluatedMetadata?.tradingRules?.constraints?.find((constraint) => constraint.type === "MIN_NOTIONAL")?.value?.amount
+  assert.equal(refreshedRuleReads, 1, "An active recovery position must trigger a current exchange-filter read")
+  assert.equal(refreshedMinimumNotional, "200", "Strategy evaluation must receive the refreshed minimum-notional filter")
+  assert.equal(
+    harness.orders.some((order) => order.side === "SELL"),
+    false,
+    "A recovery SELL below the refreshed minimum notional must not be submitted",
+  )
+})
+
+test("blocks recovery SELL planning when current exchange filters cannot be retrieved", async () => {
+  const market = marketsBySymbol.get("DOGEUSDT")
+  const seeded = createOperatorPauseRecoveryPosition({ market })
+  const recoveryLedgersByMarket = new Map([[market.id, seeded.recoveryLedger]])
+  const refreshError = new Error("exchangeInfo request unavailable")
+  const harness = await createHarness({
+    symbols: ["DOGEUSDT"],
+    portfolio: seeded.portfolio,
+    recoveryLedgersByMarket,
+    brokerOverrides: {
+      getSymbolFilters: async () => ({
+        ok: false,
+        errors: [refreshError],
+      }),
+    },
+  })
+
+  const result = await harness.engine.processMarketPrice({
+    symbol: market.symbol,
+    priceEvent: {
+      symbol: market.symbol,
+      price: "101",
+      timestamp: 1,
+    },
+  })
+
+  assert.equal(result.ok, false, "A failed exchange-filter refresh must stop recovery SELL evaluation")
+  assert.equal(
+    harness.orders.some((order) => order.side === "SELL"),
+    false,
+    "No recovery SELL may be submitted with unavailable current exchange filters",
+  )
+  assert.ok(
+    harness.pauses.some(({ symbol, reason }) =>
+      symbol === market.symbol && reason === "RECOVERY_SELL_FILTERS_UNAVAILABLE"),
+    "The affected market must be paused when recovery SELL filters are unavailable",
+  )
+})
+
+test("submits a valid recovery SELL when refreshed exchange filters remain valid", async () => {
+  const market = marketsBySymbol.get("DOGEUSDT")
+  const seeded = createOperatorPauseRecoveryPosition({ market })
+  const recoveryLedgersByMarket = new Map([[market.id, seeded.recoveryLedger]])
+  let refreshedRuleReads = 0
+  const harness = await createHarness({
+    symbols: ["DOGEUSDT"],
+    portfolio: seeded.portfolio,
+    recoveryLedgersByMarket,
+    strategyPolicy: createRecoverySellTestStrategyPolicy({ lastBuyPrice: "100" }),
+    brokerOverrides: {
+      getSymbolFilters: async ({ symbol }) => {
+        refreshedRuleReads += 1
+        assert.equal(symbol, market.symbol, "Recovery planning must refresh the exact active market's filters")
+        return {
+          ok: true,
+          data: makeMarketMetadata(market),
+        }
+      },
+    },
+  })
+
+  const result = await harness.engine.processMarketPrice({
+    symbol: market.symbol,
+    priceEvent: {
+      symbol: market.symbol,
+      price: "101",
+      timestamp: 1,
+    },
+  })
+
+  assert.equal(result.ok, true, result.errors?.[0]?.message ?? "A valid refreshed recovery SELL must succeed")
+  assert.equal(refreshedRuleReads, 1, "Recovery SELL sizing must use a current filter snapshot")
+  assert.ok(
+    harness.orders.some((order) => order.side === "SELL"),
+    "A recovery SELL satisfying refreshed exchange filters must be submitted",
   )
 })
