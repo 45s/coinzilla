@@ -2,6 +2,10 @@ import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 import { UserDataSession } from "./user-data-session.js"
 
+function shouldFailReconnect({ isReconnectClient, failReconnect }) {
+  return isReconnectClient && (typeof failReconnect === "function" ? failReconnect() : failReconnect)
+}
+
 function createRecoveryPort({ subscriptionId, isReconnectClient, failReconnect, failDisconnect, calls = [], subscribe }) {
   const listeners = {
     event: new Set(),
@@ -13,10 +17,7 @@ function createRecoveryPort({ subscriptionId, isReconnectClient, failReconnect, 
     state: "open",
     async connect() {
       calls.push("connect")
-      const shouldFailReconnect = typeof failReconnect === "function"
-        ? failReconnect()
-        : failReconnect
-      if (isReconnectClient && shouldFailReconnect) {
+      if (shouldFailReconnect({ isReconnectClient, failReconnect })) {
         throw new Error("reconnect unavailable")
       }
       this.state = "open"
@@ -502,7 +503,10 @@ async function verifyFailedReconnectRetriesAndEventuallyRecovers() {
 
   assert.equal(reconnectAttempts, 2, "A later reconnect attempt must be allowed to succeed.")
   assert.ok(
-    getStatusesByType({ statuses, type: "recovered" }).length > 0,
+    getStatusesByType({
+      statuses,
+      type: "recovered",
+    }).length > 0,
     "A successful retry must publish the recovered generation for application reconciliation.",
   )
   assert.equal(
