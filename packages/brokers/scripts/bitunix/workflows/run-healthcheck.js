@@ -434,6 +434,30 @@ function shouldSkipOperatorOrder({ report, runOperatorOrder }) {
   return runOperatorOrder && !evaluateReadOnlyHealthCheck({ report }).healthy
 }
 
+async function runOperatorAndAppendResult({
+  report,
+  runOperatorOrder,
+  runOperatorProbe,
+  env,
+  probeId,
+  startedAt,
+}) {
+  const operatorResult = await runSelectedOperator({
+    runOperatorOrder,
+    runOperatorProbe,
+    env,
+    probeId,
+  })
+  return appendSelectedOperatorResult({
+    report,
+    operatorResult,
+    startedAt,
+    env,
+    runOperatorProbe,
+    probeId,
+  })
+}
+
 async function runDiagnosticsWithOperatorAttempt({
   env,
   onProgress,
@@ -473,19 +497,13 @@ async function runDiagnosticsWithOperatorAttempt({
       ? `      General diagnostics skipped; running focused HYPEUSDT preflight for ${probeId}`
       : "      Read-only health checks passed; starting the guarded HYPEUSDT operator attempt",
   })
-  const operatorResult = await runSelectedOperator({
+  const appendedReport = await runOperatorAndAppendResult({
+    report,
     runOperatorOrder,
     runOperatorProbe,
     env,
     probeId,
-  })
-  const appendedReport = appendSelectedOperatorResult({
-    report,
-    operatorResult,
     startedAt,
-    env,
-    runOperatorProbe,
-    probeId,
   })
   return runOperatorProbe
     ? {
