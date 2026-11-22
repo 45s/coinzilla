@@ -16,7 +16,9 @@ function createCapturedRequest({ path, options, isPlacement }) {
   return {
     method: options.method,
     path,
-    ...(isPlacement\n      ? { body: options.body ?? null }\n      : { query: sanitizeDiagnosticValue({ value: options.queryParams ?? {} }) }),
+    ...(isPlacement
+      ? { body: options.body ?? null }
+      : { query: sanitizeDiagnosticValue({ value: options.queryParams ?? {} }) }),
   }
 }
 
