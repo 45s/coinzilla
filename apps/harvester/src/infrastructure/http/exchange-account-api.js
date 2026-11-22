@@ -27,6 +27,18 @@ function resolveAccount({ exchangeAccounts, providerInstanceId } = {}) {
   return exchangeAccounts.find((account) => account.providerInstanceId === providerInstanceId)
 }
 
+function serializeAccountSnapshot(snapshot) {
+  return {
+    sourceTime: snapshot.sourceTime,
+    balances: snapshot.balances.map((balance) => balance?.value ?? balance),
+  }
+}
+
+function serializeOpenOrders(orders) {
+  if (!Array.isArray(orders)) return []
+  return orders.map((order) => order?.value ?? order)
+}
+
 function mapAccountMetadata(account) {
   return {
     providerInstanceId: account.providerInstanceId,
@@ -123,8 +135,8 @@ export async function handleExchangeAccountRequest({
         ok: true,
         data: {
           ...mapAccountMetadata(account),
-          accountSnapshot: snapshot.data,
-          openOrders: openOrders.data,
+          accountSnapshot: serializeAccountSnapshot(snapshot.data),
+          openOrders: serializeOpenOrders(openOrders.data),
           observedAt: new Date().toISOString(),
         },
       },
