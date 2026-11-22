@@ -16,7 +16,8 @@ test("Bitunix health-check help lists every mode without credentials or network 
 
   assert.equal(result.status, 0, "help must exit successfully without credentials or network access")
   assert.match(result.stdout, /--local/, "help must describe local-only diagnostics")
-  assert.match(result.stdout, /--publish/, "help must describe sanitized report publishing")\n  assert.match(result.stdout, /--full-diagnostics/, "help must describe the opt-in broad diagnostic suite")
+  assert.match(result.stdout, /--publish/, "help must describe sanitized report publishing")
+  assert.match(result.stdout, /--full-diagnostics/, "help must describe the opt-in broad diagnostic suite")
   assert.match(result.stdout, /--place-order/, "help must describe the guarded operator order mode")
   assert.equal(result.stderr, "", "help must not emit credential or runtime errors")
 })
