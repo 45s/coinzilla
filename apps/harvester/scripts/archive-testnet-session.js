@@ -156,6 +156,11 @@ async function copySelectedLogs({ sourceDirectory, destinationDirectory, onFileC
       .map((entry) => entry.name)
       .sort()
     latestSessionName = sessions.at(-1)
+    if (!latestSessionName) {
+      throw new Error("No session directory was found under logs/sessions; refusing to publish an archive without session evidence.")
+    }
+  } else {
+    throw new Error("The logs/sessions directory is missing; refusing to publish an archive without session evidence.")
   }
 
   for (const entry of entries) {
