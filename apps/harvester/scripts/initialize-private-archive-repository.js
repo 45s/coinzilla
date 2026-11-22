@@ -129,13 +129,13 @@ async function main() {
   ].join(" | ")
   const args = process.argv.slice(2)
   if (args.length === 1 && args[0] === "--version") {
-    process.stdout.write(identity + "\\n")
+    process.stdout.write(identity + "\n")
     return
   }
   if (args.length > 0) {
     throw new TypeError("Usage: archive:repo:init [--version]")
   }
-  process.stdout.write(identity + "\\n")
+  process.stdout.write(identity + "\n")
   const result = await initializePrivateArchiveRepository()
   const status = result.alreadyInitialized
     ? "already initialized; no changes made"
