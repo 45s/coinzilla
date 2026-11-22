@@ -28,12 +28,12 @@ async function createArchiveFixture() {
       sequence: String(sequence),
       digest: sequence === 48 ? DATA_COMMIT_HASH : String(sequence).padStart(64, "0"),
       runtimeSessionId: RUNTIME_SESSION_ID,
-    })).join("\\n") + "\\n",
+    })).join("\n") + "\n",
     "recovery-facts/manifest.jsonl": Array.from({ length: 49 }, (_, sequence) => JSON.stringify({
       sequence: String(sequence),
       recordCount: String(sequence + 1),
       lastCommittedDigest: sequence === 48 ? DATA_COMMIT_HASH : String(sequence).padStart(64, "0"),
-    })).join("\\n") + "\\n",
+    })).join("\n") + "\n",
   }
   for (const [relativePath, content] of Object.entries(files)) {
     const filename = path.join(packageDirectory, relativePath)
@@ -79,7 +79,7 @@ test("archives complete logs and data trees without requiring process markers", 
       assert.deepEqual(manifest.includedDirectories, ["logs", "data", "recovery-facts"], "the manifest must declare all copied source trees")
       assert.equal(manifest.dataCommitHash, DATA_COMMIT_HASH, "the archive manifest must identify the last committed recovery-facts digest")
       assert.equal(manifest.recoveryRuntimeSessionId, RUNTIME_SESSION_ID, "the archive manifest must identify the session owning the last committed fact")
-      assert.equal(await readFile(path.join(directory, "data_commit_hash"), "utf8"), DATA_COMMIT_HASH + "\\n", "the archive must contain the standalone data_commit_hash file")
+      assert.equal(await readFile(path.join(directory, "data_commit_hash"), "utf8"), DATA_COMMIT_HASH + "\n", "the archive must contain the standalone data_commit_hash file")
       for (const [relativePath, content] of Object.entries(fixture.files)) {
         assert.equal(
           await readFile(path.join(directory, relativePath), "utf8"),
@@ -112,7 +112,7 @@ test("keeps the completed local snapshot when remote publication fails", async (
   )
   assert.equal(
     await readFile(path.join(attemptedDirectory, "data_commit_hash"), "utf8"),
-    DATA_COMMIT_HASH + "\\n",
+    DATA_COMMIT_HASH + "\n",
     "the complete local snapshot must retain the last committed data hash",
   )
   assert.equal(
