@@ -13,7 +13,10 @@ function createRecoveryPort({ subscriptionId, isReconnectClient, failReconnect, 
     state: "open",
     async connect() {
       calls.push("connect")
-      if (isReconnectClient && failReconnect) {
+      const shouldFailReconnect = typeof failReconnect === "function"
+        ? failReconnect()
+        : failReconnect
+      if (isReconnectClient && shouldFailReconnect) {
         throw new Error("reconnect unavailable")
       }
       this.state = "open"
@@ -477,6 +480,48 @@ async function verifyFailedReconnectKeepsRecoveryPending() {
   await fixture.session.stop()
 }
 
+async function verifyFailedReconnectRetriesAndEventuallyRecovers() {
+  const statuses = []
+  let reconnectAttempts = 0
+  const fixture = createRecoveryFixture({
+    failReconnect: () => ++reconnectAttempts === 1,
+  })
+  fixture.session.start()
+  const subscription = await fixture.session.subscribe({
+    onEvent() {},
+    onStatus: createStatusRecorder(statuses),
+  })
+
+  fixture.closeInitialConnection()
+  await fixture.reconnect()
+  assert.ok(
+    hasRecoveryFailureStatus(statuses),
+    "The first failed reconnect must leave recovery required and publish its failure status.",
+  )
+  await fixture.reconnect()
+
+  assert.equal(reconnectAttempts, 2, "A later reconnect attempt must be allowed to succeed.")
+  assert.ok(
+    getStatusesByType({ statuses, type: "recovered" }).length > 0,
+    "A successful retry must publish the recovered generation for application reconciliation.",
+  )
+  assert.equal(
+    countCalls({
+      calls: fixture.calls,
+      method: "subscribe",
+    }),
+    2,
+    "The initial and recovered subscriptions must each be established once.",
+  )
+  const recoveryGeneration = getCurrentRecoveryGeneration(statuses)
+  assert.deepEqual(subscription.data.acknowledgeRecoveryResult(recoveryGeneration), {
+    accepted: true,
+    completed: true,
+  }, "The subscriber must acknowledge only the recovered generation after successful retry.")
+
+  await fixture.session.stop()
+}
+
 async function verifyFailedReconnectCleanupFailureBlocksNextClient() {
   const fixture = createRecoveryFixture({
     failReconnect: true,
@@ -560,6 +605,7 @@ async function verifySubscriberAcknowledgementsCompleteSharedRecovery() {
 
 describe("Application user-data session recovery acknowledgements", () => {
   it("keeps recovery pending when reconnect is unavailable", verifyFailedReconnectKeepsRecoveryPending)
+  it("retries a failed reconnect and eventually restores the subscription", verifyFailedReconnectRetriesAndEventuallyRecovers)
   it("does not replace a failed reconnect client before cleanup succeeds", verifyFailedReconnectCleanupFailureBlocksNextClient)
   it("rejects acknowledgement when no recovery is pending", verifyAcknowledgementIsRejectedWithoutRecovery)
   it("separates local acknowledgement acceptance from shared completion", verifySubscriberAcknowledgementsCompleteSharedRecovery)
