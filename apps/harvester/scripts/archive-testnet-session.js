@@ -582,7 +582,7 @@ async function readLatestRecoveryCheckpoint(recoveryFactsDirectory) {
 }
 
 async function createArchiveManifest({ directory, createdAt, logRuntimeSessionId, onFileHashed } = {}) {
-  const files = await listRegularFiles(directory)
+  const files = await listRegularFiles({ directory })
   const entries = []
   let completedBytes = 0
   const totalBytes = (await getTreeSize(directory)).totalBytes
