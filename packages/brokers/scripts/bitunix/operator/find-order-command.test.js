@@ -258,7 +258,10 @@ test("scan records thrown account-wide read failures and still writes a report",
     assert.equal(result.report.summary.failedRequestCount, 1)
     assert.ok(result.reportPath)
     const saved = JSON.parse(await readFile(result.reportPath, "utf8"))
-    assert.equal(saved.stages[1].errors[0].code, "E_PENDING_SCAN")
+    const failedStage = saved.stages.find((stage) =>
+      stage.operation === "broker.getOpenOrders",
+    )
+    assert.equal(failedStage.errors[0].code, "E_PENDING_SCAN")
   } finally {
     await rm(reportDirectory, {
       recursive: true,
