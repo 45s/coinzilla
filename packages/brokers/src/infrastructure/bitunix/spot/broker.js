@@ -260,13 +260,14 @@ async function reconcileSpotOrderPlacement({ restClient, symbol, placementData }
       where: "BitunixSpotBroker.createOrder() detail reconciliation",
       error,
     })
-    // The placement acknowledgement is already definitive. A failed follow-up
-    // read must not turn an accepted order into a failed createOrder() result.
-    // Return the acknowledgement explicitly as un-reconciled data; callers
-    // must not infer OPEN/FILLED status until a later read verifies it.
+    // Placement is confirmed, but createOrder() has not produced a normalized
+    // Order. Keep ok:false while preserving the accepted acknowledgement and
+    // the confirmed mutation outcome so callers cannot mistake this for a
+    // rejected placement or retry it.
     return {
       ...toResult({
         data: placementData,
+        errors: [error],
         mutationOutcome: "CONFIRMED",
       }),
       reconciliation: {
