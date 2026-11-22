@@ -281,12 +281,24 @@ test("Bitunix order probe persists confirmed placement and failed reconciliation
       result: resultFixture,
       balances: [
         {
-          free: { amount: "0.01", asset: { code: "HYPE" } },
-          locked: { amount: "0", asset: { code: "HYPE" } },
+          free: {
+            amount: "0.01",
+            asset: { code: "HYPE" },
+          },
+          locked: {
+            amount: "0",
+            asset: { code: "HYPE" },
+          },
         },
         {
-          free: { amount: "11.3", asset: { code: "USDT" } },
-          locked: { amount: "0", asset: { code: "USDT" } },
+          free: {
+            amount: "11.3",
+            asset: { code: "USDT" },
+          },
+          locked: {
+            amount: "0",
+            asset: { code: "USDT" },
+          },
         },
       ],
     })
