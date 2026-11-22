@@ -2990,7 +2990,11 @@ test("Bitunix Spot Broker API emits structured order-read diagnostics", async ()
     logger,
     responses: {
       "/api/spot/v1/common/coin_pair/list": [
-        { base: "HYPE", quote: "USDT", isOpen: "1" },
+        {
+          base: "HYPE",
+          quote: "USDT",
+          isOpen: "1",
+        },
       ],
       "/api/spot/v1/order/pending/list": [{
         orderId: "2124329325141426176",
