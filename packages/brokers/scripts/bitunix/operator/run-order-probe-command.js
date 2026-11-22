@@ -104,8 +104,9 @@ export async function runOperatorOrderProbeCommand({
       markerPath: resolve(brokersRoot, `.diagnostics/bitunix-order-probe-${probe.id}.json`),
       preflight,
     }),
-    assertMatrixCanContinue: () => assertBitunixOrderProbeMatrixCanContinue({
+    assertMatrixCanContinue: ({ probeId: selectedProbeId }) => assertBitunixOrderProbeMatrixCanContinue({
       diagnosticsDirectory: resolve(brokersRoot, ".diagnostics"),
+      probeId: selectedProbeId,
     }),
     writeLine: (message) => stdout.write(`${redactApiSecrets({
       message,
