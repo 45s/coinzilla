@@ -88,11 +88,7 @@ async function main() {
   }
   process.stdout.write(`${createResetIdentity()}\n`)
   const result = await runHarvesterOperationalStateReset({ args })
-  process.stdout.write(
-    result.removed
-      ? `Removed only recovery-facts: ${result.directory}\n`
-      : `No recovery-facts directory existed; nothing was removed: ${result.directory}\n`,
-  )
+  process.stdout.write(`Removed only recovery-facts: ${result.directory}\n`)
   process.stdout.write("The next Harvester startup will initialize an empty Operational State Store. Logs, databases, Journal sessions and archives were not changed.\n")
 }
 
