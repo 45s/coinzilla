@@ -57,7 +57,10 @@ function createVolatilityProtectedDependencies() {
   dependencies.getVolatilityData = () => ({
     ok: true,
     data: {
-      status: { isReady: true, isFresh: true },
+      status: {
+        isReady: true,
+        isFresh: true,
+      },
       metrics: { volatilityRatio: "2" },
     },
   })
