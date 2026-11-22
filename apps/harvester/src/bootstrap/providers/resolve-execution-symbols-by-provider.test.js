@@ -1,5 +1,6 @@
 import assert from "node:assert/strict"
 import test from "node:test"
+import { appConfig } from "../../../config/index.js"
 import { StrategyId } from "../../domain/strategies/strategy-ids.js"
 import { resolveExecutionRoutesByProvider, resolveExecutionSymbolsByProvider } from "./resolve-execution-symbols-by-provider.js"
 
@@ -140,6 +141,32 @@ test("rejects an RS route unless RS is explicitly enabled and the market is enab
     /disabled|not enabled|unsupported strategy/i,
     "An RS route must never implicitly enable RS or adopt the CG pair configuration",
   )
+})
+
+test("infers the enabled RS-only route in legacy single-provider TESTNET mode", () => {
+  const result = resolveExecutionRoutesByProvider({
+    appConfig: {
+      strategies: {
+        RS_recoverySeller: {
+          enabled: true,
+          pairs: {
+            LINEAUSDT: {
+              enabled: true,
+              tradingEnvironment: "testnet",
+            },
+          },
+        },
+      },
+    },
+    providers: [providers[0]],
+  })
+  assert.deepEqual([...result], [[
+    "binance-testnet-primary",
+    [{
+      strategyId: StrategyId.RECOVERY_SELLER,
+      symbol: "LINEAUSDT",
+    }],
+  ]], "RS-only legacy mode must infer the single configured TESTNET provider without requiring explicit routing")
 })
 
 test("rejects multi-provider configuration without an explicit execution route table", () => {
@@ -382,5 +409,41 @@ test("preserves strategy identity for same-market CG and RS routes on one provid
     [...result],
     fixture.expectedRoutes,
     "The account runtime must retain strategy identity even when its market-data/execution symbol list is deduplicated",
+  )
+})
+
+
+test("routes default LINEAUSDT Recovery Seller only to the TESTNET provider", () => {
+  const configuredApp = structuredClone(appConfig)
+  configuredApp.strategies.CG_coinGrabber.pairs = {
+    ETHUSDT: {
+      enabled: true,
+      tradingEnvironment: "live",
+    },
+  }
+
+  const testnetRoutes = resolveExecutionRoutesByProvider({
+    appConfig: configuredApp,
+    providers: [providers[0]],
+  })
+  assert.deepEqual(
+    [...testnetRoutes.get("binance-testnet-primary")].filter(({ strategyId }) =>
+      strategyId === StrategyId.RECOVERY_SELLER),
+    [{
+      strategyId: StrategyId.RECOVERY_SELLER,
+      symbol: "LINEAUSDT",
+    }],
+    "TESTNET must select the enabled LINEAUSDT RS market from the default app configuration.",
+  )
+
+  const liveRoutes = resolveExecutionRoutesByProvider({
+    appConfig: configuredApp,
+    providers: [providers[1]],
+  })
+  assert.deepEqual(
+    [...liveRoutes.get("binance-live-secondary")].filter(({ strategyId }) =>
+      strategyId === StrategyId.RECOVERY_SELLER),
+    [],
+    "LIVE must never select the TESTNET-only LINEAUSDT RS market.",
   )
 })

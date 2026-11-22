@@ -89,7 +89,8 @@
       "title": "Broker/client order identity and canonical order-state transitions",
       "sourceModules": [
         "src/domain/orders/order-registry.js",
-        "src/domain/orders/order-ownership.js"
+        "src/domain/orders/order-ownership.js",
+        "src/use-cases/create-user-data-event-transition.js"
       ],
       "tests": [
         {
@@ -106,13 +107,20 @@
           "path": "src/domain/orders/order-registry.test.js",
           "name": "ignores FILLED-to-OPEN regressions regardless of event timestamp",
           "kind": "failure"
+        },
+        {
+          "path": "test/replays/doge-zro-conservative-replay.test.js",
+          "name": "accounts distinct partial BUY fills when their cumulative order reports arrive out of order",
+          "kind": "integration"
         }
       ],
       "runtimeStatus": "active",
       "invariants": [
         "Resolve execution reports through canonical broker/client identity; reject conflicting identities.",
-        "Cumulative executed quantity and terminal order state never move backwards; stale reports cannot reduce canonical commitment."
-      ]
+        "Cumulative executed quantity and terminal order state never move backwards; stale reports cannot reduce canonical commitment.",
+        "A duplicate or stale order snapshot never regresses canonical order state and does not suppress its distinct TRADE Fill."
+      ],
+      "integrationRequired": true
     },
     {
       "id": "BROKER_HISTORY_RECONCILIATION",
@@ -147,7 +155,8 @@
       "title": "Canonical execution identity, duplicate delivery and conflicting replay",
       "sourceModules": [
         "src/domain/portfolio/portfolio.js",
-        "src/domain/fills/fill-fingerprint.js"
+        "src/domain/fills/fill-fingerprint.js",
+        "src/use-cases/create-user-data-event-transition.js"
       ],
       "integrationRequired": true,
       "tests": [
@@ -165,12 +174,23 @@
           "path": "src/use-cases/conservative-trading-engine.test.js",
           "name": "reconciles missing REST fills for an owned order and deduplicates overlapping stream delivery",
           "kind": "integration"
+        },
+        {
+          "path": "test/replays/doge-zro-conservative-replay.test.js",
+          "name": "accounts an identical duplicate partial BUY execution only once",
+          "kind": "normal"
+        },
+        {
+          "path": "test/replays/doge-zro-conservative-replay.test.js",
+          "name": "accounts distinct partial BUY fills when their cumulative order reports arrive out of order",
+          "kind": "integration"
         }
       ],
       "runtimeStatus": "active",
       "invariants": [
         "Apply each canonical fill at most once per market and strategy owner; duplicate delivery is an immutable no-op.",
-        "Reject a reused fill identity with changed immutable execution facts without mutating accounting."
+        "Reject a reused fill identity with changed immutable execution facts without mutating accounting.",
+        "Apply each distinct TRADE Fill even when its accompanying order snapshot is duplicate or stale; resolve it against the current registered order while preserving exact-once accounting."
       ]
     },
     {

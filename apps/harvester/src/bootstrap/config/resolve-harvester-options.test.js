@@ -140,22 +140,37 @@ test("rejects an RS route unless the RS strategy is explicitly enabled", async (
   )
 })
 
-test("fails closed for an RS-only provider until RS runtime dispatch exists", async () => {
+test("resolves an RS-only provider account without creating a Conservative execution route", async () => {
+  const cfg = {
+    ...config({ enabledSymbols: ["BTCUSDT"] }),
+    strategies: {
+      ...config({ enabledSymbols: ["BTCUSDT"] }).strategies,
+      RS_recoverySeller: {
+        enabled: true,
+        pairs: {
+          ETHUSDT: recoverySellerPair(),
+        },
+      },
+    },
+  }
   const fixture = createFixture({
+    cfg,
     env: { TRADING_MODE: TRADING_ENVIRONMENTS.TESTNET },
   })
+  const result = await resolveHarvesterOptions({
+    ...fixture.input,
+    executionSymbols: ["ETHUSDT"],
+    executionRoutes: [{
+      strategyId: "RS_recoverySeller",
+      symbol: "ETHUSDT",
+    }],
+  })
 
-  await assert.rejects(
-    resolveHarvesterOptions({
-      ...fixture.input,
-      executionSymbols: ["ETHUSDT"],
-      executionRoutes: [{
-        strategyId: "RS_recoverySeller",
-        symbol: "ETHUSDT",
-      }],
-    }),
-    /no Conservative execution route.*RS-only runtime dispatch is not integrated/i,
-  )
+  assert.deepEqual(result.conservativePairs, {}, "An RS-only provider must not receive a synthetic Conservative market.")
+  assert.deepEqual(Object.keys(result.recoverySellerPairs), ["ETHUSDT"], "The RS provider must receive only its explicitly routed RS pair.")
+  assert.deepEqual(Object.keys(result.pairs), ["ETHUSDT"], "The provider market map must contain the RS market without adding it to CG.")
+  assert.deepEqual(result.executionSymbols, ["ETHUSDT"], "The RS route must remain executable on the selected provider.")
+  assert.equal(result.tradingEnabled, true, "An enabled RS route must not be disabled merely because this account has no CG route.")
 })
 
 test("rejects duplicate Conservative strategy routes before selecting runtime pairs", async () => {
