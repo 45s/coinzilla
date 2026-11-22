@@ -164,7 +164,7 @@ async function startHarvesterWithExternalClosingSell({ calls, publishedEvents })
   })
   return {
     result,
-    openOrderReads,
+    getOpenOrderReads: () => openOrderReads,
   }
 }
 
@@ -200,8 +200,8 @@ test("captures the CLOSING account-wide open-order set before broker disconnect 
     "CLOSING open-order evidence must be durably published before the CLOSING balance audit.",
   )
   assert.equal(calls.includes("cancel-order"), false, "The external recovery SELL must remain untouched.")
-  assert.ok(fixture.openOrderReads >= 2, "The runtime must perform the startup audit and a separate CLOSING read.")
-  assert.ok(calls.lastIndexOf(`open-orders:${fixture.openOrderReads}:account`) < calls.indexOf("disconnect"))
+  assert.ok(fixture.getOpenOrderReads() >= 2, "The runtime must perform the startup audit and a separate CLOSING read.")
+  assert.ok(calls.lastIndexOf(`open-orders:${fixture.getOpenOrderReads()}:account`) < calls.indexOf("disconnect"))
 })
 
 test("blocks trading after execution accounting failure", async () => {
