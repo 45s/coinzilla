@@ -365,7 +365,7 @@ async function createArchiveManifest({ directory, createdAt, onFileHashed } = {}
     includedDirectories: [...SOURCE_DIRECTORIES],
     logSelection: {
       cumulative: "final-5-percent-of-each-file",
-      sessions: "newest-session-directory-only",
+      sessions: "newest-session-directory-only; gzip-compressed",
     },
     dataCommitHash,
     recoveryRuntimeSessionId: recoveryCheckpoint.runtimeSessionId,
