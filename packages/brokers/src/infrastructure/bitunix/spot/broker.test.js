@@ -531,7 +531,7 @@ test("Bitunix Spot accepted LIVE placement remains successful when order-detail 
     price: "30",
   })
 
-  assert.equal(result.ok, true, "a definitive successful placement acknowledgement must remain a successful createOrder result")
+  assert.equal(result.ok, false, "createOrder must not claim a normalized Order when detail reconciliation fails")
   assert.equal(result.data.orderId, "2124329325141426176", "the exact string order ID must survive the failed follow-up read")
   assert.equal(result.data.placeStatus, 1, "the original exchange placement status must be preserved")
   assert.equal(result.data.placeCode, 0, "the original exchange placement code must be preserved")
@@ -547,7 +547,9 @@ test("Bitunix Spot accepted LIVE placement remains successful when order-detail 
       status: 200,
     },
   }, "the failed detail lookup must remain visible as structured reconciliation metadata")
-  assert.deepEqual(result.errors, [], "a post-acceptance read failure must not make the placement result unsuccessful")
+  assert.equal(result.errors.length, 1, "the failed read must remain visible as the reason createOrder did not complete")
+  assert.equal(result.errors[0].exchangeCode, "100005")
+  assert.match(result.errors[0].message, /result\.api\.parameter\.sign\.illegal/)
   assert.equal(calls.length, 2, "one placement and one detail read are allowed; no request is retried")
   assert.equal(calls[0].method, "POST")
   assert.equal(calls[0].path, "/api/spot/v1/order/place_order")
