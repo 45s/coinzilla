@@ -4,7 +4,7 @@ import { loadEnvFile } from "node:process"
 import { dirname, resolve } from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
 import { assertInteractiveTerminal } from "./helpers/validate-order-attempt.js"
-import { runOperatorOrderCommand, reportOperatorFailure } from "./operator/run-order-command.js"
+import { runOperatorOrderCommand, reportOperatorFailure } from "./operator/run-order-command.js"\nimport { runOperatorOrderProbeCommand, reportOrderProbeFailure } from "./operator/run-order-probe-command.js"
 import { runHealthcheckWorkflow } from "./workflows/run-healthcheck.js"
 import { parseHealthcheckMode } from "./helpers/parse-healthcheck-mode.js"
 import { sanitizeDiagnosticError } from "./helpers/sanitize-diagnostic-data.js"
@@ -89,7 +89,7 @@ async function runHealthcheck({ args = process.argv.slice(2) } = {}) {
   if (mode === "version") {
     return
   }
-  if (mode === "place-order") {
+  if (mode === "probe-order") {\n    assertInteractiveTerminal({\n      stdin: process.stdin,\n      stdout: process.stdout,\n    })\n    loadLocalEnvironment()\n    const probeId = args[0].slice("--probe-order=".length)\n    process.exitCode = await runHealthcheckWorkflow({\n      mode,\n      probeId,\n      brokersRoot,\n      repositoryRoot,\n      env: process.env,\n      runOperatorProbe: async ({ env, probeId: selectedProbeId }) => {\n        try {\n          return await runOperatorOrderProbeCommand({\n            env,\n            brokersRoot,\n            probeId: selectedProbeId,\n          })\n        } catch (error) {\n          reportOrderProbeFailure({\n            error,\n            env,\n          })\n          throw error\n        }\n      },\n    })\n    return\n  }\n  if (mode === "place-order") {
     assertInteractiveTerminal({
       stdin: process.stdin,
       stdout: process.stdout,
@@ -132,7 +132,7 @@ const isMainModule = process.argv[1] &&
 if (isMainModule) {
   const args = process.argv.slice(2)
   runHealthcheck({ args }).catch((error) => {
-    if (args.includes("--place-order")) {
+    if (args.includes("--place-order") || args.some((argument) => argument.startsWith("--probe-order="))) {
       reportOperatorFailure({
         error,
         env: process.env,
