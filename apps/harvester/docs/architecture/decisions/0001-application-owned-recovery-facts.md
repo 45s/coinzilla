@@ -210,6 +210,18 @@ The earlier implementation-tracking sentence that says `main()` creates/verifies
 
 When a store is explicitly supplied or recovery is separately enabled, the existing verification, append, and fail-closed rules remain applicable. The store is never auto-initialized or repaired. Restart restoration remains disabled pending the independent #654 gates. Do not change this behavior as part of #1327.
 
+### RS durable-store bootstrap update — 2026-11-22
+
+The later default RS enablement changes when the process entrypoint must construct the existing store, without changing ADR-0001's genesis or restoration rules. `prepareProcessOperationalStateStore` now prepares and verifies the process-owned store when either Conservative restart recovery is enabled or RS is globally enabled with at least one enabled market. RS requires this store for its durable STOP latch and process-boundary facts even while automatic process-restart restoration remains disabled.
+
+Telegram-only operator control still does not create or require the store. Runtime never creates genesis, repairs missing/corrupt history, or restores Portfolio/RecoveryLedger/OrderRegistry state. If the ledger has not been initialized, the operator must run the explicit one-time `operational-state:init` command while Harvester is stopped. The RS TESTNET session remains separately gated by its controlled runbook.
+
+### Genesis initialization policy superseded — 2026-11-22
+
+The explicit-only genesis rule in this ADR is superseded by [ADR-0007](0007-initialize-empty-operational-state-ledger.md). The runtime may create genesis only when the Operational State Store directory is missing or exists but is empty. If the directory contains the two expected stream files, startup verifies them; a partial ledger, unexpected contents, or any integrity failure remains a hard startup failure. No existing data is repaired, reset, replaced, or treated as empty.
+
+This supersession changes only first-start genesis initialization. The append-only record/manifest protocol, durable acknowledgement rules, fail-closed integrity behavior, Journal boundary, and disabled automatic process-restart restoration remain unchanged.
+
 ## Offline durable-fact candidate projection
 
 The application-owned stream is read and integrity-verified independently of Journal. `projectHarvesterOperationalState` validates the global committed sequence, immutable configuration fingerprint, per-runtime PROCESS_STARTED/PROCESS_STOPPED boundaries, and cross-fact order/blocker transitions. It translates durable facts into the existing pure canonical recovery reducer's domain-event vocabulary; it does not read Journal files or treat Journal records as recovery authority. PREFLIGHT balance/open-order evidence is projected before the synthetic trading-session activation boundary so the reducer preserves its existing preflight contract. Durable global sequence values remain metadata for audit and integrity; cycle events retain their synthetic replay sequence so they are ordered in the same domain as projected fills. Never sort canonical Portfolio events by mixing durable-stream sequence numbers with synthetic replay sequence numbers.

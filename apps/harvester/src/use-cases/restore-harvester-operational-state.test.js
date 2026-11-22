@@ -5,7 +5,7 @@ import { Asset, Market } from "@coinzilla/entities"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { OrderRegistry } from "../domain/orders/order-registry.js"
 import { StrategyId } from "../domain/strategies/strategy-ids.js"
-import { projectHarvesterOperationalState } from "../infrastructure/operational-state/project-harvester-operational-state.js"
+import { projectHarvesterOperationalState } from "../infrastructure/operational-state/project-harvester.js"
 import { restoreHarvesterOperationalState } from "./restore-harvester-operational-state.js"
 
 const market = new Market({

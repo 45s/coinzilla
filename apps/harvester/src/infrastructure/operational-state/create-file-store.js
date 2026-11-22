@@ -19,7 +19,7 @@ import {
   validateFactInput,
   validateFactRecord,
   validateManifestCheckpoint,
-} from "./operational-state-record-validation.js"
+} from "./record-validation.js"
 
 const FACTS_FILE_NAME = "facts.jsonl"
 const MANIFEST_FILE_NAME = "manifest.jsonl"
@@ -337,6 +337,90 @@ async function initializeOperationalStateStore({ store, assertNoUncertainWrite, 
     }
     return toResult({ error })
   }
+}
+
+async function initializeOperationalStateStoreIfEmpty({ store, assertNoUncertainWrite, syncStreams, verifyState }) {
+  try {
+    assertNoUncertainWrite()
+    let directoryStat
+    try {
+      directoryStat = await store.fileSystem.lstat(store.absoluteDirectory)
+    } catch (error) {
+      if (error.code !== "ENOENT") {
+        throw error
+      }
+      return await createInitialOperationalStateLedger({
+        store,
+        assertNoUncertainWrite,
+        syncStreams,
+        verifyState,
+      })
+    }
+    if (directoryStat.isSymbolicLink() || !directoryStat.isDirectory()) {
+      throw createError(
+        "Operational State Store path must be a real directory, not a symlink",
+        "DURABLE_FACTS_DIRECTORY_INVALID",
+      )
+    }
+    const entries = await store.fileSystem.readdir(store.absoluteDirectory)
+    if (entries.length === 0) {
+      return await createInitialOperationalStateLedger({
+        store,
+        assertNoUncertainWrite,
+        syncStreams,
+        verifyState,
+      })
+    }
+    const hasBothStreams = entries.length === 2 &&
+      entries.includes(FACTS_FILE_NAME) &&
+      entries.includes(MANIFEST_FILE_NAME)
+    if (!hasBothStreams) {
+      throw createError(
+        "Operational State Store directory must contain exactly facts.jsonl and manifest.jsonl; " +
+          "refusing to initialize or overwrite unexpected or partial contents",
+        "DURABLE_FACTS_LEDGER_INCOMPLETE",
+      )
+    }
+    return toResult({
+      data: {
+        ready: true,
+        initialized: false,
+      },
+    })
+  } catch (error) {
+    if (!error.code) {
+      error.code = "DURABLE_FACTS_INITIALIZATION_FAILED"
+    }
+    return toResult({ error })
+  }
+}
+
+async function createInitialOperationalStateLedger({ store, assertNoUncertainWrite, syncStreams, verifyState }) {
+  const initialized = await initializeOperationalStateStore({
+    store,
+    assertNoUncertainWrite,
+    syncStreams,
+    verifyState,
+  })
+  if (initialized?.ok !== true) {
+    return initialized
+  }
+  return toResult({
+    data: {
+      ...initialized.data,
+      ready: true,
+      initialized: true,
+    },
+  })
+}
+
+function createOperationalStateStoreInitializeIfEmpty({ store, serialize, assertNoUncertainWrite, syncStreams, verifyState }) {
+  return () => serialize(() => initializeOperationalStateStoreIfEmpty({
+    store,
+    assertNoUncertainWrite,
+    syncStreams,
+    verifyState,
+  }))
 }
 
 function createOperationalStateStoreInitializer({
@@ -663,6 +747,9 @@ function createOperationalStateStoreOperations({ store }) {
   const initialize = createOperationalStateStoreInitializer({ store,
 ...coordination,
 verifyState })
+  const initializeIfEmpty = createOperationalStateStoreInitializeIfEmpty({ store,
+...coordination,
+verifyState })
   const append = createOperationalStateStoreAppender({ store,
 ...coordination,
 verifyState })
@@ -675,6 +762,7 @@ verifyState })
   return Object.freeze({
     runtimeSessionId: store.runtimeSessionId,
     initialize,
+    initializeIfEmpty,
     append,
     verify,
     readAll,

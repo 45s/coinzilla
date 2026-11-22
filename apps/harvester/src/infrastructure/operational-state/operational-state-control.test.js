@@ -4,7 +4,7 @@ import { mkdtemp, rm } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import test from "node:test"
-import { createFileOperationalStateStore } from "./create-file-operational-state-store.js"
+import { createFileOperationalStateStore } from "./create-file-store.js"
 
 const createStore = async (t) => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-control-facts-"))
@@ -137,10 +137,8 @@ test("accepts a sticky market safety blocker and a separate evidence-backed reso
   assert.equal(resolved.data.durable, true, "A blocker resolution must be durably acknowledged.")
 })
 
-test("rejects safety blockers with invalid scope, evidence, identity, or resolution classification", async (t) => {
-  const store = await createStore(t)
-  const validId = blockerIdFor()
-  const invalidFacts = [
+function createInvalidSafetyBlockerFacts(validId) {
+  return [
     {
       factId: `safety-blocker-raised:${  validId}`,
       factType: "SAFETY_BLOCKER_RAISED",
@@ -195,6 +193,12 @@ evidenceDigest,
 note: "extra" },
     },
   ]
+}
+
+test("rejects safety blockers with invalid scope, evidence, identity, or resolution classification", async (t) => {
+  const store = await createStore(t)
+  const validId = blockerIdFor()
+  const invalidFacts = createInvalidSafetyBlockerFacts(validId)
   for (const fact of invalidFacts) {
     const result = await store.append(fact)
     assert.equal(result.ok, false, `Invalid safety blocker fact ${  fact.factId  } must fail closed.`)

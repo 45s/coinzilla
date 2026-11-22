@@ -5,7 +5,7 @@ import test from "node:test"
 import {
   DEFAULT_OPERATIONAL_STATE_DIRECTORY,
   resolveOperationalStateDirectory,
-} from "./resolve-operational-state-directory.js"
+} from "./resolve-directory.js"
 
 const expectedPackageDirectory = fileURLToPath(new URL("../../../recovery-facts", import.meta.url))
 
