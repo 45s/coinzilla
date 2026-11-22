@@ -431,7 +431,9 @@ function isWorkflowProgressMessage({ message }) {
     message.startsWith("Broker API getOpenOrders:") ||
     message.startsWith("Broker API getOrder:") ||
     message.startsWith("Broker API getOrder [") ||
-    message.startsWith("Discovered open order:")
+    message.startsWith("Discovered open order:") ||
+    message.startsWith("Broker API cancelOrder") ||
+    message.startsWith("Cancelling existing order")
 }
 
 function printPublishedResult({ result, stdout, probeMode = false, includeGeneralDiagnostics = false }) {
@@ -629,6 +631,9 @@ async function runDiagnosticsWithOperatorAttempt({
 }
 
 function createOperatorWarning({ runOperatorOrder, runOperatorProbe, probeId, cancelExistingOrder }) {
+  if (cancelExistingOrder) {
+    return `WARNING: this mode sends ONE LIVE cancellation request for ${CANCELLATION_TARGET.symbol} / ${CANCELLATION_TARGET.orderId}, records its response, then runs the existing read-only order scan. No retry.\\n`
+  }
   if (runOperatorProbe) {
     return `WARNING: this mode runs a targeted LIVE read-only HYPEUSDT preflight, then may submit exactly one separately confirmed ${probeId} order probe.\n`
   }
