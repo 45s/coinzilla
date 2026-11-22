@@ -275,7 +275,13 @@ test("initializes an empty store before verifying the process-owned ledger", asy
   const expectedStore = {
     initializeIfEmpty: async () => {
       operations.push("initializeIfEmpty")
-      return { ok: true, data: { ready: true, initialized: true } }
+      return {
+        ok: true,
+        data: {
+          ready: true,
+          initialized: true,
+        },
+      }
     },
     verify: async () => {
       operations.push("verify")
