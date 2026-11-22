@@ -227,8 +227,17 @@ test("Bitunix order probe marker is exclusive and private", async () => {
   const directory = await mkdtemp(join(tmpdir(), "bitunix-order-probe-marker-"))
   const markerPath = join(directory, "probe.json")
   const preflight = {
-    probe: {\n      id: "limit-buy-1",\n      symbol: "HYPEUSDT",\n    },
-    wireRequest: {\n      symbol: "HYPEUSDT",\n      side: 2,\n      type: 1,\n      volume: "1",\n      price: "30",\n    },
+    probe: {
+      id: "limit-buy-1",
+      symbol: "HYPEUSDT",
+    },
+    wireRequest: {
+      symbol: "HYPEUSDT",
+      side: 2,
+      type: 1,
+      volume: "1",
+      price: "30",
+    },
   }
   try {
     await createProbeMarker({
