@@ -806,7 +806,11 @@ test("ambiguous cancellation is recorded once and does not prevent the subsequen
       calls.push(`getOrder:${symbol}:${orderId}`)
       return {
         ok: true,
-        data: {\n          id: orderId,\n          symbol,\n          status: "CANCELED",\n        },
+        data: {
+          id: orderId,
+          symbol,
+          status: "CANCELED",
+        },
         errors: [],
       }
     },
