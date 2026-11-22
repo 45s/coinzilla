@@ -78,7 +78,7 @@ function waitForMessage(socket) {
   })
 }
 
-async function startApi({ t, eventBus, subscribeExchangeAccountUpdates } = {}) {
+async function startApi({ t, eventBus, subscribeExchangeAccountUpdates, exchangeAccounts = [] } = {}) {
   const api = await startTradingHistoryApiServer({
     queries: createQueries(),
     environment: "testnet",
@@ -86,6 +86,7 @@ async function startApi({ t, eventBus, subscribeExchangeAccountUpdates } = {}) {
     port: 0,
     eventBus,
     subscribeExchangeAccountUpdates,
+    exchangeAccounts,
     logger: {
       error() {},
     },
@@ -257,3 +258,139 @@ test("broadcasts live updates from Harvester's existing user-data subscription",
   assert.equal(unsubscribed, true, "Closing the API must detach the monitor listener without managing the exchange stream.")
 })
 
+
+
+function createExchangeAccount({ providerInstanceId = "binance-testnet", providerType = "binance", accountId = "primary", snapshotResult, ordersResult } = {}) {
+  return {
+    providerInstanceId,
+    providerType,
+    accountId,
+    environment: "testnet",
+    connected: true,
+    readAccountSnapshot: async () => snapshotResult ?? ({
+      ok: true,
+      data: {
+        sourceTime: "2026-11-22T10:00:00.000Z",
+        balances: [{ asset: { code: "USDT" }, free: "125.50000000", locked: "2.00000000", total: "127.50000000" }],
+      },
+    }),
+    readOpenOrders: async () => ordersResult ?? ({
+      ok: true,
+      data: [{
+        value: {
+          symbol: "BTCUSDT",
+          side: "BUY",
+          type: "LIMIT",
+          price: "65000.00000000",
+          originalQuantity: "0.01000000",
+          executedQuantity: "0.00400000",
+          remainingQuantity: "0.00600000",
+          status: "PARTIALLY_FILLED",
+        },
+      }],
+    }),
+  };
+}
+
+test("sends the initial provider account and complete open-order snapshot over WebSocket", async (t) => {
+  const eventBus = new EventBus();
+  const api = await startApi({
+    t,
+    eventBus,
+    exchangeAccounts: [createExchangeAccount()],
+  });
+  const socket = new WebSocket(`ws://127.0.0.1:${api.address.port}/api/v1/trading/events`);
+  t.after(() => socket.close());
+
+  await waitForSocketOpen(socket);
+  const message = await waitForMessage(socket);
+  assert.equal(message.type, "exchange-accounts.snapshot");
+  assert.equal(typeof message.observedAt, "string");
+  assert.deepEqual(message.accounts, [{
+    providerInstanceId: "binance-testnet",
+    providerType: "binance",
+    accountId: "primary",
+    environment: "testnet",
+    connected: true,
+    accountSnapshot: {
+      sourceTime: "2026-11-22T10:00:00.000Z",
+      balances: [{ asset: { code: "USDT" }, free: "125.50000000", locked: "2.00000000", total: "127.50000000" }],
+    },
+    openOrders: [{
+      symbol: "BTCUSDT",
+      side: "BUY",
+      type: "LIMIT",
+      price: "65000.00000000",
+      originalQuantity: "0.01000000",
+      executedQuantity: "0.00400000",
+      remainingQuantity: "0.00600000",
+      status: "PARTIALLY_FILLED",
+    }],
+    errors: {},
+  }]);
+});
+
+test("keeps provider read failures explicit instead of fabricating empty snapshots", async (t) => {
+  const eventBus = new EventBus();
+  const api = await startApi({
+    t,
+    eventBus,
+    exchangeAccounts: [
+      createExchangeAccount({
+        providerInstanceId: "binance-testnet",
+        snapshotResult: { ok: false },
+        ordersResult: { ok: false },
+      }),
+      createExchangeAccount({
+        providerInstanceId: "bitunix-live",
+        providerType: "bitunix",
+        accountId: "secondary",
+      }),
+    ],
+  });
+  const socket = new WebSocket(`ws://127.0.0.1:${api.address.port}/api/v1/trading/events`);
+  t.after(() => socket.close());
+
+  await waitForSocketOpen(socket);
+  const message = await waitForMessage(socket);
+  assert.equal(message.type, "exchange-accounts.snapshot");
+  assert.equal(message.accounts.length, 2);
+  assert.equal(message.accounts[0].accountSnapshot, null, "A failed account read must not be represented as an empty balance snapshot.");
+  assert.equal(message.accounts[0].openOrders, null, "A failed order read must not be represented as an empty open-order snapshot.");
+  assert.deepEqual(message.accounts[0].errors, {
+    accountSnapshot: "Account snapshot is unavailable.",
+    openOrders: "Open orders are unavailable.",
+  });
+  assert.deepEqual(message.accounts[1].errors, {}, "One provider failure must not hide another provider's successful snapshot.");
+  assert.equal(message.accounts[1].openOrders.length, 1);
+});
+
+test("broadcasts refreshed account and open-order snapshots after monitor updates", async (t) => {
+  const eventBus = new EventBus();
+  let orderPrice = "65000.00000000";
+  const account = createExchangeAccount();
+  account.readOpenOrders = async () => ({
+    ok: true,
+    data: [{ value: { symbol: "BTCUSDT", side: "BUY", type: "LIMIT", price: orderPrice, originalQuantity: "0.01", status: "NEW" } }],
+  });
+  const api = await startApi({
+    t,
+    eventBus,
+    exchangeAccounts: [account],
+  });
+  const socket = new WebSocket(`ws://127.0.0.1:${api.address.port}/api/v1/trading/events`);
+  t.after(() => socket.close());
+
+  await waitForSocketOpen(socket);
+  await waitForMessage(socket);
+  orderPrice = "64000.00000000";
+  const publication = eventBus.publish({
+    name: "account.open_orders_captured",
+    source: "harvester.account-snapshot",
+    data: { phase: "LIVE" },
+  });
+  assert.equal(publication.ok, true);
+  const message = await waitForMessage(socket);
+  assert.equal(message.type, "exchange-accounts.updated");
+  assert.equal(message.accounts[0].openOrders[0].price, "64000.00000000");
+});
