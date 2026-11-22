@@ -86,8 +86,8 @@ type ExecutionRoute = Readonly<{
   symbol: string;
 }>;
 
-type ExecutionRoutesByProvider = ReadonlyMap<providerInstanceId, readonly ExecutionRoute[]>;
-type SymbolsByProvider = ReadonlyMap<providerInstanceId, readonly string[]>;
+type ExecutionRoutesByProvider = ReadonlyMap<string, readonly ExecutionRoute[]>;
+type SymbolsByProvider = ReadonlyMap<string, readonly string[]>;
 ```
 
 - Execution route records preserve one owner per `(strategyId, symbol)`. The symbol resolver deduplicates symbols only after ownership has been resolved; the market-data regression verifies that a symbol shared by CG and RS produces exactly one subscription per provider.
