@@ -1296,7 +1296,7 @@ test("Bitunix Spot pending-order fetch preserves the exact accepted HYPEUSDT ord
 
 test("Bitunix Spot pending-order fetch preserves a 64-bit numeric JSON order ID token", async () => {
   const requests = []
-  const rawResponse = '{"code":"0","msg":"success","data":[{"orderId":2124329325141426176,"symbol":"HYPEUSDT","side":"2","type":"1","status":"1","volume":"0.366","dealVolume":"0","price":"30","ctime":"2026-11-22T00:00:00Z"}]}'
+  const rawResponse = '{"code":"0","msg":"success","data":[{"orderId":2124329325141426176,"symbol":"HYPEUSDT","side":"2","type":"1","status":"1","volume":"0.366","dealVolume":"0","price":"30","ctime":"2026-11-22T00:00:00Z","utime":"2026-11-22T00:00:00Z"}]}'
   const broker = createSignedPlacementTestBroker({
     requests,
     responses: [],
