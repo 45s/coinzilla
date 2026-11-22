@@ -893,7 +893,9 @@ function createExchangeAccountUpdateSubscription({ runtime } = {}) {
     }
     return () => {
       for (const dispose of unsubscribe.reverse()) {
-        if (typeof dispose === "function") dispose()
+        if (typeof dispose === "function") {
+          dispose()
+        }
       }
     }
   }
