@@ -110,8 +110,8 @@ function createTestBroker({
 
 export function createFixture({
   pairs = {
-    BTCUSDT: { enabled: true },
-    DOGEUSDT: { enabled: false },
+    BTCUSDT: { enabled: true, enableVolatilityProtection: true },
+    DOGEUSDT: { enabled: false, enableVolatilityProtection: false },
   },
   historyBySymbol = {},
   onSubscribe,
