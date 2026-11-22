@@ -6,6 +6,10 @@ function shouldFailReconnect({ isReconnectClient, failReconnect }) {
   return isReconnectClient && (typeof failReconnect === "function" ? failReconnect() : failReconnect)
 }
 
+function shouldFailReconnectCleanup({ isReconnectClient, failDisconnect }) {
+  return isReconnectClient && (typeof failDisconnect === "function" ? failDisconnect() : failDisconnect)
+}
+
 function createRecoveryPort({ subscriptionId, isReconnectClient, failReconnect, failDisconnect, calls = [], subscribe }) {
   const listeners = {
     event: new Set(),
@@ -24,7 +28,7 @@ function createRecoveryPort({ subscriptionId, isReconnectClient, failReconnect, 
     },
     async disconnect() {
       calls.push("disconnect")
-      if (isReconnectClient && failDisconnect) {
+      if (shouldFailReconnectCleanup({ isReconnectClient, failDisconnect })) {
         throw new Error("reconnect cleanup unavailable")
       }
       this.state = "closed"
@@ -484,8 +488,10 @@ async function verifyFailedReconnectKeepsRecoveryPending() {
 async function verifyFailedReconnectRetriesAndEventuallyRecovers() {
   const statuses = []
   let reconnectAttempts = 0
+  let cleanupAttempts = 0
   const fixture = createRecoveryFixture({
     failReconnect: () => ++reconnectAttempts === 1,
+    failDisconnect: () => ++cleanupAttempts === 1,
   })
   fixture.session.start()
   const subscription = await fixture.session.subscribe({
@@ -502,6 +508,11 @@ async function verifyFailedReconnectRetriesAndEventuallyRecovers() {
   await fixture.reconnect()
 
   assert.equal(reconnectAttempts, 2, "A later reconnect attempt must be allowed to succeed.")
+  assert.equal(
+    cleanupAttempts,
+    2,
+    "A retry must dispose the previously failed client before attempting a new connection.",
+  )
   assert.ok(
     getStatusesByType({
       statuses,
