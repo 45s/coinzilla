@@ -723,32 +723,31 @@
       "sourceModules": [
         "src/bootstrap/account/create-account-snapshot-manager.js",
         "src/bootstrap/shutdown/create-shutdown-handler.js",
-        "src/bootstrap/start-harvester.js",
-        "src/infrastructure/operational-state/project-harvester-operational-state.js"
+        "src/bootstrap/start-harvester.js"
       ],
       "tests": [
         {
-          "path": "src/bootstrap/account/create-account-snapshot-manager.test.js",
+          "path": "src/bootstrap/account/create-account-snapshot-manager.closing.test.js",
           "name": "publishes a durable CLOSING account-wide snapshot without adopting an external recovery SELL",
           "kind": "normal"
         },
         {
-          "path": "src/bootstrap/account/create-account-snapshot-manager.test.js",
+          "path": "src/bootstrap/account/create-account-snapshot-manager.closing.test.js",
           "name": "uses a unique monotonic observation identity for repeated CLOSING snapshots in one clock tick",
           "kind": "normal"
         },
         {
-          "path": "src/bootstrap/account/create-account-snapshot-manager.test.js",
+          "path": "src/bootstrap/account/create-account-snapshot-manager.closing.test.js",
           "name": "records a BLOCKED CLOSING open-order snapshot when the broker read fails with partial data",
           "kind": "failure"
         },
         {
-          "path": "src/bootstrap/account/create-account-snapshot-manager.test.js",
+          "path": "src/bootstrap/account/create-account-snapshot-manager.closing.test.js",
           "name": "records a BLOCKED CLOSING open-order snapshot when the broker payload is malformed",
           "kind": "failure"
         },
         {
-          "path": "src/bootstrap/account/create-account-snapshot-manager.test.js",
+          "path": "src/bootstrap/account/create-account-snapshot-manager.closing.test.js",
           "name": "preserves both capture and durability failures when a BLOCKED CLOSING snapshot cannot be persisted",
           "kind": "failure"
         },
@@ -773,13 +772,8 @@
           "kind": "integration"
         },
         {
-          "path": "src/infrastructure/operational-state/project-harvester-operational-state.test.js",
-          "name": "projects verified durable order facts into a candidate recovery projection without opening readiness",
-          "kind": "integration"
-        },
-        {
-          "path": "src/infrastructure/journal/project-harvester-journal-recovery.test.js",
-          "name": "projects account audit snapshots and recognizes a complete prior trading shutdown",
+          "path": "src/infrastructure/journal/project-harvester-journal-closing-open-orders.test.js",
+          "name": "projects a CLOSING open-order snapshot in an active started Journal session",
           "kind": "integration"
         },
         {
@@ -790,6 +784,16 @@
         {
           "path": "src/infrastructure/operational-state/helpers/validate-operational-state-account-facts.test.js",
           "name": "validates a BLOCKED CLOSING open-order snapshot as explicit incomplete evidence",
+          "kind": "failure"
+        },
+        {
+          "path": "src/infrastructure/journal/project-harvester-journal-closing-open-orders.test.js",
+          "name": "rejects a CLOSING open-order snapshot before the Journal session starts",
+          "kind": "failure"
+        },
+        {
+          "path": "src/infrastructure/journal/project-harvester-journal-closing-open-orders.test.js",
+          "name": "rejects a CLOSING open-order snapshot after the Journal session has stopped",
           "kind": "failure"
         }
       ],

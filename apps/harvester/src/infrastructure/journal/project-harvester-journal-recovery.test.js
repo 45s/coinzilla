@@ -393,14 +393,6 @@ total: "0.5" }]
         enabledMarkets: ["BTCUSDT"],
         tradingEnabled: true,
       }),
-      record("account.open_orders_captured", {
-        phase: "CLOSING",
-        observedAt: 201,
-        readiness: "READY",
-        orderCount: 0,
-        orders: [],
-        blockReasons: [],
-      }),
       record("account.snapshot_captured", {
         phase: "CLOSING",
         sourceTime: 200,
@@ -415,8 +407,7 @@ outcome: "success" }),
 
   assert.equal(result.ok, true)
   assert.equal(result.data.accountSnapshots.length, 2)
-  assert.equal(result.data.openOrderSnapshots.length, 2)
-  assert.deepEqual(result.data.openOrderSnapshots.map(({ phase }) => phase), ["PREFLIGHT", "CLOSING"])
+  assert.equal(result.data.openOrderSnapshots.length, 1)
   assert.equal(result.data.sessions[0].tradingEnabled, true)
   assert.equal(result.data.sessions[0].uncleanTradingShutdown, false)
   assert.equal(result.data.requiresExchangeReconciliation, true)
@@ -1974,22 +1965,6 @@ test("rejects a RECOVERY open-order snapshot that appears before the Journal ses
 
   assert.equal(result.ok, false)
   assert.match(result.errors[0].message, /RECOVERY open-order snapshot requires a started Journal session/)
-})
-
-test("rejects a CLOSING open-order snapshot before the Journal session starts", () => {
-  const result = projectHarvesterJournalRecovery({
-    records: [record("account.open_orders_captured", {
-      phase: "CLOSING",
-      observedAt: 100,
-      readiness: "READY",
-      orderCount: 0,
-      orders: [],
-      blockReasons: [],
-    })],
-  })
-
-  assert.equal(result.ok, false)
-  assert.match(result.errors[0].message, /CLOSING open-order snapshot requires a started Journal session/)
 })
 
 test("fails closed when an unknown recovery event has no source classification", () => {
