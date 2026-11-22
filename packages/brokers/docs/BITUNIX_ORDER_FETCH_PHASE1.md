@@ -42,7 +42,9 @@ const openOrdersResult = await broker.getOpenOrders()
 
 // Record the complete sanitized result, including errors.
 
-if (openOrdersResult.ok) {
+if (Array.isArray(openOrdersResult?.data)) {
+  // Process successful-symbol orders even when another symbol failed.
+  // The aggregate result remains failed and the health gate stays blocked.
   for (const order of openOrdersResult.data) {
     const detailResult = await broker.getOrder({
       symbol: order.symbol,
@@ -59,7 +61,7 @@ Order IDs are discovered from `getOpenOrders().data`; they are never passed as C
 
 ## Bitunix Spot API behavior
 
-Bitunix documents `POST /api/spot/v1/order/pending/list` with a required symbol. The Broker API's no-argument `getOpenOrders()` enumerates active Spot markets and sequentially aggregates symbol-scoped reads. Per-symbol errors and partial data remain visible. The specific-order detail endpoint is `GET /api/spot/v1/order/detail`, with `orderId` in the URL query string. Its REST signature uses the sorted query key/value concatenation (for example, `orderId2124329325141426176`) without separators. This matches the established [JKorf Bitunix.Net REST authentication implementation](https://github.com/JKorf/Bitunix.Net/blob/main/Bitunix.Net/BitunixAuthenticationProvider.cs), which is used as the compatibility reference for this GET request. The official Spot signing page's query example is ambiguous against that implementation, so keep a regression vector for the known-working client format.
+Bitunix documents `POST /api/spot/v1/order/pending/list` with a required symbol. The Broker API's no-argument `getOpenOrders()` enumerates the current active Spot market catalog and queries each unique symbol through that symbol-scoped method. It uses a fixed four-worker pool, then aggregates results and errors in catalog order. This is a client-side convenience scan, not an exchange-provided account-wide endpoint: the catalog can omit markets that are no longer active, and Bitunix documents no cross-symbol snapshot/version token, so complete or atomic account-wide coverage is not established. The official Spot page does not publish a per-endpoint rate limit for this request; four is Coinzilla's local concurrency cap, not an exchange rate-limit claim. Per-symbol errors and partial data remain visible. The specific-order detail endpoint is `GET /api/spot/v1/order/detail`, with `orderId` in the URL query string. Its REST signature uses the sorted query key/value concatenation (for example, `orderId2124329325141426176`) without separators. This matches the established [JKorf Bitunix.Net REST authentication implementation](https://github.com/JKorf/Bitunix.Net/blob/main/Bitunix.Net/BitunixAuthenticationProvider.cs), which is used as the compatibility reference for this GET request. The official Spot signing page's query example is ambiguous against that implementation, so keep a regression vector for the known-working client format.
 
 ## Diagnostics and safety
 
@@ -67,7 +69,8 @@ Bitunix documents `POST /api/spot/v1/order/pending/list` with a required symbol.
 - Broker API and Bitunix REST logger events are retained in report events.
 - Request arguments, order IDs, symbols, success states, normalized data and error details are recorded.
 - Credentials, signatures, nonces and private user fields are redacted.
-- Requests are sequential and never automatically retried.
+- Pending-order market reads use at most four concurrent requests; results/errors are restored to catalog order. Specific-order detail reads remain sequential.
+- Requests are never automatically retried; a failed market read remains visible and does not suppress other symbols.
 - Live order mutations are disabled in the scan Broker. No placement, cancellation, transfer or withdrawal methods are called.
 
 ## Diagnostic privacy boundary
@@ -81,7 +84,11 @@ Bitunix documents `POST /api/spot/v1/order/pending/list` with a required symbol.
 
 ## Regression coverage
 
-Workflow tests inject a read-only Broker stub for ordinary publish and operator-mode scenarios, so they do not contact Bitunix or wait on network timeouts. Dedicated scan tests verify the complete successful pending-orders result, every detail response, failed pending-order results, and that detail reads are skipped when the pending-order request fails. Signature tests cover the exact 19-digit HYPE order ID and the query serialization used by the established .NET client. Healthcheck tests verify that default mode skips broad diagnostics, still requires every discovered order detail to succeed, and that `--full-diagnostics` preserves access to the existing checks.
+Workflow tests inject a read-only Broker stub for ordinary publish and operator-mode scenarios, so they do not contact Bitunix or wait on network timeouts. Broker regressions verify the four-request concurrency ceiling, one request per active symbol, catalog-order aggregation despite out-of-order responses, and preservation of partial symbol failures. Healthcheck regressions verify that every order in partial data still receives a detail read while the aggregate health gate remains failed. Other tests verify the complete open-orders result, every detail response, and failed pending-order handling. Signature tests cover the exact 19-digit HYPE order ID and the query serialization used by the established .NET client. Healthcheck tests verify that default mode skips broad diagnostics, still requires every discovered order detail to succeed, and that `--full-diagnostics` preserves access to the existing checks.
+
+## Observed scan baseline
+
+The operator's read-only healthcheck report `bitunix-health-20261122T064933913Z.json` (report commit `9d7f053e23af64c93091454461814ea4ec367bc4`, source commit `7f70cf2a3d44e5e8c747bc5414c076ec83b99f3d`) measured `getOpenOrders()` at **156,985 ms**. The updated healthcheck prints the scan duration so the next operator-run report can be compared against this baseline. This measurement is one observed run, not a Bitunix latency guarantee.
 
 ## Known accepted order
 
