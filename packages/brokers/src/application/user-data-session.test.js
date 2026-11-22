@@ -205,14 +205,29 @@ async function runNextRecoveryTimer({ timers, session }) {
   await session.waitForRecovery()
 }
 
+function createRecoveryTimerScheduler() {
+  const timers = new Map()
+  let nextTimerId = 0
+  return {
+    timers,
+    setTimeoutFn(callback) {
+      const id = ++nextTimerId
+      timers.set(id, callback)
+      return id
+    },
+    clearTimeoutFn(id) {
+      timers.delete(id)
+    },
+  }
+}
+
 function createRecoveryFixture({ failReconnect = false, logger = {} } = {}) {
   let currentClient = { name: "initial" }
   const initialClient = currentClient
   const reconnectClient = { name: "reconnected" }
   const ports = new WeakMap()
   const calls = []
-  const timers = new Map()
-  let nextTimerId = 0
+  const scheduler = createRecoveryTimerScheduler()
 
   const session = new UserDataSession({
     getClient: () => currentClient,
@@ -232,21 +247,15 @@ function createRecoveryFixture({ failReconnect = false, logger = {} } = {}) {
     logger,
     recoveryWarningThreshold: 1,
     reconnectDelay: 1,
-    setTimeoutFn: (callback) => {
-      const id = ++nextTimerId
-      timers.set(id, callback)
-      return id
-    },
-    clearTimeoutFn: (id) => {
-      timers.delete(id)
-    },
+    setTimeoutFn: scheduler.setTimeoutFn,
+    clearTimeoutFn: scheduler.clearTimeoutFn,
   })
 
   return {
     session,
     calls,
     get pendingTimerCount() {
-      return timers.size
+      return scheduler.timers.size
     },
     emitEvent(message) {
       ports.get(currentClient).emitEvent(message)
@@ -261,7 +270,7 @@ function createRecoveryFixture({ failReconnect = false, logger = {} } = {}) {
       ports.get(currentClient).close()
     },
     runNextTimer: () => runNextRecoveryTimer({
-      timers,
+      timers: scheduler.timers,
       session,
     }),
     reconnect: () => runNextRecoveryTimer({
@@ -443,7 +452,10 @@ async function verifyFailedReconnectKeepsRecoveryPending() {
   await fixture.reconnect()
 
   assert.equal(
-    countCalls({ calls: fixture.calls, method: "disconnect" }),
+    countCalls({
+      calls: fixture.calls,
+      method: "disconnect",
+    }),
     1,
     "A failed reconnect must dispose its partially opened client before another attempt can replace it.",
   )
