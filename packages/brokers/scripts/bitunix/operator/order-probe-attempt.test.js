@@ -276,7 +276,7 @@ test("Bitunix order probe persists confirmed placement and failed reconciliation
     })
     const result = await run("limit-buy-11-usdt")
     const marker = JSON.parse(await readFile(markerPath, "utf8"))
-    const output = events.filter((event) => event.operation === "output").map((event) => event.message).join("\\n")
+    const output = events.filter((event) => event.operation === "output").map((event) => event.message).join("\n")
 
     assert.equal(result.ok, false, "an un-reconciled acknowledgement is not a normalized Order result")
     assert.equal(result.mutationOutcome, "CONFIRMED", "the marker must retain the accepted exchange mutation outcome")
@@ -285,7 +285,7 @@ test("Bitunix order probe persists confirmed placement and failed reconciliation
     assert.deepEqual(marker.brokerResult.reconciliation, resultFixture.reconciliation, "the reconciliation state and error metadata must be persisted")
     assert.equal(marker.brokerResult.errors[0].exchangeCode, "100005", "the failed detail lookup must remain in the evidence")
     assert.match(output, /placement confirmed; reconciliation unavailable/i, "operator output must not mislabel the accepted placement as rejected")
-    assert.match(output, /Reconciliation: UNAVAILABLE \\(PLACEMENT_ACKNOWLEDGEMENT\\)/i)
+    assert.match(output, /Reconciliation: UNAVAILABLE \(PLACEMENT_ACKNOWLEDGEMENT\)/i)
     assert.equal(events.filter((event) => event.operation === "createOrder").length, 1, "the operator path must dispatch exactly one mutation")
   } finally {
     await rm(directory, {
