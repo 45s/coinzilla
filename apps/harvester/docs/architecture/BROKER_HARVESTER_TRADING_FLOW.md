@@ -160,17 +160,22 @@ Note over Broker: Normalize executed order; for executionType=TRADE, normalize c
 Broker-->>Bootstrap: onEvent({ event: normalized execution report })
 Bootstrap->>Engine: processUserDataEvent({ event })
 
+alt Order snapshot advances canonical state
+    Engine->>Engine: Apply monotonic order-state update
+else Duplicate or stale order snapshot
+    Engine->>Engine: Preserve the current registered order state
+end
+
 alt executionType = TRADE
-    Engine->>Engine: Validate registered order and canonical Fill identity
+    Engine->>Engine: Validate Fill against the current registered order
     Engine->>Accounting: updateTradingAccounting({ fill })
     Accounting->>Portfolio: applyFill({ fill })
     Accounting->>Ledger: applyFill({ fill })
     Accounting-->>Engine: updated Portfolio + RecoveryLedger
-    Note over Portfolio,Ledger: Actual fill facts and commissions update both accounting projections
+    Note over Portfolio,Ledger: Each distinct Fill applies once; an identical duplicate is a no-op
     Engine-->>Bootstrap: execution processed
 else order status update without a trade
-    Engine->>Engine: Update order lifecycle / registry
-    Note over Engine,Portfolio: No fill means no Portfolio or RecoveryLedger accounting change
+    Note over Engine,Portfolio: No Fill means no Portfolio or RecoveryLedger accounting change
 end
 
 opt Submission acknowledgement already reports FILLED
