@@ -171,7 +171,10 @@ async function copyRegularTree({
 } = {}) {
   const source = relative ? path.join(sourceDirectory, relative) : sourceDirectory
   const destination = relative ? path.join(destinationDirectory, relative) : destinationDirectory
-  await mkdir(destination, { recursive: true, mode: 0o700 })
+  await mkdir(destination, {
+    recursive: true,
+    mode: 0o700,
+  })
   const entries = await readdir(source, { withFileTypes: true })
   for (const entry of entries) {
     const sourcePath = path.join(source, entry.name)
@@ -181,7 +184,10 @@ async function copyRegularTree({
       throw new Error(`Refusing to archive a symbolic link: ${sourcePath}`)
     }
     if (sourceStats.isDirectory()) {
-      await mkdir(destinationPath, { recursive: false, mode: 0o700 })
+      await mkdir(destinationPath, {
+        recursive: false,
+        mode: 0o700,
+      })
       await copyRegularTree({
         sourceDirectory,
         destinationDirectory,
@@ -203,7 +209,10 @@ async function copyRegularTree({
 async function copyCompressedTree({ sourceDirectory, destinationDirectory, relative = "", onFileCopied } = {}) {
   const source = relative ? path.join(sourceDirectory, relative) : sourceDirectory
   const destination = relative ? path.join(destinationDirectory, relative) : destinationDirectory
-  await mkdir(destination, { recursive: true, mode: 0o700 })
+  await mkdir(destination, {
+    recursive: true,
+    mode: 0o700,
+  })
   for (const entry of await readdir(source, { withFileTypes: true })) {
     const childRelative = relative ? path.join(relative, entry.name) : entry.name
     const sourcePath = path.join(sourceDirectory, childRelative)
@@ -224,7 +233,10 @@ async function copyCompressedTree({ sourceDirectory, destinationDirectory, relat
       await pipeline(
         createReadStream(sourcePath),
         createGzip({ level: 6 }),
-        createWriteStream(destinationPath, { flags: "w", mode: 0o600 }),
+        createWriteStream(destinationPath, {
+          flags: "w",
+          mode: 0o600,
+        }),
       )
       await onFileCopied?.({
         relativePath: compressedRelative.split(path.sep).join("/"),
@@ -320,7 +332,10 @@ async function copyLogRootEntry({
 }
 
 async function copySelectedLogs({ sourceDirectory, destinationDirectory, onFileCopied } = {}) {
-  await mkdir(destinationDirectory, { recursive: true, mode: 0o700 })
+  await mkdir(destinationDirectory, {
+    recursive: true,
+    mode: 0o700,
+  })
   const entries = await readdir(sourceDirectory, { withFileTypes: true })
   const allowedEntries = entries.filter((entry) => ["sessions", "cumulative"].includes(entry.name))
   if (allowedEntries.length !== entries.length) {
@@ -382,7 +397,10 @@ async function copySessionFilteredTailFile({ source, destination, runtimeSession
   const bytesToKeep = Math.max(1, Math.ceil(totalBytes * 0.05))
   const startOffset = totalBytes - bytesToKeep
   let currentOffset = 0
-  const output = createWriteStream(destination, { flags: "w", mode: 0o600 })
+  const output = createWriteStream(destination, {
+    flags: "w",
+    mode: 0o600,
+  })
   try {
     await visitSessionLogRecords({
       filename: source,
@@ -424,7 +442,10 @@ async function copyCumulativeTailTree({
 } = {}) {
   const source = path.join(sourceDirectory, relative)
   const destination = path.join(destinationDirectory, relative)
-  await mkdir(destination, { recursive: true, mode: 0o700 })
+  await mkdir(destination, {
+    recursive: true,
+    mode: 0o700,
+  })
   for (const entry of await readdir(source, { withFileTypes: true })) {
     const childRelative = path.join(relative, entry.name)
     const sourcePath = path.join(sourceDirectory, childRelative)
@@ -513,7 +534,10 @@ async function getDevelopmentDataTreeSize(directory) {
 }
 
 async function copyDevelopmentDataTree({ sourceDirectory, destinationDirectory, onFileCopied } = {}) {
-  await mkdir(destinationDirectory, { recursive: true, mode: 0o700 })
+  await mkdir(destinationDirectory, {
+    recursive: true,
+    mode: 0o700,
+  })
   const entries = await readdir(sourceDirectory, { withFileTypes: true })
   for (const entry of entries) {
     if (entry.name === "production") {
@@ -653,7 +677,10 @@ async function verifyArchive({ directory, manifest } = {}) {
 async function createRemoteArchiveDirectory({ checkout, archiveName } = {}) {
   const remoteDirectory = path.join(checkout, "archives", archiveName)
   try {
-    await mkdir(remoteDirectory, { recursive: false, mode: 0o700 })
+    await mkdir(remoteDirectory, {
+      recursive: false,
+      mode: 0o700,
+    })
     return {
       directory: remoteDirectory,
       alreadyExists: false,
@@ -763,7 +790,10 @@ async function publishArchive({
   remote,
   runGit = runGitDefault,
   createTemporaryDirectory = (prefix) => mkdtemp(path.join(os.tmpdir(), prefix)),
-  removeTemporaryDirectory = (filename) => rm(filename, { recursive: true, force: true }),
+  removeTemporaryDirectory = (filename) => rm(filename, {
+    recursive: true,
+    force: true,
+  }),
   onProgress,
 } = {}) {
   const temporaryRoot = await createTemporaryDirectory(".archive-push-")
@@ -945,11 +975,17 @@ export async function runHarvesterArchivePush({
     archiveId: createArchiveId(),
   })
   const outputDirectory = path.join(packageDirectory, "archive-output")
-  await mkdir(outputDirectory, { recursive: true, mode: 0o700 })
+  await mkdir(outputDirectory, {
+    recursive: true,
+    mode: 0o700,
+  })
   await assertRealDirectory(outputDirectory)
   const localArchive = path.join(outputDirectory, archiveName)
   try {
-    await mkdir(localArchive, { recursive: false, mode: 0o700 })
+    await mkdir(localArchive, {
+      recursive: false,
+      mode: 0o700,
+    })
     const logSessionIdentity = await copyArchiveEvidence({
       sourcePaths,
       packageDirectory,
