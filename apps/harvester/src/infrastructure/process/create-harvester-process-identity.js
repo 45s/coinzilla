@@ -118,11 +118,11 @@ function captureSource({ captureBuildMetadata, cwd, env }) {
 /**
  * Capture the immutable identity for one Harvester OS process.
  *
- * The process-entry timestamp and runtime-session ID are captured before the
- * synchronous, one-time Git inspection. Git inspection failure is diagnostic
- * only and produces explicit unavailable provenance. The development runner
- * may supply the original timestamp and session ID through its internal child
- * environment so terminal and structured files share one session identity.
+ * The development runner supplies its original timestamp, runtime-session
+ * ID and one-time Git provenance snapshot through internal child environment
+ * values so terminal, structured and Journal evidence share one process
+ * identity. Invalid supplied provenance stays explicitly unavailable instead
+ * of triggering a later Git lookup.
  *
  * @param {object} [options]
  * @param {NodeJS.ProcessEnv} [options.env]
