@@ -596,7 +596,10 @@ export class BitunixSpotBroker {
   async getOpenOrders({ symbol } = {}) {
     logBrokerDiagnostic({
       logger: this.logger,
-      event: { event: "getOpenOrders.started", symbol: symbol ?? null },
+      event: {
+        event: "getOpenOrders.started",
+        symbol: symbol ?? null,
+      },
     })
     try {
       const normalizedSymbol = requireSymbol({
@@ -684,7 +687,11 @@ export class BitunixSpotBroker {
   async getOrder({ symbol, orderId, clientOrderId } = {}) {
     logBrokerDiagnostic({
       logger: this.logger,
-      event: { event: "getOrder.started", symbol: symbol ?? null, orderId: orderId ?? null },
+      event: {
+        event: "getOrder.started",
+        symbol: symbol ?? null,
+        orderId: orderId ?? null,
+      },
     })
     try {
       const unsupportedResult = createClientOrderIdUnsupportedResult({ clientOrderId })
@@ -729,7 +736,12 @@ export class BitunixSpotBroker {
           event: "getOrder.failed",
           symbol: symbol ?? null,
           orderId: orderId ?? null,
-          error: { name: error?.name, code: error?.code, exchangeCode: error?.exchangeCode, message: error?.message },
+          error: {
+            name: error?.name,
+            code: error?.code,
+            exchangeCode: error?.exchangeCode,
+            message: error?.message,
+          },
         },
       })
       handleErr({
