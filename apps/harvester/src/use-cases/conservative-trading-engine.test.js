@@ -94,6 +94,7 @@ const appConfig = {
       pairs: {
     DOGEUSDT: {
       enabled: true,
+      enableVolatilityProtection: true,
       investment: 1000,
       orderQuantity: 1,
       keepQuantity: 0.1,
