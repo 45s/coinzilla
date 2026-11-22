@@ -779,42 +779,18 @@ test("explicit cancellation mode runs one cancel before the existing order-read 
 test("ambiguous cancellation is recorded once and does not prevent the subsequent order scan", async () => {
   const publishedReports = []
   const calls = []
-  const brokerFactory = () => ({
-    connect: async () => {},
-    cancelOrder: async () => {
-      calls.push("cancel")
-      return {
-        ok: false,
-        mutationOutcome: "OUTCOME_UNKNOWN",
-        cancellationOutcome: "OUTCOME_UNKNOWN",
-        errors: [
-          Object.assign(new Error("unknown"), {
-            code: "E_UNKNOWN",
-          }),
-        ],
-      }
-    },
-    getOpenOrders: async () => {
-      calls.push("getOpenOrders")
-      return {
-        ok: true,
-        data: [],
-        errors: [],
-      }
-    },
-    getOrder: async ({ symbol, orderId }) => {
-      calls.push(`getOrder:${symbol}:${orderId}`)
-      return {
-        ok: true,
-        data: {
-          id: orderId,
-          symbol,
-          status: "CANCELED",
-        },
-        errors: [],
-      }
-    },
-    disconnect: async () => {},
+  const brokerFactory = createCancellationBrokerFactory({
+    calls,
+    cancelResult: async () => ({
+      ok: false,
+      mutationOutcome: "OUTCOME_UNKNOWN",
+      cancellationOutcome: "OUTCOME_UNKNOWN",
+      errors: [
+        Object.assign(new Error("unknown"), {
+          code: "E_UNKNOWN",
+        }),
+      ],
+    }),
   })
   const exitCode = await runWorkflow({
     mode: "cancel-existing-order",
@@ -829,9 +805,13 @@ test("ambiguous cancellation is recorded once and does not prevent the subsequen
     }),
   })
   assert.deepEqual(calls, [
+    "connect-mutation",
     "cancel",
+    "disconnect-mutation",
+    "connect-read",
     "getOpenOrders",
     "getOrder:HYPEUSDT:2124329325141426176",
+    "disconnect-read",
   ])
   const cancellation = publishedReports[0].results.find((entry) =>
     entry.operation === "Broker API cancelOrder")
