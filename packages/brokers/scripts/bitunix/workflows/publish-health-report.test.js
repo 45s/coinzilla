@@ -546,6 +546,58 @@ test("publisher uses the focused operator-probe health evaluator when supplied",
 })
 
 
+function createOrderReadDiagnosticReport({ orderId, symbol }) {
+  const report = createDiagnosticReport()
+  report.results.push(
+    {
+      operation: "Broker API getOpenOrders",
+      status: "passed",
+      durationMs: 41438,
+      request: {
+        method: "getOpenOrders",
+        arguments: [],
+      },
+      response: {
+        ok: true,
+        data: [{
+          id: orderId,
+          symbol,
+          status: "OPEN",
+        }],
+        errors: [],
+      },
+    },
+    {
+      operation: "Broker API getOrder",
+      status: "passed",
+      durationMs: 304,
+      request: {
+        method: "getOrder",
+        arguments: [{
+          symbol,
+          orderId,
+        }],
+      },
+      response: {
+        ok: true,
+        data: {
+          id: orderId,
+          symbol,
+          status: "OPEN",
+          price: "30",
+          volume: "0.366",
+          balance: "123.45",
+          uid: "private-account-uid",
+        },
+        errors: [],
+      },
+    },
+  )
+  report.summary.total += 2
+  report.summary.passed += 2
+  return report
+}
+
 test("published report exposes sanitized symbol and orderId for open-order and detail reads", async () => {
   const repositoryRoot = await createRepositoryDirectory()
   const { runGit } = createFakeGit({ repositoryRoot })
@@ -555,47 +607,10 @@ test("published report exposes sanitized symbol and orderId for open-order and d
     const result = await publishHealthReport({
       repositoryRoot,
       runGit,
-      runDiagnostics: async () => {
-        const report = createDiagnosticReport()
-        report.results.push(
-          {
-            operation: "Broker API getOpenOrders",
-            status: "passed",
-            durationMs: 41438,
-            request: { method: "getOpenOrders", arguments: [] },
-            response: {
-              ok: true,
-              data: [{ id: orderId, symbol, status: "OPEN" }],
-              errors: [],
-            },
-          },
-          {
-            operation: "Broker API getOrder",
-            status: "passed",
-            durationMs: 304,
-            request: {
-              method: "getOrder",
-              arguments: [{ symbol, orderId }],
-            },
-            response: {
-              ok: true,
-              data: {
-                id: orderId,
-                symbol,
-                status: "OPEN",
-                price: "30",
-                volume: "0.366",
-                balance: "123.45",
-                uid: "private-account-uid",
-              },
-              errors: [],
-            },
-          },
-        )
-        report.summary.total += 2
-        report.summary.passed += 2
-        return report
-      },
+      runDiagnostics: async () => createOrderReadDiagnosticReport({
+        orderId,
+        symbol,
+      }),
       env: {
         BITUNIX_API_KEY: apiKey,
         BITUNIX_API_SECRET: apiSecret,
