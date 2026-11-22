@@ -221,6 +221,64 @@ test("Bitunix Spot getOpenOrders() enumerates markets and preserves partial symb
   ])
 })
 
+
+test("Bitunix Spot account-wide open-order scan bounds concurrency and preserves catalog order", async () => {
+  const symbols = [
+    "BTCUSDT",
+    "ETHUSDT",
+    "LTCUSDT",
+    "ADAUSDT",
+    "XRPUSDT",
+    "DOGEUSDT",
+    "SOLUSDT",
+    "BNBUSDT",
+    "TRXUSDT",
+  ]
+  let activeRequests = 0
+  let maximumActiveRequests = 0
+  const { broker, calls } = createBroker({
+    responses: {
+      "/api/spot/v1/common/coin_pair/list": symbols.map((symbol) => ({
+        base: symbol.slice(0, -4),
+        quote: "USDT",
+        isOpen: "1",
+      })),
+      "/api/spot/v1/order/pending/list": async ({ body }) => {
+        activeRequests += 1
+        maximumActiveRequests = Math.max(maximumActiveRequests, activeRequests)
+        await new Promise((resolve) => setTimeout(
+          resolve,
+          (symbols.length - symbols.indexOf(body.symbol)) * 2,
+        ))
+        activeRequests -= 1
+        return [{
+          orderId: `123456789012345678${symbols.indexOf(body.symbol)}`,
+          symbol: body.symbol,
+          side: "2",
+          type: "1",
+          status: "1",
+          volume: "0.5",
+          dealVolume: "0",
+          price: "100",
+          ctime: "2026-11-22T00:00:00Z",
+          utime: "2026-11-22T00:00:00Z",
+        }]
+      },
+    },
+  })
+
+  const result = await broker.getOpenOrders()
+  const requestedSymbols = calls
+    .filter(({ path }) => path === "/api/spot/v1/order/pending/list")
+    .map(({ options }) => options.body.symbol)
+
+  assert.equal(result.ok, true)
+  assert.equal(maximumActiveRequests, 4, "the scan must use its bounded worker pool")
+  assert.deepEqual(result.data.map(({ symbol }) => symbol), symbols, "results must retain market-catalog order")
+  assert.deepEqual([...requestedSymbols].sort(), [...symbols].sort(), "every active symbol must be requested")
+  assert.equal(new Set(requestedSymbols).size, symbols.length, "each active symbol must be requested exactly once")
+})
+
 test("Bitunix Spot symbol-scoped order reads reject rows for a different symbol", async () => {
   const foreignOrder = {
     orderId: "foreign-order",

@@ -6,7 +6,6 @@ test("createRestSignature signs sorted query parameters and compact JSON body", 
   const signature = createRestSignature({
     nonce: "nonce",
     timestamp: "1700000000000",
-    // codeql[js/insufficient-password-hash] Fixed dummy API key used only by deterministic tests; it is not a stored password.
     apiKey: "api-key",
     secretKey: "secret",
     queryParams: {
@@ -37,7 +36,6 @@ test("createRestSignature treats absent query parameters and body as empty strin
   const signature = createRestSignature({
     nonce: "nonce",
     timestamp: "1700000000000",
-    // codeql[js/insufficient-password-hash] Fixed dummy API key used only by deterministic tests; it is not a stored password.
     apiKey: "api-key",
     secretKey: "secret",
   })
@@ -50,8 +48,7 @@ test("createRestSignature rejects missing credentials and invalid input", () => 
     () => createRestSignature({
       nonce: "",
       timestamp: "1700000000000",
-      // codeql[js/insufficient-password-hash] Fixed dummy API key used only by deterministic tests; it is not a stored password.
-    apiKey: "api-key",
+      apiKey: "api-key",
       secretKey: "secret",
     }),
     /nonce/i,
@@ -60,8 +57,7 @@ test("createRestSignature rejects missing credentials and invalid input", () => 
     () => createRestSignature({
       nonce: "nonce",
       timestamp: "1700000000000",
-      // codeql[js/insufficient-password-hash] Fixed dummy API key used only by deterministic tests; it is not a stored password.
-    apiKey: "api-key",
+      apiKey: "api-key",
       secretKey: "",
     }),
     /secret/i,
@@ -72,7 +68,6 @@ test("createRestSignature preserves whitespace inside JSON string values", () =>
   const options = {
     nonce: "nonce",
     timestamp: "1700000000000",
-    // codeql[js/insufficient-password-hash] Fixed dummy API key used only by deterministic tests; it is not a stored password.
     apiKey: "api-key",
     secretKey: "secret",
   }
@@ -92,7 +87,6 @@ test("createRestSignature signs the exact serialized JSON body when requested", 
   const options = {
     nonce: "nonce",
     timestamp: "1700000000000",
-    // codeql[js/insufficient-password-hash] Fixed dummy API key used only by deterministic tests; it is not a stored password.
     apiKey: "api-key",
     secretKey: "secret",
   }
