@@ -358,7 +358,7 @@ wasClean: false })
     await scheduler.runNext()
 
     assert.equal(clients.length, 2)
-    assert.equal(clients[1].state, "idle")
+    assert.equal(clients[1].state, "closed")
     assert.equal(clients[1].listenerCount, 0)
     assert.equal(clients[1].errorListenerCount, 0)
     assert.equal(clients[1].closeListenerCount, 0)
