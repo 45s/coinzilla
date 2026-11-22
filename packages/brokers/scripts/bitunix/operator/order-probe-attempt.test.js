@@ -572,6 +572,7 @@ test("Bitunix probe capture records sanitized order-detail follow-up responses",
   assert.equal(capture.followUpResponses[0].body.data.userId, "[REDACTED]")
   assert.equal(JSON.stringify(capture).includes("private-user-id"), false)
   assert.equal(Object.hasOwn(capture.requests[1], "body"), false)
+  assert.equal(capture.requests[1].query.orderId, "probe-order-1")
 })
 
 test("Bitunix order probe blocks before reads when an earlier probe has an unknown outcome", async () => {
