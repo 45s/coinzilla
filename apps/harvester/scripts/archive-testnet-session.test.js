@@ -43,7 +43,7 @@ async function createArchiveFixture() {
   return { packageDirectory, files }
 }
 
-function createArchiveDependencies({ packageDirectory, publishArchiveFn }) {
+function createArchiveDependencies({ packageDirectory, publishArchiveFn, onProgress }) {
   return {
     packageDirectory,
     env: {
@@ -54,6 +54,7 @@ function createArchiveDependencies({ packageDirectory, publishArchiveFn }) {
     now: () => new Date(CREATED_AT),
     createArchiveId: () => ARCHIVE_ID,
     publishArchiveFn,
+    onProgress,
   }
 }
 
@@ -69,8 +70,10 @@ test("archives complete logs and data trees without requiring process markers", 
   const fixture = await createArchiveFixture()
   t.after(() => rm(fixture.packageDirectory, { recursive: true, force: true }))
   let publishedDirectory
+  const progressMessages = []
   const result = await runHarvesterArchivePush(createArchiveDependencies({
     packageDirectory: fixture.packageDirectory,
+    onProgress: (message) => progressMessages.push(message),
     publishArchiveFn: async ({ directory, remote }) => {
       publishedDirectory = directory
       assert.equal(remote, ARCHIVE_REMOTE, "the archive must be sent only to the configured private repository")
@@ -90,6 +93,9 @@ test("archives complete logs and data trees without requiring process markers", 
       return { commit: REMOTE_COMMIT, fileCount: manifest.files.length + 1 }
     },
   }))
+  assert.ok(progressMessages.some((message) => message.startsWith("Archive: copying ")), "the operator must see the source-copy size and file count")
+  assert.ok(progressMessages.some((message) => message.startsWith("Hashing ")), "the operator must see checksum-generation progress")
+  assert.ok(progressMessages.includes("Local archive verified."), "the operator must see local verification completion")
   assert.equal(result.remoteCommit, REMOTE_COMMIT, "the command must return the verified remote commit")
   assert.equal(result.localArchive, publishedDirectory, "the verified local snapshot must be the published artifact")
   assert.equal(result.fileCount, Object.keys(fixture.files).length + 2, "the published inventory must include all source files, data_commit_hash and the manifest")
