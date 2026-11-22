@@ -359,10 +359,10 @@ export async function runHarvesterArchivePush({
   }
   const remote = validateArchiveRemote(env.HARVESTER_ARCHIVE_REMOTE)
   const canonicalRemote = remote
-    .replace(/^git@github\\.com:/, "https://github.com/")
-    .replace(/^ssh:\\/\\/git@github\\.com\\//, "https://github.com/")
-    .replace(/\\.git$/, "")
-    .replace(/\\/$/, "")
+    .replace(/^git@github\.com:/, "https://github.com/")
+    .replace(/^ssh:\/\/git@github\.com\//, "https://github.com/")
+    .replace(/\.git$/, "")
+    .replace(/\/$/, "")
   if (canonicalRemote !== "https://github.com/45s/coinzilla-archive") {
     throw new Error("HARVESTER_ARCHIVE_REMOTE must target the private https://github.com/45s/coinzilla-archive repository.")
   }
