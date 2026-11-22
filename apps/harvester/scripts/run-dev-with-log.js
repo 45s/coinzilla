@@ -60,6 +60,7 @@ const [, sessionLogStream] = logStreams
 const childProcess = { current: undefined }
 let childClosed = false
 let logStreamFailed = false
+let outputForwardingFailed = false
 const onLogStreamError = (error) => {
   if (logStreamFailed) {return}
   logStreamFailed = true
@@ -121,9 +122,11 @@ const closeLogStreams = async () => {
     stream.end()
     await completion
   }))
-  if (results.some((result) => result.status === "rejected")) {
+  const streamsClosed = results.every((result) => result.status === "fulfilled")
+  if (!streamsClosed) {
     process.exitCode = 1
   }
+  return streamsClosed
 }
 
 const handleSignal = (signal) => {
@@ -184,7 +187,7 @@ childProcess.current.on("close", async (...closeArguments) => {
   const droppedChunks = (await Promise.all(outputForwarding))
     .reduce((...values) => values[0] + values[1], 0)
 
-  await closeLogStreams()
+  const logStreamsClosed = await closeLogStreams()
 
   try {
     await writeFile(
@@ -194,7 +197,7 @@ childProcess.current.on("close", async (...closeArguments) => {
         endedAt: new Date().toISOString(),
         exitCode: code,
         signal,
-        logStreamsComplete: !logStreamFailed,
+        logStreamsComplete: !logStreamFailed && !outputForwardingFailed && logStreamsClosed,
       }, null, 2)}\n`,
       { encoding: "utf8", flag: "wx", mode: 0o600 },
     )
