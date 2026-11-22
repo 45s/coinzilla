@@ -240,7 +240,7 @@ function createOrdinaryTradeConfig() {
           ZROUSDT: {
             enabled: true,
             tradingEnvironment: 'both',
-            enableVolatilityProtection: false,
+            enableVolatilityProtection: true,
             priceStepPercent: 0.5,
             orderQuantity: 10,
             keepQuantity: 1,
