@@ -325,3 +325,43 @@ test("probe-order mode requires a probe id and an operator callback", async () =
     /probe id and operator probe runner/i,
   )
 })
+
+
+test("probe-order mode still reaches its dedicated preflight when generic diagnostics throw", async () => {
+  const events = []
+  const publishedReports = []
+  const exitCode = await runHealthcheckWorkflow({
+    mode: "probe-order",
+    probeId: "market-buy-1",
+    brokersRoot: "/repo/packages/brokers",
+    repositoryRoot: "/repo",
+    env,
+    stdout,
+    runDiagnostics: async () => {
+      throw new Error("generic diagnostic runner failed")
+    },
+    publishDiagnostics: createPublisher({
+      events,
+      publishedReports,
+    }),
+    runOperatorProbe: async ({ probeId }) => {
+      events.push(`operator probe:${probeId}`)
+      return {
+        ok: false,
+        mutationOutcome: "REJECTED",
+        errors: [Object.assign(new Error("exchange rejected"), {
+          code: "BITUNIX_REST_EXCHANGE_REJECTED",
+          exchangeCode: "10005",
+          status: 200,
+          kind: "exchange",
+        })],
+      }
+    },
+  })
+
+  assert.equal(events.includes("operator probe:market-buy-1"), true)
+  assert.equal(publishedReports[0].results[0].operation, "diagnostic runner")
+  assert.equal(publishedReports[0].results[0].status, "failed")
+  assert.equal(publishedReports[0].results.at(-1).error.exchangeCode, "10005")
+  assert.equal(exitCode, 1)
+})
