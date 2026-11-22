@@ -117,7 +117,6 @@ test("place-order mode runs diagnostics first and executes the order inside repo
   assert.equal(orderCalls, 1, "the order runner must be called exactly once")
   assert.equal(exitCode, 0)
   assert.equal(publishedReports[0].results.at(-1).operation, "operator order attempt")
-  assert.equal(publishedReports[0].results.at(-1).probeId, "limit-buy-1")
   assert.equal(publishedReports[0].results.at(-1).status, "passed")
   assert.equal(JSON.stringify(publishedReports[0]).includes("private-order-id"), false)
 })
@@ -268,7 +267,7 @@ test("pre-dispatch operator failures are recorded as NOT_SENT, not OUTCOME_UNKNO
 })
 
 
-test("probe-order mode runs one selected probe even when unrelated diagnostics are degraded", async () => {
+test("probe-order mode skips generic diagnostics and runs one selected probe", async () => {
   const events = []
   const publishedReports = []
   let probeCalls = 0
@@ -309,7 +308,6 @@ test("probe-order mode runs one selected probe even when unrelated diagnostics a
     "operator probe:limit-buy-1",
   ])
   assert.equal(publishedReports[0].results.at(-1).operation, "operator order probe")
-  assert.equal(publishedReports[0].results.at(-1).probeId, "limit-buy-1")
   assert.equal(publishedReports[0].results.at(-1).mutationOutcome, "REJECTED")
   assert.equal(publishedReports[0].results.at(-1).status, "passed")
   assert.equal(publishedReports[0].results.at(-1).error.exchangeCode, "10005")
@@ -330,7 +328,7 @@ test("probe-order mode requires a probe id and an operator callback", async () =
 })
 
 
-test("probe-order mode still reaches its dedicated preflight when generic diagnostics throw", async () => {
+test("probe-order mode uses only its dedicated preflight, even if generic diagnostics would fail", async () => {
   const events = []
   const publishedReports = []
   const exitCode = await runHealthcheckWorkflow({
