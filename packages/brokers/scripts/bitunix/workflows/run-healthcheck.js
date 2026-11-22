@@ -241,6 +241,7 @@ async function runDiagnosticsWithOperatorAttempt({
   runOperatorOrder,
   runOperatorProbe,
   probeId,
+  brokerFactory,
 }) {
   const startedAt = Date.now()
   const report = runOperatorProbe
