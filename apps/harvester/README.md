@@ -451,7 +451,7 @@ Use the [local DEV reset and archive runbook](./docs/operations/local-dev-reset-
 
 ADR-0001 defines the append-only record schema and integrity contract used by the Operational State Store. Startup initializes a missing or empty store, verifies an existing complete store, and fails closed for an existing corrupt or incomplete store. The local DEV reset command is a separate, explicit operation that removes only the configured `recovery-facts/` directory after Harvester has stopped.
 
-The explicit command is documented in [ADR-0001 — Process-restart recovery record contract](./docs/architecture/decisions/0001-application-owned-recovery-facts.md). Run it once while Harvester is stopped and only when the target directory is empty. Never delete, reset, or reinitialize an existing ledger to bypass a startup check.
+The explicit command is documented in [ADR-0001 — Process-restart recovery record contract](./docs/architecture/decisions/0001-application-owned-recovery-facts.md). Run manual initialization only while Harvester is stopped and only when the target directory is empty. Never delete or reinitialize a production ledger, or reset an existing store to bypass a startup check. The separate recovery-facts-only reset is restricted to local TESTNET development and is documented in the local DEV reset and archive runbook.
 
 The store directory must be on a local filesystem; network shares and cloud-synchronized folders are unsupported. Its SHA-256 chains detect accidental corruption and reordering, not malicious rewriting by a privileged local actor. The allowlisted `MARKET_HISTORY_COVERAGE_CONFIRMED` fact records only a reviewed per-market history interval and never certifies account-wide market-universe completeness.
 
