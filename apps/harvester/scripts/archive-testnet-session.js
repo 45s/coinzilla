@@ -720,6 +720,7 @@ export async function runHarvesterArchivePush({
   createArchiveId = randomUUID,
   publishArchiveFn = publishArchive,
   onProgress = (message) => process.stdout.write(message + "\n"),
+  lockDirectory = path.join(os.homedir(), ".coinzilla", "harvester", "process-locks"),
 } = {}) {
   if (env.TRADING_MODE !== "testnet") {
     throw new Error("Archive publication requires TRADING_MODE=testnet. LIVE and unspecified modes are rejected.")
