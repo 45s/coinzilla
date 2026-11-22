@@ -704,6 +704,37 @@ async function persistOpenOrdersAuditFact({ operationalStateStore, dataResult })
   }
 }
 
+async function flushOpenOrdersAuditEvent({ eventPublisher }) {
+  if (typeof eventPublisher?.flush !== "function") {
+    throw withRecoveryFailure({
+      error: new Error("Harvester requires a durable open-orders audit before advancing its lifecycle"),
+      category: "ACCOUNTING_INTEGRITY",
+      stage: "ACCOUNT_OPEN_ORDERS_AUDIT_FLUSH_CAPABILITY",
+      retryable: false,
+    })
+  }
+
+  let flushed
+  try {
+    flushed = await eventPublisher.flush()
+  } catch (error) {
+    throw withRecoveryFailure({
+      error,
+      category: "DURABILITY",
+      stage: "ACCOUNT_OPEN_ORDERS_AUDIT_FLUSH_UNCLASSIFIED",
+      retryable: false,
+    })
+  }
+  if (flushed?.ok !== true || flushed?.durable !== true) {
+    const details = flushed?.errors?.map((error) => error?.message ?? String(error)).join("; ")
+    throw createAuditFlushError({
+      flushed,
+      message: `Unable to durably persist account open-orders audit${details ? `: ${details}` : ""}`,
+      stage: "ACCOUNT_OPEN_ORDERS_AUDIT_FLUSH",
+    })
+  }
+}
+
 async function publishOpenOrdersAuditEvent({ eventPublisher, dataResult }) {
   const published = publishLifecycleEvent({
     eventPublisher,
@@ -713,39 +744,13 @@ async function publishOpenOrdersAuditEvent({ eventPublisher, dataResult }) {
   if (!published?.ok) {
     const details = published?.errors?.map((error) => error?.message ?? String(error)).join("; ")
     throw withRecoveryFailure({
-  error: new Error(`Unable to publish account open-orders audit event${  details ? `: ${  details}` : ""}`),
-  category: "DURABILITY",
-  stage: "ACCOUNT_OPEN_ORDERS_AUDIT_PUBLICATION",
-  retryable: true,
-})
-  }
-  if (typeof eventPublisher?.flush !== "function") {
-    throw withRecoveryFailure({
-  error: new Error("Harvester requires a durable open-orders audit before advancing its lifecycle"),
-  category: "ACCOUNTING_INTEGRITY",
-  stage: "ACCOUNT_OPEN_ORDERS_AUDIT_FLUSH_CAPABILITY",
-  retryable: false,
-})
-  }
-  let flushed
-  try {
-    flushed = await eventPublisher.flush()
-  } catch (error) {
-    throw withRecoveryFailure({
-  error,
-  category: "DURABILITY",
-  stage: "ACCOUNT_OPEN_ORDERS_AUDIT_FLUSH_UNCLASSIFIED",
-  retryable: false,
-})
-  }
-  if (flushed?.ok !== true || flushed?.durable !== true) {
-    const details = flushed?.errors?.map((error) => error?.message ?? String(error)).join("; ")
-    throw createAuditFlushError({
-      flushed,
-      message: `Unable to durably persist account open-orders audit${  details ? `: ${  details}` : ""}`,
-      stage: "ACCOUNT_OPEN_ORDERS_AUDIT_FLUSH",
+      error: new Error(`Unable to publish account open-orders audit event${details ? `: ${details}` : ""}`),
+      category: "DURABILITY",
+      stage: "ACCOUNT_OPEN_ORDERS_AUDIT_PUBLICATION",
+      retryable: true,
     })
   }
+  await flushOpenOrdersAuditEvent({ eventPublisher })
 }
 
 function createOpenOrdersGuardState({ unownedOrders }) {
@@ -868,6 +873,35 @@ async function publishOpenOrdersSnapshot({ context, options }) {
   return orders
 }
 
+async function persistBlockedClosingOpenOrdersSnapshot({ context, captureError }) {
+  try {
+    const blockReasons = ["CLOSING_OPEN_ORDERS_CAPTURE_FAILED"]
+    const observedAt = getNextOpenOrdersObservedAt({ context })
+    const dataResult = createOpenOrdersAuditPayload({
+      phase: "CLOSING",
+      orders: [],
+      classification: {
+        unownedOrders: [],
+        blockReasons,
+        readiness: "BLOCKED",
+      },
+      now: () => observedAt,
+    })
+    await persistAndPublishOpenOrdersAudit({
+      context,
+      dataResult,
+    })
+  } catch (auditError) {
+    const failure = new AggregateError(
+      [captureError, auditError],
+      "Unable to durably record incomplete CLOSING open-orders evidence",
+      { cause: captureError },
+    )
+    failure.recoveryFailure = auditError.recoveryFailure ?? captureError.recoveryFailure
+    throw failure
+  }
+}
+
 async function publishClosingOpenOrdersSnapshot({ context, options }) {
   let snapshot
   try {
@@ -881,40 +915,10 @@ async function publishClosingOpenOrdersSnapshot({ context, options }) {
       ownershipReconciled: options.ownershipReconciled,
     })
   } catch (error) {
-    const blockReasons = ["CLOSING_OPEN_ORDERS_CAPTURE_FAILED"]
-    try {
-      const observedAt = getNextOpenOrdersObservedAt({ context })
-      const dataResult = createOpenOrdersAuditPayload({
-        phase: "CLOSING",
-        orders: [],
-        classification: {
-          unownedOrders: [],
-          blockReasons,
-          readiness: "BLOCKED",
-        },
-        now: () => observedAt,
-      })
-      await persistAndPublishOpenOrdersAudit({
-        context,
-        dataResult,
-      })
-      logOpenOrdersAudit({
-        logger: context.logger,
-        phase: "CLOSING",
-        orders: [],
-        unownedOrders: [],
-        readiness: "BLOCKED",
-        blockReasons,
-      })
-    } catch (auditError) {
-      const failure = new AggregateError(
-        [error, auditError],
-        "Unable to durably record incomplete CLOSING open-orders evidence",
-        { cause: error },
-      )
-      failure.recoveryFailure = auditError.recoveryFailure ?? error.recoveryFailure
-      throw failure
-    }
+    await persistBlockedClosingOpenOrdersSnapshot({
+      context,
+      captureError: error,
+    })
     throw error
   }
 
@@ -1083,6 +1087,16 @@ function createCommissionBaselineSnapshot({ context, balance }) {
   })
 }
 
+function createSkippedCommissionBaseline({ reason }) {
+  return {
+    ok: true,
+    data: Object.freeze({
+      skipped: true,
+      reason,
+    }),
+  }
+}
+
 async function publishCommissionAssetBaseline({ context, options }) {
   validateCommissionAssetIdentity(options)
   const configuredAsset = findConfiguredCommissionAsset({
@@ -1095,26 +1109,18 @@ async function publishCommissionAssetBaseline({ context, options }) {
     assetId: options.assetId,
     assetCode: options.assetCode,
   })) {
-    return {
-      ok: true,
-      data: Object.freeze({
-        skipped: true,
-        reason: "CONFIGURED_MARKET_ASSET",
-      }),
-    }
+    return createSkippedCommissionBaseline({
+      reason: "CONFIGURED_MARKET_ASSET",
+    })
   }
   if (getKnownCommissionBaseline({
     context,
     assetId: options.assetId,
     assetCode: options.assetCode,
   })) {
-    return {
-      ok: true,
-      data: Object.freeze({
-        skipped: true,
-        reason: "BASELINE_ALREADY_CAPTURED",
-      }),
-    }
+    return createSkippedCommissionBaseline({
+      reason: "BASELINE_ALREADY_CAPTURED",
+    })
   }
   const balance = getPreflightCommissionBalance({
     context,
@@ -1147,14 +1153,9 @@ async function publishCommissionAssetBaseline({ context, options }) {
   }
 }
 
-function createExternalOrderReconciliation({
-  state,
-  context,
-  getHasCanonicalOwnershipReconciliation,
-  logger,
-} = {}) {
+function createSerialOpenOrdersPublisher({ state, context }) {
   let openOrdersSnapshotTask = Promise.resolve()
-  const publishOrders = (options = {}) => {
+  return (options = {}) => {
     const task = openOrdersSnapshotTask.then(async () => {
       const pendingVersions = new Map(state.pendingExternalOrderVersions)
       const orders = await publishOpenOrdersSnapshot({
@@ -1162,7 +1163,7 @@ function createExternalOrderReconciliation({
         options: {
           phase: options.phase === undefined ? "PREFLIGHT" : options.phase,
           ownershipReconciled: options.ownershipReconciled === undefined
-            ? getHasCanonicalOwnershipReconciliation()
+            ? context.getHasCanonicalOwnershipReconciliation()
             : options.ownershipReconciled,
           orders: options.orders,
         },
@@ -1177,7 +1178,10 @@ function createExternalOrderReconciliation({
     openOrdersSnapshotTask = task.catch(() => undefined)
     return task
   }
-  const observeExternalOrder = ({ symbol } = {}) => {
+}
+
+function createExternalOrderObserver({ state, publishOrders, logger }) {
+  return ({ symbol } = {}) => {
     if (typeof symbol !== "string" || !symbol.trim()) {
       return Promise.resolve(toResult({
         error: new TypeError("External-order observation requires a non-empty market symbol"),
@@ -1207,6 +1211,18 @@ function createExternalOrderReconciliation({
       },
     )
   }
+}
+
+function createExternalOrderReconciliation({ state, context, logger } = {}) {
+  const publishOrders = createSerialOpenOrdersPublisher({
+    state,
+    context,
+  })
+  const observeExternalOrder = createExternalOrderObserver({
+    state,
+    publishOrders,
+    logger,
+  })
   return {
     publishOrders,
     observeExternalOrder,
@@ -1234,7 +1250,7 @@ function createExternalOrderReconciliation({
  * @param {Function} [options.now] Clock returning epoch milliseconds.
  * @returns {object} Account snapshot read and durable audit operations.
  */
-export function createAccountSnapshotManager({
+function createAccountSnapshotManagerContext({
   broker,
   eventPublisher,
   marketMetadata,
@@ -1249,6 +1265,81 @@ export function createAccountSnapshotManager({
   monotonicNow = () => performance.now(),
   runtimeSessionId,
   operationalStateStore,
+} = {}) {
+  const state = createInitialAccountSnapshotManagerState()
+  const context = {
+    broker,
+    eventPublisher,
+    marketMetadata,
+    getPortfolio,
+    getAdditionalTrackedBaseQuantity: resolveAdditionalTrackedBaseQuantityGetter({
+      getter: getAdditionalTrackedBaseQuantity,
+    }),
+    getAdditionalTrackedQuoteCashFlow: resolveAdditionalTrackedQuoteCashFlowGetter({
+      getter: getAdditionalTrackedQuoteCashFlow,
+    }),
+    getTradingEngine,
+    getRecoveredState,
+    getHasCanonicalOwnershipReconciliation,
+    logger,
+    now,
+    monotonicNow,
+    runtimeSessionId,
+    operationalStateStore,
+    state,
+  }
+  return {
+    context,
+    state,
+  }
+}
+
+export function createAccountSnapshotManager(options = {}) {
+  const { context, state } = createAccountSnapshotManagerContext(options)
+  const { publishOrders, observeExternalOrder } = createExternalOrderReconciliation({
+    state,
+    context,
+    logger: context.logger,
+  })
+  const refresh = (refreshOptions = {}) => refreshAccountSnapshot({
+    context,
+    ...refreshOptions,
+  })
+  const publishSnapshot = (snapshotOptions = {}) => publishAccountSnapshot({
+    context,
+    options: {
+      phase: snapshotOptions.phase,
+      auditStatus: snapshotOptions.auditStatus === undefined ? "COMPLETE" : snapshotOptions.auditStatus,
+      auditReasons: snapshotOptions.auditReasons === undefined ? [] : snapshotOptions.auditReasons,
+      snapshot: snapshotOptions.snapshot,
+      allowedAssetCodes: snapshotOptions.allowedAssetCodes,
+    },
+  })
+  const publishClosingOrdersSnapshot = (snapshotOptions = {}) => publishClosingOpenOrdersSnapshot({
+    context,
+    options: snapshotOptions,
+  })
+  const publishCommissionBaseline = (baselineOptions = {}) => publishCommissionAssetBaseline({
+    context,
+    options: baselineOptions,
+  })
+
+  return Object.freeze({
+    getAccountSnapshot: () => state.accountSnapshot,
+    hasUnownedOpenOrdersForSymbol: ({ symbol } = {}) =>
+      typeof symbol === "string" && (
+        state.unownedOpenOrderSymbols.has(symbol) ||
+        state.pendingExternalOrderVersions.has(symbol)
+      ),
+    observeExternalOrder,
+    refreshAccountSnapshot: refresh,
+    publishOpenOrdersSnapshot: publishOrders,
+    publishClosingOpenOrdersSnapshot: publishClosingOrdersSnapshot,
+    publishAccountSnapshot: publishSnapshot,
+    publishCommissionAssetBaseline: publishCommissionBaseline,
+  })
+}
+
 } = {}) {
   const additionalTrackedBaseQuantityGetter = resolveAdditionalTrackedBaseQuantityGetter({
     getter: getAdditionalTrackedBaseQuantity,
