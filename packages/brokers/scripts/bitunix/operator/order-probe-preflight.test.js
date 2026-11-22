@@ -381,8 +381,14 @@ test("funded HYPE BUY calculates base quantity from live precision and confirms 
       balancesResult: {
         ok: true,
         data: [{
-          free: { amount: "11.24", asset: { code: "USDT" } },
-          locked: { amount: "0", asset: { code: "USDT" } },
+          free: {
+            amount: "11.24",
+            asset: { code: "USDT" },
+          },
+          locked: {
+            amount: "0",
+            asset: { code: "USDT" },
+          },
         }],
       },
     },
@@ -402,8 +408,14 @@ test("funded HYPE BUY refuses to dispatch when the 11 USDT budget plus reserve i
       balancesResult: {
         ok: true,
         data: [{
-          free: { amount: "11.23", asset: { code: "USDT" } },
-          locked: { amount: "0", asset: { code: "USDT" } },
+          free: {
+            amount: "11.23",
+            asset: { code: "USDT" },
+          },
+          locked: {
+            amount: "0",
+            asset: { code: "USDT" },
+          },
         }],
       },
     },
