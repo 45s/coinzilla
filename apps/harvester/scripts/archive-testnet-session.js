@@ -20,7 +20,6 @@ import os from "node:os"
 import { fileURLToPath } from "node:url"
 import { captureBuildMetadata } from "@coinzilla/utils"
 import packageMetadata from "../package.json" with { type: "json" }
-import { validateArchiveRemote } from "./initialize-private-archive-repository.js"
 import { resolveOperationalStateDirectory } from "../src/infrastructure/operational-state/resolve-directory.js"
 
 const PACKAGE_DIRECTORY = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
@@ -28,7 +27,20 @@ const SOURCE_DIRECTORIES = Object.freeze(["logs", "data", "recovery-facts"])
 const EXCLUDED_ARCHIVE_PATHS = Object.freeze(["data/production", "logs/cumulative/terminal.log"])
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
-const runGitDefault = (args, { cwd } = {}) => new Promise((resolve, reject) => {
+function validateArchiveRemote(remote) {
+  if (typeof remote !== "string" || remote.trim() !== remote || remote.length === 0) {
+    throw new TypeError("HARVESTER_ARCHIVE_REMOTE must be a non-empty GitHub repository URL.")
+  }
+  const supportedRemote = /^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:\.git)?\/?$/
+  if (!supportedRemote.test(remote)) {
+    throw new TypeError("HARVESTER_ARCHIVE_REMOTE must be an HTTPS GitHub repository URL.")
+  }
+  return remote
+}
+
+const runGitDefault = (...parameters) => {
+  const [args, { cwd } = {}] = parameters
+  return new Promise((resolve, reject) => {
   const child = spawn("git", args, {
     cwd,
     windowsHide: true,
@@ -60,7 +72,8 @@ const runGitDefault = (args, { cwd } = {}) => new Promise((resolve, reject) => {
       `git ${args[0]} failed with exit code ${code}: ${stderr.trim()}`,
     ))
   })
-})
+  })
+}
 
 const formatBytes = (bytes) => {
   if (bytes < 1024) return `${bytes} B`
