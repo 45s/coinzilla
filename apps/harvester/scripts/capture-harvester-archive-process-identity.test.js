@@ -88,7 +88,10 @@ test("rejects malformed process-start identity and source commit values", () => 
       startedAt: PROCESS_STARTED_AT,
       runtimeSessionId: RUNTIME_SESSION_ID,
       tradingMode: "testnet",
-      source: { ...source, commit: "not-a-full-sha" },
+      source: {
+        ...source,
+        commit: "not-a-full-sha",
+      },
     }),
     /commit/,
     "a malformed source commit must be rejected instead of being used in an archive name",
@@ -106,15 +109,24 @@ test("persists one process identity without overwriting an existing session reco
   })
 
   try {
-    await persistHarvesterArchiveProcessIdentity({ filename, identity })
+    await persistHarvesterArchiveProcessIdentity({
+      filename,
+      identity,
+    })
     const persisted = JSON.parse(await readFile(filename, "utf8"))
     assert.deepEqual(persisted, identity, "the session identity file must preserve the exact immutable startup snapshot")
     await assert.rejects(
-      persistHarvesterArchiveProcessIdentity({ filename, identity }),
+      persistHarvesterArchiveProcessIdentity({
+        filename,
+        identity,
+      }),
       { code: "EEXIST" },
       "a second launcher must not overwrite the identity already assigned to a process session",
     )
   } finally {
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
   }
 })
