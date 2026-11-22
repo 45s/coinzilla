@@ -19,7 +19,7 @@ const createState = (overrides = {}) => ({
   ...overrides,
 })
 
-const createHandler = ({ state = createState(), engine, onUserDataEvent = async () => {}, onSafetyBlockerRaised, logger = {} } = {}) => {
+const createHandler = ({ state = createState(), engine, onUserDataEvent = async () => {}, onMonitoringEvent, onSafetyBlockerRaised, logger = {} } = {}) => {
   const actions = { cancellations: 0,
 resumptions: 0,
 observations: [] }
@@ -33,6 +33,7 @@ observations: [] }
       actions.observations.push(input)
       return onUserDataEvent(input)
     },
+    onMonitoringEvent,
     getPortfolio: () => ({ positions: [] }),
     getRecoveryLedger: () => undefined,
     updatePortfolio: () => ({ ok: true }),
@@ -438,3 +439,31 @@ data: { reevaluate: false } }),
     "The user-data boundary must not print raw receipt or generic processed messages; canonical lifecycle transitions own those logs.",
   )
 })
+
+test("notifies the read-only exchange monitor for every accepted user-data event", async () => {
+  const monitored = []
+  const { handler, state } = createHandler({
+    onMonitoringEvent: ({ event }) => monitored.push(event),
+  })
+  const event = { eventType: "accountUpdate", balances: [] }
+  handler({ event })
+  await state.eventQueue
+
+  assert.deepEqual(monitored, [event], "The monitor must receive the existing Harvester user-data event without opening another broker subscription.")
+  assert.equal(state.accountingFailed, false, "Monitoring notification must not alter accounting state.")
+})
+
+test("contains exchange monitor observer failures without changing user-data readiness", async () => {
+  const warnings = []
+  const { handler, state } = createHandler({
+    onMonitoringEvent: () => { throw new Error("monitor unavailable") },
+    logger: { warn: (entry) => warnings.push(entry) },
+  })
+  handler({ event: { eventType: "accountUpdate" } })
+  await state.eventQueue
+
+  assert.equal(state.accountingFailed, false)
+  assert.equal(state.ready, true)
+  assert.equal(warnings[0]?.message, "exchange account monitoring observer failed")
+})
+
