@@ -76,9 +76,15 @@ const runGitDefault = (...parameters) => {
 }
 
 const formatBytes = (bytes) => {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  if (bytes < 1024) {
+    return `${bytes} B`
+  }
+  if (bytes < 1024 * 1024) {
+    return `${(bytes / 1024).toFixed(1)} KB`
+  }
+  if (bytes < 1024 * 1024 * 1024) {
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  }
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`
 }
 
@@ -213,7 +219,7 @@ async function copyCompressedTree({ sourceDirectory, destinationDirectory, relat
         onFileCopied,
       })
     } else if (sourceStats.isFile()) {
-      const compressedRelative = childRelative + ".gz"
+      const compressedRelative = `${childRelative}.gz`
       const destinationPath = path.join(destinationDirectory, compressedRelative)
       await pipeline(
         createReadStream(sourcePath),
@@ -630,7 +636,7 @@ async function createArchiveManifest({ directory, createdAt, logRuntimeSessionId
 
 async function verifyArchive({ directory, manifest } = {}) {
   const expectedPaths = manifest.files.map((entry) => entry.path).sort()
-  const actualPaths = (await listRegularFiles(directory))
+  const actualPaths = (await listRegularFiles({ directory }))
     .filter((filename) => filename !== "manifest.json")
   if (JSON.stringify(expectedPaths) !== JSON.stringify(actualPaths)) {
     throw new Error("Archive file inventory does not match its manifest.")
@@ -899,7 +905,7 @@ async function writeAndVerifyLocalArchive({ localArchive, createdAt, logSessionI
   reportProgress(onProgress, "Local archive verified.")
 }
 
-function resolveArchiveRemote({ env, args, lockDirectory } = {}) {
+function resolveArchiveRemote({ env, args } = {}) {
   if (env.TRADING_MODE !== "testnet") {
     throw new Error("Archive publication requires TRADING_MODE=testnet. LIVE and unspecified modes are rejected.")
   }
@@ -913,10 +919,7 @@ function resolveArchiveRemote({ env, args, lockDirectory } = {}) {
   if (canonicalRemote !== "https://github.com/45s/coinzilla-archive") {
     throw new Error("HARVESTER_ARCHIVE_REMOTE must target the private https://github.com/45s/coinzilla-archive repository.")
   }
-  return {
-    remote,
-    lockDirectory,
-  }
+  return remote
 }
 
 export async function runHarvesterArchivePush({
@@ -930,7 +933,7 @@ export async function runHarvesterArchivePush({
   onProgress = (message) => process.stdout.write(`${message}\n`),
   lockDirectory = path.join(os.homedir(), ".coinzilla", "harvester", "process-locks"),
 } = {}) {
-  const { remote } = resolveArchiveRemote({ env, args, lockDirectory })
+  const remote = resolveArchiveRemote({ env, args })
   await assertHarvesterProcessStopped({ lockDirectory })
   const sourcePaths = resolveArchiveSourcePaths({ packageDirectory, env })
   for (const source of sourcePaths) {
