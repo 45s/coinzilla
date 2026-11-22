@@ -75,7 +75,7 @@ const LOSSLESS_NUMERIC_FIELDS = Object.freeze({
 })
 
 function redactDiagnosticValue(value, key = "") {
-  if (/api.?key|secret|sign|nonce|email|phone|address|uid/i.test(key)) {
+  if (/api.?key|secret|sign|nonce|email|phone|address|user.?id|uid/i.test(key)) {
     return "[REDACTED]"
   }
   if (Array.isArray(value)) {
