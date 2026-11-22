@@ -94,6 +94,26 @@ export function createHarvesterArchiveDirectoryName({ createdAt, archiveId } = {
   return timestamp + "_" + archiveId.slice(0, 8)
 }
 
+function resolveArchiveDataDirectory({ packageDirectory, env } = {}) {
+  const configuredDirectory = env.HARVESTER_DATABASE_DIRECTORY
+  if (configuredDirectory === undefined) {
+    return path.join(packageDirectory, "data")
+  }
+  if (
+    typeof configuredDirectory !== "string"
+    || configuredDirectory.trim() !== configuredDirectory
+    || configuredDirectory === ""
+    || !path.isAbsolute(configuredDirectory)
+  ) {
+    throw new TypeError("HARVESTER_DATABASE_DIRECTORY must be a non-empty absolute path before archiving.")
+  }
+  const resolvedDirectory = path.resolve(configuredDirectory)
+  if (path.parse(resolvedDirectory).root === resolvedDirectory) {
+    throw new TypeError("HARVESTER_DATABASE_DIRECTORY must not be a filesystem root before archiving.")
+  }
+  return resolvedDirectory
+}
+
 async function assertHarvesterProcessStopped({ lockDirectory } = {}) {
   let directoryStats
   try {
@@ -717,9 +737,12 @@ export async function runHarvesterArchivePush({
   }
   await assertHarvesterProcessStopped({ lockDirectory })
 
+  const dataDirectory = resolveArchiveDataDirectory({ packageDirectory, env })
   const sourcePaths = SOURCE_DIRECTORIES.map((directoryName) => ({
     directoryName,
-    sourceDirectory: path.join(packageDirectory, directoryName),
+    sourceDirectory: directoryName === "data"
+      ? dataDirectory
+      : path.join(packageDirectory, directoryName),
   }))
   for (const source of sourcePaths) {
     await assertRealDirectory(source.sourceDirectory)
