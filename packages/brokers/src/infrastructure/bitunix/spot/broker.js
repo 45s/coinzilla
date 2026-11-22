@@ -537,7 +537,11 @@ export class BitunixSpotBroker {
         level: "error",
         event: {
           event: "getExchangeMarkets.failed",
-          error: { name: error?.name, code: error?.code, message: error?.message },
+          error: {
+            name: error?.name,
+            code: error?.code,
+            message: error?.message,
+          },
         },
       })
       handleErr({
@@ -629,7 +633,12 @@ export class BitunixSpotBroker {
         event: {
           event: "getOpenOrders.failed",
           symbol: symbol ?? null,
-          error: { name: error?.name, code: error?.code, exchangeCode: error?.exchangeCode, message: error?.message },
+          error: {
+            name: error?.name,
+            code: error?.code,
+            exchangeCode: error?.exchangeCode,
+            message: error?.message,
+          },
         },
       })
       handleErr({
@@ -1591,12 +1600,12 @@ export class BitunixSpotBroker {
   }
 }
 
-function createRestClient(config, logger) {
+function createRestClient(config) {
   return new BitunixRestClient({
     apiKey: config.apiKey,
     apiSecret: config.apiSecret,
     baseUrl: config.baseUrl,
     requestTimeout: config.requestTimeout,
-    logger,
+    logger: config.logger,
   })
 }
