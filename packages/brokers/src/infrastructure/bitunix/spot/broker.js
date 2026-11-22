@@ -446,7 +446,10 @@ export class BitunixSpotBroker {
       enumerable: true,
       value: createBitunixBrokerCapabilities({ allowLiveOrderMutations: this.config.allowLiveOrderMutations }),
     })
-    this.restClient = restClientFactory(this.config, this.logger)
+    this.restClient = restClientFactory({
+      ...this.config,
+      logger: this.logger,
+    })
     this.connected = false
     this.canonicalMarkets = new Map()
     this.reconcilerFactory = reconcilerFactory
