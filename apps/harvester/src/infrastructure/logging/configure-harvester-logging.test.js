@@ -81,6 +81,37 @@ force: true })
   }
 })
 
+
+test("creates missing logs, cumulative and process-session directories", async (t) => {
+  const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), "harvester-missing-logs-"))
+  const directory = path.join(temporaryRoot, "logs")
+  const logger = createLogger()
+  t.after(async () => {
+    await rm(temporaryRoot, { recursive: true, force: true })
+  })
+
+  const logging = await configureHarvesterLogging({
+    logger,
+    directory,
+    processIdentity: {
+      startedAt: "2026-11-22T12:00:00.000Z",
+      runtimeSessionId: "missing-logs-session",
+    },
+  })
+
+  assert.deepEqual(
+    (await readdir(directory)).sort(),
+    ["cumulative", "sessions"],
+    "The runtime must create the missing logs root and its cumulative/session directories.",
+  )
+  assert.deepEqual(
+    (await readdir(path.join(directory, "sessions", "2026-11-22_12-00-00-missing-logs-session"))).sort(),
+    ["harvester.log", "trace.log"],
+    "The runtime must create both structured session log files in the new process directory.",
+  )
+  await logging.close()
+})
+
 test("fails clearly when the shared logger transport API is unavailable", async () => {
   await assert.rejects(
     configureHarvesterLogging({ logger: {},
