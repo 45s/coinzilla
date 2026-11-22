@@ -78,5 +78,5 @@ test("rejects a CLOSING open-order snapshot after the Journal session has stoppe
   })
 
   assert.equal(result.ok, false)
-  assert.match(result.errors[0].message, /CLOSING open-order snapshot requires a started Journal session/)
+  assert.match(result.errors[0].message, /after harvester\.stopped/)
 })
