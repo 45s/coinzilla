@@ -269,6 +269,7 @@ export async function runBitunixOrderProbeAttempt({
   createOrderBroker,
   confirm,
   createMarker,
+  assertMatrixCanContinue,
   writeLine,
   capture = {},
   secrets = [],
@@ -279,6 +280,7 @@ export async function runBitunixOrderProbeAttempt({
     createOrderBroker,
     confirm,
     createMarker,
+    assertMatrixCanContinue,
     writeLine,
   })
   let orderBroker = null
@@ -287,6 +289,7 @@ export async function runBitunixOrderProbeAttempt({
   let dispatchStarted = false
   let result
   try {
+    await assertMatrixCanContinue()
     const preflight = await readOrderProbePreflight({
       readBroker,
       probeId,
