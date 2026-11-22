@@ -4,14 +4,13 @@ import {
   requireNonEmptyString,
 } from "./operational-state-canonical.js"
 import {
-  FACT_TYPES,
   FORMAT_VERSION,
   MAX_FACT_ID_LENGTH,
   MAX_RUNTIME_SESSION_ID_LENGTH,
   SEQUENCE_PATTERN,
   SHA256_PATTERN,
 } from "./helpers/operational-state-fact-schema.js"
-import { validateFactData } from "./operational-state-fact-validation.js"
+import { FACT_TYPES, validateFactData } from "./fact-validation.js"
 
 export function validateFactInput({ fact, runtimeSessionId }) {
   if (!fact || typeof fact !== "object" || Array.isArray(fact)) {

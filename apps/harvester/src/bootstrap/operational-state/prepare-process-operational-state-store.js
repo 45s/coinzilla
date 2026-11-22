@@ -1,5 +1,6 @@
-import { createFileOperationalStateStore } from "../../infrastructure/operational-state/create-file-operational-state-store.js"
-import { resolveOperationalStateDirectory } from "../../infrastructure/operational-state/resolve-operational-state-directory.js"
+import { StrategyId } from "../../domain/strategies/strategy-ids.js"
+import { createFileOperationalStateStore } from "../../infrastructure/operational-state/create-file-store.js"
+import { resolveOperationalStateDirectory } from "../../infrastructure/operational-state/resolve-directory.js"
 
 export class ProcessOperationalStateStartupError extends Error {
   constructor(...args) {
@@ -58,10 +59,35 @@ runtimeSessionId })
   return store
 }
 
+async function initializeProcessStoreIfEmpty({ store, directory } = {}) {
+  if (typeof store.initializeIfEmpty !== "function") {
+    return
+  }
+  let initialization
+  try {
+    initialization = await store.initializeIfEmpty()
+  } catch (cause) {
+    throw new ProcessOperationalStateStartupError(
+      `Unable to initialize an empty or inspect the existing Operational State Store at ${  directory}`,
+      "PROCESS_OPERATIONAL_STATE_INITIALIZATION_FAILED",
+      cause,
+    )
+  }
+  if (initialization?.ok === true && initialization.data?.ready === true) {
+    return
+  }
+  const cause = initialization?.errors?.[0] ?? new Error("Operational State Store initialization was not confirmed")
+  throw new ProcessOperationalStateStartupError(
+    `Harvester could not initialize an empty or accept the existing Operational State Store at ${  directory}; incomplete or corrupt history was not changed`,
+    "PROCESS_OPERATIONAL_STATE_INITIALIZATION_FAILED",
+    cause,
+  )
+}
+
 async function verifyProcessStore({ store, directory } = {}) {
   if (typeof store.verify !== "function") {
     throw new ProcessOperationalStateStartupError(
-      "Restart recovery requires verify() on the process-owned ADR-0001 operational-state store",
+      "Operational State Store requires verify() before broker-capable startup",
       "PROCESS_OPERATIONAL_STATE_VERIFY_UNAVAILABLE",
     )
   }
@@ -82,23 +108,38 @@ async function verifyProcessStore({ store, directory } = {}) {
   }
   const cause = verification?.errors?.[0] ?? new Error("Verification did not confirm a valid, durably writable ledger")
   throw new ProcessOperationalStateStartupError(
-    `Restart recovery requires an existing verified ADR-0001 operational record ledger at ${  directory}`,
+    `Harvester requires an existing verified ADR-0001 operational record ledger before broker-capable startup at ${  directory}`,
     "PROCESS_OPERATIONAL_STATE_VERIFICATION_FAILED",
     cause,
   )
 }
 
+function hasEnabledRecoverySellerMarket({ recoverySellerConfig } = {}) {
+  return recoverySellerConfig?.enabled === true &&
+    Object.values(recoverySellerConfig.pairs ?? {}).some((pairConfig) => pairConfig?.enabled === true)
+}
+
+function requiresOperationalStateStore({ appConfig } = {}) {
+  const conservativeRecoveryEnabled =
+    appConfig?.strategies?.[StrategyId.COIN_GRABBER]?.settings?.recovery?.enabled === true
+  const recoverySellerEnabled = hasEnabledRecoverySellerMarket({
+    recoverySellerConfig: appConfig?.strategies?.[StrategyId.RECOVERY_SELLER],
+  })
+  return conservativeRecoveryEnabled || recoverySellerEnabled
+}
+
 /**
- * Compose the process-owned ADR-0001 store only for CoinGrabber restart recovery.
+ * Prepare and verify the process-owned ADR-0001 store when CG restart recovery
+ * or an enabled Recovery Seller market requires durable operational facts.
  *
- * TEMPORARY: Telegram CC alone must not create or require this store. Without an
- * independently supplied store, its pause/resume commands remain process-local.
+ * Telegram-only operator control does not create or require this store.
+ * Startup initializes only a missing or empty ledger directory, verifies an
+ * existing complete ledger, and never repairs or replaces existing data.
  */
 export async function prepareProcessOperationalStateStore({
   appConfig, env = process.env, runtimeSessionId, createOperationalStateStore = createFileOperationalStateStore,
 } = {}) {
-  const recoveryEnabled = appConfig?.strategies?.CG_coinGrabber?.settings?.recovery?.enabled === true
-  if (!recoveryEnabled) {
+  if (!requiresOperationalStateStore({ appConfig })) {
     return undefined
   }
   assertStoreDependencies({
@@ -112,6 +153,10 @@ export async function prepareProcessOperationalStateStore({
     directory,
     runtimeSessionId,
     createOperationalStateStore,
+  })
+  await initializeProcessStoreIfEmpty({
+    store,
+    directory,
   })
   await verifyProcessStore({
     store,

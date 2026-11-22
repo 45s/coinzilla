@@ -2,7 +2,7 @@ import assert from "node:assert/strict"
 import { createHash } from "node:crypto"
 import test from "node:test"
 import { Asset, Market } from "@coinzilla/entities"
-import { projectHarvesterOperationalState } from "../infrastructure/operational-state/project-harvester-operational-state.js"
+import { projectHarvesterOperationalState } from "../infrastructure/operational-state/project-harvester.js"
 import { reconcileHarvesterOperationalStateCandidate } from "./reconcile-harvester-operational-state-candidate.js"
 
 const market = new Market({
