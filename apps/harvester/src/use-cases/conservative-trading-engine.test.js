@@ -409,6 +409,7 @@ function createHarnessEngine({ options, brokerState, state } = {}) {
     getPortfolio: getPortfolioOverride,
     getRecoveryLedger: getRecoveryLedgerOverride,
     getVolatilityData: getVolatilityDataOverride,
+    volatilityPairs: options.volatilityPairs,
     onOperationalStateCancellationIntent,
     onOperationalStateCancellationOutcome,
     onOperationalStateStrategyMarketPaused,
