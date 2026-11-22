@@ -446,7 +446,7 @@ export class BitunixSpotBroker {
       enumerable: true,
       value: createBitunixBrokerCapabilities({ allowLiveOrderMutations: this.config.allowLiveOrderMutations }),
     })
-    this.restClient = restClientFactory(this.config)
+    this.restClient = restClientFactory(this.config, this.logger)
     this.connected = false
     this.canonicalMarkets = new Map()
     this.reconcilerFactory = reconcilerFactory
@@ -1591,12 +1591,12 @@ export class BitunixSpotBroker {
   }
 }
 
-function createRestClient(config) {
+function createRestClient(config, logger) {
   return new BitunixRestClient({
     apiKey: config.apiKey,
     apiSecret: config.apiSecret,
     baseUrl: config.baseUrl,
     requestTimeout: config.requestTimeout,
-    logger: config.logger,
+    logger,
   })
 }
