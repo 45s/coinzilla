@@ -473,6 +473,7 @@ function subscribeToHistoryUpdates({ eventBus, clients } = {}) {
  * The socket carries persisted-history invalidation hints and read-only provider account snapshots.
  * Account readers are sampled on initial connection and after account-monitor notifications.
  * Failed provider reads remain explicit and never become fabricated empty snapshots.
+ * An empty provider list is a valid snapshot for a Harvester with no active accounts.
  *
  * @param {{server: object, eventBus: object}} input
  * @returns {Readonly<{close: () => Promise<void>}>}
