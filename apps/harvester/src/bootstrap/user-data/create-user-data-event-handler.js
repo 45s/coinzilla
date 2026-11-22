@@ -495,7 +495,11 @@ export function createUserDataEventHandler({
         reevaluateSymbol,
         logger,
       }))
-      .finally(() => notifyMonitoringObserver({ event, onMonitoringEvent, logger }))
+      .finally(() => notifyMonitoringObserver({
+        event,
+        onMonitoringEvent,
+        logger,
+      }))
     state.eventQueue = task
   }
 }
