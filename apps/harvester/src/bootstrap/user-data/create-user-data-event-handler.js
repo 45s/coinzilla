@@ -456,7 +456,6 @@ export function createUserDataEventHandler({
       return
     }
     state.eventSequence += 1
-    notifyMonitoringObserver({ event, onMonitoringEvent, logger })
     let reevaluateSymbol
     const task = state.eventQueue
       .then(() => processQueuedUserDataEvent({
@@ -492,6 +491,7 @@ export function createUserDataEventHandler({
         reevaluateSymbol,
         logger,
       }))
+      .finally(() => notifyMonitoringObserver({ event, onMonitoringEvent, logger }))
     state.eventQueue = task
   }
 }
