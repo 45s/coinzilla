@@ -44,7 +44,7 @@ The provider-account startup input carries the immutable `executionRoutes` array
 
 ## Strategy route identity through runtime metadata
 
-Provider startup receives and returns immutable strategy-owned `executionRoutes` separately from deduplicated `executionSymbols`; multi-account metadata preserves each provider's assignments. PR #1515 completed RS policy/lifecycle evaluation and order/fill management through the shared engine. PR #1696 completed legacy single-provider route inference and RS-only startup. RS remains disabled by default.
+Provider startup receives and returns immutable strategy-owned `executionRoutes` separately from deduplicated `executionSymbols`; multi-account metadata preserves each provider's assignments. PR #1515 completed RS policy/lifecycle evaluation and order/fill management through the shared engine. PR #1696 completed legacy single-provider route inference and RS-only startup. RS is enabled by default.
 
 ## Account and provider failure policy
 
@@ -72,7 +72,7 @@ Provider routing preserves the `{ strategyId, symbol }` owner while market and u
 
 RS routes are rejected unless `strategies.RS_recoverySeller.enabled` is true and every routed market is enabled for the selected `TRADING_MODE`. RS markets require an explicit positive per-market `investment` budget and an operator-declared legacy `invested` basis, original `quantity`, and per-cycle `sellQuantity`. An RS-only provider account must be supported without synthesizing a CG execution route: its enabled RS pair map supplies its execution routes and contributes to the market-data union. The account startup retains an empty Conservative pair map while preserving the RS pair map. The bootstrap regression starts a real in-process Harvester runtime with an initialized temporary Operational State Store and proves that LINEAUSDT is subscribed without a Conservative execution route. The shared durable configuration baseline fingerprints all configured strategy maps as one Harvester process configuration, and the runtime enabled-market set is the union of the selected strategy markets. This lets an RS-only provider account retain durable process-start evidence without fabricating a Conservative route. In multi-provider mode, RS execution and its market-data symbol still require explicit routes. This compatibility does not enable RS by default or authorize TESTNET/LIVE exchange operations.
 
-At startup, canonical exchange metadata is loaded before the RS legacy basis is initialized in the provider-account state. The RS pair is validated against its own order quantity, investment, precision, and order-type requirements even when CG owns the same market. The declared legacy quantity is not treated as available inventory: the account snapshot and shared reservation accounting must independently prove unreserved Spot custody before an RS SELL can be authorized. RS remains disabled by default.
+At startup, canonical exchange metadata is loaded before the RS legacy basis is initialized in the provider-account state. The RS pair is validated against its own order quantity, investment, precision, and order-type requirements even when CG owns the same market. The declared legacy quantity is not treated as available inventory: the account snapshot and shared reservation accounting must independently prove unreserved Spot custody before an RS SELL can be authorized. RS is enabled by default.
 
 ## Legacy single-provider route resolution and RS-only account startup
 
