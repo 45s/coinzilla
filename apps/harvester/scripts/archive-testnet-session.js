@@ -11,6 +11,8 @@ import {
   writeFile,
 } from "node:fs/promises"
 import { spawn } from "node:child_process"
+import { createReadStream, createWriteStream } from "node:fs"
+import { pipeline } from "node:stream/promises"
 import path from "node:path"
 import os from "node:os"
 import { fileURLToPath } from "node:url"
@@ -125,6 +127,102 @@ async function copyRegularTree({
         relativePath: path.join(relative, entry.name).split(path.sep).join("/"),
         size: sourceStats.size,
       })
+    } else {
+      throw new Error(`Refusing to archive a non-regular session entry: ${sourcePath}`)
+    }
+  }
+}
+
+async function copyTailFile(source, destination, fraction = 0.05) {
+  const fileStats = await stat(source)
+  const bytesToKeep = fileStats.size === 0 ? 0 : Math.max(1, Math.ceil(fileStats.size * fraction))
+  const start = fileStats.size - bytesToKeep
+  await pipeline(
+    createReadStream(source, { start }),
+    createWriteStream(destination, { flags: "w", mode: 0o600 }),
+  )
+  return bytesToKeep
+}
+
+async function copySelectedLogs({ sourceDirectory, destinationDirectory, onFileCopied } = {}) {
+  await mkdir(destinationDirectory, { recursive: true, mode: 0o700 })
+  const entries = await readdir(sourceDirectory, { withFileTypes: true })
+  const sessionsEntry = entries.find((entry) => entry.name === "sessions" && entry.isDirectory())
+  let latestSessionName
+  if (sessionsEntry) {
+    const sessionsDirectory = path.join(sourceDirectory, "sessions")
+    const sessions = (await readdir(sessionsDirectory, { withFileTypes: true }))
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)
+      .sort()
+    latestSessionName = sessions.at(-1)
+  }
+
+  for (const entry of entries) {
+    const sourcePath = path.join(sourceDirectory, entry.name)
+    const destinationPath = path.join(destinationDirectory, entry.name)
+    const sourceStats = await lstat(sourcePath)
+    if (sourceStats.isSymbolicLink()) {
+      throw new Error(`Refusing to archive a symbolic link: ${sourcePath}`)
+    }
+    if (entry.name === "sessions" && sourceStats.isDirectory()) {
+      if (!latestSessionName) continue
+      await copyRegularTree({
+        sourceDirectory,
+        destinationDirectory,
+        relative: path.join("sessions", latestSessionName),
+        onFileCopied,
+      })
+      continue
+    }
+    if (entry.name === "cumulative" && sourceStats.isDirectory()) {
+      await copyCumulativeTailTree({
+        sourceDirectory,
+        destinationDirectory,
+        relative: "cumulative",
+        onFileCopied,
+      })
+      continue
+    }
+    if (sourceStats.isDirectory()) {
+      await copyRegularTree({
+        sourceDirectory,
+        destinationDirectory,
+        relative: entry.name,
+        onFileCopied,
+      })
+    } else if (sourceStats.isFile()) {
+      await copyFile(sourcePath, destinationPath)
+      await onFileCopied?.({ relativePath: entry.name, size: sourceStats.size })
+    } else {
+      throw new Error(`Refusing to archive a non-regular session entry: ${sourcePath}`)
+    }
+  }
+  reportProgress(onFileCopied?.onProgress, "")
+}
+
+async function copyCumulativeTailTree({
+  sourceDirectory,
+  destinationDirectory,
+  relative,
+  onFileCopied,
+} = {}) {
+  const source = path.join(sourceDirectory, relative)
+  const destination = path.join(destinationDirectory, relative)
+  await mkdir(destination, { recursive: true, mode: 0o700 })
+  for (const entry of await readdir(source, { withFileTypes: true })) {
+    const childRelative = path.join(relative, entry.name)
+    const sourcePath = path.join(sourceDirectory, childRelative)
+    const destinationPath = path.join(destinationDirectory, childRelative)
+    const sourceStats = await lstat(sourcePath)
+    if (sourceStats.isSymbolicLink()) {
+      throw new Error(`Refusing to archive a symbolic link: ${sourcePath}`)
+    }
+    if (sourceStats.isDirectory()) {
+      await copyCumulativeTailTree({ sourceDirectory, destinationDirectory, relative: childRelative, onFileCopied })
+    } else if (sourceStats.isFile()) {
+      const size = await copyTailFile(sourcePath, destinationPath)
+      await onFileCopied?.({ relativePath: childRelative.split(path.sep).join("/"), size })
     } else {
       throw new Error(`Refusing to archive a non-regular session entry: ${sourcePath}`)
     }
@@ -384,29 +482,37 @@ export async function runHarvesterArchivePush({
   const localArchive = path.join(outputDirectory, archiveName)
 
   try {
-    const sourceSizes = await Promise.all(sourcePaths.map(async (source) => ({
-      ...source,
-      ...(await getTreeSize(source.sourceDirectory)),
-    })))
+    const sourceSizes = await Promise.all(sourcePaths
+      .filter((source) => source.directoryName !== "logs")
+      .map(async (source) => ({
+        ...source,
+        ...(await getTreeSize(source.sourceDirectory)),
+      })))
     const totalFiles = sourceSizes.reduce((total, source) => total + source.files.length, 0)
     const totalBytes = sourceSizes.reduce((total, source) => total + source.totalBytes, 0)
     let copiedFiles = 0
     let copiedBytes = 0
-    reportProgress(onProgress, `Archive: copying ${totalFiles} files (${formatBytes(totalBytes)})...`)
     await mkdir(localArchive, { recursive: false, mode: 0o700 })
+    const onFileCopied = ({ relativePath, size }) => {
+      copiedFiles += 1
+      copiedBytes += size
+      reportProgress(onProgress, `  retained ${copiedFiles} files — ${formatBytes(copiedBytes)}`)
+    }
+    reportProgress(onProgress, "Archive: selecting log evidence (last 5% of cumulative logs; newest session only)...")
+    await copySelectedLogs({
+      sourceDirectory: path.join(packageDirectory, "logs"),
+      destinationDirectory: path.join(localArchive, "logs"),
+      onFileCopied,
+    })
     for (const source of sourceSizes) {
-      reportProgress(onProgress, `Copying ${source.directoryName}/ (${source.files.length} files, ${formatBytes(source.totalBytes)})...`)
+      reportProgress(onProgress, `Copying complete ${source.directoryName}/ (${source.files.length} files, ${formatBytes(source.totalBytes)})...`)
       await copyRegularTree({
         sourceDirectory: source.sourceDirectory,
         destinationDirectory: path.join(localArchive, source.directoryName),
-        onFileCopied: ({ size }) => {
-          copiedFiles += 1
-          copiedBytes += size
-          reportProgress(onProgress, `  copied ${copiedFiles}/${totalFiles} files — ${formatBytes(copiedBytes)} / ${formatBytes(totalBytes)}`)
-        },
+        onFileCopied,
       })
     }
-    reportProgress(onProgress, `Copy complete: ${copiedFiles} files, ${formatBytes(copiedBytes)}.`)
+    reportProgress(onProgress, `Evidence copy complete: ${copiedFiles} files, ${formatBytes(copiedBytes)} retained/copied.`)
     const recoveryCheckpoint = await readLatestRecoveryCheckpoint(path.join(localArchive, "recovery-facts"))
     await writeFile(path.join(localArchive, "data_commit_hash"), recoveryCheckpoint.dataCommitHash + "\n", {
       encoding: "utf8",
