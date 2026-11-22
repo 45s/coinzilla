@@ -14,7 +14,10 @@ async function createRsOnlyOperationalStateStore() {
   })
   const initialized = await store.initialize()
   assert.equal(initialized.ok, true, "RS-only startup requires an initialized durable operational-state store")
-  return { directory, store }
+  return {
+    directory,
+    store,
+  }
 }
 
 function createRsOnlyStartupBroker({ calls }) {
