@@ -72,7 +72,7 @@ function createSignedPlacementTestBroker({ requests, responses, fetchFn, nonceFa
   })
 }
 
-function createBroker({ responses = {}, allowLiveOrderMutations = true, reconcilerFactory } = {}) {
+function createBroker({ responses = {}, allowLiveOrderMutations = true, reconcilerFactory, logger } = {})
   const calls = []
   const restClient = {
     async request(input = {}) {
@@ -94,6 +94,7 @@ function createBroker({ responses = {}, allowLiveOrderMutations = true, reconcil
     apiSecret: "secret",
     tradingMode: "live",
     allowLiveOrderMutations,
+    logger,
     dependencies: {
       restClientFactory: () => restClient,
       ...(reconcilerFactory ? { reconcilerFactory } : {}),
@@ -2976,4 +2977,47 @@ test("Bitunix Spot createOrder completes signed REST placement and order-detail 
   assert.equal(requests[1].url.pathname, "/api/spot/v1/order/detail")
   assert.equal(requests[1].url.searchParams.get("orderId"), "12345678901234567890")
   assert.equal(requests[1].options.method, "GET")
+})
+
+
+test("Bitunix Spot Broker API emits structured order-read diagnostics", async () => {
+  const events = []
+  const logger = {
+    debug: (event) => events.push(event),
+    error: (event) => events.push(event),
+  }
+  const { broker } = createBroker({
+    logger,
+    responses: {
+      "/api/spot/v1/common/coin_pair/list": [
+        { base: "HYPE", quote: "USDT", isOpen: "1" },
+      ],
+      "/api/spot/v1/order/pending/list": [{
+        orderId: "2124329325141426176",
+        symbol: "HYPEUSDT",
+        side: "2",
+        type: "1",
+        status: "1",
+        volume: "0.366",
+        dealVolume: "0",
+        price: "30",
+      }],
+      "/api/spot/v1/order/detail": new Error("synthetic detail lookup failure"),
+    },
+  })
+
+  const markets = await broker.getExchangeMarkets()
+  const pending = await broker.getOpenOrders({ symbol: "HYPEUSDT" })
+  const detail = await broker.getOrder({
+    symbol: "HYPEUSDT",
+    orderId: "2124329325141426176",
+  })
+
+  assert.equal(markets.ok, true)
+  assert.equal(pending.ok, true)
+  assert.equal(detail.ok, false)
+  assert.ok(events.some((event) => event.event === "getExchangeMarkets.completed" && event.marketCount === 1))
+  assert.ok(events.some((event) => event.event === "getOpenOrders.completed" && event.orderIds[0] === "2124329325141426176"))
+  assert.ok(events.some((event) => event.event === "getOrder.failed" && event.orderId === "2124329325141426176"))
+  assert.ok(events.every((event) => event.layer === "broker-api" && event.provider === "bitunix"))
 })
