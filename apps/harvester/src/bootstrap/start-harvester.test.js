@@ -42,11 +42,11 @@ function createRsOnlyStartupBroker({ calls }) {
   return broker
 }
 
-function createRsOnlyStartupConfig() {
+function createRsOnlyStartupConfig({ enableVolatilityProtection = false } = {}) {
   const recoverySellerPair = {
     enabled: true,
     tradingEnvironment: "testnet",
-    enableVolatilityProtection: false,
+    enableVolatilityProtection,
     legacyPosition: {
       invested: 400,
       quantity: 25000,
@@ -113,6 +113,51 @@ test("starts an RS-only provider account without a Conservative execution route"
       recursive: true,
       force: true,
     })
+  }
+})
+
+test("starts market-owned volatility history for an RS-only market when market config enables it", async () => {
+  const { directory, store } = await createRsOnlyOperationalStateStore()
+  const calls = []
+  const broker = createRsOnlyStartupBroker({ calls })
+  broker.getCandles = async ({ symbol }) => {
+    calls.push(`candle-history:${symbol}`)
+    return { ok: true, data: [] }
+  }
+  broker.subscribeForCandles = async ({ symbol }) => {
+    calls.push(`candle-subscribe:${symbol}`)
+    return {
+      ok: true,
+      data: { unsubscribe: async () => {} },
+    }
+  }
+  try {
+    const result = await startHarvesterForTest({
+      loadConfig: async () => createRsOnlyStartupConfig({ enableVolatilityProtection: true }),
+      env: binanceEnv,
+      brokerAdapterFactory: () => broker,
+      operationalStateStore: store,
+      executionSymbols: ["LINEAUSDT"],
+      executionRoutes: [{
+        strategyId: "RS_recoverySeller",
+        symbol: "LINEAUSDT",
+      }],
+      marketDataSymbols: ["LINEAUSDT"],
+      evaluateRecoverySellerTransition: async () => ({
+        ok: true,
+        data: { skipped: true },
+      }),
+      logger: {
+        info() {},
+        error() {},
+      },
+    })
+
+    assert.ok(calls.includes("candle-subscribe:LINEAUSDT"), "Volatility candle subscription must follow market config, not CG ownership.")
+    assert.ok(calls.includes("candle-history:LINEAUSDT"), "Volatility history warm-up must run for an RS-only market with protection enabled.")
+    await result.stop()
+  } finally {
+    await rm(directory, { recursive: true, force: true })
   }
 })
 
