@@ -26,6 +26,7 @@ async function createArchiveFixture() {
     "data/testnet/harvester.db-wal": "sqlite wal evidence",
     "data/testnet/harvester.db-shm": "sqlite shm evidence",
     "data/production/harvester.db": "LIVE PRODUCTION SENTINEL MUST NEVER BE ARCHIVED",
+    "data/production/harvester.db": "LIVE PRODUCTION SENTINEL MUST NEVER BE ARCHIVED",
     "data/operational-state/facts.jsonl": "operational facts",
     "recovery-facts/facts.jsonl": Array.from({ length: 49 }, (_, sequence) => JSON.stringify({
       sequence: String(sequence),
