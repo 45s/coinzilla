@@ -900,8 +900,15 @@ async function copyArchiveEvidence({ sourcePaths, packageDirectory, localArchive
   return logSessionIdentity
 }
 
+function assertArchiveSessionIdentityMatches({ logSessionIdentity, recoveryCheckpoint } = {}) {
+  if (logSessionIdentity.runtimeSessionId !== recoveryCheckpoint.runtimeSessionId) {
+    throw new Error("Selected TESTNET log session and recovery-facts runtime identities do not match; refusing to publish mixed-session evidence.")
+  }
+}
+
 async function writeAndVerifyLocalArchive({ localArchive, createdAt, logSessionIdentity, onProgress } = {}) {
   const recoveryCheckpoint = await readLatestRecoveryCheckpoint(path.join(localArchive, "recovery-facts"))
+  assertArchiveSessionIdentityMatches({ logSessionIdentity, recoveryCheckpoint })
   await writeFile(
     path.join(localArchive, "data_commit_hash"),
     `${recoveryCheckpoint.dataCommitHash}\n`,
