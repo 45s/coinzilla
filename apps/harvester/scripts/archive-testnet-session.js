@@ -1049,7 +1049,7 @@ async function main() {
   }
   process.stdout.write(`${createArchiveCliIdentity()}\n`)
   const result = await runHarvesterArchivePush({ args })
-  process.stdout.write(`${[
+  const summary = [
     "Harvester local logs/data archive published and remotely verified.",
     `Archive: archives/${result.archiveName}`,
     `Created: ${result.createdAt}`,
@@ -1058,7 +1058,8 @@ async function main() {
     `Remote commit: ${result.remoteCommit}`,
     `Local copy: ${result.localArchive}`,
     `Files verified: ${result.fileCount}`,
-  ].join("\n") + "\n`)
+  ].join("\n")
+  process.stdout.write(`${summary}\n`)
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
