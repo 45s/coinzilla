@@ -41,7 +41,7 @@ function validateArchiveRemote(remote) {
 
 const runGitDefault = (...parameters) => {
   const [args, { cwd } = {}] = parameters
-    return new Promise((resolve, reject) => {
+  return new Promise((resolve, reject) => {
     const child = spawn("git", args, {
       cwd,
       windowsHide: true,
