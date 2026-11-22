@@ -5,7 +5,7 @@ import { runDiagnostics as runReadOnlyDiagnostics } from "../diagnostics/run-dia
 import { publishHealthReport } from "./publish-health-report.js"
 import { evaluateReadOnlyHealthCheck, evaluateOperatorOrderProbeHealthCheck } from "../helpers/health-report.js"
 import { appendOrderAttemptResult } from "../helpers/append-order-attempt-result.js"
-import { createDiagnosticReport, createDiagnosticResult } from "../helpers/create-diagnostic-report.js"
+import { createDiagnosticReport } from "../helpers/create-diagnostic-report.js"
 
 function createLocalDiagnosticReportPath({ brokersRoot, now }) {
   const timestamp = new Date(now()).toISOString().replaceAll(/[:.]/g, "-")
