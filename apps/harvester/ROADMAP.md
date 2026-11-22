@@ -1,5 +1,18 @@
 # Harvester Roadmap
 
+## Local DEV reset and TESTNET evidence archive — issue #1747
+
+**In progress in [PR #1748](https://github.com/45s/coinzilla/pull/1748).** The selected workflow provides an explicit recovery-facts-only reset, repeatable TESTNET archive publication, and regression coverage for automatic logs/database directory creation.
+
+- [x] Base the task branch on current `develop`; keep reset restricted to the configured `recovery-facts/` directory.
+- [x] Require TESTNET mode, explicit confirmation and absence of Harvester process locks before reset; preserve data, logs, Journal sessions and archives.
+- [x] Create missing logs/session and Production/Testnet database directories through existing startup infrastructure; add focused regressions.
+- [x] Mark completed DEV sessions with non-secret environment and process identity so archive selection can exclude LIVE sessions.
+- [x] Exclude `data/production/`, shared unclassified terminal cumulative logs, and LIVE session logs from TESTNET archive snapshots; filter structured cumulative logs to the selected TESTNET runtime session.
+- [ ] Run exact-head package tests, reliability/coverage and required CI; update status after verified results.
+- No exchange operations or Harvester process startup are authorized or required. Process-restart restoration remains disabled.
+
+
 ## Read-only Operational State diagnostics (#1740)
 
 - **In progress in [PR #1741](https://github.com/45s/coinzilla/pull/1741):** add `pnpm run operational-state:diagnose` to verify the existing facts/manifest streams with the production store reader, then independently report the offline recovery-projection result.
