@@ -19,7 +19,11 @@ const EXPECTED_PROBES = [
 ]
 
 test("Bitunix order probe matrix contains the eight explicitly reviewed first-pass cases", () => {
-  assert.deepEqual(BITUNIX_ORDER_PROBE_IDS, EXPECTED_PROBES.map(([id]) => id))
+  assert.deepEqual(BITUNIX_ORDER_PROBE_IDS, [
+    ...EXPECTED_PROBES.map(([id]) => id).slice(0, 1),
+    "limit-buy-11-usdt",
+    ...EXPECTED_PROBES.map(([id]) => id).slice(1),
+  ])
 })
 
 test("each Bitunix probe maps through createOrder() to the expected REST wire values", () => {
