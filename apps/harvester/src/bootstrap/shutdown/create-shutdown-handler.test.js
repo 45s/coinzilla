@@ -229,7 +229,10 @@ test("activates every strategy gate before any shared service can stop", async (
 test("captures the account-wide CLOSING open-order snapshot after safety proof and before stopping services", async () => {
   const calls = []
   let ownershipReconciled
-  const participant = createSafeParticipant({ strategyId: "CONSERVATIVE", calls })
+  const participant = createSafeParticipant({
+    strategyId: "CONSERVATIVE",
+    calls,
+  })
   const fixture = createShutdown({
     participants: [participant],
     calls,
@@ -255,7 +258,10 @@ test("fails closed and marks the CLOSING balance audit incomplete when open-orde
   const calls = []
   const failure = new Error("account-wide open-orders query failed")
   const accountAudits = []
-  const participant = createSafeParticipant({ strategyId: "CONSERVATIVE", calls })
+  const participant = createSafeParticipant({
+    strategyId: "CONSERVATIVE",
+    calls,
+  })
   const fixture = createShutdown({
     participants: [participant],
     calls,
@@ -271,9 +277,10 @@ test("fails closed and marks the CLOSING balance audit incomplete when open-orde
 
   await assert.rejects(fixture.stop(), (error) => error === failure)
 
+  const [accountAudit] = accountAudits
   assert.equal(accountAudits.length, 1, "Balance evidence must still be attempted after the order snapshot fails.")
-  assert.equal(accountAudits[0].auditStatus, "INCOMPLETE")
-  assert.ok(accountAudits[0].auditReasons.includes("CLOSING_OPEN_ORDERS_SNAPSHOT_FAILED"))
+  assert.equal(accountAudit.auditStatus, "INCOMPLETE")
+  assert.ok(accountAudit.auditReasons.includes("CLOSING_OPEN_ORDERS_SNAPSHOT_FAILED"))
   assert.equal(calls.includes("market-intake-stop"), false, "Market feeds must remain connected when CLOSING evidence is incomplete.")
   assert.equal(calls.includes("user-data-stop"), false, "User-data intake must remain connected when CLOSING evidence is incomplete.")
   assert.equal(calls.includes("broker-disconnect"), false, "The broker must remain connected when CLOSING evidence is incomplete.")
@@ -283,7 +290,10 @@ test("fails closed and marks the CLOSING balance audit incomplete when open-orde
 test("refreshes the CLOSING open-order snapshot after a partial market-unsubscribe failure", async () => {
   const calls = []
   let snapshotCount = 0
-  const participant = createSafeParticipant({ strategyId: "CONSERVATIVE", calls })
+  const participant = createSafeParticipant({
+    strategyId: "CONSERVATIVE",
+    calls,
+  })
   const fixture = createShutdown({
     participants: [participant],
     calls,

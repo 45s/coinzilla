@@ -20,25 +20,16 @@ function createExternalSell() {
   }
 }
 
-function createFixture({ openOrders = [], openOrdersResult, append } = {}) {
-  const baseAsset = new Asset({
-    id: "asset:BTC",
-    code: "BTC",
-  })
-  const quoteAsset = new Asset({
-    id: "asset:USDT",
-    code: "USDT",
-  })
-  const market = new Market({
-    venue: "binance",
-    symbol: "BTCUSDT",
-    baseAsset,
-    quoteAsset,
-  })
-  const publishedEvents = []
-  const appendedFacts = []
-  let flushCount = 0
-  const manager = createAccountSnapshotManager({
+function createManagerOptions({
+  market,
+  openOrders,
+  openOrdersResult,
+  append,
+  appendedFacts,
+  publishedEvents,
+  onFlush,
+}) {
+  return {
     broker: {
       getOpenOrders: async () => openOrdersResult ?? {
         ok: true,
@@ -51,7 +42,7 @@ function createFixture({ openOrders = [], openOrdersResult, append } = {}) {
         return { ok: true }
       },
       flush: async () => {
-        flushCount += 1
+        onFlush()
         return {
           ok: true,
           durable: true,
@@ -89,7 +80,38 @@ function createFixture({ openOrders = [], openOrdersResult, append } = {}) {
         }
       },
     },
+  }
+}
+
+function createFixture({ openOrders = [], openOrdersResult, append } = {}) {
+  const baseAsset = new Asset({
+    id: "asset:BTC",
+    code: "BTC",
   })
+  const quoteAsset = new Asset({
+    id: "asset:USDT",
+    code: "USDT",
+  })
+  const market = new Market({
+    venue: "binance",
+    symbol: "BTCUSDT",
+    baseAsset,
+    quoteAsset,
+  })
+  const publishedEvents = []
+  const appendedFacts = []
+  let flushCount = 0
+  const manager = createAccountSnapshotManager(createManagerOptions({
+    market,
+    openOrders,
+    openOrdersResult,
+    append,
+    appendedFacts,
+    publishedEvents,
+    onFlush: () => {
+      flushCount += 1
+    },
+  }))
   return {
     manager,
     publishedEvents,
