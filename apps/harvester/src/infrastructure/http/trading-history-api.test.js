@@ -276,3 +276,63 @@ test("supports browser preflight and validates server configuration", async (t) 
     "The API must reject invalid environment configuration.",
   )
 });
+
+test("serves only active Harvester provider accounts through the read-only exchange API", async (t) => {
+  const { queries } = createQueries()
+  const exchangeAccounts = [{
+    providerInstanceId: "binance-live",
+    providerType: "binance",
+    accountId: "primary",
+    environment: "live",
+    connected: true,
+    readAccountSnapshot: async () => ({
+      ok: true,
+      data: {
+        sourceTime: 123,
+        balances: [{
+          value: {
+            asset: { code: "USDT" },
+            free: { amount: "12.5" },
+            locked: { amount: "0" },
+            total: { amount: "12.5" },
+          },
+        }],
+      },
+    }),
+    readOpenOrders: async () => ({
+      ok: true,
+      data: [{ value: { symbol: "BTCUSDT", side: "BUY" } }],
+    }),
+  }]
+  const { baseUrl } = await startApi({ t, queries })
+  const api = await import("./trading-history-api.js")
+  const server = await api.startTradingHistoryApiServer({
+    queries,
+    environment: "testnet",
+    port: 0,
+    exchangeAccounts,
+  })
+  t.after(async () => server.close())
+
+  const list = await fetch(`http://127.0.0.1:${server.address.port}/api/v1/exchanges/accounts`)
+  assert.equal(list.status, 200)
+  assert.deepEqual((await list.json()).data, [{
+    providerInstanceId: "binance-live",
+    providerType: "binance",
+    accountId: "primary",
+    environment: "live",
+    connected: true,
+  }])
+
+  const detail = await fetch(`http://127.0.0.1:${server.address.port}/api/v1/exchanges/accounts/binance-live`)
+  assert.equal(detail.status, 200)
+  const payload = await detail.json()
+  assert.equal(payload.data.accountSnapshot.sourceTime, 123)
+  assert.equal(payload.data.accountSnapshot.balances[0].total.amount, "12.5")
+  assert.deepEqual(payload.data.openOrders, [{ symbol: "BTCUSDT", side: "BUY" }])
+
+  const missing = await fetch(`http://127.0.0.1:${server.address.port}/api/v1/exchanges/accounts/bitunix-live`)
+  assert.equal(missing.status, 404)
+  assert.equal(baseUrl.startsWith("http://127.0.0.1:"), true)
+})
+
