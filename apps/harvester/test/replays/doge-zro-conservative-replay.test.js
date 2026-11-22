@@ -954,6 +954,7 @@ runDogeTradingReplayTest("accounts an identical duplicate partial BUY execution 
   assert.equal(position.spent.amount, "14.314", "The duplicate partial BUY report must not double the Portfolio quote cost.");
   assert.equal(recoveryLedger.buyCost, "14.314", "The duplicate partial BUY report must not double the RecoveryLedger cost basis.");
   assert.equal(dogeTradingReplay.receivedLifecycleEvents.filter(({ name }) => name === "execution.fill_applied").length, 1, "An identical duplicate stream execution must publish exactly one applied-fill event.");
+  assert.equal(dogeTradingReplay.receivedLifecycleEvents.filter(({ name }) => name === "execution.duplicate_fill").length, 1, "The duplicate stream execution must be recognized by canonical Fill identity without applying its accounting twice.");
   assert.equal(dogeTradingReplay.receivedExecutionReports.length, 2, "The runtime replay must prove the same raw execution report was delivered twice.");
   assert.equal(dogeTradingReplay.harvesterRuntimeErrors.length, 0, "An identical duplicate execution report must be ignored without a runtime accounting error.");
 });
