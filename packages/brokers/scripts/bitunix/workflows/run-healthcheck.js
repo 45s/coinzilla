@@ -92,16 +92,18 @@ async function runDiagnosticsWithOperatorAttempt({
   onProgress,
   runDiagnostics,
   runOperatorOrder,
+  runOperatorProbe,
+  probeId,
 }) {
   const report = await runDiagnostics({
     env,
     onProgress,
     brokerApiRestClientFactory: (options) => new BitunixRestClient(options),
   })
-  if (!runOperatorOrder) {
+  if (!runOperatorOrder && !runOperatorProbe) {
     return report
   }
-  if (!evaluateReadOnlyHealthCheck({ report }).healthy) {
+  if (runOperatorOrder && !evaluateReadOnlyHealthCheck({ report }).healthy) {
     return appendOrderAttemptResult({
       report,
       operatorResult: {
@@ -115,12 +117,16 @@ async function runDiagnosticsWithOperatorAttempt({
     })
   }
   onProgress?.({
-    message: "      Read-only health checks passed; starting the guarded HYPEUSDT operator attempt",
+    message: runOperatorProbe
+      ? `      Read-only diagnostics completed; starting the separately guarded ${probeId} probe`
+      : "      Read-only health checks passed; starting the guarded HYPEUSDT operator attempt",
   })
   const startedAt = Date.now()
   let operatorResult
   try {
-    operatorResult = await runOperatorOrder({ env })
+    operatorResult = runOperatorProbe
+      ? await runOperatorProbe({ env, probeId })
+      : await runOperatorOrder({ env })
   } catch (error) {
     operatorResult = {
       ok: false,
@@ -145,16 +151,22 @@ async function runPublishedHealthCheck({
   runDiagnostics,
   publishDiagnostics,
   runOperatorOrder,
+  runOperatorProbe,
+  probeId,
 }) {
-  stdout.write(runOperatorOrder
-    ? "WARNING: this mode runs LIVE read-only diagnostics, then may submit one fixed LIVE HYPEUSDT order after the health check and operator preflight pass.\n"
-    : "WARNING: this contacts the configured LIVE Bitunix Spot API using read-only requests.\n")
+  stdout.write(runOperatorProbe
+    ? `WARNING: this mode runs LIVE read-only diagnostics, then may submit exactly one separately confirmed LIVE HYPEUSDT ${probeId} order probe.\n`
+    : runOperatorOrder
+      ? "WARNING: this mode runs LIVE read-only diagnostics, then may submit one fixed LIVE HYPEUSDT order after the health check and operator preflight pass.\n"
+      : "WARNING: this contacts the configured LIVE Bitunix Spot API using read-only requests.\n")
   const result = await publishDiagnostics({
     repositoryRoot,
     runDiagnostics: (input) => runDiagnosticsWithOperatorAttempt({
       ...input,
       runDiagnostics,
       runOperatorOrder,
+      runOperatorProbe,
+      probeId,
     }),
     env,
     onProgress: ({ message }) => stdout.write(`${message}\n`),
@@ -167,13 +179,14 @@ async function runPublishedHealthCheck({
 }
 
 /**
- * Run a read-only health-check mode or the guarded order mode inside the report workflow.
+ * Run a read-only health-check mode or a human-controlled order mode inside the report workflow.
  *
- * @param {{mode: "local"|"publish"|"place-order", brokersRoot: string, repositoryRoot: string, env: NodeJS.ProcessEnv, stdout?: NodeJS.WriteStream, runOperatorOrder?: (input: {env: NodeJS.ProcessEnv}) => Promise<object>}} input
+ * @param {{mode: "local"|"publish"|"place-order"|"probe-order", probeId?: string, brokersRoot: string, repositoryRoot: string, env: NodeJS.ProcessEnv, stdout?: NodeJS.WriteStream, runOperatorOrder?: (input: {env: NodeJS.ProcessEnv}) => Promise<object>, runOperatorProbe?: (input: {env: NodeJS.ProcessEnv, probeId: string}) => Promise<object>}} input
  * @returns {Promise<number>} Process exit code.
  */
 export async function runHealthcheckWorkflow({
   mode,
+  probeId,
   brokersRoot,
   repositoryRoot,
   env,
@@ -181,6 +194,7 @@ export async function runHealthcheckWorkflow({
   runDiagnostics = runReadOnlyDiagnostics,
   publishDiagnostics = publishHealthReport,
   runOperatorOrder,
+  runOperatorProbe,
 } = {}) {
   if (mode === "local") {
     return runLocalDiagnostics({
@@ -189,9 +203,13 @@ export async function runHealthcheckWorkflow({
       stdout,
     })
   }
-  if (mode === "publish" || mode === "place-order") {
+  if (mode === "publish" || mode === "place-order" || mode === "probe-order") {
     if (mode === "place-order" && typeof runOperatorOrder !== "function") {
       throw new TypeError("The Bitunix place-order mode requires an operator order runner")
+    }
+    if (mode === "probe-order" &&
+        (typeof runOperatorProbe !== "function" || typeof probeId !== "string" || !probeId.trim())) {
+      throw new TypeError("The Bitunix probe-order mode requires a probe id and operator probe runner")
     }
     return runPublishedHealthCheck({
       repositoryRoot,
@@ -200,6 +218,8 @@ export async function runHealthcheckWorkflow({
       runDiagnostics,
       publishDiagnostics,
       runOperatorOrder,
+      runOperatorProbe,
+      probeId,
     })
   }
   throw new TypeError(`Unsupported Bitunix health-check mode: ${mode}`)
