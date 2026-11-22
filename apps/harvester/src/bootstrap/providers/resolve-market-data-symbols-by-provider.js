@@ -92,31 +92,72 @@ function groupSymbolsByProvider({ providers, routeBySymbol }) {
   ]))
 }
 
+function getEnabledStrategyPairs(appConfig) {
+  const strategies = [
+    ["CG_coinGrabber", appConfig?.strategies?.CG_coinGrabber, (strategy) => strategy.enabled !== false],
+    ["RS_recoverySeller", appConfig?.strategies?.RS_recoverySeller, (strategy) => strategy.enabled === true],
+  ]
+  const pairsByStrategy = []
+  for (const [strategyId, strategy, isEnabled] of strategies) {
+    if (!isRecord(strategy) || !isEnabled(strategy)) {
+      continue
+    }
+    if (!isRecord(strategy.pairs)) {
+      throw new TypeError(`Market-data routing requires the configured ${strategyId} pair map`)
+    }
+    pairsByStrategy.push([strategyId, strategy.pairs])
+  }
+  return pairsByStrategy
+}
+
+function createEnabledMarketMap(pairsByStrategy) {
+  const pairs = {}
+  for (const [, strategyPairs] of pairsByStrategy) {
+    for (const [symbol, pair] of Object.entries(strategyPairs)) {
+      if (pair?.enabled !== true) {
+        continue
+      }
+      const existing = pairs[symbol]
+      if (existing && existing.tradingEnvironment !== pair.tradingEnvironment) {
+        const environments = new Set([existing.tradingEnvironment, pair.tradingEnvironment])
+        if (environments.has("both")) {
+          pairs[symbol] = { ...existing, tradingEnvironment: [...environments].find((value) => value !== "both") }
+          continue
+        }
+        if (environments.size > 1) {
+          throw new TypeError(`Enabled strategies configure conflicting trading environments for market-data symbol ${symbol}`)
+        }
+      }
+      pairs[symbol] = pair
+    }
+  }
+  return pairs
+}
+
 /**
- * Resolve the single configured market-data source for every strategy market.
- * Legacy one-provider deployments retain their existing behavior. Multi-provider
- * deployments must declare an explicit route for every enabled market.
+ * Resolve the single configured market-data source for every enabled strategy market.
+ * Legacy one-provider deployments infer the union of enabled strategy markets.
+ * Multi-provider deployments must declare an explicit route for every enabled market.
  *
  * @param {{appConfig: object, providers: object[]}} input
  * @returns {ReadonlyMap<string, ReadonlyArray<string>>} Provider instance to symbols.
  */
 export function resolveMarketDataSymbolsByProvider({ appConfig, providers } = {}) {
   const providerIds = assertProviderInstances(providers)
-  const pairs = appConfig?.strategies?.CG_coinGrabber?.pairs
-  if (!isRecord(pairs) && providers.length === 1 && appConfig?.marketDataRouting === undefined) {
-    return new ReadonlyMap([[providers[0].providerInstanceId, Object.freeze([])]])
-  }
-  if (!isRecord(pairs)) {
-    throw new TypeError("Market-data routing requires the configured CG_coinGrabber pair map")
-  }
-  if (appConfig.marketDataRouting === undefined) {
+  const pairsByStrategy = getEnabledStrategyPairs(appConfig)
+  const pairs = createEnabledMarketMap(pairsByStrategy)
+  if (appConfig?.marketDataRouting === undefined) {
     if (providers.length !== 1) {
       throw new TypeError("Multi-provider Harvester configuration requires explicit marketDataRouting.routes")
     }
+    const [provider] = providers
     const enabledSymbols = Object.entries(pairs)
-      .filter(([, pair]) => pair?.enabled === true)
+      .filter(([, pair]) => {
+        const environment = pair.tradingEnvironment
+        return environment === undefined || environment === "both" || environment === provider.environment
+      })
       .map(([symbol]) => symbol)
-    return new ReadonlyMap([[providers[0].providerInstanceId, Object.freeze(enabledSymbols)]])
+    return new ReadonlyMap([[provider.providerInstanceId, Object.freeze(enabledSymbols)]])
   }
   const routeBySymbol = resolveConfiguredRoutes({
     configuredRouting: appConfig.marketDataRouting,
