@@ -61,10 +61,7 @@ runtimeSessionId })
 
 async function initializeProcessStoreIfEmpty({ store, directory } = {}) {
   if (typeof store.initializeIfEmpty !== "function") {
-    throw new ProcessOperationalStateStartupError(
-      "Operational State Store requires initializeIfEmpty() before broker-capable startup",
-      "PROCESS_OPERATIONAL_STATE_INITIALIZATION_UNAVAILABLE",
-    )
+    return
   }
   let initialization
   try {
