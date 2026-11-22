@@ -59,10 +59,7 @@ export async function runHarvesterOperationalStateReset({
     directoryStats = await lstat(directory)
   } catch (error) {
     if (error?.code === "ENOENT") {
-      return {
-        directory,
-        removed: false,
-      }
+      throw new Error("The configured recovery-facts directory does not exist; refusing to reset a missing path.", { cause: error })
     }
     throw error
   }
