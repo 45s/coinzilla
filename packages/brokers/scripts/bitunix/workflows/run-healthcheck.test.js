@@ -417,7 +417,10 @@ test("healthcheck captures full open-orders result and every detail response", a
     repositoryRoot: "/repo",
     env,
     stdout,
-    brokerFactory: createOrderScanBroker({ calls, order }),
+    brokerFactory: createOrderScanBroker({
+      calls,
+      order,
+    }),
     runDiagnostics: async () => createDiagnosticReport(),
     publishDiagnostics: createPublisher({
       events,
