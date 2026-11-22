@@ -62,7 +62,7 @@ runtimeSessionId })
 async function verifyProcessStore({ store, directory } = {}) {
   if (typeof store.verify !== "function") {
     throw new ProcessOperationalStateStartupError(
-      "Restart recovery requires verify() on the process-owned ADR-0001 operational-state store",
+      "Operational State Store requires verify() before broker-capable startup",
       "PROCESS_OPERATIONAL_STATE_VERIFY_UNAVAILABLE",
     )
   }
@@ -83,7 +83,7 @@ async function verifyProcessStore({ store, directory } = {}) {
   }
   const cause = verification?.errors?.[0] ?? new Error("Verification did not confirm a valid, durably writable ledger")
   throw new ProcessOperationalStateStartupError(
-    `Restart recovery requires an existing verified ADR-0001 operational record ledger at ${  directory}`,
+    `Harvester requires an existing verified ADR-0001 operational record ledger before broker-capable startup at ${  directory}`,
     "PROCESS_OPERATIONAL_STATE_VERIFICATION_FAILED",
     cause,
   )
