@@ -697,6 +697,14 @@ export class BitunixSpotBroker {
     }
   }
 
+  /**
+   * Fetch pending orders for one symbol, or aggregate every active Spot
+   * symbol when omitted. Account-wide reads use the market catalog because
+   * Bitunix's Spot pending-orders REST endpoint requires a symbol.
+   *
+   * @param {{symbol?: string}} [input]
+   * @returns {Promise<import("@coinzilla/utils").Result & {data?: import("@coinzilla/entities").Order[]}>}
+   */
   async getOpenOrders({ symbol } = {}) {
     if (symbol === undefined) {
       return fetchAllOpenOrders({
