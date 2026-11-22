@@ -22,10 +22,16 @@ async function createResetFixture() {
     writeFile(path.join(logsDirectory, "terminal.log"), "keep logs"),
     writeFile(path.join(dataDirectory, "harvester.db"), "keep database"),
   ])
-  return { root, recoveryFactsDirectory, logsDirectory, dataDirectory, lockDirectory }
+  return {
+    root,
+    recoveryFactsDirectory,
+    logsDirectory,
+    dataDirectory,
+    lockDirectory,
+  }
 }
 
-function createResetArguments(fixture, overrides = {}) {
+function createResetArguments({ fixture, overrides = {} } = {}) {
   return {
     args: ["--confirm"],
     env: {
@@ -39,9 +45,12 @@ function createResetArguments(fixture, overrides = {}) {
 
 test("resets only the configured recovery-facts directory", async (t) => {
   const fixture = await createResetFixture()
-  t.after(() => rm(fixture.root, { recursive: true, force: true }))
+  t.after(() => rm(fixture.root, {
+      recursive: true,
+      force: true,
+    }))
 
-  const result = await runHarvesterOperationalStateReset(createResetArguments(fixture))
+  const result = await runHarvesterOperationalStateReset(createResetArguments({ fixture }))
 
   assert.equal(result.removed, true, "The confirmed reset must remove the configured recovery-facts directory.")
   await assert.rejects(
@@ -83,7 +92,7 @@ test("requires explicit confirmation and TESTNET mode before deleting anything",
   t.after(() => rm(fixture.root, { recursive: true, force: true }))
 
   await assert.rejects(
-    runHarvesterOperationalStateReset(createResetArguments(fixture, { args: [] })),
+    runHarvesterOperationalStateReset(createResetArguments({ fixture, overrides: { args: [] } })),
     /--confirm/,
     "The reset command must require an explicit destructive-operation confirmation.",
   )
