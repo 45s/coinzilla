@@ -464,13 +464,16 @@ async function scanAvailableMarkets({ context }) {
 
 async function executeScan({ context }) {
   const {
-    broker,
     report,
     stdout,
     stderr,
     secrets,
   } = context
   try {
+    context.broker = context.brokerFactory({
+      credentials: context.credentials,
+      logger: context.logger,
+    })
     context.connected = await connectBroker({
       broker,
       report,
@@ -485,7 +488,7 @@ async function executeScan({ context }) {
     })
     stderr.write(`SCAN ERROR: ${report.fatalError.message}\n`)
   } finally {
-    if (context.connected) {
+    if (context.connected && context.broker) {
       await disconnectBroker({
         broker,
         report,
@@ -570,10 +573,10 @@ export async function runFindBitunixSpotOrder({
     secrets,
   })
   const context = {
-    broker: brokerFactory({
-      credentials,
-      logger,
-    }),
+    broker: null,
+    brokerFactory,
+    credentials,
+    logger,
     orderId: normalizedOrderId,
     stdout,
     stderr,
