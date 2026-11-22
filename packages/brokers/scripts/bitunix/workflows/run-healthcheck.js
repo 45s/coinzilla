@@ -222,6 +222,7 @@ function appendSelectedOperatorResult({
   env,
   runOperatorProbe,
   probeId,
+  brokerFactory,
 }) {
   return appendOrderAttemptResult({
     report,
@@ -249,7 +250,10 @@ async function runDiagnosticsWithOperatorAttempt({
       onProgress,
       brokerApiRestClientFactory: (options) => new BitunixRestClient(options),
     })
-  if (!runOperatorProbe) {\n    await runBitunixOrderReadScan({ env, report, stdout: { write: (message) => onProgress?.({ message: message.trim() }) }, brokerFactory })\n  }\n  if (!runOperatorOrder && !runOperatorProbe) {
+  if (!runOperatorProbe) {
+    await runBitunixOrderReadScan({ env, report, stdout: { write: (message) => onProgress?.({ message: message.trim() }) }, brokerFactory })
+  }
+  if (!runOperatorOrder && !runOperatorProbe) {
     return report
   }
   if (runOperatorOrder && !evaluateReadOnlyHealthCheck({ report }).healthy) {
@@ -304,6 +308,7 @@ async function runPublishedHealthCheck({
   runOperatorOrder,
   runOperatorProbe,
   probeId,
+  brokerFactory,
 }) {
   stdout.write(createOperatorWarning({
     runOperatorOrder,
@@ -321,6 +326,7 @@ async function runPublishedHealthCheck({
       runOperatorOrder,
       runOperatorProbe,
       probeId,
+      brokerFactory,
     }),
     env,
     onProgress: ({ message }) => stdout.write(`${message}\n`),
@@ -350,12 +356,14 @@ export async function runHealthcheckWorkflow({
   publishDiagnostics = publishHealthReport,
   runOperatorOrder,
   runOperatorProbe,
+  brokerFactory,
 } = {}) {
   if (mode === "local") {
     return runLocalDiagnostics({
       brokersRoot,
       env,
       stdout,
+      brokerFactory,
     })
   }
   if (mode === "publish" || mode === "place-order" || mode === "probe-order") {
@@ -375,6 +383,7 @@ export async function runHealthcheckWorkflow({
       runOperatorOrder,
       runOperatorProbe,
       probeId,
+      brokerFactory,
     })
   }
   throw new TypeError(`Unsupported Bitunix health-check mode: ${mode}`)
