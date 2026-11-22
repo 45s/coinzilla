@@ -1,5 +1,5 @@
 import { StrategyId } from "../domain/strategies/strategy-ids.js"
-import { createConservativeVolatilityProtectionEligibility } from "../domain/market/create-conservative-volatility-protection-eligibility.js"
+import { createMarketVolatilityProtectionEligibility } from "../domain/market/create-market-volatility-protection-eligibility.js"
 import { linkSharedAccountOrderRegistry } from "../application/providers/account-runtime-registry.js"
 import { createPositionId } from "../domain/portfolio/position.js"
 import { createStrategyLogger } from "../application/logging/create-strategy-logger.js"
@@ -1209,9 +1209,9 @@ function getInitialStateArray({ initialState, key }) {
   return initialState[key] ?? []
 }
 
-function createInitialVolatilityProtection({ pairs }) {
-  return new Map(Object.entries(pairs)
-    .filter(([, pairConfig]) => pairConfig?.enabled === true && pairConfig?.enableVolatilityProtection !== false)
+function createInitialVolatilityProtection({ markets }) {
+  return new Map(Object.entries(markets)
+    .filter(([, marketConfig]) => marketConfig?.enabled === true && marketConfig?.enableVolatilityProtection === true)
     .map(([symbol]) => [symbol, createVolatilityProtectionState({ symbol })]))
 }
 
@@ -1289,7 +1289,7 @@ function createInitialEngineTrackingState({ initialState }) {
   }
 }
 
-function createInitialEngineState({ initialState = {}, pairs, initialRegistry } = {}) {
+function createInitialEngineState({ initialState = {}, pairs, volatilityPairs = pairs, initialRegistry } = {}) {
   const journalFillsById = createInitialJournalFillIndex({
     journalFills: initialState.journalFills,
   })
@@ -1299,7 +1299,7 @@ function createInitialEngineState({ initialState = {}, pairs, initialRegistry } 
       journalFillsById,
     }),
     ...createInitialEngineTrackingState({ initialState }),
-    volatilityProtection: createInitialVolatilityProtection({ pairs }),
+    volatilityProtection: createInitialVolatilityProtection({ markets: volatilityPairs }),
   }
   linkSharedAccountOrderRegistry({
     state,
@@ -1664,7 +1664,7 @@ function createConservativeMarketMetadataCache({ dependencies, getMarketMetadata
   })
 }
 
-function createConservativeEngineState({ initialState, pairs, sharedAccountState } = {}) {
+function createConservativeEngineState({ initialState, pairs, volatilityPairs = pairs, sharedAccountState } = {}) {
   const initialRegistry = validateInitialEngineState({
     initialState,
     pairs,
@@ -1672,6 +1672,7 @@ function createConservativeEngineState({ initialState, pairs, sharedAccountState
   const { state } = createInitialEngineState({
     initialState,
     pairs,
+    volatilityPairs,
     initialRegistry,
   })
   bindSharedAccountOrderRegistry({
@@ -1689,11 +1690,13 @@ function createConservativeEngineBaseContext({ dependencies } = {}) {
     getVolatilityData,
     hasUnownedOpenOrdersForSymbol,
     sharedAccountState,
+    volatilityPairs: configuredVolatilityPairs,
   } = dependencies
   const { settings, pairs } = appConfig.strategies[StrategyId.COIN_GRABBER]
+  const volatilityPairs = configuredVolatilityPairs ?? pairs
   const volatilityProtectionEnabled = typeof getVolatilityData === "function"
-  const isVolatilityProtectionEnabledForSymbol = createConservativeVolatilityProtectionEligibility({
-    pairs,
+  const isVolatilityProtectionEnabledForSymbol = createMarketVolatilityProtectionEligibility({
+    markets: volatilityPairs,
     volatilityProtectionEnabled,
   })
   const hasBlockingOpenOrdersForSymbol = ({ symbol } = {}) =>
@@ -1702,6 +1705,7 @@ function createConservativeEngineBaseContext({ dependencies } = {}) {
   const state = createConservativeEngineState({
     initialState,
     pairs,
+    volatilityPairs,
     sharedAccountState,
   })
   const marketMetadataCache = createConservativeMarketMetadataCache({
@@ -1726,6 +1730,7 @@ function createConservativeEngineBaseContext({ dependencies } = {}) {
     dependencies,
     settings,
     pairs,
+    volatilityPairs,
     volatilityProtectionEnabled,
     isVolatilityProtectionEnabledForSymbol,
     hasBlockingOpenOrdersForSymbol,
@@ -2148,7 +2153,7 @@ function createConservativeEngineProtectionContext({ context } = {}) {
     runTransition: context.runTransition,
     cancelOwnedBuyOrders: context.cancelOwnedBuyOrders,
     evaluateLatest: ({ symbol }) => context.evaluateLatestTransition({ symbol }),
-    logger: dependencies.logger,
+    logger: dependencies.volatilityLogger ?? dependencies.logger,
   })
   Object.assign(context, volatilityWorkflow)
   context.pauseMarket = createOperatorMarketPauseHandler({
@@ -2356,6 +2361,7 @@ function createConservativeTradingEngineDependencies({ options = {} } = {}) {
     isMarketBookFresh = () => false,
     now = Date.now,
     logger,
+    volatilityLogger = logger,
     initialState = {},
   } = options
   return {
@@ -2365,6 +2371,7 @@ function createConservativeTradingEngineDependencies({ options = {} } = {}) {
     hasUnownedOpenOrdersForSymbol,
     isMarketBookFresh,
     now,
+    volatilityLogger,
     logger: logger
       ? createStrategyLogger({
         logger,
