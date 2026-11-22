@@ -1057,3 +1057,78 @@ test("Bitunix REST client classifies missing credentials on a mutation as NOT_SE
   }), (error) => error instanceof BitunixRestError && error.outcomeUnknown === false)
   assert.equal(fetchCalls, 0)
 })
+
+
+test("Bitunix REST diagnostics log request and response while redacting credentials and private fields", async () => {
+  const events = []
+  const logger = {
+    debug: (event) => events.push(event),
+    info: (event) => events.push(event),
+    warn: (event) => events.push(event),
+    error: (event) => events.push(event),
+  }
+  const client = new BitunixRestClient({
+    apiKey: "never-log-api-key",
+    apiSecret: "never-log-api-secret",
+    logger,
+    fetchFn: async () => ({
+      ok: true,
+      status: 200,
+      async json() {
+        return {
+          code: "0",
+          msg: "success",
+          data: [{ orderId: "1234567890123456789", userId: "private-user-id", symbol: "HYPEUSDT" }],
+        }
+      },
+    }),
+  })
+
+  const result = await client.request({
+    method: "POST",
+    path: "/api/spot/v1/order/pending/list",
+    body: { symbol: "HYPEUSDT" },
+    stateChanging: false,
+  })
+
+  assert.equal(result.data[0].orderId, "1234567890123456789")
+  assert.deepEqual(events.map(({ event }) => event), ["request.started", "response.received"])
+  assert.equal(events[0].layer, "rest")
+  assert.equal(events[0].path, "/api/spot/v1/order/pending/list")
+  assert.equal(events[0].body.symbol, "HYPEUSDT")
+  assert.equal(events[1].data[0].userId, "[REDACTED]")
+  const serialized = JSON.stringify(events)
+  assert.equal(serialized.includes("never-log-api-key"), false)
+  assert.equal(serialized.includes("never-log-api-secret"), false)
+  assert.equal(serialized.includes("private-user-id"), false)
+})
+
+test("Bitunix REST diagnostics record exchange rejection details without retrying", async () => {
+  const events = []
+  const client = new BitunixRestClient({
+    apiKey: "api-key",
+    apiSecret: "secret",
+    logger: {
+      debug: (event) => events.push(event),
+      warn: (event) => events.push(event),
+      error: (event) => events.push(event),
+    },
+    fetchFn: async () => ({
+      ok: true,
+      status: 200,
+      async json() {
+        return { code: "100005", msg: "result.api.parameter.sign.illegal", data: null }
+      },
+    }),
+  })
+
+  await assert.rejects(client.request({
+    method: "GET",
+    path: "/api/spot/v1/order/detail",
+    queryParams: { orderId: "2124329325141426176" },
+  }), /sign\.illegal/i)
+
+  assert.deepEqual(events.map(({ event }) => event), ["request.started", "response.received", "request.failed"])
+  assert.equal(events[1].exchangeCode, "100005")
+  assert.equal(events[2].error.exchangeCode, "100005")
+})
