@@ -74,8 +74,14 @@ const LOSSLESS_NUMERIC_FIELDS = Object.freeze({
   "/api/spot/v1/user/info": Object.freeze(["uid"]),
 })
 
+const SENSITIVE_DIAGNOSTIC_FIELD = /api.?key|secret|sign|nonce|email|phone|address|wallet|user.?id|uid|account|balance|amount|fee|transaction.?hash|txid|memo|remark|out.?biz.?id/i
+
+function normalizeDiagnosticField({ key }) {
+  return key.replaceAll(/[-_]/g, "").toLowerCase()
+}
+
 function redactDiagnosticValue({ value, key = "" }) {
-  if (/api.?key|secret|sign|nonce|email|phone|address|user.?id|uid/i.test(key)) {
+  if (SENSITIVE_DIAGNOSTIC_FIELD.test(normalizeDiagnosticField({ key }))) {
     return "[REDACTED]"
   }
   if (Array.isArray(value)) {
@@ -91,6 +97,28 @@ function redactDiagnosticValue({ value, key = "" }) {
     ]))
   }
   return value
+}
+
+function summarizeDiagnosticPayload({ value }) {
+  if (Array.isArray(value)) {
+    return {
+      type: "array",
+      itemCount: value.length,
+      fields: [...new Set(value.flatMap((item) =>
+        item && typeof item === "object" && !Array.isArray(item)
+          ? Object.keys(item)
+          : []))].sort().slice(0, 50),
+    }
+  }
+  if (value && typeof value === "object") {
+    return {
+      type: "object",
+      fields: Object.keys(value).sort().slice(0, 50),
+    }
+  }
+  return {
+    type: value === null ? "null" : typeof value,
+  }
 }
 
 function logRestDiagnostic({ logger, level = "debug", event }) {
@@ -588,8 +616,8 @@ async function dispatchRestRequest({ client, requestInput }) {
       status: response.status,
       ok: response.ok,
       exchangeCode: payload?.code === undefined ? null : String(payload.code),
-      message: typeof payload?.msg === "string" ? payload.msg : null,
-      data: redactDiagnosticValue({ value: payload?.data }),
+      message: typeof payload?.msg === "string" ? "[exchange message withheld]" : null,
+      dataSummary: summarizeDiagnosticPayload({ value: payload?.data }),
     },
   })
   return validateResponse({
@@ -640,7 +668,7 @@ async function executeRestRequest({ client, requestInput }) {
           kind: error?.kind ?? null,
           exchangeCode: error?.exchangeCode ?? null,
           status: error?.status ?? null,
-          message: error?.message ?? String(error),
+          message: "[error message withheld]",
         },
       },
     })
