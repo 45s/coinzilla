@@ -29,86 +29,64 @@ function createOrder({ id, symbol }) {
   }
 }
 
-function getPendingOrders({ calls, symbol }) {
-  calls.push(`pending:${symbol}`)
-  if (symbol === "ETHUSDT") {
-    return {
-      ok: false,
-      errors: [Object.assign(new Error("synthetic pending failure"), {
-        code: "E_PENDING",
-      })],
-    }
-  }
-  if (symbol === "BTCUSDT") {
-    return {
-      ok: true,
-      data: [createOrder({
-        id: "1001",
-        symbol,
-      })],
-    }
-  }
-  return {
-    ok: true,
-    data: [
-      {
-        ...createOrder({
-          id: ORDER_ID,
-          symbol,
-        }),
-        side: "BUY",
-        type: "LIMIT",
-        originalPrice: "30",
-        originalQuantity: "0.366",
-      },
-      createOrder({
-        id: "1002",
-        symbol,
-      }),
-    ],
-  }
-}
-
-function getOrderDetail({ calls, symbol, orderId }) {
-  calls.push(`detail:${symbol}:${orderId}`)
-  if (orderId === "1001") {
-    return {
-      ok: false,
-      errors: [Object.assign(new Error("synthetic detail failure"), {
-        code: "E_DETAIL",
-      })],
-    }
-  }
-  return {
-    ok: true,
-    data: createOrder({
-      id: orderId,
-      symbol,
-    }),
-  }
-}
-
-function createScanBroker({ calls }) {
+function createAccountWideBroker({ calls, logger }) {
   return {
     connect: async () => calls.push("connect"),
-    getExchangeMarkets: async () => ({
-      ok: true,
-      data: [
-        { symbol: "BTCUSDT" },
-        { symbol: "HYPEUSDT" },
-        { symbol: "ETHUSDT" },
-        { symbol: "HYPEUSDT" },
-      ],
-    }),
-    getOpenOrders: async ({ symbol }) => getPendingOrders({
-      calls,
-      symbol,
-    }),
-    getOrder: async ({ symbol, orderId }) => getOrderDetail({
-      calls,
-      symbol,
-      orderId,
-    }),
+    getOpenOrders: async () => {
+      calls.push("pending:account-wide")
+      logger.debug({
+        provider: "bitunix",
+        product: "spot",
+        layer: "broker-api",
+        event: "getOpenOrders.accountWide.completed",
+        marketCount: 3,
+        orderCount: 3,
+      })
+      return {
+        ok: false,
+        data: [
+          createOrder({
+            id: "1001",
+            symbol: "BTCUSDT",
+          }),
+          {
+            ...createOrder({
+              id: ORDER_ID,
+              symbol: "HYPEUSDT",
+            }),
+            side: "BUY",
+            type: "LIMIT",
+            originalPrice: "30",
+            originalQuantity: "0.366",
+          },
+          createOrder({
+            id: "1002",
+            symbol: "HYPEUSDT",
+          }),
+        ],
+        errors: [Object.assign(new Error("synthetic ETH pending failure"), {
+          code: "E_PENDING",
+        })],
+      }
+    },
+    getOrder: async ({ symbol, orderId }) => {
+      calls.push(`detail:${symbol}:${orderId}`)
+      if (orderId === "1001") {
+        return {
+          ok: false,
+          errors: [Object.assign(new Error("synthetic detail failure"), {
+            code: "E_DETAIL",
+          })],
+        }
+      }
+      return {
+        ok: true,
+        data: createOrder({
+          id: orderId,
+          symbol,
+        }),
+      }
+    },
     disconnect: async () => calls.push("disconnect"),
   }
 }
@@ -116,12 +94,10 @@ function createScanBroker({ calls }) {
 function assertScanCalls({ calls }) {
   assert.deepEqual(calls, [
     "connect",
-    "pending:BTCUSDT",
+    "pending:account-wide",
     "detail:BTCUSDT:1001",
-    "pending:HYPEUSDT",
     `detail:HYPEUSDT:${ORDER_ID}`,
     "detail:HYPEUSDT:1002",
-    "pending:ETHUSDT",
     "disconnect",
   ])
 }
@@ -129,6 +105,7 @@ function assertScanCalls({ calls }) {
 async function assertSavedScanReport({ result, secrets }) {
   const saved = JSON.parse(await readFile(result.reportPath, "utf8"))
   assert.equal(saved.summary.targetMatches[0].orderId, ORDER_ID)
+  assert.equal(saved.summary.marketCount, 3)
   assert.equal(
     saved.stages.filter((stage) => stage.operation === "broker.getOrder").length,
     3,
@@ -137,19 +114,19 @@ async function assertSavedScanReport({ result, secrets }) {
     stage.result?.errors?.[0]?.code === "E_DETAIL",
   ))
   assert.ok(saved.stages.some((stage) =>
-    stage.symbol === "ETHUSDT" &&
     stage.result?.errors?.[0]?.code === "E_PENDING",
+  ))
+  assert.ok(saved.diagnostics.some((event) =>
+    event.event === "getOpenOrders.accountWide.completed",
   ))
   assert.equal(JSON.stringify(saved).includes(secrets), false)
 }
 
-test("scan enumerates all active symbols and persists every order/detail result", async () => {
+test("scan calls account-wide Broker API once and reads every returned order detail", async () => {
   const stdout = createOutput()
   const stderr = createOutput()
   const reportDirectory = await mkdtemp(join(tmpdir(), "bitunix-order-scan-"))
   const calls = []
-  const broker = createScanBroker({ calls })
-
   try {
     const result = await runFindBitunixSpotOrder({
       env: CREDENTIALS,
@@ -160,18 +137,20 @@ test("scan enumerates all active symbols and persists every order/detail result"
       brokerFactory: ({ credentials, logger }) => {
         assert.equal(credentials.apiKey, CREDENTIALS.BITUNIX_API_KEY)
         assert.equal(typeof logger.debug, "function")
-        return broker
+        return createAccountWideBroker({
+          calls,
+          logger,
+        })
       },
     })
     assert.equal(result.found, true)
-    assert.equal(result.exitCode, 1)
-    assert.equal(result.report.summary.marketCount, 4)
+    assert.equal(result.exitCode, 1, "partial symbol/detail errors must remain visible")
+    assert.equal(result.report.summary.marketCount, 3)
     assert.equal(result.report.summary.pendingOrderCount, 3)
     assert.equal(result.report.summary.detailReadCount, 3)
     assert.equal(result.report.summary.failedRequestCount, 2)
     assert.equal(result.report.summary.targetMatchCount, 1)
     assertScanCalls({ calls })
-    assert.match(stdout.text(), /getExchangeMarkets/)
     assert.match(stdout.text(), /getOpenOrders/)
     assert.match(stdout.text(), /getOrder/)
     assert.match(stdout.text(), /report.saved/)
@@ -188,10 +167,10 @@ test("scan enumerates all active symbols and persists every order/detail result"
   }
 })
 
-test("clean full scan returns not-found only after visiting every active symbol", async () => {
+test("clean account-wide scan returns not-found only after Broker reports all active markets", async () => {
   const stdout = createOutput()
   const reportDirectory = await mkdtemp(join(tmpdir(), "bitunix-order-scan-"))
-  const scanned = []
+  const calls = []
   try {
     const result = await runFindBitunixSpotOrder({
       env: CREDENTIALS,
@@ -199,17 +178,15 @@ test("clean full scan returns not-found only after visiting every active symbol"
       stdout: stdout.stream,
       stderr: createOutput().stream,
       reportDirectory,
-      brokerFactory: () => ({
+      brokerFactory: ({ logger }) => ({
         connect: async () => {},
-        getExchangeMarkets: async () => ({
-          ok: true,
-          data: [
-            { symbol: "BTCUSDT" },
-            { symbol: "HYPEUSDT" },
-          ],
-        }),
-        getOpenOrders: async ({ symbol }) => {
-          scanned.push(symbol)
+        getOpenOrders: async () => {
+          calls.push("pending:account-wide")
+          logger.debug({
+            event: "getOpenOrders.accountWide.completed",
+            marketCount: 2,
+            orderCount: 0,
+          })
           return {
             ok: true,
             data: [],
@@ -220,7 +197,8 @@ test("clean full scan returns not-found only after visiting every active symbol"
     })
     assert.equal(result.exitCode, 2)
     assert.equal(result.found, false)
-    assert.deepEqual(scanned, ["BTCUSDT", "HYPEUSDT"])
+    assert.deepEqual(calls, ["pending:account-wide"])
+    assert.equal(result.report.summary.marketCount, 2)
     assert.equal(result.report.summary.targetMatchCount, 0)
     assert.ok(result.reportPath)
   } finally {
@@ -247,7 +225,7 @@ test("scan rejects numeric order IDs before creating a Broker", async () => {
   assert.equal(brokerCreated, false)
 })
 
-test("scan records thrown catalog failures and still writes a report", async () => {
+test("scan records thrown account-wide read failures and still writes a report", async () => {
   const reportDirectory = await mkdtemp(join(tmpdir(), "bitunix-order-scan-"))
   try {
     const result = await runFindBitunixSpotOrder({
@@ -258,20 +236,19 @@ test("scan records thrown catalog failures and still writes a report", async () 
       reportDirectory,
       brokerFactory: () => ({
         connect: async () => {},
-        getExchangeMarkets: async () => {
-          throw Object.assign(new Error("catalog offline"), {
-            code: "E_CATALOG",
+        getOpenOrders: async () => {
+          throw Object.assign(new Error("pending scan offline"), {
+            code: "E_PENDING_SCAN",
           })
         },
         disconnect: async () => {},
       }),
     })
     assert.equal(result.exitCode, 1)
-    assert.equal(result.found, false)
-    assert.ok(result.report.fatalError)
+    assert.equal(result.report.summary.failedRequestCount, 1)
     assert.ok(result.reportPath)
     const saved = JSON.parse(await readFile(result.reportPath, "utf8"))
-    assert.equal(saved.stages[2].errors[0].code, "E_CATALOG")
+    assert.equal(saved.stages[1].errors[0].code, "E_PENDING_SCAN")
   } finally {
     await rm(reportDirectory, {
       recursive: true,
@@ -279,7 +256,6 @@ test("scan records thrown catalog failures and still writes a report", async () 
     })
   }
 })
-
 
 test("scan records Broker construction failures and still writes a report", async () => {
   const reportDirectory = await mkdtemp(join(tmpdir(), "bitunix-order-scan-"))
