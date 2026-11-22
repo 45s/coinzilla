@@ -540,7 +540,18 @@ recoveryRequired: true })
           try {
             await port.connect()
           } catch (error) {
-            if (this.getClient() === client) {this.#detachClientListeners()}
+            if (this.getClient() === client) {
+              this.#detachClientListeners()
+            }
+            try {
+              await port.disconnect()
+            } catch (cleanupError) {
+              logSafely({
+                logger: this.logger,
+                level: "warn",
+                args: ["Unable to close Binance user-data client after reconnect failure", cleanupError],
+              })
+            }
             throw error
           }
           if (this.#stopped || generation !== this.#generation || this.#subscribers.size === 0 ||
