@@ -710,6 +710,7 @@ async function runPublishedHealthCheck({
     stdout,
     probeMode: Boolean(runOperatorProbe),
     includeGeneralDiagnostics: includeGeneralDiagnostics || Boolean(runOperatorOrder),
+    cancelExistingOrder,
   })
   return result.exitCode
 }
