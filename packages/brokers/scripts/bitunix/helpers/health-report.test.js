@@ -1,5 +1,6 @@
 import assert from "node:assert/strict"
 import test from "node:test"
+import { sanitizeDiagnosticValue } from "./sanitize-diagnostic-data.js"
 import {
   createSanitizedHealthReport,
   evaluateOperatorOrderProbeHealthCheck,
@@ -255,4 +256,83 @@ test("operator probe health gate treats an explicit operator decline as a safe s
 
   assert.equal(result.healthy, true)
   assert.deepEqual(result.missingRequiredOperations, [])
+})
+
+
+test("published order-read evidence includes symbol and orderId but keeps other diagnostics private", () => {
+  const orderId = "2124329325141426176"
+  const symbol = "HYPEUSDT"
+  const openOrdersResponse = sanitizeDiagnosticValue({
+    value: {
+      ok: true,
+      data: [{ id: orderId, symbol, status: "OPEN" }],
+      errors: [],
+    },
+  })
+  const detailRequest = sanitizeDiagnosticValue({
+    value: {
+      method: "getOrder",
+      arguments: [{ symbol, orderId }],
+    },
+  })
+  const detailResponse = sanitizeDiagnosticValue({
+    value: {
+      ok: true,
+      data: {
+        id: orderId,
+        symbol,
+        status: "OPEN",
+        price: "30",
+        volume: "0.366",
+        balance: "must-be-redacted",
+        uid: "must-also-be-redacted",
+      },
+      errors: [],
+    },
+  })
+  const published = createSanitizedHealthReport({
+    report: {
+      schemaVersion: 1,
+      startedAt: "2026-11-22T00:00:00.000Z",
+      finishedAt: "2026-11-22T00:00:01.000Z",
+      runtime: { node: "v26.13.0", platform: "win32" },
+      summary: { total: 3, passed: 3, failed: 0, skipped: 0 },
+      healthCheck: {
+        scope: "bitunix-order-read",
+        requiredOperations: ["Broker API getOpenOrders", "Broker API getOrder for every discovered order"],
+        missingRequiredOperations: [],
+        nonBlockingFailedOperations: [],
+        healthy: true,
+      },
+      results: [
+        { operation: "Broker API getOpenOrders", status: "passed", durationMs: 41438, response: openOrdersResponse },
+        { operation: "Broker API getOrder", status: "passed", durationMs: 304, request: detailRequest, response: detailResponse },
+        {
+          operation: "user.account",
+          status: "passed",
+          request: { apiKey: "must-not-publish" },
+          response: { balance: "must-not-publish" },
+        },
+      ],
+      events: [{ payload: "must-not-publish" }],
+    },
+  })
+
+  const open = published.results.find((result) => result.operation === "Broker API getOpenOrders")
+  const detail = published.results.find((result) => result.operation === "Broker API getOrder")
+  assert.equal(open.response.data[0].id, orderId)
+  assert.equal(open.response.data[0].symbol, symbol)
+  assert.equal(detail.request.arguments[0].orderId, orderId)
+  assert.equal(detail.request.arguments[0].symbol, symbol)
+  assert.equal(detail.response.data.id, orderId)
+  assert.equal(detail.response.data.symbol, symbol)
+  assert.equal(detail.response.data.price, "30")
+  assert.equal(detail.response.data.volume, "0.366")
+  assert.equal(detail.response.data.balance, "[REDACTED]")
+  assert.equal(detail.response.data.uid, "[REDACTED]")
+  const publicJson = JSON.stringify(published)
+  assert.equal(publicJson.includes("must-not-publish"), false)
+  assert.equal(Object.hasOwn(published.results[2], "request"), false)
+  assert.equal(Object.hasOwn(published.results[2], "response"), false)
+  assert.equal(Object.hasOwn(published, "events"), false)
 })
