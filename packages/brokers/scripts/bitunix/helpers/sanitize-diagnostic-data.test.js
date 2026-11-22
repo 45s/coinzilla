@@ -33,7 +33,7 @@ test("diagnostic sanitization redacts credentials and sensitive fields recursive
   assert.equal(sanitized.nested.token, "[REDACTED]", "Token-like response fields must be redacted at every nesting level")
   assert.equal(sanitized.nested.balance, "[REDACTED]", "Account balance values must not be persisted")
   assert.equal(sanitized.nested.uid, "[REDACTED]", "Account identifiers must not be persisted")
-  assert.equal(sanitized.message, "request failed with [REDACTED]", "Known credential values must be removed from free-form messages")
+  assert.equal(sanitized.message, "[REDACTED]", "Free-form diagnostic messages must be withheld entirely")
 })
 
 test("private response summaries preserve shape without exposing account values", () => {
