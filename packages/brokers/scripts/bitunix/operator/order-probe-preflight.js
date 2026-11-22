@@ -137,7 +137,10 @@ function assertProbeBalanceIsInsufficient({ probe, freeBase, freeQuote }) {
       left: probe.spendingAmount,
       right: probe.feeReserve,
     })
-    if (compareDecimal({ left: freeQuote, right: required }) < 0) {
+    if (compareDecimal({
+      left: freeQuote,
+      right: required,
+    }) < 0) {
       throw new Error(`Bitunix funded BUY blocked: free USDT ${freeQuote} is below ${required} USDT (11 USDT spend plus 0.24 USDT reserve)`)
     }
     return
@@ -200,8 +203,14 @@ function resolveProbeForPreflight({ probe, metadata, balanceSummary }) {
     quantity,
     quoteNotional,
   })
-  if (compareDecimal({ left: quantity, right: metadata.minimumQuantity }) < 0 ||
-      compareDecimal({ left: quoteNotional, right: metadata.minimumNotional }) < 0) {
+  if (compareDecimal({
+    left: quantity,
+    right: metadata.minimumQuantity,
+  }) < 0 ||
+      compareDecimal({
+        left: quoteNotional,
+        right: metadata.minimumNotional,
+      }) < 0) {
     throw new Error("Calculated HYPEUSDT order is below Bitunix live minimum quantity or notional")
   }
   assertProbeBalanceIsInsufficient({
@@ -330,7 +339,7 @@ export function createBitunixOrderProbePreflight({
   })
   const orderInput = createBitunixOrderProbeInput({
     probeId,
-    quantity: calculatedQuantity,
+    quantity: resolvedProbe.quantity,
   })
   const request = createSpotOrderRequest({
     input: orderInput,
