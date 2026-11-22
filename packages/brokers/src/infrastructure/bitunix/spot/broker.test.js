@@ -83,10 +83,18 @@ function createBroker({ responses = {}, allowLiveOrderMutations = true, reconcil
         options,
       })
       const key = path
-      if (responses[key] instanceof Error) {
-        throw responses[key]
+      const configuredResponse = responses[key]
+      if (configuredResponse instanceof Error) {
+        throw configuredResponse
       }
-      return { data: responses[key] }
+      if (typeof configuredResponse === "function") {
+        const value = await configuredResponse(input)
+        if (value instanceof Error) {
+          throw value
+        }
+        return { data: value }
+      }
+      return { data: configuredResponse }
     },
   }
   const broker = new BitunixSpotBroker({
@@ -153,17 +161,62 @@ test("Bitunix Spot broker reads balances without inventing an account snapshot t
   assert.equal(calls.length, 1)
 })
 
-test("Bitunix Spot broker requires a symbol for open orders and history", async () => {
-  const { broker, calls } = createBroker()
+test("Bitunix Spot getOpenOrders() enumerates markets and preserves partial symbol failures", async () => {
+  const { broker, calls } = createBroker({
+    responses: {
+      "/api/spot/v1/common/coin_pair/list": [
+        {
+          base: "BTC",
+          quote: "USDT",
+          isOpen: "1",
+        },
+        {
+          base: "ETH",
+          quote: "USDT",
+          isOpen: "1",
+        },
+        {
+          base: "OLD",
+          quote: "USDT",
+          isOpen: "0",
+        },
+      ],
+      "/api/spot/v1/order/pending/list": async ({ body }) => {
+        if (body.symbol === "ETHUSDT") {
+          throw new Error("synthetic ETH pending failure")
+        }
+        return [{
+          orderId: "1234567890123456789",
+          symbol: "BTCUSDT",
+          side: "2",
+          type: "1",
+          status: "1",
+          volume: "0.5",
+          dealVolume: "0",
+          price: "100",
+        }]
+      },
+    },
+  })
 
   const openOrders = await broker.getOpenOrders()
   const history = await broker.getOrderHistory()
 
-  assert.equal(openOrders.ok, false)
-  assert.equal(history.ok, false)
-  assert.match(openOrders.errors[0].message, /symbol/i)
+  assert.equal(openOrders.ok, false, "a partial market failure must remain visible")
+  assert.equal(openOrders.data.length, 1, "successful symbols must still contribute their orders")
+  assert.equal(openOrders.data[0].id, "1234567890123456789")
+  assert.equal(openOrders.data[0].symbol, "BTCUSDT")
+  assert.match(openOrders.errors[0].message, /synthetic ETH pending failure/)
+  assert.equal(history.ok, false, "history remains symbol-scoped")
   assert.match(history.errors[0].message, /symbol/i)
-  assert.equal(calls.length, 0)
+  assert.deepEqual(calls.map(({ path, options }) => [
+    path,
+    options.body?.symbol ?? null,
+  ]), [
+    ["/api/spot/v1/common/coin_pair/list", null],
+    ["/api/spot/v1/order/pending/list", "BTCUSDT"],
+    ["/api/spot/v1/order/pending/list", "ETHUSDT"],
+  ])
 })
 
 test("Bitunix Spot symbol-scoped order reads reject rows for a different symbol", async () => {
