@@ -105,7 +105,7 @@ test("refuses a remote with refs but no main branch", async () => {
         return "abc123 refs/heads/develop"
       },
     }),
-    /does not have the expected main branch/,
+    /contains unexpected branches/,
   )
   assert.equal(calls.length, 1)
   assert.equal(writeCount, 0)
