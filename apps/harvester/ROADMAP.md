@@ -1,5 +1,13 @@
 # Harvester Roadmap
 
+## Recovery Seller activation — 2026-11-22
+
+- The global `RS_RECOVERY_SELLER_CONFIG.enabled` switch is explicitly enabled; LINEAUSDT is the only configured RS pair and is restricted to Binance Spot TESTNET.
+- RS-1 through RS-5 offline runtime acceptance is complete in merged PR #1515. This configuration change activates the RS route at application startup, but does not authorize starting Harvester or submitting exchange orders.
+- The controlled TESTNET runbook remains CLOSED / PAUSED. A separate bounded LINEAUSDT session plan, authoritative account/open-order baseline, fee verification and explicit joint session start are required before any exchange write.
+- Restart/replay and third-asset commission valuation remain deferred; durable STOP remains terminal and cannot be cleared through CC-operator.
+
+
 ## Public Bitunix Futures market data (#1660)
 
 - **In progress in Dashboard PR [#1661](https://github.com/45s/coinzilla/pull/1661):** expose Bitunix Futures public contract and ticker REST data through the existing loopback-only Harvester API for the Dashboard Market Screener.
