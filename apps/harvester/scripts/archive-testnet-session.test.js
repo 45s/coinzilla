@@ -116,7 +116,7 @@ test("archives complete logs and data trees without requiring process markers", 
   assert.ok(progressMessages.includes("Local archive verified."), "the operator must see local verification completion")
   assert.equal(result.remoteCommit, REMOTE_COMMIT, "the command must return the verified remote commit")
   assert.equal(result.localArchive, publishedDirectory, "the verified local snapshot must be the published artifact")
-  assert.equal(result.fileCount, Object.keys(fixture.files).length + 2, "the published inventory must include all source files, data_commit_hash and the manifest")
+  assert.equal(result.fileCount, Object.keys(fixture.files).length + 1, "the published inventory must include selected logs, complete data/recovery facts, data_commit_hash and the manifest")
 })
 
 test("keeps the completed local snapshot when remote publication fails", async (t) => {
