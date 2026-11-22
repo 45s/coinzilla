@@ -225,6 +225,11 @@ function createNotSentProbeError({ error }) {
   )
   notSentError.name = "BitunixOrderProbeNotSentError"
   notSentError.mutationOutcome = "NOT_SENT"
+  for (const field of ["code", "exchangeCode", "status", "kind"]) {
+    if (error?.[field] !== undefined && error[field] !== null) {
+      notSentError[field] = error[field]
+    }
+  }
   return notSentError
 }
 
