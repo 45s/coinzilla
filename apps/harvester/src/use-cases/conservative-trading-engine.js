@@ -1,5 +1,6 @@
 import { StrategyId } from "../domain/strategies/strategy-ids.js"
 import { createMarketVolatilityProtectionEligibility } from "../domain/market/create-market-volatility-protection-eligibility.js"
+import { createMarketComponentLogger } from "../application/logging/create-market-component-logger.js"
 import { linkSharedAccountOrderRegistry } from "../application/providers/account-runtime-registry.js"
 import { createPositionId } from "../domain/portfolio/position.js"
 import { createStrategyLogger } from "../application/logging/create-strategy-logger.js"
@@ -1664,6 +1665,18 @@ function createConservativeMarketMetadataCache({ dependencies, getMarketMetadata
   })
 }
 
+function createMarketVolatilityRuntime({ dependencies, pairs } = {}) {
+  const volatilityPairs = dependencies.volatilityPairs ?? pairs
+  const volatilityProtectionEnabled = typeof dependencies.getVolatilityData === "function"
+  const isVolatilityProtectionEnabledForSymbol = createMarketVolatilityProtectionEligibility({
+    markets: volatilityPairs,
+    volatilityProtectionEnabled,
+  })
+  return {
+    ...volatilityRuntime,
+  }
+}
+
 function createConservativeEngineState({ initialState, pairs, volatilityPairs = pairs, sharedAccountState } = {}) {
   const initialRegistry = validateInitialEngineState({
     initialState,
@@ -1687,17 +1700,13 @@ function createConservativeEngineBaseContext({ dependencies } = {}) {
     appConfig,
     getMarketMetadata,
     initialState,
-    getVolatilityData,
     hasUnownedOpenOrdersForSymbol,
     sharedAccountState,
-    volatilityPairs: configuredVolatilityPairs,
   } = dependencies
   const { settings, pairs } = appConfig.strategies[StrategyId.COIN_GRABBER]
-  const volatilityPairs = configuredVolatilityPairs ?? pairs
-  const volatilityProtectionEnabled = typeof getVolatilityData === "function"
-  const isVolatilityProtectionEnabledForSymbol = createMarketVolatilityProtectionEligibility({
-    markets: volatilityPairs,
-    volatilityProtectionEnabled,
+  const volatilityRuntime = createMarketVolatilityRuntime({
+    dependencies,
+    pairs,
   })
   const hasBlockingOpenOrdersForSymbol = ({ symbol } = {}) =>
     pairs[symbol]?.externalOrdersPolicy === EXTERNAL_ORDERS_POLICIES.BLOCK &&
@@ -1705,7 +1714,7 @@ function createConservativeEngineBaseContext({ dependencies } = {}) {
   const state = createConservativeEngineState({
     initialState,
     pairs,
-    volatilityPairs,
+    volatilityPairs: volatilityRuntime.volatilityPairs,
     sharedAccountState,
   })
   const marketMetadataCache = createConservativeMarketMetadataCache({
@@ -2153,7 +2162,10 @@ function createConservativeEngineProtectionContext({ context } = {}) {
     runTransition: context.runTransition,
     cancelOwnedBuyOrders: context.cancelOwnedBuyOrders,
     evaluateLatest: ({ symbol }) => context.evaluateLatestTransition({ symbol }),
-    logger: dependencies.volatilityLogger ?? dependencies.logger,
+    logger: createMarketComponentLogger({
+      logger: dependencies.volatilityLogger ?? dependencies.logger,
+      component: "market-volatility-protection",
+    }),
   })
   Object.assign(context, volatilityWorkflow)
   context.pauseMarket = createOperatorMarketPauseHandler({
