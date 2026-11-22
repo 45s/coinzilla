@@ -56,7 +56,7 @@ function printHelp() {
   process.stdout.write([
     "Usage: pnpm --filter @coinzilla/brokers bitunix:healthcheck [--version|--local|--publish|--place-order|--probe-order=<probe-id>]",
     "",
-    "Default / --publish: run LIVE read-only diagnostics and publish only an allowlisted sanitized report branch.",
+    "Default / --publish: run LIVE read-only diagnostics, fetch all open orders through Broker.getOpenOrders(), read each returned order through Broker.getOrder(), and publish a sanitized report branch.",
     "--local: run LIVE read-only diagnostics and save a private local report without creating or pushing a branch.",
     "--place-order: run read-only health checks, then (only if healthy) the guarded one-shot LIVE HYPEUSDT BUY LIMIT attempt.",
     "--probe-order=<id>: run targeted read-only HYPEUSDT preflight and one separately confirmed LIVE order probe; publish its sanitized result and return to develop.",
@@ -65,6 +65,7 @@ function printHelp() {
     "--help: show this help without loading credentials or contacting Bitunix.",
     "",
     "The default mode never places or cancels orders, transfers funds, or withdraws.",
+    "The order-read scan records the complete getOpenOrders result and every getOrder result/error; order IDs come from getOpenOrders data, never CLI arguments.",
     "LIVE order modes are human-only and must never be invoked by AI agents, tests, CI, or scheduled jobs.",
     "",
   ].join("\n"))

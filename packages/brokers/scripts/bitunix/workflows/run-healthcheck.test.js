@@ -78,6 +78,25 @@ function createPublisher({ events, publishedReports }) {
   }
 }
 
+function createEmptyOrderScanBroker() {
+  return () => ({
+    connect: async () => {},
+    getOpenOrders: async () => ({
+      ok: true,
+      data: [],
+      errors: [],
+    }),
+    disconnect: async () => {},
+  })
+}
+
+async function runWorkflow(options) {
+  return runHealthcheckWorkflow({
+    brokerFactory: createEmptyOrderScanBroker(),
+    ...options,
+  })
+}
+
 const stdout = { write() {} }
 const env = {
   BITUNIX_API_KEY: "test-api-key",
@@ -88,7 +107,7 @@ test("place-order mode runs diagnostics first and executes the order inside repo
   const events = []
   const publishedReports = []
   let orderCalls = 0
-  const exitCode = await runHealthcheckWorkflow({
+  const exitCode = await runWorkflow({
     mode: "place-order",
     brokersRoot: "/repo/packages/brokers",
     repositoryRoot: "/repo",
@@ -125,7 +144,7 @@ test("place-order mode proceeds to guarded preflight when only optional order hi
   const events = []
   const publishedReports = []
   let orderCalls = 0
-  const exitCode = await runHealthcheckWorkflow({
+  const exitCode = await runWorkflow({
     mode: "place-order",
     brokersRoot: "/repo/packages/brokers",
     repositoryRoot: "/repo",
@@ -162,7 +181,7 @@ test("place-order mode skips the order when read-only health checks are not heal
   const events = []
   const publishedReports = []
   let orderCalls = 0
-  const exitCode = await runHealthcheckWorkflow({
+  const exitCode = await runWorkflow({
     mode: "place-order",
     brokersRoot: "/repo/packages/brokers",
     repositoryRoot: "/repo",
@@ -191,7 +210,7 @@ test("place-order mode skips the order when read-only health checks are not heal
 test("operator exceptions are recorded as OUTCOME_UNKNOWN without publishing free-form error text", async () => {
   const events = []
   const publishedReports = []
-  const exitCode = await runHealthcheckWorkflow({
+  const exitCode = await runWorkflow({
     mode: "place-order",
     brokersRoot: "/repo/packages/brokers",
     repositoryRoot: "/repo",
@@ -218,7 +237,7 @@ test("operator exceptions are recorded as OUTCOME_UNKNOWN without publishing fre
 test("ordinary publish mode does not invoke an operator order callback", async () => {
   const events = []
   const publishedReports = []
-  const exitCode = await runHealthcheckWorkflow({
+  const exitCode = await runWorkflow({
     mode: "publish",
     brokersRoot: "/repo/packages/brokers",
     repositoryRoot: "/repo",
@@ -242,7 +261,7 @@ test("pre-dispatch operator failures are recorded as NOT_SENT, not OUTCOME_UNKNO
   const preflightError = Object.assign(new Error("private balance preflight failure"), {
     mutationOutcome: "NOT_SENT",
   })
-  const exitCode = await runHealthcheckWorkflow({
+  const exitCode = await runWorkflow({
     mode: "place-order",
     brokersRoot: "/repo/packages/brokers",
     repositoryRoot: "/repo",
@@ -271,7 +290,7 @@ test("probe-order mode skips generic diagnostics and runs one selected probe", a
   const events = []
   const publishedReports = []
   let probeCalls = 0
-  const exitCode = await runHealthcheckWorkflow({
+  const exitCode = await runWorkflow({
     mode: "probe-order",
     probeId: "limit-buy-1",
     brokersRoot: "/repo/packages/brokers",
@@ -316,7 +335,7 @@ test("probe-order mode skips generic diagnostics and runs one selected probe", a
 
 test("probe-order mode requires a probe id and an operator callback", async () => {
   await assert.rejects(
-    runHealthcheckWorkflow({
+    runWorkflow({
       mode: "probe-order",
       brokersRoot: "/repo/packages/brokers",
       repositoryRoot: "/repo",
@@ -331,7 +350,7 @@ test("probe-order mode requires a probe id and an operator callback", async () =
 test("probe-order mode uses only its dedicated preflight, even if generic diagnostics would fail", async () => {
   const events = []
   const publishedReports = []
-  const exitCode = await runHealthcheckWorkflow({
+  const exitCode = await runWorkflow({
     mode: "probe-order",
     probeId: "market-buy-1",
     brokersRoot: "/repo/packages/brokers",
@@ -366,4 +385,121 @@ test("probe-order mode uses only its dedicated preflight, even if generic diagno
   assert.equal(publishedReports[0].results[0].operation, "operator order probe")
   assert.equal(publishedReports[0].results[0].error.exchangeCode, "10005")
   assert.equal(exitCode, 0)
+})
+
+
+
+function createOrderScanBroker({ calls, order }) {
+  return ({ logger, providerOptions }) => {
+    assert.equal(providerOptions.allowLiveOrderMutations, false)
+    return {
+      connect: async () => calls.push("connect"),
+      getOpenOrders: async () => {
+        calls.push("getOpenOrders")
+        logger.debug({
+          event: "pending.orders.received",
+          orderCount: 1,
+        })
+        return {
+          ok: true,
+          data: [order],
+          errors: [],
+        }
+      },
+      getOrder: async ({ symbol, orderId }) => {
+        calls.push(`getOrder:${symbol}:${orderId}`)
+        return {
+          ok: false,
+          data: null,
+          errors: [Object.assign(new Error("detail failed"), {
+            code: "E_DETAIL",
+          })],
+        }
+      },
+      disconnect: async () => calls.push("disconnect"),
+    }
+  }
+}
+
+test("healthcheck captures full open-orders result and every detail response", async () => {
+  const events = []
+  const publishedReports = []
+  const calls = []
+  const order = {
+    id: "2124329325141426176",
+    symbol: "HYPEUSDT",
+    status: "OPEN",
+  }
+  const exitCode = await runWorkflow({
+    mode: "publish",
+    brokersRoot: "/repo/packages/brokers",
+    repositoryRoot: "/repo",
+    env,
+    stdout,
+    brokerFactory: createOrderScanBroker({
+      calls,
+      order,
+    }),
+    runDiagnostics: async () => createDiagnosticReport(),
+    publishDiagnostics: createPublisher({
+      events,
+      publishedReports,
+    }),
+  })
+  assert.deepEqual(calls, [
+    "connect",
+    "getOpenOrders",
+    "getOrder:HYPEUSDT:2124329325141426176",
+    "disconnect",
+  ])
+  const [report] = publishedReports
+  const open = report.results.find((entry) => entry.operation === "Broker API getOpenOrders")
+  const detail = report.results.find((entry) => entry.operation === "Broker API getOrder")
+  assert.equal(open.status, "passed")
+  assert.equal(open.response.data[0].id, order.id)
+  assert.equal(detail.status, "failed")
+  assert.equal(detail.request.arguments[0].orderId, order.id)
+  assert.equal(detail.errors[0].code, "E_DETAIL")
+  assert.ok(report.events.some((event) => event.event === "pending.orders.received"))
+  assert.equal(exitCode, 1)
+})
+
+test("healthcheck records failed getOpenOrders response and skips detail reads", async () => {
+  const events = []
+  const publishedReports = []
+  const calls = []
+  const exitCode = await runWorkflow({
+    mode: "publish",
+    brokersRoot: "/repo/packages/brokers",
+    repositoryRoot: "/repo",
+    env,
+    stdout,
+    brokerFactory: () => ({
+      connect: async () => {},
+      getOpenOrders: async () => ({
+        ok: false,
+        data: [{
+          id: "123",
+          symbol: "HYPEUSDT",
+        }],
+        errors: [Object.assign(new Error("pending failed"), {
+          code: "E_PENDING",
+        })],
+      }),
+      getOrder: async () => calls.push("getOrder"),
+      disconnect: async () => {},
+    }),
+    runDiagnostics: async () => createDiagnosticReport(),
+    publishDiagnostics: createPublisher({
+      events,
+      publishedReports,
+    }),
+  })
+  assert.deepEqual(calls, [])
+  const [report] = publishedReports
+  const open = report.results.find((entry) => entry.operation === "Broker API getOpenOrders")
+  assert.equal(open.status, "failed")
+  assert.equal(open.response.data[0].id, "123")
+  assert.equal(open.errors[0].code, "E_PENDING")
+  assert.equal(exitCode, 1)
 })

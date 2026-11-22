@@ -66,6 +66,19 @@ const API = Object.freeze({
   matchingOrderDetails: "/api/spot/v1/order/deal/list",
 })
 
+function logBrokerDiagnostic({ logger, level = "debug", event }) {
+  try {
+    logger?.[level]?.({
+      provider: "bitunix",
+      product: "spot",
+      layer: "broker-api",
+      ...event,
+    })
+  } catch {
+    // Diagnostics must never change Broker API behavior.
+  }
+}
+
 function unsupported({ operation, reason }) {
   return new BrokerUnsupportedOperationError({
     provider: "bitunix",
@@ -104,6 +117,200 @@ function adaptSymbolOrderRows({ rows, symbol, operation }) {
       throw new TypeError(`Bitunix Spot ${operation} response symbol does not match the requested symbol`)
     }
     return adaptOrder(row)
+  })
+}
+
+function logOpenOrdersStarted({ broker, symbol }) {
+  logBrokerDiagnostic({
+    logger: broker.logger,
+    event: {
+      event: "getOpenOrders.started",
+      symbol,
+    },
+  })
+}
+
+function logOpenOrdersCompleted({ broker, symbol, orders }) {
+  logBrokerDiagnostic({
+    logger: broker.logger,
+    event: {
+      event: "getOpenOrders.completed",
+      ok: true,
+      symbol,
+      orderCount: orders.length,
+      orderIds: orders.map((order) => order.id),
+    },
+  })
+}
+
+function logOpenOrdersFailed({ broker, symbol, error }) {
+  logBrokerDiagnostic({
+    logger: broker.logger,
+    level: "error",
+    event: {
+      event: "getOpenOrders.failed",
+      symbol,
+      error: {
+        name: error?.name,
+        code: error?.code,
+        exchangeCode: error?.exchangeCode,
+        message: error?.message,
+      },
+    },
+  })
+}
+
+async function fetchOpenOrdersForSymbol({ broker, symbol }) {
+  logOpenOrdersStarted({
+    broker,
+    symbol,
+  })
+  try {
+    const normalizedSymbol = requireSymbol({
+      symbol,
+      operation: "getOpenOrders()",
+    })
+    const response = await broker.restClient.request({
+      method: "POST",
+      path: API.pendingOrders,
+      body: {
+        symbol: normalizedSymbol,
+      },
+      stateChanging: false,
+    })
+    const rows = normalizeOrderRows({
+      value: response.data,
+    })
+    const orders = adaptSymbolOrderRows({
+      rows,
+      symbol: normalizedSymbol,
+      operation: "open orders",
+    })
+    logOpenOrdersCompleted({
+      broker,
+      symbol: normalizedSymbol,
+      orders,
+    })
+    return toResult({
+      data: orders,
+    })
+  } catch (error) {
+    logOpenOrdersFailed({
+      broker,
+      symbol,
+      error,
+    })
+    handleErr({
+      where: "BitunixSpotBroker.getOpenOrders()",
+      error,
+    })
+    return toResult({
+      errors: [error],
+    })
+  }
+}
+
+async function getActiveSpotSymbols({ broker }) {
+  try {
+    const result = await broker.getExchangeMarkets()
+    if (result?.ok !== true || !Array.isArray(result.data)) {
+      return {
+        symbols: [],
+        errors: result?.errors ?? [
+          new Error("Bitunix Spot market catalog returned no valid market list"),
+        ],
+      }
+    }
+    const symbols = [...new Set(result.data.map((market) => market.symbol).filter(
+      (symbol) => typeof symbol === "string" && symbol.length > 0,
+    ))]
+    if (symbols.length === 0) {
+      return {
+        symbols: [],
+        errors: [new Error("Bitunix Spot market catalog contains no active symbols")],
+      }
+    }
+    return {
+      symbols,
+      errors: [],
+    }
+  } catch (error) {
+    return {
+      symbols: [],
+      errors: [error],
+    }
+  }
+}
+
+async function collectOpenOrdersForSymbols({ broker, symbols }) {
+  const orders = []
+  const errors = []
+  for (const symbol of symbols) {
+    try {
+      const result = await fetchOpenOrdersForSymbol({
+        broker,
+        symbol,
+      })
+      if (Array.isArray(result?.data)) {
+        orders.push(...result.data)
+      } else if (result?.ok === true) {
+        errors.push(new TypeError(
+          `Bitunix Spot getOpenOrders() returned invalid data for ${symbol}`,
+        ))
+      }
+      if (result?.ok !== true) {
+        errors.push(...(result?.errors ?? []))
+      }
+    } catch (error) {
+      errors.push(error)
+    }
+  }
+  return {
+    orders,
+    errors,
+  }
+}
+
+async function fetchAllOpenOrders({ broker }) {
+  logBrokerDiagnostic({
+    logger: broker.logger,
+    event: {
+      event: "getOpenOrders.accountWide.started",
+    },
+  })
+  const marketResult = await getActiveSpotSymbols({ broker })
+  if (marketResult.errors.length > 0) {
+    logBrokerDiagnostic({
+      logger: broker.logger,
+      level: "error",
+      event: {
+        event: "getOpenOrders.accountWide.marketCatalogFailed",
+        errorCount: marketResult.errors.length,
+      },
+    })
+    return toResult({
+      errors: marketResult.errors,
+    })
+  }
+
+  const { orders, errors } = await collectOpenOrdersForSymbols({
+    broker,
+    symbols: marketResult.symbols,
+  })
+  logBrokerDiagnostic({
+    logger: broker.logger,
+    level: errors.length === 0 ? "debug" : "warn",
+    event: {
+      event: "getOpenOrders.accountWide.completed",
+      marketCount: marketResult.symbols.length,
+      orderCount: orders.length,
+      errorCount: errors.length,
+      symbols: marketResult.symbols,
+    },
+  })
+  return toResult({
+    data: orders,
+    ...(errors.length > 0 ? { errors } : {}),
   })
 }
 
@@ -277,6 +484,64 @@ async function getBitunixSpotOrderDetail({ restClient, symbol, orderId }) {
   }))
 }
 
+function logOrderReadStarted({ broker, symbol, orderId }) {
+  logBrokerDiagnostic({
+    logger: broker.logger,
+    event: {
+      event: "getOrder.started",
+      symbol: symbol ?? null,
+      orderId: orderId ?? null,
+    },
+  })
+}
+
+function logOrderReadCompleted({ broker, order }) {
+  logBrokerDiagnostic({
+    logger: broker.logger,
+    event: {
+      event: "getOrder.completed",
+      ok: true,
+      symbol: order.symbol,
+      orderId: order.id,
+      status: order.status,
+    },
+  })
+}
+
+function logOrderReadFailed({ broker, symbol, orderId, error }) {
+  logBrokerDiagnostic({
+    logger: broker.logger,
+    level: "error",
+    event: {
+      event: "getOrder.failed",
+      symbol: symbol ?? null,
+      orderId: orderId ?? null,
+      error: {
+        name: error?.name,
+        code: error?.code,
+        exchangeCode: error?.exchangeCode,
+        message: error?.message,
+      },
+    },
+  })
+}
+
+async function fetchSpecificOrder({ broker, symbol, orderId }) {
+  const response = await broker.restClient.request({
+    method: "GET",
+    path: API.orderDetail,
+    queryParams: {
+      orderId,
+    },
+  })
+  const order = validateOrderDetailResponse({
+    response,
+    orderId,
+    symbol,
+  })
+  return adaptOrder(order)
+}
+
 function createCancelOrderFailureResult({ error, requestDispatched, cancelAcknowledged }) {
   let mutationOutcome
   if (cancelAcknowledged) {
@@ -433,7 +698,10 @@ export class BitunixSpotBroker {
       enumerable: true,
       value: createBitunixBrokerCapabilities({ allowLiveOrderMutations: this.config.allowLiveOrderMutations }),
     })
-    this.restClient = restClientFactory(this.config)
+    this.restClient = restClientFactory({
+      ...this.config,
+      logger: this.logger,
+    })
     this.connected = false
     this.canonicalMarkets = new Map()
     this.reconcilerFactory = reconcilerFactory
@@ -483,6 +751,10 @@ export class BitunixSpotBroker {
   }
 
   async getExchangeMarkets() {
+    logBrokerDiagnostic({
+      logger: this.logger,
+      event: { event: "getExchangeMarkets.started" },
+    })
     try {
       const response = await this.restClient.request({
         method: "GET",
@@ -504,8 +776,29 @@ export class BitunixSpotBroker {
         seen.add(market.symbol)
         this.canonicalMarkets.set(market.symbol, market)
       }
+      logBrokerDiagnostic({
+        logger: this.logger,
+        event: {
+          event: "getExchangeMarkets.completed",
+          ok: true,
+          marketCount: markets.length,
+          symbols: markets.map((market) => market.symbol),
+        },
+      })
       return toResult({ data: Object.freeze(markets) })
     } catch (error) {
+      logBrokerDiagnostic({
+        logger: this.logger,
+        level: "error",
+        event: {
+          event: "getExchangeMarkets.failed",
+          error: {
+            name: error?.name,
+            code: error?.code,
+            message: error?.message,
+          },
+        },
+      })
       handleErr({
         where: "BitunixSpotBroker.getExchangeMarkets()",
         error,
@@ -555,33 +848,24 @@ export class BitunixSpotBroker {
     }
   }
 
+  /**
+   * Fetch pending orders for one symbol, or aggregate every active Spot
+   * symbol when omitted. Account-wide reads use the market catalog because
+   * Bitunix's Spot pending-orders REST endpoint requires a symbol.
+   *
+   * @param {{symbol?: string}} [input]
+   * @returns {Promise<import("@coinzilla/utils").Result & {data?: import("@coinzilla/entities").Order[]}>}
+   */
   async getOpenOrders({ symbol } = {}) {
-    try {
-      const normalizedSymbol = requireSymbol({
-        symbol,
-        operation: "getOpenOrders()",
+    if (symbol === undefined) {
+      return fetchAllOpenOrders({
+        broker: this,
       })
-      const response = await this.restClient.request({
-        method: "POST",
-        path: API.pendingOrders,
-        body: { symbol: normalizedSymbol },
-        stateChanging: false,
-      })
-      const rows = normalizeOrderRows({ value: response.data })
-      return toResult({
-        data: adaptSymbolOrderRows({
-          rows,
-          symbol: normalizedSymbol,
-          operation: "open orders",
-        }),
-      })
-    } catch (error) {
-      handleErr({
-        where: "BitunixSpotBroker.getOpenOrders()",
-        error,
-      })
-      return toResult({ errors: [error] })
     }
+    return fetchOpenOrdersForSymbol({
+      broker: this,
+      symbol,
+    })
   }
 
   async getOrderHistory(input = {}) {
@@ -617,36 +901,53 @@ export class BitunixSpotBroker {
   }
 
   async getOrder({ symbol, orderId, clientOrderId } = {}) {
+    logOrderReadStarted({
+      broker: this,
+      symbol,
+      orderId,
+    })
     try {
-      const unsupportedResult = createClientOrderIdUnsupportedResult({ clientOrderId })
+      const unsupportedResult = createClientOrderIdUnsupportedResult({
+        clientOrderId,
+      })
       if (unsupportedResult) {
         return unsupportedResult
       }
-      let normalizedSymbol
-      if (symbol !== undefined) {
-        normalizedSymbol = requireSymbol({
+      const normalizedSymbol = symbol === undefined
+        ? undefined
+        : requireSymbol({
           symbol,
           operation: "getOrder()",
         })
-      }
-      const normalizedOrderId = validateOrderId({ orderId })
-      const response = await this.restClient.request({
-        method: "GET",
-        path: API.orderDetail,
-        queryParams: { orderId: normalizedOrderId },
+      const normalizedOrderId = validateOrderId({
+        orderId,
       })
-      const order = validateOrderDetailResponse({
-        response,
-        orderId: normalizedOrderId,
+      const order = await fetchSpecificOrder({
+        broker: this,
         symbol: normalizedSymbol,
+        orderId: normalizedOrderId,
       })
-      return toResult({ data: adaptOrder(order) })
+      logOrderReadCompleted({
+        broker: this,
+        order,
+      })
+      return toResult({
+        data: order,
+      })
     } catch (error) {
+      logOrderReadFailed({
+        broker: this,
+        symbol,
+        orderId,
+        error,
+      })
       handleErr({
         where: "BitunixSpotBroker.getOrder()",
         error,
       })
-      return toResult({ errors: [error] })
+      return toResult({
+        errors: [error],
+      })
     }
   }
 
@@ -1352,7 +1653,8 @@ export class BitunixSpotBroker {
 
   /**
    * Cancel every open order for one explicitly selected Spot symbol.
-   * The API has no account-wide pending-order query, so symbol is mandatory.
+   * Read-only getOpenOrders() can aggregate all symbols, but cancellation
+   * deliberately remains scoped to one explicitly authorized symbol.
    * Each cancellation is independently verified; failures never stop later
    * known orders from being processed and are returned to the caller.
    *
@@ -1516,5 +1818,6 @@ function createRestClient(config) {
     apiSecret: config.apiSecret,
     baseUrl: config.baseUrl,
     requestTimeout: config.requestTimeout,
+    logger: config.logger,
   })
 }
