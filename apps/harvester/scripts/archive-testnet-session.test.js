@@ -112,6 +112,16 @@ test("archives the final cumulative tails and newest session with complete data 
       return { commit: REMOTE_COMMIT, fileCount: manifest.files.length + 1 }
     },
   }))
+  assert.equal(
+    await readFile(path.join(fixture.packageDirectory, "logs/cumulative/terminal.log"), "utf8"),
+    "x".repeat(100),
+    "source cumulative logs must remain untouched",
+  )
+  assert.equal(
+    await readFile(path.join(fixture.packageDirectory, "logs/sessions/2026-11-20_old/terminal.log"), "utf8"),
+    "older session must be excluded",
+    "source older sessions must remain untouched",
+  )
   assert.ok(progressMessages.some((message) => message.startsWith("Archive: selecting log evidence ")), "the operator must see the source-copy size and file count")
   assert.ok(progressMessages.some((message) => message.startsWith("Hashing ")), "the operator must see checksum-generation progress")
   assert.ok(progressMessages.includes("Local archive verified."), "the operator must see local verification completion")
