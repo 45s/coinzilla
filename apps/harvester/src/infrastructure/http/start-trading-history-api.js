@@ -77,6 +77,7 @@ export async function startTradingHistoryApi({
   logger = defaultLogger,
   eventBus,
   operator,
+  exchangeAccounts = [],
   marketData = createBitunixFuturesMarketDataClient(),
   startServer = startTradingHistoryApiServer,
 } = {}) {
@@ -112,6 +113,7 @@ export async function startTradingHistoryApi({
     logger,
     eventBus,
     ...(operator === undefined ? {} : { operator }),
+    exchangeAccounts,
     marketData,
   })
   return Object.freeze({
