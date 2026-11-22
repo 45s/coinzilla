@@ -418,58 +418,17 @@ async function saveReport({ report, reportDirectory, stdout, stderr, secrets }) 
   }
 }
 
-/**
- * Scan every active Bitunix Spot market using only the public Broker API.
- * Every pending-order and per-order detail result is recorded; failures do
- * not abort later symbols or orders. No mutation method is called.
- *
- * @param {{env: NodeJS.ProcessEnv, orderId: string, brokerFactory?: Function, stdout?: NodeJS.WriteStream, stderr?: NodeJS.WriteStream, reportDirectory?: string}} input
- * @returns {Promise<{exitCode: number, found: boolean, reportPath: string|null, report: object}>}
- */
-export async function runFindBitunixSpotOrder({
-  env,
-  orderId,
-  brokerFactory = ({ credentials, logger }) => createBroker({
-    credentials,
-    logger,
-  }),
-  stdout = process.stdout,
-  stderr = process.stderr,
-  reportDirectory = resolve(process.cwd(), "packages/brokers/.diagnostics"),
-} = {}) {
-  const normalizedOrderId = validateOrderId({ orderId })
-  const credentials = parseApiCredentials({ env })
-  const secrets = [credentials.apiKey, credentials.apiSecret]
-  const logger = createLogger({
+async function executeScan({ context }) {
+  const {
+    broker,
+    report,
     stdout,
+    stderr,
     secrets,
-  })
-  const report = {
-    createdAt: new Date().toISOString(),
-    provider: "bitunix",
-    product: "spot",
-    target: {
-      symbol: TARGET_SYMBOL,
-      orderId: normalizedOrderId,
-    },
-    readOnly: true,
-    stages: [],
-    summary: {
-      marketCount: 0,
-      pendingOrderCount: 0,
-      detailReadCount: 0,
-      failedRequestCount: 0,
-      targetMatches: [],
-    },
-  }
-  const broker = brokerFactory({
-    credentials,
-    logger,
-  })
-  let connected = false
-
+    orderId,
+  } = context
   try {
-    connected = await connectBroker({
+    context.connected = await connectBroker({
       broker,
       report,
       stdout,
@@ -504,7 +463,7 @@ export async function runFindBitunixSpotOrder({
     await scanMarkets({
       broker,
       symbols,
-      orderId: normalizedOrderId,
+      orderId,
       report,
       stdout,
       secrets,
@@ -516,7 +475,7 @@ export async function runFindBitunixSpotOrder({
     })
     stderr.write(`SCAN ERROR: ${report.fatalError.message}\n`)
   } finally {
-    if (connected) {
+    if (context.connected) {
       await disconnectBroker({
         broker,
         report,
@@ -525,7 +484,16 @@ export async function runFindBitunixSpotOrder({
       })
     }
   }
+}
 
+async function finalizeScan({ context }) {
+  const {
+    report,
+    reportDirectory,
+    stdout,
+    stderr,
+    secrets,
+  } = context
   report.summary.targetMatchCount = report.summary.targetMatches.length
   report.completedAt = new Date().toISOString()
   const reportPath = await saveReport({
@@ -539,7 +507,12 @@ export async function runFindBitunixSpotOrder({
     Boolean(report.fatalError) ||
     reportPath === null
   const found = report.summary.targetMatchCount === 1
-  const exitCode = hasFailures ? 1 : found ? 0 : 2
+  let exitCode = 2
+  if (hasFailures) {
+    exitCode = 1
+  } else if (found) {
+    exitCode = 0
+  }
   writeEvent({
     stdout,
     secrets,
@@ -557,5 +530,69 @@ export async function runFindBitunixSpotOrder({
     found,
     reportPath,
     report,
+  }
+}
+
+/**
+ * Scan every active Bitunix Spot market using only the public Broker API.
+ * Every pending-order and per-order detail result is recorded; failures do
+ * not abort later symbols or orders. No mutation method is called.
+ *
+ * @param {{env: NodeJS.ProcessEnv, orderId: string, brokerFactory?: Function, stdout?: NodeJS.WriteStream, stderr?: NodeJS.WriteStream, reportDirectory?: string}} input
+ * @returns {Promise<{exitCode: number, found: boolean, reportPath: string|null, report: object}>}
+ */
+export async function runFindBitunixSpotOrder({
+  env,
+  orderId,
+  brokerFactory = ({ credentials, logger }) => createBroker({
+    credentials,
+    logger,
+  }),
+  stdout = process.stdout,
+  stderr = process.stderr,
+  reportDirectory = resolve(process.cwd(), "packages/brokers/.diagnostics"),
+} = {}) {
+  const normalizedOrderId = validateOrderId({ orderId })
+  const credentials = parseApiCredentials({ env })
+  const secrets = [credentials.apiKey, credentials.apiSecret]
+  const logger = createLogger({
+    stdout,
+    secrets,
+  })
+  const context = {
+    broker: brokerFactory({
+      credentials,
+      logger,
+    }),
+    orderId: normalizedOrderId,
+    stdout,
+    stderr,
+    secrets,
+    reportDirectory,
+    connected: false,
+    report: createScanReport({ orderId: normalizedOrderId }),
+  }
+  await executeScan({ context })
+  return finalizeScan({ context })
+}
+
+function createScanReport({ orderId }) {
+  return {
+    createdAt: new Date().toISOString(),
+    provider: "bitunix",
+    product: "spot",
+    target: {
+      symbol: TARGET_SYMBOL,
+      orderId,
+    },
+    readOnly: true,
+    stages: [],
+    summary: {
+      marketCount: 0,
+      pendingOrderCount: 0,
+      detailReadCount: 0,
+      failedRequestCount: 0,
+      targetMatches: [],
+    },
   }
 }
