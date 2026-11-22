@@ -334,7 +334,8 @@ function createPublishedReportLines({ result }) {
 }
 
 function isWorkflowProgressMessage({ message }) {
-  return /^\\[[1-5]\\/5\\]/.test(message) ||
+  return ["[1/5]", "[2/5]", "[3/5]", "[4/5]", "[5/5]"]
+    .some((prefix) => message.startsWith(prefix)) ||
     message.startsWith("Creating report branch ") ||
     message.startsWith("Returning the local checkout") ||
     message.startsWith("Local checkout is back")
