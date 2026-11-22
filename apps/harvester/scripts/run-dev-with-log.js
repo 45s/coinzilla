@@ -30,7 +30,7 @@ const runnerIdentity = [
   `node ${process.version}`,
 ].join(" | ")
 if (cliArguments.length === 1 && cliArguments[0] === "--version") {
-  process.stdout.write(runnerIdentity + "\n")
+  process.stdout.write(`${runnerIdentity}\n`)
   process.exit(0)
 }
 if (cliArguments.length > 0) {
@@ -211,7 +211,11 @@ childProcess.current.on("close", async (...closeArguments) => {
         signal,
         logStreamsComplete: !logStreamFailed && !outputForwardingFailed && logStreamsClosed,
       }, null, 2)}\n`,
-      { encoding: "utf8", flag: "wx", mode: 0o600 },
+      {
+        encoding: "utf8",
+        flag: "wx",
+        mode: 0o600,
+      },
     )
   } catch (error) {
     process.stderr.write(`Failed to persist Harvester session completion: ${error.message}\n`)
