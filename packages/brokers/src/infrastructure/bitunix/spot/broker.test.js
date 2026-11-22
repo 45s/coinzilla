@@ -72,7 +72,7 @@ function createSignedPlacementTestBroker({ requests, responses, fetchFn, nonceFa
   })
 }
 
-function createBroker({ responses = {}, allowLiveOrderMutations = true, reconcilerFactory, logger } = {})
+function createBroker({ responses = {}, allowLiveOrderMutations = true, reconcilerFactory, logger } = {}) {
   const calls = []
   const restClient = {
     async request(input = {}) {
