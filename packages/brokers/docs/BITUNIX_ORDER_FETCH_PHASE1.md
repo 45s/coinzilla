@@ -91,7 +91,7 @@ Bitunix documents `POST /api/spot/v1/order/pending/list` with a required symbol.
 - REST response log events record response shape (type, item count, field names) rather than response values. Free-form exchange and transport messages are withheld.
 - Private REST/WebSocket diagnostic results store structural summaries only. The local diagnostic report is private and created with restrictive file permissions; it is not a substitute for safe logging.
 - Sanitization explicitly redacts balances, locked balances, amounts, fees, wallet/from/to addresses, transaction hashes, withdrawal/deposit identifiers, recipient IDs, phone/email, memos and remarks.
-- The published GitHub report uses a separate strict allowlist. For the explicitly approved `Broker API getOpenOrders` and `Broker API getOrder` operations only, it includes the sanitized request arguments, normalized response data, and structured errors so the operator can verify each `symbol / orderId` pair. Other diagnostic operations still omit request/response payloads, and diagnostic events remain excluded.
+- The published GitHub report uses a separate strict allowlist. For the explicitly approved `Broker API getOpenOrders`, `Broker API getOrder`, `Broker API cancelOrder`, and `Broker API getOrder after cancellation` operations, it includes the sanitized request arguments, normalized response data, and structured errors so the operator can verify each `symbol / orderId` pair and the cancellation outcome. Other diagnostic operations still omit request/response payloads, and diagnostic events remain excluded.
 - Tests assert that realistic account and withdrawal fixtures cannot leak through REST logger events or the diagnostic sanitizer; order-read publication tests prove that symbol/orderId and normalized order fields remain visible while balances, account identifiers, credentials, signatures and non-order diagnostic payloads remain excluded.
 
 ## Regression coverage
@@ -116,6 +116,18 @@ The terminal and both local/published report files intentionally show order iden
 - Per-operation status and duration.
 
 The current accepted-order identity is `HYPEUSDT / 2124329325141426176`. This explicit publication policy is limited to the order-read operations; broad account diagnostics remain metadata-only.
+
+## Observed live cancellation verification — 2026-11-22
+
+The operator explicitly ran the one-shot cancellation workflow after the open-order discovery and specific-order detail phases had succeeded. The exact published report is [bitunix-health-20261122T092438681Z.json](https://github.com/45s/coinzilla/blob/diagnostics/bitunix-health-20261122T092438681Z/packages/brokers/diagnostics/reports/bitunix-health-20261122T092438681Z.json).
+
+| Operation | Result | Duration | Evidence |
+|---|---:|---:|---|
+| `cancelOrder({ symbol: "HYPEUSDT", orderId: "2124329325141426176" })` | Passed; `CONFIRMED` | 961 ms | Exchange detail reported `CANCELED`, original price `30` USDT, original quantity `0.366` HYPE, executed quantity `0`, remaining quantity `0.366` |
+| `getOpenOrders()` | Passed; empty result | 39,843 ms | `data: []` after cancellation |
+| `getOrder({ symbol: "HYPEUSDT", orderId: "2124329325141426176" })` | Passed; independently confirmed `CANCELED` | 293 ms | Same order ID, symbol, price and quantities; executed quantity remained `0` |
+
+The workflow summary was **3 passed, 0 failed, 0 skipped** and the order-read gate was **READY**. This proves the one approved test order was cancelled with no execution; it is not a general claim that every Bitunix cancellation or account-wide scan is exhaustive. Do not rerun the one-shot cancellation mode: its fixed target is already canceled.
 
 ## Acceptance gate
 
