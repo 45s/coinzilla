@@ -7,7 +7,8 @@ function createResponse() {
     headers: undefined,
     status: undefined,
     body: undefined,
-    writeHead(status, headers) {
+    writeHead(...args) {
+      const [status, headers] = args
       this.status = status
       this.headers = headers
     },
@@ -25,8 +26,17 @@ test("exchange account list contains only active Harvester provider instances", 
     accountId: "primary",
     environment: "live",
     connected: true,
-    readAccountSnapshot: async () => ({ ok: true, data: { sourceTime: 1, balances: [] } }),
-    readOpenOrders: async () => ({ ok: true, data: [] }),
+    readAccountSnapshot: async () => ({
+      ok: true,
+      data: {
+        sourceTime: 1,
+        balances: [],
+      },
+    }),
+    readOpenOrders: async () => ({
+      ok: true,
+      data: [],
+    }),
   }]
 
   const handled = await handleExchangeAccountRequest({
@@ -62,13 +72,26 @@ test("exchange account detail reads through the existing provider runtime", asyn
         ok: true,
         data: {
           sourceTime: 123,
-          balances: [{ value: { asset: { code: "USDT" }, free: { amount: "10" } } }],
+          balances: [{
+            value: {
+              asset: { code: "USDT" },
+              free: { amount: "10" },
+            },
+          }],
         },
       }
     },
     readOpenOrders: async () => {
       calls.push("orders")
-      return { ok: true, data: [{ value: { symbol: "BTCUSDT", side: "BUY" } }] }
+      return {
+        ok: true,
+        data: [{
+          value: {
+            symbol: "BTCUSDT",
+            side: "BUY",
+          },
+        }],
+      }
     },
   }]
 
@@ -83,9 +106,15 @@ test("exchange account detail reads through the existing provider runtime", asyn
   assert.deepEqual(calls.sort(), ["orders", "snapshot"])
   assert.deepEqual(response.body.data.accountSnapshot, {
     sourceTime: 123,
-    balances: [{ asset: { code: "USDT" }, free: { amount: "10" } }],
+    balances: [{
+      asset: { code: "USDT" },
+      free: { amount: "10" },
+    }],
   })
-  assert.deepEqual(response.body.data.openOrders, [{ symbol: "BTCUSDT", side: "BUY" }])
+  assert.deepEqual(response.body.data.openOrders, [{
+    symbol: "BTCUSDT",
+    side: "BUY",
+  }])
 })
 
 test("exchange account detail rejects provider instances not active in Harvester", async () => {
