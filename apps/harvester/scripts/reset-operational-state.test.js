@@ -92,7 +92,10 @@ test("refuses reset while any Harvester process lock exists", async (t) => {
 
 test("requires explicit confirmation and TESTNET mode before deleting anything", async (t) => {
   const fixture = await createResetFixture()
-  t.after(() => rm(fixture.root, { recursive: true, force: true }))
+  t.after(() => rm(fixture.root, {
+    recursive: true,
+    force: true,
+  }))
 
   await assert.rejects(
     runHarvesterOperationalStateReset(createResetArguments({ fixture, overrides: { args: [] } })),
@@ -100,8 +103,14 @@ test("requires explicit confirmation and TESTNET mode before deleting anything",
     "The reset command must require an explicit destructive-operation confirmation.",
   )
   await assert.rejects(
-    runHarvesterOperationalStateReset(createResetArguments(fixture, {
-      env: { ...createResetArguments({ fixture }).env, TRADING_MODE: "live" },
+    runHarvesterOperationalStateReset(createResetArguments({
+      fixture,
+      overrides: {
+        env: {
+          ...createResetArguments({ fixture }).env,
+          TRADING_MODE: "live",
+        },
+      },
     })),
     /TRADING_MODE=testnet/,
     "The reset command must reject LIVE mode.",
