@@ -13,7 +13,7 @@ created: 2026-11-14
 **Domain contract:** [Recovery Seller Domain Specification](./recovery-seller-domain-specification.md).
 **CG baseline:** [Conservative Domain Specification](./CONSERVATIVE_DOMAIN_SPECIFICATION.md).
 
-## Current RS-4 checkpoint — provider route handoff
+## Historical RS-4 checkpoint — provider route handoff (superseded)
 
 The exact `{ strategyId, symbol }` assignments survive provider-account startup and remain separate from deduplicated `executionSymbols`. PR #1515 now composes the production RS evaluator and shared account allocator through the existing Trading Engine rather than creating a parallel engine. The scoped RS-5 offline acceptance is complete and `RECOVERY_SELLER_RUNTIME_ACCEPTANCE_COMPLETE` is `true`. RS is enabled by default; configured pair routes remain environment-filtered. Restart/replay is explicitly deferred and is not an acceptance blocker.
 
@@ -49,7 +49,7 @@ With the RS acceptance gate open, bootstrap restores the account-scoped durable 
 - The Conservative engine uses that account-owned queue whenever it is composed with a provider-account runtime from `createAccountRuntimeRegistry`. Standalone and legacy test-only shared-state fixtures without the new queue retain their local serialized queue for compatibility.
 - The queue recovers after a rejected task without allowing later transitions to overlap or remain blocked.
 - The offline regression verifies ordered execution and result preservation for two strategy transitions.
-- At this intermediate checkpoint, only the shared serialization primitive was present. PR #1515 subsequently wired RS evaluation, order/fill routing and cycle reservations into the same coordinator.
+- Historical checkpoint: only the shared serialization primitive was present. PR #1515 subsequently wired RS evaluation, order/fill routing and cycle reservations into the same coordinator.
 
 ## Approved RS-4 architecture direction — 2026-11-19
 
@@ -411,7 +411,7 @@ flowchart TD
   J -->|"Yes"| K["Shared Trading Engine safety and order gates"]
 ~~~
 
-The diagrams do not override the [RS Domain Specification](./recovery-seller-domain-specification.md). RS-2b application accounting, verified custody and profitability integration are merged; PR #1127 completes the pure pre-submission SELL evaluator. PR #1515 implements the shared-engine runtime dispatch, account-wide quote/base authorization and terminal mixed-SELL integration, and the RS-5 offline lifecycle/concurrency/failure matrix is complete. The acceptance gate is open; RS is enabled by default; each market remains restricted by its own `tradingEnvironment`. Restart/recovery and third-asset commission valuation are deferred. STOP is terminal with no CC-operator reset/resume capability. Advanced lifecycle functionality remains deferred under FITDIB.
+The diagrams do not override the [RS Domain Specification](./recovery-seller-domain-specification.md). RS-2b application accounting, verified custody and profitability integration are merged; PR #1127 completes the pure pre-submission SELL evaluator. PR #1515 implements shared-engine runtime dispatch, account-wide quote/base authorization and terminal mixed-SELL integration, and the RS-5 offline lifecycle/concurrency/failure matrix is complete. The acceptance gate is open; RS is enabled by default; each market remains restricted by its own `tradingEnvironment`. Restart/recovery and third-asset commission valuation are deferred. STOP is terminal with no CC-operator reset/resume capability. Advanced lifecycle functionality remains deferred under FITDIB.
 
 ## RS-4 configuration boundary — PR #1476
 
