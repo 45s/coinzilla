@@ -472,7 +472,13 @@ test("Bitunix order probe classifies an existing one-shot marker as NOT_SENT", a
       markerPath,
       preflight: {
         probe: { id: "limit-buy-1" },
-        wireRequest: { symbol: "HYPEUSDT", side: 2, type: 1, volume: "1", price: "30" },
+        wireRequest: {
+          symbol: "HYPEUSDT",
+          side: 2,
+          type: 1,
+          volume: "1",
+          price: "30",
+        },
       },
     })
     await writeFile(markerPath, JSON.stringify({
@@ -499,8 +505,20 @@ test("Bitunix probe capture records sanitized order-detail follow-up responses",
     fetchFn: async (url) => {
       const path = new URL(url).pathname
       const data = path.endsWith("/order/detail")
-        ? { orderId: "probe-order-1", userId: "private-user-id", symbol: "HYPEUSDT" }
-        : { orderId: "probe-order-1", symbol: "HYPEUSDT", side: 2, type: 1, volume: "1", price: "30", placeStatus: "1" }
+        ? {
+          orderId: "probe-order-1",
+          userId: "private-user-id",
+          symbol: "HYPEUSDT",
+        }
+        : {
+          orderId: "probe-order-1",
+          symbol: "HYPEUSDT",
+          side: 2,
+          type: 1,
+          volume: "1",
+          price: "30",
+          placeStatus: "1",
+        }
       return new Response(JSON.stringify({
         code: 0,
         msg: "success",
