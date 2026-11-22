@@ -85,12 +85,15 @@ const formatBytes = (bytes) => {
 const reportProgress = (onProgress, message) => onProgress?.(message)
 
 const getTreeSize = async (directory) => {
-  const files = await listRegularFiles(directory)
+  const files = await listRegularFiles({ directory })
   let totalBytes = 0
   for (const relativePath of files) {
     totalBytes += (await stat(path.join(directory, relativePath))).size
   }
-  return { files, totalBytes }
+  return {
+    files,
+    totalBytes,
+  }
 }
 
 export function createHarvesterArchiveDirectoryName({ createdAt, archiveId } = {}) {
@@ -203,7 +206,12 @@ async function copyCompressedTree({ sourceDirectory, destinationDirectory, relat
       throw new Error(`Refusing to archive a symbolic link: ${sourcePath}`)
     }
     if (sourceStats.isDirectory()) {
-      await copyCompressedTree({ sourceDirectory, destinationDirectory, relative: childRelative, onFileCopied })
+      await copyCompressedTree({
+        sourceDirectory,
+        destinationDirectory,
+        relative: childRelative,
+        onFileCopied,
+      })
     } else if (sourceStats.isFile()) {
       const compressedRelative = childRelative + ".gz"
       const destinationPath = path.join(destinationDirectory, compressedRelative)
@@ -433,14 +441,17 @@ async function copyCumulativeTailTree({
         destination: destinationPath,
         runtimeSessionId,
       })
-      await onFileCopied?.({ relativePath: childRelative.split(path.sep).join("/"), size })
+      await onFileCopied?.({
+        relativePath: childRelative.split(path.sep).join("/"),
+        size,
+      })
     } else {
       throw new Error(`Refusing to archive a non-regular session entry: ${sourcePath}`)
     }
   }
 }
 
-async function listRegularFiles(directory, relative = "") {
+async function listRegularFiles({ directory, relative = "" } = {}) {
   const current = relative ? path.join(directory, relative) : directory
   const entries = await readdir(current, { withFileTypes: true })
   const files = []
@@ -452,7 +463,7 @@ async function listRegularFiles(directory, relative = "") {
       throw new Error(`Archive contains a symbolic link: ${filename}`)
     }
     if (fileStats.isDirectory()) {
-      files.push(...await listRegularFiles(directory, childRelative))
+      files.push(...await listRegularFiles({ directory, relative: childRelative }))
     } else if (fileStats.isFile()) {
       files.push(childRelative.split(path.sep).join("/"))
     } else {
@@ -475,7 +486,7 @@ async function getDevelopmentDataTreeSize(directory) {
       throw new Error(`Refusing to inspect a symbolic link in DEV data: ${filename}`)
     }
     if (fileStats.isDirectory()) {
-      files.push(...await listRegularFiles(directory, entry.name))
+      files.push(...await listRegularFiles({ directory, relative: entry.name }))
     } else if (fileStats.isFile()) {
       files.push(entry.name)
     } else {
@@ -486,7 +497,10 @@ async function getDevelopmentDataTreeSize(directory) {
   for (const relativePath of files) {
     totalBytes += (await stat(path.join(directory, relativePath))).size
   }
-  return { files, totalBytes }
+  return {
+    files,
+    totalBytes,
+  }
 }
 
 async function copyDevelopmentDataTree({ sourceDirectory, destinationDirectory, onFileCopied } = {}) {
@@ -511,7 +525,10 @@ async function copyDevelopmentDataTree({ sourceDirectory, destinationDirectory, 
       })
     } else if (sourceStats.isFile()) {
       await copyFile(sourcePath, destinationPath)
-      await onFileCopied?.({ relativePath: entry.name, size: sourceStats.size })
+      await onFileCopied?.({
+        relativePath: entry.name,
+        size: sourceStats.size,
+      })
     } else {
       throw new Error(`Refusing to archive a non-regular DEV data entry: ${sourcePath}`)
     }
@@ -816,7 +833,7 @@ export async function runHarvesterArchivePush({
       flag: "wx",
       mode: 0o600,
     })
-    const copiedFiles = await listRegularFiles(localArchive)
+    const copiedFiles = await listRegularFiles({ directory: localArchive })
     if (copiedFiles.length === 0) {
       throw new Error("The logs and data directories contain no regular files to archive.")
     }
