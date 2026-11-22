@@ -389,6 +389,7 @@ async function handleEarlyRequestRoutes({
   operator,
   marketData,
   logger,
+  exchangeAccounts,
 } = {}) {
   if (await handleOperatorControlRequest({
     request,
