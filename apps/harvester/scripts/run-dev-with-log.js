@@ -69,6 +69,7 @@ if (cliArguments.length === 1 && cliArguments[0] === "--version") {
   ]
   const [, sessionLogStream] = logStreams
   const childProcess = { current: undefined }
+  let childStarted = false
   let childClosed = false
   let logStreamFailed = false
   let outputForwardingFailed = false
@@ -194,6 +195,10 @@ if (cliArguments.length === 1 && cliArguments[0] === "--version") {
     }),
   ]
   
+  childProcess.current.on("spawn", () => {
+    childStarted = true
+  })
+
   childProcess.current.on("error", (error) => {
     process.stderr.write(`Failed to start Harvester: ${error.message}\n`)
     process.exitCode = 1
@@ -218,7 +223,7 @@ if (cliArguments.length === 1 && cliArguments[0] === "--version") {
           endedAt: new Date().toISOString(),
           exitCode: code,
           signal,
-          logStreamsComplete: !logStreamFailed && !outputForwardingFailed && logStreamsClosed,
+          logStreamsComplete: childStarted && !logStreamFailed && !outputForwardingFailed && logStreamsClosed,
         }, null, 2)}\n`,
         {
           encoding: "utf8",
