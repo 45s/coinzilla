@@ -1192,7 +1192,10 @@ function createPrivateResponseLoggingFixture() {
       },
     }),
   })
-  return { client, events }
+  return {
+    client,
+    events,
+  }
 }
 
 async function readPrivateDiagnosticResponses({ client }) {
