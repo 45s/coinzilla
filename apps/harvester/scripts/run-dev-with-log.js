@@ -125,11 +125,15 @@ if (cliArguments.length === 1 && cliArguments[0] === "--version") {
       },
     },
   )
-  if (logStreamFailed) {childProcess.current.kill("SIGTERM")}
+  if (logStreamFailed) {
+    childProcess.current.kill("SIGTERM")
+  }
   
   const closeLogStreams = async () => {
     const results = await Promise.allSettled(logStreams.map(async (stream) => {
-      if (stream.closed) {return}
+      if (stream.closed) {
+        return
+      }
       if (stream.destroyed) {
         await once(stream, "close")
         return
