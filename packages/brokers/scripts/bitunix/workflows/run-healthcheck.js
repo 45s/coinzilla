@@ -598,7 +598,7 @@ async function runPublishedHealthCheck({
 /**
  * Run a read-only health-check mode or a human-controlled order mode inside the report workflow.
  *
- * @param {{mode: "local"|"publish"|"place-order"|"probe-order", probeId?: string, brokersRoot: string, repositoryRoot: string, env: NodeJS.ProcessEnv, stdout?: NodeJS.WriteStream, runOperatorOrder?: (input: {env: NodeJS.ProcessEnv}) => Promise<object>, runOperatorProbe?: (input: {env: NodeJS.ProcessEnv, probeId: string}) => Promise<object>}} input
+ * @param {{mode: "local"|"publish"|"place-order"|"probe-order", includeGeneralDiagnostics?: boolean, probeId?: string, brokersRoot: string, repositoryRoot: string, env: NodeJS.ProcessEnv, stdout?: NodeJS.WriteStream, runOperatorOrder?: (input: {env: NodeJS.ProcessEnv}) => Promise<object>, runOperatorProbe?: (input: {env: NodeJS.ProcessEnv, probeId: string}) => Promise<object>}} input
  * @returns {Promise<number>} Process exit code.
  */
 export async function runHealthcheckWorkflow({
