@@ -192,4 +192,55 @@ export function createBitunixOrderProbePreflight({
   filtersResult,
   balancesResult,
   openOrdersResult,
+} = {}) {
+  const probe = getBitunixOrderProbe({
+    probeId,
+  })
+  const markets = requireArrayResult({
+    result: marketResult,
+    operation: "market catalog",
+  })
+  const filters = assertSuccessfulBrokerResult({
+    result: filtersResult,
+    operation: "symbol metadata",
+  })
+  const metadata = validateActiveHypeUsdtMarket({
+    markets,
+    filters,
+  })
+  const balances = requireArrayResult({
+    result: balancesResult,
+    operation: "account balances",
+  })
+  const balanceSummary = createBalanceSummary({
+    balances,
+    probe,
+  })
+  assertProbeBalanceIsInsufficient({
+    probe,
+    freeBase: balanceSummary.freeBaseBalance,
+    freeQuote: balanceSummary.freeQuoteBalance,
+  })
+  const openOrders = requireArrayResult({
+    result: openOrdersResult,
+    operation: "symbol-scoped open orders",
+  })
+  assertNoOpenOrders({
+    openOrders,
+  })
+  const orderInput = createOrderInput({
+    probe,
+  })
+  const request = createSpotOrderRequest({
+    input: orderInput,
+  })
+  return createPreflightResult({
+    probe,
+    orderInput,
+    wireRequest: request.body,
+    minimumQuantity: metadata.minimumQuantity,
+    minimumNotional: metadata.minimumNotional,
+    balanceSummary,
+    openOrderCount: openOrders.length,
+  })
 }
