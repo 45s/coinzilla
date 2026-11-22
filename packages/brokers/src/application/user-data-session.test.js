@@ -2,7 +2,7 @@ import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 import { UserDataSession } from "./user-data-session.js"
 
-function createRecoveryPort({ subscriptionId, isReconnectClient, failReconnect, calls = [], subscribe }) {
+function createRecoveryPort({ subscriptionId, isReconnectClient, failReconnect, failDisconnect, calls = [], subscribe }) {
   const listeners = {
     event: new Set(),
     error: new Set(),
@@ -20,6 +20,9 @@ function createRecoveryPort({ subscriptionId, isReconnectClient, failReconnect, 
     },
     async disconnect() {
       calls.push("disconnect")
+      if (isReconnectClient && failDisconnect) {
+        throw new Error("reconnect cleanup unavailable")
+      }
       this.state = "closed"
     },
     async subscribe() {
@@ -183,13 +186,14 @@ async function createTwoSubscriberRecoveryScenario() {
   }
 }
 
-function createRecoveryPortFactory({ ports, initialClient, reconnectClient, failReconnect, calls }) {
+function createRecoveryPortFactory({ ports, initialClient, reconnectClient, failReconnect, failDisconnect, calls }) {
   return (client) => {
     if (!ports.has(client)) {
       ports.set(client, createRecoveryPort({
         subscriptionId: client === initialClient ? 17 : 18,
         isReconnectClient: client === reconnectClient,
         failReconnect,
+        failDisconnect,
         calls,
       }))
     }
@@ -221,7 +225,7 @@ function createRecoveryTimerScheduler() {
   }
 }
 
-function createRecoveryFixture({ failReconnect = false, logger = {} } = {}) {
+function createRecoveryFixture({ failReconnect = false, failDisconnect = false, logger = {} } = {}) {
   let currentClient = { name: "initial" }
   const initialClient = currentClient
   const reconnectClient = { name: "reconnected" }
@@ -237,6 +241,7 @@ function createRecoveryFixture({ failReconnect = false, logger = {} } = {}) {
       initialClient,
       reconnectClient,
       failReconnect,
+      failDisconnect,
       calls,
     }),
     setClient: (client) => {
@@ -472,6 +477,39 @@ async function verifyFailedReconnectKeepsRecoveryPending() {
   await fixture.session.stop()
 }
 
+async function verifyFailedReconnectCleanupFailureBlocksNextClient() {
+  const fixture = createRecoveryFixture({
+    failReconnect: true,
+    failDisconnect: true,
+  })
+  fixture.session.start()
+  await fixture.session.subscribe({ onEvent() {} })
+
+  fixture.closeInitialConnection()
+  await fixture.reconnect()
+  await fixture.reconnect()
+
+  assert.equal(
+    countCalls({
+      calls: fixture.calls,
+      method: "connect",
+    }),
+    1,
+    "A replacement client must not be created while the previous failed client cannot be disposed.",
+  )
+  assert.equal(
+    countCalls({
+      calls: fixture.calls,
+      method: "disconnect",
+    }),
+    2,
+    "The session must retry disposal of the same failed client before opening another socket.",
+  )
+
+  fixture.closeCurrentConnection()
+  await fixture.session.stop()
+}
+
 async function verifyAcknowledgementIsRejectedWithoutRecovery() {
   const fixture = createRecoveryFixture()
   fixture.session.start()
@@ -522,6 +560,7 @@ async function verifySubscriberAcknowledgementsCompleteSharedRecovery() {
 
 describe("Application user-data session recovery acknowledgements", () => {
   it("keeps recovery pending when reconnect is unavailable", verifyFailedReconnectKeepsRecoveryPending)
+  it("does not replace a failed reconnect client before cleanup succeeds", verifyFailedReconnectCleanupFailureBlocksNextClient)
   it("rejects acknowledgement when no recovery is pending", verifyAcknowledgementIsRejectedWithoutRecovery)
   it("separates local acknowledgement acceptance from shared completion", verifySubscriberAcknowledgementsCompleteSharedRecovery)
 })
