@@ -151,6 +151,16 @@ export class MarketScreenerComponent implements OnInit {
       Number(favorites.has(right.symbol)) - Number(favorites.has(left.symbol)),
     );
   });
+  readonly activeFilterCount = computed(() => {
+    let count = this.selectedLabels().size;
+    if (this.searchQuery().trim()) count += 1;
+    if (this.favoritesOnly()) count += 1;
+    if (this.movementFilter() !== 'all') count += 1;
+    if (this.minPrice() || this.maxPrice()) count += 1;
+    if (this.minVolume() || this.maxVolume()) count += 1;
+    if (this.minChange() || this.maxChange()) count += 1;
+    return count;
+  });
   readonly updatedAt = computed(() => {
     const value = this.snapshot()?.observedAt;
     if (!value) return 'Not yet loaded';
@@ -196,9 +206,35 @@ export class MarketScreenerComponent implements OnInit {
     if (!this.markets().some((market) => market[nextWindow] !== null)) this.movementFilter.set('all');
   }
 
-  updateSelectedLabels(event: Event): void {
-    const select = event.target as HTMLSelectElement;
-    this.selectedLabels.set(new Set(Array.from(select.selectedOptions, (option) => option.value)));
+  toggleFilterLabel(labelId: string): void {
+    this.selectedLabels.update((selected) => {
+      const next = new Set(selected);
+      if (next.has(labelId)) next.delete(labelId);
+      else next.add(labelId);
+      return next;
+    });
+  }
+
+  selectAllLabels(): void {
+    this.selectedLabels.set(new Set(this.labels().map((label) => label.id)));
+  }
+
+  clearSelectedLabels(): void {
+    this.selectedLabels.set(new Set<string>());
+  }
+
+  clearAllFilters(): void {
+    this.searchQuery.set('');
+    this.favoritesOnly.set(false);
+    this.movementFilter.set('all');
+    this.movementWindow.set('change24h');
+    this.clearSelectedLabels();
+    this.minPrice.set('');
+    this.maxPrice.set('');
+    this.minVolume.set('');
+    this.maxVolume.set('');
+    this.minChange.set('');
+    this.maxChange.set('');
   }
 
   updateRange(event: Event, field: 'minPrice' | 'maxPrice' | 'minVolume' | 'maxVolume' | 'minChange' | 'maxChange'): void {

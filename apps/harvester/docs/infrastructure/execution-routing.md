@@ -60,7 +60,7 @@ The production provider-factory map currently registers Binance only. Bitunix Sp
 
 ## Backward compatibility
 
-When brokers.instances, executionRouting, and marketDataRouting are absent, the documented single-Binance environment configuration remains the compatibility path. Multi-provider mode requires explicit routing tables; there is no first-connected-broker fallback.
+When brokers.instances, executionRouting, and marketDataRouting are absent, the single-provider Binance compatibility path infers execution routes for every enabled executable strategy from that strategy's own pair map. The market-data subscription set is the deduplicated union of enabled markets from those strategies. This includes RS-only configurations and does not require enabling or adding a Conservative route for the same symbol. A market is inferred only when its configured trading environment is compatible with the sole provider; there is no cross-environment fallback. Multi-provider mode still requires explicit execution and market-data routing tables; there is no first-connected-broker fallback.
 
 ## Deferred boundaries
 
@@ -70,6 +70,55 @@ Process-restart restoration remains disabled under issue #654. Recovery Seller r
 
 Provider routing preserves the `{ strategyId, symbol }` owner while market and user-data subscriptions are deduplicated by symbol. A provider account with CG routes may also receive explicitly configured RS routes; the effective runtime keeps CG and RS pair maps separate and builds a union market map for canonical exchange metadata and subscriptions.
 
-RS routes are rejected unless `strategies.RS_recoverySeller.enabled` is true and every routed market is enabled for the selected `TRADING_MODE`. RS markets require an explicit positive per-market `investment` budget and an operator-declared legacy `invested` basis, original `quantity`, and per-cycle `sellQuantity`. An RS-only provider account remains rejected until the shared engine can be composed without a CG route.
+RS routes are rejected unless `strategies.RS_recoverySeller.enabled` is true and every routed market is enabled for the selected `TRADING_MODE`. RS markets require an explicit positive per-market `investment` budget and an operator-declared legacy `invested` basis, original `quantity`, and per-cycle `sellQuantity`. An RS-only provider account must be supported without synthesizing a CG execution route: its enabled RS pair map supplies its execution routes and contributes to the market-data union. The account startup retains an empty Conservative pair map while preserving the RS pair map. The bootstrap regression starts a real in-process Harvester runtime with an initialized temporary Operational State Store and proves that LINEAUSDT is subscribed without a Conservative execution route. The shared durable configuration baseline fingerprints all configured strategy maps as one Harvester process configuration, and the runtime enabled-market set is the union of the selected strategy markets. This lets an RS-only provider account retain durable process-start evidence without fabricating a Conservative route. In multi-provider mode, RS execution and its market-data symbol still require explicit routes. This compatibility does not enable RS by default or authorize TESTNET/LIVE exchange operations.
 
 At startup, canonical exchange metadata is loaded before the RS legacy basis is initialized in the provider-account state. The RS pair is validated against its own order quantity, investment, precision, and order-type requirements even when CG owns the same market. The declared legacy quantity is not treated as available inventory: the account snapshot and shared reservation accounting must independently prove unreserved Spot custody before an RS SELL can be authorized. RS remains disabled by default.
+
+## Legacy single-provider route resolution and RS-only account startup
+
+The legacy path is selected only when both explicit routing tables are absent and exactly one provider instance has already been resolved. Its provider identity and environment come from the existing provider resolver (`TRADING_MODE` for the legacy Binance descriptor); route inference never selects an endpoint or provider by strategy.
+
+The strategy-owned route output and symbol-level subscription output are intentionally different:
+
+```ts
+type ExecutionRoute = Readonly<{
+  strategyId: "CG_coinGrabber" | "RS_recoverySeller";
+  symbol: string;
+}>;
+
+type ExecutionRoutesByProvider = ReadonlyMap<string, readonly ExecutionRoute[]>;
+type SymbolsByProvider = ReadonlyMap<string, readonly string[]>;
+```
+
+- Execution route records preserve one owner per `(strategyId, symbol)`. The symbol resolver deduplicates symbols only after ownership has been resolved; the market-data regression verifies that a symbol shared by CG and RS produces exactly one subscription per provider.
+- In legacy single-provider mode, enabled CG and enabled RS pairs are read from their separate pair maps and assigned to the one already-resolved provider only when their `tradingEnvironment` is `both` or matches that provider.
+- The market-data symbol set is the union of enabled, environment-compatible markets across enabled strategies, deduplicated by symbol. Disabled pairs remain visible to explicit-route validation so an explicit route to a disabled market fails with the correct reason, but they are never subscribed.
+- In explicit multi-provider mode, every enabled strategy-market requires an explicit execution route and every enabled market requires an explicit market-data source. There is no inferred provider, first-provider fallback, or cross-environment fallback.
+- An RS-only provider account has an empty Conservative execution-pair map and a non-empty RS pair map. The Conservative evaluator skips a symbol with no Conservative pair; the shared transition evaluator then invokes the RS transition evaluator for that symbol. The RS market is not added to Conservative configuration.
+- Durable configuration baseline identity is process-wide (`strategyName: "Harvester"`): its fingerprint includes every effective configured strategy and its enabled-market list is the union of their enabled pair maps. This preserves process-start/baseline matching when one provider account owns only RS markets.
+
+```mermaid
+sequenceDiagram
+  participant C as appConfig
+  participant P as Provider resolver
+  participant E as Execution route resolver
+  participant M as Market-data resolver
+  participant A as startProviderAccounts
+  participant H as startHarvester
+  participant T as Trading Engine
+
+  C->>P: Resolve provider identity + TESTNET/LIVE
+  P-->>A: One resolved provider
+  A->>E: Resolve enabled CG/RS pair maps
+  E-->>A: (strategyId, symbol) routes
+  A->>M: Resolve enabled strategy-market union
+  M-->>A: Deduplicated symbols by provider
+  A->>H: executionRoutes + executionSymbols + marketData source metadata
+  H->>H: Split CG pairs and RS pairs
+  H->>H: Load RS metadata + initialize legacy basis
+  H->>T: Compose shared serialized engine
+  T->>T: Conservative evaluator skips RS-only symbol
+  T->>T: RS evaluator handles RS-only symbol
+```
+
+Explicit route validation failures (disabled strategy/market, missing route, duplicate owner, unknown provider, or environment mismatch) stop startup before provider connections. A market-data source failure does not change the execution destination.

@@ -228,12 +228,27 @@ describe('MarketScreenerComponent', () => {
     const labelToggle = fixture.nativeElement.querySelector('.market-label-editor input[type="checkbox"]') as HTMLInputElement;
     labelToggle.click();
     fixture.detectChanges();
-    const labelFilter = fixture.nativeElement.querySelector('select[aria-label="Filter by labels"]') as HTMLSelectElement;
-    labelFilter.options[0].selected = true;
-    labelFilter.dispatchEvent(new Event('change'));
+    const labelFilter = fixture.nativeElement.querySelector('.filter-label-chip') as HTMLButtonElement;
+    expect(labelFilter.getAttribute('aria-pressed')).toBe('false');
+    labelFilter.click();
     fixture.detectChanges();
+    expect(labelFilter.getAttribute('aria-pressed')).toBe('true');
     expect(rows()).toHaveLength(1);
     expect(rows()[0].textContent).toContain('BTCUSDT');
+
+    const labelActions = fixture.nativeElement.querySelector('.label-filter-actions') as HTMLElement;
+    const selectAllLabels = Array.from(labelActions.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('Select all')) as HTMLButtonElement;
+    const clearLabels = Array.from(labelActions.querySelectorAll('button'))
+      .find((button) => button.textContent?.trim() === 'Clear') as HTMLButtonElement;
+    selectAllLabels.click();
+    fixture.detectChanges();
+    expect(labelFilter.getAttribute('aria-pressed')).toBe('true');
+    clearLabels.click();
+    fixture.detectChanges();
+    expect(labelFilter.getAttribute('aria-pressed')).toBe('false');
+    labelFilter.click();
+    fixture.detectChanges();
 
     const minimumPrice = fixture.nativeElement.querySelector('input[aria-label="Minimum price"]') as HTMLInputElement;
     minimumPrice.value = '70000';
@@ -241,6 +256,12 @@ describe('MarketScreenerComponent', () => {
     fixture.detectChanges();
     expect(rows()).toHaveLength(0);
     expect((fixture.nativeElement as HTMLElement).textContent).toContain('No markets match these filters.');
+
+    const clearFilters = fixture.nativeElement.querySelector('.clear-filters-button') as HTMLButtonElement;
+    clearFilters.click();
+    fixture.detectChanges();
+    expect(rows()).toHaveLength(2);
+    expect(fixture.nativeElement.querySelector('.active-filter-count')).toBeNull();
   });
 
 });

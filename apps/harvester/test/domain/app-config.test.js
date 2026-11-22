@@ -26,8 +26,13 @@ quantityPrecision: 1 },
   },
   WLDFDUSD: { pricePrecision: 4,
 quantityPrecision: 1 },
+  LINEAUSDT: { pricePrecision: 6,
+quantityPrecision: 0 },
 };
 for (const [symbol, pair] of Object.entries(strategy(validConfig).pairs)) {
+  Object.assign(pair, marketPrecision[symbol]);
+}
+for (const [symbol, pair] of Object.entries(validConfig.strategies.RS_recoverySeller.pairs)) {
   Object.assign(pair, marketPrecision[symbol]);
 }
 

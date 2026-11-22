@@ -119,33 +119,33 @@ Harvester exposes one application-wide named `appConfig` export from `config/ind
 
 Each pair must explicitly use `TRADING_ENVIRONMENTS.TESTNET`, `.LIVE`, or `.BOTH` from `src/domain/trading-environment.js`. `TRADING_MODE=testnet` includes TESTNET and BOTH; `TRADING_MODE=live` includes LIVE and BOTH. The serialized values remain `"testnet"`, `"live"`, and `"both"`. Non-matching pairs are excluded, and `tradingEnvironment` is removed from the effective runtime pair config. There is no default or fallback. If no pair matches (or no matching pair is enabled), startup fails before broker connection. The pair's `enabled` flag remains independent of its environment.
 
-Other strategy-owned pair fields remain under `tradingPairs.<SYMBOL>`: `enabled`, `enableVolatilityProtection`, `externalOrdersPolicy`, `investment`, `orderQuantity`, `keepQuantity`, `minProfit`, and fee settings. Precision is not operator-owned pair configuration: it is resolved from `token-specification.json` by exact market symbol when `loadAppConfig` builds the effective runtime config. The external pair module uses `externalOrdersPolicy: EXTERNAL_ORDERS_POLICIES.IGNORE` (or `.BLOCK`) from `src/domain/external-orders-policy.js`; the serialized values remain `"ignore"` and `"block"`. Validation still allows the policy to be omitted and defaults it to ignore. Every unmatched startup order follows this policy regardless of client-order ID prefix: IGNORE leaves the order external without blocking strategy evaluation, while BLOCK restricts only that symbol. Unmatched execution reports with reserved `h-` IDs remain fail-closed and are never attributed to the current process.
+Conservative pair fields remain under `CG_COIN_GRABBER_CONFIG.pairs.<SYMBOL>` (the source module currently exports this map as `tradingPairs`); Recovery Seller fields remain under `recoverySellerPairs.<SYMBOL>`. Conservative fields include `enabled`, `enableVolatilityProtection`, `externalOrdersPolicy`, `investment`, `orderQuantity`, `keepQuantity`, `minProfit`, and fee settings. Precision is not operator-owned pair configuration: it is resolved from `token-specification.json` by exact market symbol when `loadAppConfig` builds the effective runtime config. The external pair module uses `externalOrdersPolicy: EXTERNAL_ORDERS_POLICIES.IGNORE` (or `.BLOCK`) from `src/domain/external-orders-policy.js`; the serialized values remain `"ignore"` and `"block"`. Validation still allows the policy to be omitted and defaults it to ignore. Every unmatched startup order follows this policy regardless of client-order ID prefix: IGNORE leaves the order external without blocking strategy evaluation, while BLOCK restricts only that symbol. Unmatched execution reports with reserved `h-` IDs remain fail-closed and are never attributed to the current process.
 
 **Runtime environment contract:** `TRADING_MODE` accepts exactly `testnet` or `live` and remains the compatibility selector for the legacy single-Binance configuration. `NODE_ENV` never selects an exchange environment. When `brokers.instances` is configured, each account entry selects its own explicit `environment`; the runtime passes that value into the provider adapter and account-scoped process lock.
 
 ### Recovery Seller configuration
 
-RS is explicitly disabled by default. Keep `RS_RECOVERY_SELLER_CONFIG.enabled` false until each enabled market has an explicit legacy basis and the complete RS-4/RS-5 runtime acceptance is merged. The operator-owned market map is `apps/harvester/rs-recovery-seller.js`; it is empty by default.
+**RS activation status — 2026-11-22:** LINEAUSDT is configured for Binance Spot TESTNET, but `RS_RECOVERY_SELLER_CONFIG.enabled` remains `false`. PR #1696 implements legacy single-provider route inference for enabled strategies, RS-only provider startup without a Conservative execution route, and a deduplicated CG/RS market-data union. Multi-provider deployments continue to require explicit execution and market-data route tables. Exact-head CI and offline acceptance must pass before any activation decision. The controlled TESTNET runbook remains CLOSED / PAUSED until a separate bounded LINEAUSDT session is agreed and explicitly started.
 
 An enabled RS market requires the following fields:
 
 ```js
 export const recoverySellerPairs = {
-  ZROUSDT: {
+  LINEAUSDT: {
     enabled: true,
     tradingEnvironment: TRADING_ENVIRONMENTS.TESTNET,
-    enableVolatilityProtection: true,
-    investment: 100,
-    orderQuantity: 5,
-    sellQuantity: 0.01,
-    minProfit: 0.01,
-    priceStepPercent: 0.05,
-    makerPercent: 0,
-    takerPercent: 0.1,
+    enableVolatilityProtection: false,
     legacyPosition: {
-      invested: 100,
-      quantity: 50,
+      invested: 400,
+      quantity: 25000,
     },
+    sellQuantity: 10,
+    investment: 100,
+    orderQuantity: 7000,
+    minProfit: 0.01,
+    priceStepPercent: 0.5,
+    makerPercent: 0.1,
+    takerPercent: 0.1,
   },
 }
 ```

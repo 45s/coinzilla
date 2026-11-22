@@ -67,6 +67,60 @@ test("assigns each market only to its explicitly configured source provider", ()
   ], "each market must be assigned to exactly its configured provider instance")
 })
 
+test("subscribes to enabled RS-only markets in legacy single-provider mode", () => {
+  const resolved = resolveMarketDataSymbolsByProvider({
+    appConfig: {
+      strategies: {
+        RS_recoverySeller: {
+          enabled: true,
+          pairs: {
+            LINEAUSDT: {
+              enabled: true,
+              tradingEnvironment: "testnet",
+            },
+          },
+        },
+      },
+    },
+    providers: [providers[0]],
+  })
+  assert.deepEqual([...resolved], [["binance-one", ["LINEAUSDT"]]],
+    "Market-data subscriptions must include enabled RS markets even when CG has no configured pair map")
+})
+
+test("deduplicates a market shared by enabled CG and RS strategies", () => {
+  const resolved = resolveMarketDataSymbolsByProvider({
+    appConfig: {
+      strategies: {
+        CG_coinGrabber: {
+          pairs: {
+            LINEAUSDT: {
+              enabled: true,
+              tradingEnvironment: "testnet",
+            },
+          },
+        },
+        RS_recoverySeller: {
+          enabled: true,
+          pairs: {
+            LINEAUSDT: {
+              enabled: true,
+              tradingEnvironment: "testnet",
+            },
+          },
+        },
+      },
+    },
+    providers: [providers[0]],
+  })
+
+  assert.deepEqual(
+    [...resolved],
+    [["binance-one", ["LINEAUSDT"]]],
+    "Shared CG/RS execution ownership must create only one market-data subscription per provider and symbol",
+  )
+})
+
 test("requires explicit market-data routes for multi-provider deployments", () => {
   assert.throws(
     () => resolveMarketDataSymbolsByProvider({

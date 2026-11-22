@@ -12,40 +12,42 @@ export class EffectiveConfigurationError extends ConfigValidationError {
   }
 }
 
-function canonicalize({ value, path } = {}) {
-  if (Array.isArray(value)) {
-    const result = []
-    for (const [index, item] of value.entries()) {
-      result.push(canonicalize({
-        value: item,
-        path: `${path}[${index}]`,
-      }))
-    }
-    return result
+function canonicalizeArray({ value, path }) {
+  const result = []
+  for (let index = 0; index < value.length; index += 1) {
+    result.push(canonicalize({
+      value: value[index],
+      path: `${path}[${index}]`,
+    }))
   }
-  if (value !== null && typeof value === "object") {
-    const prototype = Object.getPrototypeOf(value)
-    if (prototype !== Object.prototype && prototype !== null) {
+  return result
+}
+
+function canonicalizeObject({ value, path }) {
+  const prototype = Object.getPrototypeOf(value)
+  if (prototype !== Object.prototype && prototype !== null) {
+    throw new EffectiveConfigurationError({
+      path,
+      expected: "a plain JSON object",
+    })
+  }
+  const result = {}
+  for (const key of Object.keys(value).sort()) {
+    if (SECRET_KEY.test(key)) {
       throw new EffectiveConfigurationError({
-        path,
-        expected: "a plain JSON object",
-      })
-    }
-    const result = {}
-    for (const key of Object.keys(value).sort()) {
-      if (SECRET_KEY.test(key)) {
-        throw new EffectiveConfigurationError({
-          path: `${path}.${key}`,
-          expected: "a non-secret strategy setting",
-        })
-      }
-      result[key] = canonicalize({
-        value: value[key],
         path: `${path}.${key}`,
+        expected: "a non-secret strategy setting",
       })
     }
-    return result
+    result[key] = canonicalize({
+      value: value[key],
+      path: `${path}.${key}`,
+    })
   }
+  return result
+}
+
+function canonicalizePrimitive({ value, path }) {
   if (typeof value === "number" && !Number.isFinite(value)) {
     throw new EffectiveConfigurationError({
       path,
@@ -59,6 +61,25 @@ function canonicalize({ value, path } = {}) {
     })
   }
   return value
+}
+
+function canonicalize({ value, path } = {}) {
+  if (Array.isArray(value)) {
+    return canonicalizeArray({
+      value,
+      path,
+    })
+  }
+  if (value !== null && typeof value === "object") {
+    return canonicalizeObject({
+      value,
+      path,
+    })
+  }
+  return canonicalizePrimitive({
+    value,
+    path,
+  })
 }
 
 function getEnabledMarketSymbols({ pairs, strategyName } = {}) {
@@ -124,5 +145,46 @@ export function createEffectiveStrategyConfigurationFingerprint({ strategyName, 
   return Object.freeze({
     fingerprint,
     enabledMarkets: Object.freeze(enabledMarkets),
+  })
+}
+
+
+/**
+ * Fingerprint the effective Harvester account configuration across all enabled
+ * strategies while retaining one durable baseline contract for the process.
+ */
+export function createEffectiveHarvesterConfigurationFingerprint({ strategies } = {}) {
+  if (!isRecord(strategies) || Object.keys(strategies).length === 0) {
+    throw new EffectiveConfigurationError({
+      path: "strategies",
+      expected: "a non-empty validated strategy map",
+    })
+  }
+  const pairs = {}
+  for (const strategy of Object.values(strategies)) {
+    if (!isRecord(strategy) || !isRecord(strategy.pairs)) {
+      throw new EffectiveConfigurationError({
+        path: "strategies",
+        expected: "each configured strategy to contain a market-pair map",
+      })
+    }
+    for (const [symbol, pair] of Object.entries(strategy.pairs)) {
+      if (!isRecord(pair) || typeof pair.enabled !== "boolean") {
+        throw new EffectiveConfigurationError({
+          path: `strategies.pairs.${symbol}`,
+          expected: "a market pair with an explicit boolean enabled flag",
+        })
+      }
+      if (!Object.hasOwn(pairs, symbol) || pair.enabled === true) {
+        pairs[symbol] = { enabled: pair.enabled }
+      }
+    }
+  }
+  return createEffectiveStrategyConfigurationFingerprint({
+    strategyName: "Harvester",
+    strategy: {
+      strategies,
+      pairs,
+    },
   })
 }

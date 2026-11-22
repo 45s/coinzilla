@@ -14,6 +14,16 @@
       }
     }
   },
+  "LINEA": {
+    "baseAsset": "LINEA",
+    "markets": {
+      "LINEAUSDT": {
+        "quoteAsset": "USDT",
+        "pricePrecision": 6,
+        "quantityPrecision": 0
+      }
+    }
+  },
   "DOGE": {
     "baseAsset": "DOGE",
     "markets": {
