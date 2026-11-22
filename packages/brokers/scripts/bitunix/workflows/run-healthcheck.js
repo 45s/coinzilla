@@ -62,14 +62,14 @@ async function runLocalDiagnostics({ brokersRoot, env, stdout }) {
   return report.summary.failed > 0 ? 1 : 0
 }
 
-function printPublishedResult({ result, stdout }) {
+function printPublishedResult({ result, stdout, probeMode = false }) {
   const { passed, failed, skipped, total } = result.report.summary
   const operatorAttempt = result.report.results.find((entry) => entry.operation === "operator order attempt")
   stdout.write([
     "Bitunix Spot diagnostics completed.",
     `Checks: ${passed} passed, ${failed} failed, ${skipped} skipped (${total} total).`,
     `Diagnostics: ${failed === 0 ? "HEALTHY" : "DEGRADED"}`,
-    `Operator preflight gate: ${result.healthCheck.healthy ? "READY" : "BLOCKED"}`,
+    `Diagnostic safety/configuration gate: ${result.healthCheck.healthy ? "READY" : "BLOCKED"}`,\n    ...(probeMode ? ["The selected probe uses its own fresh Broker preflight; generic diagnostics do not gate dispatch."] : []),
     ...(result.healthCheck.nonBlockingFailedOperations.length > 0
       ? [`Non-blocking diagnostic failures: ${result.healthCheck.nonBlockingFailedOperations.join(", ")}`]
       : []),
