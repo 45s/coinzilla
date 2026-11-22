@@ -684,10 +684,14 @@ function createHarvesterUserDataEventRuntime({ startup,
         try {
           listener()
         } catch (error) {
-          startup.logger.warn?.({
-            message: "exchange account update listener failed",
-            errorName: error?.name ?? "Error",
-          })
+          try {
+            startup.logger?.warn?.({
+              message: "exchange account update listener failed",
+              errorName: error?.name ?? "Error",
+            })
+          } catch {
+            // Optional monitoring diagnostics must not affect Harvester.
+          }
         }
       }
     },
