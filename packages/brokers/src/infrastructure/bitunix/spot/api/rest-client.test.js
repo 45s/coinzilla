@@ -1078,7 +1078,11 @@ test("Bitunix REST diagnostics log request and response while redacting credenti
         return {
           code: "0",
           msg: "success",
-          data: [{ orderId: "1234567890123456789", userId: "private-user-id", symbol: "HYPEUSDT" }],
+          data: [{
+            orderId: "1234567890123456789",
+            userId: "private-user-id",
+            symbol: "HYPEUSDT",
+          }],
         }
       },
     }),
@@ -1117,7 +1121,11 @@ test("Bitunix REST diagnostics record exchange rejection details without retryin
       ok: true,
       status: 200,
       async json() {
-        return { code: "100005", msg: "result.api.parameter.sign.illegal", data: null }
+        return {
+          code: "100005",
+          msg: "result.api.parameter.sign.illegal",
+          data: null,
+        }
       },
     }),
   })
