@@ -468,6 +468,8 @@ function subscribeToHistoryUpdates({ eventBus, clients } = {}) {
  * Attach the local trading-history WebSocket endpoint to the existing HTTP server.
  *
  * The socket carries persisted-history invalidation hints and read-only provider account snapshots.
+ * Account readers are sampled on initial connection and after account-monitor notifications.
+ * Failed provider reads remain explicit and never become fabricated empty snapshots.
  *
  * @param {{server: object, eventBus: object}} input
  * @returns {Readonly<{close: () => Promise<void>}>}
