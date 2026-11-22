@@ -162,6 +162,7 @@ const forwardOutput = async ({ stream, output }) => {
       bestEffortDestinations: () => [output],
     })
   } catch (error) {
+    outputForwardingFailed = true
     if (!logStreamFailed) {
       process.stderr.write(`Failed to forward Harvester output: ${error.message}\n`)
       process.exitCode = 1
