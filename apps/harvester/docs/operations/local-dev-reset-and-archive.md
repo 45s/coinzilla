@@ -66,7 +66,7 @@ It resolves the target using the same `OPERATIONAL_STATE_DIRECTORY` configuratio
 
 On the next startup, the existing Operational State Store bootstrap initializes a fresh empty ledger because the directory is absent. It does not restore Portfolio, RecoveryLedger, or OrderRegistry from Journal/logs/database history. Process-restart restoration remains disabled. Exchange account history synchronization and startup open-order checks remain separate startup behavior; old exchange orders are not adopted or canceled by this reset.
 
-If the target is already absent, the command reports that nothing was removed. It rejects symlink targets, invalid paths, non-TESTNET mode, missing confirmation, and any process lock.
+If the target is already absent, the command refuses the missing path; it never silently treats a bad path as a successful reset. It also rejects symlink targets, invalid paths, non-TESTNET mode, missing confirmation, and any process lock.
 
 ## Directory creation
 
