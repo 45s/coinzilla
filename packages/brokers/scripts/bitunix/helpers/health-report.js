@@ -61,7 +61,7 @@ export function createSanitizedHealthReport({ report }) {
       durationMs: result.durationMs ?? null,
       ...(typeof result.probeId === "string" ? { probeId: result.probeId } : {}),
       ...(typeof result.mutationOutcome === "string" ? { mutationOutcome: result.mutationOutcome } : {}),
-      ...(result.operation === "Broker API getOpenOrders" || result.operation === "Broker API getOrder" || result.operation === "Broker API cancelOrder"
+      ...(result.operation === "Broker API getOpenOrders" || result.operation === "Broker API getOrder" || result.operation === "Broker API getOrder after cancellation" || result.operation === "Broker API cancelOrder"
         ? createPublishedOrderReadResult({ result })
         : {}),
       ...(result.error ? {
