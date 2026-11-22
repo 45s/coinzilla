@@ -6,7 +6,7 @@ This log records operator-authorized LIVE order-placement probes against Bitunix
 
 - Each probe is a separately confirmed, one-shot LIVE mutation. The operator runs the command locally and confirms it interactively.
 - Never retry a dispatched request with an unknown outcome. Reconcile manually before any further mutation.
-- A successful diagnostic workflow means the probe harness completed and captured the exchange response. It does **not** mean the exchange accepted the order.
+- A successful diagnostic workflow means the probe harness completed; inspect the nested placement acknowledgement to determine whether Bitunix accepted or rejected the order. A later read-only reconciliation failure does not undo a definitive placement acknowledgement.
 - A placement-level rejection is distinct from an HTTP/transport failure. In particular, Bitunix can return HTTP 200 and outer `success: true` while the nested placement result rejects the order.
 - Missing asset rows in the Spot account response remain **unknown**, not zero. An explicitly confirmed SELL probe may proceed with an extra typed acknowledgment; MARKET probes remain blocked while their volume denomination is unresolved.
 - These probes do not establish order acceptance, fills, quantity denomination, precision/tick rules, or complete order lifecycle behavior.
@@ -38,18 +38,32 @@ This log records operator-authorized LIVE order-placement probes against Bitunix
 - Published sanitized report: `packages/brokers/diagnostics/reports/bitunix-health-20261122T013708002Z.json`.
 - Report commit: `32362a40ec2f29b2ae895d0dbede78b3b157f907`.
 
+### 2026-11-22 — `limit-buy-11-usdt` accepted; detail reconciliation rejected
+
+- Command: `pnpm --filter @coinzilla/brokers bitunix:healthcheck --probe-order=limit-buy-11-usdt`.
+- Operator explicitly confirmed the one LIVE order after reviewing the snapshot. No automatic retry was performed.
+- Preflight: HYPEUSDT open orders `0`; available USDT `11.2436631349324959035`; required preflight minimum `11.24 USDT`.
+- Order: Spot LIMIT BUY `HYPEUSDT`, price `30 USDT`, quantity `0.366 HYPE`, estimated notional `10.98 USDT`, reserved fee allowance `0.24 USDT`.
+- Exact placement request body: `{"symbol":"HYPEUSDT","side":2,"type":1,"volume":"0.366","price":"30"}`.
+- Placement response: HTTP `200`; outer `code: "0"`, `msg: "result.success"`, `success: true`; nested `orderId: "2124329325141426176"`, `side: 2`, `type: 1`, `volume: "0.366"`, `price: "30"`, `placeStatus: 1`, `placeCode: 0`, `placeMsg: "成功"`.
+- **Placement conclusion: CONFIRMED.** Bitunix explicitly accepted the order and returned a non-empty string order ID. The operator subsequently confirmed the order was still waiting/open; no fill is claimed.
+- Follow-up read: one authenticated `GET /api/spot/v1/order/detail?orderId=2124329325141426176`; HTTP `200`; exchange code `100005`; message `result.api.parameter.sign.illegal`. This is a separate read-only detail/signature failure after successful placement, not a placement rejection.
+- The CLI showed `Broker result: not successful` and exited non-zero because the detail reconciliation error was included in the broker result. This was misleading: the mutation outcome remained `CONFIRMED` and the exchange had already accepted the order.
+- Safety: do not repeat this placement. Reconcile the existing order using read-only exchange queries. No cancellation, retry, or second mutation was performed.
+- Local private evidence: `packages/brokers/.diagnostics/bitunix-order-probe-limit-buy-11-usdt.json`. Published sanitized report: `packages/brokers/diagnostics/reports/bitunix-health-20261122T022854989Z.json`; report commit `72619cad577301b293454d3c3f82fda5190b5743`.
+
 ## What is proven — and what is not
 
-**Proven by these two observations:**
+**Proven by the three observations above:**
 
-1. The current Coinzilla `BitunixSpotBroker.createOrder()` path dispatched both a Spot LIMIT BUY and a Spot LIMIT SELL request to Bitunix.
+1. The current Coinzilla `BitunixSpotBroker.createOrder()` path dispatched Spot LIMIT BUY and SELL requests; the funded BUY was explicitly accepted by Bitunix.
 2. Bitunix returned a parseable HTTP-200 placement envelope with nested rejection code `10034`.
-3. Coinzilla correctly surfaced the nested placement rejection as `BITUNIX_REST_EXCHANGE_REJECTED` and mutation outcome `REJECTED`.
+3. Coinzilla correctly surfaced the two unfunded nested placement rejections as `BITUNIX_REST_EXCHANGE_REJECTED` / `REJECTED`, and the funded BUY as `CONFIRMED` with an exchange order ID.
 4. The probe harness preserved the raw placement response and published a sanitized report for each attempt.
 
 **Not proven:**
 
-- That Bitunix accepts a Spot order from this implementation.
+- That order-detail GET authentication/signature construction is accepted by Bitunix; the first post-placement detail lookup returned exchange code `100005`.
 - That LIMIT `volume` denomination is correct. Official English/Chinese Spot documentation and other endpoint families disagree; an insufficient-balance rejection does not resolve that conflict.
 - That MARKET order quantity denomination is safe. MARKET probes remain disabled until this is resolved.
 - That HYPE balance rows omitted by the account endpoint mean a zero balance.
@@ -60,5 +74,5 @@ This log records operator-authorized LIVE order-placement probes against Bitunix
 1. Inspect the raw sanitized reports and the exact request/response adapter path; keep the exchange response as the source of truth.
 2. The operator confirmed the Spot account lacked the required assets; both `10034` insufficient-balance rejections were expected. Do not spend further effort investigating those rejections.
 3. Resolve the LIMIT/MARKET `volume` contract from authoritative endpoint-specific evidence before enabling additional probes.
-4. A funded BUY probe is prepared: LIMIT BUY `HYPEUSDT` at `30 USDT`, spending up to `11 USDT`, with quantity calculated from live `basePrecision` and a `0.24 USDT` reserve. It requires a short `y/N` confirmation. Do not run it until the operator has funded Spot and merged the PR.
-5. Keep the broader Bitunix Spot lifecycle/Harvester admission blockers tracked independently; these two placement rejections do not make Bitunix trading-ready.
+4. The funded BUY probe is complete and must never be repeated. Its order ID is `2124329325141426176`; the operator reports it remains waiting/open.
+5. Investigate the `100005 result.api.parameter.sign.illegal` response for the signed GET order-detail endpoint. Compare the exact canonical query string, URL encoding, and official signing example. Prefer already-working signed POST pending/history reads for safe reconciliation if justified by tests. Keep broader Bitunix Spot lifecycle/Harvester admission blockers tracked independently; one accepted LIMIT order does not make Bitunix trading-ready.
