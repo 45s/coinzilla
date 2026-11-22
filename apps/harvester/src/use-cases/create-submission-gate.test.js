@@ -44,6 +44,48 @@ function createOrder({ side, type = "LIMIT" } = {}) {
   }
 }
 
+function createVolatilityProtectedDependencies() {
+  const dependencies = createDependencies()
+  dependencies.state.shutdownBuyGate = false
+  dependencies.state.volatilityProtection.set("DOGEUSDT", {
+    mode: "PROTECTED",
+    reason: "HIGH_VOLATILITY",
+  })
+  dependencies.canTrade = () => true
+  dependencies.isStopping = () => false
+  dependencies.isMarketPriceFresh = () => true
+  dependencies.getVolatilityData = () => ({
+    ok: true,
+    data: {
+      status: { isReady: true, isFresh: true },
+      metrics: { volatilityRatio: "2" },
+    },
+  })
+  dependencies.isVolatilityProtectionEnabledForSymbol = () => true
+  return dependencies
+}
+
+test("market-owned volatility protection blocks RS recovery BUY submissions", () => {
+  const gate = createSubmissionGate(createVolatilityProtectedDependencies())
+  const result = gate({
+    order: createOrder({ side: "BUY" }),
+    purpose: "RECOVERY_BUY",
+  })
+
+  assert.equal(result.allowed, false, "The shared market protection gate must block an RS recovery BUY.")
+  assert.equal(result.reason, "VOLATILITY_PROTECTION_ACTIVE")
+})
+
+test("market-owned volatility protection permits explicitly purposed RS recovery SELLs", () => {
+  const gate = createSubmissionGate(createVolatilityProtectedDependencies())
+  const result = gate({
+    order: createOrder({ side: "SELL" }),
+    purpose: "RECOVERY_SELL",
+  })
+
+  assert.deepEqual(result, { allowed: true }, "The shared volatility gate must retain the explicit recovery-SELL exception.")
+})
+
 test("blocks every BUY at the final submission gate after shutdown", () => {
   const gate = createSubmissionGate(createDependencies())
   const result = gate({
