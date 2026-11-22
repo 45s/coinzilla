@@ -48,11 +48,12 @@ The Journal process-start event schema already records allowlisted Git source me
 
 - `run-dev-with-log.js` captures `captureBuildMetadata()` once before spawning Harvester and stores the allowlisted source snapshot with the process-start timestamp, runtime session UUID and `TRADING_MODE`.
 - The launcher writes `logs/sessions/<timestamp>-<runtime-session-id>/process-identity.json` using exclusive creation (`wx`) and restrictive file mode (`0600`). An existing identity is never overwritten.
+- After the child exits and session log streams are closed, the runner writes a matching `process-completed.json` marker using exclusive creation. The archive command requires and validates this marker before copying session evidence.
 - The child receives the exact captured source snapshot through the internal `COINZILLA_PROCESS_SOURCE_METADATA` environment value. `createHarvesterProcessIdentity()` reuses that snapshot for the Journal process-start event and does not perform a second Git lookup.
 - If startup Git provenance is unavailable, the identity records explicit null/unknown values. The later archive command must reject missing/invalid commit provenance; it must not substitute the current checkout's HEAD.
 - The persisted identity contains only allowlisted build metadata and process facts. It does not serialize the environment or credentials.
 
-The archive command is implemented as `pnpm run archive:push`. It selects the newest eligible TESTNET session (or accepts `--session <runtime-session-id>`), uses the persisted process identity, creates a verified snapshot through the existing SQLite backup service, copies only that session directory and the backup pair, writes a SHA-256 manifest, and pushes a non-overwriting directory to the private remote. The operator must run it after the Harvester process has stopped so session files are stable.
+The archive command is implemented as `pnpm run archive:push`. It selects the newest eligible TESTNET session (or accepts `--session <runtime-session-id>`), uses the persisted process identity, creates a verified snapshot through the existing SQLite backup service, copies only that session directory and the backup pair, writes a SHA-256 manifest, and pushes a non-overwriting directory to the private remote. The dev runner writes `process-completed.json` only after the child exits and the session log streams are closed. The archive command requires this matching completion marker, so it refuses to copy a session that is still running or did not close through the runner. Run it after the Harvester process has stopped.
 
 ## 3. Data selection
 
