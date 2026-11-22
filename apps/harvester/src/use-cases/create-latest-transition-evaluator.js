@@ -348,6 +348,10 @@ function createConservativeLatestTransitionEvaluator(dependencies = {}) {
       return gate
     }
     try {
+      const filterRefresh = await dependencies.refreshRecoverySellMarketMetadata?.({ symbol })
+      if (filterRefresh?.ok === false) {
+        return filterRefresh
+      }
       return await executeConservativeLatestTransition({
         dependencies,
         options,

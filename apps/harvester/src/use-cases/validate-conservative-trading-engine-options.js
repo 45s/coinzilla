@@ -17,6 +17,7 @@ function validateOptionalCallbacks({
   getVolatilityData,
   isMarketPriceFresh,
   isMarketBookFresh,
+  now,
   onOperationalStateCancellationIntent,
   onOperationalStateCancellationOutcome,
   onOperationalStateStrategyMarketPaused,
@@ -49,6 +50,9 @@ function validateOptionalCallbacks({
   }
   if (typeof isMarketBookFresh !== "function") {
     throw new TypeError("isMarketBookFresh must be a function")
+  }
+  if (typeof now !== "function") {
+    throw new TypeError("now must be a function")
   }
 }
 
@@ -84,6 +88,7 @@ export function validateConservativeTradingEngineOptions({
   getVolatilityData,
   isMarketPriceFresh,
   isMarketBookFresh,
+  now,
   onOperationalStateCancellationIntent,
   onOperationalStateCancellationOutcome,
   onOperationalStateStrategyMarketPaused,
@@ -109,6 +114,7 @@ export function validateConservativeTradingEngineOptions({
     getVolatilityData,
     isMarketPriceFresh,
     isMarketBookFresh,
+    now,
     onOperationalStateCancellationIntent,
     onOperationalStateCancellationOutcome,
     onOperationalStateStrategyMarketPaused,
