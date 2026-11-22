@@ -132,6 +132,7 @@ async function readLatestRecoveryCheckpoint(recoveryFactsDirectory) {
     || !/^[a-f0-9]{64}$/i.test(dataCommitHash)
     || latestFact.digest !== dataCommitHash
     || String(latestManifest.sequence) !== String(latestFact.sequence)
+    || manifestLines.length !== factLines.length
     || Number(latestManifest.recordCount) !== factLines.length
     || !UUID_PATTERN.test(latestFact.runtimeSessionId ?? "")
   ) {

@@ -1,33 +1,43 @@
 # Local Harvester DEV archive — decisions and implementation record
 
-> Status: the original process-scoped archive contract is superseded by the operator's 2026-11-22 decision to snapshot the complete local `logs/` and `data/` directories through the existing `archive:push` command.
+> Status: `archive:push` snapshots the complete local `logs/`, `data/`, and `recovery-facts/` directories, derives `data_commit_hash` from the last committed recovery-facts checkpoint, verifies the copied files, and publishes to the private archive repository. Focused tests and local publication still require operator execution.
 > Tracking issue: [#1742](https://github.com/45s/coinzilla/issues/1742).
 > Task branch: `feat/harvester-local-dev-reset-archive`.
 > Private destination: `45s/coinzilla-archive` (private repository).
 
 This document is the durable handoff for this work. A future contributor must continue from this record and the linked issue, not rediscover decisions from chat history.
 
-## 1. Confirmed scope (latest operator decision)
+## 1. Confirmed scope (current operator decision, 2026-11-22)
 
-The first deliverable is only:
+The existing `pnpm run archive:push` command copies the following into one uniquely named archive directory:
 
-1. Copy the Harvester DEV/TESTNET database into an archive.
-2. Copy the logs belonging to the process being archived.
-3. Verify the local archive.
-4. Push the archive artifact to the private `45s/coinzilla-archive` repository.
+1. Complete `logs/` directory, including legacy sessions and cumulative logs.
+2. Complete `data/` directory, including database files and SQLite WAL/SHM sidecars.
+3. Complete `recovery-facts/` directory, preserving `facts.jsonl` and `manifest.jsonl`.
+4. Root-level `data_commit_hash`, derived from the final committed recovery-facts manifest/fact records.
 
-Explicitly out of scope for this iteration:
+The remote layout is:
 
-- No encryption. The operator explicitly said: “skip encryption part”.
-- No reset, truncation, deletion, cleanup, or reinitialization of active data.
-- No facts-store migration or facts archival.
-- No PROD/LIVE database or logs.
-- No exchange API calls, order/account mutations, or trading-process control.
-- No upload to the public `45s/coinzilla` source repository.
+```text
+archives/<archive-id>/
+├── data_commit_hash
+├── logs/
+├── data/
+├── recovery-facts/
+└── manifest.json
+```
 
-The archive is intentionally a plain, unencrypted artifact in a private repository. This is an explicit operator decision, not a claim that the artifact is encrypted or safe for public distribution.
+The command does not require process identity/completion markers and does not start a new Harvester process. It preserves all files under the three source directories without selecting sessions or filtering the `data/` tree by environment. It does not mutate or reset source files. The archive is a raw folder snapshot, not a transactional SQLite backup.
 
-## 2. Archive identity: process start, not archive-command time
+Safety boundaries:
+- Require `TRADING_MODE=testnet` for invoking the archive command and restrict publication to the private `45s/coinzilla-archive` repository.
+- Do not follow symlinks or archive special filesystem entries.
+- Do not serialize environment variables or credentials into the archive manifest.
+- Do not make exchange API calls, mutate trading configuration, or start/stop a process.
+- Keep the local snapshot if publication fails; never force-push or overwrite a different existing archive.
+- The entire `data/` tree is included as requested. The command-mode guard does not certify that every file in that tree belongs to TESTNET.
+
+## 2. Original process-identity contract (historical; superseded by section 1)
 
 The archive must identify the Harvester process that produced the data.
 
@@ -53,9 +63,9 @@ The Journal process-start event schema already records allowlisted Git source me
 - If startup Git provenance is unavailable, the identity records explicit null/unknown values. The later archive command must reject missing/invalid commit provenance; it must not substitute the current checkout's HEAD.
 - The persisted identity contains only allowlisted build metadata and process facts. It does not serialize the environment or credentials.
 
-The archive command is implemented as `pnpm run archive:push`. It selects the newest eligible TESTNET session (or accepts `--session <runtime-session-id>`), uses the persisted process identity, creates a verified snapshot through the existing SQLite backup service, copies only that session directory and the backup pair, writes a SHA-256 manifest, and pushes a non-overwriting directory to the private remote. The dev runner writes `process-completed.json` only after the child exits and the session log streams are closed. The archive command requires this matching completion marker, so it refuses to copy a session that is still running or did not close through the runner. Run it after the Harvester process has stopped.
+The original process-scoped archive implementation selected the newest eligible TESTNET session (or accepted `--session <runtime-session-id>`), used persisted process identity, created a verified snapshot through the SQLite backup service, and copied only that session and backup pair. This contract is historical and is no longer used by the current folder-snapshot implementation. The dev runner writes `process-completed.json` only after the child exits and the session log streams are closed. The archive command requires this matching completion marker, so it refuses to copy a session that is still running or did not close through the runner. Run it after the Harvester process has stopped.
 
-## 3. Data selection
+## 3. Original process-scoped data selection (historical; superseded by section 1)
 
 ### Database
 
