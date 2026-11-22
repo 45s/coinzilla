@@ -64,9 +64,11 @@ async function disconnectSubscription({ subscription, broker, scheduler }) {
       tradingMode: "testnet",
       apiKey: "test-key",
       apiSecret: "test-secret",
-      logger: { error() {},
-info() {},
-warn() {} },
+      logger: {
+        error() {},
+        info() {},
+        warn() {},
+      },
     }, {
       apiClientFactory: () => {
         client = createFakeRpcClient({
@@ -353,9 +355,11 @@ warn() {} },
     await broker.connect()
     const subscription = await broker.subscribeForUserData({ onEvent() {} })
     clients[0].state = "closed"
-    clients[0].emitClose({ code: 1006,
-reason: "network lost",
-wasClean: false })
+    clients[0].emitClose({
+      code: 1006,
+      reason: "network lost",
+      wasClean: false,
+    })
 
     await scheduler.runNext()
 
