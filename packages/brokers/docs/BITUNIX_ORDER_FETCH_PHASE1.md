@@ -55,6 +55,15 @@ Bitunix documents `POST /api/spot/v1/order/pending/list` with a required symbol.
 - Requests are sequential and never automatically retried.
 - Live order mutations are disabled in the scan Broker. No placement, cancellation, transfer or withdrawal methods are called.
 
+## Diagnostic privacy boundary
+
+- Terminal output is progress and summary only; it must never print raw exchange request/response bodies.
+- REST response log events record response shape (type, item count, field names) rather than response values. Free-form exchange and transport messages are withheld.
+- Private REST/WebSocket diagnostic results store structural summaries only. The local diagnostic report is private and created with restrictive file permissions; it is not a substitute for safe logging.
+- Sanitization explicitly redacts balances, locked balances, amounts, fees, wallet/from/to addresses, transaction hashes, withdrawal/deposit identifiers, recipient IDs, phone/email, memos and remarks.
+- The published GitHub report uses a separate strict allowlist and excludes request/response payloads and diagnostic events entirely.
+- Tests assert that realistic account and withdrawal fixtures cannot leak through REST logger events or the diagnostic sanitizer.
+
 ## Regression coverage
 
 Workflow tests inject a read-only Broker stub for ordinary publish and operator-mode scenarios, so they do not contact Bitunix or wait on network timeouts. Dedicated scan tests verify the complete successful pending-orders result, every detail response, failed pending-order results, and that detail reads are skipped when the pending-order request fails.
