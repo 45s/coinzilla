@@ -301,7 +301,10 @@ function broadcastHistoryUpdate({ clients, event } = {}) {
 function broadcastExchangeAccountUpdate({ clients } = {}) {
   const message = { type: "exchange-account.updated" }
   for (const client of clients) {
-    sendJson({ client, message })
+    sendJson({
+      client,
+      message,
+    })
   }
 }
 
