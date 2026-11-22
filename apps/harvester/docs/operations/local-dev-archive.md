@@ -12,7 +12,7 @@ This document is the durable handoff for this work. A future contributor must co
 The existing `pnpm run archive:push` command creates one uniquely named archive directory with this evidence selection:
 
 1. `logs/cumulative/`: retain only the final 5% of each regular file (tail bytes).
-2. `logs/sessions/`: retain only the lexicographically newest session directory; session directory names use sortable timestamps. Keep every file in that selected session.
+2. `logs/sessions/`: retain only the lexicographically newest session directory; session directory names use sortable timestamps. Keep every file in that selected session, gzip-compressed as `.gz` so large logs fit GitHub file limits. Decompress with standard gzip tools to recover original bytes.
 3. Other top-level log entries: copy unchanged.
 4. Complete `data/` directory, including database files and SQLite WAL/SHM sidecars.
 5. Complete `recovery-facts/` directory, preserving `facts.jsonl` and `manifest.jsonl`.
@@ -218,14 +218,14 @@ The operator explicitly changed the archive requirement after the first command 
 
 - Keep and use the existing `pnpm run archive:push` command. Do not add a second command or ask the operator to start another Harvester process.
 - Under `logs/cumulative/`, keep only the final 5% of each regular file by byte length.
-- Under `logs/sessions/`, keep only the lexicographically newest timestamp-named session directory, including all files within that session. Fail closed if no session directory exists.
+- Under `logs/sessions/`, keep only the lexicographically newest timestamp-named session directory, including all files gzip-compressed with a `.gz` suffix. Fail closed if no session directory exists.
 - Copy other top-level log entries unchanged.
 - Copy the complete `data/` and `recovery-facts/` trees, including database files, SQLite `-wal` / `-shm` sidecars, Journal evidence and Operational State Store facts when present.
 - Do not select a process session, synthesize identity markers, call the SQLite backup service, or claim SQLite integrity verification. The manifest verifies copied file inventory, sizes and SHA-256 checksums only.
 - Keep the explicit `TRADING_MODE=testnet` command guard and exact private remote restriction. The mode describes the command invocation; it does not classify every file inside the complete `data/` tree.
 - Write the local archive outside the source trees under `apps/harvester/archive-output/` to prevent the archive from copying itself. Publish a unique directory under the private remote's `archives/` path without overwriting an existing destination.
 - Never mutate, reset, delete or clean the source `logs/` or `data/` folders. Do not start, stop or control a Harvester process. Do not make exchange API calls.
-- The latest operator selection explicitly supersedes the earlier complete-logs requirement: cumulative logs are tailed to 5%, and only the newest session directory is retained. Data and recovery facts remain complete.
+- The latest operator selection explicitly supersedes the earlier complete-logs requirement: cumulative logs are tailed to 5%, and only the newest session directory is retained (gzip-compressed). Data and recovery facts remain complete.
 
 The command's archive timestamp is the time the snapshot is created, not a claim about the archived process start time. The archive is a raw evidence copy; if Harvester is still writing to the database during the copy, the checksums prove only the bytes copied, not transactional SQLite consistency. Run it against the already-stopped process when possible. No new process is needed.
 
