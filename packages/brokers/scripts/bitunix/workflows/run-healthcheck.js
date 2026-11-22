@@ -73,7 +73,8 @@ function printPublishedResult({ result, stdout }) {
     ...(result.healthCheck.nonBlockingFailedOperations.length > 0
       ? [`Non-blocking diagnostic failures: ${result.healthCheck.nonBlockingFailedOperations.join(", ")}`]
       : []),
-    ...(operatorAttempt?.probeId ? [`Order probe: ${operatorAttempt.probeId}`] : []),\n    ...(operatorAttempt ? [`Operator order attempt: ${operatorAttempt.status.toUpperCase()}`] : []),
+    ...(operatorAttempt?.probeId ? [`Order probe: ${operatorAttempt.probeId}`] : []),
+    ...(operatorAttempt ? [`Operator order attempt: ${operatorAttempt.status.toUpperCase()}`] : []),
     ...(result.healthCheck.missingRequiredOperations.length > 0
       ? [`Required gate checks not passed: ${result.healthCheck.missingRequiredOperations.join(", ")}`]
       : []),
