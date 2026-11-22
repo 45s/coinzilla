@@ -19,10 +19,10 @@ test("createRestSignature signs sorted query parameters and compact JSON body", 
       side: "BUY",
     },
   })
-  assert.equal(signature, "c5794eae3d75ac177a2bf3774a60b4050984dbb6f8841289e0126056bbb475af")
+  assert.equal(signature, "2e878fd5589985b8b09737935e1188276b6c910461d719e645aac480419d4fba")
 })
 
-test("createRestSignature treats absent query parameters and body as empty strings", () => {
+test("createRestSignature concatenates sorted REST query keys and values without equals separators", () => {\n  const signature = createRestSignature({\n    nonce: "nonce",\n    timestamp: "1700000000000",\n    apiKey: "api-key",\n    secretKey: "secret",\n    queryParams: { orderId: "2124329325141426176" },\n  })\n  assert.equal(signature, "263b87d50ccf9d41f1381af7eba6a4274d821fec0c33a2ae7c99600577dbbc9f")\n})\n\ntest("createRestSignature treats absent query parameters and body as empty strings", () => {
   const signature = createRestSignature({
     nonce: "nonce",
     timestamp: "1700000000000",
