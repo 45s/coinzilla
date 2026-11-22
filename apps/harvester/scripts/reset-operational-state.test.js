@@ -72,7 +72,10 @@ test("resets only the configured recovery-facts directory", async (t) => {
 
 test("refuses reset while any Harvester process lock exists", async (t) => {
   const fixture = await createResetFixture()
-  t.after(() => rm(fixture.root, { recursive: true, force: true }))
+  t.after(() => rm(fixture.root, {
+    recursive: true,
+    force: true,
+  }))
   await writeFile(path.join(fixture.lockDirectory, ".harvester-trading-test.lock"), "active process")
 
   await assert.rejects(
