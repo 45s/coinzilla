@@ -95,10 +95,7 @@ export class AppComponent {
       return 'current';
     }
     try {
-      // The document attribute also preserves the active choice across Angular
-      // fixture/app remounts where the test DOM may retain the document but reset storage.
-      const saved = window.localStorage.getItem(THEME_STORAGE_KEY)
-        ?? document.documentElement.dataset['theme'];
+      const saved = window.localStorage.getItem(THEME_STORAGE_KEY);
       return THEMES.some((theme) => theme.value === saved)
         ? (saved as DashboardTheme)
         : 'current';
