@@ -115,7 +115,7 @@ Every mapper must follow the temporary payload constraint in [Journal Evidence C
 | `recovery.cycle_completed` | `symbol`, `marketId`, allocated base `freeQuantity`, quote-asset `realizedNetProfit` |
 | `recovery.cycle_not_completed` | exact SELL client/broker identity, `CONTINUE_SELL_THROUGH` or `BLOCKED` outcome, reason, realized profit, active/keep quantities, configured minimum profit |
 | `account.snapshot_captured` | PREFLIGHT/RECOVERY/CLOSING lifecycle phase or targeted COMMISSION_BASELINE phase, audit status, exchange source timestamp, allowlisted exact free/locked/total balances, audit reasons |
-| `account.open_orders_captured` | PREFLIGHT/RECOVERY phase, observation time, READY/BLOCKED decision, complete account-wide open-order list (client/broker IDs, symbol, side, type, exact price/original/executed quantities, status), block reasons |
+| `account.open_orders_captured` | PREFLIGHT/RECOVERY/CLOSING phase, monotonic local observation time, READY/RECONCILED/BLOCKED decision, complete account-wide open-order list (client/broker IDs, symbol, side, type, exact price/original/executed quantities, status), block reasons |
 
 The `harvester.process_started` event records the process attempt, including its original UTC entry timestamp, even when optional Journal initialization delays publication. It is distinct from `harvester.started`, which records successful runtime startup. The process event is allowlisted and best-effort: for broker-connected startup, it is admitted before the existing PREFLIGHT flush can persist it; it does not add a separate durability barrier.
 

@@ -209,6 +209,13 @@ Read/replay is available while the Journal instance is stopped (before `start()`
 
 Harvester emits two durable lifecycle records on every connected startup, whether trading is enabled or not: `account.snapshot_captured` with `data.phase = "PREFLIGHT"` contains all balances with exact decimal free, locked, and total quantities plus exchange source time; `account.open_orders_captured` with the same phase contains account-wide open orders and their broker/client identifiers, symbol, side, type, price, original/executed quantities, and status. Open-order readiness is `READY` only for an empty result; otherwise it is `BLOCKED` with explicit reasons. Each event is followed by a successful `Journal.flush()` before Harvester proceeds to market subscriptions or engine activation. Existing orders remain externally owned; these records are observations, not adoption instructions.
 
+### Harvester CLOSING account open-order audit
+
+Trading-enabled graceful shutdown emits a separate `account.open_orders_captured` event with `data.phase = "CLOSING"` after strategy safety proof and before the CLOSING balance snapshot or shared-service teardown. The event contains the complete account-wide open-order set and exact broker/client identities, side, type, status, price, original quantity, and executed quantity. Its `observedAt` is a monotonic local capture timestamp; it is not an exchange source timestamp. The Operational State Store fact is committed before the event is published and the Journal flush barrier is crossed.
+
+Unmatched/external orders remain unowned and untouched. A BLOCKED ownership classification does not mean the account-wide read was incomplete and does not alone prevent shutdown. A failed, partial, or malformed CLOSING read is recorded as BLOCKED with `CLOSING_OPEN_ORDERS_CAPTURE_FAILED`; the paired CLOSING balance event is marked INCOMPLETE. If either fact or Journal barrier cannot be made durable, shutdown remains incomplete and the process must not report STOPPED. This evidence is audit-only and does not enable process-restart restoration or order adoption.
+
+
 ## Backup and restore
 
 A Journal backup is a byte-preserving copy of the complete set of session `.jsonl` files. Take backups only after the writer has stopped and `close()` has returned `ok: true` and `durable: true`. Do not copy an active session or treat the directory lock as backup data.
