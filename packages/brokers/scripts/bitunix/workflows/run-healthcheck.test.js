@@ -689,3 +689,39 @@ test("full-diagnostics healthcheck keeps the existing broad diagnostic suite ava
   assert.equal(exitCode, 0)
   assert.equal(publishedReports[0].healthCheck.scope, "operator-order-preflight")
 })
+
+
+test("explicit cancellation mode runs one cancel before the existing order-read scan", async () => {
+  const publishedReports = []
+  const calls = []
+  const brokerFactory = ({ providerOptions }) => {
+    const mutation = providerOptions.allowLiveOrderMutations === true
+    return {
+      connect: async () => calls.push(mutation ? "connect-mutation" : "connect-read"),
+      cancelOrder: async (input) => {
+        calls.push("cancel")
+        assert.deepEqual(input, { symbol: "HYPEUSDT", orderId: "2124329325141426176" })
+        return { ok: true, mutationOutcome: "CONFIRMED", cancellationOutcome: "CONFIRMED", data: { status: "CANCELED" }, errors: [] }
+      },
+      getOpenOrders: async () => {
+        calls.push("getOpenOrders")
+        return { ok: true, data: [], errors: [] }
+      },
+      disconnect: async () => calls.push(mutation ? "disconnect-mutation" : "disconnect-read"),
+    }
+  }
+  const exitCode = await runWorkflow({
+    mode: "cancel-existing-order",
+    brokersRoot: "/repo/packages/brokers",
+    repositoryRoot: "/repo",
+    env,
+    stdout,
+    brokerFactory,
+    publishDiagnostics: createPublisher({ events: [], publishedReports }),
+  })
+  assert.deepEqual(calls, ["connect-mutation", "cancel", "disconnect-mutation", "connect-read", "getOpenOrders", "disconnect-read"])
+  const cancellation = publishedReports[0].results.find((entry) => entry.operation === "Broker API cancelOrder")
+  assert.equal(cancellation.status, "passed")
+  assert.equal(cancellation.response.cancellationOutcome, "CONFIRMED")
+  assert.equal(exitCode, 0)
+})
