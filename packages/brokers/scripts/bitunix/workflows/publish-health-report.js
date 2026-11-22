@@ -212,7 +212,7 @@ async function switchBackToDevelop({ repositoryRoot, runGit }) {
 }
 
 async function runOnReportBranch({ repositoryRoot, runGit, branch, paths, publishedReportPath, runDiagnostics, healthCheckEvaluator, env, now, onProgress }) {
-  onProgress?.({ message: "[3/5] Running Bitunix REST and authenticated WebSocket diagnostics" })
+  onProgress?.({ message: "[3/5] Running the selected Bitunix read-only workflow" })
   const report = await runDiagnosticsSafely({
     runDiagnostics,
     env,
