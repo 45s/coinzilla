@@ -369,7 +369,9 @@ function isWorkflowProgressMessage({ message }) {
     message.startsWith("Returning the local checkout") ||
     message.startsWith("Local checkout is back") ||
     message.startsWith("Broker API getOpenOrders:") ||
-    message.startsWith("Broker API getOrder:")
+    message.startsWith("Broker API getOrder:") ||
+    message.startsWith("Broker API getOrder [") ||
+    message.startsWith("Discovered open order:")
 }
 
 function printPublishedResult({ result, stdout, probeMode = false, includeGeneralDiagnostics = false }) {
