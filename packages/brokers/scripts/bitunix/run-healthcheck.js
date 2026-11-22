@@ -178,7 +178,21 @@ async function runHealthcheck({ args = process.argv.slice(2) } = {}) {
     })
     return
   }
-  if (mode === "cancel-existing-order") {\n    loadLocalEnvironment()\n    process.exitCode = await runHealthcheckWorkflow({\n      mode,\n      brokersRoot,\n      repositoryRoot,\n      env: process.env,\n    })\n    return\n  }\n  if (mode === "probe-order") {
+  if (mode === "cancel-existing-order") {
+    assertInteractiveTerminal({
+      stdin: process.stdin,
+      stdout: process.stdout,
+    })
+    loadLocalEnvironment()
+    process.exitCode = await runHealthcheckWorkflow({
+      mode,
+      brokersRoot,
+      repositoryRoot,
+      env: process.env,
+    })
+    return
+  }
+  if (mode === "probe-order") {
     await runProbeOrderMode({ args })
     return
   }
