@@ -174,3 +174,26 @@ A new contributor should:
 - Run `pnpm run archive:push` only after the Harvester DEV process has exited cleanly and the completion marker exists.
 - Record the first local/remote archive result and any operator-discovered issue here and in #1742. Do not reopen settled scope decisions unless the operator changes them.
 - Record every implementation decision, command, test/CI result, commit, PR and remaining limitation in this document and the issue so the work is never dependent on chat history.
+
+
+## 10. First operator archive attempt — legacy session diagnosis (2026-11-22)
+
+The operator ran `pnpm run archive:push`; it failed closed with:
+
+```text
+Harvester archive publication failed: No eligible TESTNET process session was found under logs/sessions.
+```
+
+Inspection of the newest existing session, `2026-11-22_11-10-47-403b10b2-17aa-4760-a6e9-c36453cd73e2`, showed only its structured JSONL, `harvester.log`, `terminal.log`, and `trace.log`. It did not contain `process-identity.json` or `process-completed.json`. This session was created without the new archive identity/completion markers, so it is not eligible for safe archival.
+
+Do not weaken the resolver to accept legacy sessions. Do not synthesize metadata, infer startup commit from current Git HEAD, or retrofit a completion marker. Preserve the old session unchanged.
+
+### Next diagnostic / acceptance sequence
+
+1. Confirm the operator has pulled the latest task branch and that `pnpm run dev` invokes `scripts/run-dev-with-log.js` (not `pnpm start` or direct `src/index.js`).
+2. Before starting another process, confirm a controlled TESTNET validation run is intended and that configured symbols/investment limits are safe. Never start trading automatically.
+3. Start and stop one controlled TESTNET process through `pnpm run dev`.
+4. Inspect the new session directory. `process-identity.json` must exist at startup and contain the immutable process-start timestamp, runtime session ID, TESTNET environment and full startup commit. After clean shutdown, `process-completed.json` must match the runtime session ID and report `logStreamsComplete: true`.
+5. Only after those checks, run `pnpm run archive:push`; verify the local archive and private-remote publication.
+
+**Current status:** the operator reports the focused archive tests passed (5/5). The first archive attempt created/published nothing. No legacy session was modified and no operational data was uploaded. End-to-end validation remains pending a session created by the updated launcher.
