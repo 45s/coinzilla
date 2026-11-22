@@ -66,6 +66,19 @@ const API = Object.freeze({
   matchingOrderDetails: "/api/spot/v1/order/deal/list",
 })
 
+function logBrokerDiagnostic({ logger, level = "debug", event }) {
+  try {
+    logger?.[level]?.({
+      provider: "bitunix",
+      product: "spot",
+      layer: "broker-api",
+      ...event,
+    })
+  } catch {
+    // Diagnostics must never change Broker API behavior.
+  }
+}
+
 function unsupported({ operation, reason }) {
   return new BrokerUnsupportedOperationError({
     provider: "bitunix",
@@ -483,6 +496,10 @@ export class BitunixSpotBroker {
   }
 
   async getExchangeMarkets() {
+    logBrokerDiagnostic({
+      logger: this.logger,
+      event: { event: "getExchangeMarkets.started" },
+    })
     try {
       const response = await this.restClient.request({
         method: "GET",
@@ -504,8 +521,25 @@ export class BitunixSpotBroker {
         seen.add(market.symbol)
         this.canonicalMarkets.set(market.symbol, market)
       }
+      logBrokerDiagnostic({
+        logger: this.logger,
+        event: {
+          event: "getExchangeMarkets.completed",
+          ok: true,
+          marketCount: markets.length,
+          symbols: markets.map((market) => market.symbol),
+        },
+      })
       return toResult({ data: Object.freeze(markets) })
     } catch (error) {
+      logBrokerDiagnostic({
+        logger: this.logger,
+        level: "error",
+        event: {
+          event: "getExchangeMarkets.failed",
+          error: { name: error?.name, code: error?.code, message: error?.message },
+        },
+      })
       handleErr({
         where: "BitunixSpotBroker.getExchangeMarkets()",
         error,
@@ -556,6 +590,10 @@ export class BitunixSpotBroker {
   }
 
   async getOpenOrders({ symbol } = {}) {
+    logBrokerDiagnostic({
+      logger: this.logger,
+      event: { event: "getOpenOrders.started", symbol: symbol ?? null },
+    })
     try {
       const normalizedSymbol = requireSymbol({
         symbol,
@@ -568,14 +606,32 @@ export class BitunixSpotBroker {
         stateChanging: false,
       })
       const rows = normalizeOrderRows({ value: response.data })
-      return toResult({
-        data: adaptSymbolOrderRows({
-          rows,
-          symbol: normalizedSymbol,
-          operation: "open orders",
-        }),
+      const orders = adaptSymbolOrderRows({
+        rows,
+        symbol: normalizedSymbol,
+        operation: "open orders",
       })
+      logBrokerDiagnostic({
+        logger: this.logger,
+        event: {
+          event: "getOpenOrders.completed",
+          ok: true,
+          symbol: normalizedSymbol,
+          orderCount: orders.length,
+          orderIds: orders.map((order) => order.id),
+        },
+      })
+      return toResult({ data: orders })
     } catch (error) {
+      logBrokerDiagnostic({
+        logger: this.logger,
+        level: "error",
+        event: {
+          event: "getOpenOrders.failed",
+          symbol: symbol ?? null,
+          error: { name: error?.name, code: error?.code, exchangeCode: error?.exchangeCode, message: error?.message },
+        },
+      })
       handleErr({
         where: "BitunixSpotBroker.getOpenOrders()",
         error,
@@ -617,6 +673,10 @@ export class BitunixSpotBroker {
   }
 
   async getOrder({ symbol, orderId, clientOrderId } = {}) {
+    logBrokerDiagnostic({
+      logger: this.logger,
+      event: { event: "getOrder.started", symbol: symbol ?? null, orderId: orderId ?? null },
+    })
     try {
       const unsupportedResult = createClientOrderIdUnsupportedResult({ clientOrderId })
       if (unsupportedResult) {
@@ -640,8 +700,29 @@ export class BitunixSpotBroker {
         orderId: normalizedOrderId,
         symbol: normalizedSymbol,
       })
-      return toResult({ data: adaptOrder(order) })
+      const normalizedOrder = adaptOrder(order)
+      logBrokerDiagnostic({
+        logger: this.logger,
+        event: {
+          event: "getOrder.completed",
+          ok: true,
+          symbol: normalizedOrder.symbol,
+          orderId: normalizedOrder.id,
+          status: normalizedOrder.status,
+        },
+      })
+      return toResult({ data: normalizedOrder })
     } catch (error) {
+      logBrokerDiagnostic({
+        logger: this.logger,
+        level: "error",
+        event: {
+          event: "getOrder.failed",
+          symbol: symbol ?? null,
+          orderId: orderId ?? null,
+          error: { name: error?.name, code: error?.code, exchangeCode: error?.exchangeCode, message: error?.message },
+        },
+      })
       handleErr({
         where: "BitunixSpotBroker.getOrder()",
         error,
@@ -1516,5 +1597,6 @@ function createRestClient(config) {
     apiSecret: config.apiSecret,
     baseUrl: config.baseUrl,
     requestTimeout: config.requestTimeout,
+    logger: config.logger,
   })
 }
