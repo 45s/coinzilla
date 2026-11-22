@@ -283,44 +283,72 @@ function createDogeReplayCanonicalOrderCreator({ state, broker }) {
   };
 }
 
+function createDogeReplayCanonicalFill({ executionFill, brokerOrderId, order }) {
+  const commissionAsset = executionFill.commissionAsset === order.market.baseAsset.code
+    ? order.market.baseAsset
+    : order.market.quoteAsset;
+  const commissions = executionFill.commissionAmount && executionFill.commissionAmount !== "0"
+    ? [new Commission({
+      amount: new Money({
+        amount: executionFill.commissionAmount,
+        asset: commissionAsset,
+      }),
+    })]
+    : [];
+  return new Fill({
+    tradeId: String(executionFill.tradeId ?? executionFill.id),
+    brokerOrderId,
+    market: order.market,
+    side: executionFill.side,
+    price: new Money({
+      amount: executionFill.price,
+      asset: order.market.quoteAsset,
+    }),
+    quantity: new Quantity({
+      amount: executionFill.quantity,
+      asset: order.market.baseAsset,
+    }),
+    quoteQuantity: new Money({
+      amount: executionFill.quoteQuantity,
+      asset: order.market.quoteAsset,
+    }),
+    liquidityRole: executionFill.isMaker ? "MAKER" : "TAKER",
+    executedAt: executionFill.time,
+    commissions,
+    commissionStatus: "COMPLETE",
+  });
+}
+
+function recordDogeReplayExecutionFill({ state, executionFill }) {
+  const fillOrderId = executionFill?.brokerOrderId ?? executionFill?.orderId;
+  if (fillOrderId === undefined || fillOrderId === null) {
+    return;
+  }
+  const brokerOrderId = String(fillOrderId);
+  const order = state.exchangeOrderHistory.get(brokerOrderId);
+  if (!order) {
+    return;
+  }
+  const canonicalFill = createDogeReplayCanonicalFill({
+    executionFill,
+    brokerOrderId,
+    order,
+  });
+  const canonicalFills = state.exchangeCanonicalFills.get(brokerOrderId) ?? [];
+  if (!canonicalFills.some(({ id }) => id === canonicalFill.id)) {
+    canonicalFills.push(canonicalFill);
+  }
+  state.exchangeCanonicalFills.set(brokerOrderId, canonicalFills);
+}
+
 function createDogeReplayUserDataSubscription(state) {
   return async ({ onEvent }) => {
     state.publishUserDataEvent = (message) => {
       state.receivedExecutionReports.push(message.event);
-      const executionFill = message.event?.fill;
-      const fillOrderId = executionFill?.brokerOrderId ?? executionFill?.orderId;
-      if (executionFill && fillOrderId !== undefined && fillOrderId !== null) {
-        const brokerOrderId = String(fillOrderId);
-        const order = state.exchangeOrderHistory.get(brokerOrderId);
-        if (order) {
-          const commissionAsset = executionFill.commissionAsset === order.market.baseAsset.code
-            ? order.market.baseAsset
-            : order.market.quoteAsset;
-          const commissions = executionFill.commissionAmount && executionFill.commissionAmount !== "0"
-            ? [new Commission({
-              amount: new Money({ amount: executionFill.commissionAmount, asset: commissionAsset }),
-            })]
-            : [];
-          const canonicalFill = new Fill({
-            tradeId: String(executionFill.tradeId ?? executionFill.id),
-            brokerOrderId,
-            market: order.market,
-            side: executionFill.side,
-            price: new Money({ amount: executionFill.price, asset: order.market.quoteAsset }),
-            quantity: new Quantity({ amount: executionFill.quantity, asset: order.market.baseAsset }),
-            quoteQuantity: new Money({ amount: executionFill.quoteQuantity, asset: order.market.quoteAsset }),
-            liquidityRole: executionFill.isMaker ? "MAKER" : "TAKER",
-            executedAt: executionFill.time,
-            commissions,
-            commissionStatus: "COMPLETE",
-          });
-          const canonicalFills = state.exchangeCanonicalFills.get(brokerOrderId) ?? [];
-          if (!canonicalFills.some(({ id }) => id === canonicalFill.id)) {
-            canonicalFills.push(canonicalFill);
-          }
-          state.exchangeCanonicalFills.set(brokerOrderId, canonicalFills);
-        }
-      }
+      recordDogeReplayExecutionFill({
+        state,
+        executionFill: message.event?.fill,
+      });
       return onEvent(message);
     };
     return { data: { disconnect: async () => {} } };

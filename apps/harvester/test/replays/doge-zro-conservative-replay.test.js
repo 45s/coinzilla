@@ -897,6 +897,33 @@ function assertFinalOutOfOrderBuyAccounting({ dogeTradingReplay }) {
   assert.equal(dogeTradingReplay.harvesterRuntimeErrors.length, 0, "A valid out-of-order execution sequence must not produce a Harvester accounting or lifecycle error.");
 }
 
+async function completeOutOfOrderBuyCycle({ dogeTradingReplay, initialBuyOrder, firstExecutionTimestamp }) {
+  const recoverySellSubmitted = dogeTradingReplay.waitForSubmittedOrder("SELL");
+  const nextStandingBuySubmitted = dogeTradingReplay.waitForSubmittedOrder("BUY", 2);
+  await publishBuyExecution({
+    dogeTradingReplay,
+    initialBuyOrder,
+    execution: {
+      occurrence: 3,
+      tradeId: "6524",
+      fillQuantity: "100",
+      cumulativeExecutedQuantity: "400",
+      quoteQuantity: "7.157",
+      commissionAmount: "0.1",
+      timestamp: firstExecutionTimestamp + 2,
+    },
+  });
+  const [recoverySellOrder, nextStandingBuyOrder] = await Promise.all([
+    recoverySellSubmitted,
+    nextStandingBuySubmitted,
+  ]);
+  assertRecoveryOrders({
+    dogeTradingReplay,
+    recoverySellOrder,
+    nextStandingBuyOrder,
+  });
+}
+
 runDogeTradingReplayTest("accounts an identical duplicate partial BUY execution only once", async (dogeTradingReplay) => {
   const initialBuyOrder = await submitInitialBuyOrder(dogeTradingReplay);
   const firstExecutionTimestamp = Math.max(Date.now(), initialBuyOrder.createdAt + 1);
@@ -962,30 +989,7 @@ runDogeTradingReplayTest("accounts distinct partial BUY fills when their cumulat
   });
   assertPartialBuyAccountingAfterOutOfOrderExecutions({ dogeTradingReplay });
 
-  const recoverySellSubmitted = dogeTradingReplay.waitForSubmittedOrder("SELL");
-  const nextStandingBuySubmitted = dogeTradingReplay.waitForSubmittedOrder("BUY", 2);
-  await publishBuyExecution({
-    dogeTradingReplay,
-    initialBuyOrder,
-    execution: {
-      occurrence: 3,
-      tradeId: "6524",
-      fillQuantity: "100",
-      cumulativeExecutedQuantity: "400",
-      quoteQuantity: "7.157",
-      commissionAmount: "0.1",
-      timestamp: firstExecutionTimestamp + 2,
-    },
-  });
-  const [recoverySellOrder, nextStandingBuyOrder] = await Promise.all([
-    recoverySellSubmitted,
-    nextStandingBuySubmitted,
-  ]);
-  assertRecoveryOrders({
-    dogeTradingReplay,
-    recoverySellOrder,
-    nextStandingBuyOrder,
-  });
+  await completeOutOfOrderBuyCycle({ dogeTradingReplay, initialBuyOrder, firstExecutionTimestamp });
   assertFinalOutOfOrderBuyAccounting({ dogeTradingReplay });
   assert.deepEqual(
     dogeTradingReplay.receivedExecutionReports.map(({ executedOrder }) => executedOrder.executedQuantity),
