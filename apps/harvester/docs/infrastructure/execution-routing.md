@@ -123,7 +123,6 @@ sequenceDiagram
 
 Explicit route validation failures (disabled strategy/market, missing route, duplicate owner, unknown provider, or environment mismatch) stop startup before provider connections. A market-data source failure does not change the execution destination.
 
-
 ## RS-only provider configuration
 
 When a provider account is assigned only Recovery Seller execution routes, its effective Conservative pair map is empty. Configuration resolution must not require unrelated Conservative markets in that account's provider-scoped config. Explicit execution routes remain authoritative: every CG route must resolve to an enabled, environment-eligible CG market, and every RS route must resolve to an enabled, environment-eligible RS market. The global CG strategy remains enabled by the application contract, but an account with no CG routes does not receive synthetic CG execution markets.
