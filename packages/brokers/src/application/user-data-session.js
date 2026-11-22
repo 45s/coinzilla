@@ -43,6 +43,7 @@ export class UserDataSession {
   #eventIdentities = new Set()
   #generation = 0
   #clientPorts = new WeakMap()
+  #failedReconnectClient = null
 
   /**
    * @param {{getClient: () => object|null, createClient: () => object, createUserDataClientPort: (client: object) => import("./ports/user-data-client-port.js").UserDataClientPort, setClient: (client: object) => void, setConnected: (connected: boolean) => void, setUnavailable: (unavailable: boolean) => void, logger?: object, reconnectDelay?: number, recoveryWarningThreshold?: number, setTimeoutFn?: (callback: () => void, delay: number) => ReturnType<typeof setTimeout>, clearTimeoutFn?: (timer: ReturnType<typeof setTimeout>) => void}} options
@@ -565,6 +566,15 @@ recoveryRequired: true })
   async #connectClientForRecovery({ generation }) {
     let client = this.getClient()
     let port = client ? this.#portFor(client) : null
+    if (this.#failedReconnectClient) {
+      const failedClient = this.#failedReconnectClient
+      if (!await this.#disposeFailedReconnectClient({ port: failedClient.port })) {
+        throw failedClient.error
+      }
+      this.#failedReconnectClient = null
+      client = null
+      port = null
+    }
     if (client && port.state === "open") {return true}
 
     client = this.createClient()
@@ -575,7 +585,10 @@ recoveryRequired: true })
       await port.connect()
     } catch (error) {
       if (this.getClient() === client) {this.#detachClientListeners()}
-      await this.#disposeFailedReconnectClient({ port })
+      this.#failedReconnectClient = { client, port, error }
+      if (await this.#disposeFailedReconnectClient({ port })) {
+        this.#failedReconnectClient = null
+      }
       throw error
     }
     if (this.#stopped || generation !== this.#generation ||
@@ -590,12 +603,14 @@ recoveryRequired: true })
   async #disposeFailedReconnectClient({ port }) {
     try {
       await port.disconnect()
+      return true
     } catch (cleanupError) {
       logSafely({
         logger: this.logger,
         level: "warn",
         args: ["Unable to close Binance user-data client after reconnect failure", cleanupError],
       })
+      return false
     }
   }
 
