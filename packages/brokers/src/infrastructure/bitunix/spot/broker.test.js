@@ -498,7 +498,7 @@ test("Bitunix Spot placement reports unknown after a dispatched transport failur
   assert.match(result.errors[0].message, /placement response timeout/i)
 })
 
-test("Bitunix Spot accepted LIVE placement remains successful when order-detail signing is rejected", async () => {
+test("Bitunix Spot accepted LIVE placement remains confirmed but unreconciled when detail signing is rejected", async () => {
   const detailError = Object.assign(new Error("result.api.parameter.sign.illegal"), {
     code: "BITUNIX_REST_EXCHANGE_REJECTED",
     exchangeCode: "100005",
@@ -2911,6 +2911,11 @@ test("Bitunix Spot createOrder completes signed REST placement and order-detail 
   assert.equal(result.mutationOutcome, "CONFIRMED")
   assert.equal(result.data.id, "12345678901234567890")
   assert.equal(result.data.status, "OPEN")
+  assert.deepEqual(result.reconciliation, {
+    status: "VERIFIED",
+    source: "ORDER_DETAIL",
+    endpoint: "/api/spot/v1/order/detail",
+  }, "successful detail reconciliation must be explicit in the Broker result")
   assert.equal(requests.length, 2)
   assert.equal(requests[0].url.pathname, "/api/spot/v1/order/place_order")
   assert.equal(requests[0].options.method, "POST")
