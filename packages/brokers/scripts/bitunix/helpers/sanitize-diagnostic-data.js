@@ -44,6 +44,8 @@ const SENSITIVE_FIELDS = Object.freeze([
   "email",
   "phone",
   "remark",
+  "message",
+  "msg",
 ])
 
 function normalizeFieldName({ value }) {
