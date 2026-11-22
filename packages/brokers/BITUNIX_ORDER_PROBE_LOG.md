@@ -58,7 +58,7 @@ This log records operator-authorized LIVE order-placement probes against Bitunix
 ## Next investigation
 
 1. Inspect the raw sanitized reports and the exact request/response adapter path; keep the exchange response as the source of truth.
-2. Investigate why Bitunix returns `placeCode: 10034` for both sides when the visible USDT balance differs. Do not infer that this proves the submitted quantity denomination.
+2. The operator confirmed the Spot account lacked the required assets; both `10034` insufficient-balance rejections were expected. Do not spend further effort investigating those rejections.
 3. Resolve the LIMIT/MARKET `volume` contract from authoritative endpoint-specific evidence before enabling additional probes.
-4. Do not run another LIVE mutation merely to repeat the same insufficient-balance response. Any new probe must answer a distinct protocol question and remain separately operator-confirmed.
+4. A funded BUY probe is prepared: LIMIT BUY `HYPEUSDT` at `30 USDT`, spending up to `11 USDT`, with quantity calculated from live `basePrecision` and a `0.24 USDT` reserve. It requires a short `y/N` confirmation. Do not run it until the operator has funded Spot and merged the PR.
 5. Keep the broader Bitunix Spot lifecycle/Harvester admission blockers tracked independently; these two placement rejections do not make Bitunix trading-ready.
