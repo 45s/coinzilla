@@ -691,26 +691,14 @@ test("full-diagnostics healthcheck keeps the existing broad diagnostic suite ava
 })
 
 
-test("explicit cancellation mode runs one cancel before the existing order-read scan", async () => {
-  const publishedReports = []
-  const calls = []
-  const brokerFactory = ({ providerOptions }) => {
+function createCancellationBrokerFactory({ calls, cancelResult }) {
+  return ({ providerOptions }) => {
     const mutation = providerOptions.allowLiveOrderMutations === true
     return {
       connect: async () => calls.push(mutation ? "connect-mutation" : "connect-read"),
       cancelOrder: async (input) => {
         calls.push("cancel")
-        assert.deepEqual(input, {
-          symbol: "HYPEUSDT",
-          orderId: "2124329325141426176",
-        })
-        return {
-          ok: true,
-          mutationOutcome: "CONFIRMED",
-          cancellationOutcome: "CONFIRMED",
-          data: { status: "CANCELED" },
-          errors: [],
-        }
+        return cancelResult(input)
       },
       getOpenOrders: async () => {
         calls.push("getOpenOrders")
@@ -724,13 +712,38 @@ test("explicit cancellation mode runs one cancel before the existing order-read 
         calls.push(`getOrder:${symbol}:${orderId}`)
         return {
           ok: true,
-          data: { id: orderId, symbol, status: "CANCELED" },
+          data: {
+            id: orderId,
+            symbol,
+            status: "CANCELED",
+          },
           errors: [],
         }
       },
       disconnect: async () => calls.push(mutation ? "disconnect-mutation" : "disconnect-read"),
     }
   }
+}
+
+test("explicit cancellation mode runs one cancel before the existing order-read scan", async () => {
+  const publishedReports = []
+  const calls = []
+  const brokerFactory = createCancellationBrokerFactory({
+    calls,
+    cancelResult: async (input) => {
+      assert.deepEqual(input, {
+        symbol: "HYPEUSDT",
+        orderId: "2124329325141426176",
+      })
+      return {
+        ok: true,
+        mutationOutcome: "CONFIRMED",
+        cancellationOutcome: "CONFIRMED",
+        data: { status: "CANCELED" },
+        errors: [],
+      }
+    },
+  })
   const exitCode = await runWorkflow({
     mode: "cancel-existing-order",
     brokersRoot: "/repo/packages/brokers",
@@ -793,7 +806,7 @@ test("ambiguous cancellation is recorded once and does not prevent the subsequen
       calls.push(`getOrder:${symbol}:${orderId}`)
       return {
         ok: true,
-        data: { id: orderId, symbol, status: "CANCELED" },
+        data: {\n          id: orderId,\n          symbol,\n          status: "CANCELED",\n        },
         errors: [],
       }
     },
