@@ -18,6 +18,7 @@ import { fileURLToPath } from "node:url"
 import { createHarvesterTradingHistoryBackupService } from "../src/infrastructure/persistence/trading-history-backups/index.js"
 import { createHarvesterLogSessionPaths } from "../src/infrastructure/logging/create-harvester-log-session-paths.js"
 import { validateArchiveRemote } from "./initialize-private-archive-repository.js"
+import { createHarvesterArchiveProcessIdentity } from "./capture-harvester-archive-process-identity.js"
 
 const execFileAsync = promisify(execFile)
 const PACKAGE_DIRECTORY = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
@@ -38,27 +39,26 @@ const runGitDefault = async (args, { cwd } = {}) => {
 }
 
 function assertProcessIdentity(identity) {
-  if (
-    !identity
-    || identity.formatVersion !== 1
-    || identity.application !== "harvester"
-    || identity.environment !== "testnet"
-    || typeof identity.startedAt !== "string"
-    || Number.isNaN(Date.parse(identity.startedAt))
-    || new Date(identity.startedAt).toISOString() !== identity.startedAt
-    || typeof identity.runtimeSessionId !== "string"
-    || !UUID_PATTERN.test(identity.runtimeSessionId)
-    || !identity.source
-    || typeof identity.source.commit !== "string"
-    || !COMMIT_PATTERN.test(identity.source.commit)
-    || identity.source.shortCommit !== identity.source.commit.slice(0, 8)
-    || !["clean", "dirty", "unknown"].includes(identity.source.workingTree)
-  ) {
+  let normalized
+  try {
+    normalized = createHarvesterArchiveProcessIdentity({
+      startedAt: identity?.startedAt,
+      runtimeSessionId: identity?.runtimeSessionId,
+      tradingMode: identity?.environment,
+      source: identity?.source,
+    })
+  } catch (cause) {
+    throw new Error(
+      "The selected session has no valid TESTNET process-start identity and full source commit; refusing to guess from the current checkout.",
+      { cause },
+    )
+  }
+  if (normalized.environment !== "testnet" || !normalized.source.commit) {
     throw new Error(
       "The selected session has no valid TESTNET process-start identity and full source commit; refusing to guess from the current checkout.",
     )
   }
-  return identity
+  return normalized
 }
 
 export function createHarvesterArchiveDirectoryName(identity) {
