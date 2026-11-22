@@ -1,5 +1,11 @@
 # Harvester Roadmap
 
+## Local TESTNET session archive (#1742)
+
+- **Implemented on `feat/harvester-local-dev-reset-archive`; local verification pending:** `pnpm run archive:push` copies the verified TESTNET SQLite online backup and exactly one completed process-session directory (terminal/structured logs and colocated Journal evidence) into `data/archives/<process-start-UTC>_<startup-short-commit>/`, then pushes a matching directory to the private `45s/coinzilla-archive` remote.
+- The dev runner persists allowlisted startup Git provenance and a completion marker after child exit/log-stream closure. Archive naming never uses archive-command time or current Git HEAD. The command requires TESTNET, valid process-start commit, and a complete session marker; it refuses symlinks, checksum/inventory mismatches and remote collisions.
+- Copy only. No reset, encryption, facts store, shared cumulative logs, LIVE data, or exchange operations. No PR opened per operator direction. Focused tests and full package tests have not yet been executed; the first real archive publication is operator-run locally after pulling the branch.
+
 ## Read-only Operational State diagnostics (#1740)
 
 - **In progress in [PR #1741](https://github.com/45s/coinzilla/pull/1741):** add `pnpm run operational-state:diagnose` to verify the existing facts/manifest streams with the production store reader, then independently report the offline recovery-projection result.
