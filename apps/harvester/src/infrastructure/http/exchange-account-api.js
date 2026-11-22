@@ -1,7 +1,9 @@
 const ROUTE = "/api/v1/exchanges/accounts"
 
 function sendJson({ response, status, body } = {}) {
-  if (response.destroyed || response.writableEnded) return
+  if (response.destroyed || response.writableEnded) {
+    return
+  }
   const headers = {
     "Cache-Control": "no-store",
     "Content-Type": "application/json; charset=utf-8",
@@ -19,7 +21,13 @@ function sendFailure({ response, status, code, message } = {}) {
   sendJson({
     response,
     status,
-    body: { ok: false, error: { code, message } },
+    body: {
+      ok: false,
+      error: {
+        code,
+        message,
+      },
+    },
   })
 }
 
@@ -35,7 +43,9 @@ function serializeAccountSnapshot(snapshot) {
 }
 
 function serializeOpenOrders(orders) {
-  if (!Array.isArray(orders)) return []
+  if (!Array.isArray(orders)) {
+    return []
+  }
   return orders.map((order) => order?.value ?? order)
 }
 
@@ -46,6 +56,78 @@ function mapAccountMetadata(account) {
     accountId: account.accountId,
     environment: account.environment,
     connected: account.connected === true,
+  }
+}
+
+function sendInvalidProviderId({ response } = {}) {
+  sendFailure({
+    response,
+    status: 400,
+    code: "HARVESTER_EXCHANGE_PROVIDER_ID_INVALID",
+    message: "The provider account identifier is invalid.",
+  })
+}
+
+function resolveProviderInstanceId({ pathname, response } = {}) {
+  let providerInstanceId
+  try {
+    providerInstanceId = decodeURIComponent(pathname.slice(ROUTE.length + 1))
+  } catch {
+    sendInvalidProviderId({ response })
+    return null
+  }
+  if (!providerInstanceId || providerInstanceId.includes("/")) {
+    sendInvalidProviderId({ response })
+    return null
+  }
+  return providerInstanceId
+}
+
+function handleExchangeAccountListRequest({ response, exchangeAccounts } = {}) {
+  sendJson({
+    response,
+    status: 200,
+    body: {
+      ok: true,
+      data: exchangeAccounts.map(mapAccountMetadata),
+    },
+  })
+}
+
+function sendAccountReadFailure({ response } = {}) {
+  sendFailure({
+    response,
+    status: 502,
+    code: "HARVESTER_EXCHANGE_ACCOUNT_READ_FAILED",
+    message: "Harvester could not retrieve the current account snapshot.",
+  })
+}
+
+async function handleExchangeAccountDetailRequest({ response, account } = {}) {
+  try {
+    const [snapshot, openOrders] = await Promise.all([
+      account.readAccountSnapshot(),
+      account.readOpenOrders(),
+    ])
+    if (snapshot?.ok !== true || openOrders?.ok !== true) {
+      sendAccountReadFailure({ response })
+      return
+    }
+    sendJson({
+      response,
+      status: 200,
+      body: {
+        ok: true,
+        data: {
+          ...mapAccountMetadata(account),
+          accountSnapshot: serializeAccountSnapshot(snapshot.data),
+          openOrders: serializeOpenOrders(openOrders.data),
+          observedAt: new Date().toISOString(),
+        },
+      },
+    })
+  } catch {
+    sendAccountReadFailure({ response })
   }
 }
 
@@ -72,39 +154,23 @@ export async function handleExchangeAccountRequest({
     return true
   }
   if (pathname === ROUTE) {
-    sendJson({
+    handleExchangeAccountListRequest({
       response,
-      status: 200,
-      body: {
-        ok: true,
-        data: exchangeAccounts.map(mapAccountMetadata),
-      },
+      exchangeAccounts,
     })
     return true
   }
-  const encodedId = pathname.slice(ROUTE.length + 1)
-  let providerInstanceId
-  try {
-    providerInstanceId = decodeURIComponent(encodedId)
-  } catch {
-    sendFailure({
-      response,
-      status: 400,
-      code: "HARVESTER_EXCHANGE_PROVIDER_ID_INVALID",
-      message: "The provider account identifier is invalid.",
-    })
+  const providerInstanceId = resolveProviderInstanceId({
+    pathname,
+    response,
+  })
+  if (providerInstanceId === null) {
     return true
   }
-  if (!providerInstanceId || providerInstanceId.includes("/")) {
-    sendFailure({
-      response,
-      status: 400,
-      code: "HARVESTER_EXCHANGE_PROVIDER_ID_INVALID",
-      message: "The provider account identifier is invalid.",
-    })
-    return true
-  }
-  const account = resolveAccount({ exchangeAccounts, providerInstanceId })
+  const account = resolveAccount({
+    exchangeAccounts,
+    providerInstanceId,
+  })
   if (!account) {
     sendFailure({
       response,
@@ -114,40 +180,9 @@ export async function handleExchangeAccountRequest({
     })
     return true
   }
-  try {
-    const [snapshot, openOrders] = await Promise.all([
-      account.readAccountSnapshot(),
-      account.readOpenOrders(),
-    ])
-    if (snapshot?.ok !== true || openOrders?.ok !== true) {
-      sendFailure({
-        response,
-        status: 502,
-        code: "HARVESTER_EXCHANGE_ACCOUNT_READ_FAILED",
-        message: "Harvester could not retrieve the current account snapshot.",
-      })
-      return true
-    }
-    sendJson({
-      response,
-      status: 200,
-      body: {
-        ok: true,
-        data: {
-          ...mapAccountMetadata(account),
-          accountSnapshot: serializeAccountSnapshot(snapshot.data),
-          openOrders: serializeOpenOrders(openOrders.data),
-          observedAt: new Date().toISOString(),
-        },
-      },
-    })
-  } catch {
-    sendFailure({
-      response,
-      status: 502,
-      code: "HARVESTER_EXCHANGE_ACCOUNT_READ_FAILED",
-      message: "Harvester could not retrieve the current account snapshot.",
-    })
-  }
+  await handleExchangeAccountDetailRequest({
+    response,
+    account,
+  })
   return true
 }
