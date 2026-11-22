@@ -1575,3 +1575,13 @@ See [the private polling contract](./docs/BITUNIX_SPOT_POLLING.md) and [the Bitu
 - Generic `quantity` remains base-denominated; new generic `quoteQuantity` expresses quote-denominated MARKET orders.
 - Binance maps `quoteQuantity` to native `quoteOrderQty`; Bitunix maps LIMIT `quantity` and MARKET `quoteQuantity` directly to REST `volume`.
 - No price-based conversion or automatic estimate is permitted. Live mutations remain disabled by default and all #1185 lifecycle/Harvester blockers remain.
+
+## 2026-11-22 — Bitunix Spot live placement probes
+
+- [x] Ran one operator-confirmed Spot LIMIT BUY probe (`limit-buy-1`) and one separately operator-confirmed Spot LIMIT SELL probe (`limit-sell-1`).
+- [x] Both requests reached `BitunixSpotBroker.createOrder()` and Bitunix returned HTTP 200 with outer `success: true`, but nested placement `placeStatus: 0`, `placeCode: 10034`, `placeMsg: 余额不足`, and no order ID.
+- [x] Coinzilla surfaced both as `BITUNIX_REST_EXCHANGE_REJECTED` with mutation outcome `REJECTED`. The harness workflow result `SUCCESS` means evidence capture completed; it does not mean an order was accepted.
+- [x] Published sanitized reports: [BUY report](https://github.com/45s/coinzilla/blob/25eb7e57aa9f1ae79338997897d0d4f189d37bee/packages/brokers/diagnostics/reports/bitunix-health-20261122T011615067Z.json) (commit `25eb7e57aa9f1ae79338997897d0d4f189d37bee`) and [SELL report](https://github.com/45s/coinzilla/blob/32362a40ec2f29b2ae895d0dbede78b3b157f907/packages/brokers/diagnostics/reports/bitunix-health-20261122T013708002Z.json) (commit `32362a40ec2f29b2ae895d0dbede78b3b157f907`).
+- [x] Added the cumulative [Bitunix live order-probe evidence log](./BITUNIX_ORDER_PROBE_LOG.md), including the proven behavior, unresolved protocol questions, and next investigation steps.
+
+**Finding:** Spot LIMIT BUY/SELL dispatch and nested rejection parsing are empirically exercised. The operator confirmed the account lacked the required Spot assets, so both `10034` insufficient-balance rejections were expected. No accepted order or fill has yet been observed. A funded `limit-buy-11-usdt` probe is added: BUY `HYPEUSDT` LIMIT at `30 USDT`, spending up to `11 USDT`; quantity is calculated from live `basePrecision`, with `0.24 USDT` reserved. The script displays the exact order snapshot and accepts only `y/N`. This will test actual acceptance after merge and funding. Broader lifecycle/Harvester blockers remain.

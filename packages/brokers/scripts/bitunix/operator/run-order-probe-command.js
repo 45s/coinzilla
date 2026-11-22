@@ -35,6 +35,7 @@ function createBroker({ credentials, allowLiveOrderMutations, capture }) {
 
 function askForOrderProbeConfirmation({ preflight, stdin, stdout }) {
   const { probe } = preflight
+  const fundedBuy = probe.spendingAmount !== undefined
   const unknownSellBalance = probe.side === "SELL" &&
     probe.type === "LIMIT" &&
     preflight.baseBalanceUnreported === true
@@ -53,14 +54,26 @@ function askForOrderProbeConfirmation({ preflight, stdin, stdout }) {
       resolveAnswer(approved)
     }
     readline.once("close", () => finish(false))
-    const question = unknownSellBalance
-      ? `HYPE balance was not returned. Type "I ACCEPT UNKNOWN HYPE BALANCE" to submit this LIVE SELL probe "${probe.id}", or anything else to decline: `
-      : `Press ENTER to submit this LIVE ${probe.side} ${probe.type} HYPEUSDT probe "${probe.id}", or type anything to decline: `
+    let question
+    if (fundedBuy) {
+      question = "Submit LIVE order? [y/N]: "
+    } else if (unknownSellBalance) {
+      question = `HYPE balance was not returned. Type "I ACCEPT UNKNOWN HYPE BALANCE" to submit this LIVE SELL probe "${probe.id}", or anything else to decline: `
+    } else {
+      question = `Press ENTER to submit this LIVE ${probe.side} ${probe.type} HYPEUSDT probe "${probe.id}", or type anything to decline: `
+    }
+    const isApproved = (answer) => {
+      if (fundedBuy) {
+        return answer.trim().toLowerCase() === "y"
+      }
+      if (unknownSellBalance) {
+        return answer === "I ACCEPT UNKNOWN HYPE BALANCE"
+      }
+      return answer === ""
+    }
     readline.question(
       question,
-      (answer) => finish(unknownSellBalance
-        ? answer === "I ACCEPT UNKNOWN HYPE BALANCE"
-        : answer === ""),
+      (answer) => finish(isApproved(answer)),
     )
   })
 }
@@ -90,9 +103,11 @@ export async function runOperatorOrderProbeCommand({
   })
   const secrets = [credentials.apiKey, credentials.apiSecret]
   const capture = {}
-  stdout.write(
-    "WARNING: this command can submit one real Bitunix Spot LIVE order. Each probe is a separate one-shot operation.\n",
-  )
+  if (probe.spendingAmount === undefined) {
+    stdout.write(
+      "WARNING: this command can submit one real Bitunix Spot LIVE order. Each probe is a separate one-shot operation.\n",
+    )
+  }
   return runBitunixOrderProbeAttempt({
     probeId,
     readBroker: createBroker({

@@ -10,6 +10,16 @@ const ORDER_PROBES = Object.freeze([
     quoteNotional: "30",
   }),
   Object.freeze({
+    id: "limit-buy-11-usdt",
+    symbol: "HYPEUSDT",
+    side: "BUY",
+    type: "LIMIT",
+    spendingAmount: "11",
+    feeReserve: "0.24",
+    price: "30",
+    amountAsset: "USDT",
+  }),
+  Object.freeze({
     id: "limit-buy-2",
     symbol: "HYPEUSDT",
     side: "BUY",
@@ -105,7 +115,7 @@ export function getBitunixOrderProbe({ probeId } = {}) {
  * @param {{probeId: string}} input
  * @returns {Readonly<object>} Common Broker order input.
  */
-export function createBitunixOrderProbeInput({ probeId } = {}) {
+export function createBitunixOrderProbeInput({ probeId, quantity } = {}) {
   const probe = getBitunixOrderProbe({
     probeId,
   })
@@ -113,7 +123,7 @@ export function createBitunixOrderProbeInput({ probeId } = {}) {
     symbol: probe.symbol,
     side: probe.side,
     type: probe.type,
-    ...(probe.quantity === undefined ? {} : { quantity: probe.quantity }),
+    ...((quantity ?? probe.quantity) === undefined ? {} : { quantity: quantity ?? probe.quantity }),
     ...(probe.quoteQuantity === undefined ? {} : { quoteQuantity: probe.quoteQuantity }),
     ...(probe.price === undefined ? {} : { price: probe.price }),
   })

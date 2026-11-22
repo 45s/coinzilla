@@ -18,8 +18,12 @@ const EXPECTED_PROBES = [
   ["market-sell-2", "SELL", "MARKET", "2", undefined, 1, 2, "2", "0"],
 ]
 
-test("Bitunix order probe matrix contains the eight explicitly reviewed first-pass cases", () => {
-  assert.deepEqual(BITUNIX_ORDER_PROBE_IDS, EXPECTED_PROBES.map(([id]) => id))
+test("Bitunix order probe matrix contains eight diagnostic cases and the funded HYPE BUY case", () => {
+  assert.deepEqual(BITUNIX_ORDER_PROBE_IDS, [
+    ...EXPECTED_PROBES.map(([id]) => id).slice(0, 1),
+    "limit-buy-11-usdt",
+    ...EXPECTED_PROBES.map(([id]) => id).slice(1),
+  ])
 })
 
 test("each Bitunix probe maps through createOrder() to the expected REST wire values", () => {
