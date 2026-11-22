@@ -55,14 +55,14 @@ if (cliArguments.length === 1 && cliArguments[0] === "--version") {
     startedAt: sessionStartedAt,
     runtimeSessionId,
   })
-  
+
   mkdirSync(cumulativeDirectory, { recursive: true })
   mkdirSync(sessionPaths.sessionDirectory, { recursive: true })
   await persistHarvesterArchiveProcessIdentity({
     filename: resolve(sessionPaths.sessionDirectory, "process-identity.json"),
     identity: archiveProcessIdentity,
   })
-  
+
   const logStreams = [
     createWriteStream(logPath, { flags: "a" }),
     createWriteStream(sessionPaths.terminal, { flags: "wx" }),
@@ -85,7 +85,7 @@ if (cliArguments.length === 1 && cliArguments[0] === "--version") {
     }
   }
   logStreams.forEach((stream) => stream.on("error", onLogStreamError))
-  
+
   const streamOpenResults = await Promise.allSettled(logStreams.map((stream) => new Promise((...callbacks) => {
     const [resolveOpen, rejectOpen] = callbacks
     stream.once("open", resolveOpen)
@@ -105,7 +105,7 @@ if (cliArguments.length === 1 && cliArguments[0] === "--version") {
     }))
     throw streamOpenErrors[0]
   }
-  
+
   childProcess.current = spawn(
     process.execPath,
     ["src/index.js"],
@@ -129,7 +129,7 @@ if (cliArguments.length === 1 && cliArguments[0] === "--version") {
   if (logStreamFailed) {
     childProcess.current.kill("SIGTERM")
   }
-  
+
   const closeLogStreams = async () => {
     const results = await Promise.allSettled(logStreams.map(async (stream) => {
       if (stream.closed) {
@@ -149,7 +149,7 @@ if (cliArguments.length === 1 && cliArguments[0] === "--version") {
     }
     return streamsClosed
   }
-  
+
   const handleSignal = (signal) => {
     // The child has its own process group on POSIX, so it needs an explicit
     // signal. On Windows, Ctrl+C is delivered to both console processes.
@@ -157,13 +157,13 @@ if (cliArguments.length === 1 && cliArguments[0] === "--version") {
       childProcess.current.kill(signal)
     }
   }
-  
+
   const onSigint = () => handleSignal("SIGINT")
   const onSigterm = () => handleSignal("SIGTERM")
-  
+
   process.once("SIGINT", onSigint)
   process.once("SIGTERM", onSigterm)
-  
+
   const forwardOutput = async ({ stream, output }) => {
     try {
       return await forwardChildOutput({
@@ -183,7 +183,7 @@ if (cliArguments.length === 1 && cliArguments[0] === "--version") {
       return 0
     }
   }
-  
+
   const outputForwarding = [
     forwardOutput({
       stream: childProcess.current.stdout,
@@ -194,7 +194,7 @@ if (cliArguments.length === 1 && cliArguments[0] === "--version") {
       output: process.stderr,
     }),
   ]
-  
+
   childProcess.current.on("spawn", () => {
     childStarted = true
   })
@@ -203,18 +203,18 @@ if (cliArguments.length === 1 && cliArguments[0] === "--version") {
     process.stderr.write(`Failed to start Harvester: ${error.message}\n`)
     process.exitCode = 1
   })
-  
+
   childProcess.current.on("close", async (...closeArguments) => {
     const [code, signal] = closeArguments
     childClosed = true
     process.removeListener("SIGINT", onSigint)
     process.removeListener("SIGTERM", onSigterm)
-  
+
     const droppedChunks = (await Promise.all(outputForwarding))
       .reduce((total, dropped) => total + dropped, 0)
-  
+
     const logStreamsClosed = await closeLogStreams()
-  
+
     try {
       await writeFile(
         resolve(sessionPaths.sessionDirectory, "process-completed.json"),
@@ -235,7 +235,7 @@ if (cliArguments.length === 1 && cliArguments[0] === "--version") {
       process.stderr.write(`Failed to persist Harvester session completion: ${error.message}\n`)
       process.exitCode = 1
     }
-  
+
     if (
       droppedChunks > 0
       && !process.stderr.destroyed
@@ -245,7 +245,7 @@ if (cliArguments.length === 1 && cliArguments[0] === "--version") {
         `Harvester terminal display skipped ${droppedChunks} output chunk(s); full child output remains in ${logPath} and ${sessionLogStream.path}\n`,
       )
     }
-  
+
     if (logStreamFailed) {
       process.exitCode = 1
     } else if (code !== null) {
@@ -262,5 +262,5 @@ if (cliArguments.length === 1 && cliArguments[0] === "--version") {
       process.exitCode ??= 0
     }
   })
-  
+
 }
