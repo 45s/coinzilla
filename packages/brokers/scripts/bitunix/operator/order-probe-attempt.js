@@ -102,7 +102,7 @@ function formatOrderProbePreflight({ preflight }) {
     `Probe: ${probe.id}`,
     `Order: ${probe.side} ${probe.type} ${probe.symbol}`,
     `Coinzilla input: ${probe.quantity === undefined ? `quoteQuantity ${probe.quoteQuantity} USDT` : `quantity ${probe.quantity} HYPE`}`,
-    `Price: ${probe.price ?? "omitted (MARKET wire price is 0)")}`,
+    `Price: ${probe.price ?? "omitted (MARKET wire price is 0)"}`,
     `Expected wire body: ${JSON.stringify(preflight.wireRequest)}`,
     `Exchange minimum quantity (minVolume): ${preflight.minimumQuantity} HYPE`,
     `Exchange minimum notional (minPrice): ${preflight.minimumNotional} USDT`,
