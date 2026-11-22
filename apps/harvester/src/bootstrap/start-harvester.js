@@ -1362,6 +1362,7 @@ function createHarvesterRuntimeStop({ startup,
     brokerName: startup.brokerName,
     eventPublisher: startup.eventPublisher,
     publishAccountSnapshot: accountSnapshots.publishAccountSnapshot,
+    publishClosingOpenOrdersSnapshot: accountSnapshots.publishClosingOpenOrdersSnapshot,
     now: () => globalThis.performance.now(),
     runtimeSessionId: startup.runtimeSessionId,
   })

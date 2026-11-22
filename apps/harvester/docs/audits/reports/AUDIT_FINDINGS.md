@@ -658,6 +658,8 @@ Current source and regression inventory:
 
 **Required follow-up:** decide and implement, with DDD/TDD, whether CLOSING should durably capture the complete account-wide open-order set while broker REST remains connected. Specify completeness/failure semantics and preserve open SELL orders; this is read-only evidence capture, not permission to mutate orders. Keep the decision separate from deferred process-restart reconciliation #654.
 
+**Disposition update (2026-11-22):** The implementation is in progress on `fix/harvester/closing-open-orders-audit-764`. It adds a separate durable CLOSING `ACCOUNT_OPEN_ORDERS_CAPTURED` fact/Journal event, monotonic local observation identities, BLOCKED evidence for failed/partial/malformed reads, and a paired INCOMPLETE CLOSING balance audit. The branch is awaiting exact-head CI and review; this finding remains open until the implementation PR is merged.
+
 
 ## F-023 — Recovery event-processing failures are mislabeled and overclassified as accounting failures
 

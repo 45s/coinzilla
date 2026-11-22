@@ -716,6 +716,93 @@
         "Before an evaluation can plan a new recovery SELL or classify recovery dust for an active Conservative Position, require a validated same-market filter snapshot no older than 30,000 milliseconds. An owned active recovery SELL suppresses duplicate intents and remains untouched, so no refresh is required until it becomes terminal or is reconciled.",
         "If current filters are unavailable, invalid, stale, or belong to another market, pause the affected market and do not submit a recovery SELL."
       ]
+    },
+    {
+      "id": "CLOSING_ACCOUNT_OPEN_ORDER_AUDIT",
+      "title": "Durable CLOSING account-wide open-order evidence",
+      "sourceModules": [
+        "src/bootstrap/account/create-account-snapshot-manager.js",
+        "src/bootstrap/shutdown/create-shutdown-handler.js",
+        "src/bootstrap/start-harvester.js",
+        "src/infrastructure/operational-state/project-harvester-operational-state.js"
+      ],
+      "tests": [
+        {
+          "path": "src/bootstrap/account/create-account-snapshot-manager.test.js",
+          "name": "publishes a durable CLOSING account-wide snapshot without adopting an external recovery SELL",
+          "kind": "normal"
+        },
+        {
+          "path": "src/bootstrap/account/create-account-snapshot-manager.test.js",
+          "name": "uses a unique monotonic observation identity for repeated CLOSING snapshots in one clock tick",
+          "kind": "normal"
+        },
+        {
+          "path": "src/bootstrap/account/create-account-snapshot-manager.test.js",
+          "name": "records a BLOCKED CLOSING open-order snapshot when the broker read fails with partial data",
+          "kind": "failure"
+        },
+        {
+          "path": "src/bootstrap/account/create-account-snapshot-manager.test.js",
+          "name": "records a BLOCKED CLOSING open-order snapshot when the broker payload is malformed",
+          "kind": "failure"
+        },
+        {
+          "path": "src/bootstrap/account/create-account-snapshot-manager.test.js",
+          "name": "preserves both capture and durability failures when a BLOCKED CLOSING snapshot cannot be persisted",
+          "kind": "failure"
+        },
+        {
+          "path": "src/bootstrap/shutdown/create-shutdown-handler.test.js",
+          "name": "captures the account-wide CLOSING open-order snapshot after safety proof and before stopping services",
+          "kind": "normal"
+        },
+        {
+          "path": "src/bootstrap/shutdown/create-shutdown-handler.test.js",
+          "name": "fails closed and marks the CLOSING balance audit incomplete when open-order capture fails",
+          "kind": "failure"
+        },
+        {
+          "path": "src/bootstrap/shutdown/create-shutdown-handler.test.js",
+          "name": "refreshes the CLOSING open-order snapshot after a partial market-unsubscribe failure",
+          "kind": "failure"
+        },
+        {
+          "path": "src/bootstrap/start-harvester.test.js",
+          "name": "captures the CLOSING account-wide open-order set before broker disconnect without mutating external SELLs",
+          "kind": "integration"
+        },
+        {
+          "path": "src/infrastructure/operational-state/project-harvester-operational-state.test.js",
+          "name": "projects verified durable order facts into a candidate recovery projection without opening readiness",
+          "kind": "integration"
+        },
+        {
+          "path": "src/infrastructure/journal/project-harvester-journal-recovery.test.js",
+          "name": "projects account audit snapshots and recognizes a complete prior trading shutdown",
+          "kind": "integration"
+        },
+        {
+          "path": "src/application/events/lifecycle-event-dtos.test.js",
+          "name": "maps a BLOCKED CLOSING open-order snapshot without implying an empty account",
+          "kind": "normal"
+        },
+        {
+          "path": "src/infrastructure/operational-state/helpers/validate-operational-state-account-facts.test.js",
+          "name": "validates a BLOCKED CLOSING open-order snapshot as explicit incomplete evidence",
+          "kind": "failure"
+        }
+      ],
+      "runtimeStatus": "active",
+      "integrationRequired": true,
+      "invariants": [
+        "After every strategy safety proof, capture the complete account-wide open-order set while the broker remains connected and before CLOSING balance publication and shared-service teardown.",
+        "Persist ACCOUNT_OPEN_ORDERS_CAPTURED before publishing account.open_orders_captured and crossing the Journal durability barrier; observedAt is a monotonic local capture timestamp, not an exchange source timestamp.",
+        "Unmatched/external orders remain BLOCKED, unowned and untouched; their presence alone does not make the CLOSING balance audit incomplete or prevent shutdown.",
+        "A failed, partial or malformed CLOSING read must durably record BLOCKED evidence with CLOSING_OPEN_ORDERS_CAPTURE_FAILED, never an empty/READY snapshot, and must mark the following CLOSING balance audit INCOMPLETE.",
+        "If the blocked evidence cannot be durably recorded, preserve both capture and durability failures and fail shutdown closed; never publish STOPPED or release required process resources.",
+        "CLOSING open-order evidence is an audit fact only; it does not adopt orders, mutate orders, restore prior process state or enable process-restart recovery."
+      ]
     }
   ],
   "coverageBaseline": {

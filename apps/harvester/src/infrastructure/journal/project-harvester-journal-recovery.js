@@ -644,8 +644,11 @@ function validateOpenOrderSnapshotReadiness({ readiness, orders, blockReasons })
 }
 
 function validateOpenOrderSnapshotMetadata({ data, fileName, session }) {
-  if (!["OPENING", "PREFLIGHT", "RECOVERY"].includes(data.phase)) {
+  if (!["OPENING", "CLOSING", "PREFLIGHT", "RECOVERY"].includes(data.phase)) {
     throw new TypeError("Open-order snapshot phase is invalid")
+  }
+  if (data.phase === "CLOSING" && (!session.started || session.stoppedOutcome !== undefined)) {
+    throw new Error(`CLOSING open-order snapshot requires a started Journal session that has not stopped ${fileName}`)
   }
   if (data.phase === "RECOVERY" && !session.started) {
     throw new Error(`RECOVERY open-order snapshot requires a started Journal session ${fileName}`)
