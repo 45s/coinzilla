@@ -2,74 +2,74 @@
 
 Issue: [#1704](https://github.com/45s/coinzilla/issues/1704)
 
-This document records Phase 1 only: verify the existing Spot pending-orders fetch method and locate the accepted HYPEUSDT order by exact exchange identity. Specific-order detail lookup and cancellation are deliberately out of scope until Phase 1 passes.
+This phase verifies order discovery and specific-order reads using only the public Coinzilla Broker API. It does not place, modify, or cancel orders.
 
 ## Known order identity
 
 The operator's one-shot Spot LIMIT BUY was accepted by Bitunix on 2026-11-22:
 
-- Symbol: `HYPEUSDT`
-- Side/type: `BUY LIMIT`
-- Quantity: `0.366 HYPE`
-- Price: `30 USDT`
-- Exchange order ID: `"2124329325141426176"` (must remain a string)
+- Symbol: HYPEUSDT
+- Side/type: BUY LIMIT
+- Quantity: 0.366 HYPE
+- Price: 30 USDT
+- Exchange order ID: "2124329325141426176" (must remain a string)
 
-The operator reported that the order was waiting/open after placement. That is historical operator confirmation, not a fresh status read. See [PR #1703](https://github.com/45s/coinzilla/pull/1703) for the exact placement acknowledgement and post-placement detail-read failure.
+See [PR #1703](https://github.com/45s/coinzilla/pull/1703) for the exact placement acknowledgement and failed post-placement detail read.
 
-## Existing fetch method audit
+## Verified API contract
 
-`BitunixSpotBroker.getOpenOrders({ symbol })`:
+Bitunix's official Spot documentation marks symbol as required for POST /api/spot/v1/order/pending/list. The Futures pending-orders endpoint is different: its symbol parameter is optional. Do not apply Futures behavior to Spot.
 
-1. Requires an explicit symbol and normalizes it to uppercase.
-2. Sends one authenticated `POST /api/spot/v1/order/pending/list` request with `{ symbol }` and `stateChanging: false`.
-3. Accepts the documented single-row object or array response shape.
-4. Rejects missing/malformed order rows and rejects any row whose symbol does not match the requested symbol.
-5. Normalizes rows through `adaptOrder()`, retaining the exchange order ID as a string.
+The public Spot market catalog is available through Broker.getExchangeMarkets(). Therefore, account-wide Spot discovery is implemented at the Broker API layer by:
 
-This endpoint is **symbol-scoped**. It does not enumerate every Spot symbol and must be called with `HYPEUSDT` for this check.
+1. Calling getExchangeMarkets() once.
+2. Enumerating every unique active Spot market symbol returned.
+3. Calling getOpenOrders({ symbol }) sequentially for every symbol.
+4. Calling getOrder({ symbol, orderId }) once for every returned order.
+5. Recording every result and continuing after an individual symbol or detail-read failure.
 
-The REST response parser now also converts numeric JSON tokens named `orderId` to strings before `JSON.parse` can round a 64-bit value. This guard applies to pending-order, history, detail and placement responses; documented string IDs remain unchanged.
+This avoids requiring the operator to know symbols and avoids undocumented account-wide REST parameters. It is a sequence of symbol-scoped requests, not a claim that Bitunix has a single account-wide Spot pending-orders endpoint.
 
-## Offline regression coverage
+## Diagnostics
 
-The broker tests cover:
+The command emits structured logs for:
 
-- The exact accepted 19-digit HYPE order ID in the documented string form.
-- Exact ID and symbol matching after normalization.
-- HYPEUSDT/BUY/OPEN state, price and quantity fields.
-- One signed pending-orders POST with the exact serialized body.
-- A raw JSON fixture where the same 64-bit order ID is represented as a numeric token; the parser must preserve it losslessly.
-- Existing empty-list, single-object, malformed-row and wrong-symbol behavior.
+- Broker API operation starts, successful results, failures, symbols, order IDs, and statuses.
+- Bitunix Spot REST request method/path, redacted query/body metadata, HTTP status, exchange code/message, response data, and errors.
+- Every per-symbol pending-order result and every per-order detail result, including failed Result values and thrown exceptions.
+- Final counts, target match count, and report path.
 
-The read-only command tests cover exact matching, an empty pending list, and rejection of numeric CLI IDs.
+A complete JSON report is saved under packages/brokers/.diagnostics/. It includes normalized Broker API results and sanitized errors. API keys, secrets, signatures, nonces, user IDs, email addresses, phone numbers, and addresses are redacted. Diagnostic logging is best-effort and must never alter request behavior.
 
-## Operator read-only verification
+The scan is sequential, read-only, and does not retry failed requests. A failed symbol does not prevent scanning later symbols. A failed detail lookup does not prevent checking later orders.
 
-Run from the repository root after configuring `packages/brokers/.env.development`:
+## Lossless order IDs
+
+The REST response parser converts numeric JSON tokens named orderId to strings before JSON.parse can round a 64-bit value. This guard applies to pending-order, history, detail, and placement responses. IDs must remain exact strings throughout the Broker API and report.
+
+## Operator command
+
+Run from the repository root after configuring packages/brokers/.env.development:
 
 ```bash
 pnpm --filter @coinzilla/brokers bitunix:find-order --order-id=2124329325141426176
 ```
 
-The command:
-
-- Constructs the Bitunix broker with live order mutations disabled.
-- Calls only `getOpenOrders({ symbol: "HYPEUSDT" })`.
-- Matches both exact string `orderId` and exact `HYPEUSDT` symbol.
-- Prints normalized status and order quantities if found.
-- Never calls order detail, placement, modification or cancellation.
+The command scans all active Spot markets, reads every discovered order detail, and writes a report. It constructs the Broker with live order mutations disabled. It never calls createOrder, cancelOrder, or cancelAllOpenOrders.
 
 Exit codes:
 
-- `0`: the exact order was found in the current HYPEUSDT pending-order response.
-- `2`: the exact ID was not present in that pending response. This is **not** proof that the order is absent from Bitunix; it may have left the pending set. Do not place or cancel anything.
-- `1`: request, validation or local configuration failure.
+- 0: the exact target order appears exactly once and every scan request completed without errors.
+- 2: the full scan completed without request errors, but the exact order was not found in any pending list. It may have filled or otherwise left the pending set; this does not prove the order is absent.
+- 1: one or more requests failed, the scan could not complete, or the diagnostic report could not be saved. Inspect the report; a target match may still have been found during a partial scan.
 
-## Phase 1 acceptance gate
+## Acceptance gate
 
-Phase 1 remains open until the operator runs the command and the response contains exactly one row with:
+Phase 1 passes only when the report contains exactly one pending-order match with:
 
-- `id === "2124329325141426176"`
-- `symbol === "HYPEUSDT"`
+- symbol === "HYPEUSDT"
+- orderId === "2124329325141426176"
 
-Record the sanitized command output as evidence. Do not begin Phase 2 or test cancellation before this gate passes. No live placement or cancellation is part of Phase 1.
+It must also contain a recorded getOrder() result for that exact identity. If detail lookup fails, that failure is evidence for Phase 2, not permission to cancel or retry.
+
+Do not proceed to cancellation until the order-discovery and specific-order-read behavior has been analyzed and the next phase is approved. No live mutation is part of this command.
