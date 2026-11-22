@@ -49,6 +49,7 @@ export function createSanitizedHealthReport({ report }) {
       operation: result.operation,
       status: result.status,
       durationMs: result.durationMs ?? null,
+      ...(typeof result.probeId === "string" ? { probeId: result.probeId } : {}),
       ...(result.error ? {
         error: Object.fromEntries(
           ["name", "code", "kind", "status", "exchangeCode"]
