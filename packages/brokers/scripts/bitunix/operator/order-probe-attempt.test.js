@@ -1,5 +1,5 @@
 import assert from "node:assert/strict"
-import { mkdtemp, readFile, rm, stat } from "node:fs/promises"
+import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import test from "node:test"
@@ -119,6 +119,9 @@ function createDependencies({ directory, result, confirmation = true, balances, 
         assert.equal(providedCapture, capture)
         events.push("mutation.construct")
         return mutationBroker
+      },
+      async assertMatrixCanContinue() {
+        events.push("matrix.check")
       },
       async confirm({ preflight }) {
         events.push({
@@ -377,6 +380,9 @@ test("Bitunix order probe classifies an existing one-shot marker as NOT_SENT", a
         wireRequest: { symbol: "HYPEUSDT", side: 2, type: 1, volume: "1", price: "30" },
       },
     })
+    await writeFile(markerPath, JSON.stringify({
+      status: "REJECTED",
+    }))
     await assert.rejects(
       run(),
       (error) => error.mutationOutcome === "NOT_SENT" && error.code === "EEXIST",
@@ -439,4 +445,22 @@ test("Bitunix probe capture records sanitized order-detail follow-up responses",
   assert.equal(capture.followUpResponses[0].body.data.userId, "[REDACTED]")
   assert.equal(JSON.stringify(capture).includes("private-user-id"), false)
   assert.equal(Object.hasOwn(capture.requests[1], "body"), false)
+})
+
+
+test("Bitunix order probe blocks before reads when an earlier probe has an unknown outcome", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "bitunix-order-probe-matrix-stop-"))
+  try {
+    const { events, run } = createDependencies({
+      directory,
+    })
+    const error = await run().catch((caught) => caught)
+
+    assert.equal(error.mutationOutcome, "NOT_SENT")
+    assert.match(error.message, /prior probe outcome unknown/i)
+    assert.equal(events.includes("read.connect"), false)
+    assert.equal(events.includes("mutation.construct"), false)
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
 })
