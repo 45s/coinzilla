@@ -447,14 +447,7 @@ async function runDiagnosticsWithOperatorAttempt({
       onProgress,
       brokerApiRestClientFactory: (options) => new BitunixRestClient(options),
     })
-  if (!runOperatorProbe) {
-    await runGeneralOrderReadScan({
-      env,
-      report,
-      onProgress,
-      brokerFactory,
-    })
-  }
+  if (!runOperatorProbe) await runGeneralOrderReadScan({ env, report, onProgress, brokerFactory })
   if (!runOperatorOrder && !runOperatorProbe) {
     return report
   }
