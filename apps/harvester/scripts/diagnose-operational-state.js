@@ -151,6 +151,55 @@ function createIntegrityFailureReport({ error, identity }) {
   }
 }
 
+async function inspectOperationalState({ store, identity, project }) {
+  let readResult
+  try {
+    readResult = await store.readAll()
+  } catch (error) {
+    return {
+      report: createIntegrityFailureReport({ error, identity }),
+      exitCode: 2,
+    }
+  }
+  if (readResult?.ok !== true || !Array.isArray(readResult.data?.records)) {
+    return {
+      report: createIntegrityFailureReport({
+        error: readResult?.errors?.[0] ?? new Error("Operational State Store readAll returned no verified records"),
+        identity,
+      }),
+      exitCode: 2,
+    }
+  }
+
+  const records = readResult.data.records
+  const storeIntegrity = summarizeVerifiedRecords({
+    records,
+    lastCommittedSequence: readResult.data.lastCommittedSequence,
+    lastCommittedDigest: readResult.data.lastCommittedDigest,
+  })
+  let projectionResult
+  try {
+    projectionResult = project({ records })
+  } catch (error) {
+    projectionResult = {
+      ok: false,
+      errors: [error],
+    }
+  }
+  const projection = summarizeProjection({ projection: projectionResult })
+  return {
+    report: {
+      identity,
+      storeIntegrity,
+      projection,
+    },
+    exitCode: getDiagnosticExitCode({
+      storeIntegrity,
+      projection,
+    }),
+  }
+}
+
 /**
  * Run a read-only integrity and recovery-projection diagnostic.
  *
@@ -172,8 +221,8 @@ export async function runOperationalStateDiagnostic({
   captureMetadata = captureBuildMetadata,
   createStore = createFileOperationalStateStore,
   project = projectHarvesterOperationalState,
-  writeOutput = (value) => process.stdout.write(`${value}\n`),
-  writeError = (value) => process.stderr.write(`${value}\n`),
+  writeOutput = (value) => process.stdout.write(`${value}\\n`),
+  writeError = (value) => process.stderr.write(`${value}\\n`),
 } = {}) {
   let parsed
   try {
@@ -222,54 +271,13 @@ export async function runOperationalStateDiagnostic({
     return 1
   }
 
-  let readResult
-  try {
-    readResult = await store.readAll()
-  } catch (error) {
-    const report = createIntegrityFailureReport({
-      error,
-      identity,
-    })
-    writeOutput(JSON.stringify(report, null, 2))
-    return 2
-  }
-  if (readResult?.ok !== true || !Array.isArray(readResult.data?.records)) {
-    const report = createIntegrityFailureReport({
-      error: readResult?.errors?.[0] ?? new Error("Operational State Store readAll returned no verified records"),
-      identity,
-    })
-    writeOutput(JSON.stringify(report, null, 2))
-    return 2
-  }
-
-  const records = readResult.data.records
-  const storeIntegrity = summarizeVerifiedRecords({
-    records,
-    lastCommittedSequence: readResult.data.lastCommittedSequence,
-    lastCommittedDigest: readResult.data.lastCommittedDigest,
-  })
-  let projectionResult
-  try {
-    projectionResult = project({ records })
-  } catch (error) {
-    projectionResult = {
-      ok: false,
-      errors: [error],
-    }
-  }
-  const projection = summarizeProjection({
-    projection: projectionResult,
-  })
-  const report = {
+  const diagnostic = await inspectOperationalState({
+    store,
     identity,
-    storeIntegrity,
-    projection,
-  }
-  writeOutput(JSON.stringify(report, null, 2))
-  return getDiagnosticExitCode({
-    storeIntegrity,
-    projection,
+    project,
   })
+  writeOutput(JSON.stringify(diagnostic.report, null, 2))
+  return diagnostic.exitCode
 }
 
 const isDirectExecution = process.argv[1]
