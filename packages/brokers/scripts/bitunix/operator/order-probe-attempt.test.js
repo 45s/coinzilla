@@ -304,7 +304,7 @@ test("Bitunix order probe refuses missing balance evidence before confirmation",
             },
       }],
     })
-    await assert.rejects(run(), /explicit HYPE balance row/i)
+    await assert.rejects(run("market-buy-1"), /explicit HYPE balance row/i)
     assert.equal(events.some((event) => event.operation === "confirm"), false)
     assert.equal(events.includes("mutation.construct"), false)
   } finally {
