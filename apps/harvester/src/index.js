@@ -871,7 +871,26 @@ function createExchangeAccountReaders({ runtime } = {}) {
   }))
 }
 
-function createTradingHistoryApiStartInput({ options, resources, database, environment, operator, exchangeAccounts } = {}) {
+function createExchangeAccountUpdateSubscription({ runtime } = {}) {
+  const runtimes = Array.isArray(runtime?.accountRuntimes)
+    ? runtime.accountRuntimes
+    : [runtime]
+  return (listener) => {
+    const unsubscribe = runtimes.flatMap((accountRuntime) => {
+      if (typeof accountRuntime?.subscribeExchangeAccountUpdates !== "function") {
+        return []
+      }
+      return [accountRuntime.subscribeExchangeAccountUpdates(listener)]
+    })
+    return () => {
+      for (const dispose of unsubscribe) {
+        if (typeof dispose === "function") dispose()
+      }
+    }
+  }
+}
+
+function createTradingHistoryApiStartInput({ options, resources, database, environment, operator, exchangeAccounts, subscribeExchangeAccountUpdates } = {}) {
   return {
     database,
     environment,
@@ -880,10 +899,11 @@ function createTradingHistoryApiStartInput({ options, resources, database, envir
     eventBus: resources.eventBus,
     ...(operator === undefined ? {} : { operator }),
     exchangeAccounts,
+    subscribeExchangeAccountUpdates,
   }
 }
 
-async function startTradingHistoryApiService({ options, resources, database, environment, operator, exchangeAccounts } = {}) {
+async function startTradingHistoryApiService({ options, resources, database, environment, operator, exchangeAccounts, subscribeExchangeAccountUpdates } = {}) {
   try {
     const service = await options.startTradingHistoryApi(
       createTradingHistoryApiStartInput({
@@ -893,6 +913,7 @@ async function startTradingHistoryApiService({ options, resources, database, env
         environment,
         operator,
         exchangeAccounts,
+        subscribeExchangeAccountUpdates,
       }),
     )
     resources.tradingHistoryApi = service
@@ -945,6 +966,7 @@ async function startOptionalTradingHistoryApi({ options, resources, runtime } = 
     environment,
     operator: runtime.getOperator?.() ?? runtime.accountRuntimes?.[0]?.getOperator?.(),
     exchangeAccounts: createExchangeAccountReaders({ runtime }),
+    subscribeExchangeAccountUpdates: createExchangeAccountUpdateSubscription({ runtime }),
   })
 }
 
