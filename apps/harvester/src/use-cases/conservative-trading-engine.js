@@ -17,6 +17,8 @@ import { createSubmissionGate } from "./create-submission-gate.js"
 import { createShutdownRecoveryWorkflow } from "./create-shutdown-recovery-workflow.js"
 import { createConservativeShutdownSafety } from "./create-conservative-shutdown-safety.js"
 import { createLatestTransitionEvaluator } from "./create-latest-transition-evaluator.js"
+import { createMarketMetadataCache } from "./create-market-metadata-cache.js"
+import { MarketMetadataRefreshError } from "./market-metadata-refresh-error.js"
 import { createFreshMarketPriceWaiter, createMarketPriceTransitionHandler } from "./create-market-price-transition-handler.js"
 import { validateConservativeTradingEngineOptions } from "./validate-conservative-trading-engine-options.js"
 import { failureResult, recoveryFailureError, withFailure } from "./recovery-failure.js"
@@ -1306,15 +1308,6 @@ function createInitialEngineState({ initialState = {}, pairs, initialRegistry } 
 state }
 }
 
-function createMarketMetadataCache({ getMarketMetadata } = {}) {
-  const refreshedMarketMetadata = new Map()
-  return {
-    refreshedMarketMetadata,
-    getCurrentMarketMetadata: ({ symbol } = {}) =>
-      refreshedMarketMetadata.get(symbol) ?? getMarketMetadata({ symbol }),
-  }
-}
-
 function createSerializedTransitionQueue() {
   let transitionTail = Promise.resolve()
   return ({ task } = {}) => {
@@ -1661,6 +1654,32 @@ function bindSharedAccountOrderRegistry({ state, sharedAccountState } = {}) {
   })
 }
 
+function createConservativeMarketMetadataCache({ dependencies, getMarketMetadata } = {}) {
+  return createMarketMetadataCache({
+    getMarketMetadata,
+    getSymbolFilters: ({ symbol }) => dependencies.broker.getSymbolFilters({ symbol }),
+    validateMarketMetadata: validateMarketTradingReadiness,
+    now: dependencies.now,
+  })
+}
+
+function createConservativeEngineState({ initialState, pairs, sharedAccountState } = {}) {
+  const initialRegistry = validateInitialEngineState({
+    initialState,
+    pairs,
+  })
+  const { state } = createInitialEngineState({
+    initialState,
+    pairs,
+    initialRegistry,
+  })
+  bindSharedAccountOrderRegistry({
+    state,
+    sharedAccountState,
+  })
+  return state
+}
+
 function createConservativeEngineBaseContext({ dependencies } = {}) {
   const {
     appConfig,
@@ -1677,16 +1696,14 @@ function createConservativeEngineBaseContext({ dependencies } = {}) {
   const hasBlockingOpenOrdersForSymbol = ({ symbol } = {}) =>
     pairs[symbol]?.externalOrdersPolicy === EXTERNAL_ORDERS_POLICIES.BLOCK &&
     hasUnownedOpenOrdersForSymbol({ symbol })
-  const initialRegistry = validateInitialEngineState({ initialState,
-pairs })
-  const marketMetadataCache = createMarketMetadataCache({ getMarketMetadata })
-  const { refreshedMarketMetadata, getCurrentMarketMetadata } = marketMetadataCache
-  const { state } = createInitialEngineState({ initialState,
-pairs,
-initialRegistry })
-  bindSharedAccountOrderRegistry({
-    state,
+  const state = createConservativeEngineState({
+    initialState,
+    pairs,
     sharedAccountState,
+  })
+  const marketMetadataCache = createConservativeMarketMetadataCache({
+    dependencies,
+    getMarketMetadata,
   })
   const runTransition = sharedAccountState?.runTransition ?? createSerializedTransitionQueue()
   const shutdownSafety = createConservativeShutdownSafety({
@@ -1698,8 +1715,10 @@ initialRegistry })
   let marketPriceEventSequence = 0
   const recoveryCancellationState = createRecoveryManagedCancellationState({ state })
   const rememberProcessedFill = createProcessedFillTracker({ state })
-  const executionFillAccounting = createExecutionFillAccounting({ state,
-rememberProcessedFill })
+  const executionFillAccounting = createExecutionFillAccounting({
+    state,
+    rememberProcessedFill,
+  })
   return {
     dependencies,
     settings,
@@ -1708,8 +1727,7 @@ rememberProcessedFill })
     isVolatilityProtectionEnabledForSymbol,
     hasBlockingOpenOrdersForSymbol,
     marketMetadataCache,
-    refreshedMarketMetadata,
-    getCurrentMarketMetadata,
+    ...marketMetadataCache,
     state,
     runTransition,
     nextEvaluationId: () => ++strategyEvaluationSequence,
@@ -1897,6 +1915,7 @@ function createConservativeEngineRecoverySubmissionContext({ context } = {}) {
       getPortfolio: dependencies.getPortfolio,
       broker: dependencies.broker,
       refreshedMarketMetadata: context.refreshedMarketMetadata,
+      refreshMarketMetadata: context.refreshMarketMetadata,
       pause: context.pause,
       evaluateLatestTransition: (transitionOptions) => context.evaluateLatestTransition(transitionOptions),
       cancelAndReconcileTrailingBuy: context.cancelAndReconcileTrailingBuy,
@@ -1936,6 +1955,7 @@ function createConservativeEngineEvaluationContext({ context } = {}) {
     canTrade: dependencies.canTrade,
     isMarketPriceFresh: dependencies.isMarketPriceFresh,
     getCurrentMarketMetadata: context.getCurrentMarketMetadata,
+    refreshRecoverySellMarketMetadata: createRecoverySellMetadataRefreshOperation({ context }),
     nextEvaluationId: context.nextEvaluationId,
     getPortfolio: dependencies.getPortfolio,
     getRecoveryLedger: dependencies.getRecoveryLedger,
@@ -2331,6 +2351,7 @@ function createConservativeTradingEngineDependencies({ options = {} } = {}) {
     getAdditionalTrackedQuoteCashFlow = () => [],
     hasUnownedOpenOrdersForSymbol = () => false,
     isMarketBookFresh = () => false,
+    now = Date.now,
     logger,
     initialState = {},
   } = options
@@ -2340,6 +2361,7 @@ function createConservativeTradingEngineDependencies({ options = {} } = {}) {
     getAdditionalTrackedQuoteCashFlow,
     hasUnownedOpenOrdersForSymbol,
     isMarketBookFresh,
+    now,
     logger: logger
       ? createStrategyLogger({
         logger,
@@ -3527,37 +3549,88 @@ function evaluateTrailingBuyTrigger({ context, symbol, marketPrice, pairConfig, 
   return trigger
 }
 
+function hasActiveRecoveryPosition({ portfolio, marketId } = {}) {
+  const position = portfolio.getPosition({
+    marketId,
+    strategyId: StrategyId.COIN_GRABBER,
+  })
+  return position && compareDecimal({
+    left: position.baseQuantity.amount,
+    right: "0",
+  }) > 0
+}
+
+function hasActiveRecoverySell({ state, marketId } = {}) {
+  return state.registry.getActiveOrders({ marketId }).some((order) => {
+    if (order.side !== "SELL") {
+      return false
+    }
+    const ownership = state.registry.getOwnership({
+      clientOrderId: order.clientOrderId,
+      brokerOrderId: order.brokerOrderId,
+      marketId,
+    })
+    return ownership?.strategyId === StrategyId.COIN_GRABBER
+  })
+}
+
+async function refreshRecoverySellMarketMetadataForEvaluation({ context, symbol } = {}) {
+  const metadata = context.getCurrentMarketMetadata({ symbol })
+  const marketId = metadata.market.id
+  const portfolio = context.dependencies.getPortfolio()
+  const hasActivePosition = hasActiveRecoveryPosition({
+    portfolio,
+    marketId,
+  })
+  const hasActiveSell = hasActiveRecoverySell({
+    state: context.state,
+    marketId,
+  })
+  if (!hasActivePosition || hasActiveSell) {
+    return toResult({ data: metadata })
+  }
+  const result = await context.refreshMarketMetadata({
+    symbol,
+    pairConfig: context.pairs[symbol],
+    metadata,
+  })
+  if (!result.ok) {
+    await context.pause({
+      symbol,
+      reason: "RECOVERY_SELL_FILTERS_UNAVAILABLE",
+      error: result.errors?.[0],
+    })
+  }
+  return result
+}
+
+function createRecoverySellMetadataRefreshOperation({ context } = {}) {
+  return (options = {}) => refreshRecoverySellMarketMetadataForEvaluation({
+    context,
+    ...options,
+  })
+}
+
 async function refreshTrailingBuyMarketMetadata({ context, symbol, pairConfig, metadata }) {
-  try {
-    const result = await context.broker.getSymbolFilters({
-      symbol,
-    })
-    if (!result?.ok || !result.data) {
-      throw result?.errors?.[0] ?? new Error(`Fresh Binance exchange metadata is unavailable for ${  symbol}`)
-    }
-    const refreshed = validateMarketTradingReadiness({
-      symbol,
-      pairConfig,
-      marketMetadata: result.data,
-    })
-    if (refreshed.market.id !== metadata.market.id || refreshed.market.symbol !== symbol) {
-      throw new Error(`Fresh exchange metadata does not match the active market ${  symbol}`)
-    }
-    context.refreshedMarketMetadata.set(symbol, refreshed)
-    return {
-      ok: true,
-      data: refreshed,
-    }
-  } catch (error) {
+  const result = await context.refreshMarketMetadata({
+    symbol,
+    pairConfig,
+    metadata,
+    force: true,
+  })
+  if (!result.ok) {
+    const refreshError = result.errors?.[0]
+    const error = refreshError instanceof MarketMetadataRefreshError && refreshError.cause !== undefined
+      ? refreshError.cause
+      : refreshError
     await context.pause({
       symbol,
       reason: "TRAILING_BUY_REPLACEMENT_RULES_UNAVAILABLE",
       error,
     })
-    return toResult({
-      error,
-    })
+    return toResult({ error })
   }
+  return result
 }
 
 async function preflightTrailingBuyReplacement({ context, symbol, activeBuy, marketPrice }) {

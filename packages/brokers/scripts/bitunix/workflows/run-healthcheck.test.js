@@ -52,13 +52,13 @@ function createDiagnosticReport({ failed = 0, failedOperation = requiredOperatio
 }
 
 function createPublisher({ events, publishedReports }) {
-  return async ({ runDiagnostics, env }) => {
+  return async ({ runDiagnostics, healthCheckEvaluator = evaluateReadOnlyHealthCheck, env }) => {
     events.push("report branch workflow")
     const report = await runDiagnostics({
       env,
       onProgress: () => {},
     })
-    const healthCheck = evaluateReadOnlyHealthCheck({ report })
+    const healthCheck = healthCheckEvaluator({ report })
     report.healthCheck = healthCheck
     publishedReports.push(report)
     return {
@@ -71,7 +71,7 @@ function createPublisher({ events, publishedReports }) {
       pushError: null,
       exitCode: !healthCheck.healthy || report.summary.failed > 0 ||
         report.results.some((entry) =>
-          entry.operation === "operator order attempt" && entry.status === "failed")
+          (entry.operation === "operator order attempt" || entry.operation === "operator order probe") && entry.status === "failed")
         ? 1
         : 0,
     }
@@ -264,4 +264,106 @@ test("pre-dispatch operator failures are recorded as NOT_SENT, not OUTCOME_UNKNO
   assert.equal(operatorResult.error.code, "NOT_SENT")
   assert.equal(operatorResult.error.message, "[error message withheld]")
   assert.equal(JSON.stringify(publishedReports[0]).includes("private balance preflight failure"), false)
+})
+
+
+test("probe-order mode skips generic diagnostics and runs one selected probe", async () => {
+  const events = []
+  const publishedReports = []
+  let probeCalls = 0
+  const exitCode = await runHealthcheckWorkflow({
+    mode: "probe-order",
+    probeId: "limit-buy-1",
+    brokersRoot: "/repo/packages/brokers",
+    repositoryRoot: "/repo",
+    env,
+    stdout,
+    runDiagnostics: async () => {
+      events.push("unexpected generic diagnostics")
+      throw new Error("generic diagnostics must be skipped for a focused probe")
+    },
+    publishDiagnostics: createPublisher({
+      events,
+      publishedReports,
+    }),
+    runOperatorProbe: async ({ probeId }) => {
+      events.push(`operator probe:${probeId}`)
+      probeCalls += 1
+      return {
+        ok: false,
+        mutationOutcome: "REJECTED",
+        errors: [Object.assign(new Error("exchange rejected"), {
+          code: "BITUNIX_REST_EXCHANGE_REJECTED",
+          exchangeCode: "10005",
+          status: 200,
+          kind: "exchange",
+        })],
+      }
+    },
+  })
+
+  assert.equal(probeCalls, 1)
+  assert.deepEqual(events, [
+    "report branch workflow",
+    "operator probe:limit-buy-1",
+  ])
+  assert.equal(publishedReports[0].results.at(-1).operation, "operator order probe")
+  assert.equal(publishedReports[0].results.at(-1).mutationOutcome, "REJECTED")
+  assert.equal(publishedReports[0].results.at(-1).status, "passed")
+  assert.equal(publishedReports[0].results.at(-1).error.exchangeCode, "10005")
+  assert.equal(exitCode, 0)
+})
+
+test("probe-order mode requires a probe id and an operator callback", async () => {
+  await assert.rejects(
+    runHealthcheckWorkflow({
+      mode: "probe-order",
+      brokersRoot: "/repo/packages/brokers",
+      repositoryRoot: "/repo",
+      env,
+      stdout,
+    }),
+    /probe id and operator probe runner/i,
+  )
+})
+
+
+test("probe-order mode uses only its dedicated preflight, even if generic diagnostics would fail", async () => {
+  const events = []
+  const publishedReports = []
+  const exitCode = await runHealthcheckWorkflow({
+    mode: "probe-order",
+    probeId: "market-buy-1",
+    brokersRoot: "/repo/packages/brokers",
+    repositoryRoot: "/repo",
+    env,
+    stdout,
+    runDiagnostics: async () => {
+      throw new Error("generic diagnostics should not run in focused probe mode")
+    },
+    publishDiagnostics: createPublisher({
+      events,
+      publishedReports,
+    }),
+    runOperatorProbe: async ({ probeId }) => {
+      events.push(`operator probe:${probeId}`)
+      return {
+        ok: false,
+        mutationOutcome: "REJECTED",
+        errors: [Object.assign(new Error("exchange rejected"), {
+          code: "BITUNIX_REST_EXCHANGE_REJECTED",
+          exchangeCode: "10005",
+          status: 200,
+          kind: "exchange",
+        })],
+      }
+    },
+  })
+
+  assert.equal(events.includes("operator probe:market-buy-1"), true)
+  assert.equal(events.includes("unexpected generic diagnostics"), false)
+  assert.equal(publishedReports[0].results.length, 1)
+  assert.equal(publishedReports[0].results[0].operation, "operator order probe")
+  assert.equal(publishedReports[0].results[0].error.exchangeCode, "10005")
+  assert.equal(exitCode, 0)
 })
