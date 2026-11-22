@@ -86,7 +86,14 @@ function createMutationBroker({ events, result }) {
   }
 }
 
-function createDependencies({ directory, result, confirmation = true, balances, openOrders, matrixGuard } = {}) {
+function createDependencies({
+  directory,
+  result,
+  confirmation = true,
+  balances,
+  openOrders,
+  matrixGuard,
+} = {}) {
   const events = []
   const capture = {}
   const readBroker = createReadBroker({
@@ -122,6 +129,7 @@ function createDependencies({ directory, result, confirmation = true, balances, 
       },
       async assertMatrixCanContinue() {
         events.push("matrix.check")
+        await matrixGuard?.()
       },
       async confirm({ preflight }) {
         events.push({
