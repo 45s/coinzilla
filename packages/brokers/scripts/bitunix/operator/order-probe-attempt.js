@@ -283,6 +283,7 @@ export async function runBitunixOrderProbeAttempt({
       capture,
       secrets,
     }))
+    writeLine(`Private probe evidence: ${markerPath}`)
     return result
   } catch (error) {
     if (markerPath) {
