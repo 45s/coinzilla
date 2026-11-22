@@ -472,7 +472,7 @@ export async function runFindBitunixSpotOrder({
   }),
   stdout = process.stdout,
   stderr = process.stderr,
-  reportDirectory = resolve(process.cwd(), "packages/brokers/.diagnostics"),
+  reportDirectory = resolve(import.meta.dirname, "../../../.diagnostics"),
 } = {}) {
   const normalizedOrderId = validateOrderId({ orderId })
   const credentials = parseApiCredentials({ env })
