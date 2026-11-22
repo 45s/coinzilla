@@ -20,6 +20,7 @@ import { cleanupBroker } from "./broker/cleanup-broker.js"
 import { createAccountSnapshotManager } from "./account/create-account-snapshot-manager.js"
 import { loadMarketMetadata } from "./market/load-market-metadata.js"
 import { createUserDataEventHandler } from "./user-data/create-user-data-event-handler.js"
+import { createExchangeAccountMonitorObserver } from "./user-data/create-exchange-account-monitor-observer.js"
 import { createUserDataObservationHandler } from "./user-data/create-user-data-observation-handler.js"
 import { createUserDataStatusHandler } from "./user-data/create-user-data-status-handler.js"
 import { createUserDataRecoveryHandler } from "./user-data/create-user-data-recovery-handler.js"
@@ -678,9 +679,10 @@ function createHarvesterUserDataEventRuntime({ startup,
     isTradingEnabled: () => startup.tradingEnabled,
     isStopped: () => userDataState.stopped || userDataState.shutdownRequested,
     logger: startup.logger,
-    onUserDataEvent: createUserDataMonitoringObserver({
-      startup,
-      resources,
+    onUserDataEvent: createExchangeAccountMonitorObserver({
+      onUserDataEvent: startup.onUserDataEvent,
+      listeners: resources.exchangeAccountUpdateListeners,
+      logger: startup.logger,
     }),
     getPortfolio: portfolio.getPortfolio,
     getRecoveryLedger: portfolio.getRecoveryLedger,
@@ -1406,29 +1408,6 @@ function resolveHarvesterRuntimeMarketDataMetadata({ startup }) {
     marketDataProviderTypes,
     marketDataProviderInstanceId: startup.marketDataProviderInstanceId
       ?? (sourceProviderIds.length === 1 ? sourceProviderIds[0] : null),
-  }
-}
-
-function createUserDataMonitoringObserver({ startup, resources } = {}) {
-  return async (input) => {
-    try {
-      await startup.onUserDataEvent?.(input)
-    } finally {
-      for (const listener of [...resources.exchangeAccountUpdateListeners]) {
-        try {
-          listener()
-        } catch (error) {
-          try {
-            startup.logger?.warn?.({
-              message: "exchange account update listener failed",
-              errorName: error?.name ?? "Error",
-            })
-          } catch {
-            // Optional monitoring diagnostics must not affect Harvester.
-          }
-        }
-      }
-    }
   }
 }
 
