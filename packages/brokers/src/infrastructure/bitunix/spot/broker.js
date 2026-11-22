@@ -120,6 +120,81 @@ function adaptSymbolOrderRows({ rows, symbol, operation }) {
   })
 }
 
+async function fetchAllOpenOrders({ broker }) {
+  logBrokerDiagnostic({
+    logger: broker.logger,
+    event: {
+      event: "getOpenOrders.accountWide.started",
+    },
+  })
+  const marketsResult = await broker.getExchangeMarkets()
+  if (marketsResult?.ok !== true || !Array.isArray(marketsResult.data)) {
+    const errors = marketsResult?.errors ?? [
+      new Error("Bitunix Spot market catalog returned no valid market list"),
+    ]
+    logBrokerDiagnostic({
+      logger: broker.logger,
+      level: "error",
+      event: {
+        event: "getOpenOrders.accountWide.marketCatalogFailed",
+        errorCount: errors.length,
+      },
+    })
+    return toResult({ errors })
+  }
+
+  const symbols = [...new Set(marketsResult.data.map((market) => market.symbol).filter(
+    (symbol) => typeof symbol === "string" && symbol.length > 0,
+  ))]
+  if (symbols.length === 0) {
+    const error = new Error("Bitunix Spot market catalog contains no active symbols")
+    logBrokerDiagnostic({
+      logger: broker.logger,
+      level: "error",
+      event: {
+        event: "getOpenOrders.accountWide.emptyMarketCatalog",
+      },
+    })
+    return toResult({ errors: [error] })
+  }
+
+  const orders = []
+  const errors = []
+  for (const symbol of symbols) {
+    try {
+      const result = await broker.getOpenOrders({ symbol })
+      if (Array.isArray(result?.data)) {
+        orders.push(...result.data)
+      } else if (result?.ok === true) {
+        errors.push(new TypeError(
+          `Bitunix Spot getOpenOrders() returned invalid data for ${symbol}`,
+        ))
+      }
+      if (result?.ok !== true) {
+        errors.push(...(result?.errors ?? []))
+      }
+    } catch (error) {
+      errors.push(error)
+    }
+  }
+
+  logBrokerDiagnostic({
+    logger: broker.logger,
+    level: errors.length === 0 ? "debug" : "warn",
+    event: {
+      event: "getOpenOrders.accountWide.completed",
+      marketCount: symbols.length,
+      orderCount: orders.length,
+      errorCount: errors.length,
+      symbols,
+    },
+  })
+  return toResult({
+    data: orders,
+    ...(errors.length > 0 ? { errors } : {}),
+  })
+}
+
 function isOpenMarket({ symbolInfo }) {
   return symbolInfo?.isOpen === "1" || symbolInfo?.isOpen === 1
 }
@@ -597,11 +672,16 @@ export class BitunixSpotBroker {
   }
 
   async getOpenOrders({ symbol } = {}) {
+    if (symbol === undefined) {
+      return fetchAllOpenOrders({
+        broker: this,
+      })
+    }
     logBrokerDiagnostic({
       logger: this.logger,
       event: {
         event: "getOpenOrders.started",
-        symbol: symbol ?? null,
+        symbol,
       },
     })
     try {
@@ -638,7 +718,7 @@ export class BitunixSpotBroker {
         level: "error",
         event: {
           event: "getOpenOrders.failed",
-          symbol: symbol ?? null,
+          symbol,
           error: {
             name: error?.name,
             code: error?.code,
