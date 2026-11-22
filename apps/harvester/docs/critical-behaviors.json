@@ -208,6 +208,8 @@
         "src/domain/portfolio/position-accounting.js",
         "src/use-cases/conservative-trading-engine.js"
       ],
+      "runtimeStatus": "active",
+      "integrationRequired": true,
       "tests": [
         {
           "path": "src/domain/strategies/conservative/recovery-ledger.test.js",
@@ -225,12 +227,10 @@
           "kind": "integration"
         }
       ],
-      "runtimeStatus": "active",
       "invariants": [
         "Portfolio and RecoveryLedger consume the same canonical fill exactly once and preserve consistent quote basis/proceeds.",
         "Reset cycle basis only after verified profitable SELL completion and retained-inventory allocation."
-      ],
-      "integrationRequired": true
+      ]
     },
     {
       "id": "STRATEGY_BUY_SELL_SAFETY_GATES",
