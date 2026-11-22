@@ -169,3 +169,33 @@ test("operator order failure does not rewrite the read-only diagnostic health ve
 
   assert.equal(evaluateReadOnlyHealthCheck({ report }).healthy, true, "the health verdict must describe read-only diagnostics, not the separate operator mutation outcome")
 })
+
+
+test("sanitized health report retains only the safe selected probe identifier", () => {
+  const published = createSanitizedHealthReport({
+    report: {
+      schemaVersion: 1,
+      startedAt: "2026-11-21T00:00:00.000Z",
+      finishedAt: "2026-11-21T00:00:01.000Z",
+      runtime: { node: "v24.0.0", platform: "linux" },
+      summary: { total: 1, passed: 0, failed: 1, skipped: 0 },
+      healthCheck: {
+        scope: "operator-order-preflight",
+        requiredOperations,
+        missingRequiredOperations: [],
+        nonBlockingFailedOperations: [],
+        healthy: true,
+      },
+      results: [{
+        operation: "operator order attempt",
+        status: "failed",
+        durationMs: 1,
+        probeId: "limit-buy-1",
+        request: { apiKey: "must-not-publish" },
+      }],
+    },
+  })
+
+  assert.equal(published.results[0].probeId, "limit-buy-1")
+  assert.equal(JSON.stringify(published).includes("must-not-publish"), false)
+})
