@@ -2,7 +2,7 @@ import { open, readFile, rename, writeFile, mkdir } from "node:fs/promises"
 import { dirname } from "node:path"
 import { BitunixRestClient } from "../../../src/infrastructure/bitunix/spot/api/rest-client.js"
 import { BITUNIX_SPOT_ORDER_API } from "../../../src/infrastructure/bitunix/spot/adapters/order-requests.js"
-import { redactApiSecrets } from "../helpers/api-credentials.js"
+import { redactApiSecrets } from "../helpers/api-credentials.js"\nimport { sanitizeDiagnosticValue } from "../helpers/sanitize-diagnostic-data.js"
 import { createBitunixOrderProbePreflight } from "./order-probe-preflight.js"
 import { getBitunixOrderProbe } from "./order-probe-matrix.js"
 
@@ -14,35 +14,68 @@ function createCaptureRestClientFactory({ capture, fetchFn = fetch }) {
     requestTimeout: config.requestTimeout,
     fetchFn: async (url, options) => {
       const parsedUrl = new URL(url)
-      if (parsedUrl.pathname !== BITUNIX_SPOT_ORDER_API.placeOrder) {
+      const path = parsedUrl.pathname
+      const isPlacement = path === BITUNIX_SPOT_ORDER_API.placeOrder
+      const isOrderDetail = path === BITUNIX_SPOT_ORDER_API.orderDetail
+      if (!isPlacement && !isOrderDetail) {
         return fetchFn(url, options)
       }
-      capture.request = {
+      const request = {
         method: options.method,
-        path: parsedUrl.pathname,
-        body: options.body ?? null,
+        path,
+        ...(isPlacement ? { body: options.body ?? null } : {}),
+      }
+      capture.requests ??= []
+      capture.requests.push(request)
+      if (isPlacement) {
+        capture.request = request
       }
       let response
       try {
         response = await fetchFn(url, options)
       } catch (error) {
-        capture.transportError = {
+        const transportError = {
           name: error?.name ?? "Error",
           message: String(error?.message ?? error).slice(0, 500),
+          path,
+        }
+        capture.transportErrors ??= []
+        capture.transportErrors.push(transportError)
+        if (isPlacement) {
+          capture.transportError = transportError
         }
         throw error
       }
       try {
-        capture.response = {
+        const responseText = await response.clone().text()
+        const responseRecord = {
+          path,
           httpStatus: response.status,
           httpOk: response.ok,
-          body: await response.clone().text(),
+        }
+        if (isPlacement) {
+          responseRecord.body = responseText
+          capture.response = responseRecord
+        } else {
+          try {
+            responseRecord.body = sanitizeDiagnosticValue({
+              value: JSON.parse(responseText),
+            })
+          } catch {
+            responseRecord.body = "[non-JSON order-detail response withheld]"
+            responseRecord.bodyLength = responseText.length
+          }
+          capture.followUpResponses ??= []
+          capture.followUpResponses.push(responseRecord)
         }
       } catch (error) {
-        capture.responseReadError = {
+        const responseReadError = {
           name: error?.name ?? "Error",
           message: String(error?.message ?? error).slice(0, 500),
+          path,
         }
+        capture.responseReadErrors ??= []
+        capture.responseReadErrors.push(responseReadError)
       }
       return response
     },
