@@ -117,6 +117,7 @@ test("place-order mode runs diagnostics first and executes the order inside repo
   assert.equal(orderCalls, 1, "the order runner must be called exactly once")
   assert.equal(exitCode, 0)
   assert.equal(publishedReports[0].results.at(-1).operation, "operator order attempt")
+  assert.equal(publishedReports[0].results.at(-1).probeId, "limit-buy-1")
   assert.equal(publishedReports[0].results.at(-1).status, "passed")
   assert.equal(JSON.stringify(publishedReports[0]).includes("private-order-id"), false)
 })
