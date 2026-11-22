@@ -198,7 +198,6 @@ async function copySelectedLogs({ sourceDirectory, destinationDirectory, onFileC
       throw new Error(`Refusing to archive a non-regular session entry: ${sourcePath}`)
     }
   }
-  reportProgress(onFileCopied?.onProgress, "")
 }
 
 async function copyCumulativeTailTree({
@@ -490,13 +489,13 @@ export async function runHarvesterArchivePush({
       })))
     const totalFiles = sourceSizes.reduce((total, source) => total + source.files.length, 0)
     const totalBytes = sourceSizes.reduce((total, source) => total + source.totalBytes, 0)
-    let copiedFiles = 0
+    let retainedFiles = 0
     let copiedBytes = 0
     await mkdir(localArchive, { recursive: false, mode: 0o700 })
     const onFileCopied = ({ relativePath, size }) => {
-      copiedFiles += 1
+      retainedFiles += 1
       copiedBytes += size
-      reportProgress(onProgress, `  retained ${copiedFiles} files — ${formatBytes(copiedBytes)}`)
+      reportProgress(onProgress, `  retained/copied ${retainedFiles} files — ${formatBytes(copiedBytes)}`)
     }
     reportProgress(onProgress, "Archive: selecting log evidence (last 5% of cumulative logs; newest session only)...")
     await copySelectedLogs({
@@ -512,7 +511,7 @@ export async function runHarvesterArchivePush({
         onFileCopied,
       })
     }
-    reportProgress(onProgress, `Evidence copy complete: ${copiedFiles} files, ${formatBytes(copiedBytes)} retained/copied.`)
+    reportProgress(onProgress, `Evidence copy complete: ${retainedFiles} files, ${formatBytes(copiedBytes)} retained/copied.`)
     const recoveryCheckpoint = await readLatestRecoveryCheckpoint(path.join(localArchive, "recovery-facts"))
     await writeFile(path.join(localArchive, "data_commit_hash"), recoveryCheckpoint.dataCommitHash + "\n", {
       encoding: "utf8",
