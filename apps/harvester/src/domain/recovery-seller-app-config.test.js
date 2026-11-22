@@ -3,11 +3,11 @@ import test from "node:test"
 import { appConfig } from "../../config/index.js"
 import { validateAppConfig } from "./app-config.js"
 
-test("keeps Recovery Seller explicitly disabled in the default application configuration", () => {
+test("enables Recovery Seller in the default application configuration", () => {
   assert.equal(
     appConfig.strategies.RS_recoverySeller?.enabled,
-    false,
-    "RS must be present as an independent strategy and disabled until an operator supplies valid legacy authorization.",
+    true,
+    "RS must be enabled by default while each market remains independently authorized and environment-scoped.",
   )
 })
 
