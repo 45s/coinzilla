@@ -470,3 +470,16 @@ The optional inbound operator interface, its inline navigation and control-confi
 ## Dashboard operator controls
 
 The local Dashboard Operator workspace reads status, markets, portfolio positions, open orders, and balances from the running Harvester process. It also exposes confirmed BUY pause/resume commands (`pause`, `unpause`, `pauseallbuys`, `resumeallbuys`) through the same operator facade used by Telegram. The local API remains unauthenticated and must not be exposed beyond `127.0.0.1`.
+
+
+## Private archive repository bootstrap
+
+Set `HARVESTER_ARCHIVE_REMOTE` in your local, Git-ignored `.env.development` file to the private archive repository URL. Use Git's normal credential manager or SSH key for authentication; never put access tokens in the environment file.
+
+Initialize the empty repository and verify write access with:
+
+```bash
+pnpm --filter @coinzilla/harvester archive:repo:init
+```
+
+The command only initializes a repository with an `archives/.gitkeep` placeholder and a README, then pushes `main`. It refuses any repository that already contains refs, never force-pushes, and does not read or upload Harvester databases, facts, logs, Journal sessions, API credentials, or other operational data. The actual archive/reset workflow is a separate implementation step.
