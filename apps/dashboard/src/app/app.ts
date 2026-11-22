@@ -69,8 +69,23 @@ export class AppComponent {
   }
 
   setTheme(value: string): void {
-    if (THEMES.some((theme) => theme.value === value)) {
-      this.theme.set(value as DashboardTheme);
+    if (!THEMES.some((theme) => theme.value === value)) {
+      return;
+    }
+
+    const selectedTheme = value as DashboardTheme;
+    this.theme.set(selectedTheme);
+
+    // Apply and persist immediately; Angular effects may flush after the change event.
+    if (typeof document !== 'undefined') {
+      document.documentElement.dataset['theme'] = selectedTheme;
+    }
+    if (typeof window !== 'undefined') {
+      try {
+        window.localStorage.setItem(THEME_STORAGE_KEY, selectedTheme);
+      } catch {
+        // Keep the selected theme usable when browser storage is unavailable.
+      }
     }
   }
 
