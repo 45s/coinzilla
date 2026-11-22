@@ -319,6 +319,8 @@ function createHarvesterTradingEngineCoreOptions(options = {}) {
     isMarketPriceFresh: options.isMarketPriceFresh,
     isMarketBookFresh: options.isMarketBookFresh,
     getVolatilityData: ({ symbol } = {}) => options.candleHistoryService.getSnapshot({ symbol }),
+    volatilityPairs: options.volatilityPairs,
+    volatilityLogger: options.volatilityLogger,
     logger: options.logger,
     sharedAccountState: options.sharedAccountState,
     initialState: createRecoveredTradingEngineState(options.recoveredState),
