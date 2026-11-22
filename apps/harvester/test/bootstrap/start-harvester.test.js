@@ -677,6 +677,7 @@ function createVolatilityTestConfig() {
           DOGEUSDT: {
             enabled: true,
             tradingEnvironment: "both",
+            enableVolatilityProtection: true,
             investment: 100,
             orderQuantity: 100,
             keepQuantity: 1,
