@@ -505,7 +505,7 @@ test("healthcheck records failed getOpenOrders response and skips detail reads",
 })
 
 
-test("focused order-read health gate requires every discovered order detail to succeed", () => {
+function createOrderReadGateFixture() {
   const openOrders = {
     operation: "Broker API getOpenOrders",
     status: "passed",
@@ -532,45 +532,55 @@ test("focused order-read health gate requires every discovered order detail to s
       }],
     },
   })
+  return {
+    openOrders,
+    detail,
+  }
+}
 
-  const healthy = evaluateOrderReadHealthCheck({
+test("focused order-read health gate accepts every discovered order detail", () => {
+  const { openOrders, detail } = createOrderReadGateFixture()
+  const result = evaluateOrderReadHealthCheck({
     report: {
       results: [
         openOrders,
-        detail({
-          orderId: "order-1",
-          status: "passed",
-        }),
-        detail({
-          orderId: "order-2",
-          status: "passed",
-        }),
+        detail({ orderId: "order-1", status: "passed" }),
+        detail({ orderId: "order-2", status: "passed" }),
       ],
     },
   })
-  assert.equal(healthy.healthy, true)
-  assert.deepEqual(healthy.missingRequiredOperations, [])
+  assert.equal(result.healthy, true)
+  assert.deepEqual(result.missingRequiredOperations, [])
+})
 
-  const failedDetail = evaluateOrderReadHealthCheck({
+test("focused order-read health gate rejects any failed order detail", () => {
+  const { openOrders, detail } = createOrderReadGateFixture()
+  const result = evaluateOrderReadHealthCheck({
     report: {
       results: [
         openOrders,
-        detail({
-          orderId: "order-1",
-          status: "passed",
-        }),
-        detail({
-          orderId: "order-2",
-          status: "failed",
-        }),
+        detail({ orderId: "order-1", status: "passed" }),
+        detail({ orderId: "order-2", status: "failed" }),
       ],
     },
   })
-  assert.equal(failedDetail.healthy, false)
-  assert.deepEqual(failedDetail.missingRequiredOperations, [
+  assert.equal(result.healthy, false)
+  assert.deepEqual(result.missingRequiredOperations, [
     "Broker API getOrder for every discovered order",
   ])
+})
 
+test("focused order-read health gate rejects an undiscovered order detail result", () => {
+  const { openOrders, detail } = createOrderReadGateFixture()
+  const result = evaluateOrderReadHealthCheck({
+    report: {
+      results: [
+        openOrders,
+        detail({ orderId: "order-1", status: "passed" }),
+      ],
+    },
+  })
+  assert.equal(result.healthy, false, "the gate must detect an order whose detail read was skipped")
 })
 
 test("focused order-read health gate rejects an undiscovered order detail result", () => {
@@ -583,8 +593,8 @@ test("focused order-read health gate rejects an undiscovered order detail result
           response: {
             ok: true,
             data: [
-              { id: "order-1", symbol: "HYPEUSDT" },
-              { id: "order-2", symbol: "BTCUSDT" },
+              {\n              id: "order-1",\n              symbol: "HYPEUSDT",\n            },
+              {\n              id: "order-2",\n              symbol: "BTCUSDT",\n            },
             ],
           },
         },
