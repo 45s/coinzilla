@@ -1100,7 +1100,11 @@ test("Bitunix REST diagnostics log request and response while redacting credenti
   assert.equal(events[0].layer, "rest")
   assert.equal(events[0].path, "/api/spot/v1/order/pending/list")
   assert.equal(events[0].body.symbol, "HYPEUSDT")
-  assert.equal(events[1].data[0].userId, "[REDACTED]")
+  assert.deepEqual(events[1].dataSummary, {
+    type: "array",
+    itemCount: 1,
+    fields: ["orderId", "symbol", "userId"],
+  })
   const serialized = JSON.stringify(events)
   assert.equal(serialized.includes("never-log-api-key"), false)
   assert.equal(serialized.includes("never-log-api-secret"), false)
