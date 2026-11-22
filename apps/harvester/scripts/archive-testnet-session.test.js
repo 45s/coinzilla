@@ -18,6 +18,8 @@ const RUNTIME_SESSION_ID = "ebe7c1d3-ff7d-47db-b2fe-2e5ec9594c1c"
 
 async function createArchiveFixture() {
   const packageDirectory = await mkdtemp(path.join(os.tmpdir(), "harvester-archive-test-"))
+  const lockDirectory = path.join(packageDirectory, "process-locks")
+  await mkdir(lockDirectory)
   const files = {
     "logs/sessions/2026-11-20_old/terminal.log": "older session must be excluded",
     "logs/sessions/2026-11-22_latest/terminal.log": "latest TESTNET session evidence",
@@ -69,12 +71,13 @@ async function createArchiveFixture() {
     await mkdir(path.dirname(filename), { recursive: true })
     await writeFile(filename, content, "utf8")
   }
-  return { packageDirectory, files }
+  return { packageDirectory, lockDirectory, files }
 }
 
 function createArchiveDependencies({ packageDirectory, publishArchiveFn, onProgress }) {
   return {
     packageDirectory,
+    lockDirectory: path.join(packageDirectory, "process-locks"),
     env: {
       TRADING_MODE: "testnet",
       HARVESTER_ARCHIVE_REMOTE: ARCHIVE_REMOTE,
@@ -173,6 +176,24 @@ test("archives the final cumulative tails and newest session with complete data 
   assert.equal(result.remoteCommit, REMOTE_COMMIT, "the command must return the verified remote commit")
   assert.equal(result.localArchive, publishedDirectory, "the verified local snapshot must be the published artifact")
   assert.equal(result.fileCount, expectedFileCount, "The published inventory must match the verified TESTNET-only archive manifest.")
+})
+
+
+test("refuses to archive while a Harvester process lock exists", async (t) => {
+  const fixture = await createArchiveFixture()
+  t.after(() => rm(fixture.packageDirectory, { recursive: true, force: true }))
+  await writeFile(path.join(fixture.lockDirectory, ".harvester-trading-test.lock"), "active")
+
+  await assert.rejects(
+    runHarvesterArchivePush(createArchiveDependencies({
+      packageDirectory: fixture.packageDirectory,
+      publishArchiveFn: async () => {
+        throw new Error("publication must not be reached while Harvester is active")
+      },
+    })),
+    /process lock exists/i,
+    "The archive must refuse a raw database/evidence copy while a Harvester process owns its locks.",
+  )
 })
 
 test("keeps the completed local snapshot when remote publication fails", async (t) => {
