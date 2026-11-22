@@ -81,6 +81,7 @@ function createArchiveDependencies({ packageDirectory, publishArchiveFn, onProgr
     env: {
       TRADING_MODE: "testnet",
       HARVESTER_ARCHIVE_REMOTE: ARCHIVE_REMOTE,
+      OPERATIONAL_STATE_DIRECTORY: path.join(packageDirectory, "recovery-facts"),
     },
     args: [],
     now: () => new Date(CREATED_AT),
