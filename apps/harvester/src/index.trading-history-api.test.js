@@ -65,7 +65,7 @@ function createMainOptions({ database, calls, handlers, startTradingHistoryApi }
     prepareOrderHistoryPersistence: async () => ({
       relationalDatabase: database,
     }),
-    startTradingHistoryApi: startTradingHistoryApi ?? (async ({ database: suppliedDatabase, environment, eventBus, operator, exchangeAccounts }) => {
+    startTradingHistoryApi: startTradingHistoryApi ?? (async ({ database: suppliedDatabase, environment, eventBus, operator, exchangeAccounts, subscribeExchangeAccountUpdates }) => {
       assert.deepEqual(operator, { facade: "shared-harvester-operator" }, "The local API must receive the same operator facade exposed by the running Harvester runtime.");
       assert.equal(suppliedDatabase, database, "The API must reuse Harvester's existing relational database connection.")
       assert.equal(environment, "testnet", "The API environment must come from Harvester's selected runtime configuration.")
@@ -73,6 +73,7 @@ function createMainOptions({ database, calls, handlers, startTradingHistoryApi }
       assert.equal(exchangeAccounts.length, 1, "The API must receive only successfully started Harvester provider runtimes.")
       assert.equal(exchangeAccounts[0].providerType, "binance", "Provider identity must come from the active Harvester runtime.")
       assert.equal(typeof exchangeAccounts[0].readAccountSnapshot, "function", "Account reads must remain behind the Harvester runtime.")
+      assert.equal(typeof subscribeExchangeAccountUpdates, "function", "The API must receive an observer subscription backed by Harvester user-data events.")
       calls.push("api-start")
       return {
         address: {
