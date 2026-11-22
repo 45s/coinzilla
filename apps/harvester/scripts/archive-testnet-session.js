@@ -83,6 +83,7 @@ async function assertSessionCompleted(directory, runtimeSessionId) {
     || new Date(completion.endedAt).toISOString() !== completion.endedAt
     || (completion.exitCode !== null && !Number.isInteger(completion.exitCode))
     || (completion.signal !== null && typeof completion.signal !== "string")
+    || completion.logStreamsComplete !== true
   ) {
     throw new Error(`Session completion marker is invalid or belongs to another process: ${filename}`)
   }

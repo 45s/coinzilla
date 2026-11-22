@@ -194,6 +194,7 @@ childProcess.current.on("close", async (...closeArguments) => {
         endedAt: new Date().toISOString(),
         exitCode: code,
         signal,
+        logStreamsComplete: !logStreamFailed,
       }, null, 2)}\n`,
       { encoding: "utf8", flag: "wx", mode: 0o600 },
     )
