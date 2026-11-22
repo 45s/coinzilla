@@ -784,6 +784,10 @@ async function publishArchive({
     reportProgress(onProgress, "Publishing: cloning the private archive repository...")
     await runGit(["clone", "--progress", "--branch", "main", "--single-branch", remote, checkout])
     reportProgress(onProgress, "Publishing: repository cloned; preparing archive files...")
+    await mkdir(path.join(checkout, "archives"), {
+      recursive: true,
+      mode: 0o700,
+    })
     const remoteDirectory = await createRemoteArchiveDirectory({ checkout, archiveName })
     if (remoteDirectory.alreadyExists) {
       return await verifyExistingArchive({
