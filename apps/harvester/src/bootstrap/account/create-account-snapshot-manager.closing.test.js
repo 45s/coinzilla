@@ -20,7 +20,7 @@ function createExternalSell() {
   }
 }
 
-function createTestEventPublisher({ publishedEvents, onFlush }) {
+function createTestEventPublisher({ publishedEvents, onFlush, flush }) {
   return {
     publish: (event) => {
       publishedEvents.push(event)
@@ -28,6 +28,9 @@ function createTestEventPublisher({ publishedEvents, onFlush }) {
     },
     flush: async () => {
       onFlush()
+      if (flush) {
+        return flush()
+      }
       return {
         ok: true,
         durable: true,
@@ -62,6 +65,7 @@ function createManagerOptions({
   appendedFacts,
   publishedEvents,
   onFlush,
+  flush,
 }) {
   return {
     broker: {
@@ -73,6 +77,7 @@ function createManagerOptions({
     eventPublisher: createTestEventPublisher({
       publishedEvents,
       onFlush,
+      flush,
     }),
     marketMetadata: new Map([[market.symbol, { market }]]),
     getPortfolio: () => new Portfolio(),
@@ -97,7 +102,7 @@ function createManagerOptions({
   }
 }
 
-function createFixture({ openOrders = [], openOrdersResult, append } = {}) {
+function createFixture({ openOrders = [], openOrdersResult, append, flush } = {}) {
   const baseAsset = new Asset({
     id: "asset:BTC",
     code: "BTC",
@@ -125,6 +130,7 @@ function createFixture({ openOrders = [], openOrdersResult, append } = {}) {
     onFlush: () => {
       flushCount += 1
     },
+    flush,
   }))
   return {
     manager,
@@ -239,6 +245,31 @@ test("records a BLOCKED CLOSING open-order snapshot when the broker payload is m
   assert.deepEqual(fixture.publishedEvents[0].data.orders, [])
   assert.deepEqual(fixture.publishedEvents[0].data.blockReasons, ["CLOSING_OPEN_ORDERS_CAPTURE_FAILED"])
   assert.equal(fixture.appendedFacts.length, 1)
+  assert.equal(fixture.getFlushCount(), 1)
+})
+
+test("fails the CLOSING open-order audit when its Journal flush is not durable", async () => {
+  const journalFailure = new Error("closing Journal flush failed")
+  const fixture = createFixture({
+    flush: async () => ({
+      ok: false,
+      errors: [journalFailure],
+    }),
+  })
+
+  await assert.rejects(
+    fixture.manager.publishClosingOpenOrdersSnapshot({
+      ownershipReconciled: true,
+    }),
+    (error) => {
+      assert.equal(error.recoveryFailure.stage, "ACCOUNT_OPEN_ORDERS_AUDIT_FLUSH")
+      assert.match(error.message, /Unable to durably persist CLOSING account open-orders snapshot/)
+      return true
+    },
+  )
+
+  assert.equal(fixture.appendedFacts.length, 1)
+  assert.equal(fixture.publishedEvents.length, 1)
   assert.equal(fixture.getFlushCount(), 1)
 })
 
