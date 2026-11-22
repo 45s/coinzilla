@@ -177,6 +177,14 @@ async function readOrderProbePreflight({ readBroker, probeId }) {
 
 function formatOrderProbePreflight({ preflight }) {
   const { probe } = preflight
+  if (probe.spendingAmount !== undefined) {
+    return [
+      "LIVE ORDER SNAPSHOT",
+      "{ " + probe.symbol + ", " + probe.side + ", price: " + probe.price + ", spending: " + probe.spendingAmount + " USDT, quantity: " + probe.quantity + " HYPE }",
+      "Estimated order value: " + probe.quoteNotional + " USDT | Fee reserve: " + probe.feeReserve + " USDT",
+      "Available USDT: " + preflight.freeQuoteBalance + " | Open HYPEUSDT orders: " + preflight.openOrderCount,
+    ].join("\n")
+  }
   return [
     "BITUNIX SPOT — LIVE ORDER PROBE",
     "Endpoint: https://openapi.bitunix.com (LIVE)",
