@@ -3025,3 +3025,37 @@ test("Bitunix Spot Broker API emits structured order-read diagnostics", async ()
   assert.ok(events.some((event) => event.event === "getOrder.failed" && event.orderId === "2124329325141426176"))
   assert.ok(events.every((event) => event.layer === "broker-api" && event.provider === "bitunix"))
 })
+
+
+test("Bitunix Spot Broker passes the common logger into its REST client factory", async () => {
+  const events = []
+  const logger = {
+    debug: (event) => events.push(event),
+    error: (event) => events.push(event),
+  }
+  let restClientLogger
+  const broker = new BitunixSpotBroker({
+    apiKey: "key",
+    apiSecret: "secret",
+    tradingMode: "live",
+    logger,
+    dependencies: {
+      restClientFactory: (config) => {
+        restClientLogger = config.logger
+        return {
+          request: async () => ({
+            data: [],
+          }),
+        }
+      },
+    },
+  })
+
+  const result = await broker.getOpenOrders({
+    symbol: "HYPEUSDT",
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(restClientLogger, logger)
+  assert.ok(events.some((event) => event.event === "getOpenOrders.completed"))
+})
