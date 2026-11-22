@@ -523,17 +523,37 @@ async function verifyFailedReconnectRetriesAndEventuallyRecovers() {
 }
 
 async function verifyFailedReconnectCleanupFailureBlocksNextClient() {
+  const statuses = []
+  const warnings = []
   const fixture = createRecoveryFixture({
     failReconnect: true,
     failDisconnect: true,
+    logger: {
+      warn(...args) {
+        warnings.push(args)
+      },
+    },
   })
   fixture.session.start()
-  await fixture.session.subscribe({ onEvent() {} })
+  await fixture.session.subscribe({
+    onEvent() {},
+    onStatus: createStatusRecorder(statuses),
+  })
 
   fixture.closeInitialConnection()
   await fixture.reconnect()
   await fixture.reconnect()
 
+  assert.equal(
+    statuses.find((status) => status.type === "recovering")?.error?.message,
+    "reconnect unavailable",
+    "Cleanup failure must not replace the original reconnect error.",
+  )
+  assert.equal(
+    warnings.length,
+    2,
+    "Each failed disposal attempt must be logged without changing recovery state.",
+  )
   assert.equal(
     countCalls({
       calls: fixture.calls,
