@@ -40,14 +40,10 @@ function requireRuntimeSessionId(value) {
   return value
 }
 
-function normalizeSource(value) {
-  if (value === undefined || value === null) {
-    return UNAVAILABLE_SOURCE
-  }
+function assertSourceShape(value) {
   if (typeof value !== "object" || Array.isArray(value)) {
     throw new TypeError("source must be an allowlisted build metadata object")
   }
-
   const keys = Object.keys(value).sort()
   if (
     keys.length !== SOURCE_FIELDS.length
@@ -55,27 +51,22 @@ function normalizeSource(value) {
   ) {
     throw new TypeError("source must contain only the allowlisted build metadata fields")
   }
+}
 
-  const {
-    branch,
-    commit,
-    shortCommit,
-    commitMessage,
-    commitDate,
-    workingTree,
-    metadataSource,
-  } = value
-
-  for (const [field, fieldValue] of [
+function assertSourceStringFields({ branch, commitMessage, commitDate }) {
+  const fields = [
     ["branch", branch],
     ["commitMessage", commitMessage],
     ["commitDate", commitDate],
-  ]) {
-    if (fieldValue !== null && typeof fieldValue !== "string") {
+  ]
+  for (const [field, value] of fields) {
+    if (value !== null && typeof value !== "string") {
       throw new TypeError(`source.${field} must be a string or null`)
     }
   }
+}
 
+function assertSourceCommitFields({ commit, shortCommit }) {
   if (commit !== null && (typeof commit !== "string" || !COMMIT_PATTERN.test(commit))) {
     throw new TypeError("source.commit must be a full Git commit SHA or null")
   }
@@ -88,6 +79,9 @@ function normalizeSource(value) {
   if (!commit && shortCommit !== null) {
     throw new TypeError("source.shortCommit must be null when source.commit is unavailable")
   }
+}
+
+function assertSourceStatusFields({ commit, workingTree, metadataSource }) {
   if (!["clean", "dirty", "unknown"].includes(workingTree)) {
     throw new TypeError("source.workingTree must be clean, dirty or unknown")
   }
@@ -97,15 +91,20 @@ function normalizeSource(value) {
   if (metadataSource === "unavailable" && (commit !== null || workingTree !== "unknown")) {
     throw new TypeError("unavailable source metadata must not claim a commit or worktree state")
   }
+}
 
+function normalizeSource(value) {
+  if (value === undefined || value === null) {
+    return UNAVAILABLE_SOURCE
+  }
+  assertSourceShape(value)
+  assertSourceStringFields(value)
+  assertSourceCommitFields(value)
+  assertSourceStatusFields(value)
   return Object.freeze({
-    branch,
-    commit: commit?.toLowerCase() ?? null,
-    shortCommit: shortCommit?.toLowerCase() ?? null,
-    commitMessage,
-    commitDate,
-    workingTree,
-    metadataSource,
+    ...value,
+    commit: value.commit?.toLowerCase() ?? null,
+    shortCommit: value.shortCommit?.toLowerCase() ?? null,
   })
 }
 
