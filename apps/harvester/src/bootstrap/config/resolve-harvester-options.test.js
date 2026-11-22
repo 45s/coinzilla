@@ -123,8 +123,14 @@ test("rejects conflicting volatility settings for a market routed to CG and RS",
       ...fixture.input,
       executionSymbols: ["BTCUSDT"],
       executionRoutes: [
-        { strategyId: "CG_coinGrabber", symbol: "BTCUSDT" },
-        { strategyId: "RS_recoverySeller", symbol: "BTCUSDT" },
+        {
+          strategyId: "CG_coinGrabber",
+          symbol: "BTCUSDT",
+        },
+        {
+          strategyId: "RS_recoverySeller",
+          symbol: "BTCUSDT",
+        },
       ],
     }),
     /conflicting volatility protection settings for BTCUSDT/i,
