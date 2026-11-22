@@ -33,7 +33,7 @@ This contract covers the current selected evidence work in [issue #650](https://
 | Individual applied execution | Accounting boundary | `execution.fill_applied`: trade/execution IDs, order IDs, side, price, base/quote quantities, actual commission amount/asset, liquidity role, transaction time | fill ID + trade ID + order IDs |
 | Duplicate/invalid/unowned execution | User-data/accounting boundary | Existing duplicate, invalid, unowned, and accounting-failed events | fill/order IDs |
 | Exchange trading-rule snapshot | Bootstrap after exchange metadata validation | `market.trading_rules_captured`: venue, symbol, base/quote assets, selected order type, supported order types, every supported/unsupported filter and exact decimal value | symbol + event ID/time |
-| Account baseline and closing state | Bootstrap account audit | `account.snapshot_captured` and `account.open_orders_captured` | Journal session ID, phase, source timestamp |
+| Account baseline and closing state | Bootstrap account audit | `account.snapshot_captured` and `account.open_orders_captured` | Journal session ID, phase, exchange source timestamp for balances or local monotonic `observedAt` for open orders |
 | Broker connectivity/readiness | Bootstrap/user-data status callback | Existing connection, subscription, and status-change events with safe error facts | broker + stream + event time |
 
 Order lifecycle ownership is included only when the publisher resolves the exact canonical order in OrderRegistry using client-order ID, broker-order ID, and market ID. The allowlisted ownership facts are the registered strategy, Position, purpose, and optional cycle IDs. Missing ownership is omitted; it is never inferred from symbol, current configuration, timestamp, or client-ID shape.

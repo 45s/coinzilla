@@ -331,6 +331,7 @@ function createInitialAccountSnapshotManagerState() {
     commissionBaselineAssetIds: new Map(),
     commissionBaselineAssetCodesById: new Map(),
     unownedOpenOrderSymbols: new Set(),
+    lastOpenOrdersObservedAt: undefined,
     pendingExternalOrderVersions: new Map(),
     externalOrderObservationSequence: 0,
   }
@@ -720,7 +721,7 @@ async function publishOpenOrdersAuditEvent({ eventPublisher, dataResult }) {
   }
   if (typeof eventPublisher?.flush !== "function") {
     throw withRecoveryFailure({
-  error: new Error("Harvester startup requires a durable open-orders audit before market subscriptions"),
+  error: new Error("Harvester requires a durable open-orders audit before advancing its lifecycle"),
   category: "ACCOUNTING_INTEGRITY",
   stage: "ACCOUNT_OPEN_ORDERS_AUDIT_FLUSH_CAPABILITY",
   retryable: false,
@@ -755,9 +756,11 @@ function createOpenOrdersGuardState({ unownedOrders }) {
   }
 }
 
-function logOpenOrdersAudit({ logger, orders, unownedOrders, readiness }) {
+function logOpenOrdersAudit({ logger, phase, orders, unownedOrders, readiness, blockReasons = [] }) {
   let message = "Account-wide open-orders audit is waiting for canonical order reconciliation"
-  if (readiness === "READY") {
+  if (blockReasons.includes("CLOSING_OPEN_ORDERS_CAPTURE_FAILED")) {
+    message = "Closing account-wide open-orders evidence is unavailable; a BLOCKED snapshot was durably recorded"
+  } else if (readiness === "READY") {
     message = "Account-wide open-orders audit complete; no open orders found"
   } else if (readiness === "RECONCILED") {
     message = "Account-wide open-orders audit complete; all open orders match restored Harvester ownership"
@@ -766,30 +769,50 @@ function logOpenOrdersAudit({ logger, orders, unownedOrders, readiness }) {
   }
   logger.info?.({
     message,
+    phase,
     orderCount: orders.length,
     readiness,
+    blockReasons,
     symbols: [...new Set(orders.map((order) => order.market?.symbol ?? order.symbol).filter(Boolean))],
   })
 }
 
-async function publishOpenOrdersSnapshot({ context, options }) {
-  const orders = await readAccountOpenOrders({
-    broker: context.broker,
-    suppliedOrders: options.orders,
-  })
+function getNextOpenOrdersObservedAt({ context }) {
+  const currentObservedAt = context.now()
+  const previousObservedAt = context.state.lastOpenOrdersObservedAt
+  const observedAt = previousObservedAt === undefined
+    ? currentObservedAt
+    : Math.max(currentObservedAt, previousObservedAt + 1)
+  if (!Number.isSafeInteger(observedAt) || observedAt < 0) {
+    throw new TypeError("Account open-order observation time must be a non-negative safe integer")
+  }
+  context.state.lastOpenOrdersObservedAt = observedAt
+  return observedAt
+}
+
+function createOpenOrdersSnapshot({ context, phase, orders, ownershipReconciled }) {
   const restoredOrders = context.getTradingEngine()?.getOrders?.() ??
     context.getRecoveredState()?.orderRegistry?.orders ?? []
   const classification = classifyAccountOpenOrders({
     orders,
     restoredOrders,
-    ownershipReconciled: options.ownershipReconciled,
+    ownershipReconciled,
   })
+  const observedAt = getNextOpenOrdersObservedAt({ context })
   const dataResult = createOpenOrdersAuditPayload({
-    phase: options.phase,
+    phase,
     orders,
     classification,
-    now: context.now,
+    now: () => observedAt,
   })
+  return {
+    orders,
+    classification,
+    dataResult,
+  }
+}
+
+async function persistAndPublishOpenOrdersAudit({ context, dataResult }) {
   await persistOpenOrdersAuditFact({
     operationalStateStore: context.operationalStateStore,
     dataResult,
@@ -798,17 +821,117 @@ async function publishOpenOrdersSnapshot({ context, options }) {
     eventPublisher: context.eventPublisher,
     dataResult,
   })
+}
+
+function updateOpenOrdersGuardState({ context, classification }) {
   const guardState = createOpenOrdersGuardState({
     unownedOrders: classification.unownedOrders,
   })
   context.state.unownedOpenOrderSymbols = guardState.unownedOpenOrderSymbols
+}
+
+function logOpenOrdersSnapshot({ context, phase, snapshot }) {
   logOpenOrdersAudit({
     logger: context.logger,
+    phase,
+    orders: snapshot.orders,
+    unownedOrders: snapshot.classification.unownedOrders,
+    readiness: snapshot.classification.readiness,
+    blockReasons: snapshot.classification.blockReasons,
+  })
+}
+
+async function publishOpenOrdersSnapshot({ context, options }) {
+  const orders = await readAccountOpenOrders({
+    broker: context.broker,
+    suppliedOrders: options.orders,
+  })
+  const snapshot = createOpenOrdersSnapshot({
+    context,
+    phase: options.phase,
     orders,
-    unownedOrders: classification.unownedOrders,
-    readiness: classification.readiness,
+    ownershipReconciled: options.ownershipReconciled,
+  })
+  await persistAndPublishOpenOrdersAudit({
+    context,
+    dataResult: snapshot.dataResult,
+  })
+  updateOpenOrdersGuardState({
+    context,
+    classification: snapshot.classification,
+  })
+  logOpenOrdersSnapshot({
+    context,
+    phase: options.phase,
+    snapshot,
   })
   return orders
+}
+
+async function publishClosingOpenOrdersSnapshot({ context, options }) {
+  let snapshot
+  try {
+    const orders = await readAccountOpenOrders({
+      broker: context.broker,
+    })
+    snapshot = createOpenOrdersSnapshot({
+      context,
+      phase: "CLOSING",
+      orders,
+      ownershipReconciled: options.ownershipReconciled,
+    })
+  } catch (error) {
+    const blockReasons = ["CLOSING_OPEN_ORDERS_CAPTURE_FAILED"]
+    try {
+      const observedAt = getNextOpenOrdersObservedAt({ context })
+      const dataResult = createOpenOrdersAuditPayload({
+        phase: "CLOSING",
+        orders: [],
+        classification: {
+          unownedOrders: [],
+          blockReasons,
+          readiness: "BLOCKED",
+        },
+        now: () => observedAt,
+      })
+      await persistAndPublishOpenOrdersAudit({
+        context,
+        dataResult,
+      })
+      logOpenOrdersAudit({
+        logger: context.logger,
+        phase: "CLOSING",
+        orders: [],
+        unownedOrders: [],
+        readiness: "BLOCKED",
+        blockReasons,
+      })
+    } catch (auditError) {
+      const failure = new AggregateError(
+        [error, auditError],
+        "Unable to durably record incomplete CLOSING open-orders evidence",
+        { cause: error },
+      )
+      failure.recoveryFailure = auditError.recoveryFailure ?? error.recoveryFailure
+      throw failure
+    }
+    throw error
+  }
+
+  await persistAndPublishOpenOrdersAudit({
+    context,
+    dataResult: snapshot.dataResult,
+  })
+  updateOpenOrdersGuardState({
+    context,
+    classification: snapshot.classification,
+  })
+  logOpenOrdersSnapshot({
+    context,
+    phase: "CLOSING",
+    snapshot,
+  })
+  return snapshot.orders
 }
 
 function getConfiguredAccountAssetCodes({ marketMetadata }) {
@@ -1094,7 +1217,7 @@ function createExternalOrderReconciliation({
  * Coordinate account-wide balance/open-order snapshots and their required durable audit events.
  *
  * This is a bootstrap lifecycle manager: it performs broker reads and enforces the
- * PREFLIGHT/RECOVERY account and open-order audit barriers, CLOSING account audit, and targeted COMMISSION_BASELINE publication.
+ * PREFLIGHT/RECOVERY account and open-order audit barriers, paired CLOSING account and open-order audits, and targeted COMMISSION_BASELINE publication.
  *
  * @param {object} options
  * @param {object} options.broker Broker port.
@@ -1171,6 +1294,10 @@ export function createAccountSnapshotManager({
       allowedAssetCodes: options.allowedAssetCodes,
     },
   })
+  const publishClosingOrdersSnapshot = (options = {}) => publishClosingOpenOrdersSnapshot({
+    context,
+    options,
+  })
   const publishCommissionBaseline = (options = {}) => publishCommissionAssetBaseline({
     context,
     options,
@@ -1186,6 +1313,7 @@ export function createAccountSnapshotManager({
     observeExternalOrder,
     refreshAccountSnapshot: refresh,
     publishOpenOrdersSnapshot: publishOrders,
+    publishClosingOpenOrdersSnapshot: publishClosingOrdersSnapshot,
     publishAccountSnapshot: publishSnapshot,
     publishCommissionAssetBaseline: publishCommissionBaseline,
   })
