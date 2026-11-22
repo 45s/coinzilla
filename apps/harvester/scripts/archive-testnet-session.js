@@ -299,7 +299,7 @@ async function publishArchive({
         ["ls-tree", "-r", "--name-only", "HEAD", "--", `archives/${archiveName}`],
         { cwd: checkout },
       )
-      const remoteFiles = remoteFilesOutput ? remoteFilesOutput.split("\\n").map((filename) => filename.slice(`archives/${archiveName}/`.length)).sort() : []
+      const remoteFiles = remoteFilesOutput ? remoteFilesOutput.split("\n").map((filename) => filename.slice(`archives/${archiveName}/`.length)).sort() : []
       if (JSON.stringify(localFiles) !== JSON.stringify(remoteFiles)) {
         throw new Error(`Remote archive already exists with a different file inventory; refusing to overwrite: archives/${archiveName}`)
       }
@@ -312,7 +312,7 @@ async function publishArchive({
       }
       const existingCommit = await runGit(["rev-parse", "HEAD"], { cwd: checkout })
       const remoteHead = await runGit(["ls-remote", "--heads", remote, "refs/heads/main"])
-      if (remoteHead.split(/\\s+/)[0] !== existingCommit) {
+      if (remoteHead.split(/\s+/)[0] !== existingCommit) {
         throw new Error("The archive exists in the cloned remote history, but remote main advanced during verification.")
       }
       return { commit: existingCommit, fileCount: localFiles.length, alreadyPublished: true }
