@@ -4,7 +4,8 @@ import { BitunixRestClient } from "../../../src/infrastructure/bitunix/spot/api/
 import { runDiagnostics as runReadOnlyDiagnostics } from "../diagnostics/run-diagnostics.js"
 import { publishHealthReport } from "./publish-health-report.js"
 import { evaluateReadOnlyHealthCheck } from "../helpers/health-report.js"
-import { appendOrderAttemptResult } from "../helpers/append-order-attempt-result.js"\nimport { createDiagnosticReport, createDiagnosticResult } from "../helpers/create-diagnostic-report.js"
+import { appendOrderAttemptResult } from "../helpers/append-order-attempt-result.js"
+import { createDiagnosticReport, createDiagnosticResult } from "../helpers/create-diagnostic-report.js"
 
 function createLocalDiagnosticReportPath({ brokersRoot, now }) {
   const timestamp = new Date(now()).toISOString().replaceAll(/[:.]/g, "-")
