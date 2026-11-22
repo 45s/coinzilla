@@ -128,6 +128,10 @@ async function assertArchiveManifest(directory) {
   assert.equal(manifest.logRuntimeSessionId, RUNTIME_SESSION_ID)
   assert.equal(manifest.dataCommitHash, DATA_COMMIT_HASH)
   assert.equal(manifest.recoveryRuntimeSessionId, RUNTIME_SESSION_ID)
+  assert.deepEqual(manifest.logSelection, {
+    cumulative: "final-5-percent-of-selected-TESTNET-session-structured-records",
+    sessions: "newest-completed-TESTNET-session-only; gzip-compressed",
+  })
   assert.equal(
     await readFile(path.join(directory, "data_commit_hash"), "utf8"),
     `${DATA_COMMIT_HASH}\n`,
@@ -140,6 +144,10 @@ async function assertArchiveContainsTestnetLogs(directory) {
     path.join(directory, "logs/sessions/2026-11-22_testnet/terminal.log.gz"),
   )
   assert.equal(gunzipSync(selectedLog).toString("utf8"), "latest TESTNET session evidence")
+  await assert.rejects(
+    readdir(path.join(directory, "logs/sessions/2026-11-20_old")),
+    { code: "ENOENT" },
+  )
   await assert.rejects(
     readdir(path.join(directory, "logs/sessions/2026-11-23_live")),
     { code: "ENOENT" },
