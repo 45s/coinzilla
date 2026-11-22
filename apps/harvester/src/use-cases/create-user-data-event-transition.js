@@ -306,7 +306,14 @@ async function replaceDuplicateStaleSell({ dependencies, order, symbol, recovery
   })
 }
 
-async function handleDuplicateOrStaleUpdate({ dependencies, order, symbol, update, recoveryMode } = {}) {
+async function handleDuplicateOrStaleUpdate({
+  dependencies,
+  order,
+  symbol,
+  update,
+  recoveryMode,
+  event,
+} = {}) {
   const { state } = dependencies
   if (!update.duplicate && !update.stale) {
     return null
@@ -323,9 +330,24 @@ async function handleDuplicateOrStaleUpdate({ dependencies, order, symbol, updat
   if (isUnprocessedFill) {
     return null
   }
+  const registeredOrder = getRegisteredOrder({
+    registry: state.registry,
+    order,
+  }) ?? order
+  if (event.executionType === "TRADE") {
+    const fillResult = await reconcileEventFills({
+      dependencies,
+      order: registeredOrder,
+      event,
+      terminalFillsReconciled: false,
+    })
+    if (fillResult) {
+      return fillResult
+    }
+  }
   const replacement = await replaceDuplicateStaleSell({
     dependencies,
-    order,
+    order: registeredOrder,
     symbol,
     recoveryMode,
   })
@@ -867,6 +889,7 @@ async function prepareUserDataEventTransition({
     symbol,
     update,
     recoveryMode,
+    event,
   })
   if (duplicateResult) {
     return {
