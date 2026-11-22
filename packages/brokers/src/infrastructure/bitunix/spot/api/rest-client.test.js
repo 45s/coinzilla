@@ -1140,3 +1140,106 @@ test("Bitunix REST diagnostics record exchange rejection details without retryin
   assert.equal(events[1].exchangeCode, "100005")
   assert.equal(events[2].error.exchangeCode, "100005")
 })
+
+
+test("Bitunix REST diagnostics log only response shape and never financial or wallet values", async () => {
+  const events = []
+  const responses = [
+    {
+      code: "0",
+      msg: "success",
+      data: [{
+        id: "withdrawal-private-id",
+        amount: "9876.54321",
+        fee: "0.123",
+        address: "wallet-address-secret",
+        fromAddress: "source-address-secret",
+        toAddress: "destination-address-secret",
+        transactionHash: "private-transaction-hash",
+        toUid: "private-recipient-uid",
+        toPhoneNumber: "private-phone",
+        toEmail: "private-email@example.invalid",
+        remark: "private withdrawal note",
+      }],
+    },
+    {
+      code: "0",
+      msg: "success",
+      data: [{
+        coin: "USDT",
+        balance: "123456.789",
+        balanceLocked: "10.00",
+      }],
+    },
+  ]
+  const client = new BitunixRestClient({
+    apiKey: "api-key",
+    apiSecret: "api-secret",
+    logger: {
+      debug: (event) => events.push(event),
+      warn: (event) => events.push(event),
+      error: (event) => events.push(event),
+    },
+    fetchFn: async () => ({
+      ok: true,
+      status: 200,
+      async text() {
+        return JSON.stringify(responses.shift())
+      },
+    }),
+  })
+
+  await client.request({
+    method: "POST",
+    path: "/api/spot/v1/withdraw_transfer/page",
+    body: { limit: 1 },
+    stateChanging: false,
+  })
+  await client.request({
+    method: "GET",
+    path: "/api/spot/v1/user/account",
+  })
+
+  const serializedEvents = JSON.stringify(events)
+  for (const privateValue of [
+    "9876.54321",
+    "0.123",
+    "wallet-address-secret",
+    "source-address-secret",
+    "destination-address-secret",
+    "private-transaction-hash",
+    "private-recipient-uid",
+    "private-phone",
+    "private-email@example.invalid",
+    "private withdrawal note",
+    "123456.789",
+    "10.00",
+    "withdrawal-private-id",
+  ]) {
+    assert.equal(serializedEvents.includes(privateValue), false, `diagnostic events must not expose ${privateValue}`)
+  }
+  const responseEvents = events.filter((event) => event.event === "response.received")
+  assert.equal(responseEvents.length, 2)
+  assert.deepEqual(responseEvents[0].dataSummary, {
+    type: "array",
+    itemCount: 1,
+    fields: [
+      "address",
+      "amount",
+      "fee",
+      "fromAddress",
+      "id",
+      "remark",
+      "toAddress",
+      "toEmail",
+      "toPhoneNumber",
+      "toUid",
+      "transactionHash",
+    ],
+  }, "response diagnostics retain schema shape without recording private field values")
+  assert.deepEqual(responseEvents[1].dataSummary, {
+    type: "array",
+    itemCount: 1,
+    fields: ["balance", "balanceLocked", "coin"],
+  }, "account diagnostics retain field names and item counts only")
+})
