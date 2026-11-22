@@ -725,3 +725,37 @@ test("explicit cancellation mode runs one cancel before the existing order-read 
   assert.equal(cancellation.response.cancellationOutcome, "CONFIRMED")
   assert.equal(exitCode, 0)
 })
+
+test("ambiguous cancellation is recorded once and does not prevent the subsequent order scan", async () => {
+  const publishedReports = []
+  const calls = []
+  const brokerFactory = ({ providerOptions }) => {
+    const mutation = providerOptions.allowLiveOrderMutations === true
+    return {
+      connect: async () => {},
+      cancelOrder: async () => {
+        calls.push("cancel")
+        return { ok: false, mutationOutcome: "OUTCOME_UNKNOWN", cancellationOutcome: "OUTCOME_UNKNOWN", errors: [Object.assign(new Error("unknown"), { code: "E_UNKNOWN" })] }
+      },
+      getOpenOrders: async () => {
+        calls.push("getOpenOrders")
+        return { ok: true, data: [], errors: [] }
+      },
+      disconnect: async () => {},
+    }
+  }
+  const exitCode = await runWorkflow({
+    mode: "cancel-existing-order",
+    brokersRoot: "/repo/packages/brokers",
+    repositoryRoot: "/repo",
+    env,
+    stdout,
+    brokerFactory,
+    publishDiagnostics: createPublisher({ events: [], publishedReports }),
+  })
+  assert.deepEqual(calls, ["cancel", "getOpenOrders"])
+  const cancellation = publishedReports[0].results.find((entry) => entry.operation === "Broker API cancelOrder")
+  assert.equal(cancellation.response.cancellationOutcome, "OUTCOME_UNKNOWN")
+  assert.equal(cancellation.errors[0].code, "E_UNKNOWN")
+  assert.equal(exitCode, 1)
+})
