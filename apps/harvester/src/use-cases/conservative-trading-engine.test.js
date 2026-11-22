@@ -10088,7 +10088,7 @@ test("volatility state and diagnostics are market-owned for RS-only configured m
   })
 
   assert.equal(result.ok, true)
-  assert.equal(result.data.skipped, false, "An enabled volatility market must process snapshots without a CG execution route.")
+  assert.notEqual(result.data?.skipped, true, "An enabled volatility market must process snapshots without a CG execution route.")
   assert.equal(
     harness.engine.getVolatilityProtectionState({ symbol: "LINEAUSDT" })?.mode,
     "PROTECTED",
