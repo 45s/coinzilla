@@ -569,7 +569,7 @@ function startCandleHistoryService({ context, pairs, subscriptions = [] } = {}) 
   }
 
   const enabledSymbols = Object.entries(pairs)
-    .filter(([, pairConfig]) => pairConfig?.enabled === true && pairConfig?.enableVolatilityProtection !== false)
+    .filter(([, pairConfig]) => pairConfig?.enabled === true && pairConfig?.enableVolatilityProtection === true)
     .map(([symbol]) => symbol)
   for (const symbol of enabledSymbols) {
     context.markets.set(symbol, createMarketState(symbol))
