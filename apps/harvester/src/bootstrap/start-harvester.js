@@ -1441,6 +1441,8 @@ function createHarvesterRuntimeResult({
     getRecoveryLedger: portfolio.getRecoveryLedger,
     getMarketMetadata: portfolio.getMarketMetadata,
     getAccountSnapshot: portfolio.getAccountSnapshot,
+    getExchangeAccountSnapshot: () => resources.broker.getAccountSnapshot(),
+    getExchangeOpenOrders: () => resources.broker.getOpenOrders(),
     get subscriptions() {
       return [...new Set(resources.subscriptions.map(({ symbol }) => symbol))]
     },
