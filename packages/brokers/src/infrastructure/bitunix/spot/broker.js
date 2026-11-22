@@ -120,6 +120,73 @@ function adaptSymbolOrderRows({ rows, symbol, operation }) {
   })
 }
 
+async function fetchOpenOrdersForSymbol({ broker, symbol }) {
+  logBrokerDiagnostic({
+    logger: broker.logger,
+    event: {
+      event: "getOpenOrders.started",
+      symbol,
+    },
+  })
+  try {
+    const normalizedSymbol = requireSymbol({
+      symbol,
+      operation: "getOpenOrders()",
+    })
+    const response = await broker.restClient.request({
+      method: "POST",
+      path: API.pendingOrders,
+      body: {
+        symbol: normalizedSymbol,
+      },
+      stateChanging: false,
+    })
+    const rows = normalizeOrderRows({
+      value: response.data,
+    })
+    const orders = adaptSymbolOrderRows({
+      rows,
+      symbol: normalizedSymbol,
+      operation: "open orders",
+    })
+    logBrokerDiagnostic({
+      logger: broker.logger,
+      event: {
+        event: "getOpenOrders.completed",
+        ok: true,
+        symbol: normalizedSymbol,
+        orderCount: orders.length,
+        orderIds: orders.map((order) => order.id),
+      },
+    })
+    return toResult({
+      data: orders,
+    })
+  } catch (error) {
+    logBrokerDiagnostic({
+      logger: broker.logger,
+      level: "error",
+      event: {
+        event: "getOpenOrders.failed",
+        symbol,
+        error: {
+          name: error?.name,
+          code: error?.code,
+          exchangeCode: error?.exchangeCode,
+          message: error?.message,
+        },
+      },
+    })
+    handleErr({
+      where: "BitunixSpotBroker.getOpenOrders()",
+      error,
+    })
+    return toResult({
+      errors: [error],
+    })
+  }
+}
+
 async function getActiveSpotSymbols({ broker }) {
   try {
     const result = await broker.getExchangeMarkets()
@@ -157,7 +224,10 @@ async function collectOpenOrdersForSymbols({ broker, symbols }) {
   const errors = []
   for (const symbol of symbols) {
     try {
-      const result = await broker.getOpenOrders({ symbol })
+      const result = await fetchOpenOrdersForSymbol({
+        broker,
+        symbol,
+      })
       if (Array.isArray(result?.data)) {
         orders.push(...result.data)
       } else if (result?.ok === true) {
@@ -389,6 +459,64 @@ async function getBitunixSpotOrderDetail({ restClient, symbol, orderId }) {
     orderId,
     symbol,
   }))
+}
+
+function logOrderReadStarted({ broker, symbol, orderId }) {
+  logBrokerDiagnostic({
+    logger: broker.logger,
+    event: {
+      event: "getOrder.started",
+      symbol: symbol ?? null,
+      orderId: orderId ?? null,
+    },
+  })
+}
+
+function logOrderReadCompleted({ broker, order }) {
+  logBrokerDiagnostic({
+    logger: broker.logger,
+    event: {
+      event: "getOrder.completed",
+      ok: true,
+      symbol: order.symbol,
+      orderId: order.id,
+      status: order.status,
+    },
+  })
+}
+
+function logOrderReadFailed({ broker, symbol, orderId, error }) {
+  logBrokerDiagnostic({
+    logger: broker.logger,
+    level: "error",
+    event: {
+      event: "getOrder.failed",
+      symbol: symbol ?? null,
+      orderId: orderId ?? null,
+      error: {
+        name: error?.name,
+        code: error?.code,
+        exchangeCode: error?.exchangeCode,
+        message: error?.message,
+      },
+    },
+  })
+}
+
+async function fetchSpecificOrder({ broker, symbol, orderId }) {
+  const response = await broker.restClient.request({
+    method: "GET",
+    path: API.orderDetail,
+    queryParams: {
+      orderId,
+    },
+  })
+  const order = validateOrderDetailResponse({
+    response,
+    orderId,
+    symbol,
+  })
+  return adaptOrder(order)
 }
 
 function createCancelOrderFailureResult({ error, requestDispatched, cancelAcknowledged }) {
@@ -711,62 +839,10 @@ export class BitunixSpotBroker {
         broker: this,
       })
     }
-    logBrokerDiagnostic({
-      logger: this.logger,
-      event: {
-        event: "getOpenOrders.started",
-        symbol,
-      },
+    return fetchOpenOrdersForSymbol({
+      broker: this,
+      symbol,
     })
-    try {
-      const normalizedSymbol = requireSymbol({
-        symbol,
-        operation: "getOpenOrders()",
-      })
-      const response = await this.restClient.request({
-        method: "POST",
-        path: API.pendingOrders,
-        body: { symbol: normalizedSymbol },
-        stateChanging: false,
-      })
-      const rows = normalizeOrderRows({ value: response.data })
-      const orders = adaptSymbolOrderRows({
-        rows,
-        symbol: normalizedSymbol,
-        operation: "open orders",
-      })
-      logBrokerDiagnostic({
-        logger: this.logger,
-        event: {
-          event: "getOpenOrders.completed",
-          ok: true,
-          symbol: normalizedSymbol,
-          orderCount: orders.length,
-          orderIds: orders.map((order) => order.id),
-        },
-      })
-      return toResult({ data: orders })
-    } catch (error) {
-      logBrokerDiagnostic({
-        logger: this.logger,
-        level: "error",
-        event: {
-          event: "getOpenOrders.failed",
-          symbol,
-          error: {
-            name: error?.name,
-            code: error?.code,
-            exchangeCode: error?.exchangeCode,
-            message: error?.message,
-          },
-        },
-      })
-      handleErr({
-        where: "BitunixSpotBroker.getOpenOrders()",
-        error,
-      })
-      return toResult({ errors: [error] })
-    }
   }
 
   async getOrderHistory(input = {}) {
@@ -802,70 +878,53 @@ export class BitunixSpotBroker {
   }
 
   async getOrder({ symbol, orderId, clientOrderId } = {}) {
-    logBrokerDiagnostic({
-      logger: this.logger,
-      event: {
-        event: "getOrder.started",
-        symbol: symbol ?? null,
-        orderId: orderId ?? null,
-      },
+    logOrderReadStarted({
+      broker: this,
+      symbol,
+      orderId,
     })
     try {
-      const unsupportedResult = createClientOrderIdUnsupportedResult({ clientOrderId })
+      const unsupportedResult = createClientOrderIdUnsupportedResult({
+        clientOrderId,
+      })
       if (unsupportedResult) {
         return unsupportedResult
       }
-      let normalizedSymbol
-      if (symbol !== undefined) {
-        normalizedSymbol = requireSymbol({
+      const normalizedSymbol = symbol === undefined
+        ? undefined
+        : requireSymbol({
           symbol,
           operation: "getOrder()",
         })
-      }
-      const normalizedOrderId = validateOrderId({ orderId })
-      const response = await this.restClient.request({
-        method: "GET",
-        path: API.orderDetail,
-        queryParams: { orderId: normalizedOrderId },
+      const normalizedOrderId = validateOrderId({
+        orderId,
       })
-      const order = validateOrderDetailResponse({
-        response,
-        orderId: normalizedOrderId,
+      const order = await fetchSpecificOrder({
+        broker: this,
         symbol: normalizedSymbol,
+        orderId: normalizedOrderId,
       })
-      const normalizedOrder = adaptOrder(order)
-      logBrokerDiagnostic({
-        logger: this.logger,
-        event: {
-          event: "getOrder.completed",
-          ok: true,
-          symbol: normalizedOrder.symbol,
-          orderId: normalizedOrder.id,
-          status: normalizedOrder.status,
-        },
+      logOrderReadCompleted({
+        broker: this,
+        order,
       })
-      return toResult({ data: normalizedOrder })
+      return toResult({
+        data: order,
+      })
     } catch (error) {
-      logBrokerDiagnostic({
-        logger: this.logger,
-        level: "error",
-        event: {
-          event: "getOrder.failed",
-          symbol: symbol ?? null,
-          orderId: orderId ?? null,
-          error: {
-            name: error?.name,
-            code: error?.code,
-            exchangeCode: error?.exchangeCode,
-            message: error?.message,
-          },
-        },
+      logOrderReadFailed({
+        broker: this,
+        symbol,
+        orderId,
+        error,
       })
       handleErr({
         where: "BitunixSpotBroker.getOrder()",
         error,
       })
-      return toResult({ errors: [error] })
+      return toResult({
+        errors: [error],
+      })
     }
   }
 
