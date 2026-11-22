@@ -334,8 +334,8 @@ export async function runHarvesterArchivePush({
   })
   const identity = assertProcessIdentity(selected.identity)
   const archiveName = createHarvesterArchiveDirectoryName(identity)
-  await mkdir(LOCAL_ARCHIVE_DIRECTORY, { recursive: true, mode: 0o700 })
   await assertRealDirectory(path.join(PACKAGE_DIRECTORY, "data"))
+  await mkdir(LOCAL_ARCHIVE_DIRECTORY, { recursive: true, mode: 0o700 })
   await assertRealDirectory(LOCAL_ARCHIVE_DIRECTORY)
   const localArchive = path.join(LOCAL_ARCHIVE_DIRECTORY, archiveName)
   let existingManifest = null
@@ -348,6 +348,10 @@ export async function runHarvesterArchivePush({
     await assertRealDirectory(localArchive)
     const manifestFilename = path.join(localArchive, "manifest.json")
     try {
+      const manifestStats = await lstat(manifestFilename)
+      if (manifestStats.isSymbolicLink() || !manifestStats.isFile()) {
+        throw new Error("Archive manifest must be a regular file.")
+      }
       existingManifest = JSON.parse(await readFile(manifestFilename, "utf8"))
     } catch {
       throw new Error(`A partial or unreadable local archive already exists at ${localArchive}; refusing to overwrite it.`)
