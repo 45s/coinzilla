@@ -183,13 +183,14 @@ async function createTwoSubscriberRecoveryScenario() {
   }
 }
 
-function createRecoveryPortFactory({ ports, initialClient, reconnectClient, failReconnect }) {
+function createRecoveryPortFactory({ ports, initialClient, reconnectClient, failReconnect, calls }) {
   return (client) => {
     if (!ports.has(client)) {
       ports.set(client, createRecoveryPort({
         subscriptionId: client === initialClient ? 17 : 18,
         isReconnectClient: client === reconnectClient,
         failReconnect,
+        calls,
       }))
     }
     return ports.get(client)
@@ -209,6 +210,7 @@ function createRecoveryFixture({ failReconnect = false, logger = {} } = {}) {
   const initialClient = currentClient
   const reconnectClient = { name: "reconnected" }
   const ports = new WeakMap()
+  const calls = []
   const timers = new Map()
   let nextTimerId = 0
 
@@ -220,6 +222,7 @@ function createRecoveryFixture({ failReconnect = false, logger = {} } = {}) {
       initialClient,
       reconnectClient,
       failReconnect,
+      calls,
     }),
     setClient: (client) => {
       currentClient = client
@@ -241,6 +244,7 @@ function createRecoveryFixture({ failReconnect = false, logger = {} } = {}) {
 
   return {
     session,
+    calls,
     get pendingTimerCount() {
       return timers.size
     },
@@ -438,6 +442,11 @@ async function verifyFailedReconnectKeepsRecoveryPending() {
   fixture.closeInitialConnection()
   await fixture.reconnect()
 
+  assert.equal(
+    countCalls({ calls: fixture.calls, method: "disconnect" }),
+    1,
+    "A failed reconnect must dispose its partially opened client before another attempt can replace it.",
+  )
   assert.ok(
     hasRecoveryFailureStatus(statuses),
     "A failed reconnect must publish a recoveryFailed status while keeping recovery required.",
