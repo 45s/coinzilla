@@ -1537,7 +1537,8 @@ export class BitunixSpotBroker {
 
   /**
    * Cancel every open order for one explicitly selected Spot symbol.
-   * The API has no account-wide pending-order query, so symbol is mandatory.
+   * Read-only getOpenOrders() can aggregate all symbols, but cancellation
+   * deliberately remains scoped to one explicitly authorized symbol.
    * Each cancellation is independently verified; failures never stop later
    * known orders from being processed and are returned to the caller.
    *
