@@ -107,7 +107,7 @@ async function main() {
     process.stdout.write(`${createResetIdentity()}\n`)
     return
   }
-  process.stdout.write(createResetIdentity() + "\n")
+  process.stdout.write(`${createResetIdentity()}\n`)
   const result = await runHarvesterOperationalStateReset({ args })
   process.stdout.write(
     result.removed
