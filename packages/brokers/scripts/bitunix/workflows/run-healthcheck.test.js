@@ -91,7 +91,7 @@ function createEmptyOrderScanBroker() {
 }
 
 async function runWorkflow(options) {
-  return runWorkflow({
+  return runHealthcheckWorkflow({
     brokerFactory: createEmptyOrderScanBroker(),
     ...options,
   })
