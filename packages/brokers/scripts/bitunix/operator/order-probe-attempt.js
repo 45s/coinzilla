@@ -407,7 +407,6 @@ async function runConfirmedProbeMutation({
       capture,
       secrets,
     }))
-    writeLine(`Private probe evidence: ${markerPath}`)
     return result
   } catch (error) {
     try {
