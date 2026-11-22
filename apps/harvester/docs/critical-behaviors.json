@@ -448,10 +448,6 @@
       "title": "User-data disconnect, reconnect, event draining and readiness recovery",
       "sourceModules": [
         "src/bootstrap/start-harvester.js",
-        "src/bootstrap/harvester-runtime-helpers.js",
-        "src/bootstrap/user-data/create-user-data-event-handler.js",
-        "src/bootstrap/user-data/create-user-data-status-handler.js",
-        "src/bootstrap/user-data/create-user-data-recovery-handler.js",
         "src/use-cases/create-user-data-event-transition.js",
         "src/infrastructure/brokers/binance-broker-adapter.js"
       ],
