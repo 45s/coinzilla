@@ -29,6 +29,65 @@ function createOrder({ id, symbol }) {
   }
 }
 
+async function getPendingOrders({ calls, symbol }) {
+  calls.push(`pending:${symbol}`)
+  if (symbol === "ETHUSDT") {
+    return {
+      ok: false,
+      errors: [Object.assign(new Error("synthetic pending failure"), {
+        code: "E_PENDING",
+      })],
+    }
+  }
+  if (symbol === "BTCUSDT") {
+    return {
+      ok: true,
+      data: [createOrder({
+        id: "1001",
+        symbol,
+      })],
+    }
+  }
+  return {
+    ok: true,
+    data: [
+      {
+        ...createOrder({
+          id: ORDER_ID,
+          symbol,
+        }),
+        side: "BUY",
+        type: "LIMIT",
+        originalPrice: "30",
+        originalQuantity: "0.366",
+      },
+      createOrder({
+        id: "1002",
+        symbol,
+      }),
+    ],
+  }
+}
+
+async function getOrderDetail({ calls, symbol, orderId }) {
+  calls.push(`detail:${symbol}:${orderId}`)
+  if (orderId === "1001") {
+    return {
+      ok: false,
+      errors: [Object.assign(new Error("synthetic detail failure"), {
+        code: "E_DETAIL",
+      })],
+    }
+  }
+  return {
+    ok: true,
+    data: createOrder({
+      id: orderId,
+      symbol,
+    }),
+  }
+}
+
 function createScanBroker({ calls }) {
   return {
     connect: async () => calls.push("connect"),
@@ -41,63 +100,15 @@ function createScanBroker({ calls }) {
         { symbol: "HYPEUSDT" },
       ],
     }),
-    getOpenOrders: async ({ symbol }) => {
-      calls.push(`pending:${symbol}`)
-      if (symbol === "ETHUSDT") {
-        return {
-          ok: false,
-          errors: [Object.assign(new Error("synthetic pending failure"), {
-            code: "E_PENDING",
-          })],
-        }
-      }
-      if (symbol === "BTCUSDT") {
-        return {
-          ok: true,
-          data: [createOrder({
-            id: "1001",
-            symbol,
-          })],
-        }
-      }
-      return {
-        ok: true,
-        data: [
-          {
-            ...createOrder({
-              id: ORDER_ID,
-              symbol,
-            }),
-            side: "BUY",
-            type: "LIMIT",
-            originalPrice: "30",
-            originalQuantity: "0.366",
-          },
-          createOrder({
-            id: "1002",
-            symbol,
-          }),
-        ],
-      }
-    },
-    getOrder: async ({ symbol, orderId }) => {
-      calls.push(`detail:${symbol}:${orderId}`)
-      if (orderId === "1001") {
-        return {
-          ok: false,
-          errors: [Object.assign(new Error("synthetic detail failure"), {
-            code: "E_DETAIL",
-          })],
-        }
-      }
-      return {
-        ok: true,
-        data: createOrder({
-          id: orderId,
-          symbol,
-        }),
-      }
-    },
+    getOpenOrders: async ({ symbol }) => getPendingOrders({
+      calls,
+      symbol,
+    }),
+    getOrder: async ({ symbol, orderId }) => getOrderDetail({
+      calls,
+      symbol,
+      orderId,
+    }),
     disconnect: async () => calls.push("disconnect"),
   }
 }
@@ -260,7 +271,7 @@ test("scan records thrown catalog failures and still writes a report", async () 
     assert.ok(result.report.fatalError)
     assert.ok(result.reportPath)
     const saved = JSON.parse(await readFile(result.reportPath, "utf8"))
-    assert.equal(saved.stages[1].errors[0].code, "E_CATALOG")
+    assert.equal(saved.stages[2].errors[0].code, "E_CATALOG")
   } finally {
     await rm(reportDirectory, {
       recursive: true,
