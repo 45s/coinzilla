@@ -5,6 +5,12 @@ import { createWriteStream, mkdirSync } from "node:fs"
 import { dirname, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import { spawn } from "node:child_process"
+import { captureBuildMetadata } from "@coinzilla/utils"
+import packageMetadata from "../package.json" with { type: "json" }
+import {
+  createHarvesterArchiveProcessIdentity,
+  persistHarvesterArchiveProcessIdentity,
+} from "./capture-harvester-archive-process-identity.js"
 import { forwardChildOutput } from "./forward-child-output.js"
 import { createHarvesterLogSessionPaths } from "../src/infrastructure/logging/create-harvester-log-session-paths.js"
 
@@ -14,6 +20,24 @@ const cumulativeDirectory = resolve(logDirectory, "cumulative")
 const logPath = resolve(cumulativeDirectory, "terminal.log")
 const sessionStartedAt = new Date().toISOString()
 const runtimeSessionId = randomUUID()
+let sourceMetadata = null
+try {
+  sourceMetadata = captureBuildMetadata({
+    application: "harvester",
+    version: packageMetadata.version,
+    cwd: packageDirectory,
+    env: process.env,
+  }).source
+} catch {
+  // Startup provenance is best-effort for trading. The archive command will
+  // reject this session later if its source commit is unavailable.
+}
+const archiveProcessIdentity = createHarvesterArchiveProcessIdentity({
+  startedAt: sessionStartedAt,
+  runtimeSessionId,
+  tradingMode: process.env.TRADING_MODE ?? null,
+  source: sourceMetadata,
+})
 const sessionPaths = createHarvesterLogSessionPaths({
   directory: logDirectory,
   startedAt: sessionStartedAt,
@@ -22,6 +46,10 @@ const sessionPaths = createHarvesterLogSessionPaths({
 
 mkdirSync(cumulativeDirectory, { recursive: true })
 mkdirSync(sessionPaths.sessionDirectory, { recursive: true })
+await persistHarvesterArchiveProcessIdentity({
+  filename: resolve(sessionPaths.sessionDirectory, "process-identity.json"),
+  identity: archiveProcessIdentity,
+})
 
 const logStreams = [
   createWriteStream(logPath, { flags: "a" }),
@@ -75,6 +103,7 @@ childProcess.current = spawn(
         : "0",
       COINZILLA_PROCESS_STARTED_AT: sessionStartedAt,
       COINZILLA_RUNTIME_SESSION_ID: runtimeSessionId,
+      COINZILLA_PROCESS_SOURCE_METADATA: JSON.stringify(archiveProcessIdentity.source),
     },
   },
 )
