@@ -162,7 +162,7 @@ function selectExecutionPairs({ pairs, executionSymbols }) {
 }
 
 function resolveEffectivePairs({ strategyConfig, tradingMode, executionSymbols }) {
-  if (Object.keys(strategyConfig.pairs ?? {}).length === 0) {
+  if (executionSymbols === undefined && Object.keys(strategyConfig.pairs ?? {}).length === 0) {
     throw new Error("Conservative trading requires at least one enabled pair")
   }
   const environmentPairs = selectPairsForTradingMode({
