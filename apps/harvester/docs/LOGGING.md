@@ -317,6 +317,8 @@ strategy marker; the console does not print a decorative `⚪ SYS` label.
 Strategy identity is never inferred from a symbol, side, order ID, or
 client-order-ID prefix.
 
+Market-volatility protection diagnostics are market/component-owned rather than strategy-owned. They carry `component: "market-volatility-protection"` and no `strategyId`, so they render without a CG or RS marker. Strategy-owned diagnostics continue to use their canonical strategy identity.
+
 The Conservative engine and CG Portfolio/RecoveryLedger workflow receive
 strategy-scoped adapters around the shared `@coinzilla/utils` logger. They add
 the immutable CG strategy ID to every structured diagnostic emitted by those
