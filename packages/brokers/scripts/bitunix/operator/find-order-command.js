@@ -28,7 +28,7 @@ function safeValue({ value, secrets }) {
   if (value && typeof value === "object") {
     return Object.fromEntries(Object.entries(value).map(([key, child]) => [
       key,
-      /api.?key|secret|sign|nonce|email|phone|address|uid/i.test(key)
+      /api.?key|secret|sign|nonce|email|phone|address|user.?id|uid/i.test(key)
         ? "[REDACTED]"
         : safeValue({ value: child, secrets }),
     ]))
