@@ -75,12 +75,12 @@ Bitunix documents `POST /api/spot/v1/order/pending/list` with a required symbol.
 
 ## Diagnostic privacy boundary
 
-- Terminal output is progress and summary only; it must never print raw exchange request/response bodies.
+- Terminal output shows each discovered order as `symbol / orderId` and prints the matching `getOrder` result with that identity; it never prints raw exchange request/response bodies.
 - REST response log events record response shape (type, item count, field names) rather than response values. Free-form exchange and transport messages are withheld.
 - Private REST/WebSocket diagnostic results store structural summaries only. The local diagnostic report is private and created with restrictive file permissions; it is not a substitute for safe logging.
 - Sanitization explicitly redacts balances, locked balances, amounts, fees, wallet/from/to addresses, transaction hashes, withdrawal/deposit identifiers, recipient IDs, phone/email, memos and remarks.
-- The published GitHub report uses a separate strict allowlist and excludes request/response payloads and diagnostic events entirely.
-- Tests assert that realistic account and withdrawal fixtures cannot leak through REST logger events or the diagnostic sanitizer.
+- The published GitHub report uses a separate strict allowlist. For the explicitly approved `Broker API getOpenOrders` and `Broker API getOrder` operations only, it includes the sanitized request arguments, normalized response data, and structured errors so the operator can verify each `symbol / orderId` pair. Other diagnostic operations still omit request/response payloads, and diagnostic events remain excluded.
+- Tests assert that realistic account and withdrawal fixtures cannot leak through REST logger events or the diagnostic sanitizer; order-read publication tests prove that symbol/orderId and normalized order fields remain visible while balances, account identifiers, credentials, signatures and non-order diagnostic payloads remain excluded.
 
 ## Regression coverage
 
@@ -93,6 +93,17 @@ The operator's read-only healthcheck report `bitunix-health-20261122T064933913Z.
 ## Known accepted order
 
 The operator's accepted HYPEUSDT BUY LIMIT from 2026-11-22 has exchange order ID `2124329325141426176`, quantity `0.366`, price `30` USDT. The healthcheck discovers this ID from pending-order results; it is not supplied to the script.
+
+## Published order-read evidence
+
+The terminal and both local/published report files intentionally show order identity. The published report includes:
+
+- Every order returned by `getOpenOrders()`, including its `symbol` and exchange `orderId` (`id` in the Broker DTO).
+- The exact `getOrder({ symbol, orderId })` arguments for every discovered order.
+- The complete sanitized normalized result and structured errors for each corresponding detail read.
+- Per-operation status and duration.
+
+The current accepted-order identity is `HYPEUSDT / 2124329325141426176`. This explicit publication policy is limited to the order-read operations; broad account diagnostics remain metadata-only.
 
 ## Acceptance gate
 

@@ -42,6 +42,14 @@ function printLocalDiagnosticSummary({ report, outputPath, stdout }) {
   ].join("\n"))
 }
 
+function getOrderIdentityLabel({ request }) {
+  const orderArguments = request?.method === "getOrder" ? request.arguments?.[0] : null
+  if (!orderArguments?.symbol || !orderArguments?.orderId) {
+    return ""
+  }
+  return ` [${orderArguments.symbol} / ${orderArguments.orderId}]`
+}
+
 function recordOrderReadResult({
   report,
   stdout,
@@ -73,7 +81,8 @@ function recordOrderReadResult({
   report.summary.total += 1
   report.summary[entry.status] += 1
   const duration = Number.isFinite(durationMs) ? ` (${durationMs} ms)` : ""
-  stdout.write(`      ${operation}: ${entry.status.toUpperCase()}${duration}\n`)
+  const identity = getOrderIdentityLabel({ request })
+  stdout.write(`      ${operation}${identity}: ${entry.status.toUpperCase()}${duration}\n`)
 }
 
 async function fetchAndRecordOpenOrders({ broker, report, stdout, secrets }) {
@@ -93,6 +102,11 @@ async function fetchAndRecordOpenOrders({ broker, report, stdout, secrets }) {
       durationMs: Date.now() - started,
       request,
     })
+    if (Array.isArray(result?.data)) {
+      for (const order of result.data) {
+        stdout.write(`      Discovered open order: ${order.symbol} / ${order.id}\n`)
+      }
+    }
     return result
   } catch (error) {
     recordOrderReadResult({
@@ -360,7 +374,9 @@ function isWorkflowProgressMessage({ message }) {
     message.startsWith("Returning the local checkout") ||
     message.startsWith("Local checkout is back") ||
     message.startsWith("Broker API getOpenOrders:") ||
-    message.startsWith("Broker API getOrder:")
+    message.startsWith("Broker API getOrder:") ||
+    message.startsWith("Broker API getOrder [") ||
+    message.startsWith("Discovered open order:")
 }
 
 function printPublishedResult({ result, stdout, probeMode = false, includeGeneralDiagnostics = false }) {

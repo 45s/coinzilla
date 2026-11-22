@@ -519,6 +519,8 @@ test("healthcheck records partial getOpenOrders data and still reads discovered 
   assert.equal(detail.status, "passed")
   assert.equal(detail.request.arguments[0].orderId, "123")
   assert.ok(output.some((value) => value.includes("Broker API getOpenOrders: FAILED (")))
+  assert.ok(output.some((value) => value.includes("Discovered open order: HYPEUSDT / 123")))
+  assert.ok(output.some((value) => value.includes("Broker API getOrder [HYPEUSDT / 123]: PASSED")))
   assert.equal(exitCode, 1, "partial market coverage must keep the order-read gate failed")
 })
 
