@@ -213,7 +213,10 @@ test("closes local WebSocket clients before the shared HTTP listener shuts down"
 
 test("broadcasts exchange-account invalidations from Harvester snapshot events", async (t) => {
   const eventBus = new EventBus()
-  const api = await startApi({ t, eventBus })
+  const api = await startApi({
+    t,
+    eventBus,
+  })
   const socket = new WebSocket(`ws://127.0.0.1:${api.address.port}/api/v1/trading/events`)
   t.after(() => socket.close())
 
