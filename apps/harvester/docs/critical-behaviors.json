@@ -27,7 +27,9 @@
       "title": "Order submission intent, acknowledgement and unknown outcomes",
       "sourceModules": [
         "src/use-cases/conservative-trading-engine.js",
-        "src/infrastructure/brokers/binance-broker-adapter.js"
+        "src/infrastructure/brokers/binance-broker-adapter.js",
+        "src/domain/orders/recovery-seller-submission-ownership.js",
+        "src/infrastructure/operational-state/helpers/validate-operational-state-order-facts.js"
       ],
       "integrationRequired": true,
       "tests": [
@@ -45,6 +47,16 @@
           "path": "test/replays/doge-zro-conservative-replay.test.js",
           "name": "submits the recovery SELL before the next standing BUY after the actual BUY fill",
           "kind": "integration"
+        },
+        {
+          "path": "src/infrastructure/operational-state/helpers/validate-operational-state-order-facts.test.js",
+          "name": "requires complete Position and cycle identity for an RS-owned durable SELL intent",
+          "kind": "normal"
+        },
+        {
+          "path": "src/infrastructure/operational-state/helpers/validate-operational-state-order-facts.test.js",
+          "name": "preserves the original cause when durable Recovery Seller ownership is invalid",
+          "kind": "failure"
         }
       ],
       "runtimeStatus": "active",
@@ -244,7 +256,8 @@
       "title": "Conservative BUY/SELL ordering and active-position trailing gates",
       "sourceModules": [
         "src/domain/strategies/conservative/strategy.js",
-        "src/use-cases/conservative-trading-engine.js"
+        "src/use-cases/conservative-trading-engine.js",
+        "src/domain/strategies/conservative/state-predicates.js"
       ],
       "integrationRequired": true,
       "tests": [
@@ -262,6 +275,11 @@
           "path": "test/replays/doge-zro-conservative-replay.test.js",
           "name": "submits the recovery SELL before the next standing BUY after the actual BUY fill",
           "kind": "integration"
+        },
+        {
+          "path": "src/domain/strategies/conservative/state-predicates.test.js",
+          "name": "matches active orders by symbol and side",
+          "kind": "normal"
         }
       ],
       "runtimeStatus": "active",
@@ -401,7 +419,11 @@
       "sourceModules": [
         "src/infrastructure/operational-state/create-file-operational-state-store.js",
         "src/use-cases/restore-harvester-operational-state.js",
-        "src/infrastructure/operational-state/project-harvester-operational-state.js"
+        "src/infrastructure/operational-state/project-harvester-operational-state.js",
+        "src/infrastructure/operational-state/helpers/operational-state-fact-schema.js",
+        "src/infrastructure/operational-state/helpers/validate-operational-state-recovery-seller-facts.js",
+        "src/infrastructure/operational-state/operational-state-fact-validation.js",
+        "src/infrastructure/operational-state/operational-state-record-validation.js"
       ],
       "integrationRequired": true,
       "tests": [
@@ -438,6 +460,26 @@
         {
           "path": "src/use-cases/restore-harvester-operational-state.test.js",
           "name": "converts a thrown Operational State projection into a failure result",
+          "kind": "failure"
+        },
+        {
+          "path": "src/infrastructure/operational-state/helpers/operational-state-fact-schema.test.js",
+          "name": "exports stable schema limits and fact type allowlist",
+          "kind": "normal"
+        },
+        {
+          "path": "src/infrastructure/operational-state/helpers/validate-operational-state-recovery-seller-facts.test.js",
+          "name": "accepts an explicit durable terminal mixed-SELL accounting boundary",
+          "kind": "normal"
+        },
+        {
+          "path": "src/infrastructure/operational-state/helpers/validate-operational-state-recovery-seller-facts.test.js",
+          "name": "rejects non-terminal, uncommitted, ambiguous and malformed mixed-SELL boundaries",
+          "kind": "failure"
+        },
+        {
+          "path": "src/infrastructure/operational-state/operational-state-record-validation.test.js",
+          "name": "rejects malformed record envelopes, sequence chains, digests and payloads",
           "kind": "failure"
         }
       ],
