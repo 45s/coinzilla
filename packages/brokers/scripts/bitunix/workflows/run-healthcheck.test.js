@@ -571,18 +571,31 @@ test("focused order-read health gate requires every discovered order detail to s
     "Broker API getOrder for every discovered order",
   ])
 
-  const missingDetail = evaluateOrderReadHealthCheck({
+})
+
+test("focused order-read health gate rejects an undiscovered order detail result", () => {
+  const result = evaluateOrderReadHealthCheck({
     report: {
       results: [
-        openOrders,
-        detail({
-          orderId: "order-1",
+        {
+          operation: "Broker API getOpenOrders",
           status: "passed",
-        }),
+          response: {
+            ok: true,
+            data: [
+              { id: "order-1", symbol: "HYPEUSDT" },
+              { id: "order-2", symbol: "BTCUSDT" },
+            ],
+          },
+        },
+        {
+          operation: "Broker API getOrder",
+          status: "passed",
+        },
       ],
     },
   })
-  assert.equal(missingDetail.healthy, false, "the gate must detect an order whose detail read was skipped")
+  assert.equal(result.healthy, false, "the gate must detect an order whose detail read was skipped")
 })
 
 test("focused order-read health gate accepts an explicit empty open-order list", () => {
