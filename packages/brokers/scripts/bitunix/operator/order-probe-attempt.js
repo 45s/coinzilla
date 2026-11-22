@@ -167,8 +167,18 @@ function formatOrderProbeResult({ result, capture, secrets = [] }) {
     `Mutation outcome: ${result?.mutationOutcome ?? "OUTCOME_UNKNOWN"}`,
     ...(error?.code ? [`Broker error code: ${error.code}`] : []),
     ...(error?.exchangeCode ? [`Bitunix exchange code: ${error.exchangeCode}`] : []),
-    ...(error?.status ? [`HTTP status: ${error.status}`] : []),
+    ...(capture.response?.httpStatus ? [`Placement HTTP status: ${capture.response.httpStatus}`] : []),
+    ...(error?.status ? [`Broker error HTTP status: ${error.status}`] : []),
     ...(error?.message ? [`Message: ${redactApiSecrets({ message: error.message, secrets })}`] : []),
+    ...(capture.transportError?.message
+      ? [`Transport error: ${redactApiSecrets({ message: capture.transportError.message, secrets })}`]
+      : []),
+    ...(capture.responseReadErrors?.length
+      ? [`Response capture warnings: ${capture.responseReadErrors.length}`]
+      : []),
+    ...(capture.followUpResponses?.length
+      ? [`Order-detail follow-up responses captured: ${capture.followUpResponses.length}`]
+      : []),
     ...(capture.response?.body ? [`Raw place-order response: ${redactApiSecrets({ message: capture.response.body, secrets })}`] : []),
     ...(result?.mutationOutcome === "OUTCOME_UNKNOWN"
       ? ["STOP: outcome unknown. Do not run another probe until manually investigated."]
