@@ -82,6 +82,78 @@ function loadLocalEnvironment({ allowMissing = false } = {}) {
   }
 }
 
+async function runProbeOrderMode({ args }) {
+  const probeId = args[0].slice("--probe-order=".length)
+  getBitunixOrderProbe({ probeId })
+  assertInteractiveTerminal({
+    stdin: process.stdin,
+    stdout: process.stdout,
+  })
+  loadLocalEnvironment()
+  process.exitCode = await runHealthcheckWorkflow({
+    mode: "probe-order",
+    probeId,
+    brokersRoot,
+    repositoryRoot,
+    env: process.env,
+    runOperatorProbe: async ({ env, probeId: selectedProbeId }) => {
+      try {
+        return await runOperatorOrderProbeCommand({
+          env,
+          brokersRoot,
+          probeId: selectedProbeId,
+        })
+      } catch (error) {
+        reportOrderProbeFailure({
+          error,
+          env,
+        })
+        throw error
+      }
+    },
+  })
+}
+
+async function runFixedOrderMode() {
+  assertInteractiveTerminal({
+    stdin: process.stdin,
+    stdout: process.stdout,
+  })
+  loadLocalEnvironment()
+  process.exitCode = await runHealthcheckWorkflow({
+    mode: "place-order",
+    brokersRoot,
+    repositoryRoot,
+    env: process.env,
+    runOperatorOrder: async ({ env }) => {
+      try {
+        return await runOperatorOrderCommand({
+          env,
+          brokersRoot,
+        })
+      } catch (error) {
+        reportOperatorFailure({
+          error,
+          env,
+        })
+        throw error
+      }
+    },
+  })
+}
+
+async function runReadOnlyMode({ mode }) {
+  loadLocalEnvironment({
+    allowMissing: mode === "local",
+  })
+  process.exitCode = await runHealthcheckWorkflow({
+    mode,
+    brokersRoot,
+    repositoryRoot,
+    env: process.env,
+  })
+}
+
 async function runHealthcheck({ args = process.argv.slice(2) } = {}) {
   printCliIdentity()
   const mode = parseHealthcheckMode({ args })
@@ -93,72 +165,14 @@ async function runHealthcheck({ args = process.argv.slice(2) } = {}) {
     return
   }
   if (mode === "probe-order") {
-    const probeId = args[0].slice("--probe-order=".length)
-    getBitunixOrderProbe({ probeId })
-    assertInteractiveTerminal({
-      stdin: process.stdin,
-      stdout: process.stdout,
-    })
-    loadLocalEnvironment()
-    process.exitCode = await runHealthcheckWorkflow({
-      mode,
-      probeId,
-      brokersRoot,
-      repositoryRoot,
-      env: process.env,
-      runOperatorProbe: async ({ env, probeId: selectedProbeId }) => {
-        try {
-          return await runOperatorOrderProbeCommand({
-            env,
-            brokersRoot,
-            probeId: selectedProbeId,
-          })
-        } catch (error) {
-          reportOrderProbeFailure({
-            error,
-            env,
-          })
-          throw error
-        }
-      },
-    })
+    await runProbeOrderMode({ args })
     return
   }
   if (mode === "place-order") {
-    assertInteractiveTerminal({
-      stdin: process.stdin,
-      stdout: process.stdout,
-    })
-    loadLocalEnvironment()
-    process.exitCode = await runHealthcheckWorkflow({
-      mode,
-      brokersRoot,
-      repositoryRoot,
-      env: process.env,
-      runOperatorOrder: async ({ env }) => {
-        try {
-          return await runOperatorOrderCommand({
-            env,
-            brokersRoot,
-          })
-        } catch (error) {
-          reportOperatorFailure({
-            error,
-            env,
-          })
-          throw error
-        }
-      },
-    })
+    await runFixedOrderMode()
     return
   }
-  loadLocalEnvironment({ allowMissing: mode === "local" })
-  process.exitCode = await runHealthcheckWorkflow({
-    mode,
-    brokersRoot,
-    repositoryRoot,
-    env: process.env,
-  })
+  await runReadOnlyMode({ mode })
 }
 
 const isMainModule = process.argv[1] &&
