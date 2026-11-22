@@ -128,7 +128,7 @@ All methods below are present on both provider facades. An unsupported implement
 | `getAccountSnapshot()` | Supported | Unsupported | Bitunix does not provide the source timestamp/version required for an authoritative snapshot. |
 | `getServerTime()` | Supported | Unsupported | Binance returns validated server time in Unix epoch milliseconds. |
 | `getExchangeMarkets()` | Supported | Supported | Normalized `Market[]`. |
-| `getOpenOrders()` | Supported | Supported | Current open orders; Bitunix requires a symbol, Binance can query account-wide or by symbol. |
+| `getOpenOrders({ symbol? })` | Supported | Supported | Current open orders. Bitunix accepts a symbol for one market; omitting it aggregates reads across the current active Spot market catalog. The aggregation is bounded and returns partial data with per-symbol errors, but it does not prove complete or atomic account-wide coverage. |
 | `getCanonicalOrder()` | Supported | Unsupported | Bitunix Spot does not expose the client order identity required by `CanonicalOrder`. |
 | `getCanonicalOrderHistory({ symbol, orderId?, startTime?, endTime?, limit?, includeFollowingOrders? })` | Supported | Unsupported | One bounded canonical Binance query. With `orderId`, the default is exact-order lookup; opt into inclusive lower-bound pagination with `includeFollowingOrders: true`. The caller owns pagination and coverage. |
 | `getFills()` | Supported | Unsupported | Canonical `Fill[]`; Bitunix matching details do not prove stable execution identity or fill completeness. |
