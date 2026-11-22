@@ -5,11 +5,11 @@ import { loadAppConfig } from "../../src/infrastructure/config/load-app-config.j
 import { TRADING_ENVIRONMENTS } from "../../src/domain/trading-environment.js"
 import { RS_RECOVERY_SELLER_CONFIG } from "./rs-recovery-seller.js"
 
-test("keeps Recovery Seller disabled until explicit execution routing is implemented", () => {
+test("enables Recovery Seller in the default application configuration", () => {
   assert.equal(
     RS_RECOVERY_SELLER_CONFIG.enabled,
-    false,
-    "RS remains disabled until the default runtime has explicit TESTNET execution routing.",
+    true,
+    "The default runtime must enable the implemented Recovery Seller strategy.",
   )
 })
 
@@ -36,8 +36,8 @@ test("declares the approved LINEAUSDT Recovery Seller configuration and resolves
   )
   assert.equal(
     RS_RECOVERY_SELLER_CONFIG.enabled,
-    false,
-    "Adding an authorized market must not enable the global Recovery Seller runtime switch.",
+    true,
+    "The authorized LINEAUSDT TESTNET market must be active under the enabled RS strategy.",
   )
 
   const config = await loadAppConfig()
