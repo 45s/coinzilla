@@ -12,6 +12,7 @@ import {
   redactApiSecrets,
 } from "../helpers/api-credentials.js"
 import { getBitunixOrderProbe } from "./order-probe-matrix.js"
+import { assertBitunixOrderProbeMatrixCanContinue } from "./order-probe-matrix-guard.js"
 
 function createBroker({ credentials, allowLiveOrderMutations, capture }) {
   return new Broker({
@@ -102,6 +103,9 @@ export async function runOperatorOrderProbeCommand({
     createMarker: ({ preflight }) => createProbeMarker({
       markerPath: resolve(brokersRoot, `.diagnostics/bitunix-order-probe-${probe.id}.json`),
       preflight,
+    }),
+    assertMatrixCanContinue: () => assertBitunixOrderProbeMatrixCanContinue({
+      diagnosticsDirectory: resolve(brokersRoot, ".diagnostics"),
     }),
     writeLine: (message) => stdout.write(`${redactApiSecrets({
       message,
