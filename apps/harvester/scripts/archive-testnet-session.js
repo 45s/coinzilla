@@ -94,6 +94,25 @@ export function createHarvesterArchiveDirectoryName({ createdAt, archiveId } = {
   return timestamp + "_" + archiveId.slice(0, 8)
 }
 
+async function assertHarvesterProcessStopped({ lockDirectory } = {}) {
+  let directoryStats
+  try {
+    directoryStats = await lstat(lockDirectory)
+  } catch (error) {
+    if (error?.code === "ENOENT") {
+      return
+    }
+    throw error
+  }
+  if (directoryStats.isSymbolicLink() || !directoryStats.isDirectory()) {
+    throw new Error("Harvester process-lock directory is not a regular directory; refusing to archive operational data.")
+  }
+  const entries = await readdir(lockDirectory, { withFileTypes: true })
+  if (entries.some((entry) => entry.name.endsWith(".lock"))) {
+    throw new Error("A Harvester process lock exists; stop Harvester before archiving local operational data.")
+  }
+}
+
 async function assertRealDirectory(directory) {
   const directoryStats = await lstat(directory)
   if (directoryStats.isSymbolicLink() || !directoryStats.isDirectory()) {
@@ -696,6 +715,7 @@ export async function runHarvesterArchivePush({
   if (args.length !== 0) {
     throw new TypeError("Usage: archive:push")
   }
+  await assertHarvesterProcessStopped({ lockDirectory })
 
   const sourcePaths = SOURCE_DIRECTORIES.map((directoryName) => ({
     directoryName,
