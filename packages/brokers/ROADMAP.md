@@ -1576,7 +1576,6 @@ See [the private polling contract](./docs/BITUNIX_SPOT_POLLING.md) and [the Bitu
 - Binance maps `quoteQuantity` to native `quoteOrderQty`; Bitunix maps LIMIT `quantity` and MARKET `quoteQuantity` directly to REST `volume`.
 - No price-based conversion or automatic estimate is permitted. Live mutations remain disabled by default and all #1185 lifecycle/Harvester blockers remain.
 
-
 ## 2026-11-22 — Bitunix Spot live placement probes
 
 - [x] Ran one operator-confirmed Spot LIMIT BUY probe (`limit-buy-1`) and one separately operator-confirmed Spot LIMIT SELL probe (`limit-sell-1`).
