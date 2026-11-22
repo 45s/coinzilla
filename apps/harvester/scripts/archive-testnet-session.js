@@ -191,17 +191,6 @@ async function copyRegularTree({
   }
 }
 
-async function copyTailFile(source, destination, fraction = 0.05) {
-  const fileStats = await stat(source)
-  const bytesToKeep = fileStats.size === 0 ? 0 : Math.max(1, Math.ceil(fileStats.size * fraction))
-  const start = fileStats.size - bytesToKeep
-  await pipeline(
-    createReadStream(source, { start }),
-    createWriteStream(destination, { flags: "w", mode: 0o600 }),
-  )
-  return bytesToKeep
-}
-
 async function copyCompressedTree({ sourceDirectory, destinationDirectory, relative = "", onFileCopied } = {}) {
   const source = relative ? path.join(sourceDirectory, relative) : sourceDirectory
   const destination = relative ? path.join(destinationDirectory, relative) : destinationDirectory
@@ -233,47 +222,94 @@ async function copyCompressedTree({ sourceDirectory, destinationDirectory, relat
   }
 }
 
+async function readRegularJsonFile(filename) {
+  const fileStats = await lstat(filename)
+  if (fileStats.isSymbolicLink() || !fileStats.isFile()) {
+    return null
+  }
+  return JSON.parse(await readFile(filename, "utf8"))
+}
+
+function isCompletedTestnetSession({ identity, completion } = {}) {
+  return (
+    identity?.application === "harvester"
+    && identity?.formatVersion === 1
+    && identity?.environment === "testnet"
+    && UUID_PATTERN.test(identity?.runtimeSessionId ?? "")
+    && completion?.runtimeSessionId === identity.runtimeSessionId
+    && completion?.logStreamsComplete === true
+  )
+}
+
 async function readCompletedTestnetSession(sessionDirectory) {
   try {
     const identityFilename = path.join(sessionDirectory, "process-identity.json")
     const completionFilename = path.join(sessionDirectory, "process-completed.json")
-    const [identityStats, completionStats] = await Promise.all([
-      lstat(identityFilename),
-      lstat(completionFilename),
+    const [identity, completion] = await Promise.all([
+      readRegularJsonFile(identityFilename),
+      readRegularJsonFile(completionFilename),
     ])
-    if (
-      identityStats.isSymbolicLink() || !identityStats.isFile()
-      || completionStats.isSymbolicLink() || !completionStats.isFile()
-    ) {
-      return null
-    }
-    const [identityContent, completionContent] = await Promise.all([
-      readFile(identityFilename, "utf8"),
-      readFile(completionFilename, "utf8"),
-    ])
-    const identity = JSON.parse(identityContent)
-    const completion = JSON.parse(completionContent)
-    if (
-      identity?.application !== "harvester"
-      || identity?.formatVersion !== 1
-      || identity?.environment !== "testnet"
-      || !UUID_PATTERN.test(identity?.runtimeSessionId ?? "")
-      || completion?.runtimeSessionId !== identity.runtimeSessionId
-      || completion?.logStreamsComplete !== true
-    ) {
-      return null
-    }
-    return identity
+    return isCompletedTestnetSession({ identity, completion }) ? identity : null
   } catch {
     return null
   }
 }
 
+async function findNewestCompletedTestnetSession(sessionsDirectory) {
+  const sessionNames = (await readdir(sessionsDirectory, { withFileTypes: true }))
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .sort()
+    .toReversed()
+  for (const sessionName of sessionNames) {
+    const identity = await readCompletedTestnetSession(path.join(sessionsDirectory, sessionName))
+    if (identity) {
+      return { sessionName, identity }
+    }
+  }
+  throw new Error("No completed TESTNET DEV session with valid process identity was found under logs/sessions; run pnpm dev and stop it gracefully before archiving.")
+}
+
+async function copyLogRootEntry({
+  entry,
+  sourceDirectory,
+  destinationDirectory,
+  selectedSessionName,
+  runtimeSessionId,
+  onFileCopied,
+} = {}) {
+  const sourcePath = path.join(sourceDirectory, entry.name)
+  const sourceStats = await lstat(sourcePath)
+  if (sourceStats.isSymbolicLink() || !sourceStats.isDirectory()) {
+    throw new Error(`Log root entry must be a real directory: ${sourcePath}`)
+  }
+  if (entry.name === "sessions") {
+    await copyCompressedTree({
+      sourceDirectory,
+      destinationDirectory,
+      relative: path.join("sessions", selectedSessionName),
+      onFileCopied,
+    })
+    return
+  }
+  if (entry.name === "cumulative") {
+    await copyCumulativeTailTree({
+      sourceDirectory,
+      destinationDirectory,
+      relative: "cumulative",
+      runtimeSessionId,
+      onFileCopied,
+    })
+    return
+  }
+  throw new Error("The logs root contains unsupported entries; refusing to archive unclassified log data.")
+}
+
 async function copySelectedLogs({ sourceDirectory, destinationDirectory, onFileCopied } = {}) {
   await mkdir(destinationDirectory, { recursive: true, mode: 0o700 })
   const entries = await readdir(sourceDirectory, { withFileTypes: true })
-  const unsupportedEntries = entries.filter((entry) => !["sessions", "cumulative"].includes(entry.name))
-  if (unsupportedEntries.length > 0) {
+  const allowedEntries = entries.filter((entry) => ["sessions", "cumulative"].includes(entry.name))
+  if (allowedEntries.length !== entries.length) {
     throw new Error("The logs root contains unsupported entries; refusing to archive unclassified log data.")
   }
   const sessionsEntry = entries.find((entry) => entry.name === "sessions" && entry.isDirectory())
@@ -281,65 +317,18 @@ async function copySelectedLogs({ sourceDirectory, destinationDirectory, onFileC
     throw new Error("The logs/sessions directory is missing; refusing to publish an archive without session evidence.")
   }
   const sessionsDirectory = path.join(sourceDirectory, "sessions")
-  const sessions = (await readdir(sessionsDirectory, { withFileTypes: true }))
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => entry.name)
-    .sort()
-  let selectedSession
-  let selectedIdentity
-  for (const sessionName of sessions.toReversed()) {
-    const identity = await readCompletedTestnetSession(path.join(sessionsDirectory, sessionName))
-    if (identity) {
-      selectedSession = sessionName
-      selectedIdentity = identity
-      break
-    }
-  }
-  if (!selectedSession || !selectedIdentity) {
-    throw new Error("No completed TESTNET DEV session with valid process identity was found under logs/sessions; run pnpm dev and stop it gracefully before archiving.")
-  }
-
+  const selection = await findNewestCompletedTestnetSession(sessionsDirectory)
   for (const entry of entries) {
-    const sourcePath = path.join(sourceDirectory, entry.name)
-    const destinationPath = path.join(destinationDirectory, entry.name)
-    const sourceStats = await lstat(sourcePath)
-    if (sourceStats.isSymbolicLink()) {
-      throw new Error(`Refusing to archive a symbolic link: ${sourcePath}`)
-    }
-    if (entry.name === "sessions" && sourceStats.isDirectory()) {
-      await copyCompressedTree({
-        sourceDirectory,
-        destinationDirectory,
-        relative: path.join("sessions", selectedSession),
-        onFileCopied,
-      })
-      continue
-    }
-    if (entry.name === "cumulative" && sourceStats.isDirectory()) {
-      await copyCumulativeTailTree({
-        sourceDirectory,
-        destinationDirectory,
-        relative: "cumulative",
-        runtimeSessionId: selectedIdentity.runtimeSessionId,
-        onFileCopied,
-      })
-      continue
-    }
-    if (sourceStats.isDirectory()) {
-      await copyRegularTree({
-        sourceDirectory,
-        destinationDirectory,
-        relative: entry.name,
-        onFileCopied,
-      })
-    } else if (sourceStats.isFile()) {
-      await copyFile(sourcePath, destinationPath)
-      await onFileCopied?.({ relativePath: entry.name, size: sourceStats.size })
-    } else {
-      throw new Error(`Refusing to archive a non-regular session entry: ${sourcePath}`)
-    }
+    await copyLogRootEntry({
+      entry,
+      sourceDirectory,
+      destinationDirectory,
+      selectedSessionName: selection.sessionName,
+      runtimeSessionId: selection.identity.runtimeSessionId,
+      onFileCopied,
+    })
   }
-  return selectedIdentity
+  return selection.identity
 }
 
 async function visitSessionLogRecords({ filename, runtimeSessionId, visit } = {}) {
