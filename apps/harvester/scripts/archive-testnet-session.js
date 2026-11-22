@@ -50,7 +50,7 @@ const runGitDefault = (...parameters) => {
     let stdout = ""
     let stderr = ""
     const streamProgress = args[0] === "clone" || args[0] === "push"
-  
+
     child.stdout.setEncoding("utf8")
     child.stdout.on("data", (chunk) => {
       stdout += chunk
