@@ -40,38 +40,38 @@ function validateArchiveRemote(remote) {
 
 const runGitDefault = (...parameters) => {
   const [args, { cwd } = {}] = parameters
-  return new Promise((resolve, reject) => {
-  const child = spawn("git", args, {
-    cwd,
-    windowsHide: true,
-    stdio: ["ignore", "pipe", "pipe"],
-  })
-  let stdout = ""
-  let stderr = ""
-  const streamProgress = args[0] === "clone" || args[0] === "push"
-
-  child.stdout.setEncoding("utf8")
-  child.stdout.on("data", (chunk) => {
-    stdout += chunk
-  })
-  child.stderr.setEncoding("utf8")
-  child.stderr.on("data", (chunk) => {
-    if (streamProgress) {
-      process.stderr.write(chunk)
-    } else {
-      stderr += chunk
-    }
-  })
-  child.on("error", reject)
-  child.on("close", (code) => {
-    if (code === 0) {
-      resolve(stdout.trim())
-      return
-    }
-    reject(new Error(
-      `git ${args[0]} failed with exit code ${code}: ${stderr.trim()}`,
-    ))
-  })
+    return new Promise((resolve, reject) => {
+    const child = spawn("git", args, {
+      cwd,
+      windowsHide: true,
+      stdio: ["ignore", "pipe", "pipe"],
+    })
+    let stdout = ""
+    let stderr = ""
+    const streamProgress = args[0] === "clone" || args[0] === "push"
+  
+    child.stdout.setEncoding("utf8")
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk
+    })
+    child.stderr.setEncoding("utf8")
+    child.stderr.on("data", (chunk) => {
+      if (streamProgress) {
+        process.stderr.write(chunk)
+      } else {
+        stderr += chunk
+      }
+    })
+    child.on("error", reject)
+    child.on("close", (code) => {
+      if (code === 0) {
+        resolve(stdout.trim())
+        return
+      }
+      reject(new Error(
+        `git ${args[0]} failed with exit code ${code}: ${stderr.trim()}`,
+      ))
+    })
   })
 }
 
@@ -1049,7 +1049,7 @@ async function main() {
   }
   process.stdout.write(`${createArchiveCliIdentity()}\n`)
   const result = await runHarvesterArchivePush({ args })
-  process.stdout.write([
+  process.stdout.write(`${[
     "Harvester local logs/data archive published and remotely verified.",
     `Archive: archives/${result.archiveName}`,
     `Created: ${result.createdAt}`,
