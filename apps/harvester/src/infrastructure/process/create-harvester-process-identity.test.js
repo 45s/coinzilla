@@ -103,3 +103,42 @@ COINZILLA_RUNTIME_SESSION_ID: "shared-session-123" },
   assert.equal(identity.startedAt, "2026-11-09T10:15:30.000Z", "process provenance must retain the timestamp shared with log session filenames")
   assert.equal(identity.runtimeSessionId, "shared-session-123", "process provenance must retain the session ID shared with log session filenames")
 })
+
+test("reuses the exact source metadata snapshot captured by the development launcher", () => {
+  const source = availableBuildMetadata.source
+  const identity = createHarvesterProcessIdentity({
+    env: {
+      COINZILLA_PROCESS_STARTED_AT: "2026-11-22T16:45:12.123Z",
+      COINZILLA_RUNTIME_SESSION_ID: "123e4567-e89b-42d3-a456-426614174000",
+      COINZILLA_PROCESS_SOURCE_METADATA: JSON.stringify(source),
+    },
+    processId: 67891,
+    captureBuildMetadata: () => {
+      throw new Error("the child process must not inspect a potentially changed Git worktree")
+    },
+  })
+
+  assert.deepEqual(identity.source, source, "Journal process identity must use the launcher-start provenance snapshot")
+})
+
+test("does not recapture Git when the launcher provenance snapshot is malformed", () => {
+  const identity = createHarvesterProcessIdentity({
+    env: {
+      COINZILLA_PROCESS_SOURCE_METADATA: "{invalid-json",
+    },
+    processId: 67892,
+    captureBuildMetadata: () => {
+      throw new Error("malformed launcher metadata must not trigger a later Git lookup")
+    },
+  })
+
+  assert.deepEqual(identity.source, {
+    branch: null,
+    commit: null,
+    shortCommit: null,
+    commitMessage: null,
+    commitDate: null,
+    workingTree: "unknown",
+    metadataSource: "unavailable",
+  }, "invalid startup provenance must remain explicitly unavailable")
+})
