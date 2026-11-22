@@ -647,6 +647,7 @@ export async function startTradingHistoryApiServer({
     ? attachTradingHistoryWebSocket({
         server,
         eventBus,
+        exchangeAccounts,
         subscribeExchangeAccountUpdates,
       })
     : null

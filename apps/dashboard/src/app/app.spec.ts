@@ -1,6 +1,6 @@
 import { provideHttpClient } from '@angular/common/http';
 import { TestBed } from '@angular/core/testing';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { AppComponent, readSavedDashboardTheme } from './app';
 
@@ -51,6 +51,34 @@ describe('AppComponent', () => {
     commissionsButton.click();
     fixture.detectChanges();
     expect(fixture.nativeElement.textContent).toContain('Commissions');
+  });
+
+  it('navigates to the separate live Open Orders page without replacing persisted order history', async () => {
+    class TestWebSocket extends EventTarget {
+      constructor(readonly url: string) { super(); }
+      close(): void { this.dispatchEvent(new Event('close')); }
+    }
+    vi.stubGlobal('WebSocket', TestWebSocket as unknown as typeof WebSocket);
+    await TestBed.configureTestingModule({
+      imports: [AppComponent],
+      providers: [provideHttpClient()],
+    }).compileComponents();
+
+    const fixture = TestBed.createComponent(AppComponent);
+    fixture.detectChanges();
+    const root = fixture.nativeElement as HTMLElement;
+    const openOrdersButton = Array.from(root.querySelectorAll('button.nav-item'))
+      .find((button) => button.textContent?.includes('Open Orders')) as HTMLButtonElement;
+    expect(openOrdersButton).toBeDefined();
+    openOrdersButton.click();
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).toContain('Open Orders');
+    expect(fixture.nativeElement.textContent).toContain('HARVESTER / LIVE ACCOUNT SNAPSHOTS');
+    expect(fixture.nativeElement.textContent).toContain('Waiting for open-order snapshots');
+
+    fixture.destroy();
+    vi.unstubAllGlobals();
   });
 
   it('offers the existing theme plus six palettes and persists the selected theme', async () => {
