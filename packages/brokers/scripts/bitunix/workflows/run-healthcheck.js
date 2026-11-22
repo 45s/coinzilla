@@ -244,7 +244,12 @@ async function runLocalDiagnostics({ brokersRoot, env, stdout, brokerFactory }) 
     env,
     brokerApiRestClientFactory: (options) => new BitunixRestClient(options),
   })
-  await runBitunixOrderReadScan({\n    env,\n    report,\n    stdout,\n    brokerFactory,\n  })
+  await runBitunixOrderReadScan({
+    env,
+    report,
+    stdout,
+    brokerFactory,
+  })
   const outputPath = createLocalDiagnosticReportPath({
     brokersRoot,
     now: Date.now,
