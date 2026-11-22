@@ -108,7 +108,7 @@ export function createHarvesterArchiveDirectoryName({ createdAt, archiveId } = {
     throw new TypeError("Archive ID must be a valid UUID.")
   }
   const timestamp = createdAt.replace(/\.\d{3}Z$/, "Z").replaceAll(":", "-")
-  return timestamp + "_" + archiveId.slice(0, 8)
+  return `${timestamp}_${archiveId.slice(0, 8)}`
 }
 
 function resolveArchiveDataDirectory({ packageDirectory, env } = {}) {
@@ -367,7 +367,10 @@ async function copySessionFilteredTailFile({ source, destination, runtimeSession
     },
   })
   if (totalBytes === 0) {
-    await writeFile(destination, "", { encoding: "utf8", mode: 0o600 })
+    await writeFile(destination, "", {
+      encoding: "utf8",
+      mode: 0o600,
+    })
     return 0
   }
   const bytesToKeep = Math.max(1, Math.ceil(totalBytes * 0.05))
@@ -636,7 +639,7 @@ async function verifyArchive({ directory, manifest } = {}) {
     const filename = path.join(directory, entry.path)
     const fileStats = await stat(filename)
     if (fileStats.size !== entry.size || await sha256File(filename) !== entry.sha256) {
-      throw new Error("Archive checksum or size verification failed: " + entry.path)
+      throw new Error(`Archive checksum or size verification failed: ${entry.path}`)
     }
   }
 }
@@ -788,6 +791,134 @@ async function publishArchive({
   }
 }
 
+function resolveArchiveSourcePaths({ packageDirectory, env } = {}) {
+  const dataDirectory = resolveArchiveDataDirectory({ packageDirectory, env })
+  const recoveryFactsDirectory = resolveOperationalStateDirectory({ env })
+  if (path.basename(recoveryFactsDirectory) !== "recovery-facts") {
+    throw new Error("Operational State Store archive path must end in recovery-facts.")
+  }
+  return SOURCE_DIRECTORIES.map((directoryName) => {
+    let sourceDirectory = path.join(packageDirectory, directoryName)
+    if (directoryName === "data") {
+      sourceDirectory = dataDirectory
+    } else if (directoryName === "recovery-facts") {
+      sourceDirectory = recoveryFactsDirectory
+    }
+    return {
+      directoryName,
+      sourceDirectory,
+    }
+  })
+}
+
+async function copyArchiveEvidence({ sourcePaths, packageDirectory, localArchive, onProgress } = {}) {
+  const sourceSizes = await Promise.all(sourcePaths
+    .filter((source) => source.directoryName !== "logs")
+    .map(async (source) => {
+      const size = source.directoryName === "data"
+        ? await getDevelopmentDataTreeSize(source.sourceDirectory)
+        : await getTreeSize(source.sourceDirectory)
+      return {
+        ...source,
+        ...size,
+      }
+    }))
+  let retainedFiles = 0
+  let copiedBytes = 0
+  const onFileCopied = ({ size }) => {
+    retainedFiles += 1
+    copiedBytes += size
+    reportProgress(onProgress, `  retained/copied ${retainedFiles} files — ${formatBytes(copiedBytes)}`)
+  }
+  reportProgress(onProgress, "Archive: selecting the newest completed TESTNET session and TESTNET-safe cumulative logs...")
+  const logSessionIdentity = await copySelectedLogs({
+    sourceDirectory: path.join(packageDirectory, "logs"),
+    destinationDirectory: path.join(localArchive, "logs"),
+    onFileCopied,
+  })
+  for (const source of sourceSizes) {
+    reportProgress(onProgress, `Copying complete ${source.directoryName}/ (${source.files.length} files, ${formatBytes(source.totalBytes)})...`)
+    if (source.directoryName === "data") {
+      await copyDevelopmentDataTree({
+        sourceDirectory: source.sourceDirectory,
+        destinationDirectory: path.join(localArchive, source.directoryName),
+        onFileCopied,
+      })
+    } else {
+      await copyRegularTree({
+        sourceDirectory: source.sourceDirectory,
+        destinationDirectory: path.join(localArchive, source.directoryName),
+        onFileCopied,
+      })
+    }
+  }
+  reportProgress(onProgress, `Evidence copy complete: ${retainedFiles} files, ${formatBytes(copiedBytes)} retained/copied.`)
+  return logSessionIdentity
+}
+
+async function writeAndVerifyLocalArchive({ localArchive, createdAt, logSessionIdentity, onProgress } = {}) {
+  const recoveryCheckpoint = await readLatestRecoveryCheckpoint(path.join(localArchive, "recovery-facts"))
+  await writeFile(
+    path.join(localArchive, "data_commit_hash"),
+    `${recoveryCheckpoint.dataCommitHash}\n`,
+    {
+      encoding: "utf8",
+      flag: "wx",
+      mode: 0o600,
+    },
+  )
+  const copiedFiles = await listRegularFiles({ directory: localArchive })
+  if (copiedFiles.length === 0) {
+    throw new Error("The logs and data directories contain no regular files to archive.")
+  }
+  reportProgress(onProgress, `Hashing ${copiedFiles.length + 1} archive files for manifest...`)
+  const manifest = await createArchiveManifest({
+    directory: localArchive,
+    createdAt,
+    logRuntimeSessionId: logSessionIdentity.runtimeSessionId,
+    onFileHashed: ({
+      completedFiles,
+      totalFiles: hashTotal,
+      completedBytes: hashBytes,
+      totalBytes: hashTotalBytes,
+    }) => {
+      reportProgress(onProgress, `  hashed ${completedFiles}/${hashTotal} files — ${formatBytes(hashBytes)} / ${formatBytes(hashTotalBytes)}`)
+    },
+  })
+  await writeFile(
+    path.join(localArchive, "manifest.json"),
+    `${JSON.stringify(manifest, null, 2)}\n`,
+    {
+      encoding: "utf8",
+      flag: "wx",
+      mode: 0o600,
+    },
+  )
+  reportProgress(onProgress, "Verifying local archive checksums...")
+  await verifyArchive({ directory: localArchive, manifest })
+  reportProgress(onProgress, "Local archive verified.")
+}
+
+function resolveArchiveRemote({ env, args, lockDirectory } = {}) {
+  if (env.TRADING_MODE !== "testnet") {
+    throw new Error("Archive publication requires TRADING_MODE=testnet. LIVE and unspecified modes are rejected.")
+  }
+  if (args.length !== 0) {
+    throw new TypeError("Usage: archive:push")
+  }
+  const remote = validateArchiveRemote(env.HARVESTER_ARCHIVE_REMOTE)
+  const canonicalRemote = remote
+    .replace(/\.git$/, "")
+    .replace(/\/$/, "")
+  if (canonicalRemote !== "https://github.com/45s/coinzilla-archive") {
+    throw new Error("HARVESTER_ARCHIVE_REMOTE must target the private https://github.com/45s/coinzilla-archive repository.")
+  }
+  return {
+    remote,
+    lockDirectory,
+  }
+}
+
 export async function runHarvesterArchivePush({
   args = process.argv.slice(2),
   env = process.env,
@@ -796,43 +927,15 @@ export async function runHarvesterArchivePush({
   now = () => new Date(),
   createArchiveId = randomUUID,
   publishArchiveFn = publishArchive,
-  onProgress = (message) => process.stdout.write(message + "\n"),
+  onProgress = (message) => process.stdout.write(`${message}\n`),
   lockDirectory = path.join(os.homedir(), ".coinzilla", "harvester", "process-locks"),
 } = {}) {
-  if (env.TRADING_MODE !== "testnet") {
-    throw new Error("Archive publication requires TRADING_MODE=testnet. LIVE and unspecified modes are rejected.")
-  }
-  const remote = validateArchiveRemote(env.HARVESTER_ARCHIVE_REMOTE)
-  const canonicalRemote = remote
-    .replace(/^git@github\.com:/, "https://github.com/")
-    .replace(/^ssh:\/\/git@github\.com\//, "https://github.com/")
-    .replace(/\.git$/, "")
-    .replace(/\/$/, "")
-  if (canonicalRemote !== "https://github.com/45s/coinzilla-archive") {
-    throw new Error("HARVESTER_ARCHIVE_REMOTE must target the private https://github.com/45s/coinzilla-archive repository.")
-  }
-  if (args.length !== 0) {
-    throw new TypeError("Usage: archive:push")
-  }
+  const { remote } = resolveArchiveRemote({ env, args, lockDirectory })
   await assertHarvesterProcessStopped({ lockDirectory })
-
-  const dataDirectory = resolveArchiveDataDirectory({ packageDirectory, env })
-  const recoveryFactsDirectory = resolveOperationalStateDirectory({ env })
-  if (path.basename(recoveryFactsDirectory) !== "recovery-facts") {
-    throw new Error("Operational State Store archive path must end in recovery-facts.")
-  }
-  const sourcePaths = SOURCE_DIRECTORIES.map((directoryName) => ({
-    directoryName,
-    sourceDirectory: directoryName === "data"
-      ? dataDirectory
-      : directoryName === "recovery-facts"
-        ? recoveryFactsDirectory
-        : path.join(packageDirectory, directoryName),
-  }))
+  const sourcePaths = resolveArchiveSourcePaths({ packageDirectory, env })
   for (const source of sourcePaths) {
     await assertRealDirectory(source.sourceDirectory)
   }
-
   const createdAt = now().toISOString()
   const archiveName = createHarvesterArchiveDirectoryName({
     createdAt,
@@ -842,78 +945,20 @@ export async function runHarvesterArchivePush({
   await mkdir(outputDirectory, { recursive: true, mode: 0o700 })
   await assertRealDirectory(outputDirectory)
   const localArchive = path.join(outputDirectory, archiveName)
-
   try {
-    const sourceSizes = await Promise.all(sourcePaths
-      .filter((source) => source.directoryName !== "logs")
-      .map(async (source) => ({
-        ...source,
-        ...(source.directoryName === "data"
-          ? await getDevelopmentDataTreeSize(source.sourceDirectory)
-          : await getTreeSize(source.sourceDirectory)),
-      })))
-    const totalFiles = sourceSizes.reduce((total, source) => total + source.files.length, 0)
-    const totalBytes = sourceSizes.reduce((total, source) => total + source.totalBytes, 0)
-    let retainedFiles = 0
-    let copiedBytes = 0
     await mkdir(localArchive, { recursive: false, mode: 0o700 })
-    const onFileCopied = ({ size }) => {
-      retainedFiles += 1
-      copiedBytes += size
-      reportProgress(onProgress, `  retained/copied ${retainedFiles} files — ${formatBytes(copiedBytes)}`)
-    }
-    reportProgress(onProgress, "Archive: selecting log evidence (last 5% of cumulative logs; newest session only)...")
-    const logSessionIdentity = await copySelectedLogs({
-      sourceDirectory: path.join(packageDirectory, "logs"),
-      destinationDirectory: path.join(localArchive, "logs"),
-      onFileCopied,
+    const logSessionIdentity = await copyArchiveEvidence({
+      sourcePaths,
+      packageDirectory,
+      localArchive,
+      onProgress,
     })
-    for (const source of sourceSizes) {
-      reportProgress(onProgress, `Copying complete ${source.directoryName}/ (${source.files.length} files, ${formatBytes(source.totalBytes)})...`)
-      if (source.directoryName === "data") {
-        await copyDevelopmentDataTree({
-          sourceDirectory: source.sourceDirectory,
-          destinationDirectory: path.join(localArchive, source.directoryName),
-          onFileCopied,
-        })
-      } else {
-        await copyRegularTree({
-          sourceDirectory: source.sourceDirectory,
-          destinationDirectory: path.join(localArchive, source.directoryName),
-          onFileCopied,
-        })
-      }
-    }
-    reportProgress(onProgress, `Evidence copy complete: ${retainedFiles} files, ${formatBytes(copiedBytes)} retained/copied.`)
-    const recoveryCheckpoint = await readLatestRecoveryCheckpoint(path.join(localArchive, "recovery-facts"))
-    await writeFile(path.join(localArchive, "data_commit_hash"), recoveryCheckpoint.dataCommitHash + "\n", {
-      encoding: "utf8",
-      flag: "wx",
-      mode: 0o600,
-    })
-    const copiedFiles = await listRegularFiles({ directory: localArchive })
-    if (copiedFiles.length === 0) {
-      throw new Error("The logs and data directories contain no regular files to archive.")
-    }
-
-    reportProgress(onProgress, `Hashing ${copiedFiles.length + 1} archive files for manifest...`)
-    const manifest = await createArchiveManifest({
-      directory: localArchive,
+    await writeAndVerifyLocalArchive({
+      localArchive,
       createdAt,
-      logRuntimeSessionId: logSessionIdentity.runtimeSessionId,
-      onFileHashed: ({ completedFiles, totalFiles: hashTotal, completedBytes: hashBytes, totalBytes: hashTotalBytes }) => {
-        reportProgress(onProgress, `  hashed ${completedFiles}/${hashTotal} files — ${formatBytes(hashBytes)} / ${formatBytes(hashTotalBytes)}`)
-      },
+      logSessionIdentity,
+      onProgress,
     })
-    await writeFile(path.join(localArchive, "manifest.json"), JSON.stringify(manifest, null, 2) + "\n", {
-      encoding: "utf8",
-      flag: "wx",
-      mode: 0o600,
-    })
-    reportProgress(onProgress, "Verifying local archive checksums...")
-    await verifyArchive({ directory: localArchive, manifest })
-    reportProgress(onProgress, "Local archive verified.")
-
     const published = await publishArchiveFn({
       directory: localArchive,
       archiveName,
@@ -932,8 +977,7 @@ export async function runHarvesterArchivePush({
     }
   } catch (error) {
     throw new Error(
-      "Archive " + archiveName + " was not published. The source folders were left unchanged; any local archive files were retained at "
-        + localArchive + ". " + error.message,
+      `Archive ${archiveName} was not published. The source folders were left unchanged; any local archive files were retained at ${localArchive}. ${error.message}`,
       { cause: error },
     )
   }
@@ -958,7 +1002,7 @@ function createArchiveCliIdentity({ env = process.env } = {}) {
 async function main() {
   const args = process.argv.slice(2)
   if (args.length === 1 && args[0] === "--version") {
-    process.stdout.write(createArchiveCliIdentity() + "\n")
+    process.stdout.write(`${createArchiveCliIdentity()}\n`)
     return
   }
   if (args.length > 0) {
