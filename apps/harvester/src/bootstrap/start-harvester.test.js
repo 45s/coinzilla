@@ -3,10 +3,10 @@ import assert from "node:assert/strict"
 import * as shared from "../../test/bootstrap/start-harvester-test-support.js"
 
 const { Balance, CanonicalOrder, Fill, Money, Quantity, TradingRules, multiplyDecimal, waitForTestSignal, appConfig, createMarketMetadata, createOpenOrderSnapshot, createBinanceCapabilities, createBroker, makeVolatilityReadyBroker, binanceEnv, startHarvesterForTest, createFill } = shared
-const { Asset, mkdtemp, rm, os, path, createFileOperationalStateStore } = shared
+const { mkdtemp, rm, os, path, createFileOperationalStateStore } = shared
 const test = (...args) => nodeTest(`[start-harvester.test.js] ${args[0]}`, ...args.slice(1))
 
-test("starts an RS-only provider account without a Conservative execution route", async () => {
+async function createRsOnlyOperationalStateStore() {
   const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-rs-only-startup-"))
   const store = createFileOperationalStateStore({
     directory,
@@ -14,25 +14,40 @@ test("starts an RS-only provider account without a Conservative execution route"
   })
   const initialized = await store.initialize()
   assert.equal(initialized.ok, true, "RS-only startup requires an initialized durable operational-state store")
-  const calls = []
+  return { directory, store }
+}
+
+function createRsOnlyStartupBroker({ calls }) {
   const broker = createBroker(calls)
-  const metadata = createMarketMetadata("LINEAUSDT")
-  const { baseAsset, quoteAsset } = metadata.market
+  const { baseAsset, quoteAsset } = createMarketMetadata("LINEAUSDT").market
   broker.getAccountSnapshot = async () => ({
     ok: true,
     data: {
       sourceTime: 1,
       balances: [baseAsset, quoteAsset].map((asset) => new Balance({
-        free: new Quantity({ amount: "100000", asset }),
-        locked: new Quantity({ amount: "0", asset }),
+        free: new Quantity({
+          amount: "100000",
+          asset,
+        }),
+        locked: new Quantity({
+          amount: "0",
+          asset,
+        }),
       })),
     },
   })
+  return broker
+}
+
+function createRsOnlyStartupConfig() {
   const recoverySellerPair = {
     enabled: true,
     tradingEnvironment: "testnet",
     enableVolatilityProtection: false,
-    legacyPosition: { invested: 400, quantity: 25000 },
+    legacyPosition: {
+      invested: 400,
+      quantity: 25000,
+    },
     sellQuantity: 10,
     investment: 100,
     orderQuantity: 7000,
@@ -41,19 +56,27 @@ test("starts an RS-only provider account without a Conservative execution route"
     makerPercent: 0.1,
     takerPercent: 0.1,
   }
-  const cfg = {
+  return {
     ...appConfig,
     strategies: {
       ...appConfig.strategies,
       RS_recoverySeller: {
         enabled: true,
-        pairs: { LINEAUSDT: recoverySellerPair },
+        pairs: {
+          LINEAUSDT: recoverySellerPair,
+        },
       },
     },
   }
+}
+
+test("starts an RS-only provider account without a Conservative execution route", async () => {
+  const { directory, store } = await createRsOnlyOperationalStateStore()
+  const calls = []
+  const broker = createRsOnlyStartupBroker({ calls })
   try {
     const result = await startHarvesterForTest({
-      loadConfig: async () => cfg,
+      loadConfig: async () => createRsOnlyStartupConfig(),
       env: binanceEnv,
       brokerAdapterFactory: () => broker,
       operationalStateStore: store,
@@ -65,7 +88,9 @@ test("starts an RS-only provider account without a Conservative execution route"
       marketDataSymbols: ["LINEAUSDT"],
       evaluateRecoverySellerTransition: async () => ({
         ok: true,
-        data: { skipped: true },
+        data: {
+          skipped: true,
+        },
       }),
       logger: {
         info() {},
@@ -81,7 +106,10 @@ test("starts an RS-only provider account without a Conservative execution route"
     assert.ok(calls.includes("subscribe:LINEAUSDT"), "The RS-only market must receive its market-data subscription.")
     await result.stop()
   } finally {
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
   }
 })
 
