@@ -1,4 +1,5 @@
 import { StrategyId } from "../domain/strategies/strategy-ids.js"
+import { createConservativeVolatilityProtectionEligibility } from "../domain/market/create-conservative-volatility-protection-eligibility.js"
 import { linkSharedAccountOrderRegistry } from "../application/providers/account-runtime-registry.js"
 import { createPositionId } from "../domain/portfolio/position.js"
 import { createStrategyLogger } from "../application/logging/create-strategy-logger.js"
@@ -1691,8 +1692,10 @@ function createConservativeEngineBaseContext({ dependencies } = {}) {
   } = dependencies
   const { settings, pairs } = appConfig.strategies[StrategyId.COIN_GRABBER]
   const volatilityProtectionEnabled = typeof getVolatilityData === "function"
-  const isVolatilityProtectionEnabledForSymbol = (symbol) =>
-    volatilityProtectionEnabled && pairs[symbol]?.enableVolatilityProtection !== false
+  const isVolatilityProtectionEnabledForSymbol = createConservativeVolatilityProtectionEligibility({
+    pairs,
+    volatilityProtectionEnabled,
+  })
   const hasBlockingOpenOrdersForSymbol = ({ symbol } = {}) =>
     pairs[symbol]?.externalOrdersPolicy === EXTERNAL_ORDERS_POLICIES.BLOCK &&
     hasUnownedOpenOrdersForSymbol({ symbol })
