@@ -96,8 +96,8 @@ export function evaluateReadOnlyHealthCheck({ report }) {
 export function evaluateOperatorOrderProbeHealthCheck({ report }) {
   const probeResult = report.results.find((result) =>
     result.operation === "operator order probe")
-  const completed = probeResult?.mutationOutcome === "REJECTED" ||
-    probeResult?.mutationOutcome === "CONFIRMED"
+  const completed = probeResult?.status === "passed" &&
+    (probeResult.mutationOutcome === "REJECTED" || probeResult.mutationOutcome === "CONFIRMED")
   const declined = probeResult?.mutationOutcome === "NOT_SENT" &&
     probeResult.status === "skipped"
   const healthy = completed || declined
