@@ -679,6 +679,7 @@ class TestnetTradingRecoveryScenario {
         BTCUSDT: {
           enabled: true,
             tradingEnvironment: "both",
+            enableVolatilityProtection: true,
           investment: 2000,
           orderQuantity: 0.01,
           keepQuantity: 0.001,
