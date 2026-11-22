@@ -69,7 +69,8 @@ function printPublishedResult({ result, stdout, probeMode = false }) {
     "Bitunix Spot diagnostics completed.",
     `Checks: ${passed} passed, ${failed} failed, ${skipped} skipped (${total} total).`,
     `Diagnostics: ${failed === 0 ? "HEALTHY" : "DEGRADED"}`,
-    `Diagnostic safety/configuration gate: ${result.healthCheck.healthy ? "READY" : "BLOCKED"}`,\n    ...(probeMode ? ["The selected probe uses its own fresh Broker preflight; generic diagnostics do not gate dispatch."] : []),
+    `Diagnostic safety/configuration gate: ${result.healthCheck.healthy ? "READY" : "BLOCKED"}`,
+    ...(probeMode ? ["The selected probe uses its own fresh Broker preflight; generic diagnostics do not gate dispatch."] : []),
     ...(result.healthCheck.nonBlockingFailedOperations.length > 0
       ? [`Non-blocking diagnostic failures: ${result.healthCheck.nonBlockingFailedOperations.join(", ")}`]
       : []),
