@@ -211,7 +211,7 @@ async function switchBackToDevelop({ repositoryRoot, runGit }) {
   })
 }
 
-async function runOnReportBranch({ repositoryRoot, runGit, branch, paths, publishedReportPath, runDiagnostics, env, now, onProgress }) {
+async function runOnReportBranch({ repositoryRoot, runGit, branch, paths, publishedReportPath, runDiagnostics, healthCheckEvaluator, env, now, onProgress }) {
   onProgress?.({ message: "[3/5] Running Bitunix REST and authenticated WebSocket diagnostics" })
   const report = await runDiagnosticsSafely({
     runDiagnostics,
@@ -220,7 +220,7 @@ async function runOnReportBranch({ repositoryRoot, runGit, branch, paths, publis
     onProgress,
   })
   validateDiagnosticReport({ report })
-  const healthCheck = evaluateReadOnlyHealthCheck({ report })
+  const healthCheck = healthCheckEvaluator({ report })
   onProgress?.({ message: "[4/5] Writing sanitized local and publishable reports" })
   const reports = await writeReports({
     paths,
@@ -260,7 +260,7 @@ function throwWorkflowErrors({ operationError, cleanupError }) {
   }
 }
 
-async function executeReportBranchWorkflow({ repositoryRoot, runGit, branch, paths, publishedReportPath, runDiagnostics, env, now, onProgress }) {
+async function executeReportBranchWorkflow({ repositoryRoot, runGit, branch, paths, publishedReportPath, runDiagnostics, healthCheckEvaluator, env, now, onProgress }) {
   let branchCreated = false
   let operationError = null
   let cleanupError = null
@@ -369,7 +369,7 @@ export async function publishHealthReport({
     exitCode: !execution.healthCheck.healthy ||
       execution.report.summary.failed > 0 ||
       execution.report.results.some((entry) =>
-        entry.operation === "operator order attempt" && entry.status === "failed") ||
+        (entry.operation === "operator order attempt" || entry.operation === "operator order probe") && entry.status === "failed") ||
       execution.pushError
       ? 1
       : 0,
