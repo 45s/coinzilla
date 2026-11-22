@@ -34,6 +34,7 @@ const main = (options = {}) => {
   return startMain({
     acquireProcessLock,
     createOperationalStateStore: () => ({
+      initializeIfEmpty: async () => ({ ok: true, data: { ready: true, initialized: false } }),
       verify: async () => ({ ok: true,
         data: { valid: true,
           durableWriteSupported: true } }),

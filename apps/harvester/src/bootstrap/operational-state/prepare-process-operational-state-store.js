@@ -136,8 +136,8 @@ function requiresOperationalStateStore({ appConfig } = {}) {
  * or an enabled Recovery Seller market requires durable operational facts.
  *
  * Telegram-only operator control does not create or require this store.
- * Store genesis remains an explicit one-time operation; startup never
- * initializes, repairs, or replaces a missing or corrupt ledger.
+ * Startup initializes only a missing or empty ledger directory, verifies an
+ * existing complete ledger, and never repairs or replaces existing data.
  */
 export async function prepareProcessOperationalStateStore({
   appConfig, env = process.env, runtimeSessionId, createOperationalStateStore = createFileOperationalStateStore,

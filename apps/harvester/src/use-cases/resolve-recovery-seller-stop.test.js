@@ -4,7 +4,7 @@ import os from "node:os"
 import path from "node:path"
 import test from "node:test"
 import { createRecoverySellerStopDecision, createRecoverySellerStopState, latchRecoverySellerStop } from "../domain/strategies/recovery-seller/stop-decision.js"
-import { createFileOperationalStateStore } from "../infrastructure/operational-state/create-file-operational-state-store.js"
+import { createFileOperationalStateStore } from "../infrastructure/operational-state/create-file-store.js"
 import { recordSafetyBlockerRaised } from "./record-safety-control-facts.js"
 import { resolveRecoverySellerStop } from "./resolve-recovery-seller-stop.js"
 

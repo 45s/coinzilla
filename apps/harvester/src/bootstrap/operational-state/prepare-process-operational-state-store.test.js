@@ -164,7 +164,9 @@ test("rejects invalid stores and stores without verification support", async () 
     prepareProcessOperationalStateStore({
       appConfig: config({ recovery: true }),
       runtimeSessionId: "session",
-      createOperationalStateStore: () => ({}),
+      createOperationalStateStore: () => ({
+        initializeIfEmpty: async () => ({ ok: true, data: { ready: true, initialized: false } }),
+      }),
     }),
     (error) => error.code === "PROCESS_OPERATIONAL_STATE_VERIFY_UNAVAILABLE",
   )
