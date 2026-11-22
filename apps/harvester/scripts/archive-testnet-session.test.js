@@ -3,6 +3,7 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import test from "node:test"
+import { gunzipSync } from "node:zlib"
 import {
   createHarvesterArchiveDirectoryName,
   runHarvesterArchivePush,
@@ -91,7 +92,7 @@ test("archives the final cumulative tails and newest session with complete data 
         "cumulative logs must retain only their final five percent",
       )
       assert.equal(
-        await readFile(path.join(directory, "logs/sessions/2026-11-22_latest/terminal.log"), "utf8"),
+        gunzipSync(await readFile(path.join(directory, "logs/sessions/2026-11-22_latest/terminal.log.gz"))).toString("utf8"),
         "latest session evidence",
         "the newest session must be retained in full",
       )
@@ -140,7 +141,7 @@ test("keeps the completed local snapshot when remote publication fails", async (
     "the complete local snapshot must retain the last committed data hash",
   )
   assert.equal(
-    await readFile(path.join(attemptedDirectory, "logs/sessions/2026-11-22_latest/terminal.log"), "utf8"),
+    gunzipSync(await readFile(path.join(attemptedDirectory, "logs/sessions/2026-11-22_latest/terminal.log.gz"))).toString("utf8"),
     fixture.files["logs/sessions/2026-11-22_latest/terminal.log"],
     "the selected latest session must remain available after a failed push",
   )
