@@ -204,6 +204,32 @@ test("Bitunix MARKET probe blocks if either conflicting denomination could be fu
   )
 })
 
+test("Bitunix SELL LIMIT preflight preserves an unreported HYPE balance as unknown", () => {
+  const preflight = createBitunixOrderProbePreflight(createPreflightInput({
+    probeId: "limit-sell-1",
+    overrides: {
+      balancesResult: {
+        ok: true,
+        data: [{
+          free: {
+            amount: "0.01",
+            asset: { code: "USDT" },
+          },
+          locked: {
+            amount: "0",
+            asset: { code: "USDT" },
+          },
+        }],
+      },
+    },
+  }))
+
+  assert.equal(preflight.freeBaseBalance, null)
+  assert.equal(preflight.lockedBaseBalance, null)
+  assert.equal(preflight.baseBalanceUnreported, true)
+  assert.equal(preflight.probe.side, "SELL")
+})
+
 test("Bitunix order probe preflight rejects open orders and missing explicit asset balances", () => {
   assert.throws(
     () => createBitunixOrderProbePreflight(createPreflightInput({
