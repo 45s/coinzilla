@@ -1585,3 +1585,16 @@ See [the private polling contract](./docs/BITUNIX_SPOT_POLLING.md) and [the Bitu
 - [x] Added the cumulative [Bitunix live order-probe evidence log](./BITUNIX_ORDER_PROBE_LOG.md), including the proven behavior, unresolved protocol questions, and next investigation steps.
 
 **Finding:** Spot LIMIT BUY/SELL dispatch and nested rejection parsing are empirically exercised. The operator confirmed the account lacked the required Spot assets, so both `10034` insufficient-balance rejections were expected. No accepted order or fill has yet been observed. A funded `limit-buy-11-usdt` probe is added: BUY `HYPEUSDT` LIMIT at `30 USDT`, spending up to `11 USDT`; quantity is calculated from live `basePrecision`, with `0.24 USDT` reserved. The script displays the exact order snapshot and accepts only `y/N`. This will test actual acceptance after merge and funding. Broader lifecycle/Harvester blockers remain.
+
+
+## 2026-11-22 — Bitunix first accepted Spot order and reconciliation regression
+
+**Status: LIVE placement proven; post-placement detail-read defect under repair.**
+
+- Operator-authorized funded probe `limit-buy-11-usdt` submitted exactly one Spot LIMIT BUY: `HYPEUSDT`, `0.366 HYPE` at `30 USDT` (notional `10.98 USDT`; fee reserve `0.24 USDT`).
+- Exchange placement response was HTTP 200, outer `code: "0"`, `success: true`, and nested `placeStatus: 1`, `placeCode: 0`, `placeMsg: "成功"`, with exact string `orderId: "2124329325141426176"`. This is the first proven accepted Spot order through Coinzilla's `BitunixSpotBroker.createOrder()`; the operator confirmed it remained waiting/open. No fill is claimed.
+- The subsequent read-only `GET /api/spot/v1/order/detail?orderId=2124329325141426176` returned HTTP 200 but exchange code `100005`, `result.api.parameter.sign.illegal`. This failure occurred after the accepted placement and must never trigger a second placement.
+- Regression coverage must distinguish mutation outcome from follow-up read health: confirmed placement remains `ok: true` / `mutationOutcome: "CONFIRMED"`; the raw placement acknowledgement is retained as `data`; `reconciliation.status: "UNAVAILABLE"` and structured error metadata record the failed detail lookup. Callers must not infer order status from the placement acknowledgement.
+- Offline tests cover the exact live placement fields, exact string order ID, signed GET query construction, exchange code/message, one placement POST plus one read-only GET, and no retries. CI must pass before merge; no live order probe is part of CI.
+- Do not repeat the live probe. Keep the order-detail signature investigation separate from placement; compare canonical query signing and use existing signed POST pending/history reads only as read-only reconciliation paths.
+- Historical failures are intentional evidence: unfunded BUY and SELL LIMIT attempts returned nested `placeStatus: 0` / `placeCode: 10034` (expected insufficient-balance rejections); the funded attempt succeeded at placement but the detail GET failed with `100005`. Do not repeat these probes or misclassify the detail failure as a rejected order.
