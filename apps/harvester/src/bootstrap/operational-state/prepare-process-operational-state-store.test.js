@@ -65,7 +65,10 @@ test("does not prepare the store for globally disabled RS or RS without enabled 
     createOperationalStateStore,
   }), undefined, "globally disabled RS must not require the store")
   assert.equal(await prepareProcessOperationalStateStore({
-    appConfig: config({ recoverySeller: true, recoverySellerPairEnabled: false }),
+    appConfig: config({
+        recoverySeller: true,
+        recoverySellerPairEnabled: false,
+      }),
     runtimeSessionId: "session",
     createOperationalStateStore,
   }), undefined, "RS without enabled markets must not require the store")
