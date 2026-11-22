@@ -20,6 +20,40 @@ function createExternalSell() {
   }
 }
 
+function createTestEventPublisher({ publishedEvents, onFlush }) {
+  return {
+    publish: (event) => {
+      publishedEvents.push(event)
+      return { ok: true }
+    },
+    flush: async () => {
+      onFlush()
+      return {
+        ok: true,
+        durable: true,
+      }
+    },
+  }
+}
+
+function createTestOperationalStateStore({ append, appendedFacts }) {
+  return {
+    append: async (fact) => {
+      if (append) {
+        return append(fact)
+      }
+      appendedFacts.push(fact)
+      return {
+        ok: true,
+        data: {
+          durable: true,
+          record: fact,
+        },
+      }
+    },
+  }
+}
+
 function createManagerOptions({
   market,
   openOrders,
@@ -36,19 +70,10 @@ function createManagerOptions({
         data: openOrders,
       },
     },
-    eventPublisher: {
-      publish: (event) => {
-        publishedEvents.push(event)
-        return { ok: true }
-      },
-      flush: async () => {
-        onFlush()
-        return {
-          ok: true,
-          durable: true,
-        }
-      },
-    },
+    eventPublisher: createTestEventPublisher({
+      publishedEvents,
+      onFlush,
+    }),
     marketMetadata: new Map([[market.symbol, { market }]]),
     getPortfolio: () => new Portfolio(),
     getTradingEngine: () => ({
@@ -65,21 +90,10 @@ function createManagerOptions({
       info() {},
     },
     now: () => 123,
-    operationalStateStore: {
-      append: async (fact) => {
-        if (append) {
-          return append(fact)
-        }
-        appendedFacts.push(fact)
-        return {
-          ok: true,
-          data: {
-            durable: true,
-            record: fact,
-          },
-        }
-      },
-    },
+    operationalStateStore: createTestOperationalStateStore({
+      append,
+      appendedFacts,
+    }),
   }
 }
 

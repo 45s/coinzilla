@@ -2,7 +2,7 @@ import assert from "node:assert/strict"
 import test from "node:test"
 import { projectHarvesterJournalRecovery } from "./project-harvester-journal-recovery-with-deferrals.js"
 
-function record(name, data, id = name) {
+function record({ name, data, id = name }) {
   return {
     id,
     payload: {
@@ -18,21 +18,27 @@ function record(name, data, id = name) {
 }
 
 function closingOpenOrders() {
-  return record("account.open_orders_captured", {
-    phase: "CLOSING",
-    observedAt: 201,
-    readiness: "READY",
-    orderCount: 0,
-    orders: [],
-    blockReasons: [],
+  return record({
+    name: "account.open_orders_captured",
+    data: {
+      phase: "CLOSING",
+      observedAt: 201,
+      readiness: "READY",
+      orderCount: 0,
+      orders: [],
+      blockReasons: [],
+    },
   })
 }
 
 test("projects a CLOSING open-order snapshot in an active started Journal session", () => {
   const result = projectHarvesterJournalRecovery({
     records: [
-      record("harvester.started", {
-        tradingEnabled: true,
+      record({
+        name: "harvester.started",
+        data: {
+          tradingEnabled: true,
+        },
       }),
       closingOpenOrders(),
     ],
@@ -54,12 +60,18 @@ test("rejects a CLOSING open-order snapshot before the Journal session starts", 
 test("rejects a CLOSING open-order snapshot after the Journal session has stopped", () => {
   const result = projectHarvesterJournalRecovery({
     records: [
-      record("harvester.started", {
-        tradingEnabled: true,
+      record({
+        name: "harvester.started",
+        data: {
+          tradingEnabled: true,
+        },
       }),
-      record("harvester.stopped", {
-        outcome: "success",
-        reason: "graceful shutdown completed",
+      record({
+        name: "harvester.stopped",
+        data: {
+          outcome: "success",
+          reason: "graceful shutdown completed",
+        },
       }),
       closingOpenOrders(),
     ],
