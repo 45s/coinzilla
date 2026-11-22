@@ -28,12 +28,36 @@ function createPreflightInput({ probeId = "limit-buy-1", overrides = {} } = {}) 
       ok: true,
       data: [
         {
-          free: { amount: "0.01", asset: { code: "HYPE" } },
-          locked: { amount: "0", asset: { code: "HYPE" } },
+          free: {
+
+            amount: "0.01",
+
+            asset: { code: "HYPE" },
+
+          },
+          locked: {
+
+            amount: "0",
+
+            asset: { code: "HYPE" },
+
+          },
         },
         {
-          free: { amount: "0.01", asset: { code: "USDT" } },
-          locked: { amount: "0", asset: { code: "USDT" } },
+          free: {
+
+            amount: "0.01",
+
+            asset: { code: "USDT" },
+
+          },
+          locked: {
+
+            amount: "0",
+
+            asset: { code: "USDT" },
+
+          },
         },
       ],
     },
@@ -86,12 +110,36 @@ test("Bitunix BUY LIMIT probe blocks when free USDT can cover the order notional
         ok: true,
         data: [
           {
-            free: { amount: "0.01", asset: { code: "HYPE" } },
-            locked: { amount: "0", asset: { code: "HYPE" } },
+            free: {
+
+              amount: "0.01",
+
+              asset: { code: "HYPE" },
+
+            },
+            locked: {
+
+              amount: "0",
+
+              asset: { code: "HYPE" },
+
+            },
           },
           {
-            free: { amount: "30", asset: { code: "USDT" } },
-            locked: { amount: "0", asset: { code: "USDT" } },
+            free: {
+
+              amount: "30",
+
+              asset: { code: "USDT" },
+
+            },
+            locked: {
+
+              amount: "0",
+
+              asset: { code: "USDT" },
+
+            },
           },
         ],
       },
@@ -112,12 +160,36 @@ test("Bitunix SELL LIMIT probe blocks when free HYPE can cover the base quantity
         ok: true,
         data: [
           {
-            free: { amount: "1", asset: { code: "HYPE" } },
-            locked: { amount: "0", asset: { code: "HYPE" } },
+            free: {
+
+              amount: "1",
+
+              asset: { code: "HYPE" },
+
+            },
+            locked: {
+
+              amount: "0",
+
+              asset: { code: "HYPE" },
+
+            },
           },
           {
-            free: { amount: "0.01", asset: { code: "USDT" } },
-            locked: { amount: "0", asset: { code: "USDT" } },
+            free: {
+
+              amount: "0.01",
+
+              asset: { code: "USDT" },
+
+            },
+            locked: {
+
+              amount: "0",
+
+              asset: { code: "USDT" },
+
+            },
           },
         ],
       },
@@ -138,12 +210,36 @@ test("Bitunix MARKET probe blocks if either conflicting denomination could be fu
         ok: true,
         data: [
           {
-            free: { amount: "0", asset: { code: "HYPE" } },
-            locked: { amount: "0", asset: { code: "HYPE" } },
+            free: {
+
+              amount: "0",
+
+              asset: { code: "HYPE" },
+
+            },
+            locked: {
+
+              amount: "0",
+
+              asset: { code: "HYPE" },
+
+            },
           },
           {
-            free: { amount: "1", asset: { code: "USDT" } },
-            locked: { amount: "0", asset: { code: "USDT" } },
+            free: {
+
+              amount: "1",
+
+              asset: { code: "USDT" },
+
+            },
+            locked: {
+
+              amount: "0",
+
+              asset: { code: "USDT" },
+
+            },
           },
         ],
       },
@@ -176,8 +272,20 @@ test("Bitunix order probe preflight rejects open orders and missing explicit ass
         balancesResult: {
           ok: true,
           data: [{
-            free: { amount: "0", asset: { code: "USDT" } },
-            locked: { amount: "0", asset: { code: "USDT" } },
+            free: {
+
+              amount: "0",
+
+              asset: { code: "USDT" },
+
+            },
+            locked: {
+
+              amount: "0",
+
+              asset: { code: "USDT" },
+
+            },
           }],
         },
       },
@@ -230,8 +338,20 @@ test("Bitunix LIMIT probes require only the balance asset they can spend", () =>
       balancesResult: {
         ok: true,
         data: [{
-          free: { amount: "0.01", asset: { code: "USDT" } },
-          locked: { amount: "0", asset: { code: "USDT" } },
+          free: {
+
+            amount: "0.01",
+
+            asset: { code: "USDT" },
+
+          },
+          locked: {
+
+            amount: "0",
+
+            asset: { code: "USDT" },
+
+          },
         }],
       },
     },
@@ -242,8 +362,20 @@ test("Bitunix LIMIT probes require only the balance asset they can spend", () =>
       balancesResult: {
         ok: true,
         data: [{
-          free: { amount: "0.01", asset: { code: "HYPE" } },
-          locked: { amount: "0", asset: { code: "HYPE" } },
+          free: {
+
+            amount: "0.01",
+
+            asset: { code: "HYPE" },
+
+          },
+          locked: {
+
+            amount: "0",
+
+            asset: { code: "HYPE" },
+
+          },
         }],
       },
     },
@@ -260,8 +392,20 @@ test("Bitunix MARKET probes require both balances while volume denomination is u
       balancesResult: {
         ok: true,
         data: [{
-          free: { amount: "0.01", asset: { code: "USDT" } },
-          locked: { amount: "0", asset: { code: "USDT" } },
+          free: {
+
+            amount: "0.01",
+
+            asset: { code: "USDT" },
+
+          },
+          locked: {
+
+            amount: "0",
+
+            asset: { code: "USDT" },
+
+          },
         }],
       },
     },
