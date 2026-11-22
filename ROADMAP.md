@@ -5,7 +5,7 @@
 **Goal:** prioritize demonstrated correctness, unattended-operation safety, operational confidence and maintainability. A task is complete only when its owning roadmap records the merged implementation and required verification.
 
 **Last reviewed:** 2026-11-21
-**Latest `develop` head inspected for this roadmap update:** `3073df8e26fd91e425e2f6f8f363850c85235e9e` (2026-11-21). The latest recursive inventory baseline remains `0f827ba7551be61a1be58f8dced191fb0a090870`: 1,298 tracked files, including 179 Markdown/MDX files and 1,091 `.js` files (540 `.test.js` files); 579 JavaScript files are under Harvester (268 tests). The S-7 naming/tree baseline and later S-8 additions are recorded in [the engineering standards matrix](docs/engineering/ENGINEERING_STANDARDS_MATRIX.md).
+**Latest `develop` head inspected for this roadmap update:** `39eec79531c46a93063be017b1d0173d02136545` (2026-11-22). The latest recursive inventory baseline remains `0f827ba7551be61a1be58f8dced191fb0a090870`: 1,298 tracked files, including 179 Markdown/MDX files and 1,091 `.js` files (540 `.test.js` files); 579 JavaScript files are under Harvester (268 tests). The S-7 naming/tree baseline and later S-8 additions are recorded in [the engineering standards matrix](docs/engineering/ENGINEERING_STANDARDS_MATRIX.md).
 
 ## Repository engineering standards initiative — [#1568](https://github.com/45s/coinzilla/issues/1568)
 
