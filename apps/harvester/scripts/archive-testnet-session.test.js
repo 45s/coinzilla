@@ -17,15 +17,19 @@ const DATA_COMMIT_HASH = "154720ef4b575e5a189fc6aa78fd9575917537d02e808403593ab4
 const RUNTIME_SESSION_ID = "ebe7c1d3-ff7d-47db-b2fe-2e5ec9594c1c"
 const LIVE_SESSION_ID = "a1e2c3d4-e5f6-4789-8123-123456789abc"
 
+function createJsonLines(records) {
+  return `${records.map((record) => JSON.stringify(record)).join("\n")}\n`
+}
+
 function createFixtureFiles() {
-  const structuredRecords = Array.from({ length: 20 }, (_, index) => JSON.stringify({
+  const structuredRecords = createJsonLines(Array.from({ length: 20 }, (_, index) => ({
     context: {
       runtimeSessionId: index % 2 === 0 ? RUNTIME_SESSION_ID : LIVE_SESSION_ID,
     },
     data: {
       message: index % 2 === 0 ? "TESTNET_STRUCTURED_EVIDENCE" : "LIVE_STRUCTURED_SECRET",
     },
-  })).join("\n") + "\n"
+  })))
   const facts = [
     {
       sequence: "0",
@@ -74,8 +78,8 @@ function createFixtureFiles() {
     "data/testnet/harvester.db-shm": "sqlite shm evidence",
     "data/production/harvester.db": "LIVE PRODUCTION SENTINEL MUST NEVER BE ARCHIVED",
     "data/operational-state/facts.jsonl": "operational facts",
-    "recovery-facts/facts.jsonl": facts.map((fact) => JSON.stringify(fact)).join("\n") + "\n",
-    "recovery-facts/manifest.jsonl": manifests.map((manifest) => JSON.stringify(manifest)).join("\n") + "\n",
+    "recovery-facts/facts.jsonl": createJsonLines(facts),
+    "recovery-facts/manifest.jsonl": createJsonLines(manifests),
   }
 }
 
@@ -188,7 +192,10 @@ async function assertSourcesRemainUnchanged(fixture) {
 
 test("names each local snapshot from its UTC archive time and unique ID", () => {
   assert.equal(
-    createHarvesterArchiveDirectoryName({ createdAt: CREATED_AT, archiveId: ARCHIVE_ID }),
+    createHarvesterArchiveDirectoryName({
+      createdAt: CREATED_AT,
+      archiveId: ARCHIVE_ID,
+    }),
     "2026-11-22T18-30-00Z_123e4567",
   )
 })
