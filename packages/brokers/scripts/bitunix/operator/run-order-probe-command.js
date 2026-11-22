@@ -33,7 +33,11 @@ function createBroker({ credentials, allowLiveOrderMutations, capture }) {
   })
 }
 
-function askForOrderProbeConfirmation({ probe, stdin, stdout }) {
+function askForOrderProbeConfirmation({ preflight, stdin, stdout }) {
+  const { probe } = preflight
+  const unknownSellBalance = probe.side === "SELL" &&
+    probe.type === "LIMIT" &&
+    preflight.baseBalanceUnreported === true
   const readline = createInterface({
     input: stdin,
     output: stdout,
@@ -49,9 +53,14 @@ function askForOrderProbeConfirmation({ probe, stdin, stdout }) {
       resolveAnswer(approved)
     }
     readline.once("close", () => finish(false))
+    const question = unknownSellBalance
+      ? `HYPE balance was not returned. Type "I ACCEPT UNKNOWN HYPE BALANCE" to submit this LIVE SELL probe "${probe.id}", or anything else to decline: `
+      : `Press ENTER to submit this LIVE ${probe.side} ${probe.type} HYPEUSDT probe "${probe.id}", or type anything to decline: `
     readline.question(
-      `Press ENTER to submit this LIVE ${probe.side} ${probe.type} HYPEUSDT probe "${probe.id}", or type anything to decline: `,
-      (answer) => finish(answer === ""),
+      question,
+      (answer) => finish(unknownSellBalance
+        ? answer === "I ACCEPT UNKNOWN HYPE BALANCE"
+        : answer === ""),
     )
   })
 }
@@ -96,7 +105,7 @@ export async function runOperatorOrderProbeCommand({
       capture,
     }),
     confirm: ({ preflight }) => askForOrderProbeConfirmation({
-      probe: preflight.probe,
+      preflight,
       stdin,
       stdout,
     }),
