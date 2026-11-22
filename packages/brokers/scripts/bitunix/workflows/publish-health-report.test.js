@@ -544,3 +544,85 @@ test("publisher uses the focused operator-probe health evaluator when supplied",
     })
   }
 })
+
+
+test("published report exposes sanitized symbol and orderId for open-order and detail reads", async () => {
+  const repositoryRoot = await createRepositoryDirectory()
+  const { runGit } = createFakeGit({ repositoryRoot })
+  const orderId = "2124329325141426176"
+  const symbol = "HYPEUSDT"
+  try {
+    const result = await publishHealthReport({
+      repositoryRoot,
+      runGit,
+      runDiagnostics: async () => {
+        const report = createDiagnosticReport()
+        report.results.push(
+          {
+            operation: "Broker API getOpenOrders",
+            status: "passed",
+            durationMs: 41438,
+            request: { method: "getOpenOrders", arguments: [] },
+            response: {
+              ok: true,
+              data: [{ id: orderId, symbol, status: "OPEN" }],
+              errors: [],
+            },
+          },
+          {
+            operation: "Broker API getOrder",
+            status: "passed",
+            durationMs: 304,
+            request: {
+              method: "getOrder",
+              arguments: [{ symbol, orderId }],
+            },
+            response: {
+              ok: true,
+              data: {
+                id: orderId,
+                symbol,
+                status: "OPEN",
+                price: "30",
+                volume: "0.366",
+                balance: "123.45",
+                uid: "private-account-uid",
+              },
+              errors: [],
+            },
+          },
+        )
+        report.summary.total += 2
+        report.summary.passed += 2
+        return report
+      },
+      env: {
+        BITUNIX_API_KEY: apiKey,
+        BITUNIX_API_SECRET: apiSecret,
+      },
+      now: () => fixedTimestamp,
+    })
+
+    const publicReport = await readFile(join(repositoryRoot, result.reportPath), "utf8")
+    const localReport = await readFile(join(repositoryRoot, result.localReportPath), "utf8")
+    for (const content of [publicReport, localReport]) {
+      assert.ok(content.includes(orderId), "both reports must retain the discovered exchange order ID")
+      assert.ok(content.includes(symbol), "both reports must retain the order symbol")
+      assert.ok(content.includes('"price": "30"'), "order detail fields must be retained")
+      assert.ok(content.includes('"volume": "0.366"'), "order detail volume must be retained")
+      assert.equal(content.includes("private-account-uid"), false, "private account identifiers remain redacted")
+      assert.equal(content.includes('"balance": "123.45"'), false, "account balances remain redacted")
+      assert.equal(content.includes(apiKey), false)
+      assert.equal(content.includes(apiSecret), false)
+    }
+    assert.ok(result.report.results.some((entry) =>
+      entry.operation === "Broker API getOrder" &&
+      entry.request.arguments[0].orderId === orderId &&
+      entry.request.arguments[0].symbol === symbol))
+  } finally {
+    await rm(repositoryRoot, {
+      recursive: true,
+      force: true,
+    })
+  }
+})
