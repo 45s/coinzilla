@@ -42,6 +42,14 @@ function printLocalDiagnosticSummary({ report, outputPath, stdout }) {
   ].join("\n"))
 }
 
+function getOrderIdentityLabel({ request }) {
+  const orderArguments = request?.method === "getOrder" ? request.arguments?.[0] : null
+  if (!orderArguments?.symbol || !orderArguments?.orderId) {
+    return ""
+  }
+  return ` [${orderArguments.symbol} / ${orderArguments.orderId}]`
+}
+
 function recordOrderReadResult({
   report,
   stdout,
@@ -73,10 +81,7 @@ function recordOrderReadResult({
   report.summary.total += 1
   report.summary[entry.status] += 1
   const duration = Number.isFinite(durationMs) ? ` (${durationMs} ms)` : ""
-  const orderArguments = request?.method === "getOrder" ? request.arguments?.[0] : null
-  const identity = orderArguments?.symbol && orderArguments?.orderId
-    ? ` [${orderArguments.symbol} / ${orderArguments.orderId}]`
-    : ""
+  const identity = getOrderIdentityLabel({ request })
   stdout.write(`      ${operation}${identity}: ${entry.status.toUpperCase()}${duration}\n`)
 }
 
