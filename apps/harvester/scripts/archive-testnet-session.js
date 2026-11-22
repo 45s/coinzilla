@@ -154,6 +154,13 @@ async function resolveSessionIdentity({ sessionId } = {}) {
   return candidates[0]
 }
 
+async function assertRealDirectory(directory) {
+  const directoryStats = await lstat(directory)
+  if (directoryStats.isSymbolicLink() || !directoryStats.isDirectory()) {
+    throw new Error(`Expected a real directory, not a symbolic link: ${directory}`)
+  }
+}
+
 async function copyRegularTree({ sourceDirectory, destinationDirectory, relative = "" } = {}) {
   await mkdir(destinationDirectory, { recursive: true, mode: 0o700 })
   const source = relative ? path.join(sourceDirectory, relative) : sourceDirectory
@@ -239,6 +246,10 @@ async function createArchiveManifest({ directory, identity, backupResult } = {})
 }
 
 async function verifyArchive({ directory, manifest } = {}) {
+  const databaseEntry = manifest.files.find((entry) => entry.path === "database/harvester.sqlite")
+  if (!databaseEntry || databaseEntry.sha256 !== manifest.database?.sha256) {
+    throw new Error("Archive database checksum does not match the verified SQLite backup metadata.")
+  }
   const expectedPaths = manifest.files.map((entry) => entry.path).sort()
   const actualPaths = (await listRegularFiles(directory))
     .filter((filename) => filename !== "manifest.json")
@@ -324,6 +335,8 @@ export async function runHarvesterArchivePush({
   const identity = assertProcessIdentity(selected.identity)
   const archiveName = createHarvesterArchiveDirectoryName(identity)
   await mkdir(LOCAL_ARCHIVE_DIRECTORY, { recursive: true, mode: 0o700 })
+  await assertRealDirectory(path.join(PACKAGE_DIRECTORY, "data"))
+  await assertRealDirectory(LOCAL_ARCHIVE_DIRECTORY)
   const localArchive = path.join(LOCAL_ARCHIVE_DIRECTORY, archiveName)
   let existingManifest = null
   try {
@@ -332,6 +345,7 @@ export async function runHarvesterArchivePush({
     if (error.code !== "EEXIST") {
       throw error
     }
+    await assertRealDirectory(localArchive)
     const manifestFilename = path.join(localArchive, "manifest.json")
     try {
       existingManifest = JSON.parse(await readFile(manifestFilename, "utf8"))
@@ -360,7 +374,11 @@ export async function runHarvesterArchivePush({
       const logsDestination = path.join(localArchive, "logs")
       await mkdir(databaseDirectory, { mode: 0o700 })
       await mkdir(logsDestination, { mode: 0o700 })
-      await copyFile(backupResult.backupFilename, path.join(databaseDirectory, "harvester.sqlite"))
+      const copiedDatabaseFilename = path.join(databaseDirectory, "harvester.sqlite")
+      await copyFile(backupResult.backupFilename, copiedDatabaseFilename)
+      if (await sha256File(copiedDatabaseFilename) !== backupResult.sha256) {
+        throw new Error("Copied SQLite backup checksum does not match the backup service result.")
+      }
       await copyFile(backupResult.manifestFilename, path.join(databaseDirectory, "backup-manifest.json"))
       await copyRegularTree({
         sourceDirectory: selected.directory,
