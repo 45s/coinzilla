@@ -87,7 +87,7 @@ function decimalParts(value) {
 function formatScaled(value, scale) {
   const digits = value.toString().padStart(scale + 1, "0")
   if (scale === 0) return digits
-  return `${digits.slice(0, -scale)}.${digits.slice(-scale)}`.replace(/\\.?0+$/, "")
+  return `${digits.slice(0, -scale)}.${digits.slice(-scale)}`.replace(/\.?0+$/, "")
 }
 
 function divideToPrecision({ numerator, denominator, precision }) {
