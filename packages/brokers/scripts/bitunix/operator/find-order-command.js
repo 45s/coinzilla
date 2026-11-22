@@ -19,77 +19,402 @@ function createBroker({ credentials, logger }) {
     apiSecret: credentials.apiSecret,
     tradingMode: "live",
     logger,
-    providerOptions: { allowLiveOrderMutations: false },
+    providerOptions: {
+      allowLiveOrderMutations: false,
+    },
   })
 }
 
 function safeValue({ value, secrets }) {
-  if (Array.isArray(value)) return value.map((item) => safeValue({ value: item, secrets }))
+  if (Array.isArray(value)) {
+    return value.map((item) => safeValue({ value: item, secrets }))
+  }
   if (value && typeof value === "object") {
     return Object.fromEntries(Object.entries(value).map(([key, child]) => [
       key,
-      /api.?key|secret|sign|nonce|email|phone|address|user.?id|uid/i.test(key)
+      isPrivateField({ key })
         ? "[REDACTED]"
         : safeValue({ value: child, secrets }),
     ]))
   }
-  return typeof value === "string" ? redactApiSecrets({ message: value, secrets }) : value
+  if (typeof value !== "string") {
+    return value
+  }
+  return redactApiSecrets({
+    message: value,
+    secrets,
+  })
+}
+
+function isPrivateField({ key }) {
+  return /api.?key|secret|sign|nonce|email|phone|address|user.?id|uid/i.test(key)
 }
 
 function serializeError({ error, secrets }) {
+  const details = {
+    name: error?.name,
+    code: error?.code,
+    kind: error?.kind,
+    exchangeCode: error?.exchangeCode,
+    status: error?.status,
+    path: error?.path,
+    message: error?.message ?? String(error),
+    outcomeUnknown: error?.outcomeUnknown,
+  }
   return safeValue({
+    value: details,
     secrets,
-    value: {
-      name: error?.name ?? "Error",
-      code: error?.code ?? null,
-      kind: error?.kind ?? null,
-      exchangeCode: error?.exchangeCode ?? null,
-      status: error?.status ?? null,
-      path: error?.path ?? null,
-      message: error?.message ?? String(error),
-      outcomeUnknown: error?.outcomeUnknown ?? false,
-    },
   })
 }
 
 function serializeResult({ result, secrets }) {
-  return safeValue({
+  const errors = (result?.errors ?? []).map((error) => serializeError({
+    error,
     secrets,
+  }))
+  return safeValue({
     value: {
       ok: result?.ok === true,
       data: result?.data ?? null,
-      errors: (result?.errors ?? []).map((error) => serializeError({ error, secrets })),
+      errors,
       mutationOutcome: result?.mutationOutcome ?? null,
       cancellationOutcome: result?.cancellationOutcome ?? null,
       reconciliation: result?.reconciliation ?? null,
     },
+    secrets,
   })
 }
 
 function createLogger({ stdout, secrets }) {
-  return Object.fromEntries(["debug", "info", "warn", "error"].map((level) => [
+  const levels = ["debug", "info", "warn", "error"]
+  return Object.fromEntries(levels.map((level) => [
     level,
-    (event) => stdout.write(`${JSON.stringify(safeValue({ value: { level, ...event }, secrets }))}\n`),
+    (event) => writeEvent({
+      stdout,
+      secrets,
+      event: {
+        level,
+        ...event,
+      },
+    }),
   ]))
 }
 
 function writeEvent({ stdout, event, secrets }) {
-  stdout.write(`${JSON.stringify(safeValue({ value: event, secrets }))}\n`)
+  const safeEvent = safeValue({
+    value: event,
+    secrets,
+  })
+  stdout.write(`${JSON.stringify(safeEvent)}\n`)
 }
 
-function createFailure({ operation, error }) {
+function createFailure({ operation, error, secrets }) {
   return {
     operation,
     ok: false,
-    errors: [{
-      name: error?.name ?? "Error",
-      code: error?.code ?? null,
-      kind: error?.kind ?? null,
-      exchangeCode: error?.exchangeCode ?? null,
-      status: error?.status ?? null,
-      path: error?.path ?? null,
+    errors: [serializeError({
+      error,
+      secrets,
+    })],
+  }
+}
+
+function recordStage({ report, stdout, secrets, stage }) {
+  report.stages.push(stage)
+  if (stage.ok === false) {
+    report.summary.failedRequestCount += 1
+  }
+  writeEvent({
+    stdout,
+    secrets,
+    event: {
+      event: "scan.stage",
+      ...stage,
+    },
+  })
+}
+
+async function connectBroker({ broker, report, stdout, secrets }) {
+  recordStage({
+    report,
+    stdout,
+    secrets,
+    stage: {
+      operation: "broker.connect",
+      started: true,
+      ok: null,
+    },
+  })
+  try {
+    await broker.connect()
+    return true
+  } catch (error) {
+    recordStage({
+      report,
+      stdout,
+      secrets,
+      stage: {
+        ...createFailure({
+          operation: "broker.connect",
+          error,
+          secrets,
+        }),
+        thrown: true,
+      },
+    })
+    throw error
+  }
+}
+
+async function fetchMarkets({ broker, report, stdout, secrets }) {
+  try {
+    const result = await broker.getExchangeMarkets()
+    recordStage({
+      report,
+      stdout,
+      secrets,
+      stage: {
+        operation: "broker.getExchangeMarkets",
+        ok: result?.ok === true,
+        result: serializeResult({
+          result,
+          secrets,
+        }),
+      },
+    })
+    if (result?.ok !== true || !Array.isArray(result.data)) {
+      return null
+    }
+    return result.data
+  } catch (error) {
+    recordStage({
+      report,
+      stdout,
+      secrets,
+      stage: {
+        ...createFailure({
+          operation: "broker.getExchangeMarkets",
+          error,
+          secrets,
+        }),
+        thrown: true,
+      },
+    })
+    return null
+  }
+}
+
+function getUniqueSymbols({ markets }) {
+  return [...new Set(markets.map((market) => market?.symbol).filter(
+    (symbol) => typeof symbol === "string" && symbol.length > 0,
+  ))]
+}
+
+async function fetchPendingOrders({ broker, symbol, report, stdout, secrets }) {
+  try {
+    const result = await broker.getOpenOrders({ symbol })
+    recordStage({
+      report,
+      stdout,
+      secrets,
+      stage: {
+        operation: "broker.getOpenOrders",
+        symbol,
+        ok: result?.ok === true,
+        result: serializeResult({
+          result,
+          secrets,
+        }),
+      },
+    })
+    return result?.ok === true && Array.isArray(result.data)
+      ? result.data
+      : null
+  } catch (error) {
+    recordStage({
+      report,
+      stdout,
+      secrets,
+      stage: {
+        ...createFailure({
+          operation: "broker.getOpenOrders",
+          error,
+          secrets,
+        }),
+        symbol,
+        thrown: true,
+      },
+    })
+    return null
+  }
+}
+
+function recordTargetMatch({ order, symbol, orderId, report }) {
+  if (symbol !== TARGET_SYMBOL || order?.id !== orderId) {
+    return
+  }
+  report.summary.targetMatches.push({
+    symbol,
+    orderId,
+    pendingOrder: order,
+  })
+}
+
+async function fetchOrderDetail({ broker, order, fallbackSymbol, report, stdout, secrets }) {
+  const symbol = order?.symbol ?? fallbackSymbol
+  const orderId = order?.id ?? null
+  try {
+    const result = await broker.getOrder({
+      symbol,
+      orderId,
+    })
+    recordStage({
+      report,
+      stdout,
+      secrets,
+      stage: {
+        operation: "broker.getOrder",
+        symbol,
+        orderId,
+        ok: result?.ok === true,
+        result: serializeResult({
+          result,
+          secrets,
+        }),
+      },
+    })
+  } catch (error) {
+    recordStage({
+      report,
+      stdout,
+      secrets,
+      stage: {
+        ...createFailure({
+          operation: "broker.getOrder",
+          error,
+          secrets,
+        }),
+        symbol,
+        orderId,
+        thrown: true,
+      },
+    })
+  }
+  report.summary.detailReadCount += 1
+}
+
+async function scanSymbol({ broker, symbol, orderId, report, stdout, secrets }) {
+  writeEvent({
+    stdout,
+    secrets,
+    event: {
+      event: "pending-orders.fetch.started",
+      symbol,
+    },
+  })
+  const orders = await fetchPendingOrders({
+    broker,
+    symbol,
+    report,
+    stdout,
+    secrets,
+  })
+  if (orders === null) {
+    return
+  }
+  report.summary.pendingOrderCount += orders.length
+  for (const order of orders) {
+    recordTargetMatch({
+      order,
+      symbol: order?.symbol ?? symbol,
+      orderId,
+      report,
+    })
+    await fetchOrderDetail({
+      broker,
+      order,
+      fallbackSymbol: symbol,
+      report,
+      stdout,
+      secrets,
+    })
+  }
+}
+
+async function scanMarkets({ broker, symbols, orderId, report, stdout, secrets }) {
+  for (const symbol of symbols) {
+    await scanSymbol({
+      broker,
+      symbol,
+      orderId,
+      report,
+      stdout,
+      secrets,
+    })
+  }
+}
+
+async function disconnectBroker({ broker, report, stdout, secrets }) {
+  try {
+    await broker.disconnect()
+    recordStage({
+      report,
+      stdout,
+      secrets,
+      stage: {
+        operation: "broker.disconnect",
+        ok: true,
+      },
+    })
+  } catch (error) {
+    recordStage({
+      report,
+      stdout,
+      secrets,
+      stage: {
+        ...createFailure({
+          operation: "broker.disconnect",
+          error,
+          secrets,
+        }),
+        thrown: true,
+      },
+    })
+  }
+}
+
+async function saveReport({ report, reportDirectory, stdout, stderr, secrets }) {
+  const reportPath = resolve(
+    reportDirectory,
+    `bitunix-order-scan-${Date.now()}.json`,
+  )
+  try {
+    await mkdir(reportDirectory, {
+      recursive: true,
+    })
+    await writeFile(
+      reportPath,
+      `${JSON.stringify(safeValue({ value: report, secrets }), null, 2)}\n`,
+      {
+        encoding: "utf8",
+        flag: "wx",
+      },
+    )
+    writeEvent({
+      stdout,
+      secrets,
+      event: {
+        event: "report.saved",
+        reportPath,
+      },
+    })
+    return reportPath
+  } catch (error) {
+    stderr.write(`REPORT ERROR: ${redactApiSecrets({
       message: error?.message ?? String(error),
-    }],
+      secrets,
+    })}\n`)
+    return null
   }
 }
 
@@ -104,7 +429,10 @@ function createFailure({ operation, error }) {
 export async function runFindBitunixSpotOrder({
   env,
   orderId,
-  brokerFactory = ({ credentials, logger }) => createBroker({ credentials, logger }),
+  brokerFactory = ({ credentials, logger }) => createBroker({
+    credentials,
+    logger,
+  }),
   stdout = process.stdout,
   stderr = process.stderr,
   reportDirectory = resolve(process.cwd(), "packages/brokers/.diagnostics"),
@@ -112,12 +440,18 @@ export async function runFindBitunixSpotOrder({
   const normalizedOrderId = validateOrderId({ orderId })
   const credentials = parseApiCredentials({ env })
   const secrets = [credentials.apiKey, credentials.apiSecret]
-  const logger = createLogger({ stdout, secrets })
+  const logger = createLogger({
+    stdout,
+    secrets,
+  })
   const report = {
     createdAt: new Date().toISOString(),
     provider: "bitunix",
     product: "spot",
-    target: { symbol: TARGET_SYMBOL, orderId: normalizedOrderId },
+    target: {
+      symbol: TARGET_SYMBOL,
+      orderId: normalizedOrderId,
+    },
     readOnly: true,
     stages: [],
     summary: {
@@ -128,139 +462,82 @@ export async function runFindBitunixSpotOrder({
       targetMatches: [],
     },
   }
-  let broker
+  const broker = brokerFactory({
+    credentials,
+    logger,
+  })
   let connected = false
-  let reportPath = null
-
-  const record = (stage) => {
-    report.stages.push(stage)
-    if (stage.ok === false) report.summary.failedRequestCount += 1
-    writeEvent({ stdout, secrets, event: { event: "scan.stage", ...stage } })
-  }
 
   try {
-    broker = brokerFactory({ credentials, logger })
-    record({ operation: "broker.connect", started: true, ok: null })
-    try {
-      await broker.connect()
-      connected = true
-      record({ operation: "broker.connect", ok: true })
-    } catch (error) {
-      record({ ...createFailure({ operation: "broker.connect", error }), thrown: true })
-      throw error
-    }
-
-    let marketsResult
-    try {
-      marketsResult = await broker.getExchangeMarkets()
-      record({
-        operation: "broker.getExchangeMarkets",
-        ok: marketsResult?.ok === true,
-        result: serializeResult({ result: marketsResult, secrets }),
-      })
-    } catch (error) {
-      record({ ...createFailure({ operation: "broker.getExchangeMarkets", error }), thrown: true })
-      marketsResult = null
-    }
-
-    if (marketsResult?.ok !== true || !Array.isArray(marketsResult.data)) {
+    connected = await connectBroker({
+      broker,
+      report,
+      stdout,
+      secrets,
+    })
+    const markets = await fetchMarkets({
+      broker,
+      report,
+      stdout,
+      secrets,
+    })
+    if (markets === null) {
       throw new Error("Bitunix Broker API getExchangeMarkets() failed; see diagnostic report")
     }
-
-    const markets = marketsResult.data
     report.summary.marketCount = markets.length
-    const symbols = [...new Set(markets.map((market) => market?.symbol).filter(
-      (symbol) => typeof symbol === "string" && symbol.length > 0,
-    ))]
-    record({
-      operation: "market.enumeration",
-      ok: symbols.length > 0,
-      activeMarketCount: markets.length,
-      uniqueSymbolCount: symbols.length,
-      symbols,
+    const symbols = getUniqueSymbols({ markets })
+    recordStage({
+      report,
+      stdout,
+      secrets,
+      stage: {
+        operation: "market.enumeration",
+        ok: symbols.length > 0,
+        activeMarketCount: markets.length,
+        uniqueSymbolCount: symbols.length,
+        symbols,
+      },
     })
-    if (symbols.length === 0) throw new Error("Bitunix Broker API returned no active Spot symbols")
-
-    for (const symbol of symbols) {
-      let openOrdersResult
-      try {
-        writeEvent({ stdout, secrets, event: { event: "pending-orders.fetch.started", symbol } })
-        openOrdersResult = await broker.getOpenOrders({ symbol })
-        record({
-          operation: "broker.getOpenOrders",
-          symbol,
-          ok: openOrdersResult?.ok === true,
-          result: serializeResult({ result: openOrdersResult, secrets }),
-        })
-      } catch (error) {
-        record({ ...createFailure({ operation: "broker.getOpenOrders", error }), symbol, thrown: true })
-        continue
-      }
-
-      if (openOrdersResult?.ok !== true || !Array.isArray(openOrdersResult.data)) continue
-      report.summary.pendingOrderCount += openOrdersResult.data.length
-
-      for (const order of openOrdersResult.data) {
-        const identity = { symbol: order?.symbol ?? symbol, orderId: order?.id ?? null }
-        if (identity.symbol === TARGET_SYMBOL && identity.orderId === normalizedOrderId) {
-          report.summary.targetMatches.push({
-            symbol: identity.symbol,
-            orderId: identity.orderId,
-            pendingOrder: order,
-          })
-        }
-
-        try {
-          writeEvent({ stdout, secrets, event: { event: "order-detail.fetch.started", ...identity } })
-          const detailResult = await broker.getOrder({
-            symbol: identity.symbol,
-            orderId: identity.orderId,
-          })
-          record({
-            operation: "broker.getOrder",
-            ...identity,
-            ok: detailResult?.ok === true,
-            result: serializeResult({ result: detailResult, secrets }),
-          })
-        } catch (error) {
-          record({
-            ...createFailure({ operation: "broker.getOrder", error }),
-            ...identity,
-            thrown: true,
-          })
-        }
-        report.summary.detailReadCount += 1
-      }
+    if (symbols.length === 0) {
+      throw new Error("Bitunix Broker API returned no active Spot symbols")
     }
+    await scanMarkets({
+      broker,
+      symbols,
+      orderId: normalizedOrderId,
+      report,
+      stdout,
+      secrets,
+    })
   } catch (error) {
-    report.fatalError = serializeError({ error, secrets })
+    report.fatalError = serializeError({
+      error,
+      secrets,
+    })
     stderr.write(`SCAN ERROR: ${report.fatalError.message}\n`)
   } finally {
     if (connected) {
-      try {
-        await broker.disconnect()
-        record({ operation: "broker.disconnect", ok: true })
-      } catch (error) {
-        record({ ...createFailure({ operation: "broker.disconnect", error }), thrown: true })
-      }
-    }
-    report.summary.targetMatchCount = report.summary.targetMatches.length
-    report.completedAt = new Date().toISOString()
-    reportPath = resolve(reportDirectory, `bitunix-order-scan-${Date.now()}.json`)
-    try {
-      await mkdir(reportDirectory, { recursive: true })
-      await writeFile(reportPath, `${JSON.stringify(safeValue({ value: report, secrets }), null, 2)}\n`, {
-        encoding: "utf8",
-        flag: "wx",
+      await disconnectBroker({
+        broker,
+        report,
+        stdout,
+        secrets,
       })
-      writeEvent({ stdout, secrets, event: { event: "report.saved", reportPath } })
-    } catch (error) {
-      stderr.write(`REPORT ERROR: ${redactApiSecrets({ message: error?.message ?? String(error), secrets })}\n`)
-      reportPath = null
     }
   }
 
-  const hasFailures = report.summary.failedRequestCount > 0 || Boolean(report.fatalError) || reportPath === null
+  report.summary.targetMatchCount = report.summary.targetMatches.length
+  report.completedAt = new Date().toISOString()
+  const reportPath = await saveReport({
+    report,
+    reportDirectory,
+    stdout,
+    stderr,
+    secrets,
+  })
+  const hasFailures = report.summary.failedRequestCount > 0 ||
+    Boolean(report.fatalError) ||
+    reportPath === null
   const found = report.summary.targetMatchCount === 1
   const exitCode = hasFailures ? 1 : found ? 0 : 2
   writeEvent({
@@ -275,5 +552,10 @@ export async function runFindBitunixSpotOrder({
       mutationsPerformed: false,
     },
   })
-  return { exitCode, found, reportPath, report }
+  return {
+    exitCode,
+    found,
+    reportPath,
+    report,
+  }
 }
