@@ -147,7 +147,10 @@ test("refuses to reset when the configured recovery-facts directory is missing",
 
 test("refuses a symlink as the recovery-facts reset target", async (t) => {
   const fixture = await createResetFixture()
-  t.after(() => rm(fixture.root, { recursive: true, force: true }))
+  t.after(() => rm(fixture.root, {
+    recursive: true,
+    force: true,
+  }))
   const actualDirectory = path.join(fixture.root, "actual-recovery-facts")
   await mkdir(actualDirectory)
   await writeFile(path.join(actualDirectory, "facts.jsonl"), "protected facts")
