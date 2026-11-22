@@ -489,13 +489,13 @@
       "id": "PERSISTENCE_RESTART_SAFETY_BOUNDARY",
       "title": "Operational State Store integrity and offline crash/restart projection",
       "sourceModules": [
-        "src/infrastructure/operational-state/create-file-operational-state-store.js",
+        "src/infrastructure/operational-state/create-file-store.js",
         "src/use-cases/restore-harvester-operational-state.js",
-        "src/infrastructure/operational-state/project-harvester-operational-state.js",
+        "src/infrastructure/operational-state/project-harvester.js",
         "src/infrastructure/operational-state/helpers/operational-state-fact-schema.js",
         "src/infrastructure/operational-state/helpers/validate-operational-state-recovery-seller-facts.js",
-        "src/infrastructure/operational-state/operational-state-fact-validation.js",
-        "src/infrastructure/operational-state/operational-state-record-validation.js"
+        "src/infrastructure/operational-state/fact-validation.js",
+        "src/infrastructure/operational-state/record-validation.js"
       ],
       "integrationRequired": true,
       "tests": [
@@ -1059,7 +1059,7 @@
       }
     },
     {
-      "path": "src/infrastructure/operational-state/create-file-operational-state-store.js",
+      "path": "src/infrastructure/operational-state/create-file-store.js",
       "baseline": {
         "lines": 96.07,
         "branches": 89.34,
@@ -1077,7 +1077,7 @@
       }
     },
     {
-      "path": "src/infrastructure/operational-state/project-harvester-operational-state.js",
+      "path": "src/infrastructure/operational-state/project-harvester.js",
       "baseline": {
         "lines": 81.97,
         "branches": 76.39,
@@ -1401,7 +1401,7 @@
       }
     },
     {
-      "path": "src/infrastructure/operational-state/operational-state-fact-validation.js",
+      "path": "src/infrastructure/operational-state/fact-validation.js",
       "baseline": {
         "lines": 97.4,
         "branches": 85.71,
@@ -1419,7 +1419,7 @@
       }
     },
     {
-      "path": "src/infrastructure/operational-state/operational-state-record-validation.js",
+      "path": "src/infrastructure/operational-state/record-validation.js",
       "baseline": {
         "lines": 99.21,
         "branches": 96.59,
