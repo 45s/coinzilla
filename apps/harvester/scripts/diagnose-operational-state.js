@@ -81,9 +81,10 @@ function summarizeVerifiedRecords({ records, lastCommittedSequence, lastCommitte
   for (const record of records) {
     factTypes[record.factType] = (factTypes[record.factType] ?? 0) + 1
   }
-  const sortedFactTypes = Object.fromEntries(
-    Object.entries(factTypes).sort(([left], [right]) => left.localeCompare(right)),
-  )
+  const sortedFactTypes = {}
+  for (const factType of Object.keys(factTypes).sort()) {
+    sortedFactTypes[factType] = factTypes[factType]
+  }
   return {
     status: "VERIFIED",
     recordCount: records.length,
@@ -95,14 +96,16 @@ function summarizeVerifiedRecords({ records, lastCommittedSequence, lastCommitte
   }
 }
 
-function summarizeProjection({ projection }) {
-  if (projection?.ok !== true) {
-    return {
-      status: "FAILED",
-      errors: summarizeErrors(projection?.errors ?? [new Error("Recovery projection failed without an error detail")]),
-    }
+function summarizeFailedProjection({ projection }) {
+  return {
+    status: "FAILED",
+    errors: summarizeErrors(projection?.errors ?? [
+      new Error("Recovery projection failed without an error detail"),
+    ]),
   }
-  const data = projection.data ?? {}
+}
+
+function summarizeCandidateProjection({ data }) {
   if (data.candidateOnly !== true || data.restorationEnabled !== false) {
     return {
       status: "FAILED",
@@ -125,6 +128,15 @@ function summarizeProjection({ projection }) {
     pausedMarketsCount: data.pausedMarkets?.length ?? 0,
     stickySafetyBlockersCount: data.stickySafetyBlockers?.length ?? 0,
   }
+}
+
+function summarizeProjection({ projection }) {
+  if (projection?.ok !== true) {
+    return summarizeFailedProjection({ projection })
+  }
+  return summarizeCandidateProjection({
+    data: projection.data ?? {},
+  })
 }
 
 function getDiagnosticExitCode({ storeIntegrity, projection }) {
@@ -157,7 +169,10 @@ async function inspectOperationalState({ store, identity, project }) {
     readResult = await store.readAll()
   } catch (error) {
     return {
-      report: createIntegrityFailureReport({ error, identity }),
+      report: createIntegrityFailureReport({
+        error,
+        identity,
+      }),
       exitCode: 2,
     }
   }
@@ -171,7 +186,7 @@ async function inspectOperationalState({ store, identity, project }) {
     }
   }
 
-  const records = readResult.data.records
+  const { records } = readResult.data
   const storeIntegrity = summarizeVerifiedRecords({
     records,
     lastCommittedSequence: readResult.data.lastCommittedSequence,
@@ -198,6 +213,31 @@ async function inspectOperationalState({ store, identity, project }) {
       projection,
     }),
   }
+}
+
+function createDiagnosticIdentity({ captureMetadata, cwd, env }) {
+  const metadata = captureMetadata({
+    application: APPLICATION,
+    version: harvesterPackage.version,
+    cwd,
+    env,
+  })
+  const identity = createIdentitySummary({ metadata })
+  return {
+    identity,
+    identityLine: createIdentityLine({
+      identity,
+      runtimeVersion: process.version,
+    }),
+  }
+}
+
+function createDiagnosticStore({ env, createStore }) {
+  const directory = resolveOperationalStateDirectory({ env })
+  return createStore({
+    directory,
+    runtimeSessionId: DIAGNOSTIC_SESSION_ID,
+  })
 }
 
 /**
@@ -232,11 +272,10 @@ export async function runOperationalStateDiagnostic({
     return 1
   }
 
-  let metadata
+  let identityContext
   try {
-    metadata = captureMetadata({
-      application: APPLICATION,
-      version: harvesterPackage.version,
+    identityContext = createDiagnosticIdentity({
+      captureMetadata,
       cwd,
       env,
     })
@@ -244,16 +283,11 @@ export async function runOperationalStateDiagnostic({
     writeError(`Unable to capture diagnostic source identity: ${error.message}`)
     return 1
   }
-  const identity = createIdentitySummary({ metadata })
-  const identityLine = createIdentityLine({
-    identity,
-    runtimeVersion: process.version,
-  })
+  const { identity, identityLine } = identityContext
+  writeOutput(identityLine)
   if (parsed.version) {
-    writeOutput(identityLine)
     return 0
   }
-  writeOutput(identityLine)
   if (parsed.help) {
     writeOutput(HELP)
     return 0
@@ -261,10 +295,9 @@ export async function runOperationalStateDiagnostic({
 
   let store
   try {
-    const directory = resolveOperationalStateDirectory({ env })
-    store = createStore({
-      directory,
-      runtimeSessionId: DIAGNOSTIC_SESSION_ID,
+    store = createDiagnosticStore({
+      env,
+      createStore,
     })
   } catch (error) {
     writeError(`Unable to open the configured Operational State Store: ${error.message}`)
