@@ -104,6 +104,7 @@ function createMainProviderAccountStarter({
       providerRequired: input.providerRequired,
       marketDataProviderInstanceId: input.marketDataProviderInstanceId,
       marketDataSymbols: input.marketDataSymbols,
+      executionRoutes: input.executionRoutes,
     })
     if (input.providerIdentity.accountId === failAccountId) {
       const error = new Error("secondary account connection failed")
@@ -170,14 +171,46 @@ function createMarketDataTestConfiguration(providerInstances) {
         providerInstanceId: sourceProvider.providerInstanceId,
       }
     })
+  const configuredRecoverySellerPairs = {}
+  const recoverySellerRoutes = []
+  for (const [symbol, pair] of Object.entries(defaultAppConfig.strategies.RS_recoverySeller.pairs)) {
+    const sourceProvider = resolveMarketDataSourceProvider({
+      pair,
+      providerInstances,
+    })
+    configuredRecoverySellerPairs[symbol] = sourceProvider ? pair : {
+      ...pair,
+      enabled: false,
+    }
+    if (pair.enabled && sourceProvider) {
+      recoverySellerRoutes.push({
+        symbol,
+        providerInstanceId: sourceProvider.providerInstanceId,
+      })
+    }
+  }
+  const executionRoutes = [
+    ...routes.map(({ symbol, providerInstanceId }) => ({
+      strategyId: "CG_coinGrabber",
+      symbol,
+      providerInstanceId,
+    })),
+    ...recoverySellerRoutes.map(({ symbol, providerInstanceId }) => ({
+      strategyId: "RS_recoverySeller",
+      symbol,
+      providerInstanceId,
+    })),
+  ]
   return {
     configuredPairs,
-    routes,
+    configuredRecoverySellerPairs,
+    routes: [...routes, ...recoverySellerRoutes],
+    executionRoutes,
   }
 }
 
 function createMainMultiProviderAppConfig(providerInstances) {
-  const { configuredPairs, routes } = createMarketDataTestConfiguration(providerInstances)
+  const { configuredPairs, configuredRecoverySellerPairs, routes, executionRoutes } = createMarketDataTestConfiguration(providerInstances)
   return {
     ...defaultAppConfig,
     operatorControl: {
@@ -192,16 +225,16 @@ function createMainMultiProviderAppConfig(providerInstances) {
         ...defaultAppConfig.strategies.CG_coinGrabber,
         pairs: configuredPairs,
       },
+      RS_recoverySeller: {
+        ...defaultAppConfig.strategies.RS_recoverySeller,
+        pairs: configuredRecoverySellerPairs,
+      },
     },
     marketDataRouting: {
       routes,
     },
     executionRouting: {
-      routes: routes.map(({ symbol, providerInstanceId }) => ({
-        strategyId: "CG_coinGrabber",
-        symbol,
-        providerInstanceId,
-      })),
+      routes: executionRoutes,
     },
     brokers: {
       instances: providerInstances,
@@ -366,7 +399,17 @@ test("starts configured provider accounts and acquires one process lock per acco
       "testProviderLiveSecondary",
     ], "Each runtime must expose its configured market-data source instance")
     assert.equal(fixture.started[0].marketDataSymbols.includes("DOGEUSDT"), true)
+    assert.equal(fixture.started[0].marketDataSymbols.includes("LINEAUSDT"), true,
+      "The TESTNET provider must receive the enabled RS-only LINEAUSDT market-data subscription.")
     assert.equal(fixture.started[1].marketDataSymbols.includes("LINKFDUSD"), true)
+    assert.equal(fixture.started[1].marketDataSymbols.includes("LINEAUSDT"), false,
+      "The LIVE provider must never receive the TESTNET-only LINEAUSDT market-data subscription.")
+    assert.deepEqual(fixture.started[0].executionRoutes.filter(({ strategyId }) => strategyId === "RS_recoverySeller"), [{
+      strategyId: "RS_recoverySeller",
+      symbol: "LINEAUSDT",
+    }], "The TESTNET account must receive the explicitly routed LINEAUSDT RS execution route.")
+    assert.deepEqual(fixture.started[1].executionRoutes.filter(({ strategyId }) => strategyId === "RS_recoverySeller"), [],
+      "The LIVE account must not receive an RS route for TESTNET-only LINEAUSDT.")
     assert.deepEqual(fixture.started.map(({ operatorControlEnabled }) => operatorControlEnabled), [
       true,
       false,
