@@ -161,7 +161,10 @@ test("infers the enabled RS-only route in legacy single-provider TESTNET mode", 
   })
   assert.deepEqual([...result], [[
     "binance-testnet-primary",
-    [{ strategyId: StrategyId.RECOVERY_SELLER, symbol: "LINEAUSDT" }],
+    [{
+      strategyId: StrategyId.RECOVERY_SELLER,
+      symbol: "LINEAUSDT",
+    }],
   ]], "RS-only legacy mode must infer the single configured TESTNET provider without requiring explicit routing")
 })
 

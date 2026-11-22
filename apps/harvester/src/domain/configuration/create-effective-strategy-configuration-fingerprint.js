@@ -12,40 +12,38 @@ export class EffectiveConfigurationError extends ConfigValidationError {
   }
 }
 
-function canonicalize({ value, path } = {}) {
-  if (Array.isArray(value)) {
-    const result = []
-    for (const [index, item] of value.entries()) {
-      result.push(canonicalize({
-        value: item,
-        path: `${path}[${index}]`,
-      }))
-    }
-    return result
+function canonicalizeArray({ value, path }) {
+  return value.map((item, index) => canonicalize({
+    value: item,
+    path: `${path}[${index}]`,
+  }))
+}
+
+function canonicalizeObject({ value, path }) {
+  const prototype = Object.getPrototypeOf(value)
+  if (prototype !== Object.prototype && prototype !== null) {
+    throw new EffectiveConfigurationError({
+      path,
+      expected: "a plain JSON object",
+    })
   }
-  if (value !== null && typeof value === "object") {
-    const prototype = Object.getPrototypeOf(value)
-    if (prototype !== Object.prototype && prototype !== null) {
+  const result = {}
+  for (const key of Object.keys(value).sort()) {
+    if (SECRET_KEY.test(key)) {
       throw new EffectiveConfigurationError({
-        path,
-        expected: "a plain JSON object",
-      })
-    }
-    const result = {}
-    for (const key of Object.keys(value).sort()) {
-      if (SECRET_KEY.test(key)) {
-        throw new EffectiveConfigurationError({
-          path: `${path}.${key}`,
-          expected: "a non-secret strategy setting",
-        })
-      }
-      result[key] = canonicalize({
-        value: value[key],
         path: `${path}.${key}`,
+        expected: "a non-secret strategy setting",
       })
     }
-    return result
+    result[key] = canonicalize({
+      value: value[key],
+      path: `${path}.${key}`,
+    })
   }
+  return result
+}
+
+function canonicalizePrimitive({ value, path }) {
   if (typeof value === "number" && !Number.isFinite(value)) {
     throw new EffectiveConfigurationError({
       path,
@@ -59,6 +57,16 @@ function canonicalize({ value, path } = {}) {
     })
   }
   return value
+}
+
+function canonicalize({ value, path } = {}) {
+  if (Array.isArray(value)) {
+    return canonicalizeArray({ value, path })
+  }
+  if (value !== null && typeof value === "object") {
+    return canonicalizeObject({ value, path })
+  }
+  return canonicalizePrimitive({ value, path })
 }
 
 function getEnabledMarketSymbols({ pairs, strategyName } = {}) {
