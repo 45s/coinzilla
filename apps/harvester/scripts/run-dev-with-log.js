@@ -194,11 +194,11 @@ childProcess.current.on("close", async (...closeArguments) => {
         endedAt: new Date().toISOString(),
         exitCode: code,
         signal,
-      }, null, 2)}\\n`,
+      }, null, 2)}\n`,
       { encoding: "utf8", flag: "wx", mode: 0o600 },
     )
   } catch (error) {
-    process.stderr.write(`Failed to persist Harvester session completion: ${error.message}\\n`)
+    process.stderr.write(`Failed to persist Harvester session completion: ${error.message}\n`)
     process.exitCode = 1
   }
 

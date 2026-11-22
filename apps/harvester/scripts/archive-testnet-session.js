@@ -389,7 +389,7 @@ export async function runHarvesterArchivePush({
         identity,
         backupResult,
       })
-      await writeFile(path.join(localArchive, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\\n`, {
+      await writeFile(path.join(localArchive, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`, {
         encoding: "utf8",
         flag: "wx",
         mode: 0o600,
