@@ -29,7 +29,7 @@ function createOrder({ id, symbol }) {
   }
 }
 
-async function getPendingOrders({ calls, symbol }) {
+function getPendingOrders({ calls, symbol }) {
   calls.push(`pending:${symbol}`)
   if (symbol === "ETHUSDT") {
     return {
@@ -69,7 +69,7 @@ async function getPendingOrders({ calls, symbol }) {
   }
 }
 
-async function getOrderDetail({ calls, symbol, orderId }) {
+function getOrderDetail({ calls, symbol, orderId }) {
   calls.push(`detail:${symbol}:${orderId}`)
   if (orderId === "1001") {
     return {
