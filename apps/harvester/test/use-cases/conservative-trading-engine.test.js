@@ -81,6 +81,7 @@ asset: quoteAsset }) },
     market,
     tradingRules,
     supportedOrderTypes: ["LIMIT_MAKER"],
+    unvalidatedConstraints: [],
     orderType: "LIMIT_MAKER",
   };
   const accountSnapshot = new AccountSnapshot({
@@ -165,6 +166,7 @@ function createFixtureCancelOrder({ state, market, pendingCancel, cancelStarted,
 
 function createFixtureBroker({
     market,
+    marketMetadata,
     baseAsset,
     quoteAsset,
     deferFirstSell,
@@ -200,6 +202,7 @@ function createFixtureBroker({
       cancellations,
     }),
     getFills: async ({ orderId } = {}) => toResult({ data: fillsByOrder.get(orderId) ?? [] }),
+    getSymbolFilters: async () => toResult({ data: marketMetadata }),
   }
   return {
     broker,
@@ -306,7 +309,6 @@ function createFixtureEngine({
     getPortfolio,
     getRecoveryLedger,
     getMarketMetadata: () => marketMetadata,
-    refreshMarketMetadata: async ({ metadata } = {}) => toResult({ data: metadata }),
     getAccountSnapshot: () => accountSnapshot,
     updateTradingAccounting,
     completeRecoveryCycle: () => toResult({
@@ -360,7 +362,14 @@ const createFixture = ({
   pausedMarkets = [],
 } = {}) => {
   const { baseAsset, quoteAsset, market, marketMetadata, accountSnapshot } = createMarketFixture()
-  const brokerState = createFixtureBroker({ market, baseAsset, quoteAsset, deferFirstSell, deferCancellation })
+  const brokerState = createFixtureBroker({
+    market,
+    marketMetadata,
+    baseAsset,
+    quoteAsset,
+    deferFirstSell,
+    deferCancellation,
+  })
   const accounting = createFixtureAccounting({ market })
   let ready = initiallyReady
   const appConfig = createFixtureAppConfig(externalOrdersPolicy)
