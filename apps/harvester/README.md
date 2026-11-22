@@ -65,6 +65,12 @@ pnpm --filter @coinzilla/harvester dev
 
 The API starts when Harvester has an active runtime and relational history persistence. It shares Harvester's existing database connection and closes before persistence during process shutdown; it has no separate process, script, or launch command. The unauthenticated listener is fixed to loopback for local single-user development and must not be exposed to a LAN or remote host. See the API contract for routes, filters, pagination, local-only boundary, and exact financial-value semantics.
 
+## Read-only exchange account monitor
+
+The Dashboard Exchanges page uses the local `/api/v1/exchanges/accounts` routes. Harvester builds the API's account list from successfully started provider runtimes and calls only their existing read-only account-snapshot and open-order methods. Live invalidation notifications fan out from the already-running normalized user-data handler through an isolated in-process observer; no second exchange connection or user-data subscription is created. Monitor listener failures are contained and do not participate in trading readiness, order processing, accounting, or recovery.
+
+Only provider instances actually started by Harvester and exposing both reads appear. The current production adapter factory map supports Binance Spot; Binance Futures and Bitunix account providers are not registered, so they are intentionally absent. The separate public Bitunix Futures market-data client is not an account provider and is not used as a substitute. The local API remains loopback-only and read-only.
+
 ## Operational State Store (ADR-0001)
 
 The Operational State Store is a separate Harvester-owned append-only recovery-facts ledger. It is not the SQLite history database and is not interchangeable with Journal.
