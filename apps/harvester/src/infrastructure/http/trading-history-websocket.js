@@ -372,9 +372,6 @@ function createExchangeAccountsMessage({ accounts, type } = {}) {
 }
 
 function sendInitialExchangeAccountSnapshot({ client, exchangeAccounts } = {}) {
-  if (exchangeAccounts.length === 0) {
-    return
-  }
   void createExchangeAccountsSnapshot({ exchangeAccounts }).then((accounts) => {
     sendJson({
       client,
@@ -393,13 +390,6 @@ function sendInitialExchangeAccountSnapshot({ client, exchangeAccounts } = {}) {
 }
 
 function broadcastExchangeAccountUpdate({ clients, exchangeAccounts } = {}) {
-  if (exchangeAccounts.length === 0) {
-    const message = { type: "exchange-account.updated" }
-    for (const client of clients) {
-      sendJson({ client, message })
-    }
-    return
-  }
   void createExchangeAccountsSnapshot({ exchangeAccounts }).then((accounts) => {
     const message = createExchangeAccountsMessage({
       accounts,

@@ -108,6 +108,8 @@ test("accepts local WebSocket clients and broadcasts persisted-change notificati
   t.after(() => socket.close())
 
   await waitForSocketOpen(socket)
+  const initialSnapshot = await waitForMessage(socket)
+  assert.equal(initialSnapshot.type, "exchange-accounts.snapshot", "Every new client must receive an initial account snapshot, including an empty provider list.")
   const publication = eventBus.publish({
     name: TRADING_HISTORY_UPDATED,
     source: "harvester.trading-history-persistence",
@@ -136,6 +138,7 @@ test("ignores malformed resource notifications without breaking the EventBus sub
   t.after(() => socket.close())
 
   await waitForSocketOpen(socket)
+  await waitForMessage(socket)
   eventBus.publish({
     name: TRADING_HISTORY_UPDATED,
     source: "test",
@@ -222,15 +225,16 @@ test("broadcasts exchange-account invalidations from Harvester snapshot events",
   t.after(() => socket.close())
 
   await waitForSocketOpen(socket)
+  await waitForMessage(socket)
   const publication = eventBus.publish({
     name: "account.snapshot_captured",
     source: "harvester.account-snapshot",
     data: { phase: "LIVE" },
   })
   assert.equal(publication.ok, true)
-  assert.deepEqual(await waitForMessage(socket), {
-    type: "exchange-account.updated",
-  })
+  const message = await waitForMessage(socket)
+  assert.equal(message.type, "exchange-accounts.updated")
+  assert.deepEqual(message.accounts, [])
 })
 
 
@@ -250,10 +254,11 @@ test("broadcasts live updates from Harvester's existing user-data subscription",
   t.after(() => socket.close())
 
   await waitForSocketOpen(socket)
+  await waitForMessage(socket)
   notify()
-  assert.deepEqual(await waitForMessage(socket), {
-    type: "exchange-account.updated",
-  })
+  const message = await waitForMessage(socket)
+  assert.equal(message.type, "exchange-accounts.updated")
+  assert.deepEqual(message.accounts, [])
   await api.close()
   assert.equal(unsubscribed, true, "Closing the API must detach the monitor listener without managing the exchange stream.")
 })

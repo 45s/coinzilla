@@ -1,6 +1,6 @@
 # Trading-history API v1
 
-The Harvester trading-history API exposes persisted order, execution, and commission facts through a stable HTTP contract and a local WebSocket invalidation stream. It runs inside the existing Harvester process and reuses its already-open environment-specific relational database connection.
+The Harvester local API exposes persisted order, execution, and commission facts through a stable HTTP contract and streams live exchange-account snapshots over its local WebSocket. It runs inside the existing Harvester process and reuses its already-open environment-specific relational database connection and provider-account readers.
 
 This API is intentionally for a single-user local development setup. It has no authentication or bearer-token configuration. The listener binds to `127.0.0.1` by default; do not bind it to a LAN or public interface. The Angular Dashboard connects automatically.
 
@@ -167,11 +167,11 @@ Existing orders / fills / fill_commissions tables
 
 HTTP request handling and response serialization stay in the transport adapter. Query validation and application error codes stay in the application layer. SQL and row mapping stay in Harvester infrastructure. The Harvester domain does not depend on the HTTP framework, route names, UI, or consumer identity.
 
-The HTTP and WebSocket listener runs inside the existing Harvester process and is owned by the process composition root. HTTP exposes the versioned GET resources listed above. The WebSocket adapter subscribes only to the persisted-history invalidation event; order/fill history observers publish that event after successful relational upserts. It does not subscribe directly to pre-persistence broker/trading events, create schema, change trading readiness, or own the shared database connection.
+The HTTP and WebSocket listener runs inside the existing Harvester process and is owned by the process composition root. HTTP exposes the versioned GET resources listed above. The WebSocket adapter subscribes to persisted-history invalidations and account-monitor update notifications. It reads account snapshots only through the already-composed provider-account reader functions; it does not create schema, change trading readiness, construct brokers, or own the shared database connection.
 
 ## Verification
 
-The API and WebSocket tests use temporary SQLite files, fake application dependencies, an in-memory EventBus, native WebSocket clients, and ephemeral loopback ports. Persistence notification tests verify that events follow successful upserts and are absent after failed writes. Dashboard tests cover automatic local connections, live updates, reconnect backoff, and REST snapshot resynchronization. Tests do not connect to an exchange or require credentials.
+The API and WebSocket tests use temporary SQLite files, fake application dependencies, account-reader stubs, an in-memory EventBus, native WebSocket clients, and ephemeral loopback ports. Tests verify initial account snapshots, per-provider read-failure isolation, refreshed snapshots after account-monitor notifications, persisted-history invalidation ordering, and socket lifecycle. Dashboard Exchanges/Open Orders tests prove WebSocket-only snapshot consumption, filters, favourites, details, and reconnect refresh. Tests do not connect to an exchange or require credentials.
 
 ## Operator API
 

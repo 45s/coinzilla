@@ -4,7 +4,7 @@ Angular + TypeScript client for the Coinzilla operational dashboard.
 
 ## Current state
 
-The dashboard includes a persistent theme picker with the original Emerald appearance as the default, six alternate palettes (Midnight Terminal, Clean Light, OLED / Neon, Green Terminal, Arctic, and Warm Graphite), and System mode. Theme choice is stored in browser local storage. The Overview screen remains an explicitly labeled fictional preview. Orders, Fills, and Commissions are separate read-only pages that request actual persisted Harvester records through the unauthenticated loopback-only `/api/v1` HTTP contract. The Market Screener displays Bitunix Futures public REST market data through Harvester; Bitunix Spot and Binance markets are visible future source options but are not enabled. The native rolling 24h percentage is displayed from Bitunix's public WebSocket ticker field; missing 5m, 1h, and 4h fields stay N/A. The Dashboard performs no movement calculations. Favourites are stored in source-specific one-year browser cookies. The screener fetches on page load and explicit refresh only; it does not poll in the background.
+The dashboard includes a persistent theme picker with the original Emerald appearance as the default, six alternate palettes (Midnight Terminal, Clean Light, OLED / Neon, Green Terminal, Arctic, and Warm Graphite), and System mode. Theme choice is stored in browser local storage. The Overview screen remains an explicitly labeled fictional preview. Orders, Fills, and Commissions are separate read-only pages that request actual persisted Harvester records through the unauthenticated loopback-only `/api/v1` HTTP contract. Exchanges and Open Orders consume full account and order snapshots over the local Harvester WebSocket only; these two pages make no browser HTTP requests. The Market Screener displays Bitunix Futures public REST market data through Harvester; Bitunix Spot and Binance markets are visible future source options but are not enabled. The native rolling 24h percentage is displayed from Bitunix's public WebSocket ticker field; missing 5m, 1h, and 4h fields stay N/A. The Dashboard performs no movement calculations. Favourites are stored in source-specific one-year browser cookies. The screener fetches on page load and explicit refresh only; it does not poll in the background.
 
 ## Requirements
 
@@ -33,17 +33,13 @@ pnpm --filter @coinzilla/dashboard test:coverage
 
 ## Exchanges workspace
 
-The read-only **Exchanges** page lists only provider accounts that Harvester has successfully
-started and exposed through its local account-monitor API. Balances and open orders are fetched
-from Harvester's existing broker runtimes; browser code never opens exchange connections or
-handles exchange credentials. Live WebSocket messages are invalidation hints emitted from
-Harvester's existing user-data subscription, and REST snapshots remain authoritative. Providers
-or products not configured and supported by Harvester are not displayed (currently Binance Spot
-only; no Binance Futures or Bitunix account provider).
+The read-only **Exchanges** page lists provider accounts exposed by Harvester's already-running provider readers. Search, connection/environment filters, favourites and account snapshots are handled in the browser. Favourites persist in local storage and are always sorted above other accounts. Balances and open orders arrive together in full `exchange-accounts.snapshot` / `exchange-accounts.updated` WebSocket messages; this page makes no HTTP requests and never opens exchange connections or handles exchange credentials.
+
+The separate **Open Orders** page aggregates the current account-wide open-order snapshots across every connected CEX/provider. It supports exchange, symbol, side and status filters, groups rows by provider account, and shows all available order fields in its details view. Both pages reconnect with bounded backoff and receive a fresh snapshot on each connection. A failed provider read stays visibly unavailable instead of being presented as an empty account/order list. Providers not configured and supported by Harvester are not displayed.
 
 ## Architecture boundary
 
-The dashboard is a separate client application. Trading-history data access uses a typed local Harvester API client. Browser code must not open Harvester database files, import Harvester internals, or call exchange APIs. Financial decimal values remain strings and missing values remain null. Order entry remains out of scope. The local Operator workspace routes commands through Harvester's existing application facade and safety gates; its runtime/API integration is complete in [merged PR #1654](https://github.com/45s/coinzilla/pull/1654). The Market Screener also calls Harvester only; browser code never calls exchange endpoints.
+The dashboard is a separate client application. Persisted trading-history and Operator workflows use their established typed local Harvester HTTP clients; Exchanges and Open Orders use the local Harvester WebSocket snapshot stream only. Browser code must not open Harvester database files, import Harvester internals, or call exchange APIs. Financial decimal values remain strings and missing values remain null. Order entry remains out of scope. The local Operator workspace routes commands through Harvester's existing application facade and safety gates; its runtime/API integration is complete in [merged PR #1654](https://github.com/45s/coinzilla/pull/1654). The Market Screener also calls Harvester only; browser code never calls exchange endpoints.
 
 ## Documentation
 
