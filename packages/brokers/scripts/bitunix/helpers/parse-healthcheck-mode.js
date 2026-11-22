@@ -12,7 +12,7 @@ const MODE_BY_ARGUMENT = Object.freeze({
  * Parse one supported Bitunix health-check or order-probe mode.
  *
  * @param {{args?: string[]}} input
- * @returns {"help"|"version"|"local"|"publish"|"full-diagnostics"|"place-order"|"probe-order"}
+ * @returns {"help"|"version"|"local"|"publish"|"full-diagnostics"|"place-order"|"cancel-existing-order"|"probe-order"}
  */
 export function parseHealthcheckMode({ args = [] } = {}) {
   if (!Array.isArray(args) || args.some((argument) => typeof argument !== "string")) {
