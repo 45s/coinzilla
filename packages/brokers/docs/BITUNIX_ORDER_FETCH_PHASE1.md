@@ -55,6 +55,10 @@ Bitunix documents `POST /api/spot/v1/order/pending/list` with a required symbol.
 - Requests are sequential and never automatically retried.
 - Live order mutations are disabled in the scan Broker. No placement, cancellation, transfer or withdrawal methods are called.
 
+## Regression coverage
+
+Workflow tests inject a read-only Broker stub for ordinary publish and operator-mode scenarios, so they do not contact Bitunix or wait on network timeouts. Dedicated scan tests verify the complete successful pending-orders result, every detail response, failed pending-order results, and that detail reads are skipped when the pending-order request fails.
+
 ## Known accepted order
 
 The operator's accepted HYPEUSDT BUY LIMIT from 2026-11-22 has exchange order ID `2124329325141426176`, quantity `0.366`, price `30` USDT. The healthcheck discovers this ID from pending-order results; it is not supplied to the script.
