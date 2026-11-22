@@ -335,6 +335,9 @@ function resolveSnapshotRead({ result, serializer, key, errors, errorMessage } =
   return null
 }
 
+/**
+ * Read one provider independently so failures cannot hide other account snapshots.
+ */
 async function createExchangeAccountSnapshot({ account } = {}) {
   const results = await Promise.allSettled([
     Promise.resolve().then(() => account.readAccountSnapshot()),
