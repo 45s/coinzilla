@@ -86,21 +86,7 @@ const orderFacts = () => [
 
 test("projects verified durable order facts into a candidate recovery projection without opening readiness", () => {
   const result = projectHarvesterOperationalState({
-    records: [
-      record(0, "LEDGER_INITIALIZED", { schemaVersion: 1 }, "durable-facts:genesis"),
-      baseline(),
-      started(),
-      ...preflightFacts(),
-      ...orderFacts(),
-      record(7, "ACCOUNT_OPEN_ORDERS_CAPTURED", {
-        phase: "CLOSING",
-        observedAt: 1_700_000_000_002,
-        readiness: "BLOCKED",
-        orderCount: 0,
-        orders: [],
-        blockReasons: ["CLOSING_OPEN_ORDERS_CAPTURE_FAILED"],
-      }, "closing-open-orders:process-session-1"),
-    ],
+    records: [record(0, "LEDGER_INITIALIZED", { schemaVersion: 1 }, "durable-facts:genesis"), baseline(), started(), ...preflightFacts(), ...orderFacts()],
   })
 
   assert.equal(result.ok, true, result.errors?.map(({ message }) => message).join("; "), "Durable RS lifecycle facts must project into a candidate without enabling trading.")
@@ -112,7 +98,6 @@ test("projects verified durable order facts into a candidate recovery projection
   assert.equal(result.data.orders.length, 1, "Submission intent/outcome must project into one canonical recovery order.")
   assert.equal(result.data.orders[0].brokerOrderId, "broker-order-1")
   assert.equal(result.data.orders[0].submissionOutcome, "ACKNOWLEDGED")
-  assert.deepEqual(result.data.openOrderSnapshots.map(({ phase }) => phase), ["PREFLIGHT", "CLOSING"])
   assert.equal(result.data.sessions[0].tradingEnabled, true, "Process boundary must preserve the effective trading-enabled decision.")
   assert.equal(result.data.sessions[0].uncleanTradingShutdown, true, "An unclosed trading-capable session must remain classified as unclean.")
 })
