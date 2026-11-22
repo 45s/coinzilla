@@ -104,6 +104,33 @@ test("selects CG and RS markets independently while preserving strategy-owned pa
   assert.deepEqual(result.executionRoutes, executionRoutes)
 })
 
+test("rejects conflicting volatility settings for a market routed to CG and RS", async () => {
+  const cfg = config({ enabledSymbols: ["BTCUSDT"] })
+  cfg.strategies.CG_coinGrabber.pairs.BTCUSDT.enableVolatilityProtection = true
+  cfg.strategies.RS_recoverySeller = {
+    enabled: true,
+    pairs: {
+      BTCUSDT: recoverySellerPair({ enableVolatilityProtection: false }),
+    },
+  }
+  const fixture = createFixture({
+    cfg,
+    env: { TRADING_MODE: TRADING_ENVIRONMENTS.TESTNET },
+  })
+
+  await assert.rejects(
+    resolveHarvesterOptions({
+      ...fixture.input,
+      executionSymbols: ["BTCUSDT"],
+      executionRoutes: [
+        { strategyId: "CG_coinGrabber", symbol: "BTCUSDT" },
+        { strategyId: "RS_recoverySeller", symbol: "BTCUSDT" },
+      ],
+    }),
+    /conflicting volatility protection settings for BTCUSDT/i,
+  )
+})
+
 test("rejects an RS route unless the RS strategy is explicitly enabled", async () => {
   const fixture = createFixture({
     cfg: {
