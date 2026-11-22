@@ -18,11 +18,13 @@ import { createGzip } from "node:zlib"
 import path from "node:path"
 import os from "node:os"
 import { fileURLToPath } from "node:url"
+import { captureBuildMetadata } from "@coinzilla/utils"
+import packageMetadata from "../package.json" with { type: "json" }
 import { validateArchiveRemote } from "./initialize-private-archive-repository.js"
 
 const PACKAGE_DIRECTORY = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const SOURCE_DIRECTORIES = Object.freeze(["logs", "data", "recovery-facts"])
-const EXCLUDED_ARCHIVE_PATHS = Object.freeze(["data/production"])
+const EXCLUDED_ARCHIVE_PATHS = Object.freeze(["data/production", "logs/cumulative/terminal.log"])
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 const runGitDefault = (args, { cwd } = {}) => new Promise((resolve, reject) => {
@@ -217,6 +219,10 @@ async function readCompletedTestnetSession(sessionDirectory) {
 async function copySelectedLogs({ sourceDirectory, destinationDirectory, onFileCopied } = {}) {
   await mkdir(destinationDirectory, { recursive: true, mode: 0o700 })
   const entries = await readdir(sourceDirectory, { withFileTypes: true })
+  const unsupportedEntries = entries.filter((entry) => !["sessions", "cumulative"].includes(entry.name))
+  if (unsupportedEntries.length > 0) {
+    throw new Error("The logs root contains unsupported entries; refusing to archive unclassified log data.")
+  }
   const sessionsEntry = entries.find((entry) => entry.name === "sessions" && entry.isDirectory())
   if (!sessionsEntry) {
     throw new Error("The logs/sessions directory is missing; refusing to publish an archive without session evidence.")
@@ -377,13 +383,14 @@ async function copyCumulativeTailTree({
         onFileCopied,
       })
     } else if (sourceStats.isFile()) {
-      const size = path.basename(sourcePath) === "terminal.log"
-        ? await copyTailFile(sourcePath, destinationPath)
-        : await copySessionFilteredTailFile({
-          source: sourcePath,
-          destination: destinationPath,
-          runtimeSessionId,
-        })
+      if (path.basename(sourcePath) === "terminal.log") {
+        continue
+      }
+      const size = await copySessionFilteredTailFile({
+        source: sourcePath,
+        destination: destinationPath,
+        runtimeSessionId,
+      })
       await onFileCopied?.({ relativePath: childRelative.split(path.sep).join("/"), size })
     } else {
       throw new Error(`Refusing to archive a non-regular session entry: ${sourcePath}`)
@@ -548,7 +555,7 @@ async function createArchiveManifest({ directory, createdAt, logRuntimeSessionId
     includedDirectories: [...SOURCE_DIRECTORIES],
     excludedPaths: [...EXCLUDED_ARCHIVE_PATHS],
     logSelection: {
-      cumulative: "final-5-percent-of-each-file",
+      cumulative: "final-5-percent-of-selected-TESTNET-session-structured-records",
       sessions: "newest-completed-TESTNET-session-only; gzip-compressed",
     },
     dataCommitHash,
@@ -804,14 +811,39 @@ export async function runHarvesterArchivePush({
   }
 }
 
+function createArchiveCliIdentity({ env = process.env } = {}) {
+  const metadata = captureBuildMetadata({
+    application: "harvester-archive-push",
+    version: packageMetadata.version,
+    cwd: PACKAGE_DIRECTORY,
+    env,
+  })
+  const { source } = metadata
+  return [
+    `${metadata.application} ${metadata.version}`,
+    `commit ${source.commit ?? "unknown"}`,
+    `worktree ${source.workingTree}`,
+    `node ${process.version}`,
+  ].join(" | ")
+}
+
 async function main() {
-  const result = await runHarvesterArchivePush()
+  const args = process.argv.slice(2)
+  if (args.length === 1 && args[0] === "--version") {
+    process.stdout.write(createArchiveCliIdentity() + "\\n")
+    return
+  }
+  if (args.length > 0) {
+    throw new TypeError("Usage: archive:push [--version]")
+  }
+  process.stdout.write(createArchiveCliIdentity() + "\\n")
+  const result = await runHarvesterArchivePush({ args })
   process.stdout.write([
     "Harvester local logs/data archive published and remotely verified.",
     `Archive: archives/${result.archiveName}`,
     "Created: " + result.createdAt,
-    "Included: logs/, non-production data/, recovery-facts/ and data_commit_hash",
-    "Excluded: data/production/ (LIVE database and sidecars)",
+    "Included: selected TESTNET session logs, TESTNET-safe cumulative records, non-production data/, recovery-facts/ and data_commit_hash",
+    "Excluded: data/production/, logs/cumulative/terminal.log and unclassified log-root entries",
     `Remote commit: ${result.remoteCommit}`,
     `Local copy: ${result.localArchive}`,
     `Files verified: ${result.fileCount}`,
