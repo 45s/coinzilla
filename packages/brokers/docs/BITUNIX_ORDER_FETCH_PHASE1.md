@@ -16,32 +16,34 @@ The operator's one-shot Spot LIMIT BUY was accepted by Bitunix on 2026-11-22:
 
 See [PR #1703](https://github.com/45s/coinzilla/pull/1703) for the exact placement acknowledgement and failed post-placement detail read.
 
-## Verified API contract
+## Verified API contract and Broker behavior
 
 Bitunix's official Spot documentation marks symbol as required for POST /api/spot/v1/order/pending/list. The Futures pending-orders endpoint is different: its symbol parameter is optional. Do not apply Futures behavior to Spot.
 
-The public Spot market catalog is available through Broker.getExchangeMarkets(). Therefore, account-wide Spot discovery is implemented at the Broker API layer by:
+The Broker API now hides this Spot limitation:
 
-1. Calling getExchangeMarkets() once.
-2. Enumerating every unique active Spot market symbol returned.
-3. Calling getOpenOrders({ symbol }) sequentially for every symbol.
-4. Calling getOrder({ symbol, orderId }) once for every returned order.
-5. Recording every result and continuing after an individual symbol or detail-read failure.
+- getOpenOrders() with no symbol calls getExchangeMarkets(), enumerates every unique active Spot market, and calls the existing symbol-scoped getOpenOrders({ symbol }) method sequentially.
+- getOpenOrders({ symbol }) remains available for callers that want one market only.
+- Successful market results are aggregated. If one symbol fails, the other symbols are still queried and their orders are retained; the returned Result contains both partial data and errors.
+- The operator command calls getOpenOrders() once, then calls getOrder({ symbol, orderId }) for every returned order.
 
-This avoids requiring the operator to know symbols and avoids undocumented account-wide REST parameters. It is a sequence of symbol-scoped requests, not a claim that Bitunix has a single account-wide Spot pending-orders endpoint.
+You do not need to know or supply the symbols. No undocumented account-wide REST parameter is assumed; the account-wide behavior is implemented by the Broker API over the documented market catalog and symbol-scoped pending-orders endpoint.
 
 ## Diagnostics
 
-The command emits structured logs for:
+The command records every Broker API and REST diagnostic event in the JSON report and streams structured logs to stdout.
 
-- Broker API operation starts, successful results, failures, symbols, order IDs, and statuses.
+Diagnostics include:
+
+- Broker API operation starts, successes, failures, active symbols, order IDs, order counts, and statuses.
+- Each symbol-scoped pending-orders result inside the account-wide Broker method, including failures.
 - Bitunix Spot REST request method/path, redacted query/body metadata, HTTP status, exchange code/message, response data, and errors.
-- Every per-symbol pending-order result and every per-order detail result, including failed Result values and thrown exceptions.
-- Final counts, target match count, and report path.
+- Every per-order getOrder() result, including failed Result values and thrown exceptions.
+- Final market/order/detail counts, target match count, and report path.
 
-A complete JSON report is saved under packages/brokers/.diagnostics/. It includes normalized Broker API results and sanitized errors. API keys, secrets, signatures, nonces, user IDs, email addresses, phone numbers, and addresses are redacted. Diagnostic logging is best-effort and must never alter request behavior.
+A complete JSON report is saved under packages/brokers/.diagnostics/. API keys, secrets, signatures, nonces, user IDs, email addresses, phone numbers, and addresses are redacted. Diagnostic logging is best-effort and must never change request behavior.
 
-The scan is sequential, read-only, and does not retry failed requests. A failed symbol does not prevent scanning later symbols. A failed detail lookup does not prevent checking later orders.
+The scan is sequential and never automatically retries. A failed symbol does not prevent scanning later symbols. A failed detail lookup does not prevent checking later orders.
 
 ## Lossless order IDs
 
@@ -55,7 +57,7 @@ Run from the repository root after configuring packages/brokers/.env.development
 pnpm --filter @coinzilla/brokers bitunix:find-order --order-id=2124329325141426176
 ```
 
-The command scans all active Spot markets, reads every discovered order detail, and writes a report. It constructs the Broker with live order mutations disabled. It never calls createOrder, cancelOrder, or cancelAllOpenOrders.
+The command calls Broker.getOpenOrders() without a symbol, reads every returned order detail, and writes a report. It constructs the Broker with live order mutations disabled. It never calls createOrder, cancelOrder, or cancelAllOpenOrders.
 
 Exit codes:
 
