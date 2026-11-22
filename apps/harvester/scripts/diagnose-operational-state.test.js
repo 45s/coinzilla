@@ -75,7 +75,10 @@ const createHarness = ({
     project: 0,
     mutate: 0,
   }
-  const store = createFakeStore({ readAll, calls })
+  const store = createFakeStore({
+    readAll,
+    calls,
+  })
   const dependencies = {
     args: [],
     env: {},
@@ -92,7 +95,12 @@ const createHarness = ({
     writeOutput: (value) => output.push(value),
     writeError: (value) => errors.push(value),
   }
-  return { dependencies, output, errors, calls }
+  return {
+    dependencies,
+    output,
+    errors,
+    calls,
+  }
 }
 
 test("diagnostic verifies the existing store and reports only safe projection summaries", async () => {
