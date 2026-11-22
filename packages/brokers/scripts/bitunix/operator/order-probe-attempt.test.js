@@ -30,6 +30,8 @@ function createFiltersResult() {
       isOpen: "1",
       minVolume: "0.1",
       minPrice: "10",
+      basePrecision: "4",
+      quotePrecision: "2",
     },
   }
 }
@@ -235,41 +237,45 @@ test("Bitunix order probe dispatches one reviewed createOrder request after fres
   }
 })
 
+function createConfirmedPlacementResultFixture() {
+  return {
+    ok: false,
+    mutationOutcome: "CONFIRMED",
+    data: {
+      orderId: "2124329325141426176",
+      symbol: "HYPEUSDT",
+      side: 2,
+      type: 1,
+      volume: "0.366",
+      price: "30",
+      placeStatus: 1,
+      placeCode: 0,
+      placeMsg: "成功",
+    },
+    reconciliation: {
+      status: "UNAVAILABLE",
+      source: "PLACEMENT_ACKNOWLEDGEMENT",
+      endpoint: "/api/spot/v1/order/detail",
+      error: {
+        code: "BITUNIX_REST_EXCHANGE_REJECTED",
+        exchangeCode: "100005",
+        kind: "exchange",
+        status: 200,
+      },
+    },
+    errors: [Object.assign(new Error("result.api.parameter.sign.illegal"), {
+      code: "BITUNIX_REST_EXCHANGE_REJECTED",
+      exchangeCode: "100005",
+      status: 200,
+      kind: "exchange",
+    })],
+  }
+}
+
 test("Bitunix order probe persists confirmed placement and failed reconciliation separately", async () => {
   const directory = await mkdtemp(join(tmpdir(), "bitunix-order-probe-reconciliation-"))
   try {
-    const resultFixture = {
-      ok: false,
-      mutationOutcome: "CONFIRMED",
-      data: {
-        orderId: "2124329325141426176",
-        symbol: "HYPEUSDT",
-        side: 2,
-        type: 1,
-        volume: "0.366",
-        price: "30",
-        placeStatus: 1,
-        placeCode: 0,
-        placeMsg: "成功",
-      },
-      reconciliation: {
-        status: "UNAVAILABLE",
-        source: "PLACEMENT_ACKNOWLEDGEMENT",
-        endpoint: "/api/spot/v1/order/detail",
-        error: {
-          code: "BITUNIX_REST_EXCHANGE_REJECTED",
-          exchangeCode: "100005",
-          kind: "exchange",
-          status: 200,
-        },
-      },
-      errors: [Object.assign(new Error("result.api.parameter.sign.illegal"), {
-        code: "BITUNIX_REST_EXCHANGE_REJECTED",
-        exchangeCode: "100005",
-        status: 200,
-        kind: "exchange",
-      })],
-    }
+    const resultFixture = createConfirmedPlacementResultFixture()
     const { events, run, markerPath } = createDependencies({
       directory,
       result: resultFixture,
@@ -286,7 +292,10 @@ test("Bitunix order probe persists confirmed placement and failed reconciliation
     })
     const result = await run("limit-buy-11-usdt")
     const marker = JSON.parse(await readFile(markerPath, "utf8"))
-    const output = events.filter((event) => event.operation === "output").map((event) => event.message).join("\n")
+    const output = events
+      .filter((event) => event.operation === "output")
+      .map((event) => event.message)
+      .join("\n")
 
     assert.equal(result.ok, false)
     assert.equal(result.mutationOutcome, "CONFIRMED")
