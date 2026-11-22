@@ -10,7 +10,7 @@ import {
   validateFactInput,
   validateFactRecord,
   validateManifestCheckpoint,
-} from "./operational-state-record-validation.js"
+} from "./record-validation.js"
 
 const SCHEMA_VERSION = 1
 const GENESIS_BODY = {

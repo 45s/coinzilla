@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { projectHarvesterOperationalState } from "./project-harvester-operational-state.js"
+import { projectHarvesterOperationalState } from "./project-harvester.js"
 
 const sessionId = "process-session-1"
 const fingerprint = "f".repeat(64)

@@ -5,7 +5,7 @@ import * as fsPromises from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import test from "node:test"
-import { createFileOperationalStateStore } from "./create-file-operational-state-store.js"
+import { createFileOperationalStateStore } from "./create-file-store.js"
 
 const createDirectory = () => mkdtemp(path.join(os.tmpdir(), "harvester-Operational State Store records-"))
 const createStore = (...parameters) => {
@@ -700,4 +700,80 @@ force: true }))
   })
 
   assert.equal(result.ok, false, "NOT_COMPLETED facts must validate the full cycle boundary and exact terminal SELL identity.")
+})
+
+test("automatically initializes a missing Operational State Store directory", async (t) => {
+  const directory = path.join(os.tmpdir(), `harvester-Operational State Store-auto-missing-${  process.pid  }-${  Date.now()}`)
+  t.after(() => rm(directory, { recursive: true, force: true }))
+  const store = createStore(directory)
+  const initialized = await store.initializeIfEmpty()
+  assert.equal(initialized.ok, true, "A missing ledger directory must be initialized on first startup.")
+  assert.equal(initialized.data.initialized, true, "First startup must report that it created genesis.")
+  assert.equal((await store.verify()).ok, true, "The automatically created ledger must pass full integrity verification.")
+  assert.deepEqual((await readdir(directory)).sort(), ["facts.jsonl", "manifest.jsonl"])
+})
+
+test("automatically initializes an existing empty Operational State Store directory", async (t) => {
+  const directory = await createDirectory()
+  t.after(() => rm(directory, { recursive: true, force: true }))
+  const store = createStore(directory)
+  const initialized = await store.initializeIfEmpty()
+  assert.equal(initialized.ok, true, "An existing empty directory is a valid first-start state.")
+  assert.equal(initialized.data.initialized, true, "An empty directory must receive genesis exactly once.")
+  assert.equal((await store.verify()).ok, true, "The initialized empty directory must contain a verified ledger.")
+})
+
+test("verifies an existing complete ledger without changing either stream", async (t) => {
+  const directory = await createDirectory()
+  t.after(() => rm(directory, { recursive: true, force: true }))
+  const store = createStore(directory)
+  assert.equal((await store.initialize()).ok, true)
+  const factsBefore = await readFile(path.join(directory, "facts.jsonl"), "utf8")
+  const manifestBefore = await readFile(path.join(directory, "manifest.jsonl"), "utf8")
+  const result = await store.initializeIfEmpty()
+  assert.equal(result.ok, true, "A complete existing ledger must be accepted.")
+  assert.equal(result.data.initialized, false, "An existing ledger must not receive another genesis.")
+  assert.equal((await store.verify()).ok, true)
+  assert.equal(await readFile(path.join(directory, "facts.jsonl"), "utf8"), factsBefore)
+  assert.equal(await readFile(path.join(directory, "manifest.jsonl"), "utf8"), manifestBefore)
+})
+
+test("refuses to initialize a partially present ledger and preserves existing files", async (t) => {
+  const directory = await createDirectory()
+  t.after(() => rm(directory, { recursive: true, force: true }))
+  const factsPath = path.join(directory, "facts.jsonl")
+  await writeFile(factsPath, "partial\n")
+  const result = await createStore(directory).initializeIfEmpty()
+  assert.equal(result.ok, false, "A directory containing only one ledger stream must fail closed.")
+  assert.equal(result.errors[0].code, "DURABLE_FACTS_LEDGER_INCOMPLETE")
+  assert.equal(await readFile(factsPath, "utf8"), "partial\n")
+  assert.deepEqual(await readdir(directory), ["facts.jsonl"], "The missing manifest must not be created.")
+})
+
+test("refuses unexpected existing directory contents without modifying them", async (t) => {
+  const directory = await createDirectory()
+  t.after(() => rm(directory, { recursive: true, force: true }))
+  const unexpectedPath = path.join(directory, "operator-backup.txt")
+  await writeFile(unexpectedPath, "keep")
+  const result = await createStore(directory).initializeIfEmpty()
+  assert.equal(result.ok, false, "Unexpected files must never be treated as an empty ledger.")
+  assert.equal(result.errors[0].code, "DURABLE_FACTS_LEDGER_INCOMPLETE")
+  assert.equal(await readFile(unexpectedPath, "utf8"), "keep")
+  assert.deepEqual(await readdir(directory), ["operator-backup.txt"])
+})
+
+test("does not repair or replace an existing corrupt ledger", async (t) => {
+  const directory = await createDirectory()
+  t.after(() => rm(directory, { recursive: true, force: true }))
+  const store = createStore(directory)
+  assert.equal((await store.initialize()).ok, true)
+  const factsPath = path.join(directory, "facts.jsonl")
+  const original = await readFile(factsPath, "utf8")
+  const corrupted = original.replace("LEDGER_INITIALIZED", "CORRUPTED_LEDGER")
+  await writeFile(factsPath, corrupted)
+  const result = await store.initializeIfEmpty()
+  assert.equal(result.ok, true, "The presence of both streams is not permission to repair a corrupt ledger.")
+  assert.equal(result.data.initialized, false)
+  assert.equal((await store.verify()).ok, false, "Corrupt content must still fail integrity verification.")
+  assert.equal(await readFile(factsPath, "utf8"), corrupted, "Startup must preserve the corrupt evidence unchanged.")
 })

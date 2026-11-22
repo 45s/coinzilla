@@ -88,16 +88,11 @@ The Operational State Store is a separate Harvester-owned append-only recovery-f
 
 The store is required by RS for durable STOP state and process-boundary facts; this does **not** enable automatic Portfolio/RecoveryLedger/OrderRegistry restoration. Startup verifies the existing ledger before broker-capable runtime startup. It never creates a missing genesis ledger, repairs a corrupt chain, or treats missing history as empty. Fact recorders write only after a verified store is injected. Prior process history remains subject to the existing fail-closed/observation-only startup rules; unattended restart is not enabled.
 
-The default directory is `apps/harvester/recovery-facts/`, resolved relative to the Harvester package. `OPERATIONAL_STATE_DIRECTORY` selects an alternate absolute local-filesystem directory. The one-time initializer is explicit:
+The default directory is `apps/harvester/recovery-facts/`, resolved relative to the Harvester package. `OPERATIONAL_STATE_DIRECTORY` selects an alternate absolute local-filesystem directory.
 
-```sh
-pnpm --filter @coinzilla/harvester operational-state:init -- --confirm-initialize
+**Normal startup requires no manual genesis command.** When the directory is missing or exists but is empty, the process-owned store creates the private directory (0700), `facts.jsonl`, `manifest.jsonl` (0600), and the genesis record, then verifies the result. When both expected files already exist, startup verifies their complete contents and integrity chains. A directory containing only one stream, unexpected files, malformed/corrupt records, or mismatched checkpoints fails closed; startup never repairs, resets, or overwrites existing data.
 
-# Development environment (.env.development)
-pnpm --filter @coinzilla/harvester operational-state:init:dev -- --confirm-initialize
-```
-
-The initializer creates a private directory (0700) and record/manifest files (0600), refuses to overwrite an existing store, and uses the same resolver as runtime. Do not initialize, move, delete, or manually edit these files as part of #1327. Restart restoration remains separately gated by [#654](https://github.com/45s/coinzilla/issues/654).
+The explicit `operational-state:init` CLI remains available for deliberate manual initialization and refuses to overwrite a non-empty directory. It is not required for ordinary first startup. Restart restoration remains separately gated by [#654](https://github.com/45s/coinzilla/issues/654).
 
 ## Ordinary trading-session history (#1327)
 

@@ -2,8 +2,8 @@ import { readFile } from "node:fs/promises"
 import path from "node:path"
 import { pathToFileURL } from "node:url"
 import { defaultLogger } from "@coinzilla/utils"
-import { createFileOperationalStateStore } from "../src/infrastructure/operational-state/create-file-operational-state-store.js"
-import { resolveOperationalStateDirectory } from "../src/infrastructure/operational-state/resolve-operational-state-directory.js"
+import { createFileOperationalStateStore } from "../src/infrastructure/operational-state/create-file-store.js"
+import { resolveOperationalStateDirectory } from "../src/infrastructure/operational-state/resolve-directory.js"
 import { runOfflineMarketRecovery } from "./recovery-market-context.js"
 
 const HELP = `Usage:

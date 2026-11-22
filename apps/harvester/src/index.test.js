@@ -77,6 +77,7 @@ test("constructs and injects durable operational state for enabled RS while CG r
     createOperationalStateStore: () => {
       storeCreated = true
       return {
+        initializeIfEmpty: async () => ({ ok: true, data: { ready: true, initialized: false } }),
         verify: async () => ({
           ok: true,
           data: {

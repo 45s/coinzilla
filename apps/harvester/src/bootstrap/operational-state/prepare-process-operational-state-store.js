@@ -1,6 +1,6 @@
 import { StrategyId } from "../../domain/strategies/strategy-ids.js"
-import { createFileOperationalStateStore } from "../../infrastructure/operational-state/create-file-operational-state-store.js"
-import { resolveOperationalStateDirectory } from "../../infrastructure/operational-state/resolve-operational-state-directory.js"
+import { createFileOperationalStateStore } from "../../infrastructure/operational-state/create-file-store.js"
+import { resolveOperationalStateDirectory } from "../../infrastructure/operational-state/resolve-directory.js"
 
 export class ProcessOperationalStateStartupError extends Error {
   constructor(...args) {
@@ -57,6 +57,34 @@ runtimeSessionId })
     )
   }
   return store
+}
+
+async function initializeProcessStoreIfEmpty({ store, directory } = {}) {
+  if (typeof store.initializeIfEmpty !== "function") {
+    throw new ProcessOperationalStateStartupError(
+      "Operational State Store requires initializeIfEmpty() before broker-capable startup",
+      "PROCESS_OPERATIONAL_STATE_INITIALIZATION_UNAVAILABLE",
+    )
+  }
+  let initialization
+  try {
+    initialization = await store.initializeIfEmpty()
+  } catch (cause) {
+    throw new ProcessOperationalStateStartupError(
+      `Unable to initialize an empty or inspect the existing Operational State Store at ${  directory}`,
+      "PROCESS_OPERATIONAL_STATE_INITIALIZATION_FAILED",
+      cause,
+    )
+  }
+  if (initialization?.ok === true && initialization.data?.ready === true) {
+    return
+  }
+  const cause = initialization?.errors?.[0] ?? new Error("Operational State Store initialization was not confirmed")
+  throw new ProcessOperationalStateStartupError(
+    `Harvester could not initialize an empty or accept the existing Operational State Store at ${  directory}; incomplete or corrupt history was not changed`,
+    "PROCESS_OPERATIONAL_STATE_INITIALIZATION_FAILED",
+    cause,
+  )
 }
 
 async function verifyProcessStore({ store, directory } = {}) {
@@ -129,6 +157,7 @@ export async function prepareProcessOperationalStateStore({
     runtimeSessionId,
     createOperationalStateStore,
   })
+  await initializeProcessStoreIfEmpty({ store, directory })
   await verifyProcessStore({
     store,
     directory,

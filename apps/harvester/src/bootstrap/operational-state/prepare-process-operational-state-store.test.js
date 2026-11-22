@@ -2,7 +2,7 @@ import test from "node:test"
 import assert from "node:assert/strict"
 import path from "node:path"
 import { StrategyId } from "../../domain/strategies/strategy-ids.js"
-import { DEFAULT_OPERATIONAL_STATE_DIRECTORY } from "../../infrastructure/operational-state/resolve-operational-state-directory.js"
+import { DEFAULT_OPERATIONAL_STATE_DIRECTORY } from "../../infrastructure/operational-state/resolve-directory.js"
 import { prepareProcessOperationalStateStore } from "./prepare-process-operational-state-store.js"
 
 const config = ({
@@ -23,6 +23,7 @@ const config = ({
   operatorControl: { telegram: { enabled: operator } },
 })
 const store = () => ({
+  initializeIfEmpty: async () => ({ ok: true, data: { ready: true, initialized: false } }),
   verify: async () => ({
     ok: true,
     data: {
@@ -176,6 +177,7 @@ test("fails closed when recovery ledger verification fails or throws", async () 
       appConfig: config({ recovery: true }),
       runtimeSessionId: "session",
       createOperationalStateStore: () => ({
+        initializeIfEmpty: async () => ({ ok: true, data: { ready: true, initialized: false } }),
         verify: async () => ({
           ok: false,
           errors: [invalid],
@@ -189,7 +191,10 @@ test("fails closed when recovery ledger verification fails or throws", async () 
     prepareProcessOperationalStateStore({
       appConfig: config({ recovery: true }),
       runtimeSessionId: "session",
-      createOperationalStateStore: () => ({ verify: async () => { throw thrown } }),
+      createOperationalStateStore: () => ({
+        initializeIfEmpty: async () => ({ ok: true, data: { ready: true, initialized: false } }),
+        verify: async () => { throw thrown },
+      }),
     }),
     (error) => error.code === "PROCESS_OPERATIONAL_STATE_VERIFICATION_FAILED" && error.cause === thrown,
   )
@@ -237,4 +242,44 @@ test("uses the canonical override and ignores the removed legacy variable", asyn
     createOperationalStateStore: (value) => { options = value; return store() },
   })
   assert.equal(options.directory, canonicalDirectory)
+})
+
+test("initializes an empty store before verifying the process-owned ledger", async () => {
+  const operations = []
+  const expectedStore = {
+    initializeIfEmpty: async () => {
+      operations.push("initializeIfEmpty")
+      return { ok: true, data: { ready: true, initialized: true } }
+    },
+    verify: async () => {
+      operations.push("verify")
+      return { ok: true, data: { valid: true, durableWriteSupported: true } }
+    },
+  }
+  await prepareProcessOperationalStateStore({
+    appConfig: config({ recoverySeller: true }),
+    runtimeSessionId: "session",
+    createOperationalStateStore: () => expectedStore,
+  })
+  assert.deepEqual(operations, ["initializeIfEmpty", "verify"], "Startup must initialize only an empty ledger, then verify it before returning the store.")
+})
+
+test("fails closed without verification when an existing partial ledger cannot be initialized safely", async () => {
+  const cause = new Error("one ledger stream is missing")
+  let verificationCalls = 0
+  await assert.rejects(
+    prepareProcessOperationalStateStore({
+      appConfig: config({ recoverySeller: true }),
+      runtimeSessionId: "session",
+      createOperationalStateStore: () => ({
+        initializeIfEmpty: async () => ({ ok: false, errors: [cause] }),
+        verify: async () => {
+          verificationCalls += 1
+          return { ok: true, data: { valid: true, durableWriteSupported: true } }
+        },
+      }),
+    }),
+    (error) => error.code === "PROCESS_OPERATIONAL_STATE_INITIALIZATION_FAILED" && error.cause === cause,
+  )
+  assert.equal(verificationCalls, 0, "A partial ledger must fail before ordinary verification or runtime startup.")
 })
