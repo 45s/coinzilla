@@ -5,9 +5,10 @@ import { TradingHistoryComponent } from './features/trading-history/page';
 import { OperatorComponent } from './features/operator/page';
 import { MarketScreenerComponent } from './features/market-screener/page';
 import { ExchangesComponent } from './features/exchanges/page';
+import { OpenOrdersComponent } from './features/open-orders/page';
 import type { TradingHistoryResource } from './features/trading-history/api';
 
-type DashboardPage = 'overview' | 'operator' | 'markets' | 'exchanges' | TradingHistoryResource;
+type DashboardPage = 'overview' | 'operator' | 'markets' | 'exchanges' | 'open-orders' | TradingHistoryResource;
 type DashboardTheme = 'current' | 'midnight' | 'light' | 'oled' | 'green' | 'arctic' | 'warm' | 'system';
 
 const THEME_STORAGE_KEY = 'coinzilla.dashboard.theme';
@@ -39,7 +40,7 @@ export function readSavedDashboardTheme(
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [OverviewComponent, TradingHistoryComponent, OperatorComponent, MarketScreenerComponent, ExchangesComponent],
+  imports: [OverviewComponent, TradingHistoryComponent, OperatorComponent, MarketScreenerComponent, ExchangesComponent, OpenOrdersComponent],
   templateUrl: './app.html',
   styleUrl: './app.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -53,6 +54,7 @@ export class AppComponent {
     { label: 'Commissions', icon: '◷', page: 'commissions' as const, enabled: true },
     { label: 'Markets', icon: '⌖', page: 'markets' as const, enabled: true },
     { label: 'Exchanges', icon: '⇄', page: 'exchanges' as const, enabled: true },
+    { label: 'Open Orders', icon: '↗', page: 'open-orders' as const, enabled: true },
     { label: 'Positions', icon: '▤', page: null, enabled: false },
     { label: 'Diagnostics', icon: '⌘', page: null, enabled: false },
   ] as const;
@@ -65,7 +67,7 @@ export class AppComponent {
   );
   readonly historyResource = computed<TradingHistoryResource>(() => {
     const page = this.activePage();
-    return page === 'overview' || page === 'operator' || page === 'markets' || page === 'exchanges' ? 'orders' : page;
+    return page === 'overview' || page === 'operator' || page === 'markets' || page === 'exchanges' || page === 'open-orders' ? 'orders' : page;
   });
 
   constructor() {
