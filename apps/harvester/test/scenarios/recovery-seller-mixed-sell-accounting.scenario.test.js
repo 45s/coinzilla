@@ -31,8 +31,14 @@ const clientOrderId = "rs-doge-mixed-sell-001"
 const brokerOrderId = "binance-order-001"
 
 function createMarketAndOrder() {
-  const baseAsset = new Asset({ id: "doge-asset", code: "DOGE" })
-  const quoteAsset = new Asset({ id: "usdt-asset", code: "USDT" })
+  const baseAsset = new Asset({
+    id: "doge-asset",
+    code: "DOGE",
+  })
+  const quoteAsset = new Asset({
+    id: "usdt-asset",
+    code: "USDT",
+  })
   const market = new Market({
     venue: "binance",
     symbol: "DOGEUSDT",
@@ -45,9 +51,18 @@ function createMarketAndOrder() {
     market,
     side: "SELL",
     type: "LIMIT",
-    limitPrice: new Money({ amount: "10", asset: quoteAsset }),
-    originalQuantity: new Quantity({ amount: "401", asset: baseAsset }),
-    executedQuantity: new Quantity({ amount: "401", asset: baseAsset }),
+    limitPrice: new Money({
+      amount: "10",
+      asset: quoteAsset,
+    }),
+    originalQuantity: new Quantity({
+      amount: "401",
+      asset: baseAsset,
+    }),
+    executedQuantity: new Quantity({
+      amount: "401",
+      asset: baseAsset,
+    }),
     status: "FILLED",
     createdAt: 1,
     acknowledgedAt: 2,
@@ -65,7 +80,13 @@ function createMarketAndOrder() {
     }],
   })
 
-  return { baseAsset, quoteAsset, market, order, orderRegistry }
+  return {
+    baseAsset,
+    quoteAsset,
+    market,
+    order,
+    orderRegistry,
+  }
 }
 
 function createCanonicalFill({ market, baseAsset, quoteAsset }) {
@@ -75,14 +96,26 @@ function createCanonicalFill({ market, baseAsset, quoteAsset }) {
     clientOrderId,
     market,
     side: "SELL",
-    price: new Money({ amount: "10", asset: quoteAsset }),
-    quantity: new Quantity({ amount: "401", asset: baseAsset }),
-    quoteQuantity: new Money({ amount: "4010", asset: quoteAsset }),
+    price: new Money({
+      amount: "10",
+      asset: quoteAsset,
+    }),
+    quantity: new Quantity({
+      amount: "401",
+      asset: baseAsset,
+    }),
+    quoteQuantity: new Money({
+      amount: "4010",
+      asset: quoteAsset,
+    }),
     liquidityRole: "MAKER",
     executedAt: 4,
     commissions: [
       new Commission({
-        amount: new Money({ amount: "4.01", asset: quoteAsset }),
+        amount: new Money({
+          amount: "4.01",
+          asset: quoteAsset,
+        }),
       }),
     ],
     commissionStatus: "COMPLETE",
@@ -94,10 +127,22 @@ function createInitialProjections({ market, baseAsset, quoteAsset, legacyRemaini
     positionId,
     strategyId: StrategyId.RECOVERY_SELLER,
     market,
-    baseQuantity: new Quantity({ amount: "400", asset: baseAsset }),
-    freeBaseQuantity: new Quantity({ amount: "0", asset: baseAsset }),
-    quoteNetCashFlow: new Money({ amount: "0", asset: quoteAsset }),
-    spent: new Money({ amount: "4000", asset: quoteAsset }),
+    baseQuantity: new Quantity({
+      amount: "400",
+      asset: baseAsset,
+    }),
+    freeBaseQuantity: new Quantity({
+      amount: "0",
+      asset: baseAsset,
+    }),
+    quoteNetCashFlow: new Money({
+      amount: "0",
+      asset: quoteAsset,
+    }),
+    spent: new Money({
+      amount: "4000",
+      asset: quoteAsset,
+    }),
   })
   const portfolio = new Portfolio({
     positions: [initialRecoveryPosition],
@@ -157,7 +202,7 @@ function createScenario({ legacyRemainingQuantity = "1" } = {}) {
   })
 }
 
-function applyScenario(scenario, overrides = {}) {
+function applyScenario({ scenario, overrides = {} }) {
   return applyReconciledMixedSellOrder({
     portfolio: scenario.portfolio,
     legacyPosition: scenario.legacyPosition,
@@ -203,7 +248,7 @@ test("one 401 DOGE canonical SELL Fill allocates 400 DOGE to recovery and 1 DOGE
 
 test("a reconciled mixed SELL commits recovery and legacy accounting from the same canonical Fill", () => {
   const scenario = createScenario()
-  const result = applyScenario(scenario)
+  const result = applyScenario({ scenario })
   const recoveryPosition = result.portfolio.getPosition({ positionId })
 
   assert.equal(result.applied, true,
@@ -234,12 +279,15 @@ test("a reconciled mixed SELL commits recovery and legacy accounting from the sa
 
 test("replaying the same terminal mixed SELL is an exact no-op in both accounting projections", () => {
   const scenario = createScenario()
-  const first = applyScenario(scenario)
-  const replay = applyScenario(scenario, {
+  const first = applyScenario({ scenario })
+  const replay = applyScenario({
+    scenario,
+    overrides: {
     portfolio: first.portfolio,
     legacyPosition: first.legacyPosition,
     legacyAccounting: first.legacyAccounting,
     reconciliation: first.reconciliation,
+    },
   })
 
   assert.equal(replay.applied, false,
@@ -266,7 +314,7 @@ test("a failed legacy projection leaves the recovery Portfolio and both original
   const legacyAccountingBefore = scenario.legacyAccounting
 
   assert.throws(
-    () => applyScenario(scenario),
+    () => applyScenario({ scenario }),
     /could not be applied atomically/,
     "An allocation larger than remaining legacy inventory must reject the entire mixed SELL accounting commit.",
   )
