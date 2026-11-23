@@ -10750,6 +10750,31 @@ timestamp: 1 },
   assert.equal(orders.length, 0)
 })
 
+function assertExternalOrderLocalDeferral({ result, harness, flushCount, journalEvents } = {}) {
+  assert.equal(result.ok, true)
+  assert.deepEqual(harness.orders, [],
+    "A locally deferred submission must never call the broker placeOrder port.")
+  assert.equal(harness.engine.getOrders().length, 0,
+    "The pending registry entry must be removed once the local no-broker deferral is established.")
+  assert.equal(flushCount, 1,
+    "Only the mandatory submission-request barrier may flush; deferral evidence must not add blocking Journal I/O.")
+  assert.deepEqual(harness.engine.getRecoveryIntents().deferredEvaluations, ["DOGEUSDT"])
+  const requested = journalEvents.find((event) => event.name === "order.submission_requested")
+  assert.ok(requested,
+    "The original pending request must be durably recorded before the final submission gate is rechecked.")
+  const deferred = journalEvents.find((event) => event.name === "order.submission_deferred")
+  assert.ok(deferred,
+    "A best-effort terminal deferral event must preserve the original request outcome when Journal publication succeeds.")
+  assert.equal(deferred.data.clientOrderId, requested.data.clientOrderId,
+    "The deferral outcome must preserve the exact original client-order identity.")
+  assert.equal(deferred.data.reason, "UNOWNED_OPEN_ORDERS_PRESENT",
+    "The deferral must carry a bounded safe reason, not raw diagnostics.")
+  assert.equal(journalEvents.some((event) => event.name === "order.submitted"), false,
+    "A local deferral must not fabricate a broker acknowledgement.")
+  assert.equal(journalEvents.some((event) => event.name === "order.submission_failed"), false,
+    "A local deferral must not be misclassified as a broker rejection or ambiguous outcome.")
+}
+
 test("rechecks external-order ownership after the durable order intent and records a terminal local deferral", async () => {
   let hasExternalOrder = false
   let flushCount = 0
@@ -10782,27 +10807,12 @@ test("rechecks external-order ownership after the durable order intent and recor
     },
   })
 
-  assert.equal(result.ok, true)
-  assert.deepEqual(harness.orders, [],
-    "A locally deferred submission must never call the broker placeOrder port.")
-  assert.equal(harness.engine.getOrders().length, 0,
-    "The pending registry entry must be removed once the local no-broker deferral is established.")
-  assert.equal(flushCount, 1,
-    "Only the mandatory submission-request barrier may flush; deferral evidence must not add blocking Journal I/O.")
-  assert.deepEqual(harness.engine.getRecoveryIntents().deferredEvaluations, ["DOGEUSDT"])
-  assert.ok(journalEvents.some((event) => event.name === "order.submission_requested"),
-    "The original pending request must be durably recorded before the final submission gate is rechecked.")
-  const deferred = journalEvents.find((event) => event.name === "order.submission_deferred")
-  assert.ok(deferred, "A best-effort terminal deferral event must preserve the original request outcome when Journal publication succeeds.")
-  assert.equal(deferred.data.clientOrderId, journalEvents.find((event) =>
-    event.name === "order.submission_requested").data.clientOrderId,
-  "The deferral outcome must preserve the exact original client-order identity.")
-  assert.equal(deferred.data.reason, "UNOWNED_OPEN_ORDERS_PRESENT",
-    "The deferral must carry a bounded safe reason, not raw diagnostics.")
-  assert.equal(journalEvents.some((event) => event.name === "order.submitted"), false,
-    "A local deferral must not fabricate a broker acknowledgement.")
-  assert.equal(journalEvents.some((event) => event.name === "order.submission_failed"), false,
-    "A local deferral must not be misclassified as a broker rejection or ambiguous outcome.")
+  assertExternalOrderLocalDeferral({
+    result,
+    harness,
+    flushCount,
+    journalEvents,
+  })
 })
 
 test("keeps local deferral processing non-blocking when best-effort Journal publication fails", async () => {
