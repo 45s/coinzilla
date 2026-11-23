@@ -63,7 +63,7 @@ def result_uris(result):
 def location_details(location):
     sarif_location = location.get("location", location)
     physical = sarif_location.get("physicalLocation", {})
-    uri = physical.get("artifactLocation", {}).get("uri", "<no-uri>").replace("\\\\", "/")
+    uri = physical.get("artifactLocation", {}).get("uri", "<no-uri>").replace("\\", "/")
     line = physical.get("region", {}).get("startLine")
     snippet = physical.get("region", {}).get("snippet", {}).get("text", "")
     message = sarif_location.get("message", {}).get("text", "")
@@ -105,7 +105,7 @@ def print_result_flows(results):
                     )
 
 
-def verify_repository(path):
+def verify_repository(path, require_default_suite=True):
     run = get_run(load_sarif(path))
     rules = {
         rule.get("id")
@@ -121,9 +121,12 @@ def verify_repository(path):
         raise AssertionError("The Coinzilla replacement query was not selected.")
     if BUILTIN_RULE_ID in rules:
         raise AssertionError("The original built-in query was not excluded.")
-    if len(rules) < 80 or not any(
-        rule_id.startswith("js/") and rule_id != BUILTIN_RULE_ID
-        for rule_id in rules
+    if require_default_suite and (
+        len(rules) < 80
+        or not any(
+            rule_id.startswith("js/") and rule_id != BUILTIN_RULE_ID
+            for rule_id in rules
+        )
     ):
         raise AssertionError(
             f"The default JavaScript query suite appears incomplete: {len(rules)} SARIF rules."
@@ -186,14 +189,21 @@ def main():
     parser = argparse.ArgumentParser()
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--repository", action="store_true")
+    group.add_argument("--repository-custom", action="store_true")
     group.add_argument("--positive-fixture", action="store_true")
     parser.add_argument("sarif_path")
     args = parser.parse_args()
 
     try:
-        if args.repository:
-            verify_repository(args.sarif_path)
-            print("PASS: default queries retained; built-in query replaced; Bitunix signing paths excluded.")
+        if args.repository or args.repository_custom:
+            verify_repository(
+                args.sarif_path,
+                require_default_suite=args.repository,
+            )
+            if args.repository:
+                print("PASS: default queries retained; built-in query replaced; Bitunix signing paths excluded.")
+            else:
+                print("PASS: replacement query excludes the original Bitunix alert sinks.")
         else:
             verify_positive_fixture(args.sarif_path)
             print("PASS: genuine weak password hashing is still reported.")
