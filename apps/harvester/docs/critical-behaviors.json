@@ -868,7 +868,12 @@
         },
         {
           "path": "src/use-cases/conservative-strategy-safety-pause.integration.test.js",
-          "name": "continues purpose-tagged recovery SELL evaluation and submission while safety-paused",
+          "name": "continues Recovery Seller evaluation when the Conservative strategy is safety-paused",
+          "kind": "integration"
+        },
+        {
+          "path": "src/use-cases/conservative-strategy-safety-pause.integration.test.js",
+          "name": "allows only purpose-tagged RECOVERY_SELL through the strategy safety BUY gate",
           "kind": "integration"
         }
       ],
