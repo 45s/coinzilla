@@ -2104,3 +2104,9 @@ The current rationale, filter mapping, deliberately excluded order-type-specific
 ## 2026-11-22 — RS first-start Operational State Store wiring
 
 Enabled RS startup exposed that the process entrypoint prepared the ADR-0001 Operational State Store only for Conservative restart recovery, despite RS requiring the store for its durable STOP latch and process-boundary facts. The focused fix and offline regression coverage are in [PR #1718](https://github.com/45s/coinzilla/pull/1718), tracked under [issue #1713](https://github.com/45s/coinzilla/issues/1713). The fix creates genesis automatically only when the ledger directory is missing or empty, verifies a complete existing ledger, and refuses partial, unexpected, or corrupt contents without repair. No manual genesis command is required for ordinary first startup. Automatic restart restoration remains disabled. Controlled TESTNET acceptance remains a separate paused operational gate.
+
+## 2026-11-23 — #1362 immutable archive re-review
+
+The original `coinzilla-archive` source was rechecked independently of the sanitized fixture. The 49-record fact chain and 49-record manifest chain are internally consistent; the 429-line terminal log contains 28 order-history projection validation failures, repeated user-data recovery failures followed by successful reconnect/recovery, market safety pauses, incomplete account-integrity reconciliation, and unproven shutdown completion. The root cause of the projection failures remains unknown; the large cumulative logs and database dump were not inspected, and the archive is selected-log evidence rather than a complete raw-log export.
+
+The detailed evidence, explicit unknowns, current exact-head CI blockers, and next-step ordering are recorded in [the archive re-review](docs/CONSERVATIVE_RECOVERY_ARCHIVE_REVIEW_2026-11-23.md). Continue under #1362 / PR #1761; keep the PR draft and do not run TESTNET/LIVE mutations.
