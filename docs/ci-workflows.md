@@ -16,21 +16,6 @@ This page summarizes the workflows in `.github/workflows/` and what each one ver
 | `external-links.yml` (**External Documentation Links**) | Pull requests to `develop` changing Markdown/MDX or checker sources; weekly schedule; manual dispatch | Checks changed maintained Markdown/MDX; weekly/manual full-tree scans include historical docs and are report-only. DNS answers are validated and connections pinned before requests; redirects are independently revalidated. | Additional advisory workflow; not one of the six `develop-core` required contexts. |
 | `governance-drift-review.yml` (**Repository Governance Drift Review**) | Monthly schedule; manual dispatch | Opens one monthly issue for an evidence-based review of live rulesets, review ownership, required CI contexts, workflow action pins/permissions, security setup, package matrices, architecture exceptions and governance documentation. It uses the runner's GitHub CLI and a narrowly scoped `issues: write` token; it does not change repository settings. | Additional maintenance workflow; not a required context. |
 
-## Current CodeQL release gate — 2026-11-23
-
-PR [#1758](https://github.com/45s/coinzilla/pull/1758) merged the local replacement-query implementation into `develop`. Its exact-head repository CI and non-uploading CodeQL CLI regression passed, including the positive weak-password-hash fixture. Those results validate the local query pack; they do not prove that GitHub's active Code Scanning configuration loaded it.
-
-The config `.github/codeql/codeql-config.yml` is present on `develop` but absent from `main`. Current inspected heads: `main` `043943051582a8d7bceb5a3a2f642bd886470cc8`; `develop` `0389c1adce9f66732749c798f5ca1caba0a7dd9a`. The branches are diverged (develop 3,802 commits ahead / 1 behind). Release promotion [PR #1662](https://github.com/45s/coinzilla/pull/1662) remains open and blocked.
-
-The release Code Scanning view currently reports three High findings:
-
-- `js/insufficient-password-hash` — Bitunix REST signer at `packages/brokers/src/infrastructure/bitunix/spot/auth/create-rest-signature.js:75`; tracked by [issue #1674](https://github.com/45s/coinzilla/issues/1674).
-- `js/insufficient-password-hash` — Bitunix WebSocket signer at `packages/brokers/src/infrastructure/bitunix/spot/auth/create-websocket-signature.js:63`; tracked by [issue #1674](https://github.com/45s/coinzilla/issues/1674).
-- `js/incomplete-multi-character-sanitization` — task-preflight at `scripts/task-preflight.js:85`; tracked separately by [issue #1765](https://github.com/45s/coinzilla/issues/1765).
-
-The six ordinary Actions workflows recorded for release head `f0c2d42e1a78137c1233e45b3a4f513da6ddbb0a` passed, but this is not proof that the current release head has all required checks green or that Code Scanning alerts are resolved. The exact failing merge-status context must be read from the live PR/check-run view; do not infer it from the ordinary workflow list.
-
-Release acceptance requires: (1) the reviewed config/query pack reaches `main`; (2) an authorized administrator confirms default setup and sets repository property `github-codeql-config-file=.github/codeql/codeql-config.yml` if required; (3) a fresh active CodeQL scan runs on the exact release commit; and (4) each alert is inspected independently by ID, rule, path, location and code-flow. Do not merge #1662 or dismiss alerts to bypass this gate.
 
 ## Dependabot version updates
 
