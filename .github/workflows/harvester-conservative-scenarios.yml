@@ -6,10 +6,16 @@ on:
       - develop
     paths:
       - "apps/harvester/test/scenarios/**"
+      - "apps/harvester/src/**"
+      - "apps/harvester/config/**"
       - "apps/harvester/scripts/run-conservative-scenarios.js"
       - "apps/harvester/package.json"
       - "apps/harvester/docs/critical-behaviors.json"
       - "apps/harvester/docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md"
+      - "apps/harvester/docs/domain/CONSERVATIVE_DOMAIN_SCENARIO_TESTS.md"
+      - "apps/harvester/docs/domain/DOMAIN_TEST_INVENTORY.md"
+      - "apps/harvester/ROADMAP.md"
+      - "docs/testing/SCENARIO_CATALOG.md"
       - ".github/workflows/harvester-conservative-scenarios.yml"
   workflow_dispatch:
 
