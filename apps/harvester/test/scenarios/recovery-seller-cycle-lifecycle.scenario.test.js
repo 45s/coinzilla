@@ -44,9 +44,7 @@ function assertClosedCycleCanAdvance({ state, nextCycleId }) {
 
 test("an unknown SELL outcome retains its only identity until reconciliation completes", () => {
   const submitted = createSubmittedCycle()
-  const unknown = markRecoverySellerCycleSellUnknown({
-    state: submitted,
-  })
+  const unknown = markRecoverySellerCycleSellUnknown({ state: submitted })
 
   assert.equal(unknown.status, "RECONCILIATION_REQUIRED",
     "An ambiguous submission outcome must move the cycle into reconciliation-required state.")
