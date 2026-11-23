@@ -17,6 +17,14 @@ Reviewed baseline: `develop` at `17f560ed96439fe9dcf3eb159d9f7e0b850dcd42` (2026
 
 All test improvements in this initiative must remain deterministic and offline. Issue [#626](https://github.com/45s/coinzilla/issues/626) and its user-data recovery implementation remain paused and outside this initiative.
 
+## Conservative domain scenario tests — issue #1763
+
+The [scenario-test guide](CONSERVATIVE_DOMAIN_SCENARIO_TESTS.md) explains behavior-oriented tests that compose real domain components. The exhaustive coverage checklist and implementation status are maintained in [#1763](https://github.com/45s/coinzilla/issues/1763).
+
+The initial source-driven audit is **pending**. Existing tests listed above are evidence of focused unit/domain coverage; application engine tests and historical replay tests provide additional lifecycle evidence. Do not claim scenario-matrix completeness until every matrix item is mapped to a named test or an explicit application/replay owner and disposition.
+
+Planned scenario behaviors include initial BUY fill → standing BUY and recovery SELL; second BUY fill → recovery SELL replacement/recalculation; partial recovery SELL accounting; terminal recovery completion → next cycle; retained inventory and constrained dust; commission assets and exact-decimal/filter boundaries; and invalid, duplicate, conflicting, reordered, or incomplete evidence. This initiative adds coverage without redefining the canonical Conservative specification or authorizing exchange operations.
+
 ## Existing behavior-to-test inventory
 
 | Area | Existing test files | Behaviors already protected |
@@ -214,3 +222,9 @@ The exact-head Harvester targeted suite passed after these tests were added. Str
 The new runtime-dispatch and action-authorizer suites cover the production composition seam and account-wide order authorization. `start-harvester.test.js` verifies the acceptance gate rejects configured RS routes when the gate is explicitly closed; the production gate is open after RS-5 offline acceptance. Restart/replay and third-asset commission valuation are deferred. STOP is terminal; CC-operator exposes authorized read-only status and has no clear/reset/unpause/resume path. Same-market and different-market CG/RS accounting concurrency, BUY-fill-to-SELL runtime composition, terminal mixed-SELL reconciliation, reservation release and next-cycle gating are covered by the current RS-5 offline tests. Exact-head required CI is the final merge check.
 
 `create-recovery-seller-runtime-evaluator.test.js` now composes the real accounting workflow snapshot, a canonical accepted BUY Fill, the production runtime evaluator, a sole-cycle SELL reservation and pending-order registration; it verifies a second evaluation waits and cannot submit another action. `create-recovery-seller-accounting-workflow.test.js` covers complete terminal mixed-SELL reconciliation, atomic recovery/legacy projection commit, reservation release, cycle closure and allocation of a new cycle only after closure. The focused policy, order-submitter, order-event and durable-fact suites cover profitability/filter gates, unknown outcomes, partial/terminal fills and failure handling. These are offline composition-boundary tests; they do not authorize exchange execution. Restart/replay and third-asset commission valuation remain deferred. STOP is terminal; CC-operator exposes authorized read-only status and has no clear/reset/unpause/resume path.
+
+### Conservative state-machine scenario requirements — issue #1763
+
+The scenario guide now includes a mandatory state-machine testing contract and conceptual lifecycle diagram. For each applicable transition, the issue matrix records source state, event identity, guard, destination, full Portfolio/Position/RecoveryLedger/OrderRegistry mutation, exact accounting delta, emitted effects, idempotency, conflict rejection, failure atomicity, recovery evidence, test owner/path and evidence status.
+
+Do not treat the conceptual diagram as a new production state model: map every tested transition to the canonical Conservative specification and actual implementation first. Domain tests own pure transitions; application integration tests own broker submit/cancel, REST/stream reconciliation, durable barriers and shutdown. Status-only assertions do not establish transition coverage. See [scenario guide](CONSERVATIVE_DOMAIN_SCENARIO_TESTS.md) and [issue #1763](https://github.com/45s/coinzilla/issues/1763) for the full transition and adversarial-sequence requirements.
