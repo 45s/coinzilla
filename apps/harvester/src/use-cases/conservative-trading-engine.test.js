@@ -5341,6 +5341,42 @@ test("fails closed without applying partial REST fills when cumulative history i
 })
 
 
+function createConflictingRestStreamFillFixture({ buyOrder } = {}) {
+  return {
+    streamFill: makeBuyFill({
+      order: buyOrder,
+      tradeId: "stream-execution-id",
+      price: "99.95",
+      quantity: "0.2",
+      quoteQuantity: "19.99",
+      executedAt: 10,
+    }),
+    restFill: makeBuyFill({
+      order: buyOrder,
+      tradeId: "rest-conflicting-execution-id",
+      price: "99.95",
+      quantity: "0.2",
+      quoteQuantity: "19.99",
+      executedAt: 10,
+    }),
+    partialOrder: makeOrderStatusUpdate({
+      order: buyOrder,
+      status: "PARTIALLY_FILLED",
+      executedQuantity: "0.2",
+      updatedAt: 2,
+    }),
+  }
+}
+
+function configureConflictingRestStreamHistory({ broker, buyOrder, partialOrder, restFill } = {}) {
+  broker.getOpenOrders = async () => ({
+    ok: true,
+    data: [makeOpenOrder({ order: buyOrder, executedQuantity: "0.2" })],
+  })
+  broker.getCanonicalOrderHistory = async () => ({ ok: true, data: [partialOrder] })
+  broker.getFills = async () => ({ ok: true, data: [restFill] })
+}
+
 test("fails closed when REST fill IDs conflict with executions already processed from the stream", async () => {
   const {
     engine,
@@ -5357,28 +5393,7 @@ test("fails closed when REST fill IDs conflict with executions already processed
     },
   })
   const buyOrder = engine.getOrders().find((order) => order.side === "BUY")
-  const streamFill = makeBuyFill({
-    order: buyOrder,
-    tradeId: "stream-execution-id",
-    price: "99.95",
-    quantity: "0.2",
-    quoteQuantity: "19.99",
-    executedAt: 10,
-  })
-  const restFillWithDifferentId = makeBuyFill({
-    order: buyOrder,
-    tradeId: "rest-conflicting-execution-id",
-    price: "99.95",
-    quantity: "0.2",
-    quoteQuantity: "19.99",
-    executedAt: 10,
-  })
-  const partialOrder = makeOrderStatusUpdate({
-    order: buyOrder,
-    status: "PARTIALLY_FILLED",
-    executedQuantity: "0.2",
-    updatedAt: 2,
-  })
+  const { streamFill, restFill, partialOrder } = createConflictingRestStreamFillFixture({ buyOrder })
   const streamResult = await engine.processUserDataEvent({
     event: {
       eventType: "executionReport",
@@ -5390,20 +5405,11 @@ test("fails closed when REST fill IDs conflict with executions already processed
   assert.equal(streamResult.ok, true)
   assert.equal(accountedFills.length, 1)
 
-  broker.getOpenOrders = async () => ({
-    ok: true,
-    data: [makeOpenOrder({
-    order: buyOrder,
-    executedQuantity: "0.2"
-  })]
-  })
-  broker.getCanonicalOrderHistory = async () => ({
-    ok: true,
-    data: [partialOrder]
-  })
-  broker.getFills = async () => ({
-    ok: true,
-    data: [restFillWithDifferentId]
+  configureConflictingRestStreamHistory({
+    broker,
+    buyOrder,
+    partialOrder,
+    restFill,
   })
 
   const result = await engine.reconcileOwnedOrders()
