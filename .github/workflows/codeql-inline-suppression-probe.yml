@@ -27,7 +27,6 @@ jobs:
         with:
           languages: javascript
           build-mode: none
-          queries: default
           packs: codeql/javascript-queries:AlertSuppression.ql
 
       - name: Analyze without uploading SARIF
@@ -47,12 +46,13 @@ jobs:
             exit 1
           fi
 
-          echo "## REST signer CodeQL suppression probe" >> "${GITHUB_STEP_SUMMARY}"
-          echo "" >> "${GITHUB_STEP_SUMMARY}"
-          echo "SARIF file: ${sarif_file}" >> "${GITHUB_STEP_SUMMARY}"
-          echo "" >> "${GITHUB_STEP_SUMMARY}"
+          {
+            echo "## REST signer CodeQL suppression probe"
+            echo ""
+            echo "SARIF file: ${sarif_file}"
+            echo ""
 
-          jq -r '
+            jq -r '
             [
               .runs[].results[]?
               | select(.ruleId == "js/insufficient-password-hash")
@@ -66,7 +66,9 @@ jobs:
             ]
             | .[]
             | "- \\(.uri):\\(.line) — suppressions: \\(.suppressions | tojson)"
-          ' "${sarif_file}" >> "${GITHUB_STEP_SUMMARY}"
+            ' "${sarif_file}"
+
+          } >> "${GITHUB_STEP_SUMMARY}"
 
           jq -e '
             [
@@ -78,5 +80,7 @@ jobs:
               and all($results[]; any(.suppressions[]?; .kind == "IN_SOURCE"))
           ' "${sarif_file}" >/dev/null
 
-          echo "" >> "${GITHUB_STEP_SUMMARY}"
-          echo "PASS: every REST signer result for js/insufficient-password-hash carries an IN_SOURCE suppression in this explicit CLI analysis." >> "${GITHUB_STEP_SUMMARY}"
+          {
+            echo ""
+            echo "PASS: every REST signer result for js/insufficient-password-hash carries an IN_SOURCE suppression in this explicit CLI analysis."
+          } >> "${GITHUB_STEP_SUMMARY}"
