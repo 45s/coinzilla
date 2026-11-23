@@ -169,7 +169,10 @@ function assertRoundedPriceCoversRecovery({
 test("plans recovery from cumulative multi-fill cost and confirmed partial SELL proceeds", () => {
   const state = applyRecoveryFills()
   const position = state.portfolio.getPosition({ marketId: market.id })
-  assertCumulativeAccounting({ state, position })
+  assertCumulativeAccounting({
+    state,
+    position,
+  })
 
   const plan = createRecoveryPlan({
     state,

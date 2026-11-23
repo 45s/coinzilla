@@ -337,5 +337,5 @@ Do not treat the conceptual diagram as a new production state model: map every t
 - Independent BigInt cross-products prove the 1% fee-adjusted base debit remains below the 9.9 sellable quantity, the next 0.1 step exceeds it, and the rounded-up price nets more than the exact required proceeds.
 - The first exact-head run exposed a test-oracle scaling error in the independent BigInt proceeds comparison (the scenario values and production plan outputs were correct); the test assertion has been corrected to compare both amounts at the same 10,000,000 denominator. The first run also exposed formatting and callback-length lint findings, addressed by extracting focused assertion/setup helpers.
 - Test-only coverage; no production behavior, trading rules, exchange access, or credentials changed. Corrected exact-head CI is pending.
-- The next exact-head lint run identified two remaining multi-property helper-call formatting violations; all affected calls now use one property per line. No assertion or production behavior changed.
+- Exact-head lint then identified one remaining multi-property helper-call formatting violation in the accounting assertion call; it now uses one property per line. No assertion or production behavior changed.
 

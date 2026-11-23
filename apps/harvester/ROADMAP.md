@@ -2171,6 +2171,6 @@ The detailed evidence, implementation commits, CI state and remaining unknowns a
 - The scenario independently verifies mixed base/quote commission effects, cumulative full BUY cost, partial SELL net proceeds, fee-adjusted sell quantity, tick-rounded recovery price, and exact net-proceeds sufficiency using BigInt cross-products.
 - The first exact-head run caught a test-only BigInt scale mismatch in the independent net-proceeds comparison plus strict ESLint formatting/function-length findings. The independent amounts are now compared at the same denominator; setup and arithmetic assertions are split into focused helpers.
 - This is test-only coverage. No production behavior or trading rules changed. Corrected exact-head GitHub Actions verification is pending.
-- The next exact-head lint run identified two remaining multi-property helper-call formatting violations; all affected calls now use one property per line. No assertion or production behavior changed.
+- Exact-head lint then identified one remaining multi-property helper-call formatting violation in the accounting assertion call; it now uses one property per line. No assertion or production behavior changed.
 
 - Next: review the remaining recovery arithmetic matrix against the canonical specification, add only evidenced missing boundary cases, and keep the issue/PR/inventory synchronized.
