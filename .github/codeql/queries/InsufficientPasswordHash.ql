@@ -47,23 +47,23 @@ module CoinzillaInsufficientPasswordHashConfig implements DataFlow::ConfigSig {
  * DataFlow::PropRead.getPropertyName().
  */
 private predicate isBitunixApiKeyIdentifierSource(DataFlow::Node source) {
-  exists(SensitiveVariableAccess access |
-    source = access and
-    (
-      exists(VarAccess variable |
-        access.asExpr() = variable and
-        variable.getName() = "apiKey"
-      )
-      or
-      exists(DataFlow::PropRead property |
-        access = property and
-        property.getPropertyName() = "apiKey"
-      )
-    ) and
-    access.getLocation().getFile().getRelativePath() in [
-      "packages/brokers/src/infrastructure/bitunix/spot/api/rest-client.js",
-      "packages/brokers/src/infrastructure/bitunix/spot/api/websocket-client.js"
-    ]
+  source instanceof SensitiveVariableAccess and
+  source.getLocation().getFile().getRelativePath() in [
+    "packages/brokers/scripts/bitunix/operator/order-probe-attempt.js",
+    "packages/brokers/scripts/bitunix/operator/order-probe-attempt.test.js",
+    "packages/brokers/src/infrastructure/bitunix/spot/api/rest-client.js",
+    "packages/brokers/src/infrastructure/bitunix/spot/api/websocket-client.js",
+    "packages/brokers/src/infrastructure/bitunix/spot/auth/create-rest-signature.js",
+    "packages/brokers/src/infrastructure/bitunix/spot/auth/create-websocket-signature.js",
+    "packages/brokers/src/infrastructure/bitunix/spot/broker.js"
+  ] and
+  (
+    source.asExpr().(VarAccess).getName() = "apiKey"
+    or
+    exists(DataFlow::PropRead property |
+      source = property and
+      property.getPropertyName() = "apiKey"
+    )
   )
 }
 

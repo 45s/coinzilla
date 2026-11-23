@@ -8,14 +8,25 @@ from pathlib import PurePosixPath
 
 CUSTOM_RULE_ID = "coinzilla/js-insufficient-password-hash"
 BUILTIN_RULE_ID = "js/insufficient-password-hash"
-BITUNIX_CLIENT_PATHS = (
+BITUNIX_API_KEY_SOURCE_PATHS = (
+    "packages/brokers/scripts/bitunix/operator/order-probe-attempt.js",
+    "packages/brokers/scripts/bitunix/operator/order-probe-attempt.test.js",
     "packages/brokers/src/infrastructure/bitunix/spot/api/rest-client.js",
     "packages/brokers/src/infrastructure/bitunix/spot/api/websocket-client.js",
-)
-BITUNIX_SIGNER_PATHS = (
     "packages/brokers/src/infrastructure/bitunix/spot/auth/create-rest-signature.js",
     "packages/brokers/src/infrastructure/bitunix/spot/auth/create-websocket-signature.js",
+    "packages/brokers/src/infrastructure/bitunix/spot/broker.js",
 )
+BITUNIX_ALERT_SINKS = {
+    (
+        "packages/brokers/src/infrastructure/bitunix/spot/auth/create-rest-signature.js",
+        75,
+    ),
+    (
+        "packages/brokers/src/infrastructure/bitunix/spot/auth/create-websocket-signature.js",
+        63,
+    ),
+}
 
 
 def load_sarif(path):
@@ -49,19 +60,32 @@ def result_uris(result):
                     yield uri.replace("\\", "/")
 
 
-def describe_location(location):
+def location_details(location):
     sarif_location = location.get("location", location)
     physical = sarif_location.get("physicalLocation", {})
-    uri = physical.get("artifactLocation", {}).get("uri", "<no-uri>")
-    line = physical.get("region", {}).get("startLine", "?")
+    uri = physical.get("artifactLocation", {}).get("uri", "<no-uri>").replace("\\\\", "/")
+    line = physical.get("region", {}).get("startLine")
     snippet = physical.get("region", {}).get("snippet", {}).get("text", "")
     message = sarif_location.get("message", {}).get("text", "")
-    detail = f"{uri}:{line}"
+    return uri, line, snippet, message
+
+
+def describe_location(location):
+    uri, line, snippet, message = location_details(location)
+    detail = f"{uri}:{line if line is not None else '?'}"
     if message:
         detail += f" ({message})"
     if snippet:
         detail += f" :: {snippet.strip()}"
     return detail
+
+
+def result_source_locations(result):
+    for code_flow in result.get("codeFlows", []):
+        for thread_flow in code_flow.get("threadFlows", []):
+            locations = thread_flow.get("locations", [])
+            if locations:
+                yield location_details(locations[0])
 
 
 def print_result_flows(results):
@@ -110,19 +134,29 @@ def verify_repository(path):
         for result in run.get("results", [])
         if result.get("ruleId") == CUSTOM_RULE_ID
     ]
-    protected_paths = BITUNIX_CLIENT_PATHS + BITUNIX_SIGNER_PATHS
     print_result_flows(custom_results)
-    reported_paths = sorted({
-        uri
-        for result in custom_results
-        for uri in result_uris(result)
-        if any(str(PurePosixPath(uri)).endswith(path) for path in protected_paths)
-    })
     print(f"Coinzilla replacement-query results: {len(custom_results)}")
-    print(f"Bitunix signing-flow paths in SARIF: {reported_paths}")
-    if reported_paths:
+
+    remaining_alert_sinks = []
+    remaining_api_key_sources = []
+    for result in custom_results:
+        for location in result.get("locations", []):
+            uri, line, _, _ = location_details(location)
+            if (uri, line) in BITUNIX_ALERT_SINKS:
+                remaining_alert_sinks.append(f"{uri}:{line}")
+
+        for uri, _, snippet, _ in result_source_locations(result):
+            if (
+                any(str(PurePosixPath(uri)).endswith(path) for path in BITUNIX_API_KEY_SOURCE_PATHS)
+                and "apiKey" in snippet
+            ):
+                remaining_api_key_sources.append(uri)
+
+    print(f"Original Bitunix alert sinks still reported: {sorted(set(remaining_alert_sinks))}")
+    print(f"Bitunix apiKey source locations still reported: {sorted(set(remaining_api_key_sources))}")
+    if remaining_alert_sinks or remaining_api_key_sources:
         raise AssertionError(
-            "Bitunix API-key signing flow still reported: " + ", ".join(reported_paths)
+            "Bitunix API-key signing flow still reported at original alert sinks or source locations."
         )
 
 
