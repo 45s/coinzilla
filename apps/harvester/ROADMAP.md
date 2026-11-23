@@ -2168,6 +2168,7 @@ The detailed evidence, implementation commits, CI state and remaining unknowns a
 - Started Phase 3 on the existing review branch and PR #1792; no second PR was opened.
 - Added a focused multi-fill recovery arithmetic composition test using real canonical Fill, Portfolio, RecoveryLedger, and `updateTradingAccounting` components.
 - The scenario independently verifies mixed base/quote commission effects, cumulative full BUY cost, partial SELL net proceeds, fee-adjusted sell quantity, tick-rounded recovery price, and exact net-proceeds sufficiency using BigInt cross-products.
+- Added the missing one-step residual boundary to `recovery-sell-plan.test.js`: when a 1% base-fee reserve makes a physical 0.1 residual smaller than one executable 0.1 step, no SELL is planned.
 - The first exact-head run caught a test-only BigInt scale mismatch in the independent net-proceeds comparison plus strict ESLint formatting/function-length findings. The independent amounts are now compared at the same denominator; setup and arithmetic assertions are split into focused helpers.
 - This is test-only coverage. No production behavior or trading rules changed. Corrected exact-head GitHub Actions verification is pending.
 - Exact-head lint then identified one remaining multi-property helper-call formatting violation in the accounting assertion call; it now uses one property per line. No assertion or production behavior changed.
