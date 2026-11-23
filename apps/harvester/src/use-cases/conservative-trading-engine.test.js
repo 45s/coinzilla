@@ -306,83 +306,73 @@ async function createHarness(options = {}) {
   return createHarnessFromOptions(resolvedOptions)
 }
 
+function getHarnessBrokerFailureOptions({ options } = {}) {
+  return {
+    placeOrderFailure: options.placeOrderFailure,
+    placeOrderFailureCount: options.placeOrderFailureCount,
+    placeOrderFailureAfterCount: options.placeOrderFailureAfterCount,
+    placeOrderFailureError: options.placeOrderFailureError,
+    placeOrderFailureAfterFirst: options.placeOrderFailureAfterFirst,
+    placeOrderThrow: options.placeOrderThrow,
+    cancelFailure: options.cancelFailure,
+    cancelThrow: options.cancelThrow,
+    cancelNotSent: options.cancelNotSent,
+    cancelNotSentOnSuccess: options.cancelNotSentOnSuccess,
+  }
+}
+
+function getHarnessBrokerCancellationOptions({ options } = {}) {
+  return {
+    cancelWithFill: options.cancelWithFill,
+    cancelExecutedQuantity: getHarnessCancelExecutedQuantity({
+      cancelWithFill: options.cancelWithFill,
+      cancelExecutedQuantity: options.cancelExecutedQuantity,
+    }),
+    cancelOrderStatus: options.cancelOrderStatus,
+    cancelUpdatedAt: options.cancelUpdatedAt,
+    cancelOrderGate: options.cancelOrderGate,
+    onCancelOrderStarted: options.onCancelOrderStarted,
+  }
+}
+
+function getHarnessBrokerOrderOptions({ options } = {}) {
+  return {
+    onPlaceOrder: options.onPlaceOrder,
+    placeOrderGate: options.placeOrderGate,
+    deferOrderSide: options.deferOrderSide,
+    onPlaceOrderStarted: options.onPlaceOrderStarted,
+    immediateFilledAcknowledgement: options.immediateFilledAcknowledgement,
+    getAcknowledgedFills: options.getAcknowledgedFills,
+    acknowledgedFillsGate: options.acknowledgedFillsGate,
+    getTerminalFills: options.getTerminalFills,
+  }
+}
+
+function getHarnessBrokerBalanceOptions({ options } = {}) {
+  return {
+    baseFreeBalance: options.baseFreeBalance,
+    quoteFreeBalance: options.quoteFreeBalance,
+    quoteCashFlowBaseline: options.quoteCashFlowBaseline,
+    portfolioBaseQuantityBaseline: options.portfolioBaseQuantityBaseline,
+    additionalTrackedBaseQuantityBaseline: options.additionalTrackedBaseQuantityBaseline,
+    committedQuoteBalanceBaseline: options.committedQuoteBalanceBaseline,
+    committedBaseBalanceBaseline: options.committedBaseBalanceBaseline,
+  }
+}
+
 function createHarnessBrokerState({ options } = {}) {
-  const {
-    marketMetadata: suppliedMarketMetadata,
-    getMarketMetadata: getMarketMetadataOverride,
-    getSymbolFilters: getSymbolFiltersOverride,
-    placeOrderFailure,
-    placeOrderFailureCount,
-    placeOrderFailureAfterCount,
-    placeOrderFailureError,
-    placeOrderFailureAfterFirst,
-    cancelWithFill,
-    cancelExecutedQuantity,
-    cancelOrderStatus,
-    cancelUpdatedAt,
-    cancelOrderGate,
-    onCancelOrderStarted,
-    placeOrderThrow,
-    cancelFailure,
-    cancelThrow,
-    cancelNotSent,
-    cancelNotSentOnSuccess,
-    onPlaceOrder,
-    placeOrderGate,
-    deferOrderSide,
-    onPlaceOrderStarted,
-    immediateFilledAcknowledgement,
-    getAcknowledgedFills,
-    acknowledgedFillsGate,
-    getTerminalFills,
-    baseFreeBalance,
-    quoteFreeBalance,
-    quoteCashFlowBaseline,
-    portfolioBaseQuantityBaseline,
-    additionalTrackedBaseQuantityBaseline,
-    committedQuoteBalanceBaseline,
-    committedBaseBalanceBaseline,
-  } = options
   return createHarnessBroker({
     market,
     baseAsset,
     quoteAsset,
-    getSymbolFiltersOverride,
-    getMarketMetadataOverride,
-    suppliedMarketMetadata,
+    getSymbolFiltersOverride: options.getSymbolFilters,
+    getMarketMetadataOverride: options.getMarketMetadata,
+    suppliedMarketMetadata: options.marketMetadata,
     marketMetadata,
-    placeOrderFailure,
-    placeOrderFailureCount,
-    placeOrderFailureAfterCount,
-    placeOrderFailureError,
-    placeOrderFailureAfterFirst,
-    cancelWithFill,
-    cancelExecutedQuantity: getHarnessCancelExecutedQuantity({ cancelWithFill,
-cancelExecutedQuantity }),
-    cancelOrderStatus,
-    cancelUpdatedAt,
-    cancelOrderGate,
-    onCancelOrderStarted,
-    placeOrderThrow,
-    cancelFailure,
-    cancelThrow,
-    cancelNotSent,
-    cancelNotSentOnSuccess,
-    onPlaceOrder,
-    placeOrderGate,
-    deferOrderSide,
-    onPlaceOrderStarted,
-    immediateFilledAcknowledgement,
-    getAcknowledgedFills,
-    acknowledgedFillsGate,
-    getTerminalFills,
-    baseFreeBalance,
-    quoteFreeBalance,
-    quoteCashFlowBaseline,
-    portfolioBaseQuantityBaseline,
-    additionalTrackedBaseQuantityBaseline,
-    committedQuoteBalanceBaseline,
-    committedBaseBalanceBaseline,
+    ...getHarnessBrokerFailureOptions({ options }),
+    ...getHarnessBrokerCancellationOptions({ options }),
+    ...getHarnessBrokerOrderOptions({ options }),
+    ...getHarnessBrokerBalanceOptions({ options }),
   })
 }
 
@@ -393,74 +383,59 @@ function createHarnessMutableState({ options } = {}) {
   }
 }
 
-function createHarnessEngine({ options, brokerState, state } = {}) {
-  const {
-    strategyPolicy,
-    logger,
-    hasUnownedOpenOrdersForSymbol,
-    appConfig: suppliedAppConfig,
-    isMarketPriceFresh,
-    isMarketBookFresh,
-    marketMetadata: suppliedMarketMetadata,
-    getMarketMetadata: getMarketMetadataOverride,
-    eventPublisher,
-    updateTradingAccounting: updateTradingAccountingOverride,
-    completeRecoveryCycle: completeRecoveryCycleOverride,
-    getPortfolio: getPortfolioOverride,
-    getRecoveryLedger: getRecoveryLedgerOverride,
-    getVolatilityData: getVolatilityDataOverride,
-    onOperationalStateCancellationIntent,
-    onOperationalStateCancellationOutcome,
-    onOperationalStateStrategyMarketPaused,
-    canTrade: canTradeOverride,
-    isStopping: isStoppingOverride,
-    accountingFailure,
-    accountingApplied,
-    recoveryCompletion,
-    additionalTrackedQuoteCashFlow,
-    additionalTrackedBaseQuantity,
-    initialState,
-  } = options
-  const effectiveEventPublisher = createHarnessEventPublisher({ eventPublisher })
+function createHarnessEngineCoreOptions({ options, brokerState } = {}) {
+  const effectiveEventPublisher = createHarnessEventPublisher({ eventPublisher: options.eventPublisher })
   const defaultStrategyPolicy = createHarnessStrategyPolicy({ initialPortfolio: options.initialPortfolio })
-  return makeConservativeTradingEngine({
+  return {
     broker: brokerState.broker,
-    logger,
-    strategyPolicy: strategyPolicy ?? defaultStrategyPolicy,
-    hasUnownedOpenOrdersForSymbol,
-    isMarketPriceFresh,
-    isMarketBookFresh,
-    getVolatilityData: getVolatilityDataOverride,
-    onOperationalStateCancellationIntent,
-    onOperationalStateCancellationOutcome,
-    onOperationalStateStrategyMarketPaused,
+    logger: options.logger,
+    strategyPolicy: options.strategyPolicy ?? defaultStrategyPolicy,
+    hasUnownedOpenOrdersForSymbol: options.hasUnownedOpenOrdersForSymbol,
+    isMarketPriceFresh: options.isMarketPriceFresh,
+    isMarketBookFresh: options.isMarketBookFresh,
+    getVolatilityData: options.getVolatilityData,
+    onOperationalStateCancellationIntent: options.onOperationalStateCancellationIntent,
+    onOperationalStateCancellationOutcome: options.onOperationalStateCancellationOutcome,
+    onOperationalStateStrategyMarketPaused: options.onOperationalStateStrategyMarketPaused,
     eventPublisher: effectiveEventPublisher,
-    appConfig: suppliedAppConfig ?? appConfig,
-    getAdditionalTrackedQuoteCashFlow: () => additionalTrackedQuoteCashFlow,
-    getAdditionalTrackedBaseQuantity: () => additionalTrackedBaseQuantity,
+    appConfig: options.appConfig ?? appConfig,
+    getAdditionalTrackedQuoteCashFlow: () => options.additionalTrackedQuoteCashFlow,
+    getAdditionalTrackedBaseQuantity: () => options.additionalTrackedBaseQuantity,
+  }
+}
+
+function createHarnessEngineWorkflowOptions({ options, brokerState, state } = {}) {
+  return {
     ...createHarnessEngineCallbacks({
-      getPortfolioOverride,
-      getRecoveryLedgerOverride,
-      getMarketMetadataOverride,
-      suppliedMarketMetadata,
-      marketMetadataFallback: suppliedMarketMetadata ?? marketMetadata,
+      getPortfolioOverride: options.getPortfolio,
+      getRecoveryLedgerOverride: options.getRecoveryLedger,
+      getMarketMetadataOverride: options.getMarketMetadata,
+      suppliedMarketMetadata: options.marketMetadata,
+      marketMetadataFallback: options.marketMetadata ?? marketMetadata,
       accountSnapshot: brokerState.accountSnapshot,
       state,
       pauses: brokerState.pauses,
     }),
-    updateTradingAccounting: updateTradingAccountingOverride ?? createHarnessTradingAccounting({
-      accountingFailure,
+    updateTradingAccounting: options.updateTradingAccounting ?? createHarnessTradingAccounting({
+      accountingFailure: options.accountingFailure,
       accountedFills: brokerState.accountedFills,
       accountedFillIds: brokerState.accountedFillIds,
-      accountingApplied,
+      accountingApplied: options.accountingApplied,
     }),
-    completeRecoveryCycle: completeRecoveryCycleOverride ?? createHarnessRecoveryCycleCompletion({
+    completeRecoveryCycle: options.completeRecoveryCycle ?? createHarnessRecoveryCycleCompletion({
       completedCycles: brokerState.completedCycles,
-      recoveryCompletion,
+      recoveryCompletion: options.recoveryCompletion,
     }),
-    canTrade: canTradeOverride,
-    isStopping: isStoppingOverride,
-    initialState,
+    canTrade: options.canTrade,
+    isStopping: options.isStopping,
+    initialState: options.initialState,
+  }
+}
+
+function createHarnessEngine({ options, brokerState, state } = {}) {
+  return makeConservativeTradingEngine({
+    ...createHarnessEngineCoreOptions({ options, brokerState }),
+    ...createHarnessEngineWorkflowOptions({ options, brokerState, state }),
   })
 }
 
@@ -1075,6 +1050,52 @@ test("reconciles and pauses when a BUY fills during trailing cancellation", asyn
 })
 
 
+function assertPublishedOrderSubmissionLifecycle({ harness, events, timeline, lifecycleLogs } = {}) {
+  const { orders } = harness
+  assert.equal(orders.length, 1)
+  assert.deepEqual(timeline, [
+    "event:strategy.decision",
+    "event:order.submission_requested",
+    "log:SUBMITTED",
+    "broker.placeOrder",
+    "event:order.submitted",
+    "log:ACCEPTED",
+  ])
+  assert.deepEqual(events.map(({ name }) => name), [
+    "strategy.decision",
+    "order.submission_requested",
+    "order.submitted",
+  ])
+  assert.deepEqual(events[0].data, {
+    strategy: "CONSERVATIVE",
+    symbol: "DOGEUSDT",
+    referencePrice: "100",
+    reason: "INITIAL_BUY",
+    inputs: {
+      freeQuoteBalance: "1000",
+      investmentLimit: "1000",
+      priceStepPercent: "0.05",
+    },
+    actions: [{
+      side: "BUY",
+      type: "LIMIT_MAKER",
+      price: "99.95",
+      quantity: "1",
+      reason: "INITIAL_BUY",
+    }],
+  })
+  assert.equal(events[1].data.status, "PENDING")
+  const { clientOrderId } = events[1].data
+  assert.match(clientOrderId, /^h-[0-9a-f]{22}-1$/)
+  assert.equal(events[2].data.status, "OPEN")
+  assert.equal(events[2].data.brokerOrderId, `broker-${clientOrderId}`)
+  assert.deepEqual(lifecycleLogs.map(({ lifecycleStatus }) => lifecycleStatus), ["SUBMITTED", "ACCEPTED"])
+  assert.equal(lifecycleLogs[0].strategyId, StrategyId.COIN_GRABBER)
+  assert.equal(lifecycleLogs[0].brokerOrderId, undefined, "SUBMITTED must describe the durable intent before broker acknowledgement assigns an exchange order ID.")
+  assert.equal(lifecycleLogs[0].clientOrderId, clientOrderId, "The pending lifecycle record must retain the client order identity.")
+  assert.equal(lifecycleLogs[1].brokerOrderId, `broker-${clientOrderId}`, "ACCEPTED must carry the exchange-assigned broker order identity.")
+}
+
 test("publishes actionable decisions and order submission facts around broker I/O", async () => {
   const events = []
   const timeline = []
@@ -1101,7 +1122,6 @@ test("publishes actionable decisions and order submission facts around broker I/
       return { ok: true }
     } },
   })
-  const {orders} = harness
   await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
     priceEvent: {
@@ -1110,45 +1130,7 @@ test("publishes actionable decisions and order submission facts around broker I/
       timestamp: 1
     },
   })
-
-  assert.equal(orders.length, 1)
-  assert.deepEqual(timeline, [
-    "event:strategy.decision",
-    "event:order.submission_requested",
-    "log:SUBMITTED",
-    "broker.placeOrder",
-    "event:order.submitted",
-    "log:ACCEPTED",
-  ])
-  assert.deepEqual(events.map(({ name }) => name), [
-    "strategy.decision",
-    "order.submission_requested",
-    "order.submitted",
-  ])
-  assert.equal(events[0].data.strategy, "CONSERVATIVE")
-  assert.equal(events[0].data.symbol, "DOGEUSDT")
-  assert.equal(events[0].data.referencePrice, "100")
-  assert.equal(events[0].data.reason, "INITIAL_BUY")
-  assert.equal(events[0].data.inputs.freeQuoteBalance, "1000")
-  assert.equal(events[0].data.inputs.investmentLimit, "1000")
-  assert.equal(events[0].data.inputs.priceStepPercent, "0.05")
-  assert.deepEqual(events[0].data.actions, [{
-    side: "BUY",
-    type: "LIMIT_MAKER",
-    price: "99.95",
-    quantity: "1",
-    reason: "INITIAL_BUY",
-  }])
-  assert.equal(events[1].data.status, "PENDING")
-  const {clientOrderId} = events[1].data
-  assert.match(clientOrderId, /^h-[0-9a-f]{22}-1$/)
-  assert.equal(events[2].data.status, "OPEN")
-  assert.equal(events[2].data.brokerOrderId, `broker-${clientOrderId}`)
-  assert.deepEqual(lifecycleLogs.map(({ lifecycleStatus }) => lifecycleStatus), ["SUBMITTED", "ACCEPTED"])
-  assert.equal(lifecycleLogs[0].strategyId, StrategyId.COIN_GRABBER)
-  assert.equal(lifecycleLogs[0].brokerOrderId, undefined, "SUBMITTED must describe the durable intent before broker acknowledgement assigns an exchange order ID.")
-  assert.equal(lifecycleLogs[0].clientOrderId, clientOrderId, "The pending lifecycle record must retain the client order identity.")
-  assert.equal(lifecycleLogs[1].brokerOrderId, `broker-${clientOrderId}`, "ACCEPTED must carry the exchange-assigned broker order identity.")
+  assertPublishedOrderSubmissionLifecycle({ harness, events, timeline, lifecycleLogs })
 })
 
 test("order intent publication failure prevents a broker order", async () => {
