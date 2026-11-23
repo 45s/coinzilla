@@ -8,6 +8,7 @@ on:
       - '.github/codeql/**'
       - '.github/workflows/codeql-query-regression.yml'
       - 'packages/brokers/src/infrastructure/bitunix/spot/**'
+      - 'packages/brokers/scripts/bitunix/operator/**'
   workflow_dispatch:
 
 concurrency:
