@@ -22,6 +22,17 @@ function createSubmittedCycle() {
   })
 }
 
+function assertNextCycleBlocked({ state, nextCycleId }) {
+  assert.throws(
+    () => startNextRecoverySellerCycle({
+      previousState: state,
+      nextCycleId,
+    }),
+    /only from a closed profitable and reconciled cycle/,
+    "A cycle without a closed, profitable and reconciled SELL must not advance.",
+  )
+}
+
 test("an unknown SELL outcome retains its only identity until reconciliation completes", () => {
   const submitted = createSubmittedCycle()
   const unknown = markRecoverySellerCycleSellUnknown({
@@ -58,14 +69,10 @@ test("an unknown SELL outcome retains its only identity until reconciliation com
     "The cycle must record that terminal reconciliation remains incomplete.")
   assert.equal(incomplete.profitabilityEligible, null,
     "Profitability must remain unevaluated until complete reconciliation is available.")
-  assert.throws(
-    () => startNextRecoverySellerCycle({
-      previousState: incomplete,
-      nextCycleId: "rs-lifecycle-cycle-002",
-    }),
-    /only from a closed profitable and reconciled cycle/,
-    "A cycle awaiting reconciliation must not permit the next recovery cycle.",
-  )
+  assertNextCycleBlocked({
+    state: incomplete,
+    nextCycleId: "rs-lifecycle-cycle-002",
+  })
 
   const reconciled = reconcileRecoverySellerCycleSell({
     state: incomplete,
