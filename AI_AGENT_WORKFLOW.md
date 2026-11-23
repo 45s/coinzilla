@@ -60,6 +60,39 @@ Every non-trivial task MUST have a GitHub Issue (or an existing issue explicitly
 
 An issue title/body is not frozen after kickoff. The responsible agent MUST update it when scope, acceptance criteria, decisions, dependencies, blockers or status materially change. Keep the description concise and current; put dated progress/checkpoint detail in comments rather than accumulating an event log in the issue body. Link the issue from the branch/PR and the owning roadmap where appropriate. If the task is genuinely a tiny standalone change, use an existing tracking issue or create a concise issue; do not invent bureaucracy for a one-line typo.
 
+### Continuous issue knowledge capture — mandatory
+
+The GitHub Issue is the single source of truth for the task's current context and durable work history. This is an active responsibility throughout the task, not a closeout exercise. An agent receiving only the issue URL must be able to understand the task, recover the important evidence and decisions, and continue safely without private chat history.
+
+**Capture meaningful information as soon as it is discovered.** Before moving to an unrelated investigation or implementation step, record the discovery or decision in the issue. Do not wait for a milestone, commit, PR or task completion. This requirement applies to every agent and every ownership handoff.
+
+Record information that changes or materially improves the task understanding, including:
+
+- Confirmed findings and root-cause evidence, with exact repository paths and line references; include only short, relevant code snippets when they explain the finding better than a link.
+- Reproduction steps, commands, observed output, logs, failing tests and the exact conditions under which a behavior occurs.
+- Test and experiment outcomes, including informative failed attempts. State what was tried, what happened, and what the result proves or rules out.
+- Decisions, their rationale, constraints and invariants; alternatives considered and why an approach was rejected.
+- New or corrected requirements, acceptance criteria, dependencies, ownership boundaries, compatibility constraints, blockers and safety limits.
+- Implementation checkpoints: branch, commit SHA and subject, changed paths, PR link, and the relationship between the change and the accepted task scope.
+- Verification evidence: exact command or workflow, pass/fail/skipped/blocked outcome, relevant log or run link, and the exact commit SHA tested.
+
+**Use the issue description for the current canonical snapshot:** goal, scope/ownership, requirements/invariants, acceptance criteria, dependencies, verification plan, documentation impact, decisions that remain in force, and current status/branch/head/PR/next action. Update it whenever one of those facts materially changes, and explicitly replace or mark superseded stale statements so the current description never contains competing versions.
+
+**Use issue comments for the chronological record:** add a concise dated comment when a meaningful finding, material decision, rejected approach, experiment result, blocker or handoff occurs. Routine implementation details that do not change task understanding do not need a comment. After each meaningful pushed checkpoint, refresh the issue's current-state summary with the exact head SHA, completed outcome, in-progress slice, next action and validation status; do not create a comment for every routine commit unless it is useful as a historical event.
+
+Evidence must be useful and auditable:
+
+- Link to source files, exact commits, PRs, test runs, workflow logs and external references. Include precise paths/line ranges and a small excerpt when a link alone would make the finding difficult to recover.
+- Distinguish **confirmed**, **observed**, **inferred/hypothesis**, **rejected**, and **unknown** information. Never present an inference as a fact or a stale CI result as current.
+- Preserve meaningful negative evidence and failed experiments when they prevent repeated work or explain a decision.
+- Summarize large logs and attach/link the full artifact where available; do not flood the issue with unbounded output or duplicate an entire PR diff.
+- Never put secrets, credentials, tokens, private keys or unnecessary personal/sensitive data in an issue, comment, snippet or log. Redact them and record where the protected evidence is stored only when authorized.
+- When new evidence invalidates an earlier conclusion, update the description and add a comment explaining what changed and which evidence supersedes the old conclusion.
+
+**Handoff is complete only when the issue is current.** In addition to the checkpoint format below, ensure the issue captures the exact branch/head SHA and commit subject, PR state/target, base freshness, completed and remaining work, key findings/evidence, decisions/rationale, checks and exact validated SHA, blockers/safety boundaries, documentation/roadmap state and one concrete next action. The incoming agent must independently repeat the mandatory standards preflight and verify live branch/PR/CI state before acting.
+
+The issue is the task-context source of truth, not a replacement for implementation or durable repository policy: commits and PRs prove what changed; source/tests/configuration prove implemented behavior; canonical repository/domain docs own long-lived engineering rules and contracts. Link those sources from the issue rather than copying them into a parallel task log.
+
 ### One task, one branch, one PR — mandatory
 
 A coherent task MUST be implemented on one short-lived task branch and delivered through one task PR. The branch and PR are the unit of review, validation, integration and handoff.
