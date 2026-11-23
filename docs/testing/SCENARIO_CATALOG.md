@@ -426,6 +426,33 @@ The [Conservative Domain Specification](../../apps/harvester/docs/domain/CONSERV
 
 The [Recovery Seller Domain Specification](../../apps/harvester/docs/domain/recovery-seller-domain-specification.md) and owner-approved decisions remain the behavior authority. Where the contract is draft, unresolved, or deferred, the scenario must remain blocked rather than inventing behavior.
 
+
+### Conservative executable scenario matrix
+
+The executable definitions are maintained in `apps/harvester/test/scenarios/conservative/`; the shared loader maps them to the existing critical behavior registry in `apps/harvester/docs/critical-behaviors.json`. The runner command is `pnpm --filter @coinzilla/harvester scenarios:conservative`. Generated inventory, execution, and coverage JSON is written to `apps/harvester/reports/conservative-scenarios/` and uploaded by the dedicated Harvester Conservative scenarios workflow.
+
+| Scenario ID | Category | Priority | Initial evidence status |
+|---|---|---:|---|
+| `CON-DECISION-001` | strategy-decisions | P0 | TEST-MAPPED |
+| `CON-BUY-001` | buy-lifecycle | P0 | TEST-MAPPED |
+| `CON-SELL-001` | sell-lifecycle | P0 | TEST-MAPPED |
+| `CON-RECOVERY-001` | recovery-lifecycle | P0 | TEST-MAPPED |
+| `CON-FILL-001` | partial-fills | P0 | TEST-MAPPED |
+| `CON-ACCOUNTING-001` | accounting-pnl | P0 | TEST-MAPPED |
+| `CON-FEE-001` | fees-commission-assets | P0 | TEST-MAPPED |
+| `CON-BALANCE-001` | balance-inventory | P0 | TEST-MAPPED |
+| `CON-FILTER-001` | precision-exchange-filters | P1 | TEST-MAPPED |
+| `CON-MARKET-001` | market-conditions | P1 | TEST-MAPPED |
+| `CON-ERROR-001` | exchange-failures | P0 | TEST-MAPPED |
+| `CON-EVENT-001` | event-reliability | P0 | TEST-MAPPED |
+| `CON-PERSIST-001` | persistence-restart-recovery | P1 | TEST-MAPPED |
+| `CON-PERSIST-002` | persistence-restart-recovery | P1 | UNSUPPORTED |
+| `CON-CONFIG-001` | configuration | P1 | MISSING |
+| `CON-SAFETY-001` | safety-risk-controls | P0 | TEST-MAPPED |
+| `CON-RUNTIME-001` | runtime-coordinator-integration | P1 | TEST-MAPPED |
+
+`TEST-MAPPED` means only that named tests are linked; it is not equivalent to `VERIFIED`. Runtime restart/state restoration remains `UNSUPPORTED` under the active Conservative specification §7. The coverage report scopes unmapped-test analysis to named tests in the critical behavior registry, not every Harvester test file.
+
 ### RS-001 — Legacy basis is not proof of current Spot custody
 
 **Status:** MISSING — fresh scenario test required.

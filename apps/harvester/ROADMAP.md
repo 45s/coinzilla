@@ -2126,3 +2126,10 @@ The detailed evidence, implementation commits, CI state and remaining unknowns a
 - #1362 / [PR #1761](https://github.com/45s/coinzilla/pull/1761) remain focused on deterministic Conservative recovery accounting, replay, late-fill safety and serialized shutdown behavior.
 - The 28 historical `HARVESTER_ORDER_HISTORY_RECORD_INVALID` events are separated into [issue #1789](https://github.com/45s/coinzilla/issues/1789). Their historical field, input shape, projection stage and operational impact remain unknown; no root cause is inferred from timestamp correlation.
 - Keep the archive immutable. The database dump has not been inspected and requires explicit owner authorization. No TESTNET/LIVE writes or account mutations are part of this work.
+
+## Conservative executable scenario tooling — child issue #1797
+
+The scenario-definition and reporting workstream is tracked separately from the active domain-test implementation in [#1763](https://github.com/45s/coinzilla/issues/1763). Child issue [#1797](https://github.com/45s/coinzilla/issues/1797) owns the reusable ES-module scenario schema/loader/runner, stable `CON-*` inventory, JSON reports, and offline CI artifact workflow. It reuses `docs/critical-behaviors.json` and the shared testing methodology; it does not introduce a second critical-behavior registry or change production trading logic.
+
+Initial implementation branch baseline: `develop` commit `05deb23a12c56ad64b231f0c59392e6d916447b1` (2026-11-23). The current inventory has 17 scenarios across 16 categories; 15 are TEST-MAPPED, one configuration scenario is MISSING, and runtime restart restoration is UNSUPPORTED by specification §7.
+

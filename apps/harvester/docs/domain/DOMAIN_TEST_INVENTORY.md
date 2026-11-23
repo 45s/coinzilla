@@ -270,3 +270,17 @@ Do not treat the conceptual diagram as a new production state model: map every t
 - `src/use-cases/create-conservative-shutdown-safety.test.js` proves shutdown deferred-work cleanup is serialized behind an in-flight transition. `src/use-cases/conservative-strategy-safety-pause.integration.test.js` still uses `createSafetyPauseAccounting()`, a stub that records fill IDs and arrays instead of applying real Portfolio/RecoveryLedger transitions. It remains secondary pause/BUY-gate evidence only. The real late-SELL accounting proof is in `src/bootstrap/user-data/create-user-data-event-safety-halt.test.js`.
 - `src/bootstrap/shutdown/create-conservative-shutdown-participant.test.js` verifies the Conservative shutdown participant awaits the serialized engine gate barrier before owned-BUY cancellation.
 - `src/bootstrap/user-data/create-user-data-event-safety-halt.test.js` combines the real user-data handler with `createAccountIntegritySafetyHalt` and now applies an archived ADA BUY plus late SELL through real `Fill`, `Portfolio`, `RecoveryLedger`, and production `updateTradingAccounting` components. It proves the retryable REST/stream failure triggers recovery-mode reconciliation and owned-BUY cancellation; the later SELL applies once, a duplicate is an immutable no-op, exact Portfolio/RecoveryLedger base/cost/proceeds/profit remain aligned, readiness stays closed, and BUY evaluation does not resume. The test uses a narrow engine harness for the orchestration boundary, records calls as named objects, and represents the retryable REST failure with its explicit failure contract; it does not mock the accounting behavior under test.
+
+## Executable Conservative scenario system — issue #1797
+
+The scenario-definition and runner implementation is tracked in [#1797](https://github.com/45s/coinzilla/issues/1797), under the parent audit [#1763](https://github.com/45s/coinzilla/issues/1763).
+
+- Definitions: `test/scenarios/conservative/` (17 stable `CON-*` scenarios across 16 categories).
+- Shared tooling: `test/scenarios/shared/` (schema, loader, factories, runner, assertions, reporter).
+- Existing critical behavior and test ownership: `docs/critical-behaviors.json` (reused, not duplicated).
+- Runner: `pnpm --filter @coinzilla/harvester scenarios:conservative`.
+- Generated reports: `reports/conservative-scenarios/scenario-inventory.json`, `scenario-results.json`, and `scenario-coverage.json`.
+- CI evidence: the dedicated `Harvester Conservative scenarios` workflow uploads a `conservative-scenario-reports` artifact.
+
+The initial catalog has 15 TEST-MAPPED scenarios, one MISSING configuration scenario, and one UNSUPPORTED runtime-restart scenario. TEST-MAPPED is not VERIFIED: named test mapping is present, but assertion-level review and exact-head execution evidence are still required. The coverage report's test-universe limitation is the named test set in `critical-behaviors.json`, not every Harvester test file.
+

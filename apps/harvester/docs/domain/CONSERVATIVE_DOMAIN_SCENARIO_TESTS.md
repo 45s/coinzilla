@@ -104,3 +104,43 @@ Required adversarial variants include:
 - persistence or projection failure between staged state changes;
 - completion attempt below profit threshold, with sellable active residual, with invalid dust evidence, or with incomplete terminal evidence;
 - replay of a completed event and stale events from the previous cycle.
+
+## Executable Conservative scenario inventory
+
+The executable scenario definitions live under `test/scenarios/conservative/` and use stable `CON-*` IDs. The shared loader resolves implementation modules and named test cases from the existing `docs/critical-behaviors.json` registry. That registry remains the source of truth for critical behavior ownership; this suite does not duplicate it.
+
+The inventory currently contains 17 scenarios across all 16 requested categories. The definitions carry preconditions, initial state, ordered input events, expected state/orders/accounting/side effects, invariants, specification requirement IDs, source files, named tests, priority, tags, and evidence status.
+
+Run the full mapped suite and generate the three JSON reports:
+
+```bash
+pnpm --filter @coinzilla/harvester scenarios:conservative
+```
+
+Run one scenario, a category, or filter the inventory:
+
+```bash
+pnpm --filter @coinzilla/harvester scenarios:conservative -- --id CON-BUY-001
+pnpm --filter @coinzilla/harvester scenarios:conservative -- --category recovery-lifecycle
+pnpm --filter @coinzilla/harvester scenarios:conservative -- --priority P0
+pnpm --filter @coinzilla/harvester scenarios:conservative -- --tag fees
+pnpm --filter @coinzilla/harvester scenarios:conservative -- --status MISSING
+pnpm --filter @coinzilla/harvester scenarios:conservative -- --list
+```
+
+Reports are generated under `reports/conservative-scenarios/`:
+
+- `scenario-inventory.json` — scenario definitions, category/priority/status totals, and evidence mappings.
+- `scenario-results.json` — per-scenario and per-test execution outcomes for the selected run.
+- `scenario-coverage.json` — critical gaps, scenarios without tests, uncovered requirements/critical behaviors, and critical-registry tests not mapped to a scenario.
+
+The dedicated `Harvester Conservative scenarios` workflow runs this offline suite for scenario-related pull requests and uploads the reports as the `conservative-scenario-reports` artifact. It uses Node's built-in test runner and deterministic existing test cases; it does not call a live exchange or use credentials.
+
+### Evidence status interpretation
+
+The repository's shared vocabulary is retained: `VERIFIED`, `PARTIAL`, `MISSING`, `BLOCKED`, `SPECIFIED`, `TEST-MAPPED`, and `UNSUPPORTED`. `TEST-MAPPED` means a named test path and title are linked; it is not equivalent to `VERIFIED`. Promotion to `VERIFIED` requires assertion-level business-outcome review and exact commit/test-command evidence.
+
+The initial inventory marks the invalid-configuration scenario `MISSING` pending test discovery. Runtime restart/state restoration is `UNSUPPORTED` under the active Conservative specification §7 and remains subject to the separate acceptance gates in #654. Offline persistence tests are not runtime restoration evidence.
+
+The current report's unmapped-test universe is the named test set in `docs/critical-behaviors.json`; it does not claim to scan every Harvester test file. This limitation is recorded in the generated coverage report.
+
