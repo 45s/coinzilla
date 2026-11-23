@@ -4640,35 +4640,37 @@ function assertTerminalRecoverySellAccounting({ result, currentPortfolio, curren
   assert.equal(accountedFills[0].commissions[0].amount.amount, "0.01")
 }
 
+function createTerminalRecoverySellAccounting({ accountingState, accountedFills } = {}) {
+  return async ({ fill }) => {
+    accountingState.currentPortfolio = accountingState.currentPortfolio.applyFill({
+      strategyId: StrategyId.COIN_GRABBER,
+      fill,
+    }).portfolio
+    accountingState.currentRecoveryLedger = accountingState.currentRecoveryLedger.applyFill({
+      strategyId: StrategyId.COIN_GRABBER,
+      fill,
+    }).ledger
+    accountedFills.push(fill)
+    return { ok: true, data: { applied: true, duplicate: false } }
+  }
+}
+
 async function runTerminalRecoverySellStatusScenario({ status }) {
   const seeded = makeSeededRecoveryState()
-  let currentPortfolio = seeded.portfolio
-  let currentRecoveryLedger = seeded.recoveryLedger
+  const accountingState = {
+    currentPortfolio: seeded.portfolio,
+    currentRecoveryLedger: seeded.recoveryLedger,
+  }
   const accountedFills = []
   const terminalFill = { current: undefined }
   const harness = await createHarness({
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
     baseFreeBalance: "1",
-    getPortfolio: () => currentPortfolio,
-    getRecoveryLedger: () => currentRecoveryLedger,
+    getPortfolio: () => accountingState.currentPortfolio,
+    getRecoveryLedger: () => accountingState.currentRecoveryLedger,
     getTerminalFills: ({ orderId }) => terminalFill.current?.brokerOrderId === orderId ? [terminalFill.current] : [],
-    updateTradingAccounting: async ({ fill }) => {
-      currentPortfolio = currentPortfolio.applyFill({ strategyId: StrategyId.COIN_GRABBER,
-        fill,
-      }).portfolio
-      currentRecoveryLedger = currentRecoveryLedger.applyFill({ strategyId: StrategyId.COIN_GRABBER,
-        fill,
-      }).ledger
-      accountedFills.push(fill)
-      return {
-        ok: true,
-        data: {
-          applied: true,
-          duplicate: false,
-        },
-      }
-    },
+    updateTradingAccounting: createTerminalRecoverySellAccounting({ accountingState, accountedFills }),
   })
   await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
@@ -4702,8 +4704,8 @@ async function runTerminalRecoverySellStatusScenario({ status }) {
   })
   assertTerminalRecoverySellAccounting({
     result,
-    currentPortfolio,
-    currentRecoveryLedger,
+    currentPortfolio: accountingState.currentPortfolio,
+    currentRecoveryLedger: accountingState.currentRecoveryLedger,
     accountedFills,
     quoteQuantity,
   })
