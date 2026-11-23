@@ -23,6 +23,7 @@ The two High `js/insufficient-password-hash` findings trace a public API identif
 ### Current experiment
 
 The source-to-sink paths show `apiKey` used as the internal name for a public identifier. PR #1734 tests renaming that internal value to `publicIdentifier` through both clients and signer inputs, while preserving:
+
 - Public client constructor option `apiKey`.
 - REST wire header `api-key` and WebSocket wire parameter `apiKey`.
 - Private signing secret handling.
