@@ -3,6 +3,20 @@ import test from "node:test"
 import { PassThrough } from "node:stream"
 import { createHarvesterConsoleTransport } from "./configure-harvester-logging.js"
 
+function assertDistinctOrderHistoryFailureLines(lines, written) {
+  assert.equal(lines.length, 3, "Changing only the validation field or only the client-order identity must produce a distinct console line.")
+  assert.match(lines[0], /providerInstanceId/, "The first compact diagnostic must expose its safe invalid field.")
+  assert.match(lines[0], /h-dff68008c72c47a59368ad-2/, "The first compact diagnostic must identify its affected order.")
+  assert.match(lines[1], /market\\.baseAsset\\.code/, "The second compact diagnostic must expose its distinct invalid field.")
+  assert.match(lines[1], /h-dff68008c72c47a59368ad-2/, "A field change alone must remain visible for the same order.")
+  assert.match(lines[2], /market\\.baseAsset\\.code/, "The third compact diagnostic must retain its validation field.")
+  assert.match(lines[2], /h-dff68008c72c47a59368ad-4/, "An order-identity change alone must remain visible for the same field.")
+  assert.ok(lines.every((line) => line.includes("HARVESTER_ORDER_HISTORY_RECORD_INVALID")), "Each line must retain the stable error code.")
+  assert.doesNotMatch(written, /Previous identical log entry repeated/, "Different validation failures must not be collapsed as identical.")
+  assert.doesNotMatch(written, /accountId|providerInstanceId":|eventId/, "The summary must not expose unrelated account/provider/event payload fields.")
+  assert.ok(lines.every((line) => line.length <= 200), "Each actionable validation diagnostic must remain within the console line limit.")
+}
+
 test("shows validation fields and order identity without collapsing distinct order-history failures", () => {
   const output = new PassThrough()
   let written = ""
@@ -54,17 +68,7 @@ test("shows validation fields and order identity without collapsing distinct ord
   }
 
   const lines = written.trim().split("\n")
-  assert.equal(lines.length, 3, "Changing only the validation field or only the client-order identity must produce a distinct console line.")
-  assert.match(lines[0], /providerInstanceId/, "The first compact diagnostic must expose its safe invalid field.")
-  assert.match(lines[0], /h-dff68008c72c47a59368ad-2/, "The first compact diagnostic must identify its affected order.")
-  assert.match(lines[1], /market\.baseAsset\.code/, "The second compact diagnostic must expose its distinct invalid field.")
-  assert.match(lines[1], /h-dff68008c72c47a59368ad-2/, "A field change alone must remain visible for the same order.")
-  assert.match(lines[2], /market\.baseAsset\.code/, "The third compact diagnostic must retain its validation field.")
-  assert.match(lines[2], /h-dff68008c72c47a59368ad-4/, "An order-identity change alone must remain visible for the same field.")
-  assert.ok(lines.every((line) => line.includes("HARVESTER_ORDER_HISTORY_RECORD_INVALID")), "Each line must retain the stable error code.")
-  assert.doesNotMatch(written, /Previous identical log entry repeated/, "Different validation failures must not be collapsed as identical.")
-  assert.doesNotMatch(written, /accountId|providerInstanceId":|eventId/, "The summary must not expose unrelated account/provider/event payload fields.")
-  assert.ok(lines.every((line) => line.length <= 200), "Each actionable validation diagnostic must remain within the console line limit.")
+  assertDistinctOrderHistoryFailureLines(lines, written)
   output.destroy()
 })
 
