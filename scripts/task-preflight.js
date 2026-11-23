@@ -125,7 +125,8 @@ function getSectionContent({ body, title }) {
   return content.join('\n');
 }
 function validateDocumentationImpact({ context, errors }) {
-  const docs = getSectionContent({ body: context.body, title: 'Documentation impact' });
+  const docs = getSectionContent({ body: context.body,
+title: 'Documentation impact' });
   if (!docs || plain(docs).length < 12) {
     errors.push('PR documentation impact is missing or empty.');
   }
