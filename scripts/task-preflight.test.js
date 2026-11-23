@@ -284,7 +284,7 @@ test('requires verification evidence to name the exact current PR head SHA', () 
   });
 
   assert.ok(
-    errors.some((error) => /verification evidence.*current PR head SHA/i.test(error)),
+    errors.some((error) => /verification evidence.*current PR head/i.test(error)),
     'Verification evidence from an earlier commit must not satisfy the current PR head gate.',
   );
 });
@@ -365,7 +365,7 @@ test('requires verification evidence to link to the exact current GitHub Actions
   });
 
   assert.ok(
-    errors.some((error) => /current GitHub Actions run/i.test(error)),
+    errors.some((error) => /current PR head and GitHub Actions run/i.test(error)),
     'A verification claim linked to another workflow run must not satisfy current-head evidence.',
   );
 });
