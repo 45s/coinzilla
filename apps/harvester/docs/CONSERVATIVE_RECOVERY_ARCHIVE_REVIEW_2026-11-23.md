@@ -16,9 +16,9 @@ No archive source was changed. No database dump was inspected. No Binance, TESTN
 
 | Evidence | Observed | Verification |
 |---|---:|---|
-| Recovery fact records | 49 | Sequence 0–48; all previous-fact-digest links consistent |
-| Manifest records | 49 | Sequence 0–48; all previous-manifest-digest links consistent |
-| Manifest commits | 49 | Each `lastCommittedDigest` matches the corresponding fact digest |
+| Recovery fact records | 49 | Sequence 0–48; all previous-fact-digest links consistent; terminal fact digest `154720ef4b575e5a189fc6aa78fd9575917537d02e808403593ab4c09c8dd4b8` |
+| Manifest records | 49 | Sequence 0–48; all previous-manifest-digest links consistent; terminal manifest digest `d4d5c84fa9857cf721f10955f17a816845900538779454e02d2dd6f80db65bef` |
+| Manifest commits | 49 | Each `lastCommittedDigest` matches the corresponding fact digest; all cumulative record counts match sequence + 1 |
 | Cumulative terminal log | 429 lines | Selected evidence is present in the source |
 | Order-history projection errors | 28 | Each selected occurrence reports `HARVESTER_ORDER_HISTORY_RECORD_INVALID` |
 
@@ -36,7 +36,7 @@ The terminal log contains 28 occurrences of:
 - `HARVESTER_ORDER_HISTORY_RECORD_INVALID`
 - `OrderHistoryValidationError`
 
-The log does not expose enough validation-field/context to attribute the invalid record. The source archive confirms recurrence, not the offending field or root cause. This is an investigation item, not a proven fix candidate yet.
+The log does not expose the invalid field or validation stage, so the offending historical field and root cause remain unknown. Current source review found a diagnosability gap: `OrderHistoryValidationError` retains `context.field`, but `createFailureDiagnostic()` in `src/infrastructure/persistence/create-order-history-observer.js` does not include that field in its diagnostic. `createOrderHistoryRecord()` validates provider/account/client-order identity, market identity/assets, side/type/status, execution quantities, optional timestamps, and source-event identity/timestamp. These are candidate validation boundaries only; none is identified as the historical failure. Add a focused diagnostic regression and continue bounded evidence review; do not infer a field.
 
 ### 3.2 Recovery outcomes and safety pauses
 
@@ -73,11 +73,11 @@ Therefore historical clean shutdown is **not proven**. The deterministic offline
 
 At the time of this review:
 
-- PR #1761 is open and draft.
-- PR head before this documentation checkpoint: `01d6a21d1474a7a9befc72d08ea9d1166e12db48`.
-- PR base: `ee5aeb24899c0ae058b822edc36bb6957e23baf7`.
-- Current `develop`: `d44bdcff2bec920da2c35c99a874991baa87e97f`.
-- Comparison against current `develop`: 39 commits ahead, 23 behind. The branch must be synchronized before further implementation/CI conclusions.
+- PR #1761 is open and draft. The following values are the historical checkpoint recorded before the branch synchronization.
+- Historical PR head: `01d6a21d1474a7a9befc72d08ea9d1166e12db48`.
+- Historical PR base/merge base: `ee5aeb24899c0ae058b822edc36bb6957e23baf7`.
+- Historical `develop`: `d44bdcff2bec920da2c35c99a874991baa87e97f`.
+- Historical comparison: 39 commits ahead / 23 behind. This divergence was subsequently resolved by internal sync PR #1777; see the continuation update below.
 
 Exact-head run set for the pre-documentation head:
 
@@ -97,31 +97,53 @@ Exact-head run set for the pre-documentation head:
 
 The exact Task Preflight log reports seven documentation paths missing from the PR's declared documentation-impact list: `ROADMAP.md`, `apps/harvester/ROADMAP.md`, `apps/harvester/docs/CONSERVATIVE_RECOVERY_LIFECYCLE_AUDIT.md`, `apps/harvester/docs/README.md`, `apps/harvester/docs/architecture.md`, `apps/harvester/docs/domain/ACCOUNTING_INVARIANTS.md`, and `apps/harvester/docs/domain/DOMAIN_TEST_INVENTORY.md`. It also reports stale current-base hashes for `AI_AGENT_WORKFLOW.md` and `docs/engineering/AI_TASK_COMPLIANCE_STANDARD.md`.
 
-An earlier investigation compared the eight recorded instruction blob hashes with the exact task-start commit `a623b2c0d767adcceadcb31e673772d2191b178d` and found all eight matched. The first implementation commit followed 24 seconds later. The two canonical instruction files changed on `develop` afterward. Preserve the original report as historical evidence; do not rewrite it or weaken the validator. Resolve the validator's intended task-start-vs-current-base contract with a supplemental current-base attestation or a separately reviewed validator correction. Separately update the PR documentation-impact declaration to include all changed documentation paths.
+An earlier investigation compared the eight recorded instruction blob hashes with the exact task-start commit `a623b2c0d767adcceadcb31e673772d2191b178d` and found all eight matched. The first implementation commit followed 24 seconds later. The two canonical instruction files changed on `develop` afterward. Preserve the original report as historical evidence. Task Preflight CI enforcement has since been retired on current `develop`; the historical validation failure is not a current gate and requires no further implementation work.
 
 ## 5. Confirmed follow-up gaps already identified
 
 These were identified in the prior investigation checkpoint and still require implementation/proof:
 
-1. **Exact quote quantity:** runtime replay currently derives quote quantity from price × quantity instead of consuming the exact exchange-reported archived `quoteQuantity`. Pass the recorded field through the replay and assert it.
-2. **Digest naming and fixture metadata:** fixture `lastDigest` conflates fact-chain and manifest-chain digests. Preserve distinct fact-chain and manifest-chain terminal digests and include redacted 49-record chain metadata so tests can verify all links and committed-digest correspondence.
-3. **Test inventory accuracy:** domain inventory contains stale test paths, including a nonexistent `update-trading-accounting.test.js` reference. Reconcile every listed path with the actual tree and add the missing focused atomic-accounting regression.
-4. **Late SELL composition proof:** the current late recovery SELL-after-pause integration test uses a stub accounting callback. Add a production-composition proof using real Portfolio and RecoveryLedger projections; coordinate the overlapping scenario-test requirements in #1763.
-5. **Projection failure root cause:** inspect the remaining accessible cumulative log ranges and identify what validation context can be recovered. Do not infer the historical invalid field if source evidence is absent. If the database dump is required, request explicit authorization before inspecting it.
+1. **Exact quote quantity — implemented in test commit `be7f171`:** runtime replay reads the archived fixture's exact `quoteQuantity`, passes it to the existing full-execution report helper, and asserts the emitted report preserves it.
+2. **Digest naming and chain proof — implemented in commits `42fcd7c` and `9205fc8` (lint cleanup `c5cb058`):** fixture now has distinct fact/manifest terminal digests and all 49 records' digest-link metadata; the audit test checks every previous link, manifest-to-fact reference and record count.
+3. **Test inventory accuracy — corrected in `998e5a4`:** 26 inventory paths were checked. Two stale references were corrected: the separate BUY-VWAP test was consolidated into `create-recovery-seller-accounting-workflow.test.js`; the obsolete bootstrap STOP-runtime test path was removed and current STOP workflow/startup coverage is linked. `src/use-cases/update-trading-accounting.test.js` exists and already contains a real immutable Portfolio/RecoveryLedger atomicity regression; the earlier claim that this path was nonexistent was incorrect.
+4. **Late SELL composition proof — still missing:** both `conservative-strategy-safety-pause.integration.test.js` and `create-user-data-event-safety-halt.test.js` use stub accounting. Add a production-composition proof using real Portfolio and RecoveryLedger projections; coordinate #1763.
+5. **Projection failure root cause — unresolved:** the 28 terminal-log errors do not identify field or stage. Current source drops `OrderHistoryValidationError.context.field` from observer diagnostics; add a focused diagnostic regression. The database dump remains uninspected; obtain explicit authorization before inspection.
 
 ## 6. Prioritized continuation plan
 
-1. **Synchronize PR branch with latest develop** (`d44bdcff2bec920da2c35c99a874991baa87e97f`); reconcile conflicts deliberately, especially roadmap, lifecycle audit, domain test inventory, and scenario-test docs. Re-run the comparison before editing.
-2. **Restore Task Preflight compliance without falsifying history:** declare all changed documentation paths in the PR metadata; inspect validator semantics and task-start evidence; use a separately recorded supplemental current-base instruction attestation or a focused validator issue/PR. Do not edit the original task-start report.
-3. **Fix replay fidelity:** pass exact archived `quoteQuantity` and commission amount/asset into production runtime replay; assert exact archived economics.
-4. **Fix archive integrity metadata:** distinguish fact and manifest digest fields; verify all 49 fact/manifest records and chain links in automated tests.
-5. **Close accounting proof gaps:** reconcile test inventory paths; add atomic Portfolio/RecoveryLedger regression; add real-composition late-SELL-after-pause proof; update #1763 with the overlap disposition.
-6. **Investigate projection failures from source logs:** retrieve cumulative log ranges in bounded chunks, correlate timestamps with the 28 terminal failures and durable facts, and report what remains unknown.
-7. **Re-run required gates on the final synchronized head:** focused Harvester integration tests, full workspace tests/coverage, strict changed-file ESLint, JavaScript quality/syntax, Task Preflight, actionlint, dependency audit, documentation links, and exact-head Actions verification.
+1. **Branch synchronization — complete:** internal PR #1777 merged current `develop` into the task branch. Current `develop` at sync was `3d1062aca6dc90c1db1e6ad1a6418749ecef3dd9`; the task branch is now 43 ahead / 0 behind. Root `ROADMAP.md` was the only overlapping path and was reviewed before merge.
+2. **Exact quote replay — implemented:** pass archived `quoteQuantity` through runtime replay and assert report fidelity.
+3. **Archive digest proof — implemented:** distinct terminal digests and 49-record chain-link/reference assertions are in place; current-head CI still needs to pass.
+4. **Test inventory — corrected:** two stale RS test paths replaced with current evidence; the real atomic accounting test is confirmed present.
+5. **Late SELL accounting — next implementation priority:** replace stub accounting with real Portfolio/RecoveryLedger composition and full exact-state assertions.
+6. **Order-history errors — investigate/diagnose:** add `field` to observer diagnostics and test it; correlate the 28 historical errors only as far as the selected logs permit. Do not claim a historical root cause without raw event evidence.
+7. **CI:** rerun Harvester targeted tests, workspace tests/coverage, strict changed-file ESLint, JavaScript quality/syntax, actionlint, dependency audit and documentation links on the exact final head. Task Preflight is retired and is not a gate.
 8. **Keep PR #1761 draft and unmerged** until all acceptance criteria and exact-head required checks pass. No TESTNET/LIVE validation is authorized by this task.
 
-## 7. Continuation prompt
+
+## 8. 2026-11-23 continuation — implementation and evidence checkpoint
+
+### Branch synchronization
+Internal sync PR #1777 merged current `develop` into the task branch with merge commit `da0547818c62ebd3be2890ed250ded9ffc40e9a0`. Current PR #1761 remains draft. Task Preflight CI enforcement is retired on current `develop`; it is not a blocker.
+
+### Replay and archive integrity
+- Runtime replay now sources each fill's exact `quoteQuantity` from the immutable fixture and asserts the execution report retains it.
+- The fixture now distinguishes fact terminal digest `154720ef4b575e5a189fc6aa78fd9575917537d02e808403593ab4c09c8dd4b8` from manifest terminal digest `d4d5c84fa9857cf721f10955f17a816845900538779454e02d2dd6f80db65bef`.
+- All 49 fact and 49 manifest digest metadata records are retained. Automated assertions verify sequences, previous-digest links, manifest-to-fact references and record counts.
+
+### Test inventory and accounting
+A path audit checked 26 inventory references. The old standalone BUY-VWAP test path is consolidated into `src/use-cases/create-recovery-seller-accounting-workflow.test.js`; the old bootstrap STOP-runtime test path no longer exists. Current STOP workflow tests are in `src/use-cases/create-recovery-seller-stop-workflow.test.js`; startup integration is in `src/bootstrap/start-harvester.test.js`. The exact former claim about configured RS routes failing closed without the STOP store is not currently proven by a matching test and remains a gap.
+
+The path `src/use-cases/update-trading-accounting.test.js` exists and proves immutable Portfolio/RecoveryLedger failure atomicity for a wrong-market fill. Both late-SELL-after-pause integration tests use stub accounting and do not prove real projections; that is the next accounting implementation priority.
+
+### Order-history failure investigation
+The selected 429-line terminal log contains 28 `HARVESTER_ORDER_HISTORY_RECORD_INVALID` occurrences. The historical invalid field and stage remain unknown. Current source review confirms that `OrderHistoryValidationError.context.field` is not included by `createFailureDiagnostic()`; this is a fixable diagnostics gap, not proof of the historical invalid field. The compressed startup-retry session logs were also inspected and independently show a later startup replay failure caused by a provider-attributed fill lacking a preceding submission intent. That startup-retry event is separate from the 28 order-history projection failures and must not be conflated with them. The archived cumulative `harvester.log` and `trace.log` returned no text content; the database dump remains uninspected.
+
+### CI status at this checkpoint
+The exact-head CI run for digest assertion commit `9205fc81e5d640cca19e775ebb59ea1e42b4c5a4` failed because the new assertions exceeded ESLint function-line and callback-parameter limits. Commit `c5cb058` extracted focused helpers and replaced two-parameter callbacks with `for...of`. The subsequent exact-head CI run is required to verify this correction and the later inventory/replay commits. No passing result is claimed from the older head.
+
+## 9. Continuation prompt
 
 Continue issue #1362 and PR #1761 from this branch. Read root and nested AGENTS.md files, AI_AGENT_WORKFLOW.md, the task-compliance standard, Harvester roadmap, lifecycle audit, accounting invariants, domain test inventory, and #1763 scenario-test guidance before changing source. Re-open this archive review and the immutable archive at the exact source commit above.
 
-First synchronize with current develop and resolve the 23-commit divergence without dropping either side's documentation. Then fix the seven missing PR documentation-impact paths and resolve Task Preflight correctly: preserve the original task-start report, verify its hashes against the recorded task-start commit, and do not weaken or bypass policy. Implement the five follow-up gaps in section 5 test-first, one focused increment at a time, with source, integration tests, and living docs in the same commit. Investigate the 28 order-history projection failures from available archived log ranges; never invent the invalid field or inspect the database dump without explicit authorization. Keep historical facts distinct from synthetic runtime fixtures. Re-run all required exact-head checks after each meaningful increment and on the final head. Keep the PR draft/unmerged; no TESTNET/LIVE writes or account mutations. Report evidence, unknowns, commit message, tests, CI, and the next single action at every checkpoint.
+The branch has already been synchronized with current develop and Task Preflight is retired. Continue with the remaining late-SELL real accounting composition and order-history diagnostic improvements, test-first and in small increments. Preserve the original archive and all historical unknowns; update source/tests/docs and the issue/PR descriptions after each commit. Investigate the 28 order-history projection failures from available archived log ranges; never invent the invalid field or inspect the database dump without explicit authorization. Keep historical facts distinct from synthetic runtime fixtures. Re-run all required exact-head checks after each meaningful increment and on the final head. Keep the PR draft/unmerged; no TESTNET/LIVE writes or account mutations. Report evidence, unknowns, commit message, tests, CI, and the next single action at every checkpoint.
