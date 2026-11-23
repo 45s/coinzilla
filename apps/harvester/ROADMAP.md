@@ -2141,3 +2141,14 @@ The detailed evidence, implementation commits, CI state and remaining unknowns a
 - #1362 / [PR #1761](https://github.com/45s/coinzilla/pull/1761) remain focused on deterministic Conservative recovery accounting, replay, late-fill safety and serialized shutdown behavior.
 - The 28 historical `HARVESTER_ORDER_HISTORY_RECORD_INVALID` events are separated into [issue #1789](https://github.com/45s/coinzilla/issues/1789). Their historical field, input shape, projection stage and operational impact remain unknown; no root cause is inferred from timestamp correlation.
 - Keep the archive immutable. The database dump has not been inspected and requires explicit owner authorization. No TESTNET/LIVE writes or account mutations are part of this work.
+
+
+## 2026-11-23 — #1763 Phase 2 implementation checkpoint
+
+- Replacement PR: [#1792](https://github.com/45s/coinzilla/pull/1792), branch `test/1763-conservative-test-oracle-phase2`, based on current `develop`. PR #1790 is closed as superseded because its branch was 98 commits behind and diverged.
+- Refactored the current-head overlong harness helpers and callbacks into focused test-only helpers. No production modules, strategy rules, or runtime behavior changed.
+- Added a RED regression for `makeSellFill()`: the hard-coded default produced quote notional `100` instead of the independently expected `30.8625`. Fixed the default with exact `multiplyDecimal(limitPrice, quantity)`; explicit quote quantities are preserved.
+- Replaced the three financial `Number` comparisons with `compareDecimal`. Broker DTO conversions are intentionally unchanged.
+- The first exact-head Harvester Targeted Tests run after the RED/GREEN correction passed on `4722faf3778c52da5fb4b42a4efd424754a8d33c`. That head's Repository Quality still failed: strict lint reported six remaining overlong callbacks plus formatting/no-unused findings. Those six callbacks were decomposed and formatting findings were addressed afterward.
+- Latest implementation head: `1fd246b2fc546d47df4025c3b5e210f23e9a8c76`. Exact-head CI was re-triggered; strict ESLint, workspace quality, targeted tests and remaining workflows are pending. Do not treat the earlier targeted-test pass as validation of this later head.
+- Remaining Phase 2 work: verify exact-head CI, fix any remaining lint/test failures, then record the final narrow/full test results. Scenario-suite phase remains out of scope.
