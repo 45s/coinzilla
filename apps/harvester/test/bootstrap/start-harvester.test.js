@@ -886,7 +886,10 @@ function createVolatilityMarketDataBroker({ state }) {
     subscribeForBookTicker: async ({ symbol, onBookTicker } = {}) => {
       state.bookSubscriptions.push(symbol)
       const price = symbol === "DOGEUSDT" ? "0.1" : "1"
-      await onBookTicker(createBookTicker({ symbol, price }))
+      await onBookTicker(createBookTicker({
+        symbol,
+        price,
+      }))
       return toResult({
         data: {
           unsubscribe: async () => {},
