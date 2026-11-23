@@ -74,7 +74,10 @@ test("bounds long order-history validation fields and client-order identifiers",
   output.on("data", (chunk) => {
     written += chunk.toString()
   })
-  const transport = createHarvesterConsoleTransport({ output, color: false })
+  const transport = createHarvesterConsoleTransport({
+    output,
+    color: false,
+  })
   transport.write({
     timestamp: "2026-11-22T08:52:30.000Z",
     level: "error",
