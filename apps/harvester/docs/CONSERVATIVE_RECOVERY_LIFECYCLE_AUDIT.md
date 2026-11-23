@@ -184,3 +184,5 @@ The archive does not preserve the historical LOT_SIZE, step-size, MIN_NOTIONAL o
 - The configured Harvester targeted suite passed on exact head `fdac6b00a85cc7f3988175bb9be3095afd9d8f16`. Workspace unit tests and coverage, strict changed-file ESLint, actionlint and dependency audit passed on that head. Workspace quality must be rerun after the PR-body task-preflight metadata is corrected; External Documentation Links is advisory.
 - This current-runtime evidence does not recover the historical runtime source SHA, decision-time exchange filters, or missing CLOSING/`PROCESS_STOPPED` facts. The 2026-11-22 historical shutdown remains **UNPROVEN**; current offline shutdown replay is not retroactive proof of the archived session.
 - No Binance/TESTNET API calls, order placement/cancellation, account mutation, archive rewrite, database-dump inspection, source-ledger backfill or restart-restoration change was performed.
+
+- A participant-level regression in `src/bootstrap/shutdown/create-conservative-shutdown-participant.test.js` verifies the shutdown barrier is awaited before owned-BUY cancellation begins; it is included in the final exact-head targeted run.
