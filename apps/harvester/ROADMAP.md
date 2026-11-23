@@ -43,6 +43,8 @@ Merged test-oracle increments (all six applicable GitHub Actions workflows passe
 - [#1775](https://github.com/45s/coinzilla/pull/1775), head `fb6a227c69f07e90549c56539daf9efe4ccb250f`: coherent exact terminal-Fill quote notional fixture.
 - [#1776](https://github.com/45s/coinzilla/pull/1776), head `ddd7598769f294eb418904a72fca989f9f173c8d`: exact bootstrap and replay arithmetic.
 
+A targeted source sweep also reviewed all 11 Conservative strategy unit-test files, both Portfolio test files, and nine Conservative accounting/lifecycle use-case test files. No `Number`, `toFixed`, `parseFloat`, or `parseInt` financial-oracle conversions were found outside the already documented engine-suite findings and numeric broker-adapter DTO conversions.
+
 The remaining engine-suite oracle cleanup is not complete. [#1772](https://github.com/45s/coinzilla/pull/1772) was closed without merge: its test-only fixture correction was blocked by 33 existing strict changed-file ESLint violations in the 11,494-line `conservative-trading-engine.test.js`. The exact-head Repository Quality run [45150853240](https://github.com/45s/coinzilla/actions/runs/45150853240) failed at the changed-file ESLint job; the other five applicable workflows passed. The full violation list and exact affected financial assertions are recorded in the domain test inventory.
 
 **Next:** decompose the 33 overlong test/helper functions into cohesive, lint-compliant units, then correct the SELL Fill default and remaining financial comparisons. Do not suppress ESLint, weaken policy, or change production behavior. Phase 2 remains in progress until the exact financial oracles are corrected or a narrower evidence-backed disposition is agreed.
