@@ -337,21 +337,21 @@ const scenarios = [
 
 const [zroScenario, dogeScenario, adaScenario] = scenarios
 
-test("replays archived ZROUSDT fills with explicit test filters and records exact MIN_NOTIONAL dust", async (t) => {
+test("replays archived ZROUSDT fills and completes profitable exchange-constrained residual inventory", async (t) => {
   await runArchivedRecoveryCycle({
     t,
     scenario: zroScenario,
   })
 })
 
-test("replays archived DOGEUSDT fills with explicit test filters and records exact MIN_NOTIONAL dust", async (t) => {
+test("replays archived DOGEUSDT fills and completes profitable exchange-constrained residual inventory", async (t) => {
   await runArchivedRecoveryCycle({
     t,
     scenario: dogeScenario,
   })
 })
 
-test("replays archived ADAUSDT fills with explicit test filters and records exact QUANTITY_INCREMENT dust", async (t) => {
+test("replays archived ADAUSDT fills and completes profitable exchange-constrained residual inventory", async (t) => {
   await runArchivedRecoveryCycle({
     t,
     scenario: adaScenario,
