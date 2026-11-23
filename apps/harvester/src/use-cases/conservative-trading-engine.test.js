@@ -2752,27 +2752,32 @@ test("ignores an out-of-order OPEN update after the BUY has already filled", asy
   assert.deepEqual(pauses, [])
 })
 
+function createPartialBuyFillAccounting({ getHarness } = {}) {
+  return async ({ fill }) => {
+    const harness = getHarness()
+    const portfolioUpdate = harness.getCurrentPortfolio().applyFill({
+      strategyId: StrategyId.COIN_GRABBER,
+      fill,
+    })
+    const ledgerUpdate = harness.getCurrentRecoveryLedger().applyFill({
+      strategyId: StrategyId.COIN_GRABBER,
+      fill,
+    })
+    harness.setCurrentPortfolio(portfolioUpdate.portfolio)
+    harness.setCurrentRecoveryLedger(ledgerUpdate.ledger)
+    return { ok: true, data: { applied: true, duplicate: false } }
+  }
+}
+
 test("reconciles the recovery SELL after any partial BUY fill without completing the BUY lifecycle", async () => {
   const seeded = makeSeededRecoveryState()
   const harness = await createHarness({
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
     baseFreeBalance: "1",
-    updateTradingAccounting: async ({ fill }) => {
-      const portfolioUpdate = harness.getCurrentPortfolio().applyFill({ strategyId: StrategyId.COIN_GRABBER,
-fill })
-      const ledgerUpdate = harness.getCurrentRecoveryLedger().applyFill({ strategyId: StrategyId.COIN_GRABBER,
-fill })
-      harness.setCurrentPortfolio(portfolioUpdate.portfolio)
-      harness.setCurrentRecoveryLedger(ledgerUpdate.ledger)
-      return {
-        ok: true,
-        data: {
-        applied: true,
-        duplicate: false
-      }
-      }
-    },
+    updateTradingAccounting: createPartialBuyFillAccounting({
+      getHarness: () => harness,
+    }),
   })
   await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
