@@ -28,38 +28,38 @@ The catalog is a navigation and traceability layer. Domain specifications, accep
 
 ### Harvester — shared account, order, and portfolio behavior
 
-- [HARV-ACC-001 — Account-wide commitments](#harv-acc-001-account-wide-commitments-are-counted-exactly-once)
-- [HARV-ACC-002 — Canonical fill idempotency and conflict rejection](#harv-acc-002-canonical-fills-are-applied-once-and-conflicting-replays-are-rejected)
-- [HARV-MKT-001 — Exchange trading-rule boundaries](#harv-mkt-001-exchange-trading-constraints-are-enforced-at-exact-boundaries)
+- [HARV-ACC-001 — Account-wide commitments](#harv-acc-001--account-wide-commitments-are-counted-exactly-once)
+- [HARV-ACC-002 — Canonical fill idempotency and conflict rejection](#harv-acc-002--canonical-fills-are-applied-once-and-conflicting-replays-are-rejected)
+- [HARV-MKT-001 — Exchange trading-rule boundaries](#harv-mkt-001--exchange-trading-constraints-are-enforced-at-exact-boundaries)
 
 ### Harvester — Conservative (CG)
 
-- [CG-001 — Confirmed BUY, recovery SELL, and next-BUY gating](#cg-001-a-confirmed-buy-creates-recovery-work-but-the-next-buy-waits-for-sell-acknowledgement)
-- [CG-002 — Recovery completion and constrained dust](#cg-002-recovery-completion-preserves-required-inventory-and-does-not-misclassify-dust)
+- [CG-001 — Confirmed BUY, recovery SELL, and next-BUY gating](#cg-001--a-confirmed-buy-creates-recovery-work-but-the-next-buy-waits-for-sell-acknowledgement)
+- [CG-002 — Recovery completion and constrained dust](#cg-002--recovery-completion-preserves-required-inventory-and-does-not-misclassify-dust)
 
 ### Harvester — Recovery Seller (RS)
 
-- [RS-001 — Legacy basis versus Spot custody](#rs-001-legacy-basis-is-not-proof-of-current-spot-custody)
-- [RS-002 — Recovery BUY accounting](#rs-002-recovery-buy-accounting-uses-confirmed-net-fills-and-actual-commissions)
-- [RS-003 — Additive mixed SELL quantity](#rs-003-a-mixed-recoverylegacy-sell-uses-the-additive-legacy-slice)
-- [RS-004 — Independent profitability gates](#rs-004-recovery-legacy-and-combined-profitability-gates-are-independent)
-- [RS-005 — One SELL lifecycle per cycle](#rs-005-a-recovery-cycle-may-submit-only-one-sell-lifecycle)
-- [RS-006 — Atomic mixed SELL accounting](#rs-006-mixed-sell-accounting-commits-both-allocations-atomically)
-- [RS-007 — Unknown outcome and no blind retry](#rs-007-unknown-submission-outcome-preserves-identity-and-forbids-blind-retry)
-- [RS-008 — CG/RS shared account availability](#rs-008-cg-and-rs-share-account-availability-without-sharing-strategy-ownership)
-- [RS-009 — Terminal STOP and continued reconciliation](#rs-009-stop-is-terminal-visible-and-does-not-suppress-reconciliation)
-- [RS-010 — Deferred restart and fee valuation](#rs-010-unsupported-restart-and-fee-valuation-capabilities-remain-blocked)
+- [RS-001 — Legacy basis versus Spot custody](#rs-001--legacy-basis-is-not-proof-of-current-spot-custody)
+- [RS-002 — Recovery BUY accounting](#rs-002--recovery-buy-accounting-uses-confirmed-net-fills-and-actual-commissions)
+- [RS-003 — Additive mixed SELL quantity](#rs-003--a-mixed-recoverylegacy-sell-uses-the-additive-legacy-slice)
+- [RS-004 — Independent profitability gates](#rs-004--recovery-legacy-and-combined-profitability-gates-are-independent)
+- [RS-005 — One SELL lifecycle per cycle](#rs-005--a-recovery-cycle-may-submit-only-one-sell-lifecycle)
+- [RS-006 — Atomic mixed SELL accounting](#rs-006--mixed-sell-accounting-commits-both-allocations-atomically)
+- [RS-007 — Unknown outcome and no blind retry](#rs-007--unknown-submission-outcome-preserves-identity-and-forbids-blind-retry)
+- [RS-008 — CG/RS shared account availability](#rs-008--cg-and-rs-share-account-availability-without-sharing-strategy-ownership)
+- [RS-009 — Terminal STOP and continued reconciliation](#rs-009--stop-is-terminal-visible-and-does-not-suppress-reconciliation)
+- [RS-010 — Deferred restart and fee valuation](#rs-010--unsupported-restart-and-fee-valuation-capabilities-remain-blocked)
 
 ### Shared packages
 
-- [BRK-001 — Unknown broker mutation outcome](#brk-001-unknown-broker-mutation-outcome-is-not-treated-as-failure)
-- [DB-001 — Database transaction atomicity](#db-001-a-failed-database-transaction-leaves-no-partial-write)
-- [EVT-001 — Publish versus subscriber completion](#evt-001-publish-acceptance-is-distinct-from-subscriber-completion)
-- [JRN-001 — Journal durability boundary](#jrn-001-journal-flush-is-the-durability-boundary)
-- [NTF-001 — Bounded notification delivery](#ntf-001-notification-delivery-remains-bounded-and-failure-isolated)
-- [ENT-001 — Exact financial values and asset identity](#ent-001-financial-values-preserve-exact-decimal-and-asset-identity)
-- [UTL-001 — Exact shared decimal helpers](#utl-001-shared-decimal-helpers-produce-exact-deterministic-results)
-- [IND-001 — Valid contiguous indicator history](#ind-001-indicator-calculations-reject-discontinuous-or-insufficient-candle-history)
+- [BRK-001 — Unknown broker mutation outcome](#brk-001--unknown-broker-mutation-outcome-is-not-treated-as-failure)
+- [DB-001 — Database transaction atomicity](#db-001--a-failed-database-transaction-leaves-no-partial-write)
+- [EVT-001 — Publish versus subscriber completion](#evt-001--publish-acceptance-is-distinct-from-subscriber-completion)
+- [JRN-001 — Journal durability boundary](#jrn-001--journal-flush-is-the-durability-boundary)
+- [NTF-001 — Bounded notification delivery](#ntf-001--notification-delivery-remains-bounded-and-failure-isolated)
+- [ENT-001 — Exact financial values and asset identity](#ent-001--financial-values-preserve-exact-decimal-and-asset-identity)
+- [UTL-001 — Exact shared decimal helpers](#utl-001--shared-decimal-helpers-produce-exact-deterministic-results)
+- [IND-001 — Valid contiguous indicator history](#ind-001--indicator-calculations-reject-discontinuous-or-insufficient-candle-history)
 
 ## Status vocabulary
 
