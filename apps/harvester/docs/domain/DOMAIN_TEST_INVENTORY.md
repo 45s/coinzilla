@@ -183,6 +183,10 @@ The OrderRegistry suite already covered UNKNOWN, stale events, identity mismatch
 
 [PR #931](https://github.com/45s/coinzilla/pull/931) replaces production-derived fixture totals with exact literals and asserts precise errors, no partial result data, and unchanged opening/closing snapshots for invalid out-of-order, inconsistent, negative and duplicate-asset cases. Exact final PR head `137e56a44d134096d094c8aad6850a7ccc9d9876` passed 878/878 Harvester tests (75.96% lines, 79.28% branches, 74.95% functions) and all required checks. PR #931 merged; no production code changed.
 
+### Medium — terminal-fill fixture quote notional must use exact decimal arithmetic
+
+The canonical Fill fixture in `src/use-cases/reconcile-terminal-order-fills.test.js` previously derived quote notional with JavaScript `Number(quantity) * 100`. It now uses the repository's exact-decimal multiplication utility to construct a coherent Fill. This is fixture setup, not a financial expected-value oracle; no production behavior changes.
+
 ### Explicitly deferred — Aggressive grid behavior
 
 Aggressive is deliberately blocked by unresolved product rules. Its current NO_ACTION contract and inventory gate are tested. Do not invent grid depth, pricing, SELL thresholds, reservations or risk fallback as part of this testing initiative.
