@@ -46,7 +46,7 @@ export function validateInstructionSnapshot({ report, actual, required }) {
   for (const path of [...new Set(required)].sort()) {
     if (!recorded.has(path)) {errors.push(`Required instruction missing from report: ${  path}`);}
     else if (!actual.has(path)) {errors.push(`Required instruction file missing: ${  path}`);}
-    else if (recorded.get(path) !== actual.get(path)) {errors.push(`Instruction hash stale: ${  path}`);}
+    else if (recorded.get(path) !== actual.get(path)) {errors.push(`Instruction hash is stale: ${  path}`);}
   }
   for (const path of recorded.keys()) {
     if (!actual.has(path)) {errors.push(`Recorded instruction no longer exists: ${  path}`);}
