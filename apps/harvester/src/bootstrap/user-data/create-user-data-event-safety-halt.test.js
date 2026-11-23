@@ -129,32 +129,40 @@ test("routes REST/stream reconciliation failures through the account safety halt
   handler({ event })
   await state.eventQueue
 
-  assert.deepEqual(calls.slice(0, 3), [
-    ["process", "ada-late-recovery-sell-fill", true],
-    ["reconcile", { recoveryMode: true }],
-    "cancel-owned-buys",
-  ])
-  assert.equal(state.ready, false)
-  assert.equal(state.requiresReconciliation, true)
-  assert.equal(state.accountingFailed, false)
+  assert.deepEqual(
+    calls.slice(0, 3),
+    [
+      ["process", "ada-late-recovery-sell-fill", true],
+      ["reconcile", { recoveryMode: true }],
+      "cancel-owned-buys",
+    ],
+    "A reconciliation failure must enter recovery mode, reconcile authoritative state, then cancel current-process-owned BUYs.",
+  )
+  assert.equal(state.ready, false, "Readiness must remain closed while authoritative reconciliation is required.")
+  assert.equal(state.requiresReconciliation, true, "The safety halt must retain the required reconciliation state.")
+  assert.equal(state.accountingFailed, false, "A retryable REST reconciliation failure must not be mislabeled as an accounting-integrity failure.")
   assert.equal(state.status, "AUTHORITATIVE_RECONCILIATION_REQUIRED")
-  assert.deepEqual(observedFillIds, [])
+  assert.deepEqual(observedFillIds, [], "The failed first delivery must not be published as an accepted user-data event.")
 
   handler({ event })
   await state.eventQueue
   handler({ event })
   await state.eventQueue
 
-  assert.deepEqual(calls.slice(3).map((call) => call[2]), [true, true])
-  assert.equal(appliedFillIds.size, 1)
-  assert.deepEqual(observedFillIds, [
-    "ada-late-recovery-sell-fill",
-    "ada-late-recovery-sell-fill",
-  ])
+  assert.deepEqual(calls.slice(3).map((call) => call[2]), [true, true], "Both later deliveries must continue through recovery-mode processing.")
+  assert.equal(appliedFillIds.size, 1, "Repeated delivery of the same late SELL fill must apply accounting exactly once.")
+  assert.deepEqual(
+    observedFillIds,
+    [
+      "ada-late-recovery-sell-fill",
+      "ada-late-recovery-sell-fill",
+    ],
+    "The late SELL report must be observed on each accepted recovery-mode delivery.",
+  )
   assert.equal(state.ready, false)
   assert.equal(state.requiresReconciliation, true)
   assert.equal(state.status, "AUTHORITATIVE_RECONCILIATION_REQUIRED")
-  assert.equal(calls.filter(([name]) => name === "reconcile").length, 1)
-  assert.equal(calls.filter((entry) => entry === "cancel-owned-buys").length, 1)
-  assert.equal(calls.includes("resume"), false)
+  assert.equal(calls.filter(([name]) => name === "reconcile").length, 1, "The initial safety halt must perform one authoritative reconciliation attempt.")
+  assert.equal(calls.filter((entry) => entry === "cancel-owned-buys").length, 1, "The safety halt must cancel owned BUYs once and must not recursively retry cancellation.")
+  assert.equal(calls.includes("resume"), false, "A late SELL fill must not reopen deferred BUY evaluation while readiness is closed.")
 })

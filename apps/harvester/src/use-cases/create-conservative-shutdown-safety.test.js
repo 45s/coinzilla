@@ -186,7 +186,11 @@ test("drains in-flight transitions before clearing deferred evaluations for shut
   })
 
   safety.beginShutdown()
-  assert.equal(state.shutdownBuyGate, true)
+  assert.equal(
+    state.shutdownBuyGate,
+    true,
+    "The BUY gate must close synchronously before the serialized shutdown barrier drains.",
+  )
   releaseTransition()
   await inFlightTransition
   await safety.waitForShutdownGate()

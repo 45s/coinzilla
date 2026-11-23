@@ -47,7 +47,7 @@ async function fillArchivedBuy({ replay, scenario, index, currentBuy }) {
     ? replay.waitForSubmittedOrder("BUY", index + 2)
     : null
 
-  assert.equal(currentBuy.price, buy.price)
+  assert.equal(currentBuy.price, buy.price, "The replay must submit each archived BUY at its recorded execution price.")
   await replay.publishMarketPrice(currentBuy.price)
   await replay.publishFullOrderFill({
     order: currentBuy,
@@ -87,8 +87,8 @@ async function fillArchivedBuys({ replay, scenario }) {
 }
 
 async function fillArchivedRecoverySell({ replay, scenario, recoverySell }) {
-  assert.equal(recoverySell.price, scenario.sell.price)
-  assert.equal(recoverySell.quantity, scenario.sell.quantity)
+  assert.equal(recoverySell.price, scenario.sell.price, "The recovery SELL must use the archived SELL execution price.")
+  assert.equal(recoverySell.quantity, scenario.sell.quantity, "The recovery SELL quantity must match the archived executed quantity.")
 
   const completionWaiter = replay.waitForRecoveryCycleCompletion()
   await replay.publishMarketPrice(recoverySell.price)
@@ -101,27 +101,29 @@ async function fillArchivedRecoverySell({ replay, scenario, recoverySell }) {
 }
 
 function assertCycleCompleted({ replay, scenario, completion }) {
-  assert.equal(completion.freeQuantity, scenario.expectedFreeQuantity)
-  assert.equal(completion.realizedNetProfit, scenario.expectedRealizedNetProfit)
+  assert.equal(completion.freeQuantity, scenario.expectedFreeQuantity, "The completed runtime cycle must retain the exact archived residual inventory.")
+  assert.equal(completion.realizedNetProfit, scenario.expectedRealizedNetProfit, "The runtime completion event must report exact net profit after actual commissions.")
   assert.equal(
     replay.receivedLifecycleEvents.filter(({ name }) => name === "recovery.cycle_completed").length,
     1,
+    "Each archived runtime replay must publish exactly one recovery-cycle completion event.",
   )
   assert.equal(
     replay.receivedLifecycleEvents.filter(({ name }) => name === "strategy.paused").length,
     0,
+    "A valid archived recovery cycle must not raise a strategy safety pause.",
   )
-  assert.equal(replay.harvesterRuntimeErrors.length, 0)
+  assert.equal(replay.harvesterRuntimeErrors.length, 0, "The production runtime replay must complete without uncaught Harvester errors.")
 }
 
 function assertPortfolioReset({ replay, scenario }) {
   const position = replay.runtime.portfolio.getPosition({ symbol: scenario.symbol })
   const recoveryLedger = replay.runtime.getRecoveryLedger({ marketId: position.market.id })
-  assert.equal(position.baseQuantity.amount, "0")
-  assert.equal(position.freeBaseQuantity.amount, scenario.expectedFreeQuantity)
-  assert.equal(position.spent.amount, "0")
-  assert.equal(recoveryLedger.buyCost, "0")
-  assert.equal(recoveryLedger.netSellProceeds, "0")
+  assert.equal(position.baseQuantity.amount, "0", "A completed recovery cycle must release its active Portfolio base quantity.")
+  assert.equal(position.freeBaseQuantity.amount, scenario.expectedFreeQuantity, "The exact residual inventory must remain free in Portfolio after cycle reset.")
+  assert.equal(position.spent.amount, "0", "A completed recovery cycle must reset its active BUY cost basis.")
+  assert.equal(recoveryLedger.buyCost, "0", "A completed recovery cycle must reset RecoveryLedger BUY cost.")
+  assert.equal(recoveryLedger.netSellProceeds, "0", "A completed recovery cycle must reset RecoveryLedger net SELL proceeds.")
 }
 
 async function runArchivedRecoveryCycle({ t, scenario }) {

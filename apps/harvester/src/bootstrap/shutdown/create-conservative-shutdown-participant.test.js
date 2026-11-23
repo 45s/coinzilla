@@ -864,8 +864,15 @@ test("waits for the serialized engine shutdown barrier before cancelling owned B
   const waitUntilSafe = participant.waitUntilSafe()
   await Promise.resolve()
 
-  assert.ok(calls.includes("shutdown-gate-start"))
-  assert.equal(calls.includes("cancel:all"), false)
+  assert.ok(
+    calls.includes("shutdown-gate-start"),
+    "The participant must begin waiting for the serialized shutdown barrier.",
+  )
+  assert.equal(
+    calls.includes("cancel:all"),
+    false,
+    "Owned BUY cancellation must not start before the serialized shutdown barrier completes.",
+  )
 
   releaseShutdownGate()
   await waitUntilSafe

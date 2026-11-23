@@ -396,7 +396,7 @@ async function triggerStrategySafetyPause(harness) {
 
 async function getMarketSnapshot(engine) {
   const result = await engine.getOperatorMarketSnapshots()
-  assert.equal(result.ok, true)
+  assert.equal(result.ok, true, "A valid late recovery SELL fill must be accepted after the strategy safety pause.")
   return result.data.markets.find(({ symbol }) => symbol === "DOGEUSDT")
 }
 
@@ -409,7 +409,7 @@ async function assertSafetyPauseCancellationCompleted({
 }) {
   const result = await triggerStrategySafetyPause(harness)
   assert.equal(result.ok, false)
-  assert.deepEqual(harness.cancellationIds, [buyOne.brokerOrderId, buyTwo.brokerOrderId])
+  assert.deepEqual(harness.cancellationIds, [buyOne.brokerOrderId, buyTwo.brokerOrderId], "The safety pause must cancel only the two current-process-owned BUYs.")
   assert.equal(harness.engine.getOrders().find(({ clientOrderId }) => clientOrderId === buyOne.clientOrderId).status, "CANCELED")
   assert.equal(harness.engine.getOrders().find(({ clientOrderId }) => clientOrderId === buyTwo.clientOrderId).status, "CANCELED")
   assert.equal(harness.engine.getOrders().find(({ clientOrderId }) => clientOrderId === recoverySell.clientOrderId).status, "OPEN")
@@ -426,7 +426,7 @@ async function assertSafetyPauseCancellationCompleted({
       fill: harness.accountedFills[0],
     },
   })
-  assert.equal(duplicate.ok, true)
+  assert.equal(duplicate.ok, true, "An identical duplicate late SELL report must be accepted as an idempotent delivery.")
   assert.equal(harness.accountedFills.length, 2)
   const snapshot = await getMarketSnapshot(harness.engine)
   assert.equal(snapshot.safetyPauseCancellation.status, "COMPLETE")
@@ -502,8 +502,8 @@ test("accounts a late recovery SELL fill exactly once after safety pause without
   })
 
   const pauseResult = await triggerStrategySafetyPause(harness)
-  assert.equal(pauseResult.ok, false)
-  assert.deepEqual(harness.engine.getPausedMarkets(), ["DOGEUSDT"])
+  assert.equal(pauseResult.ok, false, "The forced strategy evaluation failure must raise a safety pause.")
+  assert.deepEqual(harness.engine.getPausedMarkets(), ["DOGEUSDT"], "The DOGE safety pause must remain latched after the late SELL report.")
   assert.deepEqual(harness.cancellationIds, [buyOne.brokerOrderId, buyTwo.brokerOrderId])
 
   const filledSell = makeOrder({
@@ -525,13 +525,14 @@ test("accounts a late recovery SELL fill exactly once after safety pause without
   }
   const result = await harness.engine.processUserDataEvent({ event })
   assert.equal(result.ok, true)
-  assert.equal(harness.accountedFills.length, 1)
+  assert.equal(harness.accountedFills.length, 1, "The late recovery SELL fill must be applied exactly once.")
   assert.equal(
     harness.engine.getOrders().find(({ clientOrderId }) => clientOrderId === recoverySell.clientOrderId).status,
     "FILLED",
+    "The canonical recovery SELL order must reflect its terminal FILLED report.",
   )
   assert.deepEqual(harness.engine.getPausedMarkets(), ["DOGEUSDT"])
-  assert.equal(harness.orders.length, 0)
+  assert.equal(harness.orders.length, 0, "No new BUY or unrelated order may be submitted while the safety pause remains active.")
 
   const duplicate = await harness.engine.processUserDataEvent({ event })
   assert.equal(duplicate.ok, true)
