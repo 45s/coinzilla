@@ -2494,6 +2494,28 @@ test("EventBus failure cannot interrupt accounting failure pause handling", asyn
 })
 
 
+function assertMarketProfitThresholdCompletion({
+  result,
+  completedCycles,
+  completionInputs,
+  events,
+} = {}) {
+  assert.equal(result.ok, true)
+  assert.deepEqual(completedCycles, [], "The injected completion boundary owns completion in this test.")
+  assert.equal(completionInputs.length, 1)
+  assert.equal(completionInputs[0].minProfit, "0.1", "The engine must pass this market's threshold to recovery completion.")
+  const completed = events.find(({ name }) => name === "recovery.cycle_completed")
+  assert.ok(completed)
+  assert.deepEqual(completed.data, {
+    symbol: "DOGEUSDT",
+    marketId: market.id,
+    freeQuantity: "0.1",
+    keepQuantity: "0.1",
+    minProfit: "0.1",
+    realizedNetProfit: "1.5",
+  })
+}
+
 test("publishes the market-specific profit threshold after recovery completion succeeds", async () => {
   const events = []
   const completionInputs = []
@@ -2549,19 +2571,11 @@ test("publishes the market-specific profit threshold after recovery completion s
     },
   })
 
-  assert.equal(result.ok, true)
-  assert.deepEqual(completedCycles, [], "The injected completion boundary owns completion in this test.")
-  assert.equal(completionInputs.length, 1)
-  assert.equal(completionInputs[0].minProfit, "0.1", "The engine must pass this market's threshold to recovery completion.")
-  const completed = events.find(({ name }) => name === "recovery.cycle_completed")
-  assert.ok(completed)
-  assert.deepEqual(completed.data, {
-    symbol: "DOGEUSDT",
-    marketId: market.id,
-    freeQuantity: "0.1",
-    keepQuantity: "0.1",
-    minProfit: "0.1",
-    realizedNetProfit: "1.5",
+  assertMarketProfitThresholdCompletion({
+    result,
+    completedCycles,
+    completionInputs,
+    events,
   })
 })
 
