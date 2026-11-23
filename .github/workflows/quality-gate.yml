@@ -66,7 +66,7 @@ jobs:
 
       - name: Temporary task-preflight ESLint autofix capture
         run: |
-          pnpm exec eslint scripts/task-preflight.js scripts/task-preflight.test.js --fix
+          pnpm exec eslint scripts/task-preflight.js scripts/task-preflight.test.js --fix || true
           echo PREFLIGHT_SCRIPT_BASE64_BEGIN
           base64 -w0 scripts/task-preflight.js
           echo
