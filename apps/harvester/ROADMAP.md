@@ -18,6 +18,7 @@
 - Root cause: Conservative passed `onOperationalStateSubmissionIntent` / `onOperationalStateSubmissionOutcome` to an executor that accepts `onDurableSubmissionIntent` / `onDurableSubmissionOutcome`. The optional executor callbacks were therefore absent on the order path even while the Operational State Store was configured.
 - Fix: map the canonical callback names, require the pair at engine activation whenever the store exists, and enforce the requirement again inside the executor. Regression coverage proves intent-before-broker ordering, fail-closed intent persistence, and rejection of missing callbacks. Existing tests continue to own definite rejection, UNKNOWN outcome, outcome-write failure, and local-acknowledgement ordering.
 - Preserve provider-attributed fill ownership and projector behavior. Never reconstruct missing intents, alter the archive/original ledger, initialize or repair the store, or enable automatic process-restart restoration. Verification is offline; no Binance connection or exchange write is part of this task.
+- Core implementation is isolated in commit `ee7afb525039ad86f7860665ee83c3c79c944e6e`; the exact-head CI run must verify the production and regression changes before this roadmap item is closed.
 
 ## Read-only Operational State diagnostics (#1740)
 
