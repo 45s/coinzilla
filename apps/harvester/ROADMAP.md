@@ -2142,7 +2142,6 @@ The detailed evidence, implementation commits, CI state and remaining unknowns a
 - The 28 historical `HARVESTER_ORDER_HISTORY_RECORD_INVALID` events are separated into [issue #1789](https://github.com/45s/coinzilla/issues/1789). Their historical field, input shape, projection stage and operational impact remain unknown; no root cause is inferred from timestamp correlation.
 - Keep the archive immutable. The database dump has not been inspected and requires explicit owner authorization. No TESTNET/LIVE writes or account mutations are part of this work.
 
-
 ## 2026-11-23 — #1763 Phase 2 implementation checkpoint
 
 - Replacement PR: [#1792](https://github.com/45s/coinzilla/pull/1792), branch `test/1763-conservative-test-oracle-phase2`, based on current `develop`. PR #1790 is closed as superseded because its branch was 98 commits behind and diverged.
