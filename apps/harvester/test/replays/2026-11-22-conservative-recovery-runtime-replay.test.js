@@ -40,7 +40,7 @@ function createAppConfig({ symbol, orderQuantity, keepQuantity, minProfit, price
   }
 }
 
-async function fillArchivedBuy(replay, scenario, index, currentBuy) {
+async function fillArchivedBuy({ replay, scenario, index, currentBuy }) {
   const buy = scenario.buys[index]
   const recoverySellSubmission = replay.waitForSubmittedOrder("SELL", index + 1)
   const nextBuySubmission = index < scenario.buys.length - 1
@@ -65,14 +65,19 @@ async function fillArchivedBuy(replay, scenario, index, currentBuy) {
   }
 }
 
-async function fillArchivedBuys(replay, scenario) {
+async function fillArchivedBuys({ replay, scenario }) {
   const initialBuySubmission = replay.waitForSubmittedOrder("BUY")
   await replay.publishMarketPrice(scenario.initialPrice)
   let currentBuy = await initialBuySubmission
   let latestRecoverySell
 
   for (let index = 0; index < scenario.buys.length; index += 1) {
-    const result = await fillArchivedBuy(replay, scenario, index, currentBuy)
+    const result = await fillArchivedBuy({
+      replay,
+      scenario,
+      index,
+      currentBuy,
+    })
     latestRecoverySell = result.recoverySell
     if (result.nextBuy) {
       currentBuy = result.nextBuy
@@ -81,7 +86,7 @@ async function fillArchivedBuys(replay, scenario) {
   return latestRecoverySell
 }
 
-async function fillArchivedRecoverySell(replay, scenario, recoverySell) {
+async function fillArchivedRecoverySell({ replay, scenario, recoverySell }) {
   assert.equal(recoverySell.price, scenario.sell.price)
   assert.equal(recoverySell.quantity, scenario.sell.quantity)
 
@@ -95,7 +100,7 @@ async function fillArchivedRecoverySell(replay, scenario, recoverySell) {
   return completionWaiter
 }
 
-function assertCycleCompleted(replay, scenario, completion) {
+function assertCycleCompleted({ replay, scenario, completion }) {
   assert.equal(completion.freeQuantity, scenario.expectedFreeQuantity)
   assert.equal(completion.realizedNetProfit, scenario.expectedRealizedNetProfit)
   assert.equal(
@@ -109,7 +114,7 @@ function assertCycleCompleted(replay, scenario, completion) {
   assert.equal(replay.harvesterRuntimeErrors.length, 0)
 }
 
-function assertPortfolioReset(replay, scenario) {
+function assertPortfolioReset({ replay, scenario }) {
   const position = replay.runtime.portfolio.getPosition({ symbol: scenario.symbol })
   const recoveryLedger = replay.runtime.getRecoveryLedger({ marketId: position.market.id })
   assert.equal(position.baseQuantity.amount, "0")
@@ -119,7 +124,7 @@ function assertPortfolioReset(replay, scenario) {
   assert.equal(recoveryLedger.netSellProceeds, "0")
 }
 
-async function runArchivedRecoveryCycle(t, scenario) {
+async function runArchivedRecoveryCycle({ t, scenario }) {
   const replay = await createDogeTradingReplay({
     marketSymbol: scenario.symbol,
     appConfig: createAppConfig(scenario),
@@ -135,10 +140,24 @@ async function runArchivedRecoveryCycle(t, scenario) {
     }
   })
 
-  const recoverySell = await fillArchivedBuys(replay, scenario)
-  const completion = await fillArchivedRecoverySell(replay, scenario, recoverySell)
-  assertCycleCompleted(replay, scenario, await completion)
-  assertPortfolioReset(replay, scenario)
+  const recoverySell = await fillArchivedBuys({
+    replay,
+    scenario,
+  })
+  const completion = await fillArchivedRecoverySell({
+    replay,
+    scenario,
+    recoverySell,
+  })
+  assertCycleCompleted({
+    replay,
+    scenario,
+    completion: await completion,
+  })
+  assertPortfolioReset({
+    replay,
+    scenario,
+  })
 
   await replay.runtime.stop()
   stopped = true
@@ -257,6 +276,9 @@ const scenarios = [
 
 for (const scenario of scenarios) {
   test(`replays archived ${scenario.symbol} fills and completes profitable exchange-constrained residual inventory`, async (t) => {
-    await runArchivedRecoveryCycle(t, scenario)
+    await runArchivedRecoveryCycle({
+      t,
+      scenario,
+    })
   })
 }
