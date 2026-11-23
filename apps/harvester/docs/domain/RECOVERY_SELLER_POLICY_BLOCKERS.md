@@ -200,7 +200,7 @@ The remaining cases are deliberately fail-closed rather than assigned speculativ
 
 ### Implementation handoff
 
-Continue with the exact-head verification and remaining RS-3 fail-closed regression cases. Read the mandatory repository and Harvester documents first; use CG as the behavioral reference, but do not change CG. Historical handoff superseded: RS-3 policy, RS-4 shared-engine integration and scoped RS-5 offline lifecycle proof are complete. RS remains disabled by default in configuration. No TESTNET/LIVE orders or exchange actions are authorized by this audit or handoff.
+Continue with the exact-head verification and remaining RS-3 fail-closed regression cases. Read the mandatory repository and Harvester documents first; use CG as the behavioral reference, but do not change CG. Historical handoff superseded: RS-3 policy, RS-4 shared-engine integration and scoped RS-5 offline lifecycle proof are complete. RS was disabled at that earlier checkpoint; current configuration enables RS and per-market `tradingEnvironment` controls eligibility. No TESTNET/LIVE orders or exchange actions are authorized by this audit or handoff.
 
 ## 10. Post-audit implementation update — 2026-11-18
 
@@ -208,9 +208,9 @@ This dated addendum supersedes the pre-merge handoff in §9; it does not rewrite
 
 - The owner-approved pure pre-submission SELL evaluator was merged in PR #1127 as `3fde5cdc0b1ed39bffeb5e21a67f44e0f653e8c3`. The evaluator implements the existing per-pair `minProfit` and 0.01 quote-asset floor, Conservative-compatible order type/fee reserve, supported min/max exchange-filter validation, and sticky STOP for missing required inputs, planning failures or filter violations.
 - Exact implementation head `96315757e74a4851770716b04d8dae5cf9580ece` passed 13/13 focused evaluator tests, 2,101/2,101 Harvester tests, workspace Unit Tests and Test Coverage, strict ESLint, JavaScript quality/syntax, actionlint, Utils tests and dependency audit. The read-only Binance TESTNET integration was skipped; no exchange operations were performed.
-- **RS-3 pure policy and RS-4 shared Trading Engine runtime composition are complete.** The runtime acceptance gate is open after scoped RS-5 offline lifecycle/concurrency/failure proof. RS remains disabled by default in configuration; exact-head required CI is the final merge check.
+- **RS-3 pure policy and RS-4 shared Trading Engine runtime composition are complete.** The runtime acceptance gate is open after scoped RS-5 offline lifecycle/concurrency/failure proof. RS was disabled at that historical checkpoint; current configuration enables RS and per-market `tradingEnvironment` controls eligibility. Exact-head required CI was the final merge check for that implementation.
 - Restart/replay and third-asset commission valuation are deferred. STOP is terminal; CC-operator can inspect authorized status but cannot clear, reset, unpause or resume it.
-- RS remains disabled by default; no TESTNET/LIVE order or exchange action is authorized.
+- RS was disabled at that historical checkpoint; current configuration enables RS. No TESTNET/LIVE order or exchange action is authorized by this historical audit.
 
 ## 11. Current implementation status — PR #1515 (2026-11-20)
 
@@ -220,4 +220,4 @@ This dated addendum supersedes the pre-merge handoff in §9; it does not rewrite
 - STOP is terminal. CC-operator exposes read-only status only; it cannot clear, reset, unpause or resume STOP.
 - Offline tests cover policy gates, Spot-only custody, manual EARN return only after authoritative Spot balance confirmation, multi-cycle fixed legacy basis, unknown submission, terminal underfill, exact-once accounting and same-/different-market CG/RS accounting concurrency.
 - Remaining in-scope work is the complete RS-5 production-composition lifecycle/partial-terminal/failure matrix. Restart/replay and third-asset commission valuation are explicitly deferred.
-- RECOVERY_SELLER_RUNTIME_ACCEPTANCE_COMPLETE is true; RS remains disabled by default in configuration. No TESTNET/LIVE exchange operations were performed.
+- RECOVERY_SELLER_RUNTIME_ACCEPTANCE_COMPLETE is true; RS was disabled at that historical checkpoint and is enabled by current configuration. No TESTNET/LIVE exchange operations were performed.
