@@ -208,82 +208,51 @@ function assertSanitizedFixture() {
   )
 }
 
-function assertArchiveMetadata() {
-  assert.equal(
-    archive.source.archiveCommit,
-    "f283c90db9143c74683ae5bf9c7bb52e09590d56",
-    "The fixture must remain pinned to the immutable source archive commit.",
-  )
-  assert.equal(
-    archive.source.factsRecordCount,
-    49,
-    "The source fact stream must contain all 49 archived records.",
-  )
-  assert.equal(
-    archive.source.lastSequence,
-    48,
-    "The source fact stream must retain its final sequence number.",
-  )
+function assertFactDigestChain() {
+  const chain = archive.factDigestChain
+  assert.equal(chain.length, 49, "All 49 archived fact-chain records must remain represented.")
   assert.equal(
     archive.source.factChainTerminalDigest,
-    archive.factDigestChain.at(-1)?.digest,
+    chain.at(-1)?.digest,
     "The fact-chain terminal digest must identify the final archived fact record.",
-  )
-  assert.equal(
-    archive.source.manifestChainTerminalDigest,
-    archive.manifestDigestChain.at(-1)?.digest,
-    "The manifest-chain terminal digest must identify the final manifest record.",
   )
   assert.equal(
     archive.source.factChainTerminalDigest,
     "154720ef4b575e5a189fc6aa78fd9575917537d02e808403593ab4c09c8dd4b8",
     "The terminal fact digest must match the immutable archive source.",
   )
+  for (const [index, record] of chain.entries()) {
+    assert.equal(record.sequence, String(index), `Fact sequence ${index} must remain contiguous.`)
+    assert.match(record.digest, /^[0-9a-f]{64}$/, `Fact ${index} must retain its digest.`)
+    assert.equal(
+      record.previousDigest,
+      index === 0 ? null : chain[index - 1].digest,
+      `Fact ${index} must link to the previous fact digest.`,
+    )
+  }
+}
+
+function assertManifestDigestChain() {
+  const chain = archive.manifestDigestChain
+  assert.equal(chain.length, 49, "All 49 archived manifest-chain records must remain represented.")
+  assert.equal(archive.source.manifestRecordCount, 49, "The manifest must retain all 49 records.")
+  assert.equal(archive.source.manifestLastSequence, "48", "The manifest chain must retain its final sequence number.")
+  assert.equal(
+    archive.source.manifestChainTerminalDigest,
+    chain.at(-1)?.digest,
+    "The manifest-chain terminal digest must identify the final manifest record.",
+  )
   assert.equal(
     archive.source.manifestChainTerminalDigest,
     "d4d5c84fa9857cf721f10955f17a816845900538779454e02d2dd6f80db65bef",
     "The terminal manifest digest must match the immutable archive source.",
   )
-  assert.notEqual(
-    archive.source.factChainTerminalDigest,
-    archive.source.manifestChainTerminalDigest,
-    "Fact and manifest chain terminal digests must remain distinct.",
-  )
-  assert.equal(
-    archive.factDigestChain.length,
-    49,
-    "All 49 archived fact-chain records must remain represented.",
-  )
-  assert.equal(
-    archive.manifestDigestChain.length,
-    49,
-    "All 49 archived manifest-chain records must remain represented.",
-  )
-  assert.equal(
-    archive.source.manifestRecordCount,
-    49,
-    "The manifest must retain all 49 records.",
-  )
-  assert.equal(
-    archive.source.manifestLastSequence,
-    "48",
-    "The manifest chain must retain its final sequence number.",
-  )
-  archive.factDigestChain.forEach((record, index) => {
-    assert.equal(record.sequence, String(index), `Fact sequence ${index} must remain contiguous.`)
-    assert.match(record.digest, /^[0-9a-f]{64}$/, `Fact ${index} must retain its digest.`)
-    assert.equal(
-      record.previousDigest,
-      index === 0 ? null : archive.factDigestChain[index - 1].digest,
-      `Fact ${index} must link to the previous fact digest.`,
-    )
-  })
-  archive.manifestDigestChain.forEach((record, index) => {
+  for (const [index, record] of chain.entries()) {
     assert.equal(record.sequence, String(index), `Manifest sequence ${index} must remain contiguous.`)
     assert.match(record.digest, /^[0-9a-f]{64}$/, `Manifest ${index} must retain its digest.`)
     assert.equal(
       record.previousManifestDigest,
-      index === 0 ? null : archive.manifestDigestChain[index - 1].digest,
+      index === 0 ? null : chain[index - 1].digest,
       `Manifest ${index} must link to the previous manifest digest.`,
     )
     assert.equal(
@@ -291,12 +260,25 @@ function assertArchiveMetadata() {
       archive.factDigestChain[index].digest,
       `Manifest ${index} must reference the fact digest at the same sequence.`,
     )
-    assert.equal(
-      record.recordCount,
-      String(index + 1),
-      `Manifest ${index} must record the cumulative fact count.`,
-    )
-  })
+    assert.equal(record.recordCount, String(index + 1), `Manifest ${index} must record the cumulative fact count.`)
+  }
+}
+
+function assertArchiveMetadata() {
+  assert.equal(
+    archive.source.archiveCommit,
+    "f283c90db9143c74683ae5bf9c7bb52e09590d56",
+    "The fixture must remain pinned to the immutable source archive commit.",
+  )
+  assert.equal(archive.source.factsRecordCount, 49, "The source fact stream must contain all 49 archived records.")
+  assert.equal(archive.source.lastSequence, 48, "The source fact stream must retain its final sequence number.")
+  assert.notEqual(
+    archive.source.factChainTerminalDigest,
+    archive.source.manifestChainTerminalDigest,
+    "Fact and manifest chain terminal digests must remain distinct.",
+  )
+  assertFactDigestChain()
+  assertManifestDigestChain()
   assert.equal(
     archive.source.runtimeSessionId,
     archive.processStarted.runtimeSessionId,
@@ -312,16 +294,8 @@ function assertArchiveMetadata() {
     archive.source.runtimeSessionId,
     "The later startup-retry session must not be confused with the original recovery runtime.",
   )
-  assert.equal(
-    archive.fills.length,
-    13,
-    "All 13 archived execution-fill facts must be represented.",
-  )
-  assert.equal(
-    archive.cycleOutcomes.length,
-    3,
-    "All three archived recovery-cycle outcomes must be preserved.",
-  )
+  assert.equal(archive.fills.length, 13, "All 13 archived execution-fill facts must be represented.")
+  assert.equal(archive.cycleOutcomes.length, 3, "All three archived recovery-cycle outcomes must be preserved.")
 }
 
 function assertPortfolioCycleAccounting({
