@@ -5,6 +5,7 @@ import {
   REQUIRED_ISSUE_SECTIONS,
   calculateGitBlobSha,
   discoverApplicableInstructionPaths,
+  parseArgs,
   parsePreflightReport,
   validateInstructionSnapshot,
   validateIssueBody,
