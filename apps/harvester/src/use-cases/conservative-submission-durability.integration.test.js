@@ -88,7 +88,13 @@ const appConfig = {
   },
 }
 
-function createEngine({ calls, intentResult = { ok: true, data: { durable: true } } }) {
+function createEngine({
+  calls,
+  intentResult = {
+    ok: true,
+    data: { durable: true },
+  },
+}) {
   const brokerState = createHarnessBroker({
     market,
     baseAsset,
@@ -112,10 +118,16 @@ function createEngine({ calls, intentResult = { ok: true, data: { durable: true 
     getRecoveryLedger: () => recoveryLedger,
     getMarketMetadata: () => marketMetadata,
     getAccountSnapshot: () => brokerState.accountSnapshot,
-    updateTradingAccounting: async () => ({ ok: true, data: { applied: true } }),
+    updateTradingAccounting: async () => ({
+      ok: true,
+      data: { applied: true },
+    }),
     completeRecoveryCycle: async () => ({
       ok: true,
-      data: { eligible: true, freeQuantity: "0.1" },
+      data: {
+        eligible: true,
+        freeQuantity: "0.1",
+      },
     }),
     canTrade: () => true,
     onPause: async () => {},
@@ -131,10 +143,16 @@ function createEngine({ calls, intentResult = { ok: true, data: { durable: true 
     },
     onOperationalStateSubmissionOutcome: async () => {
       calls.push("outcome")
-      return { ok: true, data: { durable: true } }
+      return {
+        ok: true,
+        data: { durable: true },
+      }
     },
   })
-  return { engine, brokerState }
+  return {
+    engine,
+    brokerState,
+  }
 }
 
 async function submitFirstMarketDecision({ engine }) {
@@ -164,7 +182,11 @@ test("commits the operational-state submission intent and outcome around Conserv
   const { engine, brokerState } = createEngine({ calls })
   const result = await submitFirstMarketDecision({ engine })
 
-  assert.equal(result.ok, true, "A successfully committed operational-state lifecycle must allow the valid Conservative order.")
+  assert.equal(
+    result.ok,
+    true,
+    result.errors?.[0]?.message ?? "A successfully committed operational-state lifecycle must allow the valid Conservative order.",
+  )
   assert.equal(brokerState.orders.length, 1, "The Conservative decision must reach the broker exactly once.")
   assert.deepEqual(calls, ["intent", "broker", "outcome"], "The durable intent must precede broker I/O and the durable outcome must follow the broker response.")
 })
