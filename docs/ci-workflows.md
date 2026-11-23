@@ -21,7 +21,7 @@ This page summarizes the workflows in `.github/workflows/` and what each one ver
 
 PR [#1758](https://github.com/45s/coinzilla/pull/1758) merged the local replacement-query implementation into `develop`. Its exact-head repository CI and non-uploading CodeQL CLI regression passed, including the positive weak-password-hash fixture. Those results validate the local query pack; they do not prove that GitHub's active Code Scanning configuration loaded it.
 
-The config `.github/codeql/codeql-config.yml` is present on `develop` but absent from `main`. Current inspected heads: `main` `043943051582a8d7bceb5a3a2f642bd886470cc8`; `develop` `1db4b6a6054a15b80186ca9e6f5f35fd9935c03e`. The branches are diverged (develop 3,802 commits ahead / 1 behind). Release promotion [PR #1662](https://github.com/45s/coinzilla/pull/1662) remains open and blocked.
+The config `.github/codeql/codeql-config.yml` is present on `develop` but absent from `main`. Current inspected heads: `main` `043943051582a8d7bceb5a3a2f642bd886470cc8`; `develop` `0389c1adce9f66732749c798f5ca1caba0a7dd9a`. The branches are diverged (develop 3,802 commits ahead / 1 behind). Release promotion [PR #1662](https://github.com/45s/coinzilla/pull/1662) remains open and blocked.
 
 The release Code Scanning view currently reports three High findings:
 
