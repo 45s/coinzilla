@@ -15,6 +15,7 @@ import {
   validatePreflightReport,
   extractTrackingIssueNumber,
   validatePullRequestEvidence,
+  selectPullRequestSnapshot,
 } from './task-preflight.js';
 
 const CURRENT_WORKFLOW_RUN_URL = 'https://github.com/45s/coinzilla/actions/runs/123456789';
@@ -29,6 +30,38 @@ function buildIssueBody({
     return `## ${heading}\n\n${content}`;
   }).join('\n\n');
 }
+
+test('uses the live PR body but rejects a head that changed after the workflow event', () => {
+  const eventPullRequest = {
+    number: 1762,
+    body: 'Fixes #1754\\n\\nFinal source commit: old-sha',
+    base: { ref: 'develop' },
+    head: { sha: 'a'.repeat(40) },
+  };
+  const currentPullRequest = {
+    number: 1762,
+    body: 'Fixes #1754\\n\\nFinal source commit: current-sha',
+    base: { ref: 'develop' },
+    head: { sha: 'a'.repeat(40) },
+  };
+
+  assert.equal(
+    selectPullRequestSnapshot({ eventPullRequest, currentPullRequest }).body,
+    currentPullRequest.body,
+    'Validation must use the current PR description, not the older event snapshot.',
+  );
+  assert.throws(
+    () => selectPullRequestSnapshot({
+      eventPullRequest,
+      currentPullRequest: {
+        ...currentPullRequest,
+        head: { sha: 'b'.repeat(40) },
+      },
+    }),
+    /head changed after the workflow event/i,
+    'A rerun must fail closed if the PR head moved after the workflow event.',
+  );
+});
 
 test('requires the canonical repository instruction set', () => {
   assert.ok(REQUIRED_INSTRUCTION_PATHS.includes('AGENTS.md'));
