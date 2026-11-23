@@ -2752,7 +2752,7 @@ test("ignores an out-of-order OPEN update after the BUY has already filled", asy
   assert.deepEqual(pauses, [])
 })
 
-function createPartialBuyFillAccounting({ getHarness } = {}) {
+function createHarnessFillAccounting({ getHarness } = {}) {
   return async ({ fill }) => {
     const harness = getHarness()
     const portfolioUpdate = harness.getCurrentPortfolio().applyFill({
@@ -2775,7 +2775,7 @@ test("reconciles the recovery SELL after any partial BUY fill without completing
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
     baseFreeBalance: "1",
-    updateTradingAccounting: createPartialBuyFillAccounting({
+    updateTradingAccounting: createHarnessFillAccounting({
       getHarness: () => harness,
     }),
   })
@@ -5585,23 +5585,9 @@ test("a partial BUY fill creates active Portfolio inventory before trailing can 
   })
   const harness = await createHarness({
     strategyPolicy,
-    updateTradingAccounting: async ({ fill }) => {
-      const portfolioUpdate = harness.getCurrentPortfolio().applyFill({ strategyId: StrategyId.COIN_GRABBER,
-        fill,
-      })
-      const ledgerUpdate = harness.getCurrentRecoveryLedger().applyFill({ strategyId: StrategyId.COIN_GRABBER,
-        fill,
-      })
-      harness.setCurrentPortfolio(portfolioUpdate.portfolio)
-      harness.setCurrentRecoveryLedger(ledgerUpdate.ledger)
-      return {
-        ok: true,
-        data: {
-          applied: true,
-          duplicate: false,
-        },
-      }
-    },
+    updateTradingAccounting: createHarnessFillAccounting({
+      getHarness: () => harness,
+    }),
   })
 
   await harness.engine.processMarketPrice({
@@ -5716,23 +5702,9 @@ test("a partial recovery SELL fill leaves active Position inventory protected fr
     strategyPolicy,
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
-    updateTradingAccounting: async ({ fill }) => {
-      const portfolioUpdate = harness.getCurrentPortfolio().applyFill({ strategyId: StrategyId.COIN_GRABBER,
-        fill,
-      })
-      const ledgerUpdate = harness.getCurrentRecoveryLedger().applyFill({ strategyId: StrategyId.COIN_GRABBER,
-        fill,
-      })
-      harness.setCurrentPortfolio(portfolioUpdate.portfolio)
-      harness.setCurrentRecoveryLedger(ledgerUpdate.ledger)
-      return {
-        ok: true,
-        data: {
-          applied: true,
-          duplicate: false,
-        },
-      }
-    },
+    updateTradingAccounting: createHarnessFillAccounting({
+      getHarness: () => harness,
+    }),
   })
 
   await harness.engine.processMarketPrice({
