@@ -45,7 +45,7 @@ export function parsePreflightReport(body) {
     throw new Error('Preflight report missing issue, commit SHA, scope, or status.');
   }
   for (const entry of REQUIRED_PREFLIGHT_ENTRIES) {
-    if (!block.includes(entry)) throw new Error('Required preflight entry missing: ' + entry);
+    if (!block.includes(entry)) {throw new Error(`Required preflight entry missing: ${  entry}`);}
   }
   const instructions = [...block.matchAll(/^\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|$/gim)]
     .map((m) => ({ path: m[1].replaceAll('\x60', '').trim(),
