@@ -1612,15 +1612,15 @@ See [the private polling contract](./docs/BITUNIX_SPOT_POLLING.md) and [the Bitu
 - Tests cover verified/unavailable reconciliation metadata, the exact signed order-detail query, and persistence of confirmed placement evidence when readback fails.
 - No live exchange mutation is part of CI. The existing HYPE order's later cancellation and independent status verification are documented under [PR #1727](https://github.com/45s/coinzilla/pull/1727).
 
-
 ## CodeQL remediation handoff — 2026-11-23
 
 - Current branch: `fix/security/codeql-password-hash-classification`.
-- Saved/validated head: `f043f42d51edd7cae39e192c0782ab45bc6ed3e3` (11 commits ahead, 0 behind `develop` at `a623b2c0d767adcceadcb31e673772d2191b178d`).
-- PR [#1758](https://github.com/45s/coinzilla/pull/1758) is **open and Ready for review**, not draft and not merged.
+- Current branch head: `8ea1cd54893ff27eb6706ebb82d5ca07eafd598d` (12 commits ahead, 0 behind `develop` at `a623b2c0d767adcceadcb31e673772d2191b178d`). The validated implementation SHA remains `f043f42d51edd7cae39e192c0782ab45bc6ed3e3`; `8ea1cd5...` is documentation-only.
+- PR [#1758](https://github.com/45s/coinzilla/pull/1758) is **open and Ready for review**, not draft and not merged. Its description declares the current `Final source commit` and contains exactly one tracking-issue reference (`#1674`).
 - Do not create another PR or duplicate issue. Continue on PR #1758 and issue #1674.
 - Before any new edits, read root `AGENTS.md`, `ENGINEERING_STANDARDS.md`, `AI_AGENT_WORKFLOW.md`, `packages/brokers/AGENTS.md`, and the relevant CodeQL/security docs at the current branch head. Check branch/base freshness and all changed files.
 - Preserve the current validated query/config/workflow and signing behavior. Do not retry name-only renames, blanket sanitizers/suppressions, global query disablement, alert dismissal, or any change to Bitunix signature preimages/algorithm.
 - The only unfinished acceptance item is active GitHub Code Scanning activation/verification: after PR #1758 is merged and the config is on the default branch, an authorized admin must set repository property `github-codeql-config-file` to `.github/codeql/codeql-config.yml`; then run/await a fresh active scan on the intended release commit and inspect both original alert IDs and exact locations. If either remains, investigate and document a new evidence-based approach before editing.
+- The preflight CI gate passed on current head in [JavaScript Syntax run 45124099009](https://github.com/45s/coinzilla/actions/runs/45124099009); the run then exposed the redundant blank line in this handoff immediately above. The remaining quality-gate result is pending after this Markdown correction.
 - Keep issue #1674 open and release PR #1662 blocked until that active scan confirms both alerts absent. A local CLI regression or non-uploading workflow is not proof that live alerts cleared.
 - Record each meaningful action, hypothesis, failure, successful experiment, commit SHA, and CI run immediately in issue #1674. Update the roadmap and CI docs when behavior/status changes. No npm/pnpm runtime dependencies or exchange API calls/mutations.
