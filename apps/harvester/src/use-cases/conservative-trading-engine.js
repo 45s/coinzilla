@@ -507,11 +507,15 @@ function createStrategySafetyPauseBlockerEvidence({
   }
 }
 
+function getStrategySafetyPauseBlockerId({ result } = {}) {
+  return result?.data?.record?.data?.blockerId ?? result?.data?.blockerId ?? null
+}
+
 function classifyStrategySafetyPauseBlockerResult({ result } = {}) {
   const persisted = result?.ok === true && result.data?.durable === true
   return {
     persisted,
-    blockerId: result?.data?.record?.data?.blockerId ?? result?.data?.blockerId ?? null,
+    blockerId: getStrategySafetyPauseBlockerId({ result }),
     errors: persisted
       ? []
       : result?.errors ?? [new Error("Strategy safety-pause blocker was not durably committed")],
@@ -642,6 +646,32 @@ async function cancelStrategySafetyPauseBuys({ symbol, cancelOwnedBuyOrdersWithi
   }
 }
 
+function collectStrategySafetyPauseFinalizationFacts({
+  state,
+  symbol,
+  prepared,
+  cancellationResult,
+  cancellationRequired,
+}) {
+  const failures = [...prepared.failures]
+  if (cancellationResult?.ok !== true) {
+    failures.push(...(
+      cancellationResult?.errors ?? [new Error("Owned BUY cancellation did not complete")]
+    ))
+  }
+  const unresolvedOrders = cancellationRequired
+    ? readActiveStrategySafetyPauseBuyOrders({ state, symbol })
+    : []
+  if (unresolvedOrders.length > 0) {
+    failures.push(new Error("One or more current-process-owned BUY orders remain unresolved"))
+  }
+  return {
+    failures,
+    unresolvedOrders,
+    complete: failures.length === 0 && unresolvedOrders.length === 0,
+  }
+}
+
 async function finalizeStrategySafetyPause({
   state,
   symbol,
@@ -652,23 +682,14 @@ async function finalizeStrategySafetyPause({
   onSafetyBlockerRaised,
   cancellationRequired,
 }) {
-  const failures = [...prepared.failures]
-  if (cancellationResult?.ok !== true) {
-    failures.push(...(
-      cancellationResult?.errors ?? [new Error("Owned BUY cancellation did not complete")]
-    ))
-  }
-  const unresolvedOrders = cancellationRequired
-    ? readActiveStrategySafetyPauseBuyOrders({
-      state,
-      symbol,
-    })
-    : []
-  if (unresolvedOrders.length > 0) {
-    failures.push(new Error("One or more current-process-owned BUY orders remain unresolved"))
-  }
-  const complete = failures.length === 0 && unresolvedOrders.length === 0
-  const blocker = complete
+  const facts = collectStrategySafetyPauseFinalizationFacts({
+    state,
+    symbol,
+    prepared,
+    cancellationResult,
+    cancellationRequired,
+  })
+  const blocker = facts.complete
     ? {
       persisted: null,
       blockerId: null,
@@ -682,28 +703,28 @@ async function finalizeStrategySafetyPause({
       pauseFactPersisted: prepared.pauseFactPersisted,
       pauseEventPublished: prepared.pauseEventPublished,
       cancellationResult,
-      unresolvedOrders,
-      failures,
+      unresolvedOrders: facts.unresolvedOrders,
+      failures: facts.failures,
     })
-  failures.push(...blocker.errors)
+  facts.failures.push(...blocker.errors)
   const status = createStrategySafetyPauseStatus({
     symbol,
     reason,
-    complete,
+    complete: facts.complete,
     pauseFactPersisted: prepared.pauseFactPersisted,
     pauseEventPublished: prepared.pauseEventPublished,
     cancellationResult,
-    unresolvedOrders,
+    unresolvedOrders: facts.unresolvedOrders,
     blocker,
-    failures,
-    status: !cancellationRequired && complete ? "NOT_REQUIRED" : undefined,
+    failures: facts.failures,
+    status: !cancellationRequired && facts.complete ? "NOT_REQUIRED" : undefined,
   })
   state.strategySafetyPauseStatuses.set(symbol, status)
   return {
-    complete,
+    complete: facts.complete,
     status,
-    failures,
-    unresolvedOrders,
+    failures: facts.failures,
+    unresolvedOrders: facts.unresolvedOrders,
   }
 }
 
@@ -799,12 +820,61 @@ function shouldCancelOwnedBuysForStrategyPause({ reason, error } = {}) {
     .some((prefix) => reason.startsWith(prefix))
 }
 
-async function executeStrategySafetyPause({ dependencies, input } = {}) {
+async function prepareAndCancelStrategySafetyPause({
+  dependencies,
+  input,
+  previousStatus,
+}) {
   const {
-    state, logger, onPause, onOperationalStateStrategyMarketPaused,
-    onSafetyBlockerRaised, publishStrategyPaused, eventPublisher,
+    state,
+    onOperationalStateStrategyMarketPaused,
+    publishStrategyPaused,
+    eventPublisher,
     cancelOwnedBuyOrdersWithinTransition,
   } = dependencies
+  const { symbol, reason, error } = input
+  const prepared = await prepareStrategySafetyPause({
+    state,
+    symbol,
+    reason,
+    error,
+    previousStatus,
+    onOperationalStateStrategyMarketPaused,
+    publishStrategyPaused,
+    eventPublisher,
+  })
+  const cancellationRequired = shouldCancelOwnedBuysForStrategyPause({
+    reason,
+    error,
+  })
+  recordStrategySafetyPauseInProgressStatus({
+    state,
+    symbol,
+    reason,
+    prepared,
+    cancellationRequired,
+  })
+  const cancellationResult = cancellationRequired
+    ? await cancelStrategySafetyPauseBuys({
+      symbol,
+      cancelOwnedBuyOrdersWithinTransition,
+    })
+    : toResult({
+      data: {
+        canceled: 0,
+        reconciled: 0,
+        notRequired: true,
+      },
+    })
+  return {
+    prepared,
+    cancellationRequired,
+    cancellationResult,
+  }
+}
+
+async function executeStrategySafetyPause({ dependencies, input } = {}) {
+  const { state, logger, onPause, onSafetyBlockerRaised } = dependencies
   const { symbol, reason, error } = input
   const previousStatus = state.strategySafetyPauseStatuses.get(symbol)
   if (state.strategySafetyPauseCancellationInProgress.has(symbol)) {
@@ -818,48 +888,20 @@ async function executeStrategySafetyPause({ dependencies, input } = {}) {
   }
   state.strategySafetyPauseCancellationInProgress.add(symbol)
   try {
-    const prepared = await prepareStrategySafetyPause({
-      state,
-      symbol,
-      reason,
-      error,
+    const preparedResult = await prepareAndCancelStrategySafetyPause({
+      dependencies,
+      input,
       previousStatus,
-      onOperationalStateStrategyMarketPaused,
-      publishStrategyPaused,
-      eventPublisher,
     })
-    const cancellationRequired = shouldCancelOwnedBuysForStrategyPause({
-      reason,
-      error,
-    })
-    recordStrategySafetyPauseInProgressStatus({
-      state,
-      symbol,
-      reason,
-      prepared,
-      cancellationRequired,
-    })
-    const cancellationResult = cancellationRequired
-      ? await cancelStrategySafetyPauseBuys({
-        symbol,
-        cancelOwnedBuyOrdersWithinTransition,
-      })
-      : toResult({
-        data: {
-          canceled: 0,
-          reconciled: 0,
-          notRequired: true,
-        },
-      })
     const result = await finalizeStrategySafetyPause({
       state,
       symbol,
       reason,
       previousStatus,
-      prepared,
-      cancellationResult,
+      prepared: preparedResult.prepared,
+      cancellationResult: preparedResult.cancellationResult,
       onSafetyBlockerRaised,
-      cancellationRequired,
+      cancellationRequired: preparedResult.cancellationRequired,
     })
     await notifyStrategySafetyPause({
       onPause,
@@ -2083,9 +2125,7 @@ function createOperatorMarketSnapshotFacts({
     volatilityState,
     openOrderBlockerActive,
   })
-  const volatilityProtection = createOperatorVolatilityProtectionSnapshot({
-    volatilityState,
-  })
+  const volatilityProtection = createOperatorVolatilityProtectionSnapshot({ volatilityState })
   return {
     metadata,
     marketPrice,

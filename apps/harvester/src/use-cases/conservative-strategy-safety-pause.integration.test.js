@@ -373,6 +373,22 @@ async function getMarketSnapshot(engine) {
   return result.data.markets.find(({ symbol }) => symbol === "DOGEUSDT")
 }
 
+async function assertSafetyPauseCancellationCompleted({
+  harness,
+  buyOne,
+  buyTwo,
+  recoverySell,
+  pauseFacts,
+}) {
+  await assertSafetyPauseCancellationCompleted({
+    harness,
+    buyOne,
+    buyTwo,
+    recoverySell,
+    pauseFacts,
+  })
+}
+
 test("gates BUYs before canceling only registered BUYs and reconciles cancellation-racing fills once", async () => {
   const [buyOne, buyTwo, recoverySell] = makeActiveOrders()
   const events = []
