@@ -169,4 +169,9 @@ export const CONSERVATIVE_REQUIREMENTS = Object.freeze([
     section: "configuration",
     title: "Conservative pair configuration is validated before trading side effects.",
   },
+  {
+    id: "CON-RUNTIME-5",
+    section: "runtime",
+    title: "Startup rejects unverified or unsafe prior process history and does not restore Conservative trading state.",
+  },
 ])
