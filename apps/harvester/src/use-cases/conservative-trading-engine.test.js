@@ -1797,6 +1797,25 @@ function makeSellFill({
   })
 }
 
+test("derives default SELL Fill quote notional from exact execution price and quantity", () => {
+  const order = createRecoveryModeOrder({
+    clientOrderId: "derived-sell-notional",
+    brokerOrderId: "broker-derived-sell-notional",
+    side: "SELL",
+    price: "123.45",
+    quantity: "0.25",
+    status: "OPEN",
+  })
+  const fill = makeSellFill({
+    order,
+    tradeId: "derived-sell-notional-fill",
+    quantity: "0.25",
+  })
+
+  assert.equal(fill.quoteQuantity.amount, "30.8625",
+    "A SELL Fill without an explicit quote quantity must use exact limit price multiplied by executed quantity.")
+})
+
 function makeBuyFill({
   order,
   tradeId,
