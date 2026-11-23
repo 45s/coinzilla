@@ -10666,6 +10666,26 @@ test("volatility protection rejects a SELL that lacks explicit recovery purpose"
 })
 
 
+function createHighVolatilitySnapshot() {
+  return {
+    ok: true,
+    data: {
+      status: {
+        isReady: true,
+        reason: null,
+        lastClosedCandleOpenTime: 60_000,
+      },
+      metrics: {
+        openTime: 60_000,
+        atr: "1",
+        natr: "2",
+        referenceNatr: "1",
+        volatilityRatio: "2",
+      },
+    },
+  }
+}
+
 function createMultiMarketVolatilityFixture() {
   const zroBaseAsset = new Asset({
     id: "asset-zro",
@@ -10705,23 +10725,7 @@ function createMultiMarketVolatilityFixture() {
     acknowledgedAt: 1,
     updatedAt: 1,
   })
-  const highVolatility = {
-    ok: true,
-    data: {
-      status: {
-        isReady: true,
-        reason: null,
-        lastClosedCandleOpenTime: 60_000,
-      },
-      metrics: {
-        openTime: 60_000,
-        atr: "1",
-        natr: "2",
-        referenceNatr: "1",
-        volatilityRatio: "2",
-      },
-    },
-  }
+  const highVolatility = createHighVolatilitySnapshot()
   return {
     dogeBuy,
     zroBuy,
@@ -11151,7 +11155,10 @@ function assertFailedDeferralPublicationRemainsNonBlocking({
 }
 
 test("keeps local deferral processing non-blocking when best-effort Journal publication fails", async () => {
-  const state = { hasExternalOrder: false, flushCount: 0 }
+  const state = {
+    hasExternalOrder: false,
+    flushCount: 0,
+  }
   const journalEvents = []
   const reportedFailures = []
   const eventPublisher = createFailingDeferralEventPublisher({
