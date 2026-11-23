@@ -1,48 +1,14 @@
 # Conservative domain scenario tests
 
-## Purpose
+## Purpose and authority
 
-Conservative domain scenario tests are readable, deterministic examples of expected trading behavior across multiple real domain components. They complement focused unit tests by verifying that valid inputs and a sequence of domain events produce the expected accounting state, decisions, order intents, and safety dispositions.
+This document contains Conservative-specific scenario examples and the conceptual lifecycle model used by the Conservative scenario initiative.
 
-The canonical trading contract remains the [Conservative Domain Specification](CONSERVATIVE_DOMAIN_SPECIFICATION.md). This document defines test organization and authoring guidance only; it does not introduce or redefine strategy rules.
+The strategy-neutral test design, fixture, state-transition proof, accounting-oracle, adversarial coverage, and evidence methodology are defined in the shared [Domain Scenario Testing Methodology](../../../../docs/testing/DOMAIN_SCENARIO_TESTING.md). Do not duplicate or redefine that method here.
 
-Coverage tracking and implementation work are owned by [issue #1763](https://github.com/45s/coinzilla/issues/1763).
+The canonical trading contract remains the [Conservative Domain Specification](CONSERVATIVE_DOMAIN_SPECIFICATION.md). This document does not introduce or redefine strategy rules. Coverage tracking and implementation work are owned by [issue #1763](https://github.com/45s/coinzilla/issues/1763).
 
-## Test types and responsibility
-
-| Test type | What it proves | Typical scope |
-| --- | --- | --- |
-| Unit test | One calculation, predicate, validator, or state transition is correct in isolation. | A recovery SELL plan, price rounding, fee-rate resolution, or fill fingerprint. |
-| Domain scenario test | Several real domain components cooperate to satisfy a business behavior. | Fill → Portfolio/Position/RecoveryLedger → Conservative evaluation → exact order intents. |
-| Application integration test | Application orchestration, ports, ordering, reconciliation, submission barriers, and lifecycle work together. | Engine/use-case event flow, cancel/fill race, pending submission, REST/stream reconciliation. |
-| Acceptance test | A requirement is satisfied at the boundary selected for acceptance. | Offline acceptance across domain and application layers; exchange acceptance is separately authorized. |
-| Replay test | A recorded or carefully reconstructed event sequence reproduces a historical behavior or incident. | Historical BUY/SELL events, actual commission facts, lifecycle and shutdown evidence. |
-
-A scenario test is not a replacement for unit tests. Keep calculation edge cases close to their calculation modules; use scenarios to prove the components compose correctly. Do not call a pure domain scenario an application integration test if it has no application orchestration.
-
-## Scenario anatomy
-
-Write each test as a behavior statement and organize the implementation around **Given / When / Then**:
-
-- **Given:** a named market, strategy configuration, market metadata and trading filters; initial domain state; canonical fills/orders; actual commissions and their assets; any relevant active orders.
-- **When:** apply the domain event(s) through the real components and evaluate the real Conservative policy.
-- **Then:** assert the resulting accounting projections and exact decisions/intents/dispositions. Verify order side, purpose, type, price, quantity, required proceeds, fees, retained inventory, cycle state and safety outcome as relevant.
-
-Prefer a scenario name that describes the observable business result:
-
-~~~js
-describe("Conservative domain scenarios", () => {
-  it("places the next standing BUY and recovery SELL after the initial BUY fill", () => {
-    // Given: a valid DOGEUSDT market, pair policy, exchange filters,
-    //        empty strategy-owned position and a canonical BUY Fill.
-    // When: the real Portfolio and RecoveryLedger apply the Fill,
-    //       then the real Conservative strategy evaluates the state.
-    // Then: assert exact accounting and both expected order intents.
-  });
-});
-~~~
-
-The snippet is illustrative. Use the repository's actual test framework, canonical factories, test naming, and public domain APIs; do not create a parallel domain implementation or an invented helper API merely to match this example.
+## Conservative scenario examples
 
 ## Example behavior: initial BUY fill
 
@@ -71,55 +37,9 @@ Use actual canonical SELL Fill facts, not an assumed requested quantity. Verify 
 
 For a completed recovery cycle, require the canonical terminal order evidence at the application boundary. Assert completion exactly once, retained inventory and constrained dust treatment, recovery-basis reset, and eligibility for the next initial BUY. A replay/duplicate terminal event must not complete or reset the cycle twice.
 
-## Fixture and helper guidance
+## Conservative state model
 
-- Use the real domain factories and entities, with canonical normalized inputs.
-- Keep fixture inputs explicit. A fixture builder may reduce repetitive valid setup, but callers must be able to see and override market, pair config, order type, fee rates, exchange filters, account/Portfolio state, orders and fill facts.
-- Prefer small named builders such as a market fixture or canonical Fill factory only when existing repository utilities do not already provide the capability.
-- Do not hide financial values behind opaque defaults. In particular, tests should make commission amount and asset, market, side, quantity, price, and exchange constraints visible.
-- Avoid mocks for Portfolio, Position, RecoveryLedger, decimal calculations, or the strategy decision under test. Mock only external ports when testing an application boundary.
-- Use exact decimal strings and compare named fields. Avoid floating-point arithmetic in scenario setup and expected values.
-- Assert both expected outcomes and important absence conditions (no duplicate intent, no stale order, no cycle reset, no unsafe BUY, no external inventory adoption).
-- Include assertion messages that explain the business invariant being protected.
-- Keep scenarios focused. Do not combine a full lifecycle and dozens of unrelated failure cases into one mega-test; use named cases or separate tests.
-- Keep tests offline, deterministic, credential-free, and independent of live or TESTNET exchange operations.
-
-## Scenario organization
-
-A dedicated scenarios folder is recommended when it makes the behavior suite discoverable without disrupting existing colocated unit-test conventions. Suggested names:
-
-- initial-buy-fill.scenario.test.js
-- second-buy-fill.scenario.test.js
-- partial-recovery-sell.scenario.test.js
-- recovery-completed.scenario.test.js
-- buy-during-recovery.scenario.test.js
-- dust-and-retained-inventory.scenario.test.js
-- fees-and-rounding.scenario.test.js
-- exchange-filters.scenario.test.js
-- fail-closed.scenario.test.js
-
-These are suggestions, not a mandate to create empty files or move existing tests. First audit current coverage and choose the smallest structure that improves readability.
-
-## Coverage completeness
-
-Use [issue #1763](https://github.com/45s/coinzilla/issues/1763) as the detailed coverage checklist and current gap tracker. The matrix must be source-driven and distinguish:
-
-- Already covered by a named test.
-- Covered at a different layer (domain, application integration, or replay).
-- Missing regression coverage.
-- Intentionally unsupported behavior or an unresolved product-contract decision.
-
-Every applicable behavior, boundary, interaction, and failure mode needs evidence or an explicit owner and disposition. Avoid an unreadable Cartesian product; use equivalence classes and named boundary cases, while retaining independent assertions for distinct invariants. A test count alone is not a completeness claim.
-
-## Definition of done
-
-A scenario suite is considered complete only when the issue matrix is audited against the current canonical specification, production source, existing tests and application/replay coverage; each applicable row is mapped to evidence; uncovered behavior has deterministic tests; existing tests remain intact; and exact-head CI evidence is recorded. Documentation and roadmap status must agree with the issue and PR.
-
-No scenario-test initiative authorizes exchange writes, process restart, live trading, or TESTNET operation.
-
-## State-machine testing: mandatory lifecycle proof
-
-State-machine tests prove that the strategy and its surrounding application move through only permitted business states, preserve accounting across transitions, and fail closed when the evidence needed for a transition is absent. They are not merely tests of status strings. Every transition test must assert the complete relevant state before and after the event, including Portfolio, Position, RecoveryLedger, order identity/status/quantities, reservations or commitments, emitted intents, and safety disposition.
+Follow the shared methodology's [state-machine and lifecycle proof](../../../../docs/testing/DOMAIN_SCENARIO_TESTING.md#state-machine-and-lifecycle-proof) requirements. The following conceptual model is Conservative-specific and does not add states or redefine transitions in the canonical specification.
 
 ### State model
 
@@ -149,21 +69,9 @@ stateDiagram-v2
 
 ReconciliationBlocked is a safety disposition in this conceptual model, not permission to clear a production latch or invent an automatic retry. A transition out of a blocked condition requires the authoritative evidence and recovery path defined by the existing application contract.
 
-### Transition contract
+## Conservative required sequence scenarios
 
-For each production transition, the coverage matrix must record:
-
-| Field | Required proof |
-| --- | --- |
-| From / event / to | Exact source state, event identity/type, and expected resulting state |
-| Preconditions | Required canonical fill/order facts, market/configuration, accounting evidence and terminal proof |
-| State mutation | Every changed field in Position, Portfolio, RecoveryLedger, OrderRegistry and commitments |
-| Accounting delta | Exact base quantity, quote cost/proceeds, commission amount/asset, realized net profit and retained inventory |
-| Emitted effects | Exact intent/disposition, or explicit proof that no intent is emitted |
-| Idempotency | Reapplying the same event does not double-apply fills, fees, proceeds, completion or reservations |
-| Conflict behavior | Same identity with different payload, stale version/timestamp, wrong market/order/side or conflicting terminal facts are rejected |
-| Failure atomicity | Rejected/failed transition leaves all authoritative projections unchanged; no partial commit |
-| Recovery | Exact evidence required to safely resume; no blind retry or implicit latch clearing |
+The sequence below is a Conservative coverage plan, not a generic strategy lifecycle. Implement only transitions supported by the canonical Conservative specification. Use the shared methodology for transition evidence, idempotency, conflict, failure-atomicity, and recovery assertions.
 
 ### Required sequence scenarios
 
@@ -198,36 +106,3 @@ Required adversarial variants include:
 - persistence or projection failure between staged state changes;
 - completion attempt below profit threshold, with sellable active residual, with invalid dust evidence, or with incomplete terminal evidence;
 - replay of a completed event and stale events from the previous cycle.
-
-### Example transition assertion pattern
-
-~~~js
-it("does not partially complete a recovery cycle when ledger reset fails", () => {
-  // Given: a completion-eligible cycle with exact canonical fills,
-  //        reconciled terminal SELL evidence and a ledger that rejects reset.
-  const beforePortfolio = portfolio;
-  const beforeLedger = recoveryLedger;
-
-  // When: the real completion workflow attempts the transition.
-  const result = completeRecoveryCycle(/* canonical inputs */);
-
-  // Then: failure is explicit and both authoritative projections are unchanged.
-  assert.equal(result.ok, false, "completion must report the failed transition");
-  assert.strictEqual(portfolio, beforePortfolio,
-    "Portfolio must not commit before RecoveryLedger completion succeeds");
-  assert.strictEqual(recoveryLedger, beforeLedger,
-    "RecoveryLedger must preserve the incomplete cycle");
-});
-~~~
-
-This is a shape example, not a claim about the repository's exact API. Implement with current public APIs and assert deep immutable values where reference identity is not the contract.
-
-### State-machine test rules
-
-1. Test every implemented legal transition at least once with exact post-state assertions.
-2. Test every forbidden transition relevant to financial safety and prove no mutation.
-3. Test every transition's duplicate/idempotent behavior and conflicting-identity behavior.
-4. Assert conservation across projections after each event, not only at the end of a long sequence.
-5. Separate domain transition tests from application orchestration tests. Broker cancel/submit, REST/stream ordering, durable barriers and shutdown belong to application owners.
-6. Keep a transition matrix with from, event, guard, to, mutation, failure result, test path, and evidence status.
-7. A transition is not covered merely because a test asserts its status. It is covered only when the associated accounting, identity, side-effect and failure guarantees are asserted.
