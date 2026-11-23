@@ -65,7 +65,7 @@ test("Bitunix Spot WebSocket signature rejects malformed input and non-scalar pa
     () => createBitunixWebSocketSignature({
       nonce: "nonce",
       timestamp: "1",
-      apiKey: "key",
+      publicIdentifier: "key",
       secretKey: "",
       params: {},
     }),
