@@ -10,7 +10,7 @@ The canonical trading contract remains the [Conservative Domain Specification](C
 
 ## Conservative scenario examples
 
-## Example behavior: initial BUY fill
+### Initial BUY fill
 
 A scenario should make every financially relevant input explicit. For example, the test fixture may represent DOGEUSDT, configured order quantity 400, BUY execution price 0.10, configured maker/taker fee rates, actual commission amount and asset, minProfit, keepQuantity, order type, price tick, quantity step, minimum/maximum quantity and notional, and current market price.
 
@@ -25,13 +25,13 @@ After applying a valid canonical BUY Fill to the real Portfolio and RecoveryLedg
 
 Do not assert merely that “two actions” were returned. An incorrect quantity, fee reserve, price, reason, or cycle state can still produce two actions.
 
-## Example behavior: second BUY fill
+### Second BUY fill
 
 Set up the state using the initial-fill scenario or a clear canonical setup, including the existing recovery SELL and its order lifecycle state. Apply the second BUY Fill with its own execution price, quantity and commission facts.
 
 The expected business behavior includes the combined position/accounting state, cancellation/reconciliation requirement for the old recovery SELL, recalculated recovery economics from the updated position and already-confirmed net SELL proceeds, correct next BUY reference, and the safety outcome if old SELL terminal state or fill history is incomplete. Pure policy tests should assert the decision from a reconciled snapshot; application tests own broker cancellation, race ordering and barriers.
 
-## Example behavior: partial and completed recovery SELL
+### Partial and completed recovery SELL
 
 Use actual canonical SELL Fill facts, not an assumed requested quantity. Verify base quantity reduction, net proceeds, commission treatment, and recovery remaining after a partial fill. A partial SELL without a new BUY must preserve the existing open order/price when the specification says so.
 
@@ -72,8 +72,6 @@ ReconciliationBlocked is a safety disposition in this conceptual model, not perm
 ## Conservative required sequence scenarios
 
 The sequence below is a Conservative coverage plan, not a generic strategy lifecycle. Implement only transitions supported by the canonical Conservative specification. Use the shared methodology for transition evidence, idempotency, conflict, failure-atomicity, and recovery assertions.
-
-### Required sequence scenarios
 
 Use these as separate, named scenario tests or tightly scoped state-machine test cases. The sequence is a coverage plan; only transitions supported by the canonical specification and current production contract should be implemented.
 
