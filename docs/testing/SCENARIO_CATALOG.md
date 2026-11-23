@@ -573,7 +573,7 @@ The [Recovery Seller Domain Specification](../../apps/harvester/docs/domain/reco
 
 ### RS-004 — Recovery, legacy, and combined profitability gates are independent
 
-**Status:** PARTIAL — the new domain-scenario test proves both cross-subsidy rejection directions, exact-threshold acceptance, recovery-only eligibility, and the resulting cycle lifecycle. These implemented subcases passed on exact PR #1793 head `a33ebb144fb9d1215d1d0fe9d521c08452362a72`; the overall scenario remains PARTIAL because the remaining subcases below are not covered. Existing RS tests remain uncredited.
+**Status:** PARTIAL — the new domain-scenario test proves both cross-subsidy rejection directions, exact-threshold acceptance, recovery-only eligibility, and the post-fill cycle lifecycle. These implemented subcases passed on exact PR #1793 test head `a33ebb144fb9d1215d1d0fe9d521c08452362a72`; the overall scenario remains PARTIAL because the remaining subcases below are not covered. Existing RS tests remain uncredited.
 
 **Behavior:** A mixed SELL is eligible only when every independently required profitability gate passes. A profitable allocation cannot subsidize a loss-making allocation.
 
@@ -617,6 +617,7 @@ The [Recovery Seller Domain Specification](../../apps/harvester/docs/domain/reco
 
 **Remaining subcases:**
 
+- Pre-submission SELL evaluator integration proving an ineligible result prevents creation/submission of an order intent. This slice tests realized net-profit gates and post-fill cycle disposition; it does not prove the pre-submission no-order side effect.
 - Just-below and just-above boundaries for each applicable threshold.
 - Actual quote/base/third-asset commission allocation and valuation.
 - Fee-rate planning, price tick/quantity step rounding, and exchange filter behavior.
