@@ -330,8 +330,16 @@ function assertCycleAccounting({ cycle }) {
   )
 
   const replay = replayCycle({ cycle })
-  assertPortfolioCycleAccounting({ cycle, replay, expected })
-  assertLedgerCycleAccounting({ cycle, replay, expected })
+  assertPortfolioCycleAccounting({
+    cycle,
+    replay,
+    expected,
+  })
+  assertLedgerCycleAccounting({
+    cycle,
+    replay,
+    expected,
+  })
 }
 
 function assertCycleCompletion({ cycle }) {
