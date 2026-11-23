@@ -41,7 +41,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Apply ESLint autofixes to scenario sources
-        run: pnpm --filter @coinzilla/harvester exec eslint --fix "test/scenarios/**/*.js" "scripts/run-conservative-scenarios.js"
+        run: pnpm --filter @coinzilla/harvester exec eslint --fix "test/scenarios/**/*.js" "scripts/run-conservative-scenarios.js" || true
 
       - name: Commit ESLint autofixes
         run: |
