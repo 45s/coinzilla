@@ -77,7 +77,7 @@ This is the explicit static configuration correction requested by the operator. 
 
 A source review of `develop` at `543753da5938eba2d95ad19d74c3f98a991e6461` on 2026-11-18 confirmed that recovery SELL planning and dust completion do not require a fresh exchange-filter read. In `src/use-cases/conservative-trading-engine.js`, `createMarketMetadataCache()` returns refreshed metadata when present and otherwise falls back to the process-start `getMarketMetadata()` snapshot. `refreshTrailingBuyMarketMetadata()` calls `broker.getSymbolFilters()` and updates the refreshed metadata only in the trailing-BUY replacement path. `src/use-cases/create-latest-transition-evaluator.js` builds strategy inputs from `getCurrentMarketMetadata()` without refreshing filters first. The architecture guide, [Broker–Harvester trading flow](architecture/BROKER_HARVESTER_TRADING_FLOW.md), also states that bootstrap loads the map once and no background refresh is claimed.
 
-The 2026-11-18 recovery-filter freshness defect is closed by merged PR #1670. The 2026-11-22 archive then confirmed two additional implementation defects: missing durable submission-intent/outcome facts and current-process-owned BUYs surviving safety-critical strategy pauses. Those are fixed by merged PR #1750 and PR #1755. This follow-up adds the sanitized 2026-11-22 archive fixture and exact accounting evidence test, and records the historical filter/shutdown limitations without fabricating missing evidence. The #1362 acceptance matrix is ready for closure after this follow-up's exact-head CI; parent issue #1359 remains open for its broader scope. Do not weaken exchange-filter, minimum-profit, reconciliation, durability, readiness, or shutdown gates.
+The 2026-11-18 recovery-filter freshness defect is closed by merged PR #1670. The 2026-11-22 archive then confirmed two additional implementation defects: missing durable submission-intent/outcome facts and current-process-owned BUYs surviving safety-critical strategy pauses. Those are fixed by merged PR #1750 and PR #1755. This follow-up adds the sanitized 2026-11-22 archive fixture and exact accounting evidence test in [PR #1759](https://github.com/45s/coinzilla/pull/1759), and records the historical filter/shutdown limitations without fabricating missing evidence. Final exact-head CI and acceptance review are required before #1362 can close. The #1362 acceptance matrix is ready for closure after this follow-up's exact-head CI; parent issue #1359 remains open for its broader scope. Do not weaken exchange-filter, minimum-profit, reconciliation, durability, readiness, or shutdown gates.
 
 PR #1411's merged scope is complete: TESTNET pair configuration is aligned to 0.1% maker/taker while LIVE entries remain unchanged; the offline ADA replay and duplicate-terminal-fill evidence are implemented; historical execution facts are preserved. The PR did not implement the recovery-SELL filter refresh and must not be described as doing so.
 
@@ -118,7 +118,6 @@ The audit is intentionally evidence-led. If a later reviewer finds a criterion n
 - `MarketMetadataRefreshError` exposes stable codes for unavailable filters, wrong-market metadata, and clock rollback while preserving the original exchange error as `cause`. The existing trailing-BUY wrapper preserves its historical error result and continues to force-refresh filters.
 - Exact-head targeted tests, strict ESLint, full unit tests, coverage, syntax, and dependency audit are pending for the corrected commit. The RED evidence from `6f8718f4a204f7eff8a1a62cedf7f70ae471f53e` remains the source-gap proof.
 
-
 ## 2026-11-23 — 2026-11-22 archive reconstruction and lifecycle disposition
 
 ### Source integrity and fixture provenance
@@ -141,6 +140,7 @@ All amounts below are exact decimal strings. BUY commissions were charged in the
 | ADAUSDT | 1 BUY / 1 SELL | 7.2 USDT | 7.25318955 USDT | +0.05318955 USDT | 0.05 ADA | 0 ADA | 0.05 USDT |
 
 Commission details:
+
 - ZRO: four BUY fees of 0.005 ZRO; SELL fee 0.0234213 USDT.
 - DOGE: four BUY fees of 0.4 DOGE; SELL fee 0.08774095 USDT.
 - ADA: BUY fee 0.05 ADA; SELL fee 0.00726045 USDT.
