@@ -573,7 +573,7 @@ The [Recovery Seller Domain Specification](../../apps/harvester/docs/domain/reco
 
 ### RS-004 — Recovery, legacy, and combined profitability gates are independent
 
-**Status:** PARTIAL — a fresh domain-scenario test now proves both cross-subsidy rejection directions, exact-threshold acceptance, recovery-only eligibility, and the resulting cycle lifecycle. Exact-head CI verification is pending. Existing RS tests remain uncredited.
+**Status:** PARTIAL — the new domain-scenario test proves both cross-subsidy rejection directions, exact-threshold acceptance, recovery-only eligibility, and the resulting cycle lifecycle. These implemented subcases passed on exact PR #1793 head `a33ebb144fb9d1215d1d0fe9d521c08452362a72`; the overall scenario remains PARTIAL because the remaining subcases below are not covered. Existing RS tests remain uncredited.
 
 **Behavior:** A mixed SELL is eligible only when every independently required profitability gate passes. A profitable allocation cannot subsidize a loss-making allocation.
 
@@ -634,6 +634,8 @@ The [Recovery Seller Domain Specification](../../apps/harvester/docs/domain/reco
   - `profitable legacy proceeds cannot subsidize a recovery loss`
   - `a mixed recovery and legacy cycle closes at exact profitability thresholds when every gate passes`
   - `recovery-only operation still requires recovery and combined profit after legacy exhaustion`
+
+**Verification evidence:** On exact PR #1793 head `a33ebb144fb9d1215d1d0fe9d521c08452362a72`, all four named scenario cases passed in the Harvester unit suite (2,674/2,674); Harvester Targeted Tests passed; Harvester and workspace Test Coverage passed; Repository Quality passed, including strict changed-file ESLint and JavaScript syntax; Dependency Audit passed; External Documentation Links passed. The read-only Binance TESTNET integration job was skipped by workflow policy; no exchange activity occurred.
 
 **Evidence note:** This is a new package-level scenario suite authored from the approved RS contract and its worked examples. It composes the real profitability and cycle-state domain components. It does not certify existing RS tests and does not yet cover fee calculation, threshold-adjacent values, exchange filters, or partial-fill accounting.
 
