@@ -31,6 +31,8 @@ test('task preflight is isolated from JavaScript quality and gates the required 
   assert.match(evidencePublisher, /issues: write/);
   assert.match(evidencePublisher, /Verification evidence/);
   assert.match(evidencePublisher, /gh api/);
+  assert.ok(evidencePublisher.includes('PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}'));
+  assert.ok(evidencePublisher.includes('RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}'));
   assert.doesNotMatch(evidencePublisher, /uses:\s+actions\/checkout|run:\s+pnpm/);
 
   const validator = extractJob('task-preflight');
