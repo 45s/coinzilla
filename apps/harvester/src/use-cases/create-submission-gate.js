@@ -16,38 +16,76 @@ function defer({ symbol, reason, details = {} } = {}) {
   }
 }
 
-function getSubmissionStateBlocker({
+function getMarketPauseSubmissionBlocker({
   symbol,
   order,
+  purpose,
   shutdownRecoverySubmission,
-  marketPrice,
   state,
-  hasBlockingOpenOrdersForSymbol,
-  canTrade,
-  isMarketPriceFresh,
-} = {}) {
-  if (state.paused.has(symbol) && !shutdownRecoverySubmission) {return defer({ symbol,
-    reason: "MARKET_PAUSED" })}
+}) {
+  const strategySafetyPauseRecoverySell = state.durablePausedMarkets?.has(symbol) === true &&
+    order.side === "SELL" &&
+    purpose === "RECOVERY_SELL"
+  if (state.paused.has(symbol) && !shutdownRecoverySubmission && !strategySafetyPauseRecoverySell) {
+    return defer({
+      symbol,
+      reason: "MARKET_PAUSED",
+    })
+  }
+  return null
+}
+
+function getOperatorPauseSubmissionBlocker({ symbol, order, state } = {}) {
   if (state.operatorPausedMarkets.has(symbol) && order.side === "BUY") {
-    return defer({ symbol,
-      reason: "OPERATOR_MARKET_PAUSED" })
+    return defer({
+      symbol,
+      reason: "OPERATOR_MARKET_PAUSED",
+    })
   }
   if (order.side === "BUY" && state.operatorAllBuysPaused === true) {
-    return defer({ symbol,
-      reason: "OPERATOR_ALL_BUYS_PAUSED" })
+    return defer({
+      symbol,
+      reason: "OPERATOR_ALL_BUYS_PAUSED",
+    })
   }
   if (order.side === "BUY" && state.operatorBuyPausedMarkets?.has(symbol) === true) {
-    return defer({ symbol,
-      reason: "OPERATOR_MARKET_BUYS_PAUSED" })
+    return defer({
+      symbol,
+      reason: "OPERATOR_MARKET_BUYS_PAUSED",
+    })
   }
+  return null
+}
+
+function getOpenOrderSubmissionBlocker({ symbol, hasBlockingOpenOrdersForSymbol } = {}) {
   if (hasBlockingOpenOrdersForSymbol({ symbol })) {
-    return defer({ symbol,
-      reason: "UNOWNED_OPEN_ORDERS_PRESENT" })
+    return defer({
+      symbol,
+      reason: "UNOWNED_OPEN_ORDERS_PRESENT",
+    })
   }
-  if (!canTrade({ symbol }) && !shutdownRecoverySubmission) {return defer({ symbol,
-    reason: "TRADING_DISABLED" })}
-  if (!marketPrice) {return defer({ symbol,
-    reason: "MARKET_PRICE_UNAVAILABLE" })}
+  return null
+}
+
+function getTradingReadinessSubmissionBlocker({
+  symbol,
+  marketPrice,
+  shutdownRecoverySubmission,
+  canTrade,
+  isMarketPriceFresh,
+}) {
+  if (!canTrade({ symbol }) && !shutdownRecoverySubmission) {
+    return defer({
+      symbol,
+      reason: "TRADING_DISABLED",
+    })
+  }
+  if (!marketPrice) {
+    return defer({
+      symbol,
+      reason: "MARKET_PRICE_UNAVAILABLE",
+    })
+  }
   if (!isMarketPriceFresh(marketPrice)) {
     return defer({
       symbol,
@@ -60,52 +98,77 @@ function getSubmissionStateBlocker({
   return null
 }
 
-function getVolatilitySubmissionBlocker({
-  symbol,
-  order,
-  purpose,
-  state,
-  getVolatilityData,
-  isVolatilityProtectionEnabledForSymbol,
-} = {}) {
-  if (!isVolatilityProtectionEnabledForSymbol(symbol)) {return null}
-  let volatility
+function getSubmissionStateBlocker(context = {}) {
+  return getMarketPauseSubmissionBlocker(context) ??
+    getOperatorPauseSubmissionBlocker(context) ??
+    getOpenOrderSubmissionBlocker(context) ??
+    getTradingReadinessSubmissionBlocker(context)
+}
+
+function getVolatilitySnapshot({ symbol, getVolatilityData }) {
   try {
     const result = getVolatilityData({ symbol })
-    volatility = result?.ok ? result.data : null
+    return result?.ok ? result.data : null
   } catch {
-    volatility = null
+    return null
   }
-  const protection = state.volatilityProtection.get(symbol) ??
-    createVolatilityProtectionState({ symbol })
+}
+
+function getVolatilitySubmissionBlockerReason({ order, purpose, protection, volatility }) {
+  const recoverySell = order.side === "SELL" && purpose === "RECOVERY_SELL"
+  if (recoverySell) {
+    return null
+  }
+  if (!volatility?.status?.isReady) {
+    return "VOLATILITY_DATA_UNAVAILABLE"
+  }
   const latestRatio = volatility?.metrics?.volatilityRatio
   const latestRatioProtected = typeof latestRatio === "string" &&
     compareDecimal({
       left: latestRatio,
       right: VOLATILITY_PROTECTION_THRESHOLDS.protectRatio,
     }) >= 0
-  const recoverySell = order.side === "SELL" && purpose === "RECOVERY_SELL"
-  if (!volatility?.status?.isReady && !recoverySell) {
-    return defer({
-      symbol,
-      reason: "VOLATILITY_DATA_UNAVAILABLE",
-      details: {
-        protectionMode: protection.mode,
-        volatilityRatio: latestRatio ?? null,
-      },
-    })
-  }
-  if ((protection.mode !== VOLATILITY_PROTECTION_MODES.NORMAL || latestRatioProtected) && !recoverySell) {
-    return defer({
-      symbol,
-      reason: "VOLATILITY_PROTECTION_ACTIVE",
-      details: {
-        protectionMode: protection.mode,
-        volatilityRatio: latestRatio ?? null,
-      },
-    })
+  if (protection.mode !== VOLATILITY_PROTECTION_MODES.NORMAL || latestRatioProtected) {
+    return "VOLATILITY_PROTECTION_ACTIVE"
   }
   return null
+}
+
+function getVolatilitySubmissionBlocker(context = {}) {
+  const {
+    symbol,
+    order,
+    purpose,
+    state,
+    getVolatilityData,
+    isVolatilityProtectionEnabledForSymbol,
+  } = context
+  if (!isVolatilityProtectionEnabledForSymbol(symbol)) {
+    return null
+  }
+  const volatility = getVolatilitySnapshot({
+    symbol,
+    getVolatilityData,
+  })
+  const protection = state.volatilityProtection.get(symbol) ??
+    createVolatilityProtectionState({ symbol })
+  const reason = getVolatilitySubmissionBlockerReason({
+    order,
+    purpose,
+    protection,
+    volatility,
+  })
+  if (!reason) {
+    return null
+  }
+  return defer({
+    symbol,
+    reason,
+    details: {
+      protectionMode: protection.mode,
+      volatilityRatio: volatility?.metrics?.volatilityRatio ?? null,
+    },
+  })
 }
 
 function getMarketBookSubmissionBlocker({
