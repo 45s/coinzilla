@@ -79,7 +79,7 @@ jobs:
             --format=sarif-latest \
             --output="$RUNNER_TEMP/coinzilla.sarif" \
             --threads=0
-          python .github/codeql/verify-sarif.py "$RUNNER_TEMP/coinzilla.sarif" --repository-custom
+          node .github/codeql/verify-sarif.mjs "$RUNNER_TEMP/coinzilla.sarif" --repository-custom
 
       - name: Validate full default-query selection and replacement
         if: steps.config-mode.outputs.full_config_validation == 'true'
@@ -88,7 +88,7 @@ jobs:
             --format=sarif-latest \
             --output="$RUNNER_TEMP/coinzilla.sarif" \
             --threads=0
-          python .github/codeql/verify-sarif.py "$RUNNER_TEMP/coinzilla.sarif" --repository
+          node .github/codeql/verify-sarif.mjs "$RUNNER_TEMP/coinzilla.sarif" --repository
 
       - name: Prove genuine password hashing is still detected
         shell: bash
@@ -111,4 +111,4 @@ jobs:
             --format=sarif-latest \
             --output="$RUNNER_TEMP/coinzilla-positive.sarif" \
             --threads=0
-          python .github/codeql/verify-sarif.py "$RUNNER_TEMP/coinzilla-positive.sarif" --positive-fixture
+          node .github/codeql/verify-sarif.mjs "$RUNNER_TEMP/coinzilla-positive.sarif" --positive-fixture
