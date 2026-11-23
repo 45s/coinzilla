@@ -98,8 +98,10 @@ export function validatePreflightReport({ report, context }) {
   return errors;
 }
 export function extractTrackingIssueNumber(body) {
-  const refs = [...(body || '').matchAll(/(?:close[sd]?|fix(?:es|ed)?|resolve[sd]?|tracking issue)\s*:?\s*#(\d+)/gi)];
-  return refs.length === 1 ? Number(refs[0][1]) : null;
+  const references = [...(body || '').matchAll(/#(\d+)/g)];
+  const tracking = (body || '').match(/(?:close[sd]?|fix(?:es|ed)?|resolve[sd]?|tracking issue)\s*:?\s*#(\d+)/i);
+  if (references.length !== 1 || !tracking || references[0][1] !== tracking[1]) return null;
+  return Number(tracking[1]);
 }
 function validateTrackingReference({ context, errors }) {
   if (extractTrackingIssueNumber(context.body) !== context.issueNumber) {
@@ -111,8 +113,19 @@ function validateReportedHead({ context, errors }) {
   const reported = body.match(/^\s*-?\s*Final source commit:?\s*([0-9a-f]{40})\s*$/im)?.[1]?.toLowerCase();
   if (reported !== context.headSha?.toLowerCase()) {errors.push('Reported source commit does not match PR head SHA.');}
 }
+function getSectionContent(body, title) {
+  const lines = body.split(/\r?\n/);
+  const heading = '## ' + title.toLowerCase();
+  const start = lines.findIndex((line) => line.trim().toLowerCase() === heading);
+  if (start < 0) return null;
+  const content = [];
+  for (let index = start + 1; index < lines.length && !/^##\s+/.test(lines[index]); index += 1) {
+    content.push(lines[index]);
+  }
+  return content.join('\n');
+}
 function validateDocumentationImpact({ context, errors }) {
-  const docs = context.body.match(/^##\s+Documentation impact\s*$([\s\S]*?)(?=^##\s+|$)/im)?.[1];
+  const docs = getSectionContent(context.body, 'Documentation impact');
   if (!docs || plain(docs).length < 12) {errors.push('PR documentation impact is missing or empty.');}
   const changedDocs = (context.changedPaths || []).filter((path) => /\.mdx?$/i.test(path));
   for (const path of changedDocs) {
