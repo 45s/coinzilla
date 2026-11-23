@@ -45,7 +45,7 @@ export const scenarios = [
     title: "Runtime restart and state restoration remain explicitly unsupported",
     category: "persistence-restart-recovery",
     priority: "P1",
-    description: "Record the current specification boundary for process interruption and runtime reconstruction without inventing restart semantics.",
+    description: "Record the specification boundary for runtime state reconstruction; startup history validation is separately covered by CON-PERSIST-003.",
     tags: ["restart", "unsupported", "scope-boundary"],
     preconditions: [
       "The active Conservative Domain Specification §7 is authoritative.",
@@ -59,7 +59,8 @@ export const scenarios = [
       { type: "PROCESS_RESTART_REQUEST", sequence: 1 },
     ],
     expectedState: {
-      runtimeRestoration: "UNSUPPORTED until the separate restart acceptance gates are approved",
+      runtimeRestoration: "UNSUPPORTED: no Portfolio, RecoveryLedger, OrderRegistry, or active-order reconstruction/resumption is performed",
+      startupSafetyGate: "durable history integrity and prior-session eligibility are checked separately before broker connection",
     },
     expectedSideEffects: {
       inferredTradingReadiness: false,
@@ -73,7 +74,7 @@ export const scenarios = [
     relatedCriticalBehaviors: [],
     relatedSourceFiles: ["src/use-cases/restore-harvester-operational-state.js"],
     coverageStatus: "UNSUPPORTED",
-    coverageReason: "The active Conservative specification explicitly excludes runtime state reconstruction; separate acceptance gates remain tracked by #654.",
+    coverageReason: "The active Conservative specification explicitly excludes runtime state reconstruction. start-harvester.js performs a separate prior-history safety gate, inventoried as CON-PERSIST-003; full restoration acceptance gates remain tracked by #654.",
   }),
   createScenarioDefinition({
     id: "CON-PERSIST-003",

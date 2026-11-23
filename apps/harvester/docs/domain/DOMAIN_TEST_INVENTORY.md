@@ -275,12 +275,12 @@ Do not treat the conceptual diagram as a new production state model: map every t
 
 The scenario-definition and runner implementation is tracked in [#1797](https://github.com/45s/coinzilla/issues/1797), under the parent audit [#1763](https://github.com/45s/coinzilla/issues/1763).
 
-- Definitions: `test/scenarios/conservative/` (17 stable `CON-*` scenarios across 16 categories).
+- Definitions: `test/scenarios/conservative/` (18 stable `CON-*` scenarios across 16 categories).
 - Shared tooling: `test/scenarios/shared/` (schema, loader, factories, runner, assertions, reporter).
 - Existing critical behavior and test ownership: `docs/critical-behaviors.json` (reused, not duplicated).
 - Runner: `pnpm --filter @coinzilla/harvester scenarios:conservative`.
 - Generated reports: `reports/conservative-scenarios/scenario-inventory.json`, `scenario-results.json`, and `scenario-coverage.json`.
 - CI evidence: the dedicated `Harvester Conservative scenarios` workflow uploads a `conservative-scenario-reports` artifact.
 
-The initial catalog has 15 TEST-MAPPED scenarios, one PARTIAL configuration scenario, and one UNSUPPORTED runtime-restart scenario. TEST-MAPPED and PARTIAL are not VERIFIED: named test mappings are present, but assertion-level review and exact-head execution evidence are still required. The coverage report's test-universe limitation is the named test set in `critical-behaviors.json`, not every Harvester test file.
+The initial catalog has 15 TEST-MAPPED scenarios, one PARTIAL configuration scenario, one MISSING startup-history-gate scenario (CON-PERSIST-003), and one UNSUPPORTED runtime-restoration scenario. TEST-MAPPED and PARTIAL are not VERIFIED: named test mappings are present, but assertion-level review and exact-head execution evidence are still required. The coverage report's test-universe limitation is the named test set in `critical-behaviors.json`, not every Harvester test file.
 
