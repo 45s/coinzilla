@@ -121,7 +121,10 @@ function applyRecoveryFills() {
   })
 }
 
-function assertCumulativeAccounting({ state, position }) {
+function assertCumulativeAccounting({
+    state,
+    position,
+  }) {
   assert.equal(position.baseQuantity.amount, "10.9", "The active base quantity must include both BUY fills, subtract the base BUY fee, and subtract the partial SELL.")
   assert.equal(position.spent.amount, "13.05", "The full BUY cost must include both quote notionals and the quote-asset BUY commission.")
   assert.equal(state.recoveryLedger.buyCost, "13.05", "The RecoveryLedger cost mirror must preserve the complete multi-fill BUY basis.")
@@ -152,7 +155,9 @@ function assertFeeAdjustedQuantityBoundary() {
   assert.ok(nextStepBaseDebitInThousandths > availableBaseInThousandths, "The next 0.1 quantity step must exceed the 9.9 base available above keepQuantity.")
 }
 
-function assertRoundedPriceCoversRecovery({ plan }) {
+function assertRoundedPriceCoversRecovery({
+    plan,
+  }) {
   const plannedNetProceedsNumerator = 980n * 866n * 99n
   const requiredNetProceedsNumerator = 8398n * 10000n
 
@@ -166,7 +171,10 @@ test("plans recovery from cumulative multi-fill cost and confirmed partial SELL 
   const position = state.portfolio.getPosition({ marketId: market.id })
   assertCumulativeAccounting({ state, position })
 
-  const plan = createRecoveryPlan({ state, position })
+  const plan = createRecoveryPlan({
+    state,
+    position,
+  })
   assert.deepEqual(plan, {
     quantity: "9.8",
     price: "0.866",
