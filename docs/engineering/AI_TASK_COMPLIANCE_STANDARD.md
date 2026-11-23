@@ -40,7 +40,7 @@ Use this table as a starting point. Follow applicable links and local domain gui
 
 The repository retains `pnpm run task:preflight` and its tests as optional developer tooling for issue/task-content validation and local readiness snapshots. Use it only when it helps; it does not authorize or block implementation, commits, PRs, or completion. The `--attest-read`, `--attest-nested`, and `--record` options are optional tool features, not agent requirements.
 
-The validator's parser/security correction and regression tests remain preserved. Its local report format and issue checks do not replace source review, meaningful tests, or accurate PR verification.
+The validator's parser/security correction and regression tests remain preserved. Its local report format and issue checks do not replace source review, meaningful tests, or accurate PR verification. It is not invoked by required CI workflows or branch-protection checks.
 
 ## 4. Engineering quality throughout the task
 
