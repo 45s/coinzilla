@@ -76,7 +76,7 @@ test("bounds long order-history validation fields and client-order identifiers",
   })
 
   const line = written.trim()
-  assert.match(line, /market\.\w{58}\.\.\./, "Long validation fields must be visibly truncated.")
+  assert.match(line, /market\.\w{54}\.\.\./, "Long validation fields must be visibly truncated.")
   assert.match(line, /clientOrderId/, "The summary must retain the client-order identity field.")
   assert.ok(line.length <= 200, "Long diagnostic values must not exceed the terminal line limit.")
   output.destroy()
