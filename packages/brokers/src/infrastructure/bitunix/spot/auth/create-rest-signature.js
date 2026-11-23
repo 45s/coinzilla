@@ -45,7 +45,7 @@ function serializeBody({ body, bodyIsSerialized = false }) {
 /**
  * Create the Bitunix double-SHA256 REST request signature.
  *
- * @param {{nonce: string, timestamp: string, apiKey: string, secretKey: string, queryParams?: Record<string, string|number|boolean>, body?: object|string, bodyIsSerialized?: boolean}} options
+ * @param {{nonce: string, timestamp: string, publicIdentifier: string, secretKey: string, queryParams?: Record<string, string|number|boolean>, body?: object|string, bodyIsSerialized?: boolean}} options
  * @returns {string} Lowercase hexadecimal signature.
  */
 export function createRestSignature(options = {}) {
@@ -53,13 +53,13 @@ export function createRestSignature(options = {}) {
     throw new TypeError("Bitunix REST signature options must be an object")
   }
 
-  const { nonce, timestamp, apiKey: publicApiKey, secretKey: signingSecret } = options
+  const { nonce, timestamp, publicIdentifier, secretKey: signingSecret } = options
   assertNonEmptyString({ value: nonce,
     name: "nonce" })
   assertNonEmptyString({ value: timestamp,
     name: "timestamp" })
-  assertNonEmptyString({ value: publicApiKey,
-    name: "apiKey" })
+  assertNonEmptyString({ value: publicIdentifier,
+    name: "publicIdentifier" })
   assertNonEmptyString({ value: signingSecret,
     name: "secretKey" })
 
@@ -68,11 +68,13 @@ export function createRestSignature(options = {}) {
     body: options.body,
     bodyIsSerialized: options.bodyIsSerialized,
   })
-  const payload = `${nonce}${timestamp}${publicApiKey}${query}${body}`
+  const payload = `${nonce}${timestamp}${publicIdentifier}${query}${body}`
 
-  // lgtm[js/insufficient-password-hash] Bitunix mandates SHA-256 here for REST request authentication; this is not password storage.
+  // codeql[js/insufficient-password-hash] Bitunix mandates SHA-256 here for REST request authentication; this is not password storage.
+
   const digest = createHash("sha256").update(payload).digest("hex")
 
-  // lgtm[js/insufficient-password-hash] Bitunix mandates SHA-256 here for REST request authentication; this is not password storage.
+  // codeql[js/insufficient-password-hash] Bitunix mandates SHA-256 here for REST request authentication; this is not password storage.
+
   return createHash("sha256").update(`${digest}${signingSecret}`).digest("hex")
 }

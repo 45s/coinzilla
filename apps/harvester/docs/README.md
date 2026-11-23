@@ -18,7 +18,8 @@ This is the entry point for Harvester-specific documentation. Repository-wide ru
 - [Harvester roadmap](../ROADMAP.md) — current domain work and status
 - [Startup open-order ownership (ADR-0004)](architecture/decisions/0004-startup-open-orders-are-external.md) — accepted and implemented ownership rule for startup-snapshot orders
 - [Emergency BUY pause (ADR-0005)](architecture/decisions/0005-emergency-buy-pause.md) — global BUY controls and owned-BUY cancellation workflow; market command split is superseded by ADR-0006
-- [Market Pause cancels owned BUYs (ADR-0006)](architecture/decisions/0006-market-pause-cancels-owned-buys.md) — current market Pause/Resume behavior, cancellation ordering, ownership boundary and recovery SELL continuity
+- [Market Pause cancels owned BUYs (ADR-0006)](architecture/decisions/0006-market-pause-cancels-owned-buys.md) — current operator market Pause/Resume behavior, cancellation ordering, ownership boundary and recovery SELL continuity
+- [Strategy safety pause cancels owned BUYs (ADR-0008)](architecture/decisions/0008-strategy-safety-pause-cancels-owned-buys.md) — Conservative strategy-originated pause, current-process BUY cancellation, durable incomplete blocker, and the narrow RECOVERY_SELL exception
 - [Startup open-order boundary plan](plans/STARTUP_EXTERNAL_ORDER_BOUNDARY.md) — completed design and implementation record for #1157
 - [Trading First](TRADING_FIRST.md) — authoritative trading priority and exchange-safety requirements
 
@@ -95,7 +96,7 @@ Shared deterministic broker/runtime fixtures live in `test/bootstrap/start-harve
 - [Historical audit reports](audits/reports/README.md)
 - [Historical audit sessions](audits/sessions/README.md)
 - [Historical audit evidence](audits/evidence/README.md)
-- [Historical DDD/Clean Architecture audit](DDD_CLEAN_ARCHITECTURE_AUDIT.md)
+- [DDD/Clean Architecture audit](DDD_CLEAN_ARCHITECTURE_AUDIT.md) — historical 2026-11-03 assessment plus current strategy/runtime consistency review
 - [Incident records](incidents/README.md)
 - [Historical task briefs](tasks/README.md)
 
