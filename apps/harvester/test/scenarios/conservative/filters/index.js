@@ -25,6 +25,8 @@ export const scenarios = [
       quantity: "rounded down to valid step size",
       price: "rounded up to valid tick size",
       residual: "not submitted when minimum quantity or notional is not met",
+      maximumFilters: "MAX_QUANTITY and MAX_NOTIONAL cap each order and leave remaining inventory for later sell-through",
+      refreshPolicy: "refreshes stale/missing filters before recovery evaluation, skips refresh while a recovery SELL is active, and forces a fresh preflight before trailing BUY replacement",
     },
     expectedOrders: [
       { side: "SELL", purpose: "RECOVERY_SELL", condition: "all current exchange filters pass" },
@@ -37,6 +39,7 @@ export const scenarios = [
       "Decimal quantities and prices are not converted through binary floating point.",
       "Recovery SELL filters are checked against current market metadata.",
       "An untradeable residual is retained rather than rounded into an invalid order.",
+      "A quantity or notional maximum does not silently discard the remaining sellable inventory.",
     ],
     relatedRequirements: ["CON-SPEC-4.5", "CON-SPEC-4.8"],
     relatedCriticalBehaviors: ["RECOVERY_SELL_MARKET_METADATA_FRESHNESS", "RECOVERY_SELL_ECONOMICS"],
