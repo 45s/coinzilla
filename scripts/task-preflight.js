@@ -120,7 +120,10 @@ function removeHtmlComments(text) {
     }
 
     output += text.slice(cursor, commentStart);
-    cursor = findHtmlCommentEnd({ text, startIndex: commentStart + 4 });
+    cursor = findHtmlCommentEnd({
+      text,
+      startIndex: commentStart + 4,
+    });
   }
 
   return output;
