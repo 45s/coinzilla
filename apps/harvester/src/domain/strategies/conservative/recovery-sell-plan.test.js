@@ -118,9 +118,16 @@ test("reserves base-asset SELL commission without crossing the retained inventor
     quantityStepSize: "0.1",
   })
 
-  // Independent arithmetic: 98.9 × 1.001 = 98.9989; the next step, 99 × 1.001 = 99.099.
+  // Scale both quantities to 0.1 units and the fee multiplier to 0.001 units.
+  // The products are therefore exact ten-thousandths, calculated independently with integers.
+  const availableSellQuantityInTenThousandths = 990n * 1000n
+  const plannedSellDebitInTenThousandths = 989n * 1001n
+  const nextStepSellDebitInTenThousandths = 990n * 1001n
+
   assert.equal(plan.quantity, "98.9", "The fee reserve and quantity-step rounding must keep the SELL quantity at 98.9.")
   assert.equal(plan.price, "0.102", "The minimum recovery price must remain rounded up to the configured price tick.")
-  assert.equal((Number(plan.quantity) * 1.001).toFixed(4), "98.9989", "The fee-adjusted SELL debit must remain below the 99 units available above keepQuantity.")
-  assert.equal((99 * 1.001).toFixed(3), "99.099", "The next 0.1 quantity step would debit 99.099 and exceed the 99 units available.")
+  assert.equal(plannedSellDebitInTenThousandths, 989989n, "98.9 × 1.001 must equal exactly 98.9989.")
+  assert.ok(plannedSellDebitInTenThousandths < availableSellQuantityInTenThousandths, "The planned fee-adjusted SELL debit must remain below the 99 units available above keepQuantity.")
+  assert.equal(nextStepSellDebitInTenThousandths, 990990n, "99 × 1.001 must equal exactly 99.099.")
+  assert.ok(nextStepSellDebitInTenThousandths > availableSellQuantityInTenThousandths, "The next 0.1 quantity step must exceed the 99 units available above keepQuantity.")
 })

@@ -4,13 +4,14 @@ import {
   Asset,
   Balance,
   CanonicalOrder,
+  Commission,
   Fill,
   Market,
   Money,
   Quantity,
   TradingRules,
 } from "@coinzilla/entities"
-import { toResult } from "@coinzilla/utils"
+import { multiplyDecimal, toResult } from "@coinzilla/utils"
 import { AccountSnapshot } from "../../src/domain/account/account-snapshot.js"
 import { Portfolio } from "../../src/domain/portfolio/portfolio.js"
 import { RecoveryLedger } from "../../src/domain/strategies/conservative/recovery-ledger.js"
@@ -249,7 +250,7 @@ function createTradeEventFactory({
       baseAsset,
       quoteAsset,
     }) {
-  return ({ acknowledgedOrder, tradeId, quantity, executedQuantity, status }) => {
+  return ({ acknowledgedOrder, tradeId, quantity, executedQuantity, status, commissions = [] }) => {
     const fill = new Fill({
       tradeId,
       brokerOrderId: acknowledgedOrder.brokerOrderId,
@@ -260,9 +261,13 @@ function createTradeEventFactory({
       quantity: new Quantity({ amount: quantity,
 asset: baseAsset }),
       quoteQuantity: new Money({
-        amount: String(Number(acknowledgedOrder.limitPrice.amount) * Number(quantity)),
+        amount: multiplyDecimal({
+          left: acknowledgedOrder.limitPrice.amount,
+          right: quantity,
+        }),
         asset: quoteAsset,
       }),
+      commissions,
       liquidityRole: "MAKER",
       commissionStatus: "COMPLETE",
       executedAt: Number(tradeId.replace(/\D/g, "")) || 1,
@@ -927,6 +932,24 @@ async function startDeferredRecoveryScenario(fixture) {
   }
 }
 
+function createCancellationRacedSellFill({ fixture, pendingSellOrder }) {
+  return fixture.createTradeEvent({
+    acknowledgedOrder: pendingSellOrder,
+    tradeId: "trade-4",
+    quantity: "2",
+    executedQuantity: "2",
+    status: "PARTIALLY_FILLED",
+    commissions: [
+      new Commission({
+        amount: new Money({
+          amount: "0.001",
+          asset: fixture.market.quoteAsset,
+        }),
+      }),
+    ],
+  });
+}
+
 async function completeDeferredRecoverySellCancellation({ fixture, secondBuy, pendingSellOrder }) {
   const { engine, cancelStarted, pendingCancel, cancellations, setFillsForOrder } = fixture;
   const partialFill = engine.processUserDataEvent({
@@ -956,12 +979,9 @@ async function completeDeferredRecoverySellCancellation({ fixture, secondBuy, pe
     [pendingSellOrder.brokerOrderId],
     "The first BUY fill must cancel the acknowledged recovery SELL by its exact broker order ID.",
   );
-  const sellFillEvent = fixture.createTradeEvent({
-    acknowledgedOrder: pendingSellOrder,
-    tradeId: "trade-4",
-    quantity: "2",
-    executedQuantity: "2",
-    status: "PARTIALLY_FILLED",
+  const sellFillEvent = createCancellationRacedSellFill({
+    fixture,
+    pendingSellOrder,
   });
   setFillsForOrder({ orderId: pendingSellOrder.brokerOrderId,
 fills: [sellFillEvent.fill] });
@@ -1006,16 +1026,30 @@ function assertCanceledRecoverySellSequence({ fixture, pendingSellOrder }) {
 }
 
 function assertReconciledFillAccounting({ fixture, sellFillEvent }) {
-  assert.equal(fixture.getPortfolio().appliedFillIds.length, 4, "Portfolio accounting must contain all four distinct executions.");
-  assert.equal(fixture.getRecoveryLedger().appliedFillIds.length, 4, "The recovery ledger must mirror all four distinct executions.");
+  const portfolio = fixture.getPortfolio();
+  const position = portfolio.getPosition({ symbol: "ZROUSDT" });
+  const recoveryLedger = fixture.getRecoveryLedger();
+
+  assert.equal(portfolio.appliedFillIds.length, 4, "Portfolio accounting must contain all four distinct executions.");
+  assert.equal(recoveryLedger.appliedFillIds.length, 4, "The recovery ledger must mirror all four distinct executions.");
   assert.equal(
-    fixture.getPortfolio().appliedFillIds.filter((id) => id === sellFillEvent.fill.id).length,
+    portfolio.appliedFillIds.filter((id) => id === sellFillEvent.fill.id).length,
     1,
     "The partial recovery SELL must be applied once across stream delivery and cancellation reconciliation.",
   );
+  assert.equal(position.quantity.amount, "18", "The Position must include both 10-unit BUYs less the 2-unit cancellation-raced SELL fill.");
+  assert.equal(position.spent.amount, "19.85", "Position.spent must retain the full 9.95 + 9.90 BUY cost across the SELL fill.");
+  assert.equal(position.freeBaseQuantity.amount, "0", "No active inventory may be moved to retained inventory before recovery completion.");
+  assert.equal(recoveryLedger.buyCost, "19.85", "The RecoveryLedger compatibility cost mirror must match the complete BUY cost.");
+  assert.equal(recoveryLedger.netSellProceeds, "2.213", "The cancellation-raced SELL fill must contribute 2 × 1.107 USDT less the actual 0.001 USDT quote commission.");
 }
 
 async function assertDuplicateFillIsIdempotent({ fixture, secondBuy }) {
+  const portfolioBefore = fixture.getPortfolio().value;
+  const recoveryLedgerBefore = fixture.getRecoveryLedger().value;
+  const submittedIntentCountBefore = fixture.submittedIntents.length;
+  const cancellationsBefore = [...fixture.cancellations];
+
   await fixture.engine.processUserDataEvent({
     event: fixture.createTradeEvent({
       acknowledgedOrder: secondBuy,
@@ -1025,8 +1059,13 @@ async function assertDuplicateFillIsIdempotent({ fixture, secondBuy }) {
       status: "FILLED",
     }),
   });
+
+  assert.deepEqual(fixture.getPortfolio().value, portfolioBefore, "A late duplicate BUY report must leave every Portfolio field unchanged.");
+  assert.deepEqual(fixture.getRecoveryLedger().value, recoveryLedgerBefore, "A late duplicate BUY report must leave every RecoveryLedger field unchanged.");
   assert.equal(fixture.getPortfolio().appliedFillIds.length, 4, "Replaying the final BUY execution must not duplicate portfolio accounting.");
   assert.equal(fixture.getRecoveryLedger().appliedFillIds.length, 4, "Replaying the final BUY execution must not duplicate recovery-ledger accounting.");
+  assert.equal(fixture.submittedIntents.length, submittedIntentCountBefore, "A duplicate BUY report must not create another order intent.");
+  assert.deepEqual(fixture.cancellations, cancellationsBefore, "A duplicate BUY report must not repeat recovery SELL cancellation side effects.");
 }
 
 async function assertFinalRecoverySellReplacement(fixture) {
@@ -1037,6 +1076,11 @@ async function assertFinalRecoverySellReplacement(fixture) {
     recoverySellSubmissionIntents[2].quantity,
     "17",
     "The final recovery SELL must protect 10 + 10 - 2 - 1 = 17 units after reconciliation.",
+  );
+  assert.equal(
+    recoverySellSubmissionIntents[2].price,
+    "1.039",
+    "The replacement price must recover 19.85 full BUY cost + 0.01 minProfit - 2.213 net SELL proceeds after quote commission across 17 sellable units.",
   );
 }
 
