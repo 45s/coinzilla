@@ -7511,7 +7511,7 @@ test("does not clear an independently durable strategy pause when a recovery can
   const harness = await createHarness({
     initialBook: false,
     initialState: {
-      orderRegistry: new OrderRegistry({ orders: [makeOrder({ status: "UNKNOWN" })] }),
+      orderRegistry: new OrderRegistry({ orders: [createRecoveredStreamCancellationOrder({ status: "UNKNOWN" })] }),
       pausedMarkets: new Set(["DOGEUSDT"]),
       durablePausedMarkets: new Set(["DOGEUSDT"]),
       recoveryManagedPausedMarkets: new Set(["DOGEUSDT"]),
@@ -7540,30 +7540,25 @@ test("does not clear an independently durable strategy pause when a recovery can
 })
 
 
-test("processes recovery-time user-data cancellation facts without broker cancel or replacement calls", async () => {
-  const makeOrder = ({ status }) => new CanonicalOrder({
+function createRecoveredStreamCancellationOrder({ status } = {}) {
+  return new CanonicalOrder({
     clientOrderId: "recovered-stream-cancel",
     brokerOrderId: "broker-recovered-stream-cancel",
     market,
     side: "SELL",
     type: "LIMIT",
-    limitPrice: new Money({
-      amount: "100",
-      asset: quoteAsset
-    }),
-    originalQuantity: new Quantity({
-      amount: "1",
-      asset: baseAsset
-    }),
-    executedQuantity: new Quantity({
-      amount: "0",
-      asset: baseAsset
-    }),
+    limitPrice: new Money({ amount: "100", asset: quoteAsset }),
+    originalQuantity: new Quantity({ amount: "1", asset: baseAsset }),
+    executedQuantity: new Quantity({ amount: "0", asset: baseAsset }),
     status,
     createdAt: 1,
     acknowledgedAt: 1,
     updatedAt: 1,
   })
+}
+
+test("processes recovery-time user-data cancellation facts without broker cancel or replacement calls", async () => {
+
   const harness = await createHarness({
     initialBook: false,
     initialState: {
@@ -7577,7 +7572,7 @@ test("processes recovery-time user-data cancellation facts without broker cancel
 
   const result = await harness.engine.processUserDataEvent({
     recoveryMode: true,
-    event: { executedOrder: makeOrder({ status: "CANCELED" }) },
+    event: { executedOrder: createRecoveredStreamCancellationOrder({ status: "CANCELED" }) },
   })
 
   assert.equal(result.ok, true, result.errors?.[0]?.message)
