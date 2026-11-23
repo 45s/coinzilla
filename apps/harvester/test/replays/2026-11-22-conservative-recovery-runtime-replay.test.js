@@ -1,6 +1,21 @@
 import nodeTest from "node:test"
 import assert from "node:assert/strict"
+import { readFileSync } from "node:fs"
 import { createDogeTradingReplay } from "./doge-zro-conservative-replay-harness.js"
+
+// The immutable archive fixture is the authority for exchange-reported execution quote quantities.
+// Runtime replay must carry these values through unchanged rather than reconstructing them from price × quantity.
+const archivedFixture = JSON.parse(readFileSync(
+  new URL("../audits/fixtures/2026-11-22-conservative-recovery.json", import.meta.url),
+  "utf8",
+))
+
+function getArchivedFill(tradeId) {
+  const fill = archivedFixture.fills.find((candidate) => candidate.tradeId === tradeId)
+  assert.ok(fill, `The immutable archive fixture must contain execution trade ${tradeId}.`)
+  assert.equal(typeof fill.quoteQuantity, "string", `Archived trade ${tradeId} must retain its exact exchange quote quantity.`)
+  return fill
+}
 
 const test = (...args) => {
   const [name, ...options] = args
@@ -49,13 +64,22 @@ async function fillArchivedBuy({ replay, scenario, index, currentBuy }) {
 
   assert.equal(currentBuy.price, buy.price, "The replay must submit each archived BUY at its recorded execution price.")
   await replay.publishMarketPrice(currentBuy.price)
-  await replay.publishFullOrderFill({
+  const archivedFill = getArchivedFill(buy.tradeId)
+  await replay.publishOrderFill({
     order: currentBuy,
     price: buy.price,
     tradeId: buy.tradeId,
+    fillQuantity: currentBuy.quantity,
+    cumulativeExecutedQuantity: currentBuy.quantity,
+    quoteQuantity: archivedFill.quoteQuantity,
     commissionAmount: buy.commissionAmount,
     commissionAsset: buy.commissionAsset,
   })
+  assert.equal(
+    replay.receivedExecutionReports.at(-1)?.fill?.quoteQuantity,
+    archivedFill.quoteQuantity,
+    `Runtime replay must preserve exchange-reported quoteQuantity for trade ${buy.tradeId}.`,
+  )
 
   const [recoverySell, nextBuy] = await Promise.all([
     recoverySellSubmission,
@@ -94,13 +118,22 @@ async function fillArchivedRecoverySell({ replay, scenario, recoverySell }) {
 
   const completionWaiter = replay.waitForRecoveryCycleCompletion()
   await replay.publishMarketPrice(recoverySell.price)
-  await replay.publishFullOrderFill({
+  const archivedFill = getArchivedFill(scenario.sell.tradeId)
+  await replay.publishOrderFill({
     order: recoverySell,
     price: scenario.sell.price,
     tradeId: scenario.sell.tradeId,
+    fillQuantity: scenario.sell.quantity,
+    cumulativeExecutedQuantity: scenario.sell.quantity,
+    quoteQuantity: archivedFill.quoteQuantity,
     commissionAmount: scenario.sell.commissionAmount,
     commissionAsset: scenario.sell.commissionAsset,
   })
+  assert.equal(
+    replay.receivedExecutionReports.at(-1)?.fill?.quoteQuantity,
+    archivedFill.quoteQuantity,
+    `Runtime replay must preserve exchange-reported quoteQuantity for trade ${scenario.sell.tradeId}.`,
+  )
   return completionWaiter
 }
 
