@@ -1,7 +1,7 @@
 import test from "node:test"
 import assert from "node:assert/strict"
 import { Asset, CanonicalOrder, Fill, Market, Money, Quantity } from "@coinzilla/entities"
-import { toResult } from "@coinzilla/utils"
+import { multiplyDecimal, toResult } from "@coinzilla/utils"
 import { makeReconcileTerminalOrderFills } from "./reconcile-terminal-order-fills.js"
 
 const baseAsset = new Asset({ id: "doge",
@@ -50,7 +50,10 @@ function makeFill({ tradeId, quantity = "1", executedAt = 10, clientOrderId = "h
 asset: quoteAsset }),
     quantity: new Quantity({ amount: quantity,
 asset: baseAsset }),
-    quoteQuantity: new Money({ amount: String(Number(quantity) * 100),
+    quoteQuantity: new Money({ amount: multiplyDecimal({
+        left: "100",
+        right: quantity,
+      }),
 asset: quoteAsset }),
     executedAt,
     commissions: [],

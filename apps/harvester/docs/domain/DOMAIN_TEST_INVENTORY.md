@@ -183,6 +183,10 @@ The OrderRegistry suite already covered UNKNOWN, stale events, identity mismatch
 
 [PR #931](https://github.com/45s/coinzilla/pull/931) replaces production-derived fixture totals with exact literals and asserts precise errors, no partial result data, and unchanged opening/closing snapshots for invalid out-of-order, inconsistent, negative and duplicate-asset cases. Exact final PR head `137e56a44d134096d094c8aad6850a7ccc9d9876` passed 878/878 Harvester tests (75.96% lines, 79.28% branches, 74.95% functions) and all required checks. PR #931 merged; no production code changed.
 
+### Medium — terminal-fill fixture quote notional must use exact decimal arithmetic
+
+The canonical Fill fixture in `src/use-cases/reconcile-terminal-order-fills.test.js` previously derived quote notional with JavaScript `Number(quantity) * 100`. It now uses the repository's exact-decimal multiplication utility to construct a coherent Fill. This is fixture setup, not a financial expected-value oracle; no production behavior changes.
+
 ### Explicitly deferred — Aggressive grid behavior
 
 Aggressive is deliberately blocked by unresolved product rules. Its current NO_ACTION contract and inventory gate are tested. Do not invent grid depth, pricing, SELL thresholds, reservations or risk fallback as part of this testing initiative.
@@ -226,6 +230,14 @@ The exact-head Harvester targeted suite passed after these tests were added. Str
 The new runtime-dispatch and action-authorizer suites cover the production composition seam and account-wide order authorization. `start-harvester.test.js` verifies the acceptance gate rejects configured RS routes when the gate is explicitly closed; the production gate is open after RS-5 offline acceptance. Restart/replay and third-asset commission valuation are deferred. STOP is terminal; CC-operator exposes authorized read-only status and has no clear/reset/unpause/resume path. Same-market and different-market CG/RS accounting concurrency, BUY-fill-to-SELL runtime composition, terminal mixed-SELL reconciliation, reservation release and next-cycle gating are covered by the current RS-5 offline tests. Exact-head required CI is the final merge check.
 
 `create-recovery-seller-runtime-evaluator.test.js` now composes the real accounting workflow snapshot, a canonical accepted BUY Fill, the production runtime evaluator, a sole-cycle SELL reservation and pending-order registration; it verifies a second evaluation waits and cannot submit another action. `create-recovery-seller-accounting-workflow.test.js` covers complete terminal mixed-SELL reconciliation, atomic recovery/legacy projection commit, reservation release, cycle closure and allocation of a new cycle only after closure. The focused policy, order-submitter, order-event and durable-fact suites cover profitability/filter gates, unknown outcomes, partial/terminal fills and failure handling. These are offline composition-boundary tests; they do not authorize exchange execution. Restart/replay and third-asset commission valuation remain deferred. STOP is terminal; CC-operator exposes authorized read-only status and has no clear/reset/unpause/resume path.
+
+### Medium — bootstrap and replay financial arithmetic must remain exact
+
+The offline bootstrap fixture now builds quote notionals and bid/ask book prices with exact decimal multiplication; remaining broker-style numeric order quantities are derived with exact decimal subtraction before conversion to the numeric adapter shape. The DOGE/ZRO replay assertions now compare retained quantity and realized profit with exact decimal comparison rather than JavaScript Number. Updated in PR #1776; not yet merged/CI-verified.
+
+### Blocked — remaining Conservative engine financial oracles
+
+`src/use-cases/conservative-trading-engine.test.js` still contains Number-based financial expectations and a `makeSellFill` default quote notional of `"100"` that can disagree with its execution price and quantity. A narrow correction attempt in [closed PR #1772](https://github.com/45s/coinzilla/pull/1772) exposed 33 pre-existing `max-lines-per-function` violations across this large test file under strict changed-file ESLint. The PR was closed; no lint suppression or unrelated broad refactor was applied. Revisit these remaining assertions after a separately scoped decomposition of that test file.
 
 ### Conservative state-machine scenario requirements — issue #1763
 
