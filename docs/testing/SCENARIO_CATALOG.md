@@ -472,7 +472,13 @@ The [Recovery Seller Domain Specification](../../apps/harvester/docs/domain/reco
 - `apps/harvester/src/domain/strategies/recovery-seller/legacy-spot-allocation.js`
 - Shared account snapshot and order-commitment allocation under `apps/harvester/src/domain/`
 
-**Automated tests:** No new RS scenario test accepted yet. Existing RS tests are deliberately not credited under #1780.
+**Automated scenario tests:**
+
+- `apps/harvester/test/scenarios/recovery-seller-mixed-sell-accounting.scenario.test.js`
+  - `one 401 DOGE canonical SELL Fill allocates 400 DOGE to recovery and 1 DOGE to legacy`
+  - `recovery and legacy allocations must sum exactly to the canonical SELL Fill quantity`
+
+**Remaining:** Pre-submission planner calculation of the additive target, partial fill variants, base/third-asset fees, exchange filters, verified custody and reservations. Existing RS tests are deliberately not credited under #1780.
 
 ### RS-002 — Recovery BUY accounting uses confirmed net fills and actual commissions
 
@@ -520,11 +526,19 @@ The [Recovery Seller Domain Specification](../../apps/harvester/docs/domain/reco
 - `apps/harvester/src/domain/strategies/recovery-seller/` accounting modules.
 - RS accounting workflow and shared Portfolio/Fill ownership boundaries.
 
-**Automated tests:** No new RS scenario test accepted yet. Existing RS tests are deliberately not credited under #1780.
+**Automated scenario tests:**
+
+- `apps/harvester/test/scenarios/recovery-seller-mixed-sell-accounting.scenario.test.js`
+  - `a reconciled mixed SELL commits recovery and legacy accounting from the same canonical Fill`
+  - `replaying the same terminal mixed SELL is an exact no-op in both accounting projections`
+  - `a failed legacy projection leaves the recovery Portfolio and both original inputs unchanged`
+  - `a duplicate staged Fill is idempotent and conflicting allocation facts are rejected`
+
+**Remaining:** Multiple canonical fills, REST/stream ordering and deduplication, incomplete fill history, base/third-asset commission allocation, and additional persistence/registry-publication failure boundaries. Existing RS tests are deliberately not credited under #1780.
 
 ### RS-003 — A mixed recovery/legacy SELL uses the additive legacy slice
 
-**Status:** MISSING — fresh scenario test required.
+**Status:** PARTIAL — new scenarios verify the canonical 401 DOGE fill allocation split of 400 DOGE recovery plus 1 DOGE legacy, including proportional actual quote-commission allocation. The pre-submission planner and other fee/filter/custody subcases remain unverified. Existing RS tests are not credited.
 
 **Behavior:** A cycle SELL combines the actual net recovery quantity with the configured legacy `sellQuantity`. The legacy slice is additive; it is not a cap or the total order quantity.
 
@@ -556,6 +570,7 @@ The [Recovery Seller Domain Specification](../../apps/harvester/docs/domain/reco
 
 **Subcases:**
 
+- Canonical 401 DOGE SELL Fill allocated as 400 DOGE recovery plus 1 DOGE legacy, with proportional quote commission (covered by the new scenario suite).
 - Full and partial mixed SELL fills.
 - Base-, quote-, and supported third-asset commission cases.
 - Mixed commission assets.
@@ -691,7 +706,7 @@ The [Recovery Seller Domain Specification](../../apps/harvester/docs/domain/reco
 
 ### RS-006 — Mixed SELL accounting commits both allocations atomically
 
-**Status:** MISSING — fresh scenario test required.
+**Status:** PARTIAL — new scenarios exercise a complete single-fill mixed SELL commit, exact-once replay, duplicate/conflicting staging, and failure atomicity when the legacy projection rejects its debit. Multi-fill REST/stream reconciliation and other failure boundaries remain unverified. Existing RS tests are not credited.
 
 **Behavior:** Complete terminal mixed-SELL history is reconciled before recovery and legacy projections are committed. Both projections commit together or neither does.
 
@@ -724,6 +739,10 @@ The [Recovery Seller Domain Specification](../../apps/harvester/docs/domain/reco
 
 **Subcases:**
 
+- Complete single-fill mixed SELL commits recovery and legacy projections together (covered).
+- Identical terminal replay is an exact no-op in both projections (covered).
+- Legacy projection failure leaves the recovery Portfolio and both original inputs unchanged (covered).
+- Duplicate staged Fill is idempotent; conflicting allocation for the same Fill identity is rejected (covered).
 - Stream-before-REST and REST-before-stream.
 - Duplicate fill, conflicting duplicate, missing history, and incomplete quantity.
 - Base/quote/mixed commission allocation.
