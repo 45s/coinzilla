@@ -575,7 +575,10 @@ async function pullRequest({ repo, token, workflowRunUrl }) {
     path: `/repos/${  repo  }/pulls/${  eventPullRequest.number}`,
     token,
   });
-  const pr = selectPullRequestSnapshot({ eventPullRequest, currentPullRequest });
+  const pr = selectPullRequestSnapshot({
+    eventPullRequest,
+    currentPullRequest,
+  });
   if (pr.base?.ref !== 'develop') {throw new Error('Validator requires a PR targeting develop.');}
   const issueNumber = extractTrackingIssueNumber(pr.body || '');
   if (!issueNumber) {throw new Error('PR must reference exactly one tracking issue; BLOCKED.');}
