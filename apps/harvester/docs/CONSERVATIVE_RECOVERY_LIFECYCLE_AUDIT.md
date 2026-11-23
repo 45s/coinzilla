@@ -205,7 +205,6 @@ This table makes the relationship between the implementation/test checkpoints an
 
 The shutdown behavior commits above are source-only commits; their corresponding living-documentation updates were consolidated in the subsequent documentation checkpoints rather than included in each original source commit. The branch history is preserved (no force-push or history rewrite). This limitation is disclosed rather than misrepresented as same-commit documentation. Future Harvester implementation/test increments must follow the per-commit documentation rule in `apps/harvester/AGENTS.md`.
 
-
 ## 2026-11-23 — implementation continuation and current evidence
 
 - Task branch synchronization completed twice through internal PRs #1777 and #1778. Latest sync merge commit is `7ef954e73d4ea8c71b043728878eb1b71ab8bc44`, bringing in current `develop` `b90f1536720edf077d80fecaecfbfcebf4a9ebff`. The task branch was 62 ahead / 0 behind at this checkpoint; PR #1761 remains draft.
