@@ -12,15 +12,33 @@ This roadmap tracks work owned by `@coinzilla/brokers`. Historical entries may r
 
 **Status: IN PROGRESS** — [issue #1690](https://github.com/45s/coinzilla/issues/1690). Add a human-operated, one-probe-per-invocation mode to the unified Bitunix CLI. The reviewed first pass covers HYPEUSDT LIMIT BUY/SELL quantities 1/2 and MARKET BUY/SELL quote quantities 1/2. Every invocation re-reads market metadata, balances and open orders; shows the exact common Broker input and wire body; requires fresh interactive confirmation; writes a unique exclusive marker; and captures the place-order request/response locally with restrictive permissions. The existing #1608 fixed HYPEUSDT order and marker remain untouched. The command uses the common `Broker.createOrder()` path, publishes only the existing sanitized diagnostic result, and never loops, retries, cancels or performs another mutation. A confirmed or unknown result requires manual review. This is a human-only LIVE investigation, not a test or production-readiness milestone; issue #1185 remains unchanged.
 
-## Bitunix Spot signature CodeQL classification — #1674
+## CodeQL password-hash source classification — #1674
 
-**Status: IN PROGRESS — independent REST/WebSocket suppression experiments** — [issue #1674](https://github.com/45s/coinzilla/issues/1674), [merged Track A PR #1738](https://github.com/45s/coinzilla/pull/1738), and [Track B PR #1739](https://github.com/45s/coinzilla/pull/1739). The official [Bitunix Spot signing contract](https://www.bitunix.com/api-docs/spots/en_us/sign/) mandates double SHA-256 for REST and WebSocket request authentication; these operations are not password storage or password verification. Keep the exchange-defined preimages, double-hash construction, wire signatures, and fixed deterministic test vectors unchanged.
+**Status: SOURCE-CLASSIFICATION EXPERIMENT IN PROGRESS** — [tracking issue #1674](https://github.com/45s/coinzilla/issues/1674); the sole open remediation PR is [#1734](https://github.com/45s/coinzilla/pull/1734). This is a CodeQL rule/source-classification investigation, not a Bitunix broker defect.
 
-- **REST / finding #1 — Track A:** retain the legacy `// lgtm[js/insufficient-password-hash]` rationale comments at the two REST SHA-256 operations, merged in PR #1738.
-- **WebSocket / finding #2 — Track B:** use `// codeql[js/insufficient-password-hash]` on standalone lines immediately before the sinks, with one blank line after each directive (per corrective PR #1725), isolated in PR #1739.
-- The next fresh CodeQL analysis on release PR #1662 must independently verify both paths. If one approach clears its finding and the other does not, apply the successful approach to the remaining signer path. If neither clears, inspect actual SARIF physical locations and taint flows before designing a materially different third fix.
-- A workflow success, source-comment appearance, or a scan performed before PR #1738 merged is not evidence of clearance. Record the exact release SHA, scan/run ID, alert IDs, physical locations and flow paths.
-- Keep issue #1674 and release PR #1662 open/blocked until REST and WebSocket findings are confirmed absent. No LIVE/TESTNET API requests, credentials changes, or order/account mutations are required.
+### Finding and protocol facts
+
+The two High `js/insufficient-password-hash` findings trace a public API identifier through the REST and WebSocket clients into Bitunix's required request-signing preimages, where SHA-256 is used. The identifier is not a user password; the hashes implement request authentication, not password storage or verification. The REST and WebSocket protocols require the existing two-stage SHA-256 construction. See the official [Bitunix Spot signing contract](https://www.bitunix.com/api-docs/spots/en_us/sign/).
+
+### Current experiment
+
+The source-to-sink paths show `apiKey` used as the internal name for a public identifier. PR #1734 tests renaming that internal value to `publicIdentifier` through both clients and signer inputs, while preserving:
+- Public client constructor option `apiKey`.
+- REST wire header `api-key` and WebSocket wire parameter `apiKey`.
+- Private signing secret handling.
+- Exact request preimages, double-SHA-256 operations, signature bytes, and fixed expected vectors.
+
+The signer helper's internal input name and direct unit-test inputs use `publicIdentifier`; WebSocket parameter serialization continues to recognize and exclude the external `apiKey` field. This hypothesis remains unproven until a fresh CodeQL analysis evaluates the exact PR head.
+
+### Required verification and exclusions
+
+- Run REST/WebSocket signer tests and Brokers package tests/coverage on the exact PR head.
+- Confirm constructor compatibility and unchanged outbound wire names through client tests.
+- Run a fresh CodeQL scan and inspect SARIF/alert records for both REST and WebSocket findings. A successful workflow or SARIF upload alone is not clearance.
+- Record each experiment, exact commit, CI outcome, CodeQL result, and conclusion in issue #1674. Do not repeat failed `lgtm`, `codeql`, or suppression-spacing experiments.
+- Do not replace the exchange protocol with bcrypt, scrypt, Argon2, PBKDF2, HMAC, or another algorithm. Do not alter credentials, perform live/testnet exchange operations, or dismiss alerts to manufacture a green result.
+
+Historical PRs and their outcomes remain linked in issue #1674. Keep the issue and release PR #1662 blocked until both findings are independently confirmed absent.
 
 ## Executable CLI source identity — #1631\n\n**Status: IN PROGRESS** — [issue #1631](https://github.com/45s/coinzilla/issues/1631) / [PR #1632](https://github.com/45s/coinzilla/pull/1632). Establishes a repository-wide requirement for user-invoked CLI entrypoints to print their exact source commit, package/script version, worktree state, and runtime before doing work, with a side-effect-free version command. The first implementation is the Bitunix healthcheck entrypoint; the repository-wide CLI inventory and remaining migrations are tracked by the issue.\n\n## Bitunix health-check and operator CLI consolidation — #1614
 
