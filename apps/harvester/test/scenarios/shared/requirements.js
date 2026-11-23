@@ -172,6 +172,6 @@ export const CONSERVATIVE_REQUIREMENTS = Object.freeze([
   {
     id: "CON-RUNTIME-5",
     section: "runtime",
-    title: "Startup rejects unverified or unsafe prior process history and does not restore Conservative trading state.",
+    title: "Prior process history disables trading; recovery-enabled startup also requires verified, eligible prior-session projection and never restores Conservative trading state.",
   },
 ])

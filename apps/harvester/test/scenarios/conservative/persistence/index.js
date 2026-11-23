@@ -78,10 +78,10 @@ export const scenarios = [
   }),
   createScenarioDefinition({
     id: "CON-PERSIST-003",
-    title: "Startup history gate rejects unsafe prior sessions without restoring Conservative state",
+    title: "Startup history gates prevent Conservative trading resumption after prior process history",
     category: "persistence-restart-recovery",
     priority: "P0",
-    description: "Cover the startup-only operational-state gate separately from offline projection and unsupported runtime state restoration.",
+    description: "Cover default recovery-disabled observation-only restart and the stricter projection/eligibility gate when recovery or Recovery Seller routes are enabled.",
     tags: ["restart-gate", "startup", "safety", "missing-test"],
     preconditions: [
       "The durable Operational State Store is supplied and its integrity verification succeeds.",
@@ -98,10 +98,10 @@ export const scenarios = [
       { type: "STARTUP_WITH_SINGLE_RECOVERY_SELLER_STOP_LATCH", sequence: 4 },
     ],
     expectedState: {
-      uncleanHistory: "startup is rejected before broker connection",
-      allowedRestart: "only all-stopped history plus observation-only/no-sticky-blocker or the single account-level RECOVERY_SELLER_UNEXPECTED_CONDITION latch",
+      priorProcessHistory: "any prior PROCESS_STARTED record forces resolved.tradingEnabled=false",
+      recoveryDisabled: "durable history is read and verified; no full projection/clean-stop eligibility check is performed",
+      recoveryEnabled: "history is projected; every prior PROCESS_STARTED must have a matching PROCESS_STOPPED, and only observation-only/no-sticky-blocker or the single account-level RECOVERY_SELLER_UNEXPECTED_CONDITION latch is accepted",
       restoration: "candidateOnly remains true and restorationEnabled remains false; Portfolio, RecoveryLedger, and OrderRegistry are not reconstructed",
-      trading: "the prior validated configuration and sticky safety posture remain authoritative; no Conservative trading state is resumed",
     },
     expectedSideEffects: {
       brokerConnectBeforeHistoryVerification: false,
@@ -110,7 +110,8 @@ export const scenarios = [
     },
     invariants: [
       "Unverified or unprojectable operational-state history prevents broker connection.",
-      "Every prior PROCESS_STARTED session must have a matching PROCESS_STOPPED record before an allowed restart.",
+      "Any prior process history disables trading on restart, including the default recovery-disabled Conservative configuration.",
+      "When recovery is enabled, every prior PROCESS_STARTED session must have a matching PROCESS_STOPPED record and pass the projected eligibility gate.",
       "Startup eligibility does not enable runtime state restoration.",
     ],
     relatedRequirements: ["CON-SPEC-7.1", "CON-RUNTIME-5"],
