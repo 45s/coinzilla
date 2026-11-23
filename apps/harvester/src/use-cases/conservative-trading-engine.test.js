@@ -412,6 +412,7 @@ function createHarnessEngine({ options, brokerState, state } = {}) {
     onOperationalStateCancellationIntent,
     onOperationalStateCancellationOutcome,
     onOperationalStateStrategyMarketPaused,
+    onSafetyBlockerRaised,
     canTrade: canTradeOverride,
     isStopping: isStoppingOverride,
     accountingFailure,
@@ -434,6 +435,7 @@ function createHarnessEngine({ options, brokerState, state } = {}) {
     onOperationalStateCancellationIntent,
     onOperationalStateCancellationOutcome,
     onOperationalStateStrategyMarketPaused,
+    onSafetyBlockerRaised,
     eventPublisher: effectiveEventPublisher,
     appConfig: suppliedAppConfig ?? appConfig,
     getAdditionalTrackedQuoteCashFlow: () => additionalTrackedQuoteCashFlow,
@@ -11490,4 +11492,327 @@ test("failed owned BUY cancellation leaves the emergency BUY gate active and rep
   assert.equal(harness.engine.getOperatorBuyPauseState().pausedMarkets.includes("DOGEUSDT"), true, "A failed cancellation must never roll back the market BUY gate.")
   assert.equal(harness.engine.getActiveOrders().some((order) => order.side === "BUY"), true, "The unresolved owned BUY must remain visible for reconciliation.")
   assert.equal(harness.pauses.length, 0, "The emergency BUY-only pause must not convert an unresolved cancellation into a broad strategy pause.")
+})
+
+
+test("strategy safety pause gates BUYs before canceling only registered active BUYs and reconciles racing fills once", async () => {
+  const buyOne = makeShutdownOrder({
+    side: "BUY",
+    clientOrderId: "strategy-pause-buy-one",
+    brokerOrderId: "broker-strategy-pause-buy-one",
+  })
+  const buyTwo = makeShutdownOrder({
+    side: "BUY",
+    clientOrderId: "strategy-pause-buy-two",
+    brokerOrderId: "broker-strategy-pause-buy-two",
+  })
+  const recoverySell = makeShutdownOrder({
+    side: "SELL",
+    clientOrderId: "strategy-pause-recovery-sell",
+    brokerOrderId: "broker-strategy-pause-recovery-sell",
+  })
+  const events = []
+  const pauseFacts = []
+  let harness
+  harness = await createHarness({
+    initialState: {
+      orderRegistry: new OrderRegistry({
+        orders: [buyOne, buyTwo, recoverySell],
+      }),
+    },
+    strategyPolicy: {
+      evaluate: () => {
+        throw new Error("forced strategy evaluation failure")
+      },
+    },
+    hasUnownedOpenOrdersForSymbol: () => true,
+    appConfig: withExternalOrdersPolicy("ignore"),
+    cancelWithFill: true,
+    accountingApplied: true,
+    onOperationalStateStrategyMarketPaused: async (fact) => {
+      pauseFacts.push(fact)
+      return { ok: true, data: { durable: true } }
+    },
+    onCancelOrderStarted: ({ order }) => {
+      assert.deepEqual(
+        harness.engine.getPausedMarkets(),
+        ["DOGEUSDT"],
+        "The in-memory BUY gate must be active before the first broker cancellation starts.",
+      )
+      assert.ok(
+        events.some((event) => event.name === HARVESTER_EVENT_NAMES.STRATEGY_PAUSED),
+        "The strategy pause event must be published before owned-BUY cancellation begins.",
+      )
+    },
+    eventPublisher: {
+      publish: (event) => {
+        events.push(event)
+        return { ok: true }
+      },
+      flush: async () => ({ ok: true, durable: true }),
+    },
+  })
+
+  const result = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: {
+      symbol: "DOGEUSDT",
+      price: "100",
+      timestamp: 1,
+    },
+  })
+
+  assert.equal(result.ok, false, "The triggering strategy evaluation failure must remain visible.")
+  assert.deepEqual(
+    harness.cancellationIds,
+    [buyOne.brokerOrderId, buyTwo.brokerOrderId],
+    "Only active BUYs registered in the current process OrderRegistry may be canceled; the external-order signal and recovery SELL must not be adopted.",
+  )
+  assert.equal(harness.engine.getOrders().find((order) => order.clientOrderId === buyOne.clientOrderId).status, "CANCELED")
+  assert.equal(harness.engine.getOrders().find((order) => order.clientOrderId === buyTwo.clientOrderId).status, "CANCELED")
+  assert.equal(harness.engine.getOrders().find((order) => order.clientOrderId === recoverySell.clientOrderId).status, "OPEN")
+  assert.equal(harness.accountedFills.length, 2, "Both partial fills racing with cancellation must be accounted.")
+  assert.deepEqual(
+    pauseFacts,
+    [{ symbol: "DOGEUSDT", reason: "STRATEGY_EVALUATION_FAILED" }],
+    "The original strategy pause reason must remain the durable pause fact.",
+  )
+
+  const firstCanceledBuy = harness.engine.getOrders().find((order) => order.clientOrderId === buyOne.clientOrderId)
+  const duplicate = await harness.engine.processUserDataEvent({
+    event: {
+      executionType: "TRADE",
+      executedOrder: firstCanceledBuy,
+      fill: harness.accountedFills[0],
+    },
+  })
+  assert.equal(duplicate.ok, true)
+  assert.equal(harness.accountedFills.length, 2, "A cancellation-racing fill replay must not be applied twice.")
+
+  const snapshots = await harness.engine.getOperatorMarketSnapshots()
+  assert.equal(snapshots.ok, true)
+  assert.equal(snapshots.data.markets[0].safetyPauseCancellation.status, "COMPLETE")
+  assert.equal(snapshots.data.markets[0].safetyPauseCancellation.canceled, 2)
+  assert.deepEqual(snapshots.data.markets[0].safetyPauseCancellation.unresolvedOrders, [])
+})
+
+test("strategy safety pause with no owned BUYs completes without broker cancellation", async () => {
+  const harness = await createHarness({
+    strategyPolicy: {
+      evaluate: () => {
+        throw new Error("forced strategy evaluation failure")
+      },
+    },
+    eventPublisher: {
+      publish: () => ({ ok: true }),
+      flush: async () => ({ ok: true, durable: true }),
+    },
+  })
+
+  await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: {
+      symbol: "DOGEUSDT",
+      price: "100",
+      timestamp: 1,
+    },
+  })
+
+  assert.deepEqual(harness.cancellationIds, [])
+  const snapshots = await harness.engine.getOperatorMarketSnapshots()
+  assert.equal(snapshots.data.markets[0].safetyPauseCancellation.status, "COMPLETE")
+  assert.deepEqual(snapshots.data.markets[0].safetyPauseCancellation.unresolvedOrders, [])
+})
+
+test("strategy safety pause reports UNKNOWN owned BUY cancellation as incomplete and raises a durable blocker", async () => {
+  const buyOrder = makeShutdownOrder({
+    side: "BUY",
+    clientOrderId: "strategy-pause-unknown-buy",
+    brokerOrderId: "broker-strategy-pause-unknown-buy",
+  })
+  const raisedBlockers = []
+  const harness = await createHarness({
+    initialState: {
+      orderRegistry: new OrderRegistry({ orders: [buyOrder] }),
+    },
+    strategyPolicy: {
+      evaluate: () => {
+        throw new Error("forced strategy evaluation failure")
+      },
+    },
+    cancelThrow: true,
+    onOperationalStateStrategyMarketPaused: async () => ({
+      ok: true,
+      data: { durable: true },
+    }),
+    onSafetyBlockerRaised: async (blocker) => {
+      raisedBlockers.push(blocker)
+      return {
+        ok: true,
+        data: {
+          durable: true,
+          record: { data: { blockerId: "strategy-pause-blocker-1" } },
+        },
+      }
+    },
+    eventPublisher: {
+      publish: () => ({ ok: true }),
+      flush: async () => ({ ok: true, durable: true }),
+    },
+  })
+
+  await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: {
+      symbol: "DOGEUSDT",
+      price: "100",
+      timestamp: 1,
+    },
+  })
+
+  assert.deepEqual(harness.cancellationIds, [buyOrder.brokerOrderId])
+  assert.equal(
+    harness.engine.getOrders().find((order) => order.clientOrderId === buyOrder.clientOrderId).status,
+    "UNKNOWN",
+  )
+  assert.equal(raisedBlockers.length, 1)
+  assert.equal(raisedBlockers[0].scope, "MARKET")
+  assert.equal(raisedBlockers[0].symbol, "DOGEUSDT")
+  assert.equal(raisedBlockers[0].reason, "STRATEGY_SAFETY_PAUSE_INCOMPLETE")
+
+  const snapshots = await harness.engine.getOperatorMarketSnapshots()
+  const snapshot = snapshots.data.markets[0]
+  assert.equal(snapshot.safetyPauseCancellation.status, "INCOMPLETE")
+  assert.deepEqual(
+    snapshot.safetyPauseCancellation.unresolvedOrders.map(({ clientOrderId, brokerOrderId, status }) => ({
+      clientOrderId,
+      brokerOrderId,
+      status,
+    })),
+    [{
+      clientOrderId: buyOrder.clientOrderId,
+      brokerOrderId: buyOrder.brokerOrderId,
+      status: "UNKNOWN",
+    }],
+  )
+  assert.ok(snapshot.blockers.includes("STRATEGY_PAUSE_CANCELLATION_INCOMPLETE"))
+})
+
+test("strategy safety pause remains BUY-blocked and reports pause persistence and publication failures", async () => {
+  const buyOrder = makeShutdownOrder({
+    side: "BUY",
+    clientOrderId: "strategy-pause-durability-buy",
+    brokerOrderId: "broker-strategy-pause-durability-buy",
+  })
+  const raisedBlockers = []
+  const harness = await createHarness({
+    initialState: {
+      orderRegistry: new OrderRegistry({ orders: [buyOrder] }),
+    },
+    strategyPolicy: {
+      evaluate: () => {
+        throw new Error("forced strategy evaluation failure")
+      },
+    },
+    onOperationalStateStrategyMarketPaused: async () => ({
+      ok: false,
+      errors: [new Error("operational state store unavailable")],
+    }),
+    onSafetyBlockerRaised: async (blocker) => {
+      raisedBlockers.push(blocker)
+      return { ok: true, data: { durable: true } }
+    },
+    eventPublisher: {
+      publish: (event) => event.name === HARVESTER_EVENT_NAMES.STRATEGY_PAUSED
+        ? { ok: false, errors: [new Error("pause event publication failed")] }
+        : { ok: true },
+      flush: async () => ({ ok: true, durable: true }),
+    },
+  })
+
+  await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: {
+      symbol: "DOGEUSDT",
+      price: "100",
+      timestamp: 1,
+    },
+  })
+
+  assert.deepEqual(harness.engine.getPausedMarkets(), ["DOGEUSDT"])
+  assert.deepEqual(harness.cancellationIds, [buyOrder.brokerOrderId], "Pause fact/event failures must not skip owned-BUY neutralization.")
+  assert.equal(raisedBlockers.length, 1, "An incomplete pause must attempt to persist a sticky safety blocker.")
+  const snapshots = await harness.engine.getOperatorMarketSnapshots()
+  const snapshot = snapshots.data.markets[0]
+  assert.equal(snapshot.safetyPauseCancellation.status, "INCOMPLETE")
+  assert.equal(snapshot.safetyPauseCancellation.pauseFactPersisted, false)
+  assert.equal(snapshot.safetyPauseCancellation.pauseEventPublished, false)
+  assert.ok(snapshot.blockers.includes("STRATEGY_PAUSE_CANCELLATION_INCOMPLETE"))
+})
+
+test("strategy safety pause continues recovery SELL evaluation and submission while suppressing BUYs", async () => {
+  const buyOrder = makeShutdownOrder({
+    side: "BUY",
+    clientOrderId: "strategy-pause-recovery-buy",
+    brokerOrderId: "broker-strategy-pause-recovery-buy",
+  })
+  const seeded = makeSeededRecoveryState()
+  let evaluationCount = 0
+  const strategyPolicy = {
+    ...conservativeStrategyPolicy,
+    evaluate: (input) => {
+      evaluationCount += 1
+      if (evaluationCount === 1) {
+        throw new Error("force the first strategy evaluation to pause")
+      }
+      return conservativeStrategyPolicy.evaluate({
+        ...input,
+        lastBuyPrice: "100",
+      })
+    },
+  }
+  const harness = await createHarness({
+    initialState: {
+      orderRegistry: new OrderRegistry({ orders: [buyOrder] }),
+    },
+    initialPortfolio: seeded.portfolio,
+    initialRecoveryLedger: seeded.recoveryLedger,
+    baseFreeBalance: "1",
+    strategyPolicy,
+    eventPublisher: {
+      publish: () => ({ ok: true }),
+      flush: async () => ({ ok: true, durable: true }),
+    },
+  })
+
+  const paused = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: {
+      symbol: "DOGEUSDT",
+      price: "100",
+      timestamp: 1,
+    },
+  })
+  assert.equal(paused.ok, false)
+  assert.equal(harness.engine.getOrders().find((order) => order.clientOrderId === buyOrder.clientOrderId).status, "CANCELED")
+
+  const recovery = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: {
+      symbol: "DOGEUSDT",
+      price: "101",
+      timestamp: 2,
+    },
+  })
+
+  assert.equal(recovery.ok, true, recovery.errors?.[0]?.message)
+  assert.ok(
+    harness.engine.getOrders().some((order) => order.side === "SELL" && ["OPEN", "PARTIALLY_FILLED"].includes(order.status)),
+    "A purpose-tagged recovery SELL must remain evaluable and submittable while the safety BUY gate is active.",
+  )
+  assert.equal(
+    harness.engine.getOrders().filter((order) => order.side === "BUY" && ["OPEN", "PARTIALLY_FILLED"].includes(order.status)).length,
+    0,
+    "The safety pause must suppress every new BUY while allowing the recovery SELL.",
+  )
 })
