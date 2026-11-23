@@ -129,7 +129,7 @@ function createAccountingState({ portfolio, recoveryLedger }) {
 function createRetryableHistoryFailure() {
   return {
     ok: false,
-    errors: [new Error("terminal fill history temporarily unavailable")],
+    errors: [],
     failure: {
       category: "REST_RECONCILIATION",
       stage: "REST_STREAM_RECONCILIATION_FAILED",
@@ -154,7 +154,7 @@ function createEngineHarness({ accounting }) {
   const calls = []
   let firstEvent = true
   const processUserDataEvent = async ({ event, recoveryMode }) => {
-    calls.push(["process", event.fill?.id, recoveryMode])
+    calls.push({ type: "process", fillId: event.fill?.id, recoveryMode })
     if (firstEvent) {
       firstEvent = false
       return createRetryableHistoryFailure()
@@ -175,11 +175,11 @@ function createEngineHarness({ accounting }) {
     processUserDataEvent,
     getOrders: () => [],
     reconcileOwnedOrders: async (options) => {
-      calls.push(["reconcile", options])
+      calls.push({ type: "reconcile", options })
       return { ok: true }
     },
     cancelOwnedBuyOrdersForSafetyHalt: async () => {
-      calls.push("cancel-owned-buys")
+      calls.push({ type: "cancel-owned-buys" })
       return { ok: true }
     },
   }
@@ -208,7 +208,7 @@ function createSafetyHaltHandler({ state, engine, calls, observedFillIds, accoun
     updatePortfolio: () => ({ ok: true }),
     updateTradingAccounting: ({ fill }) => accounting.applyFill(fill),
     cancelOwnedBuysAfterAccountingFailure,
-    resumeDeferredStrategyEvaluations: () => calls.push("resume"),
+    resumeDeferredStrategyEvaluations: () => calls.push({ type: "resume" }),
   })
 }
 
@@ -231,9 +231,9 @@ function assertInitialSafetyHalt({ state, calls, observedFillIds, sellFill }) {
   assert.deepEqual(
     calls.slice(0, 3),
     [
-      ["process", sellFill.id, true],
-      ["reconcile", { recoveryMode: true }],
-      "cancel-owned-buys",
+      { type: "process", fillId: sellFill.id, recoveryMode: true },
+      { type: "reconcile", options: { recoveryMode: true } },
+      { type: "cancel-owned-buys" },
     ],
     "A reconciliation failure must enter recovery mode, reconcile authoritative state, then cancel current-process-owned BUYs.",
   )
@@ -268,9 +268,9 @@ function assertSafetyHaltRemainsLatched({ state, calls }) {
   assert.equal(state.ready, false, "Readiness must remain closed while authoritative reconciliation is required.")
   assert.equal(state.requiresReconciliation, true, "The safety halt must retain the required reconciliation state.")
   assert.equal(state.status, "AUTHORITATIVE_RECONCILIATION_REQUIRED", "The safety halt must expose the authoritative-reconciliation-required state.")
-  assert.equal(calls.filter((call) => Array.isArray(call) && call[0] === "reconcile").length, 1, "The initial safety halt must perform one authoritative reconciliation attempt.")
-  assert.equal(calls.filter((entry) => entry === "cancel-owned-buys").length, 1, "The safety halt must cancel owned BUYs once and must not recursively retry cancellation.")
-  assert.equal(calls.includes("resume"), false, "A late SELL fill must not reopen deferred BUY evaluation while readiness is closed.")
+  assert.equal(calls.filter((call) => call.type === "reconcile").length, 1, "The initial safety halt must perform one authoritative reconciliation attempt.")
+  assert.equal(calls.filter((entry) => entry.type === "cancel-owned-buys").length, 1, "The safety halt must cancel owned BUYs once and must not recursively retry cancellation.")
+  assert.equal(calls.some((call) => call.type === "resume"), false, "A late SELL fill must not reopen deferred BUY evaluation while readiness is closed.")
 }
 
 test("routes REST/stream reconciliation failures through the account safety halt and applies a late SELL once to real projections", async () => {
@@ -312,7 +312,14 @@ test("routes REST/stream reconciliation failures through the account safety halt
   handler({ event })
   await state.eventQueue
 
-  assert.deepEqual(calls.slice(3).map((call) => call[2]), [true, true], "Both later deliveries must continue through recovery-mode processing.")
+  const recoveryModeProcessCalls = calls
+    .filter((call) => call.type === "process")
+    .slice(1)
+  assert.deepEqual(
+    recoveryModeProcessCalls.map((call) => call.recoveryMode),
+    [true, true],
+    "Both later deliveries must continue through recovery-mode processing.",
+  )
   assertLateSellAccounting({
     accounting,
     sellFill,

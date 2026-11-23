@@ -132,6 +132,14 @@ The observer enqueues work and returns immediately to EventBus delivery. A seria
 - Queue overflow and database failures are observable diagnostics; they never block or reverse a successful accounting result.
 - Actual exchange trade IDs remain scoped by provider type/instance, account, environment, and market.
 
+### Order-history observer failure diagnostics
+
+The best-effort order-history observer reports mapping, queue, write, and lifecycle failures without blocking EventBus delivery or changing Portfolio, RecoveryLedger, order ownership, readiness, or exchange state. Its structured diagnostic identifies `component` (`order-history-observer`), `operation`/`persistenceStage`, stable `errorCode`, `errorName`, and a bounded safe `field` when the domain validation error provides one.
+
+Safe event context includes `symbol`, `eventId`, `eventName`, `eventSource`, `sourceEventTimestamp`, `providerInstanceId`, `accountId`, and `clientOrderId`. The field is restricted to an ASCII dotted identifier of at most 128 characters (for example `market.baseAsset.code`). Raw order payloads, database paths, credentials, and arbitrary exception messages are not included.
+
+These fields improve diagnosis of future projection failures. Historical log entries that contain only the error code/name cannot be retroactively attributed to a field or event without additional preserved evidence.
+
 ## 5. Ownership and safety boundary
 
 - Harvester owns trading-history schemas, migrations, repository ports/adapters, row mapping, and persistence lifecycle.

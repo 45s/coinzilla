@@ -225,7 +225,7 @@ test("drains accepted writes on close and unsubscribes before later events", asy
   assert.equal(writes, 1, "Events published after observer close must not enqueue database writes.")
 })
 
-test("includes the invalid record field in mapping-failure diagnostics", async (t) => {
+test("includes safe validation fields and order context in mapping-failure diagnostics", async (t) => {
   const eventBus = new EventBus()
   const logEntries = []
   const observer = createOrderHistoryObserver({
@@ -241,20 +241,50 @@ test("includes the invalid record field in mapping-failure diagnostics", async (
     await eventBus.close()
   })
 
-  eventBus.publish({
-    name: HARVESTER_EVENT_NAMES.ORDER_UPDATED,
-    source: "harvester",
-    data: createOrderHistoryEventData({
-      providerInstanceId: "",
-    }),
+  const invalidProviderData = createOrderHistoryEventData({
+    providerInstanceId: "",
   })
+  const validMarketData = createOrderHistoryEventData()
+  const invalidMarketData = createOrderHistoryEventData({
+    market: {
+      ...validMarketData.market,
+      baseAsset: {
+        ...validMarketData.market.baseAsset,
+        code: "",
+      },
+    },
+  })
+  for (const data of [invalidProviderData, invalidMarketData]) {
+    eventBus.publish({
+      name: HARVESTER_EVENT_NAMES.ORDER_UPDATED,
+      source: "harvester",
+      data,
+    })
+  }
   await eventBus.flush()
   const result = await observer.flush()
 
-  assert.equal(result.ok, false, "Invalid order identity must fail the history projection.")
-  assert.equal(result.errors[0].context.field, "providerInstanceId", "The domain error must retain the invalid field.")
-  assert.equal(logEntries.length, 1, "One invalid event must produce one diagnostic.")
-  assert.equal(logEntries[0].errorCode, "HARVESTER_ORDER_HISTORY_RECORD_INVALID")
-  assert.equal(logEntries[0].persistenceStage, "mapping")
-  assert.equal(logEntries[0].field, "providerInstanceId", "The diagnostic must expose the safe validation field.")
+  assert.equal(result.ok, false, "Invalid order records must fail the history projection.")
+  assert.equal(result.errors.length, 2, "Both invalid records must retain their validation errors.")
+  assert.equal(result.errors[0].context.field, "providerInstanceId", "The first domain error must retain the invalid provider field.")
+  assert.equal(result.errors[1].context.field, "market.baseAsset.code", "The second domain error must retain the nested market field.")
+  assert.equal(logEntries.length, 2, "Each invalid event must produce one diagnostic.")
+
+  const [providerFailure, marketFailure] = logEntries
+  assert.equal(providerFailure.component, "order-history-observer", "Diagnostics must identify the failing component.")
+  assert.equal(providerFailure.operation, "mapping", "Diagnostics must identify the failing mapping operation.")
+  assert.equal(providerFailure.persistenceStage, "mapping", "Diagnostics must retain the persistence stage.")
+  assert.equal(providerFailure.errorCode, "HARVESTER_ORDER_HISTORY_RECORD_INVALID", "Diagnostics must retain the stable error code.")
+  assert.equal(providerFailure.field, "providerInstanceId", "Diagnostics must expose the safe provider field.")
+  assert.equal(providerFailure.symbol, "ADAUSDT", "Diagnostics must identify the affected market.")
+  assert.equal(providerFailure.eventSource, "harvester", "Diagnostics must identify the event source.")
+  assert.equal(typeof providerFailure.sourceEventTimestamp, "string", "Diagnostics must retain the source event timestamp.")
+  assert.equal(providerFailure.eventName, HARVESTER_EVENT_NAMES.ORDER_UPDATED, "Diagnostics must identify the lifecycle event.")
+  assert.equal(typeof providerFailure.eventId, "string", "Diagnostics must retain the event correlation identity.")
+  assert.equal(providerFailure.accountId, invalidProviderData.accountId, "Diagnostics must retain the safe account identity.")
+  assert.equal(providerFailure.clientOrderId, invalidProviderData.clientOrderId, "Diagnostics must retain the safe client-order identity.")
+  assert.equal(marketFailure.component, "order-history-observer", "Nested-field diagnostics must identify the failing component.")
+  assert.equal(marketFailure.operation, "mapping", "Nested-field diagnostics must identify the mapping operation.")
+  assert.equal(marketFailure.field, "market.baseAsset.code", "Diagnostics must allow safe dotted field paths.")
+  assert.equal(marketFailure.symbol, "ADAUSDT", "Nested-field diagnostics must identify the affected market.")
 })
