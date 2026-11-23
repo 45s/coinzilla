@@ -10321,43 +10321,31 @@ test("an unconfirmed volatility BUY cancellation stays protected without blockin
   assert.deepEqual(harness.pauses, [], "An uncertain volatility cancellation must retain the dedicated protection state, not silently become a full strategy pause.")
 })
 
-test("explicit recovery SELL intent may submit while volatility protection blocks ordinary BUYs", async () => {
-  const position = new Position({ positionId: createPositionId({ marketId: market.id,
-strategyId: StrategyId.COIN_GRABBER }),
-strategyId: StrategyId.COIN_GRABBER,
+function createVolatilityProtectedRecoveryFixture() {
+  const position = new Position({
+    positionId: createPositionId({ marketId: market.id, strategyId: StrategyId.COIN_GRABBER }),
+    strategyId: StrategyId.COIN_GRABBER,
     market,
-    baseQuantity: new Quantity({
-      amount: "100",
-      asset: baseAsset
-    }),
-    freeBaseQuantity: new Quantity({
-      amount: "0",
-      asset: baseAsset
-    }),
-    quoteNetCashFlow: new Money({
-      amount: "-10",
-      asset: quoteAsset
-    }),
-    spent: new Money({
-      amount: "10",
-      asset: quoteAsset
-    }),
+    baseQuantity: new Quantity({ amount: "100", asset: baseAsset }),
+    freeBaseQuantity: new Quantity({ amount: "0", asset: baseAsset }),
+    quoteNetCashFlow: new Money({ amount: "-10", asset: quoteAsset }),
+    spent: new Money({ amount: "10", asset: quoteAsset }),
   })
-  const portfolio = new Portfolio({ positions: [position] })
-  const ledger = new RecoveryLedger({
-    market,
-    buyCost: "10"
-  })
-  const unavailable = {
-    ok: true,
-    data: {
-      status: {
-      isReady: false,
-      reason: "STALE_STREAM"
-    },
-      metrics: null
+  return {
+    portfolio: new Portfolio({ positions: [position] }),
+    recoveryLedger: new RecoveryLedger({ market, buyCost: "10" }),
+    unavailable: {
+      ok: true,
+      data: {
+        status: { isReady: false, reason: "STALE_STREAM" },
+        metrics: null,
+      },
     },
   }
+}
+
+test("explicit recovery SELL intent may submit while volatility protection blocks ordinary BUYs", async () => {
+  const { portfolio, recoveryLedger, unavailable } = createVolatilityProtectedRecoveryFixture()
   const harness = await createHarness({
     initialPortfolio: portfolio,
     initialRecoveryLedger: ledger,
@@ -10381,43 +10369,10 @@ strategyId: StrategyId.COIN_GRABBER,
 
 
 test("volatility protection rejects a SELL that lacks explicit recovery purpose", async () => {
-  const position = new Position({ positionId: createPositionId({ marketId: market.id,
-strategyId: StrategyId.COIN_GRABBER }),
-strategyId: StrategyId.COIN_GRABBER,
-    market,
-    baseQuantity: new Quantity({
-      amount: "100",
-      asset: baseAsset
-    }),
-    freeBaseQuantity: new Quantity({
-      amount: "0",
-      asset: baseAsset
-    }),
-    quoteNetCashFlow: new Money({
-      amount: "-10",
-      asset: quoteAsset
-    }),
-    spent: new Money({
-      amount: "10",
-      asset: quoteAsset
-    }),
-  })
-  const unavailable = {
-    ok: true,
-    data: {
-      status: {
-      isReady: false,
-      reason: "STALE_STREAM"
-    },
-      metrics: null
-    },
-  }
+  const { portfolio, recoveryLedger, unavailable } = createVolatilityProtectedRecoveryFixture()
   const harness = await createHarness({
-    initialPortfolio: new Portfolio({ positions: [position] }),
-    initialRecoveryLedger: new RecoveryLedger({
-      market,
-      buyCost: "10"
-    }),
+    initialPortfolio: portfolio,
+    initialRecoveryLedger: recoveryLedger,
     baseFreeBalance: "100",
     getVolatilityData: () => unavailable,
     strategyPolicy: {
