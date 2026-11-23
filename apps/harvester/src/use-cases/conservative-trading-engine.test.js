@@ -8625,19 +8625,7 @@ async function createMalformedRestEnvelopeFixture({
   }
 }
 
-function assertMalformedRestEnvelopeFailsClosed({
-  fixture,
-  result,
-  scenario,
-  expectedError,
-  expectedCanonicalOrderHistoryReads,
-  expectedFillHistoryReads,
-}) {
-  const {
-    harness,
-    ownedOrder,
-    brokerReadCounts
-  } = fixture
+function assertMalformedRestEnvelopeStateUnchanged({ harness, ownedOrder, result, scenario }) {
   assert.equal(
     result.ok,
     false,
@@ -8645,7 +8633,7 @@ function assertMalformedRestEnvelopeFailsClosed({
   )
   assert.match(
     result.errors?.[0]?.message ?? "",
-    expectedError,
+    /./,
     `${scenario}: the failure must identify the malformed REST snapshot stage.`,
   )
   assert.deepEqual(
@@ -8658,13 +8646,15 @@ function assertMalformedRestEnvelopeFailsClosed({
     ["DOGEUSDT"],
     `${scenario}: the affected market must remain paused after malformed authoritative REST data.`,
   )
+  const reconciledOrder = harness.engine.getOrders().find((order) =>
+    order.brokerOrderId === ownedOrder.brokerOrderId)
   assert.equal(
-    harness.engine.getOrders().find((order) => order.brokerOrderId === ownedOrder.brokerOrderId).status,
+    reconciledOrder.status,
     "UNKNOWN",
     `${scenario}: malformed REST data must not advance the registered owned order from UNKNOWN.`,
   )
   assert.equal(
-    harness.engine.getOrders().find((order) => order.brokerOrderId === ownedOrder.brokerOrderId).executedQuantity.amount,
+    reconciledOrder.executedQuantity.amount,
     "0",
     `${scenario}: malformed REST data must not apply a partial or inferred executed quantity.`,
   )
@@ -8678,6 +8668,14 @@ function assertMalformedRestEnvelopeFailsClosed({
     [],
     `${scenario}: reconciliation failure must not submit a replacement or any other exchange order.`,
   )
+}
+
+function assertMalformedRestEnvelopeReadOrder({
+  brokerReadCounts,
+  scenario,
+  expectedCanonicalOrderHistoryReads,
+  expectedFillHistoryReads,
+}) {
   assert.equal(
     brokerReadCounts.openOrders,
     1,
@@ -8693,6 +8691,33 @@ function assertMalformedRestEnvelopeFailsClosed({
     expectedFillHistoryReads,
     `${scenario}: fill history must be read only after canonical order history validation.`,
   )
+}
+
+function assertMalformedRestEnvelopeFailsClosed({
+  fixture,
+  result,
+  scenario,
+  expectedError,
+  expectedCanonicalOrderHistoryReads,
+  expectedFillHistoryReads,
+}) {
+  assert.match(
+    result.errors?.[0]?.message ?? "",
+    expectedError,
+    `${scenario}: the failure must identify the malformed REST snapshot stage.`,
+  )
+  assertMalformedRestEnvelopeStateUnchanged({
+    harness: fixture.harness,
+    ownedOrder: fixture.ownedOrder,
+    result,
+    scenario,
+  })
+  assertMalformedRestEnvelopeReadOrder({
+    brokerReadCounts: fixture.brokerReadCounts,
+    scenario,
+    expectedCanonicalOrderHistoryReads,
+    expectedFillHistoryReads,
+  })
 }
 
 const createUnknownSubmissionHarness = async () => {
