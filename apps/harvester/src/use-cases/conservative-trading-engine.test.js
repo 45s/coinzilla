@@ -10453,16 +10453,13 @@ test("volatility protection rejects a SELL that lacks explicit recovery purpose"
 })
 
 
-test("volatility cancellation is isolated to the affected trading pair", async () => {
-  const zroBaseAsset = new Asset({
-    id: "asset-zro",
-    code: "ZRO"
-  })
+function createMultiMarketVolatilityFixture() {
+  const zroBaseAsset = new Asset({ id: "asset-zro", code: "ZRO" })
   const zroMarket = new Market({
     venue: "binance",
     symbol: "ZROUSDT",
     baseAsset: zroBaseAsset,
-    quoteAsset
+    quoteAsset,
   })
   const dogeBuy = makeShutdownOrder({
     side: "BUY",
@@ -10475,18 +10472,9 @@ test("volatility cancellation is isolated to the affected trading pair", async (
     market: zroMarket,
     side: "BUY",
     type: "LIMIT",
-    limitPrice: new Money({
-      amount: "1",
-      asset: quoteAsset
-    }),
-    originalQuantity: new Quantity({
-      amount: "1",
-      asset: zroBaseAsset
-    }),
-    executedQuantity: new Quantity({
-      amount: "0",
-      asset: zroBaseAsset
-    }),
+    limitPrice: new Money({ amount: "1", asset: quoteAsset }),
+    originalQuantity: new Quantity({ amount: "1", asset: zroBaseAsset }),
+    executedQuantity: new Quantity({ amount: "0", asset: zroBaseAsset }),
     status: "OPEN",
     createdAt: 1,
     acknowledgedAt: 1,
@@ -10498,17 +10486,22 @@ test("volatility cancellation is isolated to the affected trading pair", async (
       status: {
         isReady: true,
         reason: null,
-        lastClosedCandleOpenTime: 60_000
+        lastClosedCandleOpenTime: 60_000,
       },
       metrics: {
         openTime: 60_000,
         atr: "1",
         natr: "2",
         referenceNatr: "1",
-        volatilityRatio: "2"
+        volatilityRatio: "2",
       },
     },
   }
+  return { dogeBuy, zroBuy, highVolatility }
+}
+
+test("volatility cancellation is isolated to the affected trading pair", async () => {
+  const { dogeBuy, zroBuy, highVolatility } = createMultiMarketVolatilityFixture()
   const harness = await createHarness({
     initialState: { orderRegistry: new OrderRegistry({ orders: [dogeBuy, zroBuy] }) },
     eventPublisher: { publish: () => ({ ok: true }) },
