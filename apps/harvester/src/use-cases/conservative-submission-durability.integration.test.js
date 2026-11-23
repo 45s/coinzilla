@@ -7,6 +7,8 @@ import { conservativeStrategyPolicy } from "../domain/strategies/conservative/st
 import { makeConservativeTradingEngine } from "./conservative-trading-engine.js"
 import { createHarnessBroker } from "./conservative-trading-engine-harness.js"
 
+// This integration fixture uses an in-memory fake broker and never connects to an exchange.
+
 const baseAsset = new Asset({
   id: "doge",
   code: "DOGE",
