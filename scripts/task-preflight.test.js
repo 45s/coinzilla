@@ -190,7 +190,7 @@ test('blocks PR evidence when head SHA, acceptance, verification, or documentati
     headSha: '0123456789012345678901234567890123456789',
     issueNumber: 1754,
     issueBody: REQUIRED_ISSUE_SECTIONS.map((heading) => `## ${heading}\n\nEvidence for ${heading}.`).join('\n\n'),
-    issueComments: 'Verification evidence: pnpm test passed on commit 0123456789012345678901234567890123456789',
+    issueComments: ['Verification evidence: pnpm test passed on commit 0123456789012345678901234567890123456789'],
     changedPaths: ['docs/README.md'],
     preflightReport: {
       issueNumber: 1754,
