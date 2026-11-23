@@ -16,27 +16,34 @@ This roadmap tracks work owned by `@coinzilla/brokers`. Historical entries may r
 
 **Status: IN PROGRESS** — [issue #1690](https://github.com/45s/coinzilla/issues/1690). Add a human-operated, one-probe-per-invocation mode to the unified Bitunix CLI. The reviewed first pass covers HYPEUSDT LIMIT BUY/SELL quantities 1/2 and MARKET BUY/SELL quote quantities 1/2. Every invocation re-reads market metadata, balances and open orders; shows the exact common Broker input and wire body; requires fresh interactive confirmation; writes a unique exclusive marker; and captures the place-order request/response locally with restrictive permissions. The existing #1608 fixed HYPEUSDT order and marker remain untouched. The command uses the common `Broker.createOrder()` path, publishes only the existing sanitized diagnostic result, and never loops, retries, cancels or performs another mutation. A confirmed or unknown result requires manual review. This is a human-only LIVE investigation, not a test or production-readiness milestone; issue #1185 remains unchanged.
 
-## Bitunix Spot signature CodeQL classification — #1674
+## CodeQL password-hash source classification — #1674
 
-**Status: implementation merged; CodeQL clearance must be established by a fresh scan** — [issue #1674](https://github.com/45s/coinzilla/issues/1674), original [PR #1680](https://github.com/45s/coinzilla/pull/1680), sink-location correction [PR #1697](https://github.com/45s/coinzilla/pull/1697), and merged follow-up [PR #1733](https://github.com/45s/coinzilla/pull/1733).
+**Status: SOURCE-CLASSIFICATION EXPERIMENT IN PROGRESS** — [tracking issue #1674](https://github.com/45s/coinzilla/issues/1674); the sole open remediation PR is [#1734](https://github.com/45s/coinzilla/pull/1734). This is a CodeQL rule/source-classification investigation, not a Bitunix broker defect.
 
-### What CodeQL is reporting
+### Finding and protocol facts
 
-The `js/insufficient-password-hash` alert is a taint-analysis false positive for these Bitunix Spot request-signing operations. CodeQL traces the public `apiKey` through the REST and WebSocket clients into the signing preimage, then sees SHA-256. The API key is a public identifier, not a user password. The hash is part of Bitunix's exchange-defined request-authentication protocol; it is not password storage or password verification.
+The two High `js/insufficient-password-hash` findings trace a public API identifier through the REST and WebSocket clients into Bitunix's required request-signing preimages, where SHA-256 is used. The identifier is not a user password; the hashes implement request authentication, not password storage or verification. The REST and WebSocket protocols require the existing two-stage SHA-256 construction. See the official [Bitunix Spot signing contract](https://www.bitunix.com/api-docs/spots/en_us/sign/).
 
-The REST signer constructs `nonce + timestamp + apiKey + query + body`, hashes that preimage with SHA-256, then hashes the resulting digest together with the API secret. The WebSocket signer constructs the corresponding nonce/timestamp/API-key/parameter preimage and applies the same two-stage SHA-256 construction. See the official [Bitunix Spot signing contract](https://www.bitunix.com/api-docs/spots/en_us/sign/).
+### Current experiment
 
-### Correct handling
+The source-to-sink paths show `apiKey` used as the internal name for a public identifier. PR #1734 tests renaming that internal value to `publicIdentifier` through both clients and signer inputs, while preserving:
+- Public client constructor option `apiKey`.
+- REST wire header `api-key` and WebSocket wire parameter `apiKey`.
+- Private signing secret handling.
+- Exact request preimages, double-SHA-256 operations, signature bytes, and fixed expected vectors.
 
-- **Do not replace the exchange protocol with bcrypt, scrypt, Argon2, PBKDF2, or a different HMAC construction.** That would produce signatures Bitunix does not accept.
-- Keep the REST and WebSocket signing algorithms and deterministic signature vectors exactly aligned with the exchange contract.
-- Treat this as a narrowly scoped CodeQL classification/suppression problem at the reported hash sinks, with a rationale that identifies the public API key and the exchange-mandated request-signing protocol.
-- Cover both REST hash sinks and both WebSocket hash sinks. Also inspect test-only findings separately: use fixed dummy credentials and fixed expected signature literals; never hash real credentials in tests.
-- **PR #1733 is not the proven fix.** It changed only the placement of the suppression comments by adding blank lines before the hash statements. That placement-only approach has already been tried repeatedly and must not be prescribed or repeated as the resolution. Its merge does not establish that CodeQL suppressions work; a fresh scan must prove the outcome. The actual remediation still needs to be identified if the alerts persist.
-- Verify against a **new CodeQL run on the commit being evaluated**. Inspect its SARIF/results for both signer files and confirm the REST and WebSocket alerts are absent. A failure annotation linked to the older release PR #1662 is historical evidence for that scanned commit; it does not establish the status of a later commit. Keep issue #1674 open until the fresh scan confirms clearance.
+The signer helper's internal input name and direct unit-test inputs use `publicIdentifier`; WebSocket parameter serialization continues to recognize and exclude the external `apiKey` field. This hypothesis remains unproven until a fresh CodeQL analysis evaluates the exact PR head.
 
-The SHA-256 protocol and signature vectors must remain unchanged. No live Bitunix request, order, transfer, withdrawal, or other account mutation is part of this CodeQL remediation.
+### Required verification and exclusions
 
+- Run REST/WebSocket signer tests and Brokers package tests/coverage on the exact PR head.
+- Confirm constructor compatibility and unchanged outbound wire names through client tests.
+- Run a fresh CodeQL scan and inspect SARIF/alert records for both REST and WebSocket findings. A successful workflow or SARIF upload alone is not clearance.
+- Record each experiment, exact commit, CI outcome, CodeQL result, and conclusion in issue #1674. Do not repeat failed `lgtm`, `codeql`, or suppression-spacing experiments.
+- Do not replace the exchange protocol with bcrypt, scrypt, Argon2, PBKDF2, HMAC, or another algorithm. Do not alter credentials, perform live/testnet exchange operations, or dismiss alerts to manufacture a green result.
+
+Historical PRs and their outcomes remain linked in issue #1674. Keep the issue and release PR #1662 blocked until both findings are independently confirmed absent.
+ 
 ## Executable CLI source identity — #1631\n\n**Status: IN PROGRESS** — [issue #1631](https://github.com/45s/coinzilla/issues/1631) / [PR #1632](https://github.com/45s/coinzilla/pull/1632). Establishes a repository-wide requirement for user-invoked CLI entrypoints to print their exact source commit, package/script version, worktree state, and runtime before doing work, with a side-effect-free version command. The first implementation is the Bitunix healthcheck entrypoint; the repository-wide CLI inventory and remaining migrations are tracked by the issue.\n\n## Bitunix health-check and operator CLI consolidation — #1614
 
 **Status: IMPLEMENTED and merged** — [issue #1614](https://github.com/45s/coinzilla/issues/1614) / [PR #1616](https://github.com/45s/coinzilla/pull/1616), merge commit `488949b668e1291b5cfc64032250f6d2a4568274`. Exact-head required workflow runs and advisory External Documentation Links passed; issue #1614 is closed after acceptance and exact-head CI verification.
