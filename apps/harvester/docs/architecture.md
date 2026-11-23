@@ -950,7 +950,7 @@ Completed SELL recovery-cycle publication receives the same injected workflow de
 
 ## Strategy-owned shutdown coordination
 
-The application layer coordinates shutdown across independently running strategies. It uses a small participant contract: strategyId, beginShutdown(), waitUntilSafe(), isSafeToShutdown(), and a safety snapshot. On SIGINT/SIGTERM, the coordinator calls every participant's beginShutdown() synchronously before awaiting any participant. It waits for all participants and rechecks their current safety markers before shared cleanup.
+The application layer coordinates shutdown across independently running strategies. It uses a small participant contract: strategyId, beginShutdown(), waitUntilSafe(), isSafeToShutdown(), and a safety snapshot. On SIGINT/SIGTERM, the coordinator calls every participant's beginShutdown() synchronously before awaiting any participant. The Conservative participant raises its BUY gate immediately, then queues deferred-evaluation cleanup behind already-running serialized engine transitions. Its waitUntilSafe() awaits that gate barrier before cancellation and reconciliation, so an in-flight evaluation cannot re-add deferred work after the shutdown clear. The coordinator waits for all participants and rechecks their current safety markers before shared cleanup.
 
 A strategy participant owns its domain-specific shutdown policy. The Conservative participant owns the BUY gate, Harvester-owned BUY cancellation, order/fill/commission reconciliation, per-market safety markers and recovery SELL coverage. A future Recovery Seller participant must own its own gate, order policy and safety proof. The coordinator must not import strategy accounting, order ownership or recovery calculations.
 
