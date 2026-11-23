@@ -8340,31 +8340,22 @@ function createRecoveryModeOrder({ clientOrderId, brokerOrderId, side, price, qu
   })
 }
 
-function createRecoveryModeBuyFillFixture() {
-  const initialPosition = new Position({ positionId: createPositionId({ marketId: market.id,
-strategyId: StrategyId.COIN_GRABBER }),
-strategyId: StrategyId.COIN_GRABBER,
+function createRecoveryModeInitialAccountingFixture() {
+  const initialPosition = new Position({
+    positionId: createPositionId({ marketId: market.id, strategyId: StrategyId.COIN_GRABBER }),
+    strategyId: StrategyId.COIN_GRABBER,
     market,
-    baseQuantity: new Quantity({
-      amount: "2",
-      asset: baseAsset,
-    }),
-    freeBaseQuantity: new Quantity({
-      amount: "0",
-      asset: baseAsset,
-    }),
-    quoteNetCashFlow: new Money({
-      amount: "-100",
-      asset: quoteAsset,
-    }),
+    baseQuantity: new Quantity({ amount: "2", asset: baseAsset }),
+    freeBaseQuantity: new Quantity({ amount: "0", asset: baseAsset }),
+    quoteNetCashFlow: new Money({ amount: "-100", asset: quoteAsset }),
   })
-  const initialPortfolio = new Portfolio({
-    positions: [initialPosition],
-  })
-  const initialRecoveryLedger = new RecoveryLedger({
-    market,
-    buyCost: "100",
-  })
+  return {
+    initialPortfolio: new Portfolio({ positions: [initialPosition] }),
+    initialRecoveryLedger: new RecoveryLedger({ market, buyCost: "100" }),
+  }
+}
+
+function createRecoveryModeOrderFixture() {
   const recoverySellOrder = createRecoveryModeOrder({
     clientOrderId: "recovery-sell-during-reconnect",
     brokerOrderId: "broker-recovery-sell-during-reconnect",
@@ -8381,6 +8372,10 @@ strategyId: StrategyId.COIN_GRABBER,
     quantity: "1",
     status: "OPEN",
   })
+  return { recoverySellOrder, standingBuyOrder }
+}
+
+function createRecoveryModeFilledBuyEvidence({ standingBuyOrder } = {}) {
   const filledStandingBuyOrder = createRecoveryModeOrder({
     clientOrderId: standingBuyOrder.clientOrderId,
     brokerOrderId: standingBuyOrder.brokerOrderId,
@@ -8398,25 +8393,21 @@ strategyId: StrategyId.COIN_GRABBER,
     market,
     side: "BUY",
     price: standingBuyOrder.limitPrice,
-    quantity: new Quantity({
-      amount: "1",
-      asset: baseAsset,
-    }),
-    quoteQuantity: new Money({
-      amount: "90",
-      asset: quoteAsset,
-    }),
+    quantity: new Quantity({ amount: "1", asset: baseAsset }),
+    quoteQuantity: new Money({ amount: "90", asset: quoteAsset }),
     commissions: [],
     commissionStatus: "COMPLETE",
   })
-  return {
-    initialPortfolio,
-    initialRecoveryLedger,
-    recoverySellOrder,
-    standingBuyOrder,
-    filledStandingBuyOrder,
-    recoveredBuyFill,
-  }
+  return { filledStandingBuyOrder, recoveredBuyFill }
+}
+
+function createRecoveryModeBuyFillFixture() {
+  const accounting = createRecoveryModeInitialAccountingFixture()
+  const orders = createRecoveryModeOrderFixture()
+  const evidence = createRecoveryModeFilledBuyEvidence({
+    standingBuyOrder: orders.standingBuyOrder,
+  })
+  return { ...accounting, ...orders, ...evidence }
 }
 
 async function createRecoveryModeBuyFillHarness({ fixture }) {
