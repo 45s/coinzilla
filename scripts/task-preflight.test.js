@@ -25,7 +25,7 @@ function buildIssueBody({
   return REQUIRED_ISSUE_SECTIONS.map((heading) => {
     const content = heading === 'Acceptance criteria'
       ? acceptanceCriteria
-      : `${sectionContent} ${heading}.`;
+      : `${sectionContent} ${heading.toLowerCase()}.`;
     return `## ${heading}\n\n${content}`;
   }).join('\n\n');
 }

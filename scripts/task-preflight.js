@@ -45,6 +45,10 @@ export function parsePreflightReport(body) {
   if (!issue || !commit || !status || !scope) {
     throw new Error('Preflight report missing issue, commit SHA, scope, or status.');
   }
+  const scopePaths = [...new Set(scope[1].split(',').map((path) => path.trim().replaceAll('\\', '/').replace(/^\.\//, '').replace(/\/+$/, '')).filter(Boolean))];
+  if (!scopePaths.length || scopePaths.some((path) => path.startsWith('/') || /^[a-z]:\//i.test(path) || path.split('/').includes('..'))) {
+    throw new Error('Preflight report contains invalid task scope paths.');
+  }
   for (const entry of REQUIRED_PREFLIGHT_ENTRIES) {
     if (!block.includes(entry)) {throw new Error(`Required preflight entry missing: ${  entry}`);}
   }
@@ -60,6 +64,7 @@ export function parsePreflightReport(body) {
   return { issueNumber: Number(issue[1]),
 commitSha: commit[1].toLowerCase(),
 status: status[1].toUpperCase(),
+scopePaths,
 instructions };
 }
 export function validateInstructionSnapshot({ report, actual, required }) {
@@ -86,6 +91,14 @@ function plain(text) {
     .replace(/\s+/g, ' ')
     .trim();
 }
+function hasConcreteAcceptanceCriteria(section) {
+  const vague = /\b(?:works? as expected|works? correctly|implemented correctly|implemented as requested|all tests pass|no issues remain)\b/i;
+  const criteria = section.split(/\r?\n/)
+    .filter((line) => /^\s*(?:[-*]|\d+\.)\s+/.test(line))
+    .map((line) => plain(line).replace(/^\s*(?:[-*]|\d+\.)\s*(?:\[[ xX]\]\s*)?/, '').trim())
+    .filter(Boolean);
+  return criteria.length > 0 && criteria.every((criterion) => criterion.length >= 24 && !vague.test(criterion));
+}
 export function validateIssueBody(body) {
   if (typeof body !== 'string' || !body.trim()) {return ['Issue body is empty.'];}
   const headings = [...body.matchAll(/^##\s+(.+?)\s*$/gm)];
@@ -99,24 +112,40 @@ export function validateIssueBody(body) {
   for (const name of REQUIRED_ISSUE_SECTIONS) {
     const section = sections.get(name.toLowerCase());
     if (!section) {
-      errors.push(`Required issue section missing: ${  name}`);
+      errors.push('Required issue section missing: ' + name);
     } else if (plain(section).length < 12 || /^(?:tbd|todo|n\/a|none|pending|not started)[.! ]*$/i.test(plain(section))) {
-      errors.push(`Issue section has no meaningful content: ${  name}`);
+      errors.push('Issue section has no meaningful content: ' + name);
+    } else if (name === 'Acceptance criteria' && !hasConcreteAcceptanceCriteria(section)) {
+      errors.push('Acceptance criteria must contain concrete, observable list items.');
     }
   }
   return errors;
+}
+function isPathWithinScope({ changedPath, scopePath }) {
+  const path = changedPath.replaceAll('\\', '/').replace(/^\.\//, '');
+  const scope = scopePath.replaceAll('\\', '/').replace(/^\.\//, '').replace(/\/+$/, '');
+  return scope === '.' || path === scope || path.startsWith(scope + '/');
 }
 export function validatePreflightReport({ report, context }) {
   if (!report || report.status !== 'COMPLETE') {return ['A COMPLETE preflight report is required.'];}
   const errors = [];
   if (report.issueNumber !== context.issueNumber) {errors.push('Preflight report references a different issue.');}
+  if (!Array.isArray(report.scopePaths) || !report.scopePaths.length) {
+    errors.push('Preflight report has no declared task scope paths.');
+  } else {
+    for (const changedPath of context.changedPaths || []) {
+      if (!report.scopePaths.some((scopePath) => isPathWithinScope({ changedPath, scopePath }))) {
+        errors.push('Changed path is outside the declared preflight scope: ' + changedPath);
+      }
+    }
+  }
   errors.push(...validateInstructionSnapshot({
     report,
     actual: context.actualHashes,
     required: context.requiredPaths,
   }));
   if (!context.isAncestor) {errors.push('Preflight commit is not an ancestor of PR head.');}
-  if (context.recordedBeforeImplementation === false) {errors.push('Preflight report was not recorded before the first implementation commit.');}
+  if (context.recordedBeforeImplementation !== true) {errors.push('Preflight report was not recorded before the first implementation commit.');}
   return errors;
 }
 export function extractTrackingIssueNumber(body) {
@@ -183,6 +212,9 @@ function hasVerificationEvidence({ comments, headSha, workflowRunUrl }) {
 }
 export function validatePullRequestEvidence(context) {
   const errors = [];
+  if (context.issueIsPullRequest) {
+    errors.push('Tracking reference is a pull request, not a GitHub issue.');
+  }
   validateTrackingReference({ context,
 errors });
   validateReportedHead({ context,
@@ -205,6 +237,7 @@ errors });
       actualHashes: context.actualInstructionHashes,
       isAncestor: context.preflightCommitIsAncestor,
       recordedBeforeImplementation: context.preflightRecordedBeforeImplementation,
+      changedPaths: context.changedPaths,
     },
   }));
   return errors;
@@ -472,10 +505,23 @@ async function readChangedPullRequestPaths({ repo, token, number }) {
   throw new Error('PR changes exceed the validator pagination limit; BLOCKED.');
 }
 export async function readBaseInstructionPaths({ repo, token, sha, request = api }) {
-  const tree = await request({ path: `/repos/${  repo  }/git/trees/${  sha  }?recursive=1`,
-token });
-  if (tree.truncated) {throw new Error('Base instruction tree is truncated; BLOCKED.');}
-  return (tree.tree || [])
+  const tree = await request({
+    path: '/repos/' + repo + '/git/trees/' + sha + '?recursive=1',
+    token,
+  });
+  if (tree?.truncated === true) {
+    throw new Error('Base instruction tree is truncated; BLOCKED.');
+  }
+  if (!tree || typeof tree.truncated !== 'boolean' || !Array.isArray(tree.tree)) {
+    throw new Error('Base instruction tree response is malformed; BLOCKED.');
+  }
+  if (tree.tree.some((item) => !item || typeof item.path !== 'string' || typeof item.type !== 'string')) {
+    throw new Error('Base instruction tree contains malformed entries; BLOCKED.');
+  }
+  if (!tree.tree.some((item) => item.type === 'blob' && item.path === 'AGENTS.md')) {
+    throw new Error('Base instruction tree is missing root AGENTS.md; BLOCKED.');
+  }
+  return tree.tree
     .filter((item) => item.type === 'blob' && (item.path === 'AGENTS.md' || item.path.endsWith('/AGENTS.md')))
     .map((item) => item.path);
 }
@@ -516,6 +562,7 @@ issueNumber });
     requiredInstructionPaths: evidence.required,
     actualInstructionHashes: evidence.hashes,
     changedPaths: evidence.changed,
+    issueIsPullRequest: Boolean(evidence.issue.pull_request),
     preflightCommitIsAncestor: evidence.ancestor,
     preflightRecordedBeforeImplementation: evidence.recordedBeforeImplementation,
   });
