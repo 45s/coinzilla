@@ -2825,7 +2825,13 @@ function createHarnessFillAccounting({ getHarness } = {}) {
     })
     harness.setCurrentPortfolio(portfolioUpdate.portfolio)
     harness.setCurrentRecoveryLedger(ledgerUpdate.ledger)
-    return { ok: true, data: { applied: true, duplicate: false } }
+    return {
+      ok: true,
+      data: {
+        applied: true,
+        duplicate: false,
+      },
+    }
   }
 }
 
@@ -4019,7 +4025,13 @@ function createShutdownBuyRaceState({ seeded }) {
 function createShutdownBuyRaceAccounting({ scenario } = {}) {
   return async ({ fill }) => {
     if (scenario.appliedFillIds.has(fill.id)) {
-      return { ok: true, data: { applied: false, duplicate: true } }
+      return {
+        ok: true,
+        data: {
+          applied: false,
+          duplicate: true,
+        },
+      }
     }
     scenario.appliedFillIds.add(fill.id)
     scenario.appliedFills.push(fill)
@@ -4031,7 +4043,13 @@ function createShutdownBuyRaceAccounting({ scenario } = {}) {
       strategyId: StrategyId.COIN_GRABBER,
       fill,
     }).ledger
-    return { ok: true, data: { applied: true, duplicate: false } }
+    return {
+      ok: true,
+      data: {
+        applied: true,
+        duplicate: false,
+      },
+    }
   }
 }
 
@@ -4725,7 +4743,13 @@ function createTerminalRecoverySellAccounting({ accountingState, accountedFills 
       fill,
     }).ledger
     accountedFills.push(fill)
-    return { ok: true, data: { applied: true, duplicate: false } }
+    return {
+      ok: true,
+      data: {
+        applied: true,
+        duplicate: false,
+      },
+    }
   }
 }
 
@@ -4909,7 +4933,13 @@ function createTerminalRecoverySellInvalidHistoryHarness({
         strategyId: StrategyId.COIN_GRABBER,
         fill,
       }).ledger
-      return { ok: true, data: { applied: true, duplicate: false } }
+      return {
+      ok: true,
+      data: {
+        applied: true,
+        duplicate: false,
+      },
+    }
     },
   })
 }
@@ -5620,7 +5650,10 @@ test("rejects REST order history that is behind an already processed stream fill
     },
   })
   const buyOrder = engine.getOrders().find((order) => order.side === "BUY")
-  const streamFill = await processStreamFillAheadOfRestHistory({ engine, buyOrder })
+  await processStreamFillAheadOfRestHistory({
+    engine,
+    buyOrder,
+  })
   const staleRestFill = makeBuyFill({
     order: buyOrder,
     tradeId: "stale-rest-history-fill",
@@ -7155,7 +7188,10 @@ function createLostAcknowledgementCanonicalEvidence({ pendingOrder } = {}) {
     quoteQuantity: "99.95",
     executedAt: 2,
   })
-  return { acknowledgedOrder, fill }
+  return {
+    acknowledgedOrder,
+    fill,
+  }
 }
 
 test("reconciles an accepted order after its submission acknowledgement is lost", async () => {
@@ -10631,7 +10667,10 @@ test("volatility protection rejects a SELL that lacks explicit recovery purpose"
 
 
 function createMultiMarketVolatilityFixture() {
-  const zroBaseAsset = new Asset({ id: "asset-zro", code: "ZRO" })
+  const zroBaseAsset = new Asset({
+    id: "asset-zro",
+    code: "ZRO",
+  })
   const zroMarket = new Market({
     venue: "binance",
     symbol: "ZROUSDT",
@@ -10683,7 +10722,11 @@ function createMultiMarketVolatilityFixture() {
       },
     },
   }
-  return { dogeBuy, zroBuy, highVolatility }
+  return {
+    dogeBuy,
+    zroBuy,
+    highVolatility,
+  }
 }
 
 test("volatility cancellation is isolated to the affected trading pair", async () => {
@@ -10873,7 +10916,10 @@ function configureStreamDuringRestReadBroker({
 } = {}) {
   broker.getOpenOrders = async () => ({
     ok: true,
-    data: [makeOpenOrder({ order: buyOrder, executedQuantity: "0" })],
+    data: [makeOpenOrder({
+      order: buyOrder,
+      executedQuantity: "0",
+    })],
   })
   broker.getCanonicalOrderHistory = async () => ({
     ok: true,
@@ -10882,7 +10928,10 @@ function configureStreamDuringRestReadBroker({
   broker.getFills = async () => {
     signalFillsStarted()
     await fillsGate.promise
-    return { ok: true, data: [recoveredFill] }
+    return {
+      ok: true,
+      data: [recoveredFill],
+    }
   }
 }
 
@@ -11046,13 +11095,22 @@ test("rechecks external-order ownership after the durable order intent and recor
 function createFailingDeferralEventPublisher({ state, journalEvents, reportedFailures } = {}) {
   const publisher = {
     reportFailure: ({ event, error }) => {
-      reportedFailures.push({ eventName: event?.name, error })
+      reportedFailures.push({
+        eventName: event?.name,
+        error,
+      })
     },
     publish: (event) => {
       if (event.name === "order.submission_deferred") {
         const error = new Error("deferral evidence publication failed")
-        publisher.reportFailure({ event, error })
-        return { ok: false, errors: [error] }
+        publisher.reportFailure({
+          event,
+          error,
+        })
+        return {
+          ok: false,
+          errors: [error],
+        }
       }
       journalEvents.push(event)
       return { ok: true }
@@ -11060,7 +11118,10 @@ function createFailingDeferralEventPublisher({ state, journalEvents, reportedFai
     flush: async () => {
       state.flushCount += 1
       state.hasExternalOrder = true
-      return { ok: true, durable: true }
+      return {
+        ok: true,
+        durable: true,
+      }
     },
   }
   return publisher
