@@ -246,6 +246,8 @@ The following increments are merged into `develop`; all six applicable GitHub Ac
 | [#1775](https://github.com/45s/coinzilla/pull/1775) | `fb6a227c69f07e90549c56539daf9efe4ccb250f` | Coherent exact terminal-Fill quote notional fixture |
 | [#1776](https://github.com/45s/coinzilla/pull/1776) | `ddd7598769f294eb418904a72fca989f9f173c8d` | Exact bootstrap and replay arithmetic |
 
+The Phase 2 sweep reviewed all 11 files under `src/domain/strategies/conservative/`, both `src/domain/portfolio/` test files, and nine Conservative accounting/lifecycle use-case tests. No `Number`, `toFixed`, `parseFloat`, or `parseInt` financial-oracle conversions were found in those strategy or Portfolio suites. The only other numeric conversions found in the selected use-case tests are the broker-style numeric `Order` DTO mappings in `conservative-trading-engine.multi-market.test.js` lines 408–409; those are adapter-boundary values, not expected financial results. The large engine suite findings below are therefore the remaining known Conservative test-oracle debt from this sweep.
+
 ### Blocked — remaining Conservative engine financial oracles
 
 `src/use-cases/conservative-trading-engine.test.js` is 11,494 lines. [#1772](https://github.com/45s/coinzilla/pull/1772) attempted the narrow `makeSellFill` fixture correction but was closed without merge because strict changed-file ESLint reported 33 pre-existing `max-lines-per-function` violations. Exact failed run: [Repository Quality 45150853240](https://github.com/45s/coinzilla/actions/runs/45150853240), job `137611556689`, on PR head `30071be67129b2a65da85d561f93111ad3c71c2c`. The other five applicable workflows passed. No rule was suppressed or weakened.
