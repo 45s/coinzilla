@@ -38,6 +38,31 @@ The terminal log contains 28 occurrences of:
 
 The log does not expose the invalid field or validation stage, so the offending historical field and root cause remain unknown. At the time of the initial review, `OrderHistoryValidationError` retained `context.field` but `createFailureDiagnostic()` omitted it. This forward-looking diagnostics gap is now fixed in commit `8a84565`: the observer emits a bounded safe dotted identifier from `error.context.field`, and `order-history-observer.test.js` verifies the mapping diagnostic. `createOrderHistoryRecord()` validates provider/account/client-order identity, market identity/assets, side/type/status, execution quantities, optional timestamps, and source-event identity/timestamp. These remain candidate historical validation boundaries only; the new test's `providerInstanceId` case is synthetic and does not identify the field in the 28 archived failures. The historical field and root cause remain unknown.
 
+#### Bounded timestamp-to-fact correlation
+
+The terminal timestamps are local UTC+2; fact timestamps are UTC. The 14 early errors at 04:17:59, 04:18:08, 04:20:25, 04:21:13, 04:33:00, 04:33:07, 04:33:10, 04:33:13, 04:45:43, 05:03:33, 05:14:53, 07:18:52, 07:19:14, and 07:39:46 (terminal lines 9–148) precede the first archived fact at 10:52:02 local by several hours. The 49-record fact chain cannot attribute those earlier occurrences.
+
+The later 14 errors (terminal lines 208–412) cluster around these facts:
+
+| Terminal error time | Terminal line | Nearest fact | Fact time (local) | Recorded fact |
+|---|---:|---|---|---|
+| 10:52:26 | 208 | seq 5 | 10:52:26.590 | ZROUSDT BUY trade 15735; +590 ms |
+| 10:52:28 | 216 | seq 5 | 10:52:26.590 | ZROUSDT BUY trade 15735; +1.410 s |
+| 10:52:34 | 226 | seq 6 | 10:52:34.832 | ZROUSDT BUY trade 15736; +832 ms |
+| 10:52:44 | 237 | seq 9 | 10:52:44.692 | DOGEUSDT BUY trade 303728; +692 ms |
+| 10:52:51 | 245 | seq 10 | 10:52:51.326 | ZROUSDT BUY trade 15737; +326 ms |
+| 10:53:01 | 256 | seq 13 | 10:53:01.121 | DOGEUSDT BUY trade 303729; +121 ms |
+| 10:56:38 | 267 | seq 16 | 10:56:38.590 | ZROUSDT BUY trade 15738; +590 ms |
+| 11:03:56 | 278 | seq 19 | 11:03:56.236 | ZROUSDT SELL trade 15740; +236 ms |
+| 11:10:02 | 284 | seq 22 | 11:10:02.900 | DOGEUSDT BUY trade 303737; +900 ms |
+| 11:15:10 | 318 | seq 25 | 11:15:11.010 | DOGEUSDT BUY trade 303738; error precedes fact by ~1.01 s |
+| 11:21:57 | 331 | seq 30 | 11:21:57.642 | DOGEUSDT SELL trade 303742; +642 ms |
+| 11:31:08 | 388 | seq 35 | 11:31:08.324 | ADAUSDT BUY trade 145912; +324 ms |
+| 11:44:28 | 396 | seq 36 | 11:44:28.883 | ZROUSDT BUY trade 15742; +883 ms |
+| 11:53:33 | 412 | seq 45 and 46 | 11:53:33.xxx | ADAUSDT strategy pause and SELL trade 145942 occur in the same second; terminal precision cannot establish ordering |
+
+This is strong temporal correlation between the later error cluster and order/fill activity across ZRO, DOGE and ADA. It is not proof that the nearest fact caused a particular projection error: the terminal records omit event identity, invalid field and validation stage. The 10:52:26 and 10:52:28 errors both align with the same ZRO fill; the 11:53:33 error aligns with both a pause and SELL fact. Keep the finding at correlation level and do not infer a historical root cause.
+
 ### 3.2 Recovery outcomes and safety pauses
 
 The durable facts contain three `RECOVERY_CYCLE_NOT_COMPLETED` records and four `STRATEGY_MARKET_PAUSED` records:
