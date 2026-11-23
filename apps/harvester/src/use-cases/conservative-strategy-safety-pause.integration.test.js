@@ -380,13 +380,31 @@ async function assertSafetyPauseCancellationCompleted({
   recoverySell,
   pauseFacts,
 }) {
-  await assertSafetyPauseCancellationCompleted({
-    harness,
-    buyOne,
-    buyTwo,
-    recoverySell,
-    pauseFacts,
+  const result = await triggerStrategySafetyPause(harness)
+  assert.equal(result.ok, false)
+  assert.deepEqual(harness.cancellationIds, [buyOne.brokerOrderId, buyTwo.brokerOrderId])
+  assert.equal(harness.engine.getOrders().find(({ clientOrderId }) => clientOrderId === buyOne.clientOrderId).status, "CANCELED")
+  assert.equal(harness.engine.getOrders().find(({ clientOrderId }) => clientOrderId === buyTwo.clientOrderId).status, "CANCELED")
+  assert.equal(harness.engine.getOrders().find(({ clientOrderId }) => clientOrderId === recoverySell.clientOrderId).status, "OPEN")
+  assert.equal(harness.accountedFills.length, 2)
+  assert.deepEqual(pauseFacts, [{
+    symbol: "DOGEUSDT",
+    reason: "STRATEGY_EVALUATION_FAILED",
+  }])
+
+  const duplicate = await harness.engine.processUserDataEvent({
+    event: {
+      executionType: "TRADE",
+      executedOrder: harness.engine.getOrders().find(({ clientOrderId }) => clientOrderId === buyOne.clientOrderId),
+      fill: harness.accountedFills[0],
+    },
   })
+  assert.equal(duplicate.ok, true)
+  assert.equal(harness.accountedFills.length, 2)
+  const snapshot = await getMarketSnapshot(harness.engine)
+  assert.equal(snapshot.safetyPauseCancellation.status, "COMPLETE")
+  assert.equal(snapshot.safetyPauseCancellation.canceled, 2)
+  assert.deepEqual(snapshot.safetyPauseCancellation.unresolvedOrders, [])
 }
 
 test("gates BUYs before canceling only registered BUYs and reconciles cancellation-racing fills once", async () => {
@@ -426,31 +444,13 @@ test("gates BUYs before canceling only registered BUYs and reconciles cancellati
   })
   harnessRef.current = harness
 
-  const result = await triggerStrategySafetyPause(harness)
-  assert.equal(result.ok, false)
-  assert.deepEqual(harness.cancellationIds, [buyOne.brokerOrderId, buyTwo.brokerOrderId])
-  assert.equal(harness.engine.getOrders().find(({ clientOrderId }) => clientOrderId === buyOne.clientOrderId).status, "CANCELED")
-  assert.equal(harness.engine.getOrders().find(({ clientOrderId }) => clientOrderId === buyTwo.clientOrderId).status, "CANCELED")
-  assert.equal(harness.engine.getOrders().find(({ clientOrderId }) => clientOrderId === recoverySell.clientOrderId).status, "OPEN")
-  assert.equal(harness.accountedFills.length, 2)
-  assert.deepEqual(pauseFacts, [{
-    symbol: "DOGEUSDT",
-    reason: "STRATEGY_EVALUATION_FAILED",
-  }])
-
-  const duplicate = await harness.engine.processUserDataEvent({
-    event: {
-      executionType: "TRADE",
-      executedOrder: harness.engine.getOrders().find(({ clientOrderId }) => clientOrderId === buyOne.clientOrderId),
-      fill: harness.accountedFills[0],
-    },
+  await assertSafetyPauseCancellationCompleted({
+    harness,
+    buyOne,
+    buyTwo,
+    recoverySell,
+    pauseFacts,
   })
-  assert.equal(duplicate.ok, true)
-  assert.equal(harness.accountedFills.length, 2)
-  const snapshot = await getMarketSnapshot(harness.engine)
-  assert.equal(snapshot.safetyPauseCancellation.status, "COMPLETE")
-  assert.equal(snapshot.safetyPauseCancellation.canceled, 2)
-  assert.deepEqual(snapshot.safetyPauseCancellation.unresolvedOrders, [])
 })
 
 test("reports a complete safety pause when there are no owned BUYs", async () => {
