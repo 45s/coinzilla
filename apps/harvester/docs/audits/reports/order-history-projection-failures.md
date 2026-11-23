@@ -47,6 +47,27 @@ The terminal log is 429 lines according to the archive review. Direct retrieval 
 
 The archive also contains `data/testnet/database-dump.json` (2,645,901 bytes, SHA-256 `cc024ea0842bed65f53081263b5dbc668099c09beac14a8d2835660d357e744a`). It was not opened or queried.
 
+## Compressed per-session bundle cross-check
+
+The archive contains only one compressed session directory:
+`logs/sessions/2026-11-22_11-10-47-403b10b2-17aa-4760-a6e9-c36453cd73e2/`.
+
+| Compressed file | Size | Git blob SHA |
+|---|---:|---|
+| `harvester.log.gz` | 1,513 bytes | `ab91b095eb84d8103d2e94d20909f8104fc04044` |
+| `trace.log.gz` | 1,593 bytes | `dc8b35ff299453688b0cd7d444a830b2065cb43e` |
+| `terminal.log.gz` | 364 bytes | `b2c8520bd684f7cf7eb720b963346cfe67b8f224` |
+
+All three files were retrieved and decompressed. They contain **no** `HARVESTER_ORDER_HISTORY_RECORD_INVALID` diagnostic. They document a separate startup-retry session:
+
+- Runtime session ID: `403b10b2-17aa-4760-a6e9-c36453cd73e2`; process ID: `7920`.
+- Runtime start: `2026-11-22T11:10:47.050Z` (11:10 UTC, 13:10 local UTC+2).
+- Runtime source: `develop@3c78fcd0aa5b134e3e273c82c32e4c446ed6c4ff`, commit message `Merge pull request #1732 from 45s/fix/brokers/bitunix-accepted-order-readback-20261122`.
+- Startup failed at `11:10:50.606Z` because Operational State Store projection found provider-attributed fill `h-dff68008c72c47a59368ad-2` without a preceding submission intent. This is the separate #1743 startup-retry defect, not an order-history validation failure.
+- The compressed logs show startup/configuration and cleanup only; no broker connection or order-history processing.
+
+The 28 visible #1789 terminal groups end at 09:53 UTC (11:53 local), more than an hour before this compressed session starts. This bundle therefore cannot recover the missing #1789 inputs. The two cumulative structured files remain the only archived evidence source that could contain those raw records.
+
 ## All 28 visible terminal groups
 
 Times below are terminal-local UTC+2. The repeat column counts additional consecutive console writes suppressed after the visible error line. Each visible error line itself contains only the message, error code and error name.
@@ -147,7 +168,7 @@ The regression was first committed without the production change on `39c4e5eb373
 
 The GREEN implementation in [PR #1796](https://github.com/45s/coinzilla/pull/1796) now gives order-history validation failures a dedicated bounded console summary containing safe `field`, `symbol`, `clientOrderId` and `errorCode`. Those values are included in the summary fingerprint. The regression is isolated in `order-history-projection-console.test.js` and uses three events to prove both independent invariants: changing only the field keeps two records distinct; changing only the client-order ID also keeps two records distinct. Additional tests prove long field/client-order values remain bounded and exact duplicate failures still compact with their repeat count. The focused test file is registered in the targeted-test list.
 
-This improves future diagnosis and prevents distinct validation failures from being hidden by console summary deduplication. It does **not** identify or repair the invalid historical input. Targeted Harvester tests passed on `3b522d5e9e7e254e3695f4f9a7adc81ccc936031`. Repository Quality exposed formatting errors in the new formatter/test and pre-existing strict changed-file max-lines errors in the large existing logging test file. The formatter/test formatting is corrected in follow-up commits; the regression is isolated in a focused new test file rather than refactoring unrelated existing tests. Exact-head CI is pending.
+This improves future diagnosis and prevents distinct validation failures from being hidden by console summary deduplication. It does **not** identify or repair the invalid historical input. The regression is isolated in `order-history-projection-console.test.js`, avoiding unrelated changes to the large existing logging test file. It proves field-only and client-order-only changes remain distinct, exact repeats remain compacted, and long values/lines remain bounded. The test file is registered in the Harvester targeted-test list. The RED failure and subsequent GREEN implementation are recorded above; exact-head checks are tracked on PR #1796.
 
 ## Remaining root-cause evidence
 
