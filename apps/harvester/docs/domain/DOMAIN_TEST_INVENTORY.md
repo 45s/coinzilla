@@ -4,7 +4,7 @@ status: active
 type: testing
 owner: harvester
 created: 2026-11-10
-last_verified: 2026-11-20
+last_verified: 2026-11-23
 ---
 
 # Harvester domain logic test inventory
@@ -17,11 +17,11 @@ Reviewed baseline: `develop` at `17f560ed96439fe9dcf3eb159d9f7e0b850dcd42` (2026
 
 All test improvements in this initiative must remain deterministic and offline. Issue [#626](https://github.com/45s/coinzilla/issues/626) and its user-data recovery implementation remain paused and outside this initiative.
 
-## Conservative domain scenario tests — issue #1763
+## Conservative existing-test audit — issue #1763
 
 The [scenario-test guide](CONSERVATIVE_DOMAIN_SCENARIO_TESTS.md) explains behavior-oriented tests that compose real domain components. The exhaustive coverage checklist and implementation status are maintained in [#1763](https://github.com/45s/coinzilla/issues/1763).
 
-The initial source-driven audit is **pending**. Existing tests listed above are evidence of focused unit/domain coverage; application engine tests and historical replay tests provide additional lifecycle evidence. Do not claim scenario-matrix completeness until every matrix item is mapped to a named test or an explicit application/replay owner and disposition.
+Phase 1 audits existing assertions only. The source-to-test matrix below records current evidence and explicit gaps; it does not claim a new scenario suite exists or that every possible event permutation is covered. Phase 2 scenario-suite work remains deferred.
 
 Planned scenario behaviors include initial BUY fill → standing BUY and recovery SELL; second BUY fill → recovery SELL replacement/recalculation; partial recovery SELL accounting; terminal recovery completion → next cycle; retained inventory and constrained dust; commission assets and exact-decimal/filter boundaries; and invalid, duplicate, conflicting, reordered, or incomplete evidence. This initiative adds coverage without redefining the canonical Conservative specification or authorizing exchange operations.
 
@@ -247,4 +247,4 @@ Do not treat the conceptual diagram as a new production state model: map every t
 
 ### Medium — next-cycle basis must exclude prior retained inventory
 
-`src/use-cases/create-portfolio-workflow-next-cycle.test.js` composes real Portfolio/RecoveryLedger accounting and cycle completion with the real Conservative domain policy. It completes a first cycle, retains exactly one base unit, applies a new BUY, replays both prior-cycle fills to prove full projection immutability, and verifies that only the new cycle's cost/proceeds determine the next recovery SELL while prior retained inventory remains separate. Added in PR #1774; exact-head CI remains pending.
+`src/use-cases/create-portfolio-workflow-next-cycle.test.js` composes real Portfolio/RecoveryLedger accounting and cycle completion with the real Conservative domain policy. It completes a first cycle, retains exactly one base unit, applies a new BUY, replays both prior-cycle fills to prove full projection immutability, and verifies that only the new cycle's cost/proceeds determine the next recovery SELL while prior retained inventory remains separate. Added in merged PR #1774; all six GitHub Actions workflows passed on exact PR head `e6b4f956137dad4c2c2fdb5469d454375ce7fba9`.
