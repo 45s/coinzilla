@@ -85,6 +85,12 @@ test("loads a stable scenario inventory covering all Conservative behavior categ
   const restartScenario = scenarios.find((scenario) => scenario.id === "CON-PERSIST-002")
   assert.equal(restartScenario.coverageStatus, "UNSUPPORTED")
   assert.match(restartScenario.coverageReason, /restart|restoration|unsupported/i)
+
+  const configScenario = scenarios.find((scenario) => scenario.id === "CON-CONFIG-001")
+  const sellScenario = scenarios.find((scenario) => scenario.id === "CON-SELL-001")
+  assert.equal(configScenario.coverageStatus, "PARTIAL")
+  assert.ok(configScenario.relatedExistingTests.some((testCase) => testCase.path === "src/bootstrap/config/resolve-harvester-options.test.js"))
+  assert.ok(sellScenario.relatedExistingTests.some((testCase) => testCase.path === "src/domain/strategies/conservative/strategy.test.js"))
 })
 
 test("validates required scenario fields, stable IDs, categories, statuses, and evidence references", () => {
