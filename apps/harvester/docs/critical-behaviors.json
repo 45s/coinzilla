@@ -882,6 +882,11 @@
           "path": "src/use-cases/errors/strategy-safety-pause-incomplete-error.test.js",
           "name": "exposes a stable code and safe context while preserving the original cause",
           "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/conservative-strategy-safety-pause.integration.test.js",
+          "name": "does not recursively retry a BUY cancellation when its failure raises the strategy safety pause",
+          "kind": "failure"
         }
       ],
       "runtimeStatus": "active",

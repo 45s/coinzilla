@@ -4,7 +4,7 @@
 
 - **In progress in [PR #1755](https://github.com/45s/coinzilla/pull/1755)** on a fresh branch based on current `develop`.
 - Test-first regression coverage is registered in the Harvester targeted-test runner and critical-behavior inventory. The exact test-only head `f82618dd21a39e5d783dac34b0714828ec97bf92` confirmed RED: no owned BUY cancellations, no snapshot cancellation status, and the generic MARKET_PAUSED gate rejected purpose-tagged `RECOVERY_SELL`.
-- Implementation contract: activate the process-local BUY gate first; cancel only active BUYs owned by the current process through the existing serialized cancellation/fill-reconciliation transition; retain the gate and raise a durable `SAFETY_BLOCKER_RAISED` fact when pause evidence or cancellation is incomplete.
+- Implementation contract: activate the process-local BUY gate first; cancel only active BUYs owned by the current process through the existing serialized cancellation/fill-reconciliation transition; guard against recursive cancellation when a cancellation failure itself raises a pause; retain the gate and raise a durable `SAFETY_BLOCKER_RAISED` fact when pause evidence or cancellation is incomplete.
 - Recovery Seller evaluation and fill accounting remain active. Only purpose-tagged `RECOVERY_SELL` submissions may pass the strategy safety gate. Startup-snapshot, manual, external and prior-process orders remain untouched.
 - No exchange operations, process restart, automatic pause restoration, or operator Pause semantics changes are part of this task. Exact-head CI and offline regression evidence are required before this item is closed.
 

@@ -393,6 +393,7 @@ test("gates BUYs before canceling only registered BUYs and reconciles cancellati
     hasUnownedOpenOrdersForSymbol: () => true,
     externalOrdersPolicy: "ignore",
     cancelWithFill: true,
+    cancelExecutedQuantity: "1",
     accountingApplied: true,
     onOperationalStateStrategyMarketPaused: async (fact) => {
       pauseFacts.push(fact)
@@ -660,6 +661,9 @@ test("passes the durable safety blocker callback through Harvester engine compos
         hasUnownedOpenOrdersForSymbol: () => false,
       },
     },
+    recoveredState: {
+      orderRegistry: OrderRegistry.empty(),
+    },
     logger: {
       error: () => undefined,
     },
@@ -670,5 +674,53 @@ test("passes the durable safety blocker callback through Harvester engine compos
     engineOptions.onSafetyBlockerRaised,
     onSafetyBlockerRaised,
     "The durable safety-blocker writer must reach the Conservative engine through bootstrap composition.",
+  )
+})
+
+
+test("does not recursively retry a BUY cancellation when its failure raises the strategy safety pause", async () => {
+  const buyOrder = makeOrder({
+    side: "BUY",
+    clientOrderId: "strategy-pause-recursive-cancel",
+    brokerOrderId: "broker-strategy-pause-recursive-cancel",
+  })
+  const harness = await createSafetyPauseHarness({
+    initialState: {
+      orderRegistry: new OrderRegistry({
+        orders: [buyOrder],
+      }),
+    },
+    cancelThrow: true,
+    onOperationalStateStrategyMarketPaused: async () => ({
+      ok: true,
+      data: { durable: true },
+    }),
+    onSafetyBlockerRaised: async () => ({
+      ok: true,
+      data: { durable: true },
+    }),
+  })
+
+  const result = await harness.engine.cancelOwnedBuyOrdersForShutdown({
+    symbol: "DOGEUSDT",
+    reason: "PROCESS_SHUTDOWN",
+  })
+
+  assert.equal(result.ok, false, "The original unconfirmed cancellation must remain a failure.")
+  assert.deepEqual(
+    harness.cancellationIds,
+    [buyOrder.brokerOrderId],
+    "A cancellation failure that raises a safety pause must not issue a recursive broker cancellation.",
+  )
+  assert.equal(
+    harness.engine.getOrders()[0].status,
+    "UNKNOWN",
+    "The original unresolved broker outcome must remain explicitly UNKNOWN.",
+  )
+  const snapshot = await getMarketSnapshot(harness.engine)
+  assert.equal(
+    snapshot.safetyPauseCancellation.status,
+    "INCOMPLETE",
+    "The strategy safety pause must remain incomplete while the owned BUY is UNKNOWN.",
   )
 })
