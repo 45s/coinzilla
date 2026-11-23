@@ -1354,7 +1354,7 @@ test("Bitunix Spot pending-order fetch preserves the exact accepted HYPEUSDT ord
     createRestSignature({
       nonce: "test-nonce-0",
       timestamp: "1795262400000",
-      publicIdentifier: "test-api-key",
+      apiKey: "test-api-key",
       secretKey: "test-api-secret",
       body: requests[0].options.body,
       bodyIsSerialized: true,
@@ -3096,7 +3096,7 @@ test("Bitunix Spot createOrder completes signed REST placement and order-detail 
     createRestSignature({
       nonce: "test-nonce-0",
       timestamp: "1795262400000",
-      publicIdentifier: "test-api-key",
+      apiKey: "test-api-key",
       secretKey: "test-api-secret",
       body: requests[0].options.body,
       bodyIsSerialized: true,
@@ -3112,7 +3112,7 @@ test("Bitunix Spot createOrder completes signed REST placement and order-detail 
     createRestSignature({
       nonce: "test-nonce-1",
       timestamp: "1795262400000",
-      publicIdentifier: "test-api-key",
+      apiKey: "test-api-key",
       secretKey: "test-api-secret",
       queryParams: { orderId: "12345678901234567890" },
     }),
