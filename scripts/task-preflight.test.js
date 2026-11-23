@@ -42,20 +42,27 @@ targets: ['apps/harvester/src/domain/decision.js'] }),
 });
 
 test('parses a versioned preflight report with instruction hashes and commit identity', () => {
-  const report = parsePreflightReport([
+  const source = [
     '<!-- coinzilla-agent-preflight:v1 -->',
     '## Agent preflight',
     '- [x] Root AGENTS.md read',
     '- [x] AI task compliance standard read',
+    '- [x] Engineering standards read',
+    '- [x] AI agent workflow read',
+    '- [x] Applicable task workflow read',
+    '- [x] Documentation governance read',
+    '- [x] Markdown style standard read',
+    '- [x] Applicable nested instructions identified and read',
+    'Task scope paths: scripts, docs/engineering',
     'Task issue: #1754',
-    'Preflight commit: `0123456789012345678901234567890123456789`',
+    'Preflight commit: \x600123456789012345678901234567890123456789\x60',
     'Status: COMPLETE',
     '| Instruction file | Git blob SHA |',
     '| --- | --- |',
-    '| `AGENTS.md` | `0123456789012345678901234567890123456789` |',
+    '| \x60AGENTS.md\x60 | \x600123456789012345678901234567890123456789\x60 |',
     '<!-- /coinzilla-agent-preflight -->',
-  ].join('\n'));
-
+  ];
+  const report = parsePreflightReport(source.join('\n'));
   assert.equal(report.issueNumber, 1754);
   assert.equal(report.commitSha, '0123456789012345678901234567890123456789');
   assert.equal(report.status, 'COMPLETE');
@@ -63,8 +70,11 @@ test('parses a versioned preflight report with instruction hashes and commit ide
     path: 'AGENTS.md',
     sha: '0123456789012345678901234567890123456789',
   }]);
+  assert.throws(
+    () => parsePreflightReport(source.join('\n').replace('- [x] Root AGENTS.md read', '- [ ] Root AGENTS.md read')),
+    /Required preflight entry missing/,
+  );
 });
-
 test('rejects malformed or incomplete preflight reports', () => {
   assert.throws(() => parsePreflightReport('Status: COMPLETE'), /preflight report/i);
   assert.throws(() => parsePreflightReport([
