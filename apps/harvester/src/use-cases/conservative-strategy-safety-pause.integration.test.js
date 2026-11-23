@@ -65,7 +65,10 @@ const marketMetadata = {
       {
         type: "MIN_QUANTITY",
         status: "SUPPORTED",
-        value: new Quantity({ amount: "0.1", asset: baseAsset }),
+        value: new Quantity({
+          amount: "0.1",
+          asset: baseAsset,
+        }),
       },
       {
         type: "MIN_NOTIONAL",
@@ -150,7 +153,10 @@ function createSafetyPauseEventPublisher(eventPublisher) {
     ...eventPublisher,
     flush: typeof eventPublisher.flush === "function"
       ? eventPublisher.flush
-      : async () => ({ ok: true, durable: true }),
+      : async () => ({
+        ok: true,
+        durable: true,
+      }),
   }
 }
 
@@ -165,7 +171,10 @@ function createSafetyPauseAccounting({ options, brokerState }) {
     if (brokerState.accountedFillIds.has(fill.id)) {
       return {
         ok: true,
-        data: { applied: false, duplicate: true },
+        data: {
+          applied: false,
+          duplicate: true,
+        },
       }
     }
     brokerState.accountedFillIds.add(fill.id)
@@ -173,7 +182,10 @@ function createSafetyPauseAccounting({ options, brokerState }) {
     const applied = options.accountingApplied === true
     return {
       ok: true,
-      data: { applied, duplicate: !applied },
+      data: {
+        applied,
+        duplicate: !applied,
+      },
     }
   }
 }
@@ -238,7 +250,11 @@ async function createSafetyPauseHarness(options = {}) {
       timestamp: 1,
     },
   })
-  return { ...brokerState, engine, state }
+  return {
+    ...brokerState,
+    engine,
+    state,
+  }
 }
 
 function makeOrder({ side, clientOrderId, brokerOrderId, status = "OPEN", executedQuantity = "0" }) {
@@ -282,7 +298,10 @@ function makeSeededRecoveryState({ quantity = "1" } = {}) {
       asset: baseAsset,
     }),
     quoteQuantity: new Money({
-      amount: multiplyDecimal({ left: "100", right: quantity }),
+      amount: multiplyDecimal({
+        left: "100",
+        right: quantity,
+      }),
       asset: quoteAsset,
     }),
     commissions: [],
@@ -414,8 +433,14 @@ test("gates BUYs before canceling only registered BUYs and reconciles cancellati
 
 test("reports a complete safety pause when there are no owned BUYs", async () => {
   const harness = await createSafetyPauseHarness({
-    strategyPolicy: { evaluate: () => { throw new Error("forced strategy evaluation failure") } },
-    eventPublisher: makeEventPublisher({ events: [] }),
+    strategyPolicy: {
+      evaluate: () => {
+        throw new Error("forced strategy evaluation failure")
+      },
+    },
+    eventPublisher: makeEventPublisher({
+      events: [],
+    }),
   })
   await triggerStrategySafetyPause(harness)
   assert.deepEqual(harness.cancellationIds, [])
@@ -432,10 +457,17 @@ test("keeps an UNKNOWN owned BUY blocked and raises a durable safety blocker", a
   })
   const raisedBlockers = []
   const harness = await createSafetyPauseHarness({
-    initialState: { orderRegistry: new OrderRegistry({ orders: [buyOrder] }) },
+    initialState: {
+      orderRegistry: new OrderRegistry({
+        orders: [buyOrder],
+      }),
+    },
     strategyPolicy: { evaluate: () => { throw new Error("forced strategy evaluation failure") } },
     cancelThrow: true,
-    onOperationalStateStrategyMarketPaused: async () => ({ ok: true, data: { durable: true } }),
+    onOperationalStateStrategyMarketPaused: async () => ({
+      ok: true,
+      data: { durable: true },
+    }),
     onSafetyBlockerRaised: async (blocker) => {
       raisedBlockers.push(blocker)
       return {
@@ -443,7 +475,9 @@ test("keeps an UNKNOWN owned BUY blocked and raises a durable safety blocker", a
         data: {
           durable: true,
           record: {
-            data: { blockerId: "strategy-pause-blocker-1" },
+            data: {
+              blockerId: "strategy-pause-blocker-1",
+            },
           },
         },
       }
@@ -484,7 +518,11 @@ test("keeps the BUY gate active when pause fact persistence and publication fail
   const raisedBlockers = []
   const events = []
   const harness = await createSafetyPauseHarness({
-    initialState: { orderRegistry: new OrderRegistry({ orders: [buyOrder] }) },
+    initialState: {
+      orderRegistry: new OrderRegistry({
+        orders: [buyOrder],
+      }),
+    },
     strategyPolicy: { evaluate: () => { throw new Error("forced strategy evaluation failure") } },
     onOperationalStateStrategyMarketPaused: async () => ({
       ok: false,
