@@ -24,6 +24,34 @@ test('requires the canonical repository instruction set', () => {
   assert.ok(REQUIRED_INSTRUCTION_PATHS.includes('docs/MARKDOWN_STYLE.md'));
 });
 
+test('parses pnpm separator and PR-mode arguments', () => {
+  assert.deepEqual(parseArgs(['--', '--pull-request']), {
+    issue: 0,
+    paths: [],
+    record: false,
+    pr: true,
+    attestRead: false,
+    attestNested: false,
+  });
+});
+
+test('parses local preflight arguments and explicit attestations', () => {
+  assert.deepEqual(parseArgs([
+    '--issue', '1754',
+    '--paths', 'scripts,docs/engineering',
+    '--attest-read',
+    '--attest-nested',
+    '--record',
+  ]), {
+    issue: 1754,
+    paths: ['scripts', 'docs/engineering'],
+    record: true,
+    pr: false,
+    attestRead: true,
+    attestNested: true,
+  });
+});
+
 test('calculates Git blob SHA rather than hashing raw file bytes', () => {
   assert.equal(calculateGitBlobSha('test\n'), '9daeafb9864cf43055ae93beb0afd6c7d144bfa4');
 });
