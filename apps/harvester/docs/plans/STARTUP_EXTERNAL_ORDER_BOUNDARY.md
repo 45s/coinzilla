@@ -183,22 +183,15 @@ Target branch: `develop`
 
 **Mission:** Implement the accepted startup order contract in ADR-0004 and issue #1157. At startup, snapshot and durably record every account-wide open order, then treat every order in that snapshot as external to the current process. Do not recover, adopt, cancel, replace, reprice, or manage old orders. Apply the existing per-pair `EXTERNAL_ORDERS_POLICIES.IGNORE/BLOCK` uniformly, regardless of client-order-ID prefix. Current-process orders continue to use the existing ownership registry and lifecycle.
 
-**Mandatory preflight — hard gate:**
+**Understand the implementation scope and constraints:**
 
-Before editing, creating branches, or performing any other state-changing action:
+Before changing behavior, consult the applicable repository and Harvester instructions, task checklist, and relevant startup, Journal, broker, configuration, safety, and test documentation. Inspect current source, callers/consumers, tests, and configuration, including the account snapshot manager, startup composition, Conservative Trading Engine, broker user-data events, and external-order safety paths.
 
-1. Read root `AGENTS.md`, `ENGINEERING_STANDARDS.md`, `AI_AGENT_WORKFLOW.md`, `docs/engineering/TASK_WORKFLOWS.md`, `docs/engineering/AI_REFACTORING_AUDIT_STANDARD.md`, `docs/engineering/ESLINT_STANDARD.md`, `docs/engineering/MODULARITY_STANDARD.md`, `docs/engineering/SHARED_UTILITIES_POLICY.md`, `docs/DOCUMENTATION_GOVERNANCE.md`, and `docs/MARKDOWN_STYLE.md` in full.
-2. Read `apps/harvester/AGENTS.md`, `apps/harvester/ROADMAP.md`, `apps/harvester/docs/TRADING_FIRST.md`, the Harvester documentation index, architecture documentation, the full Conservative domain specification, ADR-0001, ADR-0004, Journal Operations, Journal evidence contract, BrokerPort/adapter contract, account snapshot and open-order event/DTO contracts, external-order configuration documentation, and relevant runbooks in full. Follow applicable references recursively.
-3. Inspect the current implementation, every caller/consumer, tests, configuration and effective ESLint rules. At minimum trace:
-   - `src/bootstrap/account/create-account-snapshot-manager.js`
-   - `src/bootstrap/start-harvester.js`
-   - `src/use-cases/conservative-trading-engine.js`
-   - account snapshot manager tests
-   - startup integration tests
-   - Conservative Trading Engine unit/integration tests
-   - broker user-data event handling and external-execution safety paths
-4. Confirm actual `IGNORE` and `BLOCK` semantics from source/tests. Do not rely on chat summaries or this plan as source evidence.
-5. Before implementation, provide a concise readiness report: documents read, source/call graph reviewed, exact behavior to change, invariants to preserve, tests to add, and any genuine blocker. If a required document is inaccessible or requirements conflict, stop and report the exact issue.
+At minimum, trace `src/bootstrap/account/create-account-snapshot-manager.js`, `src/bootstrap/start-harvester.js`, `src/use-cases/conservative-trading-engine.js`, the account snapshot manager tests, startup integration tests, Conservative Trading Engine unit/integration tests, and broker user-data event handling.
+
+Confirm the actual `IGNORE` and `BLOCK` semantics from source and tests. Preserve the accepted contract and safety invariants in this plan; do not rely on stale summaries.
+
+No Task Preflight command, formal readiness report, attestation, or issue-evidence comment is required. A working summary is optional; proceed when the task scope and relevant engineering constraints are understood.
 
 **Execution requirements:**
 

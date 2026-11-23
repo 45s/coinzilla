@@ -10,13 +10,17 @@ Harvester's mandatory execution order is defined only in [TRADING_FIRST.md](apps
 
 Visual workflow diagrams follow the canonical [visual documentation and workflow schemas standard](ENGINEERING_STANDARDS.md#visual-documentation-and-workflow-schemas). Consider flowcharts and sequence diagrams for complex work, and keep them aligned with source code and tests.
 
-## 0. Mandatory documentation and requirements preflight
+## 0. Understand the task and relevant standards
 
-The task-start gate and readiness record are owned by the canonical [AI Task Compliance Standard](docs/engineering/AI_TASK_COMPLIANCE_STANDARD.md). Every agent must complete that standard independently before any state-changing work and follow [Documentation Governance](docs/DOCUMENTATION_GOVERNANCE.md). Use [Task Workflows](docs/engineering/TASK_WORKFLOWS.md) for the task-specific checklist and the owning domain's instructions/roadmap for local constraints. Do not reproduce the compliance checklist here; the standard is the single source of truth. Read-only discovery is allowed; do not implement or mutate state until the gate is complete. If required material is missing or contradictory, stop and report the exact blocker. Before the first implementation commit, record the machine-checked issue report using the command in the [AI Task Compliance Standard](docs/engineering/AI_TASK_COMPLIANCE_STANDARD.md#machine-checked-preflight-report). This is an agent task-start practice, not a GitHub Actions or merge requirement.
+Read the root and applicable nested `AGENTS.md` instructions, the smallest relevant [Task Workflows](docs/engineering/TASK_WORKFLOWS.md) checklist, and the canonical engineering/domain documents that apply. Understand the issue or request, scope, acceptance criteria, and constraints; inspect relevant source, consumers, documentation, and tests before editing. Then plan and carry out the engineering work, with relevant verification and documentation.
 
-Before implementing a shared helper or cross-cutting capability, follow the single [shared-utilities policy](docs/engineering/SHARED_UTILITIES_POLICY.md).
+Task Preflight is not a required development step. Agents are not required to run `pnpm run task:preflight`, create readiness reports, attest to document reading, or record Preflight evidence on an issue. The validator is optional developer tooling. Independent engineering, security, testing, and documentation requirements remain in force.
 
-For any refactoring or code-audit task, use the canonical [AI Refactoring and Code Audit Standard](docs/engineering/AI_REFACTORING_AUDIT_STANDARD.md) together with the applicable checklist in [Task Workflows](docs/engineering/TASK_WORKFLOWS.md). Treat its scope, evidence, test-first, compatibility, verification, and reporting requirements as mandatory.
+Revisit applicable instructions and requirements if the task scope materially changes. Resolve genuine conflicts or blockers without replacing this practical workflow with another generic gate.
+
+Before implementing a shared helper or cross-cutting capability, follow the [Shared Utilities Policy](docs/engineering/SHARED_UTILITIES_POLICY.md).
+
+For refactoring or code-audit work, follow the canonical [AI Refactoring and Code Audit Standard](docs/engineering/AI_REFACTORING_AUDIT_STANDARD.md) and the applicable task checklist, including its scope, test-first, compatibility, verification, and reporting requirements.
 
 ## 1. The short version
 
@@ -60,38 +64,11 @@ Every non-trivial task MUST have a GitHub Issue (or an existing issue explicitly
 
 An issue title/body is not frozen after kickoff. The responsible agent MUST update it when scope, acceptance criteria, decisions, dependencies, blockers or status materially change. Keep the description concise and current; put dated progress/checkpoint detail in comments rather than accumulating an event log in the issue body. Link the issue from the branch/PR and the owning roadmap where appropriate. If the task is genuinely a tiny standalone change, use an existing tracking issue or create a concise issue; do not invent bureaucracy for a one-line typo.
 
-### Continuous issue knowledge capture — mandatory
+### Keep task context current
 
-The GitHub Issue is the single source of truth for the task's current context and durable work history. This is an active responsibility throughout the task, not a closeout exercise. An agent receiving only the issue URL must be able to understand the task, recover the important evidence and decisions, and continue safely without private chat history.
+Use the GitHub issue and PR to keep the task understandable and accurate. Update them when scope, acceptance criteria, decisions, blockers, or verification materially change. Keep detailed implementation evidence in commits, tests, source, and CI results; link to those sources rather than duplicating them in comments.
 
-**Capture meaningful information as soon as it is discovered.** Before moving to an unrelated investigation or implementation step, record the discovery or decision in the issue. Do not wait for a milestone, commit, PR or task completion. This requirement applies to every agent and every ownership handoff.
-
-Record information that changes or materially improves the task understanding, including:
-
-- Confirmed findings and root-cause evidence, with exact repository paths and line references; include only short, relevant code snippets when they explain the finding better than a link.
-- Reproduction steps, commands, observed output, logs, failing tests and the exact conditions under which a behavior occurs.
-- Test and experiment outcomes, including informative failed attempts. State what was tried, what happened, and what the result proves or rules out.
-- Decisions, their rationale, constraints and invariants; alternatives considered and why an approach was rejected.
-- New or corrected requirements, acceptance criteria, dependencies, ownership boundaries, compatibility constraints, blockers and safety limits.
-- Implementation checkpoints: branch, commit SHA and subject, changed paths, PR link, and the relationship between the change and the accepted task scope.
-- Verification evidence: exact command or workflow, pass/fail/skipped/blocked outcome, relevant log or run link, and the exact commit SHA tested.
-
-**Use the issue description for the current canonical snapshot:** goal, scope/ownership, requirements/invariants, acceptance criteria, dependencies, verification plan, documentation impact, decisions that remain in force, and current status/branch/head/PR/next action. Update it whenever one of those facts materially changes, and explicitly replace or mark superseded stale statements so the current description never contains competing versions.
-
-**Use issue comments for the chronological record:** add a concise dated comment when a meaningful finding, material decision, rejected approach, experiment result, blocker or handoff occurs. Routine implementation details that do not change task understanding do not need a comment. After each meaningful pushed checkpoint, refresh the issue's current-state summary with the exact head SHA, completed outcome, in-progress slice, next action and validation status; do not create a comment for every routine commit unless it is useful as a historical event.
-
-Evidence must be useful and auditable:
-
-- Link to source files, exact commits, PRs, test runs, workflow logs and external references. Include precise paths/line ranges and a small excerpt when a link alone would make the finding difficult to recover.
-- Distinguish **confirmed**, **observed**, **inferred/hypothesis**, **rejected**, and **unknown** information. Never present an inference as a fact or a stale CI result as current.
-- Preserve meaningful negative evidence and failed experiments when they prevent repeated work or explain a decision.
-- Summarize large logs and attach/link the full artifact where available; do not flood the issue with unbounded output or duplicate an entire PR diff.
-- Never put secrets, credentials, tokens, private keys or unnecessary personal/sensitive data in an issue, comment, snippet or log. Redact them and record where the protected evidence is stored only when authorized.
-- When new evidence invalidates an earlier conclusion, update the description and add a comment explaining what changed and which evidence supersedes the old conclusion.
-
-**Handoff is complete only when the issue is current.** In addition to the checkpoint format below, ensure the issue captures the exact branch/head SHA and commit subject, PR state/target, base freshness, completed and remaining work, key findings/evidence, decisions/rationale, checks and exact validated SHA, blockers/safety boundaries, documentation/roadmap state and one concrete next action. The incoming agent must independently repeat the mandatory standards preflight and verify live branch/PR/CI state before acting.
-
-The issue is the task-context source of truth, not a replacement for implementation or durable repository policy: commits and PRs prove what changed; source/tests/configuration prove implemented behavior; canonical repository/domain docs own long-lived engineering rules and contracts. Link those sources from the issue rather than copying them into a parallel task log.
+A formal readiness report, Preflight attestation, or issue-evidence recording ceremony is not required before work or as a completion gate. Add a handoff checkpoint when work is actually paused or ownership changes, using the existing handoff guidance.
 
 ### One task, one branch, one PR — mandatory
 
@@ -146,7 +123,7 @@ A task is not transferable merely because its branch exists. Before ending a wor
 4. State the exact repository, branch, latest commit SHA and commit subject, PR link/state, and latest `develop` base/synchronization status.
 5. Record completed outcomes, the current in-progress item, the next concrete action, decisions and rationale, unresolved questions/blockers, affected files/contracts, and any safety restrictions.
 6. Record checks actually run, exact commands/workflows and outcomes, expected RED evidence if applicable, skipped checks with reasons, and the exact SHA validated by the latest green CI. Never transfer a stale "green" claim to a newer commit.
-7. Identify the next owner only when known; otherwise explicitly mark ownership unassigned. The next agent independently repeats the mandatory documentation preflight and verifies branch/PR/CI state before acting.
+7. Identify the next owner only when known; otherwise explicitly mark ownership unassigned. The next agent reviews applicable instructions and verifies branch/PR/CI state before acting.
 
 Use this compact issue-comment/PR checkpoint format (omit fields only when genuinely not applicable):
 

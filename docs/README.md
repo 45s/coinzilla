@@ -8,7 +8,7 @@ This index is the entry point for maintained repository documentation. The gover
 - [Coding-agent instructions](../AGENTS.md) — mandatory agent entry point
 - [AI-agent workflow](../AI_AGENT_WORKFLOW.md) — branches, PRs, collaboration and integration; incremental commits and resumable handoffs
 - [Engineering standards](../ENGINEERING_STANDARDS.md) — design, TDD, verification and documentation impact
-- [ESLint Standard](engineering/ESLINT_STANDARD.md) — rule compliance, agent preflight and suppression prevention
+- [ESLint Standard](engineering/ESLINT_STANDARD.md) — rule compliance, JavaScript change guidance and suppression prevention
 - [Repository roadmap](../ROADMAP.md) — cross-workspace engineering and release work
 - [Documentation Governance](DOCUMENTATION_GOVERNANCE.md) — the documentation vision and maintenance contract
 - [Repository governance drift review](engineering/REPOSITORY_GOVERNANCE_REVIEW.md) — monthly evidence-based review of rulesets, CI, workflow supply chain, security and package matrices
@@ -24,8 +24,8 @@ This index is the entry point for maintained repository documentation. The gover
 - [Multi-provider migration audit and implementation plan](architecture/multi-provider-migration-plan.md) — source-verified audit, capability matrix, persistence assessment and implementation phases for #1339.
 - [Domain ownership](engineering/DOMAIN_OWNERSHIP.md)
 - [Task workflows](engineering/TASK_WORKFLOWS.md)
-- [AI task compliance standard](engineering/AI_TASK_COMPLIANCE_STANDARD.md) — mandatory standards discovery, hash-bearing issue preflight and completion compliance
-- [Task preflight validator](../scripts/task-preflight.js) — local instruction/issue validation and required PR evidence gate
+- [AI task standards and verification guide](engineering/AI_TASK_COMPLIANCE_STANDARD.md) — relevant standards discovery, engineering quality and completion verification
+- [Task Preflight validator](../scripts/task-preflight.js) — optional local issue/task-content validation utility
 - [AI refactoring and code audit standard](engineering/AI_REFACTORING_AUDIT_STANDARD.md)
 - [Logging and observability standard](engineering/LOGGING_OBSERVABILITY_STANDARD.md)
 - [Cross-domain requests](engineering/CROSS_DOMAIN_REQUESTS.md)
