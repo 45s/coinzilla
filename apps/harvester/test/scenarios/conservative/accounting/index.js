@@ -1,0 +1,303 @@
+import { createScenarioDefinition } from "../../shared/factories.js"
+
+export const scenarios = [
+  createScenarioDefinition({
+    id: "CON-FILL-001",
+    title: "Partial and repeated fills change inventory only by accepted execution facts",
+    category: "partial-fills",
+    priority: "P0",
+    description: "Cover partial BUY/SELL fills, multiple fills at different prices, duplicate delivery, conflicting execution identity, and out-of-order order updates.",
+    tags: ["fills", "partial-fill", "idempotency", "event-order"],
+    preconditions: [
+      "Canonical Fill identity, market, side, quantity, price, and commission facts are normalized.",
+      "The target Portfolio and order belong to the Conservative strategy and expected market.",
+    ],
+    initialState: {
+      portfolio: "known accepted fill set",
+      order: "partially filled or terminal",
+      eventStream: "may contain duplicate or reordered delivery",
+    },
+    inputEvents: [
+      { type: "PARTIAL_FILL", sequence: 1 },
+      { type: "DUPLICATE_FILL", sequence: 2 },
+      { type: "CONFLICTING_FILL_IDENTITY", sequence: 3 },
+      { type: "STALE_ORDER_UPDATE", sequence: 4 },
+    ],
+    expectedState: {
+      acceptedFillSet: "each execution identity is applied at most once",
+      conflictingIdentity: "rejected without mutating accepted accounting",
+      orderLifecycle: "terminal state cannot regress to executable state",
+    },
+    expectedAccounting: {
+      quantity: "sum of accepted net base deltas only",
+      quoteBasisOrProceeds: "sum of accepted exact fill notionals and actual commission deltas",
+    },
+    expectedSideEffects: {
+      duplicateAccounting: false,
+      staleLifecycleRegression: false,
+      partialProjectionMutationOnConflict: false,
+    },
+    invariants: [
+      "A fill is never accounted for twice.",
+      "Same execution identity with different economic payload is rejected.",
+      "A completed order cannot become executable again.",
+    ],
+    relatedRequirements: ["CON-SPEC-2.2", "CON-SPEC-3.3", "CON-SPEC-5.1", "CON-SPEC-6.3"],
+    relatedCriticalBehaviors: ["FILL_IDENTITY_DEDUPLICATION", "PORTFOLIO_RECOVERY_LEDGER_ALIGNMENT", "ORDER_IDENTITY_TRANSITIONS"],
+    coverageStatus: "TEST-MAPPED",
+    coverageReason: "Canonical fill identity and order transition tests are linked; broader delayed/missing evidence permutations remain tracked in the parent matrix.",
+  }),
+  createScenarioDefinition({
+    id: "CON-ACCOUNTING-001",
+    title: "Portfolio and RecoveryLedger reconcile exact cost, proceeds, fees, and realized PnL",
+    category: "accounting-pnl",
+    priority: "P0",
+    description: "Cover multiple fills at different prices, partial-fill accounting, exact quote cost/proceeds, realized profit, remaining inventory, and ledger-to-position alignment.",
+    tags: ["accounting", "pnl", "decimal", "portfolio"],
+    preconditions: [
+      "Only canonical fills and actual commission facts are used as accounting inputs.",
+      "Position.spent is the authoritative quote-cost basis; RecoveryLedger.buyCost is a compatibility mirror.",
+    ],
+    initialState: {
+      position: "empty or holding previously accepted inventory",
+      recoveryLedger: "zero or previously confirmed cycle proceeds",
+    },
+    inputEvents: [
+      { type: "BUY_FILL", sequence: 1 },
+      { type: "BUY_FILL_AT_DIFFERENT_PRICE", sequence: 2 },
+      { type: "PARTIAL_SELL_FILL", sequence: 3 },
+    ],
+    expectedState: {
+      portfolio: "base quantity and quote basis reflect accepted fills",
+      recoveryLedger: "confirmed net proceeds and cycle state align with Portfolio",
+    },
+    expectedAccounting: {
+      buyCost: "exact sum of gross quote notional and quote-equivalent commission",
+      netSellProceeds: "exact gross quote notional less actual quote-equivalent commission",
+      realizedPnl: "confirmed net proceeds less the corresponding authoritative cost basis",
+      remainingInventory: "only unsold net base remains",
+    },
+    expectedSideEffects: {
+      floatingPointFinancialOracle: false,
+      requestedQuantitySubstitutedForFills: false,
+    },
+    invariants: [
+      "All financial values use exact decimal arithmetic.",
+      "Portfolio and RecoveryLedger projections remain aligned after every accepted fill.",
+      "Realized PnL uses actual net execution proceeds, not requested price or estimated fee.",
+    ],
+    relatedRequirements: ["CON-SPEC-2.1", "CON-SPEC-2.2"],
+    relatedCriticalBehaviors: ["EXACT_FINANCIAL_ACCOUNTING", "PORTFOLIO_RECOVERY_LEDGER_ALIGNMENT"],
+    coverageStatus: "TEST-MAPPED",
+    coverageReason: "Exact accounting and projection-alignment tests are linked; every fee asset and cycle boundary still requires separate evidence review.",
+  }),
+  createScenarioDefinition({
+    id: "CON-FEE-001",
+    title: "Base, quote, and third-asset commissions preserve exact net inventory and quote economics",
+    category: "fees-commission-assets",
+    priority: "P0",
+    description: "Cover BUY and SELL commissions charged in base, quote, and a third asset, including quote valuation of third-asset fees and fail-closed missing valuation.",
+    tags: ["fees", "commission", "base-asset", "quote-asset", "third-asset"],
+    preconditions: [
+      "Each canonical Fill carries its actual commission amount and commission asset.",
+      "A third-asset commission is accepted only when its quote valuation is available.",
+    ],
+    initialState: {
+      feePolicy: "configured fee reserve is separate from actual commission facts",
+      assets: "base, quote, and optional third commission asset are explicit",
+    },
+    inputEvents: [
+      { type: "BUY_FILL_WITH_BASE_COMMISSION", sequence: 1 },
+      { type: "BUY_FILL_WITH_QUOTE_COMMISSION", sequence: 2 },
+      { type: "SELL_FILL_WITH_THIRD_ASSET_COMMISSION", sequence: 3 },
+      { type: "THIRD_ASSET_VALUATION_MISSING", sequence: 4 },
+    ],
+    expectedState: {
+      baseCommission: "reduces net acquired base or increases net base disposed as appropriate",
+      quoteCommission: "changes quote cash flow and quote recovery basis",
+      thirdAssetCommission: "is valued in quote or rejected when valuation evidence is absent",
+    },
+    expectedAccounting: {
+      actualCommission: "uses exchange-reported amount and asset",
+      feeReserve: "used only for order planning, never substituted for actual accounting",
+    },
+    expectedSideEffects: {
+      unvaluedThirdAssetAccepted: false,
+      feeCountedTwice: false,
+    },
+    invariants: [
+      "Commission asset identity is never inferred from the market pair.",
+      "Actual commission facts are applied exactly once.",
+      "Missing third-asset valuation fails closed before recovery economics are accepted.",
+    ],
+    relatedRequirements: ["CON-SPEC-2.3", "CON-SPEC-4.7"],
+    relatedCriticalBehaviors: ["EXACT_FINANCIAL_ACCOUNTING"],
+    coverageStatus: "TEST-MAPPED",
+    coverageReason: "Actual commission and valuation tests are linked; the complete base/quote/third-asset cross-product remains subject to review.",
+  }),
+  createScenarioDefinition({
+    id: "CON-BALANCE-001",
+    title: "Account-wide reservations and strategy-owned inventory prevent overspending or external-order adoption",
+    category: "balance-inventory",
+    priority: "P0",
+    description: "Cover free versus reserved balances, cross-market quote commitments, base inventory allocation, startup open-order reconciliation, and closing-account ownership.",
+    tags: ["balance", "reservation", "inventory", "ownership", "multi-market"],
+    preconditions: [
+      "Account balances and open orders are sourced from the authoritative account snapshot.",
+      "Order ownership is established by the current process and its canonical order registry.",
+    ],
+    initialState: {
+      account: "multiple markets may hold quote/base commitments",
+      openOrders: "include current-process-owned and external orders",
+      portfolio: "contains strategy-owned inventory only",
+    },
+    inputEvents: [
+      { type: "ACCOUNT_SNAPSHOT", sequence: 1 },
+      { type: "ALLOCATE_ORDER_COMMITMENTS", sequence: 2 },
+      { type: "STARTUP_OPEN_ORDER_RECONCILIATION", sequence: 3 },
+    ],
+    expectedState: {
+      availableBalances: "subtract all applicable reservations and commitments",
+      strategyInventory: "does not adopt unrelated external inventory",
+      startup: "blocks trading when account evidence is incomplete or conflicting",
+    },
+    expectedSideEffects: {
+      overspendAcrossMarkets: false,
+      externalOrderCancellationOrAdoption: false,
+    },
+    invariants: [
+      "Account-wide quote and base commitments reconcile across markets.",
+      "Free balance is not treated as available when already reserved.",
+      "Only orders owned by the current process are eligible for strategy cancellation.",
+    ],
+    relatedRequirements: ["CON-SPEC-3.7", "CON-RUNTIME-3", "CON-RUNTIME-4"],
+    relatedCriticalBehaviors: [
+      "ACCOUNT_COMMITMENT_ALLOCATION",
+      "STARTUP_ACCOUNT_RECONCILIATION",
+      "CLOSING_ACCOUNT_OPEN_ORDER_AUDIT",
+    ],
+    coverageStatus: "TEST-MAPPED",
+    coverageReason: "Account commitment and startup ownership tests are linked; account-level integration combinations remain subject to review.",
+  }),
+  createScenarioDefinition({
+    id: "CON-FILTER-001",
+    title: "Recovery SELL planning uses fresh filters and exact exchange precision boundaries",
+    category: "precision-exchange-filters",
+    priority: "P1",
+    description: "Cover tick/step precision, minimum quantity/notional, maximum quantity/notional, filter freshness, and rejection of non-executable residuals.",
+    tags: ["precision", "filters", "min-notional", "tick-size", "step-size"],
+    preconditions: [
+      "The latest exchange filters belong to the exact market being evaluated.",
+      "Filter metadata is refreshed within the active freshness window.",
+    ],
+    initialState: {
+      marketFilters: "fresh and complete",
+      recoveryPosition: "may contain a residual near exchange minimums",
+    },
+    inputEvents: [
+      { type: "REFRESH_MARKET_FILTERS", sequence: 1 },
+      { type: "CALCULATE_RECOVERY_SELL", sequence: 2 },
+      { type: "FILTER_BOUNDARY_CHECK", sequence: 3 },
+    ],
+    expectedState: {
+      quantity: "rounded down to valid step size",
+      price: "rounded up to valid tick size",
+      residual: "not submitted when minimum quantity or notional is not met",
+    },
+    expectedOrders: [
+      { side: "SELL", purpose: "RECOVERY_SELL", condition: "all current exchange filters pass" },
+    ],
+    expectedSideEffects: {
+      staleFilterSubmission: false,
+      invalidQuantityOrPriceSubmission: false,
+    },
+    invariants: [
+      "Decimal quantities and prices are not converted through binary floating point.",
+      "Recovery SELL filters are checked against current market metadata.",
+      "An untradeable residual is retained rather than rounded into an invalid order.",
+    ],
+    relatedRequirements: ["CON-SPEC-4.5", "CON-SPEC-4.8"],
+    relatedCriticalBehaviors: ["RECOVERY_SELL_MARKET_METADATA_FRESHNESS", "RECOVERY_SELL_ECONOMICS"],
+    coverageStatus: "TEST-MAPPED",
+    coverageReason: "Recovery SELL precision and fresh-filter tests are linked; all exchange filter combinations remain a broader matrix.",
+  }),
+  createScenarioDefinition({
+    id: "CON-MARKET-001",
+    title: "Stale or changed market data cannot authorize a stale Conservative order",
+    category: "market-conditions",
+    priority: "P1",
+    description: "Cover stale market snapshots, changing prices, residual sell-through market reference, and fresh metadata requirements before recovery SELL planning.",
+    tags: ["market-data", "staleness", "price-change", "filters"],
+    preconditions: [
+      "Market timestamps and exchange metadata freshness are available to the evaluator.",
+      "The current market price is distinguished from a prior BUY or recovery reference price.",
+    ],
+    initialState: {
+      marketData: "fresh, stale, or changed since the previous evaluation",
+      recoveryPosition: "may have secured required net proceeds with a residual balance",
+    },
+    inputEvents: [
+      { type: "MARKET_PRICE_CHANGE", sequence: 1 },
+      { type: "STALE_MARKET_SNAPSHOT", sequence: 2 },
+      { type: "RECOVERY_SELL_REEVALUATION", sequence: 3 },
+    ],
+    expectedState: {
+      staleSnapshot: "does not authorize a new order",
+      residualSellThrough: "uses the current market reference when required recovery proceeds are already secured",
+      filters: "must remain fresh for the exact market",
+    },
+    expectedSideEffects: {
+      orderFromStaleSnapshot: false,
+      staleFilterReuse: false,
+    },
+    invariants: [
+      "A stale market snapshot cannot authorize a new order.",
+      "A price change is evaluated against the correct strategy reference.",
+      "Residual sell-through does not reuse a stale recovery target price.",
+    ],
+    relatedRequirements: ["CON-SPEC-4.6", "CON-SPEC-8.1"],
+    relatedCriticalBehaviors: ["RECOVERY_SELL_MARKET_METADATA_FRESHNESS", "STRATEGY_BUY_SELL_SAFETY_GATES"],
+    coverageStatus: "TEST-MAPPED",
+    coverageReason: "Fresh metadata and strategy gate tests are linked; all stale-market timing and boundary cases remain under review.",
+  }),
+  createScenarioDefinition({
+    id: "CON-CONFIG-001",
+    title: "Invalid Conservative pair configuration fails before trading side effects",
+    category: "configuration",
+    priority: "P1",
+    description: "Cover missing or invalid pair configuration, strategy mode, minProfit threshold, order quantity, and inconsistent market configuration.",
+    tags: ["configuration", "validation", "fail-closed"],
+    preconditions: [
+      "Configuration is loaded before any order submission or account mutation.",
+      "The active pair uses the Conservative strategy-specific contract.",
+    ],
+    initialState: {
+      configuration: "may contain invalid or incomplete Conservative values",
+      broker: "offline and not called during validation",
+    },
+    inputEvents: [
+      { type: "LOAD_PAIR_CONFIGURATION", sequence: 1 },
+      { type: "VALIDATE_CONSERVATIVE_CONFIGURATION", sequence: 2 },
+    ],
+    expectedState: {
+      invalidConfiguration: "rejected with an actionable validation error",
+      validConfiguration: "normalized and available to the strategy",
+    },
+    expectedSideEffects: {
+      brokerCallsOnInvalidConfiguration: false,
+      partialRuntimeInitialization: false,
+    },
+    invariants: [
+      "Configuration validation occurs before exchange or trading side effects.",
+      "Conservative-specific settings are not silently replaced by generic strategy defaults.",
+    ],
+    relatedRequirements: ["CON-CONFIG-1"],
+    relatedCriticalBehaviors: [],
+    relatedSourceFiles: [
+      "config/strategies/cg-coin-grabber.js",
+      "src/bootstrap/config/resolve-harvester-options.js",
+    ],
+    coverageStatus: "MISSING",
+    coverageReason: "No named Conservative configuration scenario is currently registered in the critical behavior contract; exact invalid-configuration test coverage must be audited before promotion.",
+  }),
+]
