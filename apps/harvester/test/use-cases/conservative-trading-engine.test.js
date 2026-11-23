@@ -4,6 +4,7 @@ import {
   Asset,
   Balance,
   CanonicalOrder,
+  Commission,
   Fill,
   Market,
   Money,
@@ -249,7 +250,7 @@ function createTradeEventFactory({
       baseAsset,
       quoteAsset,
     }) {
-  return ({ acknowledgedOrder, tradeId, quantity, executedQuantity, status }) => {
+  return ({ acknowledgedOrder, tradeId, quantity, executedQuantity, status, commissions = [] }) => {
     const fill = new Fill({
       tradeId,
       brokerOrderId: acknowledgedOrder.brokerOrderId,
@@ -266,6 +267,7 @@ asset: baseAsset }),
         }),
         asset: quoteAsset,
       }),
+      commissions,
       liquidityRole: "MAKER",
       commissionStatus: "COMPLETE",
       executedAt: Number(tradeId.replace(/\D/g, "")) || 1,
@@ -965,6 +967,14 @@ async function completeDeferredRecoverySellCancellation({ fixture, secondBuy, pe
     quantity: "2",
     executedQuantity: "2",
     status: "PARTIALLY_FILLED",
+    commissions: [
+      new Commission({
+        amount: new Money({
+          amount: "0.001",
+          asset: fixture.quoteAsset,
+        }),
+      }),
+    ],
   });
   setFillsForOrder({ orderId: pendingSellOrder.brokerOrderId,
 fills: [sellFillEvent.fill] });
@@ -1024,7 +1034,7 @@ function assertReconciledFillAccounting({ fixture, sellFillEvent }) {
   assert.equal(position.spent.amount, "19.85", "Position.spent must retain the full 9.95 + 9.90 BUY cost across the SELL fill.");
   assert.equal(position.freeBaseQuantity.amount, "0", "No active inventory may be moved to retained inventory before recovery completion.");
   assert.equal(recoveryLedger.buyCost, "19.85", "The RecoveryLedger compatibility cost mirror must match the complete BUY cost.");
-  assert.equal(recoveryLedger.netSellProceeds, "2.214", "The cancellation-raced SELL fill must contribute exactly 2 × 1.107 USDT in confirmed net proceeds.");
+  assert.equal(recoveryLedger.netSellProceeds, "2.213", "The cancellation-raced SELL fill must contribute 2 × 1.107 USDT less the actual 0.001 USDT quote commission.");
 }
 
 async function assertDuplicateFillIsIdempotent({ fixture, secondBuy }) {
@@ -1062,8 +1072,8 @@ async function assertFinalRecoverySellReplacement(fixture) {
   );
   assert.equal(
     recoverySellSubmissionIntents[2].price,
-    "1.038",
-    "The replacement price must recover 19.85 full BUY cost + 0.01 minProfit - 2.214 confirmed SELL proceeds across 17 sellable units.",
+    "1.039",
+    "The replacement price must recover 19.85 full BUY cost + 0.01 minProfit - 2.213 net SELL proceeds after quote commission across 17 sellable units.",
   );
 }
 
