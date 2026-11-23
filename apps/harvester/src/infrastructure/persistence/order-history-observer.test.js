@@ -224,3 +224,37 @@ test("drains accepted writes on close and unsubscribes before later events", asy
 
   assert.equal(writes, 1, "Events published after observer close must not enqueue database writes.")
 })
+
+test("includes the invalid record field in mapping-failure diagnostics", async (t) => {
+  const eventBus = new EventBus()
+  const logEntries = []
+  const observer = createOrderHistoryObserver({
+    eventBus,
+    repository: { upsert: async (record) => record },
+    environment: "testnet",
+    logger: {
+      error: (entry) => logEntries.push(entry),
+    },
+  })
+  t.after(async () => {
+    await observer.close()
+    await eventBus.close()
+  })
+
+  eventBus.publish({
+    name: HARVESTER_EVENT_NAMES.ORDER_UPDATED,
+    source: "harvester",
+    data: createOrderHistoryEventData({
+      providerInstanceId: "",
+    }),
+  })
+  await eventBus.flush()
+  const result = await observer.flush()
+
+  assert.equal(result.ok, false, "Invalid order identity must fail the history projection.")
+  assert.equal(result.errors[0].context.field, "providerInstanceId", "The domain error must retain the invalid field.")
+  assert.equal(logEntries.length, 1, "One invalid event must produce one diagnostic.")
+  assert.equal(logEntries[0].errorCode, "HARVESTER_ORDER_HISTORY_RECORD_INVALID")
+  assert.equal(logEntries[0].persistenceStage, "mapping")
+  assert.equal(logEntries[0].field, "providerInstanceId", "The diagnostic must expose the safe validation field.")
+})
