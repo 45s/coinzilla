@@ -42,15 +42,23 @@ function normalizeUri(uri) {
   return uri.replaceAll("\\", "/");
 }
 
-function* locationsInResult(result) {
-  for (const location of result.locations ?? []) yield location;
-  for (const codeFlow of result.codeFlows ?? []) {
+function* codeFlowLocations(codeFlows) {
+  for (const codeFlow of codeFlows ?? []) {
     for (const threadFlow of codeFlow.threadFlows ?? []) {
       for (const threadLocation of threadFlow.locations ?? []) {
-        if (threadLocation.location) yield threadLocation.location;
+        if (threadLocation.location) {
+          yield threadLocation.location;
+        }
       }
     }
   }
+}
+
+function* locationsInResult(result) {
+  for (const location of result.locations ?? []) {
+    yield location;
+  }
+  yield* codeFlowLocations(result.codeFlows);
 }
 
 function locationDetails(location) {
@@ -66,9 +74,32 @@ function locationDetails(location) {
 function describeLocation(location) {
   const details = locationDetails(location);
   let output = `${details.uri}:${details.line ?? "?"}`;
-  if (details.message) output += ` (${details.message})`;
-  if (details.snippet) output += ` :: ${details.snippet.trim()}`;
+  if (details.message) {
+    output += ` (${details.message})`;
+  }
+  if (details.snippet) {
+    output += ` :: ${details.snippet.trim()}`;
+  }
   return output;
+}
+
+function printThreadFlow({ threadFlow, flowIndex, threadIndex }) {
+  log(`  code flow ${flowIndex}.${threadIndex}:`);
+  let locationIndex = 0;
+  for (const threadLocation of threadFlow.locations ?? []) {
+    locationIndex += 1;
+    if (threadLocation.location) {
+      log(`    ${locationIndex}: ${describeLocation(threadLocation.location)}`);
+    }
+  }
+}
+
+function printCodeFlow({ codeFlow, flowIndex }) {
+  let threadIndex = 0;
+  for (const threadFlow of codeFlow.threadFlows ?? []) {
+    threadIndex += 1;
+    printThreadFlow({ threadFlow, flowIndex, threadIndex });
+  }
 }
 
 function printResultFlows(results) {
@@ -83,23 +114,12 @@ function printResultFlows(results) {
     let flowIndex = 0;
     for (const codeFlow of result.codeFlows ?? []) {
       flowIndex += 1;
-      let threadIndex = 0;
-      for (const threadFlow of codeFlow.threadFlows ?? []) {
-        threadIndex += 1;
-        log(`  code flow ${flowIndex}.${threadIndex}:`);
-        let locationIndex = 0;
-        for (const threadLocation of threadFlow.locations ?? []) {
-          locationIndex += 1;
-          if (threadLocation.location) {
-            log(`    ${locationIndex}: ${describeLocation(threadLocation.location)}`);
-          }
-        }
-      }
+      printCodeFlow({ codeFlow, flowIndex });
     }
   }
 }
 
-function assertRuleSelection(rules, requireDefaultSuite) {
+function assertRuleSelection({ rules, requireDefaultSuite }) {
   log(`Repository SARIF rule count: ${rules.size}`);
   log(`Coinzilla replacement query selected: ${rules.has(CUSTOM_RULE_ID)}`);
   log(`Built-in query selected: ${rules.has(BUILTIN_RULE_ID)}`);
@@ -123,7 +143,9 @@ function collectRemainingSinks(results) {
     for (const location of result.locations ?? []) {
       const details = locationDetails(location);
       const key = `${details.uri}:${details.line}`;
-      if (BITUNIX_ALERT_SINKS.has(key)) remaining.push(key);
+      if (BITUNIX_ALERT_SINKS.has(key)) {
+        remaining.push(key);
+      }
     }
   }
   return [...new Set(remaining)].sort();
@@ -151,7 +173,7 @@ async function verifyRepository({ filePath, requireDefaultSuite }) {
   const rules = new Set(
     (run.tool?.driver?.rules ?? []).map((rule) => rule.id).filter(Boolean),
   );
-  assertRuleSelection(rules, requireDefaultSuite);
+  assertRuleSelection({ rules, requireDefaultSuite });
 
   const customResults = (run.results ?? []).filter(
     (result) => result.ruleId === CUSTOM_RULE_ID,
@@ -170,9 +192,11 @@ async function verifyRepository({ filePath, requireDefaultSuite }) {
 
 function hasPositiveFixtureResult(results) {
   for (const result of results) {
-    for (const uri of locationsInResult(result)) {
-      const details = locationDetails(uri);
-      if (details.uri.includes("password-hash.js")) return true;
+    for (const location of locationsInResult(result)) {
+      const details = locationDetails(location);
+      if (details.uri.includes("password-hash.js")) {
+        return true;
+      }
     }
   }
   return false;
@@ -195,7 +219,10 @@ function parseArguments(args) {
   if (selectedModes.length !== 1 || !filePath) {
     throw new Error("Usage: node verify-sarif.mjs <sarif-path> (--repository|--repository-custom|--positive-fixture)");
   }
-  return { mode: selectedModes[0], filePath };
+  return {
+    mode: selectedModes[0],
+    filePath,
+  };
 }
 
 async function main() {
