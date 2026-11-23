@@ -15,7 +15,6 @@ import {
   validatePreflightReport,
   extractTrackingIssueNumber,
   validatePullRequestEvidence,
-  selectPullRequestSnapshot,
 } from './task-preflight.js';
 
 const CURRENT_WORKFLOW_RUN_URL = 'https://github.com/45s/coinzilla/actions/runs/123456789';
@@ -31,7 +30,14 @@ function buildIssueBody({
   }).join('\n\n');
 }
 
-test('uses the live PR body but rejects a head that changed after the workflow event', () => {
+test('uses the live PR body but rejects a head that changed after the workflow event', async () => {
+  const { selectPullRequestSnapshot } = await import('./task-preflight.js');
+  assert.equal(
+    typeof selectPullRequestSnapshot,
+    'function',
+    'The validator must expose the live PR snapshot selector.',
+  );
+
   const eventPullRequest = {
     number: 1762,
     body: 'Fixes #1754\\n\\nFinal source commit: old-sha',
