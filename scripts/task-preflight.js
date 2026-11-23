@@ -373,11 +373,12 @@ async function readPreflightTiming({ repo, token, pr, preflight }) {
   const recordedBeforeImplementation = Boolean(
     firstCommitDate && preflight.createdAt && Date.parse(preflight.createdAt) <= Date.parse(firstCommitDate),
   );
-  return { ancestor, recordedBeforeImplementation };
+  return { ancestor,
+recordedBeforeImplementation };
 }
 async function isPreflightAncestor({ repo, token, commitSha, headSha }) {
   const comparison = await api({
-    path: '/repos/' + repo + '/compare/' + commitSha + '...' + headSha,
+    path: `/repos/${  repo  }/compare/${  commitSha  }...${  headSha}`,
     token,
   });
   if (comparison.total_commits > comparison.commits.length) {
@@ -387,7 +388,7 @@ async function isPreflightAncestor({ repo, token, commitSha, headSha }) {
 }
 async function getFirstPullRequestCommitDate({ repo, token, baseSha, headSha }) {
   const comparison = await api({
-    path: '/repos/' + repo + '/compare/' + baseSha + '...' + headSha,
+    path: `/repos/${  repo  }/compare/${  baseSha  }...${  headSha}`,
     token,
   });
   if (comparison.status !== 'ahead' && comparison.status !== 'identical') {
