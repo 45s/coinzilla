@@ -204,6 +204,11 @@
           "path": "test/replays/doge-zro-conservative-replay.test.js",
           "name": "accounts distinct partial BUY fills when their cumulative order reports arrive out of order",
           "kind": "integration"
+        },
+        {
+          "path": "test/audits/2026-11-22-conservative-recovery-archive.test.js",
+          "name": "replays a duplicate archived SELL fill without double-counting proceeds or profit",
+          "kind": "integration"
         }
       ],
       "runtimeStatus": "active",
