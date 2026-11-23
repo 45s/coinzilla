@@ -1417,6 +1417,56 @@ test("treats decimal-formatted zero as no execution in trailing BUY cancellation
   assert.deepEqual(harness.pauses, [])
 })
 
+function createBuyExecutionEvidence({
+  order,
+  tradeId,
+  fillQuantity = order.originalQuantity.amount,
+  fillClientOrderId,
+  executedQuantity = order.originalQuantity,
+  status,
+  executedAt,
+  updatedAt,
+  completedAt,
+} = {}) {
+  const fill = new Fill({
+    tradeId,
+    ...(fillClientOrderId ? { clientOrderId: fillClientOrderId } : {}),
+    brokerOrderId: order.brokerOrderId,
+    market,
+    side: "BUY",
+    price: order.limitPrice,
+    quantity: fillQuantity === order.originalQuantity.amount
+      ? order.originalQuantity
+      : new Quantity({ amount: fillQuantity, asset: baseAsset }),
+    quoteQuantity: new Money({
+      amount: multiplyDecimal({
+        left: order.limitPrice.amount,
+        right: fillQuantity,
+      }),
+      asset: quoteAsset,
+    }),
+    commissions: [],
+    commissionStatus: "COMPLETE",
+    executedAt,
+  })
+  const executedOrder = new CanonicalOrder({
+    clientOrderId: order.clientOrderId,
+    brokerOrderId: order.brokerOrderId,
+    market,
+    side: "BUY",
+    type: order.type,
+    limitPrice: order.limitPrice,
+    originalQuantity: order.originalQuantity,
+    executedQuantity,
+    status,
+    createdAt: order.createdAt,
+    acknowledgedAt: order.acknowledgedAt,
+    updatedAt,
+    ...(completedAt === undefined ? {} : { completedAt }),
+  })
+  return { fill, executedOrder }
+}
+
 test("treats decimal-formatted zero as no execution in recovery SELL cancellation reconciliation", async () => {
   const seeded = makeSeededRecoveryState()
   const harness = await createHarness({
@@ -1435,36 +1485,11 @@ test("treats decimal-formatted zero as no execution in recovery SELL cancellatio
   })
   const sellOrder = harness.engine.getOrders().find((order) => order.side === "SELL")
   const buyOrder = harness.engine.getOrders().find((order) => order.side === "BUY")
-  const fill = new Fill({
+  const { fill, executedOrder: filledOrder } = createBuyExecutionEvidence({
+    order: buyOrder,
     tradeId: "decimal-zero-cancel-buy-fill",
-    brokerOrderId: buyOrder.brokerOrderId,
-    market,
-    side: "BUY",
-    price: buyOrder.limitPrice,
-    quantity: buyOrder.originalQuantity,
-    quoteQuantity: new Money({
-      amount: multiplyDecimal({
-        left: buyOrder.limitPrice.amount,
-        right: buyOrder.originalQuantity.amount,
-      }),
-      asset: quoteAsset,
-    }),
-    commissions: [],
-    commissionStatus: "COMPLETE",
-    executedAt: 3,
-  })
-  const filledOrder = new CanonicalOrder({
-    clientOrderId: buyOrder.clientOrderId,
-    brokerOrderId: buyOrder.brokerOrderId,
-    market,
-    side: "BUY",
-    type: buyOrder.type,
-    limitPrice: buyOrder.limitPrice,
-    originalQuantity: buyOrder.originalQuantity,
-    executedQuantity: buyOrder.originalQuantity,
     status: "FILLED",
-    createdAt: buyOrder.createdAt,
-    acknowledgedAt: buyOrder.acknowledgedAt,
+    executedAt: 3,
     updatedAt: 3,
     completedAt: 3,
   })
@@ -1494,44 +1519,14 @@ test("rejects a stream fill whose optional clientOrderId conflicts with its regi
     },
   })
   const [order] = harness.engine.getOrders()
-  const fillQuantity = "0.1"
-  const fill = new Fill({
+  const { fill, executedOrder: partialOrder } = createBuyExecutionEvidence({
+    order,
     tradeId: "wrong-client-fill",
-    clientOrderId: "h-foreign-client-order",
-    brokerOrderId: order.brokerOrderId,
-    market,
-    side: "BUY",
-    price: order.limitPrice,
-    quantity: new Quantity({
-      amount: fillQuantity,
-      asset: baseAsset
-    }),
-    quoteQuantity: new Money({
-      amount: multiplyDecimal({
-        left: order.limitPrice.amount,
-        right: fillQuantity
-      }),
-      asset: quoteAsset,
-    }),
-    commissions: [],
-    commissionStatus: "COMPLETE",
-    executedAt: 2,
-  })
-  const partialOrder = new CanonicalOrder({
-    clientOrderId: order.clientOrderId,
-    brokerOrderId: order.brokerOrderId,
-    market,
-    side: "BUY",
-    type: order.type,
-    limitPrice: order.limitPrice,
-    originalQuantity: order.originalQuantity,
-    executedQuantity: new Quantity({
-      amount: fillQuantity,
-      asset: baseAsset
-    }),
+    fillQuantity: "0.1",
+    fillClientOrderId: "h-foreign-client-order",
+    executedQuantity: new Quantity({ amount: "0.1", asset: baseAsset }),
     status: "PARTIALLY_FILLED",
-    createdAt: order.createdAt,
-    acknowledgedAt: order.acknowledgedAt,
+    executedAt: 2,
     updatedAt: 2,
   })
   const result = await harness.engine.processUserDataEvent({
