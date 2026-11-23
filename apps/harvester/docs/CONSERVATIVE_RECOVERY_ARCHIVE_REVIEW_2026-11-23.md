@@ -36,7 +36,7 @@ The terminal log contains 28 occurrences of:
 - `HARVESTER_ORDER_HISTORY_RECORD_INVALID`
 - `OrderHistoryValidationError`
 
-The log does not expose the invalid field or validation stage, so the offending historical field and root cause remain unknown. Current source review found a diagnosability gap: `OrderHistoryValidationError` retains `context.field`, but `createFailureDiagnostic()` in `src/infrastructure/persistence/create-order-history-observer.js` does not include that field in its diagnostic. `createOrderHistoryRecord()` validates provider/account/client-order identity, market identity/assets, side/type/status, execution quantities, optional timestamps, and source-event identity/timestamp. These are candidate validation boundaries only; none is identified as the historical failure. Add a focused diagnostic regression and continue bounded evidence review; do not infer a field.
+The log does not expose the invalid field or validation stage, so the offending historical field and root cause remain unknown. At the time of the initial review, `OrderHistoryValidationError` retained `context.field` but `createFailureDiagnostic()` omitted it. This forward-looking diagnostics gap is now fixed in commit `8a84565`: the observer emits a bounded safe dotted identifier from `error.context.field`, and `order-history-observer.test.js` verifies the mapping diagnostic. `createOrderHistoryRecord()` validates provider/account/client-order identity, market identity/assets, side/type/status, execution quantities, optional timestamps, and source-event identity/timestamp. These remain candidate historical validation boundaries only; the new test's `providerInstanceId` case is synthetic and does not identify the field in the 28 archived failures. The historical field and root cause remain unknown.
 
 ### 3.2 Recovery outcomes and safety pauses
 
@@ -116,7 +116,7 @@ These were identified in the prior investigation checkpoint and still require im
 3. **Archive digest proof — implemented:** distinct terminal digests and 49-record chain-link/reference assertions are in place; current-head CI still needs to pass.
 4. **Test inventory — corrected:** two stale RS test paths replaced with current evidence; the real atomic accounting test is confirmed present.
 5. **Late SELL accounting — implemented;** retain the real Portfolio/RecoveryLedger scenario as required evidence and keep the separate stubbed pause-gate test accurately classified.
-6. **Order-history errors — investigate/diagnose:** add `field` to observer diagnostics and test it; correlate the 28 historical errors only as far as the selected logs permit. Do not claim a historical root cause without raw event evidence.
+6. **Order-history errors — continue historical investigation:** field-level observer diagnostics are implemented and covered prospectively. Correlate the 28 historical errors only as far as the selected logs permit. Do not claim a historical root cause without raw event evidence.
 7. **CI:** rerun Harvester targeted tests, workspace tests/coverage, strict changed-file ESLint, JavaScript quality/syntax, actionlint, dependency audit and documentation links on the exact final head. Task Preflight is retired and is not a gate.
 8. **Keep PR #1761 draft and unmerged** until all acceptance criteria and exact-head required checks pass. No TESTNET/LIVE validation is authorized by this task.
 
