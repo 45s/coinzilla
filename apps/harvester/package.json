@@ -68,6 +68,7 @@
       "src/domain/strategies/recovery-seller/calculate-profitability.test.js",
       "test/scenarios/recovery-seller-profitability.scenario.test.js",
       "test/scenarios/recovery-seller-mixed-sell-accounting.scenario.test.js",
+      "test/scenarios/recovery-seller-cycle-lifecycle.scenario.test.js",
       "src/domain/strategies/recovery-seller/calculate-sell-plan.test.js",
       "src/domain/strategies/recovery-seller/evaluate-sell-decision.test.js",
       "src/domain/strategies/recovery-seller/stop-decision.test.js",
