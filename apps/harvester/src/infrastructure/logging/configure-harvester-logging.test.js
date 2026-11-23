@@ -318,16 +318,27 @@ test("shows order-history validation field and order identity without deduplicat
     data: {
       ...diagnostic,
       field: "market.baseAsset.code",
+      clientOrderId: "h-dff68008c72c47a59368ad-2",
+    },
+  })
+  transport.write({
+    timestamp: "2026-11-22T08:52:29.000Z",
+    level: "error",
+    data: {
+      ...diagnostic,
+      field: "market.baseAsset.code",
       clientOrderId: "h-dff68008c72c47a59368ad-4",
     },
   })
 
   const lines = written.trim().split("\n")
-  assert.equal(lines.length, 2, "Different validation fields and client-order identities must remain distinct console diagnostics.")
+  assert.equal(lines.length, 3, "Different validation fields and client-order identities must remain distinct console diagnostics.")
   assert.match(lines[0], /providerInstanceId/, "The first compact diagnostic must expose its safe invalid field.")
   assert.match(lines[0], /h-dff68008c72c47a59368ad-2/, "The first compact diagnostic must identify its affected order.")
   assert.match(lines[1], /market\.baseAsset\.code/, "The second compact diagnostic must expose its distinct invalid field.")
-  assert.match(lines[1], /h-dff68008c72c47a59368ad-4/, "The second compact diagnostic must identify its affected order.")
+  assert.match(lines[1], /h-dff68008c72c47a59368ad-2/, "A field change alone must produce a distinct diagnostic for the same order.")
+  assert.match(lines[2], /market\.baseAsset\.code/, "The third compact diagnostic must retain its validation field.")
+  assert.match(lines[2], /h-dff68008c72c47a59368ad-4/, "An order-identity change alone must produce a distinct diagnostic for the same field.")
   assert.doesNotMatch(written, /Previous identical log entry repeated/, "Different validation failures must not be collapsed as identical.")
   assert.ok(lines.every((line) => line.length <= 200), "Each actionable validation diagnostic must remain within the console line limit.")
   output.destroy()

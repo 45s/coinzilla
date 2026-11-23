@@ -9,18 +9,18 @@ created: 2026-11-23
 # Harvester order-history projection failure investigation
 
 **Tracking issue:** [#1789 — historical order-history projection failures](https://github.com/45s/coinzilla/issues/1789)  
-**Code baseline reviewed:** \`45s/coinzilla@44ed6ce4dd32437e5343c2b1c43171f290f4836e\` (\`develop\`)  
-**Immutable archive:** \`45s/coinzilla-archive@f283c90db9143c74683ae5bf9c7bb52e09590d56\`  
-**Archive directory:** \`archives/2026-11-22T17-35-17Z_77213df6/\`  
-**Archive creation:** \`2026-11-22T17:35:17.954Z\`
+**Code baseline reviewed:** `45s/coinzilla@44ed6ce4dd32437e5343c2b1c43171f290f4836e` (`develop`)  
+**Immutable archive:** `45s/coinzilla-archive@f283c90db9143c74683ae5bf9c7bb52e09590d56`  
+**Archive directory:** `archives/2026-11-22T17-35-17Z_77213df6/`  
+**Archive creation:** `2026-11-22T17:35:17.954Z`
 
 ## Executive result
 
-The archive proves **28 visible terminal error groups** with code \`HARVESTER_ORDER_HISTORY_RECORD_INVALID\`. Each group is individually indexed below. The terminal's consecutive-identical-entry suppression reports another 30 matching logger writes, so the 28 visible groups represent **58 console logger calls**. This is not evidence of 58 distinct malformed orders: the console fingerprint omits the event ID, client-order ID and validation field.
+The archive proves **28 visible terminal error groups** with code `HARVESTER_ORDER_HISTORY_RECORD_INVALID`. Each group is individually indexed below. The terminal's consecutive-identical-entry suppression reports another 30 matching logger writes, so the 28 visible groups represent **58 console logger calls**. This is not evidence of 58 distinct malformed orders: the console fingerprint omits the event ID, client-order ID and validation field.
 
-The current source narrows this error code to **order-history record mapping/validation**, not a database upsert failure: \`OrderHistoryValidationError\` is thrown by \`createOrderHistoryRecord()\`, and \`createOrderHistoryObserver()\` records that failure at stage \`mapping\`. The archive does not identify the historical runtime source SHA, so this is a current-source attribution, not an exact historical build attestation.
+The current source narrows this error code to **order-history record mapping/validation**, not a database upsert failure: `OrderHistoryValidationError` is thrown by `createOrderHistoryRecord()`, and `createOrderHistoryObserver()` records that failure at stage `mapping`. The archive does not identify the historical runtime source SHA, so this is a current-source attribution, not an exact historical build attestation.
 
-A prospective diagnostics defect is confirmed: the observer now supplies a safe \`field\` and order context, but the compact terminal presentation does not display \`field\` or \`clientOrderId\`, and its duplicate fingerprint consequently treats different validation fields/orders as identical when the remaining summary fields match. This task adds a regression test for that presentation contract before implementing the smallest fix.
+A prospective diagnostics defect is confirmed: the observer now supplies a safe `field` and order context, but the compact terminal presentation does not display `field` or `clientOrderId`, and its duplicate fingerprint consequently treats different validation fields/orders as identical when the remaining summary fields match. This task adds a regression test for that presentation contract before implementing the smallest fix.
 
 **Historical root cause remains unresolved.** The selected terminal log has no raw event, invalid field, source event ID or client-order ID. The two full cumulative logs are present in the archive but are too large for the available GitHub file reader to return, including line-range requests. The database dump remains uninspected; no authorization to inspect it is inferred.
 
@@ -30,22 +30,22 @@ Read-only inspection of the immutable archive's manifest, fact stream, selected 
 
 ## Evidence provenance and integrity
 
-The archive manifest declares \`snapshotType: selected-log-evidence\`, with cumulative logs selected as the final 5% of each file and only the newest compressed session directory included. It is not a complete raw-log export.
+The archive manifest declares `snapshotType: selected-log-evidence`, with cumulative logs selected as the final 5% of each file and only the newest compressed session directory included. It is not a complete raw-log export.
 
 | Artifact | Size | SHA-256 from archive manifest | Git blob SHA |
 |---|---:|---|---|
-| \`manifest.json\` | 3,072 bytes | — | \`ac7fd40b1decc100738962584ebad5097c3d903d\` |
-| \`recovery-facts/facts.jsonl\` | 48,401 bytes | \`1b923c1a090904df601463d14681090165b7f8d50a3806e96655699d90a97295\` | \`a57acc6f4291972b8ecdb578cdef39101745fda8\` |
-| \`recovery-facts/manifest.jsonl\` | 16,089 bytes | \`3063f9ce829cce8a66a471672abee6b77ff52b6647b0b786381adc1db5f264bc\` | — |
-| \`logs/cumulative/terminal.log\` | 41,214 bytes | \`6ec912690afbfeb1d9c87c674647a34e11d855b2d59337c34ac58d54d2a93d33\` | \`336aadc4ff5b18a9c6628f1b63fbf78f7202a76f\` |
-| \`logs/cumulative/harvester.log\` | 96,308,862 bytes | \`60017db6d228c5589a21c80223e4288488d5c5dee14468d07e7eb9e24003fc00\` | \`2c2b3fc8b4c43b7716ac834e5b717a8d696ca67f\` |
-| \`logs/cumulative/trace.log\` | 97,056,981 bytes | \`8a24cdb0e575d853bdcb795bde697d6e735260e94b1f227b813745e9a5dabb16\` | \`b71b0d8200285f9179d4554402b357e85deb3830\` |
+| `manifest.json` | 3,072 bytes | — | `ac7fd40b1decc100738962584ebad5097c3d903d` |
+| `recovery-facts/facts.jsonl` | 48,401 bytes | `1b923c1a090904df601463d14681090165b7f8d50a3806e96655699d90a97295` | `a57acc6f4291972b8ecdb578cdef39101745fda8` |
+| `recovery-facts/manifest.jsonl` | 16,089 bytes | `3063f9ce829cce8a66a471672abee6b77ff52b6647b0b786381adc1db5f264bc` | — |
+| `logs/cumulative/terminal.log` | 41,214 bytes | `6ec912690afbfeb1d9c87c674647a34e11d855b2d59337c34ac58d54d2a93d33` | `336aadc4ff5b18a9c6628f1b63fbf78f7202a76f` |
+| `logs/cumulative/harvester.log` | 96,308,862 bytes | `60017db6d228c5589a21c80223e4288488d5c5dee14468d07e7eb9e24003fc00` | `2c2b3fc8b4c43b7716ac834e5b717a8d696ca67f` |
+| `logs/cumulative/trace.log` | 97,056,981 bytes | `8a24cdb0e575d853bdcb795bde697d6e735260e94b1f227b813745e9a5dabb16` | `b71b0d8200285f9179d4554402b357e85deb3830` |
 
-The 49 durable facts cover sequence 0–48. The existing archive review verified the fact and manifest digest chains and their one-to-one commit references. The first fact was recorded at \`2026-11-22T08:52:02.005Z\` (10:52:02 local UTC+2).
+The 49 durable facts cover sequence 0–48. The existing archive review verified the fact and manifest digest chains and their one-to-one commit references. The first fact was recorded at `2026-11-22T08:52:02.005Z` (10:52:02 local UTC+2).
 
-The terminal log is 429 lines according to the archive review. Direct retrieval returned the complete selected terminal content and all 28 matching error lines. For both large cumulative files, \`fetch_file\` returned empty content for requested line ranges (including lines 1–20); the Git blob fetch was rejected because its decoded response exceeded the connector's 67,108,864-byte limit. The files are **present**, not absent; their contents remain inaccessible through this reader.
+The terminal log is 429 lines according to the archive review. Direct retrieval returned the complete selected terminal content and all 28 matching error lines. For both large cumulative files, `fetch_file` returned empty content for requested line ranges (including lines 1–20); the Git blob fetch was rejected because its decoded response exceeded the connector's 67,108,864-byte limit. The files are **present**, not absent; their contents remain inaccessible through this reader.
 
-The archive also contains \`data/testnet/database-dump.json\` (2,645,901 bytes, SHA-256 \`cc024ea0842bed65f53081263b5dbc668099c09beac14a8d2835660d357e744a\`). It was not opened or queried.
+The archive also contains `data/testnet/database-dump.json` (2,645,901 bytes, SHA-256 `cc024ea0842bed65f53081263b5dbc668099c09beac14a8d2835660d357e744a`). It was not opened or queried.
 
 ## All 28 visible terminal groups
 
@@ -119,41 +119,43 @@ These alignments establish temporal proximity only. In particular, the 10:52:28 
 
 ### Mapping stage in current source
 
-At the reviewed \`develop\` baseline:
+At the reviewed `develop` baseline:
 
-- \`OrderHistoryValidationError\` is constructed by \`apps/harvester/src/domain/order-history/order-history-record.js\` when a record invariant fails.
-- \`createOrderHistoryObserver()\` calls \`createOrderHistoryRecord()\` inside its mapping try/catch and records caught validation errors with \`stage: "mapping"\`.
-- The error context carries a safe dotted \`field\` plus available provider/account/client-order identity.
+- `OrderHistoryValidationError` is constructed by `apps/harvester/src/domain/order-history/order-history-record.js` when a record invariant fails.
+- `createOrderHistoryObserver()` calls `createOrderHistoryRecord()` inside its mapping try/catch and records caught validation errors with `stage: "mapping"`.
+- The error context carries a safe dotted `field` plus available provider/account/client-order identity.
 - Validation boundaries include provider/account/client identity; market and asset identity; side/type/status; exact execution quantities and their consistency; optional price, ownership, quote quantity and timestamps; and source-event identity/name/source/timestamp.
 
-Therefore this error code is a domain record-mapping validation failure in the current implementation, not a repository \`upsert\` failure. The archive manifest does not identify the exact Harvester runtime commit, so this attribution must not be promoted to an exact historical source-version claim.
+Therefore this error code is a domain record-mapping validation failure in the current implementation, not a repository `upsert` failure. The archive manifest does not identify the exact Harvester runtime commit, so this attribution must not be promoted to an exact historical source-version claim.
 
 ### Why the terminal hid the field
 
-\`createFailureDiagnostic()\` now includes \`field\`, \`symbol\` and \`clientOrderId\` (the field-level diagnostic change was delivered under #1362). However, \`createConsoleRecordPresentation()\` currently selects only a subset of fields for terminal output and excludes both \`field\` and \`clientOrderId\`. Its fingerprint is built from that reduced summary. Thus two consecutive failures with the same message/code/name/symbol but different invalid fields or order identities can be rendered as one repeated-entry group.
+`createFailureDiagnostic()` now includes `field`, `symbol` and `clientOrderId` (the field-level diagnostic change was delivered under #1362). However, `createConsoleRecordPresentation()` currently selects only a subset of fields for terminal output and excludes both `field` and `clientOrderId`. Its fingerprint is built from that reduced summary. Thus two consecutive failures with the same message/code/name/symbol but different invalid fields or order identities can be rendered as one repeated-entry group.
 
 The current persistence composition can also create both a legacy order-history observer and a relational order-history observer on the same EventBus. This is a plausible source of duplicate identical log calls if both were active in the archived runtime, but the archive's selected terminal output does not prove which observer emitted each call. Do not infer 29 distinct invalid events or attribute the 58 calls to the two observers without structured logs.
 
 ### Existing tests
 
-- \`order-history-record.test.js\` covers valid record mapping, exact decimal preservation, collision-safe composite identity, skipping zero-execution orders, and rejecting incomplete provider identity.
-- \`order-history-observer.test.js\` covers valid lifecycle projection, queue overflow, repository failure, close/drain behavior, and field-level diagnostics for \`providerInstanceId\` and \`market.baseAsset.code\`.
-- \`configure-harvester-logging.test.js\` covers compact output and duplicate suppression, but did not prove that different order-history validation fields and client-order identities remain visible and distinct.
+- `order-history-record.test.js` covers valid record mapping, exact decimal preservation, collision-safe composite identity, skipping zero-execution orders, and rejecting incomplete provider identity.
+- `order-history-observer.test.js` covers valid lifecycle projection, queue overflow, repository failure, close/drain behavior, and field-level diagnostics for `providerInstanceId` and `market.baseAsset.code`.
+- `configure-harvester-logging.test.js` covers compact output and duplicate suppression, but did not prove that different order-history validation fields and client-order identities remain visible and distinct.
 - The order-history observer regression from #1362 proves the field reaches the logger; it does not prove the compact console renders it.
 
-### Focused regression being added
+### Test-first result and focused correction
 
-A deterministic console test publishes two otherwise-identical order-history failures with different safe validation fields and client-order IDs. It requires two distinct terminal lines, both fields and IDs, and the 200-character line bound. The test is added to the Harvester targeted-test file list so the relevant regression runs in the targeted workflow as well as the full package suite.
+The regression was first committed without the production change on `39c4e5eb3730ac3ce7abd3a823492bd401b44f0e`. GitHub Actions' Harvester Targeted Tests failed for the expected reason: the test expected two distinct console lines but received one. The remaining selected tests passed.
 
-This fixes future diagnosis and prevents distinct validation failures from being hidden by console summary deduplication. It does **not** identify or repair the invalid historical input.
+The GREEN implementation in [PR #1796](https://github.com/45s/coinzilla/pull/1796) now gives order-history validation failures a dedicated bounded console summary containing safe `field`, `symbol`, `clientOrderId` and `errorCode`. Those values are included in the summary fingerprint. The regression now uses three events to prove both independent invariants: changing only the field keeps two records distinct; changing only the client-order ID also keeps two records distinct. It also checks the stable error code and 200-character bound.
+
+This improves future diagnosis and prevents distinct validation failures from being hidden by console summary deduplication. It does **not** identify or repair the invalid historical input. Exact-head GREEN and full CI remain pending until the new commit completes.
 
 ## Remaining root-cause evidence
 
 Keep #1789 open until the following is resolved:
 
-1. Retrieve the archived cumulative \`harvester.log\` and \`trace.log\` in bounded chunks (or through another read-only path) and extract each matching structured record with event ID, clientOrderId, field, observer/stage and source context. The files are present and their hashes are recorded above; the current connector rejects their size.
+1. Retrieve the archived cumulative `harvester.log` and `trace.log` in bounded chunks (or through another read-only path) and extract each matching structured record with event ID, clientOrderId, field, observer/stage and source context. The files are present and their hashes are recorded above; the current connector rejects their size.
 2. Identify the exact Harvester runtime source SHA for the archived session, then verify the historical mapper and observer code against that SHA.
-3. Reconcile each structured failure with the raw \`order.updated\`/source event, nearby broker execution report, canonical order and Journal fill facts. Do not associate a fill merely because timestamps are close.
+3. Reconcile each structured failure with the raw `order.updated`/source event, nearby broker execution report, canonical order and Journal fill facts. Do not associate a fill merely because timestamps are close.
 4. Determine whether each failure affected one or both history projections and whether any expected row was absent. Keep this separate from Portfolio/RecoveryLedger and authoritative order-registry accounting unless evidence proves a link.
 5. Inspect the archived database dump only after explicit owner authorization. No database contents have been inspected in this investigation.
 
@@ -161,6 +163,6 @@ Keep #1789 open until the following is resolved:
 
 - Confirmed: 28 visible terminal groups, 58 console logger calls represented by repeat counters, and a current-source order-history record-mapping validation path.
 - Confirmed prospective gap: compact terminal output omitted validation field and client-order identity and could merge distinct failures.
-- In progress: test-first terminal diagnostic correction.
+- Implemented in draft PR #1796: bounded order-history failure summary and field/order-aware deduplication fingerprint; exact-head GREEN/CI pending.
 - Unresolved: historical invalid field(s), exact input shape(s), number of distinct invalid source events, exact historical source stage/build, observer attribution, and operational impact.
 - No source-ledger or database backfill; no archive rewrite; no TESTNET/LIVE activity.
