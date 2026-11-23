@@ -282,5 +282,5 @@ The scenario-definition and runner implementation is tracked in [#1797](https://
 - Generated reports: `reports/conservative-scenarios/scenario-inventory.json`, `scenario-results.json`, and `scenario-coverage.json`.
 - CI evidence: the dedicated `Harvester Conservative scenarios` workflow uploads a `conservative-scenario-reports` artifact.
 
-The initial catalog has 15 TEST-MAPPED scenarios, one MISSING configuration scenario, and one UNSUPPORTED runtime-restart scenario. TEST-MAPPED is not VERIFIED: named test mapping is present, but assertion-level review and exact-head execution evidence are still required. The coverage report's test-universe limitation is the named test set in `critical-behaviors.json`, not every Harvester test file.
+The initial catalog has 15 TEST-MAPPED scenarios, one PARTIAL configuration scenario, and one UNSUPPORTED runtime-restart scenario. TEST-MAPPED and PARTIAL are not VERIFIED: named test mappings are present, but assertion-level review and exact-head execution evidence are still required. The coverage report's test-universe limitation is the named test set in `critical-behaviors.json`, not every Harvester test file.
 

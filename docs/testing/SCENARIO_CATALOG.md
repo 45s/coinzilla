@@ -429,7 +429,7 @@ The [Recovery Seller Domain Specification](../../apps/harvester/docs/domain/reco
 
 ### Conservative executable scenario matrix
 
-The executable definitions are maintained in `apps/harvester/test/scenarios/conservative/`; the shared loader maps them to the existing critical behavior registry in `apps/harvester/docs/critical-behaviors.json`. The runner command is `pnpm --filter @coinzilla/harvester scenarios:conservative`. Generated inventory, execution, and coverage JSON is written to `apps/harvester/reports/conservative-scenarios/` and uploaded by the dedicated Harvester Conservative scenarios workflow.
+The executable definitions are maintained in `apps/harvester/test/scenarios/conservative/`; the shared loader maps them to the existing critical behavior registry in `apps/harvester/docs/critical-behaviors.json` plus supplemental named test mappings in `apps/harvester/test/scenarios/shared/additional-test-mappings.js`. The runner command is `pnpm --filter @coinzilla/harvester scenarios:conservative`. Generated inventory, execution, and coverage JSON is written to `apps/harvester/reports/conservative-scenarios/` and uploaded by the dedicated Harvester Conservative scenarios workflow.
 
 | Scenario ID | Category | Priority | Initial evidence status |
 |---|---|---:|---|
@@ -447,7 +447,7 @@ The executable definitions are maintained in `apps/harvester/test/scenarios/cons
 | `CON-EVENT-001` | event-reliability | P0 | TEST-MAPPED |
 | `CON-PERSIST-001` | persistence-restart-recovery | P1 | TEST-MAPPED |
 | `CON-PERSIST-002` | persistence-restart-recovery | P1 | UNSUPPORTED |
-| `CON-CONFIG-001` | configuration | P1 | MISSING |
+| `CON-CONFIG-001` | configuration | P1 | PARTIAL |
 | `CON-SAFETY-001` | safety-risk-controls | P0 | TEST-MAPPED |
 | `CON-RUNTIME-001` | runtime-coordinator-integration | P1 | TEST-MAPPED |
 

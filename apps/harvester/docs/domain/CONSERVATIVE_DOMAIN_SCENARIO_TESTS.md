@@ -107,7 +107,7 @@ Required adversarial variants include:
 
 ## Executable Conservative scenario inventory
 
-The executable scenario definitions live under `test/scenarios/conservative/` and use stable `CON-*` IDs. The shared loader resolves implementation modules and named test cases from the existing `docs/critical-behaviors.json` registry. That registry remains the source of truth for critical behavior ownership; this suite does not duplicate it.
+The executable scenario definitions live under `test/scenarios/conservative/` and use stable `CON-*` IDs. The shared loader resolves implementation modules and named test cases from the existing `docs/critical-behaviors.json` registry and supplemental scenario-specific mappings in `test/scenarios/shared/additional-test-mappings.js`. That registry remains the source of truth for critical behavior ownership; this suite does not duplicate it.
 
 The inventory currently contains 17 scenarios across all 16 requested categories. The definitions carry preconditions, initial state, ordered input events, expected state/orders/accounting/side effects, invariants, specification requirement IDs, source files, named tests, priority, tags, and evidence status.
 
@@ -140,7 +140,7 @@ The dedicated `Harvester Conservative scenarios` workflow runs this offline suit
 
 The repository's shared vocabulary is retained: `VERIFIED`, `PARTIAL`, `MISSING`, `BLOCKED`, `SPECIFIED`, `TEST-MAPPED`, and `UNSUPPORTED`. `TEST-MAPPED` means a named test path and title are linked; it is not equivalent to `VERIFIED`. Promotion to `VERIFIED` requires assertion-level business-outcome review and exact commit/test-command evidence.
 
-The initial inventory marks the invalid-configuration scenario `MISSING` pending test discovery. Runtime restart/state restoration is `UNSUPPORTED` under the active Conservative specification §7 and remains subject to the separate acceptance gates in #654. Offline persistence tests are not runtime restoration evidence.
+The initial inventory marks the invalid-configuration scenario `PARTIAL`: global strategy routing and mode tests exist, but Conservative pair-specific financial validation remains incomplete. Runtime restart/state restoration is `UNSUPPORTED` under the active Conservative specification §7 and remains subject to the separate acceptance gates in #654. Offline persistence tests are not runtime restoration evidence.
 
-The current report's unmapped-test universe is the named test set in `docs/critical-behaviors.json`; it does not claim to scan every Harvester test file. This limitation is recorded in the generated coverage report.
+The report's unmapped-test universe is the named test set in `docs/critical-behaviors.json`; supplemental direct mappings include selected `strategy.test.js` and `resolve-harvester-options.test.js` cases. It does not claim to scan every Harvester test file. This limitation is recorded in the generated coverage report.
 

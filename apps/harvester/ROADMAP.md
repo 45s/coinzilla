@@ -2131,5 +2131,5 @@ The detailed evidence, implementation commits, CI state and remaining unknowns a
 
 The scenario-definition and reporting workstream is tracked separately from the active domain-test implementation in [#1763](https://github.com/45s/coinzilla/issues/1763). Child issue [#1797](https://github.com/45s/coinzilla/issues/1797) owns the reusable ES-module scenario schema/loader/runner, stable `CON-*` inventory, JSON reports, and offline CI artifact workflow. It reuses `docs/critical-behaviors.json` and the shared testing methodology; it does not introduce a second critical-behavior registry or change production trading logic.
 
-Initial implementation branch baseline: `develop` commit `05deb23a12c56ad64b231f0c59392e6d916447b1` (2026-11-23). The current inventory has 17 scenarios across 16 categories; 15 are TEST-MAPPED, one configuration scenario is MISSING, and runtime restart restoration is UNSUPPORTED by specification §7.
+Initial implementation branch baseline: `develop` commit `05deb23a12c56ad64b231f0c59392e6d916447b1` (2026-11-23). The current inventory has 17 scenarios across 16 categories; 15 are TEST-MAPPED, one configuration scenario is PARTIAL, and runtime restart restoration is UNSUPPORTED by specification §7.
 
