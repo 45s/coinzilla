@@ -106,7 +106,10 @@ test("requires explicit confirmation and TESTNET mode before deleting anything",
   }))
 
   await assert.rejects(
-    runHarvesterOperationalStateReset(createResetArguments({ fixture, overrides: { args: [] } })),
+    runHarvesterOperationalStateReset(createResetArguments({
+      fixture,
+      overrides: { args: [] },
+    })),
     /--confirm/,
     "The reset command must require an explicit destructive-operation confirmation.",
   )

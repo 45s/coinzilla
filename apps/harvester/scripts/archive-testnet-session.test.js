@@ -22,14 +22,17 @@ function createJsonLines(records) {
 }
 
 function createLogFixtureFiles() {
-  const structuredRecords = createJsonLines(Array.from({ length: 20 }, (_, index) => ({
-    context: {
-      runtimeSessionId: index % 2 === 0 ? RUNTIME_SESSION_ID : LIVE_SESSION_ID,
-    },
-    data: {
-      message: index % 2 === 0 ? "TESTNET_STRUCTURED_EVIDENCE" : "LIVE_STRUCTURED_SECRET",
-    },
-  })))
+  const structuredRecords = createJsonLines(Array.from({ length: 20 }, (...parameters) => {
+    const [, index] = parameters
+    return {
+      context: {
+        runtimeSessionId: index % 2 === 0 ? RUNTIME_SESSION_ID : LIVE_SESSION_ID,
+      },
+      data: {
+        message: index % 2 === 0 ? "TESTNET_STRUCTURED_EVIDENCE" : "LIVE_STRUCTURED_SECRET",
+      },
+    }
+  }))
   return {
     "logs/sessions/2026-11-20_old/terminal.log": "older session must be excluded",
     "logs/sessions/2026-11-22_testnet/terminal.log": "latest TESTNET session evidence",
@@ -72,11 +75,14 @@ function createDataFixtureFiles() {
       runtimeSessionId: RUNTIME_SESSION_ID,
     },
   ]
-  const manifests = facts.map((fact, index) => ({
-    sequence: fact.sequence,
-    recordCount: String(index + 1),
-    lastCommittedDigest: fact.digest,
-  }))
+  const manifests = facts.map((...parameters) => {
+    const [fact, index] = parameters
+    return {
+      sequence: fact.sequence,
+      recordCount: String(index + 1),
+      lastCommittedDigest: fact.digest,
+    }
+  })
   return {
     "data/testnet/harvester.db": "sqlite main file",
     "data/testnet/harvester.db-wal": "sqlite wal evidence",

@@ -41,7 +41,8 @@ function validateArchiveRemote(remote) {
 
 const runGitDefault = (...parameters) => {
   const [args, { cwd } = {}] = parameters
-  return new Promise((resolve, reject) => {
+  return new Promise((...callbacks) => {
+    const [resolve, reject] = callbacks
     const child = spawn("git", args, {
       cwd,
       windowsHide: true,
@@ -89,7 +90,10 @@ const formatBytes = (bytes) => {
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`
 }
 
-const reportProgress = (onProgress, message) => onProgress?.(message)
+const reportProgress = (...parameters) => {
+  const [onProgress, message] = parameters
+  onProgress?.(message)
+}
 
 const getTreeSize = async (directory) => {
   const files = await listRegularFiles({ directory })
@@ -257,7 +261,10 @@ async function readCompletedTestnetSession(sessionDirectory) {
       readRegularJsonFile(identityFilename),
       readRegularJsonFile(completionFilename),
     ])
-    return isCompletedTestnetSession({ identity, completion }) ? identity : null
+    return isCompletedTestnetSession({
+      identity,
+      completion,
+    }) ? identity : null
   } catch {
     return null
   }
@@ -272,7 +279,10 @@ async function findNewestCompletedTestnetSession(sessionsDirectory) {
   for (const sessionName of sessionNames) {
     const identity = await readCompletedTestnetSession(path.join(sessionsDirectory, sessionName))
     if (identity) {
-      return { sessionName, identity }
+      return {
+        sessionName,
+        identity,
+      }
     }
   }
   throw new Error("No completed TESTNET DEV session with valid process identity was found under logs/sessions; run pnpm dev and stop it gracefully before archiving.")
@@ -395,7 +405,8 @@ async function copySessionFilteredTailFile({ source, destination, runtimeSession
           return
         }
         const selectedBytes = recordBytes.subarray(Math.max(0, startOffset - recordStart))
-        await new Promise((resolve, reject) => {
+        await new Promise((...callbacks) => {
+          const [resolve, reject] = callbacks
           output.write(selectedBytes, (error) => {
             if (error) {
               reject(error)
@@ -475,7 +486,10 @@ async function listRegularFiles({ directory, relative = "" } = {}) {
       throw new Error(`Archive contains a symbolic link: ${filename}`)
     }
     if (fileStats.isDirectory()) {
-      files.push(...await listRegularFiles({ directory, relative: childRelative }))
+      files.push(...await listRegularFiles({
+        directory,
+        relative: childRelative,
+      }))
     } else if (fileStats.isFile()) {
       files.push(childRelative.split(path.sep).join("/"))
     } else {
@@ -498,7 +512,10 @@ async function getDevelopmentDataTreeSize(directory) {
       throw new Error(`Refusing to inspect a symbolic link in DEV data: ${filename}`)
     }
     if (fileStats.isDirectory()) {
-      files.push(...await listRegularFiles({ directory, relative: entry.name }))
+      files.push(...await listRegularFiles({
+        directory,
+        relative: entry.name,
+      }))
     } else if (fileStats.isFile()) {
       files.push(entry.name)
     } else {
@@ -600,7 +617,7 @@ async function createArchiveManifest({ directory, createdAt, logRuntimeSessionId
   const files = await listRegularFiles({ directory })
   const entries = []
   let completedBytes = 0
-  const totalBytes = (await getTreeSize(directory)).totalBytes
+  const { totalBytes } = await getTreeSize(directory)
   for (const relativePath of files) {
     const filename = path.join(directory, relativePath)
     const fileStats = await stat(filename)
@@ -715,7 +732,13 @@ async function verifyExistingArchive({
   if (JSON.stringify(localFiles) !== JSON.stringify(remoteFiles)) {
     throw new Error("Remote archive already exists with a different file inventory; refusing to overwrite.")
   }
-  await verifyRemoteArchiveFiles({ directory, archiveName, localFiles, checkout, runGit })
+  await verifyRemoteArchiveFiles({
+    directory,
+    archiveName,
+    localFiles,
+    checkout,
+    runGit,
+  })
   const existingCommit = await runGit(["rev-parse", "HEAD"], { cwd: checkout })
   const remoteHead = await runGit(["ls-remote", "--heads", remote, "refs/heads/main"])
   if (remoteHead.split(/\s+/)[0] !== existingCommit) {
@@ -758,7 +781,13 @@ async function publishNewArchive({
     throw new Error("The archive push completed but remote main does not point to the published commit.")
   }
   const localFiles = await listRegularFiles({ directory })
-  await verifyRemoteArchiveFiles({ directory, archiveName, localFiles, checkout, runGit })
+  await verifyRemoteArchiveFiles({
+    directory,
+    archiveName,
+    localFiles,
+    checkout,
+    runGit,
+  })
   return {
     commit: localCommit,
     fileCount: localFiles.length,
@@ -788,7 +817,10 @@ async function publishArchive({
       recursive: true,
       mode: 0o700,
     })
-    const remoteDirectory = await createRemoteArchiveDirectory({ checkout, archiveName })
+    const remoteDirectory = await createRemoteArchiveDirectory({
+      checkout,
+      archiveName,
+    })
     if (remoteDirectory.alreadyExists) {
       return await verifyExistingArchive({
         directory,
@@ -813,16 +845,19 @@ async function publishArchive({
   }
 }
 
-function isPathWithin(parent, candidate) {
+function isPathWithin({ parent, candidate }) {
   const relative = path.relative(parent, candidate)
   return relative === ""
     || (relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative))
 }
 
-function assertPathsDoNotOverlap(firstPath, secondPath) {
+function assertPathsDoNotOverlap({ firstPath, secondPath }) {
   const first = path.resolve(firstPath)
   const second = path.resolve(secondPath)
-  if (isPathWithin(first, second) || isPathWithin(second, first)) {
+  if (
+    isPathWithin({ parent: first, candidate: second })
+    || isPathWithin({ parent: second, candidate: first })
+  ) {
     throw new Error(`Archive source directories must not overlap: ${first} and ${second}`)
   }
 }
@@ -836,10 +871,16 @@ function resolveArchiveSourcePaths({ packageDirectory, env } = {}) {
   const logsDirectory = path.join(packageDirectory, "logs")
   const archiveOutputDirectory = path.join(packageDirectory, "archive-output")
   for (const protectedDirectory of [logsDirectory, recoveryFactsDirectory, archiveOutputDirectory]) {
-    assertPathsDoNotOverlap(dataDirectory, protectedDirectory)
+    assertPathsDoNotOverlap({
+      firstPath: dataDirectory,
+      secondPath: protectedDirectory,
+    })
   }
   for (const protectedDirectory of [logsDirectory, dataDirectory, archiveOutputDirectory]) {
-    assertPathsDoNotOverlap(recoveryFactsDirectory, protectedDirectory)
+    assertPathsDoNotOverlap({
+      firstPath: recoveryFactsDirectory,
+      secondPath: protectedDirectory,
+    })
   }
   return SOURCE_DIRECTORIES.map((directoryName) => {
     let sourceDirectory = path.join(packageDirectory, directoryName)
@@ -908,7 +949,10 @@ function assertArchiveSessionIdentityMatches({ logSessionIdentity, recoveryCheck
 
 async function writeAndVerifyLocalArchive({ localArchive, createdAt, logSessionIdentity, onProgress } = {}) {
   const recoveryCheckpoint = await readLatestRecoveryCheckpoint(path.join(localArchive, "recovery-facts"))
-  assertArchiveSessionIdentityMatches({ logSessionIdentity, recoveryCheckpoint })
+  assertArchiveSessionIdentityMatches({
+    logSessionIdentity,
+    recoveryCheckpoint,
+  })
   await writeFile(
     path.join(localArchive, "data_commit_hash"),
     `${recoveryCheckpoint.dataCommitHash}\n`,
@@ -946,7 +990,10 @@ async function writeAndVerifyLocalArchive({ localArchive, createdAt, logSessionI
     },
   )
   reportProgress(onProgress, "Verifying local archive checksums...")
-  await verifyArchive({ directory: localArchive, manifest })
+  await verifyArchive({
+    directory: localArchive,
+    manifest,
+  })
   reportProgress(onProgress, "Local archive verified.")
 }
 
@@ -967,40 +1014,18 @@ function resolveArchiveRemote({ env, args } = {}) {
   return remote
 }
 
-export async function runHarvesterArchivePush({
-  args = process.argv.slice(2),
-  env = process.env,
-  runGit = runGitDefault,
-  packageDirectory = PACKAGE_DIRECTORY,
-  now = () => new Date(),
-  createArchiveId = randomUUID,
-  publishArchiveFn = publishArchive,
-  onProgress = (message) => process.stdout.write(`${message}\n`),
-  lockDirectory = path.join(os.homedir(), ".coinzilla", "harvester", "process-locks"),
-} = {}) {
-  const remote = resolveArchiveRemote({ env, args })
-  await assertHarvesterProcessStopped({ lockDirectory })
-  const sourcePaths = resolveArchiveSourcePaths({ packageDirectory, env })
-  for (const source of sourcePaths) {
-    await assertRealDirectory(source.sourceDirectory)
-  }
-  const createdAt = now().toISOString()
-  const archiveName = createHarvesterArchiveDirectoryName({
-    createdAt,
-    archiveId: createArchiveId(),
-  })
-  const outputDirectory = path.join(packageDirectory, "archive-output")
-  await mkdir(outputDirectory, {
-    recursive: true,
-    mode: 0o700,
-  })
-  await assertRealDirectory(outputDirectory)
-  const localArchive = path.join(outputDirectory, archiveName)
+async function publishPreparedArchive({
+  sourcePaths,
+  packageDirectory,
+  localArchive,
+  archiveName,
+  createdAt,
+  remote,
+  runGit,
+  publishArchiveFn,
+  onProgress,
+}) {
   try {
-    await mkdir(localArchive, {
-      recursive: false,
-      mode: 0o700,
-    })
     const logSessionIdentity = await copyArchiveEvidence({
       sourcePaths,
       packageDirectory,
@@ -1035,6 +1060,52 @@ export async function runHarvesterArchivePush({
       { cause: error },
     )
   }
+}
+
+export async function runHarvesterArchivePush({
+  args = process.argv.slice(2),
+  env = process.env,
+  runGit = runGitDefault,
+  packageDirectory = PACKAGE_DIRECTORY,
+  now = () => new Date(),
+  createArchiveId = randomUUID,
+  publishArchiveFn = publishArchive,
+  onProgress = (message) => process.stdout.write(`${message}\n`),
+  lockDirectory = path.join(os.homedir(), ".coinzilla", "harvester", "process-locks"),
+} = {}) {
+  const remote = resolveArchiveRemote({ env, args })
+  await assertHarvesterProcessStopped({ lockDirectory })
+  const sourcePaths = resolveArchiveSourcePaths({ packageDirectory, env })
+  for (const source of sourcePaths) {
+    await assertRealDirectory(source.sourceDirectory)
+  }
+  const createdAt = now().toISOString()
+  const archiveName = createHarvesterArchiveDirectoryName({
+    createdAt,
+    archiveId: createArchiveId(),
+  })
+  const outputDirectory = path.join(packageDirectory, "archive-output")
+  await mkdir(outputDirectory, {
+    recursive: true,
+    mode: 0o700,
+  })
+  await assertRealDirectory(outputDirectory)
+  const localArchive = path.join(outputDirectory, archiveName)
+  await mkdir(localArchive, {
+    recursive: false,
+    mode: 0o700,
+  })
+  return publishPreparedArchive({
+    sourcePaths,
+    packageDirectory,
+    localArchive,
+    archiveName,
+    createdAt,
+    remote,
+    runGit,
+    publishArchiveFn,
+    onProgress,
+  })
 }
 
 function createArchiveCliIdentity({ env = process.env } = {}) {

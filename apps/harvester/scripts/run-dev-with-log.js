@@ -210,8 +210,11 @@ if (cliArguments.length === 1 && cliArguments[0] === "--version") {
     process.removeListener("SIGINT", onSigint)
     process.removeListener("SIGTERM", onSigterm)
 
-    const droppedChunks = (await Promise.all(outputForwarding))
-      .reduce((total, dropped) => total + dropped, 0)
+    const outputChunkCounts = await Promise.all(outputForwarding)
+    let droppedChunks = 0
+    for (const outputChunkCount of outputChunkCounts) {
+      droppedChunks += outputChunkCount
+    }
 
     const logStreamsClosed = await closeLogStreams()
 
