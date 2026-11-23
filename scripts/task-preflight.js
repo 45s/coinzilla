@@ -213,6 +213,29 @@ function hasVerificationEvidence({ comments, headSha, workflowRunUrl }) {
     comment.includes(workflowRunUrl),
   );
 }
+/**
+ * Select the live pull-request snapshot only when its head still matches the event.
+ *
+ * @param {object} options
+ * @param {object} options.eventPullRequest - Pull-request snapshot captured by GitHub Actions.
+ * @param {object} options.currentPullRequest - Pull-request snapshot fetched from GitHub.
+ * @returns {object} The current pull-request snapshot.
+ * @throws {Error} If the pull request identity or head changed after the event.
+ */
+export function selectPullRequestSnapshot({ eventPullRequest, currentPullRequest }) {
+  const eventHeadSha = eventPullRequest?.head?.sha;
+  const currentHeadSha = currentPullRequest?.head?.sha;
+  if (
+    !Number.isInteger(eventPullRequest?.number) ||
+    eventPullRequest.number !== currentPullRequest?.number ||
+    !/^[a-f0-9]{40}$/i.test(eventHeadSha || '') ||
+    eventHeadSha.toLowerCase() !== currentHeadSha?.toLowerCase()
+  ) {
+    throw new Error('Pull request head changed after the workflow event; BLOCKED.');
+  }
+  return currentPullRequest;
+}
+
 export function validatePullRequestEvidence(context) {
   const errors = [];
   if (context.issueIsPullRequest) {
@@ -546,8 +569,14 @@ token });
 async function pullRequest({ repo, token, workflowRunUrl }) {
   if (!token || !process.env.GITHUB_EVENT_PATH) {throw new Error('GitHub token or PR event metadata unavailable; BLOCKED.');}
   const event = JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8'));
-  const pr = event.pull_request;
-  if (!pr || pr.base?.ref !== 'develop') {throw new Error('Validator requires a PR targeting develop.');}
+  const eventPullRequest = event.pull_request;
+  if (!eventPullRequest?.number) {throw new Error('Validator requires pull-request event metadata; BLOCKED.');}
+  const currentPullRequest = await api({
+    path: `/repos/${  repo  }/pulls/${  eventPullRequest.number}`,
+    token,
+  });
+  const pr = selectPullRequestSnapshot({ eventPullRequest, currentPullRequest });
+  if (pr.base?.ref !== 'develop') {throw new Error('Validator requires a PR targeting develop.');}
   const issueNumber = extractTrackingIssueNumber(pr.body || '');
   if (!issueNumber) {throw new Error('PR must reference exactly one tracking issue; BLOCKED.');}
   const evidence = await collectPullRequestEvidence({ repo,
