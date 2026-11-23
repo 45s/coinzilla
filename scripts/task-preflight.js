@@ -197,14 +197,17 @@ function workHash({ root, path }) {
   return existsSync(file) ? calculateGitBlobSha(readFileSync(file, 'utf8')) : null;
 }
 function findAgents(root) {
-  const found=['AGENTS.md'];
-  function walk(dir) {
-    for (const e of readdirSync(dir,{withFileTypes:true})) {
-      if (e.isDirectory() && !IGNORE.has(e.name)) {walk(join(dir,e.name));}
-      else if (e.isFile() && e.name==='AGENTS.md') {found.push(relative(root,join(dir,e.name)).split(sep).join('/'));}
+  const found = [];
+  function walk(directory) {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      if (entry.isDirectory() && !IGNORE.has(entry.name)) {
+        walk(join(directory, entry.name));
+      } else if (entry.isFile() && entry.name === 'AGENTS.md') {
+        found.push(relative(root, join(directory, entry.name)).split(sep).join('/'));
+      }
     }
   }
-  for (const name of ['apps','packages','docs','scripts','.github']) { const dir=join(root,name); if(existsSync(dir)) {walk(dir);} }
+  walk(root);
   return [...new Set(found)].sort();
 }
 function makeReport({ issue, sha, paths, hashes, scope }) {
@@ -331,6 +334,9 @@ token });
     path: `/repos/${  repo  }/compare/${  preflight.commitSha  }...${  pr.head.sha}`,
     token,
   });
+  if (compare.total_commits > compare.commits.length) {
+    throw new Error('Commit comparison is truncated; preflight timing cannot be verified. BLOCKED.');
+  }
   const ancestor = compare.status === 'ahead' || compare.status === 'identical';
   const firstCommit = compare.commits?.[0];
   const firstDate = firstCommit?.commit?.committer?.date || firstCommit?.commit?.author?.date || '';
