@@ -9,7 +9,10 @@ test("shows validation fields and order identity without collapsing distinct ord
   output.on("data", (chunk) => {
     written += chunk.toString()
   })
-  const transport = createHarvesterConsoleTransport({ output, color: false })
+  const transport = createHarvesterConsoleTransport({
+    output,
+    color: false,
+  })
   const diagnostic = {
     message: "Order history projection failed",
     component: "order-history-observer",
@@ -20,9 +23,18 @@ test("shows validation fields and order identity without collapsing distinct ord
     symbol: "ZROUSDT",
   }
   const failures = [
-    { field: "providerInstanceId", clientOrderId: "h-dff68008c72c47a59368ad-2" },
-    { field: "market.baseAsset.code", clientOrderId: "h-dff68008c72c47a59368ad-2" },
-    { field: "market.baseAsset.code", clientOrderId: "h-dff68008c72c47a59368ad-4" },
+    {
+      field: "providerInstanceId",
+      clientOrderId: "h-dff68008c72c47a59368ad-2",
+    },
+    {
+      field: "market.baseAsset.code",
+      clientOrderId: "h-dff68008c72c47a59368ad-2",
+    },
+    {
+      field: "market.baseAsset.code",
+      clientOrderId: "h-dff68008c72c47a59368ad-4",
+    },
   ]
   const timestamps = [
     "2026-11-22T08:52:26.000Z",
