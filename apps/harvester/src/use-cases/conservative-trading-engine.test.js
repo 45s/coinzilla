@@ -8558,6 +8558,23 @@ test("does not apply partial REST reconciliation after a fill-history timeout an
   })
 })
 
+function createMalformedRestEnvelopeOrder({ status } = {}) {
+  return new CanonicalOrder({
+    clientOrderId: "malformed-rest-envelope-owned-order",
+    brokerOrderId: "broker-malformed-rest-envelope-owned-order",
+    market,
+    side: "BUY",
+    type: "LIMIT",
+    limitPrice: new Money({ amount: "100", asset: quoteAsset }),
+    originalQuantity: new Quantity({ amount: "1", asset: baseAsset }),
+    executedQuantity: new Quantity({ amount: "0", asset: baseAsset }),
+    status,
+    createdAt: 1,
+    acknowledgedAt: 1,
+    updatedAt: 1,
+  })
+}
+
 async function createMalformedRestEnvelopeFixture({
   openOrdersResult = {
     ok: true,
@@ -8569,31 +8586,8 @@ async function createMalformedRestEnvelopeFixture({
     data: []
   },
 } = {}) {
-  const makeCanonicalOrder = ({ status }) => new CanonicalOrder({
-    clientOrderId: "malformed-rest-envelope-owned-order",
-    brokerOrderId: "broker-malformed-rest-envelope-owned-order",
-    market,
-    side: "BUY",
-    type: "LIMIT",
-    limitPrice: new Money({
-      amount: "100",
-      asset: quoteAsset
-    }),
-    originalQuantity: new Quantity({
-      amount: "1",
-      asset: baseAsset
-    }),
-    executedQuantity: new Quantity({
-      amount: "0",
-      asset: baseAsset
-    }),
-    status,
-    createdAt: 1,
-    acknowledgedAt: 1,
-    updatedAt: 1,
-  })
-  const ownedOrder = makeCanonicalOrder({ status: "UNKNOWN" })
-  const canonicalHistoryOrder = makeCanonicalOrder({ status: "CANCELED" })
+  const ownedOrder = createMalformedRestEnvelopeOrder({ status: "UNKNOWN" })
+  const canonicalHistoryOrder = createMalformedRestEnvelopeOrder({ status: "CANCELED" })
   const brokerReadCounts = {
     openOrders: 0,
     canonicalOrderHistory: 0,
