@@ -36,11 +36,9 @@ The AI agent—not the user—owns branch freshness for the entire task. Agents 
 
 JavaScript control-flow style (including braces on all control statements and no nested ternary operators) is defined in [ENGINEERING_STANDARDS.md](ENGINEERING_STANDARDS.md#javascript-control-flow). Follow that canonical rule in all applications and packages.
 
-## Mandatory documentation and requirements preflight — hard gate
+## Task requirements review
 
-Every AI agent and automated contributor MUST complete the task-start gate in the canonical [AI Task Compliance Standard](docs/engineering/AI_TASK_COMPLIANCE_STANDARD.md) before any state-changing work. That standard is the single authority for task-type discovery, applicable-document inventory and full reading, source/consumer/test inspection, conflict resolution, and the readiness record. Follow it in full together with the applicable task checklist and domain-specific instructions.
-
-Read-only discovery is permitted. No implementation, document edits, configuration/state mutation, PR creation, or adjacent work may begin until the preflight is complete and readiness is established. Each agent completes its own review. Before the first implementation commit, record the versioned issue report with `pnpm run task:preflight` as specified in the canonical standard. This is an agent task-start practice only; GitHub Actions does not validate or require the report. If required material is inaccessible or requirements conflict without explicit precedence, stop and report the exact blocker.
+Read the applicable task checklist, canonical engineering standards, owning-domain instructions and roadmap. Inspect the affected implementation, consumers and tests before changing them. Keep the review proportional to the task: read relevant requirements, not unrelated documentation. Do not run or require the retired Task Preflight CI job or `pnpm run task:preflight` unless the user explicitly requests it.
 
 **Task continuity and commit discipline — mandatory.** For every non-trivial task, use a GitHub Issue as the live task contract and follow the incremental commit, checkpoint and handoff protocol in [AI_AGENT_WORKFLOW.md](AI_AGENT_WORKFLOW.md#11-incremental-commits-and-resumable-task-handoffs--mandatory). Keep issue scope/acceptance/status, branch commits, PR description, roadmap and affected living documentation synchronized as work changes. A new agent must be able to resume without private chat context. Do not create a parallel task log or claim validation beyond the exact SHA actually checked.
 The same workflow's [Continuous issue knowledge capture](AI_AGENT_WORKFLOW.md#continuous-issue-knowledge-capture--mandatory) rule is mandatory: record meaningful findings, evidence, decisions, rejected approaches, experiment outcomes, blockers and exact verification promptly while work is active; keep the issue description as the current snapshot and comments as the significant chronological record.
@@ -79,3 +77,7 @@ Execute clear implementation requests within their stated scope; do not substitu
 The canonical [AI Agent Workflow](AI_AGENT_WORKFLOW.md) owns the detailed execution, remote TDD, GitHub Actions verification, branch freshness, incremental commits, issue/PR checkpoints, handoffs, and review lifecycle. Follow it in full. Local tooling is optional when GitHub Actions can perform the required verification.
 
 Never weaken checks or claim unverified success. Leave every task PR open for user review and merge; agents must never merge or enable auto-merge.
+
+## Agent communication — mandatory
+
+Keep user-facing communication short, concrete and specific. Report only decisions, completed work, exact current status, next action, blockers and verification evidence. Use brief bullets when useful. Do not repeat the task, narrate routine tool use, provide generic progress updates, speculate, over-explain, or end with unsolicited continuation prompts. Never claim work or verification that has not happened.
