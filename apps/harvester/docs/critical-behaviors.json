@@ -204,6 +204,11 @@
           "path": "test/replays/doge-zro-conservative-replay.test.js",
           "name": "accounts distinct partial BUY fills when their cumulative order reports arrive out of order",
           "kind": "integration"
+        },
+        {
+          "path": "test/audits/2026-11-22-conservative-recovery-archive.test.js",
+          "name": "replays a duplicate archived SELL fill without double-counting proceeds or profit",
+          "kind": "integration"
         }
       ],
       "runtimeStatus": "active",
@@ -264,6 +269,11 @@
           "path": "src/domain/strategies/conservative/recovery-fill-accounting.test.js",
           "name": "rejects zero and negative quote notionals",
           "kind": "failure"
+        },
+        {
+          "path": "test/audits/2026-11-22-conservative-recovery-archive.test.js",
+          "name": "reconstructs all three archived recovery cycles with exact Portfolio and RecoveryLedger accounting",
+          "kind": "integration"
         }
       ],
       "runtimeStatus": "active",
@@ -311,6 +321,11 @@
         {
           "path": "test/replays/doge-zro-conservative-replay.test.js",
           "name": "accounts partial recovery SELL executions and completes only after the terminal fill",
+          "kind": "integration"
+        },
+        {
+          "path": "test/audits/2026-11-22-conservative-recovery-archive.test.js",
+          "name": "reconstructs all three archived recovery cycles with exact Portfolio and RecoveryLedger accounting",
           "kind": "integration"
         }
       ],
@@ -392,6 +407,11 @@
           "path": "test/replays/doge-zro-conservative-replay.test.js",
           "name": "accounts partial recovery SELL executions and completes only after the terminal fill",
           "kind": "integration"
+        },
+        {
+          "path": "test/audits/2026-11-22-conservative-recovery-archive.test.js",
+          "name": "keeps archived residuals in CONTINUE_SELL_THROUGH without inferring dust",
+          "kind": "normal"
         }
       ],
       "runtimeStatus": "active",
