@@ -11,7 +11,7 @@ import {
   Quantity,
   TradingRules,
 } from '@coinzilla/entities';
-import { toResult } from '@coinzilla/utils';
+import { multiplyDecimal, subtractDecimal, toResult } from '@coinzilla/utils';
 import { startHarvester } from '../../src/bootstrap/start-harvester.js';
 import { resolveHarvesterOptions } from '../../src/bootstrap/config/resolve-harvester-options.js';
 import { loadAppConfig } from '../../src/infrastructure/config/load-app-config.js';
@@ -21,7 +21,7 @@ const createOpenOrderSnapshot = ({ order }) => {
     symbol: order.market.symbol,
     type: order.type,
     side: order.side,
-    quantity: Number(order.originalQuantity.amount) - Number(order.executedQuantity.amount),
+    quantity: Number(subtractDecimal({ left: order.originalQuantity.amount, right: order.executedQuantity.amount })),
     price: Number(order.limitPrice.amount),
     id: order.brokerOrderId,
     clientOrderId: order.clientOrderId,
@@ -454,7 +454,7 @@ asset: baseAsset }),
     quantity: new Quantity({ amount: '10',
 asset: baseAsset }),
     quoteQuantity: new Money({
-      amount: String(Number(buyIntent.price) * Number(buyIntent.quantity)),
+      amount: multiplyDecimal({ left: buyIntent.price, right: buyIntent.quantity }),
       asset: quoteAsset,
     }),
     liquidityRole: 'MAKER',
@@ -865,9 +865,9 @@ function createVolatilityMarketDataBroker({ state }) {
       const price = symbol === "DOGEUSDT" ? "0.1" : "1"
       await onBookTicker({
         symbol,
-        bestBidPrice: String(Number(price) * 0.99),
+        bestBidPrice: multiplyDecimal({ left: price, right: "0.99" }),
         bestBidQuantity: "100",
-        bestAskPrice: String(Number(price) * 1.01),
+        bestAskPrice: multiplyDecimal({ left: price, right: "1.01" }),
         bestAskQuantity: "100",
         timestamp: 10,
       })
