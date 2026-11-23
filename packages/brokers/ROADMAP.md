@@ -12,35 +12,20 @@ This roadmap tracks work owned by `@coinzilla/brokers`. Historical entries may r
 
 **Status: IN PROGRESS** — [issue #1690](https://github.com/45s/coinzilla/issues/1690). Add a human-operated, one-probe-per-invocation mode to the unified Bitunix CLI. The reviewed first pass covers HYPEUSDT LIMIT BUY/SELL quantities 1/2 and MARKET BUY/SELL quote quantities 1/2. Every invocation re-reads market metadata, balances and open orders; shows the exact common Broker input and wire body; requires fresh interactive confirmation; writes a unique exclusive marker; and captures the place-order request/response locally with restrictive permissions. The existing #1608 fixed HYPEUSDT order and marker remain untouched. The command uses the common `Broker.createOrder()` path, publishes only the existing sanitized diagnostic result, and never loops, retries, cancels or performs another mutation. A confirmed or unknown result requires manual review. This is a human-only LIVE investigation, not a test or production-readiness milestone; issue #1185 remains unchanged.
 
-## CodeQL password-hash source classification — #1674
+## CodeQL insufficient-password-hash investigation — #1674
 
-**Status: SOURCE-CLASSIFICATION EXPERIMENT IN PROGRESS** — [tracking issue #1674](https://github.com/45s/coinzilla/issues/1674); the sole open remediation PR is [#1734](https://github.com/45s/coinzilla/pull/1734). This is a CodeQL rule/source-classification investigation, not a Bitunix broker defect.
+**Status: IN PROGRESS — two High findings remain; a custom-query regression experiment is being validated.** [Tracking issue #1674](https://github.com/45s/coinzilla/issues/1674) / sole remediation PR [#1758](https://github.com/45s/coinzilla/pull/1758). This is a CodeQL rule/source-classification problem, not a Bitunix broker defect. [PR #1734](https://github.com/45s/coinzilla/pull/1734) merged at `11b49aaa7e970f7f1e652f73596358e4ead5392e`, but its post-merge scan still reported both REST and WebSocket findings. Its internal `apiKey` → `publicIdentifier` rename was ineffective and was reverted; do not retry name-only variants.
 
-### Finding and protocol facts
+The official [Bitunix Spot signing contract](https://www.bitunix.com/api-docs/spots/en_us/sign/) requires the existing two-stage SHA-256 signatures for REST and WebSocket authentication. Keep the exact preimages, protocol fields, nonce/timestamp ordering, private secret handling, signature bytes, and deterministic vectors unchanged.
 
-The two High `js/insufficient-password-hash` findings trace a public API identifier through the REST and WebSocket clients into Bitunix's required request-signing preimages, where SHA-256 is used. The identifier is not a user password; the hashes implement request authentication, not password storage or verification. The REST and WebSocket protocols require the existing two-stage SHA-256 construction. See the official [Bitunix Spot signing contract](https://www.bitunix.com/api-docs/spots/en_us/sign/).
+- The issue records the supplied source-to-sink traces and the upstream CodeQL heuristic: authorization-key names are classified as password-like sources, then flow into the generic insufficient-password-hash sink. The key is a public exchange identifier used in a per-request signature, not a user password or stored password verifier.
+- The only candidate source refinement excludes `apiKey` source accesses in the Bitunix REST and WebSocket client modules. It preserves the upstream source, sink, and sanitizer definitions for every other flow. It does not pretend the identifier is sanitized.
+- The repository-local query pack and config are experimental until the non-uploading CodeQL CLI regression workflow proves both negative Bitunix flows and a positive weak-password-hash fixture, while retaining the rest of the default JavaScript query suite.
+- The config file is not active in GitHub default setup merely because it is committed. Activation requires the repository `github-codeql-config-file` property to point to `.github/codeql/codeql-config.yml`. No repository setting has been changed. The CodeQL regression workflow does not upload SARIF or alter Code Scanning alerts.
+- No npm/runtime dependency is added. The query pack depends on the CodeQL library bundled with CLI 2.27.5; it is static analysis tooling only.
+- Keep release PR [#1662](https://github.com/45s/coinzilla/pull/1662) blocked until the active CodeQL configuration runs a fresh analysis and confirms both original findings are absent on the exact release head.
 
-### Current experiment
-
-The source-to-sink paths show `apiKey` used as the internal name for a public identifier. PR #1734 tests renaming that internal value to `publicIdentifier` through both clients and signer inputs, while preserving:
-
-- Public client constructor option `apiKey`.
-- REST wire header `api-key` and WebSocket wire parameter `apiKey`.
-- Private signing secret handling.
-- Exact request preimages, double-SHA-256 operations, signature bytes, and fixed expected vectors.
-
-The signer helper's internal input name and direct unit-test inputs use `publicIdentifier`; WebSocket parameter serialization continues to recognize and exclude the external `apiKey` field. This hypothesis remains unproven until a fresh CodeQL analysis evaluates the exact PR head.
-
-### Required verification and exclusions
-
-- Run REST/WebSocket signer tests and Brokers package tests/coverage on the exact PR head.
-- Confirm constructor compatibility and unchanged outbound wire names through client tests.
-- Run a fresh CodeQL scan and inspect SARIF/alert records for both REST and WebSocket findings. A successful workflow or SARIF upload alone is not clearance.
-- Record each experiment, exact commit, CI outcome, CodeQL result, and conclusion in issue #1674. Do not repeat failed `lgtm`, `codeql`, or suppression-spacing experiments.
-- Do not replace the exchange protocol with bcrypt, scrypt, Argon2, PBKDF2, HMAC, or another algorithm. Do not alter credentials, perform live/testnet exchange operations, or dismiss alerts to manufacture a green result.
-
-Historical PRs and their outcomes remain linked in issue #1674. Keep the issue and release PR #1662 blocked until both findings are independently confirmed absent.
-
+Historical experiments, official references, exact commits, and CI outcomes are recorded chronologically in issue #1674.
 ## Executable CLI source identity — #1631\n\n**Status: IN PROGRESS** — [issue #1631](https://github.com/45s/coinzilla/issues/1631) / [PR #1632](https://github.com/45s/coinzilla/pull/1632). Establishes a repository-wide requirement for user-invoked CLI entrypoints to print their exact source commit, package/script version, worktree state, and runtime before doing work, with a side-effect-free version command. The first implementation is the Bitunix healthcheck entrypoint; the repository-wide CLI inventory and remaining migrations are tracked by the issue.\n\n## Bitunix health-check and operator CLI consolidation — #1614
 
 **Status: IMPLEMENTED and merged** — [issue #1614](https://github.com/45s/coinzilla/issues/1614) / [PR #1616](https://github.com/45s/coinzilla/pull/1616), merge commit `488949b668e1291b5cfc64032250f6d2a4568274`. Exact-head required workflow runs and advisory External Documentation Links passed; issue #1614 is closed after acceptance and exact-head CI verification.
