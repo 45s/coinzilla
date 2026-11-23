@@ -30,6 +30,76 @@ function buildIssueBody({
   }).join('\n\n');
 }
 
+test('uses the live PR body but rejects a head that changed after the workflow event', async () => {
+  const { selectPullRequestSnapshot } = await import('./task-preflight.js');
+  assert.equal(
+    typeof selectPullRequestSnapshot,
+    'function',
+    'The validator must expose the live PR snapshot selector.',
+  );
+
+  const eventPullRequest = {
+    number: 1762,
+    body: 'Fixes #1754\n\nFinal source commit: old-sha',
+    base: {
+      ref: 'develop',
+    },
+    head: {
+      sha: 'a'.repeat(40),
+    },
+  };
+  const currentPullRequest = {
+    number: 1762,
+    body: 'Fixes #1754\n\nFinal source commit: current-sha',
+    base: {
+      ref: 'develop',
+    },
+    head: {
+      sha: 'a'.repeat(40),
+    },
+  };
+
+  assert.equal(
+    selectPullRequestSnapshot({
+      eventPullRequest,
+      currentPullRequest,
+    }).body,
+    currentPullRequest.body,
+    'Validation must use the current PR description, not the older event snapshot.',
+  );
+  assert.throws(
+    () => selectPullRequestSnapshot({
+      eventPullRequest,
+      currentPullRequest: {
+        ...currentPullRequest,
+        head: {
+          sha: 'b'.repeat(40),
+        },
+      },
+    }),
+    /head changed after the workflow event/i,
+    'A rerun must fail closed if the PR head moved after the workflow event.',
+  );
+});
+
+test('retains cumulative declared scope across preflight checkpoints for one issue', async () => {
+  const { mergePreflightScopes } = await import('./task-preflight.js');
+  assert.equal(
+    typeof mergePreflightScopes,
+    'function',
+    'The validator must expose cumulative scope merging.',
+  );
+  assert.deepEqual(
+    mergePreflightScopes({
+      reports: [
+        { scopePaths: ['.github', 'scripts', 'docs'] },
+        { scopePaths: ['.github', 'docs/engineering', 'AI_AGENT_WORKFLOW.md'] },
+      ],
+    }),
+    ['.github', 'AI_AGENT_WORKFLOW.md', 'docs', 'docs/engineering', 'scripts'],
+  );
+});
+
 test('requires the canonical repository instruction set', () => {
   assert.ok(REQUIRED_INSTRUCTION_PATHS.includes('AGENTS.md'));
   assert.ok(REQUIRED_INSTRUCTION_PATHS.includes('docs/engineering/AI_TASK_COMPLIANCE_STANDARD.md'));
