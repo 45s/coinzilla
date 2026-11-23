@@ -61,6 +61,14 @@ Do not claim 100% correctness from line/branch coverage. Completion means every 
 
 **Current status:** PR #1764 is merged and Task Preflight CI enforcement was retired in PR #1769. The first A–J source-to-test checkpoint is posted on #1763, but Phase 1 is still being refined; the grouped checkpoint is not the completed exhaustive audit. Test-only PRs #1771, #1773, #1774 and #1775 are ready for review with all six exact-head workflows passing. PR #1776 is updating bootstrap/replay arithmetic and remains under exact-head CI. PR #1772 was closed because changing the large engine test file exposes 33 pre-existing strict-ESLint max-lines violations; no rule was suppressed and the cleanup is recorded as BLOCKED in the inventory. No production behavior or trading rules have changed. Do not mark any audit row COVERED until evidence is merged to develop and its required CI passes.
 
+## Recovery Seller domain scenario coverage — issue #1780
+
+**Objective:** build independent, human-readable RS domain-scenario tests from the approved [Recovery Seller Domain Specification](./docs/domain/recovery-seller-domain-specification.md), with the scenario matrix and evidence owned by [issue #1780](https://github.com/45s/coinzilla/issues/1780). Adopt the strategy-neutral methodology tracked in [#1779](https://github.com/45s/coinzilla/issues/1779); do not copy generic methodology into RS documentation. Existing RS tests are ordinary regression tests only and receive no coverage credit for this initiative.
+
+**Current status:** the first RS-004 slice is implemented in [PR #1793](https://github.com/45s/coinzilla/pull/1793). New scenarios cover both directions of profitability cross-subsidy rejection, exact recovery/combined threshold equality with legacy break-even, recovery-only eligibility after legacy exhaustion, and the resulting cycle lifecycle. The exact test commit passed Harvester unit tests (2,674/2,674), Harvester Targeted Tests, Harvester/workspace coverage, Repository Quality, Dependency Audit and External Documentation Links. The catalog records RS-004 as PARTIAL because threshold-adjacent, fee, exchange-filter and partial-fill subcases remain uncovered.
+
+**Next priorities:** complete RS-004 boundaries/fee evidence, then implement the remaining P0 families from #1780: mixed SELL allocation and atomicity, one-SELL-per-cycle lifecycle, canonical fill identity/replay handling, verified Spot custody, and shared account reservations/concurrency. Keep each increment test-first, offline, deterministic and limited to approved behavior. Restart/replay and third-asset fee valuation remain deferred; do not invent their semantics or perform exchange operations.
+
 ## Conservative strategy safety pause cancels current-process-owned BUYs — issue #1749
 
 - In progress in [PR #1755](https://github.com/45s/coinzilla/pull/1755) on a fresh branch based on current `develop`.
