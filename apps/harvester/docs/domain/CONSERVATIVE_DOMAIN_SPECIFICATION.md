@@ -269,6 +269,19 @@ After a canonical cancellation response, the engine updates the order registry, 
 
 After confirmed cancellation with zero fills, the engine stores the current market price as the new reference and re-evaluates the Conservative policy using the refreshed filters. The actual order is rebuilt and validated again. Harvester registers it as PENDING and durably records the submission intent before broker I/O. If that intent cannot be persisted, the pending record is removed, the pair is paused, and the broker is not called. A generic broker rejection, transport error, or uncertain acknowledgement leaves the replacement explicitly UNKNOWN and pauses the pair; reconcile it by canonical `clientOrderId` before any retry. Binance's definite `POST_ONLY_WOULD_TAKE` rejection is a known rejection rather than an unknown outcome: the pending record is removed, the cached book is discarded, and evaluation is deferred until fresh book data arrives. An acknowledgement is not itself a fill; an immediately FILLED acknowledgement is reconciled against canonical execution history before the serialized transition completes.
 
+### Strategy-originated safety pause and owned-BUY cancellation
+
+A Conservative strategy-originated pause is distinct from the operator market Pause contract in ADR-0006. Whenever the engine pauses a market because a strategy/evaluation/order-safety path failed, it immediately retains the process-local market BUY gate and uses the existing serialized current-process-owned order cancellation and fill-reconciliation transition.
+
+- Cancel only active BUY orders present in the current process OrderRegistry for the affected market when the pause reason is safety-critical (strategy evaluation, durability, order-state, fill/accounting, or reconciliation integrity). Expected preflight/metadata/strategy validation rejections and explicitly retryable REST reconciliation failures still pause new actions but do not cancel an already-standing BUY. Startup-snapshot, manual, external, and prior-process orders are not adopted or canceled.
+- The pause fact `STRATEGY_MARKET_PAUSED` is committed when the Operational State Store is configured. The `strategy.paused` lifecycle event is published through the existing event publisher.
+- Cancellation-racing fills are reconciled through the existing canonical fill path and applied once before the terminal cancellation status is committed to the registry; this preserves legal order transitions such as OPEN → PARTIALLY_FILLED → CANCELED. Fill accounting and user-data intake remain active.
+- The gate remains active until every current-process-owned active BUY is terminal and reconciled. An UNKNOWN/unconfirmed order, failed pause fact/event, or incomplete cancellation yields `STRATEGY_SAFETY_PAUSE_INCOMPLETE`; the engine attempts to persist `SAFETY_BLOCKER_RAISED` with reason `STRATEGY_SAFETY_PAUSE_INCOMPLETE` and exposes the cancellation status in the operator market snapshot.
+- Recovery Seller evaluation continues while Conservative is safety-paused. Only a submission whose side is SELL and purpose is exactly `RECOVERY_SELL` may pass this strategy-safety gate; every BUY and every other SELL purpose remains blocked. All other independent readiness, order-ownership, volatility, and shutdown gates still apply.
+- This pause is process-local and is not restored or cleared by restart. A restart is not evidence that the original cause or any UNKNOWN order has been reconciled.
+
+The full trigger, ordering, fail-closed behavior, and evidence contract are recorded in [ADR-0008](../architecture/decisions/0008-strategy-safety-pause-cancels-owned-buys.md).
+
 ## 9. Derived algorithm schema
 
 The following Mermaid flowchart visualizes the rules above. If the diagram and prose ever differ, the prose in this specification controls.

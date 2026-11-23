@@ -716,6 +716,8 @@ recorded even if subsequent fill reconciliation fails; that later failure
 remains represented by the existing pause/error behavior. Recovery SELL cancellation events are implemented separately in Step 5c, after the first pause and trailing BUY cancellation milestone. All event publication is best-effort
 and does not wait for subscriber delivery or Journal persistence.
 
+A Conservative strategy-originated pause is a separate trigger from the operator market Pause contract in ADR-0006. It activates the process-local market gate before calling the existing current-process-owned BUY cancellation and fill-reconciliation transition. A failed pause fact/event or unresolved cancellation retains the gate, emits the incomplete-pause blocker where the Operational State Store is configured, and appears in the operator market snapshot. Recovery Seller evaluation and only purpose-tagged `RECOVERY_SELL` submissions remain eligible; all other BUY/SELL purposes stay blocked by the safety gate. See [ADR-0008](architecture/decisions/0008-strategy-safety-pause-cancels-owned-buys.md) and the [canonical Conservative specification](domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md#strategy-originated-safety-pause-and-owned-buy-cancellation).
+
 ### Recovery SELL cancellation events
 
 Step 5c publishes the same `order.cancelled` and `order.cancel_failed`

@@ -834,6 +834,69 @@
         "If the blocked evidence cannot be durably recorded, preserve both capture and durability failures and fail shutdown closed; never publish STOPPED or release required process resources.",
         "CLOSING open-order evidence is an audit fact only; it does not adopt orders, mutate orders, restore prior process state or enable process-restart recovery."
       ]
+    },
+    {
+      "id": "STRATEGY_SAFETY_PAUSE_BUY_CANCELLATION",
+      "title": "Conservative strategy safety pause gates BUYs and cancels current-process-owned BUY orders",
+      "sourceModules": [
+        "src/use-cases/conservative-trading-engine.js"
+      ],
+      "integrationRequired": true,
+      "tests": [
+        {
+          "path": "src/use-cases/conservative-strategy-safety-pause.integration.test.js",
+          "name": "gates BUYs before canceling only registered BUYs and reconciles cancellation-racing fills once",
+          "kind": "integration"
+        },
+        {
+          "path": "src/use-cases/conservative-strategy-safety-pause.integration.test.js",
+          "name": "reports a complete safety pause when there are no owned BUYs",
+          "kind": "normal"
+        },
+        {
+          "path": "src/use-cases/conservative-strategy-safety-pause.integration.test.js",
+          "name": "keeps an UNKNOWN owned BUY blocked and raises a durable safety blocker",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/conservative-strategy-safety-pause.integration.test.js",
+          "name": "keeps the BUY gate active when pause fact persistence and publication fail",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/conservative-strategy-safety-pause.integration.test.js",
+          "name": "continues Recovery Seller evaluation when the Conservative strategy is safety-paused",
+          "kind": "integration"
+        },
+        {
+          "path": "src/use-cases/conservative-strategy-safety-pause.integration.test.js",
+          "name": "allows only purpose-tagged RECOVERY_SELL through the strategy safety BUY gate",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/conservative-strategy-safety-pause.integration.test.js",
+          "name": "passes the durable safety blocker callback through Harvester engine composition",
+          "kind": "normal"
+        },
+        {
+          "path": "src/use-cases/errors/strategy-safety-pause-incomplete-error.test.js",
+          "name": "exposes a stable code and safe context while preserving the original cause",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/conservative-strategy-safety-pause.integration.test.js",
+          "name": "does not recursively retry a BUY cancellation when its failure raises the strategy safety pause",
+          "kind": "failure"
+        }
+      ],
+      "runtimeStatus": "active",
+      "invariants": [
+        "Activate the strategy safety BUY gate before any cancellation side effect.",
+        "Cancel only active BUY orders owned by the current process through the existing serialized cancellation and reconciliation transition.",
+        "Reconcile cancellation-racing fills exactly once; unresolved or UNKNOWN orders keep the BUY gate active and raise a durable safety blocker.",
+        "Keep Recovery Seller evaluation and only purpose-tagged RECOVERY_SELL submissions available; ordinary SELL and every BUY remain blocked.",
+        "Never cancel startup-snapshot, manual, external, or prior-process orders."
+      ]
     }
   ],
   "coverageBaseline": {
