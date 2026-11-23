@@ -194,6 +194,20 @@ function assertArchiveSourceHashes() {
   )
 }
 
+function assertSanitizedFixture() {
+  const fixtureText = JSON.stringify(archive)
+  assert.equal(
+    fixtureText.includes('"accountId"'),
+    false,
+    "The sanitized fixture must not contain account identifiers.",
+  )
+  assert.equal(
+    fixtureText.includes('"balances"'),
+    false,
+    "The sanitized fixture must not contain account balance snapshots.",
+  )
+}
+
 function assertArchiveMetadata() {
   assert.equal(
     archive.source.archiveCommit,
@@ -244,17 +258,6 @@ function assertArchiveMetadata() {
     archive.cycleOutcomes.length,
     3,
     "All three archived recovery-cycle outcomes must be preserved.",
-  )
-  const fixtureText = JSON.stringify(archive)
-  assert.equal(
-    fixtureText.includes('"accountId"'),
-    false,
-    "The sanitized fixture must not contain account identifiers.",
-  )
-  assert.equal(
-    fixtureText.includes('"balances"'),
-    false,
-    "The sanitized fixture must not contain account balance snapshots.",
   )
 }
 
@@ -744,6 +747,7 @@ function assertSubmissionAndShutdownEvidence() {
 test("reconstructs all three archived recovery cycles with exact Portfolio and RecoveryLedger accounting", () => {
   assertArchiveMetadata()
   assertArchiveSourceHashes()
+  assertSanitizedFixture()
   for (const cycle of archive.cycleOutcomes) {
     assertCycleAccounting({ cycle })
   }
