@@ -66,6 +66,10 @@ Set `GH_TOKEN` in the shell with permission to read the issue and create an issu
 
 The report is evidence, not proof of comprehension. The validator cannot prove that an agent read or understood a document; it verifies the recorded claim, file identity, hashes, task issue, and commit relationship. If scope expands, rerun the command with the expanded paths and record a new report before continuing. PR CI independently checks the report against the PR base revision, issue completeness, verification evidence, and the exact PR head SHA. A missing token, inaccessible API, missing evidence, or stale hash is BLOCKED.
 
+### Enforcement boundary and single-maintainer limitation
+
+The repository's active `develop` ruleset already requires the six documented status contexts, but currently requires zero approving reviews and does not require code-owner review. This implementation intentionally does not add `CODEOWNERS` or self-approval because the repository has a single developer. Consequently, the validator and its workflow are not independently protected from a PR that weakens both the validator and the workflow step that invokes it. CI executing code supplied by the same PR cannot prove that the policy implementation itself was not weakened. Stronger protection requires a trusted workflow sourced from the base branch (for example, `pull_request_target` that never executes PR code with write permissions) and an administrator-added required status context. Those GitHub ruleset changes are outside this repository PR and are not claimed as implemented.
+
 ## 4. Compliance during implementation
 
 - Follow the discovered standards at every implementation step; do not treat preflight as a one-time checkbox.
