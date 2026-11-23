@@ -84,6 +84,7 @@
       "src/use-cases/execute-strategy-decision.test.js",
       "src/use-cases/conservative-strategy-safety-pause.integration.test.js",
       "src/use-cases/create-conservative-shutdown-safety.test.js",
+      "src/bootstrap/user-data/create-user-data-event-handler.test.js",
       "src/bootstrap/shutdown/create-conservative-shutdown-participant.test.js",
       "src/use-cases/errors/strategy-safety-pause-incomplete-error.test.js",
       "src/use-cases/conservative-trading-engine.test.js",

@@ -186,4 +186,4 @@ The archive does not preserve the historical LOT_SIZE, step-size, MIN_NOTIONAL o
 
 - A participant-level regression in `src/bootstrap/shutdown/create-conservative-shutdown-participant.test.js` verifies the shutdown barrier is awaited before owned-BUY cancellation begins; it is included in the final exact-head targeted run.
 
-- The late-fill regression now also forces the exact `REST_STREAM_RECONCILIATION_FAILED` path, asserts owned BUY cancellation, then delivers the SELL report after the pause and proves exactly-once accounting with no BUY resumption. This covers the archived ADA timing pattern more directly than a generic strategy pause.
+- The user-data-handler regression combines `createUserDataEventHandler()` with the real `createAccountIntegritySafetyHalt()`: a retryable `REST_STREAM_RECONCILIATION_FAILED` result triggers recovery-mode owned-order reconciliation followed by owned-BUY cancellation. A subsequent SELL report is applied once while readiness remains closed and deferred BUY evaluation does not resume. This covers the archived ADA late-report ordering without bypassing the production safety-halt entry point.
