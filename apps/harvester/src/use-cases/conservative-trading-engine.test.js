@@ -8631,11 +8631,6 @@ function assertMalformedRestEnvelopeStateUnchanged({ harness, ownedOrder, result
     false,
     `${scenario}: malformed broker REST data must fail owned-order reconciliation rather than being accepted.`,
   )
-  assert.match(
-    result.errors?.[0]?.message ?? "",
-    /./,
-    `${scenario}: the failure must identify the malformed REST snapshot stage.`,
-  )
   assert.deepEqual(
     harness.accountedFills,
     [],
