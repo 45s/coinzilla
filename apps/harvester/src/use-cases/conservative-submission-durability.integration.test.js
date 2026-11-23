@@ -242,7 +242,7 @@ test("fails closed before Conservative broker placement when the operational-sta
   assert.deepEqual(calls, ["intent"], "A failed intent barrier must stop before broker placement and must not write a submission outcome.")
 })
 
-test("preserves the broker result as UNKNOWN when the operational-state outcome cannot commit", async () => {
+test("does not report success when Conservative outcome persistence fails after broker placement", async () => {
   const calls = []
   const { engine, brokerState } = createEngine({
     calls,

@@ -50,7 +50,7 @@
         },
         {
           "path": "src/use-cases/conservative-submission-durability.integration.test.js",
-          "name": "preserves the broker result as UNKNOWN when the operational-state outcome cannot commit",
+          "name": "does not report success when Conservative outcome persistence fails after broker placement",
           "kind": "failure"
         },
         {
