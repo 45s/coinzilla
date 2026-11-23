@@ -1449,7 +1449,10 @@ function createBuyExecutionEvidence({
     price: order.limitPrice,
     quantity: fillQuantity === order.originalQuantity.amount
       ? order.originalQuantity
-      : new Quantity({ amount: fillQuantity, asset: baseAsset }),
+      : new Quantity({
+        amount: fillQuantity,
+        asset: baseAsset,
+      }),
     quoteQuantity: new Money({
       amount: multiplyDecimal({
         left: order.limitPrice.amount,
@@ -1539,7 +1542,10 @@ test("rejects a stream fill whose optional clientOrderId conflicts with its regi
     tradeId: "wrong-client-fill",
     fillQuantity: "0.1",
     fillClientOrderId: "h-foreign-client-order",
-    executedQuantity: new Quantity({ amount: "0.1", asset: baseAsset }),
+    executedQuantity: new Quantity({
+      amount: "0.1",
+      asset: baseAsset,
+    }),
     status: "PARTIALLY_FILLED",
     executedAt: 2,
     updatedAt: 2,
@@ -2376,8 +2382,14 @@ async function assertMissingAndMismatchedFillDiagnostics({ engine, events, order
     market,
     side: order.side,
     price: order.limitPrice,
-    quantity: new Quantity({ amount: "0.5", asset: baseAsset }),
-    quoteQuantity: new Money({ amount: "49.975", asset: quoteAsset }),
+    quantity: new Quantity({
+      amount: "0.5",
+      asset: baseAsset,
+    }),
+    quoteQuantity: new Money({
+      amount: "49.975",
+      asset: quoteAsset,
+    }),
     liquidityRole: "MAKER",
     executedAt: 3,
     commissions: [],
@@ -3708,7 +3720,10 @@ function createOpenSellAcknowledgement({ pendingSell } = {}) {
     type: pendingSell.type,
     limitPrice: pendingSell.limitPrice,
     originalQuantity: pendingSell.originalQuantity,
-    executedQuantity: new Quantity({ amount: "0", asset: baseAsset }),
+    executedQuantity: new Quantity({
+      amount: "0",
+      asset: baseAsset,
+    }),
     status: "OPEN",
     createdAt: pendingSell.createdAt,
     acknowledgedAt: 1,
@@ -4913,7 +4928,11 @@ async function runTerminalRecoverySellInvalidHistoryCase({ fillHistory } = {}) {
   })
   await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+    priceEvent: {
+      symbol: "DOGEUSDT",
+      price: "100",
+      timestamp: 1,
+    },
   })
   const sellOrder = harness.engine.getOrders().find((order) => order.side === "SELL")
   sellOrderRef.current = sellOrder
@@ -7115,7 +7134,10 @@ function createLostAcknowledgementCanonicalEvidence({ pendingOrder } = {}) {
     type: pendingOrder.type,
     limitPrice: pendingOrder.limitPrice,
     originalQuantity: pendingOrder.originalQuantity,
-    executedQuantity: new Quantity({ amount: "1", asset: baseAsset }),
+    executedQuantity: new Quantity({
+      amount: "1",
+      asset: baseAsset,
+    }),
     status: "FILLED",
     createdAt: 1,
     acknowledgedAt: 1,
@@ -7665,9 +7687,18 @@ function createRecoveredStreamCancellationOrder({ status } = {}) {
     market,
     side: "SELL",
     type: "LIMIT",
-    limitPrice: new Money({ amount: "100", asset: quoteAsset }),
-    originalQuantity: new Quantity({ amount: "1", asset: baseAsset }),
-    executedQuantity: new Quantity({ amount: "0", asset: baseAsset }),
+    limitPrice: new Money({
+      amount: "100",
+      asset: quoteAsset,
+    }),
+    originalQuantity: new Quantity({
+      amount: "1",
+      asset: baseAsset,
+    }),
+    executedQuantity: new Quantity({
+      amount: "0",
+      asset: baseAsset,
+    }),
     status,
     createdAt: 1,
     acknowledgedAt: 1,
@@ -8459,16 +8490,31 @@ function createRecoveryModeOrder({ clientOrderId, brokerOrderId, side, price, qu
 
 function createRecoveryModeInitialAccountingFixture() {
   const initialPosition = new Position({
-    positionId: createPositionId({ marketId: market.id, strategyId: StrategyId.COIN_GRABBER }),
+    positionId: createPositionId({
+      marketId: market.id,
+      strategyId: StrategyId.COIN_GRABBER,
+    }),
     strategyId: StrategyId.COIN_GRABBER,
     market,
-    baseQuantity: new Quantity({ amount: "2", asset: baseAsset }),
-    freeBaseQuantity: new Quantity({ amount: "0", asset: baseAsset }),
-    quoteNetCashFlow: new Money({ amount: "-100", asset: quoteAsset }),
+    baseQuantity: new Quantity({
+      amount: "2",
+      asset: baseAsset,
+    }),
+    freeBaseQuantity: new Quantity({
+      amount: "0",
+      asset: baseAsset,
+    }),
+    quoteNetCashFlow: new Money({
+      amount: "-100",
+      asset: quoteAsset,
+    }),
   })
   return {
     initialPortfolio: new Portfolio({ positions: [initialPosition] }),
-    initialRecoveryLedger: new RecoveryLedger({ market, buyCost: "100" }),
+    initialRecoveryLedger: new RecoveryLedger({
+      market,
+      buyCost: "100",
+    }),
   }
 }
 
@@ -8513,8 +8559,14 @@ function createRecoveryModeFilledBuyEvidence({ standingBuyOrder } = {}) {
     market,
     side: "BUY",
     price: standingBuyOrder.limitPrice,
-    quantity: new Quantity({ amount: "1", asset: baseAsset }),
-    quoteQuantity: new Money({ amount: "90", asset: quoteAsset }),
+    quantity: new Quantity({
+      amount: "1",
+      asset: baseAsset,
+    }),
+    quoteQuantity: new Money({
+      amount: "90",
+      asset: quoteAsset,
+    }),
     commissions: [],
     commissionStatus: "COMPLETE",
   })
@@ -8704,9 +8756,18 @@ function createMalformedRestEnvelopeOrder({ status } = {}) {
     market,
     side: "BUY",
     type: "LIMIT",
-    limitPrice: new Money({ amount: "100", asset: quoteAsset }),
-    originalQuantity: new Quantity({ amount: "1", asset: baseAsset }),
-    executedQuantity: new Quantity({ amount: "0", asset: baseAsset }),
+    limitPrice: new Money({
+      amount: "100",
+      asset: quoteAsset,
+    }),
+    originalQuantity: new Quantity({
+      amount: "1",
+      asset: baseAsset,
+    }),
+    executedQuantity: new Quantity({
+      amount: "0",
+      asset: baseAsset,
+    }),
     status,
     createdAt: 1,
     acknowledgedAt: 1,
@@ -10462,13 +10523,28 @@ test("an unconfirmed volatility BUY cancellation stays protected without blockin
 
 function createVolatilityProtectedRecoveryFixture() {
   const position = new Position({
-    positionId: createPositionId({ marketId: market.id, strategyId: StrategyId.COIN_GRABBER }),
+    positionId: createPositionId({
+      marketId: market.id,
+      strategyId: StrategyId.COIN_GRABBER,
+    }),
     strategyId: StrategyId.COIN_GRABBER,
     market,
-    baseQuantity: new Quantity({ amount: "100", asset: baseAsset }),
-    freeBaseQuantity: new Quantity({ amount: "0", asset: baseAsset }),
-    quoteNetCashFlow: new Money({ amount: "-10", asset: quoteAsset }),
-    spent: new Money({ amount: "10", asset: quoteAsset }),
+    baseQuantity: new Quantity({
+      amount: "100",
+      asset: baseAsset,
+    }),
+    freeBaseQuantity: new Quantity({
+      amount: "0",
+      asset: baseAsset,
+    }),
+    quoteNetCashFlow: new Money({
+      amount: "-10",
+      asset: quoteAsset,
+    }),
+    spent: new Money({
+      amount: "10",
+      asset: quoteAsset,
+    }),
   })
   return {
     portfolio: new Portfolio({ positions: [position] }),
@@ -10476,7 +10552,10 @@ function createVolatilityProtectedRecoveryFixture() {
     unavailable: {
       ok: true,
       data: {
-        status: { isReady: false, reason: "STALE_STREAM" },
+        status: {
+          isReady: false,
+          reason: "STALE_STREAM",
+        },
         metrics: null,
       },
     },
@@ -10564,9 +10643,18 @@ function createMultiMarketVolatilityFixture() {
     market: zroMarket,
     side: "BUY",
     type: "LIMIT",
-    limitPrice: new Money({ amount: "1", asset: quoteAsset }),
-    originalQuantity: new Quantity({ amount: "1", asset: zroBaseAsset }),
-    executedQuantity: new Quantity({ amount: "0", asset: zroBaseAsset }),
+    limitPrice: new Money({
+      amount: "1",
+      asset: quoteAsset,
+    }),
+    originalQuantity: new Quantity({
+      amount: "1",
+      asset: zroBaseAsset,
+    }),
+    executedQuantity: new Quantity({
+      amount: "0",
+      asset: zroBaseAsset,
+    }),
     status: "OPEN",
     createdAt: 1,
     acknowledgedAt: 1,
@@ -11438,7 +11526,11 @@ function createLateSellScenarioAccounting({ portfolio, recoveryLedger } = {}) {
 async function establishLateSellShutdownSafety({ harness, shutdownState } = {}) {
   await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+    priceEvent: {
+      symbol: "DOGEUSDT",
+      price: "100",
+      timestamp: 1,
+    },
   })
   harness.engine.beginShutdown()
   shutdownState.started = true
