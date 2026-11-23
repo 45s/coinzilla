@@ -9,6 +9,7 @@ import {
   discoverApplicableInstructionPaths,
   parseArgs,
   parsePreflightReport,
+  plain,
   readBaseInstructionPaths,
   validateInstructionSnapshot,
   validateIssueBody,
@@ -179,6 +180,20 @@ test('rejects untouched template prompts instead of treating them as issue evide
 });
 
 
+
+test('removes HTML comments using HTML tokenizer termination semantics', () => {
+  assert.equal(plain('<!-->visible<!-->'), 'visible');
+  assert.equal(plain('<!--->visible<!--->'), 'visible');
+  assert.equal(plain('<!--hidden--!>visible'), 'visible');
+  assert.equal(plain('before<!--unclosed'), 'before');
+  assert.equal(plain('before<!--outer <!-- nested -->after'), 'beforeafter');
+  assert.equal(plain('before<!--first\nsecond--> <!--adjacent-->after'), 'beforeafter');
+});
+
+test('does not reintroduce an HTML comment opener across a removed comment boundary', () => {
+  assert.equal(plain('<!<!--hidden comment-->--').includes('<!--'), false);
+});
+
 test('preserves visible evidence between overlapping empty HTML comments', () => {
   for (const emptyComment of ['<!-->', '<!--->']) {
     const body = buildIssueBody({
@@ -194,7 +209,7 @@ test('preserves visible evidence between overlapping empty HTML comments', () =>
 
 test('does not count content hidden by malformed or unclosed HTML comments', () => {
   for (const sectionContent of [
-    '<!--hidden--!>short',
+    '<!--hidden--!>',
     '<!--hidden text without a closing delimiter',
   ]) {
     const body = buildIssueBody({ sectionContent });

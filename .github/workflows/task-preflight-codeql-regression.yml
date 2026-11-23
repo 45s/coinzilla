@@ -118,7 +118,7 @@ jobs:
           }, indent=2, sort_keys=True))
 
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
-              output.write(f"finding_count={len(findings)}\\n")
+              output.write(f"finding_count={len(findings)}\n")
           print("No task-preflight multi-character sanitizer finding detected." if not findings else "Task-preflight CodeQL finding captured for the RED regression baseline.")
           PY
 
