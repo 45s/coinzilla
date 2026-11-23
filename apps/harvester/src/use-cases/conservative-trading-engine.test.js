@@ -8452,6 +8452,22 @@ test("defers a recovered BUY fill evaluation until application recovery is ackno
 })
 
 
+function configureRestFillTimeoutRetryBroker({ broker, buyOrder, historyOrder, fill, timeout } = {}) {
+  let fillHistoryReads = 0
+  broker.getOpenOrders = async () => ({
+    ok: true,
+    data: [makeOpenOrder({ order: buyOrder, executedQuantity: "0.2" })],
+  })
+  broker.getCanonicalOrderHistory = async () => ({ ok: true, data: [historyOrder] })
+  broker.getFills = async () => {
+    fillHistoryReads += 1
+    return fillHistoryReads === 1
+      ? { ok: false, errors: [timeout] }
+      : { ok: true, data: [fill] }
+  }
+  return () => fillHistoryReads
+}
+
 async function createRestFillTimeoutRetryScenario() {
   const {
     engine,
@@ -8486,37 +8502,20 @@ async function createRestFillTimeoutRetryScenario() {
     name: "RpcTimeoutError",
     code: "RPC_TIMEOUT",
   })
-  let fillHistoryReads = 0
-  broker.getOpenOrders = async () => ({
-    ok: true,
-    data: [makeOpenOrder({
-      order: buyOrder,
-      executedQuantity: "0.2",
-    })],
+  const getFillHistoryReads = configureRestFillTimeoutRetryBroker({
+    broker,
+    buyOrder,
+    historyOrder,
+    fill,
+    timeout,
   })
-  broker.getCanonicalOrderHistory = async () => ({
-    ok: true,
-    data: [historyOrder],
-  })
-  broker.getFills = async () => {
-    fillHistoryReads += 1
-    return fillHistoryReads === 1
-      ? {
-        ok: false,
-        errors: [timeout],
-      }
-      : {
-        ok: true,
-        data: [fill],
-      }
-  }
   return {
     engine,
     buyOrder,
     fill,
     accountedFills,
     pauses,
-    getFillHistoryReads: () => fillHistoryReads,
+    getFillHistoryReads,
   }
 }
 
