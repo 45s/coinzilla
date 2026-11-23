@@ -21,5 +21,6 @@ Canonical repository-wide engineering guidance is linked below. Policy ownership
 - [Logging and observability standard](LOGGING_OBSERVABILITY_STANDARD.md) — structured records, severity, correlation, redaction and transport ownership
 - [Branch and release policy](BRANCH_AND_RELEASE_POLICY.md)
 - [Definition of Done](DEFINITION_OF_DONE.md)
+- [Repository test scenario catalog](../testing/SCENARIO_CATALOG.md) — the single human-readable index of important behavioral scenarios and their implementation/test mappings.
 
 The files linked here remain authoritative for their named subjects. This index is navigational and does not restate their rules.
