@@ -349,7 +349,17 @@ token });
     throw new Error('Commit comparison is truncated; preflight timing cannot be verified. BLOCKED.');
   }
   const ancestor = compare.status === 'ahead' || compare.status === 'identical';
-  const firstCommit = compare.commits?.[0];
+  const prCompare = await api({
+    path: '/repos/' + repo + '/compare/' + pr.base.sha + '...' + pr.head.sha,
+    token,
+  });
+  if (prCompare.status !== 'ahead' && prCompare.status !== 'identical') {
+    throw new Error('PR head is not based on the current target branch; update the branch and retry.');
+  }
+  if (prCompare.total_commits > prCompare.commits.length) {
+    throw new Error('PR commit comparison is truncated; preflight timing cannot be verified. BLOCKED.');
+  }
+  const firstCommit = prCompare.commits?.[0];
   const firstDate = firstCommit?.commit?.committer?.date || firstCommit?.commit?.author?.date || '';
   const recordedBeforeImplementation = Boolean(
     firstDate && preflight.createdAt && Date.parse(preflight.createdAt) <= Date.parse(firstDate),
