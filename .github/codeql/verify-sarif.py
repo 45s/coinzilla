@@ -49,6 +49,38 @@ def result_uris(result):
                     yield uri.replace("\\", "/")
 
 
+def describe_location(location):
+    sarif_location = location.get("location", location)
+    physical = sarif_location.get("physicalLocation", {})
+    uri = physical.get("artifactLocation", {}).get("uri", "<no-uri>")
+    line = physical.get("region", {}).get("startLine", "?")
+    snippet = physical.get("region", {}).get("snippet", {}).get("text", "")
+    message = sarif_location.get("message", {}).get("text", "")
+    detail = f"{uri}:{line}"
+    if message:
+        detail += f" ({message})"
+    if snippet:
+        detail += f" :: {snippet.strip()}"
+    return detail
+
+
+def print_result_flows(results):
+    for index, result in enumerate(results, start=1):
+        print(f"Custom result {index} primary locations:")
+        for location in result.get("locations", []):
+            print(f"  primary: {describe_location(location)}")
+        for flow_index, code_flow in enumerate(result.get("codeFlows", []), start=1):
+            for thread_index, thread_flow in enumerate(code_flow.get("threadFlows", []), start=1):
+                print(f"  code flow {flow_index}.{thread_index}:")
+                for location_index, thread_location in enumerate(
+                    thread_flow.get("locations", []), start=1
+                ):
+                    print(
+                        f"    {location_index}: "
+                        f"{describe_location(thread_location)}"
+                    )
+
+
 def verify_repository(path):
     run = get_run(load_sarif(path))
     rules = {
@@ -79,6 +111,7 @@ def verify_repository(path):
         if result.get("ruleId") == CUSTOM_RULE_ID
     ]
     protected_paths = BITUNIX_CLIENT_PATHS + BITUNIX_SIGNER_PATHS
+    print_result_flows(custom_results)
     reported_paths = sorted({
         uri
         for result in custom_results
