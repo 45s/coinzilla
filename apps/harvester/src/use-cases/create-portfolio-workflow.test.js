@@ -786,11 +786,23 @@ function createNextCycleWorkflow() {
     price: "21",
   })
   const initialPortfolio = new Portfolio()
-    .applyFill({ fill: firstCycleBuy, strategyId: StrategyId.COIN_GRABBER }).portfolio
-    .applyFill({ fill: firstCycleSell, strategyId: StrategyId.COIN_GRABBER }).portfolio
+    .applyFill({
+      fill: firstCycleBuy,
+      strategyId: StrategyId.COIN_GRABBER,
+    }).portfolio
+    .applyFill({
+      fill: firstCycleSell,
+      strategyId: StrategyId.COIN_GRABBER,
+    }).portfolio
   const initialLedger = RecoveryLedger.empty({ market })
-    .applyFill({ fill: firstCycleBuy, strategyId: StrategyId.COIN_GRABBER }).ledger
-    .applyFill({ fill: firstCycleSell, strategyId: StrategyId.COIN_GRABBER }).ledger
+    .applyFill({
+      fill: firstCycleBuy,
+      strategyId: StrategyId.COIN_GRABBER,
+    }).ledger
+    .applyFill({
+      fill: firstCycleSell,
+      strategyId: StrategyId.COIN_GRABBER,
+    }).ledger
   return createPortfolioWorkflow({
     evaluateStrategy: () => ({ action: "NO_ACTION" }),
     logger: {},
@@ -846,7 +858,11 @@ function assertNextCycleAccounting({ workflow }) {
 
 function evaluateNextCycleDecision({ workflow }) {
   return evaluateConservativeStrategy({
-    marketPrice: { symbol: "BTCUSDT", price: "10", timestamp: 100 },
+    marketPrice: {
+      symbol: "BTCUSDT",
+      price: "10",
+      timestamp: 100,
+    },
     pairConfig: {
       priceStepPercent: 1,
       orderQuantity: 2,
@@ -864,10 +880,26 @@ function evaluateNextCycleDecision({ workflow }) {
       orderType: "LIMIT_MAKER",
       tradingRules: {
         constraints: [
-          { type: "PRICE_INCREMENT", status: "SUPPORTED", value: { amount: "0.01" } },
-          { type: "QUANTITY_INCREMENT", status: "SUPPORTED", value: { amount: "0.01" } },
-          { type: "MIN_QUANTITY", status: "SUPPORTED", value: { amount: "0.01" } },
-          { type: "MIN_NOTIONAL", status: "SUPPORTED", value: { amount: "1" } },
+          {
+            type: "PRICE_INCREMENT",
+            status: "SUPPORTED",
+            value: { amount: "0.01" },
+          },
+          {
+            type: "QUANTITY_INCREMENT",
+            status: "SUPPORTED",
+            value: { amount: "0.01" },
+          },
+          {
+            type: "MIN_QUANTITY",
+            status: "SUPPORTED",
+            value: { amount: "0.01" },
+          },
+          {
+            type: "MIN_NOTIONAL",
+            status: "SUPPORTED",
+            value: { amount: "1" },
+          },
         ],
       },
     },
