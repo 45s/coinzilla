@@ -785,7 +785,10 @@ const CANCELLING_STRATEGY_PAUSE_REASONS = new Set([
   "RECONCILIATION_PENDING_ORDER_OUTCOME",
 ])
 
-function shouldCancelOwnedBuysForStrategyPause({ reason } = {}) {
+function shouldCancelOwnedBuysForStrategyPause({ reason, error } = {}) {
+  if (error?.recoveryFailure?.retryable === true || error?.retryable === true) {
+    return false
+  }
   if (typeof reason !== "string" || NON_CANCELLING_STRATEGY_PAUSE_REASONS.has(reason)) {
     return false
   }
@@ -825,7 +828,10 @@ async function executeStrategySafetyPause({ dependencies, input } = {}) {
       publishStrategyPaused,
       eventPublisher,
     })
-    const cancellationRequired = shouldCancelOwnedBuysForStrategyPause({ reason })
+    const cancellationRequired = shouldCancelOwnedBuysForStrategyPause({
+      reason,
+      error,
+    })
     recordStrategySafetyPauseInProgressStatus({
       state,
       symbol,
