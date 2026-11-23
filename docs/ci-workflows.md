@@ -55,7 +55,7 @@ The repository does not maintain a CodeQL analysis workflow, local query pack, c
 
 ## Task-readiness tooling (local only)
 
-Task-readiness validation is not a GitHub Actions job or branch-protection requirement. CI does not run the task-preflight validator/tests, publish issue comments for preflight evidence, or gate required status contexts on a preflight result. The separate CodeQL signer-query regression workflow and active Code Scanning configuration are unchanged.
+Task-readiness validation is not a GitHub Actions job or branch-protection requirement. CI does not run the task-preflight validator/tests, publish issue comments for preflight evidence, or gate required status contexts on a preflight result. The repository no longer owns a custom CodeQL query-regression workflow or configuration; see the CodeQL analysis section above.
 
 The parser fix replaces the overlapping comment regex with HTML-tokenizer-aware scanning: abrupt empty-comment endings (`<!-->` and `<!--->`), normal `-->`, incorrectly closed `--!>`, nested opener text, and EOF are covered. A final opener guard prevents comment delimiters from being recreated by later prompt/Markdown normalization. The synchronized task branch passed the full local CodeQL selection and all 29 task-preflight tests on commit `de9577bc5979782fc9b3602d9775f12db47f30c9` in [run 45139230437](https://github.com/45s/coinzilla/actions/runs/45139230437): zero target SARIF results, 29 tests passed, 0 failed. This was local CLI evidence only; it does not clear the active GitHub Code Scanning finding. The parser correction remains tracked in issue #1765 until a fresh active scan with the reviewed configuration confirms the result.
 
