@@ -138,16 +138,16 @@ The current persistence composition can also create both a legacy order-history 
 
 - `order-history-record.test.js` covers valid record mapping, exact decimal preservation, collision-safe composite identity, skipping zero-execution orders, and rejecting incomplete provider identity.
 - `order-history-observer.test.js` covers valid lifecycle projection, queue overflow, repository failure, close/drain behavior, and field-level diagnostics for `providerInstanceId` and `market.baseAsset.code`.
-- `configure-harvester-logging.test.js` covers compact output and duplicate suppression, but did not prove that different order-history validation fields and client-order identities remain visible and distinct.
+- The existing `configure-harvester-logging.test.js` covers generic compact output and duplicate suppression, but did not prove that different order-history validation fields and client-order identities remain visible and distinct.
 - The order-history observer regression from #1362 proves the field reaches the logger; it does not prove the compact console renders it.
 
 ### Test-first result and focused correction
 
 The regression was first committed without the production change on `39c4e5eb3730ac3ce7abd3a823492bd401b44f0e`. GitHub Actions' Harvester Targeted Tests failed for the expected reason: the test expected two distinct console lines but received one. The remaining selected tests passed.
 
-The GREEN implementation in [PR #1796](https://github.com/45s/coinzilla/pull/1796) now gives order-history validation failures a dedicated bounded console summary containing safe `field`, `symbol`, `clientOrderId` and `errorCode`. Those values are included in the summary fingerprint. The regression now uses three events to prove both independent invariants: changing only the field keeps two records distinct; changing only the client-order ID also keeps two records distinct. It also checks the stable error code and 200-character bound.
+The GREEN implementation in [PR #1796](https://github.com/45s/coinzilla/pull/1796) now gives order-history validation failures a dedicated bounded console summary containing safe `field`, `symbol`, `clientOrderId` and `errorCode`. Those values are included in the summary fingerprint. The regression is isolated in `order-history-projection-console.test.js` and uses three events to prove both independent invariants: changing only the field keeps two records distinct; changing only the client-order ID also keeps two records distinct. A second test bounds long field and client-order values. The focused test file is registered in the targeted-test list.
 
-This improves future diagnosis and prevents distinct validation failures from being hidden by console summary deduplication. It does **not** identify or repair the invalid historical input. Exact-head GREEN and full CI remain pending until the new commit completes.
+This improves future diagnosis and prevents distinct validation failures from being hidden by console summary deduplication. It does **not** identify or repair the invalid historical input. Targeted Harvester tests passed on `3b522d5e9e7e254e3695f4f9a7adc81ccc936031`. Repository Quality then exposed two formatting errors in the new formatter and pre-existing strict changed-file max-lines errors in the large existing logging test file. The formatter formatting is corrected here; the regression is moved to a focused new test file rather than refactoring unrelated existing tests. Exact-head CI is pending.
 
 ## Remaining root-cause evidence
 

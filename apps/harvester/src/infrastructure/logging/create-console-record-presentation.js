@@ -54,7 +54,10 @@ function summarizeOrderHistoryProjectionFailure({ data, message } = {}) {
     }
     details[key] = value
   }
-  return { message, details }
+  return {
+    message,
+    details,
+  }
 }
 
 function summarizeConsoleData({ data, shutdownPresentation } = {}) {
@@ -71,7 +74,10 @@ function summarizeConsoleData({ data, shutdownPresentation } = {}) {
   const message = String(data.message ?? "Harvester event")
     .replace(/[\r\n]+/g, " ")
   if (message === "Order history projection failed") {
-    return summarizeOrderHistoryProjectionFailure({ data, message })
+    return summarizeOrderHistoryProjectionFailure({
+      data,
+      message,
+    })
   }
   if (
     message === "Harvester recovery SELL cancellation requested"
