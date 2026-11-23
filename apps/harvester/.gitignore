@@ -2,3 +2,4 @@
 /data/
 **/harvester.db
 **/harvester.db-*
+/archive-output/
