@@ -227,6 +227,10 @@ The new runtime-dispatch and action-authorizer suites cover the production compo
 
 The offline bootstrap fixture now builds quote notionals and bid/ask book prices with exact decimal multiplication; remaining broker-style numeric order quantities are derived with exact decimal subtraction before conversion to the numeric adapter shape. The DOGE/ZRO replay assertions now compare retained quantity and realized profit with exact decimal comparison rather than JavaScript Number. Updated in PR #1776; not yet merged/CI-verified.
 
+### Blocked — remaining Conservative engine financial oracles
+
+`src/use-cases/conservative-trading-engine.test.js` still contains Number-based financial expectations and a `makeSellFill` default quote notional of `"100"` that can disagree with its execution price and quantity. A narrow correction attempt in [closed PR #1772](https://github.com/45s/coinzilla/pull/1772) exposed 33 pre-existing `max-lines-per-function` violations across this large test file under strict changed-file ESLint. The PR was closed; no lint suppression or unrelated broad refactor was applied. Revisit these remaining assertions after a separately scoped decomposition of that test file.
+
 ### Conservative state-machine scenario requirements — issue #1763
 
 The scenario guide now includes a mandatory state-machine testing contract and conceptual lifecycle diagram. For each applicable transition, the issue matrix records source state, event identity, guard, destination, full Portfolio/Position/RecoveryLedger/OrderRegistry mutation, exact accounting delta, emitted effects, idempotency, conflict rejection, failure atomicity, recovery evidence, test owner/path and evidence status.
