@@ -10637,6 +10637,27 @@ test("rejects a negative-zero market-book timestamp", () => {
 
 // Restored pre-refactor reconciliation and strategy-policy regressions.
 
+function configureStreamDuringRestReadBroker({
+  broker,
+  buyOrder,
+  partialOrder,
+  recoveredFill,
+  fillsGate,
+  fillsStarted,
+  signalFillsStarted,
+} = {}) {
+  broker.getOpenOrders = async () => ({
+    ok: true,
+    data: [makeOpenOrder({ order: buyOrder, executedQuantity: "0" })],
+  })
+  broker.getCanonicalOrderHistory = async () => ({ ok: true, data: [partialOrder] })
+  broker.getFills = async () => {
+    signalFillsStarted()
+    await fillsGate.promise
+    return { ok: true, data: [recoveredFill] }
+  }
+}
+
 test("processes stream fills received during REST reads before applying the REST snapshot", async () => {
   let releaseFills
   let signalFillsStarted
@@ -10666,19 +10687,14 @@ test("processes stream fills received during REST reads before applying the REST
     executedQuantity: "0.2",
     updatedAt: 3,
   })
-  broker.getOpenOrders = async () => ({
-    ok: true,
-    data: [makeOpenOrder({ order: buyOrder,
-executedQuantity: "0" })],
+  configureStreamDuringRestReadBroker({
+    broker,
+    buyOrder,
+    partialOrder,
+    recoveredFill,
+    fillsGate,
+    signalFillsStarted,
   })
-  broker.getCanonicalOrderHistory = async () => ({ ok: true,
-data: [partialOrder] })
-  broker.getFills = async () => {
-    signalFillsStarted()
-    await fillsGate.promise
-    return { ok: true,
-data: [recoveredFill] }
-  }
 
   const reconciliation = engine.reconcileOwnedOrders()
   await fillsStarted
