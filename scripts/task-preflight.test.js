@@ -40,15 +40,23 @@ test('uses the live PR body but rejects a head that changed after the workflow e
 
   const eventPullRequest = {
     number: 1762,
-    body: 'Fixes #1754\\n\\nFinal source commit: old-sha',
-    base: { ref: 'develop' },
-    head: { sha: 'a'.repeat(40) },
+    body: 'Fixes #1754\n\nFinal source commit: old-sha',
+    base: {
+      ref: 'develop',
+    },
+    head: {
+      sha: 'a'.repeat(40),
+    },
   };
   const currentPullRequest = {
     number: 1762,
-    body: 'Fixes #1754\\n\\nFinal source commit: current-sha',
-    base: { ref: 'develop' },
-    head: { sha: 'a'.repeat(40) },
+    body: 'Fixes #1754\n\nFinal source commit: current-sha',
+    base: {
+      ref: 'develop',
+    },
+    head: {
+      sha: 'a'.repeat(40),
+    },
   };
 
   assert.equal(
@@ -61,7 +69,9 @@ test('uses the live PR body but rejects a head that changed after the workflow e
       eventPullRequest,
       currentPullRequest: {
         ...currentPullRequest,
-        head: { sha: 'b'.repeat(40) },
+        head: {
+          sha: 'b'.repeat(40),
+        },
       },
     }),
     /head changed after the workflow event/i,
