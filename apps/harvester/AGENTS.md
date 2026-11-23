@@ -1,6 +1,6 @@
 # Engineering Standards for AI Agents
 
-These instructions apply to all work in `apps/harvester/` and take precedence over generic agent defaults. Follow repository-wide guidance (including root `AGENTS.md`, contribution docs, and existing conventions) as well. The [Harvester documentation index](./docs/README.md) is the entry point for domain documentation; repository-wide documentation requirements are defined in [Documentation Governance](../../docs/DOCUMENTATION_GOVERNANCE.md).
+These instructions apply to all work in `apps/harvester/` and take precedence over generic agent defaults. Keep user-facing communication short, concrete and specific: report completed work, exact status, next action, blockers and verified results only. Avoid filler, repeated explanations and routine tool narration. See the repository communication rule in the root [AGENTS.md](../../AGENTS.md#agent-communication--mandatory). Follow repository-wide guidance (including root `AGENTS.md`, contribution docs, and existing conventions) as well. The [Harvester documentation index](./docs/README.md) is the entry point for domain documentation; repository-wide documentation requirements are defined in [Documentation Governance](../../docs/DOCUMENTATION_GOVERNANCE.md).
 
 ## Understand applicable Harvester requirements
 
