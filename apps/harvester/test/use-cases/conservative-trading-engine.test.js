@@ -1028,6 +1028,11 @@ function assertReconciledFillAccounting({ fixture, sellFillEvent }) {
 }
 
 async function assertDuplicateFillIsIdempotent({ fixture, secondBuy }) {
+  const portfolioBefore = fixture.getPortfolio().value;
+  const recoveryLedgerBefore = fixture.getRecoveryLedger().value;
+  const submittedIntentCountBefore = fixture.submittedIntents.length;
+  const cancellationsBefore = [...fixture.cancellations];
+
   await fixture.engine.processUserDataEvent({
     event: fixture.createTradeEvent({
       acknowledgedOrder: secondBuy,
@@ -1037,8 +1042,13 @@ async function assertDuplicateFillIsIdempotent({ fixture, secondBuy }) {
       status: "FILLED",
     }),
   });
+
+  assert.deepEqual(fixture.getPortfolio().value, portfolioBefore, "A late duplicate BUY report must leave every Portfolio field unchanged.");
+  assert.deepEqual(fixture.getRecoveryLedger().value, recoveryLedgerBefore, "A late duplicate BUY report must leave every RecoveryLedger field unchanged.");
   assert.equal(fixture.getPortfolio().appliedFillIds.length, 4, "Replaying the final BUY execution must not duplicate portfolio accounting.");
   assert.equal(fixture.getRecoveryLedger().appliedFillIds.length, 4, "Replaying the final BUY execution must not duplicate recovery-ledger accounting.");
+  assert.equal(fixture.submittedIntents.length, submittedIntentCountBefore, "A duplicate BUY report must not create another order intent.");
+  assert.deepEqual(fixture.cancellations, cancellationsBefore, "A duplicate BUY report must not repeat recovery SELL cancellation side effects.");
 }
 
 async function assertFinalRecoverySellReplacement(fixture) {
