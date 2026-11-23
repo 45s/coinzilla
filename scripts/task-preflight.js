@@ -167,7 +167,10 @@ title: 'Documentation impact' });
     errors.push('PR must explain why no documentation update is required.');
   }
 }
-function hasVerificationEvidence(comments, headSha) {
+function hasVerificationEvidence({ comments, headSha }) {
+  if (typeof headSha !== 'string' || !/^[a-f0-9]{40,64}$/i.test(headSha)) {
+    return false;
+  }
   return comments.some((comment) =>
     /verification evidence/i.test(comment) && /\bpassed\b/i.test(comment) &&
     /\b(?:pnpm|npm|node|git)\b/i.test(comment) &&
@@ -183,7 +186,10 @@ errors });
   validateDocumentationImpact({ context,
 errors });
   errors.push(...validateIssueBody(context.issueBody));
-  if (!hasVerificationEvidence(context.issueComments || [], context.headSha || '')) {
+  if (!hasVerificationEvidence({
+    comments: context.issueComments || [],
+    headSha: context.headSha,
+  })) {
     errors.push('Issue lacks command-based verification evidence for the current PR head SHA.');
   }
   errors.push(...validatePreflightReport({
