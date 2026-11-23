@@ -506,29 +506,42 @@ test('rejects a pull request used as the tracking issue', () => {
   );
 });
 
-test('runs PR evidence enforcement in a dedicated Task Preflight workflow', () => {
-  const qualityWorkflow = readFileSync(
+test('runs PR evidence enforcement in a dedicated Task Preflight job', () => {
+  const workflow = readFileSync(
     new URL('../.github/workflows/quality-gate.yml', import.meta.url),
     'utf8',
   );
-  const preflightWorkflow = readFileSync(
-    new URL('../.github/workflows/task-preflight.yml', import.meta.url),
-    'utf8',
-  );
+  const workspaceJob = workflow.match(
+    /  workspace-quality:\n([\s\S]*?)(?=\n  [a-z-]+:|\n?$)/,
+  )?.[1];
+  const testsJob = workflow.match(
+    /  task-preflight-tests:\n([\s\S]*?)(?=\n  [a-z-]+:|\n?$)/,
+  )?.[1];
+  const evidenceJob = workflow.match(
+    /  publish-task-preflight-evidence:\n([\s\S]*?)(?=\n  [a-z-]+:|\n?$)/,
+  )?.[1];
+  const validatorJob = workflow.match(
+    /  task-preflight:\n([\s\S]*?)(?=\n  [a-z-]+:|\n?$)/,
+  )?.[1];
+  const requiredJob = workflow.match(
+    /  required-javascript-quality:\n([\s\S]*)$/,
+  )?.[1];
 
+  assert.match(workflow, /^name: Repository Quality/m);
   assert.doesNotMatch(
-    qualityWorkflow,
+    workspaceJob ?? '',
     /task:preflight|test:task-preflight/i,
-    'JavaScript Syntax must not run task preflight tests or PR evidence enforcement.',
+    'JavaScript/workspace quality must not execute task preflight.',
   );
-  assert.match(preflightWorkflow, /^name: Task Preflight/m);
-  assert.match(preflightWorkflow, /pnpm run test:task-preflight/);
-  assert.match(preflightWorkflow, /pnpm run task:preflight -- --pull-request/);
-  assert.match(preflightWorkflow, /issues: write/);
-  assert.match(preflightWorkflow, /github\.event\.pull_request\.head\.sha/);
-  assert.match(
-    preflightWorkflow,
-    /Publish exact-head verification evidence[\s\S]*?pnpm run task:preflight -- --pull-request/,
-    'The current-run evidence comment must be published after focused tests and before evidence validation.',
-  );
+  assert.ok(testsJob, 'A separate focused Task Preflight test job must exist.');
+  assert.match(testsJob, /pnpm run test:task-preflight/);
+  assert.ok(evidenceJob, 'Evidence publication must be isolated from PR code execution.');
+  assert.match(evidenceJob, /issues: write/);
+  assert.match(evidenceJob, /Verification evidence/);
+  assert.ok(validatorJob, 'A dedicated Task Preflight validator job must exist.');
+  assert.match(validatorJob, /pnpm run task:preflight -- --pull-request/);
+  assert.match(validatorJob, /needs: publish-task-preflight-evidence/);
+  assert.match(validatorJob, /github\.event\.pull_request\.head\.sha/);
+  assert.match(requiredJob ?? '', /task-preflight/);
+  assert.match(requiredJob ?? '', /TASK_PREFLIGHT_RESULT/);
 });
