@@ -11,6 +11,8 @@ last_verified: 2026-11-20
 
 ## Purpose and scope
 
+For the single cross-workspace, human-readable behavior view, start with the [Repository Test Scenario Catalog](../../../../docs/testing/SCENARIO_CATALOG.md). This file remains the detailed source-driven inventory of existing tests under `apps/harvester/src/domain/`; it is a supplemental implementation/evidence index, not a competing scenario catalog or a substitute for the owning domain specifications. Recovery Seller's from-scratch scenario initiative in [#1780](https://github.com/45s/coinzilla/issues/1780) explicitly gives existing RS tests no scenario-coverage credit.
+
 This is the source-driven inventory for deterministic tests under `apps/harvester/src/domain/`. It maps business responsibilities to existing tests, records test-quality risks, and sequences follow-up work. It does not define trading behavior; the [Conservative Domain Specification](CONSERVATIVE_DOMAIN_SPECIFICATION.md) remains authoritative.
 
 Reviewed baseline: `develop` at `17f560ed96439fe9dcf3eb159d9f7e0b850dcd42` (2026-11-19, after the RS-2b application accounting and RS-3 policy foundations). The current domain tree contains 45 production JavaScript files and 38 domain test files. Historical checkpoints below remain labeled as historical; they are not current file-count claims. PR #917 corrected Conservative BUY gating after RED regressions.
