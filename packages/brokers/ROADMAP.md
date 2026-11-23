@@ -8,10 +8,6 @@ owner: brokers
 
 This roadmap tracks work owned by `@coinzilla/brokers`. Historical entries may retain consumer-integration context for provenance, but application ports, adapters, routing, and runtime composition remain owned by each consuming application.
 
-## Bitunix Spot account-wide pending-order scan latency — #1704
-
-**Status: COMPLETE (implementation and one-off live verification)** — [issue #1704](https://github.com/45s/coinzilla/issues/1704), [PR #1719](https://github.com/45s/coinzilla/pull/1719) (bounded scan), and [PR #1727](https://github.com/45s/coinzilla/pull/1727) (explicit cancellation workflow). The no-argument `getOpenOrders()` convenience scan previously queried every active Spot market serially; the operator's 2026-11-22 report measured 156,985 ms. The merged implementation uses a four-worker bounded pool, deterministic catalog-order aggregation, and preserves partial results/errors; the order-read workflow continues detail reads for successful-symbol results even when another symbol fails, while keeping the aggregate gate blocked. The live operator run discovered and fetched details for the exact `HYPEUSDT / 2124329325141426176` order. The separately approved one-shot `--cancel-existing-order` workflow then made exactly one cancellation attempt, received a confirmed `CANCELED` result, and independently verified that status with `getOrder()`. The post-cancel account-wide scan returned no open orders. The published evidence is [the 2026-11-22 cancellation report](https://github.com/45s/coinzilla/blob/diagnostics/bitunix-health-20261122T092438681Z/packages/brokers/diagnostics/reports/bitunix-health-20261122T092438681Z.json). This completes the investigation for the known test order; it does not establish complete/atomic account-wide coverage because Bitunix's official pending-order endpoint remains symbol-scoped and the active market catalog may omit closed markets. The default healthcheck remains read-only.
-
 ## Bitunix Spot one-at-a-time LIVE order probe matrix — #1690
 
 **Status: IN PROGRESS** — [issue #1690](https://github.com/45s/coinzilla/issues/1690). Add a human-operated, one-probe-per-invocation mode to the unified Bitunix CLI. The reviewed first pass covers HYPEUSDT LIMIT BUY/SELL quantities 1/2 and MARKET BUY/SELL quote quantities 1/2. Every invocation re-reads market metadata, balances and open orders; shows the exact common Broker input and wire body; requires fresh interactive confirmation; writes a unique exclusive marker; and captures the place-order request/response locally with restrictive permissions. The existing #1608 fixed HYPEUSDT order and marker remain untouched. The command uses the common `Broker.createOrder()` path, publishes only the existing sanitized diagnostic result, and never loops, retries, cancels or performs another mutation. A confirmed or unknown result requires manual review. This is a human-only LIVE investigation, not a test or production-readiness milestone; issue #1185 remains unchanged.
@@ -43,7 +39,7 @@ The signer helper's internal input name and direct unit-test inputs use `publicI
 - Do not replace the exchange protocol with bcrypt, scrypt, Argon2, PBKDF2, HMAC, or another algorithm. Do not alter credentials, perform live/testnet exchange operations, or dismiss alerts to manufacture a green result.
 
 Historical PRs and their outcomes remain linked in issue #1674. Keep the issue and release PR #1662 blocked until both findings are independently confirmed absent.
- 
+
 ## Executable CLI source identity — #1631\n\n**Status: IN PROGRESS** — [issue #1631](https://github.com/45s/coinzilla/issues/1631) / [PR #1632](https://github.com/45s/coinzilla/pull/1632). Establishes a repository-wide requirement for user-invoked CLI entrypoints to print their exact source commit, package/script version, worktree state, and runtime before doing work, with a side-effect-free version command. The first implementation is the Bitunix healthcheck entrypoint; the repository-wide CLI inventory and remaining migrations are tracked by the issue.\n\n## Bitunix health-check and operator CLI consolidation — #1614
 
 **Status: IMPLEMENTED and merged** — [issue #1614](https://github.com/45s/coinzilla/issues/1614) / [PR #1616](https://github.com/45s/coinzilla/pull/1616), merge commit `488949b668e1291b5cfc64032250f6d2a4568274`. Exact-head required workflow runs and advisory External Documentation Links passed; issue #1614 is closed after acceptance and exact-head CI verification.
@@ -74,7 +70,7 @@ The direct Application suite now characterizes subscriber event filtering/dedupl
 
 ## Failed user-data reconnect client cleanup — #1714
 
-**Status: IN PROGRESS** — [Harvester Reliability Initiative #1639](https://github.com/45s/coinzilla/issues/1639), child [#1714](https://github.com/45s/coinzilla/issues/1714). The Application `UserDataSession` now explicitly detaches listeners and attempts to disconnect a client whose reconnect handshake fails before a later retry can replace it. If cleanup fails, subsequent retries continue disposing the same client and do not open a replacement socket until closure succeeds. Cleanup errors are logged without masking the original connection failure. Direct injected-port regressions assert successful disposal and fail-closed behavior while cleanup remains unsuccessful. This is an internal lifecycle correction: public Broker signatures, event/status semantics, state-changing request gates, and the no-replay contract remain unchanged. Offline only; no TESTNET/LIVE exchange operations.
+**Status: COMPLETE** — merged [PR #1716](https://github.com/45s/coinzilla/pull/1716), closing child issue [#1714](https://github.com/45s/coinzilla/issues/1714) under [Harvester Reliability Initiative #1639](https://github.com/45s/coinzilla/issues/1639). The Application `UserDataSession` detaches listeners and attempts to disconnect a client whose reconnect handshake fails before a later retry can replace it. If cleanup fails, subsequent retries continue disposing the same client and do not open a replacement socket until closure succeeds. Cleanup errors are logged without masking the original connection failure. Injected-port regressions assert successful disposal and fail-closed behavior while cleanup remains unsuccessful. This is an internal lifecycle correction: public Broker signatures, event/status semantics, state-changing request gates, and the no-replay contract remain unchanged. No TESTNET/LIVE exchange operations.
 
 ## S-7 naming remediation — COMPLETE
 
@@ -1617,14 +1613,13 @@ See [the private polling contract](./docs/BITUNIX_SPOT_POLLING.md) and [the Bitu
 - [x] Added the cumulative [Bitunix live order-probe evidence log](./BITUNIX_ORDER_PROBE_LOG.md), including the proven behavior, unresolved protocol questions, and next investigation steps.
 
 **Finding:** Spot LIMIT BUY/SELL dispatch and nested rejection parsing are empirically exercised. The operator confirmed the account lacked the required Spot assets, so both `10034` insufficient-balance rejections were expected. No accepted order or fill has yet been observed. A funded `limit-buy-11-usdt` probe is added: BUY `HYPEUSDT` LIMIT at `30 USDT`, spending up to `11 USDT`; quantity is calculated from live `basePrecision`, with `0.24 USDT` reserved. The script displays the exact order snapshot and accepts only `y/N`. This will test actual acceptance after merge and funding. Broader lifecycle/Harvester blockers remain.
+## 2026-11-22 — Bitunix accepted-placement reconciliation
 
-## 2026-11-22 — Publish Bitunix order-read identity evidence
+**Status: reconciliation contract and offline regression coverage carried forward from PR #1703; exact-head CI is the merge gate.**
 
-**Status: implementation in PR; CI verification pending.** The operator explicitly approved publishing and displaying the order symbol and exchange order ID.
-
-- Publish sanitized `getOpenOrders` and `getOrder` request/response evidence, including `symbol`, exchange order ID, normalized order fields, operation status, duration, and structured errors.
-- Keep the strict metadata-only allowlist for all other diagnostic operations; do not publish account diagnostics or logger events.
-- Continue redacting API credentials, signatures, nonces, account identifiers, balances, amounts, fees, wallet addresses, personal fields, and free-form error messages.
-- Print each discovered `symbol / orderId` and its matching `getOrder` status in the operator's terminal output.
-- Add regression coverage for sanitizer boundaries, published report payloads, exact order identity preservation, and terminal output.
-- No live exchange calls, order placement, cancellation, or other mutations are part of this implementation.
+- Preserve `mutationOutcome: "CONFIRMED"` when Bitunix explicitly accepts placement even if the subsequent read-only order-detail request fails.
+- Keep the overall Broker result `ok: false` until a normalized Order is returned; retain the raw placement acknowledgement, original read error, and structured `reconciliation` metadata.
+- Successful detail reads report `reconciliation.status: "VERIFIED"`; failed detail reads report `"UNAVAILABLE"`, with source, endpoint, and sanitized error classification.
+- The operator probe prints placement confirmation separately from reconciliation health and persists reconciliation metadata in its private one-shot marker. A confirmed placement must never be retried because a later read failed.
+- Tests cover verified/unavailable reconciliation metadata, the exact signed order-detail query, and persistence of confirmed placement evidence when readback fails.
+- No live exchange mutation is part of CI. The existing HYPE order's later cancellation and independent status verification are documented under [PR #1727](https://github.com/45s/coinzilla/pull/1727).
