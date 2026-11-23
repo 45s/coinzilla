@@ -42,7 +42,7 @@
       "src/use-cases/create-market-price-transition-handler.test.js",
       "src/use-cases/synchronize-account-history/sync-acc-history.test.js",
       "test/audits/2026-11-22-conservative-recovery-archive.test.js",
-    "test/replays/doge-zro-conservative-replay.test.js",
+      "test/replays/doge-zro-conservative-replay.test.js",
       "src/bootstrap/start-harvester.test.js",
       "test/bootstrap/trading-safety.test.js",
       "test/bootstrap/operator-control.test.js",
