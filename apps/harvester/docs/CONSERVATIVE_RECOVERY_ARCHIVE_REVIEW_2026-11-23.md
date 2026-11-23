@@ -183,7 +183,6 @@ Replay quoteQuantity fidelity, digest-chain integrity, corrected inventory paths
 - Historical root cause for the 28 order-history failures remains unknown. Do not inspect the database dump without explicit authorization.
 - Keep PR #1761 draft; update issue and PR after every implementation commit.
 
-
 ## 2026-11-23 continuation — latest develop sync and exact-head CI
 
 - Current task branch head: `07c0b5f329bde96e883b06f6aad51f903e0a6ebe`.
