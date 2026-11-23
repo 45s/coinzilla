@@ -434,8 +434,15 @@ function createHarnessEngineWorkflowOptions({ options, brokerState, state } = {}
 
 function createHarnessEngine({ options, brokerState, state } = {}) {
   return makeConservativeTradingEngine({
-    ...createHarnessEngineCoreOptions({ options, brokerState }),
-    ...createHarnessEngineWorkflowOptions({ options, brokerState, state }),
+    ...createHarnessEngineCoreOptions({
+      options,
+      brokerState,
+    }),
+    ...createHarnessEngineWorkflowOptions({
+      options,
+      brokerState,
+      state,
+    }),
   })
 }
 
@@ -1126,7 +1133,12 @@ test("publishes actionable decisions and order submission facts around broker I/
       timestamp: 1
     },
   })
-  assertPublishedOrderSubmissionLifecycle({ harness, events, timeline, lifecycleLogs })
+  assertPublishedOrderSubmissionLifecycle({
+    harness,
+    events,
+    timeline,
+    lifecycleLogs,
+  })
 })
 
 test("order intent publication failure prevents a broker order", async () => {
@@ -1464,7 +1476,10 @@ function createBuyExecutionEvidence({
     updatedAt,
     ...(completedAt === undefined ? {} : { completedAt }),
   })
-  return { fill, executedOrder }
+  return {
+    fill,
+    executedOrder,
+  }
 }
 
 test("treats decimal-formatted zero as no execution in recovery SELL cancellation reconciliation", async () => {
@@ -2396,7 +2411,11 @@ test("publishes missing and mismatched Fill diagnostics without raw execution da
   }
   })
   const [order] = engine.getOrders()
-  await assertMissingAndMismatchedFillDiagnostics({ engine, events, order })
+  await assertMissingAndMismatchedFillDiagnostics({
+    engine,
+    events,
+    order,
+  })
 })
 
 test("ignores unmatched manual order updates by default and publishes safe diagnostics", async () => {
@@ -4182,7 +4201,7 @@ function assertReplacementMatchesStrategy({ scenario, replacementSell }) {
 }
 
 
-function createShutdownBuyRaceFills({ scenario, buyOrder } = {}) {
+function createShutdownBuyRaceFills({ buyOrder } = {}) {
   const firstQuantity = "0.5"
   const secondQuantity = subtractDecimal({
     left: buyOrder.originalQuantity.amount,
@@ -4217,18 +4236,29 @@ async function assertShutdownBuyRaceResults({
   cancellationResult,
   lateFillResult,
 } = {}) {
-  await assertLateNewReportsIgnoredAfterFilled({ scenario, buyOrder })
+  await assertLateNewReportsIgnoredAfterFilled({
+    scenario,
+    buyOrder,
+  })
   assert.equal(cancellationResult.ok, true, cancellationResult.errors?.[0]?.message)
   assert.equal(lateFillResult.ok, true, lateFillResult.errors?.[0]?.message)
-  assertShutdownBuyRaceAccounting({ scenario, seeded })
+  assertShutdownBuyRaceAccounting({
+    scenario,
+    seeded,
+  })
   const replacementSell = await assertShutdownRecoverySellReplaced({ scenario })
-  assertReplacementMatchesStrategy({ scenario, replacementSell })
+  assertReplacementMatchesStrategy({
+    scenario,
+    replacementSell,
+  })
 }
 
 test("reconciles multiple BUY fills racing shutdown cancellation and replaces only the owned recovery SELL", async () => {
   const scenario = await createShutdownBuyRaceScenario()
   const { seeded, buyOrder } = scenario
-  const { firstFill, secondFill } = createShutdownBuyRaceFills({ scenario, buyOrder })
+  const { firstFill, secondFill } = createShutdownBuyRaceFills({
+    buyOrder,
+  })
   scenario.buyFills = [firstFill, secondFill]
   scenario.stopping.value = true
 
@@ -4696,7 +4726,10 @@ async function runTerminalRecoverySellStatusScenario({ status }) {
     getPortfolio: () => accountingState.currentPortfolio,
     getRecoveryLedger: () => accountingState.currentRecoveryLedger,
     getTerminalFills: ({ orderId }) => terminalFill.current?.brokerOrderId === orderId ? [terminalFill.current] : [],
-    updateTradingAccounting: createTerminalRecoverySellAccounting({ accountingState, accountedFills }),
+    updateTradingAccounting: createTerminalRecoverySellAccounting({
+      accountingState,
+      accountedFills,
+    }),
   })
   await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
@@ -4899,7 +4932,12 @@ async function runTerminalRecoverySellInvalidHistoryCase({ fillHistory } = {}) {
       }),
     },
   })
-  return { result, harness, accountingState, fillHistory }
+  return {
+    result,
+    harness,
+    accountingState,
+    fillHistory,
+  }
 }
 
 function assertTerminalRecoverySellInvalidHistory({ result, harness, accountingState, fillHistory } = {}) {
@@ -5075,17 +5113,26 @@ function configureMissingRestFillBroker({
       ok: true,
       data: [
         externalOrder,
-        makeOpenOrder({ order: buyOrder, executedQuantity: "0.00000000" }),
+        makeOpenOrder({
+          order: buyOrder,
+          executedQuantity: "0.00000000",
+        }),
       ],
     }
   }
   broker.getCanonicalOrderHistory = async ({ symbol, orderId }) => {
     calls.push(["getCanonicalOrderHistory", symbol, orderId])
-    return { ok: true, data: [historyOrder] }
+    return {
+      ok: true,
+      data: [historyOrder],
+    }
   }
   broker.getFills = async ({ symbol, orderId }) => {
     calls.push(["getFills", symbol, orderId])
-    return { ok: true, data: [secondFill, firstFill] }
+    return {
+      ok: true,
+      data: [secondFill, firstFill],
+    }
   }
   return calls
 }
@@ -5320,10 +5367,19 @@ test("accounts missing earlier REST fills without replaying cumulative order qua
 function configureIncompleteRestFillHistory({ broker, buyOrder, partialFill, historyOrder } = {}) {
   broker.getOpenOrders = async () => ({
     ok: true,
-    data: [makeOpenOrder({ order: buyOrder, executedQuantity: "0.4" })],
+    data: [makeOpenOrder({
+      order: buyOrder,
+      executedQuantity: "0.4",
+    })],
   })
-  broker.getCanonicalOrderHistory = async () => ({ ok: true, data: [historyOrder] })
-  broker.getFills = async () => ({ ok: true, data: [partialFill] })
+  broker.getCanonicalOrderHistory = async () => ({
+    ok: true,
+    data: [historyOrder],
+  })
+  broker.getFills = async () => ({
+    ok: true,
+    data: [partialFill],
+  })
 }
 
 test("fails closed without applying partial REST fills when cumulative history is incomplete", async () => {
@@ -5356,7 +5412,12 @@ test("fails closed without applying partial REST fills when cumulative history i
     executedQuantity: "0.4",
     updatedAt: 3,
   })
-  configureIncompleteRestFillHistory({ broker, buyOrder, partialFill, historyOrder })
+  configureIncompleteRestFillHistory({
+    broker,
+    buyOrder,
+    partialFill,
+    historyOrder,
+  })
 
   const result = await engine.reconcileOwnedOrders()
 
@@ -5397,10 +5458,19 @@ function createConflictingRestStreamFillFixture({ buyOrder } = {}) {
 function configureConflictingRestStreamHistory({ broker, buyOrder, partialOrder, restFill } = {}) {
   broker.getOpenOrders = async () => ({
     ok: true,
-    data: [makeOpenOrder({ order: buyOrder, executedQuantity: "0.2" })],
+    data: [makeOpenOrder({
+      order: buyOrder,
+      executedQuantity: "0.2",
+    })],
   })
-  broker.getCanonicalOrderHistory = async () => ({ ok: true, data: [partialOrder] })
-  broker.getFills = async () => ({ ok: true, data: [restFill] })
+  broker.getCanonicalOrderHistory = async () => ({
+    ok: true,
+    data: [partialOrder],
+  })
+  broker.getFills = async () => ({
+    ok: true,
+    data: [restFill],
+  })
 }
 
 test("fails closed when REST fill IDs conflict with executions already processed from the stream", async () => {
@@ -8419,7 +8489,10 @@ function createRecoveryModeOrderFixture() {
     quantity: "1",
     status: "OPEN",
   })
-  return { recoverySellOrder, standingBuyOrder }
+  return {
+    recoverySellOrder,
+    standingBuyOrder,
+  }
 }
 
 function createRecoveryModeFilledBuyEvidence({ standingBuyOrder } = {}) {
@@ -8445,7 +8518,10 @@ function createRecoveryModeFilledBuyEvidence({ standingBuyOrder } = {}) {
     commissions: [],
     commissionStatus: "COMPLETE",
   })
-  return { filledStandingBuyOrder, recoveredBuyFill }
+  return {
+    filledStandingBuyOrder,
+    recoveredBuyFill,
+  }
 }
 
 function createRecoveryModeBuyFillFixture() {
@@ -8454,7 +8530,11 @@ function createRecoveryModeBuyFillFixture() {
   const evidence = createRecoveryModeFilledBuyEvidence({
     standingBuyOrder: orders.standingBuyOrder,
   })
-  return { ...accounting, ...orders, ...evidence }
+  return {
+    ...accounting,
+    ...orders,
+    ...evidence,
+  }
 }
 
 async function createRecoveryModeBuyFillHarness({ fixture }) {
@@ -8503,14 +8583,26 @@ function configureRestFillTimeoutRetryBroker({ broker, buyOrder, historyOrder, f
   let fillHistoryReads = 0
   broker.getOpenOrders = async () => ({
     ok: true,
-    data: [makeOpenOrder({ order: buyOrder, executedQuantity: "0.2" })],
+    data: [makeOpenOrder({
+      order: buyOrder,
+      executedQuantity: "0.2",
+    })],
   })
-  broker.getCanonicalOrderHistory = async () => ({ ok: true, data: [historyOrder] })
+  broker.getCanonicalOrderHistory = async () => ({
+    ok: true,
+    data: [historyOrder],
+  })
   broker.getFills = async () => {
     fillHistoryReads += 1
     return fillHistoryReads === 1
-      ? { ok: false, errors: [timeout] }
-      : { ok: true, data: [fill] }
+      ? {
+        ok: false,
+        errors: [timeout],
+      }
+      : {
+        ok: true,
+        data: [fill],
+      }
   }
   return () => fillHistoryReads
 }
@@ -10689,7 +10781,10 @@ function configureStreamDuringRestReadBroker({
     ok: true,
     data: [makeOpenOrder({ order: buyOrder, executedQuantity: "0" })],
   })
-  broker.getCanonicalOrderHistory = async () => ({ ok: true, data: [partialOrder] })
+  broker.getCanonicalOrderHistory = async () => ({
+    ok: true,
+    data: [partialOrder],
+  })
   broker.getFills = async () => {
     signalFillsStarted()
     await fillsGate.promise
@@ -11380,7 +11475,10 @@ async function prepareLateSellShutdownScenario({ fillFraction, cancelUpdatedAt }
     cancelUpdatedAt,
     isStopping: () => shutdownState.started,
   })
-  await establishLateSellShutdownSafety({ harness, shutdownState })
+  await establishLateSellShutdownSafety({
+    harness,
+    shutdownState,
+  })
 
   const sellOrder = harness.engine.getOrders().find((order) =>
     order.side === "SELL" && ["OPEN", "PARTIALLY_FILLED"].includes(order.status))
