@@ -46,8 +46,14 @@ Non-interactive output remains plain text. The terminal is intentionally a
 summary, not a second diagnostic dump: it prints the event message plus a
 small allowlist of actionable fields (including the stable `diagnosticId`
 for catalogued startup failures), omits stacks/fingerprints/audit internals,
-and caps each line at 200 characters. The recovery SELL cancellation
-summary is rendered as `04:30:15 🪙 CG recovery SELL cancellation requested:
+and caps each line at 200 characters.
+
+Order-history projection failures additionally show the safe validation `field`,
+market `symbol`, affected `clientOrderId`, and stable `errorCode`. Those fields
+participate in the console duplicate fingerprint, so different validation
+fields or affected orders are not collapsed into one repeated-entry summary;
+exact repeats for the same field/order remain compacted with their repeat count.
+The recovery SELL cancellation summary is rendered as `04:30:15 🪙 CG recovery SELL cancellation requested:
 DOGEUSDT, reason BUY_FILLED_RECALCULATE_RECOVERY_SELL`, with the redundant
 `Harvester` prefix omitted and symbol/reason shown inline. Full structured
 entries—including stack traces and all other normalized fields—remain in the
