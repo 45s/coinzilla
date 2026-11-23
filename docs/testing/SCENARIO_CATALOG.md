@@ -584,7 +584,16 @@ The [Recovery Seller Domain Specification](../../apps/harvester/docs/domain/reco
 - `apps/harvester/src/domain/strategies/recovery-seller/mixed-sell-fill-allocation.js`
 - `apps/harvester/src/domain/strategies/recovery-seller/mixed-sell-fill-accounting.js`
 
-**Automated tests:** No new RS scenario test accepted yet. Existing RS tests are deliberately not credited under #1780.
+**Automated scenario tests:**
+
+- `apps/harvester/test/scenarios/recovery-seller-cycle-lifecycle.scenario.test.js`
+  - `an unknown SELL outcome retains its only identity until reconciliation completes`
+  - `a terminal canceled SELL remains unresolved and forbids replacement`
+  - `a terminal rejected SELL remains unresolved and forbids replacement`
+  - `a terminal expired SELL remains unresolved and forbids replacement`
+  - `a terminal SELL with a different client identity cannot reconcile the submitted cycle`
+
+**Remaining:** Application-level repeated evaluation/no-order effects, active-order reservation retention, partial-fill/cancel behavior, sticky STOP, duplicate terminal delivery and durable submission boundary. Existing RS tests remain uncredited.
 
 ### RS-004 — Recovery, legacy, and combined profitability gates are independent
 
@@ -659,7 +668,7 @@ The [Recovery Seller Domain Specification](../../apps/harvester/docs/domain/reco
 
 ### RS-005 — A recovery cycle may submit only one SELL lifecycle
 
-**Status:** MISSING — fresh scenario test required.
+**Status:** PARTIAL — new cycle-state scenarios prove one SELL identity is retained through unknown/incomplete reconciliation, terminal unsuccessful outcomes remain unresolved, and replacement SELL/new-cycle transitions are rejected. Application-level repeated evaluation, reservation retention and STOP side effects remain unverified.
 
 **Behavior:** Once the cycle's one SELL identity is recorded, repeated evaluation cannot create another SELL, replacement SELL, continuation SELL, or a new BUY cycle while the outcome remains active or unresolved.
 
@@ -702,7 +711,12 @@ The [Recovery Seller Domain Specification](../../apps/harvester/docs/domain/reco
 - RS accounting workflow and cycle reservation modules under `apps/harvester/src/domain/strategies/recovery-seller/`.
 - Shared engine order submission and terminal reconciliation orchestration.
 
-**Automated tests:** No new RS scenario test accepted yet. Existing RS tests are deliberately not credited under #1780.
+**Automated scenario test:**
+
+- `apps/harvester/test/scenarios/recovery-seller-cycle-lifecycle.scenario.test.js`
+  - `an unknown SELL outcome retains its only identity until reconciliation completes`
+
+**Remaining:** Actual application submitter/engine must prove no second broker request, retained account reservation, global STOP latch, lookup-not-found/lookup-failure behavior, unknown BUY outcome and later authoritative broker evidence. Existing RS tests remain uncredited.
 
 ### RS-006 — Mixed SELL accounting commits both allocations atomically
 
@@ -760,7 +774,7 @@ The [Recovery Seller Domain Specification](../../apps/harvester/docs/domain/reco
 
 ### RS-007 — Unknown submission outcome preserves identity and forbids blind retry
 
-**Status:** MISSING — fresh scenario test required.
+**Status:** PARTIAL — a fresh cycle-state scenario proves the original SELL identity survives an unknown outcome, repeated unknown notification is idempotent, a replacement SELL is rejected, and the cycle remains blocked until complete reconciliation. Broker submitter no-retry, lookup, reservation and global STOP effects remain unverified.
 
 **Behavior:** A timeout or disconnect after a state-changing request may mean the exchange accepted it. RS must retain the original order identity and reservation and reconcile that order without submitting a duplicate.
 
