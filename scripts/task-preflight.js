@@ -310,7 +310,7 @@ export function parseArgs(argv) {
     } else if (args[index] === '--attest-nested') {
       parsed.attestNested = true;
     } else {
-      throw new Error('Unknown argument: ' + args[index]);
+      throw new Error(`Unknown argument: ${args[index]}`);
     }
   }
   return parsed;
