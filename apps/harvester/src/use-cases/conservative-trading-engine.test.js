@@ -544,7 +544,7 @@ test("rechecks external-order ownership after the durable order intent and befor
   let hasExternalOrder = false
   const harness = await createHarness({
     appConfig: withExternalOrdersPolicy("block"),
-    hasUnownedOpenOrdersForSymbol: () => state.hasExternalOrder,
+    hasUnownedOpenOrdersForSymbol: () => hasExternalOrder,
     eventPublisher: {
       publish: () => ({ ok: true }),
       flush: async () => {
@@ -11100,7 +11100,7 @@ test("keeps local deferral processing non-blocking when best-effort Journal publ
   })
   const harness = await createHarness({
     appConfig: withExternalOrdersPolicy("block"),
-    hasUnownedOpenOrdersForSymbol: () => hasExternalOrder,
+    hasUnownedOpenOrdersForSymbol: () => state.hasExternalOrder,
     eventPublisher,
   })
 
