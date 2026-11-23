@@ -512,16 +512,16 @@ test('runs PR evidence enforcement in a dedicated Task Preflight job', () => {
     'utf8',
   );
   const workspaceJob = workflow.match(
-    / {2}workspace-quality:\n([\s\S]*?)(?=\n  [a-z-]+:|\n?$)/,
+    / {2}workspace-quality:\n([\s\S]*?)(?=\n {2}[a-z-]+:|\n?$)/,
   )?.[1];
   const testsJob = workflow.match(
-    / {2}task-preflight-tests:\n([\s\S]*?)(?=\n  [a-z-]+:|\n?$)/,
+    / {2}task-preflight-tests:\n([\s\S]*?)(?=\n {2}[a-z-]+:|\n?$)/,
   )?.[1];
   const evidenceJob = workflow.match(
-    / {2}publish-task-preflight-evidence:\n([\s\S]*?)(?=\n  [a-z-]+:|\n?$)/,
+    / {2}publish-task-preflight-evidence:\n([\s\S]*?)(?=\n {2}[a-z-]+:|\n?$)/,
   )?.[1];
   const validatorJob = workflow.match(
-    / {2}task-preflight:\n([\s\S]*?)(?=\n  [a-z-]+:|\n?$)/,
+    / {2}task-preflight:\n([\s\S]*?)(?=\n {2}[a-z-]+:|\n?$)/,
   )?.[1];
   const requiredJob = workflow.match(
     / {2}required-javascript-quality:\n([\s\S]*)$/,
