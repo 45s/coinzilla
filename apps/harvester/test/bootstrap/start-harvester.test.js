@@ -835,6 +835,23 @@ function createVolatilityAccountBroker({ metadataBySymbol, markets, balances, st
   }
 }
 
+function createBookTicker({ symbol, price }) {
+  return {
+    symbol,
+    bestBidPrice: multiplyDecimal({
+      left: price,
+      right: "0.99",
+    }),
+    bestBidQuantity: "100",
+    bestAskPrice: multiplyDecimal({
+      left: price,
+      right: "1.01",
+    }),
+    bestAskQuantity: "100",
+    timestamp: 10,
+  }
+}
+
 function createVolatilityMarketDataBroker({ state }) {
   return {
     getCandles: async ({ symbol, interval, limit } = {}) => {
@@ -869,20 +886,7 @@ function createVolatilityMarketDataBroker({ state }) {
     subscribeForBookTicker: async ({ symbol, onBookTicker } = {}) => {
       state.bookSubscriptions.push(symbol)
       const price = symbol === "DOGEUSDT" ? "0.1" : "1"
-      await onBookTicker({
-        symbol,
-        bestBidPrice: multiplyDecimal({
-          left: price,
-          right: "0.99",
-        }),
-        bestBidQuantity: "100",
-        bestAskPrice: multiplyDecimal({
-          left: price,
-          right: "1.01",
-        }),
-        bestAskQuantity: "100",
-        timestamp: 10,
-      })
+      await onBookTicker(createBookTicker({ symbol, price }))
       return toResult({
         data: {
           unsubscribe: async () => {},
