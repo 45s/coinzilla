@@ -3,6 +3,7 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { captureBuildMetadata } from '../packages/utils/src/index.js';
 
 export const REQUIRED_INSTRUCTION_PATHS = ['AGENTS.md','docs/engineering/AI_TASK_COMPLIANCE_STANDARD.md','ENGINEERING_STANDARDS.md','AI_AGENT_WORKFLOW.md','docs/engineering/TASK_WORKFLOWS.md','docs/DOCUMENTATION_GOVERNANCE.md','docs/MARKDOWN_STYLE.md'];
 export const REQUIRED_ISSUE_SECTIONS = ['Problem','Expected behavior','Investigation','Possible solutions','Implementation plan','Acceptance criteria','Verification','Resolution'];
@@ -293,18 +294,25 @@ function latestReport(comments) {
   return latest ? { ...parsePreflightReport(latest.body),
 createdAt: latest.created_at } : null;
 }
+function formatTaskPreflightIdentity({ metadata, runtimeVersion }) {
+  const { application, version, source } = metadata;
+  return `${application} v${version} | commit ${source.commit ?? 'unknown'} | worktree ${source.workingTree ?? 'unknown'} | Node ${runtimeVersion}`;
+}
 export function parseArgs(argv) {
   const args = argv[0] === '--' ? argv.slice(1) : argv;
   const parsed = {
     issue: 0,
     paths: [],
+    version: false,
     record: false,
     pr: false,
     attestRead: false,
     attestNested: false,
   };
   for (let index = 0; index < args.length; index += 1) {
-    if (args[index] === '--issue') {
+    if (args[index] === '--version') {
+      parsed.version = true;
+    } else if (args[index] === '--issue') {
       parsed.issue = Number(args[++index]);
     } else if (args[index] === '--paths') {
       parsed.paths = args[++index].split(',').map((path) => path.trim()).filter(Boolean);
@@ -510,13 +518,30 @@ issueNumber });
   process.stdout.write(`PASS: task evidence validated on ${  pr.head.sha  }.\n`);
 }
 async function main() {
-  const root=fileURLToPath(new URL('../',import.meta.url)),args=parseArgs(process.argv.slice(2));
-  const repo=process.env.GITHUB_REPOSITORY,token=process.env.GH_TOKEN??process.env.GITHUB_TOKEN;
-  if(!repo){throw new Error('GITHUB_REPOSITORY is required.');}
-  if(args.pr){await pullRequest({repo,
-token});}else {await local({root,
-args,
-repo,
-token});}
+  const root = fileURLToPath(new URL('../', import.meta.url));
+  const { version } = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
+  const metadata = captureBuildMetadata({
+    application: 'task:preflight',
+    version,
+    cwd: root,
+    env: {},
+  });
+  process.stdout.write(`${formatTaskPreflightIdentity({ metadata, runtimeVersion: process.version })}\n`);
+
+  const args = parseArgs(process.argv.slice(2));
+  if (args.version) {
+    return;
+  }
+
+  const repo = process.env.GITHUB_REPOSITORY;
+  const token = process.env.GH_TOKEN ?? process.env.GITHUB_TOKEN;
+  if (!repo) {
+    throw new Error('GITHUB_REPOSITORY is required.');
+  }
+  if (args.pr) {
+    await pullRequest({ repo, token });
+  } else {
+    await local({ root, args, repo, token });
+  }
 }
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){main().catch(e=>{process.stderr.write(`BLOCKED: ${e.message}\n`);process.exitCode=1;});}
