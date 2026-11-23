@@ -1,4 +1,6 @@
 import test from 'node:test';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
 import {
   REQUIRED_INSTRUCTION_PATHS,
@@ -277,5 +279,52 @@ test('requires verification evidence to name the exact current PR head SHA', () 
   assert.ok(
     errors.some((error) => /verification evidence.*current PR head SHA/i.test(error)),
     'Verification evidence from an earlier commit must not satisfy the current PR head gate.',
+  );
+});
+
+
+test('prints source identity and exits without GitHub credentials for --version', () => {
+  const scriptPath = fileURLToPath(new URL('./task-preflight.js', import.meta.url));
+  const result = spawnSync(process.execPath, [scriptPath, '--version'], {
+    encoding: 'utf8',
+    env: {
+      PATH: process.env.PATH,
+      HOME: process.env.HOME,
+      SystemRoot: process.env.SystemRoot,
+      GITHUB_REPOSITORY: '',
+      GH_TOKEN: '',
+      GITHUB_TOKEN: '',
+    },
+  });
+
+  assert.equal(
+    result.status,
+    0,
+    `The --version command must exit successfully without GitHub credentials; stderr: ${result.stderr}`,
+  );
+  assert.match(
+    result.stdout,
+    /task:preflight v\\d+\\.\\d+\\.\\d+/,
+    'The startup identity must name the task:preflight command and owning package version.',
+  );
+  assert.match(
+    result.stdout,
+    /commit [a-f0-9]{40,64}/i,
+    'The startup identity must report the full Git commit SHA from the executing checkout.',
+  );
+  assert.match(
+    result.stdout,
+    /worktree (?:clean|dirty|unknown)/,
+    'The startup identity must report an explicit worktree state without exposing changed paths.',
+  );
+  assert.match(
+    result.stdout,
+    /Node v\\d+\\.\\d+\\.\\d+/,
+    'The startup identity must report the Node.js runtime version.',
+  );
+  assert.equal(
+    result.stderr,
+    '',
+    'A successful side-effect-free --version invocation must not emit a blocked/error diagnostic.',
   );
 });
