@@ -32,11 +32,21 @@ function createScenarioFixture(overrides = {}) {
       position: "empty",
       activeOrders: [],
     },
-    inputEvents: [\n      {\n        type: "BUY_FILL",\n        tradeId: "buy-1",\n      },\n    ],
+    inputEvents: [
+      {
+        type: "BUY_FILL",
+        tradeId: "buy-1",
+      },
+    ],
     expectedState: {
       position: "reconciled",
     },
-    expectedOrders: [\n      {\n        side: "SELL",\n        purpose: "RECOVERY_SELL",\n      },\n    ],
+    expectedOrders: [
+      {
+        side: "SELL",
+        purpose: "RECOVERY_SELL",
+      },
+    ],
     expectedAccounting: {
       quoteBasis: "10.01",
     },
@@ -88,7 +98,12 @@ test("validates required scenario fields, stable IDs, categories, statuses, and 
       },
     ],
   }
-  const requirements = [\n    {\n      id: "CON-SPEC-3.1",\n      title: "Initial BUY behavior",\n    },\n  ]
+  const requirements = [
+    {
+      id: "CON-SPEC-3.1",
+      title: "Initial BUY behavior",
+    },
+  ]
   const result = validateScenarioDefinitions({
     scenarios: [scenario],
     requirements,
@@ -117,6 +132,11 @@ test("filters scenarios by ID, category, priority, tag, and coverage status", ()
       relatedExistingTests: [],
     }),
   ]
+  const idFilters = { id: "CON-TEST-001" }
+  const categoryFilters = { category: "accounting-pnl" }
+  const priorityFilters = { priority: "P0" }
+  const tagFilters = { tag: "commission" }
+  const statusFilters = { coverageStatus: "MISSING" }
 
   assert.deepEqual(
     filterScenarios({ scenarios, filters: idFilters }).map(({ id }) => id),
@@ -159,7 +179,11 @@ test("parses named TAP outcomes and reports missing mapped tests instead of fals
     "ok 1 - plans a recovery SELL that retains keepQuantity and covers cost plus minProfit",
     "not ok 2 - ignores FILLED-to-OPEN regressions regardless of event timestamp",
   ].join("\n")
-  const tapInput = {\n    output,\n    expectedTests,\n  }\n  const results = parseTapResults(tapInput)
+  const tapInput = {
+    output,
+    expectedTests,
+  }
+  const results = parseTapResults(tapInput)
 
   assert.equal(results[0].status, "PASSED")
   assert.equal(results[1].status, "FAILED")
@@ -205,8 +229,14 @@ test("runs mapped Node tests once per file and shares evidence across scenarios"
 test("generates inventory, execution, and coverage JSON without manually maintained reports", async () => {
   const scenario = createScenarioFixture()
   const requirements = [
-    {\n      id: "CON-SPEC-3.1",\n      title: "Initial BUY behavior",\n    },
-    {\n      id: "CON-SPEC-7.1",\n      title: "Runtime restart boundary",\n    },
+    {
+      id: "CON-SPEC-3.1",
+      title: "Initial BUY behavior",
+    },
+    {
+      id: "CON-SPEC-7.1",
+      title: "Runtime restart boundary",
+    },
   ]
   const criticalBehaviorContract = {
     behaviors: [
@@ -221,7 +251,12 @@ test("generates inventory, execution, and coverage JSON without manually maintai
     {
       id: scenario.id,
       status: "PASSED",
-      testResults: [\n        {\n          ...mappedTest,\n          status: "PASSED",\n        },\n      ],
+      testResults: [
+        {
+          ...mappedTest,
+          status: "PASSED",
+        },
+      ],
     },
   ]
   const reports = buildScenarioReports({
