@@ -8,6 +8,16 @@ export const REQUIRED_INSTRUCTION_PATHS = ['AGENTS.md','docs/engineering/AI_TASK
 export const REQUIRED_ISSUE_SECTIONS = ['Problem','Expected behavior','Investigation','Possible solutions','Implementation plan','Acceptance criteria','Verification','Resolution'];
 const START = '<!-- coinzilla-agent-preflight:v1 -->';
 const END = '<!-- /coinzilla-agent-preflight -->';
+const REQUIRED_PREFLIGHT_ENTRIES = [
+  '- [x] Root AGENTS.md read',
+  '- [x] AI task compliance standard read',
+  '- [x] Engineering standards read',
+  '- [x] AI agent workflow read',
+  '- [x] Applicable task workflow read',
+  '- [x] Documentation governance read',
+  '- [x] Markdown style standard read',
+  '- [x] Applicable nested instructions identified and read',
+];
 const IGNORE = new Set(['.git','node_modules','.pnpm-store','coverage','dist','build','.next','.turbo']);
 
 export function calculateGitBlobSha(content) {
