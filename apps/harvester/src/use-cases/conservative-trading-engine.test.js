@@ -3953,6 +3953,25 @@ function createShutdownBuyRaceState({ seeded }) {
   }
 }
 
+function createShutdownBuyRaceAccounting({ scenario } = {}) {
+  return async ({ fill }) => {
+    if (scenario.appliedFillIds.has(fill.id)) {
+      return { ok: true, data: { applied: false, duplicate: true } }
+    }
+    scenario.appliedFillIds.add(fill.id)
+    scenario.appliedFills.push(fill)
+    scenario.portfolioRef.current = scenario.portfolioRef.current.applyFill({
+      strategyId: StrategyId.COIN_GRABBER,
+      fill,
+    }).portfolio
+    scenario.ledgerRef.current = scenario.ledgerRef.current.applyFill({
+      strategyId: StrategyId.COIN_GRABBER,
+      fill,
+    }).ledger
+    return { ok: true, data: { applied: true, duplicate: false } }
+  }
+}
+
 async function createShutdownBuyRaceHarness({ seeded, scenario }) {
   let releaseCancel
   let signalCancelStarted
@@ -3975,32 +3994,7 @@ async function createShutdownBuyRaceHarness({ seeded, scenario }) {
     isMarketPriceFresh: () => scenario.marketPriceFresh,
     getPortfolio: () => scenario.portfolioRef.current,
     getRecoveryLedger: () => scenario.ledgerRef.current,
-    updateTradingAccounting: async ({ fill }) => {
-      if (scenario.appliedFillIds.has(fill.id)) {
-        return {
-          ok: true,
-          data: {
-            applied: false,
-            duplicate: true,
-          },
-        }
-      }
-      scenario.appliedFillIds.add(fill.id)
-      scenario.appliedFills.push(fill)
-      scenario.portfolioRef.current = scenario.portfolioRef.current.applyFill({ strategyId: StrategyId.COIN_GRABBER,
-        fill,
-      }).portfolio
-      scenario.ledgerRef.current = scenario.ledgerRef.current.applyFill({ strategyId: StrategyId.COIN_GRABBER,
-        fill,
-      }).ledger
-      return {
-        ok: true,
-        data: {
-          applied: true,
-          duplicate: false,
-        },
-      }
-    },
+    updateTradingAccounting: createShutdownBuyRaceAccounting({ scenario }),
     getTerminalFills: ({ orderId }) => orderId === scenario.buyOrderRef.current?.brokerOrderId
       ? scenario.buyFills
       : [],
