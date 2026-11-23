@@ -573,47 +573,71 @@ The [Recovery Seller Domain Specification](../../apps/harvester/docs/domain/reco
 
 ### RS-004 — Recovery, legacy, and combined profitability gates are independent
 
-**Status:** MISSING — fresh scenario test required.
+**Status:** PARTIAL — a fresh domain-scenario test now proves both cross-subsidy rejection directions, exact-threshold acceptance, recovery-only eligibility, and the resulting cycle lifecycle. Exact-head CI verification is pending. Existing RS tests remain uncredited.
 
 **Behavior:** A mixed SELL is eligible only when every independently required profitability gate passes. A profitable allocation cannot subsidize a loss-making allocation.
 
 **Given / preconditions:**
 
 - Recovery and legacy allocations have independent exact cost/proceeds projections.
-- Actual fees and commission valuation are available under the approved contract.
+- Actual net quote proceeds and supported fee valuation are available under the approved contract.
 - The combined-cycle projection is calculated independently.
+- A single SELL has reached terminal FILLED status and its complete canonical execution history has been reconciled.
 
 **Input / cases:**
 
-- Recovery profitable, legacy loss-making, combined profitable.
-- Legacy profitable, recovery loss-making, combined profitable.
-- Both allocations individually profitable and combined profitable.
-- One or more allocations exactly at or just below its threshold.
+- Recovery cost 10 USDT, net recovery proceeds 10.15 USDT, legacy basis 0.20 USDT and net legacy proceeds 0.19 USDT.
+- Recovery cost 10 USDT, net recovery proceeds 9.995 USDT, legacy basis 0.20 USDT and net legacy proceeds 0.30 USDT.
+- Recovery proceeds exactly meet the 0.01 USDT minimum, legacy proceeds exactly break even, and combined profit exactly meets the 0.01 USDT minimum.
+- Legacy inventory is exhausted; recovery-only operation still applies the recovery and combined gates.
 
 **Expected output:**
 
-- Any required failing allocation blocks SELL eligibility, even when combined profit is positive.
-- A SELL is eligible only when recovery, applicable legacy, and combined gates all pass.
-- Decisions use actual net proceeds and supported fee valuation, not gross order value.
+- A failing recovery or legacy allocation makes overall SELL eligibility false even when combined profit is positive.
+- A fully reconciled FILLED cycle remains UNRESOLVED after any applicable profitability gate fails.
+- An unresolved cycle cannot accept a second SELL lifecycle or start another cycle.
+- The cycle closes and a next cycle may begin only when the SELL is FILLED, fully reconciled, and every applicable gate passes.
+- Recovery-only operation omits only the inapplicable legacy gate.
 
 **Must not happen:**
 
 - Do not replace the independent gates with one aggregate profit calculation.
-- Do not submit a SELL when any required gate fails.
+- Do not let recovery profit subsidize legacy loss or legacy profit subsidize recovery loss.
+- Do not submit a replacement/second SELL or start another cycle after a failed profitability result.
+- Do not close a cycle based only on combined profitability.
 
-**Subcases:**
+**Subcases covered by the new scenario test:**
 
-- Equality, just-below, and just-above each configured threshold.
-- Maker and taker fee reserve selection.
-- Missing fee configuration or unsupported third-asset valuation.
-- Exact tick/step rounding and net-proceeds gross-up.
+- Recovery passes while legacy loses and combined profit remains positive.
+- Legacy passes while recovery loses and combined profit remains positive.
+- Recovery and combined thresholds pass at exact equality; legacy is exactly break-even.
+- Legacy exhaustion leaves recovery and combined profitability requirements active.
+- Failed profitability preserves the terminal SELL identity and blocks a replacement SELL/new cycle.
+- Successful profitability permits closure and the next cycle.
+
+**Remaining subcases:**
+
+- Just-below and just-above boundaries for each applicable threshold.
+- Actual quote/base/third-asset commission allocation and valuation.
+- Fee-rate planning, price tick/quantity step rounding, and exchange filter behavior.
+- Partial fills and complete fill-history accounting; these belong to separate RS scenario families.
 
 **Implementation:**
 
 - `apps/harvester/src/domain/strategies/recovery-seller/calculate-profitability.js`
-- `apps/harvester/src/domain/strategies/recovery-seller/calculate-sell-plan.js`
+- `apps/harvester/src/domain/strategies/recovery-seller/cycle-state.js`
 
-**Automated tests:** No new RS scenario test accepted yet. Existing RS tests are deliberately not credited under #1780.
+**Automated scenario test:**
+
+- [`recovery-seller-profitability.scenario.test.js`](../../apps/harvester/test/scenarios/recovery-seller-profitability.scenario.test.js)
+  - `a profitable recovery allocation cannot subsidize a legacy loss`
+  - `profitable legacy proceeds cannot subsidize a recovery loss`
+  - `a mixed recovery and legacy cycle closes at exact profitability thresholds when every gate passes`
+  - `recovery-only operation still requires recovery and combined profit after legacy exhaustion`
+
+**Evidence note:** This is a new package-level scenario suite authored from the approved RS contract and its worked examples. It composes the real profitability and cycle-state domain components. It does not certify existing RS tests and does not yet cover fee calculation, threshold-adjacent values, exchange filters, or partial-fill accounting.
+
+---
 
 ### RS-005 — A recovery cycle may submit only one SELL lifecycle
 
