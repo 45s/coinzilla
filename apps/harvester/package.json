@@ -19,6 +19,11 @@
   },
   "config": {
     "targetedTestFiles": [
+      "scripts/archive-testnet-session.test.js",
+      "scripts/capture-harvester-archive-process-identity.test.js",
+      "scripts/reset-operational-state.test.js",
+      "src/infrastructure/logging/configure-harvester-logging-directory.test.js",
+      "src/infrastructure/persistence/harvester-database-isolation.test.js",
       "config/strategies/rs-recovery-seller.test.js",
       "test/critical-module-coverage.test.js",
       "test/critical-behavior-contract.test.js",
@@ -33,7 +38,6 @@
       "src/application/events/lifecycle-event-dtos.order-history.test.js",
       "src/domain/trading-session/trading-session.test.js",
       "src/infrastructure/persistence/trading-session-repository.test.js",
-      "src/infrastructure/persistence/harvester-database-isolation.test.js",
       "src/infrastructure/persistence/trading-session-history-observer.test.js",
       "src/use-cases/create-market-price-transition-handler.test.js",
       "src/use-cases/synchronize-account-history/sync-acc-history.test.js",
@@ -112,6 +116,7 @@
       "src/use-cases/create-latest-transition-evaluator.test.js",
       "src/use-cases/create-market-metadata-cache.test.js",
       "src/use-cases/conservative-engine-order-event-composition.test.js",
+      "src/use-cases/conservative-submission-durability.integration.test.js",
       "src/use-cases/order-event-workflow.test.js",
       "src/use-cases/create-recovery-seller-order-submitter.test.js",
       "src/use-cases/record-order-submission-intent.test.js",
@@ -153,6 +158,8 @@
     "persistence:restore-check": "node scripts/trading-history-backups.js verify",
     "check:reliability": "node scripts/check-critical-behavior-contract.js",
     "check:critical-coverage": "node scripts/check-critical-module-coverage.js",
-    "operational-state:diagnose": "node scripts/diagnose-operational-state.js"
+    "operational-state:diagnose": "node scripts/diagnose-operational-state.js",
+    "operational-state:reset:dev": "node --env-file=.env.development scripts/reset-operational-state.js",
+    "archive:push": "node --env-file=.env.development scripts/archive-testnet-session.js"
   }
 }

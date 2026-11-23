@@ -13,11 +13,41 @@ function validateRequiredCallbacks({ callbacks } = {}) {
   }
 }
 
+function validateOperationalStateSubmissionCallbacks({
+  onOperationalStateSubmissionIntent,
+  onOperationalStateSubmissionOutcome,
+  requireOperationalStateSubmissionDurability = false,
+} = {}) {
+  if (onOperationalStateSubmissionIntent !== undefined &&
+      typeof onOperationalStateSubmissionIntent !== "function") {
+    throw new TypeError("onOperationalStateSubmissionIntent must be a function")
+  }
+  if (onOperationalStateSubmissionOutcome !== undefined &&
+      typeof onOperationalStateSubmissionOutcome !== "function") {
+    throw new TypeError("onOperationalStateSubmissionOutcome must be a function")
+  }
+  if ((onOperationalStateSubmissionIntent === undefined) !==
+      (onOperationalStateSubmissionOutcome === undefined)) {
+    throw new TypeError("onOperationalStateSubmissionIntent and onOperationalStateSubmissionOutcome must be provided together")
+  }
+  if (typeof requireOperationalStateSubmissionDurability !== "boolean") {
+    throw new TypeError("requireOperationalStateSubmissionDurability must be a boolean")
+  }
+  if (requireOperationalStateSubmissionDurability &&
+      (onOperationalStateSubmissionIntent === undefined ||
+       onOperationalStateSubmissionOutcome === undefined)) {
+    throw new TypeError("onOperationalStateSubmissionIntent and onOperationalStateSubmissionOutcome are required when the Operational State Store is configured")
+  }
+}
+
 function validateOptionalCallbacks({
   getVolatilityData,
   isMarketPriceFresh,
   isMarketBookFresh,
   now,
+  onOperationalStateSubmissionIntent,
+  onOperationalStateSubmissionOutcome,
+  requireOperationalStateSubmissionDurability,
   onOperationalStateCancellationIntent,
   onOperationalStateCancellationOutcome,
   onOperationalStateStrategyMarketPaused,
@@ -29,6 +59,11 @@ function validateOptionalCallbacks({
   if (typeof isMarketPriceFresh !== "function") {
     throw new TypeError("isMarketPriceFresh must be a function")
   }
+  validateOperationalStateSubmissionCallbacks({
+    onOperationalStateSubmissionIntent,
+    onOperationalStateSubmissionOutcome,
+    requireOperationalStateSubmissionDurability,
+  })
   if (onOperationalStateCancellationIntent !== undefined &&
       typeof onOperationalStateCancellationIntent !== "function") {
     throw new TypeError("onOperationalStateCancellationIntent must be a function")
@@ -89,6 +124,9 @@ export function validateConservativeTradingEngineOptions({
   isMarketPriceFresh,
   isMarketBookFresh,
   now,
+  onOperationalStateSubmissionIntent,
+  onOperationalStateSubmissionOutcome,
+  requireOperationalStateSubmissionDurability,
   onOperationalStateCancellationIntent,
   onOperationalStateCancellationOutcome,
   onOperationalStateStrategyMarketPaused,
@@ -115,6 +153,9 @@ export function validateConservativeTradingEngineOptions({
     isMarketPriceFresh,
     isMarketBookFresh,
     now,
+    onOperationalStateSubmissionIntent,
+    onOperationalStateSubmissionOutcome,
+    requireOperationalStateSubmissionDurability,
     onOperationalStateCancellationIntent,
     onOperationalStateCancellationOutcome,
     onOperationalStateStrategyMarketPaused,

@@ -39,6 +39,26 @@
           "kind": "normal"
         },
         {
+          "path": "src/use-cases/conservative-submission-durability.integration.test.js",
+          "name": "commits the operational-state submission intent and outcome around Conservative broker placement",
+          "kind": "integration"
+        },
+        {
+          "path": "src/use-cases/conservative-submission-durability.integration.test.js",
+          "name": "fails closed before Conservative broker placement when the operational-state intent cannot commit",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/conservative-submission-durability.integration.test.js",
+          "name": "does not report success when Conservative outcome persistence fails after broker placement",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/conservative-submission-durability.integration.test.js",
+          "name": "rejects a missing operational-state submission callback before creating a tradable Conservative engine",
+          "kind": "failure"
+        },
+        {
           "path": "src/use-cases/conservative-trading-engine.test.js",
           "name": "publishes unknown submission outcome after a transport exception",
           "kind": "failure"

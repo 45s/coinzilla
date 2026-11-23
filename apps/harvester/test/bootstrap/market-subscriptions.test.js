@@ -138,12 +138,12 @@ function createExternalBuyOrder({ market, clientOrderId, brokerOrderId, price, q
 
 function assertStrategyScopedMarketSubscriptions({ runtime, calls, candleSubscriptions, logs }) {
   assert.equal(runtime.userDataReady, true, "An external order must not block account/user-data readiness globally.")
-  assert.deepEqual(runtime.subscriptions, ["ETHUSDT"], "Only this strategy's unblocked market should own a price subscription.")
+  assert.deepEqual(runtime.subscriptions, ["ETHUSDT", "BTCUSDT"], "The runtime reports strategy price subscriptions plus independently configured volatility candle subscriptions.")
   assert.ok(calls.includes("subscribe:ETHUSDT"), "The unblocked ETHUSDT market must retain its own price subscription.")
   assert.equal(calls.includes("subscribe:BTCUSDT"), false, "The strategy-blocked BTCUSDT market must not receive a price subscription.")
   assert.ok(calls.includes("subscribe:book:ETHUSDT"), "The unblocked ETHUSDT market must retain its book-ticker subscription.")
   assert.equal(calls.includes("subscribe:book:BTCUSDT"), false, "The strategy-blocked BTCUSDT market must not receive a book-ticker subscription.")
-  assert.deepEqual(candleSubscriptions, ["ETHUSDT"], "Candle subscriptions must be scoped to the strategy unblocked ETHUSDT market.")
+  assert.deepEqual(candleSubscriptions, ["BTCUSDT", "ETHUSDT"], "Volatility candle subscriptions follow market configuration, independently of strategy external-order policy.")
   const audit = logs.find((entry) =>
     entry.message === "Account-wide open-orders snapshot recorded; unowned orders remain external and untouched")
   assert.equal(audit?.readiness, "BLOCKED", "The account-wide external-order audit must remain blocked even though ETHUSDT is independently eligible.")

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import { spawn } from "node:child_process"
-import { link, mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises"
+import { link, mkdir, mkdtemp, readdir, rm, symlink, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import test from "node:test"
@@ -148,6 +148,30 @@ test("rejects invalid trading modes and unsafe configured database paths", () =>
     }),
     /HARVESTER_DATABASE_DIRECTORY must not be a filesystem root/,
     "A filesystem root must not be accepted as the Harvester database directory.",
+  )
+})
+
+
+test("creates missing Production and Testnet data directories without using NODE_ENV", async (t) => {
+  const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), "harvester-db-missing-data-"))
+  t.after(async () => rm(temporaryRoot, {
+    recursive: true,
+    force: true,
+  }))
+  const dataDirectory = path.join(temporaryRoot, "missing", "data")
+
+  await assertHarvesterDatabaseIsolation({
+    tradingMode: "testnet",
+    env: {
+      HARVESTER_DATABASE_DIRECTORY: dataDirectory,
+      NODE_ENV: "production",
+    },
+  })
+
+  assert.deepEqual(
+    (await readdir(dataDirectory)).sort(),
+    ["production", "testnet"],
+    "A first TESTNET startup must create both isolated database directories under a missing data root, regardless of NODE_ENV.",
   )
 })
 

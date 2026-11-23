@@ -1,5 +1,25 @@
 # Harvester Roadmap
 
+## Local DEV reset and TESTNET evidence archive — issue #1747
+
+**In progress in [PR #1748](https://github.com/45s/coinzilla/pull/1748).** The selected workflow provides an explicit recovery-facts-only reset, repeatable TESTNET archive publication, and regression coverage for automatic logs/database directory creation.
+
+- [x] Base the task branch on current `develop`; keep reset restricted to the configured `recovery-facts/` directory.
+- [x] Require TESTNET mode, explicit confirmation and absence of Harvester process locks before reset; preserve data, logs, Journal sessions and archives.
+- [x] Create missing logs/session and Production/Testnet database directories through existing startup infrastructure; add focused regressions.
+- [x] Mark completed DEV sessions with non-secret environment and process identity so archive selection can exclude LIVE sessions.
+- [x] Exclude `data/production/`, shared unclassified terminal cumulative logs, and LIVE session logs from TESTNET archive snapshots; filter structured cumulative logs to the selected TESTNET runtime session.
+- [ ] Run exact-head package tests, reliability/coverage and required CI; update status after verified results.
+- No exchange operations or Harvester process startup are authorized or required. Process-restart restoration remains disabled.
+
+## Conservative Operational State submission barrier (#1743)
+
+- **In progress in [PR #1750](https://github.com/45s/coinzilla/pull/1750).** The archived 49-record session contains zero `ORDER_SUBMISSION_INTENT` and zero `ORDER_SUBMISSION_OUTCOME` facts. Sequence 5 is the provider-attributed ZROUSDT BUY fill for client order `h-dff68008c72c47a59368ad-2` / broker order `1001129` in runtime session `ebe7c1d3-ff7d-47db-b2fe-2e5ec9594c1c`; the fill itself is retained unchanged.
+- Root cause: Conservative passed `onOperationalStateSubmissionIntent` / `onOperationalStateSubmissionOutcome` to an executor that accepts `onDurableSubmissionIntent` / `onDurableSubmissionOutcome`. The optional executor callbacks were therefore absent on the order path even while the Operational State Store was configured.
+- Fix: map the canonical callback names, require the pair at engine activation whenever the store exists, and enforce the requirement again inside the executor. Regression coverage proves intent-before-broker ordering, fail-closed intent persistence, and rejection of missing callbacks. Existing tests continue to own definite rejection, UNKNOWN outcome, outcome-write failure, and local-acknowledgement ordering.
+- Preserve provider-attributed fill ownership and projector behavior. Never reconstruct missing intents, alter the archive/original ledger, initialize or repair the store, or enable automatic process-restart restoration. Verification is offline; no Binance connection or exchange write is part of this task.
+- Core implementation is isolated in commit `ee7afb525039ad86f7860665ee83c3c79c944e6e`; the exact-head CI run must verify the production and regression changes before this roadmap item is closed.
+
 ## Read-only Operational State diagnostics (#1740)
 
 - **In progress in [PR #1741](https://github.com/45s/coinzilla/pull/1741):** add `pnpm run operational-state:diagnose` to verify the existing facts/manifest streams with the production store reader, then independently report the offline recovery-projection result.
@@ -369,6 +389,18 @@ The Command Center roadmap is complete; this section is intentionally a pointer 
 10. [ ] Run the analyzer against representative multi-symbol historical data, review threshold trade-offs and accept or revise the provisional values. This is not complete until real archive data has been analyzed.
 
 ---
+
+## Market-owned volatility protection — issue #1728
+
+**Status: IN PROGRESS in [PR #1744](https://github.com/45s/coinzilla/pull/1744).** The original RS-only LINEA symptom was narrowed by merged PR #1730, but volatility eligibility and initial state remained tied to the CG pair map. The follow-up makes the effective market configuration the sole eligibility source.
+
+- [x] Test-first RS-only LINEA startup regression for enabled volatility markets and neutral volatility diagnostics.
+- [x] Pass the effective market-pair union to candle-history startup independently of strategy/external-order market-data filtering.
+- [x] Use market-owned volatility eligibility and initial state; CG and RS share the central volatility submission gate.
+- [x] Reject conflicting explicit volatility settings when the same market is configured for both CG and RS.
+- [x] Label volatility diagnostics with `component: market-volatility-protection` and no strategy ID.
+- [ ] Verify all tests and exact-head CI. No local test execution or GitHub Actions results are available through the current tool session.
+- No exchange operations are authorized or required.
 
 ## Submission deferral diagnostics — issue #1025
 
