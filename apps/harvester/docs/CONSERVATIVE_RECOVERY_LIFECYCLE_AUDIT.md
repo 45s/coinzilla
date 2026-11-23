@@ -233,7 +233,6 @@ This review does **not** establish the cause of the order-history validation fai
 
 See [the detailed archive review and continuation plan](CONSERVATIVE_RECOVERY_ARCHIVE_REVIEW_2026-11-23.md) for the exact findings, limitations, current CI evidence, and prioritized next work.
 
-
 ## 2026-11-23 continuation — current branch and CI checkpoint
 
 - Current task branch head: `07c0b5f329bde96e883b06f6aad51f903e0a6ebe`; synchronized with `develop@c1c715dc1b9b821d87d0a25e903c88c61e91ed3a` by merge commit `d963dfc2e0eb3fc02cbd9c25b08ae5b92ce61df9`.
