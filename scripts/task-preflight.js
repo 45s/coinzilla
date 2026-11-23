@@ -112,9 +112,9 @@ export function validateIssueBody(body) {
   for (const name of REQUIRED_ISSUE_SECTIONS) {
     const section = sections.get(name.toLowerCase());
     if (!section) {
-      errors.push('Required issue section missing: ' + name);
+      errors.push(`Required issue section missing: ${name}`);
     } else if (plain(section).length < 12 || /^(?:tbd|todo|n\/a|none|pending|not started)[.! ]*$/i.test(plain(section))) {
-      errors.push('Issue section has no meaningful content: ' + name);
+      errors.push(`Issue section has no meaningful content: ${name}`);
     } else if (name === 'Acceptance criteria' && !hasConcreteAcceptanceCriteria(section)) {
       errors.push('Acceptance criteria must contain concrete, observable list items.');
     }
@@ -124,7 +124,7 @@ export function validateIssueBody(body) {
 function isPathWithinScope({ changedPath, scopePath }) {
   const path = changedPath.replaceAll('\\', '/').replace(/^\.\//, '');
   const scope = scopePath.replaceAll('\\', '/').replace(/^\.\//, '').replace(/\/+$/, '');
-  return scope === '.' || path === scope || path.startsWith(scope + '/');
+  return scope === '.' || path === scope || path.startsWith(`${scope}/`);
 }
 export function validatePreflightReport({ report, context }) {
   if (!report || report.status !== 'COMPLETE') {return ['A COMPLETE preflight report is required.'];}
@@ -134,8 +134,11 @@ export function validatePreflightReport({ report, context }) {
     errors.push('Preflight report has no declared task scope paths.');
   } else {
     for (const changedPath of context.changedPaths || []) {
-      if (!report.scopePaths.some((scopePath) => isPathWithinScope({ changedPath, scopePath }))) {
-        errors.push('Changed path is outside the declared preflight scope: ' + changedPath);
+      if (!report.scopePaths.some((scopePath) => isPathWithinScope({
+        changedPath,
+        scopePath,
+      }))) {
+        errors.push(`Changed path is outside the declared preflight scope: ${changedPath}`);
       }
     }
   }
@@ -506,7 +509,7 @@ async function readChangedPullRequestPaths({ repo, token, number }) {
 }
 export async function readBaseInstructionPaths({ repo, token, sha, request = api }) {
   const tree = await request({
-    path: '/repos/' + repo + '/git/trees/' + sha + '?recursive=1',
+    path: `/repos/${repo}/git/trees/${sha}?recursive=1`,
     token,
   });
   if (tree?.truncated === true) {
