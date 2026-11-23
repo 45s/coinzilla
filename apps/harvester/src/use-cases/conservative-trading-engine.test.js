@@ -6636,6 +6636,24 @@ test("reconciles a FILLED acknowledgement from Binance myTrades without a client
   assert.deepEqual(pauses, [])
 })
 
+function createLateStreamBuyExecution({ tracked } = {}) {
+  const fill = makeBuyFill({
+    order: tracked,
+    tradeId: "late-stream-fill",
+    price: tracked.limitPrice.amount,
+    quantity: tracked.originalQuantity.amount,
+    quoteQuantity: multiplyDecimal({
+      left: tracked.limitPrice.amount,
+      right: tracked.originalQuantity.amount,
+    }),
+    clientOrderId: undefined,
+  })
+  return {
+    fill,
+    filledOrder: makeFilledOrder({ order: tracked }),
+  }
+}
+
 test("retains acknowledged broker identity after conflicting REST fill metadata and reconciles a later stream fill without resuming", async () => {
   const {
     engine,
@@ -6672,18 +6690,7 @@ test("retains acknowledged broker identity after conflicting REST fill metadata 
   assert.ok(tracked.brokerOrderId)
   assert.ok(pauses.includes("ACKNOWLEDGED_FILL_IDENTITY_MISMATCH"))
 
-  const fill = makeBuyFill({
-    order: tracked,
-    tradeId: "late-stream-fill",
-    price: tracked.limitPrice.amount,
-    quantity: tracked.originalQuantity.amount,
-    quoteQuantity: multiplyDecimal({
-      left: tracked.limitPrice.amount,
-      right: tracked.originalQuantity.amount,
-    }),
-    clientOrderId: undefined,
-  })
-  const filledOrder = makeFilledOrder({ order: tracked })
+  const { fill, filledOrder } = createLateStreamBuyExecution({ tracked })
   const streamed = await engine.processUserDataEvent({
     event: {
       eventType: "executionReport",
