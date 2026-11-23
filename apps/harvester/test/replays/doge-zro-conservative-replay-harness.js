@@ -19,7 +19,10 @@ function createOpenOrderSnapshot({ order }) {
     symbol: order.market.symbol,
     type: order.type,
     side: order.side,
-    quantity: Number(subtractDecimal({ left: order.originalQuantity.amount, right: order.executedQuantity.amount })),
+    quantity: Number(subtractDecimal({
+      left: order.originalQuantity.amount,
+      right: order.executedQuantity.amount,
+    })),
     price: Number(order.limitPrice.amount),
     id: order.brokerOrderId,
     clientOrderId: order.clientOrderId,

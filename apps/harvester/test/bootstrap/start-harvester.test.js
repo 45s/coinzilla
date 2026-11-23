@@ -21,7 +21,10 @@ const createOpenOrderSnapshot = ({ order }) => {
     symbol: order.market.symbol,
     type: order.type,
     side: order.side,
-    quantity: Number(subtractDecimal({ left: order.originalQuantity.amount, right: order.executedQuantity.amount })),
+    quantity: Number(subtractDecimal({
+      left: order.originalQuantity.amount,
+      right: order.executedQuantity.amount,
+    })),
     price: Number(order.limitPrice.amount),
     id: order.brokerOrderId,
     clientOrderId: order.clientOrderId,
@@ -454,7 +457,10 @@ asset: baseAsset }),
     quantity: new Quantity({ amount: '10',
 asset: baseAsset }),
     quoteQuantity: new Money({
-      amount: multiplyDecimal({ left: buyIntent.price, right: buyIntent.quantity }),
+      amount: multiplyDecimal({
+        left: buyIntent.price,
+        right: buyIntent.quantity,
+      }),
       asset: quoteAsset,
     }),
     liquidityRole: 'MAKER',
@@ -865,9 +871,15 @@ function createVolatilityMarketDataBroker({ state }) {
       const price = symbol === "DOGEUSDT" ? "0.1" : "1"
       await onBookTicker({
         symbol,
-        bestBidPrice: multiplyDecimal({ left: price, right: "0.99" }),
+        bestBidPrice: multiplyDecimal({
+          left: price,
+          right: "0.99",
+        }),
         bestBidQuantity: "100",
-        bestAskPrice: multiplyDecimal({ left: price, right: "1.01" }),
+        bestAskPrice: multiplyDecimal({
+          left: price,
+          right: "1.01",
+        }),
         bestAskQuantity: "100",
         timestamp: 10,
       })

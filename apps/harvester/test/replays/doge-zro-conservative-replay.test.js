@@ -358,7 +358,10 @@ function assertFinalRecoveryCycleResult({ dogeTradingReplay, recoveryCycleComple
   assert.equal(recoveryCycleCompletion.freeQuantity, EXPECTED_RETAINED_DOGE_QUANTITY, "The completed cycle must retain exactly 3.4 DOGE.");
   assert.equal(recoveryCycleCompletion.realizedNetProfit, EXPECTED_REALIZED_PROFIT_AFTER_FOUR_BUYS, "The completed cycle must report exact realized net profit.");
   assert.ok(
-    compareDecimal({ left: recoveryCycleCompletion.realizedNetProfit, right: MINIMUM_RECOVERY_PROFIT }) >= 0,
+    compareDecimal({
+      left: recoveryCycleCompletion.realizedNetProfit,
+      right: MINIMUM_RECOVERY_PROFIT,
+    }) >= 0,
     "The recovery cycle must meet the minimum net-profit requirement.",
   );
   const actualRecoverySellFillReports = dogeTradingReplay.receivedExecutionReports
