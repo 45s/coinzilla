@@ -10,7 +10,7 @@ import { scenarios as reliabilityScenarios } from "../conservative/reliability/i
 import { CONSERVATIVE_REQUIREMENTS } from "./requirements.js"
 import { assertValidScenarioDefinitions } from "./schema.js"
 
-const PACKAGE_ROOT = fileURLToPath(new URL("../../../", import.meta.url))
+export const PACKAGE_ROOT = fileURLToPath(new URL("../../../", import.meta.url))
 const CRITICAL_BEHAVIOR_PATH = fileURLToPath(new URL("../../../docs/critical-behaviors.json", import.meta.url))
 
 const SCENARIO_GROUPS = [
@@ -36,7 +36,13 @@ function uniqueBy(items, keyOf) {
 }
 
 function resolveScenarioEvidence({ scenario, behaviorMap }) {
-  const relatedBehaviors = scenario.relatedCriticalBehaviors.map((id) => behaviorMap.get(id))
+  const relatedBehaviors = scenario.relatedCriticalBehaviors.map((id) => {
+    const behavior = behaviorMap.get(id)
+    if (!behavior) {
+      throw new Error(`Scenario ${scenario.id} references unknown critical behavior ${id}.`)
+    }
+    return behavior
+  })
   const relatedSourceFiles = uniqueBy(
     [
       ...scenario.relatedSourceFiles,
@@ -81,7 +87,7 @@ function assertEvidencePathsExist({ scenarios }) {
 export function resolveScenarioDefinitions({
   definitions = SCENARIO_GROUPS.flat(),
   requirements = CONSERVATIVE_REQUIREMENTS,
-  criticalBehaviorContract,
+  criticalBehaviorContract = { behaviors: [] },
 } = {}) {
   const behaviorMap = new Map((criticalBehaviorContract.behaviors ?? []).map((behavior) => [behavior.id, behavior]))
   const scenarios = definitions.map((scenario) => resolveScenarioEvidence({
@@ -106,5 +112,3 @@ export function loadConservativeScenarios() {
   assertEvidencePathsExist({ scenarios: loaded.scenarios })
   return loaded
 }
-
-export { PACKAGE_ROOT }
