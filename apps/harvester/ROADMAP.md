@@ -12,7 +12,6 @@
 - [ ] Run exact-head package tests, reliability/coverage and required CI; update status after verified results.
 - No exchange operations or Harvester process startup are authorized or required. Process-restart restoration remains disabled.
 
-
 ## Read-only Operational State diagnostics (#1740)
 
 - **In progress in [PR #1741](https://github.com/45s/coinzilla/pull/1741):** add `pnpm run operational-state:diagnose` to verify the existing facts/manifest streams with the production store reader, then independently report the offline recovery-projection result.
