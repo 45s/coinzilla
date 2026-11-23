@@ -193,13 +193,13 @@ These requirements apply to every AI coding agent and automated contributor, inc
 
 Before work:
 
-1. Read root `AGENTS.md`, `AI_AGENT_WORKFLOW.md`, `ENGINEERING_STANDARDS.md`, and the applicable task checklist.
-2. Identify the owning application/package from `DOMAIN_OWNERSHIP.md`; read its `AGENTS.md` and `ROADMAP.md`.
-3. Use the relevant documentation index to inventory all requirements that govern the task: specifications, ADRs, runbooks, API/contracts, configuration, testing and operational guides. Follow applicable references recursively until requirements are understood.
-4. Read applicable documents in full, not only titles, snippets or summaries. Do not read unrelated domains' private implementation docs unless the task crosses those boundaries.
-5. Inspect the affected source, callers/consumers, tests and configuration. Documentation review does not replace implementation inspection.
-6. Identify the canonical source of truth, acceptance criteria, constraints, dependencies, verification and documentation impact.
-7. Provide a concise preflight/readiness summary before implementation or state-changing actions. If a required document is missing, inaccessible, contradictory or unclear, stop and report the exact blocker; do not invent requirements.
+1. Read root `AGENTS.md` and applicable nested instructions.
+2. Understand the request, acceptance criteria, scope, and constraints; identify the owning application/package when relevant.
+3. Consult the relevant documentation index and canonical specifications, ADRs, contracts, runbooks, configuration, and test guidance.
+4. Inspect affected source, callers/consumers, tests, and configuration before implementation.
+5. Resolve concrete requirement conflicts or safety blockers. Do not invent requirements or read unrelated domain internals.
+
+This is practical task understanding, not a mandatory Preflight gate. No readiness report, attestation, or issue-evidence comment is required.
 
 During and after work:
 
