@@ -4156,32 +4156,53 @@ function assertReplacementMatchesStrategy({ scenario, replacementSell }) {
 }
 
 
-test("reconciles multiple BUY fills racing shutdown cancellation and replaces only the owned recovery SELL", async () => {
-  const scenario = await createShutdownBuyRaceScenario()
-  const { seeded, buyOrder } = scenario
+function createShutdownBuyRaceFills({ scenario, buyOrder } = {}) {
   const firstQuantity = "0.5"
   const secondQuantity = subtractDecimal({
     left: buyOrder.originalQuantity.amount,
     right: firstQuantity,
   })
-  const firstFill = createShutdownBuyFill({
-    order: buyOrder,
-    tradeId: "shutdown-buy-partial-fill",
-    quantity: firstQuantity,
-    quoteQuantity: multiplyDecimal({
-      left: buyOrder.limitPrice.amount,
-      right: firstQuantity,
+  return {
+    firstFill: createShutdownBuyFill({
+      order: buyOrder,
+      tradeId: "shutdown-buy-partial-fill",
+      quantity: firstQuantity,
+      quoteQuantity: multiplyDecimal({
+        left: buyOrder.limitPrice.amount,
+        right: firstQuantity,
+      }),
     }),
-  })
-  const secondFill = createShutdownBuyFill({
-    order: buyOrder,
-    tradeId: "shutdown-buy-final-fill",
-    quantity: secondQuantity,
-    quoteQuantity: multiplyDecimal({
-      left: buyOrder.limitPrice.amount,
-      right: secondQuantity,
+    secondFill: createShutdownBuyFill({
+      order: buyOrder,
+      tradeId: "shutdown-buy-final-fill",
+      quantity: secondQuantity,
+      quoteQuantity: multiplyDecimal({
+        left: buyOrder.limitPrice.amount,
+        right: secondQuantity,
+      }),
     }),
-  })
+  }
+}
+
+async function assertShutdownBuyRaceResults({
+  scenario,
+  buyOrder,
+  seeded,
+  cancellationResult,
+  lateFillResult,
+} = {}) {
+  await assertLateNewReportsIgnoredAfterFilled({ scenario, buyOrder })
+  assert.equal(cancellationResult.ok, true, cancellationResult.errors?.[0]?.message)
+  assert.equal(lateFillResult.ok, true, lateFillResult.errors?.[0]?.message)
+  assertShutdownBuyRaceAccounting({ scenario, seeded })
+  const replacementSell = await assertShutdownRecoverySellReplaced({ scenario })
+  assertReplacementMatchesStrategy({ scenario, replacementSell })
+}
+
+test("reconciles multiple BUY fills racing shutdown cancellation and replaces only the owned recovery SELL", async () => {
+  const scenario = await createShutdownBuyRaceScenario()
+  const { seeded, buyOrder } = scenario
+  const { firstFill, secondFill } = createShutdownBuyRaceFills({ scenario, buyOrder })
   scenario.buyFills = [firstFill, secondFill]
   scenario.stopping.value = true
 
@@ -4216,21 +4237,12 @@ test("reconciles multiple BUY fills racing shutdown cancellation and replaces on
     lateFinalFill,
   ])
 
-  await assertLateNewReportsIgnoredAfterFilled({ scenario,
-buyOrder })
-
-  assert.equal(cancellationResult.ok, true, cancellationResult.errors?.[0]?.message)
-  assert.equal(lateFillResult.ok, true, lateFillResult.errors?.[0]?.message)
-  assertShutdownBuyRaceAccounting({
+  await assertShutdownBuyRaceResults({
     scenario,
+    buyOrder,
     seeded,
-  })
-  const replacementSell = await assertShutdownRecoverySellReplaced({
-    scenario,
-  })
-  assertReplacementMatchesStrategy({
-    scenario,
-    replacementSell,
+    cancellationResult,
+    lateFillResult,
   })
 })
 
