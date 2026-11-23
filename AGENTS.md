@@ -81,3 +81,7 @@ Execute clear implementation requests within their stated scope; do not substitu
 The canonical [AI Agent Workflow](AI_AGENT_WORKFLOW.md) owns the detailed execution, remote TDD, GitHub Actions verification, branch freshness, incremental commits, issue/PR checkpoints, handoffs, and review lifecycle. Follow it in full. Local tooling is optional when GitHub Actions can perform the required verification.
 
 Never weaken checks or claim unverified success. Leave every task PR open for user review and merge; agents must never merge or enable auto-merge.
+
+## Agent communication — mandatory
+
+Keep user-facing communication short, concrete and specific. Report only decisions, completed work, exact current status, next action, blockers and verification evidence. Use brief bullets when useful. Do not repeat the task, narrate routine tool use, provide generic progress updates, speculate, over-explain, or end with unsolicited continuation prompts. Never claim work or verification that has not happened.
