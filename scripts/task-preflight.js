@@ -286,15 +286,34 @@ function latestReport(comments) {
   return latest ? { ...parsePreflightReport(latest.body),
 createdAt: latest.created_at } : null;
 }
-function parseArgs(argv) {
-  const a={issue:0,
-paths:[],
-record:false,
-pr:false,
-attestRead:false,
-attestNested:false};
-  for(let i=0;i<argv.length;i+=1){if(argv[i]==='--issue'){a.issue=Number(argv[++i]);}else if(argv[i]==='--paths'){a.paths=argv[++i].split(',').map(x=>x.trim()).filter(Boolean);}else if(argv[i]==='--record'){a.record=true;}else if(argv[i]==='--pull-request'){a.pr=true;}else if(argv[i]==='--attest-read'){a.attestRead=true;}else if(argv[i]==='--attest-nested'){a.attestNested=true;}else {throw new Error(`Unknown argument: ${argv[i]}`);}}
-  return a;
+export function parseArgs(argv) {
+  const args = argv[0] === '--' ? argv.slice(1) : argv;
+  const parsed = {
+    issue: 0,
+    paths: [],
+    record: false,
+    pr: false,
+    attestRead: false,
+    attestNested: false,
+  };
+  for (let index = 0; index < args.length; index += 1) {
+    if (args[index] === '--issue') {
+      parsed.issue = Number(args[++index]);
+    } else if (args[index] === '--paths') {
+      parsed.paths = args[++index].split(',').map((path) => path.trim()).filter(Boolean);
+    } else if (args[index] === '--record') {
+      parsed.record = true;
+    } else if (args[index] === '--pull-request') {
+      parsed.pr = true;
+    } else if (args[index] === '--attest-read') {
+      parsed.attestRead = true;
+    } else if (args[index] === '--attest-nested') {
+      parsed.attestNested = true;
+    } else {
+      throw new Error('Unknown argument: ' + args[index]);
+    }
+  }
+  return parsed;
 }
 async function local({ root, args, repo, token }) {
   if (!Number.isInteger(args.issue) || args.issue < 1 || !args.paths.length) {
