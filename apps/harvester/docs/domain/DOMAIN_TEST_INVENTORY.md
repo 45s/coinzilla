@@ -328,7 +328,6 @@ Do not treat the conceptual diagram as a new production state model: map every t
 - This checkpoint records the verified implementation; the final documentation-only commit is revalidated on its own exact head.
 - **Phase 2 complete on exact PR head `68c45654a70a1ef0e4df008350564ae1871a27d3`**: all six GitHub Actions workflows passed (Harvester Targeted Tests, Unit Tests, Test Coverage, Dependency Audit, Repository Quality, External Documentation Links). Repository Quality includes strict changed-file ESLint, workspace ESLint, actionlint, JavaScript syntax and Markdown checks. The final head includes the test-only helper decomposition and documentation checkpoint; the preceding implementation head `a6a03e785c6e80bae0f0b6090c7d1bf4c2f1a14b` also passed all six workflows. The four remaining `Number(...)` occurrences in `conservative-trading-engine.test.js` are broker DTO boundary conversions for `Order` construction/status, not financial expected-value assertions; they remain intentionally unchanged. Phase 2 exit criteria are met: the SELL Fill fixture has an independent exact notional default and financial comparisons use exact decimal assertions. No production behavior, trading rules or scenario suite changed. Phase 3 (core recovery arithmetic) is the next work package.
 
-
 ### 2026-11-23 — Phase 3 core recovery arithmetic
 
 - Added `src/domain/strategies/conservative/recovery-sell-plan-multi-fill.test.js` as an offline domain composition regression.
@@ -338,4 +337,4 @@ Do not treat the conceptual diagram as a new production state model: map every t
 - The first exact-head run exposed a test-oracle scaling error in the independent BigInt proceeds comparison (the scenario values and production plan outputs were correct); the test assertion has been corrected to compare both amounts at the same 10,000,000 denominator. The first run also exposed formatting and callback-length lint findings, addressed by extracting focused assertion/setup helpers.
 - Test-only coverage; no production behavior, trading rules, exchange access, or credentials changed. Corrected exact-head CI is pending.
 - Exact-head lint then identified one remaining multi-property helper-call formatting violation in the accounting assertion call; it now uses one property per line. No assertion or production behavior changed.
-
+- Repository Quality reported repeated blank lines in this checkpoint; the extra blank lines were removed without changing document meaning.

@@ -2163,7 +2163,6 @@ The detailed evidence, implementation commits, CI state and remaining unknowns a
 - No production source, trading behavior, exchange state or credentials changed. No `scenarios/` suite was added.
 - PR #1792 remains open for user review; do not merge. Next work package after review is Phase 3: core recovery arithmetic.
 
-
 ## 2026-11-23 — #1763 Phase 3 core recovery arithmetic
 
 - Started Phase 3 on the existing review branch and PR #1792; no second PR was opened.
@@ -2174,3 +2173,4 @@ The detailed evidence, implementation commits, CI state and remaining unknowns a
 - Exact-head lint then identified one remaining multi-property helper-call formatting violation in the accounting assertion call; it now uses one property per line. No assertion or production behavior changed.
 
 - Next: review the remaining recovery arithmetic matrix against the canonical specification, add only evidenced missing boundary cases, and keep the issue/PR/inventory synchronized.
+- Repository Quality reported repeated blank lines in this checkpoint; the extra blank lines were removed without changing document meaning.
