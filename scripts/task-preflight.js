@@ -48,9 +48,14 @@ export function parsePreflightReport(body) {
     if (!block.includes(entry)) {throw new Error(`Required preflight entry missing: ${  entry}`);}
   }
   const instructions = [...block.matchAll(/^\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|$/gim)]
-    .map((m) => ({ path: m[1].replaceAll('\x60', '').trim(),
-sha: m[2].replaceAll('\x60', '').trim().toLowerCase() }))
-    .filter((m) => m.path !== 'Instruction file' && /^[0-9a-f]{40}$/.test(m.sha));
+    .map((match) => ({
+      path: match[1].replaceAll('\x60', '').trim(),
+      sha: match[2].replaceAll('\x60', '').trim().toLowerCase(),
+    }))
+    .filter((item) => item.path !== 'Instruction file' && /^[0-9a-f]{40}$/.test(item.sha));
+  if (new Set(instructions.map((item) => item.path)).size !== instructions.length) {
+    throw new Error('Preflight report contains duplicate instruction paths.');
+  }
   return { issueNumber: Number(issue[1]),
 commitSha: commit[1].toLowerCase(),
 status: status[1].toUpperCase(),
@@ -250,21 +255,26 @@ async function api({ path, token, method = 'GET', body }) {
   return response.status === 204 ? null : response.json();
 }
 async function issueData({ repo, number, token }) {
-  const issue = await api({ path: `/repos/${  repo  }/issues/${  number}`,
-token });
-  if (issue.pull_request || issue.state !== 'open') {throw new Error(`Tracking issue #${  number  } is not an open issue.`);}
+  const issue = await api({
+    path: '/repos/' + repo + '/issues/' + number,
+    token,
+  });
+  if (issue.pull_request || issue.state !== 'open') {
+    throw new Error('Tracking issue #' + number + ' is not an open issue.');
+  }
   const comments = [];
   for (let page = 1; page <= 10; page += 1) {
     const batch = await api({
-      path: `/repos/${  repo  }/issues/${  number  }/comments?per_page=100&page=${  page}`,
+      path: '/repos/' + repo + '/issues/' + number + '/comments?per_page=100&page=' + page,
       token,
     });
     comments.push(...batch);
-    if (batch.length < 100) {break;}
+    if (batch.length < 100) break;
+    if (page === 10) throw new Error('Issue comment history exceeds validator pagination limit; BLOCKED.');
   }
-  return { issue,
-comments };
+  return { issue, comments };
 }
+
 function latestReport(comments) {
   let latest = null;
   for (const comment of comments) {
