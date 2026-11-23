@@ -107,6 +107,11 @@ async function fillArchivedRecoverySell({ replay, scenario, recoverySell }) {
 function assertCycleCompleted({ replay, scenario, completion }) {
   assert.equal(completion.freeQuantity, scenario.expectedFreeQuantity, "The completed runtime cycle must retain the exact archived residual inventory.")
   assert.equal(completion.realizedNetProfit, scenario.expectedRealizedNetProfit, "The runtime completion event must report exact net profit after actual commissions.")
+  assert.deepEqual(
+    completion.dust,
+    scenario.expectedDust,
+    "Completion must preserve the exact exchange-constrained residual and limiting-filter evidence from the explicit test fixture.",
+  )
   assert.equal(
     replay.receivedLifecycleEvents.filter(({ name }) => name === "recovery.cycle_completed").length,
     1,
@@ -169,6 +174,7 @@ async function runArchivedRecoveryCycle({ t, scenario }) {
   stopped = true
 }
 
+// These are explicit current-runtime test filters, not historical exchange-filter evidence; the archive did not capture decision-time filters.
 const scenarios = [
   {
     symbol: "ZROUSDT",
@@ -219,6 +225,15 @@ const scenarios = [
     },
     expectedFreeQuantity: "0.03",
     expectedRealizedNetProfit: "0.0278787",
+    expectedDust: {
+      status: "EXCHANGE_CONSTRAINED_DUST",
+      quantity: "0.02",
+      reason: "MIN_NOTIONAL",
+      minimumQuantity: "0.01",
+      minimumNotional: "5",
+      evaluatedQuantity: "0.02",
+      evaluatedNotional: "0.02348",
+    },
   },
   {
     symbol: "DOGEUSDT",
@@ -269,6 +284,15 @@ const scenarios = [
     },
     expectedFreeQuantity: "3.4",
     expectedRealizedNetProfit: "0.01320905",
+    expectedDust: {
+      status: "EXCHANGE_CONSTRAINED_DUST",
+      quantity: "2.4",
+      reason: "MIN_NOTIONAL",
+      minimumQuantity: "1",
+      minimumNotional: "5",
+      evaluatedQuantity: "2.4",
+      evaluatedNotional: "0.132024",
+    },
   },
   {
     symbol: "ADAUSDT",
@@ -301,26 +325,33 @@ const scenarios = [
     },
     expectedFreeQuantity: "0.05",
     expectedRealizedNetProfit: "0.05318955",
+    expectedDust: {
+      status: "EXCHANGE_CONSTRAINED_DUST",
+      quantity: "0.05",
+      reason: "QUANTITY_INCREMENT",
+      quantityStepSize: "0.1",
+      evaluatedQuantity: "0",
+    },
   },
 ]
 
 const [zroScenario, dogeScenario, adaScenario] = scenarios
 
-test("replays archived ZROUSDT fills and completes profitable exchange-constrained residual inventory", async (t) => {
+test("replays archived ZROUSDT fills with explicit test filters and records exact MIN_NOTIONAL dust", async (t) => {
   await runArchivedRecoveryCycle({
     t,
     scenario: zroScenario,
   })
 })
 
-test("replays archived DOGEUSDT fills and completes profitable exchange-constrained residual inventory", async (t) => {
+test("replays archived DOGEUSDT fills with explicit test filters and records exact MIN_NOTIONAL dust", async (t) => {
   await runArchivedRecoveryCycle({
     t,
     scenario: dogeScenario,
   })
 })
 
-test("replays archived ADAUSDT fills and completes profitable exchange-constrained residual inventory", async (t) => {
+test("replays archived ADAUSDT fills with explicit test filters and records exact QUANTITY_INCREMENT dust", async (t) => {
   await runArchivedRecoveryCycle({
     t,
     scenario: adaScenario,
