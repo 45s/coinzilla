@@ -335,7 +335,10 @@ function assertFourBuyExecutionHistory({ dogeTradingReplay, completedBuyOrders, 
     "The latest recovery SELL must combine the remaining sellable DOGE at the calculated price.",
   );
   assert.ok(
-    compareDecimal({ left: latestRecoverySellOrder.quantity, right: String(dogeTradingReplay.marketConfiguration.keepQuantity) }) > 0,
+    compareDecimal({
+      left: latestRecoverySellOrder.quantity,
+      right: String(dogeTradingReplay.marketConfiguration.keepQuantity),
+    }) > 0,
     "The combined recovery SELL must preserve the configured retained inventory.",
   );
 }
@@ -386,7 +389,10 @@ function assertFinalRecoveryCycleResult({ dogeTradingReplay, recoveryCycleComple
   assert.equal(finalStrategyPosition.baseQuantity.amount, "0", "A completed recovery cycle must leave no active DOGE position.");
   assert.equal(finalStrategyPosition.freeBaseQuantity.amount, EXPECTED_RETAINED_DOGE_QUANTITY, "A completed recovery cycle must retain exactly 3.4 DOGE.");
   assert.ok(
-    compareDecimal({ left: finalStrategyPosition.freeBaseQuantity.amount, right: String(dogeTradingReplay.marketConfiguration.keepQuantity) }) >= 0,
+    compareDecimal({
+      left: finalStrategyPosition.freeBaseQuantity.amount,
+      right: String(dogeTradingReplay.marketConfiguration.keepQuantity),
+    }) >= 0,
     "The retained free DOGE inventory must meet the configured keepQuantity.",
   );
   const buyExecutionReportCount = dogeTradingReplay.receivedExecutionReports.filter(({ executedOrder }) => executedOrder.side === "BUY").length;

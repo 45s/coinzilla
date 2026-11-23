@@ -10,7 +10,7 @@ import {
   Quantity,
 } from "@coinzilla/entities";
 import { BinanceWebSocketBroker } from "@coinzilla/brokers";
-import { compareDecimal, multiplyDecimal, percentageToRate } from "@coinzilla/utils";
+import { compareDecimal, multiplyDecimal, percentageToRate, subtractDecimal } from "@coinzilla/utils";
 import { createBinanceBrokerAdapter } from "../../src/infrastructure/brokers/binance-broker-adapter.js";
 import { startHarvester } from "../../src/bootstrap/start-harvester.js";
 
