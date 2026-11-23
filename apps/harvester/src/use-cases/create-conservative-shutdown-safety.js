@@ -332,16 +332,43 @@ export function createConservativeShutdownSafety({ state, pairs, runTransition }
     invalidateShutdownSafety({ reason: "SHUTDOWN_SAFETY_NOT_PROVEN" })
     return { ok: true }
   }
-  const auditShutdownSafety = createShutdownSafetyAuditor({
+  const auditShutdownSafetyTransition = createShutdownSafetyAuditor({
     state,
     pairs,
     enabledSymbols,
     runTransition,
     notifyRevision,
   })
+  let shutdownGatePromise = Promise.resolve({ ok: true })
+  const beginShutdown = () => {
+    if (state.shutdownBuyGate === true) {
+      return { ok: true }
+    }
+    state.shutdownBuyGate = true
+    shutdownGatePromise = runTransition({
+      task: async () => {
+        state.deferredEvaluations.clear()
+        invalidateShutdownSafety({ reason: "SHUTDOWN_SAFETY_NOT_PROVEN" })
+        return { ok: true }
+      },
+    })
+    return { ok: true }
+  }
+  const waitForShutdownGate = async () => {
+    const result = await shutdownGatePromise
+    if (result?.ok === false) {
+      throw result.errors?.[0] ?? new Error("Conservative shutdown gate transition failed")
+    }
+    return result
+  }
+  const auditShutdownSafety = async (input) => {
+    await waitForShutdownGate()
+    return auditShutdownSafetyTransition(input)
+  }
 
   return Object.freeze({
     beginShutdown,
+    waitForShutdownGate,
     auditShutdownSafety,
     invalidateShutdownSafety,
     getShutdownSafetySnapshot: () => createSafetySnapshot({
