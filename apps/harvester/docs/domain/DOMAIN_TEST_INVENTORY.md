@@ -245,6 +245,9 @@ The scenario guide now includes a mandatory state-machine testing contract and c
 
 Do not treat the conceptual diagram as a new production state model: map every tested transition to the canonical Conservative specification and actual implementation first. Domain tests own pure transitions; application integration tests own broker submit/cancel, REST/stream reconciliation, durable barriers and shutdown. Status-only assertions do not establish transition coverage. See [scenario guide](CONSERVATIVE_DOMAIN_SCENARIO_TESTS.md) and [issue #1763](https://github.com/45s/coinzilla/issues/1763) for the full transition and adversarial-sequence requirements.
 
+### Medium — next-cycle basis must exclude prior retained inventory
+
+`src/use-cases/create-portfolio-workflow-next-cycle.test.js` composes real Portfolio/RecoveryLedger accounting and cycle completion with the real Conservative domain policy. It completes a first cycle, retains exactly one base unit, applies a new BUY, replays both prior-cycle fills to prove full projection immutability, and verifies that only the new cycle's cost/proceeds determine the next recovery SELL while prior retained inventory remains separate. Added in PR #1774; exact-head CI remains pending.
 
 ### 2026-11-23 — #1362 archive replay and evidence corrections
 

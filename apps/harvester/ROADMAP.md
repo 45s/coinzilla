@@ -2122,3 +2122,9 @@ The detailed evidence, implementation commits, CI state and remaining unknowns a
 - The first exact-head CI set on the merge commit is running; no pass is claimed yet.
 - The 28 historical order-history projection errors remain unattributed. Database dump inspection remains prohibited absent explicit authorization.
 - Continue test-first only for evidenced defects. Keep #1761 draft and all trading/account safety gates unchanged.
+
+## 2026-11-23 — scope split for Conservative recovery continuation
+
+- #1362 / [PR #1761](https://github.com/45s/coinzilla/pull/1761) remain focused on deterministic Conservative recovery accounting, replay, late-fill safety and serialized shutdown behavior.
+- The 28 historical `HARVESTER_ORDER_HISTORY_RECORD_INVALID` events are separated into [issue #1789](https://github.com/45s/coinzilla/issues/1789). Their historical field, input shape, projection stage and operational impact remain unknown; no root cause is inferred from timestamp correlation.
+- Keep the archive immutable. The database dump has not been inspected and requires explicit owner authorization. No TESTNET/LIVE writes or account mutations are part of this work.

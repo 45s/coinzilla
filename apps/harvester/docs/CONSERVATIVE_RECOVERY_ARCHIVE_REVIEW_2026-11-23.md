@@ -192,3 +192,7 @@ Replay quoteQuantity fidelity, digest-chain integrity, corrected inventory paths
 - Exact-head CI for `07c0b5f` is pending; no final green claim is made.
 - The 28 historical `HARVESTER_ORDER_HISTORY_RECORD_INVALID` events remain unattributed. The selected terminal log does not include field/stage. The 96 MB cumulative Harvester and 97 MB trace files are present in the archive, but the repository connector cannot return their contents because of file-size limits; no database dump was inspected. Continue with bounded non-database evidence if another accessible source becomes available.
 - No TESTNET/LIVE writes, account mutations, archive rewrites, or restart-restoration changes.
+
+## Follow-up issue split — 2026-11-23
+
+The 28 historical `HARVESTER_ORDER_HISTORY_RECORD_INVALID` order-history projection failures are now tracked independently in [issue #1789](https://github.com/45s/coinzilla/issues/1789). They remain unattributed: the selected terminal log does not contain the invalid field, raw input or projection stage, and the large cumulative/trace logs were not retrievable through the repository reader. Timestamp proximity to some recovery facts is not proof of causation. Keep this investigation outside #1362 / PR #1761 so the Conservative recovery lifecycle can be completed as one focused unit. The immutable archive database dump remains uninspected; explicit authorization is required before any inspection.

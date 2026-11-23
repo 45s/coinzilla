@@ -242,3 +242,7 @@ See [the detailed archive review and continuation plan](CONSERVATIVE_RECOVERY_AR
 - The historical all-green checkpoint at `842b502` is not evidence for the current head.
 - The 28 historical order-history validation errors remain unattributed. The archive terminal log does not expose the invalid field or stage; large cumulative log files are currently inaccessible through the repository file reader due to their size. Database dump remains uninspected pending explicit authorization.
 - PR #1761 remains draft. No exchange writes, account mutations, or safety-gate changes.
+
+## Follow-up issue split — 2026-11-23
+
+The 28 historical `HARVESTER_ORDER_HISTORY_RECORD_INVALID` order-history projection failures are now tracked independently in [issue #1789](https://github.com/45s/coinzilla/issues/1789). They remain unattributed: the selected terminal log does not contain the invalid field, raw input or projection stage, and the large cumulative/trace logs were not retrievable through the repository reader. Timestamp proximity to some recovery facts is not proof of causation. Keep this investigation outside #1362 / PR #1761 so the Conservative recovery lifecycle can be completed as one focused unit. The immutable archive database dump remains uninspected; explicit authorization is required before any inspection.
