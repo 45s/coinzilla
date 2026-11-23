@@ -168,8 +168,10 @@ title: 'Documentation impact' });
   }
 }
 function hasVerificationEvidence(comments) {
-  return /verification evidence/i.test(comments) && /\bpassed\b/i.test(comments) &&
-    /\b(?:pnpm|npm|node|git)\b/i.test(comments) && /\b[0-9a-f]{40}\b/i.test(comments);
+  return comments.some((comment) =>
+    /verification evidence/i.test(comment) && /\bpassed\b/i.test(comment) &&
+    /\b(?:pnpm|npm|node|git)\b/i.test(comment) && /\b[0-9a-f]{40}\b/i.test(comment),
+  );
 }
 export function validatePullRequestEvidence(context) {
   const errors = [];
@@ -442,7 +444,7 @@ issueNumber });
     headSha: pr.head.sha,
     issueNumber,
     issueBody: evidence.issue.body || '',
-    issueComments: evidence.comments.map((item) => item.body || '').join('\n'),
+    issueComments: evidence.comments.map((item) => item.body || ''),
     preflightReport: evidence.preflight,
     requiredInstructionPaths: evidence.required,
     actualInstructionHashes: evidence.hashes,
