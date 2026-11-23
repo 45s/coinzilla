@@ -232,3 +232,13 @@ A second source-level review was performed against the immutable archive reposit
 This review does **not** establish the cause of the order-history validation failures: the selected terminal log and 49 facts support timestamp correlation, but do not include the invalid field or raw order-history event payloads. Cumulative `harvester.log` and `trace.log` returned no text; the single compressed startup-retry session was inspected. The database dump remains present but uninspected. The archive is selected-log evidence; it must not be described as complete raw-log coverage. No missing field, exchange filter, shutdown completion, or database fact is inferred.
 
 See [the detailed archive review and continuation plan](CONSERVATIVE_RECOVERY_ARCHIVE_REVIEW_2026-11-23.md) for the exact findings, limitations, current CI evidence, and prioritized next work.
+
+
+## 2026-11-23 continuation — current branch and CI checkpoint
+
+- Current task branch head: `07c0b5f329bde96e883b06f6aad51f903e0a6ebe`; synchronized with `develop@c1c715dc1b9b821d87d0a25e903c88c61e91ed3a` by merge commit `d963dfc2e0eb3fc02cbd9c25b08ae5b92ce61df9`.
+- The merge incorporates #1776 exact-decimal bootstrap and DOGE/ZRO replay oracle changes; the domain inventory retains both #1763 scenario evidence and #1362 archive/accounting evidence.
+- Exact-head CI on prior `0370feb2ef7083366ccec607b918770acfcd7313`: five of six applicable workflows passed; Repository Quality failed on Markdown formatting only. The formatting corrections are in `07c0b5f`. Exact-head CI on that commit is pending.
+- The historical all-green checkpoint at `842b502` is not evidence for the current head.
+- The 28 historical order-history validation errors remain unattributed. The archive terminal log does not expose the invalid field or stage; large cumulative log files are currently inaccessible through the repository file reader due to their size. Database dump remains uninspected pending explicit authorization.
+- PR #1761 remains draft. No exchange writes, account mutations, or safety-gate changes.

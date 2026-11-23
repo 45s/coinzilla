@@ -142,13 +142,13 @@ These were identified in the prior investigation checkpoint and still require im
 4. **Test inventory — corrected:** two stale RS test paths replaced with current evidence; the real atomic accounting test is confirmed present.
 5. **Late SELL accounting — implemented;** retain the real Portfolio/RecoveryLedger scenario as required evidence and keep the separate stubbed pause-gate test accurately classified.
 6. **Order-history errors — continue only if new evidence is available:** field-level observer diagnostics are implemented and covered prospectively. The 28 historical errors are timestamp-correlated where the fact stream exists, but the invalid field/root cause remain unknown. Do not claim a historical root cause without raw event evidence or authorized database inspection.
-7. **CI — passed on exact head `842b502422ac01b4926d662cb81683f4151715a3`:** Harvester Targeted Tests, Unit Tests, Test Coverage, Repository Quality, Dependency Audit and External Documentation Links all passed. The read-only Binance TESTNET integration job was skipped.
+7. **Historical CI — passed on exact head `842b502422ac01b4926d662cb81683f4151715a3`:** Harvester Targeted Tests, Unit Tests, Test Coverage, Repository Quality, Dependency Audit and External Documentation Links all passed. This does not certify later commits. Exact-head CI on `0370feb2ef7083366ccec607b918770acfcd7313` failed Repository Quality on Markdown formatting; all other five workflows passed. CI for current head `07c0b5f329bde96e883b06f6aad51f903e0a6ebe` is pending. The read-only Binance TESTNET integration job remains skipped.
 8. **Keep PR #1761 draft and unmerged** pending user review. No TESTNET/LIVE validation is authorized by this task.
 
 ## 8. 2026-11-23 continuation — implementation and evidence checkpoint
 
 ### Branch synchronization
-Internal sync PRs #1777 and #1778 merged current `develop` into the task branch. Latest sync merge commit is `7ef954e73d4ea8c71b043728878eb1b71ab8bc44`, bringing in `develop@b90f1536720edf077d80fecaecfbfcebf4a9ebff`. Current PR #1761 head is `842b502422ac01b4926d662cb81683f4151715a3`, 69 ahead / 0 behind. PR #1761 remains draft. Task Preflight CI enforcement is retired on current `develop`; it is not a blocker.
+That paragraph records a historical checkpoint only. The current task branch was synchronized with `develop@c1c715dc1b9b821d87d0a25e903c88c61e91ed3a` by merge commit `d963dfc2e0eb3fc02cbd9c25b08ae5b92ce61df9`, then documentation status/Markdown was corrected in `07c0b5f329bde96e883b06f6aad51f903e0a6ebe`. PR #1761 remains draft. Task Preflight is retired and is not a gate.
 
 ### Replay and archive integrity
 
@@ -165,13 +165,13 @@ The path `src/use-cases/update-trading-accounting.test.js` exists and proves imm
 The selected 429-line terminal log contains 28 `HARVESTER_ORDER_HISTORY_RECORD_INVALID` occurrences. The historical invalid field and stage remain unknown. Current source now includes a bounded safe `OrderHistoryValidationError.context.field` in `createFailureDiagnostic()`, covered by `order-history-observer.test.js`; this prospective fix does not identify the historical field. The only compressed session directory is the startup-retry session `2026-11-22_11-10-47-403b10b2-17aa-4760-a6e9-c36453cd73e2`: its logs identify clean pre-fix source `develop@3c78fcd0` (PR #1732), startup failure on missing intent `h-dff68008c72c47a59368ad-2` (`mapExecutionFillFact`, `project-harvester.js:295`), followed by process-lock retention because runtime shutdown was not confirmed. This is the separate #1743 startup-projection issue, predating the callback fix in merged PR #1750; no successful broker connection/order write occurred in that retry session. Cumulative `harvester.log` and `trace.log` fetches returned no text, while the compressed session logs were readable. The database dump remains uninspected.
 
 ### CI status at this checkpoint
-The exact-head CI run for digest assertion commit `9205fc81e5d640cca19e775ebb59ea1e42b4c5a4` exposed ESLint function-line and callback-parameter limits; commit `c5cb058` corrected them. The subsequent exact-head run on `842b502422ac01b4926d662cb81683f4151715a3` passed all six applicable workflows: Harvester Targeted Tests, Unit Tests, Test Coverage, Repository Quality, Dependency Audit and External Documentation Links. The read-only Binance TESTNET integration job was skipped.
+The exact-head CI run for digest assertion commit `9205fc81e5d640cca19e775ebb59ea1e42b4c5a4` exposed ESLint function-line and callback-parameter limits; commit `c5cb058` corrected them. The exact-head run on `842b502422ac01b4926d662cb81683f4151715a3` passed all six applicable workflows at that historical checkpoint. Later head `0370feb2ef7083366ccec607b918770acfcd7313` failed Repository Quality on Markdown formatting; the new docs correction is in `07c0b5f329bde96e883b06f6aad51f903e0a6ebe` and requires fresh CI.
 
 ## 9. Continuation prompt
 
 Continue issue #1362 and PR #1761 from this branch. Read root and nested AGENTS.md files, AI_AGENT_WORKFLOW.md, the task-compliance standard, Harvester roadmap, lifecycle audit, accounting invariants, domain test inventory, and #1763 scenario-test guidance before changing source. Re-open this archive review and the immutable archive at the exact source commit above.
 
-The branch is synchronized with current develop; Task Preflight is retired. The replay, digest, inventory, late-SELL accounting composition, and prospective order-history field diagnostics are implemented and all applicable CI passed on exact head `842b502422ac01b4926d662cb81683f4151715a3`. The only remaining historical evidence gap is the exact invalid field/root cause for the 28 order-history errors. Preserve the original archive and all historical unknowns; do not invent the field or inspect the database dump without explicit authorization. Keep historical facts distinct from synthetic runtime fixtures. Keep PR #1761 draft/unmerged; no TESTNET/LIVE writes or account mutations. Report evidence, unknowns, commit message, tests, CI, and the next single action at every checkpoint.
+Replay quoteQuantity fidelity, digest-chain integrity, corrected inventory paths, real late-SELL Portfolio/RecoveryLedger composition, and prospective order-history field diagnostics are implemented. The 842b502 all-green CI result is historical and is superseded by the #1776 synchronization and later documentation commit; exact-head CI on `07c0b5f329bde96e883b06f6aad51f903e0a6ebe` is pending. The 28 historical order-history errors remain unattributed. Preserve the original archive and unknowns; do not invent the field or inspect the database dump without explicit authorization. Keep historical facts distinct from synthetic runtime fixtures. Keep PR #1761 draft/unmerged; no TESTNET/LIVE writes or account mutations. Report evidence, unknowns, commit message, tests, CI, and the next single action at every checkpoint.
 }
 
 ## 2026-11-23 — continuation handoff
@@ -182,3 +182,13 @@ The branch is synchronized with current develop; Task Preflight is retired. The 
 - The prior all-green exact-head CI checkpoint was `842b502`; it does not certify later commits. Run all applicable CI on the current task head.
 - Historical root cause for the 28 order-history failures remains unknown. Do not inspect the database dump without explicit authorization.
 - Keep PR #1761 draft; update issue and PR after every implementation commit.
+
+
+## 2026-11-23 continuation — latest develop sync and exact-head CI
+
+- Current task branch head: `07c0b5f329bde96e883b06f6aad51f903e0a6ebe`.
+- Merge commit `d963dfc2e0eb3fc02cbd9c25b08ae5b92ce61df9` has parents `0370feb2ef7083366ccec607b918770acfcd7313` and `c1c715dc1b9b821d87d0a25e903c88c61e91ed3a` (current develop at synchronization). It incorporates the #1776 exact-decimal bootstrap/replay changes while preserving #1362 archive evidence.
+- The 0370feb2 exact-head CI run passed Harvester Targeted Tests, Unit Tests, Coverage, Dependency Audit and External Documentation Links; Repository Quality failed only on maintained Markdown formatting in `error-vocabulary.md` and Harvester `ROADMAP.md`. The latter defects were corrected in `07c0b5f`.
+- Exact-head CI for `07c0b5f` is pending; no final green claim is made.
+- The 28 historical `HARVESTER_ORDER_HISTORY_RECORD_INVALID` events remain unattributed. The selected terminal log does not include field/stage. The 96 MB cumulative Harvester and 97 MB trace files are present in the archive, but the repository connector cannot return their contents because of file-size limits; no database dump was inspected. Continue with bounded non-database evidence if another accessible source becomes available.
+- No TESTNET/LIVE writes, account mutations, archive rewrites, or restart-restoration changes.
