@@ -2317,26 +2317,13 @@ test("Fill event publication failure cannot interrupt successful accounting", as
 })
 
 
-test("publishes missing and mismatched Fill diagnostics without raw execution data", async () => {
-  const events = []
-  const { engine } = await createHarness({
-    eventPublisher: { publish: (event) => { events.push(event); return { ok: true } } },
-  })
-  await engine.processMarketPrice({
-    symbol: "DOGEUSDT",
-    priceEvent: {
-    symbol: "DOGEUSDT",
-    price: "100",
-    timestamp: 1
-  }
-  })
-  const [order] = engine.getOrders()
+async function assertMissingAndMismatchedFillDiagnostics({ engine, events, order } = {}) {
   const executedOrder = makePartiallyFilledOrder({ order })
   const missing = await engine.processUserDataEvent({
     event: {
       executedOrder,
       executionType: "TRADE",
-      rawExchangeMessage: { apiKey: "private" }
+      rawExchangeMessage: { apiKey: "private" },
     },
   })
   assert.equal(missing.ok, false)
@@ -2352,14 +2339,8 @@ test("publishes missing and mismatched Fill diagnostics without raw execution da
     market,
     side: order.side,
     price: order.limitPrice,
-    quantity: new Quantity({
-      amount: "0.5",
-      asset: baseAsset
-    }),
-    quoteQuantity: new Money({
-      amount: "49.975",
-      asset: quoteAsset
-    }),
+    quantity: new Quantity({ amount: "0.5", asset: baseAsset }),
+    quoteQuantity: new Money({ amount: "49.975", asset: quoteAsset }),
     liquidityRole: "MAKER",
     executedAt: 3,
     commissions: [],
@@ -2367,12 +2348,9 @@ test("publishes missing and mismatched Fill diagnostics without raw execution da
   })
   const mismatch = await engine.processUserDataEvent({
     event: {
-      executedOrder: makePartiallyFilledOrder({
-      order,
-      updatedAt: 3
-    }),
+      executedOrder: makePartiallyFilledOrder({ order, updatedAt: 3 }),
       executionType: "TRADE",
-      fill: wrongFill
+      fill: wrongFill,
     },
   })
   assert.equal(mismatch.ok, false)
@@ -2380,6 +2358,23 @@ test("publishes missing and mismatched Fill diagnostics without raw execution da
     event.name === "execution.invalid_fill" && event.data.reason === "IDENTITY_MISMATCH")
   assert.ok(mismatchEvent)
   assert.equal(mismatchEvent.data.fillBrokerOrderId, "different-broker-order")
+}
+
+test("publishes missing and mismatched Fill diagnostics without raw execution data", async () => {
+  const events = []
+  const { engine } = await createHarness({
+    eventPublisher: { publish: (event) => { events.push(event); return { ok: true } } },
+  })
+  await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: {
+    symbol: "DOGEUSDT",
+    price: "100",
+    timestamp: 1
+  }
+  })
+  const [order] = engine.getOrders()
+  await assertMissingAndMismatchedFillDiagnostics({ engine, events, order })
 })
 
 test("ignores unmatched manual order updates by default and publishes safe diagnostics", async () => {
