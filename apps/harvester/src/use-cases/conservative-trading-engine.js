@@ -807,7 +807,11 @@ const CANCELLING_STRATEGY_PAUSE_REASONS = new Set([
 ])
 
 function shouldCancelOwnedBuysForStrategyPause({ reason, error } = {}) {
-  if (error?.recoveryFailure?.retryable === true || error?.retryable === true) {
+  const retryableTransportFailure = error?.recoveryFailure?.retryable === true ||
+    error?.retryable === true ||
+    error?.code === "RPC_TIMEOUT" ||
+    error?.name === "RpcTimeoutError"
+  if (retryableTransportFailure) {
     return false
   }
   if (typeof reason !== "string" || NON_CANCELLING_STRATEGY_PAUSE_REASONS.has(reason)) {
@@ -816,8 +820,16 @@ function shouldCancelOwnedBuysForStrategyPause({ reason, error } = {}) {
   if (CANCELLING_STRATEGY_PAUSE_REASONS.has(reason) || reason.endsWith("_UNCONFIRMED")) {
     return true
   }
-  return ["ACKNOWLEDGED_", "REST_", "RECOVERY_SELL_", "TRAILING_BUY_"]
-    .some((prefix) => reason.startsWith(prefix))
+  return [
+    "ACKNOWLEDGED_",
+    "REST_",
+    "RECOVERY_SELL_",
+    "TRAILING_BUY_",
+    "EXECUTION_",
+    "TERMINAL_ORDER_",
+    "RS_TERMINAL_",
+    "ACCOUNTING_",
+  ].some((prefix) => reason.startsWith(prefix))
 }
 
 async function prepareAndCancelStrategySafetyPause({
