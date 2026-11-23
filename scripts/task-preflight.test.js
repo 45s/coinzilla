@@ -15,7 +15,6 @@ import {
   validatePreflightReport,
   extractTrackingIssueNumber,
   validatePullRequestEvidence,
-  mergePreflightScopes,
 } from './task-preflight.js';
 
 const CURRENT_WORKFLOW_RUN_URL = 'https://github.com/45s/coinzilla/actions/runs/123456789';
@@ -83,7 +82,13 @@ test('uses the live PR body but rejects a head that changed after the workflow e
   );
 });
 
-test('retains cumulative declared scope across preflight checkpoints for one issue', () => {
+test('retains cumulative declared scope across preflight checkpoints for one issue', async () => {
+  const { mergePreflightScopes } = await import('./task-preflight.js');
+  assert.equal(
+    typeof mergePreflightScopes,
+    'function',
+    'The validator must expose cumulative scope merging.',
+  );
   assert.deepEqual(
     mergePreflightScopes({
       reports: [
