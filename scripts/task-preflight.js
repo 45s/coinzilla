@@ -129,9 +129,12 @@ function hasVerificationEvidence(comments) {
 }
 export function validatePullRequestEvidence(context) {
   const errors = [];
-  validateTrackingReference({ context, errors });
-  validateReportedHead({ context, errors });
-  validateDocumentationImpact({ context, errors });
+  validateTrackingReference({ context,
+errors });
+  validateReportedHead({ context,
+errors });
+  validateDocumentationImpact({ context,
+errors });
   errors.push(...validateIssueBody(context.issueBody));
   if (!hasVerificationEvidence(context.issueComments || '')) {
     errors.push('Issue lacks command-based verification evidence and commit SHA.');
