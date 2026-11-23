@@ -237,7 +237,11 @@ async function createSafetyPauseHarness(options = {}) {
     currentPortfolio: options.initialPortfolio ?? new Portfolio(),
     currentRecoveryLedger: options.initialRecoveryLedger ?? RecoveryLedger.empty({ market }),
   }
-  const engine = createSafetyPauseEngine({ options, brokerState, state })
+  const engine = createSafetyPauseEngine({
+    options,
+    brokerState,
+    state,
+  })
   await engine.processBookTicker({
     symbol: "DOGEUSDT",
     bookTicker: {
@@ -313,6 +317,42 @@ function makeEventPublisher({ events, publish = () => ({ ok: true }) } = {}) {
       durable: true,
     }),
   }
+}
+
+async function createUnknownOwnedBuyHarness({ buyOrder, raisedBlockers }) {
+  return createSafetyPauseHarness({
+    initialState: {
+      orderRegistry: new OrderRegistry({
+        orders: [buyOrder],
+      }),
+    },
+    strategyPolicy: {
+      ...conservativeStrategyPolicy,
+      evaluate: () => {
+        throw new Error("forced strategy evaluation failure")
+      },
+    },
+    cancelThrow: true,
+    onOperationalStateStrategyMarketPaused: async () => ({
+      ok: true,
+      data: { durable: true },
+    }),
+    onSafetyBlockerRaised: async (blocker) => {
+      raisedBlockers.push(blocker)
+      return {
+        ok: true,
+        data: {
+          durable: true,
+          record: {
+            data: {
+              blockerId: "strategy-pause-blocker-1",
+            },
+          },
+        },
+      }
+    },
+    eventPublisher: makeEventPublisher({ events: [] }),
+  })
 }
 
 async function triggerStrategySafetyPause(harness) {
@@ -421,38 +461,9 @@ test("keeps an UNKNOWN owned BUY blocked and raises a durable safety blocker", a
     brokerOrderId: "broker-strategy-pause-unknown-buy",
   })
   const raisedBlockers = []
-  const harness = await createSafetyPauseHarness({
-    initialState: {
-      orderRegistry: new OrderRegistry({
-        orders: [buyOrder],
-      }),
-    },
-    strategyPolicy: {
-      ...conservativeStrategyPolicy,
-      evaluate: () => {
-        throw new Error("forced strategy evaluation failure")
-      },
-    },
-    cancelThrow: true,
-    onOperationalStateStrategyMarketPaused: async () => ({
-      ok: true,
-      data: { durable: true },
-    }),
-    onSafetyBlockerRaised: async (blocker) => {
-      raisedBlockers.push(blocker)
-      return {
-        ok: true,
-        data: {
-          durable: true,
-          record: {
-            data: {
-              blockerId: "strategy-pause-blocker-1",
-            },
-          },
-        },
-      }
-    },
-    eventPublisher: makeEventPublisher({ events: [] }),
+  const harness = await createUnknownOwnedBuyHarness({
+    buyOrder,
+    raisedBlockers,
   })
 
   await triggerStrategySafetyPause(harness)
@@ -609,7 +620,11 @@ test("allows only purpose-tagged RECOVERY_SELL through the strategy safety BUY g
     purpose: "RECOVERY_SELL",
   })
   const ordinarySell = gate({
-    order: { market: { symbol: "DOGEUSDT" }, side: "SELL", type: "LIMIT" },
+    order: {
+      market: { symbol: "DOGEUSDT" },
+      side: "SELL",
+      type: "LIMIT",
+    },
     purpose: "NORMAL_SELL",
   })
   const recoveryBuy = gate({
