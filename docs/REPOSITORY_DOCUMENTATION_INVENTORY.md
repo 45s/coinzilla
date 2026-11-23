@@ -369,3 +369,11 @@ The reference audit verified the relevant Markdown indexes and migration PR diff
 | `apps/harvester/docs/architecture/decisions/0007-initialize-empty-operational-state-ledger.md` | **KEEP — accepted Harvester decision, pending merge** | Defines automatic genesis creation only for a missing/empty Operational State Store directory; existing partial, unexpected, or corrupt data remains fail-closed. Indexed from the Harvester architecture guide and supersedes only the genesis-initialization clause of ADR-0001. |
 
 The recursive counts above remain the 2026-11-21 `develop` checkpoint; PR #1718 is listed separately until merged.
+
+## AI task issue knowledge capture — PR #1752 (2026-11-23)
+
+| Path | Disposition | Purpose / evidence |
+| --- | --- | --- |
+| `.github/ISSUE_TEMPLATE/bug-report.md` | **KEEP — current general bug template** | Adds the mandatory repository/domain standards preflight before request fields and the agreed problem, expected behavior, impact, investigation, proposed approach, acceptance, dependencies, verification and resolution sections. Delivered with issue [#1751](https://github.com/45s/coinzilla/issues/1751) / PR [#1752](https://github.com/45s/coinzilla/pull/1752). |
+
+The existing `.github/ISSUE_TEMPLATE/cross-domain-request.md` receives the same preflight block; its established cross-domain request fields remain intact. The canonical continuous issue knowledge-capture rule is in [AI_AGENT_WORKFLOW.md](../AI_AGENT_WORKFLOW.md). This pending addition does not change the historical recursive-count checkpoint above.
