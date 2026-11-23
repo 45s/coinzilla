@@ -344,6 +344,7 @@ test("gates BUYs before canceling only registered BUYs and reconciles cancellati
       }),
     },
     strategyPolicy: {
+      ...conservativeStrategyPolicy,
       evaluate: () => {
         throw new Error("forced strategy evaluation failure")
       },
@@ -397,6 +398,7 @@ test("gates BUYs before canceling only registered BUYs and reconciles cancellati
 test("reports a complete safety pause when there are no owned BUYs", async () => {
   const harness = await createSafetyPauseHarness({
     strategyPolicy: {
+      ...conservativeStrategyPolicy,
       evaluate: () => {
         throw new Error("forced strategy evaluation failure")
       },
@@ -425,7 +427,12 @@ test("keeps an UNKNOWN owned BUY blocked and raises a durable safety blocker", a
         orders: [buyOrder],
       }),
     },
-    strategyPolicy: { evaluate: () => { throw new Error("forced strategy evaluation failure") } },
+    strategyPolicy: {
+      ...conservativeStrategyPolicy,
+      evaluate: () => {
+        throw new Error("forced strategy evaluation failure")
+      },
+    },
     cancelThrow: true,
     onOperationalStateStrategyMarketPaused: async () => ({
       ok: true,
@@ -486,7 +493,12 @@ test("keeps the BUY gate active when pause fact persistence and publication fail
         orders: [buyOrder],
       }),
     },
-    strategyPolicy: { evaluate: () => { throw new Error("forced strategy evaluation failure") } },
+    strategyPolicy: {
+      ...conservativeStrategyPolicy,
+      evaluate: () => {
+        throw new Error("forced strategy evaluation failure")
+      },
+    },
     onOperationalStateStrategyMarketPaused: async () => ({
       ok: false,
       errors: [new Error("operational state store unavailable")],
