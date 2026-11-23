@@ -771,34 +771,36 @@ function createSerializedRecoveryCompletionFixture() {
     completionCalls }
 }
 
-test("starts the next recovery cycle from its new BUY basis without reusing prior retained inventory", async () => {
+function createNextCycleWorkflow() {
   const firstCycleBuy = createFill({
     tradeId: "cycle-one-buy",
     quantity: "2",
     quoteQuantity: "20",
     price: "10",
-  });
+  })
   const firstCycleSell = createFill({
     tradeId: "cycle-one-sell",
     quantity: "1",
     quoteQuantity: "21",
     side: "SELL",
     price: "21",
-  });
+  })
   const initialPortfolio = new Portfolio()
     .applyFill({ fill: firstCycleBuy, strategyId: StrategyId.COIN_GRABBER }).portfolio
-    .applyFill({ fill: firstCycleSell, strategyId: StrategyId.COIN_GRABBER }).portfolio;
+    .applyFill({ fill: firstCycleSell, strategyId: StrategyId.COIN_GRABBER }).portfolio
   const initialLedger = RecoveryLedger.empty({ market })
     .applyFill({ fill: firstCycleBuy, strategyId: StrategyId.COIN_GRABBER }).ledger
-    .applyFill({ fill: firstCycleSell, strategyId: StrategyId.COIN_GRABBER }).ledger;
-  const workflow = createPortfolioWorkflow({
+    .applyFill({ fill: firstCycleSell, strategyId: StrategyId.COIN_GRABBER }).ledger
+  return createPortfolioWorkflow({
     evaluateStrategy: () => ({ action: "NO_ACTION" }),
     logger: {},
     initialPortfolio,
     initialRecoveryLedgers: new Map([[market.id, initialLedger]]),
-  });
+  })
+}
 
-  const completion = await workflow.completeRecoveryCycle({
+async function completeFirstRecoveryCycle({ workflow }) {
+  return workflow.completeRecoveryCycle({
     marketId: market.id,
     keepQuantity: "1",
     minProfit: "1",
@@ -807,36 +809,43 @@ test("starts the next recovery cycle from its new BUY basis without reusing prio
       brokerOrderId: "broker-order-cycle-one-sell",
       limitPrice: "21",
     }),
-  });
+  })
+}
 
-  assert.equal(completion.ok, true, "The first recovery cycle must complete after its full cost plus the exact profit threshold is recovered.");
-  const retainedPosition = workflow.getPortfolio().getPosition({ marketId: market.id });
-  assert.equal(retainedPosition.baseQuantity.amount, "0", "The completed cycle must leave no active inventory.");
-  assert.equal(retainedPosition.freeBaseQuantity.amount, "1", "The first cycle's keepQuantity must remain in the permanent free-inventory bucket.");
-  assert.equal(retainedPosition.spent.amount, "0", "The completed cycle's active cost basis must reset.");
-  assert.equal(workflow.getRecoveryLedger({ marketId: market.id }).buyCost, "0", "The completed cycle's ledger cost must reset.");
-  assert.equal(workflow.getRecoveryLedger({ marketId: market.id }).netSellProceeds, "0", "The completed cycle's proceeds must reset without erasing fill identities.");
+function assertFirstCycleRetainedInventory({ workflow }) {
+  const position = workflow.getPortfolio().getPosition({ marketId: market.id })
+  const ledger = workflow.getRecoveryLedger({ marketId: market.id })
+  assert.equal(position.baseQuantity.amount, "0", "The completed cycle must leave no active inventory.")
+  assert.equal(position.freeBaseQuantity.amount, "1", "The first cycle's keepQuantity must remain in the permanent free-inventory bucket.")
+  assert.equal(position.spent.amount, "0", "The completed cycle's active cost basis must reset.")
+  assert.equal(ledger.buyCost, "0", "The completed cycle's ledger cost must reset.")
+  assert.equal(ledger.netSellProceeds, "0", "The completed cycle's proceeds must reset without erasing fill identities.")
+}
 
-  const nextCycleBuy = createFill({
+async function applyNextCycleBuy({ workflow }) {
+  const fill = createFill({
     tradeId: "cycle-two-buy",
     quantity: "2",
     quoteQuantity: "20",
     price: "10",
-  });
-  const nextCycleResult = await workflow.updateTradingAccounting({ fill: nextCycleBuy });
+  })
+  return workflow.updateTradingAccounting({ fill })
+}
 
-  assert.equal(nextCycleResult.ok, true, "The next cycle's canonical BUY fill must apply successfully.");
-  const nextPosition = workflow.getPortfolio().getPosition({ marketId: market.id });
-  const nextLedger = workflow.getRecoveryLedger({ marketId: market.id });
-  assert.equal(nextPosition.baseQuantity.amount, "2", "Only the new cycle's BUY quantity must become active inventory.");
-  assert.equal(nextPosition.freeBaseQuantity.amount, "1", "The previous cycle's retained quantity must remain separate and untouched.");
-  assert.equal(nextPosition.totalBaseQuantity.amount, "3", "Total inventory must include both the prior retained unit and the new active inventory.");
-  assert.equal(nextPosition.spent.amount, "20", "The new recovery basis must contain only the second cycle's BUY cost.");
-  assert.equal(nextLedger.buyCost, "20", "The RecoveryLedger must start the new cycle from the new BUY cost.");
-  assert.equal(nextLedger.netSellProceeds, "0", "Prior-cycle SELL proceeds must not reduce the next cycle's recovery target.");
-  assert.equal(nextLedger.appliedFillIds.length, 3, "Fill identities from the completed cycle must remain deduplicated alongside the new BUY.");
+function assertNextCycleAccounting({ workflow }) {
+  const position = workflow.getPortfolio().getPosition({ marketId: market.id })
+  const ledger = workflow.getRecoveryLedger({ marketId: market.id })
+  assert.equal(position.baseQuantity.amount, "2", "Only the new cycle's BUY quantity must become active inventory.")
+  assert.equal(position.freeBaseQuantity.amount, "1", "The previous cycle's retained quantity must remain separate and untouched.")
+  assert.equal(position.totalBaseQuantity.amount, "3", "Total inventory must include both the prior retained unit and the new active inventory.")
+  assert.equal(position.spent.amount, "20", "The new recovery basis must contain only the second cycle's BUY cost.")
+  assert.equal(ledger.buyCost, "20", "The RecoveryLedger must start the new cycle from the new BUY cost.")
+  assert.equal(ledger.netSellProceeds, "0", "Prior-cycle SELL proceeds must not reduce the next cycle's recovery target.")
+  assert.equal(ledger.appliedFillIds.length, 3, "Fill identities from the completed cycle must remain deduplicated alongside the new BUY.")
+}
 
-  const decision = evaluateConservativeStrategy({
+function evaluateNextCycleDecision({ workflow }) {
+  return evaluateConservativeStrategy({
     marketPrice: { symbol: "BTCUSDT", price: "10", timestamp: 100 },
     pairConfig: {
       priceStepPercent: 1,
@@ -849,7 +858,7 @@ test("starts the next recovery cycle from its new BUY basis without reusing prio
     },
     settings: {},
     portfolio: workflow.getPortfolio(),
-    recoveryLedger: nextLedger,
+    recoveryLedger: workflow.getRecoveryLedger({ marketId: market.id }),
     marketMetadata: {
       market,
       orderType: "LIMIT_MAKER",
@@ -864,12 +873,26 @@ test("starts the next recovery cycle from its new BUY basis without reusing prio
     },
     activeOrders: [],
     lastBuyPrice: "10",
-  });
+  })
+}
 
-  const recoverySell = decision.actions.find(({ side }) => side === "SELL");
-  assert.equal(recoverySell.quantity, "1", "The next recovery SELL must exclude the previous cycle's retained unit and preserve its own keepQuantity.");
-  assert.equal(recoverySell.price, "20.01", "The next recovery SELL must recover only the new 20 quote-unit basis plus 0.01 minProfit.");
-});
+function assertNextCycleRecoverySell({ decision }) {
+  const recoverySell = decision.actions.find(({ side }) => side === "SELL")
+  assert.equal(recoverySell.quantity, "1", "The next recovery SELL must exclude the previous cycle's retained unit and preserve its own keepQuantity.")
+  assert.equal(recoverySell.price, "20.01", "The next recovery SELL must recover only the new 20 quote-unit basis plus 0.01 minProfit.")
+}
+
+test("starts the next recovery cycle from its new BUY basis without reusing prior retained inventory", async () => {
+  const workflow = createNextCycleWorkflow()
+  const completion = await completeFirstRecoveryCycle({ workflow })
+  assert.equal(completion.ok, true, "The first recovery cycle must complete after its full cost plus the exact profit threshold is recovered.")
+  assertFirstCycleRetainedInventory({ workflow })
+  const nextCycleResult = await applyNextCycleBuy({ workflow })
+  assert.equal(nextCycleResult.ok, true, "The next cycle's canonical BUY fill must apply successfully.")
+  assertNextCycleAccounting({ workflow })
+  const decision = evaluateNextCycleDecision({ workflow })
+  assertNextCycleRecoverySell({ decision })
+})
 
 test("serializes recovery completion behind an in-flight durable fill", async () => {
   const {
