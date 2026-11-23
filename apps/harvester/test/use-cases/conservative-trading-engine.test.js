@@ -941,8 +941,10 @@ function createCancellationRacedSellFill({ fixture, pendingSellOrder }) {
     status: "PARTIALLY_FILLED",
     commissions: [
       new Commission({
-        amount: "0.001",
-        asset: fixture.quoteAsset,
+        amount: new Money({
+          amount: "0.001",
+          asset: fixture.market.quoteAsset,
+        }),
       }),
     ],
   });
