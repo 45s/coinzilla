@@ -56,8 +56,6 @@ export function parseScenarioCliArguments({ argv = [] } = {}) {
       version = true
     } else if (option.name === "--list") {
       listOnly = true
-    } else if (option.name === "--all") {
-      // Running all scenarios is the default; this flag is explicit documentation.
     } else if (option.name === "--report-dir") {
       const value = option.value ?? argv[index + 1]
       if (!value) {
@@ -106,7 +104,6 @@ function printUsage() {
     "  --status TEST-MAPPED",
     "  --report-dir reports/conservative-scenarios",
     "  --list",
-    "  --all",
     "  --help",
     "  --version",
   ].join("\n"))

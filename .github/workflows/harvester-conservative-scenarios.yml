@@ -30,7 +30,7 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@d3e3c6b8c6d7e2a8d1b3d0b3f3d7e0c6b7d4e3b1
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
         with:
           version: 10.20.0
           run_install: false
