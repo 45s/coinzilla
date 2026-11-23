@@ -23,6 +23,7 @@ export const scenarios = [
     ],
     expectedState: {
       durableFacts: "idempotent and validated",
+      offlineProjection: "candidateOnly remains true, restorationEnabled remains false, and exchange reconciliation is required before any readiness decision",
       incompleteOrConflictingFacts: "fail closed",
       runtime: "does not infer that offline replay enables process restart restoration",
     },

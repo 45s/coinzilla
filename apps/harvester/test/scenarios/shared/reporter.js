@@ -112,7 +112,7 @@ function buildCoverage({
     testsNotMappedToAnyScenario: criticalTests.filter((testCase) => (
       !mappedTests.has(`${testCase.path}::${testCase.name}`)
     )),
-    testDiscoveryScope: "Named tests registered in apps/harvester/docs/critical-behaviors.json; this is not a scan of every Harvester test file.",
+    testDiscoveryScope: "Unmapped-test analysis covers named tests registered in apps/harvester/docs/critical-behaviors.json. Supplemental scenario-specific tests are linked in additional-test-mappings.js; this is not a scan of every Harvester test file.",
   }
 }
 
