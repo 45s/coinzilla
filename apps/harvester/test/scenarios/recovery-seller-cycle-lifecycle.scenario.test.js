@@ -33,6 +33,15 @@ function assertNextCycleBlocked({ state, nextCycleId }) {
   )
 }
 
+function assertClosedCycleCanAdvance({ state, nextCycleId }) {
+  const nextCycle = startNextRecoverySellerCycle({
+    previousState: state,
+    nextCycleId,
+  })
+  assert.equal(nextCycle.status, "ACCUMULATING",
+    "A new cycle may start only after the original SELL is confirmed, reconciled and profitable.")
+}
+
 test("an unknown SELL outcome retains its only identity until reconciliation completes", () => {
   const submitted = createSubmittedCycle()
   const unknown = markRecoverySellerCycleSellUnknown({
@@ -88,11 +97,10 @@ test("an unknown SELL outcome retains its only identity until reconciliation com
     "The original SELL may close the cycle only after complete reconciliation and passing profitability.")
   assert.equal(reconciled.sellOrderIdentity.brokerOrderId, "binance-order-001",
     "Reconciliation may enrich the original identity with its confirmed broker order ID.")
-  assert.equal(startNextRecoverySellerCycle({
-    previousState: reconciled,
+  assertClosedCycleCanAdvance({
+    state: reconciled,
     nextCycleId: "rs-lifecycle-cycle-002",
-  }).status, "ACCUMULATING",
-  "A new cycle may start only after the original SELL is confirmed, reconciled and profitable.")
+  })
 })
 
 for (const terminalOrderStatus of ["CANCELED", "REJECTED", "EXPIRED"]) {
