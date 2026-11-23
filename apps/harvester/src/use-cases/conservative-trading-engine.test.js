@@ -11177,7 +11177,7 @@ test("continues recovery-only market evaluation after the shutdown BUY gate", as
     baseFreeBalance: "1",
     accountingApplied: true,
     strategyPolicy,
-    isStopping: () => shutdownStarted,
+    isStopping: () => shutdownState.started,
   })
   const initialResult = await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
@@ -11289,9 +11289,31 @@ function createLateSellScenarioAccounting({ portfolio, recoveryLedger } = {}) {
   }
 }
 
+async function establishLateSellShutdownSafety({ harness, shutdownState } = {}) {
+  await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  harness.engine.beginShutdown()
+  shutdownState.started = true
+  await harness.engine.cancelOwnedBuyOrdersForShutdown()
+  assertNoShutdownSafetyPauses({ harness })
+  const initialCoverage = await harness.engine.auditShutdownRecoverySellCoverage()
+  const initialSafety = await harness.engine.auditShutdownSafety({
+    reconciliationComplete: true,
+    journalDurable: true,
+    coverageResult: initialCoverage,
+  })
+  assert.equal(
+    initialSafety.data.markets[0].status,
+    "SAFE_TO_SHUTDOWN",
+    `Initial shutdown safety blockers: ${JSON.stringify(initialSafety.data.markets[0].blockers)}. Pause callbacks: ${JSON.stringify(harness.pauses)}`,
+  )
+}
+
 async function prepareLateSellShutdownScenario({ fillFraction, cancelUpdatedAt } = {}) {
   const seeded = makeSeededRecoveryState()
-  let shutdownStarted = false
+  const shutdownState = { started: false }
   let cancelSellExecutedQuantity = "0"
   const accounting = createLateSellScenarioAccounting({
     portfolio: seeded.portfolio,
@@ -11307,30 +11329,7 @@ async function prepareLateSellShutdownScenario({ fillFraction, cancelUpdatedAt }
     cancelUpdatedAt,
     isStopping: () => shutdownStarted,
   })
-  await harness.engine.processMarketPrice({
-    symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1,
-    },
-  })
-
-  harness.engine.beginShutdown()
-  shutdownStarted = true
-  await harness.engine.cancelOwnedBuyOrdersForShutdown()
-  assertNoShutdownSafetyPauses({ harness })
-  const initialCoverage = await harness.engine.auditShutdownRecoverySellCoverage()
-  const initialSafety = await harness.engine.auditShutdownSafety({
-    reconciliationComplete: true,
-    journalDurable: true,
-    coverageResult: initialCoverage,
-  })
-  assert.equal(
-    initialSafety.data.markets[0].status,
-    "SAFE_TO_SHUTDOWN",
-    `Initial shutdown safety blockers: ${JSON.stringify(initialSafety.data.markets[0].blockers)}. Pause callbacks: ${JSON.stringify(harness.pauses)}`,
-  )
+  await establishLateSellShutdownSafety({ harness, shutdownState })
 
   const sellOrder = harness.engine.getOrders().find((order) =>
     order.side === "SELL" && ["OPEN", "PARTIALLY_FILLED"].includes(order.status))
