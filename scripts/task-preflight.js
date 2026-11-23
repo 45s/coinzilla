@@ -100,7 +100,7 @@ export function validatePreflightReport({ report, context }) {
 export function extractTrackingIssueNumber(body) {
   const references = [...(body || '').matchAll(/#(\d+)/g)];
   const tracking = (body || '').match(/(?:close[sd]?|fix(?:es|ed)?|resolve[sd]?|tracking issue)\s*:?\s*#(\d+)/i);
-  if (references.length !== 1 || !tracking || references[0][1] !== tracking[1]) return null;
+  if (references.length !== 1 || !tracking || references[0][1] !== tracking[1]) {return null;}
   return Number(tracking[1]);
 }
 function validateTrackingReference({ context, errors }) {
@@ -115,9 +115,9 @@ function validateReportedHead({ context, errors }) {
 }
 function getSectionContent(body, title) {
   const lines = body.split(/\r?\n/);
-  const heading = '## ' + title.toLowerCase();
+  const heading = `## ${  title.toLowerCase()}`;
   const start = lines.findIndex((line) => line.trim().toLowerCase() === heading);
-  if (start < 0) return null;
+  if (start < 0) {return null;}
   const content = [];
   for (let index = start + 1; index < lines.length && !/^##\s+/.test(lines[index]); index += 1) {
     content.push(lines[index]);
@@ -137,7 +137,7 @@ function validateDocumentationImpact({ context, errors }) {
   );
   for (const path of changedDocs) {
     if (!documentedPaths.has(path)) {
-      errors.push('Changed documentation path is missing from PR documentation impact: ' + path);
+      errors.push(`Changed documentation path is missing from PR documentation impact: ${  path}`);
     }
   }
   if ((context.changedPaths || []).length && changedDocs.length === 0 &&
