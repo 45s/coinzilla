@@ -15,6 +15,7 @@ import {
   validatePreflightReport,
   extractTrackingIssueNumber,
   validatePullRequestEvidence,
+  mergePreflightScopes,
 } from './task-preflight.js';
 
 const CURRENT_WORKFLOW_RUN_URL = 'https://github.com/45s/coinzilla/actions/runs/123456789';
@@ -79,6 +80,18 @@ test('uses the live PR body but rejects a head that changed after the workflow e
     }),
     /head changed after the workflow event/i,
     'A rerun must fail closed if the PR head moved after the workflow event.',
+  );
+});
+
+test('retains cumulative declared scope across preflight checkpoints for one issue', () => {
+  assert.deepEqual(
+    mergePreflightScopes({
+      reports: [
+        { scopePaths: ['.github', 'scripts', 'docs'] },
+        { scopePaths: ['.github', 'docs/engineering', 'AI_AGENT_WORKFLOW.md'] },
+      ],
+    }),
+    ['.github', 'AI_AGENT_WORKFLOW.md', 'docs', 'docs/engineering', 'scripts'],
   );
 });
 
