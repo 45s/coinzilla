@@ -52,6 +52,8 @@ Examples:
 - **Tracking issue:** <!-- Link the live task contract and acceptance criteria. -->
 - **Commit sequence:** <!-- Summarize the meaningful test/implementation/docs increments; no unrelated or opaque bulk commit. -->
 - **Current checkpoint:** <!-- What is complete, what remains, and the next action? -->
+- [ ] The tracking issue is the current task source of truth: meaningful findings, evidence, decisions, rejected approaches, blockers and exact-SHA verification are recorded; the latest checkpoint includes the branch/head, next action and handoff state.
+- **Latest issue checkpoint:** <!-- Link the meaningful finding/decision/handoff comment, or state that the current issue description is up to date and no separate event comment is needed. -->
 - **Handoff readiness:** <!-- Can another agent resume from this issue, PR, branch and canonical docs alone? Link the latest checkpoint comment. -->
 - **Known blockers / decisions:** <!-- State evidence and safe boundaries, or None. -->
 

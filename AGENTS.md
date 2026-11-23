@@ -43,6 +43,7 @@ Every AI agent and automated contributor MUST complete the task-start gate in th
 Read-only discovery is permitted. No implementation, document edits, configuration/state mutation, PR creation, or adjacent work may begin until the preflight is complete and readiness is established. Each agent completes its own review. If required material is inaccessible or requirements conflict without explicit precedence, stop and report the exact blocker.
 
 **Task continuity and commit discipline — mandatory.** For every non-trivial task, use a GitHub Issue as the live task contract and follow the incremental commit, checkpoint and handoff protocol in [AI_AGENT_WORKFLOW.md](AI_AGENT_WORKFLOW.md#11-incremental-commits-and-resumable-task-handoffs--mandatory). Keep issue scope/acceptance/status, branch commits, PR description, roadmap and affected living documentation synchronized as work changes. A new agent must be able to resume without private chat context. Do not create a parallel task log or claim validation beyond the exact SHA actually checked.
+The same workflow's [Continuous issue knowledge capture](AI_AGENT_WORKFLOW.md#continuous-issue-knowledge-capture--mandatory) rule is mandatory: record meaningful findings, evidence, decisions, rejected approaches, experiment outcomes, blockers and exact verification promptly while work is active; keep the issue description as the current snapshot and comments as the significant chronological record.
 
 ## Documentation governance — mandatory
 

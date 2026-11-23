@@ -18,6 +18,7 @@ For every non-trivial task, follow the mandatory [incremental commit and handoff
 
 - [ ] A GitHub Issue (or explicitly adopted existing issue) describes the goal, owning scope, exclusions, requirements/invariants, acceptance criteria, dependencies, verification and documentation impact.
 - [ ] The issue, branch, PR and owning roadmap link to one another where applicable; update task state as scope, decisions, blockers and progress change.
+- [ ] Follow [Continuous issue knowledge capture](../../AI_AGENT_WORKFLOW.md#continuous-issue-knowledge-capture--mandatory): record meaningful discoveries, evidence, decisions, rejected approaches, experiment outcomes, blockers and exact verification promptly; keep the issue description current and use comments for significant chronological events and handoffs.
 - [ ] Work is split into cohesive, reviewable commits using `<type>(<scope>): <imperative outcome>`; preserve test-first RED/GREEN evidence and avoid unrelated or progress-only commits.
 - [ ] Follow the commit-to-checkpoint loop in the canonical workflow: after each meaningful increment, inspect and validate it, commit and push it, synchronize with latest `develop` before pushing, and refresh the issue's current-state summary with the exact head SHA and next action before starting another increment.
 - [ ] Keep implementation, tests, and affected living documentation consistent in the same logical increment; when no documentation change is warranted, record the reason. Keep the roadmap status accurate without turning it into a commit diary.
