@@ -1,4 +1,4 @@
-name: JavaScript Syntax
+name: Repository Quality
 
 on:
   pull_request:
@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: javascript-quality-${{ github.workflow }}-${{ github.ref }}
+  group: repository-quality-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -75,16 +75,6 @@ jobs:
 
       - name: Check agent policy and domain ownership
         run: node --test scripts/check-agent-policy.test.js && node scripts/check-agent-policy.js
-      - name: Test Task Preflight workflow separation
-        run: node --test .github/workflows/task-preflight.test.js
-      - name: Test task preflight validator
-        run: pnpm run test:task-preflight
-
-      - name: Enforce PR task preflight and evidence
-        if: github.event_name == 'pull_request' && github.event.pull_request.base.ref == 'develop'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: pnpm run task:preflight -- --pull-request
 
       - name: Test AST module dependency analysis
         run: pnpm run test:module-dependency-analysis
@@ -189,18 +179,117 @@ jobs:
           LINT_CHANGED_HEAD_REF: ${{ github.event.pull_request.head.sha }}
         run: pnpm lint:changed
 
+  task-preflight-tests:
+    name: Task Preflight tests
+    if: github.event_name == 'pull_request' && github.event.pull_request.base.ref == 'develop'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Check out pull-request head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        with:
+          version: 12.11.2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24.x
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Test task preflight validator
+        run: pnpm run test:task-preflight
+
+      - name: Test Task Preflight workflow separation
+        run: node --test .github/workflows/task-preflight.test.js
+
+  publish-task-preflight-evidence:
+    name: Publish Task Preflight evidence
+    needs: task-preflight-tests
+    if: github.event_name == 'pull_request' && github.event.pull_request.base.ref == 'develop'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      issues: write
+      pull-requests: read
+    steps:
+      - name: Publish exact-head verification evidence
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          ISSUE_NUMBER="$(printf '%s\\n' "${PR_BODY}" | grep -Eio '(close[sd]?|fix(e[sd])?|resolve[sd]?) #[0-9]+' | grep -Eo '[0-9]+' | head -n 1 || true)"
+          if [[ ! "${ISSUE_NUMBER}" =~ ^[1-9][0-9]*$ ]]; then
+            echo "Could not extract exactly one closing issue reference from the PR description."
+            exit 1
+          fi
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/${ISSUE_NUMBER}/comments" \
+            -f body="Verification evidence: pnpm run test:task-preflight passed for PR head ${PR_HEAD_SHA}. Actions run: ${RUN_URL}"
+
+  task-preflight:
+    name: Task Preflight
+    needs: publish-task-preflight-evidence
+    if: github.event_name == 'pull_request' && github.event.pull_request.base.ref == 'develop'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: read
+      pull-requests: read
+    steps:
+      - name: Check out exact pull-request head with complete history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        with:
+          version: 12.11.2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24.x
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Enforce PR task preflight and evidence
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: pnpm run task:preflight -- --pull-request
+
   required-javascript-quality:
     name: Check JavaScript syntax
     runs-on: ubuntu-latest
     needs:
       - workspace-quality
       - strict-changed
+      - task-preflight
     if: always()
     steps:
       - name: Require workspace and applicable changed-file checks
         env:
           WORKSPACE_RESULT: ${{ needs.workspace-quality.result }}
           STRICT_RESULT: ${{ needs.strict-changed.result }}
+          TASK_PREFLIGHT_RESULT: ${{ needs.task-preflight.result }}
           EVENT_NAME: ${{ github.event_name }}
           BASE_REF: ${{ github.event.pull_request.base.ref }}
         run: |
@@ -212,4 +301,8 @@ jobs:
             echo "Strict changed-file ESLint failed or did not run: ${STRICT_RESULT}"
             exit 1
           fi
-          echo "Workspace JavaScript quality and all applicable strict checks passed."
+          if [ "${EVENT_NAME}" = "pull_request" ] && [ "${BASE_REF}" = "develop" ] && [ "${TASK_PREFLIGHT_RESULT}" != "success" ]; then
+            echo "Task Preflight failed or did not run: ${TASK_PREFLIGHT_RESULT}"
+            exit 1
+          fi
+          echo "Workspace JavaScript quality, Task Preflight, and all applicable strict checks passed."
