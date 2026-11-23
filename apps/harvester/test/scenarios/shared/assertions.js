@@ -1,7 +1,12 @@
 import assert from "node:assert/strict"
 
 export function getScenarioRunFailures({ results = [] } = {}) {
-  return results.filter((result) => ["FAILED", "TEST_NOT_FOUND"].includes(result.status))
+  return results.filter((result) => {
+    if (["FAILED", "TEST_NOT_FOUND", "SKIPPED"].includes(result.status)) {
+      return true
+    }
+    return result.status === "NOT_EXECUTABLE" && result.coverageStatus !== "UNSUPPORTED"
+  })
 }
 
 export function assertScenarioRunSucceeded({ results = [] } = {}) {
