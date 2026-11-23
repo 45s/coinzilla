@@ -1,11 +1,73 @@
 # Harvester Roadmap
 
+## Conservative trading correctness and exhaustive scenario coverage — issue #1763
+
+**Objective:** prove Conservative trading calculations, accounting, lifecycle transitions and safety decisions with source-mapped deterministic evidence. This complements (does not replace) focused unit tests and existing application/replay tests. The canonical [Conservative Domain Specification](./docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md) remains the sole behavior authority; the [scenario-test guide](./docs/domain/CONSERVATIVE_DOMAIN_SCENARIO_TESTS.md) defines authoring conventions; [issue #1763](https://github.com/45s/coinzilla/issues/1763) owns the exhaustive matrix and phase-by-phase evidence.
+
+**Non-negotiable quality bar**
+
+- Exact decimal inputs and independently derived expected values; no floating-point arithmetic in financial test oracles.
+- Real domain objects/components for the behavior under test; mock only external ports at application boundaries.
+- Every meaningful state transition proves complete state, accounting deltas, emitted intents/dispositions, idempotency, conflict rejection and failure atomicity.
+- Every financial invariant is checked across Portfolio, Position, RecoveryLedger, fills and order execution/commitment projections.
+- Offline, deterministic, credential-free by default. No live/TESTNET order operations or exchange writes.
+- No invented or changed trading rule. Unresolved or unsupported behavior is recorded as blocked/unsupported until an explicit contract decision exists.
+
+**Execution strategy:** one small, reviewable PR per vertical slice. Prefer a test-only RED PR followed by the smallest GREEN production+test PR when a real defect is found. Do not combine unrelated domains or broad refactors. Each PR updates the issue matrix and evidence; the roadmap is synchronized at phase boundaries.
+
+### Phased delivery plan
+
+| Phase | Small PR-sized deliverable | Exit criteria |
+| --- | --- | --- |
+| 0. Documentation and gates | Finalize #1764 guide, state-machine model, roadmap, issue matrix schema and links; fix PR metadata/preflight gate. | Docs agree; exact-head required CI passes; no claim of implementation coverage. |
+| 1. Source/evidence map | Map canonical spec rules to production modules, current unit tests, application tests, replay tests and inventory. | Every rule has an owner and evidence status; no tests added before existing coverage is understood. |
+| 2. Test oracle audit | Identify financial test oracles using Number/float conversions or production-derived expected values; replace with independent exact literals/scaled integer arithmetic in isolated PRs. | Financial expected values are independent and exact; existing intended behavior unchanged. |
+| 3. Core arithmetic | Recovery target, net proceeds, fee reserve, base/quote/third-asset commissions, tick/step rounding and decimal boundaries. | Normal, equality, just-below/above, invalid, tiny/large and exchange-filter cases have exact assertions. |
+| 4. BUY accounting | Initial and subsequent BUY fills, cost basis, net base, VWAP/reference, commissions, investment cap and commitments. | Canonical fills reconcile to Portfolio/Position/RecoveryLedger and BUY decisions. |
+| 5. SELL accounting | Partial/multiple/full SELL fills, proceeds, fee assets, remaining inventory, realized profit and recovery target. | Gross-to-net economics and active/retained inventory reconcile exactly. |
+| 6. Strategy decision scenarios | Initial BUY, second BUY, BUY suppression, recovery SELL planning/replacement, no-action dispositions. | Real domain composition emits exact intent fields and proves absence of unsafe/duplicate intents. |
+| 7. State-machine transitions | Transition matrix plus separate PRs for fill/order transitions, cancellation, reconciliation, completion and next-cycle eligibility. | Every applicable legal/forbidden transition has complete-state and no-mutation proof. |
+| 8. Idempotency and event ordering | Duplicate/replayed fills, stale/reordered reports, conflicting identities and independent-event ordering. | Exactly-once accounting and deterministic outcomes under supported event orderings. |
+| 9. Failure atomicity / fail-closed | Invalid or missing evidence, unknown outcomes, persistence/projection failures, filter failures and retry boundaries. | No partial accounting commit or unsafe action; recovery requires authoritative evidence. |
+| 10. Inventory and exchange constraints | keepQuantity, retained free inventory, constrained dust, shared assets/markets, min/max/notional/tick/step. | No external inventory adoption; no sellable residual hidden as dust; market/account projections reconcile. |
+| 11. Application integration | Only uncovered orchestration seams: submit barriers, cancel/fill races, REST/stream reconciliation, durable persistence and shutdown. | Each behavior is owned by an application test with exact evidence; domain tests do not fake orchestration. |
+| 12. Replay and regression | Reproduce relevant historical incidents/event sequences using sanitized deterministic fixtures. | Replay results match live-domain accounting and preserve idempotency; no external connectivity. |
+| 13. Coverage closure | Audit every matrix row, close gaps in small PRs, update inventory and roadmap with exact-head CI. | No applicable row missing evidence; unsupported/blocked rows have reason/owner; all required checks pass. |
+
+### Small-PR operating protocol
+
+For each slice:
+
+1. Select one or a few related matrix rows and identify the authoritative spec clauses and source owner.
+2. Inspect existing tests and reuse existing canonical factories. Record why current tests do or do not prove the requirement.
+3. Write a failing regression test first when a defect is suspected; assert the business invariant, not an implementation call.
+4. Run the narrowest deterministic test target, then relevant package tests and required workspace checks.
+5. If production code must change, keep the change minimal and preserve public behavior outside the specified defect.
+6. Run the exact relevant suite again; record RED/GREEN evidence, test path, commit/PR and exact verified head SHA.
+7. Update #1763 matrix status and the domain test inventory. Do not mark a row covered until evidence is merged to develop and required CI passes.
+8. Keep each PR independently reviewable and revertible. Avoid drive-by cleanup, unrelated renames and broad fixture rewrites.
+
+### Coverage status vocabulary
+
+- **COVERED:** named test path and assertions verified on merged develop with required CI evidence.
+- **PARTIAL:** some dimensions are tested, but boundary, accounting, state, failure or interaction proof is incomplete.
+- **MISSING:** applicable requirement has no adequate executable evidence.
+- **BLOCKED:** cannot be tested safely until a specification/product/architecture decision or prerequisite exists; include owner and unblock condition.
+- **UNSUPPORTED:** explicitly outside the supported contract; cite the reason and do not fabricate behavior.
+
+### Release/initiative completion gate
+
+Do not claim 100% correctness from line/branch coverage. Completion means every applicable canonical rule and risk row is mapped to adequate executable evidence at the correct layer; every financial invariant and lifecycle transition is protected; all known gaps are closed or explicitly blocked/unsupported; no test oracle derives expected results from the implementation under test; and required CI passes on the exact merged head. Coverage percentages remain useful diagnostics, not the acceptance definition.
+
+**Current status:** documentation foundation exists in PR #1764. Source-driven audit, scenario implementation and phase execution are pending. This roadmap is intentionally granular so work can start with Phase 1 immediately after the documentation PR is reviewed/merged.
+
 ## Conservative strategy safety pause cancels current-process-owned BUYs — issue #1749
 
-- [x] Completed in merged [PR #1755](https://github.com/45s/coinzilla/pull/1755). Exact head `1638e83c033826050cc5b9a845819f626992bbe4`; all six configured workflows succeeded, including full workspace unit tests and coverage.
-- Safety-critical pauses activate the in-memory BUY gate first, cancel/reconcile only active BUYs owned by the current process, reconcile cancellation-racing fills before terminal cancellation status, prevent recursive cancellation, and retain a durable blocker when cancellation/pause evidence is incomplete.
-- Recovery Seller evaluation and only purpose-tagged `RECOVERY_SELL` submissions remain available through the strategy-safety gate. Startup-snapshot, manual, external and prior-process orders remain untouched.
-- No exchange operations, process restart, automatic pause restoration, or operator Pause semantics changes were performed.
+- In progress in [PR #1755](https://github.com/45s/coinzilla/pull/1755) on a fresh branch based on current `develop`.
+- Test-first regression coverage is registered in the Harvester targeted-test runner and critical-behavior inventory. The exact test-only head `f82618dd21a39e5d783dac34b0714828ec97bf92` confirmed RED: no owned BUY cancellations, no snapshot cancellation status, and the generic MARKET_PAUSED gate rejected purpose-tagged `RECOVERY_SELL`.
+- Implementation contract: activate the process-local BUY gate first; cancel only active BUYs owned by the current process for safety-critical reasons (not expected preflight/metadata/validation rejections or explicitly retryable REST reconciliation failures); reconcile cancellation-racing fills before committing the terminal cancellation status; guard against recursive cancellation when a cancellation failure itself raises a pause; retain the gate and raise a durable `SAFETY_BLOCKER_RAISED` fact when pause evidence or cancellation is incomplete.
+- Recovery Seller evaluation and fill accounting remain active. Only purpose-tagged `RECOVERY_SELL` submissions may pass the strategy safety gate. Startup-snapshot, manual, external and prior-process orders remain untouched.
+- No exchange operations, process restart, automatic pause restoration, or operator Pause semantics changes are part of this task. Exact-head CI and offline regression evidence are required before this item is closed.
 
 ## Local DEV reset and TESTNET evidence archive — issue #1747
 
@@ -205,7 +267,7 @@ The 2026-11-17 Binance TESTNET cycle is preserved in merged [session audit PR #1
 - **Confirmed dust-classification defect — fixed:** [#1360](https://github.com/45s/coinzilla/issues/1360) is closed by merged [PR #1363](https://github.com/45s/coinzilla/pull/1363). The regression proves the observed 0.1 ADA remainder is accepted as MIN_NOTIONAL dust; invalid or contradictory evidence remains fail-closed.
 - **Broader lifecycle proof:** [#1362](https://github.com/45s/coinzilla/issues/1362) covers exact commission accounting, multiple/partial/duplicate SELL fills, minimum-profit boundaries, dust classes, reconciliation and shutdown completion.
 
-PR #1411 remains the historical TESTNET configuration and ADA replay baseline. The filter-freshness defect is fixed by merged PR #1670; the submission-fact barrier is fixed by merged PR #1750; and safety-pause owned-BUY cancellation is fixed by merged PR #1755. This follow-up adds the sanitized 2026-11-22 archive fixture, production-accounting reconstruction, exact current-runtime ZRO/DOGE/ADA fill replay, and late-SELL-after-pause exact-once coverage. The replay exposed a current shutdown race: an in-flight evaluation could re-add a deferred marker after `beginShutdown()` cleared it. The fix raises the BUY gate synchronously, serializes deferred cleanup behind in-flight transitions, and makes the shutdown participant await that barrier before cancellation/reconciliation. The configured Harvester targeted suite passed on parent verification head `fdac6b00a85cc7f3988175bb9be3095afd9d8f16`. A participant-level shutdown-barrier regression was added after that run and is included in the final exact-head targeted suite; final exact-head checks are pending. Historical decision-time filters and clean shutdown remain unverified and are documented as such; no archive mutation, backfill, restart restoration or exchange operation is authorized.
+PR #1411 is merged and its scoped TESTNET configuration correction, ADA offline replay, and duplicate-fill evidence are implemented. The recovery-SELL filter-freshness defect is implemented in [PR #1670](https://github.com/45s/coinzilla/pull/1670): validated per-symbol exchange filters are refreshed before active recovery planning, the same snapshot reaches strategy evaluation and submission validation, and failed/mismatched reads fail closed. Runtime-composition regressions cover changed MIN_NOTIONAL, unavailable filters, and a valid refreshed SELL; exact-head CI is pending. Keep #1359/#1362 open for the broader lifecycle acceptance matrix. Offline deterministic tests only; no exchange operations are authorized.
 
 ### P0 — User-data order-event integrity and shutdown recovery (#1132)
 
