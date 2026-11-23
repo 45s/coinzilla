@@ -109,7 +109,7 @@ test('requires meaningful content in all eight issue sections', () => {
 
 
 test('rejects untouched template prompts instead of treating them as issue evidence', () => {
-  const template = REQUIRED_ISSUE_SECTIONS.map((heading) => `## ${heading}\\n\\nWhat should happen? Describe the actual details here.`).join('\\n\\n');
+  const template = REQUIRED_ISSUE_SECTIONS.map((heading) => `## ${heading}\n\nWhat should happen? Describe the actual details here.`).join('\n\n');
   assert.equal(validateIssueBody(template).length, REQUIRED_ISSUE_SECTIONS.length);
 });
 
@@ -126,7 +126,7 @@ test('validates preflight report issue, status, required hashes, and ancestry', 
     actualHashes: new Map([['AGENTS.md', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa']]),
     isAncestor: true,
   } }), []);
-  assert.ok(validatePreflightReport(report, {
+  assert.ok(validatePreflightReport({ report, context: {
     issueNumber: 1755,
     requiredPaths: ['AGENTS.md'],
     actualHashes: new Map([['AGENTS.md', 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb']]),
