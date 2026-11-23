@@ -1,0 +1,958 @@
+{
+  "schemaVersion": 1,
+  "source": {
+    "archiveRepository": "45s/coinzilla-archive",
+    "archiveCommit": "f283c90db9143c74683ae5bf9c7bb52e09590d56",
+    "archivePath": "archives/2026-11-22T17-35-17Z_77213df6",
+    "archiveSnapshotType": "selected-log-evidence",
+    "runtimeSessionId": "ebe7c1d3-ff7d-47db-b2fe-2e5ec9594c1c",
+    "runtimeCommitCaptured": false,
+    "dataCommitHash": "154720ef4b575e5a189fc6aa78fd9575917537d02e808403593ab4c09c8dd4b8",
+    "factsPath": "archives/2026-11-22T17-35-17Z_77213df6/recovery-facts/facts.jsonl",
+    "factsSha256": "1b923c1a090904df601463d14681090165b7f8d50a3806e96655699d90a97295",
+    "factsManifestPath": "archives/2026-11-22T17-35-17Z_77213df6/recovery-facts/manifest.jsonl",
+    "factsManifestSha256": "3063f9ce829cce8a66a471672abee6b77ff52b6647b0b786381adc1db5f264bc",
+    "factsRecordCount": 49,
+    "lastSequence": 48,
+    "lastDigest": "d4d5c84fa9857cf721f10955f17a816845900538779454e02d2dd6f80db65bef",
+    "terminalLogPath": "archives/2026-11-22T17-35-17Z_77213df6/logs/cumulative/terminal.log",
+    "terminalLogSha256": "6ec912690afbfeb1d9c87c674647a34e11d855b2d59337c34ac58d54d2a93d33",
+    "terminalLogLineCount": 429,
+    "logSelection": {
+      "cumulative": "final-5-percent-of-each-file",
+      "sessions": "newest-session-directory-only; gzip-compressed"
+    },
+    "startupRetrySessionId": "403b10b2-17aa-4760-a6e9-c36453cd73e2",
+    "startupRetryLogs": [
+      {
+        "path": "logs/sessions/2026-11-22_11-10-47-403b10b2-17aa-4760-a6e9-c36453cd73e2/2026-11-22_11-10-47-403b10b2-17aa-4760-a6e9-c36453cd73e2.jsonl.gz",
+        "sha256": "2e955fa9298b1c34d305e55a3169ddee6562913f52cbfe796a9defae56b0b893"
+      },
+      {
+        "path": "logs/sessions/2026-11-22_11-10-47-403b10b2-17aa-4760-a6e9-c36453cd73e2/harvester.log.gz",
+        "sha256": "5f0e195220ef320cc9cd4ba54025274a63320c0e51d51a1b23e0838dc654bee8"
+      },
+      {
+        "path": "logs/sessions/2026-11-22_11-10-47-403b10b2-17aa-4760-a6e9-c36453cd73e2/terminal.log.gz",
+        "sha256": "38f224b9be32f90c7e0b6d4dc561980d145e77c0196fbaf93d5a35bdc6d3a78b"
+      },
+      {
+        "path": "logs/sessions/2026-11-22_11-10-47-403b10b2-17aa-4760-a6e9-c36453cd73e2/trace.log.gz",
+        "sha256": "6cdc6f262f28980a3de8828c01441f27f7a2cc841942b6df717178183ff7fb85"
+      }
+    ],
+    "databaseDump": {
+      "path": "archives/2026-11-22T17-35-17Z_77213df6/data/testnet/database-dump.json",
+      "sha256": "cc024ea0842bed65f53081263b5dbc668099c09beac14a8d2835660d357e744a",
+      "status": "PRESENT_NOT_INSPECTED"
+    }
+  },
+  "transformation": {
+    "summary": "Sanitized projection of immutable recovery facts and selected cumulative terminal-log lines; no exchange calls or account mutations.",
+    "preserved": "Sequence, recorded/executed timestamps, symbol, broker/client order IDs, trade/fill IDs, side, exact decimal price/quantity/quote quantity, commission amount and asset, cycle outcome, cancellation outcome, safety pause/blocker, and source log line numbers.",
+    "removed": "Account identifiers, balances, unrelated assets, provider-instance identifiers, credentials/secrets, unrelated log lines, and unnecessary raw snapshot fields.",
+    "clock": "Terminal clock is observed at UTC+02:00 by matching fact timestamps; local clock strings are retained separately from UTC fact timestamps.",
+    "limitation": "The archive is selected-log evidence: cumulative logs are the final 5% and only the newest session directory is retained. The database dump is present but uninspected; no claim is made about its contents. The original runtime source commit is not recorded in PROCESS_STARTED or the archive manifest."
+  },
+  "factCounts": {
+    "LEDGER_INITIALIZED": 1,
+    "CONFIGURATION_BASELINE": 1,
+    "PROCESS_STARTED": 1,
+    "ACCOUNT_SNAPSHOT_CAPTURED": 2,
+    "ACCOUNT_OPEN_ORDERS_CAPTURED": 2,
+    "EXECUTION_FILL_APPLIED": 13,
+    "ORDER_CANCELLATION_INTENT": 10,
+    "ORDER_CANCELLATION_OUTCOME": 10,
+    "RECOVERY_CYCLE_NOT_COMPLETED": 3,
+    "STRATEGY_MARKET_PAUSED": 4,
+    "SAFETY_BLOCKER_RAISED": 2
+  },
+  "processStarted": {
+    "sequence": 2,
+    "recordedAt": "2026-11-22T08:52:02.207Z",
+    "runtimeSessionId": "ebe7c1d3-ff7d-47db-b2fe-2e5ec9594c1c",
+    "tradingEnabled": true,
+    "markets": [
+      "ADAUSDT",
+      "DOGEUSDT",
+      "LINEAUSDT",
+      "LINKUSDT",
+      "ZROUSDT"
+    ]
+  },
+  "fills": [
+    {
+      "sequence": 5,
+      "recordedAt": "2026-11-22T08:52:26.590Z",
+      "executedAt": 1795337545805,
+      "fillId": "binance:ZROUSDT:15735",
+      "tradeId": "15735",
+      "brokerOrderId": "1001129",
+      "clientOrderId": "h-dff68008c72c47a59368ad-2",
+      "symbol": "ZROUSDT",
+      "marketId": "binance:ZROUSDT",
+      "baseAssetId": "zro",
+      "quoteAssetId": "usdt",
+      "side": "BUY",
+      "price": "1.17",
+      "quantity": "5",
+      "quoteQuantity": "5.85",
+      "commissionStatus": "COMPLETE",
+      "commissions": [
+        {
+          "amount": "0.005",
+          "assetId": "zro",
+          "assetCode": "ZRO",
+          "quoteValue": null
+        }
+      ]
+    },
+    {
+      "sequence": 6,
+      "recordedAt": "2026-11-22T08:52:34.832Z",
+      "executedAt": 1795337554613,
+      "fillId": "binance:ZROUSDT:15736",
+      "tradeId": "15736",
+      "brokerOrderId": "1001131",
+      "clientOrderId": "h-dff68008c72c47a59368ad-4",
+      "symbol": "ZROUSDT",
+      "marketId": "binance:ZROUSDT",
+      "baseAssetId": "zro",
+      "quoteAssetId": "usdt",
+      "side": "BUY",
+      "price": "1.169",
+      "quantity": "5",
+      "quoteQuantity": "5.845",
+      "commissionStatus": "COMPLETE",
+      "commissions": [
+        {
+          "amount": "0.005",
+          "assetId": "zro",
+          "assetCode": "ZRO",
+          "quoteValue": null
+        }
+      ]
+    },
+    {
+      "sequence": 9,
+      "recordedAt": "2026-11-22T08:52:44.692Z",
+      "executedAt": 1795337564470,
+      "fillId": "binance:DOGEUSDT:303728",
+      "tradeId": "303728",
+      "brokerOrderId": "1931359",
+      "clientOrderId": "h-dff68008c72c47a59368ad-5",
+      "symbol": "DOGEUSDT",
+      "marketId": "binance:DOGEUSDT",
+      "baseAssetId": "doge",
+      "quoteAssetId": "usdt",
+      "side": "BUY",
+      "price": "0.05482",
+      "quantity": "400",
+      "quoteQuantity": "21.928",
+      "commissionStatus": "COMPLETE",
+      "commissions": [
+        {
+          "amount": "0.4",
+          "assetId": "doge",
+          "assetCode": "DOGE",
+          "quoteValue": null
+        }
+      ]
+    },
+    {
+      "sequence": 10,
+      "recordedAt": "2026-11-22T08:52:51.326Z",
+      "executedAt": 1795337571107,
+      "fillId": "binance:ZROUSDT:15737",
+      "tradeId": "15737",
+      "brokerOrderId": "1001134",
+      "clientOrderId": "h-dff68008c72c47a59368ad-8",
+      "symbol": "ZROUSDT",
+      "marketId": "binance:ZROUSDT",
+      "baseAssetId": "zro",
+      "quoteAssetId": "usdt",
+      "side": "BUY",
+      "price": "1.168",
+      "quantity": "5",
+      "quoteQuantity": "5.84",
+      "commissionStatus": "COMPLETE",
+      "commissions": [
+        {
+          "amount": "0.005",
+          "assetId": "zro",
+          "assetCode": "ZRO",
+          "quoteValue": null
+        }
+      ]
+    },
+    {
+      "sequence": 13,
+      "recordedAt": "2026-11-22T08:53:01.121Z",
+      "executedAt": 1795337580905,
+      "fillId": "binance:DOGEUSDT:303729",
+      "tradeId": "303729",
+      "brokerOrderId": "1931369",
+      "clientOrderId": "h-dff68008c72c47a59368ad-10",
+      "symbol": "DOGEUSDT",
+      "marketId": "binance:DOGEUSDT",
+      "baseAssetId": "doge",
+      "quoteAssetId": "usdt",
+      "side": "BUY",
+      "price": "0.05479",
+      "quantity": "400",
+      "quoteQuantity": "21.916",
+      "commissionStatus": "COMPLETE",
+      "commissions": [
+        {
+          "amount": "0.4",
+          "assetId": "doge",
+          "assetCode": "DOGE",
+          "quoteValue": null
+        }
+      ]
+    },
+    {
+      "sequence": 16,
+      "recordedAt": "2026-11-22T08:56:38.590Z",
+      "executedAt": 1795337798367,
+      "fillId": "binance:ZROUSDT:15738",
+      "tradeId": "15738",
+      "brokerOrderId": "1001139",
+      "clientOrderId": "h-dff68008c72c47a59368ad-12",
+      "symbol": "ZROUSDT",
+      "marketId": "binance:ZROUSDT",
+      "baseAssetId": "zro",
+      "quoteAssetId": "usdt",
+      "side": "BUY",
+      "price": "1.167",
+      "quantity": "5",
+      "quoteQuantity": "5.835",
+      "commissionStatus": "COMPLETE",
+      "commissions": [
+        {
+          "amount": "0.005",
+          "assetId": "zro",
+          "assetCode": "ZRO",
+          "quoteValue": null
+        }
+      ]
+    },
+    {
+      "sequence": 19,
+      "recordedAt": "2026-11-22T09:03:56.236Z",
+      "executedAt": 1795338236013,
+      "fillId": "binance:ZROUSDT:15740",
+      "tradeId": "15740",
+      "brokerOrderId": "1001163",
+      "clientOrderId": "h-dff68008c72c47a59368ad-15",
+      "symbol": "ZROUSDT",
+      "marketId": "binance:ZROUSDT",
+      "baseAssetId": "zro",
+      "quoteAssetId": "usdt",
+      "side": "SELL",
+      "price": "1.174",
+      "quantity": "19.95",
+      "quoteQuantity": "23.4213",
+      "commissionStatus": "COMPLETE",
+      "commissions": [
+        {
+          "amount": "0.0234213",
+          "assetId": "usdt",
+          "assetCode": "USDT",
+          "quoteValue": null
+        }
+      ]
+    },
+    {
+      "sequence": 22,
+      "recordedAt": "2026-11-22T09:10:02.900Z",
+      "executedAt": 1795338602671,
+      "fillId": "binance:DOGEUSDT:303737",
+      "tradeId": "303737",
+      "brokerOrderId": "1931380",
+      "clientOrderId": "h-dff68008c72c47a59368ad-14",
+      "symbol": "DOGEUSDT",
+      "marketId": "binance:DOGEUSDT",
+      "baseAssetId": "doge",
+      "quoteAssetId": "usdt",
+      "side": "BUY",
+      "price": "0.05476",
+      "quantity": "400",
+      "quoteQuantity": "21.904",
+      "commissionStatus": "COMPLETE",
+      "commissions": [
+        {
+          "amount": "0.4",
+          "assetId": "doge",
+          "assetCode": "DOGE",
+          "quoteValue": null
+        }
+      ]
+    },
+    {
+      "sequence": 25,
+      "recordedAt": "2026-11-22T09:15:11.010Z",
+      "executedAt": 1795338910781,
+      "fillId": "binance:DOGEUSDT:303738",
+      "tradeId": "303738",
+      "brokerOrderId": "1931687",
+      "clientOrderId": "h-dff68008c72c47a59368ad-18",
+      "symbol": "DOGEUSDT",
+      "marketId": "binance:DOGEUSDT",
+      "baseAssetId": "doge",
+      "quoteAssetId": "usdt",
+      "side": "BUY",
+      "price": "0.05473",
+      "quantity": "400",
+      "quoteQuantity": "21.892",
+      "commissionStatus": "COMPLETE",
+      "commissions": [
+        {
+          "amount": "0.4",
+          "assetId": "doge",
+          "assetCode": "DOGE",
+          "quoteValue": null
+        }
+      ]
+    },
+    {
+      "sequence": 30,
+      "recordedAt": "2026-11-22T09:21:57.642Z",
+      "executedAt": 1795339317405,
+      "fillId": "binance:DOGEUSDT:303742",
+      "tradeId": "303742",
+      "brokerOrderId": "1931754",
+      "clientOrderId": "h-dff68008c72c47a59368ad-19",
+      "symbol": "DOGEUSDT",
+      "marketId": "binance:DOGEUSDT",
+      "baseAssetId": "doge",
+      "quoteAssetId": "usdt",
+      "side": "SELL",
+      "price": "0.05501",
+      "quantity": "1595",
+      "quoteQuantity": "87.74095",
+      "commissionStatus": "COMPLETE",
+      "commissions": [
+        {
+          "amount": "0.08774095",
+          "assetId": "usdt",
+          "assetCode": "USDT",
+          "quoteValue": null
+        }
+      ]
+    },
+    {
+      "sequence": 35,
+      "recordedAt": "2026-11-22T09:31:08.324Z",
+      "executedAt": 1795339868096,
+      "fillId": "binance:ADAUSDT:145912",
+      "tradeId": "145912",
+      "brokerOrderId": "806225",
+      "clientOrderId": "h-dff68008c72c47a59368ad-20",
+      "symbol": "ADAUSDT",
+      "marketId": "binance:ADAUSDT",
+      "baseAssetId": "ada",
+      "quoteAssetId": "usdt",
+      "side": "BUY",
+      "price": "0.144",
+      "quantity": "50",
+      "quoteQuantity": "7.2",
+      "commissionStatus": "COMPLETE",
+      "commissions": [
+        {
+          "amount": "0.05",
+          "assetId": "ada",
+          "assetCode": "ADA",
+          "quoteValue": null
+        }
+      ]
+    },
+    {
+      "sequence": 36,
+      "recordedAt": "2026-11-22T09:44:28.883Z",
+      "executedAt": 1795340668650,
+      "fillId": "binance:ZROUSDT:15742",
+      "tradeId": "15742",
+      "brokerOrderId": "1001164",
+      "clientOrderId": "h-dff68008c72c47a59368ad-16",
+      "symbol": "ZROUSDT",
+      "marketId": "binance:ZROUSDT",
+      "baseAssetId": "zro",
+      "quoteAssetId": "usdt",
+      "side": "BUY",
+      "price": "1.166",
+      "quantity": "5",
+      "quoteQuantity": "5.83",
+      "commissionStatus": "COMPLETE",
+      "commissions": [
+        {
+          "amount": "0.005",
+          "assetId": "zro",
+          "assetCode": "ZRO",
+          "quoteValue": null
+        }
+      ]
+    },
+    {
+      "sequence": 46,
+      "recordedAt": "2026-11-22T09:53:33.814Z",
+      "executedAt": 1795341212976,
+      "fillId": "binance:ADAUSDT:145942",
+      "tradeId": "145942",
+      "brokerOrderId": "806319",
+      "clientOrderId": "h-dff68008c72c47a59368ad-21",
+      "symbol": "ADAUSDT",
+      "marketId": "binance:ADAUSDT",
+      "baseAssetId": "ada",
+      "quoteAssetId": "usdt",
+      "side": "SELL",
+      "price": "0.1455",
+      "quantity": "49.9",
+      "quoteQuantity": "7.26045",
+      "commissionStatus": "COMPLETE",
+      "commissions": [
+        {
+          "amount": "0.00726045",
+          "assetId": "usdt",
+          "assetCode": "USDT",
+          "quoteValue": null
+        }
+      ]
+    }
+  ],
+  "cycleOutcomes": [
+    {
+      "sequence": 20,
+      "recordedAt": "2026-11-22T09:03:56.862Z",
+      "symbol": "ZROUSDT",
+      "marketId": "binance:ZROUSDT",
+      "baseAssetId": "zro",
+      "quoteAssetId": "usdt",
+      "activeQuantity": "0.03",
+      "spent": "23.37",
+      "netSellProceeds": "23.3978787",
+      "realizedNetProfit": "0.0278787",
+      "minProfit": "0.01",
+      "keepQuantity": "0.01",
+      "reason": "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH",
+      "outcome": "CONTINUE_SELL_THROUGH",
+      "appliedFillIds": [
+        "binance:ZROUSDT:15735",
+        "binance:ZROUSDT:15736",
+        "binance:ZROUSDT:15737",
+        "binance:ZROUSDT:15738",
+        "binance:ZROUSDT:15740"
+      ]
+    },
+    {
+      "sequence": 31,
+      "recordedAt": "2026-11-22T09:21:58.268Z",
+      "symbol": "DOGEUSDT",
+      "marketId": "binance:DOGEUSDT",
+      "baseAssetId": "doge",
+      "quoteAssetId": "usdt",
+      "activeQuantity": "3.4",
+      "spent": "87.64",
+      "netSellProceeds": "87.65320905",
+      "realizedNetProfit": "0.01320905",
+      "minProfit": "0.01",
+      "keepQuantity": "1",
+      "reason": "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH",
+      "outcome": "CONTINUE_SELL_THROUGH",
+      "appliedFillIds": [
+        "binance:DOGEUSDT:303728",
+        "binance:DOGEUSDT:303729",
+        "binance:DOGEUSDT:303737",
+        "binance:DOGEUSDT:303738",
+        "binance:DOGEUSDT:303742"
+      ]
+    },
+    {
+      "sequence": 47,
+      "recordedAt": "2026-11-22T09:53:34.428Z",
+      "symbol": "ADAUSDT",
+      "marketId": "binance:ADAUSDT",
+      "baseAssetId": "ada",
+      "quoteAssetId": "usdt",
+      "activeQuantity": "0.05",
+      "spent": "7.2",
+      "netSellProceeds": "7.25318955",
+      "realizedNetProfit": "0.05318955",
+      "minProfit": "0.05",
+      "keepQuantity": "0",
+      "reason": "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH",
+      "outcome": "CONTINUE_SELL_THROUGH",
+      "appliedFillIds": [
+        "binance:ADAUSDT:145912",
+        "binance:ADAUSDT:145942"
+      ]
+    }
+  ],
+  "strategyPauses": [
+    {
+      "sequence": 21,
+      "recordedAt": "2026-11-22T09:03:57.197Z",
+      "symbol": "ZROUSDT",
+      "reason": "RECOVERY_CYCLE_COMPLETION_FAILED"
+    },
+    {
+      "sequence": 32,
+      "recordedAt": "2026-11-22T09:21:58.601Z",
+      "symbol": "DOGEUSDT",
+      "reason": "RECOVERY_CYCLE_COMPLETION_FAILED"
+    },
+    {
+      "sequence": 39,
+      "recordedAt": "2026-11-22T09:50:53.167Z",
+      "symbol": "LINKUSDT",
+      "reason": "UNKNOWN_OR_EXTERNAL_ORDER_EVENT"
+    },
+    {
+      "sequence": 45,
+      "recordedAt": "2026-11-22T09:53:33.771Z",
+      "symbol": "ADAUSDT",
+      "reason": "REST_STREAM_RECONCILIATION_FAILED"
+    }
+  ],
+  "cancellations": [
+    {
+      "symbol": "ZROUSDT",
+      "side": "SELL",
+      "orderId": "1001130",
+      "clientOrderId": "h-dff68008c72c47a59368ad-3",
+      "intentSequence": 7,
+      "intentAt": "2026-11-22T08:52:35.432Z",
+      "intentReason": "BUY_FILLED_RECALCULATE_RECOVERY_SELL",
+      "outcomeSequence": 8,
+      "outcomeAt": "2026-11-22T08:52:36.303Z",
+      "outcome": "CANCELED",
+      "outcomeReason": "BUY_FILLED_RECALCULATE_RECOVERY_SELL"
+    },
+    {
+      "symbol": "ZROUSDT",
+      "side": "SELL",
+      "orderId": "1001133",
+      "clientOrderId": "h-dff68008c72c47a59368ad-7",
+      "intentSequence": 11,
+      "intentAt": "2026-11-22T08:52:51.924Z",
+      "intentReason": "BUY_FILLED_RECALCULATE_RECOVERY_SELL",
+      "outcomeSequence": 12,
+      "outcomeAt": "2026-11-22T08:52:52.793Z",
+      "outcome": "CANCELED",
+      "outcomeReason": "BUY_FILLED_RECALCULATE_RECOVERY_SELL"
+    },
+    {
+      "symbol": "DOGEUSDT",
+      "side": "SELL",
+      "orderId": "1931368",
+      "clientOrderId": "h-dff68008c72c47a59368ad-9",
+      "intentSequence": 14,
+      "intentAt": "2026-11-22T08:53:01.712Z",
+      "intentReason": "BUY_FILLED_RECALCULATE_RECOVERY_SELL",
+      "outcomeSequence": 15,
+      "outcomeAt": "2026-11-22T08:53:02.578Z",
+      "outcome": "CANCELED",
+      "outcomeReason": "BUY_FILLED_RECALCULATE_RECOVERY_SELL"
+    },
+    {
+      "symbol": "ZROUSDT",
+      "side": "SELL",
+      "orderId": "1001138",
+      "clientOrderId": "h-dff68008c72c47a59368ad-11",
+      "intentSequence": 17,
+      "intentAt": "2026-11-22T08:56:39.202Z",
+      "intentReason": "BUY_FILLED_RECALCULATE_RECOVERY_SELL",
+      "outcomeSequence": 18,
+      "outcomeAt": "2026-11-22T08:56:40.082Z",
+      "outcome": "CANCELED",
+      "outcomeReason": "BUY_FILLED_RECALCULATE_RECOVERY_SELL"
+    },
+    {
+      "symbol": "DOGEUSDT",
+      "side": "SELL",
+      "orderId": "1931379",
+      "clientOrderId": "h-dff68008c72c47a59368ad-13",
+      "intentSequence": 23,
+      "intentAt": "2026-11-22T09:10:03.545Z",
+      "intentReason": "BUY_FILLED_RECALCULATE_RECOVERY_SELL",
+      "outcomeSequence": 24,
+      "outcomeAt": "2026-11-22T09:10:04.431Z",
+      "outcome": "CANCELED",
+      "outcomeReason": "BUY_FILLED_RECALCULATE_RECOVERY_SELL"
+    },
+    {
+      "symbol": "DOGEUSDT",
+      "side": "SELL",
+      "orderId": "1931686",
+      "clientOrderId": "h-dff68008c72c47a59368ad-17",
+      "intentSequence": 26,
+      "intentAt": "2026-11-22T09:15:11.624Z",
+      "intentReason": "BUY_FILLED_RECALCULATE_RECOVERY_SELL",
+      "outcomeSequence": 27,
+      "outcomeAt": "2026-11-22T09:15:12.498Z",
+      "outcome": "CANCELED",
+      "outcomeReason": "BUY_FILLED_RECALCULATE_RECOVERY_SELL"
+    },
+    {
+      "symbol": "ADAUSDT",
+      "side": "BUY",
+      "orderId": "806015",
+      "clientOrderId": "h-dff68008c72c47a59368ad-6",
+      "intentSequence": 28,
+      "intentAt": "2026-11-22T09:20:19.361Z",
+      "intentReason": "TRAILING_BUY_REPRICE",
+      "outcomeSequence": 29,
+      "outcomeAt": "2026-11-22T09:20:20.238Z",
+      "outcome": "CANCELED",
+      "outcomeReason": "TRAILING_BUY_REPRICE"
+    },
+    {
+      "symbol": "LINKUSDT",
+      "side": "BUY",
+      "orderId": "3028050",
+      "clientOrderId": "h-dff68008c72c47a59368ad-1",
+      "intentSequence": 37,
+      "intentAt": "2026-11-22T09:49:41.182Z",
+      "intentReason": "TRAILING_BUY_REPRICE",
+      "outcomeSequence": 38,
+      "outcomeAt": "2026-11-22T09:49:42.047Z",
+      "outcome": "CANCELED",
+      "outcomeReason": "TRAILING_BUY_REPRICE"
+    },
+    {
+      "symbol": "ADAUSDT",
+      "side": "BUY",
+      "orderId": "806321",
+      "clientOrderId": "h-dff68008c72c47a59368ad-22",
+      "intentSequence": 41,
+      "intentAt": "2026-11-22T09:51:19.949Z",
+      "intentReason": "ACCOUNT_INTEGRITY_FAILURE",
+      "outcomeSequence": 42,
+      "outcomeAt": "2026-11-22T09:51:20.823Z",
+      "outcome": "CANCELED",
+      "outcomeReason": "ACCOUNT_INTEGRITY_FAILURE"
+    },
+    {
+      "symbol": "LINKUSDT",
+      "side": "BUY",
+      "orderId": "3029796",
+      "clientOrderId": "h-dff68008c72c47a59368ad-23",
+      "intentSequence": 43,
+      "intentAt": "2026-11-22T09:51:21.495Z",
+      "intentReason": "ACCOUNT_INTEGRITY_FAILURE",
+      "outcomeSequence": 44,
+      "outcomeAt": "2026-11-22T09:51:22.366Z",
+      "outcome": "CANCELED",
+      "outcomeReason": "ACCOUNT_INTEGRITY_FAILURE"
+    }
+  ],
+  "safetyBlockers": [
+    {
+      "sequence": 40,
+      "recordedAt": "2026-11-22T09:50:53.208Z",
+      "symbol": "LINKUSDT",
+      "reason": "ORDER_REGISTRY_MATCH",
+      "scope": "MARKET"
+    },
+    {
+      "sequence": 48,
+      "recordedAt": "2026-11-22T09:56:16.869Z",
+      "symbol": "DOGEUSDT",
+      "reason": "ORDER_REGISTRY_MATCH",
+      "scope": "MARKET"
+    }
+  ],
+  "accountSnapshots": [
+    {
+      "sequence": 3,
+      "recordedAt": "2026-11-22T08:52:19.237Z",
+      "phase": "PREFLIGHT",
+      "auditStatus": "COMPLETE"
+    },
+    {
+      "sequence": 33,
+      "recordedAt": "2026-11-22T09:28:49.362Z",
+      "phase": "RECOVERY",
+      "auditStatus": "COMPLETE"
+    }
+  ],
+  "openOrderSnapshots": [
+    {
+      "sequence": 4,
+      "recordedAt": "2026-11-22T08:52:19.554Z",
+      "phase": "PREFLIGHT",
+      "orderCount": 14,
+      "readiness": "BLOCKED",
+      "blockReasons": [
+        "UNOWNED_OPEN_ORDERS:14"
+      ],
+      "trackedOrders": []
+    },
+    {
+      "sequence": 34,
+      "recordedAt": "2026-11-22T09:28:49.407Z",
+      "phase": "RECOVERY",
+      "orderCount": 17,
+      "readiness": "BLOCKED",
+      "blockReasons": [
+        "UNOWNED_OPEN_ORDERS:14"
+      ],
+      "trackedOrders": [
+        {
+          "symbol": "LINKUSDT",
+          "side": "BUY",
+          "orderId": "3028050",
+          "clientOrderId": "h-dff68008c72c47a59368ad-1",
+          "status": "NEW"
+        },
+        {
+          "symbol": "ZROUSDT",
+          "side": "BUY",
+          "orderId": "1001164",
+          "clientOrderId": "h-dff68008c72c47a59368ad-16",
+          "status": "NEW"
+        }
+      ]
+    }
+  ],
+  "orderTimelines": [
+    {
+      "symbol": "ZROUSDT",
+      "orderId": "1001164",
+      "clientOrderId": "h-dff68008c72c47a59368ad-16",
+      "submittedAtUtc": "2026-11-22T08:56:41Z",
+      "acceptedAtUtc": "2026-11-22T08:56:41Z",
+      "pauseAtUtc": "2026-11-22T09:03:57.197Z",
+      "openOrderSnapshotAtUtc": "2026-11-22T09:28:49.407Z",
+      "fillExecutedAtUtc": "2026-11-22T09:44:28.650Z",
+      "fillRecordedAtUtc": "2026-11-22T09:44:28.883Z",
+      "cancellationIntentPresent": false
+    },
+    {
+      "symbol": "LINKUSDT",
+      "orderId": "3029796",
+      "clientOrderId": "h-dff68008c72c47a59368ad-23",
+      "submittedAtUtc": "2026-11-22T09:49:42Z",
+      "acceptedAtUtc": "2026-11-22T09:49:42Z",
+      "pauseAtUtc": "2026-11-22T09:50:53.167Z",
+      "cancellationIntentAtUtc": "2026-11-22T09:51:21.495Z",
+      "cancellationOutcomeAtUtc": "2026-11-22T09:51:22.366Z",
+      "cancellationReason": "ACCOUNT_INTEGRITY_FAILURE",
+      "cancellationOutcome": "CANCELED"
+    }
+  ],
+  "externalSellEvents": [
+    {
+      "line": 405,
+      "localTime": "11:50:53",
+      "symbol": "LINKUSDT",
+      "side": "SELL",
+      "disposition": "REJECTED_UNOWNED_OR_INVALID"
+    },
+    {
+      "line": 417,
+      "localTime": "11:56:16",
+      "symbol": "DOGEUSDT",
+      "side": "SELL",
+      "disposition": "REJECTED_UNOWNED_OR_INVALID"
+    }
+  ],
+  "adaSellTiming": {
+    "fillId": "binance:ADAUSDT:145942",
+    "executedAtUtc": "2026-11-22T09:53:32.976Z",
+    "recordedAtUtc": "2026-11-22T09:53:33.814Z",
+    "pauseAtUtc": "2026-11-22T09:53:33.771Z"
+  },
+  "terminalEvidence": [
+    {
+      "line": 182,
+      "text": "10:52:04 Supported exchange trading rules validated {\"symbol\":\"ZROUSDT\"}"
+    },
+    {
+      "line": 183,
+      "text": "10:52:04 Supported exchange trading rules validated {\"symbol\":\"DOGEUSDT\"}"
+    },
+    {
+      "line": 184,
+      "text": "10:52:05 Supported exchange trading rules validated {\"symbol\":\"ADAUSDT\"}"
+    },
+    {
+      "line": 185,
+      "text": "10:52:05 Supported exchange trading rules validated {\"symbol\":\"LINEAUSDT\"}"
+    },
+    {
+      "line": 186,
+      "text": "10:52:18 ERROR Exchange history synchronization failed; historical coverage is incomplete {\"symbol\":\"ZROUSDT\",\"operation\":\"synchronizeStartupExchangeHistory\",\"errorCode\":\"HARVESTER_ACCOUNT_HISTORY..."
+    },
+    {
+      "line": 191,
+      "text": "10:52:19 Account-wide open-orders snapshot recorded; unowned orders remain external and untouched {\"orderCount\":14,\"readiness\":\"BLOCKED\",\"symbols\":[\"LINKUSDT\",\"DOGEUSDT\",\"ZROUSDT\"]}"
+    },
+    {
+      "line": 192,
+      "text": "10:52:19 Conservative TESTNET startup checks passed; current account audit is complete {\"enabledSymbols\":[\"LINKUSDT\",\"ZROUSDT\",\"DOGEUSDT\",\"ADAUSDT\",\"LINEAUSDT\"]}"
+    },
+    {
+      "line": 193,
+      "text": "10:52:19 Conservative TESTNET trading engine activated"
+    },
+    {
+      "line": 276,
+      "text": "10:56:41 🪙 CG SUBMITTED #pending ZROUSDT BUY 5 @ 1.166 h-dff68008c72c47a59368ad-16"
+    },
+    {
+      "line": 277,
+      "text": "10:56:41 🪙 CG ACCEPTED #1001164 ZROUSDT BUY 5 @ 1.166"
+    },
+    {
+      "line": 282,
+      "text": "11:03:57 ERROR paused a trading pair {\"symbol\":\"ZROUSDT\",\"reason\":\"RECOVERY_CYCLE_COMPLETION_FAILED\"}"
+    },
+    {
+      "line": 334,
+      "text": "11:21:58 🪙 CG FILLED #1931754 DOGEUSDT SELL 1595 @ 0.05501"
+    },
+    {
+      "line": 335,
+      "text": "11:21:58 ERROR paused a trading pair {\"symbol\":\"DOGEUSDT\",\"reason\":\"RECOVERY_CYCLE_COMPLETION_FAILED\"}"
+    },
+    {
+      "line": 398,
+      "text": "11:44:28 🪙 CG PORTFOLIO ZROUSDT: amount: 5.025 | earned: 0 | spent: 29.2 | net: -5.802"
+    },
+    {
+      "line": 399,
+      "text": "11:44:29 🪙 CG FILLED #1001164 ZROUSDT BUY 5 @ 1.166"
+    },
+    {
+      "line": 402,
+      "text": "11:49:42 🪙 CG SUBMITTED #pending LINKUSDT BUY 2 @ 8.659 h-dff68008c72c47a59368ad-23"
+    },
+    {
+      "line": 403,
+      "text": "11:49:42 🪙 CG ACCEPTED #3029796 LINKUSDT BUY 2 @ 8.659"
+    },
+    {
+      "line": 404,
+      "text": "11:50:53 ERROR paused a trading pair {\"symbol\":\"LINKUSDT\",\"reason\":\"UNKNOWN_OR_EXTERNAL_ORDER_EVENT\"}"
+    },
+    {
+      "line": 405,
+      "text": "11:50:53 ERROR rejected an unowned or invalid order event {\"symbol\":\"LINKUSDT\",\"side\":\"SELL\"}"
+    },
+    {
+      "line": 408,
+      "text": "11:51:21 🪙 CG CANCEL REQUESTED #3029796 LINKUSDT BUY 2 @ 8.659"
+    },
+    {
+      "line": 409,
+      "text": "11:51:22 🪙 CG CANCELLED #3029796 LINKUSDT BUY 2 @ 8.659 | Executed: 0 | Cancelled: 2"
+    },
+    {
+      "line": 410,
+      "text": "11:53:33 ERROR paused a trading pair {\"symbol\":\"ADAUSDT\",\"reason\":\"REST_STREAM_RECONCILIATION_FAILED\"}"
+    },
+    {
+      "line": 411,
+      "text": "11:53:33 ERROR account-integrity safety halt could not fully reconcile owned orders before BUY cancellation"
+    },
+    {
+      "line": 414,
+      "text": "11:53:33 🪙 CG PORTFOLIO ADAUSDT: amount: 0.05 | earned: 0 | spent: 7.2 | net: 0.053"
+    },
+    {
+      "line": 415,
+      "text": "11:53:34 🪙 CG FILLED #806319 ADAUSDT SELL 49.9 @ 0.1455"
+    },
+    {
+      "line": 416,
+      "text": "11:56:16 ERROR paused a trading pair {\"symbol\":\"DOGEUSDT\",\"reason\":\"UNKNOWN_OR_EXTERNAL_ORDER_EVENT\"}"
+    },
+    {
+      "line": 417,
+      "text": "11:56:16 ERROR rejected an unowned or invalid order event {\"symbol\":\"DOGEUSDT\",\"side\":\"SELL\"}"
+    },
+    {
+      "line": 418,
+      "text": "12:12:59 ERROR Binance market stream error"
+    },
+    {
+      "line": 419,
+      "text": "13:10:28 shutdown requested"
+    },
+    {
+      "line": 420,
+      "text": "13:10:28 shutdown state established"
+    },
+    {
+      "line": 421,
+      "text": "13:10:28 shutdown phase STRATEGY_SHUTDOWN_SAFETY STARTED"
+    }
+  ],
+  "submissionFacts": {
+    "intentCount": 0,
+    "outcomeCount": 0
+  },
+  "filterEvidence": {
+    "filterSnapshotFactCount": 0,
+    "terminalLogRecordsOnlyRulesValidated": true,
+    "lotSizeValuesCaptured": false,
+    "minNotionalValuesCaptured": false,
+    "databaseDumpStatus": "PRESENT_NOT_INSPECTED"
+  },
+  "shutdownEvidence": {
+    "shutdownSafetyStarted": true,
+    "processStoppedFactPresent": false,
+    "closingAccountSnapshotPresent": false,
+    "closingOpenOrdersSnapshotPresent": false,
+    "terminalLogLastRelevantLine": [
+      {
+        "line": 419,
+        "text": "13:10:28 shutdown requested"
+      },
+      {
+        "line": 420,
+        "text": "13:10:28 shutdown state established"
+      },
+      {
+        "line": 421,
+        "text": "13:10:28 shutdown phase STRATEGY_SHUTDOWN_SAFETY STARTED"
+      }
+    ]
+  },
+  "startupRetry": {
+    "sessionId": "403b10b2-17aa-4760-a6e9-c36453cd73e2",
+    "startedAt": "2026-11-22T11:10:47.050Z",
+    "failedAt": "2026-11-22T11:10:50.242Z",
+    "reportedCommitPrefix": "3c78fcd",
+    "failure": "Provider-attributed execution fill has no preceding submission intent: h-dff68008c72c47a59368ad-2",
+    "processLockRetained": true
+  },
+  "pauseDispositions": [
+    {
+      "symbol": "ZROUSDT",
+      "reason": "RECOVERY_CYCLE_COMPLETION_FAILED",
+      "disposition": "UNRESOLVED_HISTORICAL_CAUSE; the recorded CONTINUE_SELL_THROUGH outcome is consistent with residual inventory, but the subsequent generic pause lacks full trace and historical filter evidence."
+    },
+    {
+      "symbol": "DOGEUSDT",
+      "reason": "RECOVERY_CYCLE_COMPLETION_FAILED",
+      "disposition": "UNRESOLVED_HISTORICAL_CAUSE; the recorded CONTINUE_SELL_THROUGH outcome is consistent with residual inventory, but the subsequent generic pause lacks full trace and historical filter evidence."
+    },
+    {
+      "symbol": "ADAUSDT",
+      "reason": "REST_STREAM_RECONCILIATION_FAILED",
+      "disposition": "FAIL_CLOSED_RECONCILIATION_PAUSE; SELL execution preceded the pause, although the fill fact was recorded afterward."
+    },
+    {
+      "symbol": "LINKUSDT",
+      "reason": "UNKNOWN_OR_EXTERNAL_ORDER_EVENT",
+      "disposition": "FAIL_CLOSED_REJECTION_OF_UNOWNED_SELL; the owned BUY was canceled later under ACCOUNT_INTEGRITY_FAILURE."
+    },
+    {
+      "symbol": "DOGEUSDT",
+      "reason": "UNKNOWN_OR_EXTERNAL_ORDER_EVENT",
+      "disposition": "FAIL_CLOSED_REJECTION_OF_UNOWNED_SELL while the market was already paused; blocker evidence is present."
+    }
+  ]
+}
