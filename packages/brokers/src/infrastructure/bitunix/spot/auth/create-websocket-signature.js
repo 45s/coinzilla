@@ -40,27 +40,27 @@ export function serializeBitunixWebSocketParams({ params }) {
 /**
  * Create the Bitunix Spot WebSocket double-SHA256 signature.
  *
- * @param {{nonce: string, timestamp: string, apiKey: string, secretKey: string, params: Record<string, string|number|boolean>}} input
+ * @param {{nonce: string, timestamp: string, publicIdentifier: string, secretKey: string, params: Record<string, string|number|boolean>}} input
  * @returns {string} Lowercase hexadecimal signature.
  */
 export function createBitunixWebSocketSignature(input = {}) {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
     throw new TypeError("Bitunix WebSocket signature input must be an object")
   }
-  const { nonce, timestamp, apiKey: publicApiKey, secretKey: signingSecret, params } = input
+  const { nonce, timestamp, publicIdentifier, secretKey: signingSecret, params } = input
   assertNonEmptyString({ value: nonce,
     name: "nonce" })
   assertNonEmptyString({ value: timestamp,
     name: "timestamp" })
-  assertNonEmptyString({ value: publicApiKey,
-    name: "apiKey" })
+  assertNonEmptyString({ value: publicIdentifier,
+    name: "publicIdentifier" })
   assertNonEmptyString({ value: signingSecret,
     name: "secretKey" })
 
   const parameterString = serializeBitunixWebSocketParams({ params })
   // codeql[js/insufficient-password-hash] Bitunix requires SHA-256 here for WebSocket request authentication.
 
-  const digest = createHash("sha256").update(`${nonce}${timestamp}${publicApiKey}${parameterString}`, "utf8").digest("hex")
+  const digest = createHash("sha256").update(`${nonce}${timestamp}${publicIdentifier}${parameterString}`, "utf8").digest("hex")
   // codeql[js/insufficient-password-hash] Bitunix requires SHA-256 here for WebSocket request authentication.
 
   return createHash("sha256").update(`${digest}${signingSecret}`, "utf8").digest("hex")
