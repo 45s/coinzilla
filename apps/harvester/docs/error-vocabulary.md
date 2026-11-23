@@ -91,7 +91,6 @@ The Telegram Command Center uses the feature-owned `OperatorQueryError` for fail
 
 The operation error aggregates the original failures as causes. The relational `runtime_errors` projection stores only bounded, allowlisted and redacted context; inspect the session DEBUG/TRACE JSONL logs for complete stack/cause evidence. This diagnostic failure does not itself change trading readiness, order ownership, or exchange state. History coverage remains incomplete until the failed page is successfully synchronized.
 
-
 ## Live order-history projection
 
 **Stable validation error code:** `HARVESTER_ORDER_HISTORY_RECORD_INVALID`
@@ -99,6 +98,7 @@ The operation error aggregates the original failures as causes. The relational `
 This code means a canonical order lifecycle event could not be mapped into the best-effort relational order-history projection. It is distinct from `HARVESTER_ACCOUNT_HISTORY_SYNC_FAILED`, which describes paginated startup synchronization from the exchange.
 
 The structured observer diagnostic includes:
+
 - `component`: `order-history-observer`
 - `operation` and `persistenceStage` (for example `mapping` or `write`)
 - stable `errorCode`, `errorName`, and a bounded safe `field` when available
