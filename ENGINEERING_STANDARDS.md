@@ -163,6 +163,19 @@ Required practices:
 
 A materially edited test case must comply with these practices throughout that case, not only on newly added lines. Review the full changed test file for opaque names, tuple-based comparisons, missing assertion messages, and unexplained expected values before delivery.
 
+### Scenario catalog and traceability
+
+The repository-wide [Test Scenario Catalog](docs/testing/SCENARIO_CATALOG.md) is the human-readable entry point for important application behavior. For meaningful new behavior, public/domain contract changes, correctness fixes, and critical lifecycle or safety guarantees:
+
+- Add a stable scenario ID and describe the observable business behavior in plain language, including preconditions, concrete inputs/events, expected outputs/state changes, and important negative assertions.
+- List meaningful boundary, invalid-input, duplicate/conflict, ordering, concurrency, and failure subcases as relevant to the behavior.
+- Link the production implementation owner and the exact automated test file **and named test case** that proves each mapped behavior. Do not make readers infer coverage from filenames.
+- Keep the catalog status honest: an existing test name is only a candidate mapping until its assertions are reviewed; VERIFIED requires reviewed assertions and successful execution on an exact cited commit/PR head.
+- If a behavior is unresolved or unsupported, mark it BLOCKED or UNSUPPORTED rather than inventing an expected result.
+- Keep detailed domain matrices and evidence in their owning specifications/issues when that is their established home; link them from the catalog rather than copying entire checklists.
+
+The catalog is a navigation and traceability layer, not a replacement for domain specifications or executable tests. This is a lightweight discoverability requirement, not a new generic preflight command, readiness report, or CI gate.
+
 ### 3. Reliability, error handling, and observability
 
 Follow the canonical [Structured Error Handling Standard](docs/engineering/structured-error-handling.md) for the shared `SystemCustomError` base, component-owned subclasses and codes, cause preservation, safe diagnostic context, and gradual adoption. New functionality and materially changed bug-fix paths must follow it; unrelated legacy code is migrated incrementally.
