@@ -231,4 +231,4 @@ Do not treat the conceptual diagram as a new production state model: map every t
 
 ### Medium — next-cycle basis must exclude prior retained inventory
 
-`src/use-cases/create-portfolio-workflow-next-cycle.test.js` composes real Portfolio/RecoveryLedger accounting and cycle completion with the real Conservative domain policy. It completes a first cycle, retains exactly one base unit, applies a new BUY, and verifies that only the new cycle's cost/proceeds determine the next recovery SELL while prior retained inventory remains separate. Added in PR #1774; exact-head CI remains pending.
+`src/use-cases/create-portfolio-workflow-next-cycle.test.js` composes real Portfolio/RecoveryLedger accounting and cycle completion with the real Conservative domain policy. It completes a first cycle, retains exactly one base unit, applies a new BUY, replays both prior-cycle fills to prove full projection immutability, and verifies that only the new cycle's cost/proceeds determine the next recovery SELL while prior retained inventory remains separate. Added in PR #1774; exact-head CI remains pending.

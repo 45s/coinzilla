@@ -131,12 +131,15 @@ function createNextCycleWorkflow() {
       fill: firstCycleSell,
       strategyId: StrategyId.COIN_GRABBER,
     }).ledger
-  return createPortfolioWorkflow({
-    evaluateStrategy: () => ({ action: "NO_ACTION" }),
-    logger: {},
-    initialPortfolio,
-    initialRecoveryLedgers: new Map([[market.id, initialLedger]]),
-  })
+  return {
+    workflow: createPortfolioWorkflow({
+      evaluateStrategy: () => ({ action: "NO_ACTION" }),
+      logger: {},
+      initialPortfolio,
+      initialRecoveryLedgers: new Map([[market.id, initialLedger]]),
+    }),
+    previousCycleFills: [firstCycleBuy, firstCycleSell],
+  }
 }
 
 async function completeFirstRecoveryCycle({ workflow }) {
@@ -179,6 +182,24 @@ function assertNextCycleAccounting({ workflow }) {
   assert.equal(ledger.appliedFillIds.length, 3, "Fill identities from the completed cycle must remain deduplicated alongside the new BUY.")
 }
 
+async function assertPreviousCycleReplayIsIgnored({ workflow, previousCycleFills }) {
+  const portfolioBefore = workflow.getPortfolio().value
+  const recoveryLedgerBefore = workflow.getRecoveryLedger({ marketId: market.id }).value
+
+  for (const fill of previousCycleFills) {
+    const result = await workflow.updateTradingAccounting({ fill })
+    assert.equal(result.ok, true, "A replay of an already-accounted prior-cycle fill must be accepted as an idempotent duplicate.")
+    assert.equal(result.data.duplicate, true, "Prior-cycle fill identities must remain registered after cycle completion.")
+  }
+
+  assert.deepEqual(workflow.getPortfolio().value, portfolioBefore, "Stale prior-cycle fills must not mutate the new Portfolio recovery basis or retained inventory.")
+  assert.deepEqual(
+    workflow.getRecoveryLedger({ marketId: market.id }).value,
+    recoveryLedgerBefore,
+    "Stale prior-cycle fills must not mutate the new RecoveryLedger cost or proceeds.",
+  )
+}
+
 function evaluateNextCycleDecision({ workflow }) {
   return evaluateConservativeStrategy({
     marketPrice: {
@@ -212,13 +233,14 @@ function assertNextCycleRecoverySell({ decision }) {
 }
 
 test("starts the next recovery cycle from its new BUY basis without reusing prior retained inventory", async () => {
-  const workflow = createNextCycleWorkflow()
+  const { workflow, previousCycleFills } = createNextCycleWorkflow()
   const completion = await completeFirstRecoveryCycle({ workflow })
   assert.equal(completion.ok, true, "The first recovery cycle must complete after its full cost plus the exact profit threshold is recovered.")
   assertFirstCycleRetainedInventory({ workflow })
   const nextCycleResult = await applyNextCycleBuy({ workflow })
   assert.equal(nextCycleResult.ok, true, "The next cycle's canonical BUY fill must apply successfully.")
   assertNextCycleAccounting({ workflow })
+  await assertPreviousCycleReplayIsIgnored({ workflow, previousCycleFills })
   const decision = evaluateNextCycleDecision({ workflow })
   assert.equal(decision.action, "PLACE_ORDERS", "The next cycle must remain eligible for its required standing orders.")
   assertNextCycleRecoverySell({ decision })
