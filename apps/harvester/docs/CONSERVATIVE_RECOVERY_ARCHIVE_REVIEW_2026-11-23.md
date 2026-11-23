@@ -172,3 +172,13 @@ The exact-head CI run for digest assertion commit `9205fc81e5d640cca19e775ebb59e
 Continue issue #1362 and PR #1761 from this branch. Read root and nested AGENTS.md files, AI_AGENT_WORKFLOW.md, the task-compliance standard, Harvester roadmap, lifecycle audit, accounting invariants, domain test inventory, and #1763 scenario-test guidance before changing source. Re-open this archive review and the immutable archive at the exact source commit above.
 
 The branch is synchronized with current develop; Task Preflight is retired. The replay, digest, inventory, late-SELL accounting composition, and prospective order-history field diagnostics are implemented and all applicable CI passed on exact head `842b502422ac01b4926d662cb81683f4151715a3`. The only remaining historical evidence gap is the exact invalid field/root cause for the 28 order-history errors. Preserve the original archive and all historical unknowns; do not invent the field or inspect the database dump without explicit authorization. Keep historical facts distinct from synthetic runtime fixtures. Keep PR #1761 draft/unmerged; no TESTNET/LIVE writes or account mutations. Report evidence, unknowns, commit message, tests, CI, and the next single action at every checkpoint.
+}
+
+## 2026-11-23 — continuation handoff
+
+- Issue #1362 / PR #1761 remain active; PR #1761 remains draft.
+- Internal sync PR #1784 merged the latest `develop@99caf7d9026e47908b54799a618bbe2f2f699c05` into the task branch using merge commit `5eaf4612673d4b8d3d15290788f103119e90fb39`. The branch was 76 ahead / 4 behind before the merge; re-check the exact comparison after the merge.
+- The merge brought two overlapping-path changes: `apps/harvester/docs/domain/DOMAIN_TEST_INVENTORY.md` and `apps/harvester/src/use-cases/reconcile-terminal-order-fills.test.js`. Review the merged regression and inventory update before continuing.
+- The prior all-green exact-head CI checkpoint was `842b502`; it does not certify later commits. Run all applicable CI on the current task head.
+- Historical root cause for the 28 order-history failures remains unknown. Do not inspect the database dump without explicit authorization.
+- Keep PR #1761 draft; update issue and PR after every implementation commit.
