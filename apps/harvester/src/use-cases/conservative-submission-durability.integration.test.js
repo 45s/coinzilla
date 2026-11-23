@@ -7,9 +7,20 @@ import { conservativeStrategyPolicy } from "../domain/strategies/conservative/st
 import { makeConservativeTradingEngine } from "./conservative-trading-engine.js"
 import { createHarnessBroker } from "./conservative-trading-engine-harness.js"
 
-const baseAsset = new Asset({ id: "doge", code: "DOGE" })
-const quoteAsset = new Asset({ id: "usdt", code: "USDT" })
-const market = new Market({ venue: "binance", symbol: "DOGEUSDT", baseAsset, quoteAsset })
+const baseAsset = new Asset({
+  id: "doge",
+  code: "DOGE",
+})
+const quoteAsset = new Asset({
+  id: "usdt",
+  code: "USDT",
+})
+const market = new Market({
+  venue: "binance",
+  symbol: "DOGEUSDT",
+  baseAsset,
+  quoteAsset,
+})
 const marketMetadata = {
   market,
   orderType: "LIMIT_MAKER",
@@ -18,10 +29,38 @@ const marketMetadata = {
   tradingRules: new TradingRules({
     market,
     constraints: [
-      { type: "PRICE_INCREMENT", status: "SUPPORTED", value: new Money({ amount: "0.01", asset: quoteAsset }) },
-      { type: "QUANTITY_INCREMENT", status: "SUPPORTED", value: new Quantity({ amount: "0.1", asset: baseAsset }) },
-      { type: "MIN_QUANTITY", status: "SUPPORTED", value: new Quantity({ amount: "0.1", asset: baseAsset }) },
-      { type: "MIN_NOTIONAL", status: "SUPPORTED", value: new Money({ amount: "5", asset: quoteAsset }) },
+      {
+        type: "PRICE_INCREMENT",
+        status: "SUPPORTED",
+        value: new Money({
+          amount: "0.01",
+          asset: quoteAsset,
+        }),
+      },
+      {
+        type: "QUANTITY_INCREMENT",
+        status: "SUPPORTED",
+        value: new Quantity({
+          amount: "0.1",
+          asset: baseAsset,
+        }),
+      },
+      {
+        type: "MIN_QUANTITY",
+        status: "SUPPORTED",
+        value: new Quantity({
+          amount: "0.1",
+          asset: baseAsset,
+        }),
+      },
+      {
+        type: "MIN_NOTIONAL",
+        status: "SUPPORTED",
+        value: new Money({
+          amount: "5",
+          asset: quoteAsset,
+        }),
+      },
     ],
   }),
 }
@@ -29,7 +68,10 @@ const appConfig = {
   strategies: {
     CG_coinGrabber: {
       enabled: true,
-      settings: { conservative: { enabled: true }, aggressive: { enabled: false } },
+      settings: {
+        conservative: { enabled: true },
+        aggressive: { enabled: false },
+      },
       pairs: {
         DOGEUSDT: {
           enabled: true,
@@ -71,12 +113,18 @@ function createEngine({ calls, intentResult = { ok: true, data: { durable: true 
     getMarketMetadata: () => marketMetadata,
     getAccountSnapshot: () => brokerState.accountSnapshot,
     updateTradingAccounting: async () => ({ ok: true, data: { applied: true } }),
-    completeRecoveryCycle: async () => ({ ok: true, data: { eligible: true, freeQuantity: "0.1" } }),
+    completeRecoveryCycle: async () => ({
+      ok: true,
+      data: { eligible: true, freeQuantity: "0.1" },
+    }),
+    canTrade: () => true,
+    onPause: async () => {},
+    isStopping: () => false,
     isMarketPriceFresh: () => true,
     isMarketBookFresh: () => true,
-    canTrade: () => true,
-    isStopping: () => false,
-    onPause: async () => {},
+    hasUnownedOpenOrdersForSymbol: () => false,
+    now: () => 1,
+    initialState: {},
     onOperationalStateSubmissionIntent: async () => {
       calls.push("intent")
       return intentResult
@@ -103,7 +151,11 @@ async function submitFirstMarketDecision({ engine }) {
   })
   return engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+    priceEvent: {
+      symbol: "DOGEUSDT",
+      price: "100",
+      timestamp: 1,
+    },
   })
 }
 
@@ -121,7 +173,10 @@ test("fails closed before Conservative broker placement when the operational-sta
   const calls = []
   const { engine, brokerState } = createEngine({
     calls,
-    intentResult: { ok: false, errors: [new Error("operational-state store unavailable")] },
+    intentResult: {
+      ok: false,
+      errors: [new Error("operational-state store unavailable")],
+    },
   })
   const result = await submitFirstMarketDecision({ engine })
 
