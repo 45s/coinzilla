@@ -1,9 +1,9 @@
 # Conservative Recovery — Immutable Archive Re-review (2026-11-23)
 
-**Tracking:** [Issue #1362](https://github.com/45s/coinzilla/issues/1362)  
-**Implementation PR:** [PR #1761](https://github.com/45s/coinzilla/pull/1761)  
-**Branch:** `fix/harvester/1362-archive-reconstruction-preflight-20261123`  
-**Archive source:** `45s/coinzilla-archive@f283c90db9143c74683ae5bf9c7bb52e09590d56`  
+**Tracking:** [Issue #1362](https://github.com/45s/coinzilla/issues/1362)
+**Implementation PR:** [PR #1761](https://github.com/45s/coinzilla/pull/1761)
+**Branch:** `fix/harvester/1362-archive-reconstruction-preflight-20261123`
+**Archive source:** `45s/coinzilla-archive@f283c90db9143c74683ae5bf9c7bb52e09590d56`
 **Archive path:** `archives/2026-11-22T17-35-17Z_77213df6/`
 
 ## 1. Why this review exists
@@ -120,13 +120,13 @@ These were identified in the prior investigation checkpoint and still require im
 7. **CI:** rerun Harvester targeted tests, workspace tests/coverage, strict changed-file ESLint, JavaScript quality/syntax, actionlint, dependency audit and documentation links on the exact final head. Task Preflight is retired and is not a gate.
 8. **Keep PR #1761 draft and unmerged** until all acceptance criteria and exact-head required checks pass. No TESTNET/LIVE validation is authorized by this task.
 
-
 ## 8. 2026-11-23 continuation — implementation and evidence checkpoint
 
 ### Branch synchronization
 Internal sync PR #1777 merged current `develop` into the task branch with merge commit `da0547818c62ebd3be2890ed250ded9ffc40e9a0`. Current PR #1761 remains draft. Task Preflight CI enforcement is retired on current `develop`; it is not a blocker.
 
 ### Replay and archive integrity
+
 - Runtime replay now sources each fill's exact `quoteQuantity` from the immutable fixture and asserts the execution report retains it.
 - The fixture now distinguishes fact terminal digest `154720ef4b575e5a189fc6aa78fd9575917537d02e808403593ab4c09c8dd4b8` from manifest terminal digest `d4d5c84fa9857cf721f10955f17a816845900538779454e02d2dd6f80db65bef`.
 - All 49 fact and 49 manifest digest metadata records are retained. Automated assertions verify sequences, previous-digest links, manifest-to-fact references and record counts.
