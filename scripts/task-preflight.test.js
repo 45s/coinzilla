@@ -306,7 +306,7 @@ test('prints source identity and exits without GitHub credentials for --version'
   );
   assert.match(
     result.stdout,
-    /task:preflight v\\d+\\.\\d+\\.\\d+/,
+    /task:preflight v\d+\.\d+\.\d+/,
     'The startup identity must name the task:preflight command and owning package version.',
   );
   assert.match(
@@ -321,7 +321,7 @@ test('prints source identity and exits without GitHub credentials for --version'
   );
   assert.match(
     result.stdout,
-    /Node v\\d+\\.\\d+\\.\\d+/,
+    /Node v\d+\.\d+\.\d+/,
     'The startup identity must report the Node.js runtime version.',
   );
   assert.equal(
