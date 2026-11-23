@@ -30,7 +30,7 @@ const cycleId = "rs-doge-cycle-001"
 const clientOrderId = "rs-doge-mixed-sell-001"
 const brokerOrderId = "binance-order-001"
 
-function createScenario({ legacyRemainingQuantity = "1" } = {}) {
+function createMarketAndOrder() {
   const baseAsset = new Asset({ id: "doge-asset", code: "DOGE" })
   const quoteAsset = new Asset({ id: "usdt-asset", code: "USDT" })
   const market = new Market({
@@ -64,7 +64,12 @@ function createScenario({ legacyRemainingQuantity = "1" } = {}) {
       cycleId,
     }],
   })
-  const fill = new Fill({
+
+  return { baseAsset, quoteAsset, market, order, orderRegistry }
+}
+
+function createCanonicalFill({ market, baseAsset, quoteAsset }) {
+  return new Fill({
     tradeId: "trade-001",
     brokerOrderId,
     clientOrderId,
@@ -82,12 +87,9 @@ function createScenario({ legacyRemainingQuantity = "1" } = {}) {
     ],
     commissionStatus: "COMPLETE",
   })
-  const allocation = createMixedSellFillAllocation({
-    fill,
-    orderRegistry,
-    recoveryQuantity: "400",
-    legacyQuantity: "1",
-  })
+}
+
+function createInitialProjections({ market, baseAsset, quoteAsset, legacyRemainingQuantity }) {
   const initialRecoveryPosition = new Position({
     positionId,
     strategyId: StrategyId.RECOVERY_SELLER,
@@ -108,10 +110,32 @@ function createScenario({ legacyRemainingQuantity = "1" } = {}) {
     ...createdLegacyPosition,
     remainingQuantity: legacyRemainingQuantity,
   })
-  const legacyAccounting = createLegacyPositionAccounting()
+
+  return {
+    portfolio,
+    legacyPosition,
+    legacyAccounting: createLegacyPositionAccounting(),
+  }
+}
+
+function createScenario({ legacyRemainingQuantity = "1" } = {}) {
+  const marketData = createMarketAndOrder()
+  const fill = createCanonicalFill(marketData)
+  const allocation = createMixedSellFillAllocation({
+    fill,
+    orderRegistry: marketData.orderRegistry,
+    recoveryQuantity: "400",
+    legacyQuantity: "1",
+  })
+  const projections = createInitialProjections({
+    market: marketData.market,
+    baseAsset: marketData.baseAsset,
+    quoteAsset: marketData.quoteAsset,
+    legacyRemainingQuantity,
+  })
   const initialReconciliation = createMixedSellFillReconciliation({
-    order,
-    orderRegistry,
+    order: marketData.order,
+    orderRegistry: marketData.orderRegistry,
   })
   const staged = stageMixedSellFillAllocation({
     reconciliation: initialReconciliation,
@@ -119,22 +143,16 @@ function createScenario({ legacyRemainingQuantity = "1" } = {}) {
   })
   const terminal = reconcileMixedSellFillOrder({
     reconciliation: staged.reconciliation,
-    terminalOrder: order,
-    orderRegistry,
+    terminalOrder: marketData.order,
+    orderRegistry: marketData.orderRegistry,
     canonicalFillAllocations: [allocation],
   })
 
   return Object.freeze({
-    baseAsset,
-    quoteAsset,
-    market,
-    order,
-    orderRegistry,
+    ...marketData,
+    ...projections,
     fill,
     allocation,
-    portfolio,
-    legacyPosition,
-    legacyAccounting,
     reconciliation: terminal.reconciliation,
   })
 }
