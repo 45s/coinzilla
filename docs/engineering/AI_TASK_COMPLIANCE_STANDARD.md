@@ -1,8 +1,8 @@
 # AI task standards and verification guide
 
-**Status:** Repository engineering guidance  
-**Applies to:** AI agents and automated coding contributors  
-**Owner:** Repository engineering  
+**Status:** Repository engineering guidance
+**Applies to:** AI agents and automated coding contributors
+**Owner:** Repository engineering
 **Canonical source:** This document
 
 Use this guide to discover the engineering standards relevant to a task and to keep implementation quality consistent. It is not a mandatory task-start gate or an administrative reporting process.
