@@ -122,7 +122,7 @@ The audit is intentionally evidence-led. If a later reviewer finds a criterion n
 
 ### Source integrity and fixture provenance
 
-- Immutable source: [`45s/coinzilla-archive`](https://github.com/45s/coinzilla-archive) commit `f283c90db9143c74683ae5bf9c7bb52e09590d56`, directory `archives/2026-11-22T17-35-17Z_77213df6`.
+- Immutable source: private repository `45s/coinzilla-archive`, commit `f283c90db9143c74683ae5bf9c7bb52e09590d56`, directory `archives/2026-11-22T17-35-17Z_77213df6`.
 - Recovery runtime session: `ebe7c1d3-ff7d-47db-b2fe-2e5ec9594c1c`. The original `PROCESS_STARTED` fact does not record the runtime source commit; `dataCommitHash` is archive-data provenance, not a verified source-code commit.
 - The 49-record Operational State fact stream has consecutive sequences 0–48 and consistent previous-digest links. All 49 manifest entries have matching sequence/count values and reference the corresponding committed fact digests. The facts file SHA-256 is `1b923c1a090904df601463d14681090165b7f8d50a3806e96655699d90a97295`; the manifest SHA-256 is `3063f9ce829cce8a66a471672abee6b77ff52b6647b0b786381adc1db5f264bc`.
 - Selected cumulative terminal log: `terminal.log` SHA-256 `6ec912690afbfeb1d9c87c674647a34e11d855b2d59337c34ac58d54d2a93d33` (429 lines). The archive manifest says cumulative logs are only the final 5% and only the newest session directory is retained. The newest session directory belongs to a separate startup retry, `403b10b2-17aa-4760-a6e9-c36453cd73e2`, not the original recovery runtime.
