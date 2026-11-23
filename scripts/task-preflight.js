@@ -80,16 +80,91 @@ export function validateInstructionSnapshot({ report, actual, required }) {
   }
   return errors;
 }
-function plain(text) {
-  return text
-    .replace(/<!--[\s\S]*?-->/g, '')
+/**
+ * Finds the first HTML comment terminator after an opening delimiter.
+ *
+ * HTML allows abrupt empty-comment closures and the incorrectly closed
+ * end-bang form. An unterminated comment consumes the remaining input.
+ */
+function findHtmlCommentEnd({ text, startIndex }) {
+  if (text[startIndex] === '>') {
+    return startIndex + 1;
+  }
+  if (text[startIndex] === '-' && text[startIndex + 1] === '>') {
+    return startIndex + 2;
+  }
+
+  const commentEnd = text.indexOf('-->', startIndex);
+  const commentEndBang = text.indexOf('--!>', startIndex);
+
+  if (commentEnd === -1) {
+    return commentEndBang === -1 ? text.length : commentEndBang + 4;
+  }
+  if (commentEndBang === -1) {
+    return commentEnd + 3;
+  }
+  return Math.min(commentEnd + 3, commentEndBang + 4);
+}
+
+/**
+ * Removes HTML comments while preserving text outside their token boundaries.
+ */
+function removeHtmlComments(text) {
+  let output = '';
+  let cursor = 0;
+
+  while (cursor < text.length) {
+    const commentStart = text.indexOf('<!--', cursor);
+    if (commentStart === -1) {
+      return output + text.slice(cursor);
+    }
+
+    output += text.slice(cursor, commentStart);
+    cursor = findHtmlCommentEnd({
+      text,
+      startIndex: commentStart + 4,
+    });
+  }
+
+  return output;
+}
+
+/**
+ * Separates comment openers recreated by subsequent text-normalization steps.
+ */
+function breakHtmlCommentOpeners(text) {
+  const commentStart = '<!--';
+  let output = '';
+  let cursor = 0;
+
+  while (cursor < text.length) {
+    const commentIndex = text.indexOf(commentStart, cursor);
+    if (commentIndex === -1) {
+      return output + text.slice(cursor);
+    }
+
+    output += `${text.slice(cursor, commentIndex)}<! --`;
+    cursor = commentIndex + commentStart.length;
+  }
+
+  return output;
+}
+
+/**
+ * Normalizes issue text while removing HTML comments and preventing delimiter reintroduction.
+ *
+ * @param {string} text - The issue or pull-request text to normalize.
+ * @returns {string} Plain normalized text.
+ */
+export function plain(text) {
+  const normalized = removeHtmlComments(text)
     .replace(/^\s*(?:What\b|Describe\b|List\b|Record\b|Which\b|Who\b|How\b|Summarize\b|Complete when resolved\b).*$/gim, '')
     .replace(/^\s*[-*]\s*\[[ xX]\]\s*(?:Observable outcome:?|TBD|TODO)?\s*$/gim, '')
     .replace(/^\s*[-*]\s*\[[ xX]\]\s*(?:Regression test reproduces the original defect and passes after the fix\.|Relevant failure and boundary cases are covered\.|No existing behavior or invariant regresses\.)\s*$/gim, '')
     .replace(/\b(?:TBD|TODO)\b/gi, '')
-    .replace(/[\x60*_>#|]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
+    .replace(/[\x60*_>#|]/g, '');
+
+  return breakHtmlCommentOpeners(normalized).replace(/\s+/g, ' ').trim();
 }
 function hasConcreteAcceptanceCriteria(section) {
   const vague = /\b(?:works? as expected|works? correctly|implemented correctly|implemented as requested|all tests pass|no issues remain)\b/i;
