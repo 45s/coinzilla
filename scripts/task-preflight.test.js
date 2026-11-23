@@ -257,6 +257,7 @@ sha: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' }],
     requiredInstructionPaths: ['AGENTS.md'],
     actualInstructionHashes: new Map([['AGENTS.md', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa']]),
     preflightCommitIsAncestor: true,
+    preflightRecordedBeforeImplementation: true,
   });
   assert.deepEqual(result, []);
 
