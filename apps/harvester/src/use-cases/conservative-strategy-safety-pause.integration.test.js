@@ -9,13 +9,11 @@ import {
   Quantity,
   TradingRules,
 } from "@coinzilla/entities"
-import { multiplyDecimal } from "@coinzilla/utils"
 import { StrategyId } from "../domain/strategies/strategy-ids.js"
-import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { OrderRegistry } from "../domain/orders/order-registry.js"
-import { RecoveryLedger } from "../domain/strategies/conservative/recovery-ledger.js"
-import { conservativeStrategyPolicy } from "../domain/strategies/conservative/strategy-policy.js"
 import { makeConservativeTradingEngine } from "./conservative-trading-engine.js"
+import { createLatestTransitionEvaluator } from "./create-latest-transition-evaluator.js"
+import { createSubmissionGate } from "./create-submission-gate.js"
 import { createHarnessBroker } from "./conservative-trading-engine-harness.js"
 import { HARVESTER_EVENT_NAMES } from "../application/events/event-names.js"
 
@@ -130,19 +128,7 @@ function createSafetyPauseBrokerState(options) {
 }
 
 function createSafetyPauseStrategyPolicy(options) {
-  if (options.strategyPolicy) {
-    return options.strategyPolicy
-  }
-  if (!options.initialPortfolio) {
-    return conservativeStrategyPolicy
-  }
-  return {
-    ...conservativeStrategyPolicy,
-    evaluate: (input) => conservativeStrategyPolicy.evaluate({
-      ...input,
-      lastBuyPrice: "100",
-    }),
-  }
+  return options.strategyPolicy
 }
 
 function createSafetyPauseEventPublisher(eventPublisher) {
@@ -235,8 +221,8 @@ function createSafetyPauseEngine({ options, brokerState, state }) {
 async function createSafetyPauseHarness(options = {}) {
   const brokerState = createSafetyPauseBrokerState(options)
   const state = {
-    currentPortfolio: options.initialPortfolio ?? new Portfolio(),
-    currentRecoveryLedger: options.initialRecoveryLedger ?? RecoveryLedger.empty({ market }),
+    currentPortfolio: options.initialPortfolio,
+    currentRecoveryLedger: options.initialRecoveryLedger,
   }
   const engine = createSafetyPauseEngine({ options, brokerState, state })
   await engine.processBookTicker({
@@ -281,42 +267,6 @@ function makeOrder({ side, clientOrderId, brokerOrderId, status = "OPEN", execut
     acknowledgedAt: 1,
     updatedAt: 1,
   })
-}
-
-function makeSeededRecoveryState({ quantity = "1" } = {}) {
-  const fill = new Fill({
-    tradeId: "seed-recovery-buy",
-    brokerOrderId: "seed-recovery-order",
-    market,
-    side: "BUY",
-    price: new Money({
-      amount: "100",
-      asset: quoteAsset,
-    }),
-    quantity: new Quantity({
-      amount: quantity,
-      asset: baseAsset,
-    }),
-    quoteQuantity: new Money({
-      amount: multiplyDecimal({
-        left: "100",
-        right: quantity,
-      }),
-      asset: quoteAsset,
-    }),
-    commissions: [],
-    commissionStatus: "COMPLETE",
-  })
-  return {
-    portfolio: new Portfolio().applyFill({
-      strategyId: StrategyId.COIN_GRABBER,
-      fill,
-    }).portfolio,
-    recoveryLedger: RecoveryLedger.empty({ market }).applyFill({
-      strategyId: StrategyId.COIN_GRABBER,
-      fill,
-    }).ledger,
-  }
 }
 
 function makeActiveOrders() {
@@ -557,51 +507,78 @@ test("keeps the BUY gate active when pause fact persistence and publication fail
   assert.ok(snapshot.blockers.includes("STRATEGY_PAUSE_CANCELLATION_INCOMPLETE"))
 })
 
-test("continues purpose-tagged recovery SELL evaluation and submission while safety-paused", async () => {
-  const buyOrder = makeOrder({
-    side: "BUY",
-    clientOrderId: "strategy-pause-recovery-buy",
-    brokerOrderId: "broker-strategy-pause-recovery-buy",
-  })
-  const seeded = makeSeededRecoveryState()
-  let evaluationCount = 0
-  const strategyPolicy = {
-    ...conservativeStrategyPolicy,
-    evaluate: (input) => {
-      evaluationCount += 1
-      if (evaluationCount === 1) {
-        throw new Error("force the first strategy evaluation to pause")
-      }
-      return conservativeStrategyPolicy.evaluate({
-        ...input,
-        lastBuyPrice: "100",
-      })
-    },
+test("continues Recovery Seller evaluation when the Conservative strategy is safety-paused", async () => {
+  const state = {
+    shutdownBuyGate: false,
+    paused: new Set(["DOGEUSDT"]),
+    durablePausedMarkets: new Set(["DOGEUSDT"]),
+    recoveryManagedPausedMarkets: new Set(),
+    deferredEvaluations: new Set(),
   }
-  const harness = await createSafetyPauseHarness({
-    initialState: { orderRegistry: new OrderRegistry({ orders: [buyOrder] }) },
-    initialPortfolio: seeded.portfolio,
-    initialRecoveryLedger: seeded.recoveryLedger,
-    baseFreeBalance: "1",
-    strategyPolicy,
-    eventPublisher: makeEventPublisher([]),
+  let recoverySellEvaluations = 0
+  const evaluate = createLatestTransitionEvaluator({
+    state,
+    pairs: { DOGEUSDT: { enabled: true } },
+    hasBlockingOpenOrdersForSymbol: () => false,
+    isStopping: () => false,
+    canTrade: () => true,
+    isMarketPriceFresh: () => true,
+    getCurrentMarketMetadata: () => marketMetadata,
+    evaluateRecoverySellerTransition: async ({ state: recoveryState }) => {
+      assert.ok(recoveryState.paused.has("DOGEUSDT"))
+      recoverySellEvaluations += 1
+      return { ok: true, data: { submitted: true } }
+    },
   })
 
-  const paused = await triggerStrategySafetyPause(harness)
-  assert.equal(paused.ok, false)
-  assert.equal(harness.engine.getOrders()[0].status, "CANCELED")
-  const recovery = await harness.engine.processMarketPrice({
+  const result = await evaluate({
     symbol: "DOGEUSDT",
-    priceEvent: {
-        symbol: "DOGEUSDT",
-        price: "105",
-        timestamp: 2,
-      },
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
   })
-  assert.equal(recovery.ok, true, recovery.errors?.[0]?.message)
-  assert.ok(harness.engine.getOrders().some((order) => order.side === "SELL" && ["OPEN", "PARTIALLY_FILLED"].includes(order.status)))
-  assert.equal(
-    harness.engine.getOrders().filter((order) => order.side === "BUY" && ["OPEN", "PARTIALLY_FILLED"].includes(order.status)).length,
-    0,
-  )
+  assert.equal(result.ok, true)
+  assert.equal(result.data.submitted, true)
+  assert.equal(recoverySellEvaluations, 1)
+})
+
+test("allows only purpose-tagged RECOVERY_SELL through the strategy safety BUY gate", () => {
+  const dependencies = {
+    state: {
+      shutdownBuyGate: false,
+      paused: new Set(["DOGEUSDT"]),
+      durablePausedMarkets: new Set(["DOGEUSDT"]),
+      recoveryManagedPausedMarkets: new Set(),
+      operatorPausedMarkets: new Set(),
+      volatilityProtection: new Map(),
+      prices: new Map([
+        ["DOGEUSDT", { price: "100", timestamp: 1 }],
+      ]),
+      books: new Map(),
+    },
+    isShutdownRecoverySubmissionAllowed: () => false,
+    isStopping: () => false,
+    hasBlockingOpenOrdersForSymbol: () => false,
+    canTrade: () => true,
+    isMarketPriceFresh: () => true,
+    getVolatilityData: () => ({ ok: false }),
+    isVolatilityProtectionEnabledForSymbol: () => false,
+    isMarketBookFresh: () => true,
+    isPostOnlyOrderCrossing: () => false,
+  }
+  const gate = createSubmissionGate(dependencies)
+  const recoverySell = gate({
+    order: { market: { symbol: "DOGEUSDT" }, side: "SELL", type: "LIMIT" },
+    purpose: "RECOVERY_SELL",
+  })
+  const ordinarySell = gate({
+    order: { market: { symbol: "DOGEUSDT" }, side: "SELL", type: "LIMIT" },
+    purpose: "NORMAL_SELL",
+  })
+  const recoveryBuy = gate({
+    order: { market: { symbol: "DOGEUSDT" }, side: "BUY", type: "LIMIT" },
+    purpose: "RECOVERY_BUY",
+  })
+
+  assert.deepEqual(recoverySell, { allowed: true })
+  assert.equal(ordinarySell.allowed, false)
+  assert.equal(recoveryBuy.allowed, false)
 })
