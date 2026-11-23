@@ -81,12 +81,10 @@ function createInitialAdaAccounting() {
   return result.data
 }
 
-function createEngineHarness({ portfolio, recoveryLedger }) {
-  const calls = []
-  const appliedFillIds = new Set()
+function createAccountingState({ portfolio, recoveryLedger }) {
   let currentPortfolio = portfolio
   let currentRecoveryLedger = recoveryLedger
-  let firstEvent = true
+  const appliedFillIds = new Set()
   const applyFill = (fill) => {
     const result = updateTradingAccounting({
       portfolio: currentPortfolio,
@@ -102,41 +100,61 @@ function createEngineHarness({ portfolio, recoveryLedger }) {
     }
     return result
   }
-  const engine = {
-    processUserDataEvent: async ({ event, recoveryMode }) => {
-      calls.push(["process", event.fill?.id, recoveryMode])
-      if (firstEvent) {
-        firstEvent = false
-        return {
-          ok: false,
-          errors: [new Error("terminal fill history temporarily unavailable")],
-          failure: {
-            category: "REST_RECONCILIATION",
-            stage: "REST_STREAM_RECONCILIATION_FAILED",
-            retryable: true,
-          },
-        }
-      }
-      const accounting = applyFill(event.fill)
-      if (!accounting.ok) {
-        return {
-          ok: false,
-          errors: accounting.errors,
-          failure: {
-            category: "ACCOUNTING_INTEGRITY",
-            stage: "LATE_SELL_ACCOUNTING_FAILED",
-            retryable: false,
-          },
-        }
-      }
-      return {
-        ok: true,
-        data: {
-          reevaluate: false,
-          duplicate: accounting.data.duplicate,
-        },
-      }
+  return {
+    applyFill,
+    appliedFillIds,
+    getPortfolio: () => currentPortfolio,
+    getRecoveryLedger: () => currentRecoveryLedger,
+  }
+}
+
+function createRetryableHistoryFailure() {
+  return {
+    ok: false,
+    errors: [new Error("terminal fill history temporarily unavailable")],
+    failure: {
+      category: "REST_RECONCILIATION",
+      stage: "REST_STREAM_RECONCILIATION_FAILED",
+      retryable: true,
     },
+  }
+}
+
+function createAccountingFailure(result) {
+  return {
+    ok: false,
+    errors: result.errors,
+    failure: {
+      category: "ACCOUNTING_INTEGRITY",
+      stage: "LATE_SELL_ACCOUNTING_FAILED",
+      retryable: false,
+    },
+  }
+}
+
+function createEngineHarness({ accounting }) {
+  const calls = []
+  let firstEvent = true
+  const processUserDataEvent = async ({ event, recoveryMode }) => {
+    calls.push(["process", event.fill?.id, recoveryMode])
+    if (firstEvent) {
+      firstEvent = false
+      return createRetryableHistoryFailure()
+    }
+    const result = accounting.applyFill(event.fill)
+    if (!result.ok) {
+      return createAccountingFailure(result)
+    }
+    return {
+      ok: true,
+      data: {
+        reevaluate: false,
+        duplicate: result.data.duplicate,
+      },
+    }
+  }
+  const engine = {
+    processUserDataEvent,
     getOrders: () => [],
     reconcileOwnedOrders: async (options) => {
       calls.push(["reconcile", options])
@@ -147,14 +165,7 @@ function createEngineHarness({ portfolio, recoveryLedger }) {
       return { ok: true }
     },
   }
-  return {
-    engine,
-    calls,
-    appliedFillIds,
-    applyFill,
-    getPortfolio: () => currentPortfolio,
-    getRecoveryLedger: () => currentRecoveryLedger,
-  }
+  return { engine, calls }
 }
 
 function createSafetyHaltHandler({ state, engine, calls, observedFillIds, accounting }) {
@@ -195,33 +206,7 @@ function createLateAdaSellEvent({ fill }) {
   }
 }
 
-test("routes REST/stream reconciliation failures through the account safety halt and applies a late SELL once to real projections", async () => {
-  const state = createState()
-  const initialAccounting = createInitialAdaAccounting()
-  const accounting = createEngineHarness(initialAccounting)
-  const { engine, calls, appliedFillIds } = accounting
-  const observedFillIds = []
-  const handler = createSafetyHaltHandler({
-    state,
-    engine,
-    calls,
-    observedFillIds,
-    accounting,
-  })
-  const sellFill = createAdaFill({
-    tradeId: "145942",
-    side: "SELL",
-    price: "0.1455",
-    quantity: "49.9",
-    quoteQuantity: "7.26045",
-    commissionAmount: "0.00726045",
-    commissionAsset: usdtQuoteAsset,
-  })
-  const event = createLateAdaSellEvent({ fill: sellFill })
-
-  handler({ event })
-  await state.eventQueue
-
+function assertInitialSafetyHalt({ state, calls, observedFillIds, sellFill }) {
   assert.deepEqual(
     calls.slice(0, 3),
     [
@@ -236,26 +221,15 @@ test("routes REST/stream reconciliation failures through the account safety halt
   assert.equal(state.accountingFailed, false, "A retryable REST reconciliation failure must not be mislabeled as an accounting-integrity failure.")
   assert.equal(state.status, "AUTHORITATIVE_RECONCILIATION_REQUIRED", "The safety halt must expose the authoritative-reconciliation-required state.")
   assert.deepEqual(observedFillIds, [], "The failed first delivery must not be published as an accepted user-data event.")
+}
 
-  handler({ event })
-  await state.eventQueue
-  const portfolioAfterFirstSell = accounting.getPortfolio()
-  const ledgerAfterFirstSell = accounting.getRecoveryLedger()
-  handler({ event })
-  await state.eventQueue
-
-  assert.deepEqual(calls.slice(3).map((call) => call[2]), [true, true], "Both later deliveries must continue through recovery-mode processing.")
-  assert.deepEqual(
-    [...appliedFillIds],
-    [sellFill.id],
-    "The same late SELL Fill must be committed to both projections exactly once.",
-  )
+function assertLateSellAccounting({ accounting, sellFill, appliedFillIds, observedFillIds, portfolioAfterSell, ledgerAfterSell }) {
+  assert.deepEqual([...appliedFillIds], [sellFill.id], "The same late SELL Fill must be committed to both projections exactly once.")
   assert.deepEqual(
     observedFillIds,
     [sellFill.id, sellFill.id],
     "The late SELL report must be observed on each accepted recovery-mode delivery.",
   )
-
   const position = accounting.getPortfolio().getPosition({ marketId: adaMarket.id })
   const recoveryLedger = accounting.getRecoveryLedger()
   assert.equal(position.baseQuantity.amount, "0.05", "Portfolio must retain the exact ADA quantity after base-fee BUY and quote-fee SELL.")
@@ -265,13 +239,55 @@ test("routes REST/stream reconciliation failures through the account safety halt
   assert.equal(recoveryLedger.netSellProceeds, "7.25318955", "RecoveryLedger must deduct the actual quote-asset SELL commission.")
   assert.equal(recoveryLedger.realizedNetProfit, "0.05318955", "RecoveryLedger realized profit must match Portfolio cash flow.")
   assert.equal(recoveryLedger.outstandingRecoveryAmount, "0", "The late SELL must satisfy the recovery basis without resetting the safety pause.")
-  assert.equal(accounting.getPortfolio(), portfolioAfterFirstSell, "Duplicate delivery must not replace or mutate the committed Portfolio projection.")
-  assert.equal(accounting.getRecoveryLedger(), ledgerAfterFirstSell, "Duplicate delivery must not replace or mutate the committed RecoveryLedger projection.")
+  assert.equal(accounting.getPortfolio(), portfolioAfterSell, "Duplicate delivery must not replace or mutate the committed Portfolio projection.")
+  assert.equal(accounting.getRecoveryLedger(), ledgerAfterSell, "Duplicate delivery must not replace or mutate the committed RecoveryLedger projection.")
+}
 
+function assertSafetyHaltRemainsLatched({ state, calls }) {
   assert.equal(state.ready, false, "Readiness must remain closed while authoritative reconciliation is required.")
   assert.equal(state.requiresReconciliation, true, "The safety halt must retain the required reconciliation state.")
   assert.equal(state.status, "AUTHORITATIVE_RECONCILIATION_REQUIRED", "The safety halt must expose the authoritative-reconciliation-required state.")
   assert.equal(calls.filter((call) => Array.isArray(call) && call[0] === "reconcile").length, 1, "The initial safety halt must perform one authoritative reconciliation attempt.")
   assert.equal(calls.filter((entry) => entry === "cancel-owned-buys").length, 1, "The safety halt must cancel owned BUYs once and must not recursively retry cancellation.")
   assert.equal(calls.includes("resume"), false, "A late SELL fill must not reopen deferred BUY evaluation while readiness is closed.")
+}
+
+test("routes REST/stream reconciliation failures through the account safety halt and applies a late SELL once to real projections", async () => {
+  const state = createState()
+  const accounting = createAccountingState(createInitialAdaAccounting())
+  const { engine, calls } = createEngineHarness({ accounting })
+  const observedFillIds = []
+  const handler = createSafetyHaltHandler({ state, engine, calls, observedFillIds, accounting })
+  const sellFill = createAdaFill({
+    tradeId: "145942",
+    side: "SELL",
+    price: "0.1455",
+    quantity: "49.9",
+    quoteQuantity: "7.26045",
+    commissionAmount: "0.00726045",
+    commissionAsset: usdtQuoteAsset,
+  })
+  const event = createLateAdaSellEvent({ fill: sellFill })
+
+  handler({ event })
+  await state.eventQueue
+  assertInitialSafetyHalt({ state, calls, observedFillIds, sellFill })
+
+  handler({ event })
+  await state.eventQueue
+  const portfolioAfterSell = accounting.getPortfolio()
+  const ledgerAfterSell = accounting.getRecoveryLedger()
+  handler({ event })
+  await state.eventQueue
+
+  assert.deepEqual(calls.slice(3).map((call) => call[2]), [true, true], "Both later deliveries must continue through recovery-mode processing.")
+  assertLateSellAccounting({
+    accounting,
+    sellFill,
+    appliedFillIds: accounting.appliedFillIds,
+    observedFillIds,
+    portfolioAfterSell,
+    ledgerAfterSell,
+  })
+  assertSafetyHaltRemainsLatched({ state, calls })
 })
