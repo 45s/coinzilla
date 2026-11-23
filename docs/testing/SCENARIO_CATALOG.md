@@ -333,7 +333,7 @@ The [Conservative Domain Specification](../../apps/harvester/docs/domain/CONSERV
   - `does not allocate free coins for a partial or cancelled recovery SELL`
   - `pauses when a fully filled recovery SELL misses minProfit`
   - `defers completion while any active residual remains above keepQuantity`
-  - `classifies exchange-constrained dust evidence that cannot be sold`
+  - `fails closed when exchange-constrained dust evidence contains non-positive filter values or negative evaluations`
 - [`recovery-sell-plan.test.js`](../../apps/harvester/src/domain/strategies/conservative/recovery-sell-plan.test.js)
   - `plans a recovery SELL that retains keepQuantity and covers cost plus minProfit`
   - `continues cumulative recovery after confirmed partial SELL proceeds`
