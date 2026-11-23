@@ -4,6 +4,10 @@ on:
   push:
     branches:
       - task/preflight-codeql-1765
+    paths:
+      - 'scripts/task-preflight.js'
+      - 'scripts/task-preflight.test.js'
+      - '.github/workflows/task-preflight-codeql-regression.yml'
   pull_request:
     branches:
       - develop
