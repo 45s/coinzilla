@@ -834,6 +834,52 @@
         "If the blocked evidence cannot be durably recorded, preserve both capture and durability failures and fail shutdown closed; never publish STOPPED or release required process resources.",
         "CLOSING open-order evidence is an audit fact only; it does not adopt orders, mutate orders, restore prior process state or enable process-restart recovery."
       ]
+    },
+    {
+      "id": "STRATEGY_SAFETY_PAUSE_BUY_CANCELLATION",
+      "title": "Automatic strategy safety pause, owned-BUY neutralization and recovery-SELL continuity",
+      "sourceModules": [
+        "src/use-cases/conservative-trading-engine.js",
+        "src/use-cases/create-latest-transition-evaluator.js",
+        "src/use-cases/create-submission-gate.js",
+        "src/bootstrap/harvester-runtime-setup.js"
+      ],
+      "integrationRequired": true,
+      "tests": [
+        {
+          "path": "src/use-cases/conservative-strategy-safety-pause.integration.test.js",
+          "name": "gates BUYs before canceling only registered BUYs and reconciles cancellation-racing fills once",
+          "kind": "integration"
+        },
+        {
+          "path": "src/use-cases/conservative-strategy-safety-pause.integration.test.js",
+          "name": "reports a complete safety pause when there are no owned BUYs",
+          "kind": "integration"
+        },
+        {
+          "path": "src/use-cases/conservative-strategy-safety-pause.integration.test.js",
+          "name": "keeps an UNKNOWN owned BUY blocked and raises a durable safety blocker",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/conservative-strategy-safety-pause.integration.test.js",
+          "name": "keeps the BUY gate active when pause fact persistence and publication fail",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/conservative-strategy-safety-pause.integration.test.js",
+          "name": "continues purpose-tagged recovery SELL evaluation and submission while safety-paused",
+          "kind": "integration"
+        }
+      ],
+      "runtimeStatus": "active",
+      "invariants": [
+        "A strategy safety pause establishes the market BUY gate before cancellation and cancels only active BUYs registered in the current process OrderRegistry; it never cancels external/manual/prior-process orders or SELLs.",
+        "Reuse the durable owned-order cancellation intent/outcome and terminal-fill reconciliation workflow; apply cancellation-racing fills exactly once. PENDING/UNKNOWN orders remain unresolved and are never blindly re-submitted for cancellation.",
+        "An unresolved owned BUY cancellation or pause durability/publication failure keeps the BUY gate active, exposes an explicit incomplete result and attempts a durable market-scoped safety blocker; never report the market as safely paused while incomplete.",
+        "Only purpose-tagged RECOVERY_SELL evaluation/submission remains available through the strategy safety BUY pause; recovery fill accounting continues and no new BUY is submitted.",
+        "Operator pause semantics and process/session ownership boundaries remain unchanged."
+      ]
     }
   ],
   "coverageBaseline": {
