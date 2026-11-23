@@ -14,17 +14,30 @@ const ORDER_HISTORY_EVENT_NAMES = new Set([
 const DEFAULT_MAX_PENDING_WRITES = 1000
 const MAX_RETAINED_ERRORS = 20
 
-function createEventContext(event) {
-  const data = event?.data ?? {}
+function createEventIdentityContext(event) {
   return {
     eventId: event?.id ?? null,
     eventName: event?.name ?? null,
     eventSource: event?.source ?? null,
     sourceEventTimestamp: event?.timestamp ?? null,
-    symbol: data.market?.symbol ?? data.symbol ?? null,
+  }
+}
+
+function createOrderIdentityContext(data) {
+  const market = data.market ?? {}
+  return {
+    symbol: market.symbol ?? data.symbol ?? null,
     providerInstanceId: data.providerInstanceId ?? null,
     accountId: data.accountId ?? null,
     clientOrderId: data.clientOrderId ?? null,
+  }
+}
+
+function createEventContext(event) {
+  const data = event?.data ?? {}
+  return {
+    ...createEventIdentityContext(event),
+    ...createOrderIdentityContext(data),
   }
 }
 

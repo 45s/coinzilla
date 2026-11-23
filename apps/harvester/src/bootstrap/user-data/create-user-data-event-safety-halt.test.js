@@ -154,7 +154,11 @@ function createEngineHarness({ accounting }) {
   const calls = []
   let firstEvent = true
   const processUserDataEvent = async ({ event, recoveryMode }) => {
-    calls.push({ type: "process", fillId: event.fill?.id, recoveryMode })
+    calls.push({
+      type: "process",
+      fillId: event.fill?.id,
+      recoveryMode,
+    })
     if (firstEvent) {
       firstEvent = false
       return createRetryableHistoryFailure()
@@ -175,7 +179,10 @@ function createEngineHarness({ accounting }) {
     processUserDataEvent,
     getOrders: () => [],
     reconcileOwnedOrders: async (options) => {
-      calls.push({ type: "reconcile", options })
+      calls.push({
+        type: "reconcile",
+        options,
+      })
       return { ok: true }
     },
     cancelOwnedBuyOrdersForSafetyHalt: async () => {
@@ -231,8 +238,15 @@ function assertInitialSafetyHalt({ state, calls, observedFillIds, sellFill }) {
   assert.deepEqual(
     calls.slice(0, 3),
     [
-      { type: "process", fillId: sellFill.id, recoveryMode: true },
-      { type: "reconcile", options: { recoveryMode: true } },
+      {
+        type: "process",
+        fillId: sellFill.id,
+        recoveryMode: true,
+      },
+      {
+        type: "reconcile",
+        options: { recoveryMode: true },
+      },
       { type: "cancel-owned-buys" },
     ],
     "A reconciliation failure must enter recovery mode, reconcile authoritative state, then cancel current-process-owned BUYs.",
