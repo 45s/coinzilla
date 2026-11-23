@@ -1,5 +1,9 @@
 import nodeTest from "node:test"
 import assert from "node:assert/strict"
+import { Asset, Commission, Fill, Market, Money, Quantity } from "@coinzilla/entities"
+import { Portfolio } from "../../domain/portfolio/portfolio.js"
+import { RecoveryLedger } from "../../domain/strategies/conservative/recovery-ledger.js"
+import { updateTradingAccounting } from "../../use-cases/update-trading-accounting.js"
 import { createUserDataEventHandler } from "./create-user-data-event-handler.js"
 import { createAccountIntegritySafetyHalt } from "../../use-cases/create-account-integrity-safety-halt.js"
 
@@ -23,10 +27,81 @@ function createState() {
   }
 }
 
-function createEngineHarness() {
+const adaBaseAsset = new Asset({ id: "ada", code: "ADA" })
+const usdtQuoteAsset = new Asset({ id: "usdt", code: "USDT" })
+const adaMarket = new Market({
+  venue: "binance",
+  symbol: "ADAUSDT",
+  baseAsset: adaBaseAsset,
+  quoteAsset: usdtQuoteAsset,
+})
+
+function createAdaFill({
+  tradeId,
+  side,
+  price,
+  quantity,
+  quoteQuantity,
+  commissionAmount,
+  commissionAsset,
+}) {
+  return new Fill({
+    tradeId,
+    brokerOrderId: `ada-order-${tradeId}`,
+    clientOrderId: `ada-client-${tradeId}`,
+    market: adaMarket,
+    side,
+    price: new Money({ amount: price, asset: usdtQuoteAsset }),
+    quantity: new Quantity({ amount: quantity, asset: adaBaseAsset }),
+    quoteQuantity: new Money({ amount: quoteQuantity, asset: usdtQuoteAsset }),
+    commissions: [
+      new Commission({
+        amount: new Money({ amount: commissionAmount, asset: commissionAsset }),
+      }),
+    ],
+    commissionStatus: "COMPLETE",
+  })
+}
+
+function createInitialAdaAccounting() {
+  const result = updateTradingAccounting({
+    portfolio: new Portfolio(),
+    recoveryLedger: RecoveryLedger.empty({ market: adaMarket }),
+    fill: createAdaFill({
+      tradeId: "145912",
+      side: "BUY",
+      price: "0.144",
+      quantity: "50",
+      quoteQuantity: "7.2",
+      commissionAmount: "0.05",
+      commissionAsset: adaBaseAsset,
+    }),
+  })
+  assert.equal(result.ok, true, "The archived ADA BUY must seed real accounting projections.")
+  return result.data
+}
+
+function createEngineHarness({ portfolio, recoveryLedger }) {
   const calls = []
   const appliedFillIds = new Set()
+  let currentPortfolio = portfolio
+  let currentRecoveryLedger = recoveryLedger
   let firstEvent = true
+  const applyFill = (fill) => {
+    const result = updateTradingAccounting({
+      portfolio: currentPortfolio,
+      recoveryLedger: currentRecoveryLedger,
+      fill,
+    })
+    if (result.ok) {
+      currentPortfolio = result.data.portfolio
+      currentRecoveryLedger = result.data.recoveryLedger
+      if (result.data.applied) {
+        appliedFillIds.add(fill.id)
+      }
+    }
+    return result
+  }
   const engine = {
     processUserDataEvent: async ({ event, recoveryMode }) => {
       calls.push(["process", event.fill?.id, recoveryMode])
@@ -42,16 +117,23 @@ function createEngineHarness() {
           },
         }
       }
-      const fillId = event.fill?.id
-      const duplicate = appliedFillIds.has(fillId)
-      if (!duplicate) {
-        appliedFillIds.add(fillId)
+      const accounting = applyFill(event.fill)
+      if (!accounting.ok) {
+        return {
+          ok: false,
+          errors: accounting.errors,
+          failure: {
+            category: "ACCOUNTING_INTEGRITY",
+            stage: "LATE_SELL_ACCOUNTING_FAILED",
+            retryable: false,
+          },
+        }
       }
       return {
         ok: true,
         data: {
           reevaluate: false,
-          duplicate,
+          duplicate: accounting.data.duplicate,
         },
       }
     },
@@ -69,10 +151,13 @@ function createEngineHarness() {
     engine,
     calls,
     appliedFillIds,
+    applyFill,
+    getPortfolio: () => currentPortfolio,
+    getRecoveryLedger: () => currentRecoveryLedger,
   }
 }
 
-function createSafetyHaltHandler({ state, engine, calls, observedFillIds }) {
+function createSafetyHaltHandler({ state, engine, calls, observedFillIds, accounting }) {
   const cancelOwnedBuysAfterAccountingFailure = createAccountIntegritySafetyHalt({
     getTradingEngine: () => engine,
     logger: {},
@@ -86,45 +171,53 @@ function createSafetyHaltHandler({ state, engine, calls, observedFillIds }) {
     onUserDataEvent: async ({ event }) => {
       observedFillIds.push(event.fill?.id)
     },
-    getPortfolio: () => ({ positions: [] }),
-    getRecoveryLedger: () => undefined,
+    getPortfolio: accounting.getPortfolio,
+    getRecoveryLedger: () => accounting.getRecoveryLedger(),
     updatePortfolio: () => ({ ok: true }),
-    updateTradingAccounting: () => ({ ok: true }),
+    updateTradingAccounting: ({ fill }) => accounting.applyFill(fill),
     cancelOwnedBuysAfterAccountingFailure,
     resumeDeferredStrategyEvaluations: () => calls.push("resume"),
   })
 }
 
-function createLateAdaSellEvent() {
+function createLateAdaSellEvent({ fill }) {
   return {
     eventType: "executionReport",
     executionType: "TRADE",
     executedOrder: {
-      market: { symbol: "ADAUSDT" },
-      brokerOrderId: "ada-recovery-sell-1",
-      clientOrderId: "ada-recovery-sell-client",
+      market: adaMarket,
+      brokerOrderId: fill.brokerOrderId,
+      clientOrderId: fill.clientOrderId,
       side: "SELL",
       status: "FILLED",
     },
-    fill: {
-      id: "ada-late-recovery-sell-fill",
-      market: { symbol: "ADAUSDT" },
-      side: "SELL",
-    },
+    fill,
   }
 }
 
-test("routes REST/stream reconciliation failures through the account safety halt and applies a late SELL once", async () => {
+test("routes REST/stream reconciliation failures through the account safety halt and applies a late SELL once to real projections", async () => {
   const state = createState()
-  const { engine, calls, appliedFillIds } = createEngineHarness()
+  const initialAccounting = createInitialAdaAccounting()
+  const accounting = createEngineHarness(initialAccounting)
+  const { engine, calls, appliedFillIds } = accounting
   const observedFillIds = []
   const handler = createSafetyHaltHandler({
     state,
     engine,
     calls,
     observedFillIds,
+    accounting,
   })
-  const event = createLateAdaSellEvent()
+  const sellFill = createAdaFill({
+    tradeId: "145942",
+    side: "SELL",
+    price: "0.1455",
+    quantity: "49.9",
+    quoteQuantity: "7.26045",
+    commissionAmount: "0.00726045",
+    commissionAsset: usdtQuoteAsset,
+  })
+  const event = createLateAdaSellEvent({ fill: sellFill })
 
   handler({ event })
   await state.eventQueue
@@ -132,7 +225,7 @@ test("routes REST/stream reconciliation failures through the account safety halt
   assert.deepEqual(
     calls.slice(0, 3),
     [
-      ["process", "ada-late-recovery-sell-fill", true],
+      ["process", sellFill.id, true],
       ["reconcile", { recoveryMode: true }],
       "cancel-owned-buys",
     ],
@@ -146,23 +239,39 @@ test("routes REST/stream reconciliation failures through the account safety halt
 
   handler({ event })
   await state.eventQueue
+  const portfolioAfterFirstSell = accounting.getPortfolio()
+  const ledgerAfterFirstSell = accounting.getRecoveryLedger()
   handler({ event })
   await state.eventQueue
 
   assert.deepEqual(calls.slice(3).map((call) => call[2]), [true, true], "Both later deliveries must continue through recovery-mode processing.")
-  assert.equal(appliedFillIds.size, 1, "Repeated delivery of the same late SELL fill must apply accounting exactly once.")
+  assert.deepEqual(
+    [...appliedFillIds],
+    [sellFill.id],
+    "The same late SELL Fill must be committed to both projections exactly once.",
+  )
   assert.deepEqual(
     observedFillIds,
-    [
-      "ada-late-recovery-sell-fill",
-      "ada-late-recovery-sell-fill",
-    ],
+    [sellFill.id, sellFill.id],
     "The late SELL report must be observed on each accepted recovery-mode delivery.",
   )
+
+  const position = accounting.getPortfolio().getPosition({ marketId: adaMarket.id })
+  const recoveryLedger = accounting.getRecoveryLedger()
+  assert.equal(position.baseQuantity.amount, "0.05", "Portfolio must retain the exact ADA quantity after base-fee BUY and quote-fee SELL.")
+  assert.equal(position.spent.amount, "7.2", "Portfolio cost basis must retain the archived BUY quote quantity.")
+  assert.equal(position.quoteNetCashFlow.amount, "0.05318955", "Portfolio must report exact realized net quote cash flow.")
+  assert.equal(recoveryLedger.buyCost, "7.2", "RecoveryLedger BUY basis must match Portfolio Position.spent.")
+  assert.equal(recoveryLedger.netSellProceeds, "7.25318955", "RecoveryLedger must deduct the actual quote-asset SELL commission.")
+  assert.equal(recoveryLedger.realizedNetProfit, "0.05318955", "RecoveryLedger realized profit must match Portfolio cash flow.")
+  assert.equal(recoveryLedger.outstandingRecoveryAmount, "0", "The late SELL must satisfy the recovery basis without resetting the safety pause.")
+  assert.equal(accounting.getPortfolio(), portfolioAfterFirstSell, "Duplicate delivery must not replace or mutate the committed Portfolio projection.")
+  assert.equal(accounting.getRecoveryLedger(), ledgerAfterFirstSell, "Duplicate delivery must not replace or mutate the committed RecoveryLedger projection.")
+
   assert.equal(state.ready, false, "Readiness must remain closed while authoritative reconciliation is required.")
   assert.equal(state.requiresReconciliation, true, "The safety halt must retain the required reconciliation state.")
   assert.equal(state.status, "AUTHORITATIVE_RECONCILIATION_REQUIRED", "The safety halt must expose the authoritative-reconciliation-required state.")
-  assert.equal(calls.filter(([name]) => name === "reconcile").length, 1, "The initial safety halt must perform one authoritative reconciliation attempt.")
+  assert.equal(calls.filter((call) => Array.isArray(call) && call[0] === "reconcile").length, 1, "The initial safety halt must perform one authoritative reconciliation attempt.")
   assert.equal(calls.filter((entry) => entry === "cancel-owned-buys").length, 1, "The safety halt must cancel owned BUYs once and must not recursively retry cancellation.")
   assert.equal(calls.includes("resume"), false, "A late SELL fill must not reopen deferred BUY evaluation while readiness is closed.")
 })
