@@ -5484,24 +5484,7 @@ function assertStaleRestOrderHistoryRejected({ engine, accountedFills, pauses, b
 }
 
 
-test("rejects REST order history that is behind an already processed stream fill", async () => {
-  const {
-    engine,
-    broker,
-    accountedFills,
-    pauses,
-  } = await createHarness({
-    accountingApplied: true,
-  })
-  await engine.processMarketPrice({
-    symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1,
-    },
-  })
-  const buyOrder = engine.getOrders().find((order) => order.side === "BUY")
+async function processStreamFillAheadOfRestHistory({ engine, buyOrder } = {}) {
   const streamFill = makeBuyFill({
     order: buyOrder,
     tradeId: "stream-ahead-of-rest",
@@ -5524,6 +5507,28 @@ test("rejects REST order history that is behind an already processed stream fill
     },
   })
   assert.equal(streamResult.ok, true)
+  return streamFill
+}
+
+test("rejects REST order history that is behind an already processed stream fill", async () => {
+  const {
+    engine,
+    broker,
+    accountedFills,
+    pauses,
+  } = await createHarness({
+    accountingApplied: true,
+  })
+  await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: {
+      symbol: "DOGEUSDT",
+      price: "100",
+      timestamp: 1,
+    },
+  })
+  const buyOrder = engine.getOrders().find((order) => order.side === "BUY")
+  const streamFill = await processStreamFillAheadOfRestHistory({ engine, buyOrder })
   const staleRestFill = makeBuyFill({
     order: buyOrder,
     tradeId: "stale-rest-history-fill",
