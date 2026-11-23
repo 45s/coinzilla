@@ -60,6 +60,7 @@ jobs:
             --threads=0
 
       - name: Analyze default queries and capture the exact sanitizer result
+        id: sarif
         shell: bash
         run: |
           set -euo pipefail
@@ -70,6 +71,7 @@ jobs:
             --threads=0
           python - "$sarif" <<'PY'
           import json
+          import os
           import sys
 
           target_rule = "js/incomplete-multi-character-sanitization"
@@ -115,7 +117,27 @@ jobs:
               "results": findings,
           }, indent=2, sort_keys=True))
 
-          if findings:
-              raise SystemExit("Task-preflight CodeQL regression remains present.")
-          print("No task-preflight multi-character sanitizer finding detected.")
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(f"finding_count={len(findings)}\\n")
+          print("No task-preflight multi-character sanitizer finding detected." if not findings else "Task-preflight CodeQL finding captured for the RED regression baseline.")
           PY
+
+      - name: Set up Node.js 24 for task-preflight tests
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24.x
+
+      - name: Run task-preflight regression tests
+        run: node --test scripts/task-preflight.test.js
+
+      - name: Fail if the task-preflight CodeQL finding remains
+        if: always()
+        env:
+          FINDING_COUNT: ${{ steps.sarif.outputs.finding_count }}
+        shell: bash
+        run: |
+          if [[ "$FINDING_COUNT" != "0" ]]; then
+            echo "Expected zero task-preflight sanitizer findings; current count: $FINDING_COUNT."
+            exit 1
+          fi
+          echo "No task-preflight sanitizer finding remains."

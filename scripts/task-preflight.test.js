@@ -178,6 +178,40 @@ test('rejects untouched template prompts instead of treating them as issue evide
   assert.ok(validateIssueBody(template).length >= REQUIRED_ISSUE_SECTIONS.length);
 });
 
+
+test('preserves visible evidence between overlapping empty HTML comments', () => {
+  for (const emptyComment of ['<!-->', '<!--->']) {
+    const body = buildIssueBody({
+      sectionContent: `${emptyComment}Specific evidence remains visible.${emptyComment}`,
+    });
+    assert.deepEqual(
+      validateIssueBody(body),
+      [],
+      `Visible evidence must survive empty comment delimiters: ${emptyComment}`,
+    );
+  }
+});
+
+test('does not count content hidden by malformed or unclosed HTML comments', () => {
+  for (const sectionContent of [
+    '<!--hidden--!>short',
+    '<!--hidden text without a closing delimiter',
+  ]) {
+    const body = buildIssueBody({ sectionContent });
+    assert.ok(
+      validateIssueBody(body).some((error) => /Problem/.test(error)),
+      `Hidden comment content must not satisfy the Problem section: ${sectionContent}`,
+    );
+  }
+});
+
+test('preserves visible text around multiline and adjacent HTML comments', () => {
+  const body = buildIssueBody({
+    sectionContent: 'Visible evidence before <!--first\ncomment--> <!--second--> visible evidence after.',
+  });
+  assert.deepEqual(validateIssueBody(body), []);
+});
+
 test('validates preflight report issue, status, required hashes, and ancestry', () => {
   const report = {
     issueNumber: 1754,
