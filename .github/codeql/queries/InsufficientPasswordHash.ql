@@ -41,11 +41,25 @@ module CoinzillaInsufficientPasswordHashConfig implements DataFlow::ConfigSig {
  * or a stored password verifier. Limit this exception to apiKey accesses in
  * the two Bitunix Spot client modules that own those protocol flows. All
  * other password-like sources remain in scope.
+ *
+ * The expression checks intentionally mirror the upstream
+ * SensitiveVariableAccess constructor: VarAccess.getName() or
+ * DataFlow::PropRead.getPropertyName().
  */
 private predicate isBitunixApiKeyIdentifierSource(DataFlow::Node source) {
   exists(SensitiveVariableAccess access |
     source = access and
-    access.getName() = "apiKey" and
+    (
+      exists(VarAccess variable |
+        access.asExpr() = variable and
+        variable.getName() = "apiKey"
+      )
+      or
+      exists(DataFlow::PropRead property |
+        access = property and
+        property.getPropertyName() = "apiKey"
+      )
+    ) and
     access.getLocation().getFile().getRelativePath() in [
       "packages/brokers/src/infrastructure/bitunix/spot/api/rest-client.js",
       "packages/brokers/src/infrastructure/bitunix/spot/api/websocket-client.js"
