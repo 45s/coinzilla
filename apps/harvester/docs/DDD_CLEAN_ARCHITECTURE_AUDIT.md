@@ -1,12 +1,31 @@
 # Harvester DDD and Clean Architecture Audit
 
-> **Audit date:** 2026-11-03  
-> **Audited branch:** `develop`  
-> **Audited source revision:** `3ad32af9285db23f1f4e587e56f534f7871730aa`  
-> **Scope:** source-code and documentation review of Harvester's application/domain boundaries, with emphasis on the Conservative trading workflow.  
-> **Overall assessment:** **7.5/10 — sound foundations; application orchestration and domain-boundary clarity need focused improvement.**
+> **Original audit:** 2026-11-03; baseline `3ad32af9285db23f1f4e587e56f534f7871730aa` (historical assessment).  
+> **Current consistency review:** 2026-11-23, `develop`; reviewed current CG/RS composition, enablement/status documentation, and the Operational State submission callback fix in merged PR #1750.  
+> **Scope:** targeted architecture/documentation consistency review, not a complete line-by-line Harvester audit or live/TESTNET validation. The original 7.5/10 score remains a historical judgment and is not recalculated.
 
 This is an architectural assessment, not a production-readiness certification. The audit did not execute the test suite, run a broker simulation, or verify a live/testnet session. Findings describe design visible in the audited source snapshot; verify the current branch before implementing follow-up work.
+
+## Current strategy/runtime consistency review — 2026-11-23
+
+This update preserves the 2026-11-03 audit as historical evidence. It corrects current strategy-runtime assumptions against `develop`; it does not claim a complete re-audit of every Harvester module.
+
+### Current verified direction
+
+- **Conservative (CG) and Recovery Seller (RS) are distinct strategies** with separate policies, strategy-owned Positions, configuration and accounting semantics.
+- **They share strategy-neutral execution mechanics:** the account-owned serialized Trading Engine, broker submission boundary, OrderRegistry/ownership, account-wide commitment allocation, order-event processing and reconciliation. Different strategy IDs do not by themselves require separate end-to-end workflows.
+- **RS is enabled by default.** LINEAUSDT is configured for TESTNET and remains excluded from LIVE by its per-market `tradingEnvironment`. Configuration does not authorize an exchange session; the controlled TESTNET runbook remains CLOSED / PAUSED.
+- PRs #1515, #1696 and #1711 delivered shared-engine runtime composition, legacy single-provider route inference/RS-only startup, and default enablement/environment routing. PR #1718 addressed Operational State Store preparation for enabled RS. Current architecture/status docs must describe these as implemented, while preserving restart/replay and third-asset commission valuation as deferred.
+
+### Operational State submission barrier — resolved
+
+The archived #1743 diagnostic exposed missing durable submission-intent facts. The source mismatch was corrected in merged [PR #1750](https://github.com/45s/coinzilla/pull/1750): the Conservative engine maps its application callback names to the executor's canonical `onDurableSubmissionIntent` / `onDurableSubmissionOutcome` contract and requires the callback pair when the Operational State Store is configured. The executor independently rejects a missing required pair. This preserves the projector's strict provider/order ownership invariant; it does not infer intent from a fill.
+
+Relevant current source: `src/use-cases/conservative-trading-engine.js`, `src/use-cases/execute-strategy-decision.js`, and `src/bootstrap/harvester-runtime-setup.js`. PR #1750 reports 30 applicable exact-head checks passed; its read-only TESTNET check was skipped and no exchange operations were performed.
+
+### Audit disposition
+
+The meaningful current correction is documentation/status drift, not a new architecture defect. Keep CG/RS policy and accounting separate; reuse shared lifecycle/execution mechanics where the contracts are strategy-neutral. Do not create a parallel engine or generic strategy abstraction without a concrete duplication/correctness finding.
 
 ## 1. Reference and interpretation
 
