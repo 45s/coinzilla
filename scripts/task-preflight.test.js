@@ -300,7 +300,6 @@ test('requires verification evidence to name the exact current PR head SHA', () 
     actualInstructionHashes: new Map([['AGENTS.md', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa']]),
     preflightCommitIsAncestor: true,
     preflightRecordedBeforeImplementation: true,
-    changedPaths: ['scripts/task-preflight.test.js'],
   });
 
   assert.ok(
@@ -411,7 +410,10 @@ test('rejects changed paths outside the declared preflight scope', () => {
       issueNumber: 1754,
       status: 'COMPLETE',
       scopePaths: ['scripts'],
-      instructions: [{ path: 'AGENTS.md', sha: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' }],
+      instructions: [{
+        path: 'AGENTS.md',
+        sha: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      }],
     },
     context: {
       issueNumber: 1754,
@@ -435,7 +437,10 @@ test('fails closed when preflight timing cannot be verified', () => {
       issueNumber: 1754,
       status: 'COMPLETE',
       scopePaths: ['scripts'],
-      instructions: [{ path: 'AGENTS.md', sha: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' }],
+      instructions: [{
+        path: 'AGENTS.md',
+        sha: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      }],
     },
     context: {
       issueNumber: 1754,
@@ -467,11 +472,13 @@ test('fails closed when the base instruction tree response is malformed', async 
 test('rejects a pull request used as the tracking issue', () => {
   const headSha = '0123456789012345678901234567890123456789';
   const errors = validatePullRequestEvidence({
-    body: 'Fixes #1754\n\nFinal source commit: ' + headSha + '\n\n## Documentation impact\nN/A because this test-only change does not alter maintained documentation.',
+    body: `Fixes #1754\n\nFinal source commit: ${headSha}\n\n## Documentation impact\nN/A because this test-only change does not alter maintained documentation.`,
     headSha,
     issueNumber: 1754,
     issueBody: buildIssueBody(),
-    issueComments: ['Verification evidence: pnpm run test:task-preflight on commit ' + headSha + '; CI run: ' + CURRENT_WORKFLOW_RUN_URL],
+    issueComments: [
+      `Verification evidence: pnpm run test:task-preflight on commit ${headSha}; CI run: ${CURRENT_WORKFLOW_RUN_URL}`,
+    ],
     workflowRunUrl: CURRENT_WORKFLOW_RUN_URL,
     issueIsPullRequest: true,
     changedPaths: ['scripts/task-preflight.test.js'],
@@ -480,7 +487,10 @@ test('rejects a pull request used as the tracking issue', () => {
       scopePaths: ['.'],
       commitSha: headSha,
       status: 'COMPLETE',
-      instructions: [{ path: 'AGENTS.md', sha: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' }],
+      instructions: [{
+        path: 'AGENTS.md',
+        sha: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      }],
     },
     requiredInstructionPaths: ['AGENTS.md'],
     actualInstructionHashes: new Map([['AGENTS.md', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa']]),
