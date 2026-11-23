@@ -21,7 +21,7 @@ All test improvements in this initiative must remain deterministic and offline. 
 
 The [scenario-test guide](CONSERVATIVE_DOMAIN_SCENARIO_TESTS.md) explains behavior-oriented tests that compose real domain components. The exhaustive coverage checklist and implementation status are maintained in [#1763](https://github.com/45s/coinzilla/issues/1763).
 
-Phase 1 audits existing assertions only. The source-to-test matrix below records current evidence and explicit gaps; it does not claim a new scenario suite exists or that every possible event permutation is covered. Phase 2 scenario-suite work remains deferred.
+Phase 1 audits existing assertions only. The source-to-test matrix below records current evidence and explicit gaps; it does not claim a new scenario suite exists or that every possible event permutation is covered. Phase 2 is the separate test-oracle integrity audit (exact financial expectations and coherent fixtures); dedicated scenario-suite implementation remains in the later scenario phases.
 
 Planned scenario behaviors include initial BUY fill → standing BUY and recovery SELL; second BUY fill → recovery SELL replacement/recalculation; partial recovery SELL accounting; terminal recovery completion → next cycle; retained inventory and constrained dust; commission assets and exact-decimal/filter boundaries; and invalid, duplicate, conflicting, reordered, or incomplete evidence. This initiative adds coverage without redefining the canonical Conservative specification or authorizing exchange operations.
 
@@ -235,9 +235,36 @@ The new runtime-dispatch and action-authorizer suites cover the production compo
 
 The offline bootstrap fixture now builds quote notionals and bid/ask book prices with exact decimal multiplication; remaining broker-style numeric order quantities are derived with exact decimal subtraction before conversion to the numeric adapter shape. The DOGE/ZRO replay assertions now compare retained quantity and realized profit with exact decimal comparison rather than JavaScript Number. Updated in merged PR #1776; exact-head CI passed before merge. This is fixture/oracle evidence, not a production behavior change.
 
+### Phase 2 — test-oracle audit evidence
+
+The following increments are merged into `develop`; all six applicable GitHub Actions workflows passed on each exact PR head:
+
+| PR | Exact verified head | Oracle improvement |
+| --- | --- | --- |
+| [#1771](https://github.com/45s/coinzilla/pull/1771) | `a347262bce8535d81caf7ce327ed69923fbddf13` | Independent exact recovery-SELL fee oracle |
+| [#1773](https://github.com/45s/coinzilla/pull/1773) | `17791f6a0cd11a2089e6b5c5a7b483e7fddc9012` | Cancellation-race accounting and duplicate immutability |
+| [#1775](https://github.com/45s/coinzilla/pull/1775) | `fb6a227c69f07e90549c56539daf9efe4ccb250f` | Coherent exact terminal-Fill quote notional fixture |
+| [#1776](https://github.com/45s/coinzilla/pull/1776) | `ddd7598769f294eb418904a72fca989f9f173c8d` | Exact bootstrap and replay arithmetic |
+
 ### Blocked — remaining Conservative engine financial oracles
 
-`src/use-cases/conservative-trading-engine.test.js` still contains Number-based financial expectations and a `makeSellFill` default quote notional of `"100"` that can disagree with its execution price and quantity. A narrow correction attempt in [closed PR #1772](https://github.com/45s/coinzilla/pull/1772) exposed 33 pre-existing `max-lines-per-function` violations across this large test file under strict changed-file ESLint. The PR was closed; no lint suppression or unrelated broad refactor was applied. Revisit these remaining assertions after a separately scoped decomposition of that test file.
+`src/use-cases/conservative-trading-engine.test.js` is 11,494 lines. [#1772](https://github.com/45s/coinzilla/pull/1772) attempted the narrow `makeSellFill` fixture correction but was closed without merge because strict changed-file ESLint reported 33 pre-existing `max-lines-per-function` violations. Exact failed run: [Repository Quality 45150853240](https://github.com/45s/coinzilla/actions/runs/45150853240), job `137611556689`, on PR head `30071be67129b2a65da85d561f93111ad3c71c2c`. The other five applicable workflows passed. No rule was suppressed or weakened.
+
+The 33 existing findings (line numbers from that exact failed head) are:
+
+- `createHarnessBrokerState` (309), `createHarnessEngine` (396)
+- async test callbacks (1078, 1442, 1508, 1866, 2332, 2514, 2758, 3655, 4148, 4778, 5151, 5280, 5391, 5509, 5637, 6597, 6670, 6926, 7539, 10331, 10402, 10633, 10785)
+- `createShutdownBuyRaceHarness` (3939), `runTerminalRecoverySellStatusScenario` (4620), `createMissingRestFillScenario` (4991), `createRecoveryModeBuyFillFixture` (8295), `createRestFillTimeoutRetryScenario` (8416), `createMalformedRestEnvelopeFixture` (8523), `assertMalformedRestEnvelopeFailsClosed` (8596), `prepareLateSellShutdownScenario` (11259)
+
+The remaining oracle defects are precisely scoped:
+
+- `makeSellFill` defaults `quoteQuantity` to `"100"`, which is not guaranteed to equal `order.limitPrice.amount × quantity`. The fixture must derive quote notional with exact decimal multiplication or require an explicit coherent value.
+- Line 6278 compares ordered prices through `Number`; use exact decimal comparison.
+- Lines 6427 and 6432 use `Number` for financial threshold/quantity expectations; replace with exact decimal comparisons and independently stated expected values.
+- Lines 4976, 4977 and 4983 convert canonical decimal strings into the numeric broker-style `Order` adapter shape. These are adapter-boundary conversions, not expected-value financial oracles; do not misclassify them as financial assertions.
+
+**Next:** refactor the 33 overlong functions into cohesive helpers without changing behavior, then apply the fixture/oracle corrections. Do not add ESLint suppressions, relax thresholds, or change production code. Phase 2 remains in progress until this cleanup is validated.
+
 
 ### Conservative state-machine scenario requirements — issue #1763
 
