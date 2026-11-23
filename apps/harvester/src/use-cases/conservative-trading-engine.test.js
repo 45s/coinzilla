@@ -3654,6 +3654,44 @@ test("recovery completion publisher failure cannot interrupt the committed cycle
 })
 
 
+function createOpenSellAcknowledgement({ pendingSell } = {}) {
+  return new CanonicalOrder({
+    clientOrderId: pendingSell.clientOrderId,
+    brokerOrderId: `broker-${pendingSell.clientOrderId}`,
+    market,
+    side: "SELL",
+    type: pendingSell.type,
+    limitPrice: pendingSell.limitPrice,
+    originalQuantity: pendingSell.originalQuantity,
+    executedQuantity: new Quantity({ amount: "0", asset: baseAsset }),
+    status: "OPEN",
+    createdAt: pendingSell.createdAt,
+    acknowledgedAt: 1,
+    updatedAt: 1,
+  })
+}
+
+async function assertSerializedSellAcknowledgement({
+  engine,
+  orders,
+  cancellationIds,
+  accountedFills,
+  resolveAcknowledgement,
+  transitions,
+} = {}) {
+  assert.deepEqual(cancellationIds, [])
+  assert.equal(orders.length, 1)
+  resolveAcknowledgement()
+  const results = await Promise.all(transitions)
+  assert.deepEqual(results.map(({ ok }) => ok), [true, true, true, true])
+  const activeOrders = engine.getOrders().filter((order) =>
+    ["PENDING", "OPEN", "PARTIALLY_FILLED", "UNKNOWN"].includes(order.status))
+  assert.deepEqual(activeOrders.map(({ side }) => side).sort(), ["BUY", "SELL"])
+  assert.deepEqual(cancellationIds, [])
+  assert.deepEqual(accountedFills, [])
+  assert.deepEqual(orders.map(({ side }) => side), ["SELL", "BUY"])
+}
+
 test("serializes market and user-data transitions until a pending SELL is acknowledged", async () => {
   let resolveAcknowledgement
   const placeOrderGate = { promise: new Promise((resolve) => { resolveAcknowledgement = resolve }) }
@@ -3686,23 +3724,7 @@ test("serializes market and user-data transitions until a pending SELL is acknow
   assert.equal(pendingSell?.brokerOrderId, undefined)
   assert.equal(engine.getOrders().some((order) => order.side === "BUY"), false)
 
-  const acknowledgedSell = new CanonicalOrder({
-    clientOrderId: pendingSell.clientOrderId,
-    brokerOrderId: `broker-${pendingSell.clientOrderId}`,
-    market,
-    side: "SELL",
-    type: pendingSell.type,
-    limitPrice: pendingSell.limitPrice,
-    originalQuantity: pendingSell.originalQuantity,
-    executedQuantity: new Quantity({
-      amount: "0",
-      asset: baseAsset
-    }),
-    status: "OPEN",
-    createdAt: pendingSell.createdAt,
-    acknowledgedAt: 1,
-    updatedAt: 1,
-  })
+  const acknowledgedSell = createOpenSellAcknowledgement({ pendingSell })
   const concurrentMarketTransition = engine.processMarketPrice({
     symbol: "DOGEUSDT",
     priceEvent: {
@@ -3718,21 +3740,14 @@ test("serializes market and user-data transitions until a pending SELL is acknow
     event: { executedOrder: acknowledgedSell },
   })
 
-  assert.deepEqual(cancellationIds, [])
-  assert.equal(orders.length, 1)
-  resolveAcknowledgement()
-  const [initialResult, marketResult, userDataResult, duplicateResult] = await Promise.all([
-    initialDecision, concurrentMarketTransition, userDataTransition, duplicateOrderTransition,
-  ])
-  assert.equal(initialResult.ok, true)
-  assert.equal(marketResult.ok, true)
-  assert.equal(userDataResult.ok, true)
-  assert.equal(duplicateResult.ok, true)
-  const activeOrders = engine.getOrders().filter((order) => ["PENDING", "OPEN", "PARTIALLY_FILLED", "UNKNOWN"].includes(order.status))
-  assert.deepEqual(activeOrders.map(({ side }) => side).sort(), ["BUY", "SELL"])
-  assert.deepEqual(cancellationIds, [])
-  assert.deepEqual(accountedFills, [])
-  assert.deepEqual(orders.map(({ side }) => side), ["SELL", "BUY"])
+  await assertSerializedSellAcknowledgement({
+    engine,
+    orders,
+    cancellationIds,
+    accountedFills,
+    resolveAcknowledgement,
+    transitions: [initialDecision, concurrentMarketTransition, userDataTransition, duplicateOrderTransition],
+  })
 })
 
 
