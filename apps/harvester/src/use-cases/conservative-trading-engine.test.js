@@ -5034,6 +5034,36 @@ function makeOpenOrder({
 }
 
 
+function configureMissingRestFillBroker({
+  broker,
+  buyOrder,
+  historyOrder,
+  externalOrder,
+  firstFill,
+  secondFill,
+} = {}) {
+  const calls = []
+  broker.getOpenOrders = async ({ symbol }) => {
+    calls.push(["getOpenOrders", symbol])
+    return {
+      ok: true,
+      data: [
+        externalOrder,
+        makeOpenOrder({ order: buyOrder, executedQuantity: "0.00000000" }),
+      ],
+    }
+  }
+  broker.getCanonicalOrderHistory = async ({ symbol, orderId }) => {
+    calls.push(["getCanonicalOrderHistory", symbol, orderId])
+    return { ok: true, data: [historyOrder] }
+  }
+  broker.getFills = async ({ symbol, orderId }) => {
+    calls.push(["getFills", symbol, orderId])
+    return { ok: true, data: [secondFill, firstFill] }
+  }
+  return calls
+}
+
 async function createMissingRestFillScenario() {
   const {
     engine,
@@ -5077,34 +5107,14 @@ async function createMissingRestFillScenario() {
     brokerOrderId: "manual-broker",
     clientOrderId: "manual-client",
   })
-  const calls = []
-  broker.getOpenOrders = async ({ symbol }) => {
-    calls.push(["getOpenOrders", symbol])
-    return {
-      ok: true,
-      data: [
-        externalOrder,
-        makeOpenOrder({
-          order: buyOrder,
-          executedQuantity: "0.00000000",
-        }),
-      ],
-    }
-  }
-  broker.getCanonicalOrderHistory = async ({ symbol, orderId }) => {
-    calls.push(["getCanonicalOrderHistory", symbol, orderId])
-    return {
-      ok: true,
-      data: [historyOrder],
-    }
-  }
-  broker.getFills = async ({ symbol, orderId }) => {
-    calls.push(["getFills", symbol, orderId])
-    return {
-      ok: true,
-      data: [secondFill, firstFill],
-    }
-  }
+  const calls = configureMissingRestFillBroker({
+    broker,
+    buyOrder,
+    historyOrder,
+    externalOrder,
+    firstFill,
+    secondFill,
+  })
   return {
     engine,
     buyOrder,
