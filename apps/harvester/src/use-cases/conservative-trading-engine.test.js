@@ -537,7 +537,7 @@ test("rechecks external-order ownership after the durable order intent and befor
   let hasExternalOrder = false
   const harness = await createHarness({
     appConfig: withExternalOrdersPolicy("block"),
-    hasUnownedOpenOrdersForSymbol: () => hasExternalOrder,
+    hasUnownedOpenOrdersForSymbol: () => state.hasExternalOrder,
     eventPublisher: {
       publish: () => ({ ok: true }),
       flush: async () => {
@@ -10854,42 +10854,61 @@ test("rechecks external-order ownership after the durable order intent and recor
   })
 })
 
-test("keeps local deferral processing non-blocking when best-effort Journal publication fails", async () => {
-  let hasExternalOrder = false
-  let flushCount = 0
-  const journalEvents = []
-  const reportedFailures = []
-  const eventPublisher = {
+function createFailingDeferralEventPublisher({ state, journalEvents, reportedFailures } = {}) {
+  const publisher = {
     reportFailure: ({ event, error }) => {
-      reportedFailures.push({
-        eventName: event?.name,
-        error,
-      })
+      reportedFailures.push({ eventName: event?.name, error })
     },
     publish: (event) => {
       if (event.name === "order.submission_deferred") {
         const error = new Error("deferral evidence publication failed")
-        eventPublisher.reportFailure({
-          event,
-          error,
-        })
-        return {
-          ok: false,
-          errors: [error],
-        }
+        publisher.reportFailure({ event, error })
+        return { ok: false, errors: [error] }
       }
       journalEvents.push(event)
       return { ok: true }
     },
     flush: async () => {
-      flushCount += 1
-      hasExternalOrder = true
-      return {
-        ok: true,
-        durable: true,
-      }
+      state.flushCount += 1
+      state.hasExternalOrder = true
+      return { ok: true, durable: true }
     },
   }
+  return publisher
+}
+
+function assertFailedDeferralPublicationRemainsNonBlocking({
+  result,
+  harness,
+  state,
+  journalEvents,
+  reportedFailures,
+} = {}) {
+  assert.equal(result.ok, true,
+    "Loss of optional terminal deferral evidence must not fail market processing after the broker call has been withheld.")
+  assert.equal(harness.orders.length, 0,
+    "A local deferral must never call the broker placement port even when its optional Journal event is lost.")
+  assert.equal(harness.engine.getOrders().length, 0,
+    "A locally unsubmitted PENDING order must be removed without waiting for optional Journal persistence.")
+  assert.equal(state.flushCount, 1,
+    "The deferral path must not add a second blocking Journal flush after the durable submission request.")
+  assert.ok(journalEvents.some((event) => event.name === "order.submission_requested"),
+    "The original order request must retain its existing durable-before-broker barrier.")
+  assert.equal(journalEvents.some((event) => event.name === "order.submission_deferred"), false,
+    "A failed best-effort publication must not be represented as persisted terminal evidence.")
+  assert.deepEqual(reportedFailures.map(({ eventName }) => eventName), ["order.submission_deferred"],
+    "A lost deferral event must remain observable as a Journal evidence gap.")
+}
+
+test("keeps local deferral processing non-blocking when best-effort Journal publication fails", async () => {
+  const state = { hasExternalOrder: false, flushCount: 0 }
+  const journalEvents = []
+  const reportedFailures = []
+  const eventPublisher = createFailingDeferralEventPublisher({
+    state,
+    journalEvents,
+    reportedFailures,
+  })
   const harness = await createHarness({
     appConfig: withExternalOrdersPolicy("block"),
     hasUnownedOpenOrdersForSymbol: () => hasExternalOrder,
@@ -10905,20 +10924,13 @@ test("keeps local deferral processing non-blocking when best-effort Journal publ
     },
   })
 
-  assert.equal(result.ok, true,
-    "Loss of optional terminal deferral evidence must not fail market processing after the broker call has been withheld.")
-  assert.equal(harness.orders.length, 0,
-    "A local deferral must never call the broker placement port even when its optional Journal event is lost.")
-  assert.equal(harness.engine.getOrders().length, 0,
-    "A locally unsubmitted PENDING order must be removed without waiting for optional Journal persistence.")
-  assert.equal(flushCount, 1,
-    "The deferral path must not add a second blocking Journal flush after the durable submission request.")
-  assert.ok(journalEvents.some((event) => event.name === "order.submission_requested"),
-    "The original order request must retain its existing durable-before-broker barrier.")
-  assert.equal(journalEvents.some((event) => event.name === "order.submission_deferred"), false,
-    "A failed best-effort publication must not be represented as persisted terminal evidence.")
-  assert.deepEqual(reportedFailures.map(({ eventName }) => eventName), ["order.submission_deferred"],
-    "A lost deferral event must remain observable as a Journal evidence gap.")
+  assertFailedDeferralPublicationRemainsNonBlocking({
+    result,
+    harness,
+    state,
+    journalEvents,
+    reportedFailures,
+  })
 })
 
 
