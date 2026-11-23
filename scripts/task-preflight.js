@@ -101,17 +101,17 @@ export function extractTrackingIssueNumber(body) {
   const refs = [...(body || '').matchAll(/(?:close[sd]?|fix(?:es|ed)?|resolve[sd]?|tracking issue)\s*:?\s*#(\d+)/gi)];
   return refs.length === 1 ? Number(refs[0][1]) : null;
 }
-function validateTrackingReference(context, errors) {
+function validateTrackingReference({ context, errors }) {
   if (extractTrackingIssueNumber(context.body) !== context.issueNumber) {
     errors.push('PR must reference exactly one valid tracking issue.');
   }
 }
-function validateReportedHead(context, errors) {
+function validateReportedHead({ context, errors }) {
   const body = context.body.replaceAll('*', '');
   const reported = body.match(/^\s*-?\s*Final source commit:?\s*([0-9a-f]{40})\s*$/im)?.[1]?.toLowerCase();
   if (reported !== context.headSha?.toLowerCase()) {errors.push('Reported source commit does not match PR head SHA.');}
 }
-function validateDocumentationImpact(context, errors) {
+function validateDocumentationImpact({ context, errors }) {
   const docs = context.body.match(/^##\s+Documentation impact\s*$([\s\S]*?)(?=^##\s+|$)/im)?.[1];
   if (!docs || plain(docs).length < 12) {errors.push('PR documentation impact is missing or empty.');}
   const changedDocs = (context.changedPaths || []).filter((path) => /\.mdx?$/i.test(path));
@@ -129,9 +129,9 @@ function hasVerificationEvidence(comments) {
 }
 export function validatePullRequestEvidence(context) {
   const errors = [];
-  validateTrackingReference(context, errors);
-  validateReportedHead(context, errors);
-  validateDocumentationImpact(context, errors);
+  validateTrackingReference({ context, errors });
+  validateReportedHead({ context, errors });
+  validateDocumentationImpact({ context, errors });
   errors.push(...validateIssueBody(context.issueBody));
   if (!hasVerificationEvidence(context.issueComments || '')) {
     errors.push('Issue lacks command-based verification evidence and commit SHA.');
