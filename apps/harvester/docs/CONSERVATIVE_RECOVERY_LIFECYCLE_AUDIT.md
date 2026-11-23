@@ -204,3 +204,19 @@ This table makes the relationship between the implementation/test checkpoints an
 | `4079869e4c2cc5ab3ce39d85bacc2db90bfd3e8c`, `fedb6ef30b583480c043cea207c46505b5e6a817`, `fc2820c9c5fa5956833a3ee38ece61248c993cd6`, `e5b611939d412489aa50d51e408b52e40f15cbd5` | Consolidated lifecycle/architecture/accounting/test-inventory/roadmap documentation and explicit separation of synthetic test filters from unknown historical filters | This audit; [Harvester architecture](architecture.md); [Harvester roadmap](../ROADMAP.md); [accounting invariants](domain/ACCOUNTING_INVARIANTS.md); [domain test inventory](domain/DOMAIN_TEST_INVENTORY.md) |
 
 The shutdown behavior commits above are source-only commits; their corresponding living-documentation updates were consolidated in the subsequent documentation checkpoints rather than included in each original source commit. The branch history is preserved (no force-push or history rewrite). This limitation is disclosed rather than misrepresented as same-commit documentation. Future Harvester implementation/test increments must follow the per-commit documentation rule in `apps/harvester/AGENTS.md`.
+
+## 2026-11-23 immutable archive re-review checkpoint
+
+A second source-level review was performed against the immutable archive repository, not only the sanitized fixture.
+
+- Source repository/commit: `45s/coinzilla-archive@f283c90db9143c74683ae5bf9c7bb52e09590d56`.
+- Archive directory: `archives/2026-11-22T17-35-17Z_77213df6/`.
+- Recovery facts: 49 records, sequence 0–48. Every previous-fact-digest link is consistent.
+- Manifest: 49 records, sequence 0–48. Every previous-manifest-digest link is consistent, and each manifest record's `lastCommittedDigest` matches its corresponding fact digest.
+- Terminal log: 429 lines; 28 `Order history projection failed` occurrences with `HARVESTER_ORDER_HISTORY_RECORD_INVALID`.
+- The terminal evidence records four failed user-data recovery attempts followed by transport reconnect at 11:28:26 and successful application recovery/subscription restoration at 11:28:49.
+- The archived process also records startup exchange-history synchronization failure for ZRO, safety pauses for ZRO/DOGE/LINK/ADA, an account-integrity halt that could not fully reconcile owned orders before BUY cancellation, and shutdown/startup failures. No historical `CLOSING` snapshot or `PROCESS_STOPPED` fact is present.
+
+This review does **not** establish the cause of the order-history validation failures: the relevant large cumulative logs could not be fully retrieved through the available repository interface, and the database dump remains present but uninspected. The archive is explicitly selected-log evidence; it must not be described as complete raw-log coverage. No missing field, exchange filter, shutdown completion, or database fact is inferred.
+
+See [the detailed archive review and continuation plan](CONSERVATIVE_RECOVERY_ARCHIVE_REVIEW_2026-11-23.md) for the exact findings, limitations, current CI evidence, and prioritized next work.
