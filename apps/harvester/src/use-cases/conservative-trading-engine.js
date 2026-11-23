@@ -660,7 +660,10 @@ function collectStrategySafetyPauseFinalizationFacts({
     ))
   }
   const unresolvedOrders = cancellationRequired
-    ? readActiveStrategySafetyPauseBuyOrders({ state, symbol })
+    ? readActiveStrategySafetyPauseBuyOrders({
+      state,
+      symbol,
+    })
     : []
   if (unresolvedOrders.length > 0) {
     failures.push(new Error("One or more current-process-owned BUY orders remain unresolved"))
