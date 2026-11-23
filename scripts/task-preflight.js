@@ -40,7 +40,13 @@ export function parsePreflightReport(body) {
   const issue = block.match(/^Task issue:\s*#(\d+)\s*$/m);
   const commit = block.match(/^Preflight commit:\s*\x60?([0-9a-f]{40})\x60?\s*$/im);
   const status = block.match(/^Status:\s*(\w+)\s*$/m);
-  if (!issue || !commit || !status) {throw new Error('Preflight report missing issue, commit SHA, or status.');}
+  const scope = block.match(/^Task scope paths:\s*(.+)\s*$/m);
+  if (!issue || !commit || !status || !scope) {
+    throw new Error('Preflight report missing issue, commit SHA, scope, or status.');
+  }
+  for (const entry of REQUIRED_PREFLIGHT_ENTRIES) {
+    if (!block.includes(entry)) throw new Error('Required preflight entry missing: ' + entry);
+  }
   const instructions = [...block.matchAll(/^\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|$/gim)]
     .map((m) => ({ path: m[1].replaceAll('\x60', '').trim(),
 sha: m[2].replaceAll('\x60', '').trim().toLowerCase() }))
