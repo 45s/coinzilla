@@ -349,13 +349,26 @@ async function issueData({ repo, number, token }) {
 comments };
 }
 
+export function mergePreflightScopes({ reports }) {
+  return [...new Set(reports.flatMap((report) => report.scopePaths))].sort();
+}
 function latestReport(comments) {
   let latest = null;
+  const reports = [];
   for (const comment of comments) {
-    if (comment.body?.includes(START) && (!latest || comment.created_at > latest.created_at)) {latest = comment;}
+    if (comment.body?.includes(START)) {
+      const report = {
+        ...parsePreflightReport(comment.body),
+        createdAt: comment.created_at,
+      };
+      reports.push(report);
+      if (!latest || comment.created_at > latest.createdAt) {latest = report;}
+    }
   }
-  return latest ? { ...parsePreflightReport(latest.body),
-createdAt: latest.created_at } : null;
+  return latest ? {
+    ...latest,
+    scopePaths: mergePreflightScopes({ reports }),
+  } : null;
 }
 function formatTaskPreflightIdentity({ metadata, runtimeVersion }) {
   const { application, version, source } = metadata;
