@@ -1833,6 +1833,44 @@ function makeBuyFill({
   })
 }
 
+async function applyCompletedBuyAndAssertDurableSellCancellation({
+  harness,
+  events,
+  sequence,
+  lifecycleStatuses,
+  buyOrder,
+  sellOrder,
+} = {}) {
+  const result = await harness.engine.processUserDataEvent({
+    event: {
+      executionType: "TRADE",
+      executedOrder: makeFilledOrder({ order: buyOrder }),
+      fill: makeBuyFill({
+        order: buyOrder,
+        tradeId: "completed-buy-fill",
+        price: "99.95",
+        quantity: "1",
+        quoteQuantity: "99.95",
+      }),
+    },
+  })
+  assert.equal(result.ok, true)
+  const cancelled = events.find((event) =>
+    event.name === "order.cancelled" && event.data.clientOrderId === sellOrder.clientOrderId)
+  assert.ok(cancelled)
+  assert.equal(cancelled.data.side, "SELL")
+  assert.equal(cancelled.data.status, "CANCELED")
+  const cancelIntentIndex = sequence.lastIndexOf("publish:cancel_requested")
+  const cancelFlushIndex = sequence.lastIndexOf("flush")
+  const brokerCancelIndex = sequence.indexOf("broker:cancel")
+  const cancelLogIndex = sequence.lastIndexOf("log:CANCEL_REQUESTED")
+  assert.ok(cancelIntentIndex >= 0)
+  assert.ok(cancelFlushIndex > cancelIntentIndex)
+  assert.ok(cancelLogIndex > cancelFlushIndex, "The terminal must log cancellation only after the durable intent barrier.")
+  assert.ok(brokerCancelIndex > cancelLogIndex, "CANCEL REQUESTED must appear before the broker cancellation call.")
+  assert.ok(lifecycleStatuses.includes("CANCELLED"), "A confirmed cancellation must produce its own terminal lifecycle record.")
+}
+
 test("durably journals recovery SELL cancellation intent before broker cancellation", async () => {
   const events = []
   const sequence = []
@@ -1883,34 +1921,14 @@ test("durably journals recovery SELL cancellation intent before broker cancellat
   assert.ok(buyOrder)
   assert.ok(sellOrder)
 
-  const result = await harness.engine.processUserDataEvent({
-    event: {
-      executionType: "TRADE",
-      executedOrder: makeFilledOrder({ order: buyOrder }),
-      fill: makeBuyFill({
-        order: buyOrder,
-        tradeId: "completed-buy-fill",
-        price: "99.95",
-        quantity: "1",
-        quoteQuantity: "99.95"
-      }),
-    },
+  await applyCompletedBuyAndAssertDurableSellCancellation({
+    harness,
+    events,
+    sequence,
+    lifecycleStatuses,
+    buyOrder,
+    sellOrder,
   })
-  assert.equal(result.ok, true)
-  const cancelled = events.find((event) =>
-    event.name === "order.cancelled" && event.data.clientOrderId === sellOrder.clientOrderId)
-  assert.ok(cancelled)
-  assert.equal(cancelled.data.side, "SELL")
-  assert.equal(cancelled.data.status, "CANCELED")
-  const cancelIntentIndex = sequence.lastIndexOf("publish:cancel_requested")
-  const cancelFlushIndex = sequence.lastIndexOf("flush")
-  const brokerCancelIndex = sequence.indexOf("broker:cancel")
-  const cancelLogIndex = sequence.lastIndexOf("log:CANCEL_REQUESTED")
-  assert.ok(cancelIntentIndex >= 0)
-  assert.ok(cancelFlushIndex > cancelIntentIndex)
-  assert.ok(cancelLogIndex > cancelFlushIndex, "The terminal must log cancellation only after the durable intent barrier.")
-  assert.ok(brokerCancelIndex > cancelLogIndex, "CANCEL REQUESTED must appear before the broker cancellation call.")
-  assert.ok(lifecycleStatuses.includes("CANCELLED"), "A confirmed cancellation must produce its own terminal lifecycle record.")
 })
 
 test("does not cancel a recovery SELL when its durable cancellation intent flush fails", async () => {
