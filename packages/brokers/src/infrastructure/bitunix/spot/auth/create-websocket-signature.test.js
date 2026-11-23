@@ -6,7 +6,7 @@ test("Bitunix Spot WebSocket signature matches the official double-SHA256 exampl
   const signature = createBitunixWebSocketSignature({
     nonce: "nonce",
     timestamp: "1700000000000",
-    publicIdentifier: "key",
+    apiKey: "key",
     secretKey: "secret",
     params: {
       symbol: "BTCUSDT",
@@ -54,7 +54,7 @@ test("Bitunix Spot WebSocket signature rejects malformed input and non-scalar pa
     () => createBitunixWebSocketSignature({
       nonce: "",
       timestamp: "1",
-      publicIdentifier: "key",
+      apiKey: "key",
       secretKey: "secret",
       params: {},
     }),
@@ -65,7 +65,7 @@ test("Bitunix Spot WebSocket signature rejects malformed input and non-scalar pa
     () => createBitunixWebSocketSignature({
       nonce: "nonce",
       timestamp: "1",
-      publicIdentifier: "key",
+      apiKey: "key",
       secretKey: "",
       params: {},
     }),

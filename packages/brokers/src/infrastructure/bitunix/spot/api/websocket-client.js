@@ -236,7 +236,7 @@ function validateClientUrl({ url }) {
 }
 
 function validateClientConfiguration({
-  publicIdentifier,
+  apiKey,
   apiSecret,
   url,
   requestTimeout,
@@ -247,7 +247,7 @@ function validateClientConfiguration({
   setTimeoutFn,
   clearTimeoutFn,
 }) {
-  if (typeof publicIdentifier !== "string" || !publicIdentifier.trim() ||
+  if (typeof apiKey !== "string" || !apiKey.trim() ||
       typeof apiSecret !== "string" || !apiSecret.trim()) {
     throw new TypeError("Bitunix Spot WebSocket API credentials are required")
   }
@@ -285,7 +285,7 @@ export class BitunixSpotWebSocketClient {
   #state = "idle"
   #pending = new Map()
   #removeListeners = []
-  #publicIdentifier
+  #apiKey
   #apiSecret
   #transport
   #transportFactory
@@ -304,7 +304,7 @@ export class BitunixSpotWebSocketClient {
    */
   constructor(options = {}) {
     const {
-      apiKey: publicIdentifier,
+      apiKey,
       apiSecret,
       url = DEFAULT_URL,
       requestTimeout = DEFAULT_REQUEST_TIMEOUT,
@@ -318,7 +318,7 @@ export class BitunixSpotWebSocketClient {
       clearTimeoutFn = clearTimeout,
     } = options
     validateClientConfiguration({
-      publicIdentifier,
+      apiKey,
       apiSecret,
       url,
       requestTimeout,
@@ -332,7 +332,7 @@ export class BitunixSpotWebSocketClient {
 
     this.url = url
     this.requestTimeout = requestTimeout
-    this.#publicIdentifier = publicIdentifier
+    this.#apiKey = apiKey
     this.#apiSecret = apiSecret
     this.#transportFactory = transportFactory
     this.#connectTimeout = connectTimeout
@@ -606,7 +606,7 @@ export class BitunixSpotWebSocketClient {
 
     const signedParams = {
       ...params,
-      apiKey: this.#publicIdentifier,
+      apiKey: this.#apiKey,
       timestamp,
       nonce,
     }
@@ -615,7 +615,7 @@ export class BitunixSpotWebSocketClient {
       sign = createBitunixWebSocketSignature({
         nonce,
         timestamp,
-        publicIdentifier: this.#publicIdentifier,
+        apiKey: this.#apiKey,
         secretKey: this.#apiSecret,
         params: signedParams,
       })

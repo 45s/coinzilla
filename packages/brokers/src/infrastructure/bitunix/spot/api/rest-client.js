@@ -266,7 +266,7 @@ function createSignedRequest({ client, method, path, queryParams, body }) {
   const signature = createRestSignature({
     nonce,
     timestamp,
-    publicIdentifier: client.publicIdentifier,
+    apiKey: client.apiKey,
     secretKey: client.apiSecret,
     queryParams: sortedQuery,
     ...(bodyText === undefined
@@ -286,7 +286,7 @@ function createSignedRequest({ client, method, path, queryParams, body }) {
     options: {
       method,
       headers: {
-        "api-key": client.publicIdentifier,
+        "api-key": client.apiKey,
         nonce,
         timestamp,
         sign: signature,
@@ -514,20 +514,20 @@ function validateResponse({ response, payload, path, stateChanging }) {
   })
 }
 
-function validateCredentials({ publicIdentifier, apiSecret }) {
-  const hasApiKey = publicIdentifier !== undefined && publicIdentifier !== null && publicIdentifier !== ""
+function validateCredentials({ apiKey, apiSecret }) {
+  const hasApiKey = apiKey !== undefined && apiKey !== null && apiKey !== ""
   const hasApiSecret = apiSecret !== undefined && apiSecret !== null && apiSecret !== ""
   if (hasApiKey || hasApiSecret) {
-    if (typeof publicIdentifier !== "string" || !publicIdentifier.trim() ||
+    if (typeof apiKey !== "string" || !apiKey.trim() ||
         typeof apiSecret !== "string" || !apiSecret.trim()) {
       throw new TypeError("Bitunix REST API key and secret must be provided together")
     }
   }
 }
 
-function validateClientOptions({ publicIdentifier, apiSecret, baseUrl, requestTimeout, fetchFn, now, nonceFactory }) {
+function validateClientOptions({ apiKey, apiSecret, baseUrl, requestTimeout, fetchFn, now, nonceFactory }) {
   validateCredentials({
-    publicIdentifier,
+    apiKey,
     apiSecret,
   })
   if (typeof baseUrl !== "string" || !baseUrl.startsWith("https://")) {
@@ -682,7 +682,7 @@ export class BitunixRestClient {
    */
   constructor(options = {}) {
     const {
-      apiKey: publicIdentifier,
+      apiKey,
       apiSecret,
       baseUrl = DEFAULT_BASE_URL,
       requestTimeout = DEFAULT_REQUEST_TIMEOUT,
@@ -692,7 +692,7 @@ export class BitunixRestClient {
       logger,
     } = options
     validateClientOptions({
-      publicIdentifier,
+      apiKey,
       apiSecret,
       baseUrl,
       requestTimeout,
@@ -701,7 +701,7 @@ export class BitunixRestClient {
       nonceFactory,
     })
 
-    this.publicIdentifier = publicIdentifier
+    this.apiKey = apiKey
     this.apiSecret = apiSecret
     this.baseUrl = baseUrl.replace(/\/$/, "")
     this.requestTimeout = requestTimeout
@@ -719,7 +719,7 @@ export class BitunixRestClient {
    */
   async request(input = {}) {
     const requestInput = validateRequest(input)
-    if (requestInput.authenticated && (!this.publicIdentifier || !this.apiSecret)) {
+    if (requestInput.authenticated && (!this.apiKey || !this.apiSecret)) {
       throw new BitunixRestError({
         message: "Bitunix REST credentials are required for authenticated requests",
         kind: "authentication",
