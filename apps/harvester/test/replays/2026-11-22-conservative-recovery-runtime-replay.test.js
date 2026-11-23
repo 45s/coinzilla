@@ -13,8 +13,12 @@ function createAppConfig({ symbol, orderQuantity, keepQuantity, minProfit, price
       CG_coinGrabber: {
         enabled: true,
         settings: {
-          conservative: { enabled: true },
-          aggressive: { enabled: false },
+          conservative: {
+            enabled: true,
+          },
+          aggressive: {
+            enabled: false,
+          },
         },
         pairs: {
           [symbol]: {
@@ -36,7 +40,86 @@ function createAppConfig({ symbol, orderQuantity, keepQuantity, minProfit, price
   }
 }
 
-async function runArchivedRecoveryCycle({ t, scenario }) {
+async function fillArchivedBuy(replay, scenario, index, currentBuy) {
+  const buy = scenario.buys[index]
+  const recoverySellSubmission = replay.waitForSubmittedOrder("SELL", index + 1)
+  const nextBuySubmission = index < scenario.buys.length - 1
+    ? replay.waitForSubmittedOrder("BUY", index + 2)
+    : null
+
+  assert.equal(currentBuy.price, buy.price)
+  await replay.publishMarketPrice(currentBuy.price)
+  await replay.publishFullOrderFill({
+    order: currentBuy,
+    price: buy.price,
+    tradeId: buy.tradeId,
+  })
+
+  const [recoverySell, nextBuy] = await Promise.all([
+    recoverySellSubmission,
+    nextBuySubmission ?? Promise.resolve(null),
+  ])
+  return {
+    recoverySell,
+    nextBuy,
+  }
+}
+
+async function fillArchivedBuys(replay, scenario) {
+  const initialBuySubmission = replay.waitForSubmittedOrder("BUY")
+  await replay.publishMarketPrice(scenario.initialPrice)
+  let currentBuy = await initialBuySubmission
+  let latestRecoverySell
+
+  for (let index = 0; index < scenario.buys.length; index += 1) {
+    const result = await fillArchivedBuy(replay, scenario, index, currentBuy)
+    latestRecoverySell = result.recoverySell
+    if (result.nextBuy) {
+      currentBuy = result.nextBuy
+    }
+  }
+  return latestRecoverySell
+}
+
+async function fillArchivedRecoverySell(replay, scenario, recoverySell) {
+  assert.equal(recoverySell.price, scenario.sell.price)
+  assert.equal(recoverySell.quantity, scenario.sell.quantity)
+
+  const completionWaiter = replay.waitForRecoveryCycleCompletion()
+  await replay.publishMarketPrice(recoverySell.price)
+  await replay.publishFullOrderFill({
+    order: recoverySell,
+    price: scenario.sell.price,
+    tradeId: scenario.sell.tradeId,
+  })
+  return completionWaiter
+}
+
+function assertCycleCompleted(replay, scenario, completion) {
+  assert.equal(completion.freeQuantity, scenario.expectedFreeQuantity)
+  assert.equal(completion.realizedNetProfit, scenario.expectedRealizedNetProfit)
+  assert.equal(
+    replay.receivedLifecycleEvents.filter(({ name }) => name === "recovery.cycle_completed").length,
+    1,
+  )
+  assert.equal(
+    replay.receivedLifecycleEvents.filter(({ name }) => name === "strategy.paused").length,
+    0,
+  )
+  assert.equal(replay.harvesterRuntimeErrors.length, 0)
+}
+
+function assertPortfolioReset(replay, scenario) {
+  const position = replay.runtime.portfolio.getPosition({ symbol: scenario.symbol })
+  const recoveryLedger = replay.runtime.getRecoveryLedger({ marketId: position.market.id })
+  assert.equal(position.baseQuantity.amount, "0")
+  assert.equal(position.freeBaseQuantity.amount, scenario.expectedFreeQuantity)
+  assert.equal(position.spent.amount, "0")
+  assert.equal(recoveryLedger.buyCost, "0")
+  assert.equal(recoveryLedger.netSellProceeds, "0")
+}
+
+async function runArchivedRecoveryCycle(t, scenario) {
   const replay = await createDogeTradingReplay({
     marketSymbol: scenario.symbol,
     appConfig: createAppConfig(scenario),
@@ -52,82 +135,10 @@ async function runArchivedRecoveryCycle({ t, scenario }) {
     }
   })
 
-  const initialBuySubmission = replay.waitForSubmittedOrder("BUY")
-  await replay.publishMarketPrice(scenario.initialPrice)
-  let currentBuy = await initialBuySubmission
-  let latestRecoverySell
-
-  for (let index = 0; index < scenario.buys.length; index += 1) {
-    const recoverySellSubmission = replay.waitForSubmittedOrder("SELL", index + 1)
-    const nextBuySubmission = index < scenario.buys.length - 1
-      ? replay.waitForSubmittedOrder("BUY", index + 2)
-      : null
-    assert.equal(
-      currentBuy.price,
-      scenario.buys[index].price,
-      `${scenario.symbol} BUY ${index + 1} must use the archived decision price.`,
-    )
-    await replay.publishMarketPrice(currentBuy.price)
-    await replay.publishFullOrderFill({
-      order: currentBuy,
-      price: scenario.buys[index].price,
-      tradeId: scenario.buys[index].tradeId,
-    })
-    const [recoverySell, nextBuy] = await Promise.all([
-      recoverySellSubmission,
-      nextBuySubmission ?? Promise.resolve(null),
-    ])
-    latestRecoverySell = recoverySell
-    if (nextBuy) {
-      currentBuy = nextBuy
-    }
-  }
-
-  assert.equal(
-    latestRecoverySell.price,
-    scenario.sell.price,
-    `${scenario.symbol} recovery SELL must use the archived decision price.`,
-  )
-  assert.equal(
-    latestRecoverySell.quantity,
-    scenario.sell.quantity,
-    `${scenario.symbol} recovery SELL must preserve the archived sellable quantity.`,
-  )
-
-  const completionWaiter = replay.waitForRecoveryCycleCompletion()
-  await replay.publishMarketPrice(latestRecoverySell.price)
-  await replay.publishFullOrderFill({
-    order: latestRecoverySell,
-    price: scenario.sell.price,
-    tradeId: scenario.sell.tradeId,
-  })
-  const completion = await completionWaiter
-
-  assert.equal(completion.freeQuantity, scenario.expectedFreeQuantity)
-  assert.equal(completion.realizedNetProfit, scenario.expectedRealizedNetProfit)
-  assert.equal(
-    replay.receivedLifecycleEvents.filter(({ name }) => name === "recovery.cycle_completed").length,
-    1,
-    `${scenario.symbol} must complete the cycle exactly once after the reconciled SELL.`,
-  )
-  assert.equal(
-    replay.receivedLifecycleEvents.filter(({ name }) => name === "strategy.paused").length,
-    0,
-    `${scenario.symbol} must not pause after a profitable SELL leaves valid exchange-constrained dust.`,
-  )
-  assert.equal(
-    replay.harvesterRuntimeErrors.length,
-    0,
-    `${scenario.symbol} must not emit runtime errors during a valid dust completion.`,
-  )
-
-  const position = replay.runtime.portfolio.getPosition({ symbol: scenario.symbol })
-  const recoveryLedger = replay.runtime.getRecoveryLedger({ marketId: position.market.id })
-  assert.equal(position.baseQuantity.amount, "0")
-  assert.equal(position.freeBaseQuantity.amount, scenario.expectedFreeQuantity)
-  assert.equal(position.spent.amount, "0")
-  assert.equal(recoveryLedger.buyCost, "0")
-  assert.equal(recoveryLedger.netSellProceeds, "0")
+  const recoverySell = await fillArchivedBuys(replay, scenario)
+  const completion = await fillArchivedRecoverySell(replay, scenario, recoverySell)
+  assertCycleCompleted(replay, scenario, await completion)
+  assertPortfolioReset(replay, scenario)
 
   await replay.runtime.stop()
   stopped = true
@@ -149,10 +160,22 @@ const scenarios = [
       minNotional: "5",
     },
     buys: [
-      { price: "1.17", tradeId: "15735" },
-      { price: "1.169", tradeId: "15736" },
-      { price: "1.168", tradeId: "15737" },
-      { price: "1.167", tradeId: "15738" },
+      {
+        price: "1.17",
+        tradeId: "15735",
+      },
+      {
+        price: "1.169",
+        tradeId: "15736",
+      },
+      {
+        price: "1.168",
+        tradeId: "15737",
+      },
+      {
+        price: "1.167",
+        tradeId: "15738",
+      },
     ],
     sell: {
       price: "1.174",
@@ -177,10 +200,22 @@ const scenarios = [
       minNotional: "5",
     },
     buys: [
-      { price: "0.05482", tradeId: "303728" },
-      { price: "0.05479", tradeId: "303729" },
-      { price: "0.05476", tradeId: "303737" },
-      { price: "0.05473", tradeId: "303738" },
+      {
+        price: "0.05482",
+        tradeId: "303728",
+      },
+      {
+        price: "0.05479",
+        tradeId: "303729",
+      },
+      {
+        price: "0.05476",
+        tradeId: "303737",
+      },
+      {
+        price: "0.05473",
+        tradeId: "303738",
+      },
     ],
     sell: {
       price: "0.05501",
@@ -205,7 +240,10 @@ const scenarios = [
       minNotional: "5",
     },
     buys: [
-      { price: "0.144", tradeId: "145912" },
+      {
+        price: "0.144",
+        tradeId: "145912",
+      },
     ],
     sell: {
       price: "0.1455",
@@ -219,6 +257,6 @@ const scenarios = [
 
 for (const scenario of scenarios) {
   test(`replays archived ${scenario.symbol} fills and completes profitable exchange-constrained residual inventory`, async (t) => {
-    await runArchivedRecoveryCycle({ t, scenario })
+    await runArchivedRecoveryCycle(t, scenario)
   })
 }
