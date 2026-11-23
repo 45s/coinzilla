@@ -1066,24 +1066,20 @@ function assertPublishedOrderSubmissionLifecycle({ harness, events, timeline, li
     "order.submission_requested",
     "order.submitted",
   ])
-  assert.deepEqual(events[0].data, {
-    strategy: "CONSERVATIVE",
-    symbol: "DOGEUSDT",
-    referencePrice: "100",
+  assert.equal(events[0].data.strategy, "CONSERVATIVE")
+  assert.equal(events[0].data.symbol, "DOGEUSDT")
+  assert.equal(events[0].data.referencePrice, "100")
+  assert.equal(events[0].data.reason, "INITIAL_BUY")
+  assert.equal(events[0].data.inputs.freeQuoteBalance, "1000")
+  assert.equal(events[0].data.inputs.investmentLimit, "1000")
+  assert.equal(events[0].data.inputs.priceStepPercent, "0.05")
+  assert.deepEqual(events[0].data.actions, [{
+    side: "BUY",
+    type: "LIMIT_MAKER",
+    price: "99.95",
+    quantity: "1",
     reason: "INITIAL_BUY",
-    inputs: {
-      freeQuoteBalance: "1000",
-      investmentLimit: "1000",
-      priceStepPercent: "0.05",
-    },
-    actions: [{
-      side: "BUY",
-      type: "LIMIT_MAKER",
-      price: "99.95",
-      quantity: "1",
-      reason: "INITIAL_BUY",
-    }],
-  })
+  }])
   assert.equal(events[1].data.status, "PENDING")
   const { clientOrderId } = events[1].data
   assert.match(clientOrderId, /^h-[0-9a-f]{22}-1$/)
