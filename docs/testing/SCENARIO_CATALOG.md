@@ -128,7 +128,7 @@ The repository-wide method for designing domain scenarios is being established s
   - `rejects a SELL that exceeds shared inventory after combined CG and RS reservations`
   - `rejects a mixed SELL when verified free Spot custody is smaller than tracked recovery plus legacy inventory`
 
-**Evidence note:** Existing test names and assertions were inspected for this mapping. The tests were not executed as part of this documentation-only catalog change.
+**Evidence note:** Existing test titles were inspected to create a navigation mapping. The assertions have not yet been reviewed against every listed subcase, and the tests were not executed as part of this documentation-only catalog change; do not treat this mapping as VERIFIED.
 
 ### HARV-ACC-002 — Canonical fills are applied once and conflicting replays are rejected
 
@@ -180,7 +180,7 @@ The repository-wide method for designing domain scenarios is being established s
   - `keeps independent strategy-owned Positions for the same market`
   - `rejects applying one canonical fill to a different strategy Position`
 
-**Evidence note:** Existing test names and assertions were inspected for this mapping. The tests were not executed as part of this documentation-only catalog change.
+**Evidence note:** Existing test titles were inspected to create a navigation mapping. The assertions have not yet been reviewed against every listed subcase, and the tests were not executed as part of this documentation-only catalog change; do not treat this mapping as VERIFIED.
 
 ### HARV-MKT-001 — Exchange trading constraints are enforced at exact boundaries
 
@@ -226,7 +226,7 @@ The repository-wide method for designing domain scenarios is being established s
   - `enforces MIN_NOTIONAL at exact equality and immediately below the configured investment`
   - `rejects malformed unvalidated constraint metadata instead of treating it as an empty list`
 
-**Evidence note:** Existing test names and assertions were inspected for this mapping. The tests were not executed as part of this documentation-only catalog change.
+**Evidence note:** Existing test titles were inspected to create a navigation mapping. The assertions have not yet been reviewed against every listed subcase, and the tests were not executed as part of this documentation-only catalog change; do not treat this mapping as VERIFIED.
 
 ---
 
@@ -284,7 +284,7 @@ The [Conservative Domain Specification](../../apps/harvester/docs/domain/CONSERV
   - `blocks the next BUY while the recovery SELL acknowledgement is pending or unknown`
   - `keeps the partial BUY active while continuing recovery SELL planning`
 
-**Evidence note:** Existing test names and assertions were inspected for this mapping. The tests were not executed as part of this documentation-only catalog change.
+**Evidence note:** Existing test titles were inspected to create a navigation mapping. The assertions have not yet been reviewed against every listed subcase, and the tests were not executed as part of this documentation-only catalog change; do not treat this mapping as VERIFIED.
 
 ### CG-002 — Recovery completion preserves required inventory and does not misclassify dust
 
@@ -340,7 +340,7 @@ The [Conservative Domain Specification](../../apps/harvester/docs/domain/CONSERV
   - `reserves base quantity for the configured fee ceiling`
   - `rounds the minimum SELL price up only when the exact fee-adjusted price exceeds a tick`
 
-**Evidence note:** Existing test names and assertions were inspected for this mapping. The tests were not executed as part of this documentation-only catalog change.
+**Evidence note:** Existing test titles were inspected to create a navigation mapping. The assertions have not yet been reviewed against every listed subcase, and the tests were not executed as part of this documentation-only catalog change; do not treat this mapping as VERIFIED.
 
 ---
 
