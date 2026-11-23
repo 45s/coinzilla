@@ -96,7 +96,7 @@ Shared deterministic broker/runtime fixtures live in `test/bootstrap/start-harve
 - [Historical audit reports](audits/reports/README.md)
 - [Historical audit sessions](audits/sessions/README.md)
 - [Historical audit evidence](audits/evidence/README.md)
-- [Historical DDD/Clean Architecture audit](DDD_CLEAN_ARCHITECTURE_AUDIT.md)
+- [DDD/Clean Architecture audit](DDD_CLEAN_ARCHITECTURE_AUDIT.md) — historical 2026-11-03 assessment plus current strategy/runtime consistency review
 - [Incident records](incidents/README.md)
 - [Historical task briefs](tasks/README.md)
 
