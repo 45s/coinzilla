@@ -4,7 +4,7 @@ status: active
 type: testing
 owner: harvester
 created: 2026-11-10
-last_verified: 2026-11-20
+last_verified: 2026-11-23
 ---
 
 # Harvester domain logic test inventory
@@ -19,11 +19,11 @@ Reviewed baseline: `develop` at `17f560ed96439fe9dcf3eb159d9f7e0b850dcd42` (2026
 
 All test improvements in this initiative must remain deterministic and offline. Issue [#626](https://github.com/45s/coinzilla/issues/626) and its user-data recovery implementation remain paused and outside this initiative.
 
-## Conservative domain scenario tests — issue #1763
+## Conservative existing-test audit — issue #1763
 
 The [scenario-test guide](CONSERVATIVE_DOMAIN_SCENARIO_TESTS.md) explains behavior-oriented tests that compose real domain components. The exhaustive coverage checklist and implementation status are maintained in [#1763](https://github.com/45s/coinzilla/issues/1763).
 
-The initial source-driven audit is **pending**. Existing tests listed above are evidence of focused unit/domain coverage; application engine tests and historical replay tests provide additional lifecycle evidence. Do not claim scenario-matrix completeness until every matrix item is mapped to a named test or an explicit application/replay owner and disposition.
+Phase 1 audits existing assertions only. The source-to-test matrix below records current evidence and explicit gaps; it does not claim a new scenario suite exists or that every possible event permutation is covered. Phase 2 is the separate test-oracle integrity audit (exact financial expectations and coherent fixtures); dedicated scenario-suite implementation remains in the later scenario phases.
 
 Planned scenario behaviors include initial BUY fill → standing BUY and recovery SELL; second BUY fill → recovery SELL replacement/recalculation; partial recovery SELL accounting; terminal recovery completion → next cycle; retained inventory and constrained dust; commission assets and exact-decimal/filter boundaries; and invalid, duplicate, conflicting, reordered, or incomplete evidence. This initiative adds coverage without redefining the canonical Conservative specification or authorizing exchange operations.
 
@@ -235,11 +235,39 @@ The new runtime-dispatch and action-authorizer suites cover the production compo
 
 ### Medium — bootstrap and replay financial arithmetic must remain exact
 
-The offline bootstrap fixture now builds quote notionals and bid/ask book prices with exact decimal multiplication; remaining broker-style numeric order quantities are derived with exact decimal subtraction before conversion to the numeric adapter shape. The DOGE/ZRO replay assertions now compare retained quantity and realized profit with exact decimal comparison rather than JavaScript Number. Updated in PR #1776; not yet merged/CI-verified.
+The offline bootstrap fixture now builds quote notionals and bid/ask book prices with exact decimal multiplication; remaining broker-style numeric order quantities are derived with exact decimal subtraction before conversion to the numeric adapter shape. The DOGE/ZRO replay assertions now compare retained quantity and realized profit with exact decimal comparison rather than JavaScript Number. Updated in merged PR #1776; exact-head CI passed before merge. This is fixture/oracle evidence, not a production behavior change.
+
+### Phase 2 — test-oracle audit evidence
+
+The following increments are merged into `develop`; all six applicable GitHub Actions workflows passed on each exact PR head:
+
+| PR | Exact verified head | Oracle improvement |
+| --- | --- | --- |
+| [#1771](https://github.com/45s/coinzilla/pull/1771) | `a347262bce8535d81caf7ce327ed69923fbddf13` | Independent exact recovery-SELL fee oracle |
+| [#1773](https://github.com/45s/coinzilla/pull/1773) | `17791f6a0cd11a2089e6b5c5a7b483e7fddc9012` | Cancellation-race accounting and duplicate immutability |
+| [#1775](https://github.com/45s/coinzilla/pull/1775) | `fb6a227c69f07e90549c56539daf9efe4ccb250f` | Coherent exact terminal-Fill quote notional fixture |
+| [#1776](https://github.com/45s/coinzilla/pull/1776) | `ddd7598769f294eb418904a72fca989f9f173c8d` | Exact bootstrap and replay arithmetic |
+
+The Phase 2 sweep reviewed all 11 files under `src/domain/strategies/conservative/`, both `src/domain/portfolio/` test files, and 16 Conservative accounting/lifecycle use-case tests (29 test files total). No `Number`, `toFixed`, `parseFloat`, or `parseInt` financial-oracle conversions were found in those strategy or Portfolio suites. The only other numeric conversions found in the selected use-case tests are the broker-style numeric `Order` DTO mappings in `conservative-trading-engine.multi-market.test.js` lines 408–409; those are adapter-boundary values, not expected financial results. The large engine suite findings below are therefore the remaining known Conservative test-oracle debt from this sweep.
 
 ### Blocked — remaining Conservative engine financial oracles
 
-`src/use-cases/conservative-trading-engine.test.js` still contains Number-based financial expectations and a `makeSellFill` default quote notional of `"100"` that can disagree with its execution price and quantity. A narrow correction attempt in [closed PR #1772](https://github.com/45s/coinzilla/pull/1772) exposed 33 pre-existing `max-lines-per-function` violations across this large test file under strict changed-file ESLint. The PR was closed; no lint suppression or unrelated broad refactor was applied. Revisit these remaining assertions after a separately scoped decomposition of that test file.
+`src/use-cases/conservative-trading-engine.test.js` is 11,494 lines. [#1772](https://github.com/45s/coinzilla/pull/1772) attempted the narrow `makeSellFill` fixture correction but was closed without merge because strict changed-file ESLint reported 33 pre-existing `max-lines-per-function` violations. Exact failed run: [Repository Quality 45150853240](https://github.com/45s/coinzilla/actions/runs/45150853240), job `137611556689`, on PR head `30071be67129b2a65da85d561f93111ad3c71c2c`. The other five applicable workflows passed. No rule was suppressed or weakened.
+
+The 33 existing findings (line numbers from that exact failed head) are:
+
+- `createHarnessBrokerState` (309), `createHarnessEngine` (396)
+- async test callbacks (1078, 1442, 1508, 1866, 2332, 2514, 2758, 3655, 4148, 4778, 5151, 5280, 5391, 5509, 5637, 6597, 6670, 6926, 7539, 10331, 10402, 10633, 10785)
+- `createShutdownBuyRaceHarness` (3939), `runTerminalRecoverySellStatusScenario` (4620), `createMissingRestFillScenario` (4991), `createRecoveryModeBuyFillFixture` (8295), `createRestFillTimeoutRetryScenario` (8416), `createMalformedRestEnvelopeFixture` (8523), `assertMalformedRestEnvelopeFailsClosed` (8596), `prepareLateSellShutdownScenario` (11259)
+
+The remaining oracle defects are precisely scoped:
+
+- `makeSellFill` defaults `quoteQuantity` to `"100"`, which is not guaranteed to equal `order.limitPrice.amount × quantity`. The fixture must derive quote notional with exact decimal multiplication or require an explicit coherent value.
+- Line 6278 compares ordered prices through `Number`; use exact decimal comparison.
+- Lines 6427 and 6432 use `Number` for financial threshold/quantity expectations; replace with exact decimal comparisons and independently stated expected values.
+- Lines 4976, 4977 and 4983 convert canonical decimal strings into the numeric broker-style `Order` adapter shape. These are adapter-boundary conversions, not expected-value financial oracles; do not misclassify them as financial assertions.
+
+**Next:** refactor the 33 overlong functions into cohesive helpers without changing behavior, then apply the fixture/oracle corrections. Do not add ESLint suppressions, relax thresholds, or change production code. Phase 2 remains in progress until this cleanup is validated.
 
 ### Conservative state-machine scenario requirements — issue #1763
 
@@ -247,9 +275,26 @@ The scenario guide now includes a mandatory state-machine testing contract and c
 
 Do not treat the conceptual diagram as a new production state model: map every tested transition to the canonical Conservative specification and actual implementation first. Domain tests own pure transitions; application integration tests own broker submit/cancel, REST/stream reconciliation, durable barriers and shutdown. Status-only assertions do not establish transition coverage. See [scenario guide](CONSERVATIVE_DOMAIN_SCENARIO_TESTS.md) and [issue #1763](https://github.com/45s/coinzilla/issues/1763) for the full transition and adversarial-sequence requirements.
 
+### Phase 1 A–J existing-assertion status
+
+| Issue area | Actual assertion evidence reviewed | Status | Boundary / remaining limitation |
+| --- | --- | --- | --- |
+| A. Initial position and BUY-fill accounting | `recovery-fill-accounting.test.js`, `portfolio.test.js`, engine VWAP test at `conservative-trading-engine.test.js` | PARTIAL | Core BUY cost, fee asset handling, fill identity and completed-BUY VWAP are asserted. Not every commission/ordering combination is composed end-to-end. |
+| B. Recovery SELL plan and economics | `recovery-sell-plan-accounting.test.js`, `sell-fee-rate.test.js`, `recovery-fill-accounting.test.js` | COVERED for tested domain calculations | Exact base/quote fee effects, required net proceeds, tick/step rounding, realized profit and minProfit equality are asserted. Application-level filter/order permutations remain under G/I. |
+| C. Standing BUY policy | `initial-buy-price.test.js`, `trailing-buy-repricing.test.js`, engine VWAP/incomplete-history tests | COVERED for documented policy boundaries | Tests assert the 99.84 actual VWAP reference and fail closed when completed BUY execution history is incomplete. |
+| D. Two-or-more BUY fills and SELL replacement | Engine cancellation/fill race regression in merged #1773 | PARTIAL | The named cancel-raced partial SELL, replacement SELL and duplicate BUY replay sequence is fully asserted. Other timeout/unknown/conflicting event permutations are not all composed in that test. |
+| E. SELL-fill accounting and recovery lifecycle | `recovery-fill-accounting.test.js`, `recovery-ledger.test.js`, `reconcile-terminal-order-fills.test.js`, engine terminal SELL tests | PARTIAL | Exact actual commissions, cumulative proceeds, REST/stream deduplication, execution order and terminal quantity parity are asserted. Not every partial/multiple-fill/terminal permutation has complete cross-projection assertions. |
+| F. Recovery completion and next cycle | `recovery-completion.test.js`, `recovery-completion.dust.test.js`, merged #1774 | PARTIAL | Component completion/dust decisions and next-cycle basis isolation/stale replay are asserted. Broader dust/filter combinations and every completion race remain unproven. |
+| G. Market data, readiness and input validation | `market/validate-market-trading-readiness.test.js`, market freshness/filter tests, engine filter-refresh tests | PARTIAL | Required order type, missing rules, market mismatch, exact quantity boundaries and fail-closed paths are asserted; exhaustive malformed metadata/cache timing combinations are not established here. |
+| H. Inventory, accounting and ownership invariants | `portfolio.test.js`, account snapshot/baseline and order-commitment tests | PARTIAL | Market-scoped Position identity, retained inventory allocation, duplicate/conflicting fills and snapshot-relative commitments are asserted. Restart restoration is outside this specification and tracked separately in #654. |
+| I. Lifecycle and race boundaries | `conservative-trading-engine.test.js`, `reconcile-terminal-order-fills.test.js`, merged #1773 | PARTIAL | Named submit/cancel barriers, late fills, REST/stream overlap, terminal reconciliation and shutdown paths have assertions; all event orderings are not covered. |
+| J. Failure, fail-closed and recovery cases | Strategy, accounting, order-registry, terminal reconciler and durable-workflow tests | PARTIAL | Named invalid/conflicting/incomplete evidence and persistence/reconciliation failures fail closed. Full restart/replay restoration is out of scope (#654); remaining engine oracle cleanup is separately BLOCKED below. |
+
+**Classification note:** no uncovered row is labeled MISSING without first establishing that no relevant assertion exists. The engine fixture/oracle cleanup is BLOCKED test-quality work, not a production defect. Restart restoration is NOT APPLICABLE to this Phase 1 specification scope and remains tracked by #654.
+
 ### Medium — next-cycle basis must exclude prior retained inventory
 
-`src/use-cases/create-portfolio-workflow-next-cycle.test.js` composes real Portfolio/RecoveryLedger accounting and cycle completion with the real Conservative domain policy. It completes a first cycle, retains exactly one base unit, applies a new BUY, replays both prior-cycle fills to prove full projection immutability, and verifies that only the new cycle's cost/proceeds determine the next recovery SELL while prior retained inventory remains separate. Added in PR #1774; exact-head CI remains pending.
+`src/use-cases/create-portfolio-workflow-next-cycle.test.js` composes real Portfolio/RecoveryLedger accounting and cycle completion with the real Conservative domain policy. It completes a first cycle, retains exactly one base unit, applies a new BUY, replays both prior-cycle fills to prove full projection immutability, and verifies that only the new cycle's cost/proceeds determine the next recovery SELL while prior retained inventory remains separate. Added in merged PR #1774; all six GitHub Actions workflows passed on exact PR head `e6b4f956137dad4c2c2fdb5469d454375ce7fba9`.
 
 ### 2026-11-23 — #1362 archive replay and evidence corrections
 
