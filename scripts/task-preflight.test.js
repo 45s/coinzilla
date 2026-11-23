@@ -112,8 +112,8 @@ required: [
     'ENGINEERING_STANDARDS.md',
     'docs/engineering/TASK_WORKFLOWS.md',
   ] }), [
-    'Required instruction missing from report: docs/engineering/TASK_WORKFLOWS.md',
     'Instruction hash is stale: ENGINEERING_STANDARDS.md',
+    'Required instruction missing from report: docs/engineering/TASK_WORKFLOWS.md',
   ]);
 });
 
