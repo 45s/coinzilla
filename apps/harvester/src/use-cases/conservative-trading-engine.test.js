@@ -2538,6 +2538,20 @@ function assertMarketProfitThresholdCompletion({
   })
 }
 
+function createInjectedRecoveryCompletion({ completionInputs } = {}) {
+  return async (input) => {
+    completionInputs.push(input)
+    return {
+      ok: true,
+      data: {
+        eligible: true,
+        freeQuantity: "0.1",
+        realizedNetProfit: "1.5",
+      },
+    }
+  }
+}
+
 test("publishes the market-specific profit threshold after recovery completion succeeds", async () => {
   const events = []
   const completionInputs = []
@@ -2549,17 +2563,7 @@ test("publishes the market-specific profit threshold after recovery completion s
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
     baseFreeBalance: "1",
-    completeRecoveryCycle: async (input) => {
-      completionInputs.push(input)
-      return {
-        ok: true,
-        data: {
-        eligible: true,
-        freeQuantity: "0.1",
-        realizedNetProfit: "1.5"
-      }
-      }
-    },
+    completeRecoveryCycle: createInjectedRecoveryCompletion({ completionInputs }),
     eventPublisher: { publish: (event) => {
       events.push(event)
       if (event.name === "recovery.cycle_completed") {
