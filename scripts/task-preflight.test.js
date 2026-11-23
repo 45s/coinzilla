@@ -48,11 +48,11 @@ test('parses a versioned preflight report with instruction hashes and commit ide
     '- [x] Root AGENTS.md read',
     '- [x] AI task compliance standard read',
     'Task issue: #1754',
-    'Preflight commit: 0123456789012345678901234567890123456789',
+    'Preflight commit: `0123456789012345678901234567890123456789`',
     'Status: COMPLETE',
     '| Instruction file | Git blob SHA |',
     '| --- | --- |',
-    '| AGENTS.md | 0123456789012345678901234567890123456789 |',
+    '| `AGENTS.md` | `0123456789012345678901234567890123456789` |',
     '<!-- /coinzilla-agent-preflight -->',
   ].join('\n'));
 
@@ -141,7 +141,29 @@ context: {
     requiredPaths: ['AGENTS.md'],
     actualHashes: new Map([['AGENTS.md', 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb']]),
     isAncestor: false,
-  } }).length >= 3);
+    recordedBeforeImplementation: false,
+  } }).length >= 4);
+});
+
+
+test('blocks documentation paths omitted from the PR impact statement', () => {
+  const errors = validatePullRequestEvidence({
+    body: 'Fixes #1754\n\nFinal source commit: 0123456789012345678901234567890123456789\n\n## Documentation impact\nUpdated: docs/README.md',
+    headSha: '0123456789012345678901234567890123456789',
+    issueNumber: 1754,
+    issueBody: REQUIRED_ISSUE_SECTIONS.map((heading) => '## ' + heading + '\n\nSpecific evidence for ' + heading + '.').join('\n\n'),
+    issueComments: 'Verification evidence: pnpm test passed on commit 0123456789012345678901234567890123456789',
+    changedPaths: ['README.md'],
+    preflightReport: {
+      issueNumber: 1754,
+      status: 'COMPLETE',
+      instructions: [{ path: 'AGENTS.md', sha: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' }],
+    },
+    requiredInstructionPaths: ['AGENTS.md'],
+    actualInstructionHashes: new Map([['AGENTS.md', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa']]),
+    preflightCommitIsAncestor: true,
+  });
+  assert.ok(errors.some((error) => error.includes('README.md')));
 });
 
 test('extracts exactly one valid same-repository tracking issue from a PR body', () => {
