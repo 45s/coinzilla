@@ -1,3 +1,10 @@
+---
+name: Cross-domain request
+about: Request a bug fix, capability, or contract change from another Coinzilla domain
+title: "[domain-request] "
+labels: []
+---
+
 ## Mandatory AI-agent preflight — read before investigating or changing state
 
 Every AI agent or automated contributor must independently complete the repository's mandatory task-start gate before implementation or any state-changing action. Read these documents in full, follow applicable links recursively, and record the readiness summary in the issue:
@@ -13,13 +20,6 @@ Every AI agent or automated contributor must independently complete the reposito
 
 Do not begin implementation, edits, configuration changes, PR creation or other state-changing work until the preflight is complete. If required material is inaccessible or contradictory, stop and report the exact blocker. This issue template does not waive repository policy.
 
----
-
----
-name: Cross-domain request
-about: Request a bug fix, capability, or contract change from another Coinzilla domain
-title: "[domain-request] "
-labels: []
 ---
 
 ## Request type
@@ -49,3 +49,4 @@ Known breaking changes, failure behavior, invariants, and migration needs.
 
 ## Links
 Related roadmap item, issue, PR, and tests.
+
