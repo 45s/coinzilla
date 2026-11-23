@@ -1769,7 +1769,10 @@ function makeSellFill({
   order,
   tradeId,
   quantity = order.originalQuantity.amount,
-  quoteQuantity = "100",
+  quoteQuantity = multiplyDecimal({
+    left: order.limitPrice.amount,
+    right: quantity,
+  }),
   commissionAmount = "0"
 }) {
   return new Fill({
