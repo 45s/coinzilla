@@ -21,7 +21,7 @@
 | --- | --- | --- |
 | 0. Documentation foundation | Completed in merged #1764. Task Preflight CI enforcement was retired in merged #1769. | Documentation foundation is merged; required project CI remains active. |
 | 1. Source/evidence map | A–J source-to-test checkpoint posted to #1763; refine every PARTIAL/BLOCKED row against exact assertions and source owners. | Every rule has an owner, named evidence and honest status; audit closure is not yet claimed. |
-| 2. Test oracle audit | In progress in #1771, #1773, #1775 and #1776: exact decimal financial oracle, coherent Fill fixtures, and replay/bootstrap arithmetic. Remaining engine test-file oracle cleanup is blocked by 33 pre-existing strict-ESLint max-lines findings; see the domain test inventory. | Financial expected values are independent and exact; remaining blocked cases have an explicit reason; production behavior remains unchanged. |
+| 2. Test oracle audit | Four focused slices are merged: #1771 exact recovery-fee oracle, #1773 cancellation-race accounting assertions, #1775 coherent terminal Fill notional, and #1776 exact bootstrap/replay arithmetic. Remaining engine-suite cleanup is blocked by 33 pre-existing strict changed-file ESLint findings in `conservative-trading-engine.test.js`; see the inventory. | Independent exact financial oracles; remaining blocked debt has precise evidence and an agreed unblocking step; production behavior unchanged. |
 | 3. Core arithmetic | Recovery target, net proceeds, fee reserve, base/quote/third-asset commissions, tick/step rounding and decimal boundaries. | Normal, equality, just-below/above, invalid, tiny/large and exchange-filter cases have exact assertions. |
 | 4. BUY accounting | Initial and subsequent BUY fills, cost basis, net base, VWAP/reference, commissions, investment cap and commitments. | Canonical fills reconcile to Portfolio/Position/RecoveryLedger and BUY decisions. |
 | 5. SELL accounting | Partial/multiple/full SELL fills, proceeds, fee assets, remaining inventory, realized profit and recovery target. | Gross-to-net economics and active/retained inventory reconcile exactly. |
@@ -33,6 +33,19 @@
 | 11. Application integration | The cancellation/fill race and replacement SELL accounting scenario is covered by the application-level regression in #1773; remaining orchestration gaps stay in the issue matrix. | Each behavior is owned by an application test with exact evidence; domain tests do not fake orchestration. |
 | 12. Replay and regression | Bootstrap and DOGE/ZRO replay fixture arithmetic/oracles are being corrected in #1776. | Replay results match live-domain accounting and preserve idempotency; no external connectivity. |
 | 13. Coverage closure | Audit every matrix row, close gaps in small PRs, update inventory and roadmap with exact-head CI. | No applicable row missing evidence; unsupported/blocked rows have reason/owner; all required checks pass. |
+
+### Phase 2 checkpoint — 2026-11-23
+
+Merged test-oracle increments (all six applicable GitHub Actions workflows passed on each exact PR head):
+
+- [#1771](https://github.com/45s/coinzilla/pull/1771), head `a347262bce8535d81caf7ce327ed69923fbddf13`: independent exact recovery-SELL fee oracle.
+- [#1773](https://github.com/45s/coinzilla/pull/1773), head `17791f6a0cd11a2089e6b5c5a7b483e7fddc9012`: cancellation-raced second-BUY/recovery-SELL accounting and duplicate immutability.
+- [#1775](https://github.com/45s/coinzilla/pull/1775), head `fb6a227c69f07e90549c56539daf9efe4ccb250f`: coherent exact terminal-Fill quote notional fixture.
+- [#1776](https://github.com/45s/coinzilla/pull/1776), head `ddd7598769f294eb418904a72fca989f9f173c8d`: exact bootstrap and replay arithmetic.
+
+The remaining engine-suite oracle cleanup is not complete. [#1772](https://github.com/45s/coinzilla/pull/1772) was closed without merge: its test-only fixture correction was blocked by 33 existing strict changed-file ESLint violations in the 11,494-line `conservative-trading-engine.test.js`. The exact-head Repository Quality run [45150853240](https://github.com/45s/coinzilla/actions/runs/45150853240) failed at the changed-file ESLint job; the other five applicable workflows passed. The full violation list and exact affected financial assertions are recorded in the domain test inventory.
+
+**Next:** decompose the 33 overlong test/helper functions into cohesive, lint-compliant units, then correct the SELL Fill default and remaining financial comparisons. Do not suppress ESLint, weaken policy, or change production behavior. Phase 2 remains in progress until the exact financial oracles are corrected or a narrower evidence-backed disposition is agreed.
 
 ### Small-PR operating protocol
 
