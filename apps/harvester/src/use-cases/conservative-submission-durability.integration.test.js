@@ -88,34 +88,46 @@ const appConfig = {
   },
 }
 
-function createEngine({
-  calls,
-  intentResult = {
-    ok: true,
-    data: { durable: true },
-  },
-}) {
-  const brokerState = createHarnessBroker({
+function createBrokerState({ calls }) {
+  return createHarnessBroker({
     market,
     baseAsset,
     quoteAsset,
     marketMetadata,
+    baseFreeBalance: "0",
+    quoteFreeBalance: "1000",
+    quoteCashFlowBaseline: "0",
+    portfolioBaseQuantityBaseline: "0",
+    additionalTrackedBaseQuantityBaseline: "0",
+    committedQuoteBalanceBaseline: "0",
+    committedBaseBalanceBaseline: "0",
     onPlaceOrder: () => calls.push("broker"),
   })
-  const broker = {
-    ...brokerState.broker,
-    providerInstanceId: "binanceTestnet",
-    providerType: "binance",
-    accountId: "binance-primary",
+}
+
+function createSubmissionCallbacks({ calls, intentResult }) {
+  return {
+    onOperationalStateSubmissionIntent: async () => {
+      calls.push("intent")
+      return intentResult
+    },
+    onOperationalStateSubmissionOutcome: async () => {
+      calls.push("outcome")
+      return {
+        ok: true,
+        data: { durable: true },
+      }
+    },
   }
-  const portfolio = new Portfolio()
-  const recoveryLedger = RecoveryLedger.empty({ market })
-  const engine = makeConservativeTradingEngine({
+}
+
+function createEngineDependencies({ broker, brokerState, calls, intentResult, includeCallbacks }) {
+  const dependencies = {
     broker,
     strategyPolicy: conservativeStrategyPolicy,
     appConfig,
-    getPortfolio: () => portfolio,
-    getRecoveryLedger: () => recoveryLedger,
+    getPortfolio: () => new Portfolio(),
+    getRecoveryLedger: () => RecoveryLedger.empty({ market }),
     getMarketMetadata: () => marketMetadata,
     getAccountSnapshot: () => brokerState.accountSnapshot,
     updateTradingAccounting: async () => ({
@@ -137,18 +149,29 @@ function createEngine({
     hasUnownedOpenOrdersForSymbol: () => false,
     now: () => 1,
     initialState: {},
-    onOperationalStateSubmissionIntent: async () => {
-      calls.push("intent")
-      return intentResult
-    },
-    onOperationalStateSubmissionOutcome: async () => {
-      calls.push("outcome")
-      return {
-        ok: true,
-        data: { durable: true },
-      }
-    },
+    requireOperationalStateSubmissionDurability: true,
+  }
+  return includeCallbacks
+    ? { ...dependencies, ...createSubmissionCallbacks({ calls, intentResult }) }
+    : dependencies
+}
+
+function createEngine({ calls, intentResult, includeCallbacks = true }) {
+  const brokerState = createBrokerState({ calls })
+  const broker = {
+    ...brokerState.broker,
+    providerInstanceId: "binanceTestnet",
+    providerType: "binance",
+    accountId: "binance-primary",
+  }
+  const dependencies = createEngineDependencies({
+    broker,
+    brokerState,
+    calls,
+    intentResult: intentResult ?? { ok: true, data: { durable: true } },
+    includeCallbacks,
   })
+  const engine = makeConservativeTradingEngine(dependencies)
   return {
     engine,
     brokerState,
@@ -205,4 +228,14 @@ test("fails closed before Conservative broker placement when the operational-sta
   assert.equal(result.ok, false, "An uncommitted operational-state intent must fail the Conservative submission.")
   assert.equal(brokerState.orders.length, 0, "The broker must not receive an order without a durable submission intent.")
   assert.deepEqual(calls, ["intent"], "A failed intent barrier must stop before broker placement and must not write a submission outcome.")
+})
+
+test("rejects a missing operational-state submission callback before creating a tradable Conservative engine", () => {
+  const calls = []
+
+  assert.throws(
+    () => createEngine({ calls, includeCallbacks: false }),
+    /onOperationalStateSubmissionIntent and onOperationalStateSubmissionOutcome/,
+  )
+  assert.deepEqual(calls, [], "A missing durable callback must be rejected before any broker operation.")
 })
