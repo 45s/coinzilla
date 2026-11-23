@@ -17,6 +17,7 @@ import { scenarios as persistenceScenarios } from "../conservative/persistence/i
 import { scenarios as configurationScenarios } from "../conservative/configuration/index.js"
 import { scenarios as safetyScenarios } from "../conservative/safety/index.js"
 import { scenarios as runtimeScenarios } from "../conservative/runtime/index.js"
+import { ADDITIONAL_TEST_MAPPINGS } from "./additional-test-mappings.js"
 import { CONSERVATIVE_REQUIREMENTS } from "./requirements.js"
 import { assertValidScenarioDefinitions } from "./schema.js"
 
@@ -72,6 +73,7 @@ function resolveScenarioEvidence({ scenario, behaviorMap }) {
   const relatedExistingTests = uniqueBy(
     [
       ...scenario.relatedExistingTests,
+      ...(ADDITIONAL_TEST_MAPPINGS[scenario.id] ?? []),
       ...relatedBehaviors.flatMap((behavior) => behavior.tests ?? []),
     ],
     (testCase) => `${testCase.path}::${testCase.name}`,

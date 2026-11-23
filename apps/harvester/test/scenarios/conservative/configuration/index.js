@@ -38,7 +38,7 @@ export const scenarios = [
       "config/strategies/cg-coin-grabber.js",
       "src/bootstrap/config/resolve-harvester-options.js",
     ],
-    coverageStatus: "MISSING",
-    coverageReason: "No named Conservative configuration scenario is currently registered in the critical behavior contract; exact invalid-configuration test coverage must be audited before promotion.",
+    coverageStatus: "PARTIAL",
+    coverageReason: "Existing tests cover strategy enablement, execution-route selection, and TRADING_MODE validation. Conservative pair-specific financial constraints such as minProfit, keepQuantity, and quantity configuration are not comprehensively validated at configuration load.",
   }),
 ]
