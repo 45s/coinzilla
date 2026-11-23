@@ -32,6 +32,10 @@ This index is the entry point for maintained repository documentation. The gover
 - [Contributing](contributing.md)
 - [Workspace package map](workspace-package-map.md)
 
+## Testing and quality
+
+- [Repository test scenario catalog](testing/SCENARIO_CATALOG.md) — human-readable behavior scenarios, concrete inputs/outputs, subcases, implementation paths, and named automated tests across the workspace.
+
 ## Operational and reference guides
 
 - [Broker WebSocket contract](brokers-websocket-contract.md)
