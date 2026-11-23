@@ -7632,12 +7632,8 @@ test("processes recovery-time user-data cancellation facts without broker cancel
 })
 
 
-test("keeps a recovery pause until every same-market cancel/replace order is canonically resolved", async () => {
-  const makeOrder = ({
-    clientOrderId,
-    brokerOrderId,
-    status
-  }) => new CanonicalOrder({
+function createRecoveryPauseOrder({ clientOrderId, brokerOrderId, status } = {}) {
+  return new CanonicalOrder({
     clientOrderId,
     brokerOrderId,
     market,
@@ -7645,34 +7641,37 @@ test("keeps a recovery pause until every same-market cancel/replace order is can
     type: "LIMIT",
     limitPrice: new Money({
       amount: "100",
-      asset: quoteAsset
+      asset: quoteAsset,
     }),
     originalQuantity: new Quantity({
       amount: "1",
-      asset: baseAsset
+      asset: baseAsset,
     }),
     executedQuantity: new Quantity({
       amount: "0",
-      asset: baseAsset
+      asset: baseAsset,
     }),
     status,
     createdAt: 1,
     acknowledgedAt: 1,
     updatedAt: 1,
   })
+}
+
+test("keeps a recovery pause until every same-market cancel/replace order is canonically resolved", async () => {
   const ownedOrders = [
-    makeOrder({
+    createRecoveryPauseOrder({
       clientOrderId: "recovered-sell-one",
       brokerOrderId: "broker-sell-one",
       status: "UNKNOWN"
     }),
-    makeOrder({
+    createRecoveryPauseOrder({
       clientOrderId: "recovered-sell-two",
       brokerOrderId: "broker-sell-two",
       status: "UNKNOWN"
     }),
   ]
-  const canceledOrders = ownedOrders.map((order) => makeOrder({
+  const canceledOrders = ownedOrders.map((order) => createRecoveryPauseOrder({
     clientOrderId: order.clientOrderId,
     brokerOrderId: order.brokerOrderId,
     status: "CANCELED",
