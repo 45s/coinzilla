@@ -6716,6 +6716,27 @@ test("retains acknowledged broker identity after conflicting REST fill metadata 
 })
 
 
+function createAcknowledgedFillBatch({ order } = {}) {
+  return [
+    makeBuyFill({
+      order,
+      tradeId: "9939",
+      price: "99.95",
+      quantity: "0.5",
+      quoteQuantity: "49.975",
+      clientOrderId: undefined,
+    }),
+    makeBuyFill({
+      order,
+      tradeId: "9940",
+      price: "99.94",
+      quantity: "0.5",
+      quoteQuantity: "49.97",
+      clientOrderId: undefined,
+    }),
+  ]
+}
+
 test("publishes one durable fill-applied event per reconciled execution and no duplicate event", async () => {
   const events = []
   const harness = await createHarness({
@@ -6727,24 +6748,7 @@ test("publishes one durable fill-applied event per reconciled execution and no d
         return { ok: true }
       },
     },
-    getAcknowledgedFills: ({ order }) => [
-      makeBuyFill({
-        order,
-        tradeId: "9939",
-        price: "99.95",
-        quantity: "0.5",
-        quoteQuantity: "49.975",
-        clientOrderId: undefined,
-      }),
-      makeBuyFill({
-        order,
-        tradeId: "9940",
-        price: "99.94",
-        quantity: "0.5",
-        quoteQuantity: "49.97",
-        clientOrderId: undefined,
-      }),
-    ],
+    getAcknowledgedFills: ({ order }) => createAcknowledgedFillBatch({ order }),
   })
 
   const result = await harness.engine.processMarketPrice({
