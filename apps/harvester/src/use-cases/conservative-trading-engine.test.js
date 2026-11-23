@@ -10643,7 +10643,6 @@ function configureStreamDuringRestReadBroker({
   partialOrder,
   recoveredFill,
   fillsGate,
-  fillsStarted,
   signalFillsStarted,
 } = {}) {
   broker.getOpenOrders = async () => ({
