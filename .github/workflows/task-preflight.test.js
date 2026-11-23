@@ -30,6 +30,12 @@ test('task preflight is isolated from JavaScript quality and gates the required 
   const evidencePublisher = extractJob('publish-task-preflight-evidence');
   assert.match(evidencePublisher, /issues: write/);
   assert.match(evidencePublisher, /Verification evidence/);
+    const issueReferencePattern = evidencePublisher.match(/grep -Eio '([^']+)'/)?.[1];
+    assert.ok(issueReferencePattern, 'Expected the evidence publisher to define an issue-reference pattern.');
+    const issueReferenceRegex = new RegExp(issueReferencePattern, 'i');
+    assert.match('Tracking issue: #1674', issueReferenceRegex);
+    assert.match('Closes #1674', issueReferenceRegex);
+    assert.doesNotMatch('Related: #1674', issueReferenceRegex);
   assert.match(evidencePublisher, /gh api/);
   assert.ok(evidencePublisher.includes('PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}'));
   assert.ok(evidencePublisher.includes('RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}'));
