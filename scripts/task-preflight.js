@@ -126,10 +126,19 @@ function getSectionContent(body, title) {
 }
 function validateDocumentationImpact({ context, errors }) {
   const docs = getSectionContent(context.body, 'Documentation impact');
-  if (!docs || plain(docs).length < 12) {errors.push('PR documentation impact is missing or empty.');}
+  if (!docs || plain(docs).length < 12) {
+    errors.push('PR documentation impact is missing or empty.');
+  }
   const changedDocs = (context.changedPaths || []).filter((path) => /\.mdx?$/i.test(path));
+  const documentedPaths = new Set(
+    (docs || '').split(/\s+/)
+      .map((item) => item.replaceAll('\x60', '').replace(/^[*,-]+|[),.;]+$/g, ''))
+      .filter(Boolean),
+  );
   for (const path of changedDocs) {
-    if (!docs?.includes(path)) {errors.push(`Changed documentation path is missing from PR documentation impact: ${  path}`);}
+    if (!documentedPaths.has(path)) {
+      errors.push('Changed documentation path is missing from PR documentation impact: ' + path);
+    }
   }
   if ((context.changedPaths || []).length && changedDocs.length === 0 &&
       !/N\/A.{0,100}(?:because|reason|no documentation)/i.test(docs || '')) {
