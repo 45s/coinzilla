@@ -138,7 +138,10 @@ function replayCycle({ cycle }) {
       record,
       `Archived cycle ${cycle.symbol} references missing fill ${fillId}.`,
     )
-    const fill = createFill({ record, market })
+    const fill = createFill({
+      record,
+      market,
+    })
     assert.equal(
       fill.id,
       record.fillId,
@@ -155,7 +158,12 @@ function replayCycle({ cycle }) {
       true,
       `Production accounting must apply archived fill ${fillId}: ${JSON.stringify(result.error)}.`,
     )
-    ;({ portfolio, recoveryLedger } = result.data)
+    const {
+      portfolio: nextPortfolio,
+      recoveryLedger: nextRecoveryLedger,
+    } = result.data
+    portfolio = nextPortfolio
+    recoveryLedger = nextRecoveryLedger
   }
 
   const position = portfolio.getPosition({
@@ -225,7 +233,11 @@ function assertArchiveMetadata() {
   )
 }
 
-function assertPortfolioCycleAccounting({ cycle, replay, expected }) {
+function assertPortfolioCycleAccounting({
+    cycle,
+    replay,
+    expected,
+  }) {
   assert.equal(
     replay.market.id,
     cycle.marketId,
@@ -248,7 +260,11 @@ function assertPortfolioCycleAccounting({ cycle, replay, expected }) {
   )
 }
 
-function assertLedgerCycleAccounting({ cycle, replay, expected }) {
+function assertLedgerCycleAccounting({
+    cycle,
+    replay,
+    expected,
+  }) {
   assert.equal(
     replay.recoveryLedger.buyCost,
     expected.spent,
