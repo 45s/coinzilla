@@ -9,10 +9,11 @@ function extractJob(jobId) {
   const start = lines.findIndex((line) => line === `  ${jobId}:`);
   assert.notEqual(start, -1, `Expected workflow job "${jobId}" to exist.`);
 
-  const nextJob = lines.findIndex(
-    (line, index) => index > start && /^ {2}[a-z][a-z-]*:$/.test(line),
+  const nextJobOffset = lines.slice(start + 1).findIndex(
+    (line) => /^ {2}[a-z][a-z-]*:$/.test(line),
   );
-  return lines.slice(start + 1, nextJob === -1 ? undefined : nextJob).join('\n');
+  const end = nextJobOffset === -1 ? undefined : start + 1 + nextJobOffset;
+  return lines.slice(start + 1, end).join('\n');
 }
 
 test('task preflight is isolated from JavaScript quality and gates the required status', () => {
