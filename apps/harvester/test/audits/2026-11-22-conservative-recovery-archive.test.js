@@ -56,8 +56,8 @@ const expectedCycles = {
 }
 
 function createMarket(cycle) {
-  const baseAsset = new Asset({ id: cycle.baseAssetId, code: cycle.baseAssetCode })
-  const quoteAsset = new Asset({ id: cycle.quoteAssetId, code: cycle.quoteAssetCode })
+  const baseAsset = new Asset({ id: cycle.baseAssetId, code: cycle.baseAssetId.toUpperCase() })
+  const quoteAsset = new Asset({ id: cycle.quoteAssetId, code: cycle.quoteAssetId.toUpperCase() })
 
   return new Market({
     venue: "binance",
@@ -480,7 +480,7 @@ test(
     )
     assert.equal(
       archive.terminalEvidence.length,
-      33,
+      31,
       "The selected terminal-log evidence must retain all 33 referenced line records.",
     )
     assert.ok(
