@@ -60,7 +60,10 @@ test('uses the live PR body but rejects a head that changed after the workflow e
   };
 
   assert.equal(
-    selectPullRequestSnapshot({ eventPullRequest, currentPullRequest }).body,
+    selectPullRequestSnapshot({
+      eventPullRequest,
+      currentPullRequest,
+    }).body,
     currentPullRequest.body,
     'Validation must use the current PR description, not the older event snapshot.',
   );
