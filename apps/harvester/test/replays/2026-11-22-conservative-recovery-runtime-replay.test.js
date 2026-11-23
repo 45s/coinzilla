@@ -274,11 +274,25 @@ const scenarios = [
   },
 ]
 
-for (const scenario of scenarios) {
-  test(`replays archived ${scenario.symbol} fills and completes profitable exchange-constrained residual inventory`, async (t) => {
-    await runArchivedRecoveryCycle({
-      t,
-      scenario,
-    })
+const [zroScenario, dogeScenario, adaScenario] = scenarios
+
+test("replays archived ZROUSDT fills and completes profitable exchange-constrained residual inventory", async (t) => {
+  await runArchivedRecoveryCycle({
+    t,
+    scenario: zroScenario,
   })
-}
+})
+
+test("replays archived DOGEUSDT fills and completes profitable exchange-constrained residual inventory", async (t) => {
+  await runArchivedRecoveryCycle({
+    t,
+    scenario: dogeScenario,
+  })
+})
+
+test("replays archived ADAUSDT fills and completes profitable exchange-constrained residual inventory", async (t) => {
+  await runArchivedRecoveryCycle({
+    t,
+    scenario: adaScenario,
+  })
+})
