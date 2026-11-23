@@ -4230,7 +4230,7 @@ test("reconciles multiple BUY fills racing shutdown cancellation and replaces on
       executionType: "TRADE",
       executedOrder: makePartiallyFilledOrder({
         order: buyOrder,
-        executedQuantity: firstQuantity,
+        executedQuantity: "0.5",
         updatedAt: 2,
       }),
       fill: firstFill,
@@ -7539,7 +7539,7 @@ test("does not clear an independently durable strategy pause when a recovery can
   const harness = await createHarness({
     initialBook: false,
     initialState: {
-      orderRegistry: new OrderRegistry({ orders: [createRecoveredStreamCancellationOrder({ status: "UNKNOWN" })] }),
+      orderRegistry: new OrderRegistry({ orders: [makeOrder({ status: "UNKNOWN" })] }),
       pausedMarkets: new Set(["DOGEUSDT"]),
       durablePausedMarkets: new Set(["DOGEUSDT"]),
       recoveryManagedPausedMarkets: new Set(["DOGEUSDT"]),
@@ -7590,7 +7590,7 @@ test("processes recovery-time user-data cancellation facts without broker cancel
   const harness = await createHarness({
     initialBook: false,
     initialState: {
-      orderRegistry: new OrderRegistry({ orders: [makeOrder({ status: "UNKNOWN" })] }),
+      orderRegistry: new OrderRegistry({ orders: [createRecoveredStreamCancellationOrder({ status: "UNKNOWN" })] }),
       pausedMarkets: new Set(["DOGEUSDT"]),
       recoveryManagedPausedMarkets: new Set(["DOGEUSDT"]),
       recoveryManagedCancellationClientOrderIds: new Set(["recovered-stream-cancel"]),
@@ -10376,7 +10376,7 @@ test("explicit recovery SELL intent may submit while volatility protection block
   const { portfolio, recoveryLedger, unavailable } = createVolatilityProtectedRecoveryFixture()
   const harness = await createHarness({
     initialPortfolio: portfolio,
-    initialRecoveryLedger: ledger,
+    initialRecoveryLedger: recoveryLedger,
     baseFreeBalance: "100",
     getVolatilityData: () => unavailable,
   })
@@ -11204,7 +11204,7 @@ test("continues recovery-only market evaluation after the shutdown BUY gate", as
     baseFreeBalance: "1",
     accountingApplied: true,
     strategyPolicy,
-    isStopping: () => shutdownState.started,
+    isStopping: () => shutdownStarted,
   })
   const initialResult = await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
@@ -11354,7 +11354,7 @@ async function prepareLateSellShutdownScenario({ fillFraction, cancelUpdatedAt }
     cancelExecutedQuantity: ({ order }) =>
       order.side === "SELL" ? cancelSellExecutedQuantity : "0",
     cancelUpdatedAt,
-    isStopping: () => shutdownStarted,
+    isStopping: () => shutdownState.started,
   })
   await establishLateSellShutdownSafety({ harness, shutdownState })
 
