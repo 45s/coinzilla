@@ -687,7 +687,7 @@ test("Bitunix REST client sends and signs exact int64 request numbers", async ()
     createRestSignature({
       nonce,
       timestamp: String(timestamp),
-      publicIdentifier: "api-key",
+      apiKey: "api-key",
       secretKey: "secret",
       body: captured.options.body,
       bodyIsSerialized: true,
