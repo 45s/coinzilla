@@ -316,7 +316,6 @@ Do not treat the conceptual diagram as a new production state model: map every t
 - `src/bootstrap/shutdown/create-conservative-shutdown-participant.test.js` verifies the Conservative shutdown participant awaits the serialized engine gate barrier before owned-BUY cancellation.
 - `src/bootstrap/user-data/create-user-data-event-safety-halt.test.js` combines the real user-data handler with `createAccountIntegritySafetyHalt` and now applies an archived ADA BUY plus late SELL through real `Fill`, `Portfolio`, `RecoveryLedger`, and production `updateTradingAccounting` components. It proves the retryable REST/stream failure triggers recovery-mode reconciliation and owned-BUY cancellation; the later SELL applies once, a duplicate is an immutable no-op, exact Portfolio/RecoveryLedger base/cost/proceeds/profit remain aligned, readiness stays closed, and BUY evaluation does not resume. The test uses a narrow engine harness for the orchestration boundary, records calls as named objects, and represents the retryable REST failure with its explicit failure contract; it does not mock the accounting behavior under test.
 
-
 ## 2026-11-23 — #1763 Phase 2 implementation checkpoint
 
 - Replacement PR: [#1792](https://github.com/45s/coinzilla/pull/1792), branch `test/1763-conservative-test-oracle-phase2`, based on current `develop`. PR #1790 is closed as superseded because its branch was 98 commits behind and diverged.
