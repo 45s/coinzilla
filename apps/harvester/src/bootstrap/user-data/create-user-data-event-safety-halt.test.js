@@ -27,8 +27,14 @@ function createState() {
   }
 }
 
-const adaBaseAsset = new Asset({ id: "ada", code: "ADA" })
-const usdtQuoteAsset = new Asset({ id: "usdt", code: "USDT" })
+const adaBaseAsset = new Asset({
+  id: "ada",
+  code: "ADA",
+})
+const usdtQuoteAsset = new Asset({
+  id: "usdt",
+  code: "USDT",
+})
 const adaMarket = new Market({
   venue: "binance",
   symbol: "ADAUSDT",
@@ -51,12 +57,24 @@ function createAdaFill({
     clientOrderId: `ada-client-${tradeId}`,
     market: adaMarket,
     side,
-    price: new Money({ amount: price, asset: usdtQuoteAsset }),
-    quantity: new Quantity({ amount: quantity, asset: adaBaseAsset }),
-    quoteQuantity: new Money({ amount: quoteQuantity, asset: usdtQuoteAsset }),
+    price: new Money({
+      amount: price,
+      asset: usdtQuoteAsset,
+    }),
+    quantity: new Quantity({
+      amount: quantity,
+      asset: adaBaseAsset,
+    }),
+    quoteQuantity: new Money({
+      amount: quoteQuantity,
+      asset: usdtQuoteAsset,
+    }),
     commissions: [
       new Commission({
-        amount: new Money({ amount: commissionAmount, asset: commissionAsset }),
+        amount: new Money({
+          amount: commissionAmount,
+          asset: commissionAsset,
+        }),
       }),
     ],
     commissionStatus: "COMPLETE",
@@ -165,7 +183,10 @@ function createEngineHarness({ accounting }) {
       return { ok: true }
     },
   }
-  return { engine, calls }
+  return {
+    engine,
+    calls,
+  }
 }
 
 function createSafetyHaltHandler({ state, engine, calls, observedFillIds, accounting }) {
@@ -257,7 +278,13 @@ test("routes REST/stream reconciliation failures through the account safety halt
   const accounting = createAccountingState(createInitialAdaAccounting())
   const { engine, calls } = createEngineHarness({ accounting })
   const observedFillIds = []
-  const handler = createSafetyHaltHandler({ state, engine, calls, observedFillIds, accounting })
+  const handler = createSafetyHaltHandler({
+    state,
+    engine,
+    calls,
+    observedFillIds,
+    accounting,
+  })
   const sellFill = createAdaFill({
     tradeId: "145942",
     side: "SELL",
@@ -271,7 +298,12 @@ test("routes REST/stream reconciliation failures through the account safety halt
 
   handler({ event })
   await state.eventQueue
-  assertInitialSafetyHalt({ state, calls, observedFillIds, sellFill })
+  assertInitialSafetyHalt({
+    state,
+    calls,
+    observedFillIds,
+    sellFill,
+  })
 
   handler({ event })
   await state.eventQueue
@@ -289,5 +321,8 @@ test("routes REST/stream reconciliation failures through the account safety halt
     portfolioAfterSell,
     ledgerAfterSell,
   })
-  assertSafetyHaltRemainsLatched({ state, calls })
+  assertSafetyHaltRemainsLatched({
+    state,
+    calls,
+  })
 })
