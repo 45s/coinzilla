@@ -247,3 +247,32 @@ sha: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' }],
   });
   assert.ok(blocked.length >= 5);
 });
+
+
+test('requires verification evidence to name the exact current PR head SHA', () => {
+  const headSha = '0123456789012345678901234567890123456789';
+  const staleSha = 'ffffffffffffffffffffffffffffffffffffffff';
+  const errors = validatePullRequestEvidence({
+    body: `Fixes #1754\\n\\nFinal source commit: ${headSha}\\n\\n## Documentation impact\\nN/A because this test-only change does not alter maintained documentation.`,
+    headSha,
+    issueNumber: 1754,
+    issueBody: REQUIRED_ISSUE_SECTIONS.map((heading) => `## ${heading}\\n\\nSpecific evidence for ${heading}.`).join('\\n\\n'),
+    issueComments: [`Verification evidence: pnpm run test:task-preflight passed on commit ${staleSha}`],
+    changedPaths: ['scripts/task-preflight.test.js'],
+    preflightReport: {
+      issueNumber: 1754,
+      commitSha: staleSha,
+      status: 'COMPLETE',
+      instructions: [{ path: 'AGENTS.md', sha: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' }],
+    },
+    requiredInstructionPaths: ['AGENTS.md'],
+    actualInstructionHashes: new Map([['AGENTS.md', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa']]),
+    preflightCommitIsAncestor: true,
+    preflightRecordedBeforeImplementation: true,
+  });
+
+  assert.ok(
+    errors.some((error) => /verification evidence.*current PR head SHA/i.test(error)),
+    'Verification evidence from an earlier commit must not satisfy the current PR head gate.',
+  );
+});
