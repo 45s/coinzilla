@@ -7016,8 +7016,8 @@ test("rejects an overcommitted batch of SELL intents before submitting any order
   assert.equal(harness.orders.length, 0)
 })
 
-test("reconciles an accepted order after its submission acknowledgement is lost", async () => {
-  const strategyPolicy = {
+function createLostAcknowledgementStrategyPolicy() {
+  return {
     evaluate: ({ lastBuyPrice }) => ({
       strategy: "TEST_POLICY",
       symbol: "DOGEUSDT",
@@ -7026,14 +7026,45 @@ test("reconciles an accepted order after its submission acknowledgement is lost"
         side: "BUY",
         type: "LIMIT_MAKER",
         price: "99.95",
-        quantity: "1"
+        quantity: "1",
       }],
     }),
     evaluateTrailingBuyRepricing: () => ({
       shouldReplace: false,
-      adjustmentThreshold: "0"
+      adjustmentThreshold: "0",
     }),
   }
+}
+
+function createLostAcknowledgementCanonicalEvidence({ pendingOrder } = {}) {
+  const acknowledgedOrder = new CanonicalOrder({
+    clientOrderId: pendingOrder.clientOrderId,
+    brokerOrderId: "broker-lost-ack",
+    market,
+    side: pendingOrder.side,
+    type: pendingOrder.type,
+    limitPrice: pendingOrder.limitPrice,
+    originalQuantity: pendingOrder.originalQuantity,
+    executedQuantity: new Quantity({ amount: "1", asset: baseAsset }),
+    status: "FILLED",
+    createdAt: 1,
+    acknowledgedAt: 1,
+    updatedAt: 2,
+    completedAt: 2,
+  })
+  const fill = makeBuyFill({
+    order: acknowledgedOrder,
+    tradeId: "lost-ack-fill-1",
+    price: "99.95",
+    quantity: "1",
+    quoteQuantity: "99.95",
+    executedAt: 2,
+  })
+  return { acknowledgedOrder, fill }
+}
+
+test("reconciles an accepted order after its submission acknowledgement is lost", async () => {
+  const strategyPolicy = createLostAcknowledgementStrategyPolicy()
   const harness = await createHarness({
     strategyPolicy,
     placeOrderThrow: true,
@@ -7054,31 +7085,8 @@ test("reconciles an accepted order after its submission acknowledgement is lost"
   assert.equal(pendingOrder.status, "UNKNOWN")
   assert.equal(pendingOrder.brokerOrderId, undefined)
 
-  const acknowledgedOrder = new CanonicalOrder({
-    clientOrderId: pendingOrder.clientOrderId,
-    brokerOrderId: "broker-lost-ack",
-    market,
-    side: pendingOrder.side,
-    type: pendingOrder.type,
-    limitPrice: pendingOrder.limitPrice,
-    originalQuantity: pendingOrder.originalQuantity,
-    executedQuantity: new Quantity({
-      amount: "1",
-      asset: baseAsset
-    }),
-    status: "FILLED",
-    createdAt: 1,
-    acknowledgedAt: 1,
-    updatedAt: 2,
-    completedAt: 2,
-  })
-  const fill = makeBuyFill({
-    order: acknowledgedOrder,
-    tradeId: "lost-ack-fill-1",
-    price: "99.95",
-    quantity: "1",
-    quoteQuantity: "99.95",
-    executedAt: 2,
+  const { acknowledgedOrder, fill } = createLostAcknowledgementCanonicalEvidence({
+    pendingOrder,
   })
   harness.setCanonicalOrderLookup({ order: acknowledgedOrder })
   harness.setAcknowledgedOrder({
