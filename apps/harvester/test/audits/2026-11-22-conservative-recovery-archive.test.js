@@ -155,8 +155,7 @@ function replayCycle({ cycle }) {
       true,
       `Production accounting must apply archived fill ${fillId}: ${JSON.stringify(result.error)}.`,
     )
-    portfolio = result.data.portfolio
-    recoveryLedger = result.data.recoveryLedger
+    ;({ portfolio, recoveryLedger } = result.data)
   }
 
   const position = portfolio.getPosition({
@@ -164,7 +163,12 @@ function replayCycle({ cycle }) {
     strategyId: StrategyId.COIN_GRABBER,
   })
 
-  return { market, portfolio, recoveryLedger, position }
+  return {
+    market,
+    portfolio,
+    recoveryLedger,
+    position,
+  }
 }
 
 function assertArchiveMetadata() {
@@ -221,26 +225,7 @@ function assertArchiveMetadata() {
   )
 }
 
-function assertCycleAccounting({ cycle }) {
-  const expected = expectedCycles[cycle.symbol]
-  assert.ok(
-    expected,
-    `The fixture must not introduce an unreviewed recovery market ${cycle.symbol}.`,
-  )
-  assert.deepEqual(
-    {
-      activeQuantity: cycle.activeQuantity,
-      spent: cycle.spent,
-      netSellProceeds: cycle.netSellProceeds,
-      realizedNetProfit: cycle.realizedNetProfit,
-      minProfit: cycle.minProfit,
-      keepQuantity: cycle.keepQuantity,
-    },
-    expected,
-    `Archived ${cycle.symbol} outcome must match the exact-decimal oracle.`,
-  )
-
-  const replay = replayCycle({ cycle })
+function assertPortfolioCycleAccounting({ cycle, replay, expected }) {
   assert.equal(
     replay.market.id,
     cycle.marketId,
@@ -261,6 +246,9 @@ function assertCycleAccounting({ cycle }) {
     expected.realizedNetProfit,
     `Portfolio cash flow for ${cycle.symbol} must include actual quote-asset SELL commissions.`,
   )
+}
+
+function assertLedgerCycleAccounting({ cycle, replay, expected }) {
   assert.equal(
     replay.recoveryLedger.buyCost,
     expected.spent,
@@ -281,6 +269,30 @@ function assertCycleAccounting({ cycle }) {
     cycle.appliedFillIds,
     `Every archived fill for ${cycle.symbol} must be applied exactly once.`,
   )
+}
+
+function assertCycleAccounting({ cycle }) {
+  const expected = expectedCycles[cycle.symbol]
+  assert.ok(
+    expected,
+    `The fixture must not introduce an unreviewed recovery market ${cycle.symbol}.`,
+  )
+  assert.deepEqual(
+    {
+      activeQuantity: cycle.activeQuantity,
+      spent: cycle.spent,
+      netSellProceeds: cycle.netSellProceeds,
+      realizedNetProfit: cycle.realizedNetProfit,
+      minProfit: cycle.minProfit,
+      keepQuantity: cycle.keepQuantity,
+    },
+    expected,
+    `Archived ${cycle.symbol} outcome must match the exact-decimal oracle.`,
+  )
+
+  const replay = replayCycle({ cycle })
+  assertPortfolioCycleAccounting({ cycle, replay, expected })
+  assertLedgerCycleAccounting({ cycle, replay, expected })
 }
 
 function assertCycleCompletion({ cycle }) {
