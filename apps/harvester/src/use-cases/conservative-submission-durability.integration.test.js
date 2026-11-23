@@ -142,7 +142,7 @@ function createEngineDependencies({ broker, brokerState, calls, intentResult, in
       },
     }),
     canTrade: () => true,
-    onPause: async () => {},
+    onPause: async () => ({ ok: true }),
     isStopping: () => false,
     isMarketPriceFresh: () => true,
     isMarketBookFresh: () => true,
@@ -151,9 +151,13 @@ function createEngineDependencies({ broker, brokerState, calls, intentResult, in
     initialState: {},
     requireOperationalStateSubmissionDurability: true,
   }
-  return includeCallbacks
-    ? { ...dependencies, ...createSubmissionCallbacks({ calls, intentResult }) }
-    : dependencies
+  if (!includeCallbacks) {
+    return dependencies
+  }
+  return {
+    ...dependencies,
+    ...createSubmissionCallbacks({ calls, intentResult }),
+  }
 }
 
 function createEngine({ calls, intentResult, includeCallbacks = true }) {
@@ -168,7 +172,10 @@ function createEngine({ calls, intentResult, includeCallbacks = true }) {
     broker,
     brokerState,
     calls,
-    intentResult: intentResult ?? { ok: true, data: { durable: true } },
+    intentResult: intentResult ?? {
+      ok: true,
+      data: { durable: true },
+    },
     includeCallbacks,
   })
   const engine = makeConservativeTradingEngine(dependencies)
