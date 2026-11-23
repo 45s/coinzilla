@@ -1863,8 +1863,9 @@ function createConservativeEngineSubmissionContext({ context } = {}) {
   }
   context.submit = makeExecuteStrategyDecision({
     broker: dependencies.broker,
-    onOperationalStateSubmissionIntent: dependencies.onOperationalStateSubmissionIntent,
-    onOperationalStateSubmissionOutcome: dependencies.onOperationalStateSubmissionOutcome,
+    onDurableSubmissionIntent: dependencies.onOperationalStateSubmissionIntent,
+    onDurableSubmissionOutcome: dependencies.onOperationalStateSubmissionOutcome,
+    requireDurableSubmission: dependencies.requireOperationalStateSubmissionDurability,
     canSubmit: context.canSubmit,
     ...createSubmissionLifecycleCallbacks({
       state: context.state,

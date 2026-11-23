@@ -82,6 +82,7 @@ function createExecutionContext({ options } = {}) {
     onSubmissionFailure,
     onDurableSubmissionIntent,
     onDurableSubmissionOutcome,
+    requireDurableSubmission = false,
     onOrderValidationFailure = async () => {},
     canSubmit = () => true,
     onSubmissionDeferred = async () => {},
@@ -108,6 +109,13 @@ function createExecutionContext({ options } = {}) {
   }
   if ((onDurableSubmissionIntent === undefined) !== (onDurableSubmissionOutcome === undefined)) {
     throw new TypeError("onDurableSubmissionIntent and onDurableSubmissionOutcome must be provided together")
+  }
+  if (typeof requireDurableSubmission !== "boolean") {
+    throw new TypeError("requireDurableSubmission must be a boolean")
+  }
+  if (requireDurableSubmission &&
+      (onDurableSubmissionIntent === undefined || onDurableSubmissionOutcome === undefined)) {
+    throw new TypeError("Durable order submission requires both durable submission callbacks")
   }
   const orderIdNamespace = randomUUID().replaceAll("-", "").slice(0, 22)
   let orderSequence = 0

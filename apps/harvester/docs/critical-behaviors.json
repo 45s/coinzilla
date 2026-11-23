@@ -50,6 +50,11 @@
         },
         {
           "path": "src/use-cases/conservative-submission-durability.integration.test.js",
+          "name": "preserves the broker result as UNKNOWN when the operational-state outcome cannot commit",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/conservative-submission-durability.integration.test.js",
           "name": "rejects a missing operational-state submission callback before creating a tradable Conservative engine",
           "kind": "failure"
         },

@@ -105,7 +105,7 @@ function createBrokerState({ calls }) {
   })
 }
 
-function createSubmissionCallbacks({ calls, intentResult }) {
+function createSubmissionCallbacks({ calls, intentResult, outcomeResult }) {
   return {
     onOperationalStateSubmissionIntent: async () => {
       calls.push("intent")
@@ -113,15 +113,12 @@ function createSubmissionCallbacks({ calls, intentResult }) {
     },
     onOperationalStateSubmissionOutcome: async () => {
       calls.push("outcome")
-      return {
-        ok: true,
-        data: { durable: true },
-      }
+      return outcomeResult
     },
   }
 }
 
-function createEngineDependencies({ broker, brokerState, calls, intentResult, includeCallbacks }) {
+function createEngineDependencies({ broker, brokerState, calls, intentResult, outcomeResult, includeCallbacks }) {
   const dependencies = {
     broker,
     strategyPolicy: conservativeStrategyPolicy,
@@ -156,11 +153,15 @@ function createEngineDependencies({ broker, brokerState, calls, intentResult, in
   }
   return {
     ...dependencies,
-    ...createSubmissionCallbacks({ calls, intentResult }),
+    ...createSubmissionCallbacks({
+      calls,
+      intentResult,
+      outcomeResult,
+    }),
   }
 }
 
-function createEngine({ calls, intentResult, includeCallbacks = true }) {
+function createEngine({ calls, intentResult, outcomeResult, includeCallbacks = true }) {
   const brokerState = createBrokerState({ calls })
   const broker = {
     ...brokerState.broker,
@@ -173,6 +174,10 @@ function createEngine({ calls, intentResult, includeCallbacks = true }) {
     brokerState,
     calls,
     intentResult: intentResult ?? {
+      ok: true,
+      data: { durable: true },
+    },
+    outcomeResult: outcomeResult ?? {
       ok: true,
       data: { durable: true },
     },
@@ -237,11 +242,30 @@ test("fails closed before Conservative broker placement when the operational-sta
   assert.deepEqual(calls, ["intent"], "A failed intent barrier must stop before broker placement and must not write a submission outcome.")
 })
 
+test("preserves the broker result as UNKNOWN when the operational-state outcome cannot commit", async () => {
+  const calls = []
+  const { engine, brokerState } = createEngine({
+    calls,
+    outcomeResult: {
+      ok: false,
+      errors: [new Error("operational-state outcome write failed")],
+    },
+  })
+  const result = await submitFirstMarketDecision({ engine })
+
+  assert.equal(result.ok, false, "An uncommitted outcome must not be reported as a successful local acknowledgement.")
+  assert.equal(brokerState.orders.length, 1, "The already-attempted broker request cannot be undone after an outcome-write failure.")
+  assert.deepEqual(calls, ["intent", "broker", "outcome"], "The intent and broker request must precede the failed outcome append.")
+})
+
 test("rejects a missing operational-state submission callback before creating a tradable Conservative engine", () => {
   const calls = []
 
   assert.throws(
-    () => createEngine({ calls, includeCallbacks: false }),
+    () => createEngine({
+      calls,
+      includeCallbacks: false,
+    }),
     /onOperationalStateSubmissionIntent and onOperationalStateSubmissionOutcome/,
   )
   assert.deepEqual(calls, [], "A missing durable callback must be rejected before any broker operation.")
