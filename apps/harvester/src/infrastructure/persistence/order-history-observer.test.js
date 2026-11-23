@@ -225,7 +225,7 @@ test("drains accepted writes on close and unsubscribes before later events", asy
   assert.equal(writes, 1, "Events published after observer close must not enqueue database writes.")
 })
 
-function assertOrderHistoryFailureDiagnostic(diagnostic, { expectedField, expectedData }) {
+function assertOrderHistoryFailureDiagnostic({ diagnostic, expectedField, expectedData }) {
   assert.equal(diagnostic.component, "order-history-observer", "Diagnostics must identify the failing component.")
   assert.equal(diagnostic.operation, "mapping", "Diagnostics must identify the failing mapping operation.")
   assert.equal(diagnostic.persistenceStage, "mapping", "Diagnostics must retain the persistence stage.")
@@ -286,11 +286,13 @@ test("includes safe validation fields and order context in mapping-failure diagn
   assert.equal(result.errors[1].context.field, "market.baseAsset.code", "The second domain error must retain the nested market field.")
   assert.equal(logEntries.length, 2, "Each invalid event must produce one diagnostic.")
 
-  assertOrderHistoryFailureDiagnostic(logEntries[0], {
+  assertOrderHistoryFailureDiagnostic({
+    diagnostic: logEntries[0],
     expectedField: "providerInstanceId",
     expectedData: invalidProviderData,
   })
-  assertOrderHistoryFailureDiagnostic(logEntries[1], {
+  assertOrderHistoryFailureDiagnostic({
+    diagnostic: logEntries[1],
     expectedField: "market.baseAsset.code",
     expectedData: invalidMarketData,
   })
