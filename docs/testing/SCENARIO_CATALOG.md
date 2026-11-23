@@ -447,11 +447,12 @@ The executable definitions are maintained in `apps/harvester/test/scenarios/cons
 | `CON-EVENT-001` | event-reliability | P0 | TEST-MAPPED |
 | `CON-PERSIST-001` | persistence-restart-recovery | P1 | TEST-MAPPED |
 | `CON-PERSIST-002` | persistence-restart-recovery | P1 | UNSUPPORTED |
+| `CON-PERSIST-003` | persistence-restart-recovery | P0 | MISSING |
 | `CON-CONFIG-001` | configuration | P1 | PARTIAL |
 | `CON-SAFETY-001` | safety-risk-controls | P0 | TEST-MAPPED |
 | `CON-RUNTIME-001` | runtime-coordinator-integration | P1 | TEST-MAPPED |
 
-`TEST-MAPPED` means only that named tests are linked; it is not equivalent to `VERIFIED`. Runtime restart/state restoration remains `UNSUPPORTED` under the active Conservative specification §7. The coverage report scopes unmapped-test analysis to named tests in the critical behavior registry, not every Harvester test file.
+`TEST-MAPPED` means only that named tests are linked; it is not equivalent to `VERIFIED`. Runtime restart/state restoration remains `UNSUPPORTED` under the active Conservative specification §7. The separate startup history gate is implemented in `start-harvester.js` but has no prior-session test coverage (`CON-PERSIST-003`, P0 MISSING). The coverage report scopes unmapped-test analysis to named tests in the critical behavior registry, not every Harvester test file.
 
 ### RS-001 — Legacy basis is not proof of current Spot custody
 
