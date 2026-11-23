@@ -59,7 +59,9 @@ async function runArchivedRecoveryCycle({ t, scenario }) {
 
   for (let index = 0; index < scenario.buys.length; index += 1) {
     const recoverySellSubmission = replay.waitForSubmittedOrder("SELL", index + 1)
-    const nextBuySubmission = replay.waitForSubmittedOrder("BUY", index + 2)
+    const nextBuySubmission = index < scenario.buys.length - 1
+      ? replay.waitForSubmittedOrder("BUY", index + 2)
+      : null
     assert.equal(
       currentBuy.price,
       scenario.buys[index].price,
@@ -73,10 +75,12 @@ async function runArchivedRecoveryCycle({ t, scenario }) {
     })
     const [recoverySell, nextBuy] = await Promise.all([
       recoverySellSubmission,
-      nextBuySubmission,
+      nextBuySubmission ?? Promise.resolve(null),
     ])
     latestRecoverySell = recoverySell
-    currentBuy = nextBuy
+    if (nextBuy) {
+      currentBuy = nextBuy
+    }
   }
 
   assert.equal(
