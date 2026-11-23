@@ -215,7 +215,6 @@ The new runtime-dispatch and action-authorizer suites cover the production compo
 
 `create-recovery-seller-runtime-evaluator.test.js` now composes the real accounting workflow snapshot, a canonical accepted BUY Fill, the production runtime evaluator, a sole-cycle SELL reservation and pending-order registration; it verifies a second evaluation waits and cannot submit another action. `create-recovery-seller-accounting-workflow.test.js` covers complete terminal mixed-SELL reconciliation, atomic recovery/legacy projection commit, reservation release, cycle closure and allocation of a new cycle only after closure. The focused policy, order-submitter, order-event and durable-fact suites cover profitability/filter gates, unknown outcomes, partial/terminal fills and failure handling. These are offline composition-boundary tests; they do not authorize exchange execution. Restart/replay and third-asset commission valuation remain deferred. STOP is terminal; CC-operator exposes authorized read-only status and has no clear/reset/unpause/resume path.
 
-
 ### 2026-11-23 — Conservative recovery archive evidence (issue #1362)
 
 - Fixture: `test/audits/fixtures/2026-11-22-conservative-recovery.json`; source archive commit `f283c90db9143c74683ae5bf9c7bb52e09590d56`, facts SHA-256 `1b923c1a090904df601463d14681090165b7f8d50a3806e96655699d90a97295`, facts-manifest SHA-256 `3063f9ce829cce8a66a471672abee6b77ff52b6647b0b786381adc1db5f264bc`, terminal-log SHA-256 `6ec912690afbfeb1d9c87c674647a34e11d855b2d59337c34ac58d54d2a93d33`.
