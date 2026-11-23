@@ -141,7 +141,7 @@ test("routes REST/stream reconciliation failures through the account safety halt
   assert.equal(state.ready, false, "Readiness must remain closed while authoritative reconciliation is required.")
   assert.equal(state.requiresReconciliation, true, "The safety halt must retain the required reconciliation state.")
   assert.equal(state.accountingFailed, false, "A retryable REST reconciliation failure must not be mislabeled as an accounting-integrity failure.")
-  assert.equal(state.status, "AUTHORITATIVE_RECONCILIATION_REQUIRED")
+  assert.equal(state.status, "AUTHORITATIVE_RECONCILIATION_REQUIRED", "The safety halt must expose the authoritative-reconciliation-required state.")
   assert.deepEqual(observedFillIds, [], "The failed first delivery must not be published as an accepted user-data event.")
 
   handler({ event })
@@ -159,9 +159,9 @@ test("routes REST/stream reconciliation failures through the account safety halt
     ],
     "The late SELL report must be observed on each accepted recovery-mode delivery.",
   )
-  assert.equal(state.ready, false)
-  assert.equal(state.requiresReconciliation, true)
-  assert.equal(state.status, "AUTHORITATIVE_RECONCILIATION_REQUIRED")
+  assert.equal(state.ready, false, "Readiness must remain closed while authoritative reconciliation is required.")
+  assert.equal(state.requiresReconciliation, true, "The safety halt must retain the required reconciliation state.")
+  assert.equal(state.status, "AUTHORITATIVE_RECONCILIATION_REQUIRED", "The safety halt must expose the authoritative-reconciliation-required state.")
   assert.equal(calls.filter(([name]) => name === "reconcile").length, 1, "The initial safety halt must perform one authoritative reconciliation attempt.")
   assert.equal(calls.filter((entry) => entry === "cancel-owned-buys").length, 1, "The safety halt must cancel owned BUYs once and must not recursively retry cancellation.")
   assert.equal(calls.includes("resume"), false, "A late SELL fill must not reopen deferred BUY evaluation while readiness is closed.")
