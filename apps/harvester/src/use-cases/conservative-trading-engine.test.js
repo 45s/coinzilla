@@ -5204,6 +5204,41 @@ function assertBackfilledRestFillHistory({ engine, accountedFills, pauses, buyOr
 }
 
 
+function createBackfilledRestFillFixture({ buyOrder } = {}) {
+  const earlierFill = makeBuyFill({
+    order: buyOrder,
+    tradeId: "rest-earlier-fill",
+    price: "99.95",
+    quantity: "0.2",
+    quoteQuantity: "19.99",
+    executedAt: 10,
+  })
+  const laterStreamFill = makeBuyFill({
+    order: buyOrder,
+    tradeId: "stream-later-fill",
+    price: "99.95",
+    quantity: "0.3",
+    quoteQuantity: "29.985",
+    executedAt: 20,
+  })
+  return {
+    earlierFill,
+    laterStreamFill,
+    streamedOrder: makeOrderStatusUpdate({
+      order: buyOrder,
+      status: "PARTIALLY_FILLED",
+      executedQuantity: "0.5",
+      updatedAt: 3,
+    }),
+    historyOrder: makeOrderStatusUpdate({
+      order: buyOrder,
+      status: "PARTIALLY_FILLED",
+      executedQuantity: "0.5",
+      updatedAt: 4,
+    }),
+  }
+}
+
 test("accounts missing earlier REST fills without replaying cumulative order quantity backwards", async () => {
   const {
     engine,
@@ -5222,28 +5257,12 @@ test("accounts missing earlier REST fills without replaying cumulative order qua
     },
   })
   const buyOrder = engine.getOrders().find((order) => order.side === "BUY")
-  const earlierFill = makeBuyFill({
-    order: buyOrder,
-    tradeId: "rest-earlier-fill",
-    price: "99.95",
-    quantity: "0.2",
-    quoteQuantity: "19.99",
-    executedAt: 10,
-  })
-  const laterStreamFill = makeBuyFill({
-    order: buyOrder,
-    tradeId: "stream-later-fill",
-    price: "99.95",
-    quantity: "0.3",
-    quoteQuantity: "29.985",
-    executedAt: 20,
-  })
-  const streamedOrder = makeOrderStatusUpdate({
-    order: buyOrder,
-    status: "PARTIALLY_FILLED",
-    executedQuantity: "0.5",
-    updatedAt: 3,
-  })
+  const {
+    earlierFill,
+    laterStreamFill,
+    streamedOrder,
+    historyOrder,
+  } = createBackfilledRestFillFixture({ buyOrder })
   const streamResult = await engine.processUserDataEvent({
     event: {
       eventType: "executionReport",
@@ -5254,12 +5273,6 @@ test("accounts missing earlier REST fills without replaying cumulative order qua
   })
   assert.equal(streamResult.ok, true)
   assert.deepEqual(accountedFills.map((fill) => fill.tradeId), ["stream-later-fill"])
-  const historyOrder = makeOrderStatusUpdate({
-    order: buyOrder,
-    status: "PARTIALLY_FILLED",
-    executedQuantity: "0.5",
-    updatedAt: 4,
-  })
   configureBackfilledRestFillHistory({
     broker,
     buyOrder,
