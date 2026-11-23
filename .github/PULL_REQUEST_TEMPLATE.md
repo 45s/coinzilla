@@ -63,7 +63,6 @@ Examples:
 
 - **Implementation:** <!-- Concise summary and affected files. -->
 - **Risks / known limitations:** <!-- Include any remaining work or "None". -->
-- **Final source commit:** <!-- Exact SHA validated by CI. -->
 
 ## Design notes
 
