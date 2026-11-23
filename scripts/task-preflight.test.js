@@ -35,7 +35,7 @@ test('discovers nested AGENTS instructions applicable to changed paths', () => {
     'packages/brokers/AGENTS.md',
   ];
   assert.deepEqual(
-    discoverApplicableInstructionPaths(paths, ['apps/harvester/src/domain/decision.js']),
+    discoverApplicableInstructionPaths({ paths, targets: ['apps/harvester/src/domain/decision.js'] }),
     ['AGENTS.md', 'apps/harvester/AGENTS.md', 'apps/harvester/src/AGENTS.md'],
   );
 });
@@ -87,14 +87,14 @@ test('detects missing and stale instruction hashes', () => {
     ['ENGINEERING_STANDARDS.md', 'cccccccccccccccccccccccccccccccccccccccc'],
   ]);
 
-  assert.deepEqual(validateInstructionSnapshot(report, actual, ['AGENTS.md', 'ENGINEERING_STANDARDS.md']), [
+  assert.deepEqual(validateInstructionSnapshot({ report, actual, required: ['AGENTS.md', 'ENGINEERING_STANDARDS.md'] }), [
     'Instruction hash is stale: ENGINEERING_STANDARDS.md',
   ]);
-  assert.deepEqual(validateInstructionSnapshot(report, actual, [
+  assert.deepEqual(validateInstructionSnapshot({ report, actual, required: [
     'AGENTS.md',
     'ENGINEERING_STANDARDS.md',
     'docs/engineering/TASK_WORKFLOWS.md',
-  ]), [
+  ] }), [
     'Required instruction is missing from preflight report: docs/engineering/TASK_WORKFLOWS.md',
     'Instruction hash is stale: ENGINEERING_STANDARDS.md',
   ]);
@@ -120,18 +120,18 @@ test('validates preflight report issue, status, required hashes, and ancestry', 
     status: 'COMPLETE',
     instructions: [{ path: 'AGENTS.md', sha: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' }],
   };
-  assert.deepEqual(validatePreflightReport(report, {
+  assert.deepEqual(validatePreflightReport({ report, context: {
     issueNumber: 1754,
     requiredPaths: ['AGENTS.md'],
     actualHashes: new Map([['AGENTS.md', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa']]),
     isAncestor: true,
-  }), []);
+  } }), []);
   assert.ok(validatePreflightReport(report, {
     issueNumber: 1755,
     requiredPaths: ['AGENTS.md'],
     actualHashes: new Map([['AGENTS.md', 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb']]),
     isAncestor: false,
-  }).length >= 3);
+  } }).length >= 3);
 });
 
 test('extracts exactly one valid same-repository tracking issue from a PR body', () => {
