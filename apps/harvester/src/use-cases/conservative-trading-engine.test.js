@@ -2397,7 +2397,10 @@ async function assertMissingAndMismatchedFillDiagnostics({ engine, events, order
   })
   const mismatch = await engine.processUserDataEvent({
     event: {
-      executedOrder: makePartiallyFilledOrder({ order, updatedAt: 3 }),
+      executedOrder: makePartiallyFilledOrder({
+        order,
+        updatedAt: 3,
+      }),
       executionType: "TRADE",
       fill: wrongFill,
     },
@@ -10548,7 +10551,10 @@ function createVolatilityProtectedRecoveryFixture() {
   })
   return {
     portfolio: new Portfolio({ positions: [position] }),
-    recoveryLedger: new RecoveryLedger({ market, buyCost: "10" }),
+    recoveryLedger: new RecoveryLedger({
+      market,
+      buyCost: "10",
+    }),
     unavailable: {
       ok: true,
       data: {
