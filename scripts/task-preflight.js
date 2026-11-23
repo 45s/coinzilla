@@ -350,7 +350,7 @@ token });
   }
   const ancestor = compare.status === 'ahead' || compare.status === 'identical';
   const prCompare = await api({
-    path: '/repos/' + repo + '/compare/' + pr.base.sha + '...' + pr.head.sha,
+    path: `/repos/${  repo  }/compare/${  pr.base.sha  }...${  pr.head.sha}`,
     token,
   });
   if (prCompare.status !== 'ahead' && prCompare.status !== 'identical') {
