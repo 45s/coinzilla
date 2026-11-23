@@ -567,12 +567,12 @@ async function persistStrategySafetyPauseBlocker({
 
 function createStrategySafetyPauseStatus({
   symbol, reason, complete, pauseFactPersisted, pauseEventPublished,
-  cancellationResult, unresolvedOrders, blocker, failures,
+  cancellationResult, unresolvedOrders, blocker, failures, status,
 }) {
   return Object.freeze({
     symbol,
     reason,
-    status: complete ? "COMPLETE" : "INCOMPLETE",
+    status: status ?? (complete ? "COMPLETE" : "INCOMPLETE"),
     pauseFactPersisted,
     pauseEventPublished,
     canceled: cancellationResult?.data?.canceled ?? 0,
@@ -643,7 +643,14 @@ async function cancelStrategySafetyPauseBuys({ symbol, cancelOwnedBuyOrdersWithi
 }
 
 async function finalizeStrategySafetyPause({
-  state, symbol, reason, previousStatus, prepared, cancellationResult, onSafetyBlockerRaised,
+  state,
+  symbol,
+  reason,
+  previousStatus,
+  prepared,
+  cancellationResult,
+  onSafetyBlockerRaised,
+  cancellationRequired,
 }) {
   const failures = [...prepared.failures]
   if (cancellationResult?.ok !== true) {
@@ -651,10 +658,12 @@ async function finalizeStrategySafetyPause({
       cancellationResult?.errors ?? [new Error("Owned BUY cancellation did not complete")]
     ))
   }
-  const unresolvedOrders = readActiveStrategySafetyPauseBuyOrders({
-    state,
-    symbol,
-  })
+  const unresolvedOrders = cancellationRequired
+    ? readActiveStrategySafetyPauseBuyOrders({
+      state,
+      symbol,
+    })
+    : []
   if (unresolvedOrders.length > 0) {
     failures.push(new Error("One or more current-process-owned BUY orders remain unresolved"))
   }
@@ -687,6 +696,7 @@ async function finalizeStrategySafetyPause({
     unresolvedOrders,
     blocker,
     failures,
+    status: !cancellationRequired && complete ? "NOT_REQUIRED" : undefined,
   })
   state.strategySafetyPauseStatuses.set(symbol, status)
   return {
@@ -731,7 +741,13 @@ async function notifyStrategySafetyPause({
   }
 }
 
-function recordStrategySafetyPauseInProgressStatus({ state, symbol, reason, prepared }) {
+function recordStrategySafetyPauseInProgressStatus({
+  state,
+  symbol,
+  reason,
+  prepared,
+  cancellationRequired,
+}) {
   const status = createStrategySafetyPauseStatus({
     symbol,
     reason,
@@ -748,8 +764,36 @@ function recordStrategySafetyPauseInProgressStatus({ state, symbol, reason, prep
       blockerId: null,
     },
     failures: prepared.failures,
+    status: cancellationRequired ? "CANCELLING" : "NOT_REQUIRED",
   })
   state.strategySafetyPauseStatuses.set(symbol, status)
+}
+
+const NON_CANCELLING_STRATEGY_PAUSE_REASONS = new Set([
+  "STRATEGY_ORDER_VALIDATION_FAILED",
+  "RECOVERY_SELL_FILTERS_UNAVAILABLE",
+  "TRAILING_BUY_REPLACEMENT_RULES_UNAVAILABLE",
+  "TRAILING_BUY_REPLACEMENT_VALIDATION_FAILED",
+])
+
+const CANCELLING_STRATEGY_PAUSE_REASONS = new Set([
+  "STRATEGY_EVALUATION_FAILED",
+  "ORDER_INTENT_NOT_DURABLE",
+  "ORDER_SUBMISSION_UNKNOWN",
+  "ACCOUNT_INTEGRITY_FAILURE",
+  "CANCELED_ORDER_NOT_REGISTERED",
+  "RECONCILIATION_PENDING_ORDER_OUTCOME",
+])
+
+function shouldCancelOwnedBuysForStrategyPause({ reason } = {}) {
+  if (typeof reason !== "string" || NON_CANCELLING_STRATEGY_PAUSE_REASONS.has(reason)) {
+    return false
+  }
+  if (CANCELLING_STRATEGY_PAUSE_REASONS.has(reason) || reason.endsWith("_UNCONFIRMED")) {
+    return true
+  }
+  return ["ACKNOWLEDGED_", "REST_", "RECOVERY_SELL_", "TRAILING_BUY_"]
+    .some((prefix) => reason.startsWith(prefix))
 }
 
 async function executeStrategySafetyPause({ dependencies, input } = {}) {
@@ -781,16 +825,26 @@ async function executeStrategySafetyPause({ dependencies, input } = {}) {
       publishStrategyPaused,
       eventPublisher,
     })
+    const cancellationRequired = shouldCancelOwnedBuysForStrategyPause({ reason })
     recordStrategySafetyPauseInProgressStatus({
       state,
       symbol,
       reason,
       prepared,
+      cancellationRequired,
     })
-    const cancellationResult = await cancelStrategySafetyPauseBuys({
-      symbol,
-      cancelOwnedBuyOrdersWithinTransition,
-    })
+    const cancellationResult = cancellationRequired
+      ? await cancelStrategySafetyPauseBuys({
+        symbol,
+        cancelOwnedBuyOrdersWithinTransition,
+      })
+      : toResult({
+        data: {
+          canceled: 0,
+          reconciled: 0,
+          notRequired: true,
+        },
+      })
     const result = await finalizeStrategySafetyPause({
       state,
       symbol,
@@ -799,6 +853,7 @@ async function executeStrategySafetyPause({ dependencies, input } = {}) {
       prepared,
       cancellationResult,
       onSafetyBlockerRaised,
+      cancellationRequired,
     })
     await notifyStrategySafetyPause({
       onPause,
@@ -4628,6 +4683,17 @@ async function validateOwnedBuyCancellationResponse({ context, order, result, re
 async function applyOwnedBuyCancellationToRegistry({ context, order, cancellation, reasonPrefix, pauseOnFailure }) {
   let update
   try {
+    const currentOrder = context.state.registry.getOrder({
+      clientOrderId: order.clientOrderId,
+    })
+    if (currentOrder?.status === "FILLED" && cancellation.status === "CANCELED") {
+      return {
+        ok: true,
+        data: {
+          reconciledOrder: currentOrder,
+        },
+      }
+    }
     update = context.state.registry.applyUpdate({
       order: cancellation,
     })
@@ -4741,8 +4807,11 @@ function getOwnedBuyReconciledQuantity({ fills }) {
 async function applyOwnedBuyExecutionFills({ context, order, fills, reasonPrefix }) {
   let reconciled = 0
   for (const fill of fills) {
+    const currentOrder = context.state.registry.getOrder({
+      clientOrderId: order.clientOrderId,
+    }) ?? order
     const processed = await context.processExecutionFillTransition({
-      order,
+      order: currentOrder,
       fill,
     })
     if (!processed.ok) {
@@ -4762,7 +4831,7 @@ async function applyOwnedBuyExecutionFills({ context, order, fills, reasonPrefix
   }
 }
 
-async function reconcileOwnedBuyCancellationFills({ context, order, reconciledOrder, reasonPrefix }) {
+async function reconcileOwnedBuyCancellationFills({ context, order, cancellation, reasonPrefix }) {
   const fillsResult = await readOwnedBuyExecutionHistory({
     context,
     order,
@@ -4788,7 +4857,7 @@ async function reconcileOwnedBuyCancellationFills({ context, order, reconciledOr
   })
   if (compareDecimal({
     left: reconciledQuantity,
-    right: reconciledOrder.executedQuantity.amount,
+    right: cancellation.executedQuantity.amount,
   }) !== 0) {
     const error = new Error(`BUY execution history does not match the terminal order executed quantity during ${  reasonPrefix}`)
     await context.pause({
@@ -4802,7 +4871,7 @@ async function reconcileOwnedBuyCancellationFills({ context, order, reconciledOr
   }
   return applyOwnedBuyExecutionFills({
     context,
-    order: reconciledOrder,
+    order,
     fills: validation.fills,
     reasonPrefix,
   })
@@ -4859,6 +4928,12 @@ async function cancelSingleOwnedBuyOrder({ context, order, reason, reasonPrefix,
   if (!validated?.ok) {
     return validated
   }
+  const fills = await reconcileOwnedBuyCancellationFills({
+    context,
+    order,
+    cancellation: validated.data,
+    reasonPrefix,
+  })
   const registryResult = await applyOwnedBuyCancellationToRegistry({
     context,
     order,
@@ -4870,12 +4945,6 @@ async function cancelSingleOwnedBuyOrder({ context, order, reason, reasonPrefix,
     return registryResult
   }
   const { reconciledOrder } = registryResult.data
-  const fills = await reconcileOwnedBuyCancellationFills({
-    context,
-    order,
-    reconciledOrder,
-    reasonPrefix,
-  })
   if (!fills.ok) {
     return fills
   }

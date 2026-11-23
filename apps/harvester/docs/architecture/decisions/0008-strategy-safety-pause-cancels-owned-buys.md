@@ -13,10 +13,10 @@ The pause also must not disable Recovery Seller evaluation or allow ordinary str
 
 ## Decision
 
-1. When the Conservative engine enters a strategy-originated pause, activate the in-memory market BUY gate before any cancellation side effect.
+1. When the Conservative engine enters a strategy-originated pause, activate the in-memory market BUY gate before any cancellation side effect. Only safety-critical pause reasons trigger owned-BUY cancellation; expected preflight, metadata and strategy validation rejections keep existing standing BUYs untouched while blocking new strategy actions.
 2. Record `STRATEGY_MARKET_PAUSED` when the Operational State Store is configured and publish the existing `strategy.paused` lifecycle event.
 3. In the same serialized engine transition, call the existing owned-order cancellation transition directly (without re-entering the transition queue). Cancel only active BUY orders in the current process OrderRegistry for the affected symbol. A per-symbol/global in-progress guard prevents a cancellation failure from recursively starting another broker cancellation.
-4. Reconcile cancellation-racing fills through the existing canonical user-data/fill path. Never infer a fill from an order status or bypass the existing exact accounting/idempotency rules.
+4. Reconcile cancellation-racing fills through the existing canonical user-data/fill path before committing the terminal cancellation response to the registry. This preserves valid OPEN → PARTIALLY_FILLED → CANCELED transitions. Never infer a fill from an order status or bypass the existing exact accounting/idempotency rules.
 5. If the pause fact/event or cancellation/fill reconciliation is incomplete, retain the BUY gate, expose `safetyPauseCancellation.status = INCOMPLETE`, return `STRATEGY_SAFETY_PAUSE_INCOMPLETE`, and attempt a durable `SAFETY_BLOCKER_RAISED` fact with reason `STRATEGY_SAFETY_PAUSE_INCOMPLETE`.
 6. Recovery Seller evaluation continues while Conservative is paused. The submission gate allows only `side === "SELL"` with `purpose === "RECOVERY_SELL"` through this strategy-safety pause; all BUYs and other SELL purposes remain blocked. Other independent readiness, ownership, volatility and shutdown gates remain authoritative.
 7. Startup-snapshot, manual, external and prior-process orders remain untouched. The pause is process-local and is not restored or cleared by restart.
