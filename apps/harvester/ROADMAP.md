@@ -2112,3 +2112,13 @@ The original `coinzilla-archive` source was rechecked independently of the sanit
 The task branch was synchronized with current `develop` through internal PR #1777. Runtime replay now carries exact archived `quoteQuantity`; the audit fixture and regression test retain and verify all 49 fact/manifest digest links and references. The test inventory was checked and two stale paths corrected. Both late-SELL-after-pause proofs still use stub accounting and require real Portfolio/RecoveryLedger composition. Current source also drops `OrderHistoryValidationError.context.field` from order-history observer diagnostics; improve this without claiming it identifies the historical failures.
 
 The detailed evidence, implementation commits, CI state and remaining unknowns are recorded in [the archive re-review](docs/CONSERVATIVE_RECOVERY_ARCHIVE_REVIEW_2026-11-23.md). Continue under #1362 / PR #1761; keep the PR draft and do not run TESTNET/LIVE mutations.
+
+
+## 2026-11-23 — continuation handoff
+
+- Issue #1362 / PR #1761 remain active; PR #1761 remains draft.
+- After the latest develop movement, the task branch was 76 ahead / 4 behind. Internal sync PR #1784 merged `develop@99caf7d9026e47908b54799a618bbe2f2f699c05` into the task branch with merge commit `5eaf4612673d4b8d3d15290788f103119e90fb39`.
+- The sync included the current `DOMAIN_TEST_INVENTORY.md` updates and the new terminal-order-fill reconciliation regression. Review both against the archive acceptance criteria before further edits.
+- The previous exact-head CI success on `842b502` does not certify the newer commits. Run the complete applicable CI suite on the new task head before reporting green.
+- Remaining historical evidence gap: the exact invalid field and root cause for the 28 archived `HARVESTER_ORDER_HISTORY_RECORD_INVALID` occurrences remain unknown. Do not inspect the database dump without explicit authorization.
+- Continue with source/test/doc increments, update issue #1362 and PR #1761 after every pushed commit, and keep PR #1761 draft until all acceptance criteria and exact-head CI pass.
