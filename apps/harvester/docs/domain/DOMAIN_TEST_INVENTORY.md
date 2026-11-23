@@ -233,7 +233,7 @@ The new runtime-dispatch and action-authorizer suites cover the production compo
 
 ### Medium — bootstrap and replay financial arithmetic must remain exact
 
-The offline bootstrap fixture now builds quote notionals and bid/ask book prices with exact decimal multiplication; remaining broker-style numeric order quantities are derived with exact decimal subtraction before conversion to the numeric adapter shape. The DOGE/ZRO replay assertions now compare retained quantity and realized profit with exact decimal comparison rather than JavaScript Number. Updated in PR #1776; not yet merged/CI-verified.
+The offline bootstrap fixture now builds quote notionals and bid/ask book prices with exact decimal multiplication; remaining broker-style numeric order quantities are derived with exact decimal subtraction before conversion to the numeric adapter shape. The DOGE/ZRO replay assertions now compare retained quantity and realized profit with exact decimal comparison rather than JavaScript Number. Updated in merged PR #1776; exact-head CI passed before merge. This is fixture/oracle evidence, not a production behavior change.
 
 ### Blocked — remaining Conservative engine financial oracles
 
@@ -244,6 +244,23 @@ The offline bootstrap fixture now builds quote notionals and bid/ask book prices
 The scenario guide now includes a mandatory state-machine testing contract and conceptual lifecycle diagram. For each applicable transition, the issue matrix records source state, event identity, guard, destination, full Portfolio/Position/RecoveryLedger/OrderRegistry mutation, exact accounting delta, emitted effects, idempotency, conflict rejection, failure atomicity, recovery evidence, test owner/path and evidence status.
 
 Do not treat the conceptual diagram as a new production state model: map every tested transition to the canonical Conservative specification and actual implementation first. Domain tests own pure transitions; application integration tests own broker submit/cancel, REST/stream reconciliation, durable barriers and shutdown. Status-only assertions do not establish transition coverage. See [scenario guide](CONSERVATIVE_DOMAIN_SCENARIO_TESTS.md) and [issue #1763](https://github.com/45s/coinzilla/issues/1763) for the full transition and adversarial-sequence requirements.
+
+### Phase 1 A–J existing-assertion status
+
+| Issue area | Actual assertion evidence reviewed | Status | Boundary / remaining limitation |
+| --- | --- | --- | --- |
+| A. Initial position and BUY-fill accounting | `recovery-fill-accounting.test.js`, `portfolio.test.js`, engine VWAP test at `conservative-trading-engine.test.js` | PARTIAL | Core BUY cost, fee asset handling, fill identity and completed-BUY VWAP are asserted. Not every commission/ordering combination is composed end-to-end. |
+| B. Recovery SELL plan and economics | `recovery-sell-plan-accounting.test.js`, `sell-fee-rate.test.js`, `recovery-fill-accounting.test.js` | COVERED for tested domain calculations | Exact base/quote fee effects, required net proceeds, tick/step rounding, realized profit and minProfit equality are asserted. Application-level filter/order permutations remain under G/I. |
+| C. Standing BUY policy | `initial-buy-price.test.js`, `trailing-buy-repricing.test.js`, engine VWAP/incomplete-history tests | COVERED for documented policy boundaries | Tests assert the 99.84 actual VWAP reference and fail closed when completed BUY execution history is incomplete. |
+| D. Two-or-more BUY fills and SELL replacement | Engine cancellation/fill race regression in merged #1773 | PARTIAL | The named cancel-raced partial SELL, replacement SELL and duplicate BUY replay sequence is fully asserted. Other timeout/unknown/conflicting event permutations are not all composed in that test. |
+| E. SELL-fill accounting and recovery lifecycle | `recovery-fill-accounting.test.js`, `recovery-ledger.test.js`, `reconcile-terminal-order-fills.test.js`, engine terminal SELL tests | PARTIAL | Exact actual commissions, cumulative proceeds, REST/stream deduplication, execution order and terminal quantity parity are asserted. Not every partial/multiple-fill/terminal permutation has complete cross-projection assertions. |
+| F. Recovery completion and next cycle | `recovery-completion.test.js`, `recovery-completion.dust.test.js`, merged #1774 | PARTIAL | Component completion/dust decisions and next-cycle basis isolation/stale replay are asserted. Broader dust/filter combinations and every completion race remain unproven. |
+| G. Market data, readiness and input validation | `market/validate-market-trading-readiness.test.js`, market freshness/filter tests, engine filter-refresh tests | PARTIAL | Required order type, missing rules, market mismatch, exact quantity boundaries and fail-closed paths are asserted; exhaustive malformed metadata/cache timing combinations are not established here. |
+| H. Inventory, accounting and ownership invariants | `portfolio.test.js`, account snapshot/baseline and order-commitment tests | PARTIAL | Market-scoped Position identity, retained inventory allocation, duplicate/conflicting fills and snapshot-relative commitments are asserted. Restart restoration is outside this specification and tracked separately in #654. |
+| I. Lifecycle and race boundaries | `conservative-trading-engine.test.js`, `reconcile-terminal-order-fills.test.js`, merged #1773 | PARTIAL | Named submit/cancel barriers, late fills, REST/stream overlap, terminal reconciliation and shutdown paths have assertions; all event orderings are not covered. |
+| J. Failure, fail-closed and recovery cases | Strategy, accounting, order-registry, terminal reconciler and durable-workflow tests | PARTIAL | Named invalid/conflicting/incomplete evidence and persistence/reconciliation failures fail closed. Full restart/replay restoration is out of scope (#654); remaining engine oracle cleanup is separately BLOCKED below. |
+
+**Classification note:** no uncovered row is labeled MISSING without first establishing that no relevant assertion exists. The engine fixture/oracle cleanup is BLOCKED test-quality work, not a production defect. Restart restoration is NOT APPLICABLE to this Phase 1 specification scope and remains tracked by #654.
 
 ### Medium — next-cycle basis must exclude prior retained inventory
 
