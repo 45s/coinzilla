@@ -53,6 +53,8 @@ async function fillArchivedBuy({ replay, scenario, index, currentBuy }) {
     order: currentBuy,
     price: buy.price,
     tradeId: buy.tradeId,
+    commissionAmount: buy.commissionAmount,
+    commissionAsset: buy.commissionAsset,
   })
 
   const [recoverySell, nextBuy] = await Promise.all([
@@ -96,6 +98,8 @@ async function fillArchivedRecoverySell({ replay, scenario, recoverySell }) {
     order: recoverySell,
     price: scenario.sell.price,
     tradeId: scenario.sell.tradeId,
+    commissionAmount: scenario.sell.commissionAmount,
+    commissionAsset: scenario.sell.commissionAsset,
   })
   return completionWaiter
 }
@@ -184,24 +188,34 @@ const scenarios = [
       {
         price: "1.17",
         tradeId: "15735",
+        commissionAmount: "0.005",
+        commissionAsset: "ZRO",
       },
       {
         price: "1.169",
         tradeId: "15736",
+        commissionAmount: "0.005",
+        commissionAsset: "ZRO",
       },
       {
         price: "1.168",
         tradeId: "15737",
+        commissionAmount: "0.005",
+        commissionAsset: "ZRO",
       },
       {
         price: "1.167",
         tradeId: "15738",
+        commissionAmount: "0.005",
+        commissionAsset: "ZRO",
       },
     ],
     sell: {
       price: "1.174",
       quantity: "19.95",
       tradeId: "15740",
+      commissionAmount: "0.0234213",
+      commissionAsset: "USDT",
     },
     expectedFreeQuantity: "0.03",
     expectedRealizedNetProfit: "0.0278787",
@@ -224,24 +238,34 @@ const scenarios = [
       {
         price: "0.05482",
         tradeId: "303728",
+        commissionAmount: "0.4",
+        commissionAsset: "DOGE",
       },
       {
         price: "0.05479",
         tradeId: "303729",
+        commissionAmount: "0.4",
+        commissionAsset: "DOGE",
       },
       {
         price: "0.05476",
         tradeId: "303737",
+        commissionAmount: "0.4",
+        commissionAsset: "DOGE",
       },
       {
         price: "0.05473",
         tradeId: "303738",
+        commissionAmount: "0.4",
+        commissionAsset: "DOGE",
       },
     ],
     sell: {
       price: "0.05501",
       quantity: "1595",
       tradeId: "303742",
+      commissionAmount: "0.08774095",
+      commissionAsset: "USDT",
     },
     expectedFreeQuantity: "3.4",
     expectedRealizedNetProfit: "0.01320905",
@@ -264,12 +288,16 @@ const scenarios = [
       {
         price: "0.144",
         tradeId: "145912",
+        commissionAmount: "0.05",
+        commissionAsset: "ADA",
       },
     ],
     sell: {
       price: "0.1455",
       quantity: "49.9",
       tradeId: "145942",
+      commissionAmount: "0.00726045",
+      commissionAsset: "USDT",
     },
     expectedFreeQuantity: "0.05",
     expectedRealizedNetProfit: "0.05318955",
