@@ -4,7 +4,6 @@
 
 > **Current disposition — 2026-11-23:** The Conservative durable submission-intent callback wiring defect was fixed in merged [PR #1750](https://github.com/45s/coinzilla/pull/1750). The original 49-record ledger remains immutable and semantically incomplete: missing intent/outcome facts were not backfilled, and the projector's strict ownership checks were not relaxed. A diagnostic against that unchanged ledger may still report projection failure; this does not mean the source fix failed.
 
-
 ## 1. What this tool is
 
 The read-only diagnostic CLI is:
