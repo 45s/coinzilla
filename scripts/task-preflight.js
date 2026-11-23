@@ -471,8 +471,8 @@ async function readChangedPullRequestPaths({ repo, token, number }) {
   }
   throw new Error('PR changes exceed the validator pagination limit; BLOCKED.');
 }
-async function readBaseInstructionPaths({ repo, token, sha }) {
-  const tree = await api({ path: `/repos/${  repo  }/git/trees/${  sha  }?recursive=1`,
+export async function readBaseInstructionPaths({ repo, token, sha, request = api }) {
+  const tree = await request({ path: `/repos/${  repo  }/git/trees/${  sha  }?recursive=1`,
 token });
   if (tree.truncated) {throw new Error('Base instruction tree is truncated; BLOCKED.');}
   return (tree.tree || [])

@@ -9,6 +9,7 @@ import {
   discoverApplicableInstructionPaths,
   parseArgs,
   parsePreflightReport,
+  readBaseInstructionPaths,
   validateInstructionSnapshot,
   validateIssueBody,
   validatePreflightReport,
@@ -17,6 +18,17 @@ import {
 } from './task-preflight.js';
 
 const CURRENT_WORKFLOW_RUN_URL = 'https://github.com/45s/coinzilla/actions/runs/123456789';
+function buildIssueBody({
+  acceptanceCriteria = '- [ ] The validator rejects stale instruction hashes.',
+  sectionContent = 'Specific evidence for',
+} = {}) {
+  return REQUIRED_ISSUE_SECTIONS.map((heading) => {
+    const content = heading === 'Acceptance criteria'
+      ? acceptanceCriteria
+      : `${sectionContent} ${heading}.`;
+    return `## ${heading}\n\n${content}`;
+  }).join('\n\n');
+}
 
 test('requires the canonical repository instruction set', () => {
   assert.ok(REQUIRED_INSTRUCTION_PATHS.includes('AGENTS.md'));
@@ -101,6 +113,7 @@ test('parses a versioned preflight report with instruction hashes and commit ide
   assert.equal(report.issueNumber, 1754);
   assert.equal(report.commitSha, '0123456789012345678901234567890123456789');
   assert.equal(report.status, 'COMPLETE');
+  assert.deepEqual(report.scopePaths, ['scripts', 'docs/engineering']);
   assert.deepEqual(report.instructions, [{
     path: 'AGENTS.md',
     sha: '0123456789012345678901234567890123456789',
@@ -153,7 +166,7 @@ required: [
 });
 
 test('requires meaningful content in all eight issue sections', () => {
-  const body = REQUIRED_ISSUE_SECTIONS.map((heading) => `## ${heading}\n\nDocumented details for ${heading.toLowerCase()}.`).join('\n\n');
+  const body = buildIssueBody({ sectionContent: 'Documented details for' });
   assert.deepEqual(validateIssueBody(body), []);
   assert.ok(validateIssueBody(body.replace('Documented details for verification.', 'TBD')).some((error) => /Verification/.test(error)));
   assert.ok(validateIssueBody(body.replace('## Possible solutions', '## Options').replace('Documented details for possible solutions.', '')).length > 0);
@@ -162,7 +175,7 @@ test('requires meaningful content in all eight issue sections', () => {
 
 test('rejects untouched template prompts instead of treating them as issue evidence', () => {
   const template = REQUIRED_ISSUE_SECTIONS.map((heading) => `## ${heading}\n\nWhat should happen? Describe the actual details here.`).join('\n\n');
-  assert.equal(validateIssueBody(template).length, REQUIRED_ISSUE_SECTIONS.length);
+  assert.ok(validateIssueBody(template).length >= REQUIRED_ISSUE_SECTIONS.length);
 });
 
 test('validates preflight report issue, status, required hashes, and ancestry', () => {
@@ -170,6 +183,7 @@ test('validates preflight report issue, status, required hashes, and ancestry', 
     issueNumber: 1754,
     commitSha: '0123456789012345678901234567890123456789',
     status: 'COMPLETE',
+    scopePaths: ['scripts'],
     instructions: [{ path: 'AGENTS.md',
 sha: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' }],
   };
@@ -179,6 +193,8 @@ context: {
     requiredPaths: ['AGENTS.md'],
     actualHashes: new Map([['AGENTS.md', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa']]),
     isAncestor: true,
+    recordedBeforeImplementation: true,
+    changedPaths: ['scripts/task-preflight.test.js'],
   } }), []);
   assert.ok(validatePreflightReport({ report,
 context: {
@@ -196,12 +212,13 @@ test('blocks documentation paths omitted from the PR impact statement', () => {
     body: 'Fixes #1754\n\nFinal source commit: 0123456789012345678901234567890123456789\n\n## Documentation impact\nUpdated: docs/README.md',
     headSha: '0123456789012345678901234567890123456789',
     issueNumber: 1754,
-    issueBody: REQUIRED_ISSUE_SECTIONS.map((heading) => `## ${  heading  }\n\nSpecific evidence for ${  heading  }.`).join('\n\n'),
+    issueBody: buildIssueBody(),
     issueComments: [`Verification evidence: pnpm run test:task-preflight on commit 0123456789012345678901234567890123456789; CI run: ${CURRENT_WORKFLOW_RUN_URL}`],
     workflowRunUrl: CURRENT_WORKFLOW_RUN_URL,
     changedPaths: ['README.md'],
     preflightReport: {
       issueNumber: 1754,
+      scopePaths: ['.'],
       status: 'COMPLETE',
       instructions: [{ path: 'AGENTS.md',
 sha: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' }],
@@ -225,12 +242,13 @@ test('blocks PR evidence when head SHA, acceptance, verification, or documentati
     body: 'Fixes #1754\n\nFinal source commit: 0123456789012345678901234567890123456789\n\n## Documentation impact\nUpdated: docs/README.md',
     headSha: '0123456789012345678901234567890123456789',
     issueNumber: 1754,
-    issueBody: REQUIRED_ISSUE_SECTIONS.map((heading) => `## ${heading}\n\nEvidence for ${heading}.`).join('\n\n'),
+    issueBody: buildIssueBody(),
     issueComments: [`Verification evidence: pnpm run test:task-preflight on commit 0123456789012345678901234567890123456789; CI run: ${CURRENT_WORKFLOW_RUN_URL}`],
     workflowRunUrl: CURRENT_WORKFLOW_RUN_URL,
     changedPaths: ['docs/README.md'],
     preflightReport: {
       issueNumber: 1754,
+      scopePaths: ['.'],
       commitSha: '0123456789012345678901234567890123456789',
       status: 'COMPLETE',
       instructions: [{ path: 'AGENTS.md',
@@ -264,12 +282,13 @@ test('requires verification evidence to name the exact current PR head SHA', () 
     body: `Fixes #1754\n\nFinal source commit: ${headSha}\n\n## Documentation impact\nN/A because this test-only change does not alter maintained documentation.`,
     headSha,
     issueNumber: 1754,
-    issueBody: REQUIRED_ISSUE_SECTIONS.map((heading) => `## ${heading}\n\nSpecific evidence for ${heading}.`).join('\n\n'),
+    issueBody: buildIssueBody(),
     issueComments: [`Verification evidence: pnpm run test:task-preflight on commit ${staleSha}; CI run: ${CURRENT_WORKFLOW_RUN_URL}`],
     workflowRunUrl: CURRENT_WORKFLOW_RUN_URL,
     changedPaths: ['scripts/task-preflight.test.js'],
     preflightReport: {
       issueNumber: 1754,
+      scopePaths: ['.'],
       commitSha: staleSha,
       status: 'COMPLETE',
       instructions: [{
@@ -281,6 +300,7 @@ test('requires verification evidence to name the exact current PR head SHA', () 
     actualInstructionHashes: new Map([['AGENTS.md', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa']]),
     preflightCommitIsAncestor: true,
     preflightRecordedBeforeImplementation: true,
+    changedPaths: ['scripts/task-preflight.test.js'],
   });
 
   assert.ok(
@@ -345,12 +365,13 @@ test('requires verification evidence to link to the exact current GitHub Actions
     body: `Fixes #1754\n\nFinal source commit: ${headSha}\n\n## Documentation impact\nN/A because this test-only change does not alter maintained documentation.`,
     headSha,
     issueNumber: 1754,
-    issueBody: REQUIRED_ISSUE_SECTIONS.map((heading) => `## ${heading}\n\nSpecific evidence for ${heading}.`).join('\n\n'),
+    issueBody: buildIssueBody(),
     issueComments: [`Verification evidence: pnpm run test:task-preflight passed on commit ${headSha}; CI run: ${commentRunUrl}`],
     workflowRunUrl: currentRunUrl,
     changedPaths: ['scripts/task-preflight.test.js'],
     preflightReport: {
       issueNumber: 1754,
+      scopePaths: ['.'],
       commitSha: headSha,
       status: 'COMPLETE',
       instructions: [{
@@ -367,5 +388,108 @@ test('requires verification evidence to link to the exact current GitHub Actions
   assert.ok(
     errors.some((error) => /current PR head and GitHub Actions run/i.test(error)),
     'A verification claim linked to another workflow run must not satisfy current-head evidence.',
+  );
+});
+
+test('rejects vague or non-observable acceptance criteria', () => {
+  for (const acceptanceCriteria of [
+    '- [ ] Works as expected.',
+    'Everything should be fine.',
+    '- [ ] The feature works as expected for all supported inputs.',
+  ]) {
+    const errors = validateIssueBody(buildIssueBody({ acceptanceCriteria }));
+    assert.ok(
+      errors.some((error) => /acceptance criteria/i.test(error)),
+      `Vague acceptance criteria must be rejected: ${acceptanceCriteria}`,
+    );
+  }
+});
+
+test('rejects changed paths outside the declared preflight scope', () => {
+  const errors = validatePreflightReport({
+    report: {
+      issueNumber: 1754,
+      status: 'COMPLETE',
+      scopePaths: ['scripts'],
+      instructions: [{ path: 'AGENTS.md', sha: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' }],
+    },
+    context: {
+      issueNumber: 1754,
+      requiredPaths: ['AGENTS.md'],
+      actualHashes: new Map([['AGENTS.md', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa']]),
+      isAncestor: true,
+      recordedBeforeImplementation: true,
+      changedPaths: ['apps/harvester/src/index.js'],
+    },
+  });
+
+  assert.ok(
+    errors.some((error) => /outside.*scope/i.test(error)),
+    'A report scoped only to scripts must not attest to changed Harvester files.',
+  );
+});
+
+test('fails closed when preflight timing cannot be verified', () => {
+  const errors = validatePreflightReport({
+    report: {
+      issueNumber: 1754,
+      status: 'COMPLETE',
+      scopePaths: ['scripts'],
+      instructions: [{ path: 'AGENTS.md', sha: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' }],
+    },
+    context: {
+      issueNumber: 1754,
+      requiredPaths: ['AGENTS.md'],
+      actualHashes: new Map([['AGENTS.md', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa']]),
+      isAncestor: true,
+    },
+  });
+
+  assert.ok(
+    errors.some((error) => /not recorded before/i.test(error)),
+    'Unknown timing must fail closed instead of being treated as a valid preflight.',
+  );
+});
+
+test('fails closed when the base instruction tree response is malformed', async () => {
+  await assert.rejects(
+    readBaseInstructionPaths({
+      repo: '45s/coinzilla',
+      token: 'test-token',
+      sha: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      request: async () => ({ truncated: false }),
+    }),
+    /malformed/i,
+    'A successful API response without a tree array must not silently omit nested AGENTS.md files.',
+  );
+});
+
+test('rejects a pull request used as the tracking issue', () => {
+  const headSha = '0123456789012345678901234567890123456789';
+  const errors = validatePullRequestEvidence({
+    body: 'Fixes #1754\n\nFinal source commit: ' + headSha + '\n\n## Documentation impact\nN/A because this test-only change does not alter maintained documentation.',
+    headSha,
+    issueNumber: 1754,
+    issueBody: buildIssueBody(),
+    issueComments: ['Verification evidence: pnpm run test:task-preflight on commit ' + headSha + '; CI run: ' + CURRENT_WORKFLOW_RUN_URL],
+    workflowRunUrl: CURRENT_WORKFLOW_RUN_URL,
+    issueIsPullRequest: true,
+    changedPaths: ['scripts/task-preflight.test.js'],
+    preflightReport: {
+      issueNumber: 1754,
+      scopePaths: ['.'],
+      commitSha: headSha,
+      status: 'COMPLETE',
+      instructions: [{ path: 'AGENTS.md', sha: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' }],
+    },
+    requiredInstructionPaths: ['AGENTS.md'],
+    actualInstructionHashes: new Map([['AGENTS.md', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa']]),
+    preflightCommitIsAncestor: true,
+    preflightRecordedBeforeImplementation: true,
+  });
+
+  assert.ok(
+    errors.some((error) => /pull request.*not.*issue/i.test(error)),
+    'A PR number must not satisfy the required tracking-issue reference.',
   );
 });
