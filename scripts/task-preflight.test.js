@@ -330,3 +330,37 @@ test('prints source identity and exits without GitHub credentials for --version'
     'A successful side-effect-free --version invocation must not emit a blocked/error diagnostic.',
   );
 });
+
+
+test('requires verification evidence to link to the exact current GitHub Actions run', () => {
+  const headSha = '0123456789012345678901234567890123456789';
+  const commentRunUrl = 'https://github.com/45s/coinzilla/actions/runs/12345';
+  const currentRunUrl = 'https://github.com/45s/coinzilla/actions/runs/67890';
+  const errors = validatePullRequestEvidence({
+    body: `Fixes #1754\n\nFinal source commit: ${headSha}\n\n## Documentation impact\nN/A because this test-only change does not alter maintained documentation.`,
+    headSha,
+    issueNumber: 1754,
+    issueBody: REQUIRED_ISSUE_SECTIONS.map((heading) => `## ${heading}\n\nSpecific evidence for ${heading}.`).join('\n\n'),
+    issueComments: [`Verification evidence: pnpm run test:task-preflight passed on commit ${headSha}; CI run: ${commentRunUrl}`],
+    workflowRunUrl: currentRunUrl,
+    changedPaths: ['scripts/task-preflight.test.js'],
+    preflightReport: {
+      issueNumber: 1754,
+      commitSha: headSha,
+      status: 'COMPLETE',
+      instructions: [{
+        path: 'AGENTS.md',
+        sha: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      }],
+    },
+    requiredInstructionPaths: ['AGENTS.md'],
+    actualInstructionHashes: new Map([['AGENTS.md', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa']]),
+    preflightCommitIsAncestor: true,
+    preflightRecordedBeforeImplementation: true,
+  });
+
+  assert.ok(
+    errors.some((error) => /current GitHub Actions run/i.test(error)),
+    'A verification claim linked to another workflow run must not satisfy current-head evidence.',
+  );
+});
