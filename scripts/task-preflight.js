@@ -256,23 +256,24 @@ async function api({ path, token, method = 'GET', body }) {
 }
 async function issueData({ repo, number, token }) {
   const issue = await api({
-    path: '/repos/' + repo + '/issues/' + number,
+    path: `/repos/${  repo  }/issues/${  number}`,
     token,
   });
   if (issue.pull_request || issue.state !== 'open') {
-    throw new Error('Tracking issue #' + number + ' is not an open issue.');
+    throw new Error(`Tracking issue #${  number  } is not an open issue.`);
   }
   const comments = [];
   for (let page = 1; page <= 10; page += 1) {
     const batch = await api({
-      path: '/repos/' + repo + '/issues/' + number + '/comments?per_page=100&page=' + page,
+      path: `/repos/${  repo  }/issues/${  number  }/comments?per_page=100&page=${  page}`,
       token,
     });
     comments.push(...batch);
-    if (batch.length < 100) break;
-    if (page === 10) throw new Error('Issue comment history exceeds validator pagination limit; BLOCKED.');
+    if (batch.length < 100) {break;}
+    if (page === 10) {throw new Error('Issue comment history exceeds validator pagination limit; BLOCKED.');}
   }
-  return { issue, comments };
+  return { issue,
+comments };
 }
 
 function latestReport(comments) {
