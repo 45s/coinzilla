@@ -113,7 +113,7 @@ function validateReportedHead({ context, errors }) {
   const reported = body.match(/^\s*-?\s*Final source commit:?\s*([0-9a-f]{40})\s*$/im)?.[1]?.toLowerCase();
   if (reported !== context.headSha?.toLowerCase()) {errors.push('Reported source commit does not match PR head SHA.');}
 }
-function getSectionContent(body, title) {
+function getSectionContent({ body, title }) {
   const lines = body.split(/\r?\n/);
   const heading = `## ${  title.toLowerCase()}`;
   const start = lines.findIndex((line) => line.trim().toLowerCase() === heading);
@@ -125,7 +125,7 @@ function getSectionContent(body, title) {
   return content.join('\n');
 }
 function validateDocumentationImpact({ context, errors }) {
-  const docs = getSectionContent(context.body, 'Documentation impact');
+  const docs = getSectionContent({ body: context.body, title: 'Documentation impact' });
   if (!docs || plain(docs).length < 12) {
     errors.push('PR documentation impact is missing or empty.');
   }
