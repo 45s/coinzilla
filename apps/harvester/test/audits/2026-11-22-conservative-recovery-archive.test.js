@@ -230,6 +230,11 @@ function assertArchiveMetadata() {
     false,
     "The fixture must not invent an uncaptured runtime source commit.",
   )
+  assert.notEqual(
+    archive.source.startupRetrySessionId,
+    archive.source.runtimeSessionId,
+    "The later startup-retry session must not be confused with the original recovery runtime.",
+  )
   assert.equal(
     archive.fills.length,
     13,
