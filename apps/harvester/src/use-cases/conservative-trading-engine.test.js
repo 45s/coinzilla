@@ -6339,7 +6339,10 @@ test("twelve sequential immediately-filled BUYs advance from each reconciled las
   assert.ok(observedReferences.slice(1).every((price) => price !== null))
   assert.equal(new Set(harness.orders.map((order) => order.price)).size, 12)
   for (let index = 1; index < harness.orders.length; index += 1) {
-    assert.ok(Number(harness.orders[index].price) < Number(harness.orders[index - 1].price))
+    assert.ok(compareDecimal({
+      left: harness.orders[index].price,
+      right: harness.orders[index - 1].price,
+    }) < 0)
   }
   assert.equal(harness.engine.getPausedMarkets().length, 0)
 })
@@ -6488,12 +6491,18 @@ function assertResidualRecoverySellAccounting({ scenario }) {
   assert.equal(scenario.result.data.reevaluate, true)
   assert.equal(scenario.currentRecoveryLedger.outstandingRecoveryAmount, "0")
   assert.equal(scenario.currentRecoveryLedger.buyCost, "105")
-  assert.ok(Number(scenario.currentRecoveryLedger.netSellProceeds) > 105.01)
+  assert.ok(compareDecimal({
+    left: scenario.currentRecoveryLedger.netSellProceeds,
+    right: "105.01",
+  }) > 0)
   const position = scenario.currentPortfolio.getPosition({ strategyId: StrategyId.COIN_GRABBER,
     marketId: market.id,
   })
   assert.equal(position.freeBaseQuantity.amount, "0")
-  assert.ok(Number(position.baseQuantity.amount) > 0.1)
+  assert.ok(compareDecimal({
+    left: position.baseQuantity.amount,
+    right: "0.1",
+  }) > 0)
   const sellOrders = scenario.harness.engine.getOrders().filter((order) => order.side === "SELL")
   assert.equal(sellOrders.length, 1)
   assert.equal(sellOrders[0].status, "FILLED")
