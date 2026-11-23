@@ -72,6 +72,45 @@ test("shows validation fields and order identity without collapsing distinct ord
   output.destroy()
 })
 
+test("still suppresses identical order-history failures with the same field and order identity", () => {
+  const output = new PassThrough()
+  let written = ""
+  output.on("data", (chunk) => {
+    written += chunk.toString()
+  })
+  const transport = createHarvesterConsoleTransport({
+    output,
+    color: false,
+  })
+  const entry = {
+    level: "error",
+    data: {
+      message: "Order history projection failed",
+      errorCode: "HARVESTER_ORDER_HISTORY_RECORD_INVALID",
+      field: "market.baseAsset.code",
+      symbol: "ZROUSDT",
+      clientOrderId: "h-dff68008c72c47a59368ad-2",
+    },
+  }
+
+  transport.write({
+    ...entry,
+    timestamp: "2026-11-22T08:52:26.000Z",
+  })
+  transport.write({
+    ...entry,
+    timestamp: "2026-11-22T08:52:27.000Z",
+  })
+  transport.close()
+
+  assert.equal((written.match(/Order history projection failed/g) ?? []).length, 1, "Exact duplicate validation failures should remain compacted.")
+  assert.match(written, /market\.baseAsset\.code/, "The retained summary must include the validation field.")
+  assert.match(written, /h-dff68008c72c47a59368ad-2/, "The retained summary must include the affected order.")
+  assert.match(written, /Previous identical log entry repeated 1 additional time\(s\)/, "The duplicate count must remain visible.")
+  output.destroy()
+})
+
+
 test("bounds long order-history validation fields and client-order identifiers", () => {
   const output = new PassThrough()
   let written = ""
