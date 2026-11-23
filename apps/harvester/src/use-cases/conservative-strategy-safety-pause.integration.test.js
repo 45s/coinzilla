@@ -10,6 +10,9 @@ import {
   TradingRules,
 } from "@coinzilla/entities"
 import { StrategyId } from "../domain/strategies/strategy-ids.js"
+import { Portfolio } from "../domain/portfolio/portfolio.js"
+import { RecoveryLedger } from "../domain/strategies/conservative/recovery-ledger.js"
+import { conservativeStrategyPolicy } from "../domain/strategies/conservative/strategy-policy.js"
 import { OrderRegistry } from "../domain/orders/order-registry.js"
 import { makeConservativeTradingEngine } from "./conservative-trading-engine.js"
 import { createLatestTransitionEvaluator } from "./create-latest-transition-evaluator.js"
@@ -128,7 +131,7 @@ function createSafetyPauseBrokerState(options) {
 }
 
 function createSafetyPauseStrategyPolicy(options) {
-  return options.strategyPolicy
+  return options.strategyPolicy ?? conservativeStrategyPolicy
 }
 
 function createSafetyPauseEventPublisher(eventPublisher) {
@@ -221,8 +224,8 @@ function createSafetyPauseEngine({ options, brokerState, state }) {
 async function createSafetyPauseHarness(options = {}) {
   const brokerState = createSafetyPauseBrokerState(options)
   const state = {
-    currentPortfolio: options.initialPortfolio,
-    currentRecoveryLedger: options.initialRecoveryLedger,
+    currentPortfolio: options.initialPortfolio ?? new Portfolio(),
+    currentRecoveryLedger: options.initialRecoveryLedger ?? RecoveryLedger.empty({ market }),
   }
   const engine = createSafetyPauseEngine({ options, brokerState, state })
   await engine.processBookTicker({
