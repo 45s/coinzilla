@@ -5291,6 +5291,15 @@ test("accounts missing earlier REST fills without replaying cumulative order qua
   })
 })
 
+function configureIncompleteRestFillHistory({ broker, buyOrder, partialFill, historyOrder } = {}) {
+  broker.getOpenOrders = async () => ({
+    ok: true,
+    data: [makeOpenOrder({ order: buyOrder, executedQuantity: "0.4" })],
+  })
+  broker.getCanonicalOrderHistory = async () => ({ ok: true, data: [historyOrder] })
+  broker.getFills = async () => ({ ok: true, data: [partialFill] })
+}
+
 test("fails closed without applying partial REST fills when cumulative history is incomplete", async () => {
   const {
     engine,
@@ -5321,21 +5330,7 @@ test("fails closed without applying partial REST fills when cumulative history i
     executedQuantity: "0.4",
     updatedAt: 3,
   })
-  broker.getOpenOrders = async () => ({
-    ok: true,
-    data: [makeOpenOrder({
-    order: buyOrder,
-    executedQuantity: "0.4"
-  })]
-  })
-  broker.getCanonicalOrderHistory = async () => ({
-    ok: true,
-    data: [historyOrder]
-  })
-  broker.getFills = async () => ({
-    ok: true,
-    data: [partialFill]
-  })
+  configureIncompleteRestFillHistory({ broker, buyOrder, partialFill, historyOrder })
 
   const result = await engine.reconcileOwnedOrders()
 
