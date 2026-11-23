@@ -18,6 +18,7 @@ import { createLatestTransitionEvaluator } from "./create-latest-transition-eval
 import { createSubmissionGate } from "./create-submission-gate.js"
 import { createHarnessBroker } from "./conservative-trading-engine-harness.js"
 import { HARVESTER_EVENT_NAMES } from "../application/events/event-names.js"
+import { createHarvesterTradingEngine } from "../bootstrap/harvester-runtime-setup.js"
 
 const test = (...[name, ...args]) => nodeTest(
   `[conservative-strategy-safety-pause.integration.test.js] ${name}`,
@@ -639,4 +640,35 @@ test("allows only purpose-tagged RECOVERY_SELL through the strategy safety BUY g
   assert.deepEqual(recoverySell, { allowed: true })
   assert.equal(ordinarySell.allowed, false)
   assert.equal(recoveryBuy.allowed, false)
+})
+
+
+test("passes the durable safety blocker callback through Harvester engine composition", () => {
+  const onSafetyBlockerRaised = async () => ({
+    ok: true,
+    data: { durable: true },
+  })
+  const engineOptions = createHarvesterTradingEngine({
+    makeConservativeTradingEngine: (options) => options,
+    userDataState: {
+      ready: true,
+      stopped: false,
+      shutdownRequested: false,
+    },
+    accountSnapshotManagerRef: {
+      current: {
+        hasUnownedOpenOrdersForSymbol: () => false,
+      },
+    },
+    logger: {
+      error: () => undefined,
+    },
+    onSafetyBlockerRaised,
+  })
+
+  assert.equal(
+    engineOptions.onSafetyBlockerRaised,
+    onSafetyBlockerRaised,
+    "The durable safety-blocker writer must reach the Conservative engine through bootstrap composition.",
+  )
 })

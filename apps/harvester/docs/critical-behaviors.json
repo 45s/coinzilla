@@ -872,6 +872,16 @@
           "path": "src/use-cases/conservative-strategy-safety-pause.integration.test.js",
           "name": "allows only purpose-tagged RECOVERY_SELL through the strategy safety BUY gate",
           "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/conservative-strategy-safety-pause.integration.test.js",
+          "name": "passes the durable safety blocker callback through Harvester engine composition",
+          "kind": "normal"
+        },
+        {
+          "path": "src/use-cases/errors/strategy-safety-pause-incomplete-error.test.js",
+          "name": "exposes a stable code and safe context while preserving the original cause",
+          "kind": "failure"
         }
       ],
       "runtimeStatus": "active",

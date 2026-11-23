@@ -25,6 +25,7 @@ import { createFreshMarketPriceWaiter, createMarketPriceTransitionHandler } from
 import { validateConservativeTradingEngineOptions } from "./validate-conservative-trading-engine-options.js"
 import { failureResult, recoveryFailureError, withFailure } from "./recovery-failure.js"
 import { OperatorBuyCancellationIncompleteError } from "./errors/operator-buy-cancellation-incomplete-error.js"
+import { StrategySafetyPauseIncompleteError } from "./errors/strategy-safety-pause-incomplete-error.js"
 import { HARVESTER_EVENT_NAMES } from "../application/events/event-names.js"
 import {
   mapOrderCancelFailedData,
@@ -408,42 +409,290 @@ function createRecoveryCycleNotCompletedPublisher({
 }
 
 
-function createPauseHandler({
-  state,
-  onOperationalStateStrategyMarketPaused,
-  logger,
-  eventPublisher,
-  onPause,
-} = {}) {
-  return async ({ symbol, reason, error }) => {
-    const wasDurablyPaused = state.durablePausedMarkets.has(symbol)
-    if (!wasDurablyPaused && onOperationalStateStrategyMarketPaused) {
-      const durable = await onOperationalStateStrategyMarketPaused({ symbol,
-reason })
-      if (durable?.ok !== true || durable.data?.durable !== true) {
-        logger?.error?.({
-          message: "strategy pause could not be committed to the Operational State Store",
+function readActiveStrategySafetyPauseBuyOrders({ state, symbol }) {
+  return state.registry.getActiveOrders()
+    .filter((order) => order.market?.symbol === symbol && order.side === "BUY")
+    .map((order) => Object.freeze({
+      clientOrderId: order.clientOrderId,
+      brokerOrderId: order.brokerOrderId ?? null,
+      status: order.status,
+    }))
+}
+
+async function persistStrategySafetyPauseFact({ callback, symbol, reason }) {
+  if (typeof callback !== "function") {
+    return { persisted: null, errors: [] }
+  }
+  try {
+    const result = await callback({ symbol, reason })
+    const persisted = result?.ok === true && result.data?.durable === true
+    return {
+      persisted,
+      errors: persisted ? [] : result?.errors ?? [new Error("Strategy safety pause fact was not durably committed")],
+    }
+  } catch (error) {
+    return { persisted: false, errors: [error] }
+  }
+}
+
+async function publishStrategySafetyPauseEvent({ callback, eventPublisher, symbol, reason, error }) {
+  if (typeof eventPublisher?.publish !== "function") {
+    return { published: null, errors: [] }
+  }
+  try {
+    const result = await callback({ symbol, reason, error })
+    const published = result?.ok === true
+    return {
+      published,
+      errors: published ? [] : result?.errors ?? [new Error("Strategy safety pause event publication failed")],
+    }
+  } catch (publicationError) {
+    return { published: false, errors: [publicationError] }
+  }
+}
+
+async function persistStrategySafetyPauseBlocker({
+  callback, previousStatus, symbol, pauseReason, pauseFactPersisted,
+  pauseEventPublished, cancellationResult, unresolvedOrders, failures,
+}) {
+  if (previousStatus?.blockerPersisted === true) {
+    return { persisted: true, blockerId: previousStatus.blockerId, errors: [] }
+  }
+  if (typeof callback !== "function") {
+    return { persisted: null, blockerId: null, errors: [] }
+  }
+  const evidence = {
+    pauseReason,
+    pauseFactPersisted,
+    pauseEventPublished,
+    cancellationSucceeded: cancellationResult?.ok === true,
+    unresolvedOrderReferences: unresolvedOrders.map((order) => (
+      `${order.clientOrderId}:${order.brokerOrderId ?? "UNKNOWN"}:${order.status}`
+    )).sort(),
+    failureCodes: failures.map((failure) => failure.code ?? failure.name ?? "ERROR").sort(),
+  }
+  try {
+    const result = await callback({
+      scope: "MARKET",
+      symbol,
+      reason: "STRATEGY_SAFETY_PAUSE_INCOMPLETE",
+      evidence,
+    })
+    const persisted = result?.ok === true && result.data?.durable === true
+    return {
+      persisted,
+      blockerId: result?.data?.record?.data?.blockerId ?? result?.data?.blockerId ?? null,
+      errors: persisted ? [] : result?.errors ?? [new Error("Strategy safety-pause blocker was not durably committed")],
+    }
+  } catch (blockerError) {
+    return { persisted: false, blockerId: null, errors: [blockerError] }
+  }
+}
+
+function createStrategySafetyPauseStatus({
+  symbol, reason, complete, pauseFactPersisted, pauseEventPublished,
+  cancellationResult, unresolvedOrders, blocker, failures,
+}) {
+  return Object.freeze({
+    symbol,
+    reason,
+    status: complete ? "COMPLETE" : "INCOMPLETE",
+    pauseFactPersisted,
+    pauseEventPublished,
+    canceled: cancellationResult?.data?.canceled ?? 0,
+    reconciled: cancellationResult?.data?.reconciled ?? 0,
+    unresolvedOrders: Object.freeze(unresolvedOrders),
+    blockerPersisted: blocker.persisted,
+    blockerId: blocker.blockerId,
+    incompleteReasons: Object.freeze([...new Set(
+      failures.map((failure) => failure.message ?? String(failure)),
+    )]),
+  })
+}
+
+async function prepareStrategySafetyPause({
+  state, symbol, reason, error, previousStatus,
+  onOperationalStateStrategyMarketPaused, publishStrategyPaused, eventPublisher,
+}) {
+  const wasPaused = state.durablePausedMarkets.has(symbol)
+  state.paused.add(symbol)
+  state.durablePausedMarkets.add(symbol)
+  let pauseFactPersisted = previousStatus?.pauseFactPersisted ?? null
+  let pauseEventPublished = previousStatus?.pauseEventPublished ?? null
+  const failures = []
+  if (!wasPaused) {
+    const fact = await persistStrategySafetyPauseFact({
+      callback: onOperationalStateStrategyMarketPaused,
+      symbol,
+      reason,
+    })
+    pauseFactPersisted = fact.persisted
+    failures.push(...fact.errors)
+    const publication = await publishStrategySafetyPauseEvent({
+      callback: publishStrategyPaused,
+      eventPublisher,
+      symbol,
+      reason,
+      error,
+    })
+    pauseEventPublished = publication.published
+    failures.push(...publication.errors)
+  }
+  if (previousStatus?.status === "INCOMPLETE") {
+    failures.push(new Error("Previous strategy safety-pause blocker requires explicit reconciliation"))
+  }
+  if (pauseFactPersisted === false) {
+    failures.push(new Error("Strategy safety pause fact persistence is incomplete"))
+  }
+  if (pauseEventPublished === false) {
+    failures.push(new Error("Strategy safety pause event publication is incomplete"))
+  }
+  return { pauseFactPersisted, pauseEventPublished, failures }
+}
+
+async function cancelStrategySafetyPauseBuys({ symbol, cancelOwnedBuyOrdersWithinTransition }) {
+  try {
+    return await cancelOwnedBuyOrdersWithinTransition({
+      symbol,
+      reason: "STRATEGY_SAFETY_PAUSE",
+      pauseOnFailure: false,
+    })
+  } catch (cancellationError) {
+    return toResult({ error: cancellationError })
+  }
+}
+
+async function finalizeStrategySafetyPause({
+  state, symbol, reason, previousStatus, prepared, cancellationResult, onSafetyBlockerRaised,
+}) {
+  const failures = [...prepared.failures]
+  if (cancellationResult?.ok !== true) {
+    failures.push(...(
+      cancellationResult?.errors ?? [new Error("Owned BUY cancellation did not complete")]
+    ))
+  }
+  const unresolvedOrders = readActiveStrategySafetyPauseBuyOrders({ state, symbol })
+  if (unresolvedOrders.length > 0) {
+    failures.push(new Error("One or more current-process-owned BUY orders remain unresolved"))
+  }
+  const complete = failures.length === 0 && unresolvedOrders.length === 0
+  const blocker = complete
+    ? { persisted: null, blockerId: null, errors: [] }
+    : await persistStrategySafetyPauseBlocker({
+      callback: onSafetyBlockerRaised,
+      previousStatus,
+      symbol,
+      pauseReason: reason,
+      pauseFactPersisted: prepared.pauseFactPersisted,
+      pauseEventPublished: prepared.pauseEventPublished,
+      cancellationResult,
+      unresolvedOrders,
+      failures,
+    })
+  failures.push(...blocker.errors)
+  const status = createStrategySafetyPauseStatus({
+    symbol,
+    reason,
+    complete,
+    pauseFactPersisted: prepared.pauseFactPersisted,
+    pauseEventPublished: prepared.pauseEventPublished,
+    cancellationResult,
+    unresolvedOrders,
+    blocker,
+    failures,
+  })
+  state.strategySafetyPauseStatuses.set(symbol, status)
+  return { complete, status, failures, unresolvedOrders }
+}
+
+async function notifyStrategySafetyPause({ onPause, logger, symbol, reason, error, result }) {
+  if (!result.complete) {
+    logger?.error?.({
+      message: "Conservative strategy safety pause is incomplete",
+      symbol,
+      reason,
+      status: result.status,
+      errors: result.failures,
+    })
+  }
+  try {
+    await onPause?.({ symbol, reason, error, status: result.status })
+  } catch (notificationError) {
+    logger?.error?.({
+      message: "Unable to notify Harvester about strategy safety pause",
+      symbol,
+      reason,
+      error: notificationError,
+    })
+  }
+}
+
+async function executeStrategySafetyPause({ dependencies, input } = {}) {
+  const {
+    state, logger, onPause, onOperationalStateStrategyMarketPaused,
+    onSafetyBlockerRaised, publishStrategyPaused, eventPublisher,
+    cancelOwnedBuyOrdersWithinTransition,
+  } = dependencies
+  const { symbol, reason, error } = input
+  const previousStatus = state.strategySafetyPauseStatuses.get(symbol)
+  if (state.strategySafetyPauseCancellationInProgress.has(symbol)) {
+    return toResult({
+      data: previousStatus ?? { symbol, reason, status: "CANCELLING" },
+    })
+  }
+  state.strategySafetyPauseCancellationInProgress.add(symbol)
+  try {
+    const prepared = await prepareStrategySafetyPause({
+      state, symbol, reason, error, previousStatus,
+      onOperationalStateStrategyMarketPaused, publishStrategyPaused, eventPublisher,
+    })
+    state.strategySafetyPauseStatuses.set(symbol, createStrategySafetyPauseStatus({
+      symbol,
+      reason,
+      complete: false,
+      pauseFactPersisted: prepared.pauseFactPersisted,
+      pauseEventPublished: prepared.pauseEventPublished,
+      cancellationResult: null,
+      unresolvedOrders: readActiveStrategySafetyPauseBuyOrders({ state, symbol }),
+      blocker: { persisted: null, blockerId: null },
+      failures: prepared.failures,
+    }))
+    const cancellationResult = await cancelStrategySafetyPauseBuys({
+      symbol,
+      cancelOwnedBuyOrdersWithinTransition,
+    })
+    const result = await finalizeStrategySafetyPause({
+      state, symbol, reason, previousStatus, prepared, cancellationResult, onSafetyBlockerRaised,
+    })
+    await notifyStrategySafetyPause({ onPause, logger, symbol, reason, error, result })
+    if (!result.complete) {
+      return toResult({
+        error: new StrategySafetyPauseIncompleteError({
           symbol,
           reason,
-          errors: durable?.errors,
-        })
-      }
-    }
-    state.paused.add(symbol)
-    state.durablePausedMarkets.add(symbol)
-    if (!wasDurablyPaused) {
-      publishLifecycleEvent({
-        eventPublisher,
-        eventName: HARVESTER_EVENT_NAMES.STRATEGY_PAUSED,
-        dataResult: mapStrategyPausedData({ symbol,
-reason,
-error }),
+          unresolvedOrderCount: result.unresolvedOrders.length,
+          failureCount: result.failures.length,
+          cause: result.failures[0] ?? error,
+        }),
       })
     }
-    await onPause({ symbol,
-reason,
-error })
+    return toResult({ data: result.status })
+  } finally {
+    state.strategySafetyPauseCancellationInProgress.delete(symbol)
   }
+}
+
+function createPauseHandler({
+  state, logger, onPause, onOperationalStateStrategyMarketPaused,
+  onSafetyBlockerRaised, publishStrategyPaused, eventPublisher,
+  cancelOwnedBuyOrdersWithinTransition,
+} = {}) {
+  const dependencies = {
+    state, logger, onPause, onOperationalStateStrategyMarketPaused,
+    onSafetyBlockerRaised, publishStrategyPaused, eventPublisher,
+    cancelOwnedBuyOrdersWithinTransition,
+  }
+  return (input = {}) => executeStrategySafetyPause({ dependencies, input })
 }
 
 function createOrderCancellationEventPublishers({ eventPublisher, logger, state } = {}) {
@@ -1243,6 +1492,8 @@ function createInitialEngineStateCore({ initialRegistry, journalFillsById }) {
 
 function createInitialEngineTrackingState({ initialState }) {
   return {
+    strategySafetyPauseStatuses: new Map(),
+    strategySafetyPauseCancellationInProgress: new Set(),
     trailingBuy: new Map([...getInitialStateArray({
       initialState,
       key: "trailingBuySymbols",
@@ -1347,41 +1598,37 @@ function createOwnedOrderSnapshotHandlers({
 }
 
 function createOwnedOrderCancellationHandlers({
-  state,
-  broker,
-  processExecutionFillTransition,
-  pause,
-  ensureCancellationEligible,
-  publishDurableIntent,
-  cancelOrderWithOperationalState,
-  markCancellationUnknown,
-  markCancellationFailure,
-  publishOrderCancelled,
-  publishOrderCancelFailed,
-  runTransition,
+  state, broker, processExecutionFillTransition, pause, ensureCancellationEligible,
+  publishDurableIntent, cancelOrderWithOperationalState, markCancellationUnknown,
+  markCancellationFailure, publishOrderCancelled, publishOrderCancelFailed, runTransition,
 } = {}) {
+  const cancellationContext = {
+    state,
+    ensureCancellationEligible,
+    publishDurableIntent,
+    cancelOrderWithOperationalState,
+    markCancellationUnknown,
+    markCancellationFailure,
+    broker,
+    pause,
+    processExecutionFillTransition,
+    publishOrderCancelled,
+    publishOrderCancelFailed,
+  }
+  const cancelOwnedBuyOrdersWithinTransition = (options = {}) => cancelOwnedBuyOrdersTransition({
+    context: cancellationContext,
+    options,
+  })
   const cancelOwnedBuyOrders = (options = {}) => runTransition({
-    task: () => cancelOwnedBuyOrdersTransition({
-      context: {
-        state,
-        ensureCancellationEligible,
-        publishDurableIntent,
-        cancelOrderWithOperationalState,
-        markCancellationUnknown,
-        markCancellationFailure,
-        broker,
-        pause,
-        processExecutionFillTransition,
-        publishOrderCancelled,
-        publishOrderCancelFailed,
-      },
-      options,
-    }),
+    task: () => cancelOwnedBuyOrdersWithinTransition(options),
   })
   return {
+    cancelOwnedBuyOrdersWithinTransition,
     cancelOwnedBuyOrders,
     cancelOwnedBuyOrdersForShutdown: (options = {}) => cancelOwnedBuyOrders(options),
-    cancelOwnedBuyOrdersForSafetyHalt: () => cancelOwnedBuyOrders({ reason: "ACCOUNT_INTEGRITY_FAILURE" }),
+    cancelOwnedBuyOrdersForSafetyHalt: () => cancelOwnedBuyOrders({
+      reason: "ACCOUNT_INTEGRITY_FAILURE",
+    }),
   }
 }
 
@@ -1536,6 +1783,7 @@ function createOperatorMarketSnapshotFacts({
     state,
     symbol,
   })
+  const safetyPauseCancellation = state.strategySafetyPauseStatuses.get(symbol) ?? null
   const safetyPaused = state.durablePausedMarkets.has(symbol) ||
     (state.paused.has(symbol) && !state.recoveryManagedPausedMarkets.has(symbol))
   const recoveryManagedPaused = state.recoveryManagedPausedMarkets.has(symbol)
@@ -1559,6 +1807,9 @@ function createOperatorMarketSnapshotFacts({
     volatilityState,
     openOrderBlockerActive,
   })
+  if (safetyPauseCancellation?.status === "INCOMPLETE") {
+    blockers.push("STRATEGY_PAUSE_CANCELLATION_INCOMPLETE")
+  }
   const volatilityProtection = createOperatorVolatilityProtectionSnapshot({
     volatilityState,
   })
@@ -1569,6 +1820,7 @@ function createOperatorMarketSnapshotFacts({
     operatorPaused,
     operatorBuyPaused,
     safetyPaused,
+    safetyPauseCancellation,
     recoveryManagedPaused,
     replacementPending,
     trailingBuyRepricePending,
@@ -1594,6 +1846,7 @@ function createOperatorMarketSnapshot(options) {
     operatorPaused: facts.operatorPaused,
     operatorBuysPaused: facts.operatorBuyPaused,
     safetyPaused: facts.safetyPaused,
+    safetyPauseCancellation: facts.safetyPauseCancellation,
     recoveryManagedPaused: facts.recoveryManagedPaused,
     replacementPending: facts.replacementPending,
     trailingBuyRepricePending: facts.trailingBuyRepricePending,
@@ -1756,22 +2009,32 @@ function createConservativeEngineBaseContext({ dependencies } = {}) {
 }
 
 function createConservativeEnginePublishingContext({ context } = {}) {
-  const { eventPublisher, getPortfolio, getRecoveryLedger, logger, onPause,
-    onOperationalStateStrategyMarketPaused } = context.dependencies
-  context.publishDurableIntent = createDurableIntentPublisher({ eventPublisher,
-logger })
+  const {
+    eventPublisher, getPortfolio, getRecoveryLedger, logger, onPause,
+    onOperationalStateStrategyMarketPaused, onSafetyBlockerRaised,
+  } = context.dependencies
+  context.publishDurableIntent = createDurableIntentPublisher({ eventPublisher, logger })
   context.publishRecoveryCycleNotCompleted = createRecoveryCycleNotCompletedPublisher({
     eventPublisher,
     getPortfolio,
     getRecoveryLedger,
     pairs: context.pairs,
   })
+  const publishStrategyPaused = ({ symbol, reason, error } = {}) => publishLifecycleEvent({
+    eventPublisher,
+    eventName: HARVESTER_EVENT_NAMES.STRATEGY_PAUSED,
+    dataResult: mapStrategyPausedData({ symbol, reason, error }),
+  })
   context.pause = createPauseHandler({
     state: context.state,
     onOperationalStateStrategyMarketPaused,
+    onSafetyBlockerRaised,
     logger,
     eventPublisher,
+    publishStrategyPaused,
     onPause,
+    cancelOwnedBuyOrdersWithinTransition: (options = {}) =>
+      context.cancelOwnedBuyOrdersWithinTransition(options),
   })
 }
 

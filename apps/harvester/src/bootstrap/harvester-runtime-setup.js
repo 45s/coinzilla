@@ -293,6 +293,7 @@ function createHarvesterTradingEngineOperationalCallbacks(options = {}) {
     onOperationalStateCancellationIntent: options.onOperationalStateCancellationIntent,
     onOperationalStateCancellationOutcome: options.onOperationalStateCancellationOutcome,
     onOperationalStateStrategyMarketPaused: options.onOperationalStateStrategyMarketPaused,
+    onSafetyBlockerRaised: options.onSafetyBlockerRaised,
   }
 }
 

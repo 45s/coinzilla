@@ -19,6 +19,7 @@ function defer({ symbol, reason, details = {} } = {}) {
 function getSubmissionStateBlocker({
   symbol,
   order,
+  purpose,
   shutdownRecoverySubmission,
   marketPrice,
   state,
@@ -26,8 +27,15 @@ function getSubmissionStateBlocker({
   canTrade,
   isMarketPriceFresh,
 } = {}) {
-  if (state.paused.has(symbol) && !shutdownRecoverySubmission) {return defer({ symbol,
-    reason: "MARKET_PAUSED" })}
+  const strategySafetyPauseRecoverySell = state.durablePausedMarkets?.has(symbol) === true &&
+    order.side === "SELL" &&
+    purpose === "RECOVERY_SELL"
+  if (state.paused.has(symbol) && !shutdownRecoverySubmission && !strategySafetyPauseRecoverySell) {
+    return defer({
+      symbol,
+      reason: "MARKET_PAUSED",
+    })
+  }
   if (state.operatorPausedMarkets.has(symbol) && order.side === "BUY") {
     return defer({ symbol,
       reason: "OPERATOR_MARKET_PAUSED" })
