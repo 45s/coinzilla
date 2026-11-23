@@ -770,4 +770,4 @@ test("preserves every archived cancellation pair, pause reason, and terminal-log
 
 test("replays a duplicate archived SELL fill without double-counting proceeds or profit", assertDuplicateSellNoOp)
 
-test("records missing submission and shutdown evidence without manufacturing success", assertSubmissionAndShutdownEvidence)
+test("preserves missing submission and shutdown evidence", assertSubmissionAndShutdownEvidence)
