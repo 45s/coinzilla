@@ -1,5 +1,66 @@
 # Harvester Roadmap
 
+## Conservative trading correctness and exhaustive scenario coverage — issue #1763
+
+**Objective:** prove Conservative trading calculations, accounting, lifecycle transitions and safety decisions with source-mapped deterministic evidence. This complements (does not replace) focused unit tests and existing application/replay tests. The canonical [Conservative Domain Specification](./docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md) remains the sole behavior authority; the [scenario-test guide](./docs/domain/CONSERVATIVE_DOMAIN_SCENARIO_TESTS.md) defines authoring conventions; [issue #1763](https://github.com/45s/coinzilla/issues/1763) owns the exhaustive matrix and phase-by-phase evidence.
+
+**Non-negotiable quality bar**
+
+- Exact decimal inputs and independently derived expected values; no floating-point arithmetic in financial test oracles.
+- Real domain objects/components for the behavior under test; mock only external ports at application boundaries.
+- Every meaningful state transition proves complete state, accounting deltas, emitted intents/dispositions, idempotency, conflict rejection and failure atomicity.
+- Every financial invariant is checked across Portfolio, Position, RecoveryLedger, fills and order execution/commitment projections.
+- Offline, deterministic, credential-free by default. No live/TESTNET order operations or exchange writes.
+- No invented or changed trading rule. Unresolved or unsupported behavior is recorded as blocked/unsupported until an explicit contract decision exists.
+
+**Execution strategy:** one small, reviewable PR per vertical slice. Prefer a test-only RED PR followed by the smallest GREEN production+test PR when a real defect is found. Do not combine unrelated domains or broad refactors. Each PR updates the issue matrix and evidence; the roadmap is synchronized at phase boundaries.
+
+### Phased delivery plan
+
+| Phase | Small PR-sized deliverable | Exit criteria |
+| --- | --- | --- |
+| 0. Documentation and gates | Finalize #1764 guide, state-machine model, roadmap, issue matrix schema and links; fix PR metadata/preflight gate. | Docs agree; exact-head required CI passes; no claim of implementation coverage. |
+| 1. Source/evidence map | Map canonical spec rules to production modules, current unit tests, application tests, replay tests and inventory. | Every rule has an owner and evidence status; no tests added before existing coverage is understood. |
+| 2. Test oracle audit | Identify financial test oracles using Number/float conversions or production-derived expected values; replace with independent exact literals/scaled integer arithmetic in isolated PRs. | Financial expected values are independent and exact; existing intended behavior unchanged. |
+| 3. Core arithmetic | Recovery target, net proceeds, fee reserve, base/quote/third-asset commissions, tick/step rounding and decimal boundaries. | Normal, equality, just-below/above, invalid, tiny/large and exchange-filter cases have exact assertions. |
+| 4. BUY accounting | Initial and subsequent BUY fills, cost basis, net base, VWAP/reference, commissions, investment cap and commitments. | Canonical fills reconcile to Portfolio/Position/RecoveryLedger and BUY decisions. |
+| 5. SELL accounting | Partial/multiple/full SELL fills, proceeds, fee assets, remaining inventory, realized profit and recovery target. | Gross-to-net economics and active/retained inventory reconcile exactly. |
+| 6. Strategy decision scenarios | Initial BUY, second BUY, BUY suppression, recovery SELL planning/replacement, no-action dispositions. | Real domain composition emits exact intent fields and proves absence of unsafe/duplicate intents. |
+| 7. State-machine transitions | Transition matrix plus separate PRs for fill/order transitions, cancellation, reconciliation, completion and next-cycle eligibility. | Every applicable legal/forbidden transition has complete-state and no-mutation proof. |
+| 8. Idempotency and event ordering | Duplicate/replayed fills, stale/reordered reports, conflicting identities and independent-event ordering. | Exactly-once accounting and deterministic outcomes under supported event orderings. |
+| 9. Failure atomicity / fail-closed | Invalid or missing evidence, unknown outcomes, persistence/projection failures, filter failures and retry boundaries. | No partial accounting commit or unsafe action; recovery requires authoritative evidence. |
+| 10. Inventory and exchange constraints | keepQuantity, retained free inventory, constrained dust, shared assets/markets, min/max/notional/tick/step. | No external inventory adoption; no sellable residual hidden as dust; market/account projections reconcile. |
+| 11. Application integration | Only uncovered orchestration seams: submit barriers, cancel/fill races, REST/stream reconciliation, durable persistence and shutdown. | Each behavior is owned by an application test with exact evidence; domain tests do not fake orchestration. |
+| 12. Replay and regression | Reproduce relevant historical incidents/event sequences using sanitized deterministic fixtures. | Replay results match live-domain accounting and preserve idempotency; no external connectivity. |
+| 13. Coverage closure | Audit every matrix row, close gaps in small PRs, update inventory and roadmap with exact-head CI. | No applicable row missing evidence; unsupported/blocked rows have reason/owner; all required checks pass. |
+
+### Small-PR operating protocol
+
+For each slice:
+
+1. Select one or a few related matrix rows and identify the authoritative spec clauses and source owner.
+2. Inspect existing tests and reuse existing canonical factories. Record why current tests do or do not prove the requirement.
+3. Write a failing regression test first when a defect is suspected; assert the business invariant, not an implementation call.
+4. Run the narrowest deterministic test target, then relevant package tests and required workspace checks.
+5. If production code must change, keep the change minimal and preserve public behavior outside the specified defect.
+6. Run the exact relevant suite again; record RED/GREEN evidence, test path, commit/PR and exact verified head SHA.
+7. Update #1763 matrix status and the domain test inventory. Do not mark a row covered until evidence is merged to develop and required CI passes.
+8. Keep each PR independently reviewable and revertible. Avoid drive-by cleanup, unrelated renames and broad fixture rewrites.
+
+### Coverage status vocabulary
+
+- **COVERED:** named test path and assertions verified on merged develop with required CI evidence.
+- **PARTIAL:** some dimensions are tested, but boundary, accounting, state, failure or interaction proof is incomplete.
+- **MISSING:** applicable requirement has no adequate executable evidence.
+- **BLOCKED:** cannot be tested safely until a specification/product/architecture decision or prerequisite exists; include owner and unblock condition.
+- **UNSUPPORTED:** explicitly outside the supported contract; cite the reason and do not fabricate behavior.
+
+### Release/initiative completion gate
+
+Do not claim 100% correctness from line/branch coverage. Completion means every applicable canonical rule and risk row is mapped to adequate executable evidence at the correct layer; every financial invariant and lifecycle transition is protected; all known gaps are closed or explicitly blocked/unsupported; no test oracle derives expected results from the implementation under test; and required CI passes on the exact merged head. Coverage percentages remain useful diagnostics, not the acceptance definition.
+
+**Current status:** documentation foundation exists in PR #1764. Source-driven audit, scenario implementation and phase execution are pending. This roadmap is intentionally granular so work can start with Phase 1 immediately after the documentation PR is reviewed/merged.
+
 ## Conservative strategy safety pause cancels current-process-owned BUYs — issue #1749
 
 - In progress in [PR #1755](https://github.com/45s/coinzilla/pull/1755) on a fresh branch based on current `develop`.
