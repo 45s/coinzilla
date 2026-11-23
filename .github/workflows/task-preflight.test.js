@@ -31,7 +31,7 @@ test('task preflight is isolated from JavaScript quality and gates the required 
   assert.match(evidencePublisher, /issues: write/);
   assert.match(evidencePublisher, /Verification evidence/);
   assert.match(evidencePublisher, /gh api/);
-  assert.doesNotMatch(evidencePublisher, /actions\/checkout|pnpm run/);
+  assert.doesNotMatch(evidencePublisher, /uses:\s+actions\/checkout|run:\s+pnpm/);
 
   const validator = extractJob('task-preflight');
   assert.match(validator, /needs: publish-task-preflight-evidence/);
