@@ -215,7 +215,6 @@ The active `develop` ruleset requires six contexts: Run package tests, Workspace
 
 The exact-head Harvester targeted suite passed after these tests were added. Strict changed-file ESLint passed after removing the obsolete terminal-reconciliation helper. Full workspace unit tests, coverage, JavaScript syntax and external documentation-link checks must still pass on the final documentation commit before this checkpoint can be considered verified. These tests establish fail-closed boundaries only; they do not prove a complete RS lifecycle or authorize RS execution.
 
-
 ### 2026-11-23 — #1362 archive replay and evidence corrections
 
 - `test/replays/2026-11-22-conservative-recovery-runtime-replay.test.js` now reads each archived execution's exact `quoteQuantity` from the immutable fixture, passes it to the execution-report replay helper, and asserts that the emitted report retains it. This avoids deriving archived exchange facts from price × quantity.
