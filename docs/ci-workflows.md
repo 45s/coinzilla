@@ -16,7 +16,6 @@ This page summarizes the workflows in `.github/workflows/` and what each one ver
 | `external-links.yml` (**External Documentation Links**) | Pull requests to `develop` changing Markdown/MDX or checker sources; weekly schedule; manual dispatch | Checks changed maintained Markdown/MDX; weekly/manual full-tree scans include historical docs and are report-only. DNS answers are validated and connections pinned before requests; redirects are independently revalidated. | Additional advisory workflow; not one of the six `develop-core` required contexts. |
 | `governance-drift-review.yml` (**Repository Governance Drift Review**) | Monthly schedule; manual dispatch | Opens one monthly issue for an evidence-based review of live rulesets, review ownership, required CI contexts, workflow action pins/permissions, security setup, package matrices, architecture exceptions and governance documentation. It uses the runner's GitHub CLI and a narrowly scoped `issues: write` token; it does not change repository settings. | Additional maintenance workflow; not a required context. |
 
-
 ## Dependabot version updates
 
 The version-update schedule, ecosystem grouping, open-PR limits and target branch are configured in [`.github/dependabot.yml`](../.github/dependabot.yml). npm and GitHub Actions version-update PRs are configured to target `develop`; patch/minor updates are grouped and major updates remain separate for manual review. This configuration is read from the repository default branch (`main`), so the target-branch change becomes effective after it reaches `main` through the approved release PR. Dependabot security-update PRs continue to target the default branch and must be handled under the security-remediation process in the [dependency audit playbook](./dependency-audit-playbook.md).
@@ -53,7 +52,6 @@ The networked **External Documentation Links** workflow is an advisory check for
 ## CodeQL analysis
 
 JavaScript/TypeScript CodeQL analysis is managed by GitHub Advanced Security default setup, outside the repository-owned workflow list. No repository-local replacement query pack, custom CodeQL configuration, SARIF verifier, or dedicated query-regression workflow is maintained. The built-in `js/insufficient-password-hash` rule remains the rule under investigation; the two signer findings are tracked in [issue #1674](https://github.com/45s/coinzilla/issues/1674). The repository property `github-codeql-config-file` is not readable through the connected API; the repository owner must verify it does not reference the removed configuration. See #1674 for upstream source analysis, prior experiment evidence, and limitations. Ordinary CI success does not establish that CodeQL alerts are cleared; use the active Code Scanning result for the exact analyzed commit.
-
 
 ## Triggers and optional broker validation
 
