@@ -24,8 +24,14 @@ const test = (...[name, ...args]) => nodeTest(
   ...args,
 )
 
-const baseAsset = new Asset({ id: "doge", code: "DOGE" })
-const quoteAsset = new Asset({ id: "usdt", code: "USDT" })
+const baseAsset = new Asset({
+  id: "doge",
+  code: "DOGE",
+})
+const quoteAsset = new Asset({
+  id: "usdt",
+  code: "USDT",
+})
 const market = new Market({
   venue: "binance",
   symbol: "DOGEUSDT",
@@ -43,12 +49,18 @@ const marketMetadata = {
       {
         type: "PRICE_INCREMENT",
         status: "SUPPORTED",
-        value: new Money({ amount: "0.01", asset: quoteAsset }),
+        value: new Money({
+          amount: "0.01",
+          asset: quoteAsset,
+        }),
       },
       {
         type: "QUANTITY_INCREMENT",
         status: "SUPPORTED",
-        value: new Quantity({ amount: "0.1", asset: baseAsset }),
+        value: new Quantity({
+          amount: "0.1",
+          asset: baseAsset,
+        }),
       },
       {
         type: "MIN_QUANTITY",
@@ -58,7 +70,10 @@ const marketMetadata = {
       {
         type: "MIN_NOTIONAL",
         status: "SUPPORTED",
-        value: new Money({ amount: "5", asset: quoteAsset }),
+        value: new Money({
+          amount: "5",
+          asset: quoteAsset,
+        }),
       },
     ],
   }),
@@ -142,15 +157,24 @@ function createSafetyPauseEventPublisher(eventPublisher) {
 function createSafetyPauseAccounting({ options, brokerState }) {
   return async ({ fill }) => {
     if (options.accountingFailure) {
-      return { ok: false, errors: [new Error("unsupported commission asset")] }
+      return {
+        ok: false,
+        errors: [new Error("unsupported commission asset")],
+      }
     }
     if (brokerState.accountedFillIds.has(fill.id)) {
-      return { ok: true, data: { applied: false, duplicate: true } }
+      return {
+        ok: true,
+        data: { applied: false, duplicate: true },
+      }
     }
     brokerState.accountedFillIds.add(fill.id)
     brokerState.accountedFills.push(fill)
     const applied = options.accountingApplied === true
-    return { ok: true, data: { applied, duplicate: !applied } }
+    return {
+      ok: true,
+      data: { applied, duplicate: !applied },
+    }
   }
 }
 
@@ -224,9 +248,18 @@ function makeOrder({ side, clientOrderId, brokerOrderId, status = "OPEN", execut
     market,
     side,
     type: "LIMIT",
-    limitPrice: new Money({ amount: "100", asset: quoteAsset }),
-    originalQuantity: new Quantity({ amount: "1", asset: baseAsset }),
-    executedQuantity: new Quantity({ amount: executedQuantity, asset: baseAsset }),
+    limitPrice: new Money({
+      amount: "100",
+      asset: quoteAsset,
+    }),
+    originalQuantity: new Quantity({
+      amount: "1",
+      asset: baseAsset,
+    }),
+    executedQuantity: new Quantity({
+      amount: executedQuantity,
+      asset: baseAsset,
+    }),
     status,
     createdAt: 1,
     acknowledgedAt: 1,
@@ -240,8 +273,14 @@ function makeSeededRecoveryState({ quantity = "1" } = {}) {
     brokerOrderId: "seed-recovery-order",
     market,
     side: "BUY",
-    price: new Money({ amount: "100", asset: quoteAsset }),
-    quantity: new Quantity({ amount: quantity, asset: baseAsset }),
+    price: new Money({
+      amount: "100",
+      asset: quoteAsset,
+    }),
+    quantity: new Quantity({
+      amount: quantity,
+      asset: baseAsset,
+    }),
     quoteQuantity: new Money({
       amount: multiplyDecimal({ left: "100", right: quantity }),
       asset: quoteAsset,
@@ -250,8 +289,14 @@ function makeSeededRecoveryState({ quantity = "1" } = {}) {
     commissionStatus: "COMPLETE",
   })
   return {
-    portfolio: new Portfolio().applyFill({ strategyId: StrategyId.COIN_GRABBER, fill }).portfolio,
-    recoveryLedger: RecoveryLedger.empty({ market }).applyFill({ strategyId: StrategyId.COIN_GRABBER, fill }).ledger,
+    portfolio: new Portfolio().applyFill({
+      strategyId: StrategyId.COIN_GRABBER,
+      fill,
+    }).portfolio,
+    recoveryLedger: RecoveryLedger.empty({ market }).applyFill({
+      strategyId: StrategyId.COIN_GRABBER,
+      fill,
+    }).ledger,
   }
 }
 
@@ -275,20 +320,27 @@ function makeActiveOrders() {
   ]
 }
 
-function makeEventPublisher(events, publish = () => ({ ok: true })) {
+function makeEventPublisher({ events, publish = () => ({ ok: true }) } = {}) {
   return {
     publish: (event) => {
       events.push(event)
       return publish(event)
     },
-    flush: async () => ({ ok: true, durable: true }),
+    flush: async () => ({
+      ok: true,
+      durable: true,
+    }),
   }
 }
 
 async function triggerStrategySafetyPause(harness) {
   return harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+    priceEvent: {
+      symbol: "DOGEUSDT",
+      price: "100",
+      timestamp: 1,
+    },
   })
 }
 
@@ -302,24 +354,36 @@ test("gates BUYs before canceling only registered BUYs and reconciles cancellati
   const [buyOne, buyTwo, recoverySell] = makeActiveOrders()
   const events = []
   const pauseFacts = []
-  let harness
-  harness = await createSafetyPauseHarness({
-    initialState: { orderRegistry: new OrderRegistry({ orders: [buyOne, buyTwo, recoverySell] }) },
-    strategyPolicy: { evaluate: () => { throw new Error("forced strategy evaluation failure") } },
+  const harnessRef = { current: null }
+  const harness = await createSafetyPauseHarness({
+    initialState: {
+      orderRegistry: new OrderRegistry({
+        orders: [buyOne, buyTwo, recoverySell],
+      }),
+    },
+    strategyPolicy: {
+      evaluate: () => {
+        throw new Error("forced strategy evaluation failure")
+      },
+    },
     hasUnownedOpenOrdersForSymbol: () => true,
     externalOrdersPolicy: "ignore",
     cancelWithFill: true,
     accountingApplied: true,
     onOperationalStateStrategyMarketPaused: async (fact) => {
       pauseFacts.push(fact)
-      return { ok: true, data: { durable: true } }
+      return {
+        ok: true,
+        data: { durable: true },
+      }
     },
     onCancelOrderStarted: () => {
-      assert.deepEqual(harness.engine.getPausedMarkets(), ["DOGEUSDT"])
+      assert.deepEqual(harnessRef.current.engine.getPausedMarkets(), ["DOGEUSDT"])
       assert.ok(events.some((event) => event.name === HARVESTER_EVENT_NAMES.STRATEGY_PAUSED))
     },
-    eventPublisher: makeEventPublisher(events),
+    eventPublisher: makeEventPublisher({ events }),
   })
+  harnessRef.current = harness
 
   const result = await triggerStrategySafetyPause(harness)
   assert.equal(result.ok, false)
@@ -328,7 +392,10 @@ test("gates BUYs before canceling only registered BUYs and reconciles cancellati
   assert.equal(harness.engine.getOrders().find(({ clientOrderId }) => clientOrderId === buyTwo.clientOrderId).status, "CANCELED")
   assert.equal(harness.engine.getOrders().find(({ clientOrderId }) => clientOrderId === recoverySell.clientOrderId).status, "OPEN")
   assert.equal(harness.accountedFills.length, 2)
-  assert.deepEqual(pauseFacts, [{ symbol: "DOGEUSDT", reason: "STRATEGY_EVALUATION_FAILED" }])
+  assert.deepEqual(pauseFacts, [{
+    symbol: "DOGEUSDT",
+    reason: "STRATEGY_EVALUATION_FAILED",
+  }])
 
   const duplicate = await harness.engine.processUserDataEvent({
     event: {
@@ -348,7 +415,7 @@ test("gates BUYs before canceling only registered BUYs and reconciles cancellati
 test("reports a complete safety pause when there are no owned BUYs", async () => {
   const harness = await createSafetyPauseHarness({
     strategyPolicy: { evaluate: () => { throw new Error("forced strategy evaluation failure") } },
-    eventPublisher: makeEventPublisher([]),
+    eventPublisher: makeEventPublisher({ events: [] }),
   })
   await triggerStrategySafetyPause(harness)
   assert.deepEqual(harness.cancellationIds, [])
@@ -371,9 +438,17 @@ test("keeps an UNKNOWN owned BUY blocked and raises a durable safety blocker", a
     onOperationalStateStrategyMarketPaused: async () => ({ ok: true, data: { durable: true } }),
     onSafetyBlockerRaised: async (blocker) => {
       raisedBlockers.push(blocker)
-      return { ok: true, data: { durable: true, record: { data: { blockerId: "strategy-pause-blocker-1" } } } }
+      return {
+        ok: true,
+        data: {
+          durable: true,
+          record: {
+            data: { blockerId: "strategy-pause-blocker-1" },
+          },
+        },
+      }
     },
-    eventPublisher: makeEventPublisher([]),
+    eventPublisher: makeEventPublisher({ events: [] }),
   })
 
   await triggerStrategySafetyPause(harness)
@@ -391,7 +466,11 @@ test("keeps an UNKNOWN owned BUY blocked and raises a durable safety blocker", a
       brokerOrderId,
       status,
     })),
-    [{ clientOrderId: buyOrder.clientOrderId, brokerOrderId: buyOrder.brokerOrderId, status: "UNKNOWN" }],
+    [{
+      clientOrderId: buyOrder.clientOrderId,
+      brokerOrderId: buyOrder.brokerOrderId,
+      status: "UNKNOWN",
+    }],
   )
   assert.ok(snapshot.blockers.includes("STRATEGY_PAUSE_CANCELLATION_INCOMPLETE"))
 })
@@ -413,11 +492,20 @@ test("keeps the BUY gate active when pause fact persistence and publication fail
     }),
     onSafetyBlockerRaised: async (blocker) => {
       raisedBlockers.push(blocker)
-      return { ok: true, data: { durable: true } }
+      return {
+        ok: true,
+        data: { durable: true },
+      }
     },
-    eventPublisher: makeEventPublisher(events, (event) => event.name === HARVESTER_EVENT_NAMES.STRATEGY_PAUSED
-      ? { ok: false, errors: [new Error("pause event publication failed")] }
-      : { ok: true }),
+    eventPublisher: makeEventPublisher({
+      events,
+      publish: (event) => event.name === HARVESTER_EVENT_NAMES.STRATEGY_PAUSED
+        ? {
+          ok: false,
+          errors: [new Error("pause event publication failed")],
+        }
+        : { ok: true },
+    }),
   })
 
   await triggerStrategySafetyPause(harness)
@@ -446,7 +534,10 @@ test("continues purpose-tagged recovery SELL evaluation and submission while saf
       if (evaluationCount === 1) {
         throw new Error("force the first strategy evaluation to pause")
       }
-      return conservativeStrategyPolicy.evaluate({ ...input, lastBuyPrice: "100" })
+      return conservativeStrategyPolicy.evaluate({
+        ...input,
+        lastBuyPrice: "100",
+      })
     },
   }
   const harness = await createSafetyPauseHarness({
@@ -463,7 +554,11 @@ test("continues purpose-tagged recovery SELL evaluation and submission while saf
   assert.equal(harness.engine.getOrders()[0].status, "CANCELED")
   const recovery = await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: { symbol: "DOGEUSDT", price: "105", timestamp: 2 },
+    priceEvent: {
+        symbol: "DOGEUSDT",
+        price: "105",
+        timestamp: 2,
+      },
   })
   assert.equal(recovery.ok, true, recovery.errors?.[0]?.message)
   assert.ok(harness.engine.getOrders().some((order) => order.side === "SELL" && ["OPEN", "PARTIALLY_FILLED"].includes(order.status)))
