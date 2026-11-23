@@ -155,13 +155,13 @@ function breakHtmlCommentOpeners(text) {
  */
 export function plain(text) {
   const normalized = removeHtmlComments(text)
-    .replace(/^\\s*(?:What\\b|Describe\\b|List\\b|Record\\b|Which\\b|Who\\b|How\\b|Summarize\\b|Complete when resolved\\b).*$/gim, '')
-    .replace(/^\\s*[-*]\\s*\\[[ xX]\\]\\s*(?:Observable outcome:?|TBD|TODO)?\\s*$/gim, '')
-    .replace(/^\\s*[-*]\\s*\\[[ xX]\\]\\s*(?:Regression test reproduces the original defect and passes after the fix\\.|Relevant failure and boundary cases are covered\\.|No existing behavior or invariant regresses\\.)\\s*$/gim, '')
-    .replace(/\\b(?:TBD|TODO)\\b/gi, '')
-    .replace(/[\\x60*_>#|]/g, '');
+    .replace(/^\s*(?:What\b|Describe\b|List\b|Record\b|Which\b|Who\b|How\b|Summarize\b|Complete when resolved\b).*$/gim, '')
+    .replace(/^\s*[-*]\s*\[[ xX]\]\s*(?:Observable outcome:?|TBD|TODO)?\s*$/gim, '')
+    .replace(/^\s*[-*]\s*\[[ xX]\]\s*(?:Regression test reproduces the original defect and passes after the fix\.|Relevant failure and boundary cases are covered\.|No existing behavior or invariant regresses\.)\s*$/gim, '')
+    .replace(/\b(?:TBD|TODO)\b/gi, '')
+    .replace(/[\x60*_>#|]/g, '');
 
-  return breakHtmlCommentOpeners(normalized).replace(/\\s+/g, ' ').trim();
+  return breakHtmlCommentOpeners(normalized).replace(/\s+/g, ' ').trim();
 }
 export function validateIssueBody(body) {
   if (typeof body !== 'string' || !body.trim()) {return ['Issue body is empty.'];}
