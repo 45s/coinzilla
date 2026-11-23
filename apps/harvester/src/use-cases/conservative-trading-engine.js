@@ -2928,6 +2928,7 @@ function createConservativeEnginePublicApi({ context } = {}) {
     waitForFreshMarketPrice: context.waitForFreshMarketPrice,
     processBookTicker: context.processBookTicker,
     beginShutdown: context.beginShutdown,
+    waitForShutdownGate: context.waitForShutdownGate,
     auditShutdownSafety: context.auditShutdownSafety,
     getShutdownSafetySnapshot: context.getShutdownSafetySnapshot,
     processUserDataEvent: context.processUserDataEvent,

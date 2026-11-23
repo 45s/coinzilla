@@ -88,7 +88,9 @@ Shared deterministic broker/runtime fixtures live in `test/bootstrap/start-harve
 ## Audit process
 
 - [2026-11-19 TESTNET Conservative session audit](audits/sessions/AUDIT_SESSION_2026-11-19_02-16-31Z.md) — latest historical session record: runbook gate conflict, external orders, failed shutdown safety proof and missing final evidence; no acceptance or exchange authorization.
-- [Conservative Recovery Lifecycle Audit](CONSERVATIVE_RECOVERY_LIFECYCLE_AUDIT.md) — acceptance evidence, confirmed outcomes, and the remaining recovery-SELL filter-freshness gap for #1359/#1362.
+- [Conservative Recovery Lifecycle Audit](CONSERVATIVE_RECOVERY_LIFECYCLE_AUDIT.md) — #1359/#1362 lifecycle evidence map, including sanitized archive reconstruction, exact fill accounting, late-fill safety and serialized shutdown proof.
+- [Conservative recovery archive review](CONSERVATIVE_RECOVERY_ARCHIVE_REVIEW_2026-11-23.md) — immutable 2026-11-22 source evidence, replay details and explicit historical unknowns.
+- [Issue #1789](https://github.com/45s/coinzilla/issues/1789) — separately tracks the 28 historical order-history projection failures.
 - [Harvester audit working rules](AUDIT_WORKING_RULES.md) — scope pointer to the repository-wide agent workflow and Harvester-specific audit boundaries.
 - [Harvester audit records index](audits/README.md) — historical evidence and investigation records.
 

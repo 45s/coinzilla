@@ -3,6 +3,7 @@ import assert from "node:assert/strict"
 import {
   Asset,
   CanonicalOrder,
+  Fill,
   Market,
   Money,
   Quantity,
@@ -261,7 +262,7 @@ async function createSafetyPauseHarness(options = {}) {
   }
 }
 
-function makeOrder({ side, clientOrderId, brokerOrderId, status = "OPEN", executedQuantity = "0" }) {
+function makeOrder({ side, clientOrderId, brokerOrderId, status = "OPEN", quantity = "1", executedQuantity = "0" }) {
   return new CanonicalOrder({
     clientOrderId,
     brokerOrderId,
@@ -273,7 +274,7 @@ function makeOrder({ side, clientOrderId, brokerOrderId, status = "OPEN", execut
       asset: quoteAsset,
     }),
     originalQuantity: new Quantity({
-      amount: "1",
+      amount: quantity,
       asset: baseAsset,
     }),
     executedQuantity: new Quantity({
@@ -284,6 +285,32 @@ function makeOrder({ side, clientOrderId, brokerOrderId, status = "OPEN", execut
     createdAt: 1,
     acknowledgedAt: 1,
     updatedAt: 1,
+    ...(status === "FILLED" ? { completedAt: 2 } : {}),
+  })
+}
+
+function makeLateSellFill({ order, tradeId }) {
+  return new Fill({
+    tradeId,
+    brokerOrderId: order.brokerOrderId,
+    clientOrderId: order.clientOrderId,
+    market,
+    side: "SELL",
+    price: new Money({
+      amount: "100",
+      asset: quoteAsset,
+    }),
+    quantity: new Quantity({
+      amount: order.originalQuantity.amount,
+      asset: baseAsset,
+    }),
+    quoteQuantity: new Money({
+      amount: "100",
+      asset: quoteAsset,
+    }),
+    executedAt: 10,
+    commissions: [],
+    commissionStatus: "COMPLETE",
   })
 }
 
@@ -451,6 +478,67 @@ test("gates BUYs before canceling only registered BUYs and reconciles cancellati
     recoverySell,
     pauseFacts,
   })
+})
+
+test("accounts a late recovery SELL fill exactly once after safety pause without reopening BUYs", async () => {
+  const [buyOne, buyTwo, recoverySell] = makeActiveOrders()
+  const harness = await createSafetyPauseHarness({
+    initialState: {
+      orderRegistry: new OrderRegistry({
+        orders: [buyOne, buyTwo, recoverySell],
+      }),
+    },
+    strategyPolicy: {
+      ...conservativeStrategyPolicy,
+      evaluate: () => {
+        throw new Error("force the safety pause before the late SELL report")
+      },
+    },
+    accountingApplied: true,
+    onOperationalStateStrategyMarketPaused: async () => ({
+      ok: true,
+      data: { durable: true },
+    }),
+  })
+
+  const pauseResult = await triggerStrategySafetyPause(harness)
+  assert.equal(pauseResult.ok, false, "The forced strategy evaluation failure must raise a safety pause.")
+  assert.deepEqual(harness.engine.getPausedMarkets(), ["DOGEUSDT"], "The DOGE safety pause must remain latched after the late SELL report.")
+  assert.deepEqual(harness.cancellationIds, [buyOne.brokerOrderId, buyTwo.brokerOrderId], "The safety pause must cancel only the two current-process-owned BUYs.")
+
+  const filledSell = makeOrder({
+    side: "SELL",
+    clientOrderId: recoverySell.clientOrderId,
+    brokerOrderId: recoverySell.brokerOrderId,
+    status: "FILLED",
+    quantity: "1",
+    executedQuantity: "1",
+  })
+  const event = {
+    eventType: "executionReport",
+    executionType: "TRADE",
+    executedOrder: filledSell,
+    fill: makeLateSellFill({
+      order: filledSell,
+      tradeId: "late-recovery-sell-fill",
+    }),
+  }
+  const result = await harness.engine.processUserDataEvent({ event })
+  assert.equal(result.ok, true, "A valid late recovery SELL fill must be accepted after the strategy safety pause.")
+  assert.equal(harness.accountedFills.length, 1, "The late recovery SELL fill must be applied exactly once.")
+  assert.equal(
+    harness.engine.getOrders().find(({ clientOrderId }) => clientOrderId === recoverySell.clientOrderId).status,
+    "FILLED",
+    "The canonical recovery SELL order must reflect its terminal FILLED report.",
+  )
+  assert.deepEqual(harness.engine.getPausedMarkets(), ["DOGEUSDT"], "The DOGE safety pause must remain latched after late-fill accounting.")
+  assert.equal(harness.orders.length, 0, "No new BUY or unrelated order may be submitted while the safety pause remains active.")
+
+  const duplicate = await harness.engine.processUserDataEvent({ event })
+  assert.equal(duplicate.ok, true, "An identical duplicate late SELL report must be accepted as an idempotent delivery.")
+  assert.equal(harness.accountedFills.length, 1, "Duplicate delivery must not apply the late SELL fill a second time.")
+  assert.deepEqual(harness.engine.getPausedMarkets(), ["DOGEUSDT"], "Duplicate delivery must not clear the latched DOGE safety pause.")
+  assert.equal(harness.orders.length, 0, "Duplicate delivery must not trigger another strategy order submission.")
 })
 
 test("reports a complete safety pause when there are no owned BUYs", async () => {
@@ -740,3 +828,4 @@ test("does not recursively retry a BUY cancellation when its failure raises the 
     "The strategy safety pause must remain incomplete while the owned BUY is UNKNOWN.",
   )
 })
+

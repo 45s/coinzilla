@@ -19,7 +19,8 @@
     "src/use-cases/reconcile-terminal-order-fills.js",
     "src/use-cases/fetch-account-trade-history.js",
     "src/use-cases/create-user-data-event-transition.js",
-    "src/domain/strategies/strategy-ids.js"
+    "src/domain/strategies/strategy-ids.js",
+    "src/use-cases/create-conservative-shutdown-safety.js"
   ],
   "behaviors": [
     {
@@ -204,6 +205,11 @@
           "path": "test/replays/doge-zro-conservative-replay.test.js",
           "name": "accounts distinct partial BUY fills when their cumulative order reports arrive out of order",
           "kind": "integration"
+        },
+        {
+          "path": "test/audits/2026-11-22-conservative-recovery-archive.test.js",
+          "name": "replays a duplicate archived SELL fill without double-counting proceeds or profit",
+          "kind": "integration"
         }
       ],
       "runtimeStatus": "active",
@@ -264,6 +270,26 @@
           "path": "src/domain/strategies/conservative/recovery-fill-accounting.test.js",
           "name": "rejects zero and negative quote notionals",
           "kind": "failure"
+        },
+        {
+          "path": "test/audits/2026-11-22-conservative-recovery-archive.test.js",
+          "name": "reconstructs all three archived recovery cycles with exact Portfolio and RecoveryLedger accounting",
+          "kind": "integration"
+        },
+        {
+          "path": "test/replays/2026-11-22-conservative-recovery-runtime-replay.test.js",
+          "name": "replays archived ZROUSDT fills and completes profitable exchange-constrained residual inventory",
+          "kind": "integration"
+        },
+        {
+          "path": "test/replays/2026-11-22-conservative-recovery-runtime-replay.test.js",
+          "name": "replays archived DOGEUSDT fills and completes profitable exchange-constrained residual inventory",
+          "kind": "integration"
+        },
+        {
+          "path": "test/replays/2026-11-22-conservative-recovery-runtime-replay.test.js",
+          "name": "replays archived ADAUSDT fills and completes profitable exchange-constrained residual inventory",
+          "kind": "integration"
         }
       ],
       "runtimeStatus": "active",
@@ -311,6 +337,26 @@
         {
           "path": "test/replays/doge-zro-conservative-replay.test.js",
           "name": "accounts partial recovery SELL executions and completes only after the terminal fill",
+          "kind": "integration"
+        },
+        {
+          "path": "test/audits/2026-11-22-conservative-recovery-archive.test.js",
+          "name": "reconstructs all three archived recovery cycles with exact Portfolio and RecoveryLedger accounting",
+          "kind": "integration"
+        },
+        {
+          "path": "test/replays/2026-11-22-conservative-recovery-runtime-replay.test.js",
+          "name": "replays archived ZROUSDT fills and completes profitable exchange-constrained residual inventory",
+          "kind": "integration"
+        },
+        {
+          "path": "test/replays/2026-11-22-conservative-recovery-runtime-replay.test.js",
+          "name": "replays archived DOGEUSDT fills and completes profitable exchange-constrained residual inventory",
+          "kind": "integration"
+        },
+        {
+          "path": "test/replays/2026-11-22-conservative-recovery-runtime-replay.test.js",
+          "name": "replays archived ADAUSDT fills and completes profitable exchange-constrained residual inventory",
           "kind": "integration"
         }
       ],
@@ -391,6 +437,26 @@
         {
           "path": "test/replays/doge-zro-conservative-replay.test.js",
           "name": "accounts partial recovery SELL executions and completes only after the terminal fill",
+          "kind": "integration"
+        },
+        {
+          "path": "test/audits/2026-11-22-conservative-recovery-archive.test.js",
+          "name": "keeps archived residuals in CONTINUE_SELL_THROUGH without inferring dust",
+          "kind": "normal"
+        },
+        {
+          "path": "test/replays/2026-11-22-conservative-recovery-runtime-replay.test.js",
+          "name": "replays archived ZROUSDT fills and completes profitable exchange-constrained residual inventory",
+          "kind": "integration"
+        },
+        {
+          "path": "test/replays/2026-11-22-conservative-recovery-runtime-replay.test.js",
+          "name": "replays archived DOGEUSDT fills and completes profitable exchange-constrained residual inventory",
+          "kind": "integration"
+        },
+        {
+          "path": "test/replays/2026-11-22-conservative-recovery-runtime-replay.test.js",
+          "name": "replays archived ADAUSDT fills and completes profitable exchange-constrained residual inventory",
           "kind": "integration"
         }
       ],
@@ -595,7 +661,8 @@
         "src/bootstrap/shutdown/create-shutdown-handler.js",
         "src/bootstrap/shutdown/create-conservative-shutdown-participant.js",
         "src/bootstrap/shutdown/create-strategy-shutdown-coordinator.js",
-        "src/infrastructure/process/create-harvester-process-identity.js"
+        "src/infrastructure/process/create-harvester-process-identity.js",
+        "src/use-cases/create-conservative-shutdown-safety.js"
       ],
       "tests": [
         {
@@ -636,6 +703,31 @@
         {
           "path": "src/infrastructure/process-lock/acquire-harvester-process-lock.test.js",
           "name": "does not remove a replacement lock after a stale-owner race",
+          "kind": "failure"
+        },
+        {
+          "path": "test/replays/2026-11-22-conservative-recovery-runtime-replay.test.js",
+          "name": "replays archived ZROUSDT fills and completes profitable exchange-constrained residual inventory",
+          "kind": "integration"
+        },
+        {
+          "path": "test/replays/2026-11-22-conservative-recovery-runtime-replay.test.js",
+          "name": "replays archived DOGEUSDT fills and completes profitable exchange-constrained residual inventory",
+          "kind": "integration"
+        },
+        {
+          "path": "test/replays/2026-11-22-conservative-recovery-runtime-replay.test.js",
+          "name": "replays archived ADAUSDT fills and completes profitable exchange-constrained residual inventory",
+          "kind": "integration"
+        },
+        {
+          "path": "src/use-cases/create-conservative-shutdown-safety.test.js",
+          "name": "drains in-flight transitions before clearing deferred evaluations for shutdown",
+          "kind": "failure"
+        },
+        {
+          "path": "src/bootstrap/shutdown/create-conservative-shutdown-participant.test.js",
+          "name": "waits for the serialized engine shutdown barrier before cancelling owned BUYs",
           "kind": "failure"
         }
       ],
@@ -886,6 +978,16 @@
         {
           "path": "src/use-cases/conservative-strategy-safety-pause.integration.test.js",
           "name": "does not recursively retry a BUY cancellation when its failure raises the strategy safety pause",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/conservative-strategy-safety-pause.integration.test.js",
+          "name": "accounts a late recovery SELL fill exactly once after safety pause without reopening BUYs",
+          "kind": "integration"
+        },
+        {
+          "path": "src/bootstrap/user-data/create-user-data-event-safety-halt.test.js",
+          "name": "routes REST/stream reconciliation failures through the account safety halt and applies a late SELL once to real projections",
           "kind": "failure"
         }
       ],
@@ -1652,6 +1754,24 @@
         "branches": 79.17,
         "functions": 100
       }
+    },
+    {
+      "path": "src/use-cases/create-conservative-shutdown-safety.js",
+      "baseline": {
+        "lines": 89.28,
+        "branches": 77.65,
+        "functions": 100
+      },
+      "minimum": {
+        "lines": 85,
+        "branches": 75,
+        "functions": 95
+      },
+      "latestObserved": {
+        "lines": 89.28,
+        "branches": 77.65,
+        "functions": 100
+      }
     }
   ],
   "runtimeScope": {
@@ -1670,17 +1790,17 @@
     ]
   },
   "latestCoverageMeasurement": {
-    "measuredAt": "2026-11-22T10:35:16Z",
-    "branch": "fix/harvester/closing-open-orders-audit-764-replay",
-    "prHeadSha": "410986aa99ba81601efc85231854fca1ad88e84f",
-    "workflowRunId": 45012989393,
-    "harvesterJobId": 137179167498,
+    "measuredAt": "2026-11-23T06:42:22Z",
+    "branch": "fix/harvester/1362-archive-reconstruction-preflight-20261123",
+    "prHeadSha": "a3350692af668f78d15e7dc03b07c1b3491a00df",
+    "workflowRunId": 45125806219,
+    "harvesterJobId": 137529748875,
     "aggregate": {
-      "lines": 90.48,
-      "branches": 83.5,
-      "functions": 95.97
+      "lines": 90.57,
+      "branches": 83.66,
+      "functions": 96.05
     },
-    "checkedCriticalModuleCount": 41,
+    "checkedCriticalModuleCount": 42,
     "gatePassed": true
   }
 }

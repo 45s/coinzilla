@@ -157,3 +157,47 @@ test("does not treat an external/manual open order as a Conservative-owned shutd
     "A market with no owned unresolved orders may be safe even when an unrelated manual order remains external.",
   )
 })
+
+test("drains in-flight transitions before clearing deferred evaluations for shutdown", async () => {
+  const state = createState()
+  let releaseTransition
+  const transitionGate = new Promise((resolve) => {
+    releaseTransition = resolve
+  })
+  let transitionQueue = Promise.resolve()
+  const runTransition = ({ task }) => {
+    const result = transitionQueue.then(task)
+    transitionQueue = result.catch(() => {})
+    return result
+  }
+  const safety = createConservativeShutdownSafety({
+    state,
+    pairs: {
+      BTCUSDT: { enabled: true },
+    },
+    runTransition,
+  })
+  const inFlightTransition = runTransition({
+    task: async () => {
+      await transitionGate
+      state.deferredEvaluations.add("BTCUSDT")
+      return { ok: true }
+    },
+  })
+
+  safety.beginShutdown()
+  assert.equal(
+    state.shutdownBuyGate,
+    true,
+    "The BUY gate must close synchronously before the serialized shutdown barrier drains.",
+  )
+  releaseTransition()
+  await inFlightTransition
+  await safety.waitForShutdownGate()
+
+  assert.equal(
+    state.deferredEvaluations.has("BTCUSDT"),
+    false,
+    "shutdown must clear deferred work after the transition that could add it has drained",
+  )
+})

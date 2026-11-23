@@ -90,3 +90,21 @@ The Telegram Command Center uses the feature-owned `OperatorQueryError` for fail
 | A trade-history failure is recorded for one market | The trade page could not be completed after order history succeeded | The completed order history remains persisted; the trade cursor remains unchanged. Other configured markets continue. The trade page is replayed on the next normal startup. |
 
 The operation error aggregates the original failures as causes. The relational `runtime_errors` projection stores only bounded, allowlisted and redacted context; inspect the session DEBUG/TRACE JSONL logs for complete stack/cause evidence. This diagnostic failure does not itself change trading readiness, order ownership, or exchange state. History coverage remains incomplete until the failed page is successfully synchronized.
+
+## Live order-history projection
+
+**Stable validation error code:** `HARVESTER_ORDER_HISTORY_RECORD_INVALID`
+
+This code means a canonical order lifecycle event could not be mapped into the best-effort relational order-history projection. It is distinct from `HARVESTER_ACCOUNT_HISTORY_SYNC_FAILED`, which describes paginated startup synchronization from the exchange.
+
+The structured observer diagnostic includes:
+
+- `component`: `order-history-observer`
+- `operation` and `persistenceStage` (for example `mapping` or `write`)
+- stable `errorCode`, `errorName`, and a bounded safe `field` when available
+- affected `symbol`, `eventId`, `eventName`, `eventSource`, and `sourceEventTimestamp`
+- safe provider/account/client-order identities
+
+The validation field is limited to an ASCII dotted identifier no longer than 128 characters. Raw order payloads and arbitrary exception messages are not logged. A projection failure is a history gap; it does not reverse a successful fill, mutate trading accounting, or authorize an exchange action.
+
+**Safe recovery:** inspect the reported field and event/market identity, compare the canonical order event with the owning order state, and fix the mapping/contract defect. Do not fabricate missing identity fields, edit exchange orders, or infer an invalid field from a historical log entry that did not preserve it. The 28 archived 2026-11-22 occurrences remain unattributed; the database dump has not been inspected.

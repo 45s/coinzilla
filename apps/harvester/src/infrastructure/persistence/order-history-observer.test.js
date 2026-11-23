@@ -224,3 +224,76 @@ test("drains accepted writes on close and unsubscribes before later events", asy
 
   assert.equal(writes, 1, "Events published after observer close must not enqueue database writes.")
 })
+
+function assertOrderHistoryFailureDiagnostic({ diagnostic, expectedField, expectedData }) {
+  assert.equal(diagnostic.component, "order-history-observer", "Diagnostics must identify the failing component.")
+  assert.equal(diagnostic.operation, "mapping", "Diagnostics must identify the failing mapping operation.")
+  assert.equal(diagnostic.persistenceStage, "mapping", "Diagnostics must retain the persistence stage.")
+  assert.equal(diagnostic.errorCode, "HARVESTER_ORDER_HISTORY_RECORD_INVALID", "Diagnostics must retain the stable error code.")
+  assert.equal(diagnostic.field, expectedField, "Diagnostics must expose the safe validation field.")
+  assert.equal(diagnostic.symbol, expectedData.market.symbol, "Diagnostics must identify the affected market.")
+  assert.equal(diagnostic.eventSource, "harvester", "Diagnostics must identify the event source.")
+  assert.equal(typeof diagnostic.sourceEventTimestamp, "string", "Diagnostics must retain the source event timestamp.")
+  assert.equal(diagnostic.eventName, HARVESTER_EVENT_NAMES.ORDER_UPDATED, "Diagnostics must identify the lifecycle event.")
+  assert.equal(typeof diagnostic.eventId, "string", "Diagnostics must retain the event correlation identity.")
+  assert.equal(diagnostic.providerInstanceId, expectedData.providerInstanceId, "Diagnostics must retain the safe provider identity.")
+  assert.equal(diagnostic.accountId, expectedData.accountId, "Diagnostics must retain the safe account identity.")
+  assert.equal(diagnostic.clientOrderId, expectedData.clientOrderId, "Diagnostics must retain the safe client-order identity.")
+}
+
+test("includes safe validation fields and order context in mapping-failure diagnostics", async (t) => {
+  const eventBus = new EventBus()
+  const logEntries = []
+  const observer = createOrderHistoryObserver({
+    eventBus,
+    repository: { upsert: async (record) => record },
+    environment: "testnet",
+    logger: {
+      error: (entry) => logEntries.push(entry),
+    },
+  })
+  t.after(async () => {
+    await observer.close()
+    await eventBus.close()
+  })
+
+  const invalidProviderData = createOrderHistoryEventData({
+    providerInstanceId: "",
+  })
+  const validMarketData = createOrderHistoryEventData()
+  const invalidMarketData = createOrderHistoryEventData({
+    market: {
+      ...validMarketData.market,
+      baseAsset: {
+        ...validMarketData.market.baseAsset,
+        code: "",
+      },
+    },
+  })
+  for (const data of [invalidProviderData, invalidMarketData]) {
+    eventBus.publish({
+      name: HARVESTER_EVENT_NAMES.ORDER_UPDATED,
+      source: "harvester",
+      data,
+    })
+  }
+  await eventBus.flush()
+  const result = await observer.flush()
+
+  assert.equal(result.ok, false, "Invalid order records must fail the history projection.")
+  assert.equal(result.errors.length, 2, "Both invalid records must retain their validation errors.")
+  assert.equal(result.errors[0].context.field, "providerInstanceId", "The first domain error must retain the invalid provider field.")
+  assert.equal(result.errors[1].context.field, "market.baseAsset.code", "The second domain error must retain the nested market field.")
+  assert.equal(logEntries.length, 2, "Each invalid event must produce one diagnostic.")
+
+  assertOrderHistoryFailureDiagnostic({
+    diagnostic: logEntries[0],
+    expectedField: "providerInstanceId",
+    expectedData: invalidProviderData,
+  })
+  assertOrderHistoryFailureDiagnostic({
+    diagnostic: logEntries[1],
+    expectedField: "market.baseAsset.code",
+    expectedData: invalidMarketData,
+  })
+})

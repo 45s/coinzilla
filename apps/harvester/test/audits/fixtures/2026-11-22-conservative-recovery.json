@@ -1,0 +1,1552 @@
+{
+  "schemaVersion": 1,
+  "source": {
+    "archiveRepository": "45s/coinzilla-archive",
+    "archiveCommit": "f283c90db9143c74683ae5bf9c7bb52e09590d56",
+    "archivePath": "archives/2026-11-22T17-35-17Z_77213df6",
+    "archiveSnapshotType": "selected-log-evidence",
+    "runtimeSessionId": "ebe7c1d3-ff7d-47db-b2fe-2e5ec9594c1c",
+    "runtimeCommitCaptured": false,
+    "factsPath": "archives/2026-11-22T17-35-17Z_77213df6/recovery-facts/facts.jsonl",
+    "factsSha256": "1b923c1a090904df601463d14681090165b7f8d50a3806e96655699d90a97295",
+    "factsManifestPath": "archives/2026-11-22T17-35-17Z_77213df6/recovery-facts/manifest.jsonl",
+    "factsManifestSha256": "3063f9ce829cce8a66a471672abee6b77ff52b6647b0b786381adc1db5f264bc",
+    "factsRecordCount": 49,
+    "lastSequence": 48,
+    "terminalLogPath": "archives/2026-11-22T17-35-17Z_77213df6/logs/cumulative/terminal.log",
+    "terminalLogSha256": "6ec912690afbfeb1d9c87c674647a34e11d855b2d59337c34ac58d54d2a93d33",
+    "terminalLogLineCount": 429,
+    "logSelection": {
+      "cumulative": "final-5-percent-of-each-file",
+      "sessions": "newest-session-directory-only; gzip-compressed"
+    },
+    "startupRetrySessionId": "403b10b2-17aa-4760-a6e9-c36453cd73e2",
+    "startupRetryLogs": [
+      {
+        "path": "logs/sessions/2026-11-22_11-10-47-403b10b2-17aa-4760-a6e9-c36453cd73e2/2026-11-22_11-10-47-403b10b2-17aa-4760-a6e9-c36453cd73e2.jsonl.gz",
+        "sha256": "2e955fa9298b1c34d305e55a3169ddee6562913f52cbfe796a9defae56b0b893"
+      },
+      {
+        "path": "logs/sessions/2026-11-22_11-10-47-403b10b2-17aa-4760-a6e9-c36453cd73e2/harvester.log.gz",
+        "sha256": "5f0e195220ef320cc9cd4ba54025274a63320c0e51d51a1b23e0838dc654bee8"
+      },
+      {
+        "path": "logs/sessions/2026-11-22_11-10-47-403b10b2-17aa-4760-a6e9-c36453cd73e2/terminal.log.gz",
+        "sha256": "38f224b9be32f90c7e0b6d4dc561980d145e77c0196fbaf93d5a35bdc6d3a78b"
+      },
+      {
+        "path": "logs/sessions/2026-11-22_11-10-47-403b10b2-17aa-4760-a6e9-c36453cd73e2/trace.log.gz",
+        "sha256": "6cdc6f262f28980a3de8828c01441f27f7a2cc841942b6df717178183ff7fb85"
+      }
+    ],
+    "databaseDump": {
+      "path": "archives/2026-11-22T17-35-17Z_77213df6/data/testnet/database-dump.json",
+      "sha256": "cc024ea0842bed65f53081263b5dbc668099c09beac14a8d2835660d357e744a",
+      "status": "PRESENT_NOT_INSPECTED"
+    },
+    "factChainTerminalDigest": "154720ef4b575e5a189fc6aa78fd9575917537d02e808403593ab4c09c8dd4b8",
+    "manifestChainTerminalDigest": "d4d5c84fa9857cf721f10955f17a816845900538779454e02d2dd6f80db65bef",
+    "manifestRecordCount": 49,
+    "manifestLastSequence": "48"
+  },
+  "transformation": {
+    "summary": "Sanitized projection of immutable recovery facts and selected cumulative terminal-log lines; no exchange calls or account mutations.",
+    "preserved": "Sequence, recorded/executed timestamps, symbol, broker/client order IDs, trade/fill IDs, side, exact decimal price/quantity/quote quantity, commission amount and asset, cycle outcome, cancellation outcome, safety pause/blocker, and source log line numbers.",
+    "removed": "Account identifiers, balances, unrelated assets, provider-instance identifiers, credentials/secrets, unrelated log lines, and unnecessary raw snapshot fields.",
+    "clock": "Terminal clock is observed at UTC+02:00 by matching fact timestamps; local clock strings are retained separately from UTC fact timestamps.",
+    "limitation": "The archive is selected-log evidence: cumulative logs are the final 5% and only the newest session directory is retained. The database dump is present but uninspected; no claim is made about its contents. The original runtime source commit is not recorded in PROCESS_STARTED or the archive manifest."
+  },
+  "factCounts": {
+    "LEDGER_INITIALIZED": 1,
+    "CONFIGURATION_BASELINE": 1,
+    "PROCESS_STARTED": 1,
+    "ACCOUNT_SNAPSHOT_CAPTURED": 2,
+    "ACCOUNT_OPEN_ORDERS_CAPTURED": 2,
+    "EXECUTION_FILL_APPLIED": 13,
+    "ORDER_CANCELLATION_INTENT": 10,
+    "ORDER_CANCELLATION_OUTCOME": 10,
+    "RECOVERY_CYCLE_NOT_COMPLETED": 3,
+    "STRATEGY_MARKET_PAUSED": 4,
+    "SAFETY_BLOCKER_RAISED": 2
+  },
+  "processStarted": {
+    "sequence": 2,
+    "recordedAt": "2026-11-22T08:52:02.207Z",
+    "runtimeSessionId": "ebe7c1d3-ff7d-47db-b2fe-2e5ec9594c1c",
+    "tradingEnabled": true,
+    "markets": [
+      "ADAUSDT",
+      "DOGEUSDT",
+      "LINEAUSDT",
+      "LINKUSDT",
+      "ZROUSDT"
+    ]
+  },
+  "fills": [
+    {
+      "sequence": 5,
+      "recordedAt": "2026-11-22T08:52:26.590Z",
+      "executedAt": 1795337545805,
+      "fillId": "binance:ZROUSDT:15735",
+      "tradeId": "15735",
+      "brokerOrderId": "1001129",
+      "clientOrderId": "h-dff68008c72c47a59368ad-2",
+      "symbol": "ZROUSDT",
+      "marketId": "binance:ZROUSDT",
+      "baseAssetId": "zro",
+      "quoteAssetId": "usdt",
+      "side": "BUY",
+      "price": "1.17",
+      "quantity": "5",
+      "quoteQuantity": "5.85",
+      "commissionStatus": "COMPLETE",
+      "commissions": [
+        {
+          "amount": "0.005",
+          "assetId": "zro",
+          "assetCode": "ZRO",
+          "quoteValue": null
+        }
+      ]
+    },
+    {
+      "sequence": 6,
+      "recordedAt": "2026-11-22T08:52:34.832Z",
+      "executedAt": 1795337554613,
+      "fillId": "binance:ZROUSDT:15736",
+      "tradeId": "15736",
+      "brokerOrderId": "1001131",
+      "clientOrderId": "h-dff68008c72c47a59368ad-4",
+      "symbol": "ZROUSDT",
+      "marketId": "binance:ZROUSDT",
+      "baseAssetId": "zro",
+      "quoteAssetId": "usdt",
+      "side": "BUY",
+      "price": "1.169",
+      "quantity": "5",
+      "quoteQuantity": "5.845",
+      "commissionStatus": "COMPLETE",
+      "commissions": [
+        {
+          "amount": "0.005",
+          "assetId": "zro",
+          "assetCode": "ZRO",
+          "quoteValue": null
+        }
+      ]
+    },
+    {
+      "sequence": 9,
+      "recordedAt": "2026-11-22T08:52:44.692Z",
+      "executedAt": 1795337564470,
+      "fillId": "binance:DOGEUSDT:303728",
+      "tradeId": "303728",
+      "brokerOrderId": "1931359",
+      "clientOrderId": "h-dff68008c72c47a59368ad-5",
+      "symbol": "DOGEUSDT",
+      "marketId": "binance:DOGEUSDT",
+      "baseAssetId": "doge",
+      "quoteAssetId": "usdt",
+      "side": "BUY",
+      "price": "0.05482",
+      "quantity": "400",
+      "quoteQuantity": "21.928",
+      "commissionStatus": "COMPLETE",
+      "commissions": [
+        {
+          "amount": "0.4",
+          "assetId": "doge",
+          "assetCode": "DOGE",
+          "quoteValue": null
+        }
+      ]
+    },
+    {
+      "sequence": 10,
+      "recordedAt": "2026-11-22T08:52:51.326Z",
+      "executedAt": 1795337571107,
+      "fillId": "binance:ZROUSDT:15737",
+      "tradeId": "15737",
+      "brokerOrderId": "1001134",
+      "clientOrderId": "h-dff68008c72c47a59368ad-8",
+      "symbol": "ZROUSDT",
+      "marketId": "binance:ZROUSDT",
+      "baseAssetId": "zro",
+      "quoteAssetId": "usdt",
+      "side": "BUY",
+      "price": "1.168",
+      "quantity": "5",
+      "quoteQuantity": "5.84",
+      "commissionStatus": "COMPLETE",
+      "commissions": [
+        {
+          "amount": "0.005",
+          "assetId": "zro",
+          "assetCode": "ZRO",
+          "quoteValue": null
+        }
+      ]
+    },
+    {
+      "sequence": 13,
+      "recordedAt": "2026-11-22T08:53:01.121Z",
+      "executedAt": 1795337580905,
+      "fillId": "binance:DOGEUSDT:303729",
+      "tradeId": "303729",
+      "brokerOrderId": "1931369",
+      "clientOrderId": "h-dff68008c72c47a59368ad-10",
+      "symbol": "DOGEUSDT",
+      "marketId": "binance:DOGEUSDT",
+      "baseAssetId": "doge",
+      "quoteAssetId": "usdt",
+      "side": "BUY",
+      "price": "0.05479",
+      "quantity": "400",
+      "quoteQuantity": "21.916",
+      "commissionStatus": "COMPLETE",
+      "commissions": [
+        {
+          "amount": "0.4",
+          "assetId": "doge",
+          "assetCode": "DOGE",
+          "quoteValue": null
+        }
+      ]
+    },
+    {
+      "sequence": 16,
+      "recordedAt": "2026-11-22T08:56:38.590Z",
+      "executedAt": 1795337798367,
+      "fillId": "binance:ZROUSDT:15738",
+      "tradeId": "15738",
+      "brokerOrderId": "1001139",
+      "clientOrderId": "h-dff68008c72c47a59368ad-12",
+      "symbol": "ZROUSDT",
+      "marketId": "binance:ZROUSDT",
+      "baseAssetId": "zro",
+      "quoteAssetId": "usdt",
+      "side": "BUY",
+      "price": "1.167",
+      "quantity": "5",
+      "quoteQuantity": "5.835",
+      "commissionStatus": "COMPLETE",
+      "commissions": [
+        {
+          "amount": "0.005",
+          "assetId": "zro",
+          "assetCode": "ZRO",
+          "quoteValue": null
+        }
+      ]
+    },
+    {
+      "sequence": 19,
+      "recordedAt": "2026-11-22T09:03:56.236Z",
+      "executedAt": 1795338236013,
+      "fillId": "binance:ZROUSDT:15740",
+      "tradeId": "15740",
+      "brokerOrderId": "1001163",
+      "clientOrderId": "h-dff68008c72c47a59368ad-15",
+      "symbol": "ZROUSDT",
+      "marketId": "binance:ZROUSDT",
+      "baseAssetId": "zro",
+      "quoteAssetId": "usdt",
+      "side": "SELL",
+      "price": "1.174",
+      "quantity": "19.95",
+      "quoteQuantity": "23.4213",
+      "commissionStatus": "COMPLETE",
+      "commissions": [
+        {
+          "amount": "0.0234213",
+          "assetId": "usdt",
+          "assetCode": "USDT",
+          "quoteValue": null
+        }
+      ]
+    },
+    {
+      "sequence": 22,
+      "recordedAt": "2026-11-22T09:10:02.900Z",
+      "executedAt": 1795338602671,
+      "fillId": "binance:DOGEUSDT:303737",
+      "tradeId": "303737",
+      "brokerOrderId": "1931380",
+      "clientOrderId": "h-dff68008c72c47a59368ad-14",
+      "symbol": "DOGEUSDT",
+      "marketId": "binance:DOGEUSDT",
+      "baseAssetId": "doge",
+      "quoteAssetId": "usdt",
+      "side": "BUY",
+      "price": "0.05476",
+      "quantity": "400",
+      "quoteQuantity": "21.904",
+      "commissionStatus": "COMPLETE",
+      "commissions": [
+        {
+          "amount": "0.4",
+          "assetId": "doge",
+          "assetCode": "DOGE",
+          "quoteValue": null
+        }
+      ]
+    },
+    {
+      "sequence": 25,
+      "recordedAt": "2026-11-22T09:15:11.010Z",
+      "executedAt": 1795338910781,
+      "fillId": "binance:DOGEUSDT:303738",
+      "tradeId": "303738",
+      "brokerOrderId": "1931687",
+      "clientOrderId": "h-dff68008c72c47a59368ad-18",
+      "symbol": "DOGEUSDT",
+      "marketId": "binance:DOGEUSDT",
+      "baseAssetId": "doge",
+      "quoteAssetId": "usdt",
+      "side": "BUY",
+      "price": "0.05473",
+      "quantity": "400",
+      "quoteQuantity": "21.892",
+      "commissionStatus": "COMPLETE",
+      "commissions": [
+        {
+          "amount": "0.4",
+          "assetId": "doge",
+          "assetCode": "DOGE",
+          "quoteValue": null
+        }
+      ]
+    },
+    {
+      "sequence": 30,
+      "recordedAt": "2026-11-22T09:21:57.642Z",
+      "executedAt": 1795339317405,
+      "fillId": "binance:DOGEUSDT:303742",
+      "tradeId": "303742",
+      "brokerOrderId": "1931754",
+      "clientOrderId": "h-dff68008c72c47a59368ad-19",
+      "symbol": "DOGEUSDT",
+      "marketId": "binance:DOGEUSDT",
+      "baseAssetId": "doge",
+      "quoteAssetId": "usdt",
+      "side": "SELL",
+      "price": "0.05501",
+      "quantity": "1595",
+      "quoteQuantity": "87.74095",
+      "commissionStatus": "COMPLETE",
+      "commissions": [
+        {
+          "amount": "0.08774095",
+          "assetId": "usdt",
+          "assetCode": "USDT",
+          "quoteValue": null
+        }
+      ]
+    },
+    {
+      "sequence": 35,
+      "recordedAt": "2026-11-22T09:31:08.324Z",
+      "executedAt": 1795339868096,
+      "fillId": "binance:ADAUSDT:145912",
+      "tradeId": "145912",
+      "brokerOrderId": "806225",
+      "clientOrderId": "h-dff68008c72c47a59368ad-20",
+      "symbol": "ADAUSDT",
+      "marketId": "binance:ADAUSDT",
+      "baseAssetId": "ada",
+      "quoteAssetId": "usdt",
+      "side": "BUY",
+      "price": "0.144",
+      "quantity": "50",
+      "quoteQuantity": "7.2",
+      "commissionStatus": "COMPLETE",
+      "commissions": [
+        {
+          "amount": "0.05",
+          "assetId": "ada",
+          "assetCode": "ADA",
+          "quoteValue": null
+        }
+      ]
+    },
+    {
+      "sequence": 36,
+      "recordedAt": "2026-11-22T09:44:28.883Z",
+      "executedAt": 1795340668650,
+      "fillId": "binance:ZROUSDT:15742",
+      "tradeId": "15742",
+      "brokerOrderId": "1001164",
+      "clientOrderId": "h-dff68008c72c47a59368ad-16",
+      "symbol": "ZROUSDT",
+      "marketId": "binance:ZROUSDT",
+      "baseAssetId": "zro",
+      "quoteAssetId": "usdt",
+      "side": "BUY",
+      "price": "1.166",
+      "quantity": "5",
+      "quoteQuantity": "5.83",
+      "commissionStatus": "COMPLETE",
+      "commissions": [
+        {
+          "amount": "0.005",
+          "assetId": "zro",
+          "assetCode": "ZRO",
+          "quoteValue": null
+        }
+      ]
+    },
+    {
+      "sequence": 46,
+      "recordedAt": "2026-11-22T09:53:33.814Z",
+      "executedAt": 1795341212976,
+      "fillId": "binance:ADAUSDT:145942",
+      "tradeId": "145942",
+      "brokerOrderId": "806319",
+      "clientOrderId": "h-dff68008c72c47a59368ad-21",
+      "symbol": "ADAUSDT",
+      "marketId": "binance:ADAUSDT",
+      "baseAssetId": "ada",
+      "quoteAssetId": "usdt",
+      "side": "SELL",
+      "price": "0.1455",
+      "quantity": "49.9",
+      "quoteQuantity": "7.26045",
+      "commissionStatus": "COMPLETE",
+      "commissions": [
+        {
+          "amount": "0.00726045",
+          "assetId": "usdt",
+          "assetCode": "USDT",
+          "quoteValue": null
+        }
+      ]
+    }
+  ],
+  "cycleOutcomes": [
+    {
+      "sequence": 20,
+      "recordedAt": "2026-11-22T09:03:56.862Z",
+      "symbol": "ZROUSDT",
+      "marketId": "binance:ZROUSDT",
+      "baseAssetId": "zro",
+      "quoteAssetId": "usdt",
+      "activeQuantity": "0.03",
+      "spent": "23.37",
+      "netSellProceeds": "23.3978787",
+      "realizedNetProfit": "0.0278787",
+      "minProfit": "0.01",
+      "keepQuantity": "0.01",
+      "reason": "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH",
+      "outcome": "CONTINUE_SELL_THROUGH",
+      "appliedFillIds": [
+        "binance:ZROUSDT:15735",
+        "binance:ZROUSDT:15736",
+        "binance:ZROUSDT:15737",
+        "binance:ZROUSDT:15738",
+        "binance:ZROUSDT:15740"
+      ]
+    },
+    {
+      "sequence": 31,
+      "recordedAt": "2026-11-22T09:21:58.268Z",
+      "symbol": "DOGEUSDT",
+      "marketId": "binance:DOGEUSDT",
+      "baseAssetId": "doge",
+      "quoteAssetId": "usdt",
+      "activeQuantity": "3.4",
+      "spent": "87.64",
+      "netSellProceeds": "87.65320905",
+      "realizedNetProfit": "0.01320905",
+      "minProfit": "0.01",
+      "keepQuantity": "1",
+      "reason": "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH",
+      "outcome": "CONTINUE_SELL_THROUGH",
+      "appliedFillIds": [
+        "binance:DOGEUSDT:303728",
+        "binance:DOGEUSDT:303729",
+        "binance:DOGEUSDT:303737",
+        "binance:DOGEUSDT:303738",
+        "binance:DOGEUSDT:303742"
+      ]
+    },
+    {
+      "sequence": 47,
+      "recordedAt": "2026-11-22T09:53:34.428Z",
+      "symbol": "ADAUSDT",
+      "marketId": "binance:ADAUSDT",
+      "baseAssetId": "ada",
+      "quoteAssetId": "usdt",
+      "activeQuantity": "0.05",
+      "spent": "7.2",
+      "netSellProceeds": "7.25318955",
+      "realizedNetProfit": "0.05318955",
+      "minProfit": "0.05",
+      "keepQuantity": "0",
+      "reason": "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH",
+      "outcome": "CONTINUE_SELL_THROUGH",
+      "appliedFillIds": [
+        "binance:ADAUSDT:145912",
+        "binance:ADAUSDT:145942"
+      ]
+    }
+  ],
+  "strategyPauses": [
+    {
+      "sequence": 21,
+      "recordedAt": "2026-11-22T09:03:57.197Z",
+      "symbol": "ZROUSDT",
+      "reason": "RECOVERY_CYCLE_COMPLETION_FAILED"
+    },
+    {
+      "sequence": 32,
+      "recordedAt": "2026-11-22T09:21:58.601Z",
+      "symbol": "DOGEUSDT",
+      "reason": "RECOVERY_CYCLE_COMPLETION_FAILED"
+    },
+    {
+      "sequence": 39,
+      "recordedAt": "2026-11-22T09:50:53.167Z",
+      "symbol": "LINKUSDT",
+      "reason": "UNKNOWN_OR_EXTERNAL_ORDER_EVENT"
+    },
+    {
+      "sequence": 45,
+      "recordedAt": "2026-11-22T09:53:33.771Z",
+      "symbol": "ADAUSDT",
+      "reason": "REST_STREAM_RECONCILIATION_FAILED"
+    }
+  ],
+  "cancellations": [
+    {
+      "symbol": "ZROUSDT",
+      "side": "SELL",
+      "orderId": "1001130",
+      "clientOrderId": "h-dff68008c72c47a59368ad-3",
+      "intentSequence": 7,
+      "intentAt": "2026-11-22T08:52:35.432Z",
+      "intentReason": "BUY_FILLED_RECALCULATE_RECOVERY_SELL",
+      "outcomeSequence": 8,
+      "outcomeAt": "2026-11-22T08:52:36.303Z",
+      "outcome": "CANCELED",
+      "outcomeReason": "BUY_FILLED_RECALCULATE_RECOVERY_SELL"
+    },
+    {
+      "symbol": "ZROUSDT",
+      "side": "SELL",
+      "orderId": "1001133",
+      "clientOrderId": "h-dff68008c72c47a59368ad-7",
+      "intentSequence": 11,
+      "intentAt": "2026-11-22T08:52:51.924Z",
+      "intentReason": "BUY_FILLED_RECALCULATE_RECOVERY_SELL",
+      "outcomeSequence": 12,
+      "outcomeAt": "2026-11-22T08:52:52.793Z",
+      "outcome": "CANCELED",
+      "outcomeReason": "BUY_FILLED_RECALCULATE_RECOVERY_SELL"
+    },
+    {
+      "symbol": "DOGEUSDT",
+      "side": "SELL",
+      "orderId": "1931368",
+      "clientOrderId": "h-dff68008c72c47a59368ad-9",
+      "intentSequence": 14,
+      "intentAt": "2026-11-22T08:53:01.712Z",
+      "intentReason": "BUY_FILLED_RECALCULATE_RECOVERY_SELL",
+      "outcomeSequence": 15,
+      "outcomeAt": "2026-11-22T08:53:02.578Z",
+      "outcome": "CANCELED",
+      "outcomeReason": "BUY_FILLED_RECALCULATE_RECOVERY_SELL"
+    },
+    {
+      "symbol": "ZROUSDT",
+      "side": "SELL",
+      "orderId": "1001138",
+      "clientOrderId": "h-dff68008c72c47a59368ad-11",
+      "intentSequence": 17,
+      "intentAt": "2026-11-22T08:56:39.202Z",
+      "intentReason": "BUY_FILLED_RECALCULATE_RECOVERY_SELL",
+      "outcomeSequence": 18,
+      "outcomeAt": "2026-11-22T08:56:40.082Z",
+      "outcome": "CANCELED",
+      "outcomeReason": "BUY_FILLED_RECALCULATE_RECOVERY_SELL"
+    },
+    {
+      "symbol": "DOGEUSDT",
+      "side": "SELL",
+      "orderId": "1931379",
+      "clientOrderId": "h-dff68008c72c47a59368ad-13",
+      "intentSequence": 23,
+      "intentAt": "2026-11-22T09:10:03.545Z",
+      "intentReason": "BUY_FILLED_RECALCULATE_RECOVERY_SELL",
+      "outcomeSequence": 24,
+      "outcomeAt": "2026-11-22T09:10:04.431Z",
+      "outcome": "CANCELED",
+      "outcomeReason": "BUY_FILLED_RECALCULATE_RECOVERY_SELL"
+    },
+    {
+      "symbol": "DOGEUSDT",
+      "side": "SELL",
+      "orderId": "1931686",
+      "clientOrderId": "h-dff68008c72c47a59368ad-17",
+      "intentSequence": 26,
+      "intentAt": "2026-11-22T09:15:11.624Z",
+      "intentReason": "BUY_FILLED_RECALCULATE_RECOVERY_SELL",
+      "outcomeSequence": 27,
+      "outcomeAt": "2026-11-22T09:15:12.498Z",
+      "outcome": "CANCELED",
+      "outcomeReason": "BUY_FILLED_RECALCULATE_RECOVERY_SELL"
+    },
+    {
+      "symbol": "ADAUSDT",
+      "side": "BUY",
+      "orderId": "806015",
+      "clientOrderId": "h-dff68008c72c47a59368ad-6",
+      "intentSequence": 28,
+      "intentAt": "2026-11-22T09:20:19.361Z",
+      "intentReason": "TRAILING_BUY_REPRICE",
+      "outcomeSequence": 29,
+      "outcomeAt": "2026-11-22T09:20:20.238Z",
+      "outcome": "CANCELED",
+      "outcomeReason": "TRAILING_BUY_REPRICE"
+    },
+    {
+      "symbol": "LINKUSDT",
+      "side": "BUY",
+      "orderId": "3028050",
+      "clientOrderId": "h-dff68008c72c47a59368ad-1",
+      "intentSequence": 37,
+      "intentAt": "2026-11-22T09:49:41.182Z",
+      "intentReason": "TRAILING_BUY_REPRICE",
+      "outcomeSequence": 38,
+      "outcomeAt": "2026-11-22T09:49:42.047Z",
+      "outcome": "CANCELED",
+      "outcomeReason": "TRAILING_BUY_REPRICE"
+    },
+    {
+      "symbol": "ADAUSDT",
+      "side": "BUY",
+      "orderId": "806321",
+      "clientOrderId": "h-dff68008c72c47a59368ad-22",
+      "intentSequence": 41,
+      "intentAt": "2026-11-22T09:51:19.949Z",
+      "intentReason": "ACCOUNT_INTEGRITY_FAILURE",
+      "outcomeSequence": 42,
+      "outcomeAt": "2026-11-22T09:51:20.823Z",
+      "outcome": "CANCELED",
+      "outcomeReason": "ACCOUNT_INTEGRITY_FAILURE"
+    },
+    {
+      "symbol": "LINKUSDT",
+      "side": "BUY",
+      "orderId": "3029796",
+      "clientOrderId": "h-dff68008c72c47a59368ad-23",
+      "intentSequence": 43,
+      "intentAt": "2026-11-22T09:51:21.495Z",
+      "intentReason": "ACCOUNT_INTEGRITY_FAILURE",
+      "outcomeSequence": 44,
+      "outcomeAt": "2026-11-22T09:51:22.366Z",
+      "outcome": "CANCELED",
+      "outcomeReason": "ACCOUNT_INTEGRITY_FAILURE"
+    }
+  ],
+  "safetyBlockers": [
+    {
+      "sequence": 40,
+      "recordedAt": "2026-11-22T09:50:53.208Z",
+      "symbol": "LINKUSDT",
+      "reason": "ORDER_REGISTRY_MATCH",
+      "scope": "MARKET"
+    },
+    {
+      "sequence": 48,
+      "recordedAt": "2026-11-22T09:56:16.869Z",
+      "symbol": "DOGEUSDT",
+      "reason": "ORDER_REGISTRY_MATCH",
+      "scope": "MARKET"
+    }
+  ],
+  "accountSnapshots": [
+    {
+      "sequence": 3,
+      "recordedAt": "2026-11-22T08:52:19.237Z",
+      "phase": "PREFLIGHT",
+      "auditStatus": "COMPLETE"
+    },
+    {
+      "sequence": 33,
+      "recordedAt": "2026-11-22T09:28:49.362Z",
+      "phase": "RECOVERY",
+      "auditStatus": "COMPLETE"
+    }
+  ],
+  "openOrderSnapshots": [
+    {
+      "sequence": 4,
+      "recordedAt": "2026-11-22T08:52:19.554Z",
+      "phase": "PREFLIGHT",
+      "orderCount": 14,
+      "readiness": "BLOCKED",
+      "blockReasons": [
+        "UNOWNED_OPEN_ORDERS:14"
+      ],
+      "trackedOrders": []
+    },
+    {
+      "sequence": 34,
+      "recordedAt": "2026-11-22T09:28:49.407Z",
+      "phase": "RECOVERY",
+      "orderCount": 17,
+      "readiness": "BLOCKED",
+      "blockReasons": [
+        "UNOWNED_OPEN_ORDERS:14"
+      ],
+      "trackedOrders": [
+        {
+          "symbol": "LINKUSDT",
+          "side": "BUY",
+          "orderId": "3028050",
+          "clientOrderId": "h-dff68008c72c47a59368ad-1",
+          "status": "NEW"
+        },
+        {
+          "symbol": "ZROUSDT",
+          "side": "BUY",
+          "orderId": "1001164",
+          "clientOrderId": "h-dff68008c72c47a59368ad-16",
+          "status": "NEW"
+        }
+      ]
+    }
+  ],
+  "orderTimelines": [
+    {
+      "symbol": "ZROUSDT",
+      "orderId": "1001164",
+      "clientOrderId": "h-dff68008c72c47a59368ad-16",
+      "submittedAtUtc": "2026-11-22T08:56:41Z",
+      "acceptedAtUtc": "2026-11-22T08:56:41Z",
+      "pauseAtUtc": "2026-11-22T09:03:57.197Z",
+      "openOrderSnapshotAtUtc": "2026-11-22T09:28:49.407Z",
+      "fillExecutedAtUtc": "2026-11-22T09:44:28.650Z",
+      "fillRecordedAtUtc": "2026-11-22T09:44:28.883Z",
+      "cancellationIntentPresent": false
+    },
+    {
+      "symbol": "LINKUSDT",
+      "orderId": "3029796",
+      "clientOrderId": "h-dff68008c72c47a59368ad-23",
+      "submittedAtUtc": "2026-11-22T09:49:42Z",
+      "acceptedAtUtc": "2026-11-22T09:49:42Z",
+      "pauseAtUtc": "2026-11-22T09:50:53.167Z",
+      "cancellationIntentAtUtc": "2026-11-22T09:51:21.495Z",
+      "cancellationOutcomeAtUtc": "2026-11-22T09:51:22.366Z",
+      "cancellationReason": "ACCOUNT_INTEGRITY_FAILURE",
+      "cancellationOutcome": "CANCELED"
+    }
+  ],
+  "externalSellEvents": [
+    {
+      "line": 405,
+      "localTime": "11:50:53",
+      "symbol": "LINKUSDT",
+      "side": "SELL",
+      "disposition": "REJECTED_UNOWNED_OR_INVALID"
+    },
+    {
+      "line": 417,
+      "localTime": "11:56:16",
+      "symbol": "DOGEUSDT",
+      "side": "SELL",
+      "disposition": "REJECTED_UNOWNED_OR_INVALID"
+    }
+  ],
+  "adaSellTiming": {
+    "fillId": "binance:ADAUSDT:145942",
+    "executedAtUtc": "2026-11-22T09:53:32.976Z",
+    "recordedAtUtc": "2026-11-22T09:53:33.814Z",
+    "pauseAtUtc": "2026-11-22T09:53:33.771Z"
+  },
+  "terminalEvidence": [
+    {
+      "line": 182,
+      "text": "10:52:04 Supported exchange trading rules validated {\"symbol\":\"ZROUSDT\"}"
+    },
+    {
+      "line": 183,
+      "text": "10:52:04 Supported exchange trading rules validated {\"symbol\":\"DOGEUSDT\"}"
+    },
+    {
+      "line": 184,
+      "text": "10:52:05 Supported exchange trading rules validated {\"symbol\":\"ADAUSDT\"}"
+    },
+    {
+      "line": 185,
+      "text": "10:52:05 Supported exchange trading rules validated {\"symbol\":\"LINEAUSDT\"}"
+    },
+    {
+      "line": 186,
+      "text": "10:52:18 ERROR Exchange history synchronization failed; historical coverage is incomplete {\"symbol\":\"ZROUSDT\",\"operation\":\"synchronizeStartupExchangeHistory\",\"errorCode\":\"HARVESTER_ACCOUNT_HISTORY..."
+    },
+    {
+      "line": 191,
+      "text": "10:52:19 Account-wide open-orders snapshot recorded; unowned orders remain external and untouched {\"orderCount\":14,\"readiness\":\"BLOCKED\",\"symbols\":[\"LINKUSDT\",\"DOGEUSDT\",\"ZROUSDT\"]}"
+    },
+    {
+      "line": 192,
+      "text": "10:52:19 Conservative TESTNET startup checks passed; current account audit is complete {\"enabledSymbols\":[\"LINKUSDT\",\"ZROUSDT\",\"DOGEUSDT\",\"ADAUSDT\",\"LINEAUSDT\"]}"
+    },
+    {
+      "line": 193,
+      "text": "10:52:19 Conservative TESTNET trading engine activated"
+    },
+    {
+      "line": 276,
+      "text": "10:56:41 🪙 CG SUBMITTED #pending ZROUSDT BUY 5 @ 1.166 h-dff68008c72c47a59368ad-16"
+    },
+    {
+      "line": 277,
+      "text": "10:56:41 🪙 CG ACCEPTED #1001164 ZROUSDT BUY 5 @ 1.166"
+    },
+    {
+      "line": 282,
+      "text": "11:03:57 ERROR paused a trading pair {\"symbol\":\"ZROUSDT\",\"reason\":\"RECOVERY_CYCLE_COMPLETION_FAILED\"}"
+    },
+    {
+      "line": 334,
+      "text": "11:21:58 🪙 CG FILLED #1931754 DOGEUSDT SELL 1595 @ 0.05501"
+    },
+    {
+      "line": 335,
+      "text": "11:21:58 ERROR paused a trading pair {\"symbol\":\"DOGEUSDT\",\"reason\":\"RECOVERY_CYCLE_COMPLETION_FAILED\"}"
+    },
+    {
+      "line": 398,
+      "text": "11:44:28 🪙 CG PORTFOLIO ZROUSDT: amount: 5.025 | earned: 0 | spent: 29.2 | net: -5.802"
+    },
+    {
+      "line": 399,
+      "text": "11:44:29 🪙 CG FILLED #1001164 ZROUSDT BUY 5 @ 1.166"
+    },
+    {
+      "line": 402,
+      "text": "11:49:42 🪙 CG SUBMITTED #pending LINKUSDT BUY 2 @ 8.659 h-dff68008c72c47a59368ad-23"
+    },
+    {
+      "line": 403,
+      "text": "11:49:42 🪙 CG ACCEPTED #3029796 LINKUSDT BUY 2 @ 8.659"
+    },
+    {
+      "line": 404,
+      "text": "11:50:53 ERROR paused a trading pair {\"symbol\":\"LINKUSDT\",\"reason\":\"UNKNOWN_OR_EXTERNAL_ORDER_EVENT\"}"
+    },
+    {
+      "line": 405,
+      "text": "11:50:53 ERROR rejected an unowned or invalid order event {\"symbol\":\"LINKUSDT\",\"side\":\"SELL\"}"
+    },
+    {
+      "line": 408,
+      "text": "11:51:21 🪙 CG CANCEL REQUESTED #3029796 LINKUSDT BUY 2 @ 8.659"
+    },
+    {
+      "line": 409,
+      "text": "11:51:22 🪙 CG CANCELLED #3029796 LINKUSDT BUY 2 @ 8.659 | Executed: 0 | Cancelled: 2"
+    },
+    {
+      "line": 410,
+      "text": "11:53:33 ERROR paused a trading pair {\"symbol\":\"ADAUSDT\",\"reason\":\"REST_STREAM_RECONCILIATION_FAILED\"}"
+    },
+    {
+      "line": 411,
+      "text": "11:53:33 ERROR account-integrity safety halt could not fully reconcile owned orders before BUY cancellation"
+    },
+    {
+      "line": 414,
+      "text": "11:53:33 🪙 CG PORTFOLIO ADAUSDT: amount: 0.05 | earned: 0 | spent: 7.2 | net: 0.053"
+    },
+    {
+      "line": 415,
+      "text": "11:53:34 🪙 CG FILLED #806319 ADAUSDT SELL 49.9 @ 0.1455"
+    },
+    {
+      "line": 416,
+      "text": "11:56:16 ERROR paused a trading pair {\"symbol\":\"DOGEUSDT\",\"reason\":\"UNKNOWN_OR_EXTERNAL_ORDER_EVENT\"}"
+    },
+    {
+      "line": 417,
+      "text": "11:56:16 ERROR rejected an unowned or invalid order event {\"symbol\":\"DOGEUSDT\",\"side\":\"SELL\"}"
+    },
+    {
+      "line": 418,
+      "text": "12:12:59 ERROR Binance market stream error"
+    },
+    {
+      "line": 419,
+      "text": "13:10:28 shutdown requested"
+    },
+    {
+      "line": 420,
+      "text": "13:10:28 shutdown state established"
+    },
+    {
+      "line": 421,
+      "text": "13:10:28 shutdown phase STRATEGY_SHUTDOWN_SAFETY STARTED"
+    }
+  ],
+  "submissionFacts": {
+    "intentCount": 0,
+    "outcomeCount": 0
+  },
+  "filterEvidence": {
+    "filterSnapshotFactCount": 0,
+    "terminalLogRecordsOnlyRulesValidated": true,
+    "lotSizeValuesCaptured": false,
+    "minNotionalValuesCaptured": false,
+    "databaseDumpStatus": "PRESENT_NOT_INSPECTED"
+  },
+  "shutdownEvidence": {
+    "shutdownSafetyStarted": true,
+    "processStoppedFactPresent": false,
+    "closingAccountSnapshotPresent": false,
+    "closingOpenOrdersSnapshotPresent": false,
+    "terminalLogLastRelevantLine": [
+      {
+        "line": 419,
+        "text": "13:10:28 shutdown requested"
+      },
+      {
+        "line": 420,
+        "text": "13:10:28 shutdown state established"
+      },
+      {
+        "line": 421,
+        "text": "13:10:28 shutdown phase STRATEGY_SHUTDOWN_SAFETY STARTED"
+      }
+    ]
+  },
+  "startupRetry": {
+    "sessionId": "403b10b2-17aa-4760-a6e9-c36453cd73e2",
+    "startedAt": "2026-11-22T11:10:47.050Z",
+    "failedAt": "2026-11-22T11:10:50.242Z",
+    "reportedCommitPrefix": "3c78fcd",
+    "failure": "Provider-attributed execution fill has no preceding submission intent: h-dff68008c72c47a59368ad-2",
+    "processLockRetained": true
+  },
+  "pauseDispositions": [
+    {
+      "symbol": "ZROUSDT",
+      "reason": "RECOVERY_CYCLE_COMPLETION_FAILED",
+      "disposition": "UNRESOLVED_HISTORICAL_CAUSE; the recorded CONTINUE_SELL_THROUGH outcome is consistent with residual inventory, but the subsequent generic pause lacks full trace and historical filter evidence."
+    },
+    {
+      "symbol": "DOGEUSDT",
+      "reason": "RECOVERY_CYCLE_COMPLETION_FAILED",
+      "disposition": "UNRESOLVED_HISTORICAL_CAUSE; the recorded CONTINUE_SELL_THROUGH outcome is consistent with residual inventory, but the subsequent generic pause lacks full trace and historical filter evidence."
+    },
+    {
+      "symbol": "ADAUSDT",
+      "reason": "REST_STREAM_RECONCILIATION_FAILED",
+      "disposition": "FAIL_CLOSED_RECONCILIATION_PAUSE; SELL execution preceded the pause, although the fill fact was recorded afterward."
+    },
+    {
+      "symbol": "LINKUSDT",
+      "reason": "UNKNOWN_OR_EXTERNAL_ORDER_EVENT",
+      "disposition": "FAIL_CLOSED_REJECTION_OF_UNOWNED_SELL; the owned BUY was canceled later under ACCOUNT_INTEGRITY_FAILURE."
+    },
+    {
+      "symbol": "DOGEUSDT",
+      "reason": "UNKNOWN_OR_EXTERNAL_ORDER_EVENT",
+      "disposition": "FAIL_CLOSED_REJECTION_OF_UNOWNED_SELL while the market was already paused; blocker evidence is present."
+    }
+  ],
+  "factDigestChain": [
+    {
+      "sequence": "0",
+      "digest": "dbae7832c27cd8524311c470e57c927ccf416b930eb3c592155e8117da6bd849",
+      "previousDigest": null
+    },
+    {
+      "sequence": "1",
+      "digest": "c09b725ecf8296c5e7a0de61d18f37b3cac1a57c333f6fd0864553961778fd41",
+      "previousDigest": "dbae7832c27cd8524311c470e57c927ccf416b930eb3c592155e8117da6bd849"
+    },
+    {
+      "sequence": "2",
+      "digest": "7a84c0e90f3b83e28791b23f9a87f28764b278d485fa6d7ec9674baf57711e9b",
+      "previousDigest": "c09b725ecf8296c5e7a0de61d18f37b3cac1a57c333f6fd0864553961778fd41"
+    },
+    {
+      "sequence": "3",
+      "digest": "0e05269b1d5c23917d457726e25fa5200cde57bb7a37acc2c9bb2b6dbdd85b27",
+      "previousDigest": "7a84c0e90f3b83e28791b23f9a87f28764b278d485fa6d7ec9674baf57711e9b"
+    },
+    {
+      "sequence": "4",
+      "digest": "235aa8a32cb4d63b14e2cf60dc49e11555cf4ceee7b64c023c9b2baff4f047ef",
+      "previousDigest": "0e05269b1d5c23917d457726e25fa5200cde57bb7a37acc2c9bb2b6dbdd85b27"
+    },
+    {
+      "sequence": "5",
+      "digest": "0b3a6bd0012f384e001f0247a9607a4f389ff0382395915d53c699ada48a2a8f",
+      "previousDigest": "235aa8a32cb4d63b14e2cf60dc49e11555cf4ceee7b64c023c9b2baff4f047ef"
+    },
+    {
+      "sequence": "6",
+      "digest": "ff407b0ea65e6b0a58a474502878875bcc9d4681047b8bf858867c997735c9c6",
+      "previousDigest": "0b3a6bd0012f384e001f0247a9607a4f389ff0382395915d53c699ada48a2a8f"
+    },
+    {
+      "sequence": "7",
+      "digest": "c22f319286e4c553c1d2ad2f01cbd184beef6e3756158cd246be8e4ad2b83eeb",
+      "previousDigest": "ff407b0ea65e6b0a58a474502878875bcc9d4681047b8bf858867c997735c9c6"
+    },
+    {
+      "sequence": "8",
+      "digest": "c4ad2db4c8adf29d6d4c5fcaf13d6458a3d437e9f321f24c5994b3530c5eed38",
+      "previousDigest": "c22f319286e4c553c1d2ad2f01cbd184beef6e3756158cd246be8e4ad2b83eeb"
+    },
+    {
+      "sequence": "9",
+      "digest": "e04145486b01bd2c052a5dcb143b41e9c2866ab099432f3d4b66bb3d70a44ae2",
+      "previousDigest": "c4ad2db4c8adf29d6d4c5fcaf13d6458a3d437e9f321f24c5994b3530c5eed38"
+    },
+    {
+      "sequence": "10",
+      "digest": "394a6d82ec0875d75e4e5a3a190802515bd85dd2ec304ead78d3dccded032576",
+      "previousDigest": "e04145486b01bd2c052a5dcb143b41e9c2866ab099432f3d4b66bb3d70a44ae2"
+    },
+    {
+      "sequence": "11",
+      "digest": "9078e85bb4d7dc4c7df951f71bc8eee5b7b81dda71057b4571cff0715b8877d7",
+      "previousDigest": "394a6d82ec0875d75e4e5a3a190802515bd85dd2ec304ead78d3dccded032576"
+    },
+    {
+      "sequence": "12",
+      "digest": "76d51d3d7aa91ce7e48bb2af7015cbc9e7634774b90e1100b51d24c7d8b3de4e",
+      "previousDigest": "9078e85bb4d7dc4c7df951f71bc8eee5b7b81dda71057b4571cff0715b8877d7"
+    },
+    {
+      "sequence": "13",
+      "digest": "f48cc85c549e41b9713ead04168eb86b70e721dce8b4abe285422ee1c006f319",
+      "previousDigest": "76d51d3d7aa91ce7e48bb2af7015cbc9e7634774b90e1100b51d24c7d8b3de4e"
+    },
+    {
+      "sequence": "14",
+      "digest": "2a24c813bc13a7a8b9cae252c8bc60bd4bf471b20f1f375e7421ef4455a38a3b",
+      "previousDigest": "f48cc85c549e41b9713ead04168eb86b70e721dce8b4abe285422ee1c006f319"
+    },
+    {
+      "sequence": "15",
+      "digest": "363c5fbb41f0465e097aa661a25f3db2c6903b3445151d6cce12aec401e040f2",
+      "previousDigest": "2a24c813bc13a7a8b9cae252c8bc60bd4bf471b20f1f375e7421ef4455a38a3b"
+    },
+    {
+      "sequence": "16",
+      "digest": "33ee5f5a02a0a5c023b3672f30ddce5dd5e1e248eb2a9da264cf11f754e174f3",
+      "previousDigest": "363c5fbb41f0465e097aa661a25f3db2c6903b3445151d6cce12aec401e040f2"
+    },
+    {
+      "sequence": "17",
+      "digest": "4dc733df9dd9a04f7cbfa3d19891a20138cb2df3e850a872964f238f730d30d4",
+      "previousDigest": "33ee5f5a02a0a5c023b3672f30ddce5dd5e1e248eb2a9da264cf11f754e174f3"
+    },
+    {
+      "sequence": "18",
+      "digest": "9787417b15b915253ccfe01ab810c3a14528294bbbb6f4ea76d4ac642bd8eeb2",
+      "previousDigest": "4dc733df9dd9a04f7cbfa3d19891a20138cb2df3e850a872964f238f730d30d4"
+    },
+    {
+      "sequence": "19",
+      "digest": "62b20807efb85abf27be8b7d7dfc00f31f1569746bc11af9a9d7e0f37cd1ac05",
+      "previousDigest": "9787417b15b915253ccfe01ab810c3a14528294bbbb6f4ea76d4ac642bd8eeb2"
+    },
+    {
+      "sequence": "20",
+      "digest": "1f08bc337cc2aaa1ace5d8ef9ce590faae3188556c2ac8b8ce58ddaed67285a7",
+      "previousDigest": "62b20807efb85abf27be8b7d7dfc00f31f1569746bc11af9a9d7e0f37cd1ac05"
+    },
+    {
+      "sequence": "21",
+      "digest": "f236324de98b2cad0f430eaaa27c2fb1c8b7d2b00dff0b66301cb626bc42f8ca",
+      "previousDigest": "1f08bc337cc2aaa1ace5d8ef9ce590faae3188556c2ac8b8ce58ddaed67285a7"
+    },
+    {
+      "sequence": "22",
+      "digest": "8b6c0e2affe23b8fbacd1f35ceb447674551eb4c2c9b33a4c7efa01fa847393a",
+      "previousDigest": "f236324de98b2cad0f430eaaa27c2fb1c8b7d2b00dff0b66301cb626bc42f8ca"
+    },
+    {
+      "sequence": "23",
+      "digest": "e2ae959b364dfb492978fee9b296fe0e81f2df01d2630d5445dee5e93c9d2834",
+      "previousDigest": "8b6c0e2affe23b8fbacd1f35ceb447674551eb4c2c9b33a4c7efa01fa847393a"
+    },
+    {
+      "sequence": "24",
+      "digest": "d96fb7c97d05e8fb2e5307f72d0b440f65eddaf52977199f23a2c11fd4d80793",
+      "previousDigest": "e2ae959b364dfb492978fee9b296fe0e81f2df01d2630d5445dee5e93c9d2834"
+    },
+    {
+      "sequence": "25",
+      "digest": "7fee7fb7bde3718349f5a03783228fe2dccf9cc8a9d5a5514d5c287d1f499102",
+      "previousDigest": "d96fb7c97d05e8fb2e5307f72d0b440f65eddaf52977199f23a2c11fd4d80793"
+    },
+    {
+      "sequence": "26",
+      "digest": "788723db3621b2e223239e8b9fe5899c0b135bfa70aca080c9a7e284c358c341",
+      "previousDigest": "7fee7fb7bde3718349f5a03783228fe2dccf9cc8a9d5a5514d5c287d1f499102"
+    },
+    {
+      "sequence": "27",
+      "digest": "b2459952375d19ff988b23cec19a2436627237baa51bb9b9f7ce42576f79d7e4",
+      "previousDigest": "788723db3621b2e223239e8b9fe5899c0b135bfa70aca080c9a7e284c358c341"
+    },
+    {
+      "sequence": "28",
+      "digest": "9c5b538be074b5f854b00c4f3a8f18e22ec51495a116e5f2f186d24c44b9757b",
+      "previousDigest": "b2459952375d19ff988b23cec19a2436627237baa51bb9b9f7ce42576f79d7e4"
+    },
+    {
+      "sequence": "29",
+      "digest": "a6ec1f64c65108cd0168859f323cdffdd17c34a1e83d4efd83d25ede9aee3f5e",
+      "previousDigest": "9c5b538be074b5f854b00c4f3a8f18e22ec51495a116e5f2f186d24c44b9757b"
+    },
+    {
+      "sequence": "30",
+      "digest": "09148e61944ff23235964701f11ec63d41391b60ff2adaeaa4f521408cb2d805",
+      "previousDigest": "a6ec1f64c65108cd0168859f323cdffdd17c34a1e83d4efd83d25ede9aee3f5e"
+    },
+    {
+      "sequence": "31",
+      "digest": "2b70f146eeeafd5af150471452fb377a675ef0bb552df9dfa096c523e8cd4bd4",
+      "previousDigest": "09148e61944ff23235964701f11ec63d41391b60ff2adaeaa4f521408cb2d805"
+    },
+    {
+      "sequence": "32",
+      "digest": "b42ae78c0752023f0f55697a4a6d0e3a1a576c211de32b8564bf0483b34cc616",
+      "previousDigest": "2b70f146eeeafd5af150471452fb377a675ef0bb552df9dfa096c523e8cd4bd4"
+    },
+    {
+      "sequence": "33",
+      "digest": "463bf8afbe7ebaa8f21028d84e61c123a29e6f1a3dc5136fbc78507d4f6650a6",
+      "previousDigest": "b42ae78c0752023f0f55697a4a6d0e3a1a576c211de32b8564bf0483b34cc616"
+    },
+    {
+      "sequence": "34",
+      "digest": "3332f43c0ef9326b2b731a7ef6e83ae1c9d2246b8c3abe7a432406255a04a2fc",
+      "previousDigest": "463bf8afbe7ebaa8f21028d84e61c123a29e6f1a3dc5136fbc78507d4f6650a6"
+    },
+    {
+      "sequence": "35",
+      "digest": "92567416706d3cd7e9d35ee808b8a1ccb3ddc7c56413bc0b5cec0dc8dcebf6fc",
+      "previousDigest": "3332f43c0ef9326b2b731a7ef6e83ae1c9d2246b8c3abe7a432406255a04a2fc"
+    },
+    {
+      "sequence": "36",
+      "digest": "1bd4d8de9a8ef46d107619ef5356b47125b036e5d3b1d7d5c7d3d94ce7d1fbc7",
+      "previousDigest": "92567416706d3cd7e9d35ee808b8a1ccb3ddc7c56413bc0b5cec0dc8dcebf6fc"
+    },
+    {
+      "sequence": "37",
+      "digest": "d47c1853bcb25d1c33ee0b326dcea4a8b536f1a47e3b7e90de8b6f3a3ee2d106",
+      "previousDigest": "1bd4d8de9a8ef46d107619ef5356b47125b036e5d3b1d7d5c7d3d94ce7d1fbc7"
+    },
+    {
+      "sequence": "38",
+      "digest": "d56b1c809830129f3ec6d7e1a31be65f8547d2631c66656b47a79158b896f2a1",
+      "previousDigest": "d47c1853bcb25d1c33ee0b326dcea4a8b536f1a47e3b7e90de8b6f3a3ee2d106"
+    },
+    {
+      "sequence": "39",
+      "digest": "54dd30ad4c48907df7e774fcd39bc26d93d51cad3baf5615469e43c8803afdd5",
+      "previousDigest": "d56b1c809830129f3ec6d7e1a31be65f8547d2631c66656b47a79158b896f2a1"
+    },
+    {
+      "sequence": "40",
+      "digest": "7c7b2ffe47ab5236e5065e5a6c42dca83450675bc3a424ecb96bd103a071aff2",
+      "previousDigest": "54dd30ad4c48907df7e774fcd39bc26d93d51cad3baf5615469e43c8803afdd5"
+    },
+    {
+      "sequence": "41",
+      "digest": "e24ce53dc7bfa4c97246a74346b7b179b8a7184e498080edf2c5cd9a6e57189d",
+      "previousDigest": "7c7b2ffe47ab5236e5065e5a6c42dca83450675bc3a424ecb96bd103a071aff2"
+    },
+    {
+      "sequence": "42",
+      "digest": "11231c59229c9abf85a7299c0bf3a82d1413ebeee1eb2ccd2eea6f5181411e5d",
+      "previousDigest": "e24ce53dc7bfa4c97246a74346b7b179b8a7184e498080edf2c5cd9a6e57189d"
+    },
+    {
+      "sequence": "43",
+      "digest": "ff51a37e540ecd785b91e2bebf76f8eb7e1122103b95e66fb5a54ad19e3001b9",
+      "previousDigest": "11231c59229c9abf85a7299c0bf3a82d1413ebeee1eb2ccd2eea6f5181411e5d"
+    },
+    {
+      "sequence": "44",
+      "digest": "b46d344f154302363496cbaf48ccc4b196ac4eace5d8e7c6be3aaee5000646de",
+      "previousDigest": "ff51a37e540ecd785b91e2bebf76f8eb7e1122103b95e66fb5a54ad19e3001b9"
+    },
+    {
+      "sequence": "45",
+      "digest": "db4135e6d16fa5855285557e0a3d2ea31d58bfbea2f2dfbdace5da684fba7cfd",
+      "previousDigest": "b46d344f154302363496cbaf48ccc4b196ac4eace5d8e7c6be3aaee5000646de"
+    },
+    {
+      "sequence": "46",
+      "digest": "dacf5fff916168fdd6c5c2e273c0d4ebd5fd19584a38fec397452a4427216af1",
+      "previousDigest": "db4135e6d16fa5855285557e0a3d2ea31d58bfbea2f2dfbdace5da684fba7cfd"
+    },
+    {
+      "sequence": "47",
+      "digest": "e15d8d541f6c7c35963e28e29b884f858ea0d95e3970deec46e60762273b32a9",
+      "previousDigest": "dacf5fff916168fdd6c5c2e273c0d4ebd5fd19584a38fec397452a4427216af1"
+    },
+    {
+      "sequence": "48",
+      "digest": "154720ef4b575e5a189fc6aa78fd9575917537d02e808403593ab4c09c8dd4b8",
+      "previousDigest": "e15d8d541f6c7c35963e28e29b884f858ea0d95e3970deec46e60762273b32a9"
+    }
+  ],
+  "manifestDigestChain": [
+    {
+      "sequence": "0",
+      "digest": "48a1815efaf2ea4036462a3ad847b824bf1dfc4306762fafeb317d7e8eeb0f64",
+      "previousManifestDigest": null,
+      "lastCommittedDigest": "dbae7832c27cd8524311c470e57c927ccf416b930eb3c592155e8117da6bd849",
+      "recordCount": "1"
+    },
+    {
+      "sequence": "1",
+      "digest": "4e9126ebc14269727446719c6841369c912a404afefc427918bf41df970499d3",
+      "previousManifestDigest": "48a1815efaf2ea4036462a3ad847b824bf1dfc4306762fafeb317d7e8eeb0f64",
+      "lastCommittedDigest": "c09b725ecf8296c5e7a0de61d18f37b3cac1a57c333f6fd0864553961778fd41",
+      "recordCount": "2"
+    },
+    {
+      "sequence": "2",
+      "digest": "50c5de7235a5f02765ebd903b34e7e08c5fc3b862155c2c3952f6dc413ef9d09",
+      "previousManifestDigest": "4e9126ebc14269727446719c6841369c912a404afefc427918bf41df970499d3",
+      "lastCommittedDigest": "7a84c0e90f3b83e28791b23f9a87f28764b278d485fa6d7ec9674baf57711e9b",
+      "recordCount": "3"
+    },
+    {
+      "sequence": "3",
+      "digest": "08a34e6185ac3c3e844ef0b441eb33ea48e3b7d8874106aac907686037e91615",
+      "previousManifestDigest": "50c5de7235a5f02765ebd903b34e7e08c5fc3b862155c2c3952f6dc413ef9d09",
+      "lastCommittedDigest": "0e05269b1d5c23917d457726e25fa5200cde57bb7a37acc2c9bb2b6dbdd85b27",
+      "recordCount": "4"
+    },
+    {
+      "sequence": "4",
+      "digest": "734c9e69e1f48ec1bd2f0ff2d254bb5db8f302f4b89088acf3810720f06eb8b5",
+      "previousManifestDigest": "08a34e6185ac3c3e844ef0b441eb33ea48e3b7d8874106aac907686037e91615",
+      "lastCommittedDigest": "235aa8a32cb4d63b14e2cf60dc49e11555cf4ceee7b64c023c9b2baff4f047ef",
+      "recordCount": "5"
+    },
+    {
+      "sequence": "5",
+      "digest": "1ed27c0b2ffee0bece7e250672b534a32ec2b420622220382a324b69d9b8b629",
+      "previousManifestDigest": "734c9e69e1f48ec1bd2f0ff2d254bb5db8f302f4b89088acf3810720f06eb8b5",
+      "lastCommittedDigest": "0b3a6bd0012f384e001f0247a9607a4f389ff0382395915d53c699ada48a2a8f",
+      "recordCount": "6"
+    },
+    {
+      "sequence": "6",
+      "digest": "ac3f951d1f3a91a9fc16c3de14f78d270ef200f2f06bb6b04f4864e62fff2ee7",
+      "previousManifestDigest": "1ed27c0b2ffee0bece7e250672b534a32ec2b420622220382a324b69d9b8b629",
+      "lastCommittedDigest": "ff407b0ea65e6b0a58a474502878875bcc9d4681047b8bf858867c997735c9c6",
+      "recordCount": "7"
+    },
+    {
+      "sequence": "7",
+      "digest": "e0a609786c1e75c45cae08f962b7f783ea8bbd1f8a56b6f220a1ff27c10fdd9e",
+      "previousManifestDigest": "ac3f951d1f3a91a9fc16c3de14f78d270ef200f2f06bb6b04f4864e62fff2ee7",
+      "lastCommittedDigest": "c22f319286e4c553c1d2ad2f01cbd184beef6e3756158cd246be8e4ad2b83eeb",
+      "recordCount": "8"
+    },
+    {
+      "sequence": "8",
+      "digest": "98d359c536ae66c0a1cc1a4cad1d9a03e97c1c3b67e60b740162884aea42a153",
+      "previousManifestDigest": "e0a609786c1e75c45cae08f962b7f783ea8bbd1f8a56b6f220a1ff27c10fdd9e",
+      "lastCommittedDigest": "c4ad2db4c8adf29d6d4c5fcaf13d6458a3d437e9f321f24c5994b3530c5eed38",
+      "recordCount": "9"
+    },
+    {
+      "sequence": "9",
+      "digest": "c3cd5ced0041ee6a9ef05fdbd36c596b05d722f1cd5c286e0766c773e0267e55",
+      "previousManifestDigest": "98d359c536ae66c0a1cc1a4cad1d9a03e97c1c3b67e60b740162884aea42a153",
+      "lastCommittedDigest": "e04145486b01bd2c052a5dcb143b41e9c2866ab099432f3d4b66bb3d70a44ae2",
+      "recordCount": "10"
+    },
+    {
+      "sequence": "10",
+      "digest": "0ec90a77ef070c295c0ff72256f3c40a7c50ebbf4e844b35b99ced5c6a843db7",
+      "previousManifestDigest": "c3cd5ced0041ee6a9ef05fdbd36c596b05d722f1cd5c286e0766c773e0267e55",
+      "lastCommittedDigest": "394a6d82ec0875d75e4e5a3a190802515bd85dd2ec304ead78d3dccded032576",
+      "recordCount": "11"
+    },
+    {
+      "sequence": "11",
+      "digest": "28c6f648088589da3e980b57ef321787afa76a587f2f705485111b62b22ba2b9",
+      "previousManifestDigest": "0ec90a77ef070c295c0ff72256f3c40a7c50ebbf4e844b35b99ced5c6a843db7",
+      "lastCommittedDigest": "9078e85bb4d7dc4c7df951f71bc8eee5b7b81dda71057b4571cff0715b8877d7",
+      "recordCount": "12"
+    },
+    {
+      "sequence": "12",
+      "digest": "281f8c56df0243a9984b6ba3344bf6598f5459590262752718f3fd0fe1b8fa2e",
+      "previousManifestDigest": "28c6f648088589da3e980b57ef321787afa76a587f2f705485111b62b22ba2b9",
+      "lastCommittedDigest": "76d51d3d7aa91ce7e48bb2af7015cbc9e7634774b90e1100b51d24c7d8b3de4e",
+      "recordCount": "13"
+    },
+    {
+      "sequence": "13",
+      "digest": "c411de121b71af6795449ff1e4981c9a15766754ac68fde25bba4cbde9e1a13f",
+      "previousManifestDigest": "281f8c56df0243a9984b6ba3344bf6598f5459590262752718f3fd0fe1b8fa2e",
+      "lastCommittedDigest": "f48cc85c549e41b9713ead04168eb86b70e721dce8b4abe285422ee1c006f319",
+      "recordCount": "14"
+    },
+    {
+      "sequence": "14",
+      "digest": "705e2255ce2774b54542809d4aafe27c8eeab5376dc7ae2aa24fe735ded305be",
+      "previousManifestDigest": "c411de121b71af6795449ff1e4981c9a15766754ac68fde25bba4cbde9e1a13f",
+      "lastCommittedDigest": "2a24c813bc13a7a8b9cae252c8bc60bd4bf471b20f1f375e7421ef4455a38a3b",
+      "recordCount": "15"
+    },
+    {
+      "sequence": "15",
+      "digest": "f53cb9371eae830458ec76f880eda99d8f4c27f05cda54ac32e6f3a3d230335f",
+      "previousManifestDigest": "705e2255ce2774b54542809d4aafe27c8eeab5376dc7ae2aa24fe735ded305be",
+      "lastCommittedDigest": "363c5fbb41f0465e097aa661a25f3db2c6903b3445151d6cce12aec401e040f2",
+      "recordCount": "16"
+    },
+    {
+      "sequence": "16",
+      "digest": "f2d1d9f7ff531b7094fc8354d1eb55bc6874ef0cb17b5eb12b4bfcfe4e328fee",
+      "previousManifestDigest": "f53cb9371eae830458ec76f880eda99d8f4c27f05cda54ac32e6f3a3d230335f",
+      "lastCommittedDigest": "33ee5f5a02a0a5c023b3672f30ddce5dd5e1e248eb2a9da264cf11f754e174f3",
+      "recordCount": "17"
+    },
+    {
+      "sequence": "17",
+      "digest": "8f4c2ff7b7390b6ac31e05718f4828585ff9588622409959a77c12fab4890a5d",
+      "previousManifestDigest": "f2d1d9f7ff531b7094fc8354d1eb55bc6874ef0cb17b5eb12b4bfcfe4e328fee",
+      "lastCommittedDigest": "4dc733df9dd9a04f7cbfa3d19891a20138cb2df3e850a872964f238f730d30d4",
+      "recordCount": "18"
+    },
+    {
+      "sequence": "18",
+      "digest": "ff9fbd40ecb4f4be423d142a46d1880856b98b6ba95ac15b85eac6ed67d85d1f",
+      "previousManifestDigest": "8f4c2ff7b7390b6ac31e05718f4828585ff9588622409959a77c12fab4890a5d",
+      "lastCommittedDigest": "9787417b15b915253ccfe01ab810c3a14528294bbbb6f4ea76d4ac642bd8eeb2",
+      "recordCount": "19"
+    },
+    {
+      "sequence": "19",
+      "digest": "57090ec44cecddc4c9c18d9109ac76f7e134b8dafa7dacc7bd41055dc80b5413",
+      "previousManifestDigest": "ff9fbd40ecb4f4be423d142a46d1880856b98b6ba95ac15b85eac6ed67d85d1f",
+      "lastCommittedDigest": "62b20807efb85abf27be8b7d7dfc00f31f1569746bc11af9a9d7e0f37cd1ac05",
+      "recordCount": "20"
+    },
+    {
+      "sequence": "20",
+      "digest": "f276d815cec2368640f9852d28d2ec712b0017aff68f4b710a97e1103642ca8e",
+      "previousManifestDigest": "57090ec44cecddc4c9c18d9109ac76f7e134b8dafa7dacc7bd41055dc80b5413",
+      "lastCommittedDigest": "1f08bc337cc2aaa1ace5d8ef9ce590faae3188556c2ac8b8ce58ddaed67285a7",
+      "recordCount": "21"
+    },
+    {
+      "sequence": "21",
+      "digest": "a74ea3878d896d9f258d44464eef2317e7ed3e87989aad8d62f20b384e265a07",
+      "previousManifestDigest": "f276d815cec2368640f9852d28d2ec712b0017aff68f4b710a97e1103642ca8e",
+      "lastCommittedDigest": "f236324de98b2cad0f430eaaa27c2fb1c8b7d2b00dff0b66301cb626bc42f8ca",
+      "recordCount": "22"
+    },
+    {
+      "sequence": "22",
+      "digest": "15a0132928d4f9b465efb92da78415ad04acd08362ecc5ba4e487dc4518b3fcb",
+      "previousManifestDigest": "a74ea3878d896d9f258d44464eef2317e7ed3e87989aad8d62f20b384e265a07",
+      "lastCommittedDigest": "8b6c0e2affe23b8fbacd1f35ceb447674551eb4c2c9b33a4c7efa01fa847393a",
+      "recordCount": "23"
+    },
+    {
+      "sequence": "23",
+      "digest": "cbaaa15b7d39c88c0acaea52ed11d5cf826ed86a6273877ed2a20857f67dff5c",
+      "previousManifestDigest": "15a0132928d4f9b465efb92da78415ad04acd08362ecc5ba4e487dc4518b3fcb",
+      "lastCommittedDigest": "e2ae959b364dfb492978fee9b296fe0e81f2df01d2630d5445dee5e93c9d2834",
+      "recordCount": "24"
+    },
+    {
+      "sequence": "24",
+      "digest": "1bfe3dd41d6566c5b3d02f2e89c8ce01256142c7e5afc295b6bc16bfb5c5493f",
+      "previousManifestDigest": "cbaaa15b7d39c88c0acaea52ed11d5cf826ed86a6273877ed2a20857f67dff5c",
+      "lastCommittedDigest": "d96fb7c97d05e8fb2e5307f72d0b440f65eddaf52977199f23a2c11fd4d80793",
+      "recordCount": "25"
+    },
+    {
+      "sequence": "25",
+      "digest": "2a95c89b1249f9ade9e3f100180521c40e55bb61fabf8deaa831aa08272acef0",
+      "previousManifestDigest": "1bfe3dd41d6566c5b3d02f2e89c8ce01256142c7e5afc295b6bc16bfb5c5493f",
+      "lastCommittedDigest": "7fee7fb7bde3718349f5a03783228fe2dccf9cc8a9d5a5514d5c287d1f499102",
+      "recordCount": "26"
+    },
+    {
+      "sequence": "26",
+      "digest": "6a24c0faada3fc7f62c5cec27e92eadaa8da756179a427ca10b24944b75b9097",
+      "previousManifestDigest": "2a95c89b1249f9ade9e3f100180521c40e55bb61fabf8deaa831aa08272acef0",
+      "lastCommittedDigest": "788723db3621b2e223239e8b9fe5899c0b135bfa70aca080c9a7e284c358c341",
+      "recordCount": "27"
+    },
+    {
+      "sequence": "27",
+      "digest": "43fecf35e31aa99a9ba72a735699b358e7be98f720e3784869c34542d62561eb",
+      "previousManifestDigest": "6a24c0faada3fc7f62c5cec27e92eadaa8da756179a427ca10b24944b75b9097",
+      "lastCommittedDigest": "b2459952375d19ff988b23cec19a2436627237baa51bb9b9f7ce42576f79d7e4",
+      "recordCount": "28"
+    },
+    {
+      "sequence": "28",
+      "digest": "d727667b41763efc5fee7e79eb5e5b07ec22258053c3b122705a7e6c1ddf1742",
+      "previousManifestDigest": "43fecf35e31aa99a9ba72a735699b358e7be98f720e3784869c34542d62561eb",
+      "lastCommittedDigest": "9c5b538be074b5f854b00c4f3a8f18e22ec51495a116e5f2f186d24c44b9757b",
+      "recordCount": "29"
+    },
+    {
+      "sequence": "29",
+      "digest": "3e517464a02977c3a657db5115565dda875f4a046a90d2fbc665ca1c230dc614",
+      "previousManifestDigest": "d727667b41763efc5fee7e79eb5e5b07ec22258053c3b122705a7e6c1ddf1742",
+      "lastCommittedDigest": "a6ec1f64c65108cd0168859f323cdffdd17c34a1e83d4efd83d25ede9aee3f5e",
+      "recordCount": "30"
+    },
+    {
+      "sequence": "30",
+      "digest": "e05f068bb95284ac12e2f111a804a8b122e990885602a9050ebe2fbd5561c5be",
+      "previousManifestDigest": "3e517464a02977c3a657db5115565dda875f4a046a90d2fbc665ca1c230dc614",
+      "lastCommittedDigest": "09148e61944ff23235964701f11ec63d41391b60ff2adaeaa4f521408cb2d805",
+      "recordCount": "31"
+    },
+    {
+      "sequence": "31",
+      "digest": "8f57506ce18db26ac8ca54fe9742ff517814e509fba570531da1eacc99058f79",
+      "previousManifestDigest": "e05f068bb95284ac12e2f111a804a8b122e990885602a9050ebe2fbd5561c5be",
+      "lastCommittedDigest": "2b70f146eeeafd5af150471452fb377a675ef0bb552df9dfa096c523e8cd4bd4",
+      "recordCount": "32"
+    },
+    {
+      "sequence": "32",
+      "digest": "0a6c351b986d19999c066b9554e6e4227bbff6edccb4248a39db036a7b886517",
+      "previousManifestDigest": "8f57506ce18db26ac8ca54fe9742ff517814e509fba570531da1eacc99058f79",
+      "lastCommittedDigest": "b42ae78c0752023f0f55697a4a6d0e3a1a576c211de32b8564bf0483b34cc616",
+      "recordCount": "33"
+    },
+    {
+      "sequence": "33",
+      "digest": "347265d4d14fa1497b9cab5d9ee578f49d0da42b8d4f4c9d8c9bc076d41dcb37",
+      "previousManifestDigest": "0a6c351b986d19999c066b9554e6e4227bbff6edccb4248a39db036a7b886517",
+      "lastCommittedDigest": "463bf8afbe7ebaa8f21028d84e61c123a29e6f1a3dc5136fbc78507d4f6650a6",
+      "recordCount": "34"
+    },
+    {
+      "sequence": "34",
+      "digest": "90200c03b82237468b41f8159b4b4f40e13283345fb64c43efd4194308174417",
+      "previousManifestDigest": "347265d4d14fa1497b9cab5d9ee578f49d0da42b8d4f4c9d8c9bc076d41dcb37",
+      "lastCommittedDigest": "3332f43c0ef9326b2b731a7ef6e83ae1c9d2246b8c3abe7a432406255a04a2fc",
+      "recordCount": "35"
+    },
+    {
+      "sequence": "35",
+      "digest": "022cda483afb8ed12b26aa77ef7bb7958f0a6aeb36949cd070e7e0e39b550100",
+      "previousManifestDigest": "90200c03b82237468b41f8159b4b4f40e13283345fb64c43efd4194308174417",
+      "lastCommittedDigest": "92567416706d3cd7e9d35ee808b8a1ccb3ddc7c56413bc0b5cec0dc8dcebf6fc",
+      "recordCount": "36"
+    },
+    {
+      "sequence": "36",
+      "digest": "8115ad1423350ab8389cc165261350f5ddbb790d545a512f3d78456f400338f0",
+      "previousManifestDigest": "022cda483afb8ed12b26aa77ef7bb7958f0a6aeb36949cd070e7e0e39b550100",
+      "lastCommittedDigest": "1bd4d8de9a8ef46d107619ef5356b47125b036e5d3b1d7d5c7d3d94ce7d1fbc7",
+      "recordCount": "37"
+    },
+    {
+      "sequence": "37",
+      "digest": "340e22682c4095195ef8609f838f643a0e84a24b7297ef46f17cf41deb24ce11",
+      "previousManifestDigest": "8115ad1423350ab8389cc165261350f5ddbb790d545a512f3d78456f400338f0",
+      "lastCommittedDigest": "d47c1853bcb25d1c33ee0b326dcea4a8b536f1a47e3b7e90de8b6f3a3ee2d106",
+      "recordCount": "38"
+    },
+    {
+      "sequence": "38",
+      "digest": "25c42ed9543523289a92ffc8c28a5c08fa3296dcda5511dcd108ffb19dba2100",
+      "previousManifestDigest": "340e22682c4095195ef8609f838f643a0e84a24b7297ef46f17cf41deb24ce11",
+      "lastCommittedDigest": "d56b1c809830129f3ec6d7e1a31be65f8547d2631c66656b47a79158b896f2a1",
+      "recordCount": "39"
+    },
+    {
+      "sequence": "39",
+      "digest": "e1369aa3e48f2351ef7d398c3406e8bfff1b95de5c910f25b066bf0bccc788da",
+      "previousManifestDigest": "25c42ed9543523289a92ffc8c28a5c08fa3296dcda5511dcd108ffb19dba2100",
+      "lastCommittedDigest": "54dd30ad4c48907df7e774fcd39bc26d93d51cad3baf5615469e43c8803afdd5",
+      "recordCount": "40"
+    },
+    {
+      "sequence": "40",
+      "digest": "af1aea8efa9681facb4970c61ae3c8212b2456280ea5b8de83805b592c3a0b5d",
+      "previousManifestDigest": "e1369aa3e48f2351ef7d398c3406e8bfff1b95de5c910f25b066bf0bccc788da",
+      "lastCommittedDigest": "7c7b2ffe47ab5236e5065e5a6c42dca83450675bc3a424ecb96bd103a071aff2",
+      "recordCount": "41"
+    },
+    {
+      "sequence": "41",
+      "digest": "3bbe0086003269d7acdf45b07703312592a66ef7019ebfd15dc669a2cc16903c",
+      "previousManifestDigest": "af1aea8efa9681facb4970c61ae3c8212b2456280ea5b8de83805b592c3a0b5d",
+      "lastCommittedDigest": "e24ce53dc7bfa4c97246a74346b7b179b8a7184e498080edf2c5cd9a6e57189d",
+      "recordCount": "42"
+    },
+    {
+      "sequence": "42",
+      "digest": "bed253df27517cbb73e970d3c4af7e6349218ae6fe0391532cfa7fabf6b0d02d",
+      "previousManifestDigest": "3bbe0086003269d7acdf45b07703312592a66ef7019ebfd15dc669a2cc16903c",
+      "lastCommittedDigest": "11231c59229c9abf85a7299c0bf3a82d1413ebeee1eb2ccd2eea6f5181411e5d",
+      "recordCount": "43"
+    },
+    {
+      "sequence": "43",
+      "digest": "c15a3a138117e4146ecd126c0b5cab62b05cf56898ae86ba09ade343ff9a798d",
+      "previousManifestDigest": "bed253df27517cbb73e970d3c4af7e6349218ae6fe0391532cfa7fabf6b0d02d",
+      "lastCommittedDigest": "ff51a37e540ecd785b91e2bebf76f8eb7e1122103b95e66fb5a54ad19e3001b9",
+      "recordCount": "44"
+    },
+    {
+      "sequence": "44",
+      "digest": "2801ed58486757c5e87b6b510a36ed66d2d690575c6b06b43db1d810d73dd4fe",
+      "previousManifestDigest": "c15a3a138117e4146ecd126c0b5cab62b05cf56898ae86ba09ade343ff9a798d",
+      "lastCommittedDigest": "b46d344f154302363496cbaf48ccc4b196ac4eace5d8e7c6be3aaee5000646de",
+      "recordCount": "45"
+    },
+    {
+      "sequence": "45",
+      "digest": "4aeb328412bb7bd633de74a1f856dda5f0bbd3c989ea72f88cdab13530ea84a1",
+      "previousManifestDigest": "2801ed58486757c5e87b6b510a36ed66d2d690575c6b06b43db1d810d73dd4fe",
+      "lastCommittedDigest": "db4135e6d16fa5855285557e0a3d2ea31d58bfbea2f2dfbdace5da684fba7cfd",
+      "recordCount": "46"
+    },
+    {
+      "sequence": "46",
+      "digest": "a141672be97b144d59f251ca3ec9f235341f6709a0119e61018db5fd3bf78c2e",
+      "previousManifestDigest": "4aeb328412bb7bd633de74a1f856dda5f0bbd3c989ea72f88cdab13530ea84a1",
+      "lastCommittedDigest": "dacf5fff916168fdd6c5c2e273c0d4ebd5fd19584a38fec397452a4427216af1",
+      "recordCount": "47"
+    },
+    {
+      "sequence": "47",
+      "digest": "6c8a2d0246bedea6487001186ec4b1fdd0b01db4f91b6e11b5619c9c973f3b31",
+      "previousManifestDigest": "a141672be97b144d59f251ca3ec9f235341f6709a0119e61018db5fd3bf78c2e",
+      "lastCommittedDigest": "e15d8d541f6c7c35963e28e29b884f858ea0d95e3970deec46e60762273b32a9",
+      "recordCount": "48"
+    },
+    {
+      "sequence": "48",
+      "digest": "d4d5c84fa9857cf721f10955f17a816845900538779454e02d2dd6f80db65bef",
+      "previousManifestDigest": "6c8a2d0246bedea6487001186ec4b1fdd0b01db4f91b6e11b5619c9c973f3b31",
+      "lastCommittedDigest": "154720ef4b575e5a189fc6aa78fd9575917537d02e808403593ab4c09c8dd4b8",
+      "recordCount": "49"
+    }
+  ]
+}

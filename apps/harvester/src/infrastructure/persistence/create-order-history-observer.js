@@ -14,14 +14,30 @@ const ORDER_HISTORY_EVENT_NAMES = new Set([
 const DEFAULT_MAX_PENDING_WRITES = 1000
 const MAX_RETAINED_ERRORS = 20
 
-function createEventContext(event) {
-  const data = event?.data ?? {}
+function createEventIdentityContext(event) {
   return {
     eventId: event?.id ?? null,
     eventName: event?.name ?? null,
+    eventSource: event?.source ?? null,
+    sourceEventTimestamp: event?.timestamp ?? null,
+  }
+}
+
+function createOrderIdentityContext(data) {
+  const market = data.market ?? {}
+  return {
+    symbol: market.symbol ?? data.symbol ?? null,
     providerInstanceId: data.providerInstanceId ?? null,
     accountId: data.accountId ?? null,
     clientOrderId: data.clientOrderId ?? null,
+  }
+}
+
+function createEventContext(event) {
+  const data = event?.data ?? {}
+  return {
+    ...createEventIdentityContext(event),
+    ...createOrderIdentityContext(data),
   }
 }
 
@@ -37,17 +53,33 @@ function createObserverError({ error, event, stage, code } = {}) {
   })
 }
 
+function getSafeValidationField(error) {
+  const field = error?.context?.field
+  if (
+    typeof field !== "string" ||
+    field.length > 128 ||
+    !/^[A-Za-z][A-Za-z0-9]*(?:\.[A-Za-z][A-Za-z0-9]*)*$/.test(field)
+  ) {
+    return undefined
+  }
+  return field
+}
+
 function createFailureDiagnostic({ error, event, stage } = {}) {
   const normalized = createObserverError({
     error,
     event,
     stage,
   })
+  const field = getSafeValidationField(normalized)
   return {
     message: "Order history projection failed",
+    component: "order-history-observer",
+    operation: stage,
     persistenceStage: stage,
     errorName: normalized.name,
     errorCode: normalized.code ?? "HARVESTER_ORDER_HISTORY_PERSISTENCE_FAILED",
+    ...(field ? { field } : {}),
     ...createEventContext(event),
   }
 }

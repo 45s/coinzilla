@@ -842,3 +842,43 @@ test("bounds repeated late-evidence safety re-evaluations and fails closed", asy
   assert.equal(snapshotCalls, 3, "The initial snapshot and two bounded safety passes must be sufficient.")
 })
 
+
+test("waits for the serialized engine shutdown barrier before cancelling owned BUYs", async () => {
+  const calls = []
+  const engine = createFakeEngine({ calls })
+  let releaseShutdownGate
+  const shutdownGate = new Promise((resolve) => {
+    releaseShutdownGate = resolve
+  })
+  engine.waitForShutdownGate = async () => {
+    calls.push("shutdown-gate-start")
+    await shutdownGate
+    calls.push("shutdown-gate-ready")
+  }
+  const participant = createParticipant({
+    engine,
+    calls,
+  })
+
+  participant.beginShutdown()
+  const waitUntilSafe = participant.waitUntilSafe()
+  await Promise.resolve()
+
+  assert.ok(
+    calls.includes("shutdown-gate-start"),
+    "The participant must begin waiting for the serialized shutdown barrier.",
+  )
+  assert.equal(
+    calls.includes("cancel:all"),
+    false,
+    "Owned BUY cancellation must not start before the serialized shutdown barrier completes.",
+  )
+
+  releaseShutdownGate()
+  await waitUntilSafe
+
+  assert.ok(
+    calls.indexOf("shutdown-gate-ready") < calls.indexOf("cancel:all"),
+    "The serialized shutdown barrier must finish before owned BUY cancellation begins.",
+  )
+})

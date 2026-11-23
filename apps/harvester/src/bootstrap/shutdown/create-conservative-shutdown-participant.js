@@ -648,14 +648,19 @@ export function createConservativeShutdownParticipant({
 
   const beginShutdown = () => engine.beginShutdown()
 
-  const waitUntilSafe = ({ signal } = {}) => waitForConservativeMarkets({
-    engine,
-    eventPublisher,
-    drainUserDataEvents,
-    getShutdownBlockers,
-    logger,
-    signal,
-  })
+  const waitUntilSafe = async ({ signal } = {}) => {
+    if (typeof engine.waitForShutdownGate === "function") {
+      await engine.waitForShutdownGate()
+    }
+    return waitForConservativeMarkets({
+      engine,
+      eventPublisher,
+      drainUserDataEvents,
+      getShutdownBlockers,
+      logger,
+      signal,
+    })
+  }
 
   const isSafeToShutdown = () => engine.getShutdownSafetySnapshot().markets
     .every((market) => market.status === "SAFE_TO_SHUTDOWN")
