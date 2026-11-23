@@ -86,7 +86,7 @@ export function validateInstructionSnapshot({ report, actual, required }) {
  * HTML allows abrupt empty-comment closures and the incorrectly closed
  * end-bang form. An unterminated comment consumes the remaining input.
  */
-function findHtmlCommentEnd(text, startIndex) {
+function findHtmlCommentEnd({ text, startIndex }) {
   if (text[startIndex] === '>') {
     return startIndex + 1;
   }
@@ -120,7 +120,7 @@ function removeHtmlComments(text) {
     }
 
     output += text.slice(cursor, commentStart);
-    cursor = findHtmlCommentEnd(text, commentStart + 4);
+    cursor = findHtmlCommentEnd({ text, startIndex: commentStart + 4 });
   }
 
   return output;
@@ -140,7 +140,7 @@ function breakHtmlCommentOpeners(text) {
       return output + text.slice(cursor);
     }
 
-    output += text.slice(cursor, commentIndex) + '<! --';
+    output += `${text.slice(cursor, commentIndex)}<! --`;
     cursor = commentIndex + commentStart.length;
   }
 
