@@ -16,6 +16,8 @@ import {
   validatePullRequestEvidence,
 } from './task-preflight.js';
 
+const CURRENT_WORKFLOW_RUN_URL = 'https://github.com/45s/coinzilla/actions/runs/123456789';
+
 test('requires the canonical repository instruction set', () => {
   assert.ok(REQUIRED_INSTRUCTION_PATHS.includes('AGENTS.md'));
   assert.ok(REQUIRED_INSTRUCTION_PATHS.includes('docs/engineering/AI_TASK_COMPLIANCE_STANDARD.md'));
@@ -195,7 +197,8 @@ test('blocks documentation paths omitted from the PR impact statement', () => {
     headSha: '0123456789012345678901234567890123456789',
     issueNumber: 1754,
     issueBody: REQUIRED_ISSUE_SECTIONS.map((heading) => `## ${  heading  }\n\nSpecific evidence for ${  heading  }.`).join('\n\n'),
-    issueComments: ['Verification evidence: pnpm test passed on commit 0123456789012345678901234567890123456789'],
+    issueComments: [`Verification evidence: pnpm run test:task-preflight on commit 0123456789012345678901234567890123456789; CI run: ${CURRENT_WORKFLOW_RUN_URL}`],
+    workflowRunUrl: CURRENT_WORKFLOW_RUN_URL,
     changedPaths: ['README.md'],
     preflightReport: {
       issueNumber: 1754,
@@ -223,7 +226,8 @@ test('blocks PR evidence when head SHA, acceptance, verification, or documentati
     headSha: '0123456789012345678901234567890123456789',
     issueNumber: 1754,
     issueBody: REQUIRED_ISSUE_SECTIONS.map((heading) => `## ${heading}\n\nEvidence for ${heading}.`).join('\n\n'),
-    issueComments: ['Verification evidence: pnpm test passed on commit 0123456789012345678901234567890123456789'],
+    issueComments: [`Verification evidence: pnpm run test:task-preflight on commit 0123456789012345678901234567890123456789; CI run: ${CURRENT_WORKFLOW_RUN_URL}`],
+    workflowRunUrl: CURRENT_WORKFLOW_RUN_URL,
     changedPaths: ['docs/README.md'],
     preflightReport: {
       issueNumber: 1754,
@@ -261,7 +265,8 @@ test('requires verification evidence to name the exact current PR head SHA', () 
     headSha,
     issueNumber: 1754,
     issueBody: REQUIRED_ISSUE_SECTIONS.map((heading) => `## ${heading}\n\nSpecific evidence for ${heading}.`).join('\n\n'),
-    issueComments: [`Verification evidence: pnpm run test:task-preflight passed on commit ${staleSha}`],
+    issueComments: [`Verification evidence: pnpm run test:task-preflight on commit ${staleSha}; CI run: ${CURRENT_WORKFLOW_RUN_URL}`],
+    workflowRunUrl: CURRENT_WORKFLOW_RUN_URL,
     changedPaths: ['scripts/task-preflight.test.js'],
     preflightReport: {
       issueNumber: 1754,

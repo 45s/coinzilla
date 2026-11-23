@@ -168,14 +168,17 @@ title: 'Documentation impact' });
     errors.push('PR must explain why no documentation update is required.');
   }
 }
-function hasVerificationEvidence({ comments, headSha }) {
-  if (typeof headSha !== 'string' || !/^[a-f0-9]{40,64}$/i.test(headSha)) {
+function hasVerificationEvidence({ comments, headSha, workflowRunUrl }) {
+  if (typeof headSha !== 'string' || !/^[a-f0-9]{40,64}$/i.test(headSha) ||
+      typeof workflowRunUrl !== 'string' ||
+      !/^https:\/\/[^/]+\/[^/]+\/[^/]+\/actions\/runs\/\d+$/i.test(workflowRunUrl)) {
     return false;
   }
   return comments.some((comment) =>
-    /verification evidence/i.test(comment) && /\bpassed\b/i.test(comment) &&
+    /verification evidence/i.test(comment) &&
     /\b(?:pnpm|npm|node|git)\b/i.test(comment) &&
-    comment.includes(headSha),
+    comment.includes(headSha) &&
+    comment.includes(workflowRunUrl),
   );
 }
 export function validatePullRequestEvidence(context) {
@@ -190,8 +193,9 @@ errors });
   if (!hasVerificationEvidence({
     comments: context.issueComments || [],
     headSha: context.headSha,
+    workflowRunUrl: context.workflowRunUrl,
   })) {
-    errors.push('Issue lacks command-based verification evidence for the current PR head SHA.');
+    errors.push('Issue lacks command-based verification evidence for the current PR head and GitHub Actions run.');
   }
   errors.push(...validatePreflightReport({
     report: context.preflightReport,
@@ -490,7 +494,7 @@ token });
   }
   return hashes;
 }
-async function pullRequest({ repo, token }) {
+async function pullRequest({ repo, token, workflowRunUrl }) {
   if (!token || !process.env.GITHUB_EVENT_PATH) {throw new Error('GitHub token or PR event metadata unavailable; BLOCKED.');}
   const event = JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8'));
   const pr = event.pull_request;
@@ -504,6 +508,7 @@ issueNumber });
   const errors = validatePullRequestEvidence({
     body: pr.body || '',
     headSha: pr.head.sha,
+    workflowRunUrl,
     issueNumber,
     issueBody: evidence.issue.body || '',
     issueComments: evidence.comments.map((item) => item.body || ''),
@@ -542,9 +547,13 @@ async function main() {
     throw new Error('GITHUB_REPOSITORY is required.');
   }
   if (args.pr) {
+    const serverUrl = (process.env.GITHUB_SERVER_URL || 'https://github.com').replace(/\/$/, '');
+    const runId = process.env.GITHUB_RUN_ID;
+    const workflowRunUrl = runId ? `${serverUrl}/${repo}/actions/runs/${runId}` : '';
     await pullRequest({
       repo,
       token,
+      workflowRunUrl,
     });
   } else {
     await local({
