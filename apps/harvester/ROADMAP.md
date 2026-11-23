@@ -2105,7 +2105,6 @@ The current rationale, filter mapping, deliberately excluded order-type-specific
 
 Enabled RS startup exposed that the process entrypoint prepared the ADR-0001 Operational State Store only for Conservative restart recovery, despite RS requiring the store for its durable STOP latch and process-boundary facts. The focused fix and offline regression coverage are in [PR #1718](https://github.com/45s/coinzilla/pull/1718), tracked under [issue #1713](https://github.com/45s/coinzilla/issues/1713). The fix creates genesis automatically only when the ledger directory is missing or empty, verifies a complete existing ledger, and refuses partial, unexpected, or corrupt contents without repair. No manual genesis command is required for ordinary first startup. Automatic restart restoration remains disabled. Controlled TESTNET acceptance remains a separate paused operational gate.
 
-
 ## 2026-11-23 — #1362 immutable archive re-review and implementation
 
 The original `coinzilla-archive` source was rechecked independently of the sanitized fixture. The 49-record fact chain and 49-record manifest chain are internally consistent, with distinct terminal digests; the 429-line terminal log contains 28 order-history record-validation failures, repeated user-data recovery failures followed by successful reconnect/recovery, market safety pauses, incomplete account-integrity reconciliation, and unproven shutdown completion. The exact historical invalid field remains unknown. The archive is selected-log evidence rather than a complete raw-log export; the database dump remains uninspected.
@@ -2113,7 +2112,6 @@ The original `coinzilla-archive` source was rechecked independently of the sanit
 The task branch preserves the archive replay and digest-chain evidence, the corrected test inventory, and the real Portfolio/RecoveryLedger late-SELL accounting composition in `create-user-data-event-safety-halt.test.js`. The observer now emits a bounded safe validation field for future failures; this does not identify the historical field in the 28 archived errors. The branch was synchronized through PR #1784 and then manually merged with current develop at `c1c715dc1b9b821d87d0a25e903c88c61e91ed3a` in commit `d963dfc2e0eb3fc02cbd9c25b08ae5b92ce61df9`, incorporating #1776 exact-decimal bootstrap/replay corrections.
 
 The detailed evidence, implementation commits, CI state and remaining unknowns are recorded in [the archive re-review](docs/CONSERVATIVE_RECOVERY_ARCHIVE_REVIEW_2026-11-23.md). Continue under #1362 / PR #1761; keep the PR draft and do not run TESTNET/LIVE mutations.
-
 
 ## 2026-11-23 — continuation after #1776 develop synchronization
 
