@@ -34,6 +34,7 @@ This index is the entry point for maintained repository documentation. The gover
 
 ## Testing and quality
 
+- [Domain Scenario Testing Methodology](testing/DOMAIN_SCENARIO_TESTING.md) — strategy-neutral guidance for designing readable behavior scenarios, exact accounting oracles, lifecycle proofs, fixtures and evidence.
 - [Repository test scenario catalog](testing/SCENARIO_CATALOG.md) — human-readable behavior scenarios, concrete inputs/outputs, subcases, implementation paths, and named automated tests across the workspace.
 
 ## Operational and reference guides

@@ -1,5 +1,12 @@
 import { createShutdownPhaseConsolePresentation } from "./create-shutdown-phase-console-presentation.js"
 
+const ORDER_HISTORY_FAILURE_DETAIL_LIMITS = Object.freeze({
+  field: 64,
+  symbol: 16,
+  clientOrderId: 48,
+  errorCode: 64,
+})
+
 const CONSOLE_DETAIL_KEYS = Object.freeze([
   "correlationId",
   "interactionType",
@@ -34,6 +41,25 @@ const CONSOLE_DETAIL_KEYS = Object.freeze([
   "broker",
 ])
 
+function summarizeOrderHistoryProjectionFailure({ data, message } = {}) {
+  const details = {}
+  for (const [key, maxLength] of Object.entries(ORDER_HISTORY_FAILURE_DETAIL_LIMITS)) {
+    const value = data[key]
+    if (typeof value !== "string" || value.trim() === "") {
+      continue
+    }
+    if (value.length > maxLength) {
+      details[key] = `${value.slice(0, maxLength - 3)}...`
+      continue
+    }
+    details[key] = value
+  }
+  return {
+    message,
+    details,
+  }
+}
+
 function summarizeConsoleData({ data, shutdownPresentation } = {}) {
   if (shutdownPresentation) {
     return {
@@ -47,6 +73,12 @@ function summarizeConsoleData({ data, shutdownPresentation } = {}) {
 
   const message = String(data.message ?? "Harvester event")
     .replace(/[\r\n]+/g, " ")
+  if (message === "Order history projection failed") {
+    return summarizeOrderHistoryProjectionFailure({
+      data,
+      message,
+    })
+  }
   if (
     message === "Harvester recovery SELL cancellation requested"
     && typeof data.symbol === "string"
