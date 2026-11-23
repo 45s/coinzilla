@@ -130,7 +130,7 @@ test("routes REST/stream reconciliation failures through the account safety halt
   await state.eventQueue
 
   assert.deepEqual(calls.slice(0, 3), [
-    ["process", "ada-late-recovery-sell-fill", false],
+    ["process", "ada-late-recovery-sell-fill", true],
     ["reconcile", { recoveryMode: true }],
     "cancel-owned-buys",
   ])
