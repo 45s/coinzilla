@@ -1,5 +1,6 @@
 # Harvester domain documentation
 
+- [Repository test scenario catalog](../../../../docs/testing/SCENARIO_CATALOG.md) — cross-workspace human-readable behavior scenarios, inputs/outputs, subcases, implementation links, and named test mappings.
 - [Conservative Domain Specification](CONSERVATIVE_DOMAIN_SPECIFICATION.md) — **sole authoritative Conservative behavior contract**.
 - [Accounting invariants](ACCOUNTING_INVARIANTS.md) — implementation/regression verification matrix and current verification boundary.
 - [Domain test inventory](DOMAIN_TEST_INVENTORY.md) — source-driven behavior-to-test map, test-quality findings and prioritized improvements.
