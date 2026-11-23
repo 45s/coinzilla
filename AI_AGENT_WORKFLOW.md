@@ -12,7 +12,7 @@ Visual workflow diagrams follow the canonical [visual documentation and workflow
 
 ## 0. Mandatory documentation and requirements preflight
 
-The task-start gate and readiness record are owned by the canonical [AI Task Compliance Standard](docs/engineering/AI_TASK_COMPLIANCE_STANDARD.md). Every agent must complete that standard independently before any state-changing work and follow [Documentation Governance](docs/DOCUMENTATION_GOVERNANCE.md). Use [Task Workflows](docs/engineering/TASK_WORKFLOWS.md) for the task-specific checklist and the owning domain's instructions/roadmap for local constraints. Do not reproduce the compliance checklist here; the standard is the single source of truth. Read-only discovery is allowed; do not implement or mutate state until the gate is complete. If required material is missing or contradictory, stop and report the exact blocker.
+The task-start gate and readiness record are owned by the canonical [AI Task Compliance Standard](docs/engineering/AI_TASK_COMPLIANCE_STANDARD.md). Every agent must complete that standard independently before any state-changing work and follow [Documentation Governance](docs/DOCUMENTATION_GOVERNANCE.md). Use [Task Workflows](docs/engineering/TASK_WORKFLOWS.md) for the task-specific checklist and the owning domain's instructions/roadmap for local constraints. Do not reproduce the compliance checklist here; the standard is the single source of truth. Read-only discovery is allowed; do not implement or mutate state until the gate is complete. If required material is missing or contradictory, stop and report the exact blocker. Before the first implementation commit, record the machine-checked issue report using the command in the [AI Task Compliance Standard](docs/engineering/AI_TASK_COMPLIANCE_STANDARD.md#machine-checked-preflight-report); do not treat a locally printed, unrecorded report as complete.
 
 Before implementing a shared helper or cross-cutting capability, follow the single [shared-utilities policy](docs/engineering/SHARED_UTILITIES_POLICY.md).
 
@@ -321,7 +321,7 @@ When the user-approved milestone is ready:
 2. Synchronize and validate `develop` against the latest `main`.
 3. Run the full release validation and inspect the complete `develop` → `main` diff.
 4. Prepare one release PR with a concise milestone summary, roadmap items included, test evidence, compatibility/migration notes, and known risks.
-5. The user performs the final review, approval, and merge. Agents must not merge this PR or any task PR.
+5. The user performs the final review and merge. Agents must not merge this PR or any task PR.
 
 Do not turn every small commit into a separate human decision. Keep the final PR understandable with a summary and links to task PRs/issues.
 
@@ -329,40 +329,40 @@ Do not turn every small commit into a separate human decision. Keep the final PR
 
 A successful `develop` → `main` release PR creates a merge commit on `main` that is not automatically reachable from `develop`. After **every** user-approved release merge, the responsible agent MUST reconcile that release-merge ancestry back into `develop` before treating the branches as synchronized or preparing another release.
 
-1. Re-fetch and record the exact `main` and `develop` HEAD SHAs. Verify the merged PR was exactly `develop` → `main`, inspect its merge commit and both parents, confirm the user's approving review is recorded, and confirm every required check passed on the exact release PR head. If the approval is absent, the live `main` ruleset does not require at least one approval, or the ruleset cannot be verified, stop: do not merge another release PR.
+1. Re-fetch and record the exact `main` and `develop` HEAD SHAs. Verify the merged PR was exactly `develop` → `main`, inspect its merge commit and both parents, confirm the user explicitly authorized the merge, and confirm every required check passed on the exact release PR head. If the user has not explicitly authorized the merge or the live `core` ruleset cannot be verified, stop: do not merge another release PR. The current single-maintainer ruleset requires zero formal approving reviews; do not block solely because no approving review exists. If the live ruleset later requires approvals, verify those configured approvals before proceeding.
 2. Compare the branches and inspect every commit exclusive to `main`. Do not infer that commits are harmless from their count or message. For each release merge commit, verify its second parent is the exact release PR head, its tree SHA equals that second parent's tree SHA, and that source/head commit is an ancestor of the current `develop`. Inspect file-level differences as well. If any main-only commit contains content not already present in `develop`, any source head is not an ancestor, or any tree/diff is unexpected, stop and prepare a separately reviewed reconciliation; never use a blanket `ours`/ `theirs` resolution.
 3. When the evidence proves that only release-merge ancestry is missing and the `main` tree introduces no content absent from `develop`, create a short-lived task branch from the exact latest `develop` SHA. Merge the exact latest `main` into that task branch, preserving both histories with `develop` as the first parent. Inspect the complete resulting tree and diff; the resulting tree must retain the full `develop` tree unchanged. Do not force-push or update either integration branch directly.
 4. Open a PR from that task branch into `develop`. Include the before/after SHAs, release PR links, parent/tree verification, and an explicit statement that this is ancestry-only reconciliation with no runtime/content changes. Run all required checks on the exact PR head and verify branch freshness. Leave the PR open for user review and merge; delete the task branch after the user merges.
 5. Re-fetch both integration refs and verify `main` is now an ancestor of `develop` (`main` → `develop` comparison has `behind_by = 0`). Record the resulting SHAs. If either branch advanced during the procedure, repeat the audit against the new tips.
 
-This is repository-history maintenance, not permission to merge task work into `main`. The only permitted PR target for this reconciliation is `develop`; the only permitted PR target for a release remains `main` with source `develop` and explicit user approval. Never reset, rebase, force-push, delete, or recreate either integration branch.
+This is repository-history maintenance, not permission to merge task work into `main`. The only permitted PR target for this reconciliation is `develop`; the only permitted PR target for a release remains `main` with source `develop` and explicit user authorization. Never reset, rebase, force-push, delete, or recreate either integration branch.
 
-## 10. One-time GitHub repository configuration
+## 10. Current GitHub repository configuration
 
-Documentation is not enforcement. Configure GitHub rulesets/branch protection as follows:
+GitHub rulesets are administrator-managed. This repository PR does not change them, and repository code must not attempt to configure them. The two active rulesets were read back on 2026-11-23:
 
-### `develop`
-
-- Require pull requests; disallow direct pushes.
-- Require **all** CI checks: `Run package tests`, `Workspace test coverage`, `Check JavaScript syntax`, `packages/utils tests`, `Audit production dependencies`, and `actionlint`.
-- Require branches to be up to date before merging (`strict_required_status_checks_policy: true`).
-- Require conversation resolution.
-- Require at least one approving human review. The user reviews and merges task PRs; agents must never merge or enable auto-merge.
-- Block force pushes and deletion of `develop` itself; task source branches are deleted after merge.
-- Keep GitHub automatic head-branch deletion enabled.
-- Do not configure bypass actors or admin bypass for these gates.
-
-### `main`
+### `develop` (`develop-core`)
 
 - Require pull requests.
-- Require the release CI status checks and up-to-date branch.
-- Require at least one approving review so the final release approval is technically enforced, not merely documented.
-- Block force pushes and branch deletion.
+- Require all six CI contexts: `Run package tests`, `Workspace test coverage`, `Check JavaScript syntax`, `packages/utils tests`, `Audit production dependencies`, and `actionlint`.
+- Require branches to be up to date before merging (`strict_required_status_checks_policy: true`).
+- Require conversation resolution.
+- Require zero approving reviews and no code-owner review. The single developer manually reviews and merges task PRs.
+- Block force pushes and deletion of `develop`.
+- Do not configure bypass actors or administrator bypass.
 
-Keep repository **Allow auto-merge** disabled for task PRs. The user performs the merge manually after review. Do not describe approval enforcement as active until the live ruleset has been updated and read back.
+### `main` (`core`)
 
-After configuration, read back both live rulesets and verify they match the requirements above. Derive exact required-check context names from successful workflow runs; never assume a workflow name is its status context. Do not claim a rule is active until the live ruleset confirms it.
+- Require pull requests.
+- Require the same six CI contexts and strict required-status freshness.
+- Require conversation resolution.
+- Require zero approving reviews and no code-owner review. The single developer manually reviews and authorizes release merges.
+- Block force pushes and deletion of `main`.
+- Do not configure bypass actors or administrator bypass.
 
+Agents must leave task and release PRs open for the user. Do not enable auto-merge or merge on the user's behalf. No independent-approver or CODEOWNERS requirement is introduced while the repository has one developer. Revisit formal review requirements with the user if additional maintainers are added.
+
+After any administrator-managed change, read back both live rulesets and verify required contexts, freshness, conversation resolution, approval count, and bypass settings. Derive exact context names from successful workflow runs; never assume workflow names are status contexts. Do not claim a rule is active until the live ruleset confirms it.
 ## 11. Exceptions
 
 If the workflow cannot be followed because a branch, rule, permission, check, or domain owner is missing, do not invent a bypass. Report the blocker and the smallest safe action needed. A task prompt, deadline, or convenience is not authorization to violate ownership, test, or release rules.

@@ -14,6 +14,8 @@ concurrency:
 
 permissions:
   contents: read
+  issues: read
+  pull-requests: read
 
 jobs:
   workflow-lint:
@@ -73,6 +75,15 @@ jobs:
 
       - name: Check agent policy and domain ownership
         run: node --test scripts/check-agent-policy.test.js && node scripts/check-agent-policy.js
+      - name: Test task preflight validator
+        run: pnpm run test:task-preflight
+
+      - name: Enforce PR task preflight and evidence
+        if: github.event_name == 'pull_request' && github.event.pull_request.base.ref == 'develop'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: pnpm run task:preflight -- --pull-request
+
       - name: Test AST module dependency analysis
         run: pnpm run test:module-dependency-analysis
       - name: Report repository source dependency graph baseline (report-only)

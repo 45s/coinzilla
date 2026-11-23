@@ -22,6 +22,26 @@ Do not begin implementation, edits, configuration changes, PR creation or other 
 
 ---
 
+## Problem
+
+What problem or unmet need is being addressed?
+
+## Expected behavior
+
+Describe the observable outcome or contract.
+
+## Investigation
+
+Record confirmed findings, observations, hypotheses and unknowns, with source/test evidence where available.
+
+## Possible solutions
+
+List viable approaches, trade-offs and rejected approaches.
+
+## Implementation plan
+
+Describe the proposed sequence, owners and test-first approach.
+
 ## Request type
 Bug / Capability / Contract change
 
@@ -46,6 +66,14 @@ Which application/package/task is blocked or affected?
 
 ## Compatibility and safety
 Known breaking changes, failure behavior, invariants, and migration needs.
+
+## Verification
+
+List exact tests and checks required; update with commands, results and the commit SHA they verify.
+
+## Resolution
+
+Summarize the delivered change, linked PR/commit and final verification. Leave pending until complete.
 
 ## Links
 Related roadmap item, issue, PR, and tests.

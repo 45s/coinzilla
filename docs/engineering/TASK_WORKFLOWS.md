@@ -5,6 +5,7 @@ All tasks must follow root AGENTS.md, AI_AGENT_WORKFLOW.md, the mandatory [AI Ta
 ## Mandatory standards-compliance preflight
 
 - [ ] Completed the task-start gate in [AI Task Compliance Standard](AI_TASK_COMPLIANCE_STANDARD.md) before changing state.
+- [ ] Recorded the versioned, hash-bearing issue report with `pnpm run task:preflight` before the first implementation commit; applicable nested `AGENTS.md` files are included.
 - [ ] Identified and read all applicable canonical standards, domain requirements, task checklist and linked specifications in full.
 - [ ] Inspected the actual source, consumers, tests, configuration and file tree; did not rely on memory or summaries.
 - [ ] Recorded task scope, constraints/invariants, acceptance criteria, verification and documentation impact.
