@@ -438,4 +438,3 @@ data: { reevaluate: false } }),
     "The user-data boundary must not print raw receipt or generic processed messages; canonical lifecycle transitions own those logs.",
   )
 })
-
