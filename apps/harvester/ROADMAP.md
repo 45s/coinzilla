@@ -21,7 +21,7 @@
 | --- | --- | --- |
 | 0. Documentation foundation | Completed in merged #1764. Task Preflight CI enforcement was retired in merged #1769. | Documentation foundation is merged; required project CI remains active. |
 | 1. Source/evidence map | A–J source-to-test checkpoint posted to #1763; refine every PARTIAL/BLOCKED row against exact assertions and source owners. | Every rule has an owner, named evidence and honest status; audit closure is not yet claimed. |
-| 2. Test oracle audit | Four focused slices are merged: #1771 exact recovery-fee oracle, #1773 cancellation-race accounting assertions, #1775 coherent terminal Fill notional, and #1776 exact bootstrap/replay arithmetic. Remaining engine-suite cleanup is blocked by 33 pre-existing strict changed-file ESLint findings in `conservative-trading-engine.test.js`; see the inventory. | Independent exact financial oracles; remaining blocked debt has precise evidence and an agreed unblocking step; production behavior unchanged. |
+| 2. Test oracle audit | Completed in merged #1771, #1773, #1775 and #1776 plus review PR #1792: exact recovery-fee, cancellation-race, terminal-Fill, bootstrap/replay and engine-suite financial oracles; test-only helper decomposition removed the 33 pre-existing strict-lint blockers without suppressions. | Exact independent financial oracles; six applicable workflows pass on PR #1792 head `68c45654a70a1ef0e4df008350564ae1871a27d3`; no production behavior changed. |
 | 3. Core arithmetic | Recovery target, net proceeds, fee reserve, base/quote/third-asset commissions, tick/step rounding and decimal boundaries. | Normal, equality, just-below/above, invalid, tiny/large and exchange-filter cases have exact assertions. |
 | 4. BUY accounting | Initial and subsequent BUY fills, cost basis, net base, VWAP/reference, commissions, investment cap and commitments. | Canonical fills reconcile to Portfolio/Position/RecoveryLedger and BUY decisions. |
 | 5. SELL accounting | Partial/multiple/full SELL fills, proceeds, fee assets, remaining inventory, realized profit and recovery target. | Gross-to-net economics and active/retained inventory reconcile exactly. |
@@ -2153,3 +2153,13 @@ The detailed evidence, implementation commits, CI state and remaining unknowns a
 - The only intermediate failure was repeated blank lines in the two updated Markdown files; both were corrected before the six-workflow pass. No production changes or scenario-suite work.
 - This checkpoint records the verified implementation; the final documentation-only commit is revalidated on its own exact head.
 - Remaining Phase 2 work: verify exact-head CI, fix any remaining lint/test failures, then record the final narrow/full test results. Scenario-suite phase remains out of scope.
+
+
+## 2026-11-23 — #1763 Phase 2 test-oracle audit completed
+
+- Phase 2 is complete in review PR [#1792](https://github.com/45s/coinzilla/pull/1792), branch `test/1763-conservative-test-oracle-phase2`, targeting `develop` at `44ed6ce4dd32437e5343c2b1c43171f290f4836e`.
+- Exact PR head `68c45654a70a1ef0e4df008350564ae1871a27d3`: all six workflows passed — Harvester Targeted Tests, Unit Tests, Test Coverage, Dependency Audit, Repository Quality and External Documentation Links.
+- The 33 pre-existing strict ESLint max-lines findings in the engine test were resolved by decomposing test-only helpers/callbacks; no rule was suppressed or weakened.
+- `makeSellFill()` now derives its default quote notional with exact decimal multiplication; explicit quote quantities remain unchanged. Three financial `Number` comparisons were replaced with exact `compareDecimal` assertions. Remaining `Number` conversions are broker DTO construction/status boundaries, not financial test oracles.
+- No production source, trading behavior, exchange state or credentials changed. No `scenarios/` suite was added.
+- PR #1792 remains open for user review; do not merge. Next work package after review is Phase 3: core recovery arithmetic.
