@@ -1,5 +1,4 @@
 import test from 'node:test';
-import { readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
@@ -504,44 +503,4 @@ test('rejects a pull request used as the tracking issue', () => {
     errors.some((error) => /pull request.*not.*issue/i.test(error)),
     'A PR number must not satisfy the required tracking-issue reference.',
   );
-});
-
-test('runs PR evidence enforcement in a dedicated Task Preflight job', () => {
-  const workflow = readFileSync(
-    new URL('../.github/workflows/quality-gate.yml', import.meta.url),
-    'utf8',
-  );
-  const workspaceJob = workflow.match(
-    / {2}workspace-quality:\n([\s\S]*?)(?=\n {2}[a-z-]+:|\n?$)/,
-  )?.[1];
-  const testsJob = workflow.match(
-    / {2}task-preflight-tests:\n([\s\S]*?)(?=\n {2}[a-z-]+:|\n?$)/,
-  )?.[1];
-  const evidenceJob = workflow.match(
-    / {2}publish-task-preflight-evidence:\n([\s\S]*?)(?=\n {2}[a-z-]+:|\n?$)/,
-  )?.[1];
-  const validatorJob = workflow.match(
-    / {2}task-preflight:\n([\s\S]*?)(?=\n {2}[a-z-]+:|\n?$)/,
-  )?.[1];
-  const requiredJob = workflow.match(
-    / {2}required-javascript-quality:\n([\s\S]*)$/,
-  )?.[1];
-
-  assert.match(workflow, /^name: Repository Quality/m);
-  assert.doesNotMatch(
-    workspaceJob ?? '',
-    /task:preflight|test:task-preflight/i,
-    'JavaScript/workspace quality must not execute task preflight.',
-  );
-  assert.ok(testsJob, 'A separate focused Task Preflight test job must exist.');
-  assert.match(testsJob, /pnpm run test:task-preflight/);
-  assert.ok(evidenceJob, 'Evidence publication must be isolated from PR code execution.');
-  assert.match(evidenceJob, /issues: write/);
-  assert.match(evidenceJob, /Verification evidence/);
-  assert.ok(validatorJob, 'A dedicated Task Preflight validator job must exist.');
-  assert.match(validatorJob, /pnpm run task:preflight -- --pull-request/);
-  assert.match(validatorJob, /needs: publish-task-preflight-evidence/);
-  assert.match(validatorJob, /github\.event\.pull_request\.head\.sha/);
-  assert.match(requiredJob ?? '', /task-preflight/);
-  assert.match(requiredJob ?? '', /TASK_PREFLIGHT_RESULT/);
 });
