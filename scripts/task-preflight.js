@@ -338,21 +338,33 @@ path })]));
   }
 }
 async function collectPullRequestEvidence({ repo, token, pr, issueNumber }) {
-  const { issue, comments } = await issueData({ repo, number: issueNumber, token });
+  const { issue, comments } = await issueData({ repo,
+number: issueNumber,
+token });
   const preflight = latestReport(comments);
-  if (!preflight) throw new Error('No versioned preflight report on issue; BLOCKED.');
-  const timing = await readPreflightTiming({ repo, token, pr, preflight });
-  const snapshot = await readApplicableInstructionSnapshot({ repo, token, pr, preflight });
-  return { issue, comments, preflight, ...timing, ...snapshot };
+  if (!preflight) {throw new Error('No versioned preflight report on issue; BLOCKED.');}
+  const timing = await readPreflightTiming({ repo,
+token,
+pr,
+preflight });
+  const snapshot = await readApplicableInstructionSnapshot({ repo,
+token,
+pr,
+preflight });
+  return { issue,
+comments,
+preflight,
+...timing,
+...snapshot };
 }
 async function readPreflightTiming({ repo, token, pr, preflight }) {
   const comparison = await api({
-    path: '/repos/' + repo + '/compare/' + preflight.commitSha + '...' + pr.head.sha,
+    path: `/repos/${  repo  }/compare/${  preflight.commitSha  }...${  pr.head.sha}`,
     token,
   });
   const ancestor = comparison.status === 'ahead' || comparison.status === 'identical';
   const prComparison = await api({
-    path: '/repos/' + repo + '/compare/' + pr.base.sha + '...' + pr.head.sha,
+    path: `/repos/${  repo  }/compare/${  pr.base.sha  }...${  pr.head.sha}`,
     token,
   });
   if (prComparison.status !== 'ahead' && prComparison.status !== 'identical') {
@@ -366,18 +378,29 @@ async function readPreflightTiming({ repo, token, pr, preflight }) {
   const recordedBeforeImplementation = Boolean(
     firstDate && preflight.createdAt && Date.parse(preflight.createdAt) <= Date.parse(firstDate),
   );
-  return { ancestor, recordedBeforeImplementation };
+  return { ancestor,
+recordedBeforeImplementation };
 }
 async function readApplicableInstructionSnapshot({ repo, token, pr, preflight }) {
-  const changed = await readChangedPullRequestPaths({ repo, token, number: pr.number });
-  const baseAgents = await readBaseInstructionPaths({ repo, token, sha: pr.base.sha });
+  const changed = await readChangedPullRequestPaths({ repo,
+token,
+number: pr.number });
+  const baseAgents = await readBaseInstructionPaths({ repo,
+token,
+sha: pr.base.sha });
   const required = [...new Set([
     ...REQUIRED_INSTRUCTION_PATHS,
-    ...discoverApplicableInstructionPaths({ paths: baseAgents, targets: changed }),
+    ...discoverApplicableInstructionPaths({ paths: baseAgents,
+targets: changed }),
     ...preflight.instructions.map((item) => item.path),
   ])].sort();
-  const hashes = await readBaseInstructionHashes({ repo, token, sha: pr.base.sha, paths: required });
-  return { changed, required, hashes };
+  const hashes = await readBaseInstructionHashes({ repo,
+token,
+sha: pr.base.sha,
+paths: required });
+  return { changed,
+required,
+hashes };
 }
 async function readChangedPullRequestPaths({ repo, token, number }) {
   const changed = [];
