@@ -240,7 +240,10 @@ test("starts the next recovery cycle from its new BUY basis without reusing prio
   const nextCycleResult = await applyNextCycleBuy({ workflow })
   assert.equal(nextCycleResult.ok, true, "The next cycle's canonical BUY fill must apply successfully.")
   assertNextCycleAccounting({ workflow })
-  await assertPreviousCycleReplayIsIgnored({ workflow, previousCycleFills })
+  await assertPreviousCycleReplayIsIgnored({
+    workflow,
+    previousCycleFills,
+  })
   const decision = evaluateNextCycleDecision({ workflow })
   assert.equal(decision.action, "PLACE_ORDERS", "The next cycle must remain eligible for its required standing orders.")
   assertNextCycleRecoverySell({ decision })
