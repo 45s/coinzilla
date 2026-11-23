@@ -35,9 +35,13 @@ Who or what is affected? What is blocked, degraded or at risk? Include severity 
 
 Record confirmed findings, relevant source paths/line references, logs, failing tests and reproduction steps. Distinguish confirmed facts from hypotheses.
 
-## Proposed approach
+## Possible solutions
 
 List viable approaches and the preferred direction, if known. Explain important trade-offs; do not prescribe an implementation before investigation supports it.
+
+## Implementation plan
+
+Describe the smallest implementation sequence, including the test-first approach and affected files/domains.
 
 ## Acceptance criteria
 

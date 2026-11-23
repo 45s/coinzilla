@@ -27,13 +27,11 @@
     "lint": "eslint . --max-warnings 0",
     "lint:changed": "node scripts/lint-changed.js",
     "lint:fix": "eslint . --fix",
-
     "test": "pnpm --recursive --if-present test",
     "test:coverage": "pnpm --filter './packages/*' --filter './apps/*' --recursive exec node --test --experimental-test-coverage",
     "test:external-links": "node --test scripts/check-external-links.test.js",
     "test:module-dependency-analysis": "node --test scripts/module-import-analysis.test.js scripts/module-import-resolution.test.js scripts/module-dependency-graph.test.js scripts/module-dependency-cycles.test.js scripts/repository-module-discovery.test.js scripts/repository-module-graph-report.test.js",
     "test:sync-main": "node --test scripts/sync-main.test.js",
-
     "check:agent-policy": "node --test scripts/check-agent-policy.test.js && node scripts/check-agent-policy.js",
     "check:external-links": "node scripts/check-external-links.js",
     "check:helper-names": "node --test scripts/check-helper-policy.test.js && node scripts/check-helper-policy.js --check-names",
@@ -48,12 +46,13 @@
     "report:module-graph": "node scripts/report-module-graph.js",
     "db:export": "pnpm --filter @coinzilla/harvester persistence:export",
     "sync:main": "node scripts/sync-main.js",
-
     "server": "node scripts/run-apps.js server",
     "client": "node scripts/run-apps.js client",
     "app": "node scripts/run-apps.js app",
     "server:prod": "pnpm --filter @coinzilla/harvester start",
     "client:prod": "pnpm --filter @coinzilla/dashboard build",
-    "app:prod": "node scripts/run-apps.js app:prod"
+    "app:prod": "node scripts/run-apps.js app:prod",
+    "task:preflight": "node scripts/task-preflight.js",
+    "test:task-preflight": "node --test scripts/task-preflight.test.js"
   }
 }

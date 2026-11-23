@@ -59,6 +59,8 @@ Examples:
 
 ## Completion report
 
+- **Final source commit:** <!-- Exact 40-character PR head SHA; CI validates this value. -->
+
 - **Implementation:** <!-- Concise summary and affected files. -->
 - **Risks / known limitations:** <!-- Include any remaining work or "None". -->
 - **Final source commit:** <!-- Exact SHA validated by CI. -->

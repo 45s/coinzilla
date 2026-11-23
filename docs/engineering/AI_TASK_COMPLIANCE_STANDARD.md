@@ -54,6 +54,18 @@ Before editing, provide a concise task readiness summary in the working conversa
 
 Do not dump entire documents or create a separate task log. Keep the record concise and proportionate; the GitHub issue/PR remains the durable task contract.
 
+### Machine-checked preflight report
+
+Before the first implementation commit, record the completed readiness report on the tracking issue with the repository validator:
+
+```sh
+GITHUB_REPOSITORY=45s/coinzilla pnpm run task:preflight -- --issue 123 --paths scripts,docs/engineering,.github --attest-read --attest-nested --record
+```
+
+Set `GH_TOKEN` in the shell with permission to read the issue and create an issue comment. Replace the issue number and scope paths with the actual task. The command checks the issue sections, required instruction files, and their Git blob hashes, discovers applicable nested `AGENTS.md` files from the declared paths, then records a versioned report and the preflight commit SHA. Omitting `--record` prints a report but does not satisfy the gate. The two explicit attestation flags are the agent's own claim that it read the required and applicable instructions.
+
+The report is evidence, not proof of comprehension. The validator cannot prove that an agent read or understood a document; it verifies the recorded claim, file identity, hashes, task issue, and commit relationship. If scope expands, rerun the command with the expanded paths and record a new report before continuing. PR CI independently checks the report against the PR base revision, issue completeness, verification evidence, and the exact PR head SHA. A missing token, inaccessible API, missing evidence, or stale hash is BLOCKED.
+
 ## 4. Compliance during implementation
 
 - Follow the discovered standards at every implementation step; do not treat preflight as a one-time checkbox.
