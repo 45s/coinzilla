@@ -1,0 +1,57 @@
+name: Harvester Conservative scenarios
+
+on:
+  pull_request:
+    branches:
+      - develop
+    paths:
+      - "apps/harvester/test/scenarios/**"
+      - "apps/harvester/scripts/run-conservative-scenarios.js"
+      - "apps/harvester/package.json"
+      - "apps/harvester/docs/critical-behaviors.json"
+      - "apps/harvester/docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md"
+      - ".github/workflows/harvester-conservative-scenarios.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: harvester-conservative-scenarios-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  conservative-scenarios:
+    name: Conservative scenario execution and reports
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@d3e3c6b8c6d7e2a8d1b3d0b3f3d7e0c6b7d4e3b1
+        with:
+          version: 10.20.0
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Execute Conservative scenarios and generate JSON reports
+        run: pnpm --filter @coinzilla/harvester scenarios:conservative
+
+      - name: Upload Conservative scenario reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: conservative-scenario-reports
+          path: apps/harvester/reports/conservative-scenarios/*.json
+          if-no-files-found: warn
+          retention-days: 14
