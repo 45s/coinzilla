@@ -1035,6 +1035,10 @@ async function publishPreparedArchive({
   onProgress,
 }) {
   try {
+    await mkdir(localArchive, {
+      recursive: false,
+      mode: 0o700,
+    })
     const logSessionIdentity = await copyArchiveEvidence({
       sourcePaths,
       packageDirectory,
@@ -1106,10 +1110,6 @@ export async function runHarvesterArchivePush({
   })
   await assertRealDirectory(outputDirectory)
   const localArchive = path.join(outputDirectory, archiveName)
-  await mkdir(localArchive, {
-    recursive: false,
-    mode: 0o700,
-  })
   return publishPreparedArchive({
     sourcePaths,
     packageDirectory,
