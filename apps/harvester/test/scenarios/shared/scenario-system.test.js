@@ -80,11 +80,13 @@ test("loads a stable scenario inventory covering all Conservative behavior categ
 test("validates required scenario fields, stable IDs, categories, statuses, and evidence references", () => {
   const scenario = createScenarioFixture()
   const criticalBehaviorContract = {
-    behaviors: [{
-      id: "RECOVERY_SELL_ECONOMICS",
-      sourceModules: ["src/domain/strategies/conservative/recovery-sell-plan.js"],
-      tests: [mappedTest],
-    }],
+    behaviors: [
+      {
+        id: "RECOVERY_SELL_ECONOMICS",
+        sourceModules: ["src/domain/strategies/conservative/recovery-sell-plan.js"],
+        tests: [mappedTest],
+      },
+    ],
   }
   const requirements = [{ id: "CON-SPEC-3.1", title: "Initial BUY behavior" }]
   const result = validateScenarioDefinitions({
@@ -171,8 +173,13 @@ test("runs mapped Node tests once per file and shares evidence across scenarios"
     title: "A second scenario sharing the same named test",
   })
   const calls = []
-  const spawnSync = (command, args, options) => {
-    calls.push({ command, args, options })
+  const spawnSync = (...args) => {
+    const [command, commandArgs, options] = args
+    calls.push({
+      command,
+      args: commandArgs,
+      options,
+    })
     return {
       status: 0,
       stdout: "TAP version 13\nok 1 - plans a recovery SELL that retains keepQuantity and covers cost plus minProfit\n",
@@ -202,17 +209,21 @@ test("generates inventory, execution, and coverage JSON without manually maintai
     { id: "CON-SPEC-7.1", title: "Runtime restart boundary" },
   ]
   const criticalBehaviorContract = {
-    behaviors: [{
-      id: "RECOVERY_SELL_ECONOMICS",
-      sourceModules: ["src/domain/strategies/conservative/recovery-sell-plan.js"],
-      tests: [mappedTest],
-    }],
+    behaviors: [
+      {
+        id: "RECOVERY_SELL_ECONOMICS",
+        sourceModules: ["src/domain/strategies/conservative/recovery-sell-plan.js"],
+        tests: [mappedTest],
+      },
+    ],
   }
-  const results = [{
-    id: scenario.id,
-    status: "PASSED",
-    testResults: [{ ...mappedTest, status: "PASSED" }],
-  }]
+  const results = [
+    {
+      id: scenario.id,
+      status: "PASSED",
+      testResults: [{ ...mappedTest, status: "PASSED" }],
+    },
+  ]
   const reports = buildScenarioReports({
     scenarios: [scenario],
     results,
