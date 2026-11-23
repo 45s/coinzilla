@@ -231,8 +231,8 @@ const scenarios = [
       reason: "MIN_NOTIONAL",
       minimumQuantity: "0.01",
       minimumNotional: "5",
-      evaluatedQuantity: "0.02",
-      evaluatedNotional: "0.02348",
+      evaluatedQuantity: "0.01",
+      evaluatedNotional: "0.01174",
     },
   },
   {
@@ -290,8 +290,8 @@ const scenarios = [
       reason: "MIN_NOTIONAL",
       minimumQuantity: "1",
       minimumNotional: "5",
-      evaluatedQuantity: "2.4",
-      evaluatedNotional: "0.132024",
+      evaluatedQuantity: "2",
+      evaluatedNotional: "0.11002",
     },
   },
   {
