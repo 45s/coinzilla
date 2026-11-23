@@ -855,15 +855,24 @@ function assertPathsDoNotOverlap({ firstPath, secondPath }) {
   const first = path.resolve(firstPath)
   const second = path.resolve(secondPath)
   if (
-    isPathWithin({ parent: first, candidate: second })
-    || isPathWithin({ parent: second, candidate: first })
+    isPathWithin({
+      parent: first,
+      candidate: second,
+    })
+    || isPathWithin({
+      parent: second,
+      candidate: first,
+    })
   ) {
     throw new Error(`Archive source directories must not overlap: ${first} and ${second}`)
   }
 }
 
 function resolveArchiveSourcePaths({ packageDirectory, env } = {}) {
-  const dataDirectory = resolveArchiveDataDirectory({ packageDirectory, env })
+  const dataDirectory = resolveArchiveDataDirectory({
+    packageDirectory,
+    env,
+  })
   const recoveryFactsDirectory = resolveOperationalStateDirectory({ env })
   if (path.basename(recoveryFactsDirectory) !== "recovery-facts") {
     throw new Error("Operational State Store archive path must end in recovery-facts.")
@@ -1073,9 +1082,15 @@ export async function runHarvesterArchivePush({
   onProgress = (message) => process.stdout.write(`${message}\n`),
   lockDirectory = path.join(os.homedir(), ".coinzilla", "harvester", "process-locks"),
 } = {}) {
-  const remote = resolveArchiveRemote({ env, args })
+  const remote = resolveArchiveRemote({
+    env,
+    args,
+  })
   await assertHarvesterProcessStopped({ lockDirectory })
-  const sourcePaths = resolveArchiveSourcePaths({ packageDirectory, env })
+  const sourcePaths = resolveArchiveSourcePaths({
+    packageDirectory,
+    env,
+  })
   for (const source of sourcePaths) {
     await assertRealDirectory(source.sourceDirectory)
   }
