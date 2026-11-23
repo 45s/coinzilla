@@ -7,8 +7,14 @@ import { RecoveryLedger } from "./recovery-ledger.js"
 import { calculateRecoverySellPlan } from "./recovery-sell-plan.js"
 import { updateTradingAccounting } from "../../../use-cases/update-trading-accounting.js"
 
-const baseAsset = new Asset({ id: "asset:DOGE", code: "DOGE" })
-const quoteAsset = new Asset({ id: "asset:USDT", code: "USDT" })
+const baseAsset = new Asset({
+  id: "asset:DOGE",
+  code: "DOGE",
+})
+const quoteAsset = new Asset({
+  id: "asset:USDT",
+  code: "USDT",
+})
 const market = new Market({
   venue: "binance",
   symbol: "DOGEUSDT",
@@ -32,14 +38,26 @@ function createFill({
     clientOrderId: `client-${tradeId}`,
     market,
     side,
-    price: new Money({ amount: price, asset: quoteAsset }),
-    quantity: new Quantity({ amount: quantity, asset: baseAsset }),
-    quoteQuantity: new Money({ amount: quoteQuantity, asset: quoteAsset }),
+    price: new Money({
+      amount: price,
+      asset: quoteAsset,
+    }),
+    quantity: new Quantity({
+      amount: quantity,
+      asset: baseAsset,
+    }),
+    quoteQuantity: new Money({
+      amount: quoteQuantity,
+      asset: quoteAsset,
+    }),
     commissions: commissionAmount === "0"
       ? []
       : [
         new Commission({
-          amount: new Money({ amount: commissionAmount, asset: commissionAsset }),
+          amount: new Money({
+            amount: commissionAmount,
+            asset: commissionAsset,
+          }),
         }),
       ],
     commissionStatus: "COMPLETE",
@@ -57,7 +75,7 @@ function applyFill({ state, fill }) {
   return result.data
 }
 
-test("plans recovery from cumulative multi-fill cost and confirmed partial SELL proceeds", () => {
+function applyRecoveryFills() {
   const emptyState = {
     portfolio: new Portfolio(),
     recoveryLedger: RecoveryLedger.empty({ market }),
@@ -88,7 +106,7 @@ test("plans recovery from cumulative multi-fill cost and confirmed partial SELL 
       executedAt: 2,
     }),
   })
-  const afterPartialSell = applyFill({
+  return applyFill({
     state: afterSecondBuy,
     fill: createFill({
       tradeId: "partial-sell-quote-fee",
@@ -101,40 +119,60 @@ test("plans recovery from cumulative multi-fill cost and confirmed partial SELL 
       executedAt: 3,
     }),
   })
+}
 
-  const position = afterPartialSell.portfolio.getPosition({ marketId: market.id })
+function assertCumulativeAccounting({ state, position }) {
   assert.equal(position.baseQuantity.amount, "10.9", "The active base quantity must include both BUY fills, subtract the base BUY fee, and subtract the partial SELL.")
   assert.equal(position.spent.amount, "13.05", "The full BUY cost must include both quote notionals and the quote-asset BUY commission.")
-  assert.equal(afterPartialSell.recoveryLedger.buyCost, "13.05", "The RecoveryLedger cost mirror must preserve the complete multi-fill BUY basis.")
-  assert.equal(afterPartialSell.recoveryLedger.netSellProceeds, "4.752", "Confirmed partial SELL proceeds must subtract the actual quote-asset commission.")
+  assert.equal(state.recoveryLedger.buyCost, "13.05", "The RecoveryLedger cost mirror must preserve the complete multi-fill BUY basis.")
+  assert.equal(state.recoveryLedger.netSellProceeds, "4.752", "Confirmed partial SELL proceeds must subtract the actual quote-asset commission.")
+}
 
-  const plan = calculateRecoverySellPlan({
+function createRecoveryPlan({ state, position }) {
+  return calculateRecoverySellPlan({
     activeQuantity: position.baseQuantity.amount,
     keepQuantity: "1",
-    positionSpent: afterPartialSell.recoveryLedger.buyCost,
-    saleProceeds: afterPartialSell.recoveryLedger.netSellProceeds,
+    positionSpent: state.recoveryLedger.buyCost,
+    saleProceeds: state.recoveryLedger.netSellProceeds,
     minProfit: "0.1",
     feeRate: "0.01",
     priceTickSize: "0.001",
     quantityStepSize: "0.1",
   })
+}
 
-  assert.deepEqual(plan, {
-    quantity: "9.8",
-    price: "0.866",
-    requiredNetProceeds: "8.398",
-  }, "The replacement recovery SELL must use the full accumulated BUY basis, net confirmed SELL proceeds, the per-cycle keep amount, and conservative fee reserves.")
-
+function assertFeeAdjustedQuantityBoundary() {
   const availableBaseInThousandths = 9900n
   const plannedBaseDebitInThousandths = (9800n * 101n) / 100n
   const nextStepBaseDebitInThousandths = (9900n * 101n) / 100n
+
   assert.equal(plannedBaseDebitInThousandths, 9898n, "A 9.8 SELL plus the 1% base-fee reserve must debit exactly 9.898 base.")
   assert.ok(plannedBaseDebitInThousandths < availableBaseInThousandths, "The planned fee-adjusted SELL debit must preserve at least the configured 1 base unit.")
   assert.equal(nextStepBaseDebitInThousandths, 9999n, "A 9.9 SELL plus the 1% base-fee reserve must debit exactly 9.999 base.")
   assert.ok(nextStepBaseDebitInThousandths > availableBaseInThousandths, "The next 0.1 quantity step must exceed the 9.9 base available above keepQuantity.")
+}
 
+function assertRoundedPriceCoversRecovery({ plan }) {
   const plannedNetProceedsNumerator = 980n * 866n * 99n
-  const requiredNetProceedsNumerator = 8398n * 1000000n
+  const requiredNetProceedsNumerator = 8398n * 10000n
+
   assert.equal(plannedNetProceedsNumerator, 84019320n, "A 9.8 SELL at 0.866 after a 1% quote-fee reserve must yield exactly 8.401932 net quote.")
   assert.ok(plannedNetProceedsNumerator > requiredNetProceedsNumerator, "The rounded-up recovery price must cover the exact 8.398 net quote requirement.")
+  assert.equal(plan.price, "0.866", "The minimum recovery price must round up to the next 0.001 tick.")
+}
+
+test("plans recovery from cumulative multi-fill cost and confirmed partial SELL proceeds", () => {
+  const state = applyRecoveryFills()
+  const position = state.portfolio.getPosition({ marketId: market.id })
+  assertCumulativeAccounting({ state, position })
+
+  const plan = createRecoveryPlan({ state, position })
+  assert.deepEqual(plan, {
+    quantity: "9.8",
+    price: "0.866",
+    requiredNetProceeds: "8.398",
+  }, "The replacement recovery SELL must use full accumulated BUY basis, net confirmed SELL proceeds, keepQuantity, and conservative fee reserves.")
+
+  assertFeeAdjustedQuantityBoundary()
+  assertRoundedPriceCoversRecovery({ plan })
 })
