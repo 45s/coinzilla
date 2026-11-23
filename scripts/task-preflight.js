@@ -80,7 +80,7 @@ export function validateInstructionSnapshot({ report, actual, required }) {
   }
   return errors;
 }
-function plain(text) {
+export function plain(text) {
   return text
     .replace(/<!--[\s\S]*?-->/g, '')
     .replace(/^\s*(?:What\b|Describe\b|List\b|Record\b|Which\b|Who\b|How\b|Summarize\b|Complete when resolved\b).*$/gim, '')
