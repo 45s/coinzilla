@@ -35,7 +35,8 @@ test('discovers nested AGENTS instructions applicable to changed paths', () => {
     'packages/brokers/AGENTS.md',
   ];
   assert.deepEqual(
-    discoverApplicableInstructionPaths({ paths, targets: ['apps/harvester/src/domain/decision.js'] }),
+    discoverApplicableInstructionPaths({ paths,
+targets: ['apps/harvester/src/domain/decision.js'] }),
     ['AGENTS.md', 'apps/harvester/AGENTS.md', 'apps/harvester/src/AGENTS.md'],
   );
 });
@@ -78,8 +79,10 @@ test('rejects malformed or incomplete preflight reports', () => {
 test('detects missing and stale instruction hashes', () => {
   const report = {
     instructions: [
-      { path: 'AGENTS.md', sha: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' },
-      { path: 'ENGINEERING_STANDARDS.md', sha: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' },
+      { path: 'AGENTS.md',
+sha: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' },
+      { path: 'ENGINEERING_STANDARDS.md',
+sha: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' },
     ],
   };
   const actual = new Map([
@@ -87,10 +90,14 @@ test('detects missing and stale instruction hashes', () => {
     ['ENGINEERING_STANDARDS.md', 'cccccccccccccccccccccccccccccccccccccccc'],
   ]);
 
-  assert.deepEqual(validateInstructionSnapshot({ report, actual, required: ['AGENTS.md', 'ENGINEERING_STANDARDS.md'] }), [
+  assert.deepEqual(validateInstructionSnapshot({ report,
+actual,
+required: ['AGENTS.md', 'ENGINEERING_STANDARDS.md'] }), [
     'Instruction hash is stale: ENGINEERING_STANDARDS.md',
   ]);
-  assert.deepEqual(validateInstructionSnapshot({ report, actual, required: [
+  assert.deepEqual(validateInstructionSnapshot({ report,
+actual,
+required: [
     'AGENTS.md',
     'ENGINEERING_STANDARDS.md',
     'docs/engineering/TASK_WORKFLOWS.md',
@@ -118,15 +125,18 @@ test('validates preflight report issue, status, required hashes, and ancestry', 
     issueNumber: 1754,
     commitSha: '0123456789012345678901234567890123456789',
     status: 'COMPLETE',
-    instructions: [{ path: 'AGENTS.md', sha: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' }],
+    instructions: [{ path: 'AGENTS.md',
+sha: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' }],
   };
-  assert.deepEqual(validatePreflightReport({ report, context: {
+  assert.deepEqual(validatePreflightReport({ report,
+context: {
     issueNumber: 1754,
     requiredPaths: ['AGENTS.md'],
     actualHashes: new Map([['AGENTS.md', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa']]),
     isAncestor: true,
   } }), []);
-  assert.ok(validatePreflightReport({ report, context: {
+  assert.ok(validatePreflightReport({ report,
+context: {
     issueNumber: 1755,
     requiredPaths: ['AGENTS.md'],
     actualHashes: new Map([['AGENTS.md', 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb']]),
@@ -153,7 +163,8 @@ test('blocks PR evidence when head SHA, acceptance, verification, or documentati
       issueNumber: 1754,
       commitSha: '0123456789012345678901234567890123456789',
       status: 'COMPLETE',
-      instructions: [{ path: 'AGENTS.md', sha: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' }],
+      instructions: [{ path: 'AGENTS.md',
+sha: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' }],
     },
     requiredInstructionPaths: ['AGENTS.md'],
     actualInstructionHashes: new Map([['AGENTS.md', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa']]),
