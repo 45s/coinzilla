@@ -4,7 +4,7 @@ status: active
 type: testing
 owner: harvester
 created: 2026-11-10
-last_verified: 2026-11-20
+last_verified: 2026-11-23
 ---
 
 # Harvester domain logic test inventory
@@ -17,11 +17,11 @@ Reviewed baseline: `develop` at `17f560ed96439fe9dcf3eb159d9f7e0b850dcd42` (2026
 
 All test improvements in this initiative must remain deterministic and offline. Issue [#626](https://github.com/45s/coinzilla/issues/626) and its user-data recovery implementation remain paused and outside this initiative.
 
-## Conservative domain scenario tests — issue #1763
+## Conservative existing-test audit — issue #1763
 
 The [scenario-test guide](CONSERVATIVE_DOMAIN_SCENARIO_TESTS.md) explains behavior-oriented tests that compose real domain components. The exhaustive coverage checklist and implementation status are maintained in [#1763](https://github.com/45s/coinzilla/issues/1763).
 
-The initial source-driven audit is **pending**. Existing tests listed above are evidence of focused unit/domain coverage; application engine tests and historical replay tests provide additional lifecycle evidence. Do not claim scenario-matrix completeness until every matrix item is mapped to a named test or an explicit application/replay owner and disposition.
+Phase 1 audits existing assertions only. The source-to-test matrix below records the current evidence and explicit gaps; it does not claim that a new scenario suite exists or that every possible event permutation is covered. Phase 2 scenario-suite work remains deferred.
 
 Planned scenario behaviors include initial BUY fill → standing BUY and recovery SELL; second BUY fill → recovery SELL replacement/recalculation; partial recovery SELL accounting; terminal recovery completion → next cycle; retained inventory and constrained dust; commission assets and exact-decimal/filter boundaries; and invalid, duplicate, conflicting, reordered, or incomplete evidence. This initiative adds coverage without redefining the canonical Conservative specification or authorizing exchange operations.
 
@@ -243,7 +243,6 @@ The scenario guide now includes a mandatory state-machine testing contract and c
 
 Do not treat the conceptual diagram as a new production state model: map every tested transition to the canonical Conservative specification and actual implementation first. Domain tests own pure transitions; application integration tests own broker submit/cancel, REST/stream reconciliation, durable barriers and shutdown. Status-only assertions do not establish transition coverage. See [scenario guide](CONSERVATIVE_DOMAIN_SCENARIO_TESTS.md) and [issue #1763](https://github.com/45s/coinzilla/issues/1763) for the full transition and adversarial-sequence requirements.
 
-
 ## Phase 1 — existing Conservative test audit (2026-11-23)
 
 **Scope:** audit existing tests only. No new `scenarios/` suite, production fixes, trading-rule changes, exchange operations or credentials.
@@ -255,7 +254,7 @@ Do not treat the conceptual diagram as a new production state model: map every t
 | BUY policy, VWAP, investment cap and active-order gating | `initial-buy-price.test.js`, `trailing-buy-repricing.test.js`, `strategy.test.js`, engine tests | COVERED for specified policy | Do not invent an investment-cap no-action reason; canonical spec allows the next BUY alongside an acknowledged recovery SELL. |
 | Second BUY, recovery SELL cancellation/fill race and replacement | Engine integration test; merged PR #1773 | COVERED for the named composed sequence | Other cancellation/REST/stream orderings remain covered by separate engine/reconciler tests; no claim that every permutation is composed in one test. |
 | SELL terminal reconciliation and actual fees | `reconcile-terminal-order-fills.test.js`, engine terminal SELL tests, recovery accounting tests | COVERED for tested terminal parity and commission paths | Existing large-engine helper has inconsistent default quote notional; its cleanup is BLOCKED by #1772. |
-| Completion, dust and retained inventory | `recovery-completion.test.js`, `recovery-completion.dust.test.js`, Position/workflow/engine tests | PARTIAL | Component and full-cycle completion conditions are covered; next-cycle fresh-basis isolation is added in open PR #1774 but is not merged and cannot yet count as develop coverage. |
+| Completion, dust and retained inventory | `recovery-completion.test.js`, `recovery-completion.dust.test.js`, Position/workflow/engine tests | PARTIAL | Component and full-cycle completion conditions are covered. Merged PR #1774 adds next-cycle fresh-basis isolation and stale prior-cycle fill replay assertions. |
 | Market readiness and exchange filters | Market freshness/readiness, metadata cache, strategy/filter and engine tests | COVERED for current documented behavior | Recovery-filter freshness defect was fixed in merged PR #1670; not an open audit finding. |
 | Market/account ownership and commitments | Portfolio, Position, allocator, account snapshot and multi-market engine tests | COVERED for tested market-scoped ownership | Keep broader cross-strategy/restart ownership boundaries separate from this Conservative-only audit. |
 | Lifecycle ordering, durable barriers and shutdown | Engine, terminal reconciler, durable Portfolio workflow and shutdown tests | COVERED for named application boundaries | Process restart restoration remains explicitly outside this scope (#654). |
@@ -265,9 +264,9 @@ Do not treat the conceptual diagram as a new production state model: map every t
 
 - #1771 — merged; exact recovery SELL fee oracle uses independent integer arithmetic.
 - #1773 — merged; cancellation-raced second-BUY accounting and late duplicate immutability assertions.
-- #1774 — open for user review; adds next-cycle basis isolation and stale prior-cycle fill replay assertions. All six GitHub Actions workflows passed on exact head `e6b4f956137dad4c2c2fdb5469d454375ce7fba9`. It is not yet merged and is not counted as develop coverage.
+- #1774 — merged to develop as merge commit `281a18c057bfe576155acf49f1080c11ec2ae42d`; adds next-cycle basis isolation and stale prior-cycle fill replay assertions. All six GitHub Actions workflows passed on exact PR head `e6b4f956137dad4c2c2fdb5469d454375ce7fba9`.
 - #1775 — merged; terminal Fill fixture quote notional uses exact decimal multiplication.
 - #1776 — merged; bootstrap/replay arithmetic uses exact decimal operations. The remaining large engine test oracle cleanup is still blocked as above.
 - #1772 — closed unmerged; the narrow engine fixture attempt hit 33 existing strict ESLint max-lines violations. No rule was suppressed.
 
-**Audit conclusion:** the A–J checkpoint is now reconciled with the merged PR state. The material remaining coverage gap is next-cycle fresh-basis isolation until #1774 is merged. The material test-quality blocker is the large engine test file's inconsistent SELL fixture default and remaining Number-based expectations. No confirmed production bug was found; therefore this audit creates no speculative bug issue. Phase 2 scenario-suite implementation remains deferred.
+**Audit conclusion:** the A–J existing-test checkpoint is reconciled with merged PR state. Next-cycle fresh-basis isolation and stale prior-cycle replay are covered by merged #1774. The material remaining test-quality blocker is the large engine test file's inconsistent SELL fixture default and remaining Number-based expectations; this is not evidence of a production defect. No confirmed production bug was found, so no speculative bug issue was created. Phase 2 scenario-suite implementation remains deferred.
