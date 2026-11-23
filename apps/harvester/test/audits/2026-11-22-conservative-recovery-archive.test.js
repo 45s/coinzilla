@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
-import { test as nodeTest } from "node:test"
+import { test } from "node:test"
 
 import {
   Asset,
@@ -17,9 +17,6 @@ import { RecoveryLedger } from "../../src/domain/strategies/conservative/recover
 import { evaluateRecoveryCompletion } from "../../src/domain/strategies/conservative/recovery-completion.js"
 import { StrategyId } from "../../src/domain/strategies/strategy-ids.js"
 import { updateTradingAccounting } from "../../src/use-cases/update-trading-accounting.js"
-
-const test = ({ name, run }) =>
-  nodeTest(`[2026-11-22-conservative-recovery-archive.test.js] ${name}`, run)
 
 const archive = JSON.parse(
   readFileSync(
@@ -422,7 +419,6 @@ function assertNoHistoricalFilterInference() {
 
 function assertPostPauseZroFill() {
   const zroCycle = archive.cycleOutcomes.find(cycle => cycle.symbol === "ZROUSDT")
-  const zroOrder = archive.orderTimelines.find(order => order.orderId === "1001164")
   const zroReplay = replayCycle({ cycle: zroCycle })
   const postPauseFill = archive.fills.find(fill => fill.brokerOrderId === "1001164")
 
@@ -740,51 +736,33 @@ function assertSubmissionAndShutdownEvidence() {
   )
 }
 
-test({
-  name: "reconstructs all three archived recovery cycles with exact Portfolio and RecoveryLedger accounting",
-  run: () => {
-    assertArchiveMetadata()
-    assertArchiveSourceHashes()
-    for (const cycle of archive.cycleOutcomes) {
-      assertCycleAccounting({ cycle })
-    }
-  },
+test("reconstructs all three archived recovery cycles with exact Portfolio and RecoveryLedger accounting", () => {
+  assertArchiveMetadata()
+  assertArchiveSourceHashes()
+  for (const cycle of archive.cycleOutcomes) {
+    assertCycleAccounting({ cycle })
+  }
 })
 
-test({
-  name: "keeps archived residuals in CONTINUE_SELL_THROUGH without inferring dust",
-  run: () => {
-    assertNoHistoricalFilterInference()
-    for (const cycle of archive.cycleOutcomes) {
-      assertCycleCompletion({ cycle })
-    }
-  },
+test("keeps archived residuals in CONTINUE_SELL_THROUGH without inferring dust", () => {
+  assertNoHistoricalFilterInference()
+  for (const cycle of archive.cycleOutcomes) {
+    assertCycleCompletion({ cycle })
+  }
 })
 
-test({
-  name: "preserves the archived owned-order and delayed-fill chronology",
-  run: () => {
-    assertPostPauseZroFill()
-    assertZroAndLinkOrderChronology()
-    assertAdaAndUnownedSellChronology()
-  },
+test("preserves the archived owned-order and delayed-fill chronology", () => {
+  assertPostPauseZroFill()
+  assertZroAndLinkOrderChronology()
+  assertAdaAndUnownedSellChronology()
 })
 
-test({
-  name: "preserves every archived cancellation pair, pause reason, and terminal-log line reference",
-  run: () => {
-    assertCancellationPairs()
-    assertPauseReasons()
-    assertTerminalLogReferences()
-  },
+test("preserves every archived cancellation pair, pause reason, and terminal-log line reference", () => {
+  assertCancellationPairs()
+  assertPauseReasons()
+  assertTerminalLogReferences()
 })
 
-test({
-  name: "replays a duplicate archived SELL fill without double-counting proceeds or profit",
-  run: assertDuplicateSellNoOp,
-})
+test("replays a duplicate archived SELL fill without double-counting proceeds or profit", assertDuplicateSellNoOp)
 
-test({
-  name: "records missing submission and shutdown evidence without manufacturing success",
-  run: assertSubmissionAndShutdownEvidence,
-})
+test("records missing submission and shutdown evidence without manufacturing success", assertSubmissionAndShutdownEvidence)
