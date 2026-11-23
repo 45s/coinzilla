@@ -2162,3 +2162,12 @@ The detailed evidence, implementation commits, CI state and remaining unknowns a
 - `makeSellFill()` now derives its default quote notional with exact decimal multiplication; explicit quote quantities remain unchanged. Three financial `Number` comparisons were replaced with exact `compareDecimal` assertions. Remaining `Number` conversions are broker DTO construction/status boundaries, not financial test oracles.
 - No production source, trading behavior, exchange state or credentials changed. No `scenarios/` suite was added.
 - PR #1792 remains open for user review; do not merge. Next work package after review is Phase 3: core recovery arithmetic.
+
+
+## 2026-11-23 — #1763 Phase 3 core recovery arithmetic
+
+- Started Phase 3 on the existing review branch and PR #1792; no second PR was opened.
+- Added a focused multi-fill recovery arithmetic composition test using real canonical Fill, Portfolio, RecoveryLedger, and `updateTradingAccounting` components.
+- The scenario independently verifies mixed base/quote commission effects, cumulative full BUY cost, partial SELL net proceeds, fee-adjusted sell quantity, tick-rounded recovery price, and exact net-proceeds sufficiency using BigInt cross-products.
+- This is test-only coverage. No production behavior or trading rules changed. Exact-head GitHub Actions verification is pending.
+- Next: review the remaining recovery arithmetic matrix against the canonical specification, add only evidenced missing boundary cases, and keep the issue/PR/inventory synchronized.

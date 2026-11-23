@@ -327,3 +327,12 @@ Do not treat the conceptual diagram as a new production state model: map every t
 - The only intermediate failure was repeated blank lines in the two updated Markdown files; both were corrected before the six-workflow pass. No production changes or scenario-suite work.
 - This checkpoint records the verified implementation; the final documentation-only commit is revalidated on its own exact head.
 - **Phase 2 complete on exact PR head `68c45654a70a1ef0e4df008350564ae1871a27d3`**: all six GitHub Actions workflows passed (Harvester Targeted Tests, Unit Tests, Test Coverage, Dependency Audit, Repository Quality, External Documentation Links). Repository Quality includes strict changed-file ESLint, workspace ESLint, actionlint, JavaScript syntax and Markdown checks. The final head includes the test-only helper decomposition and documentation checkpoint; the preceding implementation head `a6a03e785c6e80bae0f0b6090c7d1bf4c2f1a14b` also passed all six workflows. The four remaining `Number(...)` occurrences in `conservative-trading-engine.test.js` are broker DTO boundary conversions for `Order` construction/status, not financial expected-value assertions; they remain intentionally unchanged. Phase 2 exit criteria are met: the SELL Fill fixture has an independent exact notional default and financial comparisons use exact decimal assertions. No production behavior, trading rules or scenario suite changed. Phase 3 (core recovery arithmetic) is the next work package.
+
+
+### 2026-11-23 — Phase 3 core recovery arithmetic
+
+- Added `src/domain/strategies/conservative/recovery-sell-plan-multi-fill.test.js` as an offline domain composition regression.
+- The test applies two canonical BUY fills and one partial SELL through real `Fill`, `Portfolio`, `RecoveryLedger`, and `updateTradingAccounting` components. It mixes a base-asset BUY commission, quote-asset BUY commission, and quote-asset partial SELL commission.
+- Independent expectations prove active quantity `10.9`, full accumulated BUY cost `13.05`, confirmed net SELL proceeds `4.752`, remaining recovery requirement `8.398`, and replacement SELL plan `9.8 @ 0.866`.
+- Independent BigInt cross-products prove the 1% fee-adjusted base debit remains below the 9.9 sellable quantity, the next 0.1 step exceeds it, and the rounded-up price nets more than the exact required proceeds.
+- Test-only coverage; no production behavior, trading rules, exchange access, or credentials changed. Exact-head CI is pending.
