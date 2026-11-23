@@ -37,17 +37,31 @@ function createObserverError({ error, event, stage, code } = {}) {
   })
 }
 
+function getSafeValidationField(error) {
+  const field = error?.context?.field
+  if (
+    typeof field !== "string" ||
+    field.length > 128 ||
+    !/^[A-Za-z][A-Za-z0-9]*(?:\\.[A-Za-z][A-Za-z0-9]*)*$/.test(field)
+  ) {
+    return undefined
+  }
+  return field
+}
+
 function createFailureDiagnostic({ error, event, stage } = {}) {
   const normalized = createObserverError({
     error,
     event,
     stage,
   })
+  const field = getSafeValidationField(normalized)
   return {
     message: "Order history projection failed",
     persistenceStage: stage,
     errorName: normalized.name,
     errorCode: normalized.code ?? "HARVESTER_ORDER_HISTORY_PERSISTENCE_FAILED",
+    ...(field ? { field } : {}),
     ...createEventContext(event),
   }
 }
