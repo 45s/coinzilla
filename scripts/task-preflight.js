@@ -358,28 +358,46 @@ preflight,
 ...snapshot };
 }
 async function readPreflightTiming({ repo, token, pr, preflight }) {
+  const ancestor = await isPreflightAncestor({
+    repo,
+    token,
+    commitSha: preflight.commitSha,
+    headSha: pr.head.sha,
+  });
+  const firstCommitDate = await getFirstPullRequestCommitDate({
+    repo,
+    token,
+    baseSha: pr.base.sha,
+    headSha: pr.head.sha,
+  });
+  const recordedBeforeImplementation = Boolean(
+    firstCommitDate && preflight.createdAt && Date.parse(preflight.createdAt) <= Date.parse(firstCommitDate),
+  );
+  return { ancestor, recordedBeforeImplementation };
+}
+async function isPreflightAncestor({ repo, token, commitSha, headSha }) {
   const comparison = await api({
-    path: `/repos/${  repo  }/compare/${  preflight.commitSha  }...${  pr.head.sha}`,
+    path: '/repos/' + repo + '/compare/' + commitSha + '...' + headSha,
     token,
   });
-  const ancestor = comparison.status === 'ahead' || comparison.status === 'identical';
-  const prComparison = await api({
-    path: `/repos/${  repo  }/compare/${  pr.base.sha  }...${  pr.head.sha}`,
+  if (comparison.total_commits > comparison.commits.length) {
+    throw new Error('Preflight ancestry comparison is truncated; BLOCKED.');
+  }
+  return comparison.status === 'ahead' || comparison.status === 'identical';
+}
+async function getFirstPullRequestCommitDate({ repo, token, baseSha, headSha }) {
+  const comparison = await api({
+    path: '/repos/' + repo + '/compare/' + baseSha + '...' + headSha,
     token,
   });
-  if (prComparison.status !== 'ahead' && prComparison.status !== 'identical') {
+  if (comparison.status !== 'ahead' && comparison.status !== 'identical') {
     throw new Error('PR head is not based on the current target branch; update the branch and retry.');
   }
-  if (prComparison.total_commits > prComparison.commits.length) {
+  if (comparison.total_commits > comparison.commits.length) {
     throw new Error('PR commit comparison is truncated; preflight timing cannot be verified. BLOCKED.');
   }
-  const firstCommit = prComparison.commits?.[0];
-  const firstDate = firstCommit?.commit?.committer?.date || firstCommit?.commit?.author?.date || '';
-  const recordedBeforeImplementation = Boolean(
-    firstDate && preflight.createdAt && Date.parse(preflight.createdAt) <= Date.parse(firstDate),
-  );
-  return { ancestor,
-recordedBeforeImplementation };
+  const firstCommit = comparison.commits?.[0];
+  return firstCommit?.commit?.committer?.date || firstCommit?.commit?.author?.date || '';
 }
 async function readApplicableInstructionSnapshot({ repo, token, pr, preflight }) {
   const changed = await readChangedPullRequestPaths({ repo,
