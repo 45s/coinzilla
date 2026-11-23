@@ -987,7 +987,7 @@
         },
         {
           "path": "src/bootstrap/user-data/create-user-data-event-safety-halt.test.js",
-          "name": "routes REST/stream reconciliation failures through the account safety halt and applies a late SELL once",
+          "name": "routes REST/stream reconciliation failures through the account safety halt and applies a late SELL once to real projections",
           "kind": "failure"
         }
       ],
