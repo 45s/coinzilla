@@ -731,6 +731,27 @@ async function notifyStrategySafetyPause({
   }
 }
 
+function recordStrategySafetyPauseInProgressStatus({ state, symbol, reason, prepared }) {
+  const status = createStrategySafetyPauseStatus({
+    symbol,
+    reason,
+    complete: false,
+    pauseFactPersisted: prepared.pauseFactPersisted,
+    pauseEventPublished: prepared.pauseEventPublished,
+    cancellationResult: null,
+    unresolvedOrders: readActiveStrategySafetyPauseBuyOrders({
+      state,
+      symbol,
+    }),
+    blocker: {
+      persisted: null,
+      blockerId: null,
+    },
+    failures: prepared.failures,
+  })
+  state.strategySafetyPauseStatuses.set(symbol, status)
+}
+
 async function executeStrategySafetyPause({ dependencies, input } = {}) {
   const {
     state, logger, onPause, onOperationalStateStrategyMarketPaused,
@@ -760,23 +781,12 @@ async function executeStrategySafetyPause({ dependencies, input } = {}) {
       publishStrategyPaused,
       eventPublisher,
     })
-    state.strategySafetyPauseStatuses.set(symbol, createStrategySafetyPauseStatus({
+    recordStrategySafetyPauseInProgressStatus({
+      state,
       symbol,
       reason,
-      complete: false,
-      pauseFactPersisted: prepared.pauseFactPersisted,
-      pauseEventPublished: prepared.pauseEventPublished,
-      cancellationResult: null,
-      unresolvedOrders: readActiveStrategySafetyPauseBuyOrders({
-        state,
-        symbol,
-      }),
-      blocker: {
-        persisted: null,
-        blockerId: null,
-      },
-      failures: prepared.failures,
-    }))
+      prepared,
+    })
     const cancellationResult = await cancelStrategySafetyPauseBuys({
       symbol,
       cancelOwnedBuyOrdersWithinTransition,
