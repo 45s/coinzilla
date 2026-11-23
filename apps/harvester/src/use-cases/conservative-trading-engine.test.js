@@ -4800,78 +4800,99 @@ test("treats unclassified thrown terminal fill-history adapter errors as termina
   })
 })
 
+function createTerminalRecoverySellInvalidHistoryHarness({
+  fillHistory,
+  accountingState,
+  sellFillRef,
+  sellOrderRef,
+  seeded,
+} = {}) {
+  return createHarness({
+    initialPortfolio: seeded.portfolio,
+    initialRecoveryLedger: seeded.recoveryLedger,
+    baseFreeBalance: "1",
+    getPortfolio: () => accountingState.currentPortfolio,
+    getRecoveryLedger: () => accountingState.currentRecoveryLedger,
+    getTerminalFills: ({ orderId }) => {
+      if (sellFillRef.current?.brokerOrderId !== orderId) { return [] }
+      if (fillHistory !== "conflicting") { return [] }
+      return [sellFillRef.current, makeSellFill({
+        order: sellOrderRef.current,
+        tradeId: sellFillRef.current.tradeId,
+        quantity: "0.1",
+        quoteQuantity: "1",
+      })]
+    },
+    updateTradingAccounting: async ({ fill }) => {
+      accountingState.currentPortfolio = accountingState.currentPortfolio.applyFill({
+        strategyId: StrategyId.COIN_GRABBER,
+        fill,
+      }).portfolio
+      accountingState.currentRecoveryLedger = accountingState.currentRecoveryLedger.applyFill({
+        strategyId: StrategyId.COIN_GRABBER,
+        fill,
+      }).ledger
+      return { ok: true, data: { applied: true, duplicate: false } }
+    },
+  })
+}
+
+async function runTerminalRecoverySellInvalidHistoryCase({ fillHistory } = {}) {
+  const seeded = makeSeededRecoveryState()
+  const accountingState = {
+    currentPortfolio: seeded.portfolio,
+    currentRecoveryLedger: seeded.recoveryLedger,
+  }
+  const sellFillRef = { current: undefined }
+  const sellOrderRef = { current: undefined }
+  const harness = await createTerminalRecoverySellInvalidHistoryHarness({
+    fillHistory,
+    accountingState,
+    sellFillRef,
+    sellOrderRef,
+    seeded,
+  })
+  await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  const sellOrder = harness.engine.getOrders().find((order) => order.side === "SELL")
+  sellOrderRef.current = sellOrder
+  sellFillRef.current = makeSellFill({
+    order: sellOrder,
+    tradeId: `invalid-terminal-sell-${fillHistory === "conflicting" ? "conflict" : "missing"}`,
+    quantity: "0.2",
+    quoteQuantity: "20",
+  })
+  const result = await harness.engine.processUserDataEvent({
+    event: {
+      executedOrder: makeOrderStatusUpdate({
+        order: sellOrder,
+        status: "CANCELED",
+        executedQuantity: "0.2",
+      }),
+    },
+  })
+  return { result, harness, accountingState, fillHistory }
+}
+
+function assertTerminalRecoverySellInvalidHistory({ result, harness, accountingState, fillHistory } = {}) {
+  assert.equal(result.ok, false)
+  assert.equal(harness.accountedFills.length, 0)
+  assert.equal(accountingState.currentPortfolio.positions[0].baseQuantity.amount, "1")
+  assert.equal(accountingState.currentRecoveryLedger.netSellProceeds, "0")
+  assert.equal(harness.engine.getOrders().filter((order) => order.side === "SELL").length, 1)
+  assert.ok(harness.pauses.includes(
+    fillHistory === "conflicting"
+      ? "TERMINAL_ORDER_FILL_CONFLICTING_DUPLICATE"
+      : "TERMINAL_ORDER_EXECUTED_QUANTITY_MISMATCH",
+  ))
+}
+
 test("terminal recovery SELL with incomplete or conflicting fill history cannot advance", async () => {
   for (const fillHistory of [[], "conflicting"]) {
-    const seeded = makeSeededRecoveryState()
-    let currentPortfolio = seeded.portfolio
-    let currentRecoveryLedger = seeded.recoveryLedger
-    const sellFillRef = { current: undefined }
-    const sellOrderRef = { current: undefined }
-    const harness = await createHarness({
-      initialPortfolio: seeded.portfolio,
-      initialRecoveryLedger: seeded.recoveryLedger,
-      baseFreeBalance: "1",
-      getPortfolio: () => currentPortfolio,
-      getRecoveryLedger: () => currentRecoveryLedger,
-      getTerminalFills: ({ orderId }) => {
-        if (sellFillRef.current?.brokerOrderId !== orderId) {return []}
-        return fillHistory === "conflicting" ? [sellFillRef.current, makeSellFill({
-          order: sellOrderRef.current,
-          tradeId: sellFillRef.current.tradeId,
-          quantity: "0.1",
-          quoteQuantity: "1",
-        })] : []
-      },
-      updateTradingAccounting: async ({ fill }) => {
-        currentPortfolio = currentPortfolio.applyFill({ strategyId: StrategyId.COIN_GRABBER,
-fill }).portfolio
-        currentRecoveryLedger = currentRecoveryLedger.applyFill({ strategyId: StrategyId.COIN_GRABBER,
-fill }).ledger
-        return {
-          ok: true,
-          data: {
-          applied: true,
-          duplicate: false
-        }
-        }
-      },
-    })
-    await harness.engine.processMarketPrice({
-      symbol: "DOGEUSDT",
-      priceEvent: {
-        symbol: "DOGEUSDT",
-        price: "100",
-        timestamp: 1
-      },
-    })
-    sellOrderRef.current = harness.engine.getOrders().find((order) => order.side === "SELL")
-    const sellOrder = sellOrderRef.current
-    sellFillRef.current = makeSellFill({
-      order: sellOrder,
-      tradeId: `invalid-terminal-sell-${fillHistory === "conflicting" ? "conflict" : "missing"}`,
-      quantity: "0.2",
-      quoteQuantity: "20",
-    })
-    const result = await harness.engine.processUserDataEvent({
-      event: {
-        executedOrder: makeOrderStatusUpdate({
-          order: sellOrder,
-          status: "CANCELED",
-          executedQuantity: "0.2",
-        }),
-      },
-    })
-
-    assert.equal(result.ok, false)
-    assert.equal(harness.accountedFills.length, 0)
-    assert.equal(currentPortfolio.positions[0].baseQuantity.amount, "1")
-    assert.equal(currentRecoveryLedger.netSellProceeds, "0")
-    assert.equal(harness.engine.getOrders().filter((order) => order.side === "SELL").length, 1)
-    assert.ok(harness.pauses.includes(
-      fillHistory === "conflicting"
-        ? "TERMINAL_ORDER_FILL_CONFLICTING_DUPLICATE"
-        : "TERMINAL_ORDER_EXECUTED_QUANTITY_MISMATCH",
-    ))
+    const scenario = await runTerminalRecoverySellInvalidHistoryCase({ fillHistory })
+    assertTerminalRecoverySellInvalidHistory(scenario)
   }
 })
 
