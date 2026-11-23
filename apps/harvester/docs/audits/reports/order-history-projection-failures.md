@@ -187,3 +187,38 @@ Keep #1789 open until the following is resolved:
 - Implemented in draft PR #1796: bounded order-history failure summary and field/order-aware deduplication fingerprint; exact-head GREEN/CI pending.
 - Unresolved: historical invalid field(s), exact input shape(s), number of distinct invalid source events, exact historical source stage/build, observer attribution, and operational impact.
 - No source-ledger or database backfill; no archive rewrite; no TESTNET/LIVE activity.
+
+
+## 2026-11-23 follow-up: alternate retrieval attempts
+
+This follow-up records the next read-only retrieval attempts; it does not change the archive or the historical conclusions above.
+
+The immutable archive commit and both paths were queried directly again:
+
+- Archive commit: `f283c90db9143c74683ae5bf9c7bb52e09590d56`.
+- `archives/2026-11-22T17-35-17Z_77213df6/logs/cumulative/harvester.log`: Git blob `2c2b3fc8b4c43b7716ac834e5b717a8d696ca67f`; manifest size 96,308,862 bytes; expected SHA-256 `60017db6d228c5589a21c80223e4288488d5c5dee14468d07e7eb9e24003fc00`.
+- `archives/2026-11-22T17-35-17Z_77213df6/logs/cumulative/trace.log`: Git blob `b71b0d8200285f9179d4554402b357e85deb3830`; manifest size 97,056,981 bytes; expected SHA-256 `8a24cdb0e575d853bdcb795bde697d6e735260e94b1f227b813745e9a5dabb16`.
+
+Attempts and outcomes:
+
+1. Requested Base64 line ranges 1–20 for each file through the repository file endpoint. Both responses identified the expected blob SHA but returned an empty content string (0 bytes).
+2. Requested the `harvester.log` blob directly by its Git blob SHA. The connector rejected the response before returning content: `decoded message length too large: 117868062 bytes, limit: 67108864 bytes`.
+3. Checked for an existing local checkout of `coinzilla-archive`; none is mounted in this execution environment.
+4. Tried read-only `git ls-remote` against the private repository to determine whether a direct Git transport was available. The environment could not resolve `github.com`; no repository data was transferred.
+
+These attempts do not establish that the files are unavailable in GitHub. They establish that this execution environment currently has no usable transport for reading their bytes: the connected GitHub reader cannot return line ranges or oversized blobs, there is no mounted archive checkout, and direct Git network access is unavailable.
+
+### Exact operator retrieval request
+
+Please provide a read-only local checkout/path to `45s/coinzilla-archive` at commit `f283c90db9143c74683ae5bf9c7bb52e09590d56`, or export the two exact files listed above as byte-preserving chunks. Do not regenerate, normalize, re-encode, truncate, or rewrite either file.
+
+For a local checkout, the exact source objects can be read with:
+
+```sh
+git -C /path/to/coinzilla-archive show f283c90db9143c74683ae5bf9c7bb52e09590d56:archives/2026-11-22T17-35-17Z_77213df6/logs/cumulative/harvester.log
+git -C /path/to/coinzilla-archive show f283c90db9143c74683ae5bf9c7bb52e09590d56:archives/2026-11-22T17-35-17Z_77213df6/logs/cumulative/trace.log
+```
+
+Before analysis, calculate SHA-256 on each reconstructed original byte stream and require exact matches to the manifest hashes above. If exporting chunks, include byte offsets, preserve chunk order and bytes exactly, and verify the final concatenated file size and SHA-256. A partial export is not sufficient to claim integrity or to conclude that a missing event was absent.
+
+Until those exact bytes are supplied and verified, the historical invalid fields/input shapes, distinct invalid-record classes, historical projection stage/build, and operational impact remain unknown. Do not inspect the database dump; explicit owner authorization is still required.
