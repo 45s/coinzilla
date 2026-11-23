@@ -3,7 +3,6 @@ import assert from "node:assert/strict"
 import {
   Asset,
   CanonicalOrder,
-  Fill,
   Market,
   Money,
   Quantity,
@@ -186,7 +185,10 @@ function createSafetyPauseEngineCallbacks({ options, brokerState, state }) {
     getMarketMetadata: () => marketMetadata,
     getAccountSnapshot: () => brokerState.accountSnapshot,
     onPause: async ({ reason }) => brokerState.pauses.push(reason),
-    updateTradingAccounting: createSafetyPauseAccounting({ options, brokerState }),
+    updateTradingAccounting: createSafetyPauseAccounting({
+      options,
+      brokerState,
+    }),
     completeRecoveryCycle: async ({ marketId }) => {
       brokerState.completedCycles.push(marketId)
       return {
@@ -201,7 +203,11 @@ function createSafetyPauseEngineCallbacks({ options, brokerState, state }) {
   }
 }
 
-function createSafetyPauseEngine({ options, brokerState, state }) {
+function createSafetyPauseEngine({
+    options,
+    brokerState,
+    state,
+  }) {
   return makeConservativeTradingEngine({
     broker: brokerState.broker,
     appConfig: createSafetyPauseAppConfig(options.externalOrdersPolicy),
@@ -217,7 +223,11 @@ function createSafetyPauseEngine({ options, brokerState, state }) {
     onOperationalStateStrategyMarketPaused: options.onOperationalStateStrategyMarketPaused,
     onSafetyBlockerRaised: options.onSafetyBlockerRaised,
     initialState: options.initialState,
-    ...createSafetyPauseEngineCallbacks({ options, brokerState, state }),
+    ...createSafetyPauseEngineCallbacks({
+      options,
+      brokerState,
+      state,
+    }),
   })
 }
 
@@ -530,13 +540,20 @@ test("continues Recovery Seller evaluation when the Conservative strategy is saf
     evaluateRecoverySellerTransition: async ({ state: recoveryState }) => {
       assert.ok(recoveryState.paused.has("DOGEUSDT"))
       recoverySellEvaluations += 1
-      return { ok: true, data: { submitted: true } }
+      return {
+        ok: true,
+        data: { submitted: true },
+      }
     },
   })
 
   const result = await evaluate({
     symbol: "DOGEUSDT",
-    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+    priceEvent: {
+      symbol: "DOGEUSDT",
+      price: "100",
+      timestamp: 1,
+    },
   })
   assert.equal(result.ok, true)
   assert.equal(result.data.submitted, true)
@@ -553,7 +570,10 @@ test("allows only purpose-tagged RECOVERY_SELL through the strategy safety BUY g
       operatorPausedMarkets: new Set(),
       volatilityProtection: new Map(),
       prices: new Map([
-        ["DOGEUSDT", { price: "100", timestamp: 1 }],
+        ["DOGEUSDT", {
+          price: "100",
+          timestamp: 1,
+        }],
       ]),
       books: new Map(),
     },
@@ -569,7 +589,11 @@ test("allows only purpose-tagged RECOVERY_SELL through the strategy safety BUY g
   }
   const gate = createSubmissionGate(dependencies)
   const recoverySell = gate({
-    order: { market: { symbol: "DOGEUSDT" }, side: "SELL", type: "LIMIT" },
+    order: {
+      market: { symbol: "DOGEUSDT" },
+      side: "SELL",
+      type: "LIMIT",
+    },
     purpose: "RECOVERY_SELL",
   })
   const ordinarySell = gate({
@@ -577,7 +601,11 @@ test("allows only purpose-tagged RECOVERY_SELL through the strategy safety BUY g
     purpose: "NORMAL_SELL",
   })
   const recoveryBuy = gate({
-    order: { market: { symbol: "DOGEUSDT" }, side: "BUY", type: "LIMIT" },
+    order: {
+      market: { symbol: "DOGEUSDT" },
+      side: "BUY",
+      type: "LIMIT",
+    },
     purpose: "RECOVERY_BUY",
   })
 
