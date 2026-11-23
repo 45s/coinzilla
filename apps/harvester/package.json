@@ -137,7 +137,8 @@
       "src/infrastructure/http/start-trading-history-api.test.js",
       "src/infrastructure/http/market-data-api.test.js",
       "src/infrastructure/http/bitunix-futures-market-data.test.js",
-      "test/use-cases/conservative-trading-engine.test.js"
+      "test/use-cases/conservative-trading-engine.test.js",
+      "test/scenarios/shared/scenario-system.test.js"
     ]
   },
   "scripts": {
