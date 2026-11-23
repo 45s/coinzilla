@@ -932,6 +932,24 @@ async function startDeferredRecoveryScenario(fixture) {
   }
 }
 
+function createCancellationRacedSellFill({ fixture, pendingSellOrder }) {
+  return fixture.createTradeEvent({
+    acknowledgedOrder: pendingSellOrder,
+    tradeId: "trade-4",
+    quantity: "2",
+    executedQuantity: "2",
+    status: "PARTIALLY_FILLED",
+    commissions: [
+      new Commission({
+        amount: new Money({
+          amount: "0.001",
+          asset: fixture.quoteAsset,
+        }),
+      }),
+    ],
+  });
+}
+
 async function completeDeferredRecoverySellCancellation({ fixture, secondBuy, pendingSellOrder }) {
   const { engine, cancelStarted, pendingCancel, cancellations, setFillsForOrder } = fixture;
   const partialFill = engine.processUserDataEvent({
@@ -961,20 +979,9 @@ async function completeDeferredRecoverySellCancellation({ fixture, secondBuy, pe
     [pendingSellOrder.brokerOrderId],
     "The first BUY fill must cancel the acknowledged recovery SELL by its exact broker order ID.",
   );
-  const sellFillEvent = fixture.createTradeEvent({
-    acknowledgedOrder: pendingSellOrder,
-    tradeId: "trade-4",
-    quantity: "2",
-    executedQuantity: "2",
-    status: "PARTIALLY_FILLED",
-    commissions: [
-      new Commission({
-        amount: new Money({
-          amount: "0.001",
-          asset: fixture.quoteAsset,
-        }),
-      }),
-    ],
+  const sellFillEvent = createCancellationRacedSellFill({
+    fixture,
+    pendingSellOrder,
   });
   setFillsForOrder({ orderId: pendingSellOrder.brokerOrderId,
 fills: [sellFillEvent.fill] });
