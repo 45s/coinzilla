@@ -23,7 +23,7 @@ Examples:
 
 ## Standards compliance
 
-- [ ] Completed the mandatory [AI Task Compliance Standard](../docs/engineering/AI_TASK_COMPLIANCE_STANDARD.md) preflight; applicable standards were read and followed.
+- [ ] Consulted applicable repository/domain instructions and engineering standards.
 - [ ] Inspected existing implementation, consumers, tests and configuration; no policy was bypassed or weakened.
 - **Applicable standards:** <!-- List canonical documents or N/A with reason. -->
 - **Exceptions/conflicts:** <!-- None, or link the documented decision/blocker. -->
@@ -52,7 +52,7 @@ Examples:
 - **Tracking issue:** <!-- Link the live task contract and acceptance criteria. -->
 - **Commit sequence:** <!-- Summarize the meaningful test/implementation/docs increments; no unrelated or opaque bulk commit. -->
 - **Current checkpoint:** <!-- What is complete, what remains, and the next action? -->
-- [ ] The tracking issue is the current task source of truth: meaningful findings, evidence, decisions, rejected approaches, blockers and exact-SHA verification are recorded; the latest checkpoint includes the branch/head, next action and handoff state.
+- [ ] The tracking issue and PR accurately reflect current scope, decisions, blockers, and verification. Add a handoff checkpoint when work is paused or ownership changes; no Preflight evidence comment is required.
 - **Latest issue checkpoint:** <!-- Link the meaningful finding/decision/handoff comment, or state that the current issue description is up to date and no separate event comment is needed. -->
 - **Handoff readiness:** <!-- Can another agent resume from this issue, PR, branch and canonical docs alone? Link the latest checkpoint comment. -->
 - **Known blockers / decisions:** <!-- State evidence and safe boundaries, or None. -->

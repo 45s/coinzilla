@@ -1,17 +1,16 @@
 # Task-specific agent workflows
 
-All tasks must follow root AGENTS.md, AI_AGENT_WORKFLOW.md, the mandatory [AI Task Compliance Standard](AI_TASK_COMPLIANCE_STANDARD.md), the owning domain's AGENTS.md, and its roadmap. Use the smallest applicable checklist below; high-risk requirements are additive.
+All tasks must follow root AGENTS.md, AI_AGENT_WORKFLOW.md, applicable [AI task standards and verification guidance](AI_TASK_COMPLIANCE_STANDARD.md), the owning domain's AGENTS.md, and its roadmap. Use the smallest applicable checklist below; high-risk requirements are additive.
 
-## Mandatory standards-compliance preflight
+## Understand the task and applicable standards
 
-- [ ] Completed the task-start gate in [AI Task Compliance Standard](AI_TASK_COMPLIANCE_STANDARD.md) before changing state.
-- [ ] Recorded the versioned, hash-bearing issue report with `pnpm run task:preflight` before the first implementation commit; applicable nested `AGENTS.md` files are included.
-- [ ] Identified and read all applicable canonical standards, domain requirements, task checklist and linked specifications in full.
-- [ ] Inspected the actual source, consumers, tests, configuration and file tree; did not rely on memory or summaries.
-- [ ] Recorded task scope, constraints/invariants, acceptance criteria, verification and documentation impact.
-- [ ] Reviewed names for new or materially changed modules/functions/exports/variables: helpers are fully self-descriptive; core/domain functions are behavior-descriptive with contextual brevity; orchestration names express the action/transition; modules/services/classes remain concise and responsibility-oriented.
-- [ ] Resolved applicable requirements conflicts or documented a concrete blocker/exception; none were silently bypassed.
-- [ ] Repeated standards discovery if task scope or affected domains changed.
+- Read root and applicable nested `AGENTS.md` instructions.
+- Understand the request/issue, scope, acceptance criteria, constraints, and dependencies.
+- Consult the smallest applicable checklist and canonical engineering/domain documents.
+- Inspect relevant implementation, consumers, documentation, configuration, and tests.
+- Plan the change; implement, test, document, and verify it appropriately.
+
+Task Preflight is not required. No `pnpm run task:preflight`, readiness report, attestation, or issue-evidence comment is required before work or as a completion gate. The validator remains optional developer tooling. Preserve independent engineering, security, testing, documentation, and accurate issue/PR requirements.
 
 ## Task contract, incremental commits and handoff
 
@@ -19,7 +18,7 @@ For every non-trivial task, follow the mandatory [incremental commit and handoff
 
 - [ ] A GitHub Issue (or explicitly adopted existing issue) describes the goal, owning scope, exclusions, requirements/invariants, acceptance criteria, dependencies, verification and documentation impact.
 - [ ] The issue, branch, PR and owning roadmap link to one another where applicable; update task state as scope, decisions, blockers and progress change.
-- [ ] Follow [Continuous issue knowledge capture](../../AI_AGENT_WORKFLOW.md#continuous-issue-knowledge-capture--mandatory): record meaningful discoveries, evidence, decisions, rejected approaches, experiment outcomes, blockers and exact verification promptly; keep the issue description current and use comments for significant chronological events and handoffs.
+- [ ] Keep the issue and PR accurate when scope, acceptance criteria, decisions, blockers, or verification materially change. Use a handoff checkpoint when work is paused or ownership changes; no Preflight evidence comment is required.
 - [ ] Work is split into cohesive, reviewable commits using `<type>(<scope>): <imperative outcome>`; preserve test-first RED/GREEN evidence and avoid unrelated or progress-only commits.
 - [ ] Follow the commit-to-checkpoint loop in the canonical workflow: after each meaningful increment, inspect and validate it, commit and push it, synchronize with latest `develop` before pushing, and refresh the issue's current-state summary with the exact head SHA and next action before starting another increment.
 - [ ] Keep implementation, tests, and affected living documentation consistent in the same logical increment; when no documentation change is warranted, record the reason. Keep the roadmap status accurate without turning it into a commit diary.

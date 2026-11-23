@@ -14,7 +14,7 @@ Every AI agent and automated contributor must follow the canonical documents bel
 | Configuration ownership, validation, defaults, environment and migration | [Configuration Standard](docs/engineering/CONFIGURATION_STANDARD.md) |
 | Binance exchange environment selection | [ADR-0002: Explicit Binance trading environment](docs/architecture/decisions/ADR-0002-explicit-binance-trading-environment.md) |
 | Task checklists | [docs/engineering/TASK_WORKFLOWS.md](docs/engineering/TASK_WORKFLOWS.md) |
-| AI task standards discovery and compliance gate | [AI Task Compliance Standard](docs/engineering/AI_TASK_COMPLIANCE_STANDARD.md) |
+| Task standards discovery and verification | [AI Task Compliance Standard](docs/engineering/AI_TASK_COMPLIANCE_STANDARD.md) |
 | Domain/path ownership | [docs/engineering/DOMAIN_OWNERSHIP.md](docs/engineering/DOMAIN_OWNERSHIP.md) |
 | Bitunix Spot reference-driven implementation | [packages/brokers/AGENTS.md — mandatory Bitunix reference audit](packages/brokers/AGENTS.md#bitunix-spot-development--mandatory-reference-audit) |
 | Bitunix Spot discovery-to-regression workflow and operator-only LIVE investigation boundary | [packages/brokers/docs/BITUNIX_WORKFLOW.md](packages/brokers/docs/BITUNIX_WORKFLOW.md) |
@@ -36,14 +36,16 @@ The AI agent—not the user—owns branch freshness for the entire task. Agents 
 
 JavaScript control-flow style (including braces on all control statements and no nested ternary operators) is defined in [ENGINEERING_STANDARDS.md](ENGINEERING_STANDARDS.md#javascript-control-flow). Follow that canonical rule in all applications and packages.
 
-## Mandatory documentation and requirements preflight — hard gate
+## Understand the task and relevant standards
 
-Every AI agent and automated contributor MUST complete the task-start gate in the canonical [AI Task Compliance Standard](docs/engineering/AI_TASK_COMPLIANCE_STANDARD.md) before any state-changing work. That standard is the single authority for task-type discovery, applicable-document inventory and full reading, source/consumer/test inspection, conflict resolution, and the readiness record. Follow it in full together with the applicable task checklist and domain-specific instructions.
+For each task, read this file and the applicable nested `AGENTS.md` instructions. Use the smallest relevant [Task Workflows](docs/engineering/TASK_WORKFLOWS.md) checklist, consult canonical engineering and domain documents that apply, understand the request and acceptance criteria, and inspect the relevant implementation, consumers, documentation, and tests. Plan the work, then implement, test, and document it.
 
-Read-only discovery is permitted. No implementation, document edits, configuration/state mutation, PR creation, or adjacent work may begin until the preflight is complete and readiness is established. Each agent completes its own review. Before the first implementation commit, record the versioned issue report with `pnpm run task:preflight` as specified in the canonical standard. This is an agent task-start practice only; GitHub Actions does not validate or require the report. If required material is inaccessible or requirements conflict without explicit precedence, stop and report the exact blocker.
+Task Preflight is not a required development step. No `pnpm run task:preflight` command, readiness report, attestation, or issue-evidence recording is required before work, before a commit, or as a completion gate. The validator may be used voluntarily as developer tooling.
+
+If an actual requirement is unclear or conflicts with another applicable requirement, resolve the specific issue before changing behavior; do not invent requirements or weaken independent safety and engineering standards.
 
 **Task continuity and commit discipline — mandatory.** For every non-trivial task, use a GitHub Issue as the live task contract and follow the incremental commit, checkpoint and handoff protocol in [AI_AGENT_WORKFLOW.md](AI_AGENT_WORKFLOW.md#11-incremental-commits-and-resumable-task-handoffs--mandatory). Keep issue scope/acceptance/status, branch commits, PR description, roadmap and affected living documentation synchronized as work changes. A new agent must be able to resume without private chat context. Do not create a parallel task log or claim validation beyond the exact SHA actually checked.
-The same workflow's [Continuous issue knowledge capture](AI_AGENT_WORKFLOW.md#continuous-issue-knowledge-capture--mandatory) rule is mandatory: record meaningful findings, evidence, decisions, rejected approaches, experiment outcomes, blockers and exact verification promptly while work is active; keep the issue description as the current snapshot and comments as the significant chronological record.
+Keep the issue and PR current when scope, acceptance criteria, decisions, blockers, or verification materially change. No formal Preflight report, attestation, or issue-evidence comment is required to begin or complete work.
 
 ## Documentation governance — mandatory
 

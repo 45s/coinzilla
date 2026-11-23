@@ -14,7 +14,7 @@ This is the entry point for Harvester-specific documentation. Repository-wide ru
 - [Repository Configuration Standard](../../../docs/engineering/CONFIGURATION_STANDARD.md) — shared ownership, validation, defaults, environment access, secrets and migration rules.
 - [Harvester README](../README.md) — setup, runtime, configuration and operational overview
 - [Shared token specification generator](../README.md#generate-or-refresh-market-metadata) — retrieve and maintain exchange-derived market precision through `pnpm run config:symbol`; strategy pairs remain operator-owned
-- [Harvester agent instructions](../AGENTS.md) — mandatory preflight and domain-specific constraints
+- [Harvester agent instructions](../AGENTS.md) — applicable domain constraints and safety requirements
 - [Harvester roadmap](../ROADMAP.md) — current domain work and status
 - [Startup open-order ownership (ADR-0004)](architecture/decisions/0004-startup-open-orders-are-external.md) — accepted and implemented ownership rule for startup-snapshot orders
 - [Emergency BUY pause (ADR-0005)](architecture/decisions/0005-emergency-buy-pause.md) — global BUY controls and owned-BUY cancellation workflow; market command split is superseded by ADR-0006
@@ -86,7 +86,9 @@ Shared deterministic broker/runtime fixtures live in `test/bootstrap/start-harve
 ## Audit process
 
 - [2026-11-19 TESTNET Conservative session audit](audits/sessions/AUDIT_SESSION_2026-11-19_02-16-31Z.md) — latest historical session record: runbook gate conflict, external orders, failed shutdown safety proof and missing final evidence; no acceptance or exchange authorization.
-- [Conservative Recovery Lifecycle Audit](CONSERVATIVE_RECOVERY_LIFECYCLE_AUDIT.md) — #1359/#1362 lifecycle evidence map, including the 2026-11-22 sanitized archive fixture, exact fill accounting, merged fixes and explicit historical filter/shutdown limitations.
+- [Conservative Recovery Lifecycle Audit](CONSERVATIVE_RECOVERY_LIFECYCLE_AUDIT.md) — #1359/#1362 lifecycle evidence map, including sanitized archive reconstruction, exact fill accounting, late-fill safety and serialized shutdown proof.
+- [Conservative recovery archive review](CONSERVATIVE_RECOVERY_ARCHIVE_REVIEW_2026-11-23.md) — immutable 2026-11-22 source evidence, replay details and explicit historical unknowns.
+- [Issue #1789](https://github.com/45s/coinzilla/issues/1789) — separately tracks the 28 historical order-history projection failures.
 - [Harvester audit working rules](AUDIT_WORKING_RULES.md) — scope pointer to the repository-wide agent workflow and Harvester-specific audit boundaries.
 - [Harvester audit records index](audits/README.md) — historical evidence and investigation records.
 
