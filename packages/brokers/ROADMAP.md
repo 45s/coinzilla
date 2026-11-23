@@ -21,10 +21,10 @@ The official [Bitunix Spot signing contract](https://www.bitunix.com/api-docs/sp
 - The issue preserves the exact SARIF traces for both original sink locations: REST `create-rest-signature.js:75` and WebSocket `create-websocket-signature.js:63`.
 - The trace showed API-key sources in seven exact Bitunix integration/operator files: the operator probe and its test, broker config, REST/WebSocket clients, and REST/WebSocket signer modules. The candidate excludes only `apiKey` variable/property accesses in those exact files; it does not exclude other names or API keys across the repository.
 - The replacement query retains the upstream `InsufficientPasswordHash::Source`, `Sink`, and `Sanitizer` semantics for all other flows. It does not treat the key as sanitized and does not alter application code.
-- The non-uploading CLI regression workflow checks the exact original sink locations and source locations and uses a temporary positive weak-password-hash fixture. Ordinary source/query commits run the replacement pack only; config/pack changes in the triggering commit and manual dispatch revalidate full default-query selection. The full-suite selection was verified with 87 SARIF rules, the custom query selected, and the built-in query excluded. Full-suite GREEN: run 45119907302; current-head fast-path GREEN: run 45120789046.
+- The non-uploading CLI regression workflow checks the exact original sink locations and source locations and uses a temporary positive weak-password-hash fixture. Ordinary source/query commits run the replacement pack only; config/pack changes in the triggering commit and manual dispatch revalidate full default-query selection. The full-suite selection was verified with 87 SARIF rules, the custom query selected, and the built-in query excluded. Full-suite GREEN: run 45119907302; final PR-head fast-path GREEN: run 45121293430 (head f043f42d51edd7cae39e192c0782ab45bc6ed3e3).
 - The config file is not active in GitHub default setup merely because it is committed. Activation requires the repository `github-codeql-config-file` property to point to `.github/codeql/codeql-config.yml`. No repository setting has been changed. The regression workflow does not upload SARIF or alter Code Scanning alerts.
 - The query pack declares the CodeQL-only dependency codeql/javascript-all (^3.0.1), resolved by the pinned CodeQL CLI 2.27.5. No npm/pnpm application dependency, lockfile change, or runtime package is added.
-- Keep release PR [#1662](https://github.com/45s/coinzilla/pull/1662) blocked until the active CodeQL configuration runs a fresh analysis and confirms both original findings are absent on the exact release head.
+- PR #1758 is open and Ready for review (not draft), targeting develop. Its validated head is f043f42d51edd7cae39e192c0782ab45bc6ed3e3; it is 11 commits ahead / 0 behind develop at a623b2c0d767adcceadcb31e673772d2191b178d. Keep release PR [#1662](https://github.com/45s/coinzilla/pull/1662) blocked until PR #1758 is merged, an authorized admin activates the config through github-codeql-config-file, and a fresh active CodeQL analysis confirms both original findings are absent on the exact release head.
 
 Historical experiments, official references, exact commits, and CI outcomes are recorded chronologically in issue #1674.
 
@@ -1611,3 +1611,16 @@ See [the private polling contract](./docs/BITUNIX_SPOT_POLLING.md) and [the Bitu
 - The operator probe prints placement confirmation separately from reconciliation health and persists reconciliation metadata in its private one-shot marker. A confirmed placement must never be retried because a later read failed.
 - Tests cover verified/unavailable reconciliation metadata, the exact signed order-detail query, and persistence of confirmed placement evidence when readback fails.
 - No live exchange mutation is part of CI. The existing HYPE order's later cancellation and independent status verification are documented under [PR #1727](https://github.com/45s/coinzilla/pull/1727).
+
+
+## CodeQL remediation handoff — 2026-11-23
+
+- Current branch: `fix/security/codeql-password-hash-classification`.
+- Saved/validated head: `f043f42d51edd7cae39e192c0782ab45bc6ed3e3` (11 commits ahead, 0 behind `develop` at `a623b2c0d767adcceadcb31e673772d2191b178d`).
+- PR [#1758](https://github.com/45s/coinzilla/pull/1758) is **open and Ready for review**, not draft and not merged.
+- Do not create another PR or duplicate issue. Continue on PR #1758 and issue #1674.
+- Before any new edits, read root `AGENTS.md`, `ENGINEERING_STANDARDS.md`, `AI_AGENT_WORKFLOW.md`, `packages/brokers/AGENTS.md`, and the relevant CodeQL/security docs at the current branch head. Check branch/base freshness and all changed files.
+- Preserve the current validated query/config/workflow and signing behavior. Do not retry name-only renames, blanket sanitizers/suppressions, global query disablement, alert dismissal, or any change to Bitunix signature preimages/algorithm.
+- The only unfinished acceptance item is active GitHub Code Scanning activation/verification: after PR #1758 is merged and the config is on the default branch, an authorized admin must set repository property `github-codeql-config-file` to `.github/codeql/codeql-config.yml`; then run/await a fresh active scan on the intended release commit and inspect both original alert IDs and exact locations. If either remains, investigate and document a new evidence-based approach before editing.
+- Keep issue #1674 open and release PR #1662 blocked until that active scan confirms both alerts absent. A local CLI regression or non-uploading workflow is not proof that live alerts cleared.
+- Record each meaningful action, hypothesis, failure, successful experiment, commit SHA, and CI run immediately in issue #1674. Update the roadmap and CI docs when behavior/status changes. No npm/pnpm runtime dependencies or exchange API calls/mutations.
