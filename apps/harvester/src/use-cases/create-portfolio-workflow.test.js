@@ -878,6 +878,7 @@ function evaluateNextCycleDecision({ workflow }) {
 
 function assertNextCycleRecoverySell({ decision }) {
   const recoverySell = decision.actions.find(({ side }) => side === "SELL")
+  assert.ok(recoverySell, "The new active inventory must produce a recovery SELL intent.")
   assert.equal(recoverySell.quantity, "1", "The next recovery SELL must exclude the previous cycle's retained unit and preserve its own keepQuantity.")
   assert.equal(recoverySell.price, "20.01", "The next recovery SELL must recover only the new 20 quote-unit basis plus 0.01 minProfit.")
 }
@@ -891,6 +892,7 @@ test("starts the next recovery cycle from its new BUY basis without reusing prio
   assert.equal(nextCycleResult.ok, true, "The next cycle's canonical BUY fill must apply successfully.")
   assertNextCycleAccounting({ workflow })
   const decision = evaluateNextCycleDecision({ workflow })
+  assert.equal(decision.action, "PLACE_ORDERS", "The next cycle must remain eligible for its required standing orders.")
   assertNextCycleRecoverySell({ decision })
 })
 
