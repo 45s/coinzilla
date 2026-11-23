@@ -345,6 +345,7 @@ GitHub rulesets are administrator-managed. This repository PR does not change th
 
 - Require pull requests.
 - Require all six CI contexts: `Run package tests`, `Workspace test coverage`, `Check JavaScript syntax`, `packages/utils tests`, `Audit production dependencies`, and `actionlint`.
+- The `Check JavaScript syntax` required context is an aggregate: it depends on the separate `Task Preflight` job for `develop` pull requests as well as JavaScript/workspace quality. The dedicated job is therefore enforced without adding a seventh required status context.
 - Require branches to be up to date before merging (`strict_required_status_checks_policy: true`).
 - Require conversation resolution.
 - Require zero approving reviews and no code-owner review. The single developer manually reviews and merges task PRs.
