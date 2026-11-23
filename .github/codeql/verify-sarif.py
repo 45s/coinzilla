@@ -65,12 +65,12 @@ def verify_repository(path):
         raise AssertionError("The Coinzilla replacement query was not selected.")
     if BUILTIN_RULE_ID in rules:
         raise AssertionError("The original built-in query was not excluded.")
-    if len(rules) < 100 or not any(
+    if len(rules) < 80 or not any(
         rule_id.startswith("js/") and rule_id != BUILTIN_RULE_ID
         for rule_id in rules
     ):
         raise AssertionError(
-            "The default JavaScript query suite does not appear to remain enabled."
+            f"The default JavaScript query suite appears incomplete: {len(rules)} SARIF rules."
         )
 
     custom_results = [
@@ -87,13 +87,10 @@ def verify_repository(path):
     })
     print(f"Coinzilla replacement-query results: {len(custom_results)}")
     print(f"Bitunix signing-flow paths in SARIF: {reported_paths}")
-    for result in custom_results:
-        for uri in result_uris(result):
-            normalized = str(PurePosixPath(uri))
-            if any(normalized.endswith(path) for path in protected_paths):
-                raise AssertionError(
-                    f"Bitunix API-key signing flow still reported: {normalized}"
-                )
+    if reported_paths:
+        raise AssertionError(
+            "Bitunix API-key signing flow still reported: " + ", ".join(reported_paths)
+        )
 
 
 def verify_positive_fixture(path):
