@@ -163,6 +163,14 @@ export function plain(text) {
 
   return breakHtmlCommentOpeners(normalized).replace(/\s+/g, ' ').trim();
 }
+function hasConcreteAcceptanceCriteria(section) {
+  const vague = /\b(?:works? as expected|works? correctly|implemented correctly|implemented as requested|all tests pass|no issues remain)\b/i;
+  const criteria = section.split(/\r?\n/)
+    .filter((line) => /^\s*(?:[-*]|\d+\.)\s+/.test(line))
+    .map((line) => plain(line).replace(/^\s*(?:[-*]|\d+\.)\s*(?:\[[ xX]\]\s*)?/, '').trim())
+    .filter(Boolean);
+  return criteria.length > 0 && criteria.every((criterion) => criterion.length >= 24 && !vague.test(criterion));
+}
 export function validateIssueBody(body) {
   if (typeof body !== 'string' || !body.trim()) {return ['Issue body is empty.'];}
   const headings = [...body.matchAll(/^##\s+(.+?)\s*$/gm)];
