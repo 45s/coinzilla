@@ -720,13 +720,13 @@ The [Recovery Seller Domain Specification](../../apps/harvester/docs/domain/reco
 
 - A mixed SELL has multiple streamed and REST-reported fills.
 - The same canonical fill appears through both channels.
-- One projection commit is forced to fail.
+- The recovery projection can be calculated, but the legacy projection rejects its debit because remaining legacy inventory is insufficient.
 - A conflicting replay changes execution or allocation facts.
 
 **Expected output:**
 
 - The complete canonical fill set is reconciled to the terminal order quantity.
-- Recovery and legacy projections commit atomically.
+- Recovery and legacy domain projections are returned together or neither is published; a failed legacy projection leaves the original recovery Portfolio and legacy inputs unchanged.
 - Identical replay is an immutable no-op.
 - A conflicting replay is rejected.
 - A failed/incomplete commit preserves both prior projections and retains the cycle reservation while latching the required STOP.
@@ -746,7 +746,8 @@ The [Recovery Seller Domain Specification](../../apps/harvester/docs/domain/reco
 - Stream-before-REST and REST-before-stream.
 - Duplicate fill, conflicting duplicate, missing history, and incomplete quantity.
 - Base/quote/mixed commission allocation.
-- Failure before commit, during commit, and after successful commit before registry publication where covered by the contract.
+- Projection-level failure atomicity when legacy inventory is insufficient (covered).
+- Durable persistence transaction barriers and failures before/during/after commit, including registry publication, remain separate application-integration subcases.
 
 **Implementation:**
 
