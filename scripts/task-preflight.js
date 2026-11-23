@@ -526,7 +526,10 @@ async function main() {
     cwd: root,
     env: {},
   });
-  process.stdout.write(`${formatTaskPreflightIdentity({ metadata, runtimeVersion: process.version })}\n`);
+  process.stdout.write(`${formatTaskPreflightIdentity({
+    metadata,
+    runtimeVersion: process.version,
+  })}\n`);
 
   const args = parseArgs(process.argv.slice(2));
   if (args.version) {
@@ -539,9 +542,17 @@ async function main() {
     throw new Error('GITHUB_REPOSITORY is required.');
   }
   if (args.pr) {
-    await pullRequest({ repo, token });
+    await pullRequest({
+      repo,
+      token,
+    });
   } else {
-    await local({ root, args, repo, token });
+    await local({
+      root,
+      args,
+      repo,
+      token,
+    });
   }
 }
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){main().catch(e=>{process.stderr.write(`BLOCKED: ${e.message}\n`);process.exitCode=1;});}

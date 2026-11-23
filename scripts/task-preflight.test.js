@@ -30,6 +30,7 @@ test('parses pnpm separator and PR-mode arguments', () => {
   assert.deepEqual(parseArgs(['--', '--pull-request']), {
     issue: 0,
     paths: [],
+    version: false,
     record: false,
     pr: true,
     attestRead: false,
@@ -47,6 +48,7 @@ test('parses local preflight arguments and explicit attestations', () => {
   ]), {
     issue: 1754,
     paths: ['scripts', 'docs/engineering'],
+    version: false,
     record: true,
     pr: false,
     attestRead: true,
