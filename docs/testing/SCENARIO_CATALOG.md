@@ -8,6 +8,8 @@ created: 2026-11-23
 
 # Test scenario catalog
 
+Shared design guidance: [Domain Scenario Testing Methodology](DOMAIN_SCENARIO_TESTING.md). This catalog is the behavior-navigation and evidence index; owning domain specifications and issues remain authoritative for rules and detailed matrices.
+
 This is the single human-readable entry point for understanding the important behavioral scenarios the Coinzilla automated tests are intended to prove.
 
 It is organized around **what the application must do**, not around test filenames. Each scenario describes the business behavior, preconditions, inputs, expected outcomes, important subcases, implementation ownership, and the automated test cases that prove it.
