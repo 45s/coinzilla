@@ -179,6 +179,24 @@ function replayCycle({ cycle }) {
   }
 }
 
+function assertArchiveSourceHashes() {
+  assert.equal(
+    archive.source.factsSha256,
+    "1b923c1a090904df601463d14681090165b7f8d50a3806e96655699d90a97295",
+    "The fixture must retain the independently verified facts-file SHA-256.",
+  )
+  assert.equal(
+    archive.source.factsManifestSha256,
+    "3063f9ce829cce8a66a471672abee6b77ff52b6647b0b786381adc1db5f264bc",
+    "The fixture must retain the independently verified manifest SHA-256.",
+  )
+  assert.equal(
+    archive.source.terminalLogSha256,
+    "6ec912690afbfeb1d9c87c674647a34e11d855b2d59337c34ac58d54d2a93d33",
+    "The fixture must retain the independently verified terminal-log SHA-256.",
+  )
+}
+
 function assertArchiveMetadata() {
   assert.equal(
     archive.source.archiveCommit,
@@ -195,10 +213,15 @@ function assertArchiveMetadata() {
     48,
     "The source fact stream must retain its final sequence number.",
   )
-  assert.equal(
+  assert.match(
+    archive.source.dataCommitHash,
+    /^[0-9a-f]{64}$/,
+    "Archive data provenance must retain its original SHA-256-shaped value.",
+  )
+  assert.notEqual(
     archive.source.dataCommitHash,
     archive.source.lastDigest,
-    "Archive data provenance must not be represented as a runtime source commit.",
+    "The archive data commit hash must not be confused with the final fact digest.",
   )
   assert.equal(
     archive.source.runtimeSessionId,
@@ -713,6 +736,7 @@ test({
   name: "reconstructs all three archived recovery cycles with exact Portfolio and RecoveryLedger accounting",
   run: () => {
     assertArchiveMetadata()
+    assertArchiveSourceHashes()
     for (const cycle of archive.cycleOutcomes) {
       assertCycleAccounting({ cycle })
     }
