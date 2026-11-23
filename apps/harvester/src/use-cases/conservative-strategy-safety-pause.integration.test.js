@@ -393,7 +393,7 @@ test("gates BUYs before canceling only registered BUYs and reconciles cancellati
     hasUnownedOpenOrdersForSymbol: () => true,
     externalOrdersPolicy: "ignore",
     cancelWithFill: true,
-    cancelExecutedQuantity: "1",
+    cancelExecutedQuantity: "0.5",
     accountingApplied: true,
     onOperationalStateStrategyMarketPaused: async (fact) => {
       pauseFacts.push(fact)
