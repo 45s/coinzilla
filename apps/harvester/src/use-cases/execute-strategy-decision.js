@@ -74,32 +74,19 @@ function attachAcknowledgedOrderProviderIdentity({ pendingOrder, brokerAcknowled
   })
 }
 
-function createExecutionContext({ options } = {}) {
-  const {
-    broker,
-    onPendingOrder,
-    onAcknowledgedOrder,
-    onSubmissionFailure,
-    onDurableSubmissionIntent,
-    onDurableSubmissionOutcome,
-    onOrderValidationFailure = async () => {},
-    canSubmit = () => true,
-    onSubmissionDeferred = async () => {},
-  } = options
-  if (typeof broker?.placeOrder !== "function") {
-    throw new TypeError("makeExecuteStrategyDecision requires a broker placeOrder port")
-  }
-  const callbacks = {
-    onPendingOrder,
-    onAcknowledgedOrder,
-    onSubmissionFailure,
-    onOrderValidationFailure,
-    canSubmit,
-    onSubmissionDeferred,
-  }
+function validateRequiredExecutionCallbacks({ callbacks } = {}) {
   for (const [name, callback] of Object.entries(callbacks)) {
-    if (typeof callback !== "function") {throw new TypeError(`${name  } must be a function`)}
+    if (typeof callback !== "function") {
+      throw new TypeError(`${name} must be a function`)
+    }
   }
+}
+
+function validateDurableSubmissionCallbacks({
+  onDurableSubmissionIntent,
+  onDurableSubmissionOutcome,
+  requireDurableSubmission,
+} = {}) {
   if (onDurableSubmissionIntent !== undefined && typeof onDurableSubmissionIntent !== "function") {
     throw new TypeError("onDurableSubmissionIntent must be a function")
   }
@@ -109,6 +96,46 @@ function createExecutionContext({ options } = {}) {
   if ((onDurableSubmissionIntent === undefined) !== (onDurableSubmissionOutcome === undefined)) {
     throw new TypeError("onDurableSubmissionIntent and onDurableSubmissionOutcome must be provided together")
   }
+  if (typeof requireDurableSubmission !== "boolean") {
+    throw new TypeError("requireDurableSubmission must be a boolean")
+  }
+  if (requireDurableSubmission &&
+      (onDurableSubmissionIntent === undefined || onDurableSubmissionOutcome === undefined)) {
+    throw new TypeError("Durable order submission requires both durable submission callbacks")
+  }
+}
+
+function createExecutionContext({ options } = {}) {
+  const {
+    broker,
+    onPendingOrder,
+    onAcknowledgedOrder,
+    onSubmissionFailure,
+    onDurableSubmissionIntent,
+    onDurableSubmissionOutcome,
+    requireDurableSubmission = false,
+    onOrderValidationFailure = async () => {},
+    canSubmit = () => true,
+    onSubmissionDeferred = async () => {},
+  } = options
+  if (typeof broker?.placeOrder !== "function") {
+    throw new TypeError("makeExecuteStrategyDecision requires a broker placeOrder port")
+  }
+  validateRequiredExecutionCallbacks({
+    callbacks: {
+      onPendingOrder,
+      onAcknowledgedOrder,
+      onSubmissionFailure,
+      onOrderValidationFailure,
+      canSubmit,
+      onSubmissionDeferred,
+    },
+  })
+  validateDurableSubmissionCallbacks({
+    onDurableSubmissionIntent,
+    onDurableSubmissionOutcome,
+    requireDurableSubmission,
+  })
   const orderIdNamespace = randomUUID().replaceAll("-", "").slice(0, 22)
   let orderSequence = 0
   const providerIdentity = resolveProviderIdentity({

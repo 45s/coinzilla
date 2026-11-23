@@ -316,6 +316,7 @@ function createHarvesterTradingEngineCoreOptions(options = {}) {
     updateTradingAccounting: options.updateTradingAccounting,
     updateRecoverySellerAccounting: options.recoverySellerWorkflow?.applyBuyFill,
     completeRecoveryCycle: options.completeRecoveryCycle,
+    requireOperationalStateSubmissionDurability: options.requireOperationalStateSubmissionDurability,
     isMarketPriceFresh: options.isMarketPriceFresh,
     isMarketBookFresh: options.isMarketBookFresh,
     getVolatilityData: ({ symbol } = {}) => options.candleHistoryService.getSnapshot({ symbol }),

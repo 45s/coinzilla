@@ -116,6 +116,7 @@
       "src/use-cases/create-latest-transition-evaluator.test.js",
       "src/use-cases/create-market-metadata-cache.test.js",
       "src/use-cases/conservative-engine-order-event-composition.test.js",
+      "src/use-cases/conservative-submission-durability.integration.test.js",
       "src/use-cases/order-event-workflow.test.js",
       "src/use-cases/create-recovery-seller-order-submitter.test.js",
       "src/use-cases/record-order-submission-intent.test.js",

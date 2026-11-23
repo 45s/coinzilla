@@ -12,6 +12,14 @@
 - [ ] Run exact-head package tests, reliability/coverage and required CI; update status after verified results.
 - No exchange operations or Harvester process startup are authorized or required. Process-restart restoration remains disabled.
 
+## Conservative Operational State submission barrier (#1743)
+
+- **In progress in [PR #1750](https://github.com/45s/coinzilla/pull/1750).** The archived 49-record session contains zero `ORDER_SUBMISSION_INTENT` and zero `ORDER_SUBMISSION_OUTCOME` facts. Sequence 5 is the provider-attributed ZROUSDT BUY fill for client order `h-dff68008c72c47a59368ad-2` / broker order `1001129` in runtime session `ebe7c1d3-ff7d-47db-b2fe-2e5ec9594c1c`; the fill itself is retained unchanged.
+- Root cause: Conservative passed `onOperationalStateSubmissionIntent` / `onOperationalStateSubmissionOutcome` to an executor that accepts `onDurableSubmissionIntent` / `onDurableSubmissionOutcome`. The optional executor callbacks were therefore absent on the order path even while the Operational State Store was configured.
+- Fix: map the canonical callback names, require the pair at engine activation whenever the store exists, and enforce the requirement again inside the executor. Regression coverage proves intent-before-broker ordering, fail-closed intent persistence, and rejection of missing callbacks. Existing tests continue to own definite rejection, UNKNOWN outcome, outcome-write failure, and local-acknowledgement ordering.
+- Preserve provider-attributed fill ownership and projector behavior. Never reconstruct missing intents, alter the archive/original ledger, initialize or repair the store, or enable automatic process-restart restoration. Verification is offline; no Binance connection or exchange write is part of this task.
+- Core implementation is isolated in commit `ee7afb525039ad86f7860665ee83c3c79c944e6e`; the exact-head CI run must verify the production and regression changes before this roadmap item is closed.
+
 ## Read-only Operational State diagnostics (#1740)
 
 - **In progress in [PR #1741](https://github.com/45s/coinzilla/pull/1741):** add `pnpm run operational-state:diagnose` to verify the existing facts/manifest streams with the production store reader, then independently report the offline recovery-projection result.
