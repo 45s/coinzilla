@@ -51,7 +51,10 @@ function createBroker({ orderRow = createOrderRow() } = {}) {
       dependencies: {
         fetchFn: async (...args) => {
           const [url, options] = args
-          requests.push({ url: String(url), options })
+          requests.push({
+            url: String(url),
+            options,
+          })
           const path = new URL(url).pathname
           if (path === "/api/v1/futures/market/trading_pairs") {
             return createFuturesResponse({
@@ -82,7 +85,10 @@ function createBroker({ orderRow = createOrderRow() } = {}) {
       },
     },
   })
-  return { broker, requests }
+  return {
+    broker,
+    requests,
+  }
 }
 
 test("Bitunix Futures getCanonicalOrder reads by client ID and preserves exact order facts", async () => {
