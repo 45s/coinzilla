@@ -1212,6 +1212,13 @@ export class BitunixFuturesBroker {
     }
   }
 
+  async getOpenOrders() {
+    return unsupportedResult({
+      operation: "getOpenOrders",
+      reason: "The Futures pending-order API returns provider-specific DTOs and does not yet satisfy the shared legacy Order[] completeness contract.",
+    })
+  }
+
   async getFills() {
     return unsupportedResult({
       operation: "getFills",
