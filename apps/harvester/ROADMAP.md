@@ -2,12 +2,59 @@
 
 ## P0 Conservative recovery SELL idempotency — issue #1827
 
-- In progress in [PR #1831](https://github.com/45s/coinzilla/pull/1831) on branch `fix/harvester/1827-recovery-sell-idempotency`.
-- The final submission gate now owns a Position-scoped reservation check in addition to the strategy's active-order suppression. PENDING, OPEN, PARTIALLY_FILLED and UNKNOWN Conservative SELLs reserve the Position; the candidate is excluded from its own post-registration gate recheck; terminal registry transitions release the reservation.
-- RED was observed on exact test-only head `aec7ade8c57ba1c8ed66ce17855373919455b3fe`: the new reservation test failed because the gate returned `allowed: true` for an existing PENDING SELL. GREEN implementation and deterministic repeated-event, delayed-ack, market-data-failure, and strategy-evaluation-failure integration coverage are now included in the task branch.
-- Incident classification remains incomplete: the published recovery-facts stream contains no SELL submission outcomes. Compressed Journal, structured log and trace artifacts are hash-recorded, but the contents have not yet been decoded; do not claim any incident clientOrderId was accepted, rejected or UNKNOWN without those records or authoritative broker history.
-- [Issue #1828](https://github.com/45s/coinzilla/issues/1828) is an integration prerequisite. This branch was created from the then-current `develop`; after #1828 merges, merge the updated `develop` into this branch (do not rewrite history), resolve only genuine conflicts, and rerun the full relevant verification on the resulting head.
-- No exchange writes, cancellations, account mutations or Harvester restarts are authorized or required.
+**Implementation:** ready for review in [PR #1831](https://github.com/45s/coinzilla/pull/1831), branch
+`fix/harvester/1827-recovery-sell-idempotency`. The issue remains open for incident evidence and
+root-cause classification.
+
+- The final submission gate mirrors the existing Conservative active-SELL ownership predicate.
+  Any active COIN_GRABBER-owned SELL for the same market reserves its single Position, including
+  legacy orders with stale or missing Position IDs.
+- PENDING, OPEN, PARTIALLY_FILLED and UNKNOWN orders hold the reservation. The candidate is
+  excluded from its own post-registration gate recheck. FILLED, CANCELED, REJECTED and EXPIRED
+  registry transitions release it. Recovery Seller ownership is isolated.
+- TDD RED was observed on test-only head
+  `aec7ade8c57ba1c8ed66ce17855373919455b3fe`: an existing PENDING SELL did not block a second
+  recovery SELL at the final application gate. GREEN implementation and regression tests cover
+  repeated events, delayed acknowledgement, terminal transitions, market-data failures and
+  strategy-evaluation failures.
+- Harvester targeted tests, full Harvester unit tests, workspace unit tests, Repository Quality,
+  Dependency Audit and Harvester coverage floors passed on the task head at the last verification.
+  The new submission-gate module measured 90.54% lines, 92.22% branches and 100% functions.
+
+### Source trace and incident classification
+
+- Strategy evaluation already reads active COIN_GRABBER SELLs from the registry. The new final
+  gate independently enforces the same market/strategy reservation before broker I/O.
+- The pending lifecycle registers PENDING and publishes the durable intent before broker I/O.
+  The `SUBMITTED` lifecycle log is emitted before the final post-registration gate recheck and
+  before the broker call; it proves intent creation, not that the broker request was sent.
+- ACKNOWLEDGED submissions update the registry; uncertain outcomes become UNKNOWN and pause the
+  market. A definite rejection removes the pending reservation. A definite post-only rejection
+  also invalidates the market book. After a definite filter rejection, the next evaluation
+  refreshes recovery-sell market metadata when no active SELL remains and pauses if filters are
+  unavailable.
+- Market-book parsing/processing errors delete the cached book. Strategy-evaluation exceptions
+  pause the market. These failure paths are independently covered; temporal proximity does not
+  establish that they caused the incident's repeated intents.
+- The archive's recovery-facts stream contains 25 records: six BUY intents with six ACKNOWLEDGED
+  outcomes, three BUY fills, two BUY cancellation intent/outcome pairs, and no SELL submission
+  intent/outcome records. Preflight recorded 10 unowned open orders and BLOCKED readiness, then
+  raised the account-level `RECOVERY_SELLER_UNEXPECTED_CONDITION` safety blocker. This belongs
+  to Team A / #1828; this PR does not modify startup admission.
+- The exact session is present in private archive commit
+  `e965b979ad74e8d2a0caaa19071afd2bc6b38e6c`. The GitHub integration can read its manifest and
+  recovery-facts text, but cannot decode the compressed binary artifacts; unauthenticated CI
+  access returns HTTP 404. To classify each listed clientOrderId, the Journal
+  `2026-11-24_17-12-20-386708f6-29e6-46e1-87fe-3a9665e97871.jsonl.gz`, `harvester.log.gz`,
+  `terminal.log.gz` and `trace.log.gz` are required. Redact credentials if present, but preserve
+  clientOrderIds, brokerOrderIds, timestamps, statuses and error codes. Until then, do not claim
+  any incident SELL was accepted, rejected, unknown or never sent.
+
+[Issue #1828](https://github.com/45s/coinzilla/issues/1828) is an integration prerequisite. After
+#1828 merges, merge the updated `develop` into this branch without rewriting history, resolve
+genuine conflicts, and rerun focused tests and exact-head verification. No exchange writes,
+cancellations, account mutations or Harvester restarts are authorized or required.
+
 
 ## Conservative trading correctness and exhaustive scenario coverage — issue #1763
 
