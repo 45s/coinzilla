@@ -73,6 +73,52 @@ function applyCloseState({ currentState, afterClose, positionId, symbol }) {
   })
 }
 
+function handleFlashClosePosition({ options, currentState, afterClose, closeError, closeAcceptedOnError }) {
+  const body = JSON.parse(options.body)
+  if (closeError) {
+    if (closeAcceptedOnError) {
+      currentState.value = applyCloseState({
+        currentState: currentState.value,
+        afterClose,
+        positionId: body.positionId,
+      })
+    }
+    throw closeError
+  }
+  currentState.value = applyCloseState({
+    currentState: currentState.value,
+    afterClose,
+    positionId: body.positionId,
+  })
+  return createResponse({
+    data: {
+      positionId: body.positionId,
+    },
+  })
+}
+
+function handleCloseAllPositions({ options, currentState, afterClose, closeError, closeAcceptedOnError }) {
+  const body = JSON.parse(options.body)
+  if (closeError) {
+    if (closeAcceptedOnError) {
+      currentState.value = applyCloseState({
+        currentState: currentState.value,
+        afterClose,
+        symbol: body.symbol,
+      })
+    }
+    throw closeError
+  }
+  currentState.value = applyCloseState({
+    currentState: currentState.value,
+    afterClose,
+    symbol: body.symbol,
+  })
+  return createResponse({
+    data: [],
+  })
+}
+
 function createPositionFetch({
   requests,
   currentState,
@@ -89,54 +135,29 @@ function createPositionFetch({
     })
     const path = new URL(url).pathname
     if (path === "/api/v1/futures/position/get_pending_positions") {
-      const requestedSymbol = new URL(url).searchParams.get("symbol")
+      const symbol = new URL(url).searchParams.get("symbol")
+      const positions = currentState.value.filter((position) =>
+        symbol === null || position.symbol === symbol)
       return createResponse({
-        data: currentState.value.filter((position) =>
-          requestedSymbol === null || position.symbol === requestedSymbol),
+        data: positions,
       })
     }
     if (path === "/api/v1/futures/trade/flash_close_position") {
-      const body = JSON.parse(options.body)
-      if (closeError) {
-        if (closeAcceptedOnError) {
-          currentState.value = applyCloseState({
-            currentState: currentState.value,
-            afterClose,
-            positionId: body.positionId,
-          })
-        }
-        throw closeError
-      }
-      currentState.value = applyCloseState({
-        currentState: currentState.value,
+      return handleFlashClosePosition({
+        options,
+        currentState,
         afterClose,
-        positionId: body.positionId,
-      })
-      return createResponse({
-        data: {
-          positionId: body.positionId,
-        },
+        closeError,
+        closeAcceptedOnError,
       })
     }
     if (path === "/api/v1/futures/trade/close_all_position") {
-      const body = JSON.parse(options.body)
-      if (closeError) {
-        if (closeAcceptedOnError) {
-          currentState.value = applyCloseState({
-            currentState: currentState.value,
-            afterClose,
-            symbol: body.symbol,
-          })
-        }
-        throw closeError
-      }
-      currentState.value = applyCloseState({
-        currentState: currentState.value,
+      return handleCloseAllPositions({
+        options,
+        currentState,
         afterClose,
-        symbol: body.symbol,
-      })
-      return createResponse({
-        data: [],
+        closeError,
+        closeAcceptedOnError,
       })
     }
     if (path === "/api/v1/futures/position/get_history_positions") {
