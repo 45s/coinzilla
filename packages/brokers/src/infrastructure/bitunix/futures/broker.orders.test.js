@@ -250,7 +250,13 @@ test("Bitunix Futures common open-order method remains explicitly unsupported", 
 })
 
 
-function createCancellationFetch({ requests }) {
+function createCancellationFetch({
+  requests,
+  cancelResponse,
+  detailStatus = "PART_FILLED_CANCELED",
+  pendingOrder = {},
+  cancelError,
+}) {
   return async (...request) => {
     const [url, options] = request
     const path = new URL(url).pathname
@@ -278,6 +284,7 @@ function createCancellationFetch({ requests }) {
             realizedPNL: "0",
             effect: "GTC",
             status: "PART_FILLED",
+            ...pendingOrder,
           })],
           total: 1,
         },
@@ -286,13 +293,16 @@ function createCancellationFetch({ requests }) {
     if (path === "/api/v1/futures/trade/get_order_detail") {
       return createFuturesResponse({
         data: createOrderRow({
-          status: "PART_FILLED_CANCELED",
+          status: detailStatus,
         }),
       })
     }
     if (path === "/api/v1/futures/trade/cancel_orders") {
+      if (cancelError) {
+        throw cancelError
+      }
       return createFuturesResponse({
-        data: {
+        data: cancelResponse ?? {
           successList: [{
             orderId: "futures-order-123",
             clientId: "strategy-order-456",
@@ -305,7 +315,10 @@ function createCancellationFetch({ requests }) {
   }
 }
 
-function createCancellationBroker({ allowLiveOrderMutations = true } = {}) {
+function createCancellationBroker({
+  allowLiveOrderMutations = true,
+  ...fetchOptions
+} = {}) {
   const requests = []
   const broker = new Broker({
     provider: "bitunix-futures",
@@ -316,6 +329,7 @@ function createCancellationBroker({ allowLiveOrderMutations = true } = {}) {
       dependencies: {
         fetchFn: createCancellationFetch({
           requests,
+          ...fetchOptions,
         }),
       },
     },
@@ -353,6 +367,91 @@ test("Bitunix Futures cancelOrder is one-shot and confirms the final canceled or
       orderId: "futures-order-123",
     }],
   })
+})
+
+
+test("Bitunix Futures cancelOrder reconciles a lost acknowledgement by client ID without retrying", async () => {
+  const { broker, requests } = createCancellationBroker({
+    cancelError: new Error("connection lost after dispatch"),
+  })
+  await broker.connect()
+  await broker.getExchangeMarkets()
+
+  const result = await broker.cancelOrder({
+    symbol: "BTCUSDT",
+    orderId: "futures-order-123",
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.mutationOutcome, "CONFIRMED")
+  assert.equal(result.cancellationOutcome, "CONFIRMED")
+  assert.equal(requests.filter(({ method }) => method === "POST").length, 1)
+})
+
+test("Bitunix Futures cancelOrder reports unknown when a lost acknowledgement cannot be reconciled", async () => {
+  const { broker, requests } = createCancellationBroker({
+    cancelError: new Error("connection lost after dispatch"),
+    detailStatus: "PART_FILLED",
+  })
+  await broker.connect()
+  await broker.getExchangeMarkets()
+
+  const result = await broker.cancelOrder({
+    symbol: "BTCUSDT",
+    orderId: "futures-order-123",
+  })
+
+  assert.equal(result.ok, false)
+  assert.equal(result.mutationOutcome, "OUTCOME_UNKNOWN")
+  assert.equal(result.cancellationOutcome, "OUTCOME_UNKNOWN")
+  assert.equal(requests.filter(({ method }) => method === "POST").length, 1)
+})
+
+test("Bitunix Futures cancelOrder returns a per-order exchange rejection", async () => {
+  const { broker, requests } = createCancellationBroker({
+    cancelResponse: {
+      successList: [],
+      failureList: [{
+        orderId: "futures-order-123",
+        clientId: "strategy-order-456",
+        errorCode: 10034,
+        errorMsg: "order is no longer cancellable",
+      }],
+    },
+  })
+  await broker.connect()
+  await broker.getExchangeMarkets()
+
+  const result = await broker.cancelOrder({
+    symbol: "BTCUSDT",
+    orderId: "futures-order-123",
+  })
+
+  assert.equal(result.ok, false)
+  assert.equal(result.mutationOutcome, "REJECTED")
+  assert.equal(result.cancellationOutcome, "REJECTED")
+  assert.equal(requests.filter(({ method }) => method === "POST").length, 1)
+  assert.equal(requests.some(({ path }) => path === "/api/v1/futures/trade/get_order_detail"), false)
+})
+
+test("Bitunix Futures cancelOrder does not dispatch when pending-order identity lacks clientId", async () => {
+  const { broker, requests } = createCancellationBroker({
+    pendingOrder: {
+      clientId: undefined,
+    },
+  })
+  await broker.connect()
+  await broker.getExchangeMarkets()
+
+  const result = await broker.cancelOrder({
+    symbol: "BTCUSDT",
+    orderId: "futures-order-123",
+  })
+
+  assert.equal(result.ok, false)
+  assert.equal(result.mutationOutcome, "NOT_SENT")
+  assert.equal(result.cancellationOutcome, "NOT_SENT")
+  assert.equal(requests.filter(({ method }) => method === "POST").length, 0)
 })
 
 test("Bitunix Futures cancelOrder remains NOT_SENT without explicit live mutation opt-in", async () => {
