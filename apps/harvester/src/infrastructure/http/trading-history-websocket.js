@@ -16,6 +16,27 @@ const ACCOUNT_UPDATE_EVENTS = Object.freeze([
   "account.snapshot_captured",
   "account.open_orders_captured",
 ])
+const BOTS_UPDATE_EVENTS = Object.freeze([
+  "harvester.operator_buy_control_completed",
+  "harvester.process_started",
+  "harvester.started",
+  "harvester.startup_failed",
+  "harvester.stopped",
+  "broker.connected",
+  "broker.disconnected",
+  "broker.status_changed",
+  "user_data.readiness_changed",
+  "market.trading_rules_captured",
+  "execution.fill_applied",
+  "recovery.cycle_completed",
+  "recovery.cycle_not_completed",
+  "account.snapshot_captured",
+  "account.open_orders_captured",
+])
+const BOTS_OPERATOR_ACTOR = Object.freeze({
+  id: "local-dashboard",
+  roles: Object.freeze(["trading-operator"]),
+})
 const ALLOWED_RESOURCES = new Set(["orders", "fills", "commissions"])
 
 function encodeFrame({ opcode, payload = Buffer.alloc(0) } = {}) {
@@ -251,7 +272,7 @@ function writeUpgradeResponse({ socket, key } = {}) {
   ].join("\r\n"))
 }
 
-function handleUpgrade({ request, socket, head, clients, exchangeAccounts } = {}) {
+function handleUpgrade({ request, socket, head, clients, exchangeAccounts, requestBotsSnapshot } = {}) {
   const key = getUpgradeKey({
     request,
     socket,
@@ -272,6 +293,7 @@ function handleUpgrade({ request, socket, head, clients, exchangeAccounts } = {}
     client,
     exchangeAccounts,
   })
+  requestBotsSnapshot?.()
   if (head.length > 0) {
     handleSocketData({
       client,
@@ -467,6 +489,153 @@ function subscribeToHistoryUpdates({ eventBus, clients } = {}) {
   return result.subscription
 }
 
+function serializeOperatorQuery(result) {
+  if (result?.ok === true && result.data && typeof result.data === "object" && !Array.isArray(result.data)) {
+    return {
+      ok: true,
+      data: result.data,
+    }
+  }
+  const error = result?.errors?.[0]
+  return {
+    ok: false,
+    error: {
+      code: typeof error?.code === "string" ? error.code : "HARVESTER_OPERATOR_SNAPSHOT_UNAVAILABLE",
+      message: "Harvester operator snapshot is unavailable.",
+    },
+  }
+}
+
+async function readOperatorResource({ operator, method } = {}) {
+  if (typeof operator?.[method] !== "function") {
+    return {
+      ok: false,
+      error: {
+        code: "HARVESTER_OPERATOR_QUERY_NOT_FOUND",
+        message: "Harvester operator snapshot is unavailable.",
+      },
+    }
+  }
+  try {
+    return serializeOperatorQuery(await operator[method]({
+      actor: BOTS_OPERATOR_ACTOR,
+    }))
+  } catch {
+    return {
+      ok: false,
+      error: {
+        code: "HARVESTER_OPERATOR_SNAPSHOT_READ_FAILED",
+        message: "Harvester operator snapshot is unavailable.",
+      },
+    }
+  }
+}
+
+async function createBotsSnapshotMessage({ operator, revision } = {}) {
+  const [status, markets, portfolio] = await Promise.all([
+    readOperatorResource({
+      operator,
+      method: "getStatus",
+    }),
+    readOperatorResource({
+      operator,
+      method: "getMarkets",
+    }),
+    readOperatorResource({
+      operator,
+      method: "getPositions",
+    }),
+  ])
+  const data = {
+    status,
+    markets,
+    portfolio,
+  }
+  const complete = status.ok && markets.ok && portfolio.ok
+  return {
+    type: complete ? "bots.snapshot" : "bots.snapshot.unavailable",
+    version: 1,
+    revision,
+    observedAt: new Date().toISOString(),
+    data,
+  }
+}
+
+function broadcastBotsSnapshot({ clients, message } = {}) {
+  for (const client of clients) {
+    sendJson({
+      client,
+      message,
+    })
+  }
+}
+
+function createBotsSnapshotCoordinator({ operator, clients } = {}) {
+  let requestedRevision = 0
+  let publishedRevision = 0
+  let reading = false
+
+  async function drainSnapshots() {
+    if (reading || clients.size === 0) {
+      return
+    }
+    reading = true
+    try {
+      while (clients.size > 0 && publishedRevision < requestedRevision) {
+        const revision = requestedRevision
+        const message = await createBotsSnapshotMessage({
+          operator,
+          revision,
+        })
+        if (revision !== requestedRevision) {
+          continue
+        }
+        broadcastBotsSnapshot({
+          clients,
+          message,
+        })
+        publishedRevision = revision
+      }
+    } finally {
+      reading = false
+      if (clients.size > 0 && publishedRevision < requestedRevision) {
+        void drainSnapshots()
+      }
+    }
+  }
+
+  function requestSnapshot() {
+    requestedRevision += 1
+    void drainSnapshots()
+  }
+
+  return Object.freeze({
+    requestSnapshot,
+  })
+}
+
+function subscribeToBotsUpdates({ eventBus, requestSnapshot } = {}) {
+  const subscriptions = []
+  try {
+    for (const name of BOTS_UPDATE_EVENTS) {
+      const result = eventBus.subscribe({
+        name,
+        handler: requestSnapshot,
+      })
+      if (result?.ok !== true || typeof result.subscription?.unsubscribe !== "function") {
+        throw new TypeError("Trading-history WebSocket could not subscribe to Harvester Bots updates.")
+      }
+      subscriptions.push(result.subscription)
+    }
+  } catch (error) {
+    for (const subscription of subscriptions) {
+      subscription.unsubscribe()
+    }
+    throw error
+  }
+  return subscriptions
+}
+
 /**
  * Attach the local trading-history WebSocket endpoint to the existing HTTP server.
  *
@@ -478,7 +647,7 @@ function subscribeToHistoryUpdates({ eventBus, clients } = {}) {
  * @param {{server: object, eventBus: object}} input
  * @returns {Readonly<{close: () => Promise<void>}>}
  */
-export function attachTradingHistoryWebSocket({ server, eventBus, exchangeAccounts = [], subscribeExchangeAccountUpdates } = {}) {
+export function attachTradingHistoryWebSocket({ server, eventBus, exchangeAccounts = [], subscribeExchangeAccountUpdates, operator } = {}) {
   if (!server || typeof server.on !== "function" || typeof server.off !== "function") {
     throw new TypeError("Trading-history WebSocket requires the existing HTTP server.")
   }
@@ -487,8 +656,21 @@ export function attachTradingHistoryWebSocket({ server, eventBus, exchangeAccoun
     eventBus,
     clients,
   })
+  const botsCoordinator = operator
+    ? createBotsSnapshotCoordinator({
+      operator,
+      clients,
+    })
+    : null
+  let botsSubscriptions = []
   let accountSubscriptions
   try {
+    if (botsCoordinator) {
+      botsSubscriptions = subscribeToBotsUpdates({
+        eventBus,
+        requestSnapshot: botsCoordinator.requestSnapshot,
+      })
+    }
     accountSubscriptions = subscribeToExchangeAccountUpdates({
       eventBus,
       clients,
@@ -497,6 +679,9 @@ export function attachTradingHistoryWebSocket({ server, eventBus, exchangeAccoun
     })
   } catch (error) {
     subscription.unsubscribe()
+    for (const botsSubscription of botsSubscriptions) {
+      botsSubscription.unsubscribe()
+    }
     throw error
   }
   const onUpgrade = (...upgradeArguments) => {
@@ -507,6 +692,7 @@ export function attachTradingHistoryWebSocket({ server, eventBus, exchangeAccoun
       head,
       clients,
       exchangeAccounts,
+      requestBotsSnapshot: botsCoordinator?.requestSnapshot,
     })
   }
   server.on("upgrade", onUpgrade)
@@ -514,6 +700,9 @@ export function attachTradingHistoryWebSocket({ server, eventBus, exchangeAccoun
     close: async () => {
       server.off("upgrade", onUpgrade)
       subscription.unsubscribe()
+      for (const botsSubscription of botsSubscriptions) {
+        botsSubscription.unsubscribe()
+      }
       for (const accountSubscription of accountSubscriptions) {
         accountSubscription.unsubscribe()
       }
