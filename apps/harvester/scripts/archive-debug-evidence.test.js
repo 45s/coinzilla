@@ -26,6 +26,12 @@ test("requires TESTNET mode and explicit stopped-process confirmation", () => {
       env: { TRADING_MODE: "testnet" },
     }),
   )
+  assert.doesNotThrow(
+    () => validateArchiveRequest({
+      args: ["--", "--confirm-stopped"],
+      env: { TRADING_MODE: "testnet" },
+    }),
+  )
 })
 
 test("names debug archives as directly inspectable tar.gz files", () => {
