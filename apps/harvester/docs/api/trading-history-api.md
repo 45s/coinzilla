@@ -139,9 +139,31 @@ The same socket streams the authoritative runtime, configured-market, and Portfo
   "revision": 12,
   "observedAt": "2026-11-24T09:00:00.000Z",
   "data": {
-    "status": { "ok": true, "data": { "runtimeState": "RUNNING" } },
-    "markets": { "ok": true, "data": { "markets": [] } },
-    "portfolio": { "ok": true, "data": { "positions": [] } }
+    "status": {
+      "ok": true,
+      "data": {
+        "observedAt": 120000,
+        "runtimeState": "RUNNING",
+        "tradingEnabled": true,
+        "userData": { "ready": true, "status": "READY" },
+        "readiness": { "state": "READY", "blockers": [] },
+        "markets": { "configured": 0, "enabled": 0, "blocked": 0 }
+      }
+    },
+    "markets": {
+      "ok": true,
+      "data": {
+        "observedAt": 120000,
+        "tradingEnabled": true,
+        "userDataReady": true,
+        "userDataStatus": "READY",
+        "markets": []
+      }
+    },
+    "portfolio": {
+      "ok": true,
+      "data": { "observedAt": 120000, "positions": [] }
+    }
   }
 }
 ```
