@@ -97,6 +97,35 @@ function assertPrecision({ value, precision, field }) {
   }
 }
 
+function validatePendingOrder({ order, input }) {
+  if (order.clientId !== input.clientId || order.symbol !== input.symbol ||
+      (input.orderId !== undefined && order.orderId !== input.orderId)) {
+    return createOutcomeResult({
+      errors: [new Error("Bitunix Futures pending-order identity does not match the modification request")],
+      mutationOutcome: "NOT_SENT",
+      orderOutcome: "NOT_SENT",
+    })
+  }
+  if (!OPEN_ORDER_STATUSES.has(order.status) || order.orderType !== "LIMIT") {
+    return createOutcomeResult({
+      errors: [new Error("Bitunix Futures modification requires one open LIMIT order")],
+      mutationOutcome: "NOT_SENT",
+      orderOutcome: "NOT_SENT",
+    })
+  }
+  if (compareDecimal({
+    left: input.qty,
+    right: order.executedQuantity,
+  }) < 0) {
+    return createOutcomeResult({
+      errors: [new Error("Bitunix Futures modified qty cannot be below already executed quantity")],
+      mutationOutcome: "NOT_SENT",
+      orderOutcome: "NOT_SENT",
+    })
+  }
+  return undefined
+}
+
 async function findPendingOrder({ broker, input }) {
   const pending = await broker.getFuturesPendingOrders({
     symbol: input.symbol,
@@ -123,42 +152,14 @@ async function findPendingOrder({ broker, input }) {
     }
   }
   const [order] = pending.data.orders
-  if (order.clientId !== input.clientId || order.symbol !== input.symbol ||
-      (input.orderId !== undefined && order.orderId !== input.orderId)) {
-    return {
-      result: createOutcomeResult({
-        errors: [new Error("Bitunix Futures pending-order identity does not match the modification request")],
-        mutationOutcome: "NOT_SENT",
-        orderOutcome: "NOT_SENT",
-      }),
-    }
-  }
-  if (!OPEN_ORDER_STATUSES.has(order.status) || order.orderType !== "LIMIT") {
-    return {
-      result: createOutcomeResult({
-        errors: [new Error("Bitunix Futures modification requires one open LIMIT order")],
-        mutationOutcome: "NOT_SENT",
-        orderOutcome: "NOT_SENT",
-      }),
-    }
-  }
-  if (compareDecimal({
-    left: input.qty,
-    right: order.executedQuantity,
-  }) < 0) {
-    return {
-      result: createOutcomeResult({
-        errors: [new Error("Bitunix Futures modified qty cannot be below already executed quantity")],
-        mutationOutcome: "NOT_SENT",
-        orderOutcome: "NOT_SENT",
-      }),
-    }
-  }
-  return {
+  const validationResult = validatePendingOrder({
     order,
-  }
+    input,
+  })
+  return validationResult === undefined
+    ? { order }
+    : { result: validationResult }
 }
-
 function validateModifyFilters({ filters, input }) {
   if (filters.symbol !== input.symbol || filters.symbolStatus !== "OPEN" ||
       filters.isApiSupported !== true) {
