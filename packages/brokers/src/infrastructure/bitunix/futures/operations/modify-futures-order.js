@@ -228,13 +228,13 @@ async function reconcileModifiedOrder({ broker, input, acknowledged, error }) {
     })
   }
   const quantityMatches = compareDecimal({
-    left: detail.data.quantity,
+    left: detail.data.originalQuantity.amount,
     right: input.qty,
   }) === 0
   const priceMatches = input.price === undefined || (
     detail.data.limitPrice !== undefined &&
     compareDecimal({
-      left: detail.data.limitPrice,
+      left: detail.data.limitPrice.amount,
       right: input.price,
     }) === 0
   )
