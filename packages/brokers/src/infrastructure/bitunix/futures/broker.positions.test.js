@@ -130,7 +130,7 @@ test("Bitunix Futures getFuturesPositions returns exact current position facts a
     updatedAt: 1_700_000_001_000,
     lifecycle: "CURRENT",
   })
-  const request = requests[0]
+  const [request] = requests
   const query = new URL(request.url).searchParams
   assert.equal(new URL(request.url).pathname, "/api/v1/futures/position/get_pending_positions")
   assert.equal(query.get("symbol"), "BTCUSDT")
