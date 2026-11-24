@@ -30,13 +30,16 @@ test("Bitunix Futures capability declarations match implemented streams and read
   }
 
   for (const type of [
-    "READ_OPEN_ORDERS",
     "READ_COMPLETE_FILL_HISTORY",
     "RECOVER_USER_DATA_SESSION",
     "RECOVER_PROCESS_RESTART",
-    "SUBSCRIBE_CANDLES",
-  ]) {
+      ]) {
     assert.equal(capabilities.getStatus({ type }), "UNKNOWN", `${type} must not overstate completeness`)
+  }
+
+  for (const type of ["READ_OPEN_ORDERS", "SUBSCRIBE_CANDLES"]) {
+    assert.equal(capabilities.getStatus({ type }), "UNSUPPORTED", `${type} must be explicitly unavailable through the common contract`)
+    assert.ok(capabilities.getCapability({ type }).reason, `${type} must explain its unsupported common projection`)
   }
 
   for (const type of [
