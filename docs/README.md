@@ -71,7 +71,7 @@ Each active application/package owns its local README, agent instructions, roadm
 - [Database](../packages/db/README.md) — provider-neutral CRUD infrastructure with built-in SQLite provider
 - [Entities](../packages/entities/README.md) — exchange-neutral domain contracts and financial value objects
 - [Event Bus](../packages/event-bus/README.md) — bounded in-process event delivery
-- [Indicators](../packages/indicators/README.md) — exchange-neutral technical-indicator calculations
+- [Indicators](../packages/indicators/README.md) — exchange-neutral technical indicator calculations
 - [Journal](../packages/journal/README.md) — durable event recording and replay
 - [Notifiers](../packages/notifiers/README.md) — optional operational notifications
 - [Utils](../packages/utils/README.md) — shared domain-neutral helpers
