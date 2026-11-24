@@ -363,7 +363,10 @@ async function reconcileCreatedOrder({
   }
   return createOutcomeResult({
     data: detail.data,
-    mutationOutcome: "CONFIRMED",
+    ...(error === undefined ? {} : {
+      errors: [error],
+    }),
+    mutationOutcome: acknowledged ? "CONFIRMED" : "OUTCOME_UNKNOWN",
     orderOutcome: "CONFIRMED",
   })
 }

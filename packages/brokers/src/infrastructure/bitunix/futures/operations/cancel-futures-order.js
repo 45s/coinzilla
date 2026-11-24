@@ -162,7 +162,10 @@ async function reconcileCancellation({ broker, symbol, order, event, error }) {
   if (detail.data.status === "CANCELED" && eventConfirmed) {
     return createOutcomeResult({
       data: detail.data,
-      mutationOutcome: "CONFIRMED",
+      ...(error === undefined ? {} : {
+        errors: [error],
+      }),
+      mutationOutcome: error === undefined ? "CONFIRMED" : "OUTCOME_UNKNOWN",
       cancellationOutcome: "CONFIRMED",
     })
   }
