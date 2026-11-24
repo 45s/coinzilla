@@ -122,7 +122,9 @@ function createStopLatch({
   operationalStateStore,
   getStopSnapshot,
   setStopSnapshot,
+  setAccountAdmissionBlocked,
 } = {}) {
+  let pendingLatch = null
   return async ({ explanation, orderIdentity } = {}) => {
     const current = getStopSnapshot()
     if (current.stopState.status === "STOPPED") {
@@ -135,40 +137,35 @@ function createStopLatch({
         },
       })
     }
-    const decision = createRecoverySellerStopDecision({
-      explanation,
-    })
-    const normalizedIdentity = normalizeOrderIdentity({
-      orderIdentity,
-    })
-    const persisted = await persistRecoverySellerBlocker({
-      operationalStateStore,
-      explanation,
-      orderIdentity: normalizedIdentity,
-    })
-    if (persisted?.ok !== true || persisted.data?.durable !== true) {
-      return persisted?.ok === false
-        ? persisted
-        : toResult({ error: new Error("Recovery Seller STOP blocker was not durably acknowledged") })
-    }
-    const stopState = latchRecoverySellerStop({
-      state: current.stopState,
-      decision,
-    })
-    const { blockerId } = persisted.data.record.data
-    setStopSnapshot({
-      stopState,
-      blockerId,
-    })
-    return toResult({
-      data: {
-        durable: true,
-        duplicate: persisted.data.duplicate === true,
-        stopState,
-        blockerId,
-        record: persisted.data.record,
-      },
-    })
+    if (pendingLatch) return pendingLatch
+    setAccountAdmissionBlocked(true)
+    pendingLatch = (async () => {
+      const decision = createRecoverySellerStopDecision({ explanation })
+      const normalizedIdentity = normalizeOrderIdentity({ orderIdentity })
+      const persisted = await persistRecoverySellerBlocker({
+        operationalStateStore,
+        explanation,
+        orderIdentity: normalizedIdentity,
+      })
+      if (persisted?.ok !== true || persisted.data?.durable !== true) {
+        return persisted?.ok === false
+          ? persisted
+          : toResult({ error: new Error("Recovery Seller STOP blocker was not durably acknowledged") })
+      }
+      const stopState = latchRecoverySellerStop({ state: current.stopState, decision })
+      const { blockerId } = persisted.data.record.data
+      setStopSnapshot({ stopState, blockerId })
+      return toResult({
+        data: {
+          durable: true,
+          duplicate: persisted.data.duplicate === true,
+          stopState,
+          blockerId,
+          record: persisted.data.record,
+        },
+      })
+    })()
+    try { return await pendingLatch } finally { pendingLatch = null }
   }
 }
 
@@ -176,6 +173,7 @@ function createStopResolver({
   operationalStateStore,
   getStopSnapshot,
   setStopSnapshot,
+  setAccountAdmissionBlocked,
 } = {}) {
   return async (evidence = {}) => {
     const current = getStopSnapshot()
@@ -193,6 +191,7 @@ function createStopResolver({
         stopState: result.data.stopState,
         blockerId: null,
       })
+      setAccountAdmissionBlocked(false)
     }
     return result
   }
@@ -216,9 +215,13 @@ export async function createRecoverySellerStopWorkflow({ operationalStateStore }
       stopState: createRestoredStopState({ blocker }),
       blockerId: blocker?.data?.blockerId ?? null,
     }
+    let accountAdmissionBlocked = Boolean(blocker)
     const getStopSnapshot = () => snapshot
     const setStopSnapshot = (next) => {
       snapshot = Object.freeze(next)
+    }
+    const setAccountAdmissionBlocked = (blocked) => {
+      accountAdmissionBlocked = blocked === true
     }
     return toResult({
       data: Object.freeze({
@@ -226,15 +229,18 @@ export async function createRecoverySellerStopWorkflow({ operationalStateStore }
           operationalStateStore,
           getStopSnapshot,
           setStopSnapshot,
+          setAccountAdmissionBlocked,
         }),
         resolve: createStopResolver({
           operationalStateStore,
           getStopSnapshot,
           setStopSnapshot,
+          setAccountAdmissionBlocked,
         }),
         getStopState: () => snapshot.stopState,
         getState: () => snapshot.stopState,
         getBlockerId: () => snapshot.blockerId,
+        isAccountAdmissionBlocked: () => accountAdmissionBlocked,
       }),
     })
   } catch (error) {

@@ -213,6 +213,17 @@ function getMarketBookSubmissionBlocker({
 export function createSubmissionGate(dependencies = {}) {
   return ({ order, purpose } = {}) => {
     const { symbol } = order.market
+    const accountSafetyBlocker = dependencies.getAccountSafetyBlocker?.()
+    if (accountSafetyBlocker?.scope === "ACCOUNT") {
+      return defer({
+        symbol,
+        reason: "ACCOUNT_SAFETY_BLOCKER_ACTIVE",
+        details: {
+          blockerReason: accountSafetyBlocker.reason ?? null,
+          blockerId: accountSafetyBlocker.blockerId ?? null,
+        },
+      })
+    }
     const shutdownRecoverySubmission = dependencies.isShutdownRecoverySubmissionAllowed() &&
       dependencies.isStopping?.() === true &&
       order.side === "SELL" &&
