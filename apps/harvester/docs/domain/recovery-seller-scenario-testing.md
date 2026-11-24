@@ -370,6 +370,8 @@ Primary source paths:
 - Config validation/resolution: `apps/harvester/src/domain/app-config.js`.
 - Exchange-derived precision source: `apps/harvester/token-specification.json`; do not add `pricePrecision` or `quantityPrecision` to operator-maintained RS pair entries.
 
+External pair entries must use the existing `TRADING_ENVIRONMENTS.BOTH`, `.TESTNET` or `.LIVE` constants and the existing `EXTERNAL_ORDERS_POLICIES.IGNORE` or `.BLOCK` constants; preserve their serialized values. Do not add a second environment/policy vocabulary or create duplicate pair configuration boundaries.
+
 The strategy config currently sets `enabled: true` at the audited checkpoint. The RS specification's section 15 contains a conflicting disabled-by-default statement. Do not create a default assertion or change config until the owner resolves that discrepancy. Per-pair environment eligibility remains a separate control.
 
 **Volatility is market-owned, not RS-owned.** The effective protection market set is derived from the union of enabled strategy market configurations, not from a CG or RS execution route. A configured market with market-level enablement and `enableVolatilityProtection: true` receives volatility history/state/protection even when it has no CG route. When the same market is configured in CG and RS, both explicit protection values must agree; startup rejects conflicting values. Do not make volatility calculation, candle history or protection depend on RS strategy activation. RS scenarios may prove that the real market-level protection gate is respected, but volatility calculations and market-state transitions belong to their strategy-neutral market tests. See [Harvester Volatility Protection](../volatility-protection.md) and [#1016](https://github.com/45s/coinzilla/issues/1016).
@@ -830,6 +832,8 @@ Required principles:
 
 A builder may reduce mechanical construction. It must not decide whether an order is eligible, calculate expected profitability, allocate inventory, or apply a fill using a parallel implementation.
 
+Follow Harvester's DDD boundary: pure deterministic trading calculations/decisions are domain functions; state-owning classes enforce lifecycle invariants; use cases coordinate workflows through injected ports. Use named exports and the established ESM/JSDoc style; do not add default exports to Harvester domain/config modules. Every assertion must have a detailed failure message, compare named fields rather than opaque tuples, and use plain-English test names that explain the business behavior.
+
 ### 9.2 Fixture responsibility
 
 | Builder | May do | Must not do |
@@ -1287,6 +1291,21 @@ For APPLICATION scenarios, inject deterministic failure at named boundaries:
 
 For every injected failure, assert the entire relevant before/after state: Portfolio/Positions, applied Fill IDs, legacy state, OrderRegistry, cycle state, order identity, reservation, STOP, persistence log and broker call log.
 
+### 12.2 Generated and combinatorial testing
+
+Use generated/property-based testing only where it increases confidence in a stable invariant. It supplements named business scenarios; it never replaces them.
+
+- **Exhaustive finite-state testing:** enumerate every actual valid/invalid lifecycle transition and order terminal outcome from the production state/decision contract.
+- **Boundary testing:** use exact threshold, one smallest meaningful unit below and one above for money, quantity, precision and exchange filters.
+- **Pairwise combinations:** combine independent configuration/market-readiness dimensions when interaction risk exists; do not create the full Cartesian product of every field.
+- **Generated decimal invariants:** generate deterministic exact-decimal inputs to prove quantity conservation, non-negative allocations, fee application exactly once, reservation limits and no cross-subsidy.
+- **Generated event sequences:** vary duplicate, conflicting, delayed and reordered canonical events around known lifecycle boundaries.
+- **Determinism:** use a fixed/reported seed. A failing generated case must be reproducible and promoted to a named stable scenario/subcase with the minimized counterexample recorded.
+- **No duplicated domain logic:** generators may create input values and event orderings; they must call the real production domain/use-case path and use an independent oracle.
+- **No random flakiness:** do not depend on wall-clock time, live market data, network, exchange credentials or nondeterministic scheduling. No new property-testing dependency without an explicit repository-level decision.
+
+Do not use a generated test count as evidence that a named business matrix row is complete.
+
 ## 13. Contract blockers: exact current treatment
 
 These blockers must appear in the registry, #1780, the repository catalog where relevant, and the Harvester roadmap summary. Do not resolve them in scenario code.
@@ -1527,9 +1546,9 @@ Never write "all scenarios covered" without a row-by-row audit. Never leave a st
 
 An agent asked to "implement RS domain scenarios" must execute this sequence without relying on chat history.
 
-### Step 1 — Preflight and current-state audit
+### Step 1 — Repository and current-state audit
 
-1. Read root and Harvester AGENTS files.
+1. Read root and Harvester AGENTS files. Do not run a Task Preflight command or create a preflight attestation; Harvester AGENTS explicitly says it is not a required development step.
 2. Read applicable task checklist, engineering standards, AI workflow, TRADING_FIRST, Harvester roadmap, this playbook, RS spec, RS implementation roadmap, shared methodology and scenario catalog.
 3. Fetch current develop SHA and check whether the working branch is based on it.
 4. Read #1780 and its latest comments; identify the next unchecked P0 subcase.
@@ -1567,10 +1586,24 @@ For each case:
 2. Write the readable scenario using real production components.
 3. Establish RED if behavior is absent/incorrect; if it passes immediately, inspect whether the intended production path was truly exercised.
 4. Keep expected financial values independent.
-5. Assert complete relevant state and forbidden side effects.
-6. Run the narrowest targeted test.
-7. Fix a genuine defect only within an explicitly scoped production issue/PR; do not weaken the test.
-8. Run relevant broader tests and repository checks as appropriate.
+5. Assert complete relevant state and forbidden side effects; every assertion needs a detailed diagnostic message.
+6. Register every new scenario test file in `apps/harvester/package.json` under `config.targetedTestFiles`. Paths are relative to the Harvester package root (for example, `test/scenarios/recovery-seller-profitability.scenario.test.js`). The targeted-test runner rejects missing, duplicate, absolute or out-of-package paths.
+7. Run the narrowest targeted test. Canonical commands:
+
+~~~bash
+# One scenario file (from repository root):
+pnpm --filter @coinzilla/harvester exec node --test --test-reporter=spec test/scenarios/recovery-seller-profitability.scenario.test.js
+
+# All configured Harvester targeted regression files, including registered scenario files:
+pnpm --filter @coinzilla/harvester run test:targeted
+
+# Full Harvester package test suite:
+pnpm --filter @coinzilla/harvester test
+~~~
+
+8. Fix a genuine defect only within an explicitly scoped production issue/PR; do not weaken the test.
+9. Run relevant broader tests and repository checks as appropriate. The root package manager is pinned to `pnpm@12.11.2`; use the repository-pinned toolchain, not npm/yarn.
+10. Keep scenario tests deterministic and offline. Do not run `testnet:*`, live broker commands, order placement/cancellation or credential-backed scripts as part of scenario verification.
 
 ### Step 5 — Record evidence and synchronize
 
@@ -1580,10 +1613,11 @@ For each case:
 4. Update Harvester roadmap phase/next action.
 5. Update domain inventory only if its supplemental source/test mapping changed.
 6. Update or link a production issue when a real implementation defect was exposed.
-7. Commit and push; synchronize branch with latest develop.
-8. Verify exact PR head and GitHub Actions results.
-9. Keep PR open for owner review and merge.
-10. After merge, record merged SHA and re-check issue/docs freshness.
+7. After every material scenario decision, discovered defect, test result or evidence change, update the owning issue and affected docs immediately; do not batch important evidence until the end.
+8. Commit and push; synchronize branch with latest develop.
+9. Verify exact PR head and GitHub Actions results.
+10. Keep PR open for owner review and merge.
+11. After merge, record merged SHA and re-check issue/docs freshness.
 
 ### Step 6 — Stop conditions
 
@@ -1617,6 +1651,8 @@ A review-ready scenario PR should make every applicable answer obvious:
 - [ ] Are duplicates, conflicts and failure boundaries covered where applicable?
 - [ ] Are test helpers mechanical rather than a second implementation?
 - [ ] Are all unsupported/blocked subcases explicit?
+- [ ] Is every new scenario test file registered in `apps/harvester/package.json` `config.targetedTestFiles`?
+- [ ] Does every assertion include a detailed failure message?
 - [ ] Does registry validation reject broken references?
 - [ ] Does the report distinguish test mapping from verified evidence?
 - [ ] Are #1780, catalog, roadmap and relevant inventories synchronized?
@@ -1679,6 +1715,9 @@ No. Record them and wait for owner-approved decisions. Do not make policy decisi
 **Does a merged PR mean the family is complete?**
 
 No. PR #1793 is the initial partial scenario slice. Its four files and exact assertions do not complete RS-001…RS-010.
+
+**Can an agent stop because no local checkout or test runner is available?**  
+No. Harvester AGENTS requires GitHub repository operations and GitHub Actions as the verification runner when local tools are unavailable. Implement the real changes, open/update the PR, inspect the exact PR-head checks, and fix failures. Never ask the owner to run the tests and never claim success without exact-head evidence.
 
 **What should the next agent do first?**
 
