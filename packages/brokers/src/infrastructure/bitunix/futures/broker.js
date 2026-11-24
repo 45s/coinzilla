@@ -21,6 +21,12 @@ import {
   closeFuturesPosition as closeFuturesPositionOperation,
   closeFuturesPositionBySide as closeFuturesPositionBySideOperation,
 } from "./operations/close-futures-position.js"
+import {
+  cancelFuturesPositionTpSlOrder as cancelFuturesPositionTpSlOrderOperation,
+  cancelFuturesTpSlOrder as cancelFuturesTpSlOrderOperation,
+  modifyFuturesPositionTpSlOrder as modifyFuturesPositionTpSlOrderOperation,
+  placeFuturesPositionTpSlOrder as placeFuturesPositionTpSlOrderOperation,
+} from "./operations/manage-futures-tpsl.js"
 import { modifyFuturesOrder as modifyFuturesOrderOperation } from "./operations/modify-futures-order.js"
 import { getFuturesFundingRate as getFuturesFundingRateOperation, getFuturesFundingRates as getFuturesFundingRatesOperation } from "./operations/get-futures-funding-rates.js"
 import { getFuturesFundingRateHistory as getFuturesFundingRateHistoryOperation } from "./operations/get-futures-funding-rate-history.js"
@@ -1626,6 +1632,90 @@ export class BitunixFuturesBroker {
    * Returns one bounded page of historical Futures TP/SL orders.
    * Exchange order fields and decimal strings are preserved without implying complete history.
    */
+  async placeFuturesPositionTpSlOrder(input = {}) {
+    if (!this.config.allowLivePositionMutations) {
+      return {
+        ...unsupportedResult({
+          operation: "placeFuturesPositionTpSlOrder",
+          reason: "position-level TP/SL mutations are disabled by default; set allowLivePositionMutations: true only after independent live-account authorization",
+        }),
+        mutationOutcome: "NOT_SENT",
+        tpSlOutcome: "NOT_SENT",
+      }
+    }
+    return placeFuturesPositionTpSlOrderOperation({
+      broker: this,
+      input,
+    })
+  }
+
+  async modifyFuturesPositionTpSlOrder(input = {}) {
+    if (!this.config.allowLivePositionMutations) {
+      return {
+        ...unsupportedResult({
+          operation: "modifyFuturesPositionTpSlOrder",
+          reason: "position-level TP/SL mutations are disabled by default; set allowLivePositionMutations: true only after independent live-account authorization",
+        }),
+        mutationOutcome: "NOT_SENT",
+        tpSlOutcome: "NOT_SENT",
+      }
+    }
+    return modifyFuturesPositionTpSlOrderOperation({
+      broker: this,
+      input,
+    })
+  }
+
+  async cancelFuturesPositionTpSlOrder(input = {}) {
+    if (!this.config.allowLivePositionMutations) {
+      return {
+        ...unsupportedResult({
+          operation: "cancelFuturesPositionTpSlOrder",
+          reason: "position-level TP/SL mutations are disabled by default; set allowLivePositionMutations: true only after independent live-account authorization",
+        }),
+        mutationOutcome: "NOT_SENT",
+        cancellationOutcome: "NOT_SENT",
+        tpSlOutcome: "NOT_SENT",
+      }
+    }
+    return cancelFuturesPositionTpSlOrderOperation({
+      broker: this,
+      input,
+    })
+  }
+
+  async cancelFuturesTpSlOrder(input = {}) {
+    if (!this.config.allowLiveOrderMutations) {
+      return {
+        ...unsupportedResult({
+          operation: "cancelFuturesTpSlOrder",
+          reason: "live Futures order mutations are disabled by default; set allowLiveOrderMutations: true only after independent live-account authorization",
+        }),
+        mutationOutcome: "NOT_SENT",
+        cancellationOutcome: "NOT_SENT",
+        tpSlOutcome: "NOT_SENT",
+      }
+    }
+    return cancelFuturesTpSlOrderOperation({
+      broker: this,
+      input,
+    })
+  }
+
+  async placeFuturesTpSlOrder() {
+    return unsupportedResult({
+      operation: "placeFuturesTpSlOrder",
+      reason: "Bitunix order-level TP/SL requests expose positionId and quantity but no documented reduceOnly or close-position guarantee for the child order; use position-level TP/SL for full-position market close or createFuturesOrder() with tradeSide CLOSE and reduceOnly true for explicit partial reduction.",
+    })
+  }
+
+  async modifyFuturesTpSlOrder() {
+    return unsupportedResult({
+      operation: "modifyFuturesTpSlOrder",
+      reason: "Bitunix order-level TP/SL requests expose no documented reduceOnly or close-position guarantee for the child order; use position-level TP/SL for full-position market close or createFuturesOrder() with tradeSide CLOSE and reduceOnly true for explicit partial reduction.",
+    })
+  }
+
   async getFuturesTpSlOrderHistory(input = {}) {
     try {
       const request = createFuturesTpSlHistoryQuery(input)
