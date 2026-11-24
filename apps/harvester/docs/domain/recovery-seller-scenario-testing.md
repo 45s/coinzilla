@@ -1009,26 +1009,27 @@ Required assertions: exact legacy basis, remaining quantity, verified Spot quant
 **Business question:** does recovery inventory reflect only confirmed canonical RS BUY fills and actual commissions?
 
 Required cases:
-
-1. Valid initial BUY from an empty recovery allocation.
-2. BUY suppression for invalid authorization, legacy basis, market readiness, account snapshot, budget or safety evidence.
+1. Valid initial recovery BUY eligibility from an empty recovery allocation.
+2. BUY is blocked when authorization, legacy basis, market readiness, account snapshot, investment budget or safety evidence is invalid/missing.
 3. Exact BUY intent identity, market, side, order type, price, quantity, quote commitment and reason/disposition.
 4. BUY fill ownership dispatches to RS accounting and never to CG accounting.
-4. Full BUY fill updates shared Portfolio and correct RS Position exactly once; partial BUY updates only confirmed execution and leaves the unfilled quote commitment reserved.
-5. Multiple fills at equal and different prices produce exact accumulated cost, net base and execution VWAP; multiple BUY tranches do not rewrite legacy basis.
-6. Base-asset fee reduces net acquired base.
-7. Quote-asset fee increases quote cost.
-8. Zero and multiple supported commission records.
-9. Third-asset fee only with approved valuation; otherwise fail closed.
-10. Duplicate identical Fill is idempotent.
-11. Same Fill identity with changed quantity, price, market, order or commission is rejected atomically.
-12. Wrong strategy/Position/order/market/side attribution is rejected.
-13. Overfill, impossible quantity, invalid precision and unsupported commission bounds fail safely.
-14. Fill-before-ack, ack-before-fill and terminal acknowledgement ordering.
-15. Unknown BUY submission prevents blind duplicate BUY and retains identity/commitment for reconciliation.
-16. Active/partial/unknown BUY gates the next BUY as specified.
-17. Investment cap below/equal/above boundary, including outstanding quote commitments.
-18. RS budget cannot borrow unused CG/other-strategy budget.
+5. Full BUY fill updates shared Portfolio and the correct RS Position exactly once.
+6. Partial BUY fill updates only confirmed executed quantity/cost/fees; the unfilled quote commitment remains reserved.
+7. Multiple BUY fills at equal and different prices produce exact accumulated cost, net base quantity and actual execution VWAP.
+8. BUY base-asset commission reduces net acquired base.
+9. BUY quote-asset commission increases actual quote cost.
+10. Zero commission and multiple supported fee records are accounted exactly.
+11. Third-asset fee follows an approved authoritative valuation path; missing/ambiguous valuation fails closed and is not treated as zero.
+12. Duplicate identical BUY Fill is idempotent across repeated delivery.
+13. Same Fill identity with changed quantity, price, market, order or commission is rejected without partial mutation.
+14. Fill for wrong strategy/Position/order/market/side cannot be attributed to RS.
+15. Overfill, impossible quantity, invalid precision, negative/zero values or commission beyond supported bounds are rejected safely.
+16. BUY acknowledgement before fill, fill before acknowledgement and immediate terminal acknowledgement preserve exact accounting and order ownership.
+17. Unknown BUY submission outcome blocks unsafe duplicate BUY and retains identity/commitment for reconciliation.
+18. Open/partial/unknown BUY lifecycle blocks the next BUY at every boundary required by the contract.
+19. Investment cap below, at and above the boundary is enforced exactly; committed quote is included and not double-counted.
+20. Multiple BUY tranches do not rewrite legacy basis.
+21. Per-pair RS budget cannot borrow unused CG or other-strategy budget.
 
 Core source ownership: accounting workflow, Portfolio/Position, canonical Fill identity, BUY evaluator, action authorizer, order submitter.
 
@@ -1039,20 +1040,21 @@ Required assertions: actual net base, quote cost, VWAP, applied Fill identities,
 **Business question:** is the SELL target derived from actual net recovery inventory plus only eligible legacy quantity, with exact ownership and no over-allocation?
 
 Required cases:
-
-1. Recovery net base + configured legacy slice.
-2. Legacy remainder smaller than configured slice.
-3. Legacy exhausted; recovery-only cycle.
-4. Verified Spot below, equal to and above the required legacy slice.
-5. Account-wide existing SELL reservations and shared base commitments.
-6. Cross-market reservations and same-market CG/RS reservations.
-7. Exact recovery/legacy allocation split and conservation.
-8. Real TradingRules filters, including quantity/notional and tick/step boundaries.
-9. Missing custody, invalid precision, invalid filter metadata and allocation ambiguity fail closed; allocation precision/rounding ambiguity must never silently shift quantity between recovery and legacy.
-10. No broker submission for any blocked/below-target plan.
-11. Base/quote/mixed commission allocation after actual canonical fills.
-12. Planner's complete workflow input must be accepted by the real SELL evaluator.
-13. Exact planned SELL price, quantity, order type, fee reserve, net proceeds and recovery/legacy allocation split are asserted, not only intent count.
+1. Recovery net base quantity plus the configured additive legacy slice.
+2. Legacy remaining quantity smaller than configured sellQuantity uses only the approved smaller remainder.
+3. Legacy exhaustion selects recovery-only cycle behavior; no legacy quantity is fabricated or reused.
+4. Verified Spot quantity below, equal to and above the required legacy slice.
+5. Verified Spot allocation derives from authoritative Spot total minus all Portfolio Positions for the canonical base asset, capped by authorized remaining legacy quantity.
+6. Account-wide existing SELL reservations and shared base commitments are respected.
+7. Cross-market reservations and same-market CG/RS reservations cannot double-sell the same physical base inventory.
+8. Exact recovery/legacy allocation split and quantity conservation.
+9. Real TradingRules filters, including quantity/notional and tick/step boundaries.
+10. Missing custody, invalid precision, invalid filter metadata and allocation ambiguity fail closed.
+11. Allocation precision/rounding ambiguity fails closed; quantity is never silently shifted between recovery and legacy.
+12. No broker submission occurs for any blocked or below-target plan.
+13. Base-, quote- and mixed-commission allocation follows actual canonical fills.
+14. The complete real accounting-workflow input is accepted by the default SELL evaluator; this application subcase remains blocked by #1809 until fixed.
+15. Exact planned SELL price, quantity, order type, fee reserve, net proceeds and recovery/legacy allocation split are asserted, not only intent count.
 
 Core source ownership: `calculate-sell-plan.js`, `evaluate-sell-decision.js`, `legacy-spot-allocation.js`, accounting workflow, shared allocator/TradingRules.
 
@@ -1063,22 +1065,27 @@ Core source ownership: `calculate-sell-plan.js`, `evaluate-sell-decision.js`, `l
 **Business question:** do recovery, legacy and combined profitability independently satisfy their own requirements?
 
 Required cases:
-
-1. Recovery exactly at minimum profit.
-2. Recovery just below/above threshold.
-3. Legacy break-even, below break-even and above break-even where applicable.
-4. Combined gate independently enforced.
-5. Recovery profit cannot subsidize legacy loss.
-6. Legacy profit cannot subsidize recovery loss.
-7. All gates passing yields the exact eligible decision.
-8. Recovery-only operation still enforces recovery and combined gates.
-9. Actual net proceeds and actual fee assets, not gross order notional.
-10. Mixed SELL target is the max of independent net proceeds requirements with correct fee gross-up.
-11. LIMIT_MAKER uses the configured maker fee reserve; ordinary LIMIT uses the approved higher maker/taker reserve.
-12. makerPercent zero/non-zero selects the owner-approved order type exactly.
-13. Exact price/quantity rounding preserves net proceeds.
-14. No intent/submission if any gate or required metadata fails.
-15. Post-fill actual adverse profitability commits confirmed facts exactly once, preserves ownership/reservation evidence and latches the approved STOP; no follow-up SELL, replacement, BUY or cycle reset is invented.
+1. Recovery profitability gate passes exactly at the configured minimum-profit threshold.
+2. Recovery profitability fails just below the threshold.
+3. Recovery profitability exceeds the threshold by the smallest meaningful exact increment.
+4. Legacy profitability gate passes at break-even where the contract permits it.
+5. Legacy profitability fails below break-even and blocks SELL eligibility as specified.
+6. Legacy profitability passes above break-even.
+7. Combined-cycle profitability gate is independently evaluated and cannot replace either allocation gate.
+8. Recovery profitable plus legacy loss-making is rejected even if the combined cycle is profitable.
+9. Legacy profitable plus recovery loss-making is rejected even if the combined cycle is profitable.
+10. Combined profitable while one allocation fails is rejected.
+11. All independent gates passing produces the expected eligible result.
+12. Recovery-only operation still enforces recovery and combined gates after legacy exhaustion.
+13. All gates use actual net proceeds and actual fee assets, not gross order value.
+14. Mixed SELL target uses the approved maximum of the independent allocation net-proceeds requirements with exact fee gross-up.
+15. LIMIT_MAKER uses the configured maker fee reserve; ordinary LIMIT uses the approved higher maker/taker reserve.
+16. makerPercent zero/non-zero selects the owner-approved order type exactly.
+17. SELL price/quantity rounding at tick/step boundaries preserves required net proceeds.
+18. Missing/invalid fee configuration or filter metadata fails closed.
+19. No SELL intent is emitted if any required profitability or exchange-readiness gate fails.
+20. Exact expected SELL price, quantity, order type, fee reserve, net proceeds and allocation split are asserted.
+21. Post-fill actual adverse profitability commits confirmed facts exactly once, preserves ownership/reservation evidence and latches the approved STOP; no follow-up SELL, replacement, BUY or cycle reset is authorized.
 
 Core source ownership: `calculate-profitability.js`, `calculate-sell-plan.js`, `evaluate-sell-decision.js`, application transition evaluator and accounting workflow.
 
@@ -1087,20 +1094,21 @@ Core source ownership: `calculate-profitability.js`, `calculate-sell-plan.js`, `
 **Business question:** can one cycle ever create more than one SELL lifecycle or release its reservation too early?
 
 Required cases:
-
-1. First SELL identity is recorded before the approved broker-I/O boundary.
-2. Repeated evaluation while active creates no second broker call.
-3. Reservation creation follows the approved durable submission boundary.
-4. Unknown outcome retains original identity and reservation.
-5. Partial SELL fills are staged until complete terminal reconciliation.
-6. Complete terminal fill history is reconciled before commit.
-7. Reservation releases only after successful required accounting commit.
-8. CANCELED/REJECTED/EXPIRED including partial execution leaves the cycle unresolved and follows the approved terminal STOP contract; no replacement SELL or next BUY is created. The source/spec STOP discrepancy remains blocked.
-9. Unknown, incomplete, conflicting or duplicate terminal facts cannot close twice or release twice.
-10. Duplicate completion request/event is idempotent; stale fills/reports from a completed cycle cannot affect the next cycle.
-11. SELL acknowledgement preserves the original canonical order identity and reservation.
-12. New cycle only after approved closure.
-13. Legacy exhaustion permits recovery-only behavior only as explicitly specified.
+1. A cycle can acquire only one SELL reservation and one SELL order identity.
+2. First SELL identity is recorded before the approved broker-I/O boundary.
+3. Repeated evaluation while the SELL is pending/open cannot create another SELL broker call.
+4. SELL reservation is created only at the approved durable submission boundary.
+5. Reservation remains held while submission outcome is unknown.
+6. SELL acknowledgement preserves the original canonical order identity and reservation.
+7. Partial SELL fills are staged and do not prematurely commit mixed allocation projections.
+8. Complete terminal SELL reconciles the complete canonical REST/stream Fill set before atomic commit.
+9. Reservation releases only after successful terminal mixed-SELL accounting.
+10. Terminal partial/CANCELED/REJECTED/EXPIRED outcomes leave the cycle unresolved and follow the approved terminal STOP contract; no replacement SELL or next BUY is created. This STOP outcome remains subject to the documented source/spec discrepancy.
+11. Unknown, incomplete, conflicting or duplicate terminal facts cannot close twice or release twice.
+12. Duplicate completion request/event is idempotent; stale fills/reports from a completed cycle cannot affect the next cycle.
+13. A new cycle is created only after approved terminal reconciliation, accounting commit and completion gates pass.
+14. Legacy exhaustion transitions to recovery-only cycles only under the explicit contract.
+15. Reaching the recovery investment limit blocks new BUYs only; an already-open recovery SELL remains live and untouched, is not canceled/replaced/repriced, and continues through terminal reconciliation.
 
 Core source ownership: cycle state, lifecycle decision, accounting workflow, order submitter, order callbacks, reservation and terminal reconciliation.
 
@@ -1109,25 +1117,28 @@ Core source ownership: cycle state, lifecycle decision, accounting workflow, ord
 **Business question:** do recovery and legacy projections consume the same canonical execution evidence and commit together?
 
 Required cases:
-
 1. Recovery and legacy allocations remain distinct while sharing one actual Portfolio/custody aggregate.
-2. One canonical SELL Fill split between recovery and legacy.
-3. Multiple partial SELL fills.
-4. Allocation sum equals canonical Fill quantity under approved fee treatment; partial SELL consumes exact allocated quantities and fees from the correct allocation.
+2. One canonical SELL Fill is split between recovery and legacy using the approved allocation contract.
+3. Multiple partial SELL fills are accumulated and reconciled exactly.
+4. Allocation sum equals canonical SELL Fill quantity under approved fee treatment; partial SELL consumes exact allocated quantities and fees from the correct allocation.
 5. Recovery and legacy projections derive from identical accepted Fill facts; recovery allocation uses only canonical RS recovery fills and attributed proceeds.
-6. Successful commit updates both.
-7. Failure in either projection leaves both unchanged; the cycle reservation remains held and no partial projection is published. Any STOP disposition remains subject to the unresolved STOP contract.
-8. Identical terminal replay is an exact no-op.
-9. Same identity with changed facts is rejected.
-10. Duplicate Fill through REST and stream in both orders.
-11. Conflicting REST/stream facts are rejected atomically.
-12. Incomplete fill history cannot commit a terminal allocation.
-13. Durable barrier and reservation retention/release are verified at application layer.
-14. Confirmed fills are accounted even if post-fill profitability fails.
-15. Shared Portfolio totals reconcile to the sum of strategy-owned allocations plus correctly classified unallocated inventory; no synthetic custody is created.
-16. Streamed RS SELL fills are staged under RS ownership and are not applied as standalone CG fills.
-17. Terminal mixed-SELL reconciliation receives the complete canonical REST/stream fill history.
-18. Atomic accounting failure prevents registry publication and cycle closure.
+6. SELL base-asset commission reduces net base quantity/proceeds allocation according to the approved accounting contract.
+7. SELL quote-asset commission reduces net quote proceeds exactly.
+8. Third-asset SELL commission requires authoritative quote valuation; unsupported valuation fails closed.
+9. Mixed commission assets are allocated without duplication or loss.
+10. Allocation precision/rounding ambiguity fails closed rather than silently shifting quantity between recovery and legacy.
+11. Successful commit updates both recovery and legacy projections.
+12. Failure in either projection leaves both unchanged; the cycle reservation remains held and no partial projection is published. Any STOP disposition remains subject to the unresolved STOP contract.
+13. Identical terminal mixed-SELL replay is an exact no-op; conflicting replay is rejected.
+14. Duplicate Fill through REST and stream in either order produces exact-once behavior.
+15. Conflicting REST/stream facts are rejected atomically.
+16. Incomplete fill history cannot commit a terminal allocation.
+17. Durable barrier and reservation retention/release are verified at application layer.
+18. Confirmed canonical fills are committed exactly once even if subsequent profitability is false.
+19. Shared Portfolio totals reconcile to strategy-owned allocations plus correctly classified unallocated inventory; no synthetic custody is created.
+20. Streamed RS SELL fills are staged under RS ownership and are not applied as standalone CG fills.
+21. Terminal mixed-SELL reconciliation receives the complete canonical REST/stream Fill history.
+22. Atomic accounting failure prevents order-registry publication and cycle closure.
 
 Core source ownership: mixed SELL allocation/accounting/reconciliation, Portfolio, accounting workflow, record-reconciled use case, persistence boundary.
 
@@ -1136,22 +1147,22 @@ Core source ownership: mixed SELL allocation/accounting/reconciliation, Portfoli
 **Business question:** when broker outcome is unknown, does RS preserve original identity/commitment and reconcile without resubmitting?
 
 Required cases:
-
 1. Timeout before broker acceptance.
 2. Timeout after broker acceptance but before response.
-3. Unknown response retains client order identity.
+3. Unknown response retains the original client order identity.
 4. Repeated unknown event is idempotent.
-5. Lookup finds active order.
+5. Lookup finds the active order.
 6. Lookup finds terminal order and complete history.
-7. Lookup says not found.
+7. Lookup says the order is not found.
 8. Lookup itself fails or returns incomplete history.
 9. Original reservation remains held until authoritative resolution.
-10. No second broker submission under any unknown path.
+10. No second broker submission occurs under any unknown path.
 11. Existing order reconciliation and confirmed fills continue under STOP.
-12. Durable submission intent precedes broker submission; durable outcome is recorded before local acknowledgement is considered complete.
-13. Reservation creation/release occurs at the correct workflow boundary.
-14. Durable outcome failure after external submission preserves uncertainty and blocks duplicate submission.
-15. Unknown submission followed by active, terminal, not-found or failed lookup has exact expected reservation and broker-call behavior.
+12. Durable submission intent precedes broker submission.
+13. Durable submission outcome is recorded before local acknowledgement is considered complete.
+14. Reservation creation/release occurs at the correct workflow boundary.
+15. Durable outcome failure after external submission preserves uncertainty and blocks duplicate submission.
+16. Unknown submission followed by active, terminal, not-found or failed lookup has exact expected reservation and broker-call behavior.
 
 Core source ownership: order submitter, lifecycle decision, order callbacks, accounting workflow, order registry and persistence.
 
@@ -1160,21 +1171,20 @@ Core source ownership: order submitter, lifecycle decision, order callbacks, acc
 **Business question:** can CG and RS run independently while never spending/selling the same physical account inventory twice?
 
 Required cases:
-
-1. Same market, concurrent CG and RS BUY accounting.
-2. Different markets, concurrent BUY accounting.
-3. Same market, competing SELL base reservations.
-4. Different markets sharing quote/base asset constraints.
-5. Snapshot locks already reflected are not deducted twice.
-6. New commitments after snapshot are deducted exactly once.
-7. Strategy-owned Position attribution remains distinct in one shared Portfolio.
-8. RS budget cannot borrow CG budget and vice versa.
-9. Concurrent evaluations serialize or reject conflicting allocation without double-submit.
+1. CG and RS run concurrently on different markets with independent Position/order ownership.
+2. CG and RS run concurrently on the same market with multiple independent Positions.
+3. Shared Portfolio represents actual account custody once; strategy Positions do not duplicate wallet balance.
+4. Shared quote availability is never double-spent across concurrent intents.
+5. Shared base inventory/reservations prevent double-sell and oversell.
+6. RS cannot consume unused CG budget; CG cannot consume unused RS budget.
+7. Strategy-specific order/fill ownership is immutable through submit, acknowledgement, stream, REST and terminal reconciliation.
+8. A Fill is attributed to exactly one owning Position/strategy.
+9. Concurrent decision attempts serialize account-level reservation/submission transitions and produce deterministic results.
 10. Failure during one strategy's accounting does not partially mutate the other strategy's Position.
 11. Same-symbol market-data subscription deduplication does not merge strategy ownership.
 12. One strategy's pause/disable/STOP does not silently change another strategy's policy; account-wide safety reservations remain authoritative.
 13. External/manual order isolation remains intact while multiple strategies are active.
-14. The shared serialized transition queue orders CG/RS decisions, submissions and fill transitions.
+14. The shared serialized transition queue orders CG/RS decisions, submissions and Fill transitions.
 15. Bootstrap routes RS-only and concurrent CG/RS strategies by explicit strategy ownership and environment selectors.
 16. Runtime configuration does not enable a deferred operational session or bypass per-market environment filtering.
 
@@ -1185,21 +1195,20 @@ Core source ownership: shared Portfolio, account snapshot/commitment allocator, 
 **Business question:** does unexpected evidence block new trading while preserving order/fill facts and required reconciliation?
 
 Potential cases after owner resolution:
-
 1. STOP is sticky across later market updates and unrelated operator commands.
-2. No new BUY/SELL/replacement/retry while STOP is active.
+2. No new BUY/SELL/replacement/retry occurs while STOP is active.
 3. Existing active order may be WAITed/reconciled under the contract.
 4. Confirmed canonical fills continue to be accounted exactly once.
-5. Missing/malformed/conflicting/unmodeled evidence fails closed.
+5. Missing, malformed, conflicting or unmodeled evidence fails closed.
 6. Persistence/commit failure preserves projections and reservations as specified.
-7. Exchange filter violation behavior follows the exact approved filter-vs-dust boundary.
-8. Operator visibility and permitted actions match the approved STOP contract.
-9. No implicit reset or self-resume.
+7. Exchange-filter violation behavior follows the exact approved filter-versus-dust boundary.
+8. Operator visibility and permitted actions match the approved STOP contract; the operator facade remains read-only unless the owner changes the contract.
+9. No implicit reset or self-resume occurs.
 10. Missing account snapshot, stale market data, invalid market metadata, missing filters or invalid precision blocks new actions.
 11. Durable intent failure prevents broker submission when required; durable outcome failure preserves uncertainty and prevents blind retry.
-12. Operator visibility remains read-only unless the owner explicitly changes the contract.
-13. Invalid BUY/SELL intent is never submitted; invalid fill identity cannot mutate Portfolio, allocations, reservations or completion state.
-14. Failure after external submission but before local acknowledgement retains canonical identity for reconciliation and blocks duplicate submission.
+12. Invalid BUY/SELL intent is never submitted; invalid Fill identity cannot mutate Portfolio, allocations, reservations or completion state.
+13. Failure after external submission but before local acknowledgement retains canonical identity for reconciliation and blocks duplicate submission.
+14. STOP does not prevent required reconciliation of already-submitted orders/fills.
 
 **Do not implement this family as if its contract were settled.** The specification says terminal STOP/no reset, while current source contains `resolveRecoverySellerStopState` and `resolveRecoverySellerStop`; the operator facade exposes read-only status. Record and wait for owner resolution. The existence of a source helper is not approval to expose it.
 
@@ -1218,6 +1227,26 @@ This family is a disposition register, not permission to invent functionality.
 - Restart/replay remains unsupported at each interruption point: after durable intent, after broker acceptance, after partial fill, during terminal reconciliation, after projection commit but before registry publication, and after STOP.
 - Any behavior without an explicit canonical decision remains BLOCKED rather than inferred.
 - A future owner-approved issue must define the contract, source of truth, replay semantics and acceptance criteria before implementation scenarios are added.
+
+### 11.1 Crosswalk to the owning issue's A–K matrix
+
+Every checkbox in [#1780](https://github.com/45s/coinzilla/issues/1780) must map to at least one stable scenario/subcase ID. This crosswalk prevents a future agent from accidentally treating the RS-001…RS-010 family names as permission to omit an original matrix section.
+
+| #1780 matrix section | Playbook family ownership |
+| --- | --- |
+| A. Authorization, legacy declaration and custody | RS-001 |
+| B. Initial recovery BUY and BUY accounting | RS-002 |
+| C. Recovery and legacy allocation accounting | RS-001, RS-002, RS-003 and RS-006 |
+| D. Independent profitability and SELL economics | RS-004 |
+| E. One-SELL-per-cycle lifecycle and reservations | RS-005, with application evidence in RS-007 |
+| F. STOP, failure atomicity and fail-closed behavior | RS-006, RS-007 and RS-009 |
+| G. Concurrent strategies and account-wide resource safety | RS-008 |
+| H. Cycle completion, residuals and next-cycle behavior | RS-003, RS-005, RS-006 and RS-010 |
+| I. Market, exchange precision and exact arithmetic | RS-002, RS-003 and RS-004 |
+| J. Application integration scenarios | RS-002, RS-005, RS-006, RS-007 and RS-008 |
+| K. Explicitly deferred / blocked scenarios | RS-009 and RS-010 |
+
+A matrix checkbox is not complete merely because the family is implemented. Split it into individual stable subcase IDs where it contains more than one independently falsifiable behavior. Keep every missing/blocked/unsupported subcase visible in the registry and #1780.
 
 ## 12. Adversarial sequence and failure matrix
 
