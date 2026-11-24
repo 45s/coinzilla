@@ -23,6 +23,31 @@ describe('AppComponent', () => {
     expect(renderedText).toContain('fictional demo data');
   });
 
+  it('provides a dedicated Bots workspace for live Harvester strategy and portfolio state', async () => {
+    await TestBed.configureTestingModule({
+      imports: [AppComponent],
+      providers: [provideHttpClient()],
+    }).compileComponents();
+
+    const fixture = TestBed.createComponent(AppComponent);
+    fixture.detectChanges();
+
+    const botsButton = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button.nav-item'))
+      .find((button) => button.textContent?.includes('Bots')) as HTMLButtonElement | undefined;
+    expect(botsButton, 'The primary navigation must expose Bots as a separate workspace.').toBeDefined();
+    if (!botsButton) return;
+
+    botsButton.click();
+    fixture.detectChanges();
+
+    const renderedText = (fixture.nativeElement as HTMLElement).textContent as string;
+    expect(renderedText, 'The Bots workspace must identify itself as a live Harvester control surface.').toContain('HARVESTER / BOT CONTROL');
+    expect(renderedText, 'The Bots workspace must summarize the active runtime strategy mode.').toContain('Strategy mode');
+    expect(renderedText, 'The Bots workspace must expose process uptime.').toContain('Running time');
+    expect(renderedText, 'The Bots workspace must expose configured market controls.').toContain('Market controls');
+    expect(renderedText, 'The Bots workspace must show the Portfolio position view.').toContain('Portfolio positions');
+  });
+
   it('navigates to real-record Orders, Fills and Commissions pages', async () => {
     await TestBed.configureTestingModule({
       imports: [AppComponent],
