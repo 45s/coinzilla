@@ -310,6 +310,29 @@ describe('BotsComponent', () => {
     expect((fixture.nativeElement as HTMLElement).textContent).toContain('Reconnecting to Harvester');
   });
 
+  it('reconnects and accepts a new server revision epoch after Harvester restarts', async () => {
+    vi.stubGlobal('WebSocket', MockWebSocket);
+    const result = await createBotsFixture();
+    http = result.http;
+    const { fixture, socket } = result;
+    vi.useFakeTimers();
+    socket.close();
+    await vi.advanceTimersByTimeAsync(1_000);
+
+    const reconnect = MockWebSocket.instances.at(-1);
+    if (!reconnect) throw new Error('Bots component did not reconnect its WebSocket.');
+    expect(MockWebSocket.instances).toHaveLength(2);
+    reconnect.open();
+    reconnect.sendMessage(createSnapshotMessage({
+      revision: 1,
+      paused: true,
+    }));
+    fixture.detectChanges();
+
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain('BUYs paused');
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain('Snapshot fresh');
+  });
+
   it('marks an incomplete initial snapshot unavailable and keeps controls disabled', async () => {
     vi.stubGlobal('WebSocket', MockWebSocket);
     await TestBed.configureTestingModule({
