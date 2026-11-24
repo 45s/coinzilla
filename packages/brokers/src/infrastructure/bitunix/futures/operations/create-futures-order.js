@@ -91,6 +91,9 @@ function validateReduceOnly({ tradeSide, reduceOnly }) {
   if (tradeSide === "OPEN" && reduceOnly) {
     throw new TypeError("Bitunix Futures OPEN orders cannot set reduceOnly: true")
   }
+  if (tradeSide === "CLOSE" && reduceOnly !== true) {
+    throw new TypeError("Bitunix Futures CLOSE orders require reduceOnly: true to prevent position reversal")
+  }
 }
 
 function normalizePositionId({ input, tradeSide }) {
@@ -217,6 +220,31 @@ function normalizeFuturesOrderInput({ input }) {
     }),
   }
 }
+async function validateClosePositionPreflight({ broker, order }) {
+  const result = await broker.getFuturesPositions({
+    symbol: order.symbol,
+    positionId: order.positionId,
+  })
+  if (!result.ok) {
+    throw result.errors?.[0] ?? new Error("Bitunix Futures CLOSE position preflight failed")
+  }
+  if (result.data.length !== 1) {
+    throw new Error("Bitunix Futures CLOSE order was not sent because the exact position is not open")
+  }
+  const [position] = result.data
+  // Bitunix maps LONG to BUY and SHORT to SELL for Futures CLOSE orders.
+  const expectedSide = position.side === "LONG" ? "BUY" : "SELL"
+  if (order.side !== expectedSide) {
+    throw new TypeError("Bitunix Futures CLOSE order side must match the position side")
+  }
+  if (compareDecimal({
+    left: order.qty,
+    right: position.quantity,
+  }) > 0) {
+    throw new RangeError("Bitunix Futures CLOSE order quantity cannot exceed the current open position quantity")
+  }
+}
+
 function readPrecision({ value, field }) {
   if (!Number.isSafeInteger(value) || value < 0) {
     throw new TypeError(`Bitunix Futures ${field} must be a non-negative integer`)
@@ -466,6 +494,12 @@ export async function createFuturesOrder({ broker, input } = {}) {
     const order = normalizeFuturesOrderInput({
       input,
     })
+    if (order.tradeSide === "CLOSE") {
+      await validateClosePositionPreflight({
+        broker,
+        order,
+      })
+    }
     const markets = await broker.getExchangeMarkets()
     if (!markets.ok) {
       return createOutcomeResult({
