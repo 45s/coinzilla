@@ -1531,7 +1531,7 @@ Every family below explicitly answers the 22 contract questions required by the 
 | 16. Failure cases | Invalid/negative/zero Fill; overfill; wrong order/Position/strategy/market; invalid precision; contradictory commission identity; missing account state; unknown acknowledgement; persistence failure. |
 | 17. Duplicate/replay cases | Identical Fill replay is a no-op; same identity with changed facts is rejected atomically. Process restart/replay restoration remains unsupported. |
 | 18. Required assertions | Exact net base, quote cost, actual execution VWAP inputs, applied Fill identities, pending quote commitment, order ownership, cycle state and exact broker-call count. |
-| 19. Existing regression tests | create-recovery-seller-accounting-workflow.test.js; create-recovery-seller-accounting-workflow.buy-vwap.test.js; create-recovery-seller-runtime-evaluator.test.js; order-event-workflow.test.js. Zero scenario credit. |
+| 19. Existing regression tests | create-recovery-seller-accounting-workflow.test.js (includes cycle-scoped BUY VWAP assertions); create-recovery-seller-runtime-evaluator.test.js; order-event-workflow.test.js. Zero scenario credit. |
 | 20. Missing scenario tests | New RS-002 registry cases for full/partial/multiple BUY fills, base/quote fees, duplicate/conflicting identity, investment boundaries, unknown submission and CG exclusion. |
 | 21. Blocked decisions | Third-asset quote valuation source and process restart/replay remain deferred. Missing/ambiguous third-asset valuation must fail closed, never equal zero by assumption. |
 | 22. Acceptance criteria | Every #1780 section B case has stable IDs and independent exact-decimal expected values; real Portfolio/Fill ownership is asserted; new scenarios are merged and verified before status changes. |
@@ -1666,7 +1666,7 @@ Every family below explicitly answers the 22 contract questions required by the 
 | 16. Failure cases | Timeout before/after broker acceptance; missing response; lookup not found; lookup failed; partial/incomplete history; durable outcome write failure. |
 | 17. Duplicate/replay cases | Repeated identical unknown event is idempotent; conflicting identity/status is rejected; duplicate lookup results do not create new orders. |
 | 18. Required assertions | Exact broker-call count stays one; original IDs/intent/reservation retained; correct RECONCILE/WAIT/BLOCK; confirmed fills applied once. |
-| 19. Existing regression tests | create-recovery-seller-order-submitter.test.js; recovery-seller-cycle-lifecycle.scenario.test.js; recovery-seller-order-callbacks.test.js. New scenario evidence remains PARTIAL. |
+| 19. Existing regression tests | create-recovery-seller-order-submitter.test.js; order-event-workflow.test.js; recovery-seller-cycle-lifecycle.scenario.test.js. Callback behavior is covered through the submitter/event workflow; there is no standalone recovery-seller-order-callbacks.test.js. New scenario evidence remains PARTIAL. |
 | 20. Missing scenario tests | Real submitter plus durable store and broker lookup across every unknown timing point, including lookup not-found and persistence failure. |
 | 21. Blocked decisions | No automatic retry/replacement policy is approved. Restart/replay is separately deferred under RS-010. |
 | 22. Acceptance criteria | Every #1780 section E/F/J unknown-outcome case has exact identity, reservation and broker-call assertions; no scenario permits retry. |
