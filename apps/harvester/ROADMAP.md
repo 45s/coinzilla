@@ -2191,7 +2191,6 @@ The detailed evidence, implementation commits, CI state and remaining unknowns a
 
 ## 2026-11-24 — #1763 Phase 4 BUY accounting completion work
 
-
 **Phase 4 functional implementation complete in review PR #1808.** This phase now has composed canonical BUY accounting, a second-BUY basis regression, exact BUY investment-cap boundaries, and a full engine lifecycle routed through the production accounting use case. The lifecycle proves exact accounting after a second BUY and recovery-SELL cancellation/fill reconciliation. CI is intentionally deferred; this is an implementation checkpoint, not a claim of verified CI or merged coverage.
 
 - Added composed initial/multiple-BUY accounting coverage in `src/use-cases/conservative-buy-accounting-scenario.test.js`, applying canonical fills through `updateTradingAccounting` and asserting exact Position/RecoveryLedger inventory, cost, quote cash flow, commission treatment, execution identities, duplicate behavior and failure atomicity.
