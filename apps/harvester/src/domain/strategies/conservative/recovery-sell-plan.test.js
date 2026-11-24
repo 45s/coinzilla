@@ -159,3 +159,16 @@ test("clamps required proceeds to zero when confirmed proceeds exceed the recove
     requiredNetProceeds: "0",
   })
 })
+
+test("preserves a positive recovery requirement immediately below the proceeds threshold", () => {
+  const plan = calculateRecoverySellPlan({
+    ...basePlan,
+    saleProceeds: "10.0099999",
+  })
+
+  assert.deepEqual(plan, {
+    quantity: "99",
+    price: "0.001",
+    requiredNetProceeds: "0.0000001",
+  }, "A sub-threshold proceeds balance must not be treated as recovered, even when the remaining requirement is smaller than one price tick.")
+})
