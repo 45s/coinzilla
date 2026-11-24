@@ -137,6 +137,7 @@
       "src/use-cases/trading-history/queries.test.js",
       "src/infrastructure/http/trading-history-api.test.js",
       "src/infrastructure/http/trading-history-websocket.test.js",
+      "src/infrastructure/http/trading-history-websocket-frame.test.js",
       "src/infrastructure/http/trading-history-bots-websocket.test.js",
       "src/infrastructure/http/start-trading-history-api.test.js",
       "src/infrastructure/http/market-data-api.test.js",
