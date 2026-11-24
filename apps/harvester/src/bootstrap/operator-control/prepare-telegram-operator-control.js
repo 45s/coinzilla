@@ -97,6 +97,7 @@ async function startTelegramOperatorAdapter({
   logger,
   operationalStateStore,
   engine,
+  eventPublisher,
   getRuntimeSnapshot,
   getPortfolio,
   getRecoveryLedger,
@@ -110,6 +111,7 @@ async function startTelegramOperatorAdapter({
   const operator = createHarvesterOperator({
     engine,
     operationalStateStore,
+    eventPublisher,
     getRuntimeSnapshot,
     getPortfolio,
     getRecoveryLedger,

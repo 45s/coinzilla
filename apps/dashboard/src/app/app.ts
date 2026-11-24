@@ -6,9 +6,10 @@ import { OperatorComponent } from './features/operator/page';
 import { MarketScreenerComponent } from './features/market-screener/page';
 import { ExchangesComponent } from './features/exchanges/page';
 import { OpenOrdersComponent } from './features/open-orders/page';
+import { BotsComponent } from './features/bots/page';
 import type { TradingHistoryResource } from './features/trading-history/api';
 
-type DashboardPage = 'overview' | 'operator' | 'markets' | 'exchanges' | 'open-orders' | TradingHistoryResource;
+type DashboardPage = 'overview' | 'operator' | 'bots' | 'markets' | 'exchanges' | 'open-orders' | TradingHistoryResource;
 type DashboardTheme = 'current' | 'midnight' | 'light' | 'oled' | 'green' | 'arctic' | 'warm' | 'system';
 
 const THEME_STORAGE_KEY = 'coinzilla.dashboard.theme';
@@ -40,7 +41,7 @@ export function readSavedDashboardTheme(
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [OverviewComponent, TradingHistoryComponent, OperatorComponent, MarketScreenerComponent, ExchangesComponent, OpenOrdersComponent],
+  imports: [OverviewComponent, TradingHistoryComponent, OperatorComponent, BotsComponent, MarketScreenerComponent, ExchangesComponent, OpenOrdersComponent],
   templateUrl: './app.html',
   styleUrl: './app.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -48,6 +49,7 @@ export function readSavedDashboardTheme(
 export class AppComponent {
   readonly navigationItems = [
     { label: 'Overview', icon: '◫', page: 'overview' as const, enabled: true },
+    { label: 'Bots', icon: '◉', page: 'bots' as const, enabled: true },
     { label: 'Operator', icon: '⌘', page: 'operator' as const, enabled: true },
     { label: 'Orders', icon: '⇄', page: 'orders' as const, enabled: true },
     { label: 'Fills', icon: '⌁', page: 'fills' as const, enabled: true },
@@ -67,7 +69,7 @@ export class AppComponent {
   );
   readonly historyResource = computed<TradingHistoryResource>(() => {
     const page = this.activePage();
-    return page === 'overview' || page === 'operator' || page === 'markets' || page === 'exchanges' || page === 'open-orders' ? 'orders' : page;
+    return page === 'overview' || page === 'operator' || page === 'bots' || page === 'markets' || page === 'exchanges' || page === 'open-orders' ? 'orders' : page;
   });
 
   constructor() {
