@@ -3,6 +3,27 @@ import { ensure } from "@coinzilla/utils"
 const DEFAULT_BASE_URL = "https://fapi.bitunix.com"
 const DEFAULT_PUBLIC_WS_URL = "wss://fapi.bitunix.com/public/"
 const DEFAULT_PRIVATE_WS_URL = "wss://fapi.bitunix.com/private/"
+const CONFIGURATION_OPTIONS = new Set([
+  "apiKey",
+  "apiSecret",
+  "tradingMode",
+  "baseUrl",
+  "publicWebSocketUrl",
+  "privateWebSocketUrl",
+  "requestTimeout",
+  "allowLiveOrderMutations",
+  "allowLiveAccountMutations",
+])
+
+function validateConfigurationInput({ input }) {
+  if (input === null || typeof input !== "object" || Array.isArray(input)) {
+    throw new TypeError("Bitunix Futures configuration input must be an object")
+  }
+  const unexpectedOptions = Object.keys(input).filter((option) => !CONFIGURATION_OPTIONS.has(option))
+  if (unexpectedOptions.length > 0) {
+    throw new TypeError(`Bitunix Futures configuration received unsupported options: ${unexpectedOptions.join(", ")}`)
+  }
+}
 
 function validateCredentials({ apiKey, apiSecret, tradingMode }) {
   ensure.nonEmptyString({
@@ -60,17 +81,21 @@ export class BitunixFuturesConfig {
   /**
    * @param {{apiKey: string, apiSecret: string, tradingMode: "live", baseUrl?: string, publicWebSocketUrl?: string, privateWebSocketUrl?: string, requestTimeout?: number, allowLiveOrderMutations?: boolean, allowLiveAccountMutations?: boolean}} input
    */
-  constructor({
-    apiKey,
-    apiSecret,
-    tradingMode,
-    baseUrl = DEFAULT_BASE_URL,
-    publicWebSocketUrl = DEFAULT_PUBLIC_WS_URL,
-    privateWebSocketUrl = DEFAULT_PRIVATE_WS_URL,
-    requestTimeout = 10_000,
-    allowLiveOrderMutations = false,
-    allowLiveAccountMutations = false,
-  } = {}) {
+  constructor(input = {}) {
+    validateConfigurationInput({
+      input,
+    })
+    const {
+      apiKey,
+      apiSecret,
+      tradingMode,
+      baseUrl = DEFAULT_BASE_URL,
+      publicWebSocketUrl = DEFAULT_PUBLIC_WS_URL,
+      privateWebSocketUrl = DEFAULT_PRIVATE_WS_URL,
+      requestTimeout = 10_000,
+      allowLiveOrderMutations = false,
+      allowLiveAccountMutations = false,
+    } = input
     validateCredentials({
       apiKey,
       apiSecret,
