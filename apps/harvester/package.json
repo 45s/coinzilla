@@ -23,6 +23,7 @@
       "scripts/capture-harvester-archive-process-identity.test.js",
       "scripts/reset-operational-state.test.js",
       "src/infrastructure/logging/configure-harvester-logging-directory.test.js",
+      "src/infrastructure/logging/order-history-projection-console.test.js",
       "src/infrastructure/persistence/harvester-database-isolation.test.js",
       "config/strategies/rs-recovery-seller.test.js",
       "test/critical-module-coverage.test.js",
@@ -66,9 +67,6 @@
       "src/domain/strategies/recovery-seller/mixed-sell-fill-reconciliation.test.js",
       "src/domain/strategies/recovery-seller/mixed-sell-fill-accounting.test.js",
       "src/domain/strategies/recovery-seller/calculate-profitability.test.js",
-      "test/scenarios/recovery-seller-profitability.scenario.test.js",
-      "test/scenarios/recovery-seller-mixed-sell-accounting.scenario.test.js",
-      "test/scenarios/recovery-seller-cycle-lifecycle.scenario.test.js",
       "src/domain/strategies/recovery-seller/calculate-sell-plan.test.js",
       "src/domain/strategies/recovery-seller/evaluate-sell-decision.test.js",
       "src/domain/strategies/recovery-seller/stop-decision.test.js",
@@ -140,7 +138,10 @@
       "src/infrastructure/http/start-trading-history-api.test.js",
       "src/infrastructure/http/market-data-api.test.js",
       "src/infrastructure/http/bitunix-futures-market-data.test.js",
-      "test/use-cases/conservative-trading-engine.test.js"
+      "test/use-cases/conservative-trading-engine.test.js",
+      "test/scenarios/recovery-seller-profitability.scenario.test.js",
+      "test/scenarios/recovery-seller-mixed-sell-accounting.scenario.test.js",
+      "test/scenarios/recovery-seller-cycle-lifecycle.scenario.test.js"
     ]
   },
   "scripts": {

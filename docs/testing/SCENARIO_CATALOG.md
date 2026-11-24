@@ -8,6 +8,8 @@ created: 2026-11-23
 
 # Test scenario catalog
 
+Shared design guidance: [Domain Scenario Testing Methodology](DOMAIN_SCENARIO_TESTING.md). This catalog is the behavior-navigation and evidence index; owning domain specifications and issues remain authoritative for rules and detailed matrices.
+
 This is the single human-readable entry point for understanding the important behavioral scenarios the Coinzilla automated tests are intended to prove.
 
 It is organized around **what the application must do**, not around test filenames. Each scenario describes the business behavior, preconditions, inputs, expected outcomes, important subcases, implementation ownership, and the automated test cases that prove it.
@@ -424,526 +426,259 @@ The [Conservative Domain Specification](../../apps/harvester/docs/domain/CONSERV
 
 The [Recovery Seller Domain Specification](../../apps/harvester/docs/domain/recovery-seller-domain-specification.md) and owner-approved decisions remain the behavior authority. Where the contract is draft, unresolved, or deferred, the scenario must remain blocked rather than inventing behavior.
 
+## Harvester — Recovery Seller (RS)
+
+The [Recovery Seller Domain Specification](../../apps/harvester/docs/domain/recovery-seller-domain-specification.md) is the behavior authority; [issue #1780](https://github.com/45s/coinzilla/issues/1780) owns the RS-specific scenario matrix and evidence. The shared, strategy-neutral authoring method is in [DOMAIN_SCENARIO_TESTING.md](./DOMAIN_SCENARIO_TESTING.md) and is tracked separately by [#1779](https://github.com/45s/coinzilla/issues/1779).
+
+**Coverage rule:** this initiative starts at zero. Existing RS unit, workflow, runtime, and operator tests are ordinary regression evidence only; they do not earn scenario-matrix credit. A scenario is not COVERED merely because a related helper test exists or because a test file name sounds relevant. Domain scenarios must prove a coherent business outcome through real domain components. Application-boundary claims require application-level scenarios.
+
+### RS scenario record schema
+
+Every RS entry and issue-matrix row should make the following fields discoverable. Keep the record human-readable; this is a documentation schema, not a new runtime DTO.
+
+| Field | Required meaning |
+| --- | --- |
+| `id` / `priority` | Stable RS-001…RS-010 identifier and P0/P1/P2 risk rank |
+| `authority` | Exact specification section / owner-approved decision |
+| `layer` | `DOMAIN`, `APPLICATION`, or deferred `REPLAY` boundary |
+| `given` | Initial business state, ownership, custody, reservations and lifecycle |
+| `when` | Ordered events/inputs with exact decimal strings and canonical identities |
+| `then` | Exact decision, quantities, money, state transitions and committed projections |
+| `must_not` | Explicit negative assertions: no duplicate order, cross-subsidy, partial commit, or unauthorized inventory |
+| `subcases` | Equality, just-below/above, partial, duplicate, conflicting, reordered, missing and failure variants |
+| `implementation` | Source paths that own the behavior; paths are navigation, not evidence |
+| `tests` | Exact new scenario file and named case(s), or `not mapped` |
+| `status` | MISSING / IN PROGRESS / PARTIAL / BLOCKED / UNSUPPORTED / COVERED |
+| `evidence` | Exact head SHA, required workflow result and merge status; otherwise explicitly none |
+
+Example record shape:
+
+```yaml
+id: RS-003
+priority: P0
+authority:
+  - recovery-seller-domain-specification.md: sellQuantity is additive
+layer: DOMAIN
+given:
+  recovery:
+    netQuantity: "1"
+    costQuote: "10"
+  legacy:
+    authorizedRemainingQuantity: "0.01"
+    verifiedSpotUnreservedQuantity: "0.01"
+    fixedAverageCostQuotePerBase: "20"
+  minProfitQuote: "0.01"
+when:
+  - evaluate the mixed SELL plan
+then:
+  totalBaseQuantity: "1.01"
+  requiredNetProceedsQuote: "20.20"
+  unroundedPriceQuotePerBase: "20.00"
+must_not:
+  - treat sellQuantity as the total SELL quantity or a cap
+  - use combined profit to bypass either allocation gate
+  - include off-Spot or reserved legacy quantity
+subcases:
+  - legacy slice smaller than configured amount
+  - legacy exhausted (recovery-only)
+  - exact tick/step and notional boundaries
+status: PARTIAL
+tests:
+  - path: apps/harvester/test/scenarios/recovery-seller-mixed-sell-accounting.scenario.test.js
+    case: one 401 DOGE canonical SELL Fill allocates 400 DOGE to recovery and 1 DOGE to legacy
+evidence:
+  exactHead: pending after branch synchronization
+  mergedToDevelop: false
+```
+
+The schema intentionally separates *business input* from *derived oracle*. Tests must calculate the expected result independently; never copy the implementation's returned value into the expected value.
+
 ### RS-001 — Legacy basis is not proof of current Spot custody
 
-**Status:** MISSING — fresh scenario test required.
+**Status:** MISSING — no new RS scenario test accepted.
 
-**Behavior:** Operator-declared historical cost basis and legacy quantity must remain distinct from current Spot custody and sellable inventory. RS may sell only verified, unreserved Spot quantity; EARN or other off-Spot holdings are not available for a Spot order.
+**Behavior:** Operator-declared original quote investment and original base quantity establish historical basis/authorization. Current sellability is a separate fact obtained from verified Spot custody, less existing reservations and other account commitments.
 
-**Given / preconditions:**
+**Given / example:**
+- Operator declaration: `invested="100" USDT`, `originalQuantity="50" ZRO`.
+- Configured legacy release: `sellQuantity="0.01" ZRO`.
+- Verified Spot free quantity: `"0.50" ZRO`; the remaining logical quantity may be in EARN/off-Spot custody.
 
-- The operator explicitly declares an original legacy position.
-- Current Spot availability is obtained through the approved account evidence path.
-- Any EARN/off-Spot balance is separate from Spot free quantity.
+**Then:**
+- Fixed historical average cost is `100 / 50 = 2 USDT/ZRO`.
+- Only verified, unreserved Spot quantity is available for the current Spot SELL.
+- A Spot/EARN transfer changes custody/availability, not the original cost basis.
+- Configuration does not seed Portfolio with synthetic fills or create a wallet-wide RS ownership claim.
 
-**Input / example:**
+**Must not happen:** infer RS ownership from total wallet balance; sell EARN/off-Spot quantity; adopt manual/external inventory; rewrite basis on transfer.
 
-- Declared legacy basis: 100 USDT invested for 50 ZRO.
-- Configured legacy release per completed cycle: 0.01 ZRO.
-- Verified Spot free quantity: 0.50 ZRO.
-- Remaining logical legacy quantity may be held outside Spot (for example, in EARN).
+**Required subcases:** invalid/missing/zero/negative basis; insufficient Spot; stale/conflicting account snapshot; external/manual order isolation; CG reservation reducing available Spot; transfer in/out while preserving historical basis.
 
-**Expected output:**
+**Implementation:** `legacy-position.js`, `legacy-spot-allocation.js`, account snapshot and shared commitment allocation.
 
-- Historical average cost is calculated as 100 / 50 = 2 USDT per ZRO using exact decimal arithmetic.
-- The declared original quantity and basis are preserved.
-- At most the verified, unreserved 0.50 ZRO in Spot can support current Spot execution; off-Spot quantity is not counted as immediately sellable.
-- Spot/EARN transfers affect custody/availability, not historical acquisition basis.
-- No synthetic Portfolio fill or ownership claim is created from configuration alone.
+**New scenario tests:** not mapped. Existing RS tests are not credited.
 
-**Must not happen:**
+### RS-002 — Recovery BUY accounting uses confirmed net fills
 
-- Do not infer authorization or RS ownership from the wallet's total balance.
-- Do not adopt external/manual inventory or orders.
-- Do not treat EARN quantity as Spot-available.
-- Do not rewrite historical basis when custody changes.
+**Status:** MISSING — no new RS scenario test accepted.
 
-**Subcases:**
+**Behavior:** Recovery inventory and cost are derived only from canonical confirmed BUY fills attributed to the current RS Position/cycle/order/market. Requested quantity and acknowledgement are not execution.
 
-- Missing, zero, negative, malformed, or contradictory basis inputs.
-- Spot quantity below the required legacy slice.
-- Stale or conflicting custody evidence.
-- External/manual order or inventory isolation.
-- Existing CG/other-strategy allocations and reservations reduce physical availability without becoming RS-owned.
+**Given / worked fee variants (kept separate):**
+- Fill: `10 ZRO @ 2 USDT/ZRO`; gross execution cost = `20 USDT`.
+- Base-fee variant: commission `0.01 ZRO` => net acquired recovery quantity `9.99 ZRO`; quote execution cost remains `20 USDT`.
+- Quote-fee variant: commission `0.02 USDT` => net acquired base `10 ZRO`; quote cost becomes `20.02 USDT`.
 
-**Implementation:**
+**Then:** aggregate multiple canonical fills using exact quantity, cost, commission and execution VWAP; only the owning RS cycle is credited.
 
-- `apps/harvester/src/domain/strategies/recovery-seller/legacy-position.js`
-- `apps/harvester/src/domain/strategies/recovery-seller/legacy-spot-allocation.js`
-- Shared account snapshot and order-commitment allocation under `apps/harvester/src/domain/`
+**Must not happen:** credit requested/unfilled quantity; treat an unsupported third-asset fee as zero; attribute CG, manual, external, wrong-market or wrong-Position fills to RS; apply a duplicate twice or accept changed facts under an existing Fill identity.
 
-**Automated scenario tests:**
+**Required subcases:** full/partial/multiple fills; base/quote/zero/multiple fee records; fill-before-ack and ack-before-fill; identical replay and conflicting identity; unknown BUY outcome; active BUY gating; investment cap below/equal/above.
 
-- `apps/harvester/test/scenarios/recovery-seller-mixed-sell-accounting.scenario.test.js`
+**Implementation:** RS accounting workflow, Portfolio/Position and canonical Fill ownership.
+
+**New scenario tests:** not mapped. Existing RS tests are not credited.
+
+### RS-003 — Mixed SELL quantity is recovery plus eligible legacy slice
+
+**Status:** PARTIAL — one post-fill allocation example is newly mapped; pre-submission planning, verified custody, reservations and exchange-filter behavior are not proved by that case.
+
+**Behavior:** Conceptual SELL quantity is actual net recovery quantity plus the configured legacy `sellQuantity`, limited by the authorized remaining legacy amount that is verified, Spot-available and unreserved. `sellQuantity` is additive, not total quantity or a cap.
+
+**Specification example (illustrative quantities, not pair defaults):**
+- DOGE example: `400 DOGE recovery + 1 DOGE legacy = 401 DOGE`.
+- The example establishes additive semantics only. It does not approve a DOGE price, notional, commission rate, or trading configuration.
+
+**New test fixture caveat:** the current mixed-SELL scenario uses a synthetic DOGE Fill at `10 USDT/DOGE`, `4010 USDT` gross quote proceeds and `4.01 USDT` quote commission. Those values are fixture inputs in that test, not specification-approved fee economics or production defaults. The test proves a supplied canonical Fill can be split as 400 + 1 and that the allocation sums to the Fill; it does **not** prove that the pre-submission planner derives 401 from recovery inventory plus eligible legacy custody.
+
+**Required then:** planner returns the exact target and ownership split; actual canonical fills/fees determine final recovery and legacy debit/proceeds; all relevant filters and profitability gates are enforced.
+
+**Must not happen:** interpret legacy slice as total/cap; use gross BUY quantity rather than net base; consume unverified/reserved legacy; round allocation ownership silently; invent fee assumptions.
+
+**New scenario tests:**
+- `recovery-seller-mixed-sell-accounting.scenario.test.js`
   - `one 401 DOGE canonical SELL Fill allocates 400 DOGE to recovery and 1 DOGE to legacy`
   - `recovery and legacy allocations must sum exactly to the canonical SELL Fill quantity`
 
-**Remaining:** Pre-submission planner calculation of the additive target, partial fill variants, base/third-asset fees, exchange filters, verified custody and reservations. Existing RS tests are deliberately not credited under #1780.
+**Remaining:** planner/no-order proof; smaller legacy remainder; legacy exhaustion; partial fills; base/quote/mixed commission allocation; exchange tick/step/min/max/notional; insufficient Spot; central reservations; precision failure.
 
-### RS-002 — Recovery BUY accounting uses confirmed net fills and actual commissions
+### RS-004 — Recovery, legacy and combined profitability gates are independent
 
-**Status:** MISSING — fresh scenario test required.
+**Status:** PARTIAL — four new domain cases prove both cross-subsidy directions, exact-threshold acceptance and recovery-only eligibility. They do not prove the pre-submission evaluator emits no order when a gate fails.
 
-**Behavior:** Recovery inventory and cost basis come only from canonical confirmed BUY fills attributed to the current RS cycle. Requested quantity and acknowledgements are not executions.
+**Specification worked example — mixed SELL planning (no fees):**
+- Recovery: `1 ZRO`, cost `10 USDT`.
+- Legacy: `0.01 ZRO`, fixed average cost `20 USDT/ZRO`, legacy cost `0.20 USDT`.
+- `minProfit = 0.01 USDT`; combined quantity = `1.01 ZRO`.
+- Recovery proceeds requirement: `(10 + 0.01) * 1.01 / 1 = 10.1101 USDT`.
+- Legacy proceeds requirement: `0.20 * 1.01 / 0.01 = 20.20 USDT`.
+- Combined requirement: `10 + 0.20 + 0.01 = 10.21 USDT`.
+- Required proceeds = `max(10.1101, 20.20, 10.21) = 20.20 USDT`.
+- Unrounded price = `20.20 / 1.01 = 20.00 USDT/ZRO`.
 
-**Given / preconditions:**
+At `20.00 USDT/ZRO`, recovery receives `20.00 USDT` (profit `+10.00`), legacy receives `0.20 USDT` (break-even), and combined profit is `+10.00 USDT`; every applicable gate passes. Using only the combined requirement `10.21` would fail the legacy gate and is therefore incorrect.
 
-- A valid RS cycle and recovery Position identity exist.
-- The BUY order is explicitly owned by RS.
-- Canonical fills contain exact quantity, price, and actual commission facts.
+**Cross-subsidy negative oracle:**
+- Recovery cost `10.00`, proceeds `10.15` => `+0.15`.
+- Legacy cost `0.20`, proceeds `0.19` => `-0.01`.
+- Combined cost `10.20`, proceeds `10.34` => `+0.14`.
+- Recovery and combined are profitable, but legacy fails; overall eligibility must fail.
+- The reverse direction is also required: recovery cost `10.00`, proceeds `9.995` (loss `-0.005`); legacy cost `0.20`, proceeds `0.30` (profit `+0.10`); combined profit `+0.095`. Recovery fails, so overall eligibility must fail.
 
-**Input / example:**
+**Must not happen:** collapse three gates into one; let either allocation subsidize the other; evaluate gross rather than actual net proceeds; close an executed cycle after a failed realized gate.
 
-- RS BUY fill: 10 ZRO at 2 USDT per ZRO.
-- Variant A: 0.01 ZRO base-asset commission.
-- Variant B: 0.02 USDT quote-asset commission.
+**New scenario tests:** `recovery-seller-profitability.scenario.test.js`
+- `a profitable recovery allocation cannot subsidize a legacy loss`
+- `profitable legacy proceeds cannot subsidize a recovery loss`
+- `a mixed recovery and legacy cycle closes at exact profitability thresholds when every gate passes`
+- `recovery-only operation still requires recovery and combined profit after legacy exhaustion`
 
-**Expected output:**
+**Remaining:** pre-submission no-order/evaluator integration; just-below/just-above each threshold; actual fee gross-up/allocation; price tick and quantity step; partial/multiple fill history; post-fill adverse STOP application effects.
 
-- Variant A adds 9.99 ZRO net recovery quantity; quote cost remains the actual 20 USDT execution cost.
-- Variant B adds 10 ZRO net base quantity and 20.02 USDT actual quote cost.
-- Multiple fills accumulate exact net quantity, cost, and execution VWAP.
-- Only fills attributed to the correct RS strategy, Position, cycle, order, and market affect RS accounting.
+### RS-005 — One SELL lifecycle per recovery cycle
 
-**Must not happen:**
+**Status:** PARTIAL — new pure cycle-state scenarios prove identity retention and reject selected invalid transitions. They do not prove application broker-call counts or reservation persistence.
 
-- Do not account unfilled requested quantity.
-- Do not silently treat third-asset commission with missing/ambiguous quote valuation as zero.
-- Do not attribute a CG, external, or wrong-Position fill to RS.
+**Given / example:** cycle `rs-cycle-001` submits one SELL with client ID `rs-cycle-001-sell`; the transport result is unknown; the evaluator is invoked again.
 
-**Subcases:**
+**Then:** the original identity remains authoritative; repeated unknown notification is idempotent; a second SELL identity is rejected; incomplete terminal history cannot close the cycle; successful closure requires the original order, complete reconciliation and eligible profitability.
 
-- Full and partial BUY fills.
-- Multiple fills at equal and different prices.
-- Base, quote, zero, and multiple commission records.
-- Duplicate identical fill and conflicting same-ID fill.
-- Fill before acknowledgement and acknowledgement before fill.
-- Unknown BUY submission outcome and an active/unknown BUY blocking the next BUY.
-- Investment cap below, exactly at, and above the boundary.
+**Terminal variants:** CANCELED, REJECTED and EXPIRED remain unresolved; a terminal event with a different client identity is rejected without mutating the submitted state.
 
-**Implementation:**
+**Must not happen:** no replacement/continuation SELL, no next-cycle BUY, no premature reservation release, no second close from duplicate terminal delivery.
 
-- `apps/harvester/src/domain/strategies/recovery-seller/` accounting modules.
-- RS accounting workflow and shared Portfolio/Fill ownership boundaries.
+**New scenario tests:** `recovery-seller-cycle-lifecycle.scenario.test.js`
+- `an unknown SELL outcome retains its only identity until reconciliation completes`
+- loop-generated cases: `a terminal canceled SELL remains unresolved and forbids replacement`, `a terminal rejected SELL remains unresolved and forbids replacement`, `a terminal expired SELL remains unresolved and forbids replacement`
+- `a terminal SELL with a different client identity cannot reconcile the submitted cycle`
 
-**Automated scenario tests:**
+**Remaining:** repeated application evaluation proves zero extra broker submissions; reservation retention/release; partial-fill/cancel races; lookup not-found/failure; duplicate terminal delivery; global STOP and unknown BUY.
 
-- `apps/harvester/test/scenarios/recovery-seller-mixed-sell-accounting.scenario.test.js`
-  - `a reconciled mixed SELL commits recovery and legacy accounting from the same canonical Fill`
-  - `replaying the same terminal mixed SELL is an exact no-op in both accounting projections`
-  - `a failed legacy projection leaves the recovery Portfolio and both original inputs unchanged`
-  - `a duplicate staged Fill is idempotent and conflicting allocation facts are rejected`
+### RS-006 — Mixed SELL accounting is exact-once and projection-atomic
 
-**Remaining:** Multiple canonical fills, REST/stream ordering and deduplication, incomplete fill history, base/third-asset commission allocation, and additional persistence/registry-publication failure boundaries. Existing RS tests are deliberately not credited under #1780.
+**Status:** PARTIAL — new cases prove single-Fill projection, replay no-op, staged duplicate/conflict handling and one domain-projection failure boundary. This is not proof of multi-fill REST/stream or durable transaction atomicity.
 
-### RS-003 — A mixed recovery/legacy SELL uses the additive legacy slice
+**Given / example:** one canonical mixed SELL order and Fill has an explicit recovery/legacy allocation; both projections are calculated from the same accepted execution evidence.
 
-**Status:** PARTIAL — new scenarios verify the canonical 401 DOGE fill allocation split of 400 DOGE recovery plus 1 DOGE legacy, including proportional actual quote-commission allocation. The pre-submission planner and other fee/filter/custody subcases remain unverified. Existing RS tests are not credited.
+**Then:** recovery and legacy domain projections are returned together or neither changes; identical replay is a no-op; conflicting facts are rejected; a failed legacy projection leaves the recovery Portfolio and original inputs unchanged.
 
-**Behavior:** A cycle SELL combines the actual net recovery quantity with the configured legacy `sellQuantity`. The legacy slice is additive; it is not a cap or the total order quantity.
+**Must not happen:** apply a partial RS SELL as a standalone CG fill; partially mutate recovery while legacy fails; release a reservation before the required commit succeeds.
 
-**Given / preconditions:**
+**New scenario tests:** `recovery-seller-mixed-sell-accounting.scenario.test.js`
+- `a reconciled mixed SELL commits recovery and legacy accounting from the same canonical Fill`
+- `replaying the same terminal mixed SELL is an exact no-op in both accounting projections`
+- `a failed legacy projection leaves the recovery Portfolio and both original inputs unchanged`
+- `a duplicate staged Fill is idempotent and conflicting allocation facts are rejected`
 
-- The cycle has a reconciled net recovery allocation.
-- The configured legacy slice is explicitly authorized and verified available in Spot.
-- Account-wide reservations, market filters, and independent profitability gates permit the action.
+**Remaining:** two-or-more canonical fills; stream-first and REST-first; duplicate cross-channel delivery; incomplete fill history; base/quote/mixed/third-asset fee behavior; commit failure at each persistence boundary; registry publication failure; durable transaction barrier; reservation and STOP effects.
 
-**Input / example:**
+### RS-007 — Unknown submission outcome retains identity and forbids blind retry
 
-- Net recovery quantity: 400 DOGE.
-- Configured `sellQuantity`: 1 DOGE of legacy inventory.
-- Verified unreserved Spot quantity is sufficient for both allocations.
+**Status:** PARTIAL — the new cycle-state test proves state-level identity retention and replacement rejection only. The broker/application no-retry behavior is not proved by this test.
 
-**Expected output:**
+**Given / example:** durable intent exists for client order ID `rs-cycle-001-sell`; broker request is dispatched; response is lost before acknowledgement.
 
-- The conceptual combined SELL target is 401 DOGE before exchange-step rounding and any fee-reserve gross-up.
-- The order plan and final fill allocation must identify which quantity belongs to recovery and which belongs to legacy.
-- Actual canonical fills and commissions determine the final quantities/proceeds committed to each allocation.
-- The final order remains subject to the independent recovery, legacy, and combined profitability gates and current exchange filters.
+**Then:** the original identity remains attached to the lifecycle; only lookup/reconciliation of that identity is permitted; the application must not send a second state-changing request; unresolved reservation remains held; the current contract requires STOP and continued reconciliation.
 
-**Must not happen:**
+**New scenario mapping:** the unknown-outcome case in `recovery-seller-cycle-lifecycle.scenario.test.js` overlaps RS-005 state-machine assertions. Do not count it as proof of broker submitter behavior.
 
-- Do not interpret `sellQuantity` as total SELL quantity or a maximum cap.
-- Do not assume gross BUY quantity equals net recovery quantity.
-- Do not sell unverified or reserved legacy inventory.
-- Do not silently round across allocation ownership boundaries.
+**Remaining:** actual submitter invocation count; lookup not-found and lookup-failure; original reservation retention; STOP latch; durable intent/outcome failure; unknown BUY.
 
-**Subcases:**
+### RS-008 — CG and RS share physical resources, not strategy ownership
 
-- Canonical 401 DOGE SELL Fill allocated as 400 DOGE recovery plus 1 DOGE legacy, with proportional quote commission (covered by the new scenario suite).
-- Full and partial mixed SELL fills.
-- Base-, quote-, and supported third-asset commission cases.
-- Mixed commission assets.
-- Quantity step, tick size, min/max quantity, and min/max notional boundaries.
-- Insufficient verified Spot custody.
-- Allocation precision ambiguity.
+**Status:** MISSING — no new RS scenario test accepted.
 
-**Implementation:**
+**Example:** CG and RS each request a SELL against the same market. Their strategy budgets and Positions remain separate, while the shared account allocator must ensure combined reserved base never exceeds verified available Spot. Repeat with competing BUY quote commitments and with different markets sharing the same quote asset.
 
-- `apps/harvester/src/domain/strategies/recovery-seller/calculate-sell-plan.js`
-- `apps/harvester/src/domain/strategies/recovery-seller/mixed-sell-fill-allocation.js`
-- `apps/harvester/src/domain/strategies/recovery-seller/mixed-sell-fill-accounting.js`
+**Required outputs:** deterministic serialized allocation; one canonical order owner; one Fill credited to exactly one Position; no strategy budget borrowing; no aggregate oversell/double-spend.
 
-**Automated scenario tests:**
+**Implementation:** shared commitment allocator, account runtime registry, engine transition queue and strategy-owned order routing.
 
-- `apps/harvester/test/scenarios/recovery-seller-cycle-lifecycle.scenario.test.js`
-  - `an unknown SELL outcome retains its only identity until reconciliation completes`
-  - `a terminal canceled SELL remains unresolved and forbids replacement`
-  - `a terminal rejected SELL remains unresolved and forbids replacement`
-  - `a terminal expired SELL remains unresolved and forbids replacement`
-  - `a terminal SELL with a different client identity cannot reconcile the submitted cycle`
+**Tests:** not mapped.
 
-**Remaining:** Application-level repeated evaluation/no-order effects, active-order reservation retention, partial-fill/cancel behavior, sticky STOP, duplicate terminal delivery and durable submission boundary. Existing RS tests remain uncredited.
+### RS-009 — STOP blocks new trading but does not suppress reconciliation
 
-### RS-004 — Recovery, legacy, and combined profitability gates are independent
+**Status:** BLOCKED — a contract/source discrepancy must be resolved before this row can be claimed as terminal or tested as an unconditional no-reset invariant.
 
-**Status:** PARTIAL — the new domain-scenario test proves both cross-subsidy rejection directions, exact-threshold acceptance, recovery-only eligibility, and the post-fill cycle lifecycle. These implemented subcases passed on exact PR #1793 test head `a33ebb144fb9d1215d1d0fe9d521c08452362a72`; the overall scenario remains PARTIAL because the remaining subcases below are not covered. Existing RS tests remain uncredited.
+**Current evidence and discrepancy:**
+- The RS specification and #1780 describe STOP as terminal with no operator clear/reset/resume path; the operator facade exposes read-only STOP status.
+- `stop-decision.js` exports `resolveRecoverySellerStopState`, and `resolve-recovery-seller-stop.js` implements an evidence-backed durable `SAFETY_BLOCKER_RESOLVED` operator-action workflow.
+- `create-harvester-operator.js` currently exposes only `getRecoverySellerStopState`, not the resolution use case.
+- Therefore “no operator method is exposed” is supported, but “there is no domain/application STOP resolution capability” is not. The owner must decide whether the resolution use case is obsolete/forbidden or the terminal-STOP specification needs revision. Do not write a scenario that silently chooses.
 
-**Behavior:** A mixed SELL is eligible only when every independently required profitability gate passes. A profitable allocation cannot subsidize a loss-making allocation.
+**Invariant still required:** while STOP is latched, no new BUY/SELL/retry/replacement may pass; WAIT/RECONCILE of already-submitted work remains possible; first STOP evidence is preserved.
 
-**Given / preconditions:**
+**Tests:** not mapped by this initiative. Existing tests receive no coverage credit.
 
-- Recovery and legacy allocations have independent exact cost/proceeds projections.
-- Actual net quote proceeds and supported fee valuation are available under the approved contract.
-- The combined-cycle projection is calculated independently.
-- A single SELL has reached terminal FILLED status and its complete canonical execution history has been reconciled.
+### RS-010 — Deferred and unresolved capabilities remain explicit
 
-**Input / cases:**
+**Status:** mixed disposition — restart/replay is UNSUPPORTED for this initiative; third-asset fee valuation is BLOCKED until an authoritative execution-time quote valuation source is approved.
 
-- Recovery cost 10 USDT, net recovery proceeds 10.15 USDT, legacy basis 0.20 USDT and net legacy proceeds 0.19 USDT.
-- Recovery cost 10 USDT, net recovery proceeds 9.995 USDT, legacy basis 0.20 USDT and net legacy proceeds 0.30 USDT.
-- Recovery proceeds exactly meet the 0.01 USDT minimum, legacy proceeds exactly break even, and combined profit exactly meets the 0.01 USDT minimum.
-- Legacy inventory is exhausted; recovery-only operation still applies the recovery and combined gates.
+**Restart/replay:** no new scenario may claim automatic RS restart restoration, STOP restoration/clearing, or cycle/reservation reconstruction. A separate approved initiative and contract are required.
 
-**Expected output:**
+**Third-asset commission:** missing, stale, ambiguous or conflicting asset/rate/timestamp evidence must fail closed; never treat the fee as zero or use an unverified current market price. The specification's mixed-fee calculation is illustrative, not evidence that a reliable runtime valuation source is accepted.
 
-- A failing recovery or legacy allocation makes overall SELL eligibility false even when combined profit is positive.
-- A fully reconciled FILLED cycle remains UNRESOLVED after any applicable profitability gate fails.
-- An unresolved cycle cannot accept a second SELL lifecycle or start another cycle.
-- The cycle closes and a next cycle may begin only when the SELL is FILLED, fully reconciled, and every applicable gate passes.
-- Recovery-only operation omits only the inapplicable legacy gate.
-
-**Must not happen:**
-
-- Do not replace the independent gates with one aggregate profit calculation.
-- Do not let recovery profit subsidize legacy loss or legacy profit subsidize recovery loss.
-- Do not submit a replacement/second SELL or start another cycle after a failed profitability result.
-- Do not close a cycle based only on combined profitability.
-
-**Subcases covered by the new scenario test:**
-
-- Recovery passes while legacy loses and combined profit remains positive.
-- Legacy passes while recovery loses and combined profit remains positive.
-- Recovery and combined thresholds pass at exact equality; legacy is exactly break-even.
-- Legacy exhaustion leaves recovery and combined profitability requirements active.
-- Failed profitability preserves the terminal SELL identity and blocks a replacement SELL/new cycle.
-- Successful profitability permits closure and the next cycle.
-
-**Remaining subcases:**
-
-- Pre-submission SELL evaluator integration proving an ineligible result prevents creation/submission of an order intent. This slice tests realized net-profit gates and post-fill cycle disposition; it does not prove the pre-submission no-order side effect.
-- Just-below and just-above boundaries for each applicable threshold.
-- Actual quote/base/third-asset commission allocation and valuation.
-- Fee-rate planning, price tick/quantity step rounding, and exchange filter behavior.
-- Partial fills and complete fill-history accounting; these belong to separate RS scenario families.
-
-**Implementation:**
-
-- `apps/harvester/src/domain/strategies/recovery-seller/calculate-profitability.js`
-- `apps/harvester/src/domain/strategies/recovery-seller/cycle-state.js`
-
-**Automated scenario test:**
-
-- [`recovery-seller-profitability.scenario.test.js`](../../apps/harvester/test/scenarios/recovery-seller-profitability.scenario.test.js)
-  - `a profitable recovery allocation cannot subsidize a legacy loss`
-  - `profitable legacy proceeds cannot subsidize a recovery loss`
-  - `a mixed recovery and legacy cycle closes at exact profitability thresholds when every gate passes`
-  - `recovery-only operation still requires recovery and combined profit after legacy exhaustion`
-
-**Verification evidence:** On exact PR #1793 head `a33ebb144fb9d1215d1d0fe9d521c08452362a72`, all four named scenario cases passed in the Harvester unit suite (2,674/2,674); Harvester Targeted Tests passed; Harvester and workspace Test Coverage passed; Repository Quality passed, including strict changed-file ESLint and JavaScript syntax; Dependency Audit passed; External Documentation Links passed. The read-only Binance TESTNET integration job was skipped by workflow policy; no exchange activity occurred.
-
-**Evidence note:** This is a new package-level scenario suite authored from the approved RS contract and its worked examples. It composes the real profitability and cycle-state domain components. It does not certify existing RS tests and does not yet cover fee calculation, threshold-adjacent values, exchange filters, or partial-fill accounting.
-
----
-
-### RS-005 — A recovery cycle may submit only one SELL lifecycle
-
-**Status:** PARTIAL — new cycle-state scenarios prove one SELL identity is retained through unknown/incomplete reconciliation, terminal unsuccessful outcomes remain unresolved, and replacement SELL/new-cycle transitions are rejected. Application-level repeated evaluation, reservation retention and STOP side effects remain unverified.
-
-**Behavior:** Once the cycle's one SELL identity is recorded, repeated evaluation cannot create another SELL, replacement SELL, continuation SELL, or a new BUY cycle while the outcome remains active or unresolved.
-
-**Given / preconditions:**
-
-- A stable cycle ID and recovery Position ID exist.
-- The SELL intent has crossed the approved durable submission boundary and has one recorded identity.
-
-**Input / cases:**
-
-- Re-evaluate while SELL is open.
-- Deliver partial fills.
-- End with FILLED, CANCELED, REJECTED, EXPIRED, or unknown outcome.
-- Repeat the terminal event.
-
-**Expected output:**
-
-- Repeated evaluation while active returns the allowed wait/reconcile behavior for the original order.
-- The reservation remains held until successful terminal mixed-SELL accounting.
-- A fully filled and reconciled SELL closes the cycle only when all accounting and profitability gates pass.
-- A terminal partial/canceled/rejected/expired SELL leaves the cycle unresolved and triggers the specified STOP behavior.
-- Duplicate terminal delivery does not close or release the cycle twice.
-
-**Must not happen:**
-
-- No second SELL or new BUY cycle while the first SELL is active or unresolved.
-- No blind retry or replacement after an unknown outcome.
-- No reservation release before successful terminal accounting.
-
-**Subcases:**
-
-- Pending/open repeated evaluation.
-- Partial fill followed by terminal cancellation/rejection/expiry.
-- Complete fill with incomplete history.
-- Duplicate and conflicting terminal facts.
-- Successful terminal full fill with complete accounting.
-
-**Implementation:**
-
-- RS accounting workflow and cycle reservation modules under `apps/harvester/src/domain/strategies/recovery-seller/`.
-- Shared engine order submission and terminal reconciliation orchestration.
-
-**Automated scenario test:**
-
-- `apps/harvester/test/scenarios/recovery-seller-cycle-lifecycle.scenario.test.js`
-  - `an unknown SELL outcome retains its only identity until reconciliation completes`
-
-**Remaining:** Actual application submitter/engine must prove no second broker request, retained account reservation, global STOP latch, lookup-not-found/lookup-failure behavior, unknown BUY outcome and later authoritative broker evidence. Existing RS tests remain uncredited.
-
-### RS-006 — Mixed SELL accounting commits both allocations atomically
-
-**Status:** PARTIAL — new scenarios exercise a complete single-fill mixed SELL commit, exact-once replay, duplicate/conflicting staging, and failure atomicity when the legacy projection rejects its debit. Multi-fill REST/stream reconciliation and other failure boundaries remain unverified. Existing RS tests are not credited.
-
-**Behavior:** Complete terminal mixed-SELL history is reconciled before recovery and legacy projections are committed. Both projections commit together or neither does.
-
-**Given / preconditions:**
-
-- The SELL has a canonical order identity.
-- The complete distinct REST/stream fill set is available.
-- Actual commission facts and allocation inputs are valid.
-
-**Input / cases:**
-
-- A mixed SELL has multiple streamed and REST-reported fills.
-- The same canonical fill appears through both channels.
-- The recovery projection can be calculated, but the legacy projection rejects its debit because remaining legacy inventory is insufficient.
-- A conflicting replay changes execution or allocation facts.
-
-**Expected output:**
-
-- The complete canonical fill set is reconciled to the terminal order quantity.
-- Recovery and legacy domain projections are returned together or neither is published; a failed legacy projection leaves the original recovery Portfolio and legacy inputs unchanged.
-- Identical replay is an immutable no-op.
-- A conflicting replay is rejected.
-- A failed/incomplete commit preserves both prior projections and retains the cycle reservation while latching the required STOP.
-
-**Must not happen:**
-
-- Do not apply streamed partial RS SELL fills as standalone Conservative fills.
-- Do not partially mutate one allocation when the other fails.
-- Do not release the reservation before both projections commit.
-
-**Subcases:**
-
-- Complete single-fill mixed SELL commits recovery and legacy projections together (covered).
-- Identical terminal replay is an exact no-op in both projections (covered).
-- Legacy projection failure leaves the recovery Portfolio and both original inputs unchanged (covered).
-- Duplicate staged Fill is idempotent; conflicting allocation for the same Fill identity is rejected (covered).
-- Stream-before-REST and REST-before-stream.
-- Duplicate fill, conflicting duplicate, missing history, and incomplete quantity.
-- Base/quote/mixed commission allocation.
-- Projection-level failure atomicity when legacy inventory is insufficient (covered).
-- Durable persistence transaction barriers and failures before/during/after commit, including registry publication, remain separate application-integration subcases.
-
-**Implementation:**
-
-- `apps/harvester/src/domain/strategies/recovery-seller/mixed-sell-fill-reconciliation.js`
-- `apps/harvester/src/domain/strategies/recovery-seller/mixed-sell-fill-accounting.js`
-- `apps/harvester/src/use-cases/record-recovery-seller-mixed-sell-reconciled.js`
-- Shared Portfolio and order-event workflow boundaries.
-
-**Automated tests:** No new RS scenario test accepted yet. Existing RS tests are deliberately not credited under #1780.
-
-### RS-007 — Unknown submission outcome preserves identity and forbids blind retry
-
-**Status:** PARTIAL — a fresh cycle-state scenario proves the original SELL identity survives an unknown outcome, repeated unknown notification is idempotent, a replacement SELL is rejected, and the cycle remains blocked until complete reconciliation. Broker submitter no-retry, lookup, reservation and global STOP effects remain unverified.
-
-**Behavior:** A timeout or disconnect after a state-changing request may mean the exchange accepted it. RS must retain the original order identity and reservation and reconcile that order without submitting a duplicate.
-
-**Given / preconditions:**
-
-- A durable order intent and client order identity exist.
-- The broker request has been dispatched.
-- The acknowledgement is lost or its outcome is unknown.
-
-**Input / example:**
-
-- Submit the cycle SELL with client order ID `rs-cycle-001-sell`.
-- The transport times out before a definitive acknowledgement.
-- The evaluator runs again before canonical order history is available.
-
-**Expected output:**
-
-- The original client identity and reservation remain attached to the order lifecycle.
-- RS latches the required global STOP and returns the non-trading reconciliation path for the original order.
-- Existing order/fill facts continue to be reconciled.
-- No new trading action is authorized.
-
-**Must not happen:**
-
-- Do not blindly resubmit the SELL.
-- Do not create a new client order ID to evade the unknown result.
-- Do not release the original reservation because the response was lost.
-
-**Subcases:**
-
-- Unknown BUY submission outcome.
-- Unknown SELL submission outcome.
-- Order lookup not found or lookup failure.
-- Later authoritative order/fill evidence.
-- Conflicting order identity or unsupported exchange status.
-
-**Implementation:**
-
-- RS action authorizer, order submitter, and shared engine order reconciliation boundary.
-
-**Automated tests:** No new RS scenario test accepted yet. Existing RS tests are deliberately not credited under #1780.
-
-### RS-008 — CG and RS share account availability without sharing strategy ownership
-
-**Status:** MISSING — fresh scenario test required.
-
-**Behavior:** CG and RS may operate concurrently, including on the same market, while maintaining separate strategy Positions, order ownership, and budgets. Physical quote/base availability and reservations remain account-wide.
-
-**Given / preconditions:**
-
-- One provider account has both strategies enabled for supported markets.
-- Each strategy has its own configured pair and budget.
-- Both strategies use the shared Portfolio, order registry, and account-level reservation coordinator.
-
-**Input / example:**
-
-- CG and RS each request a BUY using the same account quote balance.
-- Alternatively, both request SELL against the same market's base asset.
-- Repeat with the strategies on the same market and on different markets.
-
-**Expected output:**
-
-- Account-level allocation serializes competing requests and prevents double-spend or oversell.
-- Each order and fill remains attributed to exactly one strategy and Position.
-- Shared Portfolio custody is represented once; strategy Positions do not duplicate wallet balance.
-- Each strategy remains within its own budget.
-
-**Must not happen:**
-
-- Do not borrow another strategy's unused budget.
-- Do not allocate one fill to two Positions.
-- Do not treat same-market subscription deduplication as shared strategy ownership.
-
-**Subcases:**
-
-- Same market and different markets.
-- Concurrent BUY quote reservations.
-- Concurrent SELL base reservations.
-- Same raw trade ID across markets/accounts where identity scope differs.
-- One strategy paused/STOPped while the other continues only within its own approved policy and account safety constraints.
-
-**Implementation:**
-
-- `apps/harvester/src/domain/orders/allocate-order-commitments.js`
-- `apps/harvester/src/application/providers/account-runtime-registry.js`
-- Shared engine transition queue and provider/strategy routing.
-
-**Automated tests:** No new RS scenario test accepted yet. Existing RS tests are deliberately not credited under #1780.
-
-### RS-009 — STOP is terminal, visible, and does not suppress reconciliation
-
-**Status:** MISSING — fresh scenario test required.
-
-**Behavior:** Unexpected, contradictory, unsupported, or unmodeled conditions latch global STOP. STOP prevents new trading actions but does not abandon reconciliation of orders already submitted or confirmed fills.
-
-**Given / preconditions:**
-
-- RS runtime is active.
-- A covered lifecycle boundary receives invalid or contradictory evidence.
-
-**Input / cases:**
-
-- An invalid filter, missing custody evidence, conflicting fill, failed accounting commit, or unknown order outcome occurs.
-- Later market data appears healthy.
-- An operator queries STOP status.
-
-**Expected output:**
-
-- New BUY/SELL/replacement/retry actions remain blocked.
-- STOP remains latched after later healthy observations.
-- Existing submitted orders and confirmed fills remain eligible for non-trading reconciliation.
-- Operator status is read-only.
-
-**Must not happen:**
-
-- No automatic or operator clear/reset/unpause/resume.
-- No loss of confirmed fills, commissions, order ownership, or reservations.
-- No new trading action while STOP is latched.
-
-**Subcases:**
-
-- STOP after invalid input and after external submission.
-- Reconciliation continues while STOP is active.
-- Repeated STOP evidence preserves the first authoritative reason.
-- Operator query cannot mutate STOP.
-
-**Implementation:**
-
-- RS STOP decision and durable STOP workflow.
-- Shared engine order-event and reconciliation boundary.
-- CC-operator read-only status facade.
-
-**Automated tests:** No new RS scenario test accepted yet. Existing RS tests are deliberately not credited under #1780.
-
-### RS-010 — Unsupported restart and fee-valuation capabilities remain blocked
-
-**Status:** BLOCKED / UNSUPPORTED — do not invent a runtime path.
-
-**Behavior:** Process restart/replay restoration and third-asset commission conversion without an authoritative execution-time quote source are not accepted capabilities in the current RS contract.
-
-**Given / preconditions:**
-
-- A process restart would require reconstructing RS cycle, reservation, STOP, and order/fill ownership.
-- A commission is charged in a third asset without an authoritative quote value/rate/timestamp.
-
-**Input / cases:**
-
-- Restart at each interruption point in a cycle.
-- A third-asset fee is observed with no supported valuation evidence.
-
-**Expected output:**
-
-- Restart/replay remains outside current acceptance and must not be claimed as supported.
-- Missing or ambiguous third-asset fee valuation fails closed; it is not treated as zero.
-- The catalog retains these gaps until a separate approved contract and implementation exist.
-
-**Must not happen:**
-
-- Do not add automatic restart restoration, STOP clearing, or resume behavior through tests.
-- Do not fabricate fee conversion from a current market price or an unverified source.
-
-**Subcases:**
-
-- Restart after durable intent, broker acceptance, partial fill, terminal reconciliation, projection commit, and STOP.
-- Third-asset commission with missing, stale, ambiguous, or conflicting valuation source.
-
-**Implementation:** Future work only after explicit product/architecture decisions.
-
-**Automated tests:** Not applicable as supported behavior today. Any fail-closed test for the existing boundary must be tracked separately and must not imply that the deferred capability is implemented.
+**Tests:** no supported-capability scenario mapped. Keep these limitations visible.
 
 ---
 

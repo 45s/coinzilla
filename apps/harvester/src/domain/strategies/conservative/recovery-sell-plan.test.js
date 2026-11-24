@@ -131,3 +131,44 @@ test("reserves base-asset SELL commission without crossing the retained inventor
   assert.equal(nextStepSellDebitInTenThousandths, 990990n, "99 × 1.001 must equal exactly 99.099.")
   assert.ok(nextStepSellDebitInTenThousandths > availableSellQuantityInTenThousandths, "The next 0.1 quantity step must exceed the 99 units available above keepQuantity.")
 })
+
+test("does not plan a SELL when the base-fee reserve rounds a one-step residual below one step", () => {
+  const plan = calculateRecoverySellPlan({
+    ...basePlan,
+    activeQuantity: "1.1",
+    feeRate: "0.01",
+    quantityStepSize: "0.1",
+  })
+
+  assert.deepEqual(plan, {
+    quantity: "0",
+    price: null,
+    requiredNetProceeds: "10.01",
+  }, "A physical residual equal to one quantity step must remain unsold when the base-fee reserve makes its executable quantity smaller than one step.")
+})
+
+test("clamps required proceeds to zero when confirmed proceeds exceed the recovery target", () => {
+  const plan = calculateRecoverySellPlan({
+    ...basePlan,
+    saleProceeds: "10.02",
+  })
+
+  assert.deepEqual(plan, {
+    quantity: "99",
+    price: null,
+    requiredNetProceeds: "0",
+  })
+})
+
+test("preserves a positive recovery requirement immediately below the proceeds threshold", () => {
+  const plan = calculateRecoverySellPlan({
+    ...basePlan,
+    saleProceeds: "10.0099999",
+  })
+
+  assert.deepEqual(plan, {
+    quantity: "99",
+    price: "0.001",
+    requiredNetProceeds: "0.0000001",
+  }, "A sub-threshold proceeds balance must not be treated as recovered, even when the remaining requirement is smaller than one price tick.")
+})
