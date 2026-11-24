@@ -1041,7 +1041,14 @@ export class BitunixFuturesBroker {
       }
       await this.privateWebSocketConnectPromise
     }
-    await this.privateWebSocketClient.waitUntilAuthenticated()
+    try {
+      await this.privateWebSocketClient.waitUntilAuthenticated()
+    } catch (error) {
+      await this.privateWebSocketClient.disconnect()
+      this.privateWebSocketClient = null
+      this.privateWebSocketConnectPromise = null
+      throw error
+    }
     return this.privateWebSocketClient
   }
 
@@ -1092,15 +1099,6 @@ export class BitunixFuturesBroker {
       { ch: "order" },
       { ch: "tpsl" },
     ]
-    try {
-      client.subscribe({
-        channels,
-      })
-    } catch (error) {
-      client.off("channel", dispatchObservation)
-      client.off("status", dispatchStatus)
-      throw error
-    }
     const observer = {
       onObservation,
       onStatus,
@@ -1111,6 +1109,20 @@ export class BitunixFuturesBroker {
       dispatchObservation,
       dispatchStatus,
       observers,
+    }
+    try {
+      client.subscribe({
+        channels,
+      })
+    } catch (error) {
+      client.off("channel", dispatchObservation)
+      client.off("status", dispatchStatus)
+      this.privateWebSocketSession = null
+      observers.clear()
+      await client.disconnect()
+      this.privateWebSocketClient = null
+      this.privateWebSocketConnectPromise = null
+      throw error
     }
     deliverFuturesUserDataStatus({
       status: {
