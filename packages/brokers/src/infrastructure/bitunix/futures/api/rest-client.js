@@ -4,7 +4,6 @@ import { createRestSignature } from "../../common/auth/create-rest-signature.js"
 import { quoteDepthLevelNumbers } from "./quote-depth-level-numbers.js"
 
 const MIN_REQUEST_INTERVAL_MS = 100
-const RATE_LIMITER_IDLE_MS = 60_000
 const RATE_LIMITERS = new Map()
 
 const ERROR_CODES = Object.freeze({
@@ -330,21 +329,14 @@ function getSharedRateLimiter({ apiKey, rateLimitNow, sleepFn }) {
   if (!Number.isSafeInteger(now) || now < 0) {
     throw new TypeError("Bitunix Futures rate-limit clock must return a non-negative safe integer")
   }
-  for (const [key, limiter] of RATE_LIMITERS) {
-    if (now - limiter.lastUsedAt > RATE_LIMITER_IDLE_MS) {
-      RATE_LIMITERS.delete(key)
-    }
-  }
   const key = createRateLimiterKey({
     apiKey,
   })
   const existing = RATE_LIMITERS.get(key)
   if (existing) {
-    existing.lastUsedAt = now
     return existing
   }
   const limiter = {
-    lastUsedAt: now,
     nextRequestAt: 0,
     rateLimitNow,
     requestQueue: Promise.resolve(),
@@ -412,7 +404,6 @@ export class BitunixFuturesRestClient {
       name: "dispatch",
     })
     const limiter = this.#rateLimiter
-    limiter.lastUsedAt = limiter.rateLimitNow()
     const scheduled = limiter.requestQueue.then(async () => {
       const now = limiter.rateLimitNow()
       if (!Number.isSafeInteger(now) || now < 0) {
@@ -427,7 +418,6 @@ export class BitunixFuturesRestClient {
         throw new TypeError("Bitunix Futures rate-limit clock must return a non-negative safe integer")
       }
       limiter.nextRequestAt = Math.max(dispatchedAt, limiter.nextRequestAt) + MIN_REQUEST_INTERVAL_MS
-      limiter.lastUsedAt = dispatchedAt
       return {
         result: dispatch(),
       }
