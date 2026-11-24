@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto"
 import { ensure, SystemCustomError } from "@coinzilla/utils"
 import { createRestSignature } from "../../common/auth/create-rest-signature.js"
+import { quoteDepthLevelNumbers } from "./quote-depth-level-numbers.js"
 
 const ERROR_CODES = Object.freeze({
   authentication: "BITUNIX_FUTURES_AUTHENTICATION_REQUIRED",
@@ -248,7 +249,16 @@ async function sendRestRequest({ client, request, url, options }) {
 async function readResponsePayload({ response, request }) {
   try {
     if (typeof response?.text === "function") {
-      return JSON.parse(await response.text())
+      const responseText = await response.text()
+      const parsedText = request.path === "/api/v1/futures/market/depth"
+        ? quoteDepthLevelNumbers({
+          text: responseText,
+        })
+        : responseText
+      return JSON.parse(parsedText)
+    }
+    if (request.path === "/api/v1/futures/market/depth") {
+      throw new TypeError("Bitunix Futures depth responses must be read as raw text to preserve numeric precision")
     }
     if (typeof response?.json === "function") {
       return await response.json()
