@@ -23,8 +23,8 @@ export interface GitHubPullRequestsSnapshot {
 function getNextPageUrl(response: HttpResponse<unknown[]>): string | null {
   const linkHeader = response.headers.get('Link');
   if (!linkHeader) return null;
-  const nextLink = [...linkHeader.matchAll(/<([^>]+)>([^<]*?)(?=,\\s*<|$)/g)]
-    .find(([, , parameters]) => /(?:^|;)\\s*rel\\s*=\\s*(?:"next"|'next'|next)\\s*(?=;|$)/i.test(parameters ?? ''));
+  const nextLink = [...linkHeader.matchAll(/<([^>]+)>([^<]*?)(?=,\s*<|$)/g)]
+    .find(([, , parameters]) => /(?:^|;)\s*rel\s*=\s*(?:"next"|'next'|next)\s*(?=;|$)/i.test(parameters ?? ''));
   if (!nextLink) return null;
 
   const nextUrl = new URL(nextLink[1] as string);
