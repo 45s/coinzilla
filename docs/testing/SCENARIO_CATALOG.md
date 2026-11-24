@@ -833,6 +833,7 @@ The package entries below make the repository-wide scope visible, but their exac
 **Implementation:** `packages/brokers/src/infrastructure/bitunix/futures/broker.js` — `getFuturesTpSlOrderHistory()`, query validation and symbol correlation; `adapters/adapt-futures-pending-tpsl-orders.js` preserves the exchange TP/SL group fields.
 
 **Automated tests:** `packages/brokers/src/infrastructure/bitunix/futures/broker.tpsl.test.js`:
+
 - `Bitunix Futures TP/SL history reads preserve exchange history fields and pagination`
 - `Bitunix Futures TP/SL history rejects an oversized page before dispatch`
 - `Bitunix Futures TP/SL history rejects rows for a different requested symbol`

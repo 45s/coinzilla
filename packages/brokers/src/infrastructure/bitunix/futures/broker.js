@@ -1112,6 +1112,7 @@ export class BitunixFuturesBroker {
       fetchFn,
       now,
       nonceFactory,
+      privateEventTimeoutMs = 5_000,
     } = dependencies
     ensure.function({
       value: restClientFactory,
@@ -1121,6 +1122,11 @@ export class BitunixFuturesBroker {
       value: webSocketClientFactory,
       name: "webSocketClientFactory",
     })
+    ensure.positiveInteger({
+      value: privateEventTimeoutMs,
+      name: "privateEventTimeoutMs",
+    })
+    this.privateEventTimeoutMs = privateEventTimeoutMs
     this.config = config
     this.logger = logger
     this.now = now ?? Date.now

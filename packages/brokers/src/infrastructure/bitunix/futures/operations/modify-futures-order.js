@@ -4,7 +4,7 @@ import {
   handleErr,
   toResult,
 } from "@coinzilla/utils"
-import { BitunixFuturesRestError } from "../api/rest-client.js"
+import { createPrivateOrderEventWaiter } from "./private-order-event-confirmation.js"
 import { createUserDataReadinessError } from "./user-data-readiness.js"
 
 const MODIFY_ORDER_PATH = "/api/v1/futures/trade/modify_order"
@@ -203,16 +203,28 @@ function validateModifyFilters({ filters, input }) {
   }
 }
 
-function createUnknownModifyResponseError() {
-  return new BitunixFuturesRestError({
-    message: "Bitunix Futures modify-order response did not confirm the requested orderId",
-    kind: "response",
-    path: MODIFY_ORDER_PATH,
-    outcomeUnknown: true,
-  })
+function isMatchingModifyEvent({ event, input, order }) {
+  const payload = event?.data
+  if (event?.ch !== "order" || payload?.event !== "UPDATE" ||
+      payload.orderId !== order.orderId || payload.clientId !== input.clientId ||
+      payload.symbol !== input.symbol || !["NEW", "PART_FILLED"].includes(payload.orderStatus) ||
+      typeof payload.qty !== "string" || typeof payload.price !== "string") {
+    return false
+  }
+  try {
+    return compareDecimal({
+      left: payload.qty,
+      right: input.qty,
+    }) === 0 && compareDecimal({
+      left: payload.price,
+      right: input.price,
+    }) === 0
+  } catch {
+    return false
+  }
 }
 
-async function reconcileModifiedOrder({ broker, input, error }) {
+async function reconcileModifiedOrder({ broker, input, order, event, error }) {
   const detail = await broker.getCanonicalOrder({
     symbol: input.symbol,
     clientOrderId: input.clientId,
@@ -236,11 +248,20 @@ async function reconcileModifiedOrder({ broker, input, error }) {
       left: detail.data.limitPrice.amount,
       right: input.price,
     }) === 0
-  if (!quantityMatches || !priceMatches) {
+  const eventMatches = isMatchingModifyEvent({
+    event,
+    input,
+    order,
+  })
+  if (!eventMatches || !quantityMatches || !priceMatches) {
     return createOutcomeResult({
       data: detail.data,
       errors: [
-        error ?? new Error("Bitunix Futures final order detail does not match the requested modification"),
+        error ?? new Error(
+          !eventMatches
+            ? "Bitunix Futures matching private UPDATE event was not observed for the requested order values"
+            : "Bitunix Futures final order detail does not match the requested modification",
+        ),
       ],
       mutationOutcome: "OUTCOME_UNKNOWN",
       orderOutcome: "OUTCOME_UNKNOWN",
@@ -254,6 +275,12 @@ async function reconcileModifiedOrder({ broker, input, error }) {
 }
 
 async function dispatchModifyOrder({ broker, input, order }) {
+  const eventWaiter = createPrivateOrderEventWaiter({
+    broker,
+    orderId: order.orderId,
+    clientOrderId: input.clientId,
+    symbol: input.symbol,
+  })
   let response
   try {
     response = await broker.restClient.request({
@@ -273,12 +300,16 @@ async function dispatchModifyOrder({ broker, input, order }) {
       error,
     })
     if (error?.outcomeUnknown === true) {
+      const confirmation = await eventWaiter.promise
       return reconcileModifiedOrder({
         broker,
         input,
-        error,
+        order,
+        event: confirmation.event,
+        error: confirmation.error ?? error,
       })
     }
+    eventWaiter.cancel()
     const outcome = error?.kind === "exchange" || error?.kind === "http"
       ? "REJECTED"
       : "NOT_SENT"
@@ -288,11 +319,13 @@ async function dispatchModifyOrder({ broker, input, order }) {
       orderOutcome: outcome,
     })
   }
-  const acknowledged = response.data?.orderId === order.orderId
+  const confirmation = await eventWaiter.promise
   return reconcileModifiedOrder({
     broker,
     input,
-    ...(acknowledged ? {} : { error: createUnknownModifyResponseError() }),
+    order,
+    event: confirmation.event,
+    error: confirmation.error,
   })
 }
 
