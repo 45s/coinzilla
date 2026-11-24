@@ -510,14 +510,15 @@ test("contains one client's snapshot serialization failure without interrupting 
   const closeEvent = await failingSocketClosed;
   assert.equal(closeEvent.code, 1011, "A client with an unserializable application snapshot must be closed with an internal-error status.");
 
+  const updateMessage = waitForMessage(healthySocket)
   const publication = eventBus.publish({
     name: "account.snapshot_captured",
     source: "test",
     data: {},
-  });
-  assert.equal(publication.ok, true, "A later account update must still be accepted after the failing client is removed.");
-  await eventBus.flush();
-  const update = await waitForMessage(healthySocket);
+  })
+  assert.equal(publication.ok, true, "A later account update must still be accepted after the failing client is removed.")
+  await eventBus.flush()
+  const update = await updateMessage
   assert.equal(update.type, "exchange-accounts.updated", "An already-connected healthy client must continue receiving account updates.");
   assert.deepEqual(update.accounts[0].accountSnapshot.balances, [], "The failing client's serialization error must not corrupt the healthy client's snapshot.");
 });
