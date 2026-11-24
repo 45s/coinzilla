@@ -128,6 +128,19 @@ After `account.snapshot_captured` or `account.open_orders_captured`, connected c
 
 These are current runtime observations, not persisted history, accounting evidence, or durable replay. Messages can be missed while disconnected; the next connection's initial snapshot reconciles the current account view. No account/order mutation command is accepted over this socket.
 
+### WebSocket framing and resource limits
+
+Server-to-client messages use RFC 6455 unmasked final frames and the protocol's three payload-length forms: inline 7-bit lengths (0–125 bytes), 16-bit extended lengths (126–65,535 bytes), and 64-bit extended lengths (65,536 bytes and above). Lengths are calculated from the UTF-8 encoded payload bytes, not JavaScript string characters. Large snapshots are sent as complete messages; the server never truncates a snapshot to fit a frame header.
+
+The local API applies explicit outbound resource limits:
+
+- A serialized JSON WebSocket message may contain at most **1 MiB** of UTF-8 payload. A larger application message is rejected by closing only that client with WebSocket status **1009 (message too big)**. The server does not split, truncate, or publish a partial snapshot.
+- The per-client socket write queue is bounded at **2 MiB**. If another complete frame would exceed that queue budget, the slow client is closed with status **1013 (try again later)**.
+- A JSON serialization, frame-encoding, or synchronous socket-write failure closes only the affected client with status **1011 (internal error)**. Client cleanup removes its heartbeat and subscription membership; the HTTP listener, Harvester process, and other clients remain available.
+- Client close, heartbeat, and pong control-frame writes use the same protocol encoder and contain synchronous socket failures at the client boundary.
+
+These limits are transport safeguards, not limits on exchange account contents or trading data. If a valid snapshot exceeds the application message cap, the client must reconnect after the source payload is corrected or the documented contract is deliberately revised; the server never reports a truncated snapshot as complete.
+
 ### Live Bots operator snapshots
 
 The same socket streams the authoritative runtime, configured-market, and Portfolio read models used by the Bots workspace. A new client receives a complete `bots.snapshot` message; every relevant application/runtime notification produces a newer full `bots.state.updated` message. The server subscribes before accepting upgrades. If an invalidation arrives during a read, the captured revision is sent first and the latest invalidation is coalesced into a follow-up read/update, so the initial snapshot and subsequent state change are both observable without losing the newer state.
