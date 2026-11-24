@@ -28,7 +28,10 @@ function requirePositiveDecimal({ value, field }) {
     value,
     field,
   })
-  if (compareDecimal({ left: value, right: "0" }) <= 0) {
+  if (compareDecimal({
+    left: value,
+    right: "0",
+  }) <= 0) {
     throw new RangeError(`Bitunix Futures order ${field} must be greater than zero`)
   }
   return value
