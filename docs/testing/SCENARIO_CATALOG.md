@@ -28,11 +28,92 @@ The catalog is a navigation and traceability layer. Domain specifications, accep
 
 ## Quick scenario index
 
-### Harvester — shared account, order, and portfolio behavior
+### Harvester — Dashboard operator and real-time monitoring
+
+### OPS-001 — Live Bots snapshots remain authoritative across updates and reconnects
+
+**Status:** TEST-MAPPED — named regression cases are present; exact-head verification is pending.
+
+**Behavior:** The Dashboard Bots workspace receives a complete, versioned view of Harvester runtime status, configured markets, and Portfolio positions over the existing local WebSocket. Relevant application/runtime events produce newer complete snapshots. A reconnect always synchronizes current state without replaying missed deltas.
+
+**Given / preconditions:**
+
+- Harvester is running with its existing operator application facade and shared local HTTP/WebSocket listener.
+- The Dashboard connects to `/api/v1/trading/events`.
+- The application read models remain authoritative for runtime, market readiness/operator BUY gates, and Portfolio accounting.
+
+**Input / example:**
+
+- Connect a new WebSocket client and read the initial snapshot.
+- Complete a market-scoped or global operator BUY pause/resume.
+- Publish a relevant runtime, broker, readiness, market-rule, fill, recovery, or account-audit notification.
+- Cause a newer notification while the initial snapshot reads are still pending.
+- Disconnect and reconnect after one or more notifications were missed.
+- Make one operator read fail or return malformed data.
+
+**Expected output:**
+
+- A complete `bots.snapshot` envelope includes version, monotonically increasing revision, observation time, and status/markets/portfolio resource DTOs.
+- A snapshot read that becomes stale during an intervening event is discarded and reread before it is broadcast.
+- A reconnect receives a newly sampled complete snapshot; clients do not depend on event replay.
+- A failed resource read is explicit in `bots.snapshot.unavailable`; no failed read becomes an invented empty array.
+- Successful operator BUY-control events distinguish `MARKET` plus symbol from `GLOBAL` without symbol and distinguish `PAUSE` from `RESUME`.
+- The Dashboard separates WebSocket health from snapshot freshness, rejects stale revisions, retains last complete values as stale, and disables commands until a complete snapshot is fresh.
+- Confirmed commands continue through the existing HTTP operator facade.
+
+**Must not happen:**
+
+- No second WebSocket server, broker connection, database connection, or browser exchange call.
+- No REST polling or manual refresh for Bots runtime/market/Portfolio snapshots.
+- No fabricated empty markets/positions on failed reads.
+- No strategy safety pause represented as an operator BUY-control event.
+- No command frame accepted over the WebSocket.
+- No floating-point conversion or browser-side financial accounting.
+
+**Subcases represented by the mapped tests:**
+
+- Initial complete snapshot and reconnect full-snapshot synchronization.
+- Market BUY pause event triggers a newer complete snapshot.
+- Event arrives while the initial snapshot is being read.
+- Market/global scope and pause/resume event payloads.
+- Failed engine transition publishes no completion event.
+- Malformed, unsupported, incomplete, and unavailable client messages.
+- Duplicate/out-of-order revisions are ignored; disconnect marks retained data stale.
+- Command confirmation and post-command stream synchronization; page destruction closes the socket.
+
+**Implementation:**
+
+- `apps/harvester/src/infrastructure/http/trading-history-websocket.js`
+- `apps/harvester/src/application/operator/create-harvester-operator.js`
+- `apps/harvester/src/application/events/event-names.js`
+- `apps/dashboard/src/app/features/bots/page.ts`
+- `apps/dashboard/src/app/features/bots/realtime.ts`
+
+**Automated tests:**
+
+- [Harvester WebSocket regressions](../../apps/harvester/src/infrastructure/http/trading-history-bots-websocket.test.js)
+  - `sends a versioned complete operator snapshot to every new Bots WebSocket client`
+  - `broadcasts a newer complete snapshot after a successful operator BUY-control transition`
+  - `does not lose an operator transition that occurs while the initial snapshot is being read`
+  - `a reconnect receives a fresh full snapshot rather than relying on missed event replay`
+- [Operator BUY-control event regressions](../../apps/harvester/src/application/operator/create-harvester-operator-events.test.js)
+  - `publishes market-scoped pause and resume events only after successful BUY transitions`
+  - `publishes global BUY-control events without inventing a market symbol`
+  - `does not publish a BUY-control completion event when the engine rejects the transition`
+- [Dashboard protocol validation](../../apps/dashboard/src/app/features/bots/realtime.spec.ts)
+- [Dashboard Bots stream behavior](../../apps/dashboard/src/app/features/bots/page.spec.ts)
+
+**Evidence note:** Test mappings are recorded; this scenario is not VERIFIED until the final PR head passes the relevant Harvester, Dashboard, workspace, coverage, and repository-quality checks.
+
+## Harvester — shared account, order, and portfolio behavior
 
 - [HARV-ACC-001 — Account-wide commitments](#harv-acc-001--account-wide-commitments-are-counted-exactly-once)
 - [HARV-ACC-002 — Canonical fill idempotency and conflict rejection](#harv-acc-002--canonical-fills-are-applied-once-and-conflicting-replays-are-rejected)
 - [HARV-MKT-001 — Exchange trading-rule boundaries](#harv-mkt-001--exchange-trading-constraints-are-enforced-at-exact-boundaries)
+
+### Harvester — Dashboard operator and real-time monitoring
+
+- [OPS-001 — Live Bots snapshots remain authoritative across updates and reconnects](#ops-001--live-bots-snapshots-remain-authoritative-across-updates-and-reconnects)
 
 ### Harvester — Conservative (CG)
 
