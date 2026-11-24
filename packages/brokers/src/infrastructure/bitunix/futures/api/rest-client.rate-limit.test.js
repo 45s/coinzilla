@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
-import { BitunixFuturesConfig } from "./config/bitunix-futures-config.js"
+import { BitunixFuturesConfig } from "../config/bitunix-futures-config.js"
 import { BitunixFuturesRestClient } from "./rest-client.js"
 
 function createConfig() {
