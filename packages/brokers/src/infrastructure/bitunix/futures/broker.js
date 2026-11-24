@@ -1,5 +1,5 @@
 import { Asset, Market } from "@coinzilla/entities"
-import { ensure, handleErr, toResult } from "@coinzilla/utils"
+import { assertDecimalString, compareDecimal, ensure, handleErr, toResult } from "@coinzilla/utils"
 import { adaptFuturesBalances } from "./adapters/adapt-futures-balances.js"
 import { BrokerCapabilities } from "../../../broker/broker-capabilities.js"
 import { BrokerUnsupportedOperationError } from "../../../broker/errors/broker-unsupported-operation-error.js"
@@ -28,6 +28,12 @@ const FUTURES_CAPABILITIES = [
     type: "READ_ACCOUNT_SNAPSHOT",
     status: "UNKNOWN",
     reason: "The Futures account snapshot and source-freshness contract have not yet been verified.",
+  },
+  {
+    type: "READ_MARKET_PRICE",
+    status: "SUPPORTED",
+    method: "getPrices",
+    guarantee: "Returns the requested Futures symbol last traded price and mark price as exact decimal strings from the public ticker endpoint.",
   },
   {
     type: "READ_EXCHANGE_MARKETS",
@@ -321,11 +327,63 @@ export class BitunixFuturesBroker {
     })
   }
 
-  async getPrices() {
-    return unsupportedResult({
-      operation: "getPrices",
-      reason: "Futures market price reads are not implemented yet.",
-    })
+  async getPrices({ symbol } = {}) {
+    try {
+      const normalizedSymbol = ensure.nonEmptyString({
+        value: symbol,
+        name: "symbol",
+      }).trim().toUpperCase()
+      const response = await this.restClient.request({
+        method: "GET",
+        path: "/api/v1/futures/market/tickers",
+        queryParams: {
+          symbols: normalizedSymbol,
+        },
+        authenticated: false,
+      })
+      ensure.array({
+        value: response.data,
+        name: "tickerRows",
+      })
+      if (response.data.length !== 1) {
+        throw new TypeError("Bitunix Futures ticker response must contain exactly one requested symbol")
+      }
+      const ticker = response.data[0]
+      ensure.plainObject({
+        value: ticker,
+        name: "ticker",
+      })
+      if (ticker.symbol !== normalizedSymbol) {
+        throw new TypeError("Bitunix Futures ticker symbol does not match the requested symbol")
+      }
+      for (const field of ["lastPrice", "markPrice"]) {
+        assertDecimalString({
+          value: ticker[field],
+          field: `Bitunix Futures ticker ${field}`,
+        })
+        if (compareDecimal({
+          left: ticker[field],
+          right: "0",
+        }) <= 0) {
+          throw new RangeError(`Bitunix Futures ticker ${field} must be positive`)
+        }
+      }
+      return toResult({
+        data: Object.freeze({
+          symbol: normalizedSymbol,
+          price: ticker.lastPrice,
+          markPrice: ticker.markPrice,
+        }),
+      })
+    } catch (error) {
+      handleErr({
+        where: "BitunixFuturesBroker.getPrices()",
+        error,
+      })
+      return toResult({
+        errors: [error],
+      })
+    }
   }
 
   async getCandles() {
