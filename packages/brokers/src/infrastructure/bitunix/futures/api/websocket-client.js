@@ -278,7 +278,8 @@ export class BitunixFuturesWebSocketClient extends EventEmitter {
     if (this.#state === "open") {
       return Promise.resolve(this)
     }
-    return new Promise((resolve, reject) => {
+    return new Promise((...args) => {
+      const [resolve, reject] = args
       const onStatus = (status) => {
         if (status.state === "open") {
           this.off("status", onStatus)
