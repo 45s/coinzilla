@@ -92,6 +92,8 @@ apps/<app>/docs/
 
 The same structure applies under a package's `docs/` or repository-root `docs/features/` when that scope owns the feature.
 
+Feature folders are documentation-only: do not place production source code, automated test files, runtime configuration or task logs in them. Keep implementation and tests in their normal owning-domain locations, then link to them from the specification when useful.
+
 Files are added based on actual need:
 
 | File | Requirement | Responsibility |
