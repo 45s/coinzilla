@@ -9,7 +9,6 @@ import {
   Money,
   Quantity,
 } from "@coinzilla/entities"
-import { StrategyId } from "../../../src/domain/strategies/strategy-ids.js"
 import { evaluateRecoverySellerBuyDecision } from "../../../src/domain/strategies/recovery-seller/evaluate-buy-decision.js"
 import { createRecoverySellerCycleState } from "../../../src/domain/strategies/recovery-seller/cycle-state.js"
 import { createRecoverySellerStopState } from "../../../src/domain/strategies/recovery-seller/stop-decision.js"
@@ -60,23 +59,6 @@ const buyPolicyMarketMetadata = {
   },
 }
 
-function createBuyPolicyOrder({ status }) {
-  return {
-    market: { symbol: "ZROUSDT" },
-    side: "BUY",
-    status,
-    clientOrderId: `rs-buy-${status.toLowerCase()}`,
-    ...(status === "UNKNOWN" ? {} : {
-      brokerOrderId: "broker-rs-buy-policy",
-    }),
-    ownership: {
-      strategyId: StrategyId.RECOVERY_SELLER,
-      purpose: "RECOVERY_BUY",
-      positionId: "rs-policy-position",
-      cycleId: "rs-policy-cycle",
-    },
-  }
-}
 
 function evaluateBuyPolicyCase({ overrides }) {
   const result = evaluateRecoverySellerBuyDecision({
