@@ -476,6 +476,90 @@ export class BitunixFuturesBroker {
     }
   }
 
+  async getFuturesPositionMode() {
+    try {
+      const response = await this.restClient.request({
+        method: "GET",
+        path: "/api/v1/futures/account/position_mode",
+      })
+      ensure.plainObject({
+        value: response.data,
+        name: "Futures position mode",
+      })
+      const positionMode = ensure.oneOf({
+        value: response.data.positionMode,
+        values: ["ONE_WAY", "HEDGE"],
+        name: "positionMode",
+      })
+      return toResult({
+        data: Object.freeze({ positionMode }),
+      })
+    } catch (error) {
+      handleErr({
+        where: "BitunixFuturesBroker.getFuturesPositionMode()",
+        error,
+      })
+      return toResult({
+        errors: [error],
+      })
+    }
+  }
+
+  async getFuturesLeverageAndMarginMode({ symbol, marginCoin = "USDT" } = {}) {
+    try {
+      const normalizedSymbol = ensure.nonEmptyString({
+        value: symbol,
+        name: "symbol",
+      }).trim().toUpperCase()
+      ensure.oneOf({
+        value: marginCoin,
+        values: ["USDT"],
+        name: "marginCoin",
+        errMsg: 'Bitunix USDT Futures settings require marginCoin "USDT"',
+      })
+      const response = await this.restClient.request({
+        method: "GET",
+        path: "/api/v1/futures/account/get_leverage_margin_mode",
+        queryParams: {
+          symbol: normalizedSymbol,
+          marginCoin,
+        },
+      })
+      ensure.plainObject({
+        value: response.data,
+        name: "Futures leverage and margin mode",
+      })
+      if (response.data.symbol !== normalizedSymbol || response.data.marginCoin !== marginCoin) {
+        throw new TypeError("Bitunix Futures leverage settings do not match the requested symbol and margin coin")
+      }
+      const leverage = ensure.positiveInteger({
+        value: response.data.leverage,
+        name: "leverage",
+      })
+      const marginMode = ensure.oneOf({
+        value: response.data.marginMode,
+        values: ["ISOLATION", "CROSS"],
+        name: "marginMode",
+      })
+      return toResult({
+        data: Object.freeze({
+          symbol: normalizedSymbol,
+          marginCoin,
+          leverage,
+          marginMode,
+        }),
+      })
+    } catch (error) {
+      handleErr({
+        where: "BitunixFuturesBroker.getFuturesLeverageAndMarginMode()",
+        error,
+      })
+      return toResult({
+        errors: [error],
+      })
+    }
+  }
+
   /**
    * Futures-specific position projection. This is deliberately not a Spot
    * Position entity or a canonical account snapshot.
