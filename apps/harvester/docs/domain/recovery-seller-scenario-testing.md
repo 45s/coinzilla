@@ -259,6 +259,17 @@ SELL base target = actual net recovery base quantity
                  + eligible legacy base quantity
 ~~~
 
+The original legacy average cost is fixed:
+
+~~~text
+original legacy average cost = legacyPosition.invested
+                             / legacyPosition.quantity
+~~~
+
+Do not recompute that average after a legacy disposal. After a cycle has successfully completed, decrement remaining logical legacy quantity exactly once by the legacy base quantity actually disposed (normally one configured §sellQuantity§ lot; use the smaller remaining amount only under the approved smaller-remainder rule). Do not decrement on SELL planning, order submission, partial-fill delivery, an unconfirmed terminal state, or duplicate replay. The decrement is committed only after complete terminal fill/commission reconciliation and the atomic recovery/legacy accounting transition succeeds.
+
+The configured §investment§ is the recovery-tranche BUY budget. It is separate from §legacyPosition.invested§, which is the original historical quote cost used to establish legacy basis.
+
 Eligible legacy quantity is bounded by authorized remaining legacy quantity, verified Spot availability and unreserved account inventory. The configured value is not the total SELL quantity and not a maximum cap on recovery inventory.
 
 Specification illustration only:
@@ -309,6 +320,7 @@ This exact shape is a source observation. The canonical factory remains the pref
 - CANCELED, REJECTED and EXPIRED outcomes do not authorize a replacement SELL or a new BUY cycle.
 - A cycle closes only after a fully reconciled FILLED SELL, successful accounting/commitment handling and all applicable profitability gates.
 - A later cycle is distinct and requires an eligible CLOSED prior cycle under the approved contract.
+- Reaching the RS recovery investment limit blocks new BUYs only. An already-open recovery SELL remains live and untouched: do not cancel, replace or reprice it because the BUY budget is exhausted. Continue canonical fill/order reconciliation until its terminal outcome is known before considering another cycle.
 - Do not import Conservative SELL replacement/cancellation behavior.
 
 ### 4.5 Profitability is three independent gates
@@ -983,6 +995,8 @@ Required cases:
 10. Stale, missing, incomplete or conflicting custody evidence fails closed.
 11. Spot transfers change availability only through approved evidence; historical basis remains unchanged.
 12. Reservations and account snapshot baselines are not double-counted.
+13. Derive the verified legacy Spot allocation from the authoritative Spot account total for the canonical base asset minus all Portfolio Positions for that base asset; cap the remainder by the operator-authorized remaining legacy quantity. The shared account allocator separately accounts for active/in-flight reservations. Do not subtract snapshot locks twice or count a reservation in both the baseline and current delta.
+14. Missing authorized balances, stale/incomplete snapshots, or authoritative Spot total below aggregate Portfolio base quantity fail closed. Do not infer Spot from EARN/off-Spot quantity or external/manual inventory.
 
 Core source ownership: `legacy-position.js`, `legacy-spot-allocation.js`, shared Portfolio/account snapshot/commitment allocation, action authorizer.
 
