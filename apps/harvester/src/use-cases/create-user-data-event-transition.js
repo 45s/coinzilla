@@ -200,10 +200,7 @@ async function prepareOrderEvent({ dependencies, event } = {}) {
       }),
     })
   }
-  return { order,
-    symbol,
-    update,
-    previousOrder }
+  return { order, symbol, update, previousOrder }
 }
 
 async function handlePreFillRecoveryState({ dependencies, order, symbol, recoveryMode } = {}) {
