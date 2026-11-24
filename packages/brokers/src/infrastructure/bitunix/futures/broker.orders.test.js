@@ -194,3 +194,28 @@ test("Bitunix Futures canonical history validates pagination and time bounds bef
   }
   assert.equal(requests.length, 0)
 })
+
+
+test("Bitunix Futures canonical history supports canceled-order filters and normalizes partial cancellation", async () => {
+  const { broker, requests } = createBroker({
+    orderRow: createOrderRow({
+      status: "PART_FILLED_CANCELED",
+    }),
+  })
+  const result = await broker.getCanonicalOrderHistory({
+    symbol: "BTCUSDT",
+    status: "PART_FILLED_CANCELED",
+    orderType: "LIMIT",
+    queryCanceled: true,
+    limit: 10,
+    skip: 0,
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.data[0].status, "CANCELED")
+  assert.equal(result.data[0].executedQuantity.amount, "0.125000000000000001")
+  const query = new URL(requests[0].url).searchParams
+  assert.equal(query.get("status"), "PART_FILLED_CANCELED")
+  assert.equal(query.get("type"), "LIMIT")
+  assert.equal(query.get("queryCanceled"), "true")
+})
