@@ -169,20 +169,70 @@ export const recoverySellerBuyAccountingScenarios = Object.freeze([
     stepType: "evaluate-recovery-buy-policy-scenario",
     input: {
       cases: [
-        { id: "operator-stopped", overrides: { strategyStopped: true } },
-        { id: "market-paused", overrides: { marketPaused: true } },
-        { id: "reconciliation-incomplete", overrides: { reconciliationComplete: false } },
-        { id: "missing-readiness", overrides: { reconciliationComplete: undefined } },
-        { id: "orphaned-commitment", overrides: { pendingBuyCommitment: "5" } },
+        {
+          id: "operator-stopped",
+          overrides: { strategyStopped: true },
+        },
+        {
+          id: "market-paused",
+          overrides: { marketPaused: true },
+        },
+        {
+          id: "reconciliation-incomplete",
+          overrides: { reconciliationComplete: false },
+        },
+        {
+          id: "missing-readiness",
+          overrides: { reconciliationComplete: undefined },
+        },
+        {
+          id: "orphaned-commitment",
+          overrides: { pendingBuyCommitment: "5" },
+        },
       ],
     },
     expected: {
       cases: [
-        { id: "operator-stopped", outcome: "BLOCK", reasonCode: "STRATEGY_STOPPED", action: null, stopStatus: "CLEAR", orderIdentity: null },
-        { id: "market-paused", outcome: "BLOCK", reasonCode: "MARKET_PAUSED", action: null, stopStatus: "CLEAR", orderIdentity: null },
-        { id: "reconciliation-incomplete", outcome: "BLOCK", reasonCode: "RECONCILIATION_INCOMPLETE", action: null, stopStatus: "CLEAR", orderIdentity: null },
-        { id: "missing-readiness", outcome: "BLOCK", reasonCode: "UNEXPECTED_OR_UNMODELED_CONDITION", action: null, stopStatus: "STOPPED", orderIdentity: null },
-        { id: "orphaned-commitment", outcome: "BLOCK", reasonCode: "UNEXPECTED_OR_UNMODELED_CONDITION", action: null, stopStatus: "STOPPED", orderIdentity: null },
+        {
+          id: "operator-stopped",
+          outcome: "BLOCK",
+          reasonCode: "STRATEGY_STOPPED",
+          action: null,
+          stopStatus: "CLEAR",
+          orderIdentity: null,
+        },
+        {
+          id: "market-paused",
+          outcome: "BLOCK",
+          reasonCode: "MARKET_PAUSED",
+          action: null,
+          stopStatus: "CLEAR",
+          orderIdentity: null,
+        },
+        {
+          id: "reconciliation-incomplete",
+          outcome: "BLOCK",
+          reasonCode: "RECONCILIATION_INCOMPLETE",
+          action: null,
+          stopStatus: "CLEAR",
+          orderIdentity: null,
+        },
+        {
+          id: "missing-readiness",
+          outcome: "BLOCK",
+          reasonCode: "UNEXPECTED_OR_UNMODELED_CONDITION",
+          action: null,
+          stopStatus: "STOPPED",
+          orderIdentity: null,
+        },
+        {
+          id: "orphaned-commitment",
+          outcome: "BLOCK",
+          reasonCode: "UNEXPECTED_OR_UNMODELED_CONDITION",
+          action: null,
+          stopStatus: "STOPPED",
+          orderIdentity: null,
+        },
       ],
     },
     rules: ["RS_BUY_READINESS_REQUIRED", "RS_UNKNOWN_OUTCOME_NO_RETRY"],
@@ -217,7 +267,10 @@ export const recoverySellerBuyAccountingScenarios = Object.freeze([
     layer: "DOMAIN",
     stepType: "evaluate-recovery-buy-policy-scenario",
     input: {
-      cases: [{ id: "initial-intent", overrides: {} }],
+      cases: [{
+        id: "initial-intent",
+        overrides: {},
+      }],
     },
     expected: {
       cases: [{
