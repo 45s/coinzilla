@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 import { Broker } from "../../../index.js"
-import { connectAndAcknowledgeUserDataReconciliation, createFakePrivateWebSocketClientFactory } from "./futures-mutation-fixtures.js"
+import { connectAndAcknowledgeUserDataReconciliation, FakePrivateWebSocketClient } from "./futures-mutation-fixtures.js"
 
 const credentials = {
   apiKey: "test-api-key",
@@ -199,11 +199,12 @@ test("Bitunix Futures modifyFuturesOrder preflights and verifies exact order cha
   const result = await broker.modifyFuturesOrder(modifyInput)
 
   privateClients[0].off("channel", observePrivateEvent)
-  assert.equal(result.ok, true, `a matching private UPDATE event and REST readback should confirm the modification: ${result.errors?.map((error) => error.message).join("; ") ?? "no errors"}`)
+  assert.equal(privateClients.length, 1, "the test must track the actual private WebSocket client separately from public connections")
   assert.equal(observedEvents.length, 1, "the exchange fixture must emit one private order event for the modification")
   assert.equal(observedEvents[0].data.event, "UPDATE", "the observed private event must represent an order update")
   assert.equal(observedEvents[0].data.qty, modifyInput.qty, "the private event must carry the requested exact quantity")
   assert.equal(observedEvents[0].data.price, modifyInput.price, "the private event must carry the requested exact price")
+  assert.equal(result.ok, true, `a matching private UPDATE event and REST readback should confirm the modification: ${result.errors?.map((error) => error.message).join("; ") ?? "no errors"}`)
   assert.equal(result.mutationOutcome, "CONFIRMED")
   assert.equal(result.orderOutcome, "CONFIRMED")
   assert.equal(result.data.originalQuantity.amount, "0.02")
