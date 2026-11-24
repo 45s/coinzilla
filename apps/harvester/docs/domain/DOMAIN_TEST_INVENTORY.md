@@ -349,7 +349,7 @@ Do not treat the conceptual diagram as a new production state model: map every t
 
 The planner scenario intentionally supplies a canonical lifecycle cycle-state value to isolate the SELL planner. The real accounting workflow snapshot currently omits required accumulating-state invariants; see [#1809](https://github.com/45s/coinzilla/issues/1809). Do not describe this suite as proving the complete runtime workflow-to-SELL-evaluator path until that issue is fixed and covered.
 
-The separate initiative adds three package-level scenario files; it does not replace or retroactively credit the existing RS unit/runtime tests listed above.
+The separate initiative adds four package-level scenario files; it does not replace or retroactively credit the existing RS unit/runtime tests listed above.
 
 | Scenario family | New scenario evidence | Current disposition |
 | --- | --- | --- |

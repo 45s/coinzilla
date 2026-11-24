@@ -546,7 +546,7 @@ The schema intentionally separates *business input* from *derived oracle*. Tests
 The accounting workflow's transition snapshot currently emits an incomplete accumulating cycle-state shape that the default SELL evaluator rejects; full workflow-to-evaluator proof is tracked separately in [#1809](https://github.com/45s/coinzilla/issues/1809). The planner scenarios normalize only the lifecycle state using the canonical domain factory so that planner economics and no-submit boundaries can be tested without changing production behavior.
 
 
-**Status:** PARTIAL — one post-fill allocation example is newly mapped; pre-submission planning, verified custody, reservations and exchange-filter behavior are not proved by that case.
+**Status:** PARTIAL — the new planner scenario verifies canonical BUY-derived recovery quantity, Spot-verified additive legacy quantity, the independent ZRO proceeds oracle, smaller eligible Spot remainder, missing-custody fail-closed behavior, a same-market active SELL reservation gate, a real TradingRules minimum-notional rejection, and no-submit boundaries. It supplies a canonical lifecycle state to isolate planner behavior because the real workflow-to-evaluator cycle-state projection is blocked by [#1809](https://github.com/45s/coinzilla/issues/1809); it does not prove the full runtime wiring.
 
 **Behavior:** Conceptual SELL quantity is actual net recovery quantity plus the configured legacy `sellQuantity`, limited by the authorized remaining legacy amount that is verified, Spot-available and unreserved. `sellQuantity` is additive, not total quantity or a cap.
 
@@ -557,7 +557,7 @@ The accounting workflow's transition snapshot currently emits an incomplete accu
 
 **New test fixture caveat:** the current mixed-SELL scenario uses a synthetic DOGE Fill at `10 USDT/DOGE`, `4010 USDT` gross quote proceeds and `4.01 USDT` quote commission. Those values are fixture inputs in that test, not specification-approved fee economics or production defaults. The test proves a supplied canonical Fill can be split as 400 + 1 and that the allocation sums to the Fill; it does **not** prove that the pre-submission planner derives 401 from recovery inventory plus eligible legacy custody.
 
-**Required then:** planner returns the exact target and ownership split; actual canonical fills/fees determine final recovery and legacy debit/proceeds; all relevant filters and profitability gates are enforced.
+**Required then:** planner returns the exact target and ownership split; actual canonical fills/fees determine final recovery and legacy debit/proceeds; all relevant filters and profitability gates are enforced. The full production workflow must supply a cycle state accepted by the SELL domain validator before the application path can be called covered.
 
 **Must not happen:** interpret legacy slice as total/cap; use gross BUY quantity rather than net base; consume unverified/reserved legacy; round allocation ownership silently; invent fee assumptions.
 
@@ -573,7 +573,7 @@ The accounting workflow's transition snapshot currently emits an incomplete accu
   - `one 401 DOGE canonical SELL Fill allocates 400 DOGE to recovery and 1 DOGE to legacy`
   - `recovery and legacy allocations must sum exactly to the canonical SELL Fill quantity`
 
-**Remaining:** planner/no-order proof; smaller legacy remainder; legacy exhaustion; partial fills; base/quote/mixed commission allocation; exchange tick/step/min/max/notional; insufficient Spot; central reservations; precision failure.
+**Remaining:** fix and prove the real workflow-to-evaluator cycle-state mapping (#1809); cross-market/shared account reservations; legacy exhaustion at scenario level; partial and multiple fills; base/quote/mixed commission allocation; exchange tick/step/min/max boundaries beyond the minimum-notional case; durable reservation/commit behavior; precision failure.
 
 ### RS-004 — Recovery, legacy, and combined profitability gates are independent
 
