@@ -598,11 +598,12 @@ function serializeOperatorQuery({ result, method } = {}) {
     }
   }
   const [error] = result?.errors ?? []
+  const { code: errorCode } = error ?? {}
   let code = "HARVESTER_OPERATOR_SNAPSHOT_UNAVAILABLE"
   if (result?.ok === true) {
     code = "HARVESTER_OPERATOR_SNAPSHOT_INVALID"
-  } else if (typeof error?.code === "string") {
-    code = error.code
+  } else if (typeof errorCode === "string") {
+    code = errorCode
   }
   return {
     ok: false,
