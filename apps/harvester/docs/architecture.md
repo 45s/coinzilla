@@ -46,6 +46,29 @@ Before changing an execution path, compare it with the approved Conservative Dom
 
 These are responsibility boundaries, not a requirement that every concept must be represented by a class. The Trading Engine is not a Portfolio-like domain entity. A strategy policy is implemented as a plain pure function when its decision is deterministic. Calling it a domain policy describes its business responsibility; it does not imply a class or stateful strategy object.
 
+## Live Bots operator snapshots
+
+The Dashboard Bots workspace is a read-only projection of the existing application-owned operator read models. It does not create a second runtime model or query an exchange. The shared local HTTP server owns both the existing operator command API and `/api/v1/trading/events`; the WebSocket adapter reuses the existing origin validation, connection limits, frame/buffer bounds, heartbeat, and shutdown lifecycle.
+
+```mermaid
+flowchart LR
+  Dashboard[Dashboard Bots] -->|confirmed command over HTTP| OperatorAPI[Existing operator HTTP adapter]
+  OperatorAPI --> Operator[Application operator facade]
+  Operator --> Engine[Trading Engine and operator BUY controls]
+  Operator -->|successful control event| EventBus[Application EventBus]
+  EventBus -->|snapshot invalidation| WebSocket[Existing shared WebSocket adapter]
+  WebSocket -->|read current DTOs| Operator
+  WebSocket -->|versioned full snapshot| Dashboard
+```
+
+The application facade publishes `harvester.operator_buy_control_completed` only after a market/global BUY pause or resume use case returns success. Its payload distinguishes `MARKET` plus symbol from `GLOBAL` without symbol and records `PAUSE` or `RESUME`. Strategy safety pauses are a separate concern: they are not operator BUY-control events and are never presented as operator commands.
+
+The EventBus message is an invalidation hint, not a copy of trading state. The WebSocket adapter reads the authoritative application query facade (`getStatus`, `getMarkets`, and `getPositions`) and sends a complete `bots.snapshot` version-1 envelope containing a server-process revision, observation time, and status/markets/portfolio resources. It subscribes before accepting connections; if a newer event arrives during an in-flight read, the stale read is discarded and sampled again. A reconnect receives a fresh full snapshot. A process restart begins a new revision epoch, which the reconnecting client accepts before applying normal duplicate/out-of-order revision checks.
+
+If one of the required application reads fails, the adapter sends `bots.snapshot.unavailable` with explicit per-resource errors. It must not replace an unavailable market or Portfolio read with an empty list. The Dashboard retains its last complete snapshot as stale, distinguishes socket health from snapshot freshness, and disables controls until a complete snapshot returns. Financial values remain the exact strings supplied by the application read models.
+
+The WebSocket is read-only. Confirmed commands continue through the existing HTTP adapter and application facade, preserving the engine's `beforeApply` Operational State Store boundary and all existing BUY/SELL safety gates. The stream adds no broker connection, database access, order execution, financial calculation, per-strategy registry, or per-Position strategy attribution. See the [trading-history and Bots WebSocket API contract](./api/trading-history-api.md#live-bots-operator-snapshots) for the wire format and lifecycle details.
+
 ## Volatility market-data intake (current implementation)
 
 The runtime composes `createCandleHistoryService` after the existing price intake. It subscribes to each enabled market's one-minute Kline stream before requesting 101 historical candles, retains up to 100 completed candles, buffers live events during warm-up, and backfills detected gaps through the application broker port. It computes ATR(14), NATR and the current/reference ratio using the previous 60 NATR observations. The per-market snapshot is available through runtime `getVolatilityData({ symbol })`.
