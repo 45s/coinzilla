@@ -14,6 +14,7 @@ function serializeQueryParams({ queryParams }) {
     throw new TypeError("Bitunix REST signature queryParams must be an object")
   }
   return Object.keys(queryParams)
+    .filter((key) => queryParams[key] !== undefined && queryParams[key] !== null)
     .sort()
     .map((key) => `${key}${String(queryParams[key])}`)
     .join("")
