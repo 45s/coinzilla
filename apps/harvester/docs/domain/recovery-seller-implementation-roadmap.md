@@ -270,8 +270,8 @@ Never fabricate BUY fills or seed Portfolio from unverified wallet snapshots.
 **Deliverable:** deterministic policy functions producing explicit decisions/order intents from validated domain facts. RS-3 must not submit orders, call a broker, mutate Portfolio/accounting, or register runtime configuration.
 
 **Implemented pure policy in merged PRs #1325, #1379 and #1127:**
+
 - a global fail-closed decision primitive: any missing, contradictory, unexpected, or unmodeled condition produces a stable BLOCK/STOP decision and preserves accounting/reservations; STOP blocks additional BUY spending only, while an otherwise-valid first recovery SELL remains eligible under the one-SELL-per-cycle and independent SELL safety gates; existing orders continue through reconciliation and exact-once accounting; only an authorized administrator may resolve STOP after cause-fixed authoritative reconciliation, verified accounting/reservations and durable acknowledgement; no automatic clear or self-resume;
-- a global fail-closed decision primitive: any missing, contradictory, unexpected, or unmodeled condition produces a stable BLOCK/STOP decision, prevents all new trading actions, preserves accounting and reservations, and requires reconciliation plus operator review before any resumption;
 - recovery-tranche and eligible legacy quantity decisions from actual net fills, fixed legacy basis, verified Spot availability and shared reservations;
 - BUY planning within the RS strategy/pair investment budget, reusing only the explicitly approved Conservative-neutral cadence and fee rules;
 - mixed SELL planning whose quantity never exceeds actual net recovery inventory plus the authorized, verified, unreserved legacy slice;
@@ -466,8 +466,8 @@ Canonical fill accounting now distinguishes RS ownership, explicit CG ownership,
 - A terminal RS SELL whose mixed-SELL reconciler is missing or fails now attempts to persist the account-wide sticky STOP before pausing the affected market. The failure cannot silently degrade into a market-only pause or Conservative recovery-cycle completion.
 - Configured RS routes now require a production transition evaluator during startup configuration preflight. Missing evaluator registration aborts before \`PROCESS_STARTED\` is persisted and before broker connection.
 - Exact-head Harvester targeted tests and strict changed-file ESLint pass for these corrections. Full workspace checks are still running; no all-checks-passed claim is made.
+
 **Runtime acceptance status:** RS-4 production composition and the scoped RS-5 offline lifecycle/partial-terminal outcome/reservation/failure matrix are complete in PR #1515. `RECOVERY_SELLER_RUNTIME_ACCEPTANCE_COMPLETE` is `true`; `RS_RECOVERY_SELLER_CONFIG.enabled` is `true` by default. Restart/replay and third-asset commission valuation are deferred. STOP is investment-only under the 2026-11-24 owner decision; the operator facade still lacks the authorized evidence-backed resolution command. Keep each market's `enabled` and `tradingEnvironment` settings authoritative. Enabling RS does not start Harvester or authorize an exchange session.
-**Runtime acceptance status:** RS-4 production composition and the scoped RS-5 offline lifecycle/partial-terminal outcome/reservation/failure matrix are complete in PR #1515. `RECOVERY_SELLER_RUNTIME_ACCEPTANCE_COMPLETE` is `true`; `RS_RECOVERY_SELLER_CONFIG.enabled` is `true` by default. Restart/replay and third-asset commission valuation are deferred. STOP is terminal; CC-operator can inspect status but cannot clear, reset or resume it. Keep each market's `enabled` and `tradingEnvironment` settings authoritative. Enabling RS does not start Harvester or authorize an exchange session.
 
 ### 2026-11-20 — production runtime dispatch and shared allocation checkpoint (PR #1515)
 
