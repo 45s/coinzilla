@@ -61,6 +61,91 @@ function createResponse({ data }) {
   }
 }
 
+function applyCloseState({ currentState, afterClose, positionId, symbol }) {
+  if (afterClose !== undefined) {
+    return [...afterClose]
+  }
+  return currentState.filter((position) => {
+    if (positionId !== undefined) {
+      return position.positionId !== positionId
+    }
+    return symbol !== undefined && position.symbol !== symbol
+  })
+}
+
+function createPositionFetch({
+  requests,
+  currentState,
+  history,
+  afterClose,
+  closeError,
+  closeAcceptedOnError,
+}) {
+  return async (...args) => {
+    const [url, options] = args
+    requests.push({
+      url: String(url),
+      options,
+    })
+    const path = new URL(url).pathname
+    if (path === "/api/v1/futures/position/get_pending_positions") {
+      return createResponse({
+        data: currentState.value,
+      })
+    }
+    if (path === "/api/v1/futures/trade/flash_close_position") {
+      const body = JSON.parse(options.body)
+      if (closeError) {
+        if (closeAcceptedOnError) {
+          currentState.value = applyCloseState({
+            currentState: currentState.value,
+            afterClose,
+            positionId: body.positionId,
+          })
+        }
+        throw closeError
+      }
+      currentState.value = applyCloseState({
+        currentState: currentState.value,
+        afterClose,
+        positionId: body.positionId,
+      })
+      return createResponse({
+        data: {
+          positionId: body.positionId,
+        },
+      })
+    }
+    if (path === "/api/v1/futures/trade/close_all_position") {
+      const body = JSON.parse(options.body)
+      if (closeError) {
+        if (closeAcceptedOnError) {
+          currentState.value = applyCloseState({
+            currentState: currentState.value,
+            afterClose,
+            symbol: body.symbol,
+          })
+        }
+        throw closeError
+      }
+      currentState.value = applyCloseState({
+        currentState: currentState.value,
+        afterClose,
+        symbol: body.symbol,
+      })
+      return createResponse({
+        data: [],
+      })
+    }
+    if (path === "/api/v1/futures/position/get_history_positions") {
+      return createResponse({
+        data: history,
+      })
+    }
+    throw new Error("Unexpected Futures request: " + path)
+  }
+}
+
 function createBroker({
   current = [currentPosition],
   history = {
@@ -73,19 +158,17 @@ function createBroker({
   closeAcceptedOnError = false,
 } = {}) {
   const requests = []
-  let currentState = [...current]
-  const applyCloseState = ({ positionId, symbol }) => {
-    if (afterClose !== undefined) {
-      currentState = [...afterClose]
-      return
-    }
-    currentState = currentState.filter((position) => {
-      if (positionId !== undefined) {
-        return position.positionId !== positionId
-      }
-      return symbol !== undefined && position.symbol !== symbol
-    })
+  const currentState = {
+    value: [...current],
   }
+  const fetchFn = createPositionFetch({
+    requests,
+    currentState,
+    history,
+    afterClose,
+    closeError,
+    closeAcceptedOnError,
+  })
   const broker = new Broker({
     provider: "bitunix-futures",
     ...credentials,
@@ -93,61 +176,7 @@ function createBroker({
     providerOptions: {
       allowLivePositionMutations,
       dependencies: {
-        fetchFn: async (...args) => {
-          const [url, options] = args
-          requests.push({
-            url: String(url),
-            options,
-          })
-          const path = new URL(url).pathname
-          if (path === "/api/v1/futures/position/get_pending_positions") {
-            return createResponse({
-              data: currentState,
-            })
-          }
-          if (path === "/api/v1/futures/trade/flash_close_position") {
-            const body = JSON.parse(options.body)
-            if (closeError) {
-              if (closeAcceptedOnError) {
-                applyCloseState({
-                  positionId: body.positionId,
-                })
-              }
-              throw closeError
-            }
-            applyCloseState({
-              positionId: body.positionId,
-            })
-            return createResponse({
-              data: {
-                positionId: body.positionId,
-              },
-            })
-          }
-          if (path === "/api/v1/futures/trade/close_all_position") {
-            const body = JSON.parse(options.body)
-            if (closeError) {
-              if (closeAcceptedOnError) {
-                applyCloseState({
-                  symbol: body.symbol,
-                })
-              }
-              throw closeError
-            }
-            applyCloseState({
-              symbol: body.symbol,
-            })
-            return createResponse({
-              data: [],
-            })
-          }
-          if (path === "/api/v1/futures/position/get_history_positions") {
-            return createResponse({
-              data: history,
-            })
-          }
-          throw new Error(`Unexpected Futures request: ${path}`)
-        },
+        fetchFn,
       },
     },
   })

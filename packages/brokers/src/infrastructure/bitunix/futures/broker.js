@@ -16,6 +16,11 @@ import { adaptFuturesPendingTpSlOrders } from "./adapters/adapt-futures-pending-
 import { cancelFuturesOrder } from "./operations/cancel-futures-order.js"
 import { cancelFuturesOpenOrders } from "./operations/cancel-futures-open-orders.js"
 import { createFuturesOrder as createFuturesOrderOperation } from "./operations/create-futures-order.js"
+import {
+  closeAllFuturesPositions as closeAllFuturesPositionsOperation,
+  closeFuturesPosition as closeFuturesPositionOperation,
+  closeFuturesPositionBySide as closeFuturesPositionBySideOperation,
+} from "./operations/close-futures-position.js"
 import { modifyFuturesOrder as modifyFuturesOrderOperation } from "./operations/modify-futures-order.js"
 import { getFuturesFundingRate as getFuturesFundingRateOperation, getFuturesFundingRates as getFuturesFundingRatesOperation } from "./operations/get-futures-funding-rates.js"
 import { getFuturesFundingRateHistory as getFuturesFundingRateHistoryOperation } from "./operations/get-futures-funding-rate-history.js"
@@ -2208,6 +2213,57 @@ export class BitunixFuturesBroker {
         errors: [error],
       })
     }
+  }
+
+  async closeFuturesPosition(input = {}) {
+    if (!this.config.allowLivePositionMutations) {
+      return {
+        ...unsupportedResult({
+          operation: "closeFuturesPosition",
+          reason: "live Futures position mutations are disabled by default; set allowLivePositionMutations: true only after independent live-account authorization",
+        }),
+        mutationOutcome: "NOT_SENT",
+        positionOutcome: "NOT_SENT",
+      }
+    }
+    return closeFuturesPositionOperation({
+      broker: this,
+      input,
+    })
+  }
+
+  async closeFuturesPositionBySide(input = {}) {
+    if (!this.config.allowLivePositionMutations) {
+      return {
+        ...unsupportedResult({
+          operation: "closeFuturesPositionBySide",
+          reason: "live Futures position mutations are disabled by default; set allowLivePositionMutations: true only after independent live-account authorization",
+        }),
+        mutationOutcome: "NOT_SENT",
+        positionOutcome: "NOT_SENT",
+      }
+    }
+    return closeFuturesPositionBySideOperation({
+      broker: this,
+      input,
+    })
+  }
+
+  async closeAllFuturesPositions(input = {}) {
+    if (!this.config.allowLivePositionMutations) {
+      return {
+        ...unsupportedResult({
+          operation: "closeAllFuturesPositions",
+          reason: "live Futures position mutations are disabled by default; set allowLivePositionMutations: true only after independent live-account authorization",
+        }),
+        mutationOutcome: "NOT_SENT",
+        positionOutcome: "NOT_SENT",
+      }
+    }
+    return closeAllFuturesPositionsOperation({
+      broker: this,
+      input,
+    })
   }
 
   async createFuturesOrder(input = {}) {
