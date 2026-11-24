@@ -977,6 +977,79 @@ export class BitunixFuturesBroker {
     return this.publicWebSocketClient
   }
 
+  #createPublicSubscription({ client, channel, symbol }) {
+    const listeners = new Set()
+    const dispatch = (event) => {
+      for (const callback of listeners) {
+        callback(event)
+      }
+    }
+    client.on(channel, dispatch)
+    try {
+      client.subscribe({
+        channels: [{
+          ch: channel,
+          symbol,
+        }],
+      })
+    } catch (error) {
+      client.off(channel, dispatch)
+      throw error
+    }
+    return {
+      channel,
+      client,
+      dispatch,
+      listeners,
+    }
+  }
+
+  #createPublicUnsubscriber({ key, channel, symbol, listener }) {
+    let disposed = false
+    return async () => {
+      if (disposed) {
+        return
+      }
+      disposed = true
+      await this.#releasePublicSubscription({
+        key,
+        channel,
+        symbol,
+        listener,
+      })
+    }
+  }
+
+  async #releasePublicSubscription({ key, channel, symbol, listener }) {
+    const subscription = this.publicWebSocketSubscriptions.get(key)
+    if (!subscription) {
+      return
+    }
+    subscription.listeners.delete(listener)
+    if (subscription.listeners.size > 0) {
+      return
+    }
+    subscription.client.off(channel, subscription.dispatch)
+    this.publicWebSocketSubscriptions.delete(key)
+    try {
+      subscription.client.unsubscribe({
+        channels: [{
+          ch: channel,
+          symbol,
+        }],
+      })
+    } finally {
+      if (this.publicWebSocketSubscriptions.size === 0) {
+        try {
+          await subscription.client.disconnect()
+        } finally {
+          this.publicWebSocketClient = null
+          this.publicWebSocketConnectPromise = null
+        }
+      }
+    }
+  }
+
   async #subscribePublicChannel({ channel, symbol, listener }) {
     if (!this.connected) {
       throw new Error("Bitunix Futures broker must be connected before subscribing")
@@ -985,112 +1058,19 @@ export class BitunixFuturesBroker {
     const key = `${channel}:${symbol}`
     let subscription = this.publicWebSocketSubscriptions.get(key)
     if (!subscription) {
-      const listeners = new Set()
-      const dispatch = (event) => {
-        for (const callback of listeners) {
-          callback(event)
-        }
-      }
-      client.on(channel, dispatch)
-      try {
-        client.subscribe({
-          channels: [{
-            ch: channel,
-            symbol,
-          }],
-        })
-      } catch (error) {
-        client.off(channel, dispatch)
-        throw error
-      }
-      subscription = {
-        channel,
+      subscription = this.#createPublicSubscription({
         client,
-        dispatch,
-        listeners,
-      }
+        channel,
+        symbol,
+      })
       this.publicWebSocketSubscriptions.set(key, subscription)
     }
     subscription.listeners.add(listener)
-    let disposed = false
-    return async () => {
-      if (disposed) {
-        return
-      }
-      disposed = true
-      const current = this.publicWebSocketSubscriptions.get(key)
-      if (!current) {
-        return
-      }
-      current.listeners.delete(listener)
-      if (current.listeners.size > 0) {
-        return
-      }
-      current.client.off(channel, current.dispatch)
-      this.publicWebSocketSubscriptions.delete(key)
-      try {
-        current.client.unsubscribe({
-          channels: [{
-            ch: channel,
-            symbol,
-          }],
-        })
-      } finally {
-        if (this.publicWebSocketSubscriptions.size === 0) {
-          try {
-            await current.client.disconnect()
-          } finally {
-            this.publicWebSocketClient = null
-            this.publicWebSocketConnectPromise = null
-          }
-        }
-      }
-    }
-  }
-
-  async getBalances({ marginCoin = "USDT" } = {}) {
-    try {
-      ensure.oneOf({
-        value: marginCoin,
-        values: ["USDT"],
-        name: "marginCoin",
-        errMsg: 'Bitunix USDT Futures balance reads require marginCoin "USDT"',
-      })
-      const response = await this.restClient.request({
-        method: "GET",
-        path: "/api/v1/futures/account",
-        queryParams: {
-          marginCoin,
-        },
-      })
-      return toResult({
-        data: adaptFuturesBalances({
-          rows: response.data,
-          marginCoin,
-        }),
-      })
-    } catch (error) {
-      handleErr({
-        where: "BitunixFuturesBroker.getBalances()",
-        error,
-      })
-      return toResult({
-        errors: [error],
-      })
-    }
-  }
-
-  async getAccountSnapshot() {
-    return unsupportedResult({
-      operation: "getAccountSnapshot",
-      reason: "Futures account snapshot reads are not implemented yet.",
-    })
-  }
-
-  async getServerTime() {
-    return unsupportedResult({
-      operation: "getServerTime",
-      reason: "A documented Futures server-time endpoint has not been verified.",
+    return this.#createPublicUnsubscriber({
+      key,
+      channel,
+      symbol,
+      listener,
     })
   }
 
