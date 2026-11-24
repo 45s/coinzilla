@@ -25,7 +25,7 @@ const tpSlRow = {
   slQty: "0.01000002",
 }
 
-function createBroker({ rows = [tpSlRow] } = {}) {
+function createBroker({ rows = [tpSlRow], responseData } = {}) {
   const requests = []
   const broker = new Broker({
     provider: "bitunix-futures",
@@ -44,7 +44,7 @@ function createBroker({ rows = [tpSlRow] } = {}) {
             status: 200,
             json: async () => ({
               code: 0,
-              data: rows,
+              data: responseData ?? rows,
             }),
           }
         },
@@ -133,7 +133,10 @@ test("Bitunix Futures TP/SL history reads preserve exchange history fields and p
     triggerTime: 1_700_000_001_000,
   }
   const { broker, requests } = createBroker({
-    rows: [historyRow],
+    responseData: {
+      orderList: [historyRow],
+      total: 1,
+    },
   })
   const result = await broker.getFuturesTpSlOrderHistory({
     symbol: "BTCUSDT",
