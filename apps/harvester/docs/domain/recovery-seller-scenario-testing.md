@@ -973,7 +973,7 @@ For each applicable monetary/quantity threshold, cover:
 - One smallest meaningful exact unit below.
 - One smallest meaningful exact unit above.
 
-For exchange rules, use the real TradingRules contract and test tick size, step size, minimum/maximum price, minimum/maximum quantity and minimum/maximum notional as applicable. Assert exact rounded quantity/price and net proceeds, not only whether a plan exists.
+For exchange rules, use the real TradingRules contract and test tick size, step size, minimum/maximum price, minimum/maximum quantity and minimum/maximum notional as applicable. Assert exact rounded quantity/price and net proceeds, not only whether a plan exists. Include tiny quantities whose decimal serialization may use exponent notation, wrong symbol/base/quote metadata, and UTC timestamp/freshness plus canonical market-readiness boundaries wherever they gate an RS decision.
 
 ## 11. Scenario family matrix and required subcases
 
@@ -1013,6 +1013,7 @@ Required cases:
 1. Valid initial BUY from an empty recovery allocation.
 2. BUY suppression for invalid authorization, legacy basis, market readiness, account snapshot, budget or safety evidence.
 3. Exact BUY intent identity, market, side, order type, price, quantity, quote commitment and reason/disposition.
+4. BUY fill ownership dispatches to RS accounting and never to CG accounting.
 4. Full BUY fill updates shared Portfolio and correct RS Position exactly once; partial BUY updates only confirmed execution and leaves the unfilled quote commitment reserved.
 5. Multiple fills at equal and different prices produce exact accumulated cost, net base and execution VWAP; multiple BUY tranches do not rewrite legacy basis.
 6. Base-asset fee reduces net acquired base.
@@ -1096,8 +1097,10 @@ Required cases:
 7. Reservation releases only after successful required accounting commit.
 8. CANCELED/REJECTED/EXPIRED including partial execution leaves the cycle unresolved and follows the approved terminal STOP contract; no replacement SELL or next BUY is created. The source/spec STOP discrepancy remains blocked.
 9. Unknown, incomplete, conflicting or duplicate terminal facts cannot close twice or release twice.
-10. New cycle only after approved closure.
-11. Legacy exhaustion permits recovery-only behavior only as explicitly specified.
+10. Duplicate completion request/event is idempotent; stale fills/reports from a completed cycle cannot affect the next cycle.
+11. SELL acknowledgement preserves the original canonical order identity and reservation.
+12. New cycle only after approved closure.
+13. Legacy exhaustion permits recovery-only behavior only as explicitly specified.
 
 Core source ownership: cycle state, lifecycle decision, accounting workflow, order submitter, order callbacks, reservation and terminal reconciliation.
 
@@ -1122,6 +1125,9 @@ Required cases:
 13. Durable barrier and reservation retention/release are verified at application layer.
 14. Confirmed fills are accounted even if post-fill profitability fails.
 15. Shared Portfolio totals reconcile to the sum of strategy-owned allocations plus correctly classified unallocated inventory; no synthetic custody is created.
+16. Streamed RS SELL fills are staged under RS ownership and are not applied as standalone CG fills.
+17. Terminal mixed-SELL reconciliation receives the complete canonical REST/stream fill history.
+18. Atomic accounting failure prevents registry publication and cycle closure.
 
 Core source ownership: mixed SELL allocation/accounting/reconciliation, Portfolio, accounting workflow, record-reconciled use case, persistence boundary.
 
@@ -1144,6 +1150,8 @@ Required cases:
 11. Existing order reconciliation and confirmed fills continue under STOP.
 12. Durable submission intent precedes broker submission; durable outcome is recorded before local acknowledgement is considered complete.
 13. Reservation creation/release occurs at the correct workflow boundary.
+14. Durable outcome failure after external submission preserves uncertainty and blocks duplicate submission.
+15. Unknown submission followed by active, terminal, not-found or failed lookup has exact expected reservation and broker-call behavior.
 
 Core source ownership: order submitter, lifecycle decision, order callbacks, accounting workflow, order registry and persistence.
 
@@ -1166,6 +1174,9 @@ Required cases:
 11. Same-symbol market-data subscription deduplication does not merge strategy ownership.
 12. One strategy's pause/disable/STOP does not silently change another strategy's policy; account-wide safety reservations remain authoritative.
 13. External/manual order isolation remains intact while multiple strategies are active.
+14. The shared serialized transition queue orders CG/RS decisions, submissions and fill transitions.
+15. Bootstrap routes RS-only and concurrent CG/RS strategies by explicit strategy ownership and environment selectors.
+16. Runtime configuration does not enable a deferred operational session or bypass per-market environment filtering.
 
 Core source ownership: shared Portfolio, account snapshot/commitment allocator, Trading Engine serialization, RS/CG ownership and action authorization.
 
@@ -1187,6 +1198,8 @@ Potential cases after owner resolution:
 10. Missing account snapshot, stale market data, invalid market metadata, missing filters or invalid precision blocks new actions.
 11. Durable intent failure prevents broker submission when required; durable outcome failure preserves uncertainty and prevents blind retry.
 12. Operator visibility remains read-only unless the owner explicitly changes the contract.
+13. Invalid BUY/SELL intent is never submitted; invalid fill identity cannot mutate Portfolio, allocations, reservations or completion state.
+14. Failure after external submission but before local acknowledgement retains canonical identity for reconciliation and blocks duplicate submission.
 
 **Do not implement this family as if its contract were settled.** The specification says terminal STOP/no reset, while current source contains `resolveRecoverySellerStopState` and `resolveRecoverySellerStop`; the operator facade exposes read-only status. Record and wait for owner resolution. The existence of a source helper is not approval to expose it.
 
@@ -1202,6 +1215,8 @@ This family is a disposition register, not permission to invent functionality.
 - Automatic STOP clear/reset/unpause/resume is not permitted under the current contract.
 - Separate final-residual liquidation without a new BUY remains unresolved.
 - Runtime authorization revocation/expiry remains deferred under the approved FITDIB boundary.
+- Restart/replay remains unsupported at each interruption point: after durable intent, after broker acceptance, after partial fill, during terminal reconciliation, after projection commit but before registry publication, and after STOP.
+- Any behavior without an explicit canonical decision remains BLOCKED rather than inferred.
 - A future owner-approved issue must define the contract, source of truth, replay semantics and acceptance criteria before implementation scenarios are added.
 
 ## 12. Adversarial sequence and failure matrix
@@ -1221,6 +1236,7 @@ Every relevant family must consider these dimensions. Do not blindly multiply ev
 | Concurrency | Same market, different market, same base asset, shared quote, simultaneous CG/RS, duplicate evaluator invocation |
 | Market rules | Tick, step, min/max price, min/max quantity, min/max notional, missing metadata |
 | Safety | STOP clear/stopped, market pause, reconciliation pending, stale snapshot, unknown external order |
+| Market identity/readiness | Correct/wrong symbol, base/quote, market metadata, UTC timestamp/freshness and environment selection |
 
 ### 12.1 Required failure injection points
 
@@ -1238,6 +1254,7 @@ For APPLICATION scenarios, inject deterministic failure at named boundaries:
 10. Atomic commit failure.
 11. Reservation release failure.
 12. Terminal outcome persistence failure.
+13. After accounting commit but before order-registry publication/cycle closure.
 
 For every injected failure, assert the entire relevant before/after state: Portfolio/Positions, applied Fill IDs, legacy state, OrderRegistry, cycle state, order identity, reservation, STOP, persistence log and broker call log.
 
