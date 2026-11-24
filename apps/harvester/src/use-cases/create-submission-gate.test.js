@@ -126,6 +126,7 @@ test("blocks an ordinary SELL while Conservative shutdown permits recovery SELL 
 
 
 const CONSERVATIVE_MARKET_ID = "binance:spot:DOGEUSDT"
+const ACTIVE_RECOVERY_SELL_STATUSES = new Set(["PENDING", "OPEN", "PARTIALLY_FILLED", "UNKNOWN"])
 const CONSERVATIVE_POSITION_ID = JSON.stringify([
   CONSERVATIVE_MARKET_ID,
   StrategyId.COIN_GRABBER,
@@ -149,7 +150,8 @@ function createActiveRecoverySellDependencies({
     status,
   }
   dependencies.state.registry = {
-    getActiveOrders: ({ marketId } = {}) => marketId === CONSERVATIVE_MARKET_ID
+    getActiveOrders: ({ marketId } = {}) => marketId === CONSERVATIVE_MARKET_ID &&
+      ACTIVE_RECOVERY_SELL_STATUSES.has(status)
       ? [activeOrder]
       : [],
     getOwnership: ({ clientOrderId: requestedClientOrderId } = {}) =>
@@ -233,4 +235,20 @@ test("does not treat a Recovery Seller order as a Conservative Position reservat
   assert.deepEqual(result, {
     allowed: true,
   }, "The Conservative admission guard must not block an order owned by the separate Recovery Seller strategy.")
+})
+
+
+test("releases the Conservative recovery SELL reservation after a terminal order transition", () => {
+  const { dependencies } = createActiveRecoverySellDependencies({
+    status: "CANCELED",
+  })
+  const gate = createSubmissionGate(dependencies)
+  const result = gate({
+    order: createRecoverySellCandidate(),
+    purpose: "RECOVERY_SELL",
+  })
+
+  assert.deepEqual(result, {
+    allowed: true,
+  }, "A canonical terminal SELL must release the Position reservation for a later recovery intent.")
 })

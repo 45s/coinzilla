@@ -1,3 +1,5 @@
+import { createPositionId } from "../domain/portfolio/position.js"
+import { StrategyId } from "../domain/strategies/strategy-ids.js"
 import { compareDecimal } from "@coinzilla/utils"
 import {
   createVolatilityProtectionState,
@@ -67,6 +69,49 @@ function getOpenOrderSubmissionBlocker({ symbol, hasBlockingOpenOrdersForSymbol 
   return null
 }
 
+function getConservativeRecoverySellReservationBlocker({
+  symbol,
+  order,
+  purpose,
+  state,
+} = {}) {
+  const registry = state?.registry
+  if (order.side !== "SELL" || purpose !== "RECOVERY_SELL" ||
+      typeof registry?.getActiveOrders !== "function" ||
+      typeof registry.getOwnership !== "function") {
+    return null
+  }
+  const positionId = createPositionId({
+    marketId: order.market.id,
+    strategyId: StrategyId.COIN_GRABBER,
+  })
+  const activeOrder = registry.getActiveOrders({
+    marketId: order.market.id,
+  }).find((candidate) => {
+    if (candidate.side !== "SELL" || candidate.clientOrderId === order.clientOrderId) {
+      return false
+    }
+    const ownership = registry.getOwnership({
+      clientOrderId: candidate.clientOrderId,
+      brokerOrderId: candidate.brokerOrderId,
+      marketId: candidate.market.id,
+    })
+    return ownership?.strategyId === StrategyId.COIN_GRABBER &&
+      ownership.positionId === positionId
+  })
+  if (!activeOrder) {
+    return null
+  }
+  return defer({
+    symbol,
+    reason: "RECOVERY_SELL_ALREADY_ACTIVE",
+    details: {
+      existingClientOrderId: activeOrder.clientOrderId,
+      existingStatus: activeOrder.status,
+    },
+  })
+}
+
 function getTradingReadinessSubmissionBlocker({
   symbol,
   marketPrice,
@@ -102,6 +147,7 @@ function getSubmissionStateBlocker(context = {}) {
   return getMarketPauseSubmissionBlocker(context) ??
     getOperatorPauseSubmissionBlocker(context) ??
     getOpenOrderSubmissionBlocker(context) ??
+    getConservativeRecoverySellReservationBlocker(context) ??
     getTradingReadinessSubmissionBlocker(context)
 }
 

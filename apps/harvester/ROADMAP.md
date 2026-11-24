@@ -1,5 +1,14 @@
 # Harvester Roadmap
 
+## P0 Conservative recovery SELL idempotency — issue #1827
+
+- In progress in [PR #1831](https://github.com/45s/coinzilla/pull/1831) on branch `fix/harvester/1827-recovery-sell-idempotency`.
+- The final submission gate now owns a Position-scoped reservation check in addition to the strategy's active-order suppression. PENDING, OPEN, PARTIALLY_FILLED and UNKNOWN Conservative SELLs reserve the Position; the candidate is excluded from its own post-registration gate recheck; terminal registry transitions release the reservation.
+- RED was observed on exact test-only head `aec7ade8c57ba1c8ed66ce17855373919455b3fe`: the new reservation test failed because the gate returned `allowed: true` for an existing PENDING SELL. GREEN implementation and delayed-ack/repeated-event integration coverage are now included in the task branch.
+- Incident classification remains incomplete: the published recovery-facts stream contains no SELL submission outcomes. Compressed Journal, structured log and trace artifacts are hash-recorded, but the contents have not yet been decoded; do not claim any incident clientOrderId was accepted, rejected or UNKNOWN without those records or authoritative broker history.
+- [Issue #1828](https://github.com/45s/coinzilla/issues/1828) is an integration prerequisite. This branch was created from the then-current `develop`; after #1828 merges, merge the updated `develop` into this branch (do not rewrite history), resolve only genuine conflicts, and rerun the full relevant verification on the resulting head.
+- No exchange writes, cancellations, account mutations or Harvester restarts are authorized or required.
+
 ## Conservative trading correctness and exhaustive scenario coverage — issue #1763
 
 **Objective:** prove Conservative trading calculations, accounting, lifecycle transitions and safety decisions with source-mapped deterministic evidence. This complements (does not replace) focused unit tests and existing application/replay tests. The canonical [Conservative Domain Specification](./docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md) remains the sole behavior authority; the [scenario-test guide](./docs/domain/CONSERVATIVE_DOMAIN_SCENARIO_TESTS.md) defines authoring conventions; [issue #1763](https://github.com/45s/coinzilla/issues/1763) owns the exhaustive matrix and phase-by-phase evidence.

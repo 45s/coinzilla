@@ -5,6 +5,7 @@
     "src/domain/portfolio/",
     "src/domain/strategies/conservative/",
     "src/use-cases/conservative-trading-engine.js",
+    "src/use-cases/create-submission-gate.js",
     "src/use-cases/restore-harvester-operational-state.js",
     "src/bootstrap/account/",
     "src/bootstrap/start-harvester.js",
@@ -375,10 +376,41 @@
       "sourceModules": [
         "src/domain/strategies/conservative/strategy.js",
         "src/use-cases/conservative-trading-engine.js",
+        "src/use-cases/create-submission-gate.js",
         "src/domain/strategies/conservative/state-predicates.js"
       ],
       "integrationRequired": true,
       "tests": [
+        {
+          "path": "src/use-cases/create-submission-gate.test.js",
+          "name": "blocks a second Conservative recovery SELL while its Position has an active order reservation",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/create-submission-gate.test.js",
+          "name": "allows the current PENDING recovery SELL through its post-registration gate recheck",
+          "kind": "normal"
+        },
+        {
+          "path": "src/use-cases/create-submission-gate.test.js",
+          "name": "does not treat a Recovery Seller order as a Conservative Position reservation",
+          "kind": "normal"
+        },
+        {
+          "path": "src/use-cases/create-submission-gate.test.js",
+          "name": "releases the Conservative recovery SELL reservation after a terminal order transition",
+          "kind": "normal"
+        },
+        {
+          "path": "src/use-cases/conservative-submission-durability.integration.test.js",
+          "name": "does not submit repeated recovery SELL intents for one active Conservative Position",
+          "kind": "integration"
+        },
+        {
+          "path": "src/use-cases/conservative-submission-durability.integration.test.js",
+          "name": "retains a PENDING recovery SELL reservation while its broker acknowledgement is delayed",
+          "kind": "integration"
+        },
         {
           "path": "src/use-cases/conservative-trading-engine.test.js",
           "name": "suppresses trailing BUY repricing while an actual active Position exists",
@@ -408,7 +440,8 @@
       "runtimeStatus": "active",
       "invariants": [
         "While recovery capital or an active Position exists, prohibit new/trailing BUY; recovery SELL must be submitted and reconciled first.",
-        "An unresolved order or failed recovery SELL path keeps the market paused and blocks subsequent BUY submission."
+        "An unresolved order or failed recovery SELL path keeps the market paused and blocks subsequent BUY submission.",
+        "At most one active Conservative recovery SELL may reserve a Position; PENDING, OPEN, PARTIALLY_FILLED and UNKNOWN orders hold that reservation until a canonical terminal transition."
       ]
     },
     {
