@@ -1613,6 +1613,7 @@ Implemented on the PR branch; exact current head and CI status are recorded in i
 - Account-wide position-mode and per-symbol leverage/margin-mode reads.
 - Bounded raw Futures execution-history pages preserving trade identity and fee/realized-PnL values. These are provider-specific DTOs, not canonical Fill records.
 - Single-order `cancelOrder({ symbol, orderId })` is implemented behind `allowLiveOrderMutations: true`; it preflights exactly one pending order with exchange `clientId`, sends one `stateChanging: true` request, validates per-order acknowledgement, and verifies final canonical order status. Lost acknowledgements reconcile once; no retry occurs.
+- `cancelAllOpenOrders({ symbol? })` is implemented behind the same explicit opt-in. It supports symbol-scoped or account-wide cancellation, performs pending-count preflight and final count readback, and reports unknown outcomes without retry when orders remain or acknowledgement is lost.
 - Public trade-price and one-level book-ticker subscriptions are wired into common Broker lifecycle with shared connections, multiple listeners, idempotent cleanup and exact decimal values. Private balance/position/order/TP-SL observations wait for login acknowledgement. Bounded reconnect reauthenticates and resubscribes; it always leaves recovery required because the protocol has no replay cursor/sequence and complete REST reconciliation is unproven.
 
 **Verified protocol constraints / unresolved blockers:**
@@ -1629,7 +1630,7 @@ Implemented on the PR branch; exact current head and CI status are recorded in i
 - [ ] Re-run exact-head required CI after the latest documentation updates. The preceding code head passed Brokers unit tests/coverage, strict changed-file ESLint, actionlint, Dependency Audit and Harvester Targeted Tests; workspace Repository Quality failed only on trailing whitespace in the new audit document, which has been corrected.
 - [x] Public trade/book-ticker and private balance/position/order/TP-SL observations are integrated into Broker lifecycle with cleanup and bounded reconnect; private observations remain non-authoritative and recovery-required.
 - [x] Implement one-order cancellation with explicit opt-in, pending-order preflight, `clientId` reconciliation, final-state readback and no blind retries.
-- [ ] Implement provider-specific create/modify, cancel-all, close-position and TP/SL mutations with explicit Futures fields, caller client IDs, account-scoped exclusion, mutation outcome classification and final-state readback.
+- [ ] Implement provider-specific create/modify, close-position and TP/SL mutations with explicit Futures fields, caller client IDs, account-scoped exclusion, mutation outcome classification and final-state readback.
 - [ ] Implement position-mode/margin-mode/leverage and margin-adjustment writes with explicit preconditions, account-mutation opt-in and post-write verification.
 - [ ] Resolve fee-asset semantics and execution-history completeness before canonical Fill support.
 - [ ] Resolve account-wide open-order projection and timestamped account snapshot/server-time semantics; keep unsupported/unknown capability states explicit where the common contract cannot be met.
@@ -1647,13 +1648,13 @@ No live Futures mutation or exchange request has been performed by the implement
 - Low-level WebSocket reconnect is bounded, reauthenticates and resubscribes private channels, detects heartbeat loss, and recognizes the official `op: "ping"` / `pong` response envelope. Reconnect never implies recovery.
 - REST requests are dispatched at a conservative 10 requests/second per client, with concurrency-safe slot reservation at fetch invocation and deterministic fake-clock tests.
 - Restored common `getBalances()` using exact USDT free/locked balances; bonus is excluded. `getAccountSnapshot()` and `getServerTime()` remain explicitly unsupported.
-- Capability declarations distinguish supported public market streams, raw private observations and opt-in single-order cancellation from unsupported candle/cancel-all/create/modify/close/TP-SL/account-setting mutations and unknown recovery/completeness guarantees.
+- Capability declarations distinguish supported public market streams, raw private observations and opt-in single-order cancellation from unsupported candle/create/modify/close/TP-SL/account-setting mutations and unknown recovery/completeness guarantees.
 
 **Still required before production use:**
 
 - [ ] Re-run exact-head required CI after the latest documentation updates; preceding code checks are recorded above.
 - [x] Single-order cancellation is implemented behind explicit opt-in with pending-order preflight, per-order acknowledgement parsing, client-ID final-state readback and no blind retry.
-- [ ] Implement safe create/modify/cancel-all/close/TP-SL mutation lifecycle with account-scoped exclusion, explicit Futures semantics, caller client IDs, final-state readback and unknown-outcome reconciliation. No live mutation is permitted during implementation.
+- [ ] Implement safe create/modify/close/TP-SL mutation lifecycle with account-scoped exclusion, explicit Futures semantics, caller client IDs, final-state readback and unknown-outcome reconciliation. No live mutation is permitted during implementation.
 - [ ] Implement position-mode/margin-mode/leverage and margin adjustment with explicit preconditions and post-write verification.
 - [ ] Resolve canonical Fill fee-asset and history-completeness semantics.
 - [ ] Provide defensible account-state recovery despite missing WebSocket replay/sequence guarantees, or explicitly keep recovery-dependent capabilities unavailable.
