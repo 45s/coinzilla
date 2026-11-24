@@ -2176,3 +2176,9 @@ The detailed evidence, implementation commits, CI state and remaining unknowns a
 
 - Next: review the remaining recovery arithmetic matrix against the canonical specification, add only evidenced missing boundary cases, and keep the issue/PR/inventory synchronized.
 - Repository Quality reported repeated blank lines in this checkpoint; the extra blank lines were removed without changing document meaning.
+
+
+### 2026-11-24 — #1763 Phase 3 follow-up
+
+- Added the over-target confirmed-proceeds boundary test: proceeds above position cost plus minimum profit clamp required proceeds to zero and return no recovery limit price.
+- Test-only change; CI validation pending in follow-up PR.
