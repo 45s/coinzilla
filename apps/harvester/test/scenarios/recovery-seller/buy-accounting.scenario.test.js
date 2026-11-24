@@ -155,13 +155,16 @@ function createOperationalStateStore() {
   const records = []
   return {
     records,
-    append: async (fact) => ({
-      ok: true,
-      data: {
-        durable: true,
-        record: records.push(fact),
-      },
-    }),
+    append: async (fact) => {
+      records.push(fact)
+      return {
+        ok: true,
+        data: {
+          durable: true,
+          record: fact,
+        },
+      }
+    },
     readAll: async () => ({
       ok: true,
       data: {
