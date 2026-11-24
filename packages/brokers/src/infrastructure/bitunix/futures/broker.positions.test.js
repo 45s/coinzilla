@@ -89,8 +89,10 @@ function createPositionFetch({
     })
     const path = new URL(url).pathname
     if (path === "/api/v1/futures/position/get_pending_positions") {
+      const requestedSymbol = new URL(url).searchParams.get("symbol")
       return createResponse({
-        data: currentState.value,
+        data: currentState.value.filter((position) =>
+          requestedSymbol === null || position.symbol === requestedSymbol),
       })
     }
     if (path === "/api/v1/futures/trade/flash_close_position") {
@@ -142,7 +144,7 @@ function createPositionFetch({
         data: history,
       })
     }
-    throw new Error("Unexpected Futures request: " + path)
+    throw new Error(`Unexpected Futures request: ${path}`)
   }
 }
 
