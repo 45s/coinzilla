@@ -245,4 +245,19 @@ describe('GitHubPullRequestsApi', () => {
     const result = await resultPromise;
     expect(result.pullRequests).toHaveLength(5);
   });
+  it('follows a next link when rel is not the final Link parameter', async () => {
+    const resultPromise = api.loadOpenPullRequests();
+    http.expectOne('https://api.github.com/repos/45s/coinzilla/pulls?state=open&per_page=100&page=1')
+      .flush([], {
+        headers: {
+          Link: '<https://api.github.com/repos/45s/coinzilla/pulls?state=open&per_page=100&page=2>; title="Next page", rel="next"',
+        },
+      });
+    await Promise.resolve();
+    const secondPage = http.expectOne('https://api.github.com/repos/45s/coinzilla/pulls?state=open&per_page=100&page=2');
+    secondPage.flush([]);
+    const result = await resultPromise;
+    expect(result.pullRequests).toEqual([]);
+  });
+
 });
