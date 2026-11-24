@@ -267,6 +267,17 @@ function createCancellationBroker({ allowLiveOrderMutations = true } = {}) {
             method: options.method,
             body: options.body,
           })
+          if (path === "/api/v1/futures/market/trading_pairs") {
+            return createFuturesResponse({
+              data: [{
+                symbol: "BTCUSDT",
+                base: "BTC",
+                quote: "USDT",
+                symbolStatus: "OPEN",
+                isApiSupported: true,
+              }],
+            })
+          }
           if (path === "/api/v1/futures/trade/get_pending_orders") {
             return createFuturesResponse({
               data: {
@@ -312,6 +323,7 @@ function createCancellationBroker({ allowLiveOrderMutations = true } = {}) {
 test("Bitunix Futures cancelOrder is one-shot and confirms the final canceled order state", async () => {
   const { broker, requests } = createCancellationBroker()
   await broker.connect()
+  await broker.getExchangeMarkets()
 
   const result = await broker.cancelOrder({
     symbol: "BTCUSDT",
@@ -323,11 +335,12 @@ test("Bitunix Futures cancelOrder is one-shot and confirms the final canceled or
   assert.equal(result.cancellationOutcome, "CONFIRMED")
   assert.equal(result.data.status, "CANCELED")
   assert.deepEqual(requests.map(({ path, method }) => [path, method]), [
+    ["/api/v1/futures/market/trading_pairs", "GET"],
     ["/api/v1/futures/trade/get_pending_orders", "GET"],
     ["/api/v1/futures/trade/cancel_orders", "POST"],
     ["/api/v1/futures/trade/get_order_detail", "GET"],
   ])
-  const [, cancelRequest] = requests
+  const [, , cancelRequest] = requests
   assert.deepEqual(JSON.parse(cancelRequest.body), {
     symbol: "BTCUSDT",
     orderList: [{
