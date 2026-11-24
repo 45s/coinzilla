@@ -68,6 +68,8 @@ function makeBuyCase({
   status = "TEST-MAPPED",
   blocker,
   subcases,
+  layer = "APPLICATION",
+  stepType = "apply-recovery-buy-scenario",
 }) {
   const title = `${id}: ${name}`
   const mappings = createBuyCaseMappings({
@@ -87,7 +89,7 @@ function makeBuyCase({
       "apps/harvester/docs/domain/recovery-seller-domain-specification.md#6-buy-tranche-accumulation-and-eligibility",
       "issue-1780: RS-002 BUY accounting",
     ],
-    layer: "APPLICATION",
+    layer,
     configFields: [
       "RS_PAIR.orderQuantity",
       "RS_PAIR.investment",
@@ -106,7 +108,7 @@ function makeBuyCase({
     },
     given: { input },
     when: [{
-      type: "apply-recovery-buy-scenario",
+      type: stepType,
       inputKey: "input",
       saveAs: "actual",
     }],
@@ -160,350 +162,84 @@ export const recoverySellerBuyAccountingScenarios = Object.freeze([
     },
     rules: ["RS_BUY_CONFIRMED_FILL_ONLY"],
   }),
-  blockedCase({
+  makeBuyCase({
     id: "RS-002-002",
-    name: "BUY eligibility fails closed when authorization, readiness, snapshot, budget or safety evidence is invalid",
-    reason: "The current scenario runner has no composed BUY evaluator/action-authorizer boundary that accepts the complete authorization, market-readiness, account-snapshot and strategy-budget inputs as one real application decision.",
-    unblockCondition: "Add an offline application scenario around the production BUY evaluator and shared action authorizer; assert each missing/invalid evidence gate and zero broker submissions without changing production policy.",
-  }),
-  blockedCase({
-    id: "RS-002-003",
-    name: "the submitted BUY intent preserves exact identity, market, side, type, price, quantity, commitment and reason",
-    reason: "The production BUY submission path is not yet exposed as one scenario-runner operation with an observable intent and broker-call boundary.",
-    unblockCondition: "Add a deterministic offline application fixture around the real BUY evaluator, intent builder, shared authorizer and submitter; assert the complete canonical intent and exact broker-call count.",
-  }),
-  makeBuyCase({
-    id: "RS-002-005",
-    name: "a confirmed BUY Fill is attributed to the registered RS Position and never to CG",
+    name: "BUY policy blocks known readiness failures and latches STOP for missing or orphaned evidence",
+    layer: "DOMAIN",
+    stepType: "evaluate-recovery-buy-policy-scenario",
     input: {
-      fills: [{
-        tradeId: "rs-buy-owner-1",
-        quantity: "5.01",
-        quoteQuantity: "10.02",
-      }],
-      assertStrategyOwnership: true,
-    },
-    expected: {
-      appliedFillIds: 1,
-      position: {
-        quantity: "5.01",
-        spent: "10.02",
-      },
-      positionStrategyId: "RS_recoverySeller",
-      executionQuantity: "5.01",
-      executionVwap: "2",
-    },
-    rules: ["RS_BUY_CONFIRMED_FILL_ONLY", "RS_STRATEGY_OWNERSHIP_ISOLATION"],
-  }),
-  makeBuyCase({
-    id: "RS-002-006",
-    name: "a full BUY Fill updates the shared Portfolio and RS Position exactly once",
-    input: {
-      fills: [{
-        tradeId: "rs-buy-full-1",
-        quantity: "5.01",
-        quoteQuantity: "10.02",
-      }],
-    },
-    expected: {
-      appliedFillIds: 1,
-      position: {
-        quantity: "5.01",
-        spent: "10.02",
-      },
-      executionQuantity: "5.01",
-      executionVwap: "2",
-    },
-    rules: ["RS_BUY_CONFIRMED_FILL_ONLY", "RS_BUY_ACTUAL_QUOTE_COST"],
-  }),
-  makeBuyCase({
-    id: "RS-002-007",
-    name: "a partial BUY Fill records only executed quantity and leaves the remainder unfilled",
-    input: {
-      fills: [{
-        tradeId: "rs-buy-partial-1",
-        quantity: "2.5",
-        quoteQuantity: "5",
-      }],
-    },
-    expected: {
-      appliedFillIds: 1,
-      position: {
-        quantity: "2.5",
-        spent: "5",
-      },
-      executionQuantity: "2.5",
-      executionVwap: "2",
-    },
-    rules: ["RS_BUY_CONFIRMED_FILL_ONLY", "RS_BUY_ACTUAL_QUOTE_COST"],
-  }),
-  makeBuyCase({
-    id: "RS-002-008",
-    name: "multiple BUY fills at different prices accumulate exact cost, net base and execution VWAP",
-    input: {
-      fills: [
-        {
-          tradeId: "rs-buy-multiple-1",
-          quantity: "2.5",
-          quoteQuantity: "5",
-          price: "2",
-        },
-        {
-          tradeId: "rs-buy-multiple-2",
-          quantity: "2.5",
-          quoteQuantity: "10",
-          price: "4",
-        },
+      cases: [
+        { id: "operator-stopped", overrides: { strategyStopped: true } },
+        { id: "market-paused", overrides: { marketPaused: true } },
+        { id: "reconciliation-incomplete", overrides: { reconciliationComplete: false } },
+        { id: "missing-readiness", overrides: { reconciliationComplete: undefined } },
+        { id: "orphaned-commitment", overrides: { pendingBuyCommitment: "5" } },
       ],
     },
     expected: {
-      appliedFillIds: 2,
-      position: {
-        quantity: "5",
-        spent: "15",
-      },
-      executionQuantity: "5",
-      executionVwap: "3",
-    },
-    rules: ["RS_BUY_CONFIRMED_FILL_ONLY", "RS_BUY_ACTUAL_QUOTE_COST"],
-  }),
-  makeBuyCase({
-    id: "RS-002-009",
-    name: "a BUY base-asset commission reduces acquired net base",
-    input: {
-      fills: [{
-        tradeId: "rs-buy-base-fee-1",
-        quantity: "2.5",
-        quoteQuantity: "5",
-        baseCommission: "0.01",
-      }],
-    },
-    expected: {
-      appliedFillIds: 1,
-      position: {
-        quantity: "2.49",
-        spent: "5",
-      },
-      executionQuantity: "2.5",
-      executionVwap: "2",
-    },
-    rules: ["RS_BUY_NET_BASE_AFTER_FEES"],
-  }),
-  makeBuyCase({
-    id: "RS-002-010",
-    name: "a BUY quote-asset commission increases actual quote cost",
-    input: {
-      fills: [{
-        tradeId: "rs-buy-quote-fee-1",
-        quantity: "2.5",
-        quoteQuantity: "5",
-        quoteCommission: "0.005",
-      }],
-    },
-    expected: {
-      appliedFillIds: 1,
-      position: {
-        quantity: "2.5",
-        spent: "5.005",
-      },
-      executionQuantity: "2.5",
-      executionVwap: "2",
-    },
-    rules: ["RS_BUY_ACTUAL_QUOTE_COST"],
-  }),
-  makeBuyCase({
-    id: "RS-002-011",
-    name: "zero commission and multiple supported base and quote fee records are accounted exactly",
-    input: {
-      fills: [
-        {
-          tradeId: "rs-buy-zero-fee-1",
-          quantity: "1",
-          quoteQuantity: "2",
-        },
-        {
-          tradeId: "rs-buy-multiple-fees-1",
-          quantity: "2.5",
-          quoteQuantity: "5",
-          baseCommissions: ["0.01", "0.005"],
-          quoteCommissions: ["0.005", "0.002"],
-        },
+      cases: [
+        { id: "operator-stopped", outcome: "BLOCK", reasonCode: "STRATEGY_STOPPED", action: null, stopStatus: "CLEAR", orderIdentity: null },
+        { id: "market-paused", outcome: "BLOCK", reasonCode: "MARKET_PAUSED", action: null, stopStatus: "CLEAR", orderIdentity: null },
+        { id: "reconciliation-incomplete", outcome: "BLOCK", reasonCode: "RECONCILIATION_INCOMPLETE", action: null, stopStatus: "CLEAR", orderIdentity: null },
+        { id: "missing-readiness", outcome: "BLOCK", reasonCode: "UNEXPECTED_OR_UNMODELED_CONDITION", action: null, stopStatus: "STOPPED", orderIdentity: null },
+        { id: "orphaned-commitment", outcome: "BLOCK", reasonCode: "UNEXPECTED_OR_UNMODELED_CONDITION", action: null, stopStatus: "STOPPED", orderIdentity: null },
       ],
     },
-    expected: {
-      appliedFillIds: 2,
-      position: {
-        quantity: "3.485",
-        spent: "7.007",
-      },
-      executionQuantity: "3.5",
-      executionVwap: "2",
-    },
-    rules: [
-      "RS_BUY_NET_BASE_AFTER_FEES",
-      "RS_BUY_ACTUAL_QUOTE_COST",
-    ],
-  }),
-  makeBuyCase({
-    id: "RS-002-012",
-    name: "an unvalued third-asset BUY commission fails closed and is never treated as zero",
-    input: {
-      fills: [{
-        tradeId: "rs-buy-unvalued-fee-1",
-        quantity: "2.5",
-        quoteQuantity: "5",
-        thirdAssetCommission: "0.01",
-      }],
-    },
-    expected: {
-      appliedFillIds: 0,
-      position: null,
-      executionQuantity: null,
-      executionVwap: null,
-      results: [{
-        ok: false,
-        applied: false,
-      }],
-    },
-    rules: ["RS_BUY_ACTUAL_QUOTE_COST"],
+    rules: ["RS_BUY_ELIGIBILITY", "RS_UNKNOWN_OUTCOME_NO_RETRY"],
     status: "PARTIAL",
     subcases: [
       {
-        id: "RS-002-012-A",
-        description: "missing third-asset quote valuation fails closed",
+        id: "RS-002-002-A",
+        description: "readiness, missing-evidence and orphaned-commitment gates",
         status: "TEST-MAPPED",
         test: {
           file: testFile,
-          title: "RS-002-012: an unvalued third-asset BUY commission fails closed and is never treated as zero",
+          title: "RS-002-002: BUY policy blocks known readiness failures and latches STOP for missing or orphaned evidence",
         },
         evidence: null,
       },
       {
-        id: "RS-002-012-B",
-        description: "successful third-asset valuation is blocked until an authoritative execution-time source is approved",
+        id: "RS-002-002-B",
+        description: "authorization, legacy-basis and authoritative account-snapshot gates",
         status: "BLOCKED",
         test: null,
         blocker: {
-          reason: "No authoritative execution-time quote-value source is approved for third-asset commissions.",
-          unblockCondition: "Approve a source with asset identity, quote asset, rate/value and freshness semantics, then add a successful valuation scenario.",
+          reason: "The BUY policy evaluator does not own the operator legacy-basis or account-snapshot contract; the scenario runner has not yet composed the real authorization and account-snapshot application boundary.",
+          unblockCondition: "Add a composed application scenario through the real legacy authorization/custody context and shared action authorizer, proving missing/invalid basis and missing/stale account snapshots produce zero BUY submissions.",
         },
         evidence: null,
       },
     ],
   }),
   makeBuyCase({
-    id: "RS-002-013",
-    name: "an identical canonical BUY Fill replay is an exact no-op",
+    id: "RS-002-003",
+    name: "the BUY policy produces the exact canonical initial BUY intent",
+    layer: "DOMAIN",
+    stepType: "evaluate-recovery-buy-policy-scenario",
     input: {
-      fills: [{
-        tradeId: "rs-buy-duplicate-1",
-        quantity: "2.5",
-        quoteQuantity: "5",
-      }],
-      replayFirstFill: true,
+      cases: [{ id: "initial-intent", overrides: {} }],
     },
     expected: {
-      appliedFillIds: 1,
-      position: {
-        quantity: "2.5",
-        spent: "5",
-      },
-      executionQuantity: "2.5",
-      executionVwap: "2",
-      replay: {
-        ok: true,
-        applied: false,
-        duplicate: true,
-      },
-    },
-    rules: ["RS_CANONICAL_FILL_EXACT_ONCE"],
-  }),
-  makeBuyCase({
-    id: "RS-002-014",
-    name: "the same canonical Fill identity with changed execution facts is rejected atomically",
-    input: {
-      fills: [{
-        tradeId: "rs-buy-conflict-1",
-        quantity: "2.5",
-        quoteQuantity: "5",
-      }],
-      conflictFirstFill: true,
-    },
-    expected: {
-      appliedFillIds: 1,
-      position: {
-        quantity: "2.5",
-        spent: "5",
-      },
-      executionQuantity: "2.5",
-      executionVwap: "2",
-      conflict: {
-        ok: false,
-        applied: false,
-      },
-    },
-    rules: ["RS_CANONICAL_FILL_EXACT_ONCE"],
-    invariants: ["RS_CONFLICT_REJECTION"],
-  }),
-  makeBuyCase({
-    id: "RS-002-015",
-    name: "wrong broker identity and external unowned BUY fills cannot mutate the RS Position",
-    input: {
-      owned: false,
-      fills: [
-        {
-          tradeId: "rs-buy-wrong-broker-1",
-          quantity: "1",
-          quoteQuantity: "2",
-          brokerOrderId: "unowned-broker-order",
+      cases: [{
+        id: "initial-intent",
+        outcome: "SUBMIT",
+        reasonCode: "BUY_TRANCHE_ELIGIBLE",
+        action: {
+          side: "BUY",
+          purpose: "RECOVERY_BUY",
+          cycleId: "rs-policy-cycle",
+          positionId: "rs-policy-position",
+          type: "LIMIT_MAKER",
+          price: "1.999",
+          quantity: "5",
+          notional: "9.995",
+          reason: "INITIAL_BUY",
         },
-        {
-          tradeId: "rs-buy-unowned-1",
-          quantity: "1",
-          quoteQuantity: "2",
-        },
-      ],
-    },
-    expected: {
-      appliedFillIds: 0,
-      position: null,
-      executionQuantity: null,
-      executionVwap: null,
-      results: [
-        {
-          ok: false,
-          applied: false,
-        },
-        {
-          ok: false,
-          applied: false,
-        },
-      ],
-    },
-    rules: ["RS_STRATEGY_OWNERSHIP_ISOLATION"],
-  }),
-  makeBuyCase({
-    id: "RS-002-016",
-    name: "a base commission exceeding executed quantity fails without negative recovery inventory",
-    input: {
-      fills: [{
-        tradeId: "rs-buy-invalid-base-fee-1",
-        quantity: "2.5",
-        quoteQuantity: "5",
-        baseCommission: "3",
+        stopStatus: "CLEAR",
+        orderIdentity: null,
       }],
     },
-    expected: {
-      appliedFillIds: 0,
-      position: null,
-      executionQuantity: null,
-      executionVwap: null,
-      results: [{
-        ok: false,
-        applied: false,
-      }],
-    },
-    rules: ["RS_BUY_NET_BASE_AFTER_FEES"],
+    rules: ["RS_BUY_ELIGIBILITY"],
   }),
   blockedCase({
     id: "RS-002-017",
@@ -517,17 +253,151 @@ export const recoverySellerBuyAccountingScenarios = Object.freeze([
     reason: "The current new scenario runner exercises accounting after canonical order registration, not the durable BUY submitter's unknown-outcome and reservation boundary.",
     unblockCondition: "Add an offline application scenario around the real submitter and durable intent/outcome callbacks; assert exact broker-call count, retained client identity and quote reservation until authoritative reconciliation.",
   }),
-  blockedCase({
+  makeBuyCase({
     id: "RS-002-019",
-    name: "open, partial and unknown BUY lifecycle states block another BUY",
-    reason: "The scenario runner does not yet drive the real BUY decision and action-authorizer boundary across pending/open/partial/unknown lifecycle states.",
-    unblockCondition: "Add the production transition evaluator and shared action authorizer to the application scenario harness; assert no second BUY intent or broker call while the prior BUY remains active or unresolved.",
+    name: "open and partially filled RS BUY orders suppress every additional BUY intent",
+    layer: "DOMAIN",
+    stepType: "evaluate-recovery-buy-policy-scenario",
+    input: {
+      cases: [
+        {
+          id: "open",
+          overrides: {
+            activeOrders: [{
+              market: { symbol: "ZROUSDT" },
+              side: "BUY",
+              status: "OPEN",
+              clientOrderId: "rs-buy-open",
+              brokerOrderId: "broker-rs-open",
+              ownership: {
+                strategyId: "RS_recoverySeller",
+                purpose: "RECOVERY_BUY",
+                positionId: "rs-policy-position",
+                cycleId: "rs-policy-cycle",
+              },
+            }],
+          },
+        },
+        {
+          id: "partially-filled",
+          overrides: {
+            activeOrders: [{
+              market: { symbol: "ZROUSDT" },
+              side: "BUY",
+              status: "PARTIALLY_FILLED",
+              clientOrderId: "rs-buy-partial",
+              brokerOrderId: "broker-rs-partial",
+              ownership: {
+                strategyId: "RS_recoverySeller",
+                purpose: "RECOVERY_BUY",
+                positionId: "rs-policy-position",
+                cycleId: "rs-policy-cycle",
+              },
+            }],
+          },
+        },
+      ],
+    },
+    expected: {
+      cases: [
+        {
+          id: "open",
+          outcome: "WAIT",
+          reasonCode: "WAIT_FOR_EXISTING_RS_BUY",
+          action: null,
+          stopStatus: "CLEAR",
+          orderIdentity: {
+            clientOrderId: "rs-buy-open",
+            brokerOrderId: "broker-rs-open",
+          },
+        },
+        {
+          id: "partially-filled",
+          outcome: "WAIT",
+          reasonCode: "WAIT_FOR_EXISTING_RS_BUY",
+          action: null,
+          stopStatus: "CLEAR",
+          orderIdentity: {
+            clientOrderId: "rs-buy-partial",
+            brokerOrderId: "broker-rs-partial",
+          },
+        },
+      ],
+    },
+    rules: ["RS_BUY_ELIGIBILITY", "RS_NO_DUPLICATE_BUY"],
   }),
-  blockedCase({
+  makeBuyCase({
     id: "RS-002-020",
-    name: "investment cap below, at and above the exact boundary includes committed quote once",
-    reason: "The scenario runner currently does not compose the production BUY investment-limit evaluator with snapshot-relative account commitments.",
-    unblockCondition: "Add boundary scenarios through the real BUY evaluator and shared allocator for below/equal/above investment limit, including open and partially filled quote commitments.",
+    name: "the per-pair investment limit enforces exact below, equal and above boundaries",
+    layer: "DOMAIN",
+    stepType: "evaluate-recovery-buy-policy-scenario",
+    input: {
+      cases: ["19.994", "19.995", "19.996"].map((investment, index) => ({
+        id: ["below", "equal", "above"][index],
+        overrides: {
+          pairConfig: {
+            orderQuantity: "5",
+            priceStepPercent: "0.05",
+            investment,
+          },
+          recoveryPosition: {
+            positionId: "rs-policy-position",
+            quantity: "5",
+            spent: "10",
+          },
+          lastBuyPrice: "2",
+        },
+      })),
+    },
+    expected: {
+      cases: [
+        {
+          id: "below",
+          outcome: "BLOCK",
+          reasonCode: "INVESTMENT_LIMIT_REACHED",
+          action: null,
+          stopStatus: "CLEAR",
+          orderIdentity: null,
+        },
+        {
+          id: "equal",
+          outcome: "SUBMIT",
+          reasonCode: "BUY_TRANCHE_ELIGIBLE",
+          action: {
+            side: "BUY",
+            purpose: "RECOVERY_BUY",
+            cycleId: "rs-policy-cycle",
+            positionId: "rs-policy-position",
+            type: "LIMIT_MAKER",
+            price: "1.999",
+            quantity: "5",
+            notional: "9.995",
+            reason: "NEXT_STANDING_BUY",
+          },
+          stopStatus: "CLEAR",
+          orderIdentity: null,
+        },
+        {
+          id: "above",
+          outcome: "SUBMIT",
+          reasonCode: "BUY_TRANCHE_ELIGIBLE",
+          action: {
+            side: "BUY",
+            purpose: "RECOVERY_BUY",
+            cycleId: "rs-policy-cycle",
+            positionId: "rs-policy-position",
+            type: "LIMIT_MAKER",
+            price: "1.999",
+            quantity: "5",
+            notional: "9.995",
+            reason: "NEXT_STANDING_BUY",
+          },
+          stopStatus: "CLEAR",
+          orderIdentity: null,
+        },
+      ],
+    },
+    rules: ["RS_BUY_BUDGET_LIMIT"],
   }),
   blockedCase({
     id: "RS-002-021",
