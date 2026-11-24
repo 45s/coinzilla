@@ -449,9 +449,15 @@ function createPendingOrdersQuery({ input }) {
     value: input.clientOrderId,
     name: "clientOrderId",
   })
-  if (symbol !== undefined) queryParams.symbol = symbol
-  if (orderId !== undefined) queryParams.orderId = orderId
-  if (clientId !== undefined) queryParams.clientId = clientId
+  if (symbol !== undefined) {
+    queryParams.symbol = symbol
+  }
+  if (orderId !== undefined) {
+    queryParams.orderId = orderId
+  }
+  if (clientId !== undefined) {
+    queryParams.clientId = clientId
+  }
   if (input.status !== undefined) {
     queryParams.status = ensure.oneOf({
       value: input.status,
@@ -496,9 +502,15 @@ function createTradeHistoryQuery({ input }) {
     value: input.positionId,
     name: "positionId",
   })
-  if (symbol !== undefined) queryParams.symbol = symbol
-  if (orderId !== undefined) queryParams.orderId = orderId
-  if (positionId !== undefined) queryParams.positionId = positionId
+  if (symbol !== undefined) {
+    queryParams.symbol = symbol
+  }
+  if (orderId !== undefined) {
+    queryParams.orderId = orderId
+  }
+  if (positionId !== undefined) {
+    queryParams.positionId = positionId
+  }
   if (Object.keys(queryParams).length === 0) {
     throw new TypeError("Bitunix Futures trade history requires symbol, orderId or positionId")
   }
@@ -536,8 +548,12 @@ function createPositionHistoryQuery({ input }) {
     value: input.positionId,
     name: "positionId",
   })
-  if (symbol !== undefined) queryParams.symbol = symbol
-  if (positionId !== undefined) queryParams.positionId = positionId
+  if (symbol !== undefined) {
+    queryParams.symbol = symbol
+  }
+  if (positionId !== undefined) {
+    queryParams.positionId = positionId
+  }
   if (symbol === undefined && positionId === undefined) {
     throw new TypeError("Bitunix Futures position history requires symbol or positionId")
   }
