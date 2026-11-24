@@ -655,7 +655,7 @@ The accounting workflow-to-default-evaluator defect is addressed in [PR #1815](h
 
 ### RS-004 — Recovery, legacy, and combined profitability gates are independent
 
-**Status:** PARTIAL — four new domain cases prove both cross-subsidy directions, exact-threshold acceptance and recovery-only eligibility. Three application-transition boundary cases now prove no submission one tick below recovery-dominant, legacy-dominant and tied recovery/legacy/combined plan prices, and submission at/above those targets. [PR #1819](https://github.com/45s/coinzilla/pull/1819) adds registry-driven case `RS-004-011` for all three profitability gates passing at exact recovery/combined thresholds with legacy break-even; it is TEST-MAPPED on exact head `bbd9626029df03cf6c7ad90980df0222c5c1fa4d`, not yet VERIFIED. Actual fill-commission-aware profitability and post-fill application outcomes remain incomplete.
+**Status:** PARTIAL — four new domain cases prove both cross-subsidy directions, exact-threshold acceptance and recovery-only eligibility. Three application-transition boundary cases now prove no submission one tick below recovery-dominant, legacy-dominant and tied recovery/legacy/combined plan prices, and submission at/above those targets. [PR #1819](https://github.com/45s/coinzilla/pull/1819) adds registry-driven case `RS-004-011` for all three profitability gates passing at exact recovery/combined thresholds with legacy break-even; it is TEST-MAPPED on exact head `06786f5a3c01f87b5e5d30e945ec7e8662f4b75b`. All five exact-head workflows pass, but the case is not VERIFIED until owner review/merge and merged-head evidence. Actual fill-commission-aware profitability and post-fill application outcomes remain incomplete.
 
 **Specification worked example — mixed SELL planning (no fees):**
 
@@ -682,7 +682,7 @@ At `20.00 USDT/ZRO`, recovery receives `20.00 USDT` (profit `+10.00`), legacy re
 
 **New scenario tests:** `recovery-seller-profitability.scenario.test.js`
 
-- `registry-and-runner.scenario.test.js` — `RS-004-011`: registry validation and a real-domain all-gates-pass profitability case (PR #1819; TEST-MAPPED, exact-head CI pending).
+- `registry-and-runner.scenario.test.js` — `RS-004-011`: registry validation and a real-domain all-gates-pass profitability case (PR #1819; TEST-MAPPED, exact-head CI passed; merge evidence pending).
 
 - `a profitable recovery allocation cannot subsidize a legacy loss`
 - `profitable legacy proceeds cannot subsidize a recovery loss`
