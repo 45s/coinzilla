@@ -82,7 +82,6 @@ loopback-only and read-only.
 
 The account-monitor WebSocket uses RFC 6455 7-bit, 16-bit and 64-bit payload-length encodings, measured from UTF-8 bytes. Complete JSON messages are limited to 1 MiB and each client's buffered-write queue to 2 MiB. A message above 1 MiB is rejected with close code 1009; a slow client's queue overflow uses 1013; serialization, encoding or synchronous write failures use 1011. These outcomes close and clean up only the affected socket. Snapshots are never silently truncated, and a WebSocket client failure must not terminate Harvester or interrupt trading.
 
-
 ## Operational State Store (ADR-0001)
 
 The Operational State Store is a separate Harvester-owned append-only recovery-facts ledger. It is not the SQLite history database and is not interchangeable with Journal.
