@@ -1,14 +1,7 @@
 import { Asset, Balance, Quantity } from "@coinzilla/entities"
 import { addDecimal, ensure } from "@coinzilla/utils"
 
-/**
- * Convert one Bitunix USDT Futures margin-account row into the shared Balance.
- * Order-frozen funds and position margin are both locked; bonus is not custody.
- *
- * @param {{rows: object[], marginCoin: string}} input
- * @returns {Balance[]}
- */
-export function adaptFuturesBalances({ rows, marginCoin } = {}) {
+function findMarginAccount({ rows, marginCoin }) {
   ensure.array({
     value: rows,
     name: "accountRows",
@@ -38,7 +31,10 @@ export function adaptFuturesBalances({ rows, marginCoin } = {}) {
   if (account === undefined) {
     throw new TypeError(`Bitunix Futures account response does not contain ${marginCoin} margin account`)
   }
+  return account
+}
 
+function createCanonicalBalance({ account, marginCoin }) {
   const available = ensure.nonEmptyString({
     value: account.available,
     name: "account.available",
@@ -59,7 +55,7 @@ export function adaptFuturesBalances({ rows, marginCoin } = {}) {
     left: frozen,
     right: margin,
   })
-  return [new Balance({
+  return new Balance({
     free: new Quantity({
       amount: available,
       asset,
@@ -68,5 +64,23 @@ export function adaptFuturesBalances({ rows, marginCoin } = {}) {
       amount: locked,
       asset,
     }),
+  })
+}
+
+/**
+ * Convert one Bitunix USDT Futures margin-account row into the shared Balance.
+ * Order-frozen funds and position margin are both locked; bonus is not custody.
+ *
+ * @param {{rows: object[], marginCoin: string}} input
+ * @returns {Balance[]}
+ */
+export function adaptFuturesBalances({ rows, marginCoin } = {}) {
+  const account = findMarginAccount({
+    rows,
+    marginCoin,
+  })
+  return [createCanonicalBalance({
+    account,
+    marginCoin,
   })]
 }
