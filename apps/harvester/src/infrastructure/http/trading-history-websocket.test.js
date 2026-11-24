@@ -519,7 +519,6 @@ test("contains one client's snapshot serialization failure without interrupting 
   assert.deepEqual(update.accounts[0].accountSnapshot.balances, [], "The failing client's serialization error must not corrupt the healthy client's snapshot.")
 })
 
-
 test("rejects an oversized application snapshot for its client without stopping the HTTP server", async (t) => {
   const eventBus = new EventBus()
   const balances = [...Array(12000).keys()].map((index) => ({
