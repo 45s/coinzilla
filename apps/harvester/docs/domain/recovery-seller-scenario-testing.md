@@ -356,6 +356,7 @@ Primary source paths:
 - Operator-maintained pair entries: `apps/harvester/rs-recovery-seller.js`.
 - Strategy config composition: `apps/harvester/config/strategies/rs-recovery-seller.js`.
 - Config validation/resolution: `apps/harvester/src/domain/app-config.js`.
+- Exchange-derived precision source: `apps/harvester/token-specification.json`; do not add `pricePrecision` or `quantityPrecision` to operator-maintained RS pair entries.
 
 The strategy config currently sets `enabled: true` at the audited checkpoint. The RS specification's section 15 contains a conflicting disabled-by-default statement. Do not create a default assertion or change config until the owner resolves that discrepancy. Per-pair environment eligibility remains a separate control.
 
@@ -505,10 +506,7 @@ export const recoveryOnlyProfitabilityScenario = Object.freeze({
     "apps/harvester/src/domain/strategies/recovery-seller/evaluate-sell-decision.js",
     "apps/harvester/src/domain/strategies/recovery-seller/cycle-state.js",
   ],
-  test: {
-    file: "apps/harvester/test/scenarios/recovery-seller-profitability.scenario.test.js",
-    title: "recovery-only cycle still passes its required profit gates",
-  },
+  test: null,
   status: "SPECIFIED",
   evidence: null,
 });
@@ -577,7 +575,7 @@ scenario:
   test:
     file: NOT MAPPED
     title: NOT MAPPED
-  status: PARTIAL
+  status: SPECIFIED
   evidence: null
 ~~~
 
@@ -621,8 +619,8 @@ Use namespaced IDs such as:
 - `RS_PAIR.priceStepPercent`
 - `RS_PAIR.makerPercent`
 - `RS_PAIR.takerPercent`
-- `RS_PAIR.pricePrecision`
-- `RS_PAIR.quantityPrecision`
+- `RS_MARKET.pricePrecision` (resolved runtime metadata, not an operator pair field)
+- `RS_MARKET.quantityPrecision` (resolved runtime metadata, not an operator pair field)
 
 These names describe the current config contract. Update them only after verifying current validator/config source.
 
