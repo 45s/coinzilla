@@ -209,7 +209,6 @@ The Futures provider remains **not production-ready**. The WebSocket client is c
 
 The implementation and regression tests are offline and use injected fake transports/fetchers. No LIVE Futures request or mutation was performed. No isolated Futures TESTNET endpoint has been verified. Production readiness remains blocked by mutation lifecycle/outcome reconciliation, authoritative account-state recovery, canonical Fill semantics, consumer integration, and all required exact-head CI checks.
 
-
 ### Separate pending TP/SL read endpoint
 
 The official [Get Pending TP/SL Order](https://www.bitunix.com/api-docs/futures/tp_sl/get_pending_tp_sl_order.html) endpoint is distinct from standard pending orders: `GET /api/v1/futures/tpsl/get_pending_orders`. It accepts optional symbol/position filters and one `skip`/`limit` page (maximum 100); unlike standard order history, the response is a plain array without a total count.
