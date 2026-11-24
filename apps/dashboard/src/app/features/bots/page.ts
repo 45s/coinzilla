@@ -39,6 +39,7 @@ export class BotsComponent implements OnInit, OnDestroy {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private reconnectAttempt = 0;
   private lastRevision = 0;
+  private pendingCommandSnapshotLabel: string | null = null;
   private destroyed = false;
 
   readonly socketState = signal<SocketState>('connecting');
@@ -137,7 +138,9 @@ export class BotsComponent implements OnInit, OnDestroy {
     if (message.type === 'bots.snapshot.unavailable') {
       this.loading.set(false);
       this.snapshotFreshness.set(hadSnapshot ? 'stale' : 'unavailable');
-      this.errorMessage.set('A Harvester operator read model is unavailable. The last complete snapshot is retained.');
+      this.errorMessage.set(hadSnapshot
+        ? 'A Harvester operator read model is unavailable. The last complete snapshot is retained.'
+        : 'A Harvester operator read model is unavailable. Waiting for a complete snapshot.');
       return;
     }
     this.status.set(readBotsRuntimeStatus(message.data.status.data));
@@ -147,6 +150,10 @@ export class BotsComponent implements OnInit, OnDestroy {
     this.snapshotFreshness.set('fresh');
     this.loading.set(false);
     this.errorMessage.set(null);
+    if (this.pendingCommandSnapshotLabel) {
+      this.successMessage.set(`${this.pendingCommandSnapshotLabel} state synchronized.`);
+      this.pendingCommandSnapshotLabel = null;
+    }
     this.reconnectAttempt = 0;
   }
 
@@ -197,6 +204,7 @@ export class BotsComponent implements OnInit, OnDestroy {
       this.pendingCommand.set(null);
       if (this.lastRevision === revisionBeforeCommand) {
         this.snapshotFreshness.set('stale');
+        this.pendingCommandSnapshotLabel = pending.label;
         this.successMessage.set(`${pending.label} accepted; waiting for the live snapshot.`);
       } else {
         this.successMessage.set(`${pending.label} accepted by Harvester.`);
