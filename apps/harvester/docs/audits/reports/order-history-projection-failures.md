@@ -275,7 +275,7 @@ The archived logger context reports `develop@3ecc3366f16317e84a2cdc32b7c39c79148
 4. `apps/harvester/src/application/events/lifecycle-event-dtos.js:72-91` allows all three provenance fields to be absent together; `mapOrderUpdatedData` then publishes an `order.updated` payload without them.
 5. `apps/harvester/src/infrastructure/persistence/create-order-history-observer.js:193-207` passes that payload to `createOrderHistoryRecord()`, which rejects the missing `providerInstanceId` during mapping.
 
-This is a source-proven defect path matching all three archived payloads and diagnostics. The correction in this PR resolves the post-update canonical order from the registry using the previously registered order's canonical client ID, then uses that canonical order for ownership lookup and `order.updated` DTO mapping. Strict order-history validation remains unchanged; missing provider identity is not made acceptable.
+This is a source-proven defect path matching all three archived payloads and diagnostics. The correction in this PR resolves the post-update canonical order from the registry using the previously registered order's canonical client ID, then uses that canonical order for ownership lookup and `order.updated` DTO mapping. Strict order-history validation remains unchanged; missing provider identity is not made acceptable. The first strict changed-file lint run found `prepareOrderEvent` at 63 lines / complexity 17 against limits of 60 / 15; the registry lookup and ownership resolution are now isolated in the focused `resolveUpdatedOrderHistoryContext` helper. No ESLint rule was weakened.
 
 ### Duplicate observer diagnostics
 

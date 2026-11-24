@@ -132,6 +132,19 @@ function getRegisteredOrder({ registry, order } = {}) {
   return undefined
 }
 
+function resolveUpdatedOrderHistoryContext({ registry, previousOrder, order } = {}) {
+  const canonicalClientOrderId = previousOrder?.clientOrderId ?? order.clientOrderId
+  const updatedOrder = registry.getOrder?.({
+    clientOrderId: canonicalClientOrderId,
+  }) ?? previousOrder ?? order
+  const ownership = registry.getOwnership({
+    clientOrderId: updatedOrder.clientOrderId,
+    brokerOrderId: updatedOrder.brokerOrderId,
+    marketId: updatedOrder.market.id,
+  })
+  return { order: updatedOrder, ownership }
+}
+
 async function prepareOrderEvent({ dependencies, event } = {}) {
   const { state, eventPublisher } = dependencies
   if (event?.eventType === "executionReport" && event?.brokerEvidence) {
@@ -171,13 +184,10 @@ async function prepareOrderEvent({ dependencies, event } = {}) {
   }
   state.registry = update.registry
   if (update.applied === true) {
-    const updatedRegisteredOrder = state.registry.getOrder?.({
-      clientOrderId: previousOrder?.clientOrderId ?? order.clientOrderId,
-    }) ?? previousOrder ?? order
-    const ownership = state.registry.getOwnership({
-      clientOrderId: updatedRegisteredOrder.clientOrderId,
-      brokerOrderId: updatedRegisteredOrder.brokerOrderId,
-      marketId: updatedRegisteredOrder.market.id,
+    const { order: updatedRegisteredOrder, ownership } = resolveUpdatedOrderHistoryContext({
+      registry: state.registry,
+      previousOrder,
+      order,
     })
     publishLifecycleEvent({
       eventPublisher,
