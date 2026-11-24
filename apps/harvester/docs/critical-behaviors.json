@@ -1277,6 +1277,24 @@
       }
     },
     {
+      "path": "src/use-cases/create-submission-gate.js",
+      "baseline": {
+        "lines": 90.67,
+        "branches": 92.22,
+        "functions": 100
+      },
+      "minimum": {
+        "lines": 90,
+        "branches": 90,
+        "functions": 95
+      },
+      "latestObserved": {
+        "lines": 90.67,
+        "branches": 92.22,
+        "functions": 100
+      }
+    },
+    {
       "path": "src/use-cases/collect-owned-order-snapshots.js",
       "baseline": {
         "lines": 83.9,
