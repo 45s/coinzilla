@@ -121,12 +121,18 @@ const submitterMarketMetadata = {
       {
         type: "PRICE_INCREMENT",
         status: "SUPPORTED",
-        value: new Money({ amount: "0.001", asset: quoteAsset }),
+        value: new Money({
+          amount: "0.001",
+          asset: quoteAsset,
+        }),
       },
       {
         type: "QUANTITY_INCREMENT",
         status: "SUPPORTED",
-        value: new Quantity({ amount: "0.01", asset: baseAsset }),
+        value: new Quantity({
+          amount: "0.01",
+          asset: baseAsset,
+        }),
       },
       {
         type: "MIN_QUANTITY",
@@ -136,7 +142,10 @@ const submitterMarketMetadata = {
       {
         type: "MIN_NOTIONAL",
         status: "SUPPORTED",
-        value: new Money({ amount: "5", asset: quoteAsset }),
+        value: new Money({
+          amount: "5",
+          asset: quoteAsset,
+        }),
       },
     ],
   }),
@@ -196,7 +205,10 @@ function createBudgetAuthorizer({ activeOrders }) {
     recoverySellerStopWorkflow: {
       latch: async () => {
         stopLatchCount += 1
-        return { ok: true, data: { durable: true } }
+        return {
+          ok: true,
+          data: { durable: true },
+        }
       },
     },
     getPortfolio: () => ({
@@ -330,14 +342,20 @@ async function createUnknownBuySubmitterContext() {
     recoverySellerAccountingWorkflow: workflow,
     onDurableSubmissionIntent: async (fact) => {
       durableFacts.push(fact)
-      return { ok: true, data: { durable: true } }
+      return {
+        ok: true,
+        data: { durable: true },
+      }
     },
     onDurableSubmissionOutcome: async (fact) => {
       durableFacts.push(fact)
       return { ok: true, data: { durable: true } }
     },
     onUnresolvedSubmission: async ({ order, outcome }) => {
-      unresolved.push({ order, outcome })
+      unresolved.push({
+        order,
+        outcome,
+      })
       return stopResult.data.latch({
         explanation: `RS BUY submission is unresolved: ${outcome}`,
         orderIdentity: {
@@ -368,7 +386,10 @@ function createUnknownBuyActiveOrders({ workflow }) {
 function evaluateUnknownBuyFollowup({ workflow, stopResult }) {
   return evaluateRecoverySellerBuyDecision({
     stopState: stopResult.data.getStopState(),
-    marketPrice: { symbol: "ZROUSDT", price: "2" },
+    marketPrice: {
+      symbol: "ZROUSDT",
+      price: "2",
+    },
     pairConfig: {
       orderQuantity: "5",
       priceStepPercent: "0.05",
