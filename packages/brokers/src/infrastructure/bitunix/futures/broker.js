@@ -896,6 +896,7 @@ export class BitunixFuturesBroker {
     }
     const {
       restClientFactory = (options) => new BitunixFuturesRestClient(options),
+      webSocketClientFactory = (options) => new BitunixFuturesWebSocketClient(options),
       fetchFn,
       now,
       nonceFactory,
@@ -904,14 +905,23 @@ export class BitunixFuturesBroker {
       value: restClientFactory,
       name: "restClientFactory",
     })
+    ensure.function({
+      value: webSocketClientFactory,
+      name: "webSocketClientFactory",
+    })
     this.config = config
     this.logger = logger
+    this.now = now ?? Date.now
     this.restClient = restClientFactory({
       config,
       fetchFn,
       now,
       nonceFactory,
     })
+    this.webSocketClientFactory = webSocketClientFactory
+    this.publicWebSocketClient = null
+    this.publicWebSocketConnectPromise = null
+    this.publicWebSocketSubscriptions = new Map()
     this.connected = false
     this.canonicalMarkets = new Map()
     Object.defineProperty(this, "capabilities", {
@@ -927,7 +937,107 @@ export class BitunixFuturesBroker {
   }
 
   async disconnect() {
+    const client = this.publicWebSocketClient
+    if (client) {
+      for (const subscription of this.publicWebSocketSubscriptions.values()) {
+        client.off(subscription.channel, subscription.dispatch)
+      }
+      this.publicWebSocketSubscriptions.clear()
+      try {
+        await client.disconnect()
+      } finally {
+        this.publicWebSocketClient = null
+        this.publicWebSocketConnectPromise = null
+      }
+    }
     this.connected = false
+  }
+
+  async #ensurePublicWebSocketClient() {
+    if (!this.publicWebSocketClient) {
+      this.publicWebSocketClient = this.webSocketClientFactory({
+        channelType: "public",
+        url: this.config.publicWebSocketUrl,
+        now: this.now,
+      })
+    }
+    if (this.publicWebSocketClient.state !== "open") {
+      if (!this.publicWebSocketConnectPromise) {
+        this.publicWebSocketConnectPromise = this.publicWebSocketClient.connect().finally(() => {
+          this.publicWebSocketConnectPromise = null
+        })
+      }
+      await this.publicWebSocketConnectPromise
+    }
+    return this.publicWebSocketClient
+  }
+
+  async #subscribePublicChannel({ channel, symbol, listener }) {
+    if (!this.connected) {
+      throw new Error("Bitunix Futures broker must be connected before subscribing")
+    }
+    const client = await this.#ensurePublicWebSocketClient()
+    const key = `${channel}:${symbol}`
+    let subscription = this.publicWebSocketSubscriptions.get(key)
+    if (!subscription) {
+      const listeners = new Set()
+      const dispatch = (event) => {
+        for (const callback of listeners) {
+          callback(event)
+        }
+      }
+      client.on(channel, dispatch)
+      try {
+        client.subscribe({
+          channels: [{
+            ch: channel,
+            symbol,
+          }],
+        })
+      } catch (error) {
+        client.off(channel, dispatch)
+        throw error
+      }
+      subscription = {
+        channel,
+        client,
+        dispatch,
+        listeners,
+      }
+      this.publicWebSocketSubscriptions.set(key, subscription)
+    }
+    subscription.listeners.add(listener)
+    let disposed = false
+    return async () => {
+      if (disposed) {
+        return
+      }
+      disposed = true
+      const current = this.publicWebSocketSubscriptions.get(key)
+      if (!current) {
+        return
+      }
+      current.listeners.delete(listener)
+      if (current.listeners.size > 0) {
+        return
+      }
+      current.client.off(channel, current.dispatch)
+      this.publicWebSocketSubscriptions.delete(key)
+      try {
+        current.client.unsubscribe({
+          channels: [{
+            ch: channel,
+            symbol,
+          }],
+        })
+      } finally {
+        if (this.publicWebSocketSubscriptions.size === 0) {
+          await current.client.disconnect()
+          this.publicWebSocketClient = null
+          this.publicWebSocketConnectPromise = null
+        }
+      }
+    }
   }
 
   async getBalances({ marginCoin = "USDT" } = {}) {
@@ -1512,11 +1622,40 @@ export class BitunixFuturesBroker {
     })
   }
 
-  async subscribeForPrices() {
-    return unsupportedResult({
-      operation: "subscribeForPrices",
-      reason: "Futures public WebSocket subscriptions are not implemented yet.",
-    })
+  async subscribeForPrices({ symbol, onPrice } = {}) {
+    try {
+      const normalizedSymbol = ensure.nonEmptyString({
+        value: symbol,
+        name: "symbol",
+      }).trim().toUpperCase()
+      ensure.function({
+        value: onPrice,
+        name: "onPrice",
+      })
+      const unsubscribe = await this.#subscribePublicChannel({
+        channel: "trade",
+        symbol: normalizedSymbol,
+        listener: (event) => deliverFuturesTradePrice({
+          event,
+          symbol: normalizedSymbol,
+          onPrice,
+        }),
+      })
+      return toResult({
+        data: Object.freeze({
+          stream: "trade",
+          unsubscribe,
+        }),
+      })
+    } catch (error) {
+      handleErr({
+        where: "BitunixFuturesBroker.subscribeForPrices()",
+        error,
+      })
+      return toResult({
+        errors: [error],
+      })
+    }
   }
 
   async subscribeForCandles() {
@@ -1526,11 +1665,41 @@ export class BitunixFuturesBroker {
     })
   }
 
-  async subscribeForBookTicker() {
-    return unsupportedResult({
-      operation: "subscribeForBookTicker",
-      reason: "Futures public WebSocket subscriptions are not implemented yet.",
-    })
+  async subscribeForBookTicker({ symbol, onBookTicker } = {}) {
+    try {
+      const normalizedSymbol = ensure.nonEmptyString({
+        value: symbol,
+        name: "symbol",
+      }).trim().toUpperCase()
+      ensure.function({
+        value: onBookTicker,
+        name: "onBookTicker",
+      })
+      const unsubscribe = await this.#subscribePublicChannel({
+        channel: "depth_book1",
+        symbol: normalizedSymbol,
+        listener: (event) => deliverFuturesBookTicker({
+          event,
+          symbol: normalizedSymbol,
+          now: this.now,
+          onBookTicker,
+        }),
+      })
+      return toResult({
+        data: Object.freeze({
+          stream: "depth_book1",
+          unsubscribe,
+        }),
+      })
+    } catch (error) {
+      handleErr({
+        where: "BitunixFuturesBroker.subscribeForBookTicker()",
+        error,
+      })
+      return toResult({
+        errors: [error],
+      })
+    }
   }
 
   async subscribeForUserData() {
