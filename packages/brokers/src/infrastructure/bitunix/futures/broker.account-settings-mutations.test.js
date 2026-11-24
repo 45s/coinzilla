@@ -7,7 +7,7 @@ function createBroker() {
   return new Broker({
     provider: "bitunix-futures",
     apiKey: "test-api-key",
-    secretKey: "test-secret-key",
+    apiSecret: "test-secret-key",
     tradingMode: "live",
   })
 }
