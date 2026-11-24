@@ -176,7 +176,7 @@ function createOperationalStateStore() {
   }
 }
 
-async function runUnknownBuySubmissionScenario() {
+async async function createUnknownBuySubmitterContext() {
   const sharedState = createSubmitterSharedState()
   const workflow = createRecoverySellerAccountingWorkflow({ sharedState })
   const operationalStateStore = createOperationalStateStore()
@@ -215,7 +215,51 @@ async function runUnknownBuySubmissionScenario() {
       })
     },
   })
-  const result = await submit({
+  return {
+    workflow,
+    stopResult,
+    submit,
+    durableFacts,
+    unresolved,
+    getBrokerCallCount: () => brokerCallCount,
+  }
+}
+
+function createUnknownBuyActiveOrders({ workflow }) {
+  return workflow.getActiveOrders().map((order) => ({
+    ...order,
+    ownership: workflow.getOrderRegistry().getOwnership({
+      clientOrderId: order.clientOrderId,
+    }),
+  }))
+}
+
+function evaluateUnknownBuyFollowup({ workflow, stopResult }) {
+  return evaluateRecoverySellerBuyDecision({
+    stopState: stopResult.data.getStopState(),
+    marketPrice: { symbol: "ZROUSDT", price: "2" },
+    pairConfig: {
+      orderQuantity: "5",
+      priceStepPercent: "0.05",
+      investment: "100",
+    },
+    marketMetadata: buyPolicyMarketMetadata,
+    activeOrders: createUnknownBuyActiveOrders({ workflow }),
+    cycleState: createRecoverySellerCycleState({
+      cycleId: "rs-cycle-1",
+      positionId: "rs-position-1",
+    }),
+    strategyStopped: false,
+    marketPaused: false,
+    reconciliationComplete: true,
+    cumulativeNetSellProceeds: "0",
+    pendingBuyCommitment: "0",
+  })
+}
+
+async function runUnknownBuySubmissionScenario() {
+  const runtime = await createUnknownBuySubmitterContext()
+  const result = await runtime.submit({
     lifecycleDecision: {
       outcome: "SUBMIT",
       reasonCode: "BUY_TRANCHE_ELIGIBLE",
@@ -231,161 +275,20 @@ async function runUnknownBuySubmissionScenario() {
     },
     marketMetadata: submitterMarketMetadata,
   })
-  const activeOrders = workflow.getActiveOrders().map((order) => ({
-    ...order,
-    ownership: workflow.getOrderRegistry().getOwnership({
-      clientOrderId: order.clientOrderId,
-    }),
-  }))
-  const followup = evaluateRecoverySellerBuyDecision({
-    stopState: stopResult.data.getStopState(),
-    marketPrice: { symbol: "ZROUSDT", price: "2" },
-    pairConfig: {
-      orderQuantity: "5",
-      priceStepPercent: "0.05",
-      investment: "100",
-    },
-    marketMetadata: buyPolicyMarketMetadata,
-    activeOrders,
-    cycleState: createRecoverySellerCycleState({
-      cycleId: "rs-cycle-1",
-      positionId: "rs-position-1",
-    }),
-    strategyStopped: false,
-    marketPaused: false,
-    reconciliationComplete: true,
-    cumulativeNetSellProceeds: "0",
-    pendingBuyCommitment: "0",
+  const followup = evaluateUnknownBuyFollowup({
+    workflow: runtime.workflow,
+    stopResult: runtime.stopResult,
   })
+  const [activeOrder] = runtime.workflow.getActiveOrders()
   return {
-    brokerCallCount,
+    brokerCallCount: runtime.getBrokerCallCount(),
     resultOk: result.ok,
-    unresolvedCount: unresolved.length,
-    durableFactCount: durableFacts.length,
-    activeOrderStatus: activeOrders[0]?.status ?? null,
-    stopStatus: stopResult.data.getStopState().status,
+    unresolvedCount: runtime.unresolved.length,
+    durableFactCount: runtime.durableFacts.length,
+    activeOrderStatus: activeOrder?.status ?? null,
+    stopStatus: runtime.stopResult.data.getStopState().status,
     followupOutcome: followup.decision.outcome,
     followupAction: followup.action ?? null,
-  }
-}
-
-function createBudgetAuthorizer({ activeOrders }) {
-  let stopLatchCount = 0
-  const ownershipByClientOrderId = new Map(activeOrders.map((order) => [
-    order.clientOrderId,
-    { strategyId: order.strategyId ?? "CG_coinGrabber" },
-  ]))
-  const state = {
-    registry: {
-      getActiveOrders: () => activeOrders,
-      getOwnership: ({ clientOrderId }) => ownershipByClientOrderId.get(clientOrderId),
-    },
-  }
-  const authorize = createRecoverySellerActionAuthorizer({
-    state,
-    recoverySellerPairs: {
-      ZROUSDT: { investment: 100 },
-    },
-    recoverySellerStopWorkflow: {
-      latch: async () => {
-        stopLatchCount += 1
-        return { ok: true, data: { durable: true } }
-      },
-    },
-    getPortfolio: () => ({
-      positions: [],
-      getPosition: () => undefined,
-    }),
-    getAccountSnapshot: () => ({
-      balances: [],
-      getFreeBalance: ({ assetId }) => ({
-        amount: assetId === "USDT" ? "100" : "0",
-      }),
-      getPortfolioBaseQuantityBaseline: () => "0",
-      getAdditionalTrackedBaseQuantityBaseline: () => "0",
-      getQuoteCashFlowBaseline: () => "0",
-      getCommittedQuoteBalanceBaseline: () => "0",
-      getCommittedBaseBalanceBaseline: () => "0",
-    }),
-    getAdditionalTrackedBaseQuantity: () => [],
-    getAdditionalTrackedQuoteCashFlow: () => [],
-    allocateOrderCommitments,
-  })
-  return {
-    authorize,
-    getStopLatchCount: () => stopLatchCount,
-  }
-}
-
-async function runBuyBudgetIsolationScenario({ input }) {
-  const rsBudget = evaluateBuyPolicyCase({
-    overrides: {
-      pairConfig: {
-        orderQuantity: "5",
-        priceStepPercent: "0.05",
-        investment: "9.994",
-      },
-      recoveryPosition: {
-        positionId: "rs-policy-position",
-        quantity: "5",
-        spent: "0",
-      },
-      lastBuyPrice: "2",
-    },
-  })
-  const conservativeOrder = {
-    clientOrderId: "cg-same-market-buy",
-    strategyId: "CG_coinGrabber",
-    market: {
-      id: "ZROUSDT",
-      symbol: "ZROUSDT",
-      baseAsset: { id: "ZRO" },
-      quoteAsset: { id: "USDT" },
-    },
-    side: "BUY",
-    remainingQuantity: { amount: "9.1" },
-    limitPrice: { amount: "10" },
-  }
-  const runtime = createBudgetAuthorizer({
-    activeOrders: [conservativeOrder],
-  })
-  const allocation = await runtime.authorize({
-    action: {
-      side: "BUY",
-      quantity: "1",
-      price: "10",
-      positionId: "rs-position-1",
-    },
-    snapshot: {
-      planInput: {
-        recoveryQuantity: "0",
-        verifiedUnreservedLegacyQuantity: "0",
-        recoveryCostBasis: "0",
-      },
-      cumulativeNetSellProceeds: "0",
-    },
-    input: {
-      symbol: "ZROUSDT",
-      marketMetadata: {
-        market: {
-          id: "ZROUSDT",
-          baseAsset: { id: "ZRO" },
-          quoteAsset: { id: "USDT" },
-        },
-      },
-    },
-  })
-  return {
-    otherStrategyInvestment: input.otherStrategyInvestment,
-    rsPairBudgetOutcome: rsBudget.outcome,
-    rsPairBudgetReason: rsBudget.reasonCode,
-    sharedAccountAllocation: {
-      ok: allocation.ok,
-      allowed: allocation.data?.allowed ?? false,
-      skipped: allocation.data?.skipped ?? false,
-      reason: allocation.data?.reason ?? null,
-    },
-    stopLatchCount: runtime.getStopLatchCount(),
   }
 }
 
