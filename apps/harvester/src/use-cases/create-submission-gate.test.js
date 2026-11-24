@@ -1,6 +1,7 @@
 import assert from "node:assert/strict"
 import nodeTest from "node:test"
 
+import { StrategyId } from "../domain/strategies/strategy-ids.js"
 import { createSubmissionGate } from "./create-submission-gate.js"
 
 const test = (...args) => {
@@ -123,8 +124,6 @@ test("blocks an ordinary SELL while Conservative shutdown permits recovery SELL 
   assert.equal(result.reason, "CONSERVATIVE_SHUTDOWN_RECOVERY_SELL_ONLY", "Expected result.reason to equal \"CONSERVATIVE_SHUTDOWN_RECOVERY_SELL_ONLY\" in \"blocks an ordinary SELL while Conservative shutdown permits recovery SELL only\".")
 })
 
-
-import { StrategyId } from "../domain/strategies/strategy-ids.js"
 
 const CONSERVATIVE_MARKET_ID = "binance:spot:DOGEUSDT"
 const CONSERVATIVE_POSITION_ID = JSON.stringify([
