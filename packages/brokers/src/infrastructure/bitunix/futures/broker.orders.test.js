@@ -48,7 +48,6 @@ function createOrderRow(overrides = {}) {
 
 function createBroker({ orderRow = createOrderRow() } = {}) {
   const requests = []
-  const privateClients = []
   const broker = new Broker({
     provider: "bitunix-futures",
     ...credentials,
