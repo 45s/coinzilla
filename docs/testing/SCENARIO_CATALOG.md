@@ -95,6 +95,7 @@ The catalog is a navigation and traceability layer. Domain specifications, accep
   - `sends a versioned complete operator snapshot to every new Bots WebSocket client`
   - `broadcasts a newer complete snapshot after a successful operator BUY-control transition`
   - `does not lose an operator transition that occurs while the initial snapshot is being read`
+  - `reports failed operator reads explicitly instead of fabricating empty resources`
   - `a reconnect receives a fresh full snapshot rather than relying on missed event replay`
 - [Operator BUY-control event regressions](../../apps/harvester/src/application/operator/create-harvester-operator-events.test.js)
   - `publishes market-scoped pause and resume events only after successful BUY transitions`
@@ -102,6 +103,7 @@ The catalog is a navigation and traceability layer. Domain specifications, accep
   - `does not publish a BUY-control completion event when the engine rejects the transition`
 - [Dashboard protocol validation](../../apps/dashboard/src/app/features/bots/realtime.spec.ts)
 - [Dashboard Bots stream behavior](../../apps/dashboard/src/app/features/bots/page.spec.ts)
+  - `reconnects and accepts a new server revision epoch after Harvester restarts`
 
 **Evidence note:** Test mappings are recorded; this scenario is not VERIFIED until the final PR head passes the relevant Harvester, Dashboard, workspace, coverage, and repository-quality checks.
 
