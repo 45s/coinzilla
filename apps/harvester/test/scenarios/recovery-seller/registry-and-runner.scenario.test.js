@@ -435,8 +435,11 @@ test("the APPLICATION runner rejects DOMAIN records and missing operation handle
 })
 
 test("RS-004-011: recovery, legacy and combined profitability gates all pass independently", async () => {
+  const scenario = recoverySellerScenarioRegistry.find((item) => item.id === "RS-004-011")
+  assert.ok(scenario,
+    "The stable RS-004-011 profitability case must be present in the shared registry.")
   const result = await runRecoverySellerDomainScenario({
-    scenario: recoverySellerScenarioRegistry[0],
+    scenario,
     handlers: {
       "evaluate-recovery-seller-profitability": ({ input }) =>
         calculateRecoverySellerProfitability(input),
@@ -444,19 +447,19 @@ test("RS-004-011: recovery, legacy and combined profitability gates all pass ind
   })
   const [profitability] = result.results
 
-  assert.equal(result.scenarioId, "RS-004-011",
+  assert.equal(result.scenarioId, scenario.id,
     "The runner must report the stable scenario ID for the executed business case.")
   assert.deepEqual(result.report, {
-    scenarioId: "RS-004-011",
-    test: recoverySellerScenarioRegistry[0].test,
+    scenarioId: scenario.id,
+    test: scenario.test,
     status: "TEST-MAPPED",
     evidence: null,
-    result: [recoverySellerScenarioRegistry[0].then],
+    result: [scenario.then],
   }, "The execution report must name the case, exact test mapping, unchanged status, evidence and actual result.")
   assert.equal(result.report.status, "TEST-MAPPED",
     "Executing a scenario must never auto-promote its coverage status.")
   assert.equal(result.report.evidence, null,
     "A local execution must not invent merged-head or CI evidence.")
-  assert.deepEqual(profitability, recoverySellerScenarioRegistry[0].then,
+  assert.deepEqual(profitability, scenario.then,
     "The real RS profitability policy must match the independently authored exact-decimal oracle for recovery, legacy and combined gates.")
 })
