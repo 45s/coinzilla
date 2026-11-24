@@ -123,7 +123,10 @@ export function validateArchiveRequest({ args, env } = {}) {
   if (env.TRADING_MODE !== "testnet") {
     throw new Error("Debug archiving requires TRADING_MODE=testnet; LIVE and unspecified modes are rejected.")
   }
-  if (args.length !== 1 || args[0] !== "--confirm-stopped") {
+  // pnpm forwards the argument separator itself, so argv may be
+  // ["--", "--confirm-stopped"] when invoked through the workspace script.
+  const forwardedArgs = args[0] === "--" ? args.slice(1) : args
+  if (forwardedArgs.length !== 1 || forwardedArgs[0] !== "--confirm-stopped") {
     throw new TypeError("Usage: pnpm --filter @coinzilla/harvester archive:debug -- --confirm-stopped")
   }
 }
