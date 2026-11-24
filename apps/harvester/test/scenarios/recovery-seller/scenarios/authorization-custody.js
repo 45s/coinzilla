@@ -6,6 +6,42 @@ const custodySource = "apps/harvester/src/domain/strategies/recovery-seller/lega
 const workflowSource = "apps/harvester/src/use-cases/create-recovery-seller-accounting-workflow.js"
 const allocatorSource = "apps/harvester/src/domain/orders/allocate-order-commitments.js"
 
+function createScenarioCoverage() {
+  return {
+    rules: [
+      "RS_LEGACY_BASIS_REQUIRED",
+      "RS_SPOT_CUSTODY_REQUIRED",
+      "RS_EXTERNAL_INVENTORY_NOT_OWNED",
+      "RS_NO_SYNTHETIC_INVENTORY",
+      "RS_CUSTODY_CONSERVATION",
+      "RS_ACCOUNT_BASE_RESERVATION",
+      "RS_STRATEGY_OWNERSHIP_ISOLATION",
+    ],
+    decisions: ["RS_SELL_ELIGIBILITY", "RS_ACCOUNT_ALLOCATION"],
+    states: [],
+    transitions: [],
+    invariants: [
+      "RS_STABLE_OWNERSHIP",
+      "RS_NO_SYNTHETIC_INVENTORY",
+      "RS_CUSTODY_CONSERVATION",
+      "RS_RESERVATION_CONSERVATION",
+    ],
+  }
+}
+
+function createMappedSubcases({ id, name, status, subcases, title }) {
+  return subcases ?? [{
+    id: `${id}-A`,
+    description: name,
+    status,
+    test: {
+      file: testFile,
+      title,
+    },
+    evidence: null,
+  }]
+}
+
 function makeCase({
   id,
   name,
@@ -19,16 +55,13 @@ function makeCase({
   subcases,
 }) {
   const title = `${id}: ${name}`
-  const mappedSubcases = subcases ?? [{
-    id: `${id}-A`,
-    description: name,
+  const mappedSubcases = createMappedSubcases({
+    id,
+    name,
     status,
-    test: {
-      file: testFile,
-      title,
-    },
-    evidence: null,
-  }]
+    subcases,
+    title,
+  })
 
   return defineRecoverySellerScenario({
     id,
@@ -45,26 +78,7 @@ function makeCase({
       "RS_PAIR.legacyPosition.quantity",
       "RS_PAIR.sellQuantity",
     ],
-    covers: {
-      rules: [
-        "RS_LEGACY_BASIS_REQUIRED",
-        "RS_SPOT_CUSTODY_REQUIRED",
-        "RS_EXTERNAL_INVENTORY_NOT_OWNED",
-        "RS_NO_SYNTHETIC_INVENTORY",
-        "RS_CUSTODY_CONSERVATION",
-        "RS_ACCOUNT_BASE_RESERVATION",
-        "RS_STRATEGY_OWNERSHIP_ISOLATION",
-      ],
-      decisions: ["RS_SELL_ELIGIBILITY", "RS_ACCOUNT_ALLOCATION"],
-      states: [],
-      transitions: [],
-      invariants: [
-        "RS_STABLE_OWNERSHIP",
-        "RS_NO_SYNTHETIC_INVENTORY",
-        "RS_CUSTODY_CONSERVATION",
-        "RS_RESERVATION_CONSERVATION",
-      ],
-    },
+    covers: createScenarioCoverage(),
     given: {
       input,
     },
@@ -146,7 +160,10 @@ export const authorizationCustodyScenarios = Object.freeze([
   makeCase({
     id: "RS-001-004",
     name: "operator-declared legacy basis does not create synthetic Portfolio fills",
-    input: { invested: "50", quantity: "10" },
+    input: {
+      invested: "50",
+      quantity: "10",
+    },
     step: "create-legacy-position-map",
     expected: {
       legacyMarkets: 1,
