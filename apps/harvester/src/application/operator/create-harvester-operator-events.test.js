@@ -46,7 +46,7 @@ test("publishes market-scoped pause and resume events only after successful BUY 
   const paused = await operator.pauseBuys({
     actor,
     requestId: "dashboard:pause:1",
-    symbol: " btcusdt ",
+    symbol: " BTCUSDT ",
   })
   const resumed = await operator.resumeBuys({
     actor,
