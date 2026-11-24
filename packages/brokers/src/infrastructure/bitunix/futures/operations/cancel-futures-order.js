@@ -180,15 +180,9 @@ async function reconcileCancellation({
   })
 }
 
-async function dispatchAndReconcile({
-  broker,
-  symbol,
-  orderId,
-  clientOrderId,
-}) {
-  let response
+async function dispatchCancelRequest({ broker, symbol, orderId }) {
   try {
-    response = await broker.restClient.request({
+    const response = await broker.restClient.request({
       method: "POST",
       path: CANCEL_ORDERS_PATH,
       body: {
@@ -199,31 +193,61 @@ async function dispatchAndReconcile({
       },
       stateChanging: true,
     })
+    return {
+      response,
+    }
   } catch (error) {
     handleErr({
       where: "cancelFuturesOrder()",
       error,
     })
-    if (error?.outcomeUnknown === true) {
-      return reconcileCancellation({
-        broker,
-        symbol,
-        clientOrderId,
-        acknowledged: false,
-        error,
-      })
+    return {
+      error,
     }
-    const outcome = error?.kind === "exchange" || error?.kind === "http"
-      ? "REJECTED"
-      : "NOT_SENT"
-    return createOutcomeResult({
-      errors: [error],
-      mutationOutcome: outcome,
-      cancellationOutcome: outcome,
+  }
+}
+
+async function handleCancelDispatchError({ broker, symbol, clientOrderId, error }) {
+  if (error?.outcomeUnknown === true) {
+    return reconcileCancellation({
+      broker,
+      symbol,
+      clientOrderId,
+      acknowledged: false,
+      error,
+    })
+  }
+  const outcome = error?.kind === "exchange" || error?.kind === "http"
+    ? "REJECTED"
+    : "NOT_SENT"
+  return createOutcomeResult({
+    errors: [error],
+    mutationOutcome: outcome,
+    cancellationOutcome: outcome,
+  })
+}
+
+async function dispatchAndReconcile({
+  broker,
+  symbol,
+  orderId,
+  clientOrderId,
+}) {
+  const dispatch = await dispatchCancelRequest({
+    broker,
+    symbol,
+    orderId,
+  })
+  if (dispatch.error) {
+    return handleCancelDispatchError({
+      broker,
+      symbol,
+      clientOrderId,
+      error: dispatch.error,
     })
   }
   const acknowledgement = parseCancelAcknowledgement({
-    data: response.data,
+    data: dispatch.response.data,
     orderId,
   })
   if (acknowledgement.rejected) {
