@@ -70,7 +70,6 @@ function createBalance({ asset = baseAsset, free, locked = "0" }) {
 function createBuyFill({
   tradeId,
   targetMarket = market,
-  strategyId = StrategyId.COIN_GRABBER,
   quantity,
   quoteQuantity,
 } = {}) {
@@ -121,13 +120,14 @@ function createLegacySpotInput({
   quantity = "10",
   spotTotal,
   portfolioQuantity = "0",
+  portfolioPositions,
   offSpotQuantity = "0",
 } = {}) {
   const position = createLegacyPosition({
     invested,
     quantity,
   })
-  const portfolioPositions = input.portfolioPositions
+  const portfolioPositionsToApply = portfolioPositions
     ? input.portfolioPositions.map((item) => ({
         market: item.market === "ZROFDUSD" ? alternateMarket : market,
         quantity: item.quantity,
@@ -144,7 +144,7 @@ function createLegacySpotInput({
           strategyId: StrategyId.COIN_GRABBER,
         }]
   const portfolio = createPortfolioWithPositions({
-    positions: portfolioPositions,
+    positions: portfolioPositionsToApply,
   })
   const allocation = calculateVerifiedLegacySpotAllocation({
     balances: [createBalance({ free: spotTotal })],
