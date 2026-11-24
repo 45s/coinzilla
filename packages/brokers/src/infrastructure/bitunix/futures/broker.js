@@ -616,12 +616,11 @@ function normalizeFuturesPage({ response, listKey, label, adapter }) {
     value: response.data,
     name: label,
   })
-  const rows = response.data[listKey]
+  const { [listKey]: rows, total } = response.data
   ensure.array({
     value: rows,
     name: listKey,
   })
-  const total = response.data.total
   if (!Number.isSafeInteger(total) || total < 0) {
     throw new TypeError(`Bitunix Futures ${label} total must be a non-negative safe integer`)
   }
