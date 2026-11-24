@@ -1,6 +1,7 @@
-import { Asset, Market } from "@coinzilla/entities"
-import { assertDecimalString, compareDecimal, ensure, handleErr, toResult } from "@coinzilla/utils"
+import { Asset, Fill, Market, Money, Quantity } from "@coinzilla/entities"
+import { assertDecimalString, compareDecimal, ensure, handleErr, multiplyDecimal, toResult } from "@coinzilla/utils"
 import { adaptFuturesBalances } from "./adapters/adapt-futures-balances.js"
+import { adaptFuturesFills } from "./adapters/adapt-futures-fills.js"
 import { adaptFuturesOrderBook } from "./adapters/adapt-futures-order-book.js"
 import { BrokerCapabilities } from "../../../broker/broker-capabilities.js"
 import { BrokerUnsupportedOperationError } from "../../../broker/errors/broker-unsupported-operation-error.js"
@@ -103,6 +104,17 @@ const FUTURES_CAPABILITIES = [
     method: "getFuturesTradeHistory",
     guarantee: "Returns one validated, symbol/order/position-filterable Futures execution-history page with stable tradeId/orderId and exact quantity, price, fee and realized-PnL strings.",
     limitation: "This provider-specific DTO is not canonical Fill; fee currency/semantics and complete gap-free history are not established.",
+  },
+  {
+    type: "READ_FILLS",
+    status: "SUPPORTED",
+    method: "getFills",
+    guarantee: "Returns canonical Fill values from stable Futures tradeId/orderId rows, preserving exact execution decimals and deriving quote notional with exact decimal arithmetic.",
+    limitation: "The exchange response omits fee asset, so canonical commissions remain UNKNOWN; the caller must paginate bounded history pages and current market metadata must exist.",
+    conditions: [
+      "Supply a symbol, orderId, positionId, or time-window filter supported by the Futures history endpoint.",
+      "Paginate with skip/limit; the exchange permits at most 100 rows per page.",
+    ],
   },
   {
     type: "READ_COMPLETE_FILL_HISTORY",
@@ -1465,10 +1477,6 @@ export class BitunixFuturesBroker {
   }
 
   /**
-   * Provider-specific raw Futures executions. Fee and realized PnL are
-   * preserved exactly; this is not the canonical Fill contract.
-   */
-  /**
    * Returns one page of Bitunix Futures pending orders with exact decimals.
    * This extension does not claim an atomic or exhaustive account snapshot.
    */
@@ -1535,6 +1543,10 @@ export class BitunixFuturesBroker {
     }
   }
 
+  /**
+   * Provider-specific raw Futures executions. Fee and realized PnL are
+   * preserved exactly; use getFills() for the canonical Fill projection.
+   */
   async getFuturesTradeHistory(input = {}) {
     try {
       const request = createTradeHistoryQuery({
@@ -1566,6 +1578,45 @@ export class BitunixFuturesBroker {
     } catch (error) {
       handleErr({
         where: "BitunixFuturesBroker.getFuturesTradeHistory()",
+        error,
+      })
+      return toResult({
+        errors: [error],
+      })
+    }
+  }
+
+  /**
+   * Return one bounded canonical Fill page. Quote notional is derived exactly
+   * from the exchange's base quantity and execution price; fee denomination
+   * remains unknown because the history response omits the fee asset.
+   */
+  async getFills(input = {}) {
+    const history = await this.getFuturesTradeHistory(input)
+    if (!history.ok) {
+      return history
+    }
+    if (history.data.trades.length === 0) {
+      return toResult({
+        data: [],
+      })
+    }
+    const markets = await this.getExchangeMarkets()
+    if (!markets.ok) {
+      return toResult({
+        errors: markets.errors,
+      })
+    }
+    try {
+      return toResult({
+        data: adaptFuturesFills({
+          trades: history.data.trades,
+          markets: markets.data,
+        }),
+      })
+    } catch (error) {
+      handleErr({
+        where: "BitunixFuturesBroker.getFills()",
         error,
       })
       return toResult({
