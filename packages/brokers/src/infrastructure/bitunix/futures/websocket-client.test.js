@@ -20,7 +20,11 @@ class FakeTransport {
 
   async close() {
     for (const listener of this.listeners.close) {
-      listener({ code: 1000, reason: "closed", wasClean: true })
+      listener({
+        code: 1000,
+        reason: "closed",
+        wasClean: true,
+      })
     }
   }
 
@@ -57,13 +61,22 @@ function createClient({ channelType = "public", now = () => 1_700_000_000_000 } 
     now,
     nonceFactory: () => "nonce",
     transportFactory: () => transport,
-    setIntervalFn: (callback, delay) => {
-      intervals.push({ callback, delay })
+    setIntervalFn: (...args) => {
+      const [callback, delay] = args
+      intervals.push({
+        callback,
+        delay,
+      })
       return intervals.length
     },
     clearIntervalFn: (id) => clearedIntervals.push(id),
   })
-  return { client, transport, intervals, clearedIntervals }
+  return {
+    client,
+    transport,
+    intervals,
+    clearedIntervals,
+  }
 }
 
 test("Bitunix Futures private WebSocket signs login with seconds timestamp and waits for login acknowledgement", async () => {
@@ -116,11 +129,26 @@ test("Bitunix Futures public WebSocket subscribes to documented channels and for
 
   const result = client.subscribe({
     channels: [
-      { ch: "price", symbol: "btcusdt" },
-      { ch: "ticker", symbol: "ETHUSDT" },
-      { ch: "depth_book1", symbol: "BTCUSDT" },
-      { ch: "trade", symbol: "BTCUSDT" },
-      { ch: "market_kline_1min", symbol: "BTCUSDT" },
+      {
+        ch: "price",
+        symbol: "btcusdt",
+      },
+      {
+        ch: "ticker",
+        symbol: "ETHUSDT",
+      },
+      {
+        ch: "depth_book1",
+        symbol: "BTCUSDT",
+      },
+      {
+        ch: "trade",
+        symbol: "BTCUSDT",
+      },
+      {
+        ch: "market_kline_1min",
+        symbol: "BTCUSDT",
+      },
     ],
   })
 
@@ -139,7 +167,11 @@ test("Bitunix Futures public WebSocket subscribes to documented channels and for
     ch: "price",
     symbol: "BTCUSDT",
     ts: 1_700_000_000_000,
-    data: { mp: "65000.10", ip: "64999.90", fr: "0.0001" },
+    data: {
+      mp: "65000.10",
+      ip: "64999.90",
+      fr: "0.0001",
+    },
   }
   transport.receive(event)
   assert.deepEqual(events, [event])
@@ -172,22 +204,32 @@ test("Bitunix Futures WebSocket validates channel type, endpoint, channel count 
 
   const { client, transport } = createClient()
   await client.connect()
+  const channels = []
+  for (let index = 0; index < 301; index += 1) {
+    channels.push({
+      ch: "ticker",
+      symbol: `COIN${index}USDT`,
+    })
+  }
   assert.throws(
     () => client.subscribe({
-      channels: Array.from({ length: 301 }, (_, index) => ({
-        ch: "ticker",
-        symbol: `COIN${index}USDT`,
-      })),
+      channels,
     }),
     /300 channel/i,
   )
   assert.equal(transport.sent.length, 0)
 
   client.subscribe({
-    channels: [{ ch: "ticker", symbol: "BTCUSDT" }],
+    channels: [{
+      ch: "ticker",
+      symbol: "BTCUSDT",
+    }],
   })
   client.unsubscribe({
-    channels: [{ ch: "ticker", symbol: "BTCUSDT" }],
+    channels: [{
+      ch: "ticker",
+      symbol: "BTCUSDT",
+    }],
   })
   client.ping()
   client.ping()
