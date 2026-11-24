@@ -1,4 +1,5 @@
 import { provideHttpClient } from '@angular/common/http';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -26,7 +27,7 @@ describe('AppComponent', () => {
   it('provides a dedicated Bots workspace for live Harvester strategy and portfolio state', async () => {
     await TestBed.configureTestingModule({
       imports: [AppComponent],
-      providers: [provideHttpClient()],
+      providers: [provideHttpClient(), provideHttpClientTesting()],
     }).compileComponents();
 
     const fixture = TestBed.createComponent(AppComponent);
@@ -39,6 +40,11 @@ describe('AppComponent', () => {
 
     botsButton.click();
     fixture.detectChanges();
+
+    const http = TestBed.inject(HttpTestingController);
+    http.expectOne('http://127.0.0.1:4201/api/v1/trading/operator/status').flush({ ok: true, data: {} });
+    http.expectOne('http://127.0.0.1:4201/api/v1/trading/operator/markets').flush({ ok: true, data: { markets: [] } });
+    http.expectOne('http://127.0.0.1:4201/api/v1/trading/operator/portfolio').flush({ ok: true, data: { positions: [] } });
 
     const renderedText = (fixture.nativeElement as HTMLElement).textContent as string;
     expect(renderedText, 'The Bots workspace must identify itself as a live Harvester control surface.').toContain('HARVESTER / BOT CONTROL');
