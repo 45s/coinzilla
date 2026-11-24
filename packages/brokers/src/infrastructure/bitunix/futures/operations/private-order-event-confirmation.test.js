@@ -101,6 +101,40 @@ test("private order-event waiter resolves on a matching event and removes its li
   assert.equal(broker.privateWebSocketClient.listenerCount("status"), 0, "the status listener must be removed after resolution")
 })
 
+test("private order-event waiter ignores matching identities on a different event type", async () => {
+  const broker = createBroker()
+  const waiter = createPrivateOrderEventWaiter({
+    broker,
+    orderId: "order-1",
+    clientOrderId: "client-1",
+    symbol: "BTCUSDT",
+    eventType: "CLOSE",
+  })
+  let settled = false
+  const observed = waiter.promise.then((result) => {
+    settled = true
+    return result
+  })
+
+  broker.privateWebSocketClient.emit("channel", createEvent({
+    event: "UPDATE",
+  }))
+  await Promise.resolve()
+  assert.equal(settled, false, "an UPDATE must not satisfy a CLOSE event waiter")
+
+  const closeEvent = createEvent({
+    event: "CLOSE",
+    orderStatus: "CANCELED",
+  })
+  broker.privateWebSocketClient.emit("channel", closeEvent)
+  const result = await observed
+
+  assert.strictEqual(result.event, closeEvent)
+  assert.equal(result.error, null)
+  assert.equal(broker.privateWebSocketClient.listenerCount("channel"), 0)
+  assert.equal(broker.privateWebSocketClient.listenerCount("status"), 0)
+})
+
 test("private order-event waiter returns an explicit error when the private session becomes unavailable", async () => {
   const broker = createBroker()
   const waiter = createPrivateOrderEventWaiter({
