@@ -50,11 +50,14 @@ function requireEnum({ value, values, field }) {
   return value
 }
 
-function normalizeCurrentPosition({ position }) {
+function requirePositionObject({ position, lifecycle }) {
   if (position === null || typeof position !== "object" || Array.isArray(position)) {
-    throw new TypeError("Bitunix Futures current position should be an object")
+    throw new TypeError(`Bitunix Futures ${lifecycle.toLowerCase()} position should be an object`)
   }
-  return Object.freeze({
+}
+
+function normalizePositionContext({ position }) {
+  return {
     positionId: requireIdentifier({
       value: position.positionId,
       field: "positionId",
@@ -63,16 +66,6 @@ function normalizeCurrentPosition({ position }) {
       value: position.symbol,
       field: "symbol",
     }).toUpperCase(),
-    quantity: requireDecimal({
-      value: position.qty,
-      field: "qty",
-      allowZero: false,
-    }),
-    entryValue: requireDecimal({
-      value: position.entryValue,
-      field: "entryValue",
-      allowZero: false,
-    }),
     side: requireEnum({
       value: position.side,
       values: SIDES,
@@ -90,6 +83,34 @@ function normalizeCurrentPosition({ position }) {
     }),
     leverage: requireLeverage({
       value: position.leverage,
+    }),
+  }
+}
+
+function normalizePositionTimestamps({ position }) {
+  return {
+    createdAt: requireTimestamp({
+      value: position.ctime,
+      field: "ctime",
+    }),
+    updatedAt: requireTimestamp({
+      value: position.mtime,
+      field: "mtime",
+    }),
+  }
+}
+
+function normalizeCurrentPositionAmounts({ position }) {
+  return {
+    quantity: requireDecimal({
+      value: position.qty,
+      field: "qty",
+      allowZero: false,
+    }),
+    entryValue: requireDecimal({
+      value: position.entryValue,
+      field: "entryValue",
+      allowZero: false,
     }),
     fee: requireDecimal({
       value: position.fee,
@@ -127,31 +148,11 @@ function normalizeCurrentPosition({ position }) {
       field: "avgOpenPrice",
       allowZero: false,
     }),
-    createdAt: requireTimestamp({
-      value: position.ctime,
-      field: "ctime",
-    }),
-    updatedAt: requireTimestamp({
-      value: position.mtime,
-      field: "mtime",
-    }),
-    lifecycle: "CURRENT",
-  })
+  }
 }
 
-function normalizeHistoricalPosition({ position }) {
-  if (position === null || typeof position !== "object" || Array.isArray(position)) {
-    throw new TypeError("Bitunix Futures historical position should be an object")
-  }
-  return Object.freeze({
-    positionId: requireIdentifier({
-      value: position.positionId,
-      field: "positionId",
-    }),
-    symbol: requireIdentifier({
-      value: position.symbol,
-      field: "symbol",
-    }).toUpperCase(),
+function normalizeHistoricalPositionAmounts({ position }) {
+  return {
     quantity: requireDecimal({
       value: position.maxQty,
       field: "maxQty",
@@ -169,24 +170,6 @@ function normalizeHistoricalPosition({ position }) {
     liquidatedQuantity: requireDecimal({
       value: position.liqQty,
       field: "liqQty",
-    }),
-    side: requireEnum({
-      value: position.side,
-      values: SIDES,
-      field: "side",
-    }),
-    positionMode: requireEnum({
-      value: position.positionMode,
-      values: POSITION_MODES,
-      field: "positionMode",
-    }),
-    marginMode: requireEnum({
-      value: position.marginMode,
-      values: MARGIN_MODES,
-      field: "marginMode",
-    }),
-    leverage: requireLeverage({
-      value: position.leverage,
     }),
     fee: requireDecimal({
       value: position.fee,
@@ -206,13 +189,42 @@ function normalizeHistoricalPosition({ position }) {
       value: position.liqPrice,
       field: "liqPrice",
     }),
-    createdAt: requireTimestamp({
-      value: position.ctime,
-      field: "ctime",
+  }
+}
+
+function normalizeCurrentPosition({ position }) {
+  requirePositionObject({
+    position,
+    lifecycle: "Current",
+  })
+  return Object.freeze({
+    ...normalizePositionContext({
+      position,
     }),
-    updatedAt: requireTimestamp({
-      value: position.mtime,
-      field: "mtime",
+    ...normalizeCurrentPositionAmounts({
+      position,
+    }),
+    ...normalizePositionTimestamps({
+      position,
+    }),
+    lifecycle: "CURRENT",
+  })
+}
+
+function normalizeHistoricalPosition({ position }) {
+  requirePositionObject({
+    position,
+    lifecycle: "Historical",
+  })
+  return Object.freeze({
+    ...normalizePositionContext({
+      position,
+    }),
+    ...normalizeHistoricalPositionAmounts({
+      position,
+    }),
+    ...normalizePositionTimestamps({
+      position,
     }),
     lifecycle: "HISTORICAL",
   })
