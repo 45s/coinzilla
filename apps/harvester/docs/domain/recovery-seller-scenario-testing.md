@@ -229,19 +229,19 @@ apps/harvester/test/scenarios/
 │   │   ├── controlled-event-delivery.js         # REST/stream ordering and duplicates
 │   │   ├── failure-injection.js                 # Named boundary failures
 │   │   └── financial-oracles.js                 # Independent test-only arithmetic
-│   └── reports/
-│       ├── parse-test-results.js                # Actual test-run evidence
-│       └── generate-coverage-report.js          # Registry + execution + review status
-├── registry-and-runner.scenario.test.js         # PR 1 / RS-004-011
-├── authorization-custody.scenario.test.js       # PR 2 / RS-001
-├── buy-accounting.scenario.test.js              # PR 2 / RS-002
-├── mixed-sell-planning.scenario.test.js          # PR 3 / RS-003
-├── profitability.scenario.test.js               # PR 3 / RS-004
-├── sell-lifecycle.scenario.test.js               # PR 4 / RS-005
-├── unknown-outcomes.scenario.test.js              # PR 4 / RS-007
-├── mixed-sell-accounting.scenario.test.js         # PR 5 / RS-006
-├── shared-account-concurrency.scenario.test.js   # PR 6 / RS-008
-└── stop-and-failures.scenario.test.js             # PR 7 / RS-009, after owner decision
+│   ├── reports/
+│   │   ├── parse-test-results.js                # Actual test-run evidence
+│   │   └── generate-coverage-report.js          # Registry + execution + review status
+│   ├── registry-and-runner.scenario.test.js    # PR 1 / RS-004-011
+│   ├── authorization-custody.scenario.test.js  # PR 2 / RS-001
+│   ├── buy-accounting.scenario.test.js         # PR 2 / RS-002
+│   ├── mixed-sell-planning.scenario.test.js    # PR 3 / RS-003
+│   ├── profitability.scenario.test.js          # PR 3 / RS-004
+│   ├── sell-lifecycle.scenario.test.js          # PR 4 / RS-005
+│   ├── unknown-outcomes.scenario.test.js        # PR 4 / RS-007
+│   ├── mixed-sell-accounting.scenario.test.js   # PR 5 / RS-006
+│   ├── shared-account-concurrency.scenario.test.js # PR 6 / RS-008
+│   └── stop-and-failures.scenario.test.js       # PR 7 / RS-009, after owner decision
 ├── recovery-seller-cycle-lifecycle.scenario.test.js
 ├── recovery-seller-mixed-sell-accounting.scenario.test.js
 ├── recovery-seller-profitability.scenario.test.js
