@@ -89,7 +89,10 @@ function isMarketsData(value: unknown): boolean {
     && typeof market['symbol'] === 'string'
     && typeof market['enabled'] === 'boolean'
     && typeof market['readiness'] === 'string'
-    && Array.isArray(market['blockers']));
+    && Array.isArray(market['blockers'])
+    && (market['operatorBuysPaused'] === undefined || typeof market['operatorBuysPaused'] === 'boolean')
+    && (market['latestPrice'] === undefined || market['latestPrice'] === null || typeof market['latestPrice'] === 'string')
+    && (market['priceFresh'] === undefined || typeof market['priceFresh'] === 'boolean'));
 }
 
 function isPositionData(value: unknown): boolean {
@@ -98,6 +101,11 @@ function isPositionData(value: unknown): boolean {
     || typeof value['activeQuantity'] !== 'string'
     || typeof value['investedQuote'] !== 'string') {
     return false;
+  }
+  for (const field of ['freeQuantity', 'totalQuantity', 'quoteNetCashFlow']) {
+    if (value[field] !== undefined && value[field] !== null && typeof value[field] !== 'string') {
+      return false;
+    }
   }
   if (value['recovery'] === null) {
     return true;
