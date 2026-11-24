@@ -68,3 +68,45 @@ test("Bitunix Futures REST client serializes concurrent requests at a conservati
   assert.deepEqual(calls.map(({ time }) => time), [0, 100, 200])
   assert.deepEqual(delays, [100, 100])
 })
+
+
+test("Bitunix Futures REST rate limiting is shared across clients using the same API key", async () => {
+  let clock = 0
+  const calls = []
+  const config = createConfig()
+  const dependencies = {
+    config,
+    now: () => 1_700_000_000_000,
+    rateLimitNow: () => clock,
+    sleepFn: async (delay) => {
+      clock += delay
+    },
+    fetchFn: async (...args) => {
+      calls.push(clock)
+      const [url] = args
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          code: 0,
+          data: String(url),
+        }),
+      }
+    },
+  }
+  const firstClient = new BitunixFuturesRestClient(dependencies)
+  const secondClient = new BitunixFuturesRestClient(dependencies)
+
+  await Promise.all([
+    firstClient.request({
+      method: "GET",
+      path: "/api/v1/futures/account",
+    }),
+    secondClient.request({
+      method: "GET",
+      path: "/api/v1/futures/account",
+    }),
+  ])
+
+  assert.deepEqual(calls, [0, 100])
+})
