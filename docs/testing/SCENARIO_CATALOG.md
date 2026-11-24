@@ -143,6 +143,7 @@ The catalog is a navigation and traceability layer. Domain specifications, accep
 
 - [BRK-001 — Unknown broker mutation outcome](#brk-001--unknown-broker-mutation-outcome-is-not-treated-as-failure)
 - [BRK-002 — Bitunix Futures TP/SL history is bounded and identity-preserving](#brk-002--bitunix-futures-tpsl-history-is-bounded-and-identity-preserving)
+- [BRK-003 — Futures position closes require reconciled private user data](#brk-003--futures-position-closes-require-reconciled-private-user-data)
 - [DB-001 — Database transaction atomicity](#db-001--a-failed-database-transaction-leaves-no-partial-write)
 - [EVT-001 — Publish versus subscriber completion](#evt-001--publish-acceptance-is-distinct-from-subscriber-completion)
 - [JRN-001 — Journal durability boundary](#jrn-001--journal-flush-is-the-durability-boundary)
@@ -838,6 +839,30 @@ The package entries below make the repository-wide scope visible, but their exac
 - `Bitunix Futures TP/SL history rejects an oversized page before dispatch`
 - `Bitunix Futures TP/SL history rejects rows for a different requested symbol`
 - `Bitunix Futures TP/SL history rejects values outside the documented int32 query range`
+
+### BRK-003 — Futures position closes require reconciled private user data
+
+**Status:** TEST-MAPPED — the readiness regression was observed RED on test-only commit `b410108338eefba65d70e8a9393140e53ed247e0`; the implementation gate and updated tests are on the current #1806 branch. Do not mark VERIFIED until the exact implementation head passes the Brokers test suite.
+
+**Behavior:** Explicit `allowLivePositionMutations: true` is not sufficient to close a Futures position. The consumer must first establish an authenticated private user-data session, reconcile balances, positions, pending orders and TP/SL orders through REST, and acknowledge that reconciliation.
+
+**Input:** Call `closeFuturesPosition()`, `closeFuturesPositionBySide()` or `closeAllFuturesPositions()` while the position-mutation opt-in is enabled but the private session is absent, disconnected, unauthenticated or still recovery-required.
+
+**Expected output:** Every operation returns `mutationOutcome: "NOT_SENT"` and `positionOutcome: "NOT_SENT"`; no position preflight or state-changing POST is dispatched. Once the session is authenticated and reconciliation is acknowledged, the existing explicit-scope close workflow may perform its one-shot request and REST post-readback.
+
+**Must not happen:** Do not close a position merely because the position-mutation opt-in is enabled. Do not treat reconnect as reconciliation, silently restore readiness, or retry a dispatched close after an unknown outcome.
+
+**Subcases:** Single position close; symbol/side resolution; symbol-scoped close-all; account-wide close with explicit confirmation; missing session; authenticated but unreconciled session; disconnected session; successful reconciled readiness.
+
+**Implementation:** `packages/brokers/src/infrastructure/bitunix/futures/broker.js` — `closeFuturesPosition()`, `closeFuturesPositionBySide()`, `closeAllFuturesPositions()`, `isUserDataReady` and `positionMutationNotReadyResult()`.
+
+**Automated tests:** `packages/brokers/src/infrastructure/bitunix/futures/broker.positions.test.js`:
+
+- `Bitunix Futures position mutations are NOT_SENT until the private user-data session is reconciled`
+- `Bitunix Futures closeFuturesPosition closes one exact position and verifies REST readback`
+- `Bitunix Futures closeFuturesPositionBySide resolves exactly one position side`
+- `Bitunix Futures closeAllFuturesPositions closes only the requested symbol and verifies the final scope`
+- `Bitunix Futures closeAllFuturesPositions requires explicit account-wide confirmation`
 
 ### DB-001 — A failed database transaction leaves no partial write
 
