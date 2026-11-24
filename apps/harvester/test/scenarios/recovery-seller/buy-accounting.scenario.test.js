@@ -91,8 +91,8 @@ function evaluateBuyPolicyCase({ overrides }) {
     pendingBuyCommitment: "0",
     ...overrides,
   })
-  const action = result.action
-  const orderIdentity = result.decision.orderIdentity
+  const { action } = result
+  const { orderIdentity } = result.decision
   return {
     outcome: result.decision.outcome,
     reasonCode: result.decision.reasonCode ?? null,
@@ -348,6 +348,10 @@ async function createUnknownBuySubmitterContext() {
   const unresolved = []
   let brokerCallCount = 0
   const submit = createRecoverySellerOrderSubmitter({
+    canSubmit: async () => ({
+      ok: true,
+      data: { allowed: true },
+    }),
     broker: {
       providerInstanceId: "binance-testnet-primary",
       providerType: "binance",
