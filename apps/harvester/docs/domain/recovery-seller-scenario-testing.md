@@ -363,6 +363,7 @@ The strategy config currently sets `enabled: true` at the audited checkpoint. Th
 The runtime references `thirdAssetFeeQuoteValue` in some paths, but it is not part of the validated operator pair configuration contract. Do not document it as a supported user-configurable field or fabricate its source.
 
 **Change-impact rule:** whenever an RS configuration field is added, removed, renamed, retyped, defaulted, or changes validation, the implementing agent must update:
+
 1. The configuration field catalog in the scenario registry.
 2. Relevant RS rule/decision links.
 3. The scenario matrix and boundary/invalid cases.
@@ -695,6 +696,7 @@ Cycle states are the five values listed in section 4.3. Transition IDs should de
 - `RS_CLOSED_TO_NEXT_ACCUMULATING_CYCLE`
 
 The exact validator/factory is authoritative. For every transition, record:
+
 1. Previous full state.
 2. Event identity and facts.
 3. Guard/preconditions.
@@ -1250,6 +1252,7 @@ These blockers must appear in the registry, #1780, the repository catalog where 
 Issue #1809 documents that the accounting workflow snapshot's accumulating cycle state lacks required invariant fields, causing the real default SELL evaluator to reject the state before planning.
 
 Required fix belongs to #1809, not the documentation/scenario-only issue. The fix must preserve the domain validator and make the real workflow-to-evaluator boundary produce a canonical valid state. Acceptance must include:
+
 - Real accounting workflow.
 - Real transition snapshot.
 - Real default SELL evaluator.
@@ -1268,6 +1271,7 @@ This sequence is the approved working roadmap. Deliver small PRs against develop
 **Goal:** prove the framework itself with one real scenario before adding a large matrix.
 
 Deliver:
+
 1. Registry record schema and stable ID validation.
 2. Family/config/rule/decision/state/transition/invariant catalogs with only source-verified entries.
 3. Registry validator with meaningful failure messages.
@@ -1278,6 +1282,7 @@ Deliver:
 8. Update #1780 and roadmap with exact implementation/evidence state.
 
 Do not:
+
 - Change production code/configuration.
 - Create fake RS domain rules.
 - Move all four existing scenario files.
@@ -1285,6 +1290,7 @@ Do not:
 - Claim registry completeness equals scenario coverage.
 
 Acceptance:
+
 - Duplicate/unknown IDs and references fail validation.
 - Representative scenario executes real production domain behavior.
 - Expected values are independently calculated.
@@ -1374,6 +1380,7 @@ The report must show missing/blocked/unsupported rows, not hide them in an aggre
 ### 15.4 Generated report design
 
 The report generator consumes:
+
 1. Checked-in scenario registry.
 2. Actual test-runner result data.
 3. Explicit human-reviewed oracle/authority status.
@@ -1455,6 +1462,7 @@ An agent asked to "implement RS domain scenarios" must execute this sequence wit
 ### Step 2 — Define the scenario before coding
 
 For each case:
+
 1. Assign stable ID.
 2. Link exact specification section/approved decision.
 3. Set priority and test layer.
@@ -1501,6 +1509,7 @@ For each case:
 ### Step 6 — Stop conditions
 
 Stop and mark the affected case BLOCKED if:
+
 - The canonical spec is contradictory or silent.
 - Expected financial result cannot be independently derived.
 - Current source path/identity/state is unclear.
