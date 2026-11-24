@@ -13,7 +13,7 @@ const broker = new Broker({
 test("Bitunix Futures unsupported common operations explain their Futures-specific alternatives", async () => {
   const cases = [
     ["getAccountSnapshot", /no atomic.*snapshot|source timestamp/i],
-    ["getServerTime", /no documented.*server-time endpoint/i],
+    ["getServerTime", /does not document.*server-time endpoint/i],
     ["getOrder", /getCanonicalOrder/i],
     ["getOrderHistory", /getCanonicalOrderHistory/i],
     ["getMyTrades", /getFuturesTradeHistory|bounded.*Fills/i],

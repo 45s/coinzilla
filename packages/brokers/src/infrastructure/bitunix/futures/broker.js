@@ -2440,7 +2440,7 @@ export class BitunixFuturesBroker {
   async createOrder() {
     return unsupportedResult({
       operation: "createOrder",
-      reason: "Futures order placement is disabled until the mutation lifecycle is verified.",
+      reason: "The common CanonicalOrder model cannot express Futures tradeSide, positionId and reduceOnly semantics; use createFuturesOrder() with explicit Futures fields and the live-mutation safety gate.",
     })
   }
 
