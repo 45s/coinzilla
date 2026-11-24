@@ -341,3 +341,15 @@ test("Bitunix Futures createFuturesOrder does not confirm a mismatched order pri
   assert.equal(result.orderOutcome, "OUTCOME_UNKNOWN", "a mismatched readback must preserve the uncertain order outcome")
   assert.equal(requests.filter(({ method }) => method === "POST").length, 1, "reconciliation must never repeat the placement POST")
 })
+
+
+test("Bitunix Futures createFuturesOrder remains NOT_SENT until private user-data state is reconciled", async () => {
+  const { broker, requests } = createOrderBroker()
+  await broker.connect()
+
+  const result = await broker.createFuturesOrder(limitOrderInput)
+
+  assert.equal(result.ok, false, "order placement must be blocked without a reconciled private user-data session")
+  assert.equal(result.mutationOutcome, "NOT_SENT", "a readiness failure must occur before exchange dispatch")
+  assert.equal(requests.some(({ method }) => method === "POST"), false, "no placement POST may be sent before reconciliation")
+})

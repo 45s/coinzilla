@@ -20,12 +20,27 @@ class FakePrivateWebSocketClient extends EventEmitter {
 
   disconnectCount = 0
 
+  status() {
+    return {
+      state: this.state,
+      authenticated: this.authenticated,
+      recoveryRequired: this.recoveryRequired,
+    }
+  }
+
   async connect() {
     this.state = "open"
+    this.emit("status", this.status())
   }
 
   async waitUntilAuthenticated() {
     this.authenticated = true
+    this.emit("status", this.status())
+  }
+
+  markReconciled() {
+    this.recoveryRequired = false
+    this.emit("status", this.status())
   }
 
   subscribe({ channels }) {
@@ -159,4 +174,51 @@ test("Bitunix Futures private user-data subscription requires a connected broker
   assert.equal(result.ok, false)
   assert.match(result.errors[0].message, /connected/i)
   assert.equal(clients.length, 0)
+})
+
+
+test("Bitunix Futures exposes an explicit, non-authoritative user-data reconciliation acknowledgement", async () => {
+  const { broker, clients } = createBroker()
+  const observations = []
+  const statuses = []
+  await broker.connect()
+
+  const subscription = await broker.subscribeForUserData({
+    onObservation: (observation) => observations.push(observation),
+    onStatus: (status) => statuses.push(status),
+  })
+
+  assert.equal(subscription.ok, true, "the authenticated private session should subscribe")
+  assert.equal(subscription.data.recoveryRequired, true, "a new private session must require reconciliation")
+  assert.equal(broker.isUserDataReady, false, "a new private session must not authorize mutations")
+
+  const rejected = await broker.acknowledgeUserDataReconciliation({
+    reconciliationCompleted: false,
+  })
+  assert.equal(rejected.ok, false, "reconciliation must require explicit caller acknowledgement")
+
+  const acknowledged = await broker.acknowledgeUserDataReconciliation({
+    reconciliationCompleted: true,
+  })
+  assert.equal(acknowledged.ok, true, "a connected authenticated session may record completed external reconciliation")
+  assert.equal(acknowledged.data.recoveryRequired, false, "the caller acknowledgement should clear the recovery gate")
+  assert.equal(acknowledged.data.authoritative, false, "manual reconciliation must not make the stream authoritative")
+  assert.equal(acknowledged.data.replayable, false, "manual reconciliation must not claim event replay")
+  assert.equal(broker.isUserDataReady, true, "only a reconciled active session may authorize mutations")
+
+  clients[0].emit("channel", {
+    channel: "order",
+    data: {
+      orderId: "futures-order-123",
+      clientId: "strategy-order-456",
+    },
+  })
+  assert.equal(observations[0].recoveryRequired, false, "observations must reflect the acknowledged recovery state")
+  assert.equal(observations[0].authoritative, false, "private observations remain non-authoritative")
+  assert.equal(observations[0].replayable, false, "private observations remain non-replayable")
+  assert.equal(statuses.at(-1).recoveryRequired, false, "status updates must expose the current recovery state")
+
+  await subscription.data.unsubscribe()
+  assert.equal(broker.isUserDataReady, false, "unsubscribing must close the mutation-readiness gate")
+  await broker.disconnect()
 })

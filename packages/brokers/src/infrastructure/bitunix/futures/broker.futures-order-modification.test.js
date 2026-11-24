@@ -249,3 +249,15 @@ test("Bitunix Futures modifyFuturesOrder does not confirm an acknowledged but mi
   assert.equal(result.orderOutcome, "OUTCOME_UNKNOWN", "a mismatched final state must remain unresolved")
   assert.equal(requests.filter(({ method }) => method === "POST").length, 1, "reconciliation must never repeat the modification POST")
 })
+
+
+test("Bitunix Futures modifyFuturesOrder remains NOT_SENT until private user-data state is reconciled", async () => {
+  const { broker, requests } = createModifyBroker()
+  await broker.connect()
+
+  const result = await broker.modifyFuturesOrder(modifyInput)
+
+  assert.equal(result.ok, false, "order modification must be blocked without a reconciled private user-data session")
+  assert.equal(result.mutationOutcome, "NOT_SENT", "a readiness failure must occur before exchange dispatch")
+  assert.equal(requests.some(({ method }) => method === "POST"), false, "no modification POST may be sent before reconciliation")
+})

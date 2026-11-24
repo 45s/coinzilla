@@ -663,3 +663,31 @@ test("Bitunix Futures cancelAllOpenOrders reconciles a lost acknowledgement with
   assert.equal(result.data.remainingOpenOrders, 0)
   assert.equal(requests.filter(({ method }) => method === "POST").length, 1)
 })
+
+
+test("Bitunix Futures cancelOrder remains NOT_SENT until private user-data state is reconciled", async () => {
+  const { broker, requests } = createCancellationBroker()
+  await broker.connect()
+
+  const result = await broker.cancelOrder({
+    symbol: "BTCUSDT",
+    orderId: "futures-order-123",
+  })
+
+  assert.equal(result.ok, false, "cancellation must be blocked without a reconciled private user-data session")
+  assert.equal(result.mutationOutcome, "NOT_SENT", "a readiness failure must occur before exchange dispatch")
+  assert.equal(result.cancellationOutcome, "NOT_SENT", "the cancellation outcome must remain unsent")
+  assert.equal(requests.some(({ method }) => method === "POST"), false, "no cancellation POST may be sent before reconciliation")
+})
+
+test("Bitunix Futures cancelAllOpenOrders remains NOT_SENT until private user-data state is reconciled", async () => {
+  const { broker, requests } = createCancelAllBroker()
+  await broker.connect()
+
+  const result = await broker.cancelAllOpenOrders()
+
+  assert.equal(result.ok, false, "cancel-all must be blocked without a reconciled private user-data session")
+  assert.equal(result.mutationOutcome, "NOT_SENT", "a readiness failure must occur before exchange dispatch")
+  assert.equal(result.cancellationOutcome, "NOT_SENT", "the cancellation outcome must remain unsent")
+  assert.equal(requests.some(({ method }) => method === "POST"), false, "no cancel-all POST may be sent before reconciliation")
+})
