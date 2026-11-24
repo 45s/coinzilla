@@ -670,6 +670,7 @@ export const recoverySellerBuyAccountingScenarios = Object.freeze([
           owned: false,
           fillInput: {
             tradeId: "rs-unowned-buy-fill",
+            price: "10",
             quantity: "1",
             quoteQuantity: "10",
           },
@@ -679,6 +680,7 @@ export const recoverySellerBuyAccountingScenarios = Object.freeze([
           strategyId: "CG_coinGrabber",
           fillInput: {
             tradeId: "rs-wrong-strategy-buy-fill",
+            price: "10",
             quantity: "1",
             quoteQuantity: "10",
           },
@@ -688,11 +690,13 @@ export const recoverySellerBuyAccountingScenarios = Object.freeze([
           seedPositionId: "foreign-position",
           seedFillInput: {
             tradeId: "rs-wrong-position-buy-fill",
+            price: "10",
             quantity: "1",
             quoteQuantity: "10",
           },
           fillInput: {
             tradeId: "rs-wrong-position-buy-fill",
+            price: "10",
             quantity: "1",
             quoteQuantity: "10",
           },
@@ -701,6 +705,7 @@ export const recoverySellerBuyAccountingScenarios = Object.freeze([
           id: "wrong-broker-order",
           fillInput: {
             tradeId: "rs-wrong-order-buy-fill",
+            price: "10",
             brokerOrderId: "foreign-broker-order",
             quantity: "1",
             quoteQuantity: "10",
@@ -710,6 +715,7 @@ export const recoverySellerBuyAccountingScenarios = Object.freeze([
           id: "wrong-market",
           fillInput: {
             tradeId: "rs-wrong-market-buy-fill",
+            price: "10",
             marketSymbol: "ZROFDUSD",
             quantity: "1",
             quoteQuantity: "10",
@@ -719,6 +725,7 @@ export const recoverySellerBuyAccountingScenarios = Object.freeze([
           id: "wrong-side",
           fillInput: {
             tradeId: "rs-wrong-side-buy-fill",
+            price: "10",
             side: "SELL",
             quantity: "1",
             quoteQuantity: "10",
