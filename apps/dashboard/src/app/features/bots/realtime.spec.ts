@@ -79,6 +79,33 @@ describe('Bots WebSocket protocol', () => {
     expect(parseBotsWebSocketMessage(JSON.stringify(incomplete))).toBeNull();
   });
 
+  it('rejects numeric recovery values instead of accepting lossy financial data', () => {
+    const malformed = {
+      ...validSnapshot,
+      data: {
+        ...validSnapshot.data,
+        portfolio: {
+          ok: true,
+          data: {
+            observedAt: 120000,
+            positions: [{
+              symbol: 'BTCUSDT',
+              activeQuantity: '0.1',
+              investedQuote: '500',
+              recovery: {
+                buyCost: 500,
+                netSellProceeds: '0',
+                outstandingRecoveryAmount: '500',
+                realizedNetProfit: '0',
+              },
+            }],
+          },
+        },
+      },
+    };
+    expect(parseBotsWebSocketMessage(JSON.stringify(malformed))).toBeNull();
+  });
+
   it('accepts an explicit unavailable snapshot without converting failed reads to empty data', () => {
     const unavailable = {
       ...validSnapshot,
