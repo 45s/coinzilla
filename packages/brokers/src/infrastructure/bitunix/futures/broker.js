@@ -64,6 +64,96 @@ const FUTURES_CAPABILITIES = [
     guarantee: "Returns the validated Bitunix USDT Futures contract catalog and includes only contracts with OPEN status and API trading enabled.",
   },
   {
+    type: "READ_TRADING_RULES",
+    status: "UNKNOWN",
+    reason: "The Futures catalog does not document discrete tickSize or stepSize increments; raw precision metadata is not a trading-rule substitute.",
+  },
+  {
+    type: "READ_SERVER_TIME",
+    status: "UNKNOWN",
+    reason: "No verified Futures server-time endpoint has been implemented.",
+  },
+  {
+    type: "READ_CANONICAL_ORDER",
+    status: "UNKNOWN",
+    reason: "The Futures canonical order adapter and clientId recovery path have not yet been implemented.",
+  },
+  {
+    type: "READ_CANONICAL_ORDER_HISTORY",
+    status: "UNKNOWN",
+    reason: "The Futures canonical order-history adapter and pagination contract have not yet been implemented.",
+  },
+  {
+    type: "READ_TRADE_HISTORY",
+    status: "UNKNOWN",
+    reason: "The Futures trade-history adapter and execution identity contract have not yet been implemented.",
+  },
+  {
+    type: "READ_COMPLETE_FILL_HISTORY",
+    status: "UNKNOWN",
+    reason: "The Futures API documentation does not yet establish complete, stable, gap-free fill history.",
+  },
+  {
+    type: "RECONCILE_ORDERS",
+    status: "UNKNOWN",
+    reason: "Order reconciliation requires verified order identity, complete fills and account-scoped coverage.",
+  },
+  {
+    type: "RECOVER_USER_DATA_SESSION",
+    status: "UNKNOWN",
+    reason: "The Futures private WebSocket session recovery and REST reconciliation lifecycle have not yet been implemented.",
+  },
+  {
+    type: "RECOVER_PROCESS_RESTART",
+    status: "UNKNOWN",
+    reason: "Restart recovery requires verified account-wide order and position reconciliation.",
+  },
+  {
+    type: "OBSERVE_USER_DATA",
+    status: "UNKNOWN",
+    reason: "The Futures private WebSocket observation adapter has not yet been implemented.",
+  },
+  {
+    type: "SUBSCRIBE_CANDLES",
+    status: "UNKNOWN",
+    reason: "The Futures public WebSocket kline lifecycle has not yet been implemented.",
+  },
+  {
+    type: "SUBSCRIBE_BOOK_TICKER",
+    status: "UNKNOWN",
+    reason: "The Futures public WebSocket depth/book ticker lifecycle has not yet been implemented.",
+  },
+  {
+    type: "READ_ASSETS",
+    status: "UNSUPPORTED",
+    reason: "The USDT-margined Futures account contract does not expose the Spot asset inventory operation.",
+  },
+  {
+    type: "READ_EXCHANGE_RATES",
+    status: "UNSUPPORTED",
+    reason: "The Futures product does not expose the Spot exchange-rate catalog operation.",
+  },
+  {
+    type: "READ_DEPOSITS",
+    status: "UNSUPPORTED",
+    reason: "Deposit history is outside the USDT-margined Futures product contract.",
+  },
+  {
+    type: "READ_DEPOSIT_ADDRESS",
+    status: "UNSUPPORTED",
+    reason: "Deposit addresses are outside the USDT-margined Futures product contract.",
+  },
+  {
+    type: "READ_WITHDRAWAL_HISTORY",
+    status: "UNSUPPORTED",
+    reason: "Withdrawal history is outside the USDT-margined Futures product contract.",
+  },
+  {
+    type: "READ_MATCHING_ORDER_DETAILS",
+    status: "UNSUPPORTED",
+    reason: "The Spot matching-order detail operation is not a Futures operation.",
+  },
+  {
     type: "READ_OPEN_ORDERS",
     status: "UNKNOWN",
     reason: "The Futures open-order adapter and completeness contract have not yet been implemented.",

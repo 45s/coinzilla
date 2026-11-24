@@ -267,6 +267,8 @@ Current verified capabilities:
 - `getBalances()`: authenticated USDT margin-account read; exact available/frozen/margin decimal mapping. This is not an authoritative account snapshot because the source does not provide a verified snapshot timestamp.
 - `getPrices()`: one-shot public ticker read returning exact last and mark prices.
 - `getCandles()`: public closed-kline read with exact decimals, chronological ordering and interval-derived close time.
+- `getSymbolFilters()`: raw trading-pair metadata; it does not invent `tickSize` or `stepSize` from decimal precision.
+- `getOrderBook()`: Futures-specific extension returning exact bid/ask level strings; the REST response has no source timestamp or sequence.
 - Signed Futures REST transport with explicit POST mutation-state declaration and no automatic retries.
 
 All other Futures operations remain `UNKNOWN` or `UNSUPPORTED` until their protocol mapping, lifecycle and deterministic tests are complete. In particular, the presence of Futures endpoints does not establish canonical fill completeness, order recovery, or private WebSocket event durability. Do not use this provider for Harvester routing or production execution based on the partial capability set. No LIVE mutation has been performed by automated tests or the implementation agent.

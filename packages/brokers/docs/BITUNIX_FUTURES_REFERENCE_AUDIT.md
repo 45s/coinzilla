@@ -74,6 +74,12 @@ The official trading-pair catalog exposes fields such as `basePrecision`, `quote
 - `clientId` is a client-supplied identity and must be preserved for unknown-outcome reconciliation where the order-detail endpoint supports it.
 - Margin mode, leverage and position mode are account-level state. They are not inferred from a market symbol and must be changed only through separately gated operations.
 
+### REST depth semantics
+
+- Public depth is read from `GET /api/v1/futures/market/depth` with a symbol and a documented depth limit (`1`, `5`, `15`, `50`, or `max`). The endpoint is rate-limited to 10 requests/second/IP.
+- The response contains `asks` and `bids` price/quantity pairs. The schema describes string values while the example body emits JSON numbers. Parsing those numbers through JavaScript `Number` can round valid exchange decimals; the Futures REST client quotes numeric tokens in these arrays before JSON parsing.
+- The REST depth response does not provide a verified source timestamp or sequence. It is a point-in-time snapshot, not a gap-free stream.
+
 ### Account balance semantics
 
 - The Futures account response separates `available`, `frozen`, and `margin`.
@@ -127,8 +133,10 @@ The library is used as a secondary discovery/reference source. It does not estab
 - [x] Public trading-pair catalog mapping with OPEN/API-supported filtering.
 - [x] Private USDT account-balance mapping with exact decimal arithmetic.
 - [x] Public ticker price and closed kline reads.
+- [x] Lossless REST depth/order-book reads and raw symbol-filter metadata.
 - [x] Public one-shot ticker prices (`lastPrice`, `markPrice`) and closed kline reads with exact decimals and interval-derived close time.
-- [ ] Depth/order-book reads and raw Futures market-filter metadata; do not infer tick/step increments from precision fields.
+- [x] REST depth/order-book reads with lossless numeric-token parsing and explicit no-source-timestamp limitation.
+- [x] Raw Futures trading-pair metadata; no tick/step increments are inferred from decimal precision fields.
 - [ ] Pending/history orders, canonical order mapping and clientId-based unknown-outcome reconciliation.
 - [ ] Position reads/history/tiers and explicit account position/leverage/margin controls.
 - [ ] Canonical fill mapping only after identity/completeness evidence is sufficient.
