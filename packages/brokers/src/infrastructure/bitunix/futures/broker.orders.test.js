@@ -2,7 +2,7 @@ import assert from "node:assert/strict"
 import test from "node:test"
 
 import { Broker } from "../../../index.js"
-import { connectAndAcknowledgeUserDataReconciliation, createFakePrivateWebSocketClientFactory } from "./futures-mutation-fixtures.js"
+import { connectAndAcknowledgeUserDataReconciliation, FakePrivateWebSocketClient } from "./futures-mutation-fixtures.js"
 import { CanonicalOrder } from "@coinzilla/entities"
 
 const credentials = {
@@ -44,6 +44,7 @@ function createOrderRow(overrides = {}) {
 
 function createBroker({ orderRow = createOrderRow() } = {}) {
   const requests = []
+  const privateClients = []
   const broker = new Broker({
     provider: "bitunix-futures",
     ...credentials,
@@ -299,8 +300,31 @@ function createCancellationAckResponse({ cancelResponse }) {
   })
 }
 
+function emitCancellationEvent({ privateClients, detailStatus }) {
+  privateClients[0]?.emit("channel", {
+    ch: "order",
+    symbol: "BTCUSDT",
+    ts: 1_700_000_002_000,
+    data: {
+      event: "CLOSE",
+      orderId: "futures-order-123",
+      clientId: "strategy-order-456",
+      symbol: "BTCUSDT",
+      orderStatus: detailStatus,
+    },
+  })
+}
+
+function shouldEmitCancellationEvent({ cancelResponse, detailStatus }) {
+  const explicitlyRejected = cancelResponse?.failureList?.some(
+    (failure) => failure?.orderId === "futures-order-123",
+  )
+  return !explicitlyRejected && ["CANCELED", "PART_FILLED_CANCELED"].includes(detailStatus)
+}
+
 function createCancellationFetch({
   requests,
+  privateClients,
   cancelResponse,
   detailStatus = "PART_FILLED_CANCELED",
   pendingOrder = {},
@@ -328,6 +352,15 @@ function createCancellationFetch({
       })
     }
     if (path === "/api/v1/futures/trade/cancel_orders") {
+      if (shouldEmitCancellationEvent({
+        cancelResponse,
+        detailStatus,
+      })) {
+        emitCancellationEvent({
+          privateClients,
+          detailStatus,
+        })
+      }
       if (cancelError) {
         throw cancelError
       }
@@ -351,9 +384,17 @@ function createCancellationBroker({
     providerOptions: {
       allowLiveOrderMutations,
       dependencies: {
-        webSocketClientFactory: createFakePrivateWebSocketClientFactory(),
+        privateEventTimeoutMs: 10,
+        webSocketClientFactory: ({ channelType }) => {
+          const client = new FakePrivateWebSocketClient()
+          if (channelType === "private") {
+            privateClients.push(client)
+          }
+          return client
+        },
         fetchFn: createCancellationFetch({
           requests,
+          privateClients,
           ...fetchOptions,
         }),
       },
@@ -362,6 +403,7 @@ function createCancellationBroker({
   return {
     broker,
     requests,
+    privateClients,
   }
 }
 

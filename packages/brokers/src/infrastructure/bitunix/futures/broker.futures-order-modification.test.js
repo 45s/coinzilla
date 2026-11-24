@@ -113,12 +113,12 @@ function createModifyResponse({
   })
 }
 
-function createModifyDetailResponse({ detailError, detailOptions }) {
+function createModifyDetailResponse({ detailError, detailOrder }) {
   if (detailError) {
     throw detailError
   }
   return createFuturesResponse({
-    data: createCanonicalOrder(detailOptions),
+    data: createCanonicalOrder(detailOrder),
   })
 }
 
@@ -137,10 +137,11 @@ function createModifyFetch(options) {
       })
     }
     if (path === "/api/v1/futures/trade/get_pending_orders") {
+      const pendingTotal = options.pendingTotal ?? 1
       return createFuturesResponse({
         data: {
-          orderList: [createPendingOrder()],
-          total: 1,
+          orderList: pendingTotal === 0 ? [] : [createPendingOrder(options.pendingOrder)],
+          total: pendingTotal,
         },
       })
     }

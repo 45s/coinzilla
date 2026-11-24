@@ -76,7 +76,12 @@ export function createPrivateOrderEventWaiter({ broker, orderId, clientOrderId, 
     resolveResult(result)
   }
   function onChannel(event) {
-    if (matchesPrivateOrderEventIdentity({ event, orderId, clientOrderId, symbol })) {
+    if (matchesPrivateOrderEventIdentity({
+      event,
+      orderId,
+      clientOrderId,
+      symbol,
+    })) {
       settle({
         event,
         error: null,
