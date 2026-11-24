@@ -109,44 +109,41 @@ Do not claim 100% correctness from line/branch coverage. Completion means every 
 - **In progress in [PR #1741](https://github.com/45s/coinzilla/pull/1741):** add `pnpm run operational-state:diagnose` to verify the existing facts/manifest streams with the production store reader, then independently report the offline recovery-projection result.
 - The command is read-only, prints a safe fact-type/candidate summary and exact source identity, and never initializes, repairs, truncates, or mutates the ledger. It does not connect to Binance or enable process-restart restoration.
 
-## Recovery Seller domain scenario coverage — issue #1780
+## Recovery Seller domain scenario testing — issue #1780
 
-**Purpose:** independently prove RS business behavior from the approved domain contract. This is a test-evidence workstream, not a new trading-policy or runtime-activation task. Shared scenario methodology is owned by [#1779](https://github.com/45s/coinzilla/issues/1779) and merged in [PR #1795](https://github.com/45s/coinzilla/pull/1795). The repository-wide human-readable index is [SCENARIO_CATALOG.md](../../docs/testing/SCENARIO_CATALOG.md); #1780 owns the detailed RS matrix and evidence.
+**Purpose:** deliver a from-scratch, source-grounded RS scenario suite. This is a test-evidence workstream, not a trading-policy, configuration, activation or exchange-operation task. The detailed AI-agent implementation contract is [Recovery Seller Scenario Testing Playbook](./docs/domain/recovery-seller-scenario-testing.md). The shared strategy-neutral method is [Domain Scenario Testing Methodology](../../docs/testing/DOMAIN_SCENARIO_TESTING.md), owned by [#1779](https://github.com/45s/coinzilla/issues/1779). The repository-wide navigation index is [SCENARIO_CATALOG.md](../../docs/testing/SCENARIO_CATALOG.md). Issue [#1780](https://github.com/45s/coinzilla/issues/1780) owns the complete RS matrix, subcases, blockers and evidence.
 
-**Current PR:** [#1793](https://github.com/45s/coinzilla/pull/1793), branch `test/rs-profitability-domain-scenarios-v2`. The PR branch was originally based on `44ed6ce4dd32437e5343c2b1c43171f290f4836e`; it is being synchronized with current `develop` before any new exact-head verification. Do not reuse old CI claims as evidence for the synchronized head.
+**Current baseline — develop `a72cfb0fb66461290a8855a6df774dcdd87b2c6e`:** PR [#1793](https://github.com/45s/coinzilla/pull/1793) is merged at `9902d6a01d675a988a40f0fb2130c3eb477675ef`. Its PR head `4d59272ea22317b3540d2356082b270328542c7e` had 29 successful checks and one intentionally skipped read-only Binance TESTNET workflow. This is the initial partial scenario slice, not complete RS coverage.
 
-**New files in the current slice:**
+**Current family disposition:**
 
-- `test/scenarios/recovery-seller-sell-planner.scenario.test.js` — five application-composed planner cases for canonical BUY-derived recovery quantity, verified Spot legacy availability, the specification ZRO proceeds oracle, account SELL reservation blocking, exchange-filter STOP and no-submission behavior.
-- `test/scenarios/recovery-seller-profitability.scenario.test.js` — four named cases for both cross-subsidy directions, exact threshold equality, and recovery-only profitability.
-- `test/scenarios/recovery-seller-mixed-sell-accounting.scenario.test.js` — six named cases for a supplied canonical DOGE Fill split, exact allocation sum, domain projection commit, replay no-op, one failure-atomicity boundary, and staged duplicate/conflict handling.
-- `test/scenarios/recovery-seller-cycle-lifecycle.scenario.test.js` — two explicit cases plus three loop-generated terminal-status cases for unknown identity retention, terminal unsuccessful outcomes, and conflicting client identity rejection.
-
-**Evidence limits:** these are new domain-level scenario files, but not all are end-to-end business scenarios. RS-003's DOGE price/proceeds/commission are synthetic test fixture values; only the 400 + 1 additive quantity example is specification-illustrative. The supplied-Fill allocation test does not prove the planner derives its target from verified custody. The cycle lifecycle tests exercise pure cycle-state transitions, not broker submitter call counts, durable reservation retention, or application STOP side effects. The accounting test proves one-Fill domain projection atomicity, not multi-Fill REST/stream reconciliation or a durable database transaction barrier.
-
-**Scenario status:**
-
-- RS-001 legacy basis/Spot custody — MISSING.
-- RS-002 confirmed BUY/net-fee accounting — MISSING.
-- RS-003 additive mixed SELL allocation — PARTIAL.
+- RS-001 authorization / legacy basis / Spot custody — MISSING.
+- RS-002 confirmed BUY and net-fee accounting — MISSING.
+- RS-003 additive mixed SELL planning/allocation — PARTIAL; real workflow-to-evaluator state projection is separately tracked by [#1809](https://github.com/45s/coinzilla/issues/1809).
 - RS-004 independent profitability — PARTIAL.
 - RS-005 one SELL lifecycle — PARTIAL.
-- RS-006 exact-once/domain projection atomicity — PARTIAL.
-- RS-007 unknown outcome/no blind retry — PARTIAL (state-level only; application no-retry not proved).
-- RS-008 CG/RS shared resources — MISSING.
-- RS-009 STOP — BLOCKED pending resolution of the domain STOP-clear helper/use-case versus terminal-STOP contract.
-- RS-010 restart/replay — UNSUPPORTED; third-asset fee valuation — BLOCKED pending approved source.
+- RS-006 mixed SELL accounting atomicity — PARTIAL.
+- RS-007 unknown outcome/no blind retry — PARTIAL (state-level evidence only).
+- RS-008 CG/RS shared account resources — MISSING.
+- RS-009 STOP — BLOCKED by the specification/source resolution discrepancy.
+- RS-010 restart/replay — UNSUPPORTED; third-asset fee valuation — BLOCKED.
 
-**Contract discrepancies to resolve before affected scenarios are encoded:**
+**Contract blockers:** STOP resolution, strategy enabled-default wording, third-asset fee valuation source, and dust-versus-filter-STOP boundary remain unresolved. Do not encode invented behavior or change production policy/configuration to clear these blockers.
 
-1. STOP: specification/#1780 call STOP terminal and say no clear/reset path, but `resolveRecoverySellerStopState` and `resolveRecoverySellerStop` implement an evidence-backed operator resolution. The operator facade currently exposes read-only status only. Do not claim either an exposed operator reset or absence of an internal resolution use case.
-2. Default enabled state: current config sets `RS_RECOVERY_SELLER_CONFIG.enabled: true`, while specification §15 says keep it false by default; the specification's earlier text and implementation roadmap say enabled by default. Keep this as a documentation/owner-decision blocker; this scenario PR must not change configuration.
-3. Third-asset commission valuation: calculation examples exist, but the authoritative runtime quote valuation source remains unresolved/deferred.
+**Next implementation sequence (small PRs, test-only unless a separately scoped production defect is demonstrated):**
 
-**Newly discovered RS-003 implementation blocker:** the real accounting workflow transition snapshot emits an accumulating cycle state missing fields required by the SELL domain validator. The default evaluator therefore fails closed before planning. Tracked separately in [issue #1809](https://github.com/45s/coinzilla/issues/1809). The planner scenario uses the canonical cycle-state factory to isolate planner economics; it does not claim the production workflow-to-evaluator path is covered.
+1. PR 1 — scenario registry/schema, stable IDs, traceability catalogs, validation, thin runner, and one real RS-004 scenario through the runner.
+2. PR 2 — RS-001/002 authorization, custody and confirmed BUY accounting.
+3. PR 3 — RS-003/004 planner, fee-aware economics and profitability boundaries; fix #1809 in its own production issue/PR.
+4. PR 4 — RS-005/007 one-SELL lifecycle, unknown outcomes, broker-call count and reservation proof.
+5. PR 5 — RS-006 multi-fill reconciliation and atomic accounting.
+6. PR 6 — RS-008 shared CG/RS account concurrency.
+7. PR 7 — RS-009 only after owner resolves STOP and dust/filter contracts.
+8. Keep RS-010 deferred until separately approved product contracts exist.
 
-**Next P0 work:** resolve and test workflow-to-evaluator cycle-state projection in #1809; actual fill-commission-aware profitability; multiple canonical fills and REST/stream order permutations; durable submission/reconciliation boundaries; STOP decision after the owner resolves the contract discrepancy. Continue test-first in small increments. Do not change production policy, configuration, or exchange state under #1780.
+**Non-negotiable evidence rule:** existing RS unit/workflow/runtime/operator tests receive no scenario-coverage credit for #1780. A family becomes VERIFIED only when every required subcase is proved by new named scenario assertions, independently reviewed, passed on an exact SHA, merged to develop, and recorded with exact CI evidence. Use the shared methodology's status vocabulary; do not use test count or registry presence as coverage.
 
+**Safety boundary:** no production behavior, trading policy, strategy configuration, runtime activation, credentials, broker calls, order operations, TESTNET/LIVE session, or exchange state changes are authorized by #1780.
 ## Recovery Seller activation — 2026-11-22
 
 - RS is enabled by default. LINEAUSDT is enabled with `tradingEnvironment: TESTNET`; the existing per-market selector includes it only for TESTNET and excludes it from LIVE.
