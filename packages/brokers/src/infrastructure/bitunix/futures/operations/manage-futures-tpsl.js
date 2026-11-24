@@ -472,7 +472,9 @@ async function executeTpSlCancellation({ broker, input, requirePositionId }) {
         dispatchError: dispatch.error,
         confirmed: status === "CANCELED",
       }),
-      ...classified,
+      tpSlOutcome: classified.tpSlOutcome,
+      cancellationOutcome: classified.cancellationOutcome,
+      childOrderFillOutcome: classified.childOrderFillOutcome,
     })
   } catch (error) {
     handleErr({

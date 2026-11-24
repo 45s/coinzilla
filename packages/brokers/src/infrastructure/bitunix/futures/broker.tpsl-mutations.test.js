@@ -64,11 +64,12 @@ function createBroker({
       request: async (request) => {
         requests.push(request)
         const path = request.path
-        const event = path.endsWith("/place_order")
-          ? "CREATE"
-          : path.endsWith("/modify_order")
-            ? "UPDATE"
-            : "CLOSE"
+        let event = "CLOSE"
+        if (path.endsWith("/place_order")) {
+          event = "CREATE"
+        } else if (path.endsWith("/modify_order")) {
+          event = "UPDATE"
+        }
         if (emitEvent) {
           privateWebSocketClient.emit("channel", createTpSlEvent({
             event,
