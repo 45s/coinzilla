@@ -2188,3 +2188,11 @@ The detailed evidence, implementation commits, CI state and remaining unknowns a
 - Added cross-projection regressions for identical duplicate replay, changed commission facts under a reused Fill identity, Portfolio/RecoveryLedger history disagreement, foreign-market BUY evidence and failure atomicity. Rejected inputs leave both accepted immutable projections unchanged.
 - Audited the Phase 4 BUY matrix against existing Portfolio/Position, commission-validation, canonical Fill, completed-BUY VWAP, account-snapshot and allocation tests; source/test evidence is recorded in `docs/domain/DOMAIN_TEST_INVENTORY.md`.
 - Test-only/docs work. No production behavior, strategy rules, exchange access or credentials changed. Exact-head CI verification is pending.
+
+## 2026-11-24 — #1763 Phase 4 BUY accounting completion work
+
+- Added composed initial/multiple-BUY accounting coverage in `src/use-cases/conservative-buy-accounting-scenario.test.js`, applying canonical fills through `updateTradingAccounting` and asserting exact Position/RecoveryLedger inventory, cost, quote cash flow, commission treatment, execution identities, duplicate behavior and failure atomicity.
+- Added `src/use-cases/second-buy-fill-reconciliation.test.js` to prove a later BUY adds its net inventory and all quote-valued fees to the existing Position and RecoveryLedger basis without resetting the first tranche.
+- Extended `strategies/conservative/strategy.test.js` investment-cap boundaries to assert the next BUY is allowed just above the exact required cap, while existing cases cover equality and below-cap suppression; recovery SELL remains eligible.
+- Existing completed-BUY VWAP and incomplete-history tests remain the authoritative reference-price proof in the engine suite. Existing strategy tests cover initial BUY price/quantity, active BUY suppression and recovery-SELL acknowledgement gating.
+- Updated the domain test inventory with the added test ownership and corrected its Markdown spacing failure. No production behavior or trading rules changed. Exact-head CI is pending.
