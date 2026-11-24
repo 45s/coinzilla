@@ -320,6 +320,7 @@ async function dispatchModifyOrder({ broker, input, order }) {
     orderId: order.orderId,
     clientOrderId: input.clientId,
     symbol: input.symbol,
+    eventType: "UPDATE",
   })
   try {
     await broker.restClient.request({

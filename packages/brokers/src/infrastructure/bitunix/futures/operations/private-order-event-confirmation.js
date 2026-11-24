@@ -183,7 +183,13 @@ function createPrivateEventWaiter({
  * @param {{broker: object, orderId?: string, clientOrderId?: string, symbol: string}} options
  * @returns {{promise: Promise<{event: object|null, error: Error|null}>, startTimeout: () => void, cancel: () => void}}
  */
-export function createPrivateOrderEventWaiter({ broker, orderId, clientOrderId, symbol } = {}) {
+export function createPrivateOrderEventWaiter({
+  broker,
+  orderId,
+  clientOrderId,
+  symbol,
+  eventType,
+} = {}) {
   const { client, timeoutMs } = validatePrivateEventClient({
     broker,
   })
@@ -193,18 +199,29 @@ export function createPrivateOrderEventWaiter({ broker, orderId, clientOrderId, 
   if (!hasIdentifier(orderId) && !hasIdentifier(clientOrderId)) {
     throw new TypeError("Bitunix Futures private order-event waiter requires at least one order identifier")
   }
+  if (eventType !== undefined && !["CREATE", "UPDATE", "CLOSE"].includes(eventType)) {
+    throw new TypeError("Bitunix Futures private order-event waiter eventType must be CREATE, UPDATE or CLOSE")
+  }
   return createPrivateEventWaiter({
     client,
     timeoutMs,
-    onChannel: (event) => matchesPrivateOrderEventIdentity({
-      event,
-      orderId,
-      clientOrderId,
-      symbol,
-    }) ? {
-      event,
-      error: null,
-    } : undefined,
+    onChannel: (event) => {
+      if (eventType !== undefined && event?.data?.event !== eventType) {
+        return undefined
+      }
+      if (!matchesPrivateOrderEventIdentity({
+        event,
+        orderId,
+        clientOrderId,
+        symbol,
+      })) {
+        return undefined
+      }
+      return {
+        event,
+        error: null,
+      }
+    },
     onStatus: (status) => isPrivateSessionUnavailable(status) ? {
       event: null,
       error: new Error("Bitunix Futures private user-data session became unavailable before order-event confirmation"),

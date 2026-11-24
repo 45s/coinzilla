@@ -283,6 +283,7 @@ async function dispatchAndReconcile({ broker, symbol, order }) {
     orderId: order.orderId,
     clientOrderId: order.clientId,
     symbol,
+    eventType: "CLOSE",
   })
   const dispatch = await dispatchCancelRequest({
     broker,
