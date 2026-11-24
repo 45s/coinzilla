@@ -92,7 +92,7 @@ function isMarketsData(value: unknown): boolean {
     && Array.isArray(market['blockers'])
     && (market['operatorBuysPaused'] === undefined || typeof market['operatorBuysPaused'] === 'boolean')
     && (market['latestPrice'] === undefined || market['latestPrice'] === null || typeof market['latestPrice'] === 'string')
-    && (market['priceFresh'] === undefined || typeof market['priceFresh'] === 'boolean'));
+    && (market['priceFresh'] === undefined || market['priceFresh'] === null || typeof market['priceFresh'] === 'boolean'));
 }
 
 function isPositionData(value: unknown): boolean {
