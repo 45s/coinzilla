@@ -94,7 +94,11 @@ async function createFixture() {
     await mkdir(path.dirname(filename), { recursive: true })
     await writeFile(filename, content, "utf8")
   }
-  return { packageDirectory, lockDirectory, files }
+  return {
+    packageDirectory,
+    lockDirectory,
+    files,
+  }
 }
 
 function archiveDependencies({ fixture, overrides = {} } = {}) {
