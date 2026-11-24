@@ -112,7 +112,7 @@ const FUTURES_CAPABILITIES = [
   {
     type: "RECOVER_USER_DATA_SESSION",
     status: "UNKNOWN",
-    reason: "The Futures private WebSocket session recovery and REST reconciliation lifecycle have not yet been implemented.",
+    reason: "The private WebSocket reconnects and resubscribes, but the protocol has no replay cursor and the broker cannot prove gap-free REST reconciliation; recovery remains required.",
   },
   {
     type: "RECOVER_PROCESS_RESTART",
@@ -121,18 +121,22 @@ const FUTURES_CAPABILITIES = [
   },
   {
     type: "OBSERVE_USER_DATA",
-    status: "UNKNOWN",
-    reason: "The Futures private WebSocket observation adapter has not yet been implemented.",
+    status: "SUPPORTED",
+    method: "subscribeForUserData",
+    guarantee: "After authenticated private login, emits raw balance, position, order and TP/SL channel observations through onObservation.",
+    limitation: "Observations are not canonical events, are not authoritative or replayable, and always require external REST reconciliation.",
   },
   {
     type: "SUBSCRIBE_CANDLES",
     status: "UNKNOWN",
-    reason: "The Futures public WebSocket kline lifecycle has not yet been implemented.",
+    reason: "The public Futures kline payload does not provide a documented candle open timestamp required by the common Candle contract.",
   },
   {
     type: "SUBSCRIBE_BOOK_TICKER",
-    status: "UNKNOWN",
-    reason: "The Futures public WebSocket depth/book ticker lifecycle has not yet been implemented.",
+    status: "SUPPORTED",
+    method: "subscribeForBookTicker",
+    guarantee: "Streams the documented one-level depth channel as exact best bid/ask price and quantity strings.",
+    limitation: "The event has no sequence; timestamp is local receipt time and cannot establish gap-free book history.",
   },
   {
     type: "READ_ASSETS",
@@ -210,13 +214,17 @@ const FUTURES_CAPABILITIES = [
   },
   {
     type: "SUBSCRIBE_USER_DATA",
-    status: "UNKNOWN",
-    reason: "The Futures private WebSocket event lifecycle and recovery contract have not yet been implemented.",
+    status: "SUPPORTED",
+    method: "subscribeForUserData",
+    guarantee: "Authenticates the private Futures WebSocket and subscribes to balance, position, order and TP/SL channels.",
+    limitation: "Only raw onObservation delivery is supported; no canonical event, replay cursor or recovery guarantee is claimed.",
   },
   {
     type: "SUBSCRIBE_MARKET_PRICES",
-    status: "UNKNOWN",
-    reason: "The Futures public WebSocket stream lifecycle has not yet been implemented.",
+    status: "SUPPORTED",
+    method: "subscribeForPrices",
+    guarantee: "Streams public Futures trades with exact price/quantity strings and the exchange trade timestamp.",
+    limitation: "The trade channel does not expose a stable trade ID or complete execution-history guarantee.",
   },
 ]
 
