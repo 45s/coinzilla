@@ -71,7 +71,7 @@ function createClient({ channelType = "public", now = () => 1_700_000_000_000 } 
     apiKey: channelType === "private" ? "key" : undefined,
     apiSecret: channelType === "private" ? "secret" : undefined,
     now,
-    nonceFactory: () => "nonce",
+    nonceFactory: () => "0123456789abcdef0123456789abcdef",
     transportFactory: () => {
       const transport = new FakeTransport()
       transports.push(transport)
@@ -186,8 +186,8 @@ test("Bitunix Futures private WebSocket signs login with seconds timestamp and w
     args: [{
       apiKey: "key",
       timestamp: 1_700_000_000,
-      nonce: "nonce",
-      sign: "4e7a2729e5c5d624ec65714143aa8d7ec45753bcf9b8c868ebf4696cccf0341f",
+      nonce: "0123456789abcdef0123456789abcdef",
+      sign: "cfea713a6145e877b1f905692b42dec1e5f72e11c026d1683112ab29eea2062b",
     }],
   })
   assert.equal(intervals[0].delay, 3_000)
