@@ -259,13 +259,47 @@ export function assertRecoverySellerEvaluatorConfigured({
   }
 }
 
+export function getHarvesterAccountSafetyBlocker({
+  userDataState = {},
+  recoverySellerStopWorkflow,
+} = {}) {
+  if (
+    recoverySellerStopWorkflow?.isAccountAdmissionBlocked?.() === true ||
+    recoverySellerStopWorkflow?.getState?.().status === "STOPPED"
+  ) {
+    return Object.freeze({
+      scope: "ACCOUNT",
+      reason: "RECOVERY_SELLER_UNEXPECTED_CONDITION",
+      blockerId: recoverySellerStopWorkflow?.getBlockerId?.() ?? null,
+    })
+  }
+  if (
+    userDataState.accountingFailed === true ||
+    userDataState.requiresReconciliation === true ||
+    userDataState.streamUnsafe === true ||
+    userDataState.safetyHaltRequired === true
+  ) {
+    return Object.freeze({
+      scope: "ACCOUNT",
+      reason: "USER_DATA_RECONCILIATION_REQUIRED",
+      blockerId: null,
+    })
+  }
+  return null
+}
+
 function createHarvesterTradingEngineSafetyCallbacks({
   userDataState,
   accountSnapshotManagerRef,
+  recoverySellerStopWorkflow,
   logger,
 }) {
   return {
     canTrade: () => userDataState.ready,
+    getAccountSafetyBlocker: () => getHarvesterAccountSafetyBlocker({
+      userDataState,
+      recoverySellerStopWorkflow,
+    }),
     hasUnownedOpenOrdersForSymbol: accountSnapshotManagerRef.current.hasUnownedOpenOrdersForSymbol,
     onUnownedExternalOrderObserved: ({ order } = {}) => {
       const manager = accountSnapshotManagerRef.current
@@ -335,6 +369,7 @@ function createHarvesterTradingEngineOptions(options = {}) {
     ...createHarvesterTradingEngineSafetyCallbacks({
       userDataState: options.userDataState,
       accountSnapshotManagerRef: options.accountSnapshotManagerRef,
+      recoverySellerStopWorkflow: options.recoverySellerStopWorkflow,
       logger: options.logger,
     }),
     ...createHarvesterTradingEngineOperationalCallbacks(options),
