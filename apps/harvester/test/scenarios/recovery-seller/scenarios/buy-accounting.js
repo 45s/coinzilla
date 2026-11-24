@@ -295,7 +295,7 @@ export const recoverySellerBuyAccountingScenarios = Object.freeze([
   }),
   makeBuyCase({
     id: "RS-002-018",
-    name: "an unknown BUY submission is durably retained and follow-up policy refuses a replacement",
+    name: "an unknown BUY submission is durably retained and STOP blocks replacement; reconciliation remains blocked",
     stepType: "submit-recovery-buy-with-unknown-outcome",
     input: {},
     expected: {
@@ -305,10 +305,38 @@ export const recoverySellerBuyAccountingScenarios = Object.freeze([
       durableFactCount: 2,
       activeOrderStatus: "UNKNOWN",
       stopStatus: "STOPPED",
-      followupOutcome: "RECONCILE",
+      followupOutcome: "BLOCK",
       followupAction: null,
     },
     rules: ["RS_UNKNOWN_OUTCOME_NO_RETRY", "RS_BUY_ACTIVE_ORDER_GATE"],
+    invariants: [
+      "RS_STOP_INVESTMENT_ONLY",
+      "RS_RECONCILIATION_CONTINUES",
+    ],
+    status: "PARTIAL",
+    subcases: [
+      {
+        id: "RS-002-018-A",
+        description: "unknown submission persists intent/outcome, retains the owned UNKNOWN order and latches STOP after exactly one broker call",
+        status: "TEST-MAPPED",
+        test: {
+          file: testFile,
+          title: "RS-002-018: an unknown BUY submission is durably retained and STOP blocks replacement; reconciliation remains blocked",
+        },
+        evidence: null,
+      },
+      {
+        id: "RS-002-018-B",
+        description: "follow-up order reconciliation continues while STOP is latched",
+        status: "BLOCKED",
+        test: null,
+        blocker: {
+          reason: "The current BUY evaluator returns BLOCK before reconciling an already-owned UNKNOWN BUY while STOP is latched. The owner-approved STOP contract requires existing orders to continue WAIT/RECONCILE; STOP is investment-only.",
+          unblockCondition: "Implement the separately authorized production STOP/evaluator correction so an existing owned UNKNOWN order remains reconcilable while new BUY submissions remain blocked; then change this scenario oracle to require RECONCILE and prove zero replacement broker calls.",
+        },
+        evidence: null,
+      },
+    ],
   }),
   makeBuyCase({
     id: "RS-002-019",
