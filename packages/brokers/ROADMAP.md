@@ -10,7 +10,7 @@ This roadmap tracks work owned by `@coinzilla/brokers`. Historical entries may r
 
 ## Bitunix USDT Futures provider — #1805
 
-**Status: IN PROGRESS** — [issue #1805](https://github.com/45s/coinzilla/issues/1805) / [Draft PR #1806](https://github.com/45s/coinzilla/pull/1806). A distinct `bitunix-futures` provider is being added to the existing `Broker` facade. Implemented reads include exact USDT balances, market catalog/tickers/depth/closed REST klines, canonical order detail/history, provider-specific pending orders and TP/SL groups, current/historical positions, position/leverage/margin-mode reads, and bounded raw execution history. Public trade/book-ticker and authenticated private observations are integrated with login-ack gating, heartbeat, bounded reconnect/resubscribe and cleanup. The [Futures reference audit](./docs/bitunix-futures-reference-audit.md) records the wider documented endpoint surface and remaining gaps. Still incomplete: common open-order/account snapshot/server-time/fill projections, order/position/TP-SL/account-setting mutations, and private-stream reconciliation/recovery. No Futures TESTNET endpoint has been verified and no LIVE mutation is permitted. Keep this provider out of production execution and Harvester routing.
+**Status: IN PROGRESS** — [issue #1805](https://github.com/45s/coinzilla/issues/1805) / [Draft PR #1806](https://github.com/45s/coinzilla/pull/1806). A distinct `bitunix-futures` provider is being added to the existing `Broker` facade. Implemented reads include exact USDT balances, market catalog/tickers/depth/closed REST klines, canonical order detail/history, provider-specific pending orders and pending/historical TP/SL groups, current/historical positions, position/leverage/margin-mode reads, and bounded raw execution history. Public trade/book-ticker and authenticated private observations are integrated with login-ack gating, heartbeat, bounded reconnect/resubscribe and cleanup. The [Futures reference audit](./docs/bitunix-futures-reference-audit.md) records the wider documented endpoint surface and remaining gaps. Still incomplete: common open-order/account snapshot/server-time/fill projections, order/position/TP-SL/account-setting mutations, and private-stream reconciliation/recovery. No Futures TESTNET endpoint has been verified and no LIVE mutation is permitted. Keep this provider out of production execution and Harvester routing.
 
 ## Bitunix Spot one-at-a-time LIVE order probe matrix — #1690
 
@@ -1609,7 +1609,7 @@ See [the private polling contract](./docs/BITUNIX_SPOT_POLLING.md) and [the Bitu
 - Separate USDT Futures provider, signing, request pacing and exact-decimal REST projections.
 - Canonical order detail/history and bounded canonical `getFills()`; execution quote notional uses exact decimal multiplication and fee asset remains explicitly unknown.
 - Current/historical positions, USDT balances, market catalog/ticker/depth/REST candles, funding rates/history, position tiers and authenticated trading-settings reads.
-- Provider-specific pending orders and TP/SL reads.
+- Provider-specific pending orders and pending/historical TP/SL reads.
 - Public trade/book-ticker and authenticated private balance/position/order/TP-SL observations, with login acknowledgement, cleanup, heartbeat and bounded reconnect/resubscribe. Events remain non-authoritative and non-replayable.
 - `createFuturesOrder()`, LIMIT-only `modifyFuturesOrder()`, `cancelOrder()` and `cancelAllOpenOrders()` are implemented behind explicit live-mutation opt-in, an active authenticated private session, and explicit caller acknowledgement after REST reconciliation. Reconnect/unsubscribe resets readiness. Dispatched mutations are never blindly retried.
 - TDD RED → GREEN evidence covers bounded canonical fills, mismatched create/modify readback, missing LIMIT price, and mutation attempts without a reconciled private session.
@@ -1621,7 +1621,7 @@ Commit `5999b5caea110f90942ff2e2977686374ca7fccf` passed all six required workfl
 ### Remaining before production use
 
 - [ ] Correlate private order/TP-SL events with mutation outcomes; preserve unknown outcomes when event/readback evidence is incomplete.
-- [ ] Complete attached TP/SL modification and separate order-level/position-level TP/SL place, modify, cancel and history operations.
+- [ ] Complete attached TP/SL modification and separate order-level/position-level TP/SL place, modify and cancel mutations.
 - [ ] Implement close-position and close-all with explicit scope, one-shot dispatch and verified position postconditions.
 - [ ] Implement account-setting and isolated-position-margin mutations behind account-specific opt-in and safe preconditions.
 - [ ] Establish authoritative account snapshot/recovery guarantees; the current user-data acknowledgement is consumer attestation only and does not provide event replay or sequence guarantees.

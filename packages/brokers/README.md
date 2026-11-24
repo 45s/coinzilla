@@ -565,7 +565,7 @@ The `bitunix-futures` provider is a separate USDT-margined Futures adapter; it m
 - Market catalog, ticker/mark prices, order-book depth and closed REST candles.
 - Current and batch funding rates, bounded funding-rate history, position tiers and authenticated per-symbol trading settings.
 - Exact USDT balance projection, current/historical positions, position mode and leverage/margin-mode reads.
-- Canonical order detail and bounded canonical order history; provider-specific pending-order and pending TP/SL reads.
+- Canonical order detail and bounded canonical order history; provider-specific pending-order, pending TP/SL and historical TP/SL reads.
 - Canonical `getFills()` for one bounded execution-history page. Exact decimal quote notional is derived without floating-point arithmetic; commission asset is unknown because the exchange history row does not supply it. Complete account-wide fill history is not claimed.
 - Provider-specific `createFuturesOrder()`, LIMIT-only `modifyFuturesOrder()`, `cancelOrder()` and `cancelAllOpenOrders()`, all behind explicit live-mutation opt-in and private user-data readiness.
 - Public trade and one-level book-ticker subscriptions; authenticated private balance, position, order and TP/SL observations through `onObservation`.
@@ -585,7 +585,7 @@ Disconnect, reconnect and unsubscribe reset the readiness gate. The acknowledgem
 ### Remaining blockers
 
 - Correlate matching private order/TP-SL events with placement, modification and cancellation outcomes; retain `OUTCOME_UNKNOWN` when evidence is missing or ambiguous.
-- Complete attached TP/SL modification and separate order-level/position-level TP/SL place, modify, cancel and history operations.
+- Complete attached TP/SL modification and separate order-level/position-level TP/SL place, modify and cancel mutations. Historical TP/SL reads are available through `getFuturesTpSlOrderHistory()`.
 - Implement explicit-scope position close and close-all operations with verified postconditions.
 - Implement account-level position-mode, symbol margin-mode/leverage and isolated-position-margin mutations behind separate account-mutation safeguards.
 - Keep common Spot-shaped `createCanonicalOrder()`, `getOpenOrders()` and legacy order/trade projections unsupported where they cannot preserve Futures semantics.

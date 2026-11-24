@@ -290,6 +290,7 @@ These provider-specific projections do not imply common canonical account, posit
 
 - `getFuturesPendingOrders({ symbol?, orderId?, clientOrderId?, status?, startTime?, endTime?, limit?, skip? })`: one pending-order page preserving exact decimals and documented TP/SL fields.
 - `getFuturesPendingTpSlOrders({ symbol?, positionId?, limit?, skip? })`: separate position TP/SL group endpoint; validates each present leg and preserves exact trigger/limit/quantity strings. One page, maximum 100; no total count is returned.
+- `getFuturesTpSlOrderHistory({ symbol?, side?, positionMode?, startTime?, endTime?, limit?, skip? })`: one bounded historical TP/SL page using the documented `orderList`/`total` response; preserves exact trigger/execution values and status/timestamps. Caller owns pagination and exchange retention coverage.
 - `getFuturesPositions({ symbol?, positionId? })`: current position projections; explicitly excludes subaccount aggregation and preserves optional subaccount identity.
 - `getFuturesPositionHistory({ symbol | positionId, startTime?, endTime?, limit?, skip? })`: one bounded historical-position page.
 - `getFuturesPositionMode()` and `getFuturesLeverageAndMarginMode({ symbol, marginCoin: "USDT" })`: authenticated account-setting reads.
@@ -315,7 +316,7 @@ The REST client serializes request dispatch at a conservative 10 requests/second
 - `createFuturesOrder()` supports explicit MARKET/LIMIT Futures orders, required `tradeSide`, `reduceOnly`, position identity for CLOSE, explicit LIMIT effect, exact market-filter validation and attached TP/SL parameters. It requires `allowLiveOrderMutations: true` and an acknowledged private-session readiness state.
 - `modifyFuturesOrder()` is limited to identified pending LIMIT orders and exact quantity/price changes. Attached TP/SL modification is not implemented.
 - `cancelOrder()` and `cancelAllOpenOrders()` require the same opt-in/readiness gate and perform one-shot dispatch plus REST readback. Matching private-event correlation/confirmation is still incomplete; REST readback alone is not a production recovery guarantee.
-- Position close/close-all, separate order-level/position-level TP/SL place/modify/cancel/history, and account-setting/isolated-margin mutations remain unimplemented.
+- Position close/close-all, separate order-level/position-level TP/SL place/modify/cancel mutations, attached TP/SL modification, and account-setting/isolated-margin mutations remain unimplemented.
 - Canonical `getFills()` is bounded to one page; fee asset remains unknown and complete account-wide execution history is not claimed.
 - No LIVE Futures request or mutation has been performed by implementation work or automated tests. No isolated Futures TESTNET endpoint has been verified.
 
