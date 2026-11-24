@@ -25,6 +25,7 @@ import { createHarnessBroker } from "./conservative-trading-engine-harness.js"
 import { conservativeStrategyPolicy } from "../domain/strategies/conservative/strategy-policy.js"
 import { addDecimal, compareDecimal, multiplyDecimal, subtractDecimal } from "@coinzilla/utils"
 import { evaluateConservativeStrategy } from "../domain/strategies/conservative/strategy.js"
+import { updateTradingAccounting } from "./update-trading-accounting.js"
 
 const baseAsset = new Asset({
   id: "doge",
@@ -3136,32 +3137,17 @@ function createZeroFeeCycleConfig({ keepQuantity }) {
 }
 
 async function updateCompleteCycleAccounting({ scenario, fill }) {
-  try {
-    const portfolioResult = scenario.currentPortfolio.applyFill({ strategyId: StrategyId.COIN_GRABBER,
-      fill,
-    })
-    const ledgerResult = scenario.currentRecoveryLedger.applyFill({ strategyId: StrategyId.COIN_GRABBER,
-      fill,
-    })
-    if (portfolioResult.applied !== ledgerResult.applied ||
-        portfolioResult.duplicate !== ledgerResult.duplicate) {
-      throw new Error("Portfolio and RecoveryLedger execution identities are inconsistent")
-    }
-    scenario.currentPortfolio = portfolioResult.portfolio
-    scenario.currentRecoveryLedger = ledgerResult.ledger
-    return {
-      ok: true,
-      data: {
-        applied: portfolioResult.applied,
-        duplicate: portfolioResult.duplicate,
-      },
-    }
-  } catch (error) {
-    return {
-      ok: false,
-      errors: [error],
-    }
+  const result = updateTradingAccounting({
+    portfolio: scenario.currentPortfolio,
+    recoveryLedger: scenario.currentRecoveryLedger,
+    fill,
+  })
+  if (!result.ok) {
+    return result
   }
+  scenario.currentPortfolio = result.data.portfolio
+  scenario.currentRecoveryLedger = result.data.recoveryLedger
+  return result
 }
 
 async function completeCycleRecovery({ scenario, marketId, keepQuantity, minProfit }) {
