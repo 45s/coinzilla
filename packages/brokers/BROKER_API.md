@@ -290,7 +290,7 @@ These provider-specific projections do not imply common canonical account, posit
 
 - `getFuturesPendingOrders({ symbol?, orderId?, clientOrderId?, status?, startTime?, endTime?, limit?, skip? })`: one pending-order page preserving exact decimals and documented TP/SL fields.
 - `getFuturesPendingTpSlOrders({ symbol?, positionId?, limit?, skip? })`: separate position TP/SL group endpoint; validates each present leg and preserves exact trigger/limit/quantity strings. One page, maximum 100; no total count is returned.
-- `getFuturesTpSlOrderHistory({ symbol?, side?, positionMode?, startTime?, endTime?, limit?, skip? })`: one bounded historical TP/SL page using the documented `orderList`/`total` response; preserves exact trigger/execution values and status/timestamps. Caller owns pagination and exchange retention coverage.
+- `getFuturesTpSlOrderHistory({ symbol?, side?, positionMode?, startTime?, endTime?, limit?, skip? })`: one bounded historical TP/SL page using the documented `orderList`/`total` response; `side` and `positionMode` are signed int32 filters, `limit` is capped at 100, and the caller owns pagination and exchange retention coverage. Exact trigger/execution values and status/timestamps are preserved.
 - `getFuturesPositions({ symbol?, positionId? })`: current position projections; explicitly excludes subaccount aggregation and preserves optional subaccount identity.
 - `getFuturesPositionHistory({ symbol | positionId, startTime?, endTime?, limit?, skip? })`: one bounded historical-position page.
 - `getFuturesPositionMode()` and `getFuturesLeverageAndMarginMode({ symbol, marginCoin: "USDT" })`: authenticated account-setting reads.

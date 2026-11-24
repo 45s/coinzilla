@@ -142,6 +142,7 @@ The catalog is a navigation and traceability layer. Domain specifications, accep
 ### Shared packages
 
 - [BRK-001 — Unknown broker mutation outcome](#brk-001--unknown-broker-mutation-outcome-is-not-treated-as-failure)
+- [BRK-002 — Bitunix Futures TP/SL history is bounded and identity-preserving](#brk-002--bitunix-futures-tpsl-history-is-bounded-and-identity-preserving)
 - [DB-001 — Database transaction atomicity](#db-001--a-failed-database-transaction-leaves-no-partial-write)
 - [EVT-001 — Publish versus subscriber completion](#evt-001--publish-acceptance-is-distinct-from-subscriber-completion)
 - [JRN-001 — Journal durability boundary](#jrn-001--journal-flush-is-the-durability-boundary)
@@ -814,6 +815,28 @@ The package entries below make the repository-wide scope visible, but their exac
 **Implementation:** `packages/brokers/src/` provider mutation and canonical order lookup boundaries.
 
 **Automated tests:** Exact files and named cases not yet mapped. Start from [Broker API contract](../../packages/brokers/BROKER_API.md) and [Brokers package README](../../packages/brokers/README.md).
+
+### BRK-002 — Bitunix Futures TP/SL history is bounded and identity-preserving
+
+**Status:** VERIFIED on `a80dcaeebb7a9b0bd6378834271f01f0b34559d6` — the exact-head Brokers unit suite passed.
+
+**Behavior:** The Bitunix USDT Futures provider reads historical TP/SL order groups through the dedicated history endpoint and returns one caller-bounded page without presenting it as complete account history.
+
+**Input:** `getFuturesTpSlOrderHistory()` accepts optional symbol, side, position-mode and time-range filters plus `limit` and `skip`. The exchange defines side/positionMode as signed int32 fields and limits each page to 100 rows.
+
+**Expected output:** The result exposes `orders`, exchange `total`, `skip` and `limit`. TP/SL identity, position identity, exact decimal trigger/quantity values, status, creation time and trigger time are preserved. Returned rows must match the requested symbol when one is supplied.
+
+**Must not happen:** Do not coerce exchange decimal strings to JavaScript numbers; treat TP/SL history as ordinary canonical orders; return rows for a different requested symbol; or claim that one page proves complete history/retention coverage.
+
+**Subcases:** Valid filters and bounded pagination; maximum page size; oversized page rejection before dispatch; signed-int32 range validation; response symbol mismatch; exact TP/SL prices and exchange lifecycle timestamps.
+
+**Implementation:** `packages/brokers/src/infrastructure/bitunix/futures/broker.js` — `getFuturesTpSlOrderHistory()`, query validation and symbol correlation; `adapters/adapt-futures-pending-tpsl-orders.js` preserves the exchange TP/SL group fields.
+
+**Automated tests:** `packages/brokers/src/infrastructure/bitunix/futures/broker.tpsl.test.js`:
+- `Bitunix Futures TP/SL history reads preserve exchange history fields and pagination`
+- `Bitunix Futures TP/SL history rejects an oversized page before dispatch`
+- `Bitunix Futures TP/SL history rejects rows for a different requested symbol`
+- `Bitunix Futures TP/SL history rejects values outside the documented int32 query range`
 
 ### DB-001 — A failed database transaction leaves no partial write
 
