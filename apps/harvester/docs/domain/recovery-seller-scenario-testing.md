@@ -1055,7 +1055,13 @@ Required cases:
 7. Cross-market reservations and same-market CG/RS reservations cannot double-sell the same physical base inventory.
 8. Exact recovery/legacy allocation split and quantity conservation.
 9. Real TradingRules filters, including quantity/notional and tick/step boundaries.
-10. Missing custody, invalid precision, invalid filter metadata and allocation ambiguity fail closed.
+10. Any candidate SELL violating a supported price/quantity increment, min/max price, min/max quantity or min/max notional filter latches global sticky STOP; no automatic adjustment, split, retry or dust reinterpretation.
+11. Missing required filter metadata fails closed/STOPs under the approved market contract.
+12. After a successfully completed cycle is fully reconciled and all profitability gates pass, a residual unsellable solely because of current quantity/notional filters is retained as bonus dust; record exact residual and limiting filter.
+13. Retained bonus dust is permanently excluded from all future RS recovery/legacy inventory, SELL targets, profitability and available-inventory calculations.
+14. Price-filter failures, unavailable commission valuation, incomplete fill/order reconciliation, active reservations or other unresolved accounting/risk conditions are not dust and block successful completion.
+15. Ordinary sellable residual is not dust and cannot be hidden or discarded; dust classification cannot bypass the combined profitability gate.
+16. Missing custody, invalid precision, invalid filter metadata and allocation ambiguity fail closed.
 11. Allocation precision/rounding ambiguity fails closed; quantity is never silently shifted between recovery and legacy.
 12. No broker submission occurs for any blocked or below-target plan.
 13. Base-, quote- and mixed-commission allocation follows actual canonical fills.
@@ -1213,7 +1219,7 @@ Potential cases after owner resolution:
 4. Confirmed canonical fills continue to be accounted exactly once.
 5. Missing, malformed, conflicting or unmodeled evidence fails closed.
 6. Persistence/commit failure preserves projections and reservations as specified.
-7. Exchange-filter violation behavior follows the exact approved filter-versus-dust boundary.
+7. Any candidate SELL exchange-filter violation latches global sticky STOP with no adjustment/split/retry/dust reinterpretation; only a residual after a successfully completed, fully reconciled cycle may qualify as quantity/notional-constrained retained bonus dust.
 8. Operator visibility and permitted actions match the approved STOP contract; the operator facade remains read-only unless the owner changes the contract.
 9. No implicit reset or self-resume occurs.
 10. Missing account snapshot, stale market data, invalid market metadata, missing filters or invalid precision blocks new actions.
