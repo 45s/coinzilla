@@ -65,12 +65,17 @@ function createBotsSnapshot() {
       markets: {
         ok: true,
         data: {
+          observedAt: 120000,
+          tradingEnabled: true,
+          userDataReady: true,
+          userDataStatus: 'READY',
           markets: [],
         },
       },
       portfolio: {
         ok: true,
         data: {
+          observedAt: 120000,
           positions: [],
         },
       },
