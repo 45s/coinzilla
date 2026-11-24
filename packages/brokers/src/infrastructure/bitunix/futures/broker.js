@@ -93,8 +93,10 @@ const FUTURES_CAPABILITIES = [
   },
   {
     type: "READ_TRADE_HISTORY",
-    status: "UNKNOWN",
-    reason: "The Futures trade-history adapter and execution identity contract have not yet been implemented.",
+    status: "SUPPORTED",
+    method: "getFuturesTradeHistory",
+    guarantee: "Returns one validated, symbol/order/position-filterable Futures execution-history page with stable tradeId/orderId and exact quantity, price, fee and realized-PnL strings.",
+    limitation: "This provider-specific DTO is not canonical Fill; fee currency/semantics and complete gap-free history are not established.",
   },
   {
     type: "READ_COMPLETE_FILL_HISTORY",
@@ -168,13 +170,17 @@ const FUTURES_CAPABILITIES = [
   },
   {
     type: "READ_ORDER",
-    status: "UNKNOWN",
-    reason: "The Futures order identity and detail adapter have not yet been implemented.",
+    status: "SUPPORTED",
+    method: "getCanonicalOrder",
+    guarantee: "Reads order detail by exchange order ID or caller client ID and verifies the returned identifier and symbol.",
+    limitation: "Canonical mapping fails closed if the exchange omits clientId; caller must reconcile order history and trade history separately.",
   },
   {
     type: "READ_ORDER_HISTORY",
-    status: "UNKNOWN",
-    reason: "The Futures order-history adapter and pagination contract have not yet been implemented.",
+    status: "SUPPORTED",
+    method: "getCanonicalOrderHistory",
+    guarantee: "Returns one symbol-scoped order-history page with exact decimal quantities and validated client identity.",
+    limitation: "Caller owns skip/limit pagination and exchange retention windows; one page is not proof of complete history.",
   },
   {
     type: "READ_FILLS",
