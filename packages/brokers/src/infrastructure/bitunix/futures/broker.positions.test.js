@@ -10,6 +10,7 @@ const credentials = {
 
 const currentPosition = {
   positionId: "position-123",
+  subAccountId: 987,
   symbol: "BTCUSDT",
   qty: "0.250000000000000001",
   entryValue: "16250.000000000000065",
@@ -31,6 +32,7 @@ const currentPosition = {
 
 const historicalPosition = {
   positionId: "position-closed-123",
+  subAccountId: 321,
   symbol: "BTCUSDT",
   maxQty: "0.5",
   entryPrice: "60000.10",
@@ -111,6 +113,7 @@ test("Bitunix Futures getFuturesPositions returns exact current position facts a
   assert.equal(result.data.length, 1)
   assert.deepEqual(result.data[0], {
     positionId: "position-123",
+    subAccountId: 987,
     symbol: "BTCUSDT",
     quantity: "0.250000000000000001",
     entryValue: "16250.000000000000065",
@@ -154,6 +157,7 @@ test("Bitunix Futures getFuturesPositionHistory returns one exact paginated hist
   assert.equal(result.data.positions.length, 1)
   assert.deepEqual(result.data.positions[0], {
     positionId: "position-closed-123",
+    subAccountId: 321,
     symbol: "BTCUSDT",
     quantity: "0.5",
     entryPrice: "60000.10",
