@@ -43,8 +43,8 @@ const FUTURES_CAPABILITIES = [
   },
   {
     type: "READ_ACCOUNT_SNAPSHOT",
-    status: "UNKNOWN",
-    reason: "The Futures account snapshot and source-freshness contract have not yet been verified.",
+    status: "UNSUPPORTED",
+    reason: "Bitunix exposes independent account, position, order and TP/SL reads without a shared source timestamp or snapshot version; the provider cannot satisfy an atomic account-snapshot contract.",
   },
   {
     type: "READ_CANDLES",
@@ -85,8 +85,8 @@ const FUTURES_CAPABILITIES = [
   },
   {
     type: "READ_SERVER_TIME",
-    status: "UNKNOWN",
-    reason: "No verified Futures server-time endpoint has been implemented.",
+    status: "UNSUPPORTED",
+    reason: "The current official Bitunix Futures API reference does not document a server-time endpoint; local time and WebSocket gateway timestamps are not exchange server time.",
   },
   {
     type: "READ_CANONICAL_ORDER",
@@ -196,17 +196,13 @@ const FUTURES_CAPABILITIES = [
   },
   {
     type: "READ_ORDER",
-    status: "SUPPORTED",
-    method: "getCanonicalOrder",
-    guarantee: "Reads order detail by exchange order ID or caller client ID and verifies the returned identifier and symbol.",
-    limitation: "Canonical mapping fails closed if the exchange omits clientId; caller must reconcile order history and trade history separately.",
+    status: "UNSUPPORTED",
+    reason: "The legacy common getOrder() projection is not a Futures order contract. Use getCanonicalOrder() for canonical fields and getFuturesPendingOrders()/getFuturesTradeHistory() for provider-specific Futures details.",
   },
   {
     type: "READ_ORDER_HISTORY",
-    status: "SUPPORTED",
-    method: "getCanonicalOrderHistory",
-    guarantee: "Returns one symbol-scoped order-history page with exact decimal quantities and validated client identity.",
-    limitation: "Caller owns skip/limit pagination and exchange retention windows; one page is not proof of complete history.",
+    status: "UNSUPPORTED",
+    reason: "The legacy common getOrderHistory() projection is not a Futures history contract. Use getCanonicalOrderHistory() for bounded canonical pages and provider-specific Futures history methods for exchange-specific fields.",
   },
   {
     type: "PLACE_LIMIT_ORDER",
@@ -1557,14 +1553,14 @@ export class BitunixFuturesBroker {
   async getAccountSnapshot() {
     return unsupportedResult({
       operation: "getAccountSnapshot",
-      reason: "Bitunix Futures account responses do not provide a documented source timestamp or snapshot version.",
+      reason: "Bitunix account, position, order and TP/SL resources are fetched independently and expose no shared source timestamp or snapshot version; an atomic account snapshot cannot be promised.",
     })
   }
 
   async getServerTime() {
     return unsupportedResult({
       operation: "getServerTime",
-      reason: "A documented Bitunix Futures server-time endpoint has not been verified.",
+      reason: "The current official Bitunix Futures API reference does not document a server-time endpoint; local time and WebSocket gateway timestamps are not exchange server time.",
     })
   }
 
@@ -2251,7 +2247,7 @@ export class BitunixFuturesBroker {
   async createCanonicalOrder() {
     return unsupportedResult({
       operation: "createCanonicalOrder",
-      reason: "Futures order placement is disabled until the mutation lifecycle is verified.",
+      reason: "The common createOrder() shape cannot express Futures tradeSide, positionId and reduceOnly semantics; use createFuturesOrder() with explicit Futures fields and the live-mutation safety gate.",
     })
   }
 
@@ -2328,7 +2324,7 @@ export class BitunixFuturesBroker {
   async subscribeForCandles() {
     return unsupportedResult({
       operation: "subscribeForCandles",
-      reason: "Futures public WebSocket subscriptions are not implemented yet.",
+      reason: "The public Kline WebSocket payload contains a gateway push timestamp but no documented candle open timestamp required by the common Candle contract; use getCandles() for closed REST candles.",
     })
   }
 
@@ -2419,21 +2415,21 @@ export class BitunixFuturesBroker {
   async getOrder() {
     return unsupportedResult({
       operation: "getOrder",
-      reason: "Futures order reads are not implemented yet.",
+      reason: "The legacy common getOrder() DTO cannot express Futures positionId, tradeSide or reduceOnly semantics; use getCanonicalOrder() for canonical fields and getFuturesPendingOrders() for the provider-specific order projection.",
     })
   }
 
   async getOrderHistory() {
     return unsupportedResult({
       operation: "getOrderHistory",
-      reason: "Futures order history is not implemented yet.",
+      reason: "The legacy common getOrderHistory() projection is not a Futures history contract; use getCanonicalOrderHistory() for bounded canonical pages and getFuturesTradeHistory() for provider-specific execution history.",
     })
   }
 
   async getMyTrades() {
     return unsupportedResult({
       operation: "getMyTrades",
-      reason: "Futures trade history is not implemented yet.",
+      reason: "The legacy common getMyTrades() projection cannot preserve the Futures fee-asset limitation and provider-specific execution fields; use getFills() for canonical bounded fills or getFuturesTradeHistory() for exact Futures rows.",
     })
   }
 

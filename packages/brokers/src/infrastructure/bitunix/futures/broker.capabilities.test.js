@@ -23,8 +23,8 @@ test("Bitunix Futures unsupported common operations explain their Futures-specif
   ]
   for (const [method, reason] of cases) {
     const result = await broker[method]()
-    assert.equal(result.ok, false, method + " must fail closed")
-    assert.match(result.errors[0].message, reason, method + " must explain its actual limitation and alternative")
+    assert.equal(result.ok, false, `${method} must fail closed`)
+    assert.match(result.errors[0].message, reason, `${method} must explain its actual limitation and alternative`)
   }
 })
 
@@ -53,8 +53,8 @@ test("Bitunix Futures capability declarations match implemented operations and e
     "READ_ORDER",
     "READ_ORDER_HISTORY",
   ]) {
-    assert.equal(capabilities.getStatus({ type }), "UNSUPPORTED", type + " must match the runtime's explicit unsupported result")
-    assert.ok(capabilities.getCapability({ type }).reason, type + " must explain its semantic limitation")
+    assert.equal(capabilities.getStatus({ type }), "UNSUPPORTED", `${type} must match the runtime's explicit unsupported result`)
+    assert.ok(capabilities.getCapability({ type }).reason, `${type} must explain its semantic limitation`)
   }
 
   for (const type of [
