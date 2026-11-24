@@ -408,3 +408,25 @@ test("Bitunix Futures private WebSocket reauthenticates and resubscribes but sta
   assert.equal(client.recoveryRequired, false)
   await client.disconnect()
 })
+
+
+test("Bitunix Futures WebSocket heartbeat timeout enters bounded reconnect and requires reconciliation", async () => {
+  let nowMs = 1_700_000_000_000
+  const {
+    client,
+    intervals,
+    timeouts,
+  } = createClient({
+    now: () => nowMs,
+  })
+  await client.connect()
+  intervals[0].callback()
+  nowMs += 7_000
+  intervals[0].callback()
+
+  assert.equal(client.state, "closed")
+  assert.equal(client.recoveryRequired, true)
+  assert.equal(timeouts[0].delay, 1_000)
+  await client.disconnect()
+  assert.equal(client.state, "closed")
+})
