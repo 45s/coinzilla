@@ -638,8 +638,14 @@ function resolveArchiveSourcePaths({ packageDirectory, env } = {}) {
     })
   }
   return [
-    { directoryName: "logs", sourceDirectory: logsDirectory },
-    { directoryName: "recovery-facts", sourceDirectory: recoveryFactsDirectory },
+    {
+      directoryName: "logs",
+      sourceDirectory: logsDirectory,
+    },
+    {
+      directoryName: "recovery-facts",
+      sourceDirectory: recoveryFactsDirectory,
+    },
   ]
 }
 
