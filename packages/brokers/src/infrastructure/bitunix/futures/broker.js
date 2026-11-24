@@ -870,10 +870,12 @@ function createFuturesTpSlHistoryQuery(input = {}) {
   }
   for (const field of ["side", "positionMode"]) {
     if (input[field] !== undefined) {
-      if (!Number.isSafeInteger(input[field])) {
-        throw new TypeError(`Bitunix Futures TP/SL history ${field} must be a safe integer`)
-      }
-      queryParams[field] = input[field]
+      queryParams[field] = ensure.integerInRange({
+        value: input[field],
+        min: -2_147_483_648,
+        max: 2_147_483_647,
+        name: `Bitunix Futures TP/SL history ${field}`,
+      })
     }
   }
   const pagination = createPaginationOptions({
