@@ -453,9 +453,10 @@ test("Bitunix Futures cancelOrder reconciles a lost acknowledgement by client ID
     orderId: "futures-order-123",
   })
 
-  assert.equal(result.ok, true)
-  assert.equal(result.mutationOutcome, "CONFIRMED")
+  assert.equal(result.ok, false)
+  assert.equal(result.mutationOutcome, "OUTCOME_UNKNOWN")
   assert.equal(result.cancellationOutcome, "CONFIRMED")
+  assert.ok(result.errors?.length > 0)
   assert.equal(requests.filter(({ method }) => method === "POST").length, 1)
 })
 

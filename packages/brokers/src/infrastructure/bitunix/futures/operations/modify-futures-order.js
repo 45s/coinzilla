@@ -269,10 +269,10 @@ async function reconcileModifiedOrder({ broker, input, order, event, error }) {
   }
   return createOutcomeResult({
     data: detail.data,
-    ...(error === undefined ? {} : {
+    ...(error === undefined || error === null ? {} : {
       errors: [error],
     }),
-    mutationOutcome: error === undefined ? "CONFIRMED" : "OUTCOME_UNKNOWN",
+    mutationOutcome: error === undefined || error === null ? "CONFIRMED" : "OUTCOME_UNKNOWN",
     orderOutcome: "CONFIRMED",
   })
 }
