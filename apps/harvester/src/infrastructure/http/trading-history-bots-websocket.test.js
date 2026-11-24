@@ -340,6 +340,36 @@ test("reports failed operator reads explicitly instead of fabricating empty reso
   assert.equal(message.data.portfolio.ok, true)
 })
 
+test("rejects malformed successful read models as unavailable snapshots", async (t) => {
+  const eventBus = new EventBus()
+  const { operator } = createOperatorState()
+  operator.getMarkets = async () => ({
+    ok: true,
+    data: {
+      observedAt: 120000,
+      markets: "not-an-array",
+    },
+  })
+  const api = await startApi({
+    t,
+    eventBus,
+    operator,
+  })
+  const socket = new WebSocket(`ws://127.0.0.1:${api.address.port}/api/v1/trading/events`)
+  t.after(() => socket.close())
+
+  await waitForSocketOpen(socket)
+  const message = await waitForMessage({
+    socket,
+    predicate: (item) => item.type === "bots.snapshot.unavailable",
+  })
+
+  assert.equal(message.data.markets.ok, false)
+  assert.equal(message.data.markets.error.code, "HARVESTER_OPERATOR_SNAPSHOT_INVALID")
+  assert.equal(message.data.status.ok, true)
+  assert.equal(message.data.portfolio.ok, true)
+})
+
 test("a reconnect receives a fresh full snapshot rather than relying on missed event replay", async (t) => {
   const eventBus = new EventBus()
   const { operator, state } = createOperatorState()
