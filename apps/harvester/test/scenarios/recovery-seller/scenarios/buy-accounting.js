@@ -150,15 +150,38 @@ function blockedCase({ id, name, reason, unblockCondition }) {
 export const recoverySellerBuyAccountingScenarios = Object.freeze([
   makeBuyCase({
     id: "RS-002-001",
-    name: "a valid initial BUY order creates no recovery inventory before a confirmed Fill",
-    input: { fills: [] },
-    expected: {
-      appliedFillIds: 0,
-      position: null,
-      executionQuantity: null,
-      executionVwap: null,
+    name: "an empty recovery allocation is BUY-eligible without creating inventory before a confirmed Fill",
+    stepType: "evaluate-initial-buy-and-accounting-scenario",
+    input: {
+      policyOverrides: {},
+      fills: [],
     },
-    rules: ["RS_BUY_CONFIRMED_FILL_ONLY"],
+    expected: {
+      policy: {
+        outcome: "SUBMIT",
+        reasonCode: "BUY_TRANCHE_ELIGIBLE",
+        action: {
+          side: "BUY",
+          purpose: "RECOVERY_BUY",
+          cycleId: "rs-policy-cycle",
+          positionId: "rs-policy-position",
+          type: "LIMIT_MAKER",
+          price: "1.999",
+          quantity: "5",
+          notional: "9.995",
+          reason: "INITIAL_BUY",
+        },
+        stopStatus: "CLEAR",
+        orderIdentity: null,
+      },
+      accounting: {
+        appliedFillIds: 0,
+        position: null,
+        executionQuantity: null,
+        executionVwap: null,
+      },
+    },
+    rules: ["RS_BUY_CONFIRMED_FILL_ONLY", "RS_BUY_INTENT_CONTRACT"],
   }),
   makeBuyCase({
     id: "RS-002-002",
