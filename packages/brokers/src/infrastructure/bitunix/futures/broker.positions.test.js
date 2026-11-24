@@ -75,7 +75,10 @@ function createBroker({
       dependencies: {
         fetchFn: async (...args) => {
           const [url, options] = args
-          requests.push({ url: String(url), options })
+          requests.push({
+            url: String(url),
+            options,
+          })
           const path = new URL(url).pathname
           if (path === "/api/v1/futures/position/get_pending_positions") {
             return createResponse({
@@ -92,7 +95,10 @@ function createBroker({
       },
     },
   })
-  return { broker, requests }
+  return {
+    broker,
+    requests,
+  }
 }
 
 test("Bitunix Futures getFuturesPositions returns exact current position facts and excludes subaccounts by default", async () => {
