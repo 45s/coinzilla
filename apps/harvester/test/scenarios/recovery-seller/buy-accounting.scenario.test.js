@@ -168,9 +168,7 @@ async function applyConflictingFill({ workflow, firstFill, order }) {
   }
 }
 
-async function runBuyScenario({ input }) {
-  const { workflow, order, positionId, cycleId } = createScenarioWorkflow({ input })
-  const fills = input.fills.map((fillInput) => createScenarioFill({ fillInput, order }))
+async function applyScenarioFills({ workflow, fills }) {
   const results = []
   for (const fill of fills) {
     const result = await workflow.applyBuyFill({ fill })
@@ -179,12 +177,32 @@ async function runBuyScenario({ input }) {
       applied: result.data?.applied === true,
     })
   }
-  const replay = input.replayFirstFill === true && fills[0]
-    ? await workflow.applyBuyFill({ fill: fills[0] })
-    : undefined
-  const conflict = input.conflictFirstFill === true
-    ? await applyConflictingFill({ workflow, firstFill: fills[0], order })
-    : undefined
+  return results
+}
+
+async function replayScenarioFill({ workflow, fills, input }) {
+  if (input.replayFirstFill !== true || !fills[0]) return undefined
+  return workflow.applyBuyFill({ fill: fills[0] })
+}
+
+async function applyScenarioConflict({ workflow, fills, order, input }) {
+  if (input.conflictFirstFill !== true) return undefined
+  return applyConflictingFill({
+    workflow,
+    firstFill: fills[0],
+    order,
+  })
+}
+
+async function runBuyScenario({ input }) {
+  const { workflow, order, positionId, cycleId } = createScenarioWorkflow({ input })
+  const fills = input.fills.map((fillInput) => createScenarioFill({
+    fillInput,
+    order,
+  }))
+  const results = await applyScenarioFills({ workflow, fills })
+  const replay = await replayScenarioFill({ workflow, fills, input })
+  const conflict = await applyScenarioConflict({ workflow, fills, order, input })
   const portfolio = workflow.getPortfolio()
   const position = portfolio.getPosition({ positionId })
   return {
