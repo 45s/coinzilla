@@ -518,3 +518,46 @@ test("contains one client's snapshot serialization failure without interrupting 
   assert.equal(update.type, "exchange-accounts.updated", "An already-connected healthy client must continue receiving account updates.")
   assert.deepEqual(update.accounts[0].accountSnapshot.balances, [], "The failing client's serialization error must not corrupt the healthy client's snapshot.")
 })
+
+
+test("rejects an oversized application snapshot for its client without stopping the HTTP server", async (t) => {
+  const eventBus = new EventBus()
+  const balances = [...Array(12000).keys()].map((index) => ({
+    asset: {
+      code: `OVERSIZED${String(index).padStart(5, "0")}`,
+    },
+    free: "12345678901234567890",
+    locked: "12345678901234567890",
+    total: "24691357802469135780",
+  }))
+  const api = await startApi({
+    t,
+    eventBus,
+    exchangeAccounts: [
+      createExchangeAccount({
+        snapshotResult: {
+          ok: true,
+          data: {
+            sourceTime: "2026-11-24T19:20:00.000Z",
+            balances,
+          },
+        },
+      }),
+    ],
+  })
+  const socket = new WebSocket(`ws://127.0.0.1:${api.address.port}/api/v1/trading/events`)
+  t.after(() => socket.close())
+  const closed = new Promise((resolve) => {
+    socket.addEventListener("close", resolve, {
+      once: true,
+    })
+  })
+
+  await waitForSocketOpen(socket)
+  const closeEvent = await closed
+  assert.equal(closeEvent.code, 1009, "An application message above the documented 1 MiB limit must close the client with message-too-big status.")
+
+  const response = await fetch(`http://127.0.0.1:${api.address.port}/api/v1/trading/metadata`)
+  assert.equal(response.status, 200, "Rejecting an oversized WebSocket message must not stop the shared HTTP server.")
+  await response.text()
+})
