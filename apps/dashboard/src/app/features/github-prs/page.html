@@ -111,7 +111,7 @@
                   @if (labels().labels.length === 0) { <span class="muted-copy">No labels</span> }
                 </div>
                 <details class="assignment-editor">
-                  <summary>Manage labels</summary>
+                  <summary>{{ labelsFor(pullRequest).length === 0 ? '+ Add label' : 'Manage labels' }}</summary>
                   @if (labels().labels.length === 0) { <span class="muted-copy">Create a label above first.</span> }
                   @for (label of labels().labels; track label.id) {
                     <label class="assignment-option">

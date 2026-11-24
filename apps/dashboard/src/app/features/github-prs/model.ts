@@ -52,22 +52,22 @@ export function formatRelativeCommitTime(timestamp: string | null, now = Date.no
   if (!Number.isFinite(commitTime)) return 'Unavailable';
 
   const difference = now - commitTime;
-  if (difference < -60_000) return 'in the future';
+  if (difference < 0) return 'in the future';
   if (difference < 60_000) return 'just now';
 
   const minutes = Math.floor(difference / 60_000);
-  if (minutes < 60) return `${minutes} min ago`;
+  if (minutes < 60) return minutes + ' min ago';
 
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours} hr ago`;
+  if (hours < 24) return hours + ' hr ago';
 
   const days = Math.floor(hours / 24);
-  if (days < 30) return `${days} days ago`;
+  if (days < 30) return days + ' days ago';
 
   const months = Math.floor(days / 30);
-  if (months < 12) return `${months} mo ago`;
+  if (months < 12) return months + ' mo ago';
 
-  return `${Math.floor(months / 12)} yr ago`;
+  return Math.floor(months / 12) + ' yr ago';
 }
 
 export async function mapWithConcurrency<Input, Output>(
