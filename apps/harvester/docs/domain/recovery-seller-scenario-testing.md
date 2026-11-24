@@ -266,9 +266,9 @@ original legacy average cost = legacyPosition.invested
                              / legacyPosition.quantity
 ~~~
 
-Do not recompute that average after a legacy disposal. After a cycle has successfully completed, decrement remaining logical legacy quantity exactly once by the legacy base quantity actually disposed (normally one configured §sellQuantity§ lot; use the smaller remaining amount only under the approved smaller-remainder rule). Do not decrement on SELL planning, order submission, partial-fill delivery, an unconfirmed terminal state, or duplicate replay. The decrement is committed only after complete terminal fill/commission reconciliation and the atomic recovery/legacy accounting transition succeeds.
+Do not recompute that average after a legacy disposal. After a cycle has successfully completed, decrement remaining logical legacy quantity exactly once by the legacy base quantity actually disposed (normally one configured `sellQuantity` lot; use the smaller remaining amount only under the approved smaller-remainder rule). Do not decrement on SELL planning, order submission, partial-fill delivery, an unconfirmed terminal state, or duplicate replay. The decrement is committed only after complete terminal fill/commission reconciliation and the atomic recovery/legacy accounting transition succeeds.
 
-The configured §investment§ is the recovery-tranche BUY budget. It is separate from §legacyPosition.invested§, which is the original historical quote cost used to establish legacy basis.
+The configured `investment` is the recovery-tranche BUY budget. It is separate from `legacyPosition.invested`, which is the original historical quote cost used to establish legacy basis.
 
 Eligible legacy quantity is bounded by authorized remaining legacy quantity, verified Spot availability and unreserved account inventory. The configured value is not the total SELL quantity and not a maximum cap on recovery inventory.
 
