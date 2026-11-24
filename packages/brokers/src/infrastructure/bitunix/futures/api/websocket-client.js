@@ -573,7 +573,13 @@ export class BitunixFuturesWebSocketClient extends EventEmitter {
     this.#authenticated = true
     this.#reconnectAttempts = 0
     this.#recoveryRequired = true
-    this.#resubscribeDesired()
+    try {
+      this.#resubscribeDesired()
+    } catch (error) {
+      this.emit("clientError", error)
+      this.#handleTransportLoss({})
+      return
+    }
     this.emit("authenticated")
     this.#emitStatus({
       loginAcknowledged: true,
@@ -617,6 +623,9 @@ export class BitunixFuturesWebSocketClient extends EventEmitter {
     this.#recoveryRequired = true
     this.#subscriptions.clear()
     this.#removeTransportListeners()
+    Promise.resolve(this.#transport.close()).catch((error) => {
+      this.emit("clientError", error)
+    })
     this.#emitStatus({
       recoveryRequired: true,
       closeEvent,
