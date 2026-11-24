@@ -116,6 +116,7 @@ Do not claim 100% correctness from line/branch coverage. Completion means every 
 **Current PR:** [#1793](https://github.com/45s/coinzilla/pull/1793), branch `test/rs-profitability-domain-scenarios-v2`. The PR branch was originally based on `44ed6ce4dd32437e5343c2b1c43171f290f4836e`; it is being synchronized with current `develop` before any new exact-head verification. Do not reuse old CI claims as evidence for the synchronized head.
 
 **New files in the current slice:**
+
 - `test/scenarios/recovery-seller-profitability.scenario.test.js` — four named cases for both cross-subsidy directions, exact threshold equality, and recovery-only profitability.
 - `test/scenarios/recovery-seller-mixed-sell-accounting.scenario.test.js` — six named cases for a supplied canonical DOGE Fill split, exact allocation sum, domain projection commit, replay no-op, one failure-atomicity boundary, and staged duplicate/conflict handling.
 - `test/scenarios/recovery-seller-cycle-lifecycle.scenario.test.js` — two explicit cases plus three loop-generated terminal-status cases for unknown identity retention, terminal unsuccessful outcomes, and conflicting client identity rejection.
@@ -123,6 +124,7 @@ Do not claim 100% correctness from line/branch coverage. Completion means every 
 **Evidence limits:** these are new domain-level scenario files, but not all are end-to-end business scenarios. RS-003's DOGE price/proceeds/commission are synthetic test fixture values; only the 400 + 1 additive quantity example is specification-illustrative. The supplied-Fill allocation test does not prove the planner derives its target from verified custody. The cycle lifecycle tests exercise pure cycle-state transitions, not broker submitter call counts, durable reservation retention, or application STOP side effects. The accounting test proves one-Fill domain projection atomicity, not multi-Fill REST/stream reconciliation or a durable database transaction barrier.
 
 **Scenario status:**
+
 - RS-001 legacy basis/Spot custody — MISSING.
 - RS-002 confirmed BUY/net-fee accounting — MISSING.
 - RS-003 additive mixed SELL allocation — PARTIAL.
@@ -135,6 +137,7 @@ Do not claim 100% correctness from line/branch coverage. Completion means every 
 - RS-010 restart/replay — UNSUPPORTED; third-asset fee valuation — BLOCKED pending approved source.
 
 **Contract discrepancies to resolve before affected scenarios are encoded:**
+
 1. STOP: specification/#1780 call STOP terminal and say no clear/reset path, but `resolveRecoverySellerStopState` and `resolveRecoverySellerStop` implement an evidence-backed operator resolution. The operator facade currently exposes read-only status only. Do not claim either an exposed operator reset or absence of an internal resolution use case.
 2. Default enabled state: current config sets `RS_RECOVERY_SELLER_CONFIG.enabled: true`, while specification §15 says keep it false by default; the specification's earlier text and implementation roadmap say enabled by default. Keep this as a documentation/owner-decision blocker; this scenario PR must not change configuration.
 3. Third-asset commission valuation: calculation examples exist, but the authoritative runtime quote valuation source remains unresolved/deferred.
