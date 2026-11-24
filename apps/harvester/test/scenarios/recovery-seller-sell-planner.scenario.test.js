@@ -18,7 +18,11 @@ import {
   createLegacyPosition,
   createLegacyPositionAccounting,
 } from "../../src/domain/strategies/recovery-seller/legacy-position.js"
-import { createRecoverySellerStopState } from "../../src/domain/strategies/recovery-seller/stop-decision.js"
+import {
+  createRecoverySellerStopDecision,
+  createRecoverySellerStopState,
+  latchRecoverySellerStop,
+} from "../../src/domain/strategies/recovery-seller/stop-decision.js"
 import { createRecoverySellerCycleState } from "../../src/domain/strategies/recovery-seller/cycle-state.js"
 import { evaluateRecoverySellerSellDecision } from "../../src/domain/strategies/recovery-seller/evaluate-sell-decision.js"
 import { createRecoverySellerAccountingWorkflow } from "../../src/use-cases/create-recovery-seller-accounting-workflow.js"
@@ -653,4 +657,185 @@ test("actual TradingRules minimum-notional violations block the derived SELL wit
     "The application transition must preserve the exchange-filter STOP decision.")
   assert.equal(submissions, 0,
     "No broker submission may occur when the actual TradingRules reject the planned order.")
+})
+
+test("the real accounting workflow snapshot reaches the default SELL evaluator and submits the eligible mixed SELL", async () => {
+  const scenario = await createPlannerScenario()
+  let submitted
+  const evaluate = createRecoverySellerTransitionEvaluator({
+    getSnapshot: async () => scenario.snapshot,
+    submitOrder: async (input) => {
+      submitted = input
+      return {
+        ok: true,
+        data: {
+          submitted: true,
+        },
+      }
+    },
+    evaluateBuyDecision: () => ({
+      decision: {
+        outcome: "WAIT",
+        reasonCode: "SCENARIO_BUY_WAIT",
+        explanation: "The workflow-to-SELL regression must not fall through to a new BUY.",
+      },
+    }),
+  })
+
+  const result = await evaluate({
+    symbol,
+    marketPrice: {
+      symbol,
+      price: "20",
+    },
+    marketMetadata: scenario.marketMetadata,
+    pairConfig,
+  })
+
+  assert.equal(result.decision?.outcome, undefined,
+    `The real workflow cycle state must pass the default SELL evaluator instead of fail-closing: ${result.decision?.reasonCode ?? result.errors?.[0]?.message ?? "no decision"}.`)
+  assert.equal(result.ok, true,
+    "The composed transition must return the successful submitter result for an eligible recovery SELL.")
+  assert.equal(submitted.action.side, "SELL",
+    "The real workflow snapshot must reach the default SELL evaluator and submit SELL, not BUY.")
+  assert.equal(submitted.action.quantity, "1.01",
+    "The submitted mixed SELL must use the canonical 1.00 recovery plus 0.01 verified legacy allocation.")
+  assert.equal(submitted.action.cycleId, scenario.snapshot.cycleState.cycleId,
+    "The workflow cycle identity must be preserved through the evaluator and submitted SELL.")
+  assert.equal(submitted.action.positionId, scenario.snapshot.cycleState.positionId,
+    "The workflow Position identity must be preserved through the evaluator and submitted SELL.")
+})
+
+test("the real accounting workflow snapshot still fails closed when verified legacy Spot custody is missing", async () => {
+  const scenario = await createPlannerScenario({
+    spotTotalQuantity: "1",
+  })
+  let submissions = 0
+  const evaluate = createRecoverySellerTransitionEvaluator({
+    getSnapshot: async () => scenario.snapshot,
+    submitOrder: async () => {
+      submissions += 1
+      return {
+        ok: true,
+        data: {
+          submitted: true,
+        },
+      }
+    },
+    evaluateBuyDecision: () => ({
+      decision: {
+        outcome: "WAIT",
+        reasonCode: "SCENARIO_BUY_WAIT",
+        explanation: "The missing-custody scenario must not fall through to a new BUY.",
+      },
+    }),
+  })
+
+  const result = await evaluate({
+    symbol,
+    marketPrice: {
+      symbol,
+      price: "25",
+    },
+    marketMetadata: scenario.marketMetadata,
+    pairConfig,
+  })
+
+  assert.equal(result.decision?.outcome, "BLOCK",
+    "The composed workflow must preserve the fail-closed legacy-custody decision.")
+  assert.match(result.decision.explanation, /no verified unreserved Spot quantity is available/,
+    "The default SELL evaluator must reach the legacy-custody guard, not stop earlier on a malformed cycle-state projection.")
+  assert.equal(submissions, 0,
+    "Missing verified legacy Spot custody must result in zero broker submission attempts.")
+})
+
+function createWorkflowGateScenarios({ baseScenario, existingOrderScenario }) {
+  const stoppedState = latchRecoverySellerStop({
+    state: createRecoverySellerStopState(),
+    decision: createRecoverySellerStopDecision({
+      explanation: "Owner STOP must prevent new SELL submissions.",
+    }),
+  })
+  return [
+    {
+      name: "existing account order",
+      snapshot: existingOrderScenario.snapshot,
+    },
+    {
+      name: "STOP",
+      snapshot: Object.freeze({
+        ...baseScenario.snapshot,
+        stopState: stoppedState,
+      }),
+    },
+    {
+      name: "market pause",
+      snapshot: Object.freeze({
+        ...baseScenario.snapshot,
+        marketPaused: true,
+      }),
+    },
+    {
+      name: "incomplete reconciliation",
+      snapshot: Object.freeze({
+        ...baseScenario.snapshot,
+        reconciliationComplete: false,
+      }),
+    },
+  ]
+}
+
+async function assertWorkflowGateBlocksSell({ name, snapshot, marketMetadata }) {
+  let submissions = 0
+  const evaluate = createRecoverySellerTransitionEvaluator({
+    getSnapshot: async () => snapshot,
+    submitOrder: async () => {
+      submissions += 1
+      return {
+        ok: true,
+        data: {
+          submitted: true,
+        },
+      }
+    },
+    evaluateBuyDecision: () => ({
+      decision: {
+        outcome: "WAIT",
+        reasonCode: "SCENARIO_BUY_WAIT",
+        explanation: "The gate scenario must not submit a new BUY.",
+      },
+    }),
+  })
+  const result = await evaluate({
+    symbol,
+    marketPrice: {
+      symbol,
+      price: "25",
+    },
+    marketMetadata,
+    pairConfig,
+  })
+
+  assert.equal(submissions, 0,
+    `The real workflow snapshot must not submit a SELL while ${name} is active.`)
+  assert.equal(result.decision.outcome, "WAIT",
+    `The ${name} gate must take precedence over a profitable SELL plan.`)
+}
+
+test("real workflow snapshots preserve existing-order, STOP, pause and reconciliation gates before SELL submission", async () => {
+  const baseScenario = await createPlannerScenario()
+  const existingOrderScenario = await createPlannerScenario({
+    includeExternalSellReservation: true,
+  })
+  const gatedSnapshots = createWorkflowGateScenarios({
+    baseScenario,
+    existingOrderScenario,
+  })
+
+  for (const scenario of gatedSnapshots) {
+    await assertWorkflowGateBlocksSell({
+      ...scenario,
+      marketMetadata: baseScenario.marketMetadata,
+    })
+  }
 })
