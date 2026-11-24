@@ -37,3 +37,33 @@ test("Bitunix Futures REST requires every POST request to declare its mutation s
   )
   assert.equal(requestCount, 0, "an ambiguous POST must be rejected before network dispatch")
 })
+
+test("Bitunix Futures depth response preserves numeric JSON price and quantity tokens losslessly", async () => {
+  const config = new BitunixFuturesConfig({
+    apiKey: "bitunix-futures-depth-test-key",
+    apiSecret: "bitunix-futures-depth-test-secret",
+    tradingMode: "live",
+  })
+  const client = new BitunixFuturesRestClient({
+    config,
+    fetchFn: async () => ({
+      ok: true,
+      status: 200,
+      text: async () => '{"code":0,"data":{"asks":[[0.1001,0.123456789012345678]],"bids":[[0.1,1]]}}',
+    }),
+    now: () => 1_700_000_000_000,
+    nonceFactory: () => "nonce-depth",
+  })
+
+  const response = await client.request({
+    method: "GET",
+    path: "/api/v1/futures/market/depth",
+    queryParams: {
+      symbol: "BTCUSDT",
+    },
+  })
+
+  assert.equal(response.data.asks[0][0], "0.1001", "depth price tokens must remain decimal strings")
+  assert.equal(response.data.asks[0][1], "0.123456789012345678", "depth quantity tokens must not be rounded through JavaScript Number")
+  assert.equal(response.data.bids[0][0], "0.1", "bid price tokens must also remain exact")
+})
