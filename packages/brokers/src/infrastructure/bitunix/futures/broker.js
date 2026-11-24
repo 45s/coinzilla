@@ -1,5 +1,6 @@
-import { Asset, Market } from "@coinzilla/entities"
+import { Market } from "@coinzilla/entities"
 import { ensure, handleErr, toResult } from "@coinzilla/utils"
+import { adaptFuturesBalances } from "./adapters/adapt-futures-balances.js"
 import { BrokerCapabilities } from "../../../broker/broker-capabilities.js"
 import { BrokerUnsupportedOperationError } from "../../../broker/errors/broker-unsupported-operation-error.js"
 import { BitunixFuturesRestClient } from "./api/rest-client.js"
@@ -18,8 +19,10 @@ function unsupportedResult({ operation, reason }) {
 const FUTURES_CAPABILITIES = [
   {
     type: "READ_BALANCES",
-    status: "UNKNOWN",
-    reason: "The Futures account response adapter and source-freshness contract have not yet been implemented.",
+    status: "SUPPORTED",
+    method: "getBalances",
+    guarantee: "Returns the USDT Futures account available balance and combines frozen order funds with position margin using exact decimal arithmetic.",
+    limitation: "The source response has no authoritative account timestamp; this does not provide a fresh account snapshot.",
   },
   {
     type: "READ_ACCOUNT_SNAPSHOT",
@@ -219,11 +222,36 @@ export class BitunixFuturesBroker {
     this.connected = false
   }
 
-  async getBalances() {
-    return unsupportedResult({
-      operation: "getBalances",
-      reason: "Futures account reads are not implemented yet.",
-    })
+  async getBalances({ marginCoin = "USDT" } = {}) {
+    try {
+      ensure.oneOf({
+        value: marginCoin,
+        values: ["USDT"],
+        name: "marginCoin",
+        errMsg: 'Bitunix USDT Futures balance reads require marginCoin "USDT"',
+      })
+      const response = await this.restClient.request({
+        method: "GET",
+        path: "/api/v1/futures/account",
+        queryParams: {
+          marginCoin,
+        },
+      })
+      return toResult({
+        data: adaptFuturesBalances({
+          rows: response.data,
+          marginCoin,
+        }),
+      })
+    } catch (error) {
+      handleErr({
+        where: "BitunixFuturesBroker.getBalances()",
+        error,
+      })
+      return toResult({
+        errors: [error],
+      })
+    }
   }
 
   async getAccountSnapshot() {

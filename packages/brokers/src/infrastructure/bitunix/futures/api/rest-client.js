@@ -85,11 +85,13 @@ function validateBody({ method, body }) {
 }
 
 function validateMutationState({ method, stateChanging }) {
-  ensure.boolean({
-    value: stateChanging,
-    name: "stateChanging",
-  })
-  if (stateChanging && method !== "POST") {
+  if (method === "POST" || stateChanging !== undefined) {
+    ensure.boolean({
+      value: stateChanging,
+      name: "stateChanging",
+    })
+  }
+  if (stateChanging === true && method !== "POST") {
     throw new TypeError("Bitunix Futures state-changing requests must use POST")
   }
 }
@@ -130,7 +132,7 @@ function normalizeRequest({ input }) {
     queryParams = {},
     body,
     authenticated = true,
-    stateChanging = false,
+    stateChanging,
   } = input
   return {
     method,
