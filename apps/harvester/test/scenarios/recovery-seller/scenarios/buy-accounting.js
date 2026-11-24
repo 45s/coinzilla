@@ -179,8 +179,8 @@ export const recoverySellerBuyAccountingScenarios = Object.freeze([
           overrides: { reconciliationComplete: undefined },
         },
         {
-          id: "orphaned-commitment",
-          overrides: { pendingBuyCommitment: "5" },
+          id: "invalid-market-metadata",
+          overrides: { marketMetadata: null },
         },
       ],
     },
@@ -219,7 +219,7 @@ export const recoverySellerBuyAccountingScenarios = Object.freeze([
           orderIdentity: null,
         },
         {
-          id: "orphaned-commitment",
+          id: "invalid-market-metadata",
           outcome: "BLOCK",
           reasonCode: "UNEXPECTED_OR_UNMODELED_CONDITION",
           action: null,
