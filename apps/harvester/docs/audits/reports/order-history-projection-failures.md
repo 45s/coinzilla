@@ -292,4 +292,16 @@ The current persistence composition creates a legacy order-history observer in `
 
 ### Regression test — provider provenance on lifecycle updates
 
-A deterministic regression now seeds a real `OrderRegistry` with an accepted `OPEN` order carrying provider identity, then applies a `PARTIALLY_FILLED` update (executed quantity `0.5`) with the same client/broker order IDs, a matching canonical Fill, and no provider provenance on the incoming order. It asserts that the registry retains the original identity and that the published `order.updated` event carries all three provenance fields, with a field-specific failure message for each identity assertion. The fixture is offline and uses the existing canonical Order/Fill entities. RED was confirmed on test head `96665d9385334790be50c6ec4ad11c33b6f94bea` by Harvester Targeted Tests run `45466356240` (job `138702193913`): 18 passed, 1 failed. The sole failure was the intended assertion (`providerInstanceId`: actual `undefined`, expected `binanceTestnet`), after the valid fixture setup and registry identity assertion passed. The mapper correction is now implemented in this PR; GREEN verification is pending on the next exact head.
+A deterministic regression now seeds a real `OrderRegistry` with an accepted `OPEN` order carrying provider identity, then applies a `PARTIALLY_FILLED` update (executed quantity `0.5`) with the same client/broker order IDs, a matching canonical Fill, and no provider provenance on the incoming order. It asserts that the registry retains the original identity and that the published `order.updated` event carries all three provenance fields, with a field-specific failure message for each identity assertion. The fixture is offline and uses the existing canonical Order/Fill entities. RED was confirmed on test head `96665d9385334790be50c6ec4ad11c33b6f94bea` by Harvester Targeted Tests run `45466356240` (job `138702193913`): 18 passed, 1 failed. The sole failure was the intended assertion (`providerInstanceId`: actual `undefined`, expected `binanceTestnet`), after the valid fixture setup and registry identity assertion passed. The mapper correction is implemented in this PR; GREEN was confirmed on code head `00adf1b55f3d5a879991359de95295f570e8046d`. The exact workflow results are recorded in the GREEN verification checkpoint below.
+
+
+### GREEN verification checkpoint — code head `00adf1b55f3d5a879991359de95295f570e8046d`
+
+- Harvester Targeted Tests: run `45468276780`, passed.
+- Unit Tests: run `45468276524`, all package jobs passed; Harvester reported 2,722 passed and 0 failed.
+- Test Coverage: run `45468276538`, all package jobs passed; Harvester coverage was 90.59% lines, 83.71% branches and 96.07% functions.
+- Repository Quality: run `45468276441`, passed, including zero-warning workspace ESLint, strict changed-file ESLint, JavaScript syntax, helper purity, dependency policy and maintained Markdown style.
+- Dependency Audit: run `45468276587`, passed.
+- External Documentation Links: run `45468276823`, still in progress at this checkpoint.
+
+The code/test/quality gates are green on this code head. The PR remains draft for the required #1826 integration order; the historical 2026-11-22 failure set remains unresolved.
