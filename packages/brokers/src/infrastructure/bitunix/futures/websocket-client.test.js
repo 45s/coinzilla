@@ -351,7 +351,9 @@ test("Bitunix Futures public WebSocket reconnects with bounded backoff and requi
   assert.equal(client.recoveryRequired, true)
   assert.equal(timeouts[0].delay, 1_000)
 
+  const openPromise = client.waitUntilOpen()
   await timeouts[0].callback()
+  await openPromise
   assert.equal(transports.length, 2)
   assert.equal(client.state, "open")
   assert.equal(client.recoveryRequired, true)
