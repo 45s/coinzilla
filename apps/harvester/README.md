@@ -355,6 +355,10 @@ DEBUG/TRACE logs and the Journal JSONL file live in that same session directory.
 Standalone `start` creates structured session files but does not create
 terminal-capture files. See [Logging](./docs/LOGGING.md) for destinations, lifecycle and retention.
 
+## Debug evidence archive
+
+For a lightweight TESTNET debug archive, stop Harvester and run `pnpm --filter @coinzilla/harvester archive:debug`. It publishes only the newest completed TESTNET session logs and `recovery-facts/` as a directory under `archives/<timestamp>_<id>_debug/` in the private `45s/coinzilla-archive` repository. Databases and cumulative logs are excluded. See the [local DEV reset and archive runbook](./docs/operations/local-dev-reset-and-archive.md).
+
 ## Implementation style
 
 See [Architecture](./docs/architecture.md) and [Harvester agent instructions](./AGENTS.md).
