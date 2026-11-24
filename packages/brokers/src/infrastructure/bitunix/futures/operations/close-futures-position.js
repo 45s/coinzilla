@@ -33,12 +33,13 @@ function requireText({ value, field }) {
 }
 
 function normalizeOptionalSymbol({ symbol }) {
-  return symbol === undefined
-    ? undefined
-    : requireText({
-      value: symbol,
-      field: "symbol",
-    }).toUpperCase()
+  if (symbol === undefined) {
+    return undefined
+  }
+  return requireText({
+    value: symbol,
+    field: "symbol",
+  }).toUpperCase()
 }
 
 function filterPositions({ positions, symbol, positionId }) {
@@ -80,10 +81,9 @@ function createAlreadyClosedResult({ data }) {
 
 function getMutationOutcome({ dispatchError, positionOutcome }) {
   if (dispatchError) {
-    if (dispatchError.outcomeUnknown === true) {
-      return "OUTCOME_UNKNOWN"
-    }
-    return "REJECTED"
+    return dispatchError.outcomeUnknown === true
+      ? "OUTCOME_UNKNOWN"
+      : "REJECTED"
   }
   if (positionOutcome === "CLOSED") {
     return "CONFIRMED"
@@ -165,6 +165,69 @@ async function dispatchPositionMutation({ broker, path, body }) {
   }
 }
 
+async function prepareExactPosition({ broker, positionId, symbol }) {
+  const preflight = await readPositions({
+    broker,
+    positionId,
+  })
+  if (preflight.errors) {
+    return {
+      result: createPositionResult({
+        errors: preflight.errors,
+        mutationOutcome: "NOT_SENT",
+        positionOutcome: "UNKNOWN",
+      }),
+    }
+  }
+  if (preflight.positions.length === 0) {
+    return {
+      result: createAlreadyClosedResult({
+        data: {
+          positionId,
+        },
+      }),
+    }
+  }
+  if (preflight.positions.length !== 1) {
+    throw new Error("Bitunix Futures close requires one unique positionId")
+  }
+  const [position] = preflight.positions
+  if (symbol !== undefined && position.symbol !== symbol) {
+    throw new TypeError("Bitunix Futures close position symbol does not match the requested symbol")
+  }
+  return {
+    position,
+  }
+}
+
+async function prepareCloseAllScope({ broker, scope, symbol }) {
+  const preflight = await readPositions({
+    broker,
+    ...scope,
+  })
+  if (preflight.errors) {
+    return {
+      result: createPositionResult({
+        errors: preflight.errors,
+        mutationOutcome: "NOT_SENT",
+        positionOutcome: "UNKNOWN",
+      }),
+    }
+  }
+  if (preflight.positions.length === 0) {
+    return {
+      result: createAlreadyClosedResult({
+        data: symbol === undefined ? {} : {
+          symbol,
+        },
+      }),
+    }
+  }
+  return {
+    positions: preflight.positions,
+  }
+}
+
 /**
  * Close one exact Futures position using Bitunix's positionId-based flash-close endpoint.
  */
@@ -181,33 +244,13 @@ export async function closeFuturesPosition({ broker, input } = {}) {
     const symbol = normalizeOptionalSymbol({
       symbol: input.symbol,
     })
-    const scope = {
-      positionId,
-    }
-    const preflight = await readPositions({
+    const prepared = await prepareExactPosition({
       broker,
-      ...scope,
+      positionId,
+      symbol,
     })
-    if (preflight.errors) {
-      return createPositionResult({
-        errors: preflight.errors,
-        mutationOutcome: "NOT_SENT",
-        positionOutcome: "UNKNOWN",
-      })
-    }
-    if (preflight.positions.length === 0) {
-      return createAlreadyClosedResult({
-        data: {
-          positionId,
-        },
-      })
-    }
-    if (preflight.positions.length !== 1) {
-      throw new Error("Bitunix Futures close requires one unique positionId")
-    }
-    const [position] = preflight.positions
-    if (symbol !== undefined && position.symbol !== symbol) {
-      throw new TypeError("Bitunix Futures close position symbol does not match the requested symbol")
+    if (prepared.result) {
+      return prepared.result
     }
     const dispatchError = await dispatchPositionMutation({
       broker,
@@ -218,8 +261,10 @@ export async function closeFuturesPosition({ broker, input } = {}) {
     })
     return reconcilePositionMutation({
       broker,
-      scope,
-      initialPositions: [position],
+      scope: {
+        positionId,
+      },
+      initialPositions: [prepared.position],
       dispatchError,
       operation: "closeFuturesPosition",
     })
@@ -317,25 +362,13 @@ export async function closeAllFuturesPositions({ broker, input } = {}) {
     const scope = symbol === undefined ? {} : {
       symbol,
     }
-    const preflight = await readPositions({
+    const prepared = await prepareCloseAllScope({
       broker,
-      ...scope,
+      scope,
+      symbol,
     })
-    if (preflight.errors) {
-      return createPositionResult({
-        errors: preflight.errors,
-        mutationOutcome: "NOT_SENT",
-        positionOutcome: "UNKNOWN",
-      })
-    }
-    if (preflight.positions.length === 0) {
-      return createAlreadyClosedResult({
-        data: {
-          ...(symbol === undefined ? {} : {
-            symbol,
-          }),
-        },
-      })
+    if (prepared.result) {
+      return prepared.result
     }
     const dispatchError = await dispatchPositionMutation({
       broker,
@@ -347,7 +380,7 @@ export async function closeAllFuturesPositions({ broker, input } = {}) {
     return reconcilePositionMutation({
       broker,
       scope,
-      initialPositions: preflight.positions,
+      initialPositions: prepared.positions,
       dispatchError,
       operation: "closeAllFuturesPositions",
     })
