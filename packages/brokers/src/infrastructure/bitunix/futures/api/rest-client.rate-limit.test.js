@@ -1,0 +1,70 @@
+import assert from "node:assert/strict"
+import test from "node:test"
+
+import { BitunixFuturesConfig } from "./config/bitunix-futures-config.js"
+import { BitunixFuturesRestClient } from "./rest-client.js"
+
+function createConfig() {
+  return new BitunixFuturesConfig({
+    apiKey: "bitunix-rate-limit-test-key",
+    apiSecret: "bitunix-rate-limit-test-secret",
+    tradingMode: "live",
+  })
+}
+
+test("Bitunix Futures REST client serializes concurrent requests at a conservative 10 requests per second", async () => {
+  let clock = 0
+  const calls = []
+  const delays = []
+  const client = new BitunixFuturesRestClient({
+    config: createConfig(),
+    now: () => 1_700_000_000_000,
+    rateLimitNow: () => clock,
+    sleepFn: async (delay) => {
+      delays.push(delay)
+      clock += delay
+    },
+    fetchFn: async (...args) => {
+      const [url] = args
+      calls.push({
+        url: String(url),
+        time: clock,
+      })
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          code: 0,
+          data: [],
+        }),
+      }
+    },
+  })
+
+  await Promise.all([
+    client.request({
+      method: "GET",
+      path: "/api/v1/futures/account",
+      queryParams: {
+        marginCoin: "USDT",
+      },
+    }),
+    client.request({
+      method: "GET",
+      path: "/api/v1/futures/account",
+      queryParams: {
+        marginCoin: "USDT",
+      },
+    }),
+    client.request({
+      method: "GET",
+      path: "/api/v1/futures/account",
+      queryParams: {
+        marginCoin: "USDT",
+      },
+    }),
+  ])
+
+  assert.deepEqual(calls.map(({ time }) => time), [0, 100, 200])
+  assert.deepEqual(delays, [100, 100])
+})
