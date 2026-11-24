@@ -74,6 +74,7 @@ describe('BotsComponent', () => {
     const fixture = TestBed.createComponent(BotsComponent);
     fixture.detectChanges();
     flushInitialSnapshots(http);
+    await fixture.componentInstance.lastRefresh;
     await fixture.whenStable();
     fixture.detectChanges();
 
@@ -99,6 +100,7 @@ describe('BotsComponent', () => {
     const fixture = TestBed.createComponent(BotsComponent);
     fixture.detectChanges();
     flushInitialSnapshots(http);
+    await fixture.componentInstance.lastRefresh;
     await fixture.whenStable();
     fixture.detectChanges();
 
@@ -121,6 +123,7 @@ describe('BotsComponent', () => {
 
     await Promise.resolve();
     flushInitialSnapshots(http, { paused: true });
+    await fixture.componentInstance.lastRefresh;
     await fixture.whenStable();
     fixture.detectChanges();
 
@@ -137,6 +140,7 @@ describe('BotsComponent', () => {
     const fixture = TestBed.createComponent(BotsComponent);
     fixture.detectChanges();
     flushInitialSnapshots(http);
+    await fixture.componentInstance.lastRefresh;
     await fixture.whenStable();
     fixture.detectChanges();
 
@@ -164,6 +168,7 @@ describe('BotsComponent', () => {
     const fixture = TestBed.createComponent(BotsComponent);
     fixture.detectChanges();
     flushInitialSnapshots(http, { paused: true });
+    await fixture.componentInstance.lastRefresh;
     await fixture.whenStable();
     fixture.detectChanges();
 
@@ -184,6 +189,7 @@ describe('BotsComponent', () => {
 
     await Promise.resolve();
     flushInitialSnapshots(http, { paused: false });
+    await fixture.componentInstance.lastRefresh;
     await fixture.whenStable();
     fixture.detectChanges();
 
@@ -200,6 +206,7 @@ describe('BotsComponent', () => {
     const fixture = TestBed.createComponent(BotsComponent);
     fixture.detectChanges();
     flushInitialSnapshots(http);
+    await fixture.componentInstance.lastRefresh;
     await fixture.whenStable();
     fixture.detectChanges();
 
@@ -221,6 +228,7 @@ describe('BotsComponent', () => {
 
     await Promise.resolve();
     flushInitialSnapshots(http);
+    await fixture.componentInstance.lastRefresh;
     await fixture.whenStable();
     fixture.detectChanges();
     expect((fixture.nativeElement as HTMLElement).textContent, 'The global pause action must complete and refresh the authoritative snapshot.').toContain('Pause BUYs across all markets accepted by Harvester.');
@@ -241,6 +249,7 @@ describe('BotsComponent', () => {
     });
     http.expectOne(`${BASE_URL}/markets`).flush({ ok: true, data: { markets: [] } });
     http.expectOne(`${BASE_URL}/portfolio`).flush({ ok: true, data: { positions: [] } });
+    await fixture.componentInstance.lastRefresh;
     await fixture.whenStable();
     fixture.detectChanges();
 
@@ -259,6 +268,7 @@ describe('BotsComponent', () => {
     const fixture = TestBed.createComponent(BotsComponent);
     fixture.detectChanges();
     flushInitialSnapshots(http, { positions: false });
+    await fixture.componentInstance.lastRefresh;
     await fixture.whenStable();
     fixture.detectChanges();
 
