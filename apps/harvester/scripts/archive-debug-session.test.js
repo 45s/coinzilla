@@ -28,11 +28,8 @@ function jsonLines(records) {
   return `${records.map((record) => JSON.stringify(record)).join("\n")}\n`
 }
 
-async function createFixture() {
-  const packageDirectory = await mkdtemp(path.join(os.tmpdir(), "harvester-debug-archive-test-"))
-  const lockDirectory = path.join(packageDirectory, "process-locks")
-  await mkdir(lockDirectory)
-  const files = {
+function createFixtureFiles() {
+  return {
     "logs/sessions/2026-11-20_old/terminal.log": "old session",
     "logs/sessions/2026-11-24_testnet/terminal.log": "selected TESTNET session evidence",
     "logs/sessions/2026-11-24_testnet/process-identity.json": JSON.stringify({
@@ -85,16 +82,19 @@ async function createFixture() {
       },
     ]),
   }
+}
+
+async function createFixture() {
+  const packageDirectory = await mkdtemp(path.join(os.tmpdir(), "harvester-debug-archive-test-"))
+  const lockDirectory = path.join(packageDirectory, "process-locks")
+  await mkdir(lockDirectory)
+  const files = createFixtureFiles()
   for (const [relativePath, content] of Object.entries(files)) {
     const filename = path.join(packageDirectory, relativePath)
     await mkdir(path.dirname(filename), { recursive: true })
     await writeFile(filename, content, "utf8")
   }
-  return {
-    packageDirectory,
-    lockDirectory,
-    files
-  }
+  return { packageDirectory, lockDirectory, files }
 }
 
 function archiveDependencies({ fixture, overrides = {} } = {}) {
@@ -210,7 +210,12 @@ test("rejects LIVE mode before creating an archive", async (t) => {
     force: true
   }))
   await assert.rejects(
-    runHarvesterDebugArchive(archiveDependencies({ fixture, overrides: { TRADING_MODE: "live" } })),
+    runHarvesterDebugArchive(archiveDependencies({
+      fixture,
+      overrides: {
+        TRADING_MODE: "live",
+      },
+    })),
     /TRADING_MODE=testnet/,
   )
   await assert.rejects(readdir(path.join(fixture.packageDirectory, "archive-output")), { code: "ENOENT" })
