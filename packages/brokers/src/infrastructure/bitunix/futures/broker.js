@@ -869,6 +869,52 @@ function adaptFuturesBookTicker({ event, symbol, timestamp }) {
   })
 }
 
+function deliverFuturesPrivateObservation({ event, now, onObservation }) {
+  try {
+    const observedAt = now()
+    if (!Number.isSafeInteger(observedAt) || observedAt < 0) {
+      throw new TypeError("Bitunix Futures observation time must be a non-negative safe integer")
+    }
+    const observation = Object.freeze({
+      source: "BITUNIX_FUTURES_PRIVATE_WEBSOCKET",
+      channel: event.ch,
+      symbol: event.symbol ?? null,
+      observedAt,
+      serverTimestamp: event.ts ?? null,
+      payload: event.data,
+      authoritative: false,
+      replayable: false,
+      recoveryRequired: true,
+    })
+    onObservation(observation)
+  } catch (error) {
+    handleErr({
+      where: "BitunixFuturesBroker.subscribeForUserData()",
+      error,
+    })
+  }
+}
+
+function deliverFuturesUserDataStatus({ status, onStatus }) {
+  if (typeof onStatus !== "function") {
+    return
+  }
+  try {
+    onStatus(Object.freeze({
+      ...status,
+      deliveryMode: "NATIVE_EVENTS",
+      authoritative: false,
+      replayable: false,
+      recoveryRequired: true,
+    }))
+  } catch (error) {
+    handleErr({
+      where: "BitunixFuturesBroker.subscribeForUserData().onStatus",
+      error,
+    })
+  }
+}
+
 function deliverFuturesBookTicker({ event, symbol, now, onBookTicker }) {
   try {
     const bookTicker = adaptFuturesBookTicker({
@@ -925,6 +971,9 @@ export class BitunixFuturesBroker {
     this.publicWebSocketClient = null
     this.publicWebSocketConnectPromise = null
     this.publicWebSocketSubscriptions = new Map()
+    this.privateWebSocketClient = null
+    this.privateWebSocketConnectPromise = null
+    this.privateWebSocketSession = null
     this.connected = false
     this.canonicalMarkets = new Map()
     Object.defineProperty(this, "capabilities", {
@@ -940,21 +989,173 @@ export class BitunixFuturesBroker {
   }
 
   async disconnect() {
-    const client = this.publicWebSocketClient
-    if (client) {
+    const clients = [
+      this.publicWebSocketClient,
+      this.privateWebSocketClient,
+    ].filter(Boolean)
+    if (this.publicWebSocketClient) {
       for (const subscription of this.publicWebSocketSubscriptions.values()) {
-        client.off(subscription.channel, subscription.dispatch)
+        this.publicWebSocketClient.off(subscription.channel, subscription.dispatch)
       }
-      this.publicWebSocketSubscriptions.clear()
+    }
+    if (this.privateWebSocketSession) {
+      this.privateWebSocketClient.off("channel", this.privateWebSocketSession.dispatchObservation)
+      this.privateWebSocketClient.off("status", this.privateWebSocketSession.dispatchStatus)
+    }
+    this.publicWebSocketSubscriptions.clear()
+    this.privateWebSocketSession = null
+    this.connected = false
+    const results = await Promise.allSettled(clients.map((client) => client.disconnect()))
+    this.publicWebSocketClient = null
+    this.publicWebSocketConnectPromise = null
+    this.privateWebSocketClient = null
+    this.privateWebSocketConnectPromise = null
+    const failures = results.filter((result) => result.status === "rejected")
+    if (failures.length > 0) {
+      throw new AggregateError(
+        failures.map((failure) => failure.reason),
+        "Bitunix Futures WebSocket clients failed to disconnect cleanly",
+      )
+    }
+  }
+
+  async #ensurePrivateWebSocketClient() {
+    if (!this.privateWebSocketClient) {
+      this.privateWebSocketClient = this.webSocketClientFactory({
+        channelType: "private",
+        url: this.config.privateWebSocketUrl,
+        apiKey: this.config.apiKey,
+        apiSecret: this.config.apiSecret,
+        now: this.now,
+      })
+    }
+    if (this.privateWebSocketClient.state !== "open") {
+      if (!this.privateWebSocketConnectPromise) {
+        const connect = this.privateWebSocketClient.state === "connecting" &&
+          typeof this.privateWebSocketClient.waitUntilOpen === "function"
+          ? this.privateWebSocketClient.waitUntilOpen()
+          : this.privateWebSocketClient.connect()
+        this.privateWebSocketConnectPromise = connect.finally(() => {
+          this.privateWebSocketConnectPromise = null
+        })
+      }
+      await this.privateWebSocketConnectPromise
+    }
+    await this.privateWebSocketClient.waitUntilAuthenticated()
+    return this.privateWebSocketClient
+  }
+
+  async #createPrivateUserDataSession({ onObservation, onStatus }) {
+    const client = await this.#ensurePrivateWebSocketClient()
+    if (this.privateWebSocketSession) {
+      const observer = {
+        onObservation,
+        onStatus,
+      }
+      this.privateWebSocketSession.observers.add(observer)
+      deliverFuturesUserDataStatus({
+        status: {
+          state: client.state,
+          authenticated: client.authenticated,
+          recoveryRequired: true,
+        },
+        onStatus,
+      })
+      return this.#createPrivateUserDataUnsubscriber({
+        client,
+        observer,
+      })
+    }
+    const observers = new Set()
+    const dispatchObservation = (event) => {
+      for (const observer of observers) {
+        deliverFuturesPrivateObservation({
+          event,
+          now: this.now,
+          onObservation: observer.onObservation,
+        })
+      }
+    }
+    const dispatchStatus = (status) => {
+      for (const observer of observers) {
+        deliverFuturesUserDataStatus({
+          status,
+          onStatus: observer.onStatus,
+        })
+      }
+    }
+    client.on("channel", dispatchObservation)
+    client.on("status", dispatchStatus)
+    const channels = [
+      { ch: "balance" },
+      { ch: "position" },
+      { ch: "order" },
+      { ch: "tpsl" },
+    ]
+    try {
+      client.subscribe({
+        channels,
+      })
+    } catch (error) {
+      client.off("channel", dispatchObservation)
+      client.off("status", dispatchStatus)
+      throw error
+    }
+    const observer = {
+      onObservation,
+      onStatus,
+    }
+    observers.add(observer)
+    this.privateWebSocketSession = {
+      channels,
+      dispatchObservation,
+      dispatchStatus,
+      observers,
+    }
+    deliverFuturesUserDataStatus({
+      status: {
+        state: client.state,
+        authenticated: client.authenticated,
+        recoveryRequired: true,
+      },
+      onStatus,
+    })
+    return this.#createPrivateUserDataUnsubscriber({
+      client,
+      observer,
+    })
+  }
+
+  #createPrivateUserDataUnsubscriber({ client, observer }) {
+    let disposed = false
+    return async () => {
+      if (disposed) {
+        return
+      }
+      disposed = true
+      const session = this.privateWebSocketSession
+      if (!session) {
+        return
+      }
+      session.observers.delete(observer)
+      if (session.observers.size > 0) {
+        return
+      }
+      client.off("channel", session.dispatchObservation)
+      client.off("status", session.dispatchStatus)
+      this.privateWebSocketSession = null
       try {
-        await client.disconnect()
+        client.unsubscribe({
+          channels: session.channels,
+        })
       } finally {
-        this.publicWebSocketClient = null
-        this.publicWebSocketConnectPromise = null
-        this.connected = false
+        try {
+          await client.disconnect()
+        } finally {
+          this.privateWebSocketClient = null
+          this.privateWebSocketConnectPromise = null
+        }
       }
-    } else {
-      this.connected = false
     }
   }
 
@@ -1740,11 +1941,44 @@ export class BitunixFuturesBroker {
     }
   }
 
-  async subscribeForUserData() {
-    return unsupportedResult({
-      operation: "subscribeForUserData",
-      reason: "Futures private WebSocket subscriptions are not implemented yet.",
-    })
+  async subscribeForUserData({ onObservation, onStatus } = {}) {
+    try {
+      if (!this.connected) {
+        throw new Error("Bitunix Futures broker must be connected before subscribing to user data")
+      }
+      ensure.function({
+        value: onObservation,
+        name: "onObservation",
+        errMsg: "Bitunix Futures user-data subscription requires an onObservation callback because native events are not authoritative",
+      })
+      if (onStatus !== undefined) {
+        ensure.function({
+          value: onStatus,
+          name: "onStatus",
+        })
+      }
+      const unsubscribe = await this.#createPrivateUserDataSession({
+        onObservation,
+        onStatus,
+      })
+      return toResult({
+        data: Object.freeze({
+          deliveryMode: "NATIVE_EVENTS",
+          authoritative: false,
+          replayable: false,
+          recoveryRequired: true,
+          unsubscribe,
+        }),
+      })
+    } catch (error) {
+      handleErr({
+        where: "BitunixFuturesBroker.subscribeForUserData()",
+        error,
+      })
+      return toResult({
+        errors: [error],
+      })
+    }
   }
 
   async getAssets() {
