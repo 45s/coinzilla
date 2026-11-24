@@ -5,7 +5,7 @@
 **Scope:** Bitunix USDT-margined Futures REST, account/trading settings, orders/positions/TP-SL, market data, and WebSocket channels.
 **Authority:** Current official Bitunix Futures API documentation is authoritative. Third-party SDKs and official demos are corroborating implementation evidence, not protocol authority.
 
-This audit is separate from the Bitunix Spot reference audit. Futures endpoints, semantics and models must not be inferred from Spot behavior.
+This audit is separate from the Bitunix Spot reference audit. Futures endpoints, semantics and models must not be inferred from Spot behavior. The current repository contains a Binance Spot Broker implementation but no Binance Futures provider implementation; there is no Binance Futures code to compare or copy. Binance Spot is used only as a reference for the shared Broker contract and its conformance patterns.
 
 ## 1. Sources inspected
 
@@ -20,6 +20,27 @@ This audit is separate from the Bitunix Spot reference audit. Futures endpoints,
 - [Futures order history](https://www.bitunix.com/api-docs/futures/trade/get_history_orders.html)
 - [Futures execution history](https://www.bitunix.com/api-docs/futures/trade/get_history_trades.html)
 - [Futures private WebSocket](https://www.bitunix.com/api-docs/futures/websocket/prepare/WebSocket.html)
+- [Single Futures account](https://www.bitunix.com/api-docs/futures/account/get_single_account.html)
+- [Futures trading settings](https://www.bitunix.com/api-docs/futures/account/get_trading_settings.html)
+- [Get position mode](https://www.bitunix.com/api-docs/futures/account/get_position_mode.html)
+- [Get leverage and margin mode](https://www.bitunix.com/api-docs/futures/account/get_leverage_and_margin_mode.html)
+- [Change position mode](https://www.bitunix.com/api-docs/futures/account/change_position_mode.html)
+- [Change margin mode](https://www.bitunix.com/api-docs/futures/account/change_margin_mode.html)
+- [Change leverage](https://www.bitunix.com/api-docs/futures/account/change_leverage.html)
+- [Adjust position margin](https://www.bitunix.com/api-docs/futures/account/adjust_position_margin.html)
+- [Current funding rate](https://www.bitunix.com/api-docs/futures/market/get_funding_rate.html)
+- [Batch funding rates](https://www.bitunix.com/api-docs/futures/market/get_funding_rate_batch.html)
+- [Funding-rate history](https://www.bitunix.com/api-docs/futures/market/get_funding_rate_history.html)
+- [Position tiers](https://www.bitunix.com/api-docs/futures/position/get_position_tiers.html)
+- [Close all positions](https://www.bitunix.com/api-docs/futures/trade/close_all_position.html)
+- [Flash close position](https://www.bitunix.com/api-docs/futures/trade/flash_close_position.html)
+- [Batch Futures orders](https://www.bitunix.com/api-docs/futures/trade/batch_order.html)
+- [Place TP/SL order](https://www.bitunix.com/api-docs/futures/tpsl/place_order.html)
+- [Place position TP/SL](https://www.bitunix.com/api-docs/futures/tpsl/place_position_order.html)
+- [Modify TP/SL order](https://www.bitunix.com/api-docs/futures/tpsl/modify_order.html)
+- [Modify position TP/SL](https://www.bitunix.com/api-docs/futures/tpsl/modify_position_order.html)
+- [Cancel TP/SL order](https://www.bitunix.com/api-docs/futures/tpsl/cancel_order.html)
+- [TP/SL history](https://www.bitunix.com/api-docs/futures/tpsl/get_history_orders.html)
 - Official repository, immutable inspected revision: [BitunixOfficial/open-api @ 0be792c](https://github.com/BitunixOfficial/open-api/tree/0be792c3a98a2706d22e5d1a9742f448f11f3347)
   - [Node private HTTP client](https://github.com/BitunixOfficial/open-api/blob/0be792c3a98a2706d22e5d1a9742f448f11f3347/Demo/Node/openApiHttpFuturePrivate.js)
   - [Node public HTTP client](https://github.com/BitunixOfficial/open-api/blob/0be792c3a98a2706d22e5d1a9742f448f11f3347/Demo/Node/openApiHttpFuturePublic.js)
@@ -69,7 +90,7 @@ The JKorf request-validation suite exercises order placement/edit/cancel/cancel-
 
 ### Implemented provider-specific reads
 
-The current adapter has distinct Futures configuration and signing, public market catalog/tickers/depth/REST candles, exact USDT balance projection, canonical order detail/history, provider-specific pending-order and TP/SL pending-order reads, current/historical position projections, position-mode and leverage/margin-mode reads, bounded raw execution-history pages, and public/private WebSocket observations.
+The current adapter has distinct Futures configuration and signing, public market catalog/tickers/depth/REST candles, exact USDT balance projection, canonical order detail/history, provider-specific pending-order and TP/SL pending-order reads, current/historical position projections, position-mode and leverage/margin-mode reads, bounded raw execution-history pages, canonical bounded Fill projection, and public/private WebSocket observations.
 
 ### Common Broker contract gaps
 
@@ -81,17 +102,17 @@ These are implementation gaps or deliberate common-contract exclusions—not abs
 | `getAccountSnapshot()` | Account REST and private balance/position channels exist. | Unsupported/unknown until a timestamped, consistent account snapshot contract and cross-resource consistency are established. A local receipt time is not exchange source time. |
 | `getServerTime()` | No verified Futures server-time endpoint was found in the inspected interfaces or official Node demo. | Unknown/unsupported; do not synthesize server time from local time or an unrelated ticker timestamp. |
 | `getOrder()` / `getOrderHistory()` legacy projections | Futures detail and history endpoints exist; canonical Coinzilla read methods are implemented. | Legacy compatibility methods remain unsupported until their numeric/order-state mapping can preserve the existing legacy contract without fabricating market-order prices or identities. |
-| `getMyTrades()` / `getFills()` | `GET /api/v1/futures/trade/get_history_trades` exists; JKorf exposes user trades and raw pages. | Provider-specific raw history is implemented. Canonical Fill remains unsupported because fee-asset semantics and complete/gap-free execution history are not established. |
-| `createOrder()` / `createCanonicalOrder()` | Place-order endpoint and full Futures-specific fields exist: `tradeSide`, `positionId`, `reduceOnly`, `clientId`, `effect`, and optional TP/SL parameters. | Not implemented. The common order entities do not carry the required Futures position/open-close semantics. A provider-specific typed operation is required; no ambiguous defaults may be introduced. |
-| `cancelOrder()` | Cancel-one endpoint exists; JKorf exposes it. | Implemented behind `allowLiveOrderMutations: true`: exact pending-order preflight, stable `clientId` requirement, one-shot `stateChanging: true` POST, `successList` / `failureList` validation and final canonical detail readback. Lost acknowledgements reconcile once; no blind retry. |
-| `cancelAllOpenOrders()` | Cancel-all endpoint exists and accepts an optional symbol; JKorf exposes it. | Implemented behind `allowLiveOrderMutations: true`: optional symbol or account-wide one-shot request, pending-count preflight, and final pending-count readback. Lost acknowledgements reconcile once; remaining orders produce `OUTCOME_UNKNOWN` and are never blindly retried. Caller must enforce single-writer ownership. |
-| Modify order | `POST /api/v1/futures/trade/modify_order` exists; JKorf exposes EditOrder. | Provider-specific extension not implemented; not a common Broker method. Requires exact identity, quantity/price validation, one-shot dispatch and readback. |
+| `getMyTrades()` / `getFills()` | `GET /api/v1/futures/trade/get_history_trades` returns stable `tradeId` and `orderId`, exact `qty`/`price`, `roleType`, `fee`, `realizedPNL` and `ctime`. | `getFills()` is supported for one bounded page: quote notional is derived with exact decimal multiplication, maker/taker and execution identity are preserved, and `commissionStatus` remains `UNKNOWN` because the fee asset is absent. `getMyTrades()` remains an unsupported legacy projection; raw fee and realized PnL remain available through `getFuturesTradeHistory()`. Complete account-wide history/retention is not claimed. |
+| `createOrder()` / `createCanonicalOrder()` | Place-order endpoint and full Futures-specific fields exist: `tradeSide`, `positionId`, `reduceOnly`, `clientId`, `effect`, and optional attached TP/SL parameters. | Common Spot-shaped methods remain unsupported because they cannot express all Futures semantics. Provider-specific `createFuturesOrder()` is implemented behind `allowLiveOrderMutations: true`, requires explicit Futures fields and exact market-filter validation, and reconciles by client ID without retrying. Its live mutation path is not production-ready until the private user-data readiness/reconciliation gate and event-confirmation requirements are enforced. |
+| `cancelOrder()` | Cancel-one endpoint exists; JKorf exposes it. Official documentation warns that a successful interface response is not necessarily a successful cancellation and identifies the private order push as the accurate result. | Implemented behind `allowLiveOrderMutations: true`: exact pending-order preflight, stable `clientId` requirement, one-shot `stateChanging: true` POST, response-list validation and final detail readback. No blind retry. REST readback is not a substitute for the documented private-event confirmation; the readiness/event gate remains a production blocker. |
+| `cancelAllOpenOrders()` | Cancel-all endpoint exists and accepts an optional symbol; JKorf exposes it. | Implemented behind `allowLiveOrderMutations: true`: optional symbol or account-wide one-shot request, pending-count preflight, response-list validation and final pending-count readback. Lost acknowledgements are not retried; unresolved outcomes remain unknown. Caller must enforce single-writer ownership. The documented private-event confirmation and readiness gate remain production blockers. |
+| Modify order | `POST /api/v1/futures/trade/modify_order` exists; JKorf exposes EditOrder. The endpoint supports quantity, limit price and attached TP/SL fields. | Provider-specific `modifyFuturesOrder()` is implemented for an identified pending LIMIT order and requires both exact quantity and price. Attached TP/SL modification is not yet exposed. Acknowledgement/readback mismatches remain `OUTCOME_UNKNOWN`; private order-event confirmation and the readiness gate remain production blockers. |
 | Close position | Close-one and close-all endpoints exist; JKorf exposes both. | Provider-specific mutation not implemented; requires explicit position identity/symbol scope and final-state reconciliation. |
-| TP/SL mutation | Futures TP/SL place, position TP/SL, cancel and history endpoints exist. | Pending TP/SL reads are implemented; mutation and TP/SL history coverage remain incomplete. |
+| TP/SL mutation | Futures order placement accepts attached TP/SL fields; separate order-level and position-level place/modify/cancel/history endpoints also exist. | Attached TP/SL fields are supported by `createFuturesOrder()`. Pending TP/SL reads are implemented. Separate position-level TP/SL, modification, cancellation and TP/SL history operations remain incomplete. |
 | Position/account settings writes | Set position mode, set margin mode, set leverage and adjust margin endpoints exist. | Current adapter is read-only for these settings. Mutations require account-mutation opt-in, state preconditions and post-write verification. |
 | Funding and position tiers | Current and historical funding, and position-tier endpoints exist. | Provider-specific read extensions not implemented; they are not currently part of the common Broker contract. |
 
-The absence of a verified isolated Futures TESTNET prohibits mutation integration tests against LIVE. It does **not** erase the documented endpoint surface: offline request/response tests can be written, but state-changing methods must remain disabled until their one-shot dispatch, readiness gates, reconciliation and final-state verification are complete and the safety limitation is explicitly reviewed.
+The absence of a verified isolated Futures TESTNET prohibits mutation integration tests against LIVE. It does **not** erase the documented endpoint surface: offline request/response tests can be written, but state-changing methods must remain disabled until their one-shot dispatch, private user-data readiness/reconciliation gate, event-based confirmation, read-after-write checks and unknown-outcome behavior are complete and the safety limitation is explicitly reviewed.
 
 ## 5. Protocol and model invariants
 
@@ -106,12 +127,12 @@ The absence of a verified isolated Futures TESTNET prohibits mutation integratio
 
 ## 6. Next implementation order
 
-1. Add provider-specific typed Futures order inputs that explicitly represent side, order type, quantity, limit price, trade side, position ID, reduce-only, effect, client ID and optional TP/SL parameters; keep common canonical placement unsupported until its domain contract can express those fields safely.
-2. Implement provider-specific order placement and modify operations behind explicit opt-in and strict readiness gates. Single-order cancellation and symbol-scoped/account-wide cancel-all are implemented with deterministic offline tests for opt-in, preflight, acknowledgement, readback, lost acknowledgements and no blind retry. Do not use LIVE integration tests.
-3. Implement position close, TP/SL mutations and account-setting writes with the same one-shot/unknown-outcome discipline and post-write verification.
-4. Resolve open-order common projection semantics or retain the explicit unsupported status while keeping the provider-specific pending-order API.
-5. Resolve canonical Fill fee-asset/completeness semantics and account snapshot freshness before enabling canonical Fill/account capabilities.
-6. Add read-only funding-rate, position-tier and trading-settings extensions only if a concrete Broker consumer needs them; avoid exposing an unbounded copy of every exchange endpoint.
-7. Keep private stream recovery UNKNOWN until sequence/replay or a complete REST reconciliation contract is documented and tested.
+1. Gate every order-changing operation on explicit live-mutation opt-in **and** an authenticated private user-data session whose recovery state has been acknowledged only after the consumer's REST reconciliation. Keep observations non-authoritative and non-replayable; reconnect must reset readiness.
+2. Confirm placement, modification and cancellation from matching private order-channel events where the official API identifies those events as the accurate operation result. A missing event, disconnect or mismatched payload remains `OUTCOME_UNKNOWN`; never retry a dispatched mutation.
+3. Complete LIMIT modification with the documented attached TP/SL fields, exact preflight and final-state verification.
+4. Implement position close/close-all, separate TP/SL place/modify/cancel/history, batch order operations, and account setting/margin mutations only with explicit scope, one-shot dispatch, readiness gates and verified postconditions.
+5. Add read-only current/historical funding rates, position tiers and trading settings from their documented endpoints, with exact DTO validation and pagination/rate-limit tests.
+6. Keep common Spot-shaped `createOrder()`, `getOrder()`, `getOpenOrders()` and legacy projections unsupported where they cannot preserve Futures identity, exact decimals or open/close semantics. Keep provider-specific typed operations explicit rather than fabricating a canonical mapping.
+7. Preserve `READ_FILLS` as bounded-page support only; keep complete-history, account-snapshot freshness, server-time, event replay and process-restart recovery UNKNOWN until source guarantees and reconciliation coverage are proven.
 
 No external SDK, demo, or reference implementation is a Coinzilla runtime dependency.
