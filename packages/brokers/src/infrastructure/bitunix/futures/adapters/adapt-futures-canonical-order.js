@@ -40,16 +40,45 @@ function requireDecimal({ value, field, allowZero = true }) {
     value,
     field: `Bitunix Futures order ${field}`,
   })
-  if (compareDecimal({
+  const comparison = compareDecimal({
     left: value,
     right: "0",
-  }) < 0 || (!allowZero && compareDecimal({
-    left: value,
-    right: "0",
-  }) === 0)) {
+  })
+  if (comparison < 0 || (!allowZero && comparison === 0)) {
     throw new RangeError(`Bitunix Futures order ${field} is outside the valid range`)
   }
   return value
+}
+
+function requireOrderObject({ order }) {
+  if (order === null || typeof order !== "object" || Array.isArray(order)) {
+    throw new TypeError("Bitunix Futures order should be an object")
+  }
+}
+
+function requireOrderMarket({ order, market }) {
+  const symbol = String(order.symbol ?? "").toUpperCase()
+  if (!market || market.symbol !== symbol) {
+    throw new TypeError("Bitunix Futures order symbol does not match its canonical market")
+  }
+}
+
+function normalizeOrderIdentity({ order }) {
+  const side = String(order.side ?? "").toUpperCase()
+  if (!ORDER_SIDES.has(side)) {
+    throw new TypeError("Bitunix Futures order side is unsupported")
+  }
+  return {
+    brokerOrderId: requireIdentifier({
+      value: order.orderId,
+      field: "orderId",
+    }),
+    clientOrderId: requireIdentifier({
+      value: order.clientId,
+      field: "clientId",
+    }),
+    side,
+  }
 }
 
 function normalizeOrderType({ order }) {
@@ -60,35 +89,7 @@ function normalizeOrderType({ order }) {
   return type
 }
 
-function normalizeOrderStatus({ order }) {
-  const status = typeof order.status === "string" ? order.status.toUpperCase() : ""
-  if (!Object.hasOwn(ORDER_STATUS_MAP, status)) {
-    return "UNKNOWN"
-  }
-  return ORDER_STATUS_MAP[status]
-}
-
-function validateOrderRow({ order, market }) {
-  if (order === null || typeof order !== "object" || Array.isArray(order)) {
-    throw new TypeError("Bitunix Futures order should be an object")
-  }
-  if (!market || market.symbol !== String(order.symbol ?? "").toUpperCase()) {
-    throw new TypeError("Bitunix Futures order symbol does not match its canonical market")
-  }
-
-  const brokerOrderId = requireIdentifier({
-    value: order.orderId,
-    field: "orderId",
-  })
-  const clientOrderId = requireIdentifier({
-    value: order.clientId,
-    field: "clientId",
-  })
-  const side = String(order.side ?? "").toUpperCase()
-  if (!ORDER_SIDES.has(side)) {
-    throw new TypeError("Bitunix Futures order side is unsupported")
-  }
-  const type = normalizeOrderType({ order })
+function normalizeOrderQuantities({ order, market }) {
   const originalAmount = requireDecimal({
     value: order.qty,
     field: "qty",
@@ -104,38 +105,7 @@ function validateOrderRow({ order, market }) {
   }) > 0) {
     throw new RangeError("Bitunix Futures executed order quantity exceeds original quantity")
   }
-
-  const rawStatus = typeof order.status === "string" ? order.status.toUpperCase() : ""
-  if (!Object.hasOwn(ORDER_STATUS_MAP, rawStatus)) {
-    throw new TypeError(`Bitunix Futures order status is unsupported: ${rawStatus || "unknown"}`)
-  }
-  const status = normalizeOrderStatus({ order })
-  const createdAt = requireTimestamp({
-    value: order.ctime,
-    field: "ctime",
-  })
-  const updatedAt = requireTimestamp({
-    value: order.mtime,
-    field: "mtime",
-  })
-  const limitPrice = type === "LIMIT"
-    ? new Money({
-      amount: requireDecimal({
-        value: order.price,
-        field: "price",
-        allowZero: false,
-      }),
-      asset: market.quoteAsset,
-    })
-    : undefined
-
   return {
-    clientOrderId,
-    brokerOrderId,
-    market,
-    side,
-    type,
-    ...(limitPrice === undefined ? {} : { limitPrice }),
     originalQuantity: new Quantity({
       amount: originalAmount,
       asset: market.baseAsset,
@@ -144,11 +114,79 @@ function validateOrderRow({ order, market }) {
       amount: executedAmount,
       asset: market.baseAsset,
     }),
+  }
+}
+
+function normalizeOrderLifecycle({ order }) {
+  const rawStatus = typeof order.status === "string" ? order.status.toUpperCase() : ""
+  if (!Object.hasOwn(ORDER_STATUS_MAP, rawStatus)) {
+    throw new TypeError(`Bitunix Futures order status is unsupported: ${rawStatus || "unknown"}`)
+  }
+  const createdAt = requireTimestamp({
+    value: order.ctime,
+    field: "ctime",
+  })
+  const updatedAt = requireTimestamp({
+    value: order.mtime,
+    field: "mtime",
+  })
+  const status = ORDER_STATUS_MAP[rawStatus]
+  return {
     status,
     createdAt,
     acknowledgedAt: createdAt,
     updatedAt,
     ...(TERMINAL_STATUSES.has(status) ? { completedAt: updatedAt } : {}),
+  }
+}
+
+function normalizeLimitPrice({ order, type, market }) {
+  if (type !== "LIMIT") {
+    return undefined
+  }
+  return new Money({
+    amount: requireDecimal({
+      value: order.price,
+      field: "price",
+      allowZero: false,
+    }),
+    asset: market.quoteAsset,
+  })
+}
+
+function validateOrderRow({ order, market }) {
+  requireOrderObject({
+    order,
+  })
+  requireOrderMarket({
+    order,
+    market,
+  })
+  const identity = normalizeOrderIdentity({
+    order,
+  })
+  const type = normalizeOrderType({
+    order,
+  })
+  const quantities = normalizeOrderQuantities({
+    order,
+    market,
+  })
+  const lifecycle = normalizeOrderLifecycle({
+    order,
+  })
+  const limitPrice = normalizeLimitPrice({
+    order,
+    type,
+    market,
+  })
+  return {
+    ...identity,
+    market,
+    type,
+    ...quantities,
+    ...lifecycle,
+    ...(limitPrice === undefined ? {} : { limitPrice }),
   }
 }
 
