@@ -1655,3 +1655,10 @@ No live Futures mutation or exchange request has been performed by the implement
 - [ ] Complete common Broker conformance and consuming-app integration.
 
 No live Futures request or mutation has been performed. No isolated Futures TESTNET endpoint has been verified.
+
+
+### Separate pending TP/SL group reads
+
+- [x] Add `getFuturesPendingTpSlOrders()` for the distinct official TP/SL pending endpoint.
+- [x] Preserve exact trigger, execution-price and quantity strings; validate each present leg and reject incomplete LIMIT legs.
+- [x] Enforce the documented 100-row maximum; no total count is exposed, so account-wide completeness remains unproven.
