@@ -22,6 +22,46 @@ function createTpSlEvent({ event, status, symbol, positionId, orderId }) {
   }
 }
 
+function createRestClient({
+  requests,
+  privateWebSocketClient,
+  eventStatus,
+  emitEvent,
+  responseOrderId,
+  dispatchError,
+  eventPositionId,
+}) {
+  return {
+    request: async (request) => {
+      requests.push(request)
+      const { path } = request
+      let event = "CLOSE"
+      if (path.endsWith("/place_order")) {
+        event = "CREATE"
+      } else if (path.endsWith("/modify_order")) {
+        event = "UPDATE"
+      }
+      if (emitEvent) {
+        privateWebSocketClient.emit("channel", createTpSlEvent({
+          event,
+          status: eventStatus,
+          symbol: request.body.symbol,
+          positionId: request.body.positionId ?? eventPositionId,
+          orderId: responseOrderId,
+        }))
+      }
+      if (dispatchError) {
+        throw dispatchError
+      }
+      return {
+        data: {
+          orderId: responseOrderId,
+        },
+      }
+    },
+  }
+}
+
 function createBroker({
   eventStatus = "NEW",
   emitEvent = true,
@@ -40,6 +80,15 @@ function createBroker({
     quantity: "0.02",
     marginMode: "ISOLATION",
   }
+  const restClient = createRestClient({
+    requests,
+    privateWebSocketClient,
+    eventStatus,
+    emitEvent,
+    responseOrderId,
+    dispatchError,
+    eventPositionId,
+  })
   const broker = {
     isUserDataReady: true,
     privateWebSocketClient,
@@ -60,35 +109,7 @@ function createBroker({
         minTradeVolume: "0.001",
       },
     }),
-    restClient: {
-      request: async (request) => {
-        requests.push(request)
-        const { path } = request
-        let event = "CLOSE"
-        if (path.endsWith("/place_order")) {
-          event = "CREATE"
-        } else if (path.endsWith("/modify_order")) {
-          event = "UPDATE"
-        }
-        if (emitEvent) {
-          privateWebSocketClient.emit("channel", createTpSlEvent({
-            event,
-            status: eventStatus,
-            symbol: request.body.symbol,
-            positionId: request.body.positionId ?? eventPositionId,
-            orderId: responseOrderId,
-          }))
-        }
-        if (dispatchError) {
-          throw dispatchError
-        }
-        return {
-          data: {
-            orderId: responseOrderId,
-          },
-        }
-      },
-    },
+    restClient,
   }
   return {
     broker,
