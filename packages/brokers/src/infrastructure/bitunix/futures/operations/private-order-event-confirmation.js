@@ -23,12 +23,19 @@ function createOrderEventsResult({ orders, received, error }) {
   for (const order of orders) {
     const event = received.get(getOrderEventKey(order))
     if (event) {
-      events.push({ order, event })
+      events.push({
+        order,
+        event,
+      })
     } else {
       missingOrders.push(order)
     }
   }
-  return { events, missingOrders, error }
+  return {
+    events,
+    missingOrders,
+    error,
+  }
 }
 
 function findMatchingOrder({ event, orders }) {
@@ -127,7 +134,10 @@ export function createPrivateOrderEventWaiter({ broker, orderId, clientOrderId, 
       clientOrderId,
       symbol,
     })) {
-      settle({ event, error: null })
+      settle({
+        event,
+        error: null,
+      })
     }
   }
   function onStatus(status) {
@@ -164,7 +174,7 @@ export function createPrivateOrderEventWaiter({ broker, orderId, clientOrderId, 
  * @param {{broker: object, orders: object[]}} options
  * @returns {{promise: Promise<{events: object[], missingOrders: object[], error: Error|null}>, startTimeout: () => void, cancel: () => void}}
  */
-export function createPrivateOrderEventsWaiter({ broker, orders } = {}) {
+function validatePrivateOrderEventsWaiter({ broker, orders }) {
   const client = broker?.privateWebSocketClient
   const timeoutMs = broker?.privateEventTimeoutMs
   if (broker?.isUserDataReady !== true || !client ||
@@ -183,6 +193,14 @@ export function createPrivateOrderEventsWaiter({ broker, orders } = {}) {
   if (new Set(expectedKeys).size !== expectedKeys.length) {
     throw new RangeError("Bitunix Futures multi-order event waiter cannot track duplicate order identities")
   }
+  return { client, timeoutMs }
+}
+
+export function createPrivateOrderEventsWaiter({ broker, orders } = {}) {
+  const { client, timeoutMs } = validatePrivateOrderEventsWaiter({
+    broker,
+    orders,
+  })
 
   const received = new Map()
   let settled = false

@@ -543,15 +543,19 @@ test("Bitunix Futures cancelOrder remains NOT_SENT without explicit live mutatio
 
 
 function createCancelAllOrders(total) {
-  return Array.from({ length: total }, (_, index) => createOrderRow({
-    orderId: `futures-order-${123 + index}`,
-    clientId: `strategy-order-${456 + index}`,
-    fee: "0",
-    realizedPNL: "0",
-    effect: "GTC",
-    status: "NEW",
-    tradeQty: "0",
-  }))
+  const orders = []
+  for (let index = 0; index < total; index += 1) {
+    orders.push(createOrderRow({
+      orderId: `futures-order-${123 + index}`,
+      clientId: `strategy-order-${456 + index}`,
+      fee: "0",
+      realizedPNL: "0",
+      effect: "GTC",
+      status: "NEW",
+      tradeQty: "0",
+    }))
+  }
+  return orders
 }
 
 function emitCancelAllEvents({ privateClients, orders }) {
@@ -732,7 +736,7 @@ test("Bitunix Futures cancelAllOpenOrders does not confirm an empty final scope 
   assert.equal(result.ok, false, "an empty REST snapshot alone must not confirm cancellation of every preflight order")
   assert.equal(result.mutationOutcome, "OUTCOME_UNKNOWN", "missing private order events must leave the mutation outcome unknown")
   assert.equal(result.cancellationOutcome, "OUTCOME_UNKNOWN", "the final empty pending scope cannot replace per-order private CLOSE evidence")
-  assert.equal(requests.filter(({ path, options }) => path === "/api/v1/futures/trade/cancel_all_orders" && options.method === "POST").length, 1, "an uncertain cancel-all operation must never be retried")
+  assert.equal(requests.filter(({ path, method }) => path === "/api/v1/futures/trade/cancel_all_orders" && method === "POST").length, 1, "an uncertain cancel-all operation must never be retried")
 })
 
 test("Bitunix Futures cancelAllOpenOrders reports unknown while pending orders remain", async () => {

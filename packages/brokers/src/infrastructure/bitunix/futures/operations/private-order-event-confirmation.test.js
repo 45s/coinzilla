@@ -214,8 +214,16 @@ test("private cancellation event matching accepts only CLOSE events with cancele
 test("private multi-order waiter resolves only after every unique order identity is observed", async () => {
   const broker = createBroker()
   const orders = [
-    { orderId: "order-1", clientId: "client-1", symbol: "BTCUSDT" },
-    { orderId: "order-2", clientId: "client-2", symbol: "ETHUSDT" },
+    {
+      orderId: "order-1",
+      clientId: "client-1",
+      symbol: "BTCUSDT",
+    },
+    {
+      orderId: "order-2",
+      clientId: "client-2",
+      symbol: "ETHUSDT",
+    },
   ]
   const waiter = createPrivateOrderEventsWaiter({
     broker,
@@ -249,8 +257,16 @@ test("private multi-order waiter returns partial observations and missing identi
     timeoutMs: 5,
   })
   const orders = [
-    { orderId: "order-1", clientId: "client-1", symbol: "BTCUSDT" },
-    { orderId: "order-2", clientId: "client-2", symbol: "ETHUSDT" },
+    {
+      orderId: "order-1",
+      clientId: "client-1",
+      symbol: "BTCUSDT",
+    },
+    {
+      orderId: "order-2",
+      clientId: "client-2",
+      symbol: "ETHUSDT",
+    },
   ]
   const waiter = createPrivateOrderEventsWaiter({
     broker,
