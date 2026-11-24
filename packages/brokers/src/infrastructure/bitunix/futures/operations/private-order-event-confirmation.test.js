@@ -71,6 +71,14 @@ test("private order-event identity requires channel, symbol and every supplied o
   }), false, "position events must not satisfy order mutation confirmation")
 })
 
+test("single-order waiter requires at least one exchange or client order identity", () => {
+  const broker = createBroker()
+  assert.throws(() => createPrivateOrderEventWaiter({
+    broker,
+    symbol: "BTCUSDT",
+  }), /at least one order identifier/i)
+})
+
 test("private order-event waiter resolves on a matching event and removes its listeners", async () => {
   const broker = createBroker()
   const waiter = createPrivateOrderEventWaiter({
