@@ -43,6 +43,13 @@ const FUTURES_CAPABILITIES = [
     guarantee: "Returns the requested Futures symbol last traded price and mark price as exact decimal strings from the public ticker endpoint.",
   },
   {
+    type: "READ_SYMBOL_FILTERS",
+    status: "SUPPORTED",
+    method: "getSymbolFilters",
+    guarantee: "Returns the raw documented Futures trading-pair metadata for one symbol.",
+    limitation: "The API does not document tickSize or stepSize; basePrecision and quotePrecision are not converted into increments.",
+  },
+  {
     type: "READ_EXCHANGE_MARKETS",
     status: "SUPPORTED",
     method: "getExchangeMarkets",
@@ -568,10 +575,48 @@ export class BitunixFuturesBroker {
     })
   }
 
-  async getSymbolFilters() {
-    return unsupportedResult({
-      operation: "getSymbolFilters",
-      reason: "Futures symbol metadata reads are not implemented yet.",
-    })
+  async getSymbolFilters({ symbol } = {}) {
+    try {
+      const normalizedSymbol = ensure.nonEmptyString({
+        value: symbol,
+        name: "symbol",
+      }).trim().toUpperCase()
+      const response = await this.restClient.request({
+        method: "GET",
+        path: "/api/v1/futures/market/trading_pairs",
+        queryParams: {
+          symbols: normalizedSymbol,
+        },
+        authenticated: false,
+      })
+      ensure.array({
+        value: response.data,
+        name: "tradingPairs",
+      })
+      if (response.data.length !== 1) {
+        throw new TypeError("Bitunix Futures symbol metadata response must contain exactly one requested symbol")
+      }
+      const [symbolInfo] = response.data
+      const marketInfo = validateFuturesMarketRow({
+        symbolInfo,
+        symbols: new Set(),
+      })
+      if (marketInfo.symbol !== normalizedSymbol) {
+        throw new TypeError("Bitunix Futures symbol metadata does not match the requested symbol")
+      }
+      return toResult({
+        data: Object.freeze({
+          ...symbolInfo,
+        }),
+      })
+    } catch (error) {
+      handleErr({
+        where: "BitunixFuturesBroker.getSymbolFilters()",
+        error,
+      })
+      return toResult({
+        errors: [error],
+      })
+    }
   }
 }

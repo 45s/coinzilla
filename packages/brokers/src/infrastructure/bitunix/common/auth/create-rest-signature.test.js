@@ -12,7 +12,7 @@ test("shared Bitunix REST signing preserves the documented double-SHA256 contrac
     queryParams: {
       symbol: "BTCUSDT",
       limit: 10,
-      category: "futures",
+      category: "spot",
     },
     body: {
       symbol: "BTCUSDT",
