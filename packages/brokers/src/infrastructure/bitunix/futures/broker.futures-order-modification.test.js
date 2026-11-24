@@ -81,6 +81,9 @@ function createModifyFetch({
   modifyError,
   responseCode = 0,
   responseMessage = "Success",
+  privateClients = [],
+  emitModifyEvent = true,
+  modifyEventOverrides = {},
 }) {
   return async (...request) => {
     const [url, options] = request
@@ -108,6 +111,23 @@ function createModifyFetch({
       if (modifyError) {
         throw modifyError
       }
+      if (emitModifyEvent) {
+        privateClients[0]?.emit("channel", {
+          ch: "order",
+          symbol: "BTCUSDT",
+          ts: 1_700_000_002_000,
+          data: {
+            event: "UPDATE",
+            orderId: "futures-order-123",
+            clientId: "strategy-order-456",
+            symbol: "BTCUSDT",
+            orderStatus: "PART_FILLED",
+            qty: "0.02",
+            price: "61000.1",
+            ...modifyEventOverrides,
+          },
+        })
+      }
       return createFuturesResponse({
         data: modifyResponse ?? {
           orderId: "futures-order-123",
@@ -130,6 +150,7 @@ function createModifyBroker({
   ...fetchOptions
 } = {}) {
   const requests = []
+  const privateClients = []
   const broker = new Broker({
     provider: "bitunix-futures",
     ...credentials,
@@ -137,9 +158,11 @@ function createModifyBroker({
     providerOptions: {
       allowLiveOrderMutations,
       dependencies: {
-        webSocketClientFactory: createFakePrivateWebSocketClientFactory(),
+        webSocketClientFactory: createFakePrivateWebSocketClientFactory(privateClients),
+        privateEventTimeoutMs: 10,
         fetchFn: createModifyFetch({
           requests,
+          privateClients,
           ...fetchOptions,
         }),
       },
@@ -148,6 +171,7 @@ function createModifyBroker({
   return {
     broker,
     requests,
+    privateClients,
   }
 }
 
@@ -262,4 +286,35 @@ test("Bitunix Futures modifyFuturesOrder remains NOT_SENT until private user-dat
   assert.equal(result.ok, false, "order modification must be blocked without a reconciled private user-data session")
   assert.equal(result.mutationOutcome, "NOT_SENT", "a readiness failure must occur before exchange dispatch")
   assert.equal(requests.some(({ method }) => method === "POST"), false, "no modification POST may be sent before reconciliation")
+})
+
+
+test("Bitunix Futures modifyFuturesOrder does not confirm a REST-matching result without a private UPDATE event", async () => {
+  const { broker, requests } = createModifyBroker({
+    emitModifyEvent: false,
+  })
+  await connectAndAcknowledgeUserDataReconciliation(broker)
+
+  const result = await broker.modifyFuturesOrder(modifyInput)
+
+  assert.equal(result.ok, false, "REST readback alone must not confirm a modification when Bitunix requires a private order push")
+  assert.equal(result.mutationOutcome, "OUTCOME_UNKNOWN", "a missing matching private UPDATE event must keep the mutation outcome unknown")
+  assert.equal(result.orderOutcome, "OUTCOME_UNKNOWN", "a matching REST snapshot cannot replace the required private event")
+  assert.equal(requests.filter(({ method }) => method === "POST").length, 1, "an uncertain modification must never be retried")
+})
+
+test("Bitunix Futures modifyFuturesOrder requires the private UPDATE event to match the requested order values", async () => {
+  const { broker, requests } = createModifyBroker({
+    modifyEventOverrides: {
+      qty: "0.03",
+    },
+  })
+  await connectAndAcknowledgeUserDataReconciliation(broker)
+
+  const result = await broker.modifyFuturesOrder(modifyInput)
+
+  assert.equal(result.ok, false, "a private UPDATE event with a different quantity must not confirm the requested modification")
+  assert.equal(result.mutationOutcome, "OUTCOME_UNKNOWN", "a mismatched private event must preserve the unknown mutation outcome")
+  assert.equal(result.orderOutcome, "OUTCOME_UNKNOWN", "the private event must confirm the exact requested quantity and price")
+  assert.equal(requests.filter(({ method }) => method === "POST").length, 1, "a mismatched private event must not trigger a second modification")
 })
