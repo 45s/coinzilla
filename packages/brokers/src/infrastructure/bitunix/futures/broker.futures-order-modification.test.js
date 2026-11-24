@@ -158,7 +158,13 @@ function createModifyBroker({
     providerOptions: {
       allowLiveOrderMutations,
       dependencies: {
-        webSocketClientFactory: createFakePrivateWebSocketClientFactory(privateClients),
+        webSocketClientFactory: ({ channelType }) => {
+          const client = new FakePrivateWebSocketClient()
+          if (channelType === "private") {
+            privateClients.push(client)
+          }
+          return client
+        },
         privateEventTimeoutMs: 10,
         fetchFn: createModifyFetch({
           requests,

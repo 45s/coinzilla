@@ -43,14 +43,14 @@ export function createPrivateOrderEventWaiter({ broker, orderId, clientOrderId, 
   const promise = new Promise((resolve) => {
     resolveResult = resolve
   })
-  const cleanup = () => {
+  function cleanup() {
     client.off("channel", onChannel)
     client.off("status", onStatus)
     if (timer !== null) {
       clearTimeout(timer)
     }
   }
-  const settle = (result) => {
+  function settle(result) {
     if (settled) {
       return
     }
@@ -58,7 +58,7 @@ export function createPrivateOrderEventWaiter({ broker, orderId, clientOrderId, 
     cleanup()
     resolveResult(result)
   }
-  const onChannel = (event) => {
+  function onChannel(event) {
     if (matchesPrivateOrderEventIdentity({
       event,
       orderId,
@@ -71,7 +71,7 @@ export function createPrivateOrderEventWaiter({ broker, orderId, clientOrderId, 
       })
     }
   }
-  const onStatus = (status) => {
+  function onStatus(status) {
     if (status?.state !== "open" || status.authenticated !== true ||
         status.recoveryRequired !== false) {
       settle({
