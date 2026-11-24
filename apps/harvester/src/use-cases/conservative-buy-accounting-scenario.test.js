@@ -336,7 +336,11 @@ test("rejects a repeated BUY identity with changed commission facts without part
     /Conflicting execution facts reused Fill ID/,
     "The failure must identify the conflicting canonical execution evidence.",
   )
-  assertAccountingStateUnchanged({ state, portfolioValue, ledgerValue })
+  assertAccountingStateUnchanged({
+    state,
+    portfolioValue,
+    ledgerValue,
+  })
 })
 
 test("rejects inconsistent Portfolio and RecoveryLedger duplicate histories without committing either projection", () => {
@@ -415,6 +419,10 @@ test("rejects a BUY from another market without committing the Portfolio-only ap
     /Fill market does not match RecoveryLedger market/,
     "The failure must identify the mismatched recovery market.",
   )
-  assertAccountingStateUnchanged({ state, portfolioValue, ledgerValue })
+  assertAccountingStateUnchanged({
+    state,
+    portfolioValue,
+    ledgerValue,
+  })
 })
 
