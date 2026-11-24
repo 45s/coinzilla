@@ -1971,9 +1971,9 @@ No. The smaller-remainder rule applies to the legacy slice within the current cy
 
 No. Volatility protection is market-owned and strategy-neutral. RS is one strategy route that must respect the market gate; it does not own candle history or volatility state transitions.
 
-**Should the agent fix STOP, enabled-default, dust or third-asset conflicts while writing tests?**
+**Should the agent change STOP, dust or third-asset policy while writing tests, or revisit the enabled default?**
 
-No. Record them and wait for owner-approved decisions. Do not make policy decisions in a test PR.
+Do not change STOP, dust or third-asset policy without the required owner decision. The enabled default is already resolved by owner-approved #1713 / merged PR #1711 and is recorded in the canonical RS specification; do not revert it in a scenario PR.
 
 **Does a merged PR mean the family is complete?**
 
