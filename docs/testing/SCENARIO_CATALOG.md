@@ -545,7 +545,6 @@ The schema intentionally separates *business input* from *derived oracle*. Tests
 ### RS-003 — A mixed recovery/legacy SELL uses the additive legacy slice
 The accounting workflow's transition snapshot currently emits an incomplete accumulating cycle-state shape that the default SELL evaluator rejects; full workflow-to-evaluator proof is tracked separately in [#1809](https://github.com/45s/coinzilla/issues/1809). The planner scenarios normalize only the lifecycle state using the canonical domain factory so that planner economics and no-submit boundaries can be tested without changing production behavior.
 
-
 **Status:** PARTIAL — the new planner scenario verifies canonical BUY-derived recovery quantity, Spot-verified additive legacy quantity, the independent ZRO proceeds oracle, smaller eligible Spot remainder, missing-custody fail-closed behavior, a same-market active SELL reservation gate, a real TradingRules minimum-notional rejection, and no-submit boundaries. It supplies a canonical lifecycle state to isolate planner behavior because the real workflow-to-evaluator cycle-state projection is blocked by [#1809](https://github.com/45s/coinzilla/issues/1809); it does not prove the full runtime wiring.
 
 **Behavior:** Conceptual SELL quantity is actual net recovery quantity plus the configured legacy `sellQuantity`, limited by the authorized remaining legacy amount that is verified, Spot-available and unreserved. `sellQuantity` is additive, not total quantity or a cap.
