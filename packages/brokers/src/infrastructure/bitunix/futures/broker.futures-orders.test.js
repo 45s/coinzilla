@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { Broker } from "./broker.js"
+import { Broker } from "../../../index.js"
 
 const credentials = {
   apiKey: "test-api-key",
