@@ -211,7 +211,7 @@ function createUnknownModifyResponseError() {
   })
 }
 
-async function reconcileModifiedOrder({ broker, input, acknowledged, error }) {
+async function reconcileModifiedOrder({ broker, input, error }) {
   const detail = await broker.getCanonicalOrder({
     symbol: input.symbol,
     clientOrderId: input.clientId,
@@ -230,20 +230,18 @@ async function reconcileModifiedOrder({ broker, input, acknowledged, error }) {
     left: detail.data.originalQuantity.amount,
     right: input.qty,
   }) === 0
-  const priceMatches = input.price === undefined || (
-    detail.data.limitPrice !== undefined &&
+  const priceMatches = detail.data.limitPrice !== undefined &&
     compareDecimal({
       left: detail.data.limitPrice.amount,
       right: input.price,
     }) === 0
-  )
   if (!quantityMatches || !priceMatches) {
     return createOutcomeResult({
       data: detail.data,
       errors: [
         error ?? new Error("Bitunix Futures final order detail does not match the requested modification"),
       ],
-      mutationOutcome: acknowledged ? "CONFIRMED" : "OUTCOME_UNKNOWN",
+      mutationOutcome: "OUTCOME_UNKNOWN",
       orderOutcome: "OUTCOME_UNKNOWN",
     })
   }
@@ -277,7 +275,6 @@ async function dispatchModifyOrder({ broker, input, order }) {
       return reconcileModifiedOrder({
         broker,
         input,
-        acknowledged: false,
         error,
       })
     }
@@ -294,7 +291,6 @@ async function dispatchModifyOrder({ broker, input, order }) {
   return reconcileModifiedOrder({
     broker,
     input,
-    acknowledged,
     ...(acknowledged ? {} : { error: createUnknownModifyResponseError() }),
   })
 }
