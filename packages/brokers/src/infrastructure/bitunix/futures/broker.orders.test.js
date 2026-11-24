@@ -2,7 +2,11 @@ import assert from "node:assert/strict"
 import test from "node:test"
 
 import { Broker } from "../../../index.js"
-import { connectAndAcknowledgeUserDataReconciliation, FakePrivateWebSocketClient } from "./futures-mutation-fixtures.js"
+import {
+  connectAndAcknowledgeUserDataReconciliation,
+  createFakePrivateWebSocketClientFactory,
+  FakePrivateWebSocketClient,
+} from "./futures-mutation-fixtures.js"
 import { CanonicalOrder } from "@coinzilla/entities"
 
 const credentials = {
@@ -377,6 +381,7 @@ function createCancellationBroker({
   ...fetchOptions
 } = {}) {
   const requests = []
+  const privateClients = []
   const broker = new Broker({
     provider: "bitunix-futures",
     ...credentials,
