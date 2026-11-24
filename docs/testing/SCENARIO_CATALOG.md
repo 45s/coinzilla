@@ -574,7 +574,7 @@ The schema intentionally separates *business input* from *derived oracle*. Tests
 
 ### RS-001 — Legacy basis is not proof of current Spot custody
 
-**Status:** MISSING — no new RS scenario test accepted.
+**Status:** PARTIAL — 14 stable authorization/custody scenario cases are registered and mapped to the new application/domain suite. The two freshness-sensitive cases (RS-001-010 and RS-001-014) retain explicit BLOCKED freshness subcases because the canonical account snapshot exposes no authoritative freshness marker.
 
 **Behavior:** Operator-declared original quote investment and original base quantity establish historical basis/authorization. Current sellability is a separate fact obtained from verified Spot custody, less existing reservations and other account commitments.
 
@@ -597,11 +597,11 @@ The schema intentionally separates *business input* from *derived oracle*. Tests
 
 **Implementation:** `legacy-position.js`, `legacy-spot-allocation.js`, account snapshot and shared commitment allocation.
 
-**New scenario tests:** not mapped. Existing RS tests are not credited.
+**New scenario tests:** `apps/harvester/test/scenarios/recovery-seller/authorization-custody.scenario.test.js` with `scenarios/authorization-custody.js` (RS-001-001 through RS-001-014). Exact-head targeted test evidence is tracked in [PR #1820](https://github.com/45s/coinzilla/pull/1820); the family remains PARTIAL and is not VERIFIED until merge and merged-head verification.
 
 ### RS-002 — Recovery BUY accounting uses confirmed net fills and actual commissions
 
-**Status:** MISSING — no new RS scenario test accepted.
+**Status:** PARTIAL — 12 of the 20 reserved RS-002 case IDs have new application-level scenario tests; RS-002-012 is PARTIAL (missing third-asset valuation fails closed, while successful valuation remains BLOCKED); seven cases remain explicitly BLOCKED at the BUY evaluator/intent/submitter/event-order/shared-budget boundaries. This is not complete BUY lifecycle coverage.
 
 **Behavior:** Recovery inventory and cost are derived only from canonical confirmed BUY fills attributed to the current RS Position/cycle/order/market. Requested quantity and acknowledgement are not execution.
 
@@ -619,7 +619,7 @@ The schema intentionally separates *business input* from *derived oracle*. Tests
 
 **Implementation:** RS accounting workflow, Portfolio/Position and canonical Fill ownership.
 
-**New scenario tests:** not mapped. Existing RS tests are not credited.
+**New scenario tests:** `apps/harvester/test/scenarios/recovery-seller/buy-accounting.scenario.test.js` with `scenarios/buy-accounting.js`: RS-002-001, RS-002-005 through RS-002-016 (RS-002-012 includes an explicit blocked successful-valuation subcase). The suite proves no inventory before a confirmed fill, RS ownership, full/partial/multiple fills, exact cost/VWAP, base/quote/multiple fees, missing third-asset valuation failure, duplicate replay, conflicting identity, external/wrong-order rejection and invalid base-fee rejection. RS-002-002/003 and RS-002-017 through RS-002-021 remain BLOCKED with exact unblock conditions in the registry. Targeted evidence is tracked in [PR #1820](https://github.com/45s/coinzilla/pull/1820); the family remains PARTIAL until merge and exact merged-head verification.
 
 ### RS-003 — A mixed recovery/legacy SELL uses the additive legacy slice
 The accounting workflow-to-default-evaluator defect is addressed in [PR #1815](https://github.com/45s/coinzilla/pull/1815). That PR adds composed regressions against the real accounting workflow snapshot and the real default SELL evaluator; the PR remains unmerged, so this is not yet VERIFIED evidence.
