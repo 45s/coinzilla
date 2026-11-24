@@ -339,3 +339,10 @@ Do not treat the conceptual diagram as a new production state model: map every t
 - Test-only coverage; no production behavior, trading rules, exchange access, or credentials changed. Corrected exact-head CI is pending.
 - Exact-head lint then identified one remaining multi-property helper-call formatting violation in the accounting assertion call; it now uses one property per line. No assertion or production behavior changed.
 - Repository Quality reported repeated blank lines in this checkpoint; the extra blank lines were removed without changing document meaning.
+
+### 2026-11-24 — #1763 Phase 4 BUY accounting
+
+- Added `src/use-cases/conservative-buy-accounting-scenario.test.js` as an offline accounting composition regression using canonical Fill, Portfolio, RecoveryLedger, and `updateTradingAccounting`.
+- The scenario applies three BUY executions at different prices and verifies exact cumulative net base quantity, quote-denominated spent basis, quote cash flow, and matching RecoveryLedger cost/fill identities. It includes base-, quote-, and reliably valued third-asset commissions, plus a zero-fee fill.
+- Added a failure-atomicity case proving an unvalued third-asset commission on a later BUY is rejected without changing the already accepted Position or either projection's fill identities.
+- Test-only change; no production behavior, trading rules, exchange access, or credentials changed. Exact-head GitHub Actions verification is pending.
