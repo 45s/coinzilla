@@ -105,13 +105,21 @@ function createBuyCaseDefinition({
 }
 
 function makeBuyCase(options) {
-  const title = `${options.id}: ${options.name}`
-  const mappings = createBuyCaseMappings({
+  const normalized = {
+    rules: [],
+    invariants: [],
+    status: "TEST-MAPPED",
+    layer: "APPLICATION",
+    stepType: "apply-recovery-buy-scenario",
     ...options,
+  }
+  const title = `${normalized.id}: ${normalized.name}`
+  const mappings = createBuyCaseMappings({
+    ...normalized,
     title,
   })
   return createBuyCaseDefinition({
-    ...options,
+    ...normalized,
     title,
     mappings,
   })
