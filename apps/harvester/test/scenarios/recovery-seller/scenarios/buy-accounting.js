@@ -18,6 +18,25 @@ function createBuySubcases({ id, name, status, blocker, title }) {
   }]
 }
 
+function createBuyCaseTest({ status, title }) {
+  if (status === "BLOCKED") return null
+  return {
+    file: testFile,
+    title,
+  }
+}
+
+function resolveBuySubcases({ subcases, id, name, status, blocker, title }) {
+  if (subcases) return subcases
+  return createBuySubcases({
+    id,
+    name,
+    status,
+    blocker,
+    title,
+  })
+}
+
 function makeBuyCase({
   id,
   name,
@@ -30,10 +49,7 @@ function makeBuyCase({
   subcases,
 }) {
   const title = `${id}: ${name}`
-  const test = status === "BLOCKED" ? null : {
-    file: testFile,
-    title,
-  }
+  const test = createBuyCaseTest({ status, title })
   return defineRecoverySellerScenario({
     id,
     family: "RS-002",
@@ -73,7 +89,8 @@ function makeBuyCase({
       "apply one canonical Fill more than once",
       "adopt an external Fill without immutable RS order ownership",
     ],
-    subcases: subcases ?? createBuySubcases({
+    subcases: resolveBuySubcases({
+      subcases,
       id,
       name,
       status,
