@@ -181,12 +181,16 @@ async function applyScenarioFills({ workflow, fills }) {
 }
 
 async function replayScenarioFill({ workflow, fills, input }) {
-  if (input.replayFirstFill !== true || !fills[0]) return undefined
+  if (input.replayFirstFill !== true || !fills[0]) {
+    return undefined
+  }
   return workflow.applyBuyFill({ fill: fills[0] })
 }
 
 async function applyScenarioConflict({ workflow, fills, order, input }) {
-  if (input.conflictFirstFill !== true) return undefined
+  if (input.conflictFirstFill !== true) {
+    return undefined
+  }
   return applyConflictingFill({
     workflow,
     firstFill: fills[0],
@@ -200,9 +204,21 @@ async function runBuyScenario({ input }) {
     fillInput,
     order,
   }))
-  const results = await applyScenarioFills({ workflow, fills })
-  const replay = await replayScenarioFill({ workflow, fills, input })
-  const conflict = await applyScenarioConflict({ workflow, fills, order, input })
+  const results = await applyScenarioFills({
+    workflow,
+    fills,
+  })
+  const replay = await replayScenarioFill({
+    workflow,
+    fills,
+    input,
+  })
+  const conflict = await applyScenarioConflict({
+    workflow,
+    fills,
+    order,
+    input,
+  })
   const portfolio = workflow.getPortfolio()
   const position = portfolio.getPosition({ positionId })
   return {
