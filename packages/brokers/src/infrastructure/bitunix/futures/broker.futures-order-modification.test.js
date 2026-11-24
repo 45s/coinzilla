@@ -96,14 +96,14 @@ function createModifyResponse({
   emitModifyEvent = true,
   modifyEventOverrides = {},
 }) {
-  if (modifyError) {
-    throw modifyError
-  }
-  if (emitModifyEvent) {
+  if (emitModifyEvent && (!modifyError || emitModifyEventOnError)) {
     createModifyEvent({
       privateClients,
       modifyEventOverrides,
     })
+  }
+  if (modifyError) {
+    throw modifyError
   }
   return createFuturesResponse({
     data: {
@@ -227,6 +227,23 @@ test("Bitunix Futures modifyFuturesOrder preflights and verifies exact order cha
     price: "61000.1",
   })
   assert.equal(requests.filter(({ method }) => method === "POST").length, 1)
+})
+
+test("Bitunix Futures modifyFuturesOrder keeps a lost acknowledgement unknown when event and readback confirm the order state", async () => {
+  const { broker, requests } = createModifyBroker({
+    modifyError: new Error("connection lost after dispatch"),
+    emitModifyEventOnError: true,
+  })
+  await connectAndAcknowledgeUserDataReconciliation(broker)
+
+  const result = await broker.modifyFuturesOrder(modifyInput)
+
+  assert.equal(result.ok, false)
+  assert.equal(result.mutationOutcome, "OUTCOME_UNKNOWN")
+  assert.equal(result.orderOutcome, "CONFIRMED")
+  assert.ok(result.errors?.length > 0)
+  assert.equal(requests.filter(({ path }) => path === "/api/v1/futures/trade/modify_order").length, 1)
+  assert.equal(requests.filter(({ path }) => path === "/api/v1/futures/trade/get_order_detail").length, 1)
 })
 
 test("Bitunix Futures modifyFuturesOrder is NOT_SENT without explicit live mutation opt-in", async () => {

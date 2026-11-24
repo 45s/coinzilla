@@ -206,6 +206,27 @@ test("Bitunix Futures cancelOrder confirms only a matching private CLOSE event p
   assert.equal(requests.filter(({ path }) => path === "/api/v1/futures/trade/cancel_orders").length, 1, "confirmed cancellation must use exactly one mutation request")
 })
 
+test("Bitunix Futures cancelOrder keeps a lost acknowledgement unknown when private CLOSE and REST readback confirm cancellation", async () => {
+  const { broker, requests } = createCancelBroker({
+    cancelError: new Error("connection lost after dispatch"),
+    emitCancelEvent: true,
+    eventStatus: "CANCELED",
+    detailStatus: "CANCELED",
+  })
+  await connectAndAcknowledgeUserDataReconciliation(broker)
+
+  const result = await broker.cancelOrder({
+    symbol: "BTCUSDT",
+    orderId: "futures-order-123",
+  })
+
+  assert.equal(result.ok, false)
+  assert.equal(result.mutationOutcome, "OUTCOME_UNKNOWN")
+  assert.equal(result.cancellationOutcome, "CONFIRMED")
+  assert.ok(result.errors?.length > 0)
+  assert.equal(requests.filter(({ path }) => path === "/api/v1/futures/trade/cancel_orders").length, 1)
+})
+
 test("Bitunix Futures cancelOrder does not treat a FILLED private CLOSE event as cancellation", async () => {
   const { broker, requests } = createCancelBroker({
     eventStatus: "FILLED",

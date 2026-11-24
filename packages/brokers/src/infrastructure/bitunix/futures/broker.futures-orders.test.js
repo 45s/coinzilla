@@ -233,9 +233,10 @@ test("Bitunix Futures createFuturesOrder reconciles a lost acknowledgement by cl
 
   const result = await broker.createFuturesOrder(limitOrderInput)
 
-  assert.equal(result.ok, true)
-  assert.equal(result.mutationOutcome, "CONFIRMED")
-  assert.equal(result.orderOutcome, "CONFIRMED")
+  assert.equal(result.ok, false, "a lost acknowledgement must not be represented as an acknowledged mutation")
+  assert.equal(result.mutationOutcome, "OUTCOME_UNKNOWN")
+  assert.equal(result.orderOutcome, "CONFIRMED", "the clientId readback independently confirms that the order exists")
+  assert.ok(result.errors?.length > 0, "the lost acknowledgement must remain visible")
   assert.equal(requests.filter(({ method }) => method === "POST").length, 1)
 })
 
