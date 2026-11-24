@@ -19,6 +19,7 @@ import {
   createLegacyPositionAccounting,
 } from "../../src/domain/strategies/recovery-seller/legacy-position.js"
 import { createRecoverySellerStopState } from "../../src/domain/strategies/recovery-seller/stop-decision.js"
+import { createRecoverySellerCycleState } from "../../src/domain/strategies/recovery-seller/cycle-state.js"
 import { evaluateRecoverySellerSellDecision } from "../../src/domain/strategies/recovery-seller/evaluate-sell-decision.js"
 import { createRecoverySellerAccountingWorkflow } from "../../src/use-cases/create-recovery-seller-accounting-workflow.js"
 import { createRecoverySellerTransitionEvaluator } from "../../src/use-cases/create-recovery-seller-transition-evaluator.js"
@@ -275,12 +276,16 @@ async function createPlannerScenario({
   return Object.freeze({
     workflow,
     snapshot,
+    cycleState: createRecoverySellerCycleState({
+      cycleId: snapshot.cycleState.cycleId,
+      positionId: snapshot.cycleState.positionId,
+    }),
     marketMetadata,
     stopState,
   })
 }
 
-function assertSpecificationZroSellPlan({ snapshot, marketMetadata, stopState }) {
+function assertSpecificationZroSellPlan({ snapshot, cycleState, marketMetadata, stopState }) {
   assert.equal(snapshot.recoveryPosition.quantity, "1",
     "The Recovery Position quantity must come from the confirmed canonical BUY Fill, not a caller-selected SELL split.")
   assert.equal(snapshot.recoveryPosition.spent, "10",
@@ -294,7 +299,7 @@ function assertSpecificationZroSellPlan({ snapshot, marketMetadata, stopState })
   const result = evaluateRecoverySellerSellDecision({
     pairConfig,
     marketMetadata,
-    cycleState: snapshot.cycleState,
+    cycleState,
     stopState,
     planInput: snapshot.planInput,
   })
@@ -315,8 +320,15 @@ function assertSpecificationZroSellPlan({ snapshot, marketMetadata, stopState })
 }
 
 function createTransitionEvaluator({ snapshot, onSubmit }) {
+  const evaluatorSnapshot = Object.freeze({
+    ...snapshot,
+    cycleState: createRecoverySellerCycleState({
+      cycleId: snapshot.cycleState.cycleId,
+      positionId: snapshot.cycleState.positionId,
+    }),
+  })
   return createRecoverySellerTransitionEvaluator({
-    getSnapshot: async () => snapshot,
+    getSnapshot: async () => evaluatorSnapshot,
     submitOrder: async (input) => {
       onSubmit(input)
       return {
@@ -371,7 +383,7 @@ test("a smaller verified Spot remainder is the only legacy quantity added to the
   const result = evaluateRecoverySellerSellDecision({
     pairConfig,
     marketMetadata: scenario.marketMetadata,
-    cycleState: scenario.snapshot.cycleState,
+    cycleState: scenario.cycleState,
     stopState: scenario.stopState,
     planInput: scenario.snapshot.planInput,
   })

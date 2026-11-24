@@ -143,6 +143,8 @@ Do not claim 100% correctness from line/branch coverage. Completion means every 
 2. Default enabled state: current config sets `RS_RECOVERY_SELLER_CONFIG.enabled: true`, while specification §15 says keep it false by default; the specification's earlier text and implementation roadmap say enabled by default. Keep this as a documentation/owner-decision blocker; this scenario PR must not change configuration.
 3. Third-asset commission valuation: calculation examples exist, but the authoritative runtime quote valuation source remains unresolved/deferred.
 
+**Newly discovered RS-003 implementation blocker:** the real accounting workflow transition snapshot emits an accumulating cycle state missing fields required by the SELL domain validator. The default evaluator therefore fails closed before planning. Tracked separately in [issue #1809](https://github.com/45s/coinzilla/issues/1809). The planner scenario uses the canonical cycle-state factory to isolate planner economics; it does not claim the production workflow-to-evaluator path is covered.
+
 **Next P0 work:** threshold-adjacent economics; multiple canonical fills and REST/stream order permutations; durable submission/reconciliation boundaries; STOP decision after the owner resolves the contract discrepancy. Continue test-first in small increments. Do not change production policy, configuration, or exchange state under #1780.
 
 ## Recovery Seller activation — 2026-11-22

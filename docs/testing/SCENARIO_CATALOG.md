@@ -543,6 +543,8 @@ The schema intentionally separates *business input* from *derived oracle*. Tests
 **New scenario tests:** not mapped. Existing RS tests are not credited.
 
 ### RS-003 — A mixed recovery/legacy SELL uses the additive legacy slice
+The accounting workflow's transition snapshot currently emits an incomplete accumulating cycle-state shape that the default SELL evaluator rejects; full workflow-to-evaluator proof is tracked separately in [#1809](https://github.com/45s/coinzilla/issues/1809). The planner scenarios normalize only the lifecycle state using the canonical domain factory so that planner economics and no-submit boundaries can be tested without changing production behavior.
+
 
 **Status:** PARTIAL — one post-fill allocation example is newly mapped; pre-submission planning, verified custody, reservations and exchange-filter behavior are not proved by that case.
 
@@ -561,7 +563,7 @@ The schema intentionally separates *business input* from *derived oracle*. Tests
 
 **New scenario tests:**
 
-- `recovery-seller-sell-planner.scenario.test.js`
+- `recovery-seller-sell-planner.scenario.test.js` (planner-focused; canonical cycle state is supplied to isolate planner behavior)
   - `the SELL planner derives the specification ZRO quantity and strictest independent proceeds target from canonical inventory and Spot custody`
   - `a smaller verified Spot remainder is the only legacy quantity added to the recovery SELL`
   - `missing verified Spot custody blocks the SELL intent and produces no broker submission`
