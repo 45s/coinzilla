@@ -21,13 +21,13 @@ function createPositionResult({ data, errors, mutationOutcome, positionOutcome }
 
 function requireInputObject({ input, operation }) {
   if (input === null || typeof input !== "object" || Array.isArray(input)) {
-    throw new TypeError(\`Bitunix Futures \${operation} input must be an object\`)
+    throw new TypeError(`Bitunix Futures ${operation} input must be an object`)
   }
 }
 
 function requireText({ value, field }) {
   if (typeof value !== "string" || value.trim() === "") {
-    throw new TypeError(\`Bitunix Futures \${field} must be a non-empty string\`)
+    throw new TypeError(`Bitunix Futures ${field} must be a non-empty string`)
   }
   return value.trim()
 }
