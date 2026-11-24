@@ -12,8 +12,7 @@ import {
 } from "node:fs/promises"
 import { spawn } from "node:child_process"
 import { createReadStream, createWriteStream } from "node:fs"
-import { finished, pipeline } from "node:stream/promises"
-import { createInterface } from "node:readline"
+import { pipeline } from "node:stream/promises"
 import { createGzip } from "node:zlib"
 import path from "node:path"
 import os from "node:os"
@@ -268,41 +267,6 @@ async function findNewestCompletedTestnetSession(sessionsDirectory) {
   throw new Error("No completed TESTNET DEV session with valid process identity was found under logs/sessions; run pnpm dev and stop it gracefully before archiving.")
 }
 
-async function copyLogRootEntry({
-  entry,
-  sourceDirectory,
-  destinationDirectory,
-  selectedSessionName,
-  runtimeSessionId,
-  onFileCopied,
-} = {}) {
-  const sourcePath = path.join(sourceDirectory, entry.name)
-  const sourceStats = await lstat(sourcePath)
-  if (sourceStats.isSymbolicLink() || !sourceStats.isDirectory()) {
-    throw new Error(`Log root entry must be a real directory: ${sourcePath}`)
-  }
-  if (entry.name === "sessions") {
-    await copyCompressedTree({
-      sourceDirectory,
-      destinationDirectory,
-      relative: path.join("sessions", selectedSessionName),
-      onFileCopied,
-    })
-    return
-  }
-  if (entry.name === "cumulative") {
-    await copyCumulativeTailTree({
-      sourceDirectory,
-      destinationDirectory,
-      relative: "cumulative",
-      runtimeSessionId,
-      onFileCopied,
-    })
-    return
-  }
-  throw new Error("The logs root contains unsupported entries; refusing to archive unclassified log data.")
-}
-
 async function copySelectedLogs({ sourceDirectory, destinationDirectory, onFileCopied } = {}) {
   await mkdir(destinationDirectory, {
     recursive: true,
@@ -313,15 +277,18 @@ async function copySelectedLogs({ sourceDirectory, destinationDirectory, onFileC
   if (unsupportedEntries.length > 0) {
     throw new Error("The logs root contains unsupported entries; refusing to archive unclassified log data.")
   }
-  const sessionsEntry = entries.find((entry) => entry.name === "sessions" && entry.isDirectory())
+  for (const entry of entries) {
+    const entryPath = path.join(sourceDirectory, entry.name)
+    const entryStats = await lstat(entryPath)
+    if (entryStats.isSymbolicLink() || !entryStats.isDirectory()) {
+      throw new Error(`Expected logs/${entry.name} to be a real directory.`)
+    }
+  }
+  const sessionsEntry = entries.find((entry) => entry.name === "sessions")
   if (!sessionsEntry) {
     throw new Error("The logs/sessions directory is missing; refusing to publish an archive without session evidence.")
   }
   const selection = await findNewestCompletedTestnetSession(path.join(sourceDirectory, "sessions"))
-  const sessionsStats = await lstat(path.join(sourceDirectory, "sessions"))
-  if (sessionsStats.isSymbolicLink() || !sessionsStats.isDirectory()) {
-    throw new Error("The logs/sessions directory must be a real directory.")
-  }
   await copyCompressedTree({
     sourceDirectory,
     destinationDirectory,
@@ -329,128 +296,6 @@ async function copySelectedLogs({ sourceDirectory, destinationDirectory, onFileC
     onFileCopied,
   })
   return selection.identity
-}
-
-async function visitSessionLogRecords({ filename, runtimeSessionId, visit } = {}) {
-  const lines = createInterface({
-    input: createReadStream(filename),
-    crlfDelay: Infinity,
-  })
-  for await (const line of lines) {
-    let record
-    try {
-      record = JSON.parse(line)
-    } catch {
-      continue
-    }
-    if (record?.context?.runtimeSessionId === runtimeSessionId) {
-      await visit(line)
-    }
-  }
-}
-
-async function copySessionFilteredTailFile({ source, destination, runtimeSessionId } = {}) {
-  let totalBytes = 0
-  await visitSessionLogRecords({
-    filename: source,
-    runtimeSessionId,
-    visit: (line) => {
-      totalBytes += Buffer.byteLength(line) + 1
-    },
-  })
-  if (totalBytes === 0) {
-    await writeFile(destination, "", {
-      encoding: "utf8",
-      mode: 0o600,
-    })
-    return 0
-  }
-  const bytesToKeep = Math.max(1, Math.ceil(totalBytes * 0.05))
-  const startOffset = totalBytes - bytesToKeep
-  let currentOffset = 0
-  const output = createWriteStream(destination, {
-    flags: "w",
-    mode: 0o600,
-  })
-  try {
-    await visitSessionLogRecords({
-      filename: source,
-      runtimeSessionId,
-      visit: async (line) => {
-        const recordBytes = Buffer.from(`${line}\n`)
-        const recordStart = currentOffset
-        currentOffset += recordBytes.length
-        if (currentOffset <= startOffset) {
-          return
-        }
-        const selectedBytes = recordBytes.subarray(Math.max(0, startOffset - recordStart))
-        await new Promise((...callbacks) => {
-          const [resolve, reject] = callbacks
-          output.write(selectedBytes, (error) => {
-            if (error) {
-              reject(error)
-              return
-            }
-            resolve()
-          })
-        })
-      },
-    })
-    output.end()
-    await finished(output)
-  } catch (error) {
-    output.destroy()
-    throw error
-  }
-  return bytesToKeep
-}
-
-async function copyCumulativeTailTree({
-  sourceDirectory,
-  destinationDirectory,
-  relative,
-  runtimeSessionId,
-  onFileCopied,
-} = {}) {
-  const source = path.join(sourceDirectory, relative)
-  const destination = path.join(destinationDirectory, relative)
-  await mkdir(destination, {
-    recursive: true,
-    mode: 0o700,
-  })
-  for (const entry of await readdir(source, { withFileTypes: true })) {
-    const childRelative = path.join(relative, entry.name)
-    const sourcePath = path.join(sourceDirectory, childRelative)
-    const destinationPath = path.join(destinationDirectory, childRelative)
-    const sourceStats = await lstat(sourcePath)
-    if (sourceStats.isSymbolicLink()) {
-      throw new Error(`Refusing to archive a symbolic link: ${sourcePath}`)
-    }
-    if (sourceStats.isDirectory()) {
-      await copyCumulativeTailTree({
-        sourceDirectory,
-        destinationDirectory,
-        relative: childRelative,
-        runtimeSessionId,
-        onFileCopied,
-      })
-    } else if (sourceStats.isFile()) {
-      if (path.basename(sourcePath) === "terminal.log") {
-        continue
-      }
-      const size = await copySessionFilteredTailFile({
-        source: sourcePath,
-        destination: destinationPath,
-        runtimeSessionId,
-      })
-      await onFileCopied?.({
-        relativePath: childRelative.split(path.sep).join("/"),
-        size,
-      })
-    } else {
-      throw new Error(`Refusing to archive a non-regular session entry: ${sourcePath}`)
-    }
-  }
 }
 
 async function listRegularFiles({ directory, relative = "" } = {}) {
