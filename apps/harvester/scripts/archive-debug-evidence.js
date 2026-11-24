@@ -187,7 +187,7 @@ export async function runHarvesterDebugArchive({
     try {
       const recoveryStats = await lstat(recoveryDirectory)
       if (recoveryStats.isSymbolicLink() || !recoveryStats.isDirectory()) throw new Error("recovery-facts path must be a real directory.")
-      await copyEvidenceTree(recoveryDirectory, path.join(staging, "recovery-facts"))
+      await mkdir(path.join(staging, "recovery-facts"), { recursive: true, mode: 0o700 })\n      await copyEvidenceTree(recoveryDirectory, path.join(staging, "recovery-facts"))
       includedSources.push("recovery-facts")
     } catch (error) {
       if (error?.code !== "ENOENT") throw error
