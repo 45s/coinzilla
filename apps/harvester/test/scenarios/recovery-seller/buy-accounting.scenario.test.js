@@ -10,6 +10,7 @@ import {
   Quantity,
   TradingRules,
 } from "@coinzilla/entities"
+import { toResult } from "@coinzilla/utils"
 import { StrategyId } from "../../../src/domain/strategies/strategy-ids.js"
 import { evaluateRecoverySellerBuyDecision } from "../../../src/domain/strategies/recovery-seller/evaluate-buy-decision.js"
 import { createRecoverySellerCycleState } from "../../../src/domain/strategies/recovery-seller/cycle-state.js"
@@ -25,6 +26,7 @@ import {
 import { allocateOrderCommitments } from "../../../src/domain/orders/allocate-order-commitments.js"
 import { createRecoverySellerActionAuthorizer } from "../../../src/use-cases/create-recovery-seller-action-authorizer.js"
 import { createRecoverySellerOrderSubmitter } from "../../../src/use-cases/create-recovery-seller-order-submitter.js"
+import { makeOrderEventWorkflow } from "../../../src/use-cases/order-event-workflow.js"
 import { createRecoverySellerStopWorkflow } from "../../../src/use-cases/create-recovery-seller-stop-workflow.js"
 import { runRecoverySellerApplicationScenario } from "./runners/run-application-scenario.js"
 import { runRecoverySellerDomainScenario } from "./runners/run-domain-scenario.js"
@@ -957,12 +959,284 @@ async function runInvalidBuyFillScenario() {
   }
 }
 
+function createRSOrderEventRegistry() {
+  const pendingOrder = new CanonicalOrder({
+    clientOrderId: "rs-order-event-buy",
+    market,
+    side: "BUY",
+    type: "LIMIT_MAKER",
+    limitPrice: new Money({
+      amount: "20",
+      asset: quoteAsset,
+    }),
+    originalQuantity: new Quantity({
+      amount: "1",
+      asset: baseAsset,
+    }),
+    executedQuantity: new Quantity({
+      amount: "0",
+      asset: baseAsset,
+    }),
+    status: "PENDING",
+    createdAt: 100,
+    updatedAt: 100,
+  })
+  return OrderRegistry.empty().registerPending({
+    order: pendingOrder,
+    ownership: {
+      strategyId: StrategyId.RECOVERY_SELLER,
+      positionId: "rs-event-position",
+      purpose: "RECOVERY_BUY",
+      cycleId: "rs-event-cycle",
+    },
+  }).registry
+}
+
+function createRSOrderEventState({ registry }) {
+  return {
+    registry,
+    reconciledTerminalOrderClientIds: new Set(),
+    unrequestedTerminalOrderClientIds: new Set(),
+    completedOrderTransitions: new Set(),
+    shutdownRecoveryReplanSymbols: new Set(),
+    completedRecoverySellSymbols: new Set(),
+    completedRecoverySellOrdersBySymbol: new Map(),
+    replacementIntents: new Set(),
+    deferredEvaluations: new Set(),
+    trailingBuy: new Map(),
+    buyReferenceOverrides: new Map(),
+    lastBuyPrices: new Map(),
+    buyExecutionTotals: new Map(),
+    sellExecutionTotals: new Map(),
+    processedFillsByOrder: new Map(),
+  }
+}
+
+function createRSOrderEventHarness({ terminalFills = [] } = {}) {
+  const state = createRSOrderEventState({
+    registry: createRSOrderEventRegistry(),
+  })
+  const pauseCalls = []
+  let accountingWorkflow
+  let brokerCallCount = 0
+  const workflow = makeOrderEventWorkflow({
+    state,
+    broker: {
+      getFills: async () => {
+        brokerCallCount += 1
+        return toResult({ data: terminalFills })
+      },
+    },
+    eventPublisher: {
+      publish: () => toResult({ data: { accepted: true } }),
+    },
+    updateTradingAccounting: async () => toResult({
+      data: {
+        applied: true,
+      },
+    }),
+    updateRecoverySellerAccounting: async ({ fill }) => {
+      accountingWorkflow = createRecoverySellerAccountingWorkflow({
+        initialPortfolio: new Portfolio(),
+        initialOrderRegistry: state.registry,
+      })
+      return accountingWorkflow.applyBuyFill({ fill })
+    },
+    recordBuyExecutionFill: () => {},
+    recordSellExecutionFill: () => {},
+    pause: async (input) => pauseCalls.push(input),
+    requireProviderProvenance: false,
+    pairs: {
+      [market.symbol]: {
+        keepQuantity: "0",
+        minProfit: "0.01",
+        externalOrdersPolicy: "ignore",
+      },
+    },
+    logger: {
+      info: () => {},
+      warn: () => {},
+      error: () => {},
+    },
+    resolveRecoveryManagedCancellation: () => false,
+    cancelAndReconcileRecoverySells: async () => toResult({ data: {} }),
+    evaluateLatestTransition: async () => toResult({ data: {} }),
+    getReconciledBuyExecutionPrice: () => "10",
+    isStopping: () => false,
+    assertReconciledSellExecution: () => {},
+    completeRecoveryCycle: async () => toResult({ data: {} }),
+    publishRecoveryCycleNotCompleted: () => {},
+  })
+  return {
+    state,
+    workflow,
+    pauseCalls,
+    getAccountingWorkflow: () => accountingWorkflow,
+    getBrokerCallCount: () => brokerCallCount,
+  }
+}
+
+function createRSOrderEventOrder({ status, executedQuantity, updatedAt }) {
+  return new CanonicalOrder({
+    clientOrderId: "rs-order-event-buy",
+    brokerOrderId: "broker-rs-order-event-buy",
+    market,
+    side: "BUY",
+    type: "LIMIT_MAKER",
+    limitPrice: new Money({
+      amount: "20",
+      asset: quoteAsset,
+    }),
+    originalQuantity: new Quantity({
+      amount: "1",
+      asset: baseAsset,
+    }),
+    executedQuantity: new Quantity({
+      amount: executedQuantity,
+      asset: baseAsset,
+    }),
+    status,
+    createdAt: 100,
+    acknowledgedAt: 101,
+    updatedAt,
+    completedAt: status === "FILLED" ? updatedAt : undefined,
+  })
+}
+
+function createRSOrderEventFill({ quantity, quoteQuantity }) {
+  return new Fill({
+    tradeId: "rs-order-event-buy-fill",
+    brokerOrderId: "broker-rs-order-event-buy",
+    clientOrderId: "rs-order-event-buy",
+    market,
+    side: "BUY",
+    price: new Money({
+      amount: "10",
+      asset: quoteAsset,
+    }),
+    quantity: new Quantity({
+      amount: quantity,
+      asset: baseAsset,
+    }),
+    quoteQuantity: new Money({
+      amount: quoteQuantity,
+      asset: quoteAsset,
+    }),
+    commissions: [],
+    commissionStatus: "COMPLETE",
+  })
+}
+
+async function runRSOrderEventCase({ scenarioCase }) {
+  const fill = createRSOrderEventFill(scenarioCase)
+  const terminalFills = scenarioCase.id === "immediate-terminal-ack" ? [fill] : []
+  const harness = createRSOrderEventHarness({ terminalFills })
+  const results = []
+  if (scenarioCase.id === "ack-before-fill") {
+    results.push(await harness.workflow.processUserDataEventTransition({
+      event: {
+        eventType: "executionReport",
+        executionType: "NEW",
+        executedOrder: createRSOrderEventOrder({
+          status: "OPEN",
+          executedQuantity: "0",
+          updatedAt: 101,
+        }),
+      },
+    }))
+    results.push(await harness.workflow.processUserDataEventTransition({
+      event: {
+        eventType: "executionReport",
+        executionType: "TRADE",
+        executedOrder: createRSOrderEventOrder({
+          status: "PARTIALLY_FILLED",
+          executedQuantity: scenarioCase.quantity,
+          updatedAt: 102,
+        }),
+        fill,
+      },
+    }))
+  } else if (scenarioCase.id === "fill-before-ack") {
+    results.push(await harness.workflow.processUserDataEventTransition({
+      event: {
+        eventType: "executionReport",
+        executionType: "TRADE",
+        executedOrder: createRSOrderEventOrder({
+          status: "PARTIALLY_FILLED",
+          executedQuantity: scenarioCase.quantity,
+          updatedAt: 102,
+        }),
+        fill,
+      },
+    }))
+  } else {
+    results.push(await harness.workflow.processUserDataEventTransition({
+      event: {
+        eventType: "executionReport",
+        executionType: "NEW",
+        executedOrder: createRSOrderEventOrder({
+          status: "FILLED",
+          executedQuantity: scenarioCase.quantity,
+          updatedAt: 102,
+        }),
+      },
+    }))
+  }
+  return createRSOrderEventResult({
+    scenarioCase,
+    harness,
+    results,
+  })
+}
+
+function createRSOrderEventResult({ scenarioCase, harness, results }) {
+  const accounting = harness.getAccountingWorkflow()
+  const portfolio = accounting?.getPortfolio()
+  const position = portfolio?.getPosition({
+    positionId: "rs-event-position",
+  })
+  const order = harness.state.registry.getOrder({
+    clientOrderId: "rs-order-event-buy",
+  })
+  return {
+    id: scenarioCase.id,
+    resultOk: results.every((result) => result.ok === true),
+    eventCount: results.length,
+    orderStatus: order?.status ?? null,
+    orderBrokerOrderId: order?.brokerOrderId ?? null,
+    brokerCallCount: harness.getBrokerCallCount(),
+    pauseCount: harness.pauseCalls.length,
+    appliedFillIds: portfolio?.appliedFillIds.length ?? 0,
+    position: position
+      ? {
+          quantity: position.baseQuantity.amount,
+          spent: position.spent.amount,
+        }
+      : null,
+    executionQuantity: accounting?.getBuyExecutionQuantity({
+      cycleId: "rs-event-cycle",
+    }) ?? null,
+    executionVwap: accounting?.getBuyExecutionVwap({
+      cycleId: "rs-event-cycle",
+    }) ?? null,
+  }
+}
+
+async function runBuyOrderEventOrderingScenario({ input }) {
+  const cases = []
+  for (const scenarioCase of input.cases) {
+    cases.push(await runRSOrderEventCase({ scenarioCase }))
+  }
+  return { cases }
+}
+
 const applicationHandlers = {
   "apply-recovery-buy-scenario": runBuyScenario,
   "apply-recovery-buy-fee-record-scenarios": runBuyFeeRecordScenario,
   "evaluate-initial-buy-and-accounting-scenario": runInitialBuyScenario,
   "reject-invalid-buy-fill-ownership": runBuyOwnershipRejectionScenario,
   "validate-rejected-buy-fill-values": runInvalidBuyFillScenario,
+  "process-recovery-buy-order-event-orderings": runBuyOrderEventOrderingScenario,
   "submit-recovery-buy-with-unknown-outcome": runUnknownBuySubmissionScenario,
   "evaluate-recovery-buy-budget-isolation": runBuyBudgetIsolationScenario,
 }
