@@ -18,6 +18,7 @@ This index is the entry point for maintained repository documentation. The gover
 ## Repository-wide engineering
 
 - [Engineering documentation index](engineering/README.md)
+- [Feature Specification Standard](FEATURE_SPECIFICATION_STANDARD.md) — how to create, structure, review and maintain AI-readable feature specifications
 - [Architecture and decisions](architecture/README.md)
 - [ADR-0002: Explicit Binance trading environment](architecture/decisions/ADR-0002-explicit-binance-trading-environment.md)
 - [ADR-0003: Explicit multi-provider execution and market-data routing](architecture/decisions/ADR-0003-multi-provider-routing.md)
