@@ -443,9 +443,21 @@ test("publishes registered provider provenance when an incoming order update omi
   )
   const updatedEvent = calls.published.find((event) => event.name === "order.updated")
   assert.ok(updatedEvent, "An applied order update must publish its lifecycle event.")
-  assert.equal(updatedEvent.data.providerInstanceId, "binanceTestnet")
-  assert.equal(updatedEvent.data.providerType, "binance")
-  assert.equal(updatedEvent.data.accountId, "binance-primary")
+  assert.equal(
+    updatedEvent.data.providerInstanceId,
+    "binanceTestnet",
+    "The published order.updated event must retain the accepted provider instance identity.",
+  )
+  assert.equal(
+    updatedEvent.data.providerType,
+    "binance",
+    "The published order.updated event must retain the provider type.",
+  )
+  assert.equal(
+    updatedEvent.data.accountId,
+    "binance-primary",
+    "The published order.updated event must retain the account identity.",
+  )
 })
 
 test("rejects a streamed fill whose broker identity conflicts with the registered order", async () => {
