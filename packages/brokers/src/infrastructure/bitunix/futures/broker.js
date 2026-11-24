@@ -27,6 +27,11 @@ import {
   modifyFuturesPositionTpSlOrder as modifyFuturesPositionTpSlOrderOperation,
   placeFuturesPositionTpSlOrder as placeFuturesPositionTpSlOrderOperation,
 } from "./operations/manage-futures-tpsl.js"
+import {
+  setFuturesLeverage as setFuturesLeverageOperation,
+  setFuturesMarginMode as setFuturesMarginModeOperation,
+  setFuturesPositionMode as setFuturesPositionModeOperation,
+} from "./operations/manage-futures-account-settings.js"
 import { modifyFuturesOrder as modifyFuturesOrderOperation } from "./operations/modify-futures-order.js"
 import { getFuturesFundingRate as getFuturesFundingRateOperation, getFuturesFundingRates as getFuturesFundingRatesOperation } from "./operations/get-futures-funding-rates.js"
 import { getFuturesFundingRateHistory as getFuturesFundingRateHistoryOperation } from "./operations/get-futures-funding-rate-history.js"
@@ -1860,6 +1865,68 @@ export class BitunixFuturesBroker {
       broker: this,
       input,
     })
+  }
+
+  async setFuturesLeverage(input = {}) {
+    if (!this.config.allowLiveAccountMutations) {
+      return {
+        ...unsupportedResult({
+          operation: "setFuturesLeverage",
+          reason: "live Futures account mutations are disabled by default; set allowLiveAccountMutations: true only after independent live-account authorization",
+        }),
+        mutationOutcome: "NOT_SENT",
+        configurationOutcome: "NOT_SENT",
+      }
+    }
+    return setFuturesLeverageOperation({
+      broker: this,
+      input,
+    })
+  }
+
+  async setFuturesMarginMode(input = {}) {
+    if (!this.config.allowLiveAccountMutations) {
+      return {
+        ...unsupportedResult({
+          operation: "setFuturesMarginMode",
+          reason: "live Futures account mutations are disabled by default; set allowLiveAccountMutations: true only after independent live-account authorization",
+        }),
+        mutationOutcome: "NOT_SENT",
+        configurationOutcome: "NOT_SENT",
+      }
+    }
+    return setFuturesMarginModeOperation({
+      broker: this,
+      input,
+    })
+  }
+
+  async setFuturesPositionMode(input = {}) {
+    if (!this.config.allowLiveAccountMutations) {
+      return {
+        ...unsupportedResult({
+          operation: "setFuturesPositionMode",
+          reason: "live Futures account mutations are disabled by default; set allowLiveAccountMutations: true only after independent live-account authorization",
+        }),
+        mutationOutcome: "NOT_SENT",
+        configurationOutcome: "NOT_SENT",
+      }
+    }
+    return setFuturesPositionModeOperation({
+      broker: this,
+      input,
+    })
+  }
+
+  async adjustFuturesPositionMargin() {
+    return {
+      ...unsupportedResult({
+        operation: "adjustFuturesPositionMargin",
+        reason: "the current official Bitunix Futures API reference does not document an isolated position-margin adjustment endpoint; do not emulate this operation with leverage or margin-mode mutations",
+      }),
+      mutationOutcome: "NOT_SENT",
+      configurationOutcome: "UNSUPPORTED",
+    }
   }
 
   async getFuturesTradingSettings(input = {}) {
