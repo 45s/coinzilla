@@ -166,8 +166,8 @@ test("Bitunix Futures modifyFuturesOrder preflights and verifies exact order cha
   assert.equal(result.ok, true)
   assert.equal(result.mutationOutcome, "CONFIRMED")
   assert.equal(result.orderOutcome, "CONFIRMED")
-  assert.equal(result.data.quantity, "0.02")
-  assert.equal(result.data.limitPrice, "61000.1")
+  assert.equal(result.data.originalQuantity.amount, "0.02")
+  assert.equal(result.data.limitPrice.amount, "61000.1")
   const modifyRequest = requests.find(({ path }) => path === "/api/v1/futures/trade/modify_order")
   assert.deepEqual(JSON.parse(modifyRequest.body), {
     qty: "0.02",
