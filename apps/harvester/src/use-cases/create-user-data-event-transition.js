@@ -171,16 +171,19 @@ async function prepareOrderEvent({ dependencies, event } = {}) {
   }
   state.registry = update.registry
   if (update.applied === true) {
+    const updatedRegisteredOrder = state.registry.getOrder?.({
+      clientOrderId: previousOrder?.clientOrderId ?? order.clientOrderId,
+    }) ?? previousOrder ?? order
     const ownership = state.registry.getOwnership({
-      clientOrderId: order.clientOrderId,
-      brokerOrderId: order.brokerOrderId,
-      marketId: order.market.id,
+      clientOrderId: updatedRegisteredOrder.clientOrderId,
+      brokerOrderId: updatedRegisteredOrder.brokerOrderId,
+      marketId: updatedRegisteredOrder.market.id,
     })
     publishLifecycleEvent({
       eventPublisher,
       eventName: HARVESTER_EVENT_NAMES.ORDER_UPDATED,
       dataResult: mapOrderUpdatedData({
-        order,
+        order: updatedRegisteredOrder,
         executionType: event.executionType,
         evidence: event.brokerEvidence,
         ownership,

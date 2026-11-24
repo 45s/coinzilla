@@ -275,7 +275,7 @@ The archived logger context reports \`develop@3ecc3366f16317e84a2cdc32b7c39c7914
 4. \`apps/harvester/src/application/events/lifecycle-event-dtos.js:72-91\` allows all three provenance fields to be absent together; \`mapOrderUpdatedData\` then publishes an \`order.updated\` payload without them.
 5. \`apps/harvester/src/infrastructure/persistence/create-order-history-observer.js:193-207\` passes that payload to \`createOrderHistoryRecord()\`, which rejects the missing \`providerInstanceId\` during mapping.
 
-This is a source-proven defect path matching all three archived payloads and diagnostics. The narrow correction is to map the post-update canonical order resolved from the registry using the previously registered order's canonical client ID, rather than serializing the raw incoming order. Preserve strict order-history validation; do not make missing provider identity acceptable.
+This is a source-proven defect path matching all three archived payloads and diagnostics. The correction in this PR resolves the post-update canonical order from the registry using the previously registered order's canonical client ID, then uses that canonical order for ownership lookup and `order.updated` DTO mapping. Strict order-history validation remains unchanged; missing provider identity is not made acceptable.
 
 ### Duplicate observer diagnostics
 
@@ -286,10 +286,10 @@ The current persistence composition creates a legacy order-history observer in \
 - Confirmed for this separate 2026-11-24 session: three unique \`order.updated\` records lost provider provenance before publication; both history projections report mapping failures.
 - Not established: whether the 2026-11-22 28-group set shares this defect. Its two large cumulative source logs remain unavailable through the current connector; no conclusion is inferred.
 - PR #1796 is merged as \`4adde09fbbfabac10e54d689644e5c473824f65f\`. It fixes prospective terminal diagnostic visibility only, not the missing provider provenance.
-- The code correction and RED/GREEN regression are deferred until #1826 is integrated, as required by the issue's integration order. This checkpoint does not touch #1826's WebSocket files.
+- The focused source correction and regression are implemented in draft PR #1832. The PR remains draft and must be reviewed/integrated only after #1826 is integrated, as required by the issue's integration order. No #1826 WebSocket files are changed.
 - No database dump was inspected; no exchange requests/writes, order cancellations, account mutations, restarts or archive rewrites were performed.
 
 
 ### Regression test — provider provenance on lifecycle updates
 
-A deterministic regression now seeds a real `OrderRegistry` with an accepted `OPEN` order carrying provider identity, then applies a `PARTIALLY_FILLED` update (executed quantity `0.5`) with the same client/broker order IDs, a matching canonical Fill, and no provider provenance on the incoming order. It asserts that the registry retains the original identity and that the published `order.updated` event carries all three provenance fields. The fixture is offline and uses the existing canonical Order/Fill entities. Exact-head RED verification is pending; the production mapper remains unchanged in this checkpoint.
+A deterministic regression now seeds a real `OrderRegistry` with an accepted `OPEN` order carrying provider identity, then applies a `PARTIALLY_FILLED` update (executed quantity `0.5`) with the same client/broker order IDs, a matching canonical Fill, and no provider provenance on the incoming order. It asserts that the registry retains the original identity and that the published `order.updated` event carries all three provenance fields. The fixture is offline and uses the existing canonical Order/Fill entities. RED was confirmed on test head `96665d9385334790be50c6ec4ad11c33b6f94bea` by Harvester Targeted Tests run `45466356240` (job `138702193913`): 18 passed, 1 failed. The sole failure was the intended assertion (`providerInstanceId`: actual `undefined`, expected `binanceTestnet`), after the valid fixture setup and registry identity assertion passed. The mapper correction is now implemented in this PR; GREEN verification is pending on the next exact head.
