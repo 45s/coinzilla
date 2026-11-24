@@ -58,6 +58,7 @@ function createOrderFetch({
   requests,
   symbolInfo = {},
   orderStatus = "NEW",
+  orderOverrides = {},
   placeResponse,
   placeError,
   responseCode = 0,
@@ -299,4 +300,21 @@ test("Bitunix Futures createFuturesOrder validates and preserves explicit TP/SL 
   assert.equal(body.slStopType, "LAST_PRICE")
   assert.equal(body.slOrderType, "MARKET")
   assert.equal(Object.hasOwn(body, "slOrderPrice"), false)
+})
+
+
+test("Bitunix Futures createFuturesOrder does not confirm a mismatched order readback", async () => {
+  const { broker, requests } = createOrderBroker({
+    orderOverrides: {
+      qty: "0.02",
+    },
+  })
+  await broker.connect()
+
+  const result = await broker.createFuturesOrder(limitOrderInput)
+
+  assert.equal(result.ok, false, "a different exchange order quantity must not be reported as a successful placement")
+  assert.equal(result.mutationOutcome, "OUTCOME_UNKNOWN", "a mismatched readback cannot confirm the requested mutation")
+  assert.equal(result.orderOutcome, "OUTCOME_UNKNOWN", "a mismatched readback must preserve the uncertain order outcome")
+  assert.equal(requests.filter(({ method }) => method === "POST").length, 1, "reconciliation must never repeat the placement POST")
 })
