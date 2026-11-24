@@ -69,7 +69,16 @@ function sendJson({ client, message } = {}) {
     })
     return false
   }
-  return client.socket.write(frame)
+  try {
+    return client.socket.write(frame)
+  } catch {
+    closeClient({
+      client,
+      code: 1011,
+      reason: "Unable to write a WebSocket message.",
+    })
+    return false
+  }
 }
 
 function closeClient({ client, code = 1000, reason = "" } = {}) {
