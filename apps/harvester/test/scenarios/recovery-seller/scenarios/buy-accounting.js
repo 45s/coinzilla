@@ -290,11 +290,22 @@ export const recoverySellerBuyAccountingScenarios = Object.freeze([
     reason: "The current RS accounting workflow requires a broker-order identity already registered in OrderRegistry; the new scenario boundary does not yet compose out-of-order broker events through the real order-event workflow.",
     unblockCondition: "Add application scenarios that deliver fill-before-ack, acknowledgement-before-fill and immediate terminal acknowledgement through the production order-event workflow with controlled event ordering.",
   }),
-  blockedCase({
+  makeBuyCase({
     id: "RS-002-018",
-    name: "an unknown BUY submission retains identity and commitment and blocks replacement",
-    reason: "The current new scenario runner exercises accounting after canonical order registration, not the durable BUY submitter's unknown-outcome and reservation boundary.",
-    unblockCondition: "Add an offline application scenario around the real submitter and durable intent/outcome callbacks; assert exact broker-call count, retained client identity and quote reservation until authoritative reconciliation.",
+    name: "an unknown BUY submission is durably retained and follow-up policy refuses a replacement",
+    stepType: "submit-recovery-buy-with-unknown-outcome",
+    input: {},
+    expected: {
+      brokerCallCount: 1,
+      resultOk: false,
+      unresolvedCount: 1,
+      durableFactCount: 2,
+      activeOrderStatus: "UNKNOWN",
+      stopStatus: "STOPPED",
+      followupOutcome: "RECONCILE",
+      followupAction: null,
+    },
+    rules: ["RS_UNKNOWN_OUTCOME_NO_RETRY", "RS_BUY_ACTIVE_ORDER_GATE"],
   }),
   makeBuyCase({
     id: "RS-002-019",
