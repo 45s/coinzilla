@@ -425,8 +425,14 @@ export const recoverySellerBuyAccountingScenarios = Object.freeze([
       executionQuantity: null,
       executionVwap: null,
       results: [
-        { ok: false, applied: false },
-        { ok: false, applied: false },
+        {
+          ok: false,
+          applied: false,
+        },
+        {
+          ok: false,
+          applied: false,
+        },
       ],
     },
     rules: ["RS_STRATEGY_OWNERSHIP_ISOLATION"],
