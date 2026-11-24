@@ -689,6 +689,19 @@ async function runInitialBuyScenario({ input }) {
   }
 }
 
+async function runBuyFeeRecordScenario({ input }) {
+  const zeroCommission = await runBuyScenario({
+    input: input.zeroCommission,
+  })
+  const multipleFeeRecords = await runBuyScenario({
+    input: input.multipleFeeRecords,
+  })
+  return {
+    zeroCommission,
+    multipleFeeRecords,
+  }
+}
+
 async function runBuyScenario({ input }) {
   const { workflow, order, positionId, cycleId } = createScenarioWorkflow({ input })
   const fills = input.fills.map((fillInput) => createScenarioFill({
@@ -859,6 +872,7 @@ async function runInvalidBuyFillScenario() {
 
 const applicationHandlers = {
   "apply-recovery-buy-scenario": runBuyScenario,
+  "apply-recovery-buy-fee-record-scenarios": runBuyFeeRecordScenario,
   "evaluate-initial-buy-and-accounting-scenario": runInitialBuyScenario,
   "reject-invalid-buy-fill-ownership": runBuyOwnershipRejectionScenario,
   "validate-rejected-buy-fill-values": runInvalidBuyFillScenario,
