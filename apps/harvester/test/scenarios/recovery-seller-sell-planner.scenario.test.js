@@ -654,3 +654,50 @@ test("actual TradingRules minimum-notional violations block the derived SELL wit
   assert.equal(submissions, 0,
     "No broker submission may occur when the actual TradingRules reject the planned order.")
 })
+
+test("the real accounting workflow snapshot reaches the default SELL evaluator and submits the eligible mixed SELL", async () => {
+  const scenario = await createPlannerScenario()
+  let submitted
+  const evaluate = createRecoverySellerTransitionEvaluator({
+    getSnapshot: async () => scenario.snapshot,
+    submitOrder: async (input) => {
+      submitted = input
+      return {
+        ok: true,
+        data: {
+          submitted: true,
+        },
+      }
+    },
+    evaluateBuyDecision: () => ({
+      decision: {
+        outcome: "WAIT",
+        reasonCode: "SCENARIO_BUY_WAIT",
+        explanation: "The workflow-to-SELL regression must not fall through to a new BUY.",
+      },
+    }),
+  })
+
+  const result = await evaluate({
+    symbol,
+    marketPrice: {
+      symbol,
+      price: "20",
+    },
+    marketMetadata: scenario.marketMetadata,
+    pairConfig,
+  })
+
+  assert.equal(result.decision?.outcome, undefined,
+    `The real workflow cycle state must pass the default SELL evaluator instead of fail-closing: ${result.decision?.reasonCode ?? result.errors?.[0]?.message ?? "no decision"}.`)
+  assert.equal(result.ok, true,
+    "The composed transition must return the successful submitter result for an eligible recovery SELL.")
+  assert.equal(submitted.action.side, "SELL",
+    "The real workflow snapshot must reach the default SELL evaluator and submit SELL, not BUY.")
+  assert.equal(submitted.action.quantity, "1.01",
+    "The submitted mixed SELL must use the canonical 1.00 recovery plus 0.01 verified legacy allocation.")
+  assert.equal(submitted.action.cycleId, scenario.snapshot.cycleState.cycleId,
+    "The workflow cycle identity must be preserved through the evaluator and submitted SELL.")
+  assert.equal(submitted.action.positionId, scenario.snapshot.cycleState.positionId,
+    "The workflow Position identity must be preserved through the evaluator and submitted SELL.")
+})
