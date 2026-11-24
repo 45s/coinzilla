@@ -348,7 +348,7 @@ export class BitunixFuturesBroker {
       if (response.data.length !== 1) {
         throw new TypeError("Bitunix Futures ticker response must contain exactly one requested symbol")
       }
-      const ticker = response.data[0]
+      const [ticker] = response.data
       ensure.plainObject({
         value: ticker,
         name: "ticker",
