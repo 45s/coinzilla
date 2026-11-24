@@ -480,7 +480,7 @@ test("the pre-submit transition enforces the legacy-dominant profitability bound
   await assertPriceBoundary({
     scenario,
     belowPrice: "19.99",
-    targetPrice: "20.00",
+    targetPrice: "20",
     abovePrice: "20.01",
   })
 })
