@@ -12,7 +12,10 @@ function response(data) {
   return {
     ok: true,
     status: 200,
-    json: async () => ({ code: 0, data }),
+    json: async () => ({
+      code: 0,
+      data,
+    }),
   }
 }
 
@@ -24,7 +27,8 @@ test("Bitunix Futures reads account-wide position mode from the documented priva
     tradingMode: "live",
     providerOptions: {
       dependencies: {
-        fetchFn: async (url, options) => {
+        fetchFn: async (...args) => {
+          const [url, options] = args
           requests.push({ url: String(url), options })
           return response({ positionMode: "HEDGE" })
         },
@@ -50,7 +54,8 @@ test("Bitunix Futures reads symbol leverage and margin mode with explicit USDT m
     tradingMode: "live",
     providerOptions: {
       dependencies: {
-        fetchFn: async (url, options) => {
+        fetchFn: async (...args) => {
+          const [url, options] = args
           requests.push({ url: String(url), options })
           return response({
             symbol: "BTCUSDT",
