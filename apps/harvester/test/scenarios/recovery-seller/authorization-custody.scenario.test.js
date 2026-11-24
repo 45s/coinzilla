@@ -128,7 +128,7 @@ function createLegacySpotInput({
     quantity,
   })
   const portfolioPositionsToApply = portfolioPositions
-    ? portfolioPositions.map((item) => ({
+    ? input.portfolioPositions.map((item) => ({
         market: item.market === "ZROFDUSD" ? alternateMarket : market,
         quantity: item.quantity,
         quoteQuantity: item.quantity,
