@@ -47,55 +47,67 @@ function createQueries() {
   }
 }
 
-function createOperatorState() {
-  const state = {
-    status: {
-      observedAt: 120000,
-      startedAt: 60000,
-      runtimeState: "RUNNING",
-      broker: "binance",
-      tradingEnabled: true,
-      tradingMode: "testnet",
-      strategyMode: "conservative-testnet",
-      stopping: false,
-      readiness: {
-        state: "READY",
-        blockers: [],
-      },
-      userData: {
-        ready: true,
-        status: "READY",
-        ageMs: 10,
-      },
-      markets: {
-        configured: 1,
-        enabled: 1,
-        blocked: 0,
-      },
+function createOperatorStatus() {
+  return {
+    observedAt: 120000,
+    startedAt: 60000,
+    runtimeState: "RUNNING",
+    broker: "binance",
+    tradingEnabled: true,
+    tradingMode: "testnet",
+    strategyMode: "conservative-testnet",
+    stopping: false,
+    readiness: {
+      state: "READY",
+      blockers: [],
+    },
+    userData: {
+      ready: true,
+      status: "READY",
+      ageMs: 10,
     },
     markets: {
-      observedAt: 120000,
-      markets: [{
-        symbol: "BTCUSDT",
-        enabled: true,
-        operatorBuysPaused: false,
-        readiness: "READY",
-        blockers: [],
-        latestPrice: "65000.00000000",
-        priceFresh: true,
-      }],
+      configured: 1,
+      enabled: 1,
+      blocked: 0,
     },
-    portfolio: {
-      observedAt: 120000,
-      positions: [{
-        symbol: "BTCUSDT",
-        activeQuantity: "0.12500000",
-        investedQuote: "500.00000000",
-        recovery: {
-          outstandingRecoveryAmount: "500.00000000",
-        },
-      }],
-    },
+  }
+}
+
+function createOperatorMarkets() {
+  return {
+    observedAt: 120000,
+    markets: [{
+      symbol: "BTCUSDT",
+      enabled: true,
+      operatorBuysPaused: false,
+      readiness: "READY",
+      blockers: [],
+      latestPrice: "65000.00000000",
+      priceFresh: true,
+    }],
+  }
+}
+
+function createOperatorPortfolio() {
+  return {
+    observedAt: 120000,
+    positions: [{
+      symbol: "BTCUSDT",
+      activeQuantity: "0.12500000",
+      investedQuote: "500.00000000",
+      recovery: {
+        outstandingRecoveryAmount: "500.00000000",
+      },
+    }],
+  }
+}
+
+function createOperatorState() {
+  const state = {
+    status: createOperatorStatus(),
+    markets: createOperatorMarkets(),
+    portfolio: createOperatorPortfolio(),
   }
   return {
     state,
