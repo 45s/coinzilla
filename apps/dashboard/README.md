@@ -4,7 +4,7 @@ Angular + TypeScript client for the Coinzilla operational dashboard.
 
 ## Current state
 
-The dashboard includes a persistent theme picker with the original Emerald appearance as the default, six alternate palettes (Midnight Terminal, Clean Light, OLED / Neon, Green Terminal, Arctic, and Warm Graphite), and System mode. Theme choice is stored in browser local storage. The Overview screen remains an explicitly labeled fictional preview. Orders, Fills, and Commissions are separate read-only pages that request actual persisted Harvester records through the unauthenticated loopback-only `/api/v1` HTTP contract. Exchanges and Open Orders consume full account and order snapshots over the local Harvester WebSocket only; these two pages make no browser HTTP requests. The Market Screener displays Bitunix Futures public REST market data through Harvester; Bitunix Spot and Binance markets are visible future source options but are not enabled. The native rolling 24h percentage is displayed from Bitunix's public WebSocket ticker field; missing 5m, 1h, and 4h fields stay N/A. The Dashboard performs no movement calculations. Favourites are stored in source-specific one-year browser cookies. The screener fetches on page load and explicit refresh only; it does not poll in the background.
+The dashboard includes a persistent theme picker with the original Emerald appearance as the default, six alternate palettes (Midnight Terminal, Clean Light, OLED / Neon, Green Terminal, Arctic, and Warm Graphite), and System mode. Theme choice is stored in browser local storage. The Overview screen remains an explicitly labeled fictional preview. The separate **Bots** workspace reads live runtime, market and Portfolio snapshots from Harvester's existing loopback operator API and exposes confirmation-gated BUY pause controls. Orders, Fills, and Commissions are separate read-only pages that request actual persisted Harvester records through the unauthenticated loopback-only `/api/v1` HTTP contract. Exchanges and Open Orders consume full account and order snapshots over the local Harvester WebSocket only; these two pages make no browser HTTP requests. The Market Screener displays Bitunix Futures public REST market data through Harvester; Bitunix Spot and Binance markets are visible future source options but are not enabled. The native rolling 24h percentage is displayed from Bitunix's public WebSocket ticker field; missing 5m, 1h, and 4h fields stay N/A. The Dashboard performs no movement calculations. Favourites are stored in source-specific one-year browser cookies. The screener fetches on page load and explicit refresh only; it does not poll in the background.
 
 ## Requirements
 
@@ -30,6 +30,14 @@ pnpm --filter @coinzilla/dashboard build
 pnpm --filter @coinzilla/dashboard test
 pnpm --filter @coinzilla/dashboard test:coverage
 ```
+
+## Bots workspace
+
+The **Bots** page is a structured view over Harvester's existing operator snapshots. It shows the process state and running duration, the effective runtime strategy mode, TESTNET/LIVE environment, readiness and blockers, enabled/blocked/disabled markets, market prices, and Portfolio inventory/recovery accounting. Decimal amounts remain strings and are rendered without browser-side financial calculations.
+
+The current operator API reports one effective `strategyMode` and market-level state. It does not expose individual strategy registration/enablement or per-Position `strategyId`; the page does not invent those statuses or attribute market-level positions to a strategy. A richer strategy-by-strategy view requires a separately coordinated Harvester read-model/API extension.
+
+Market and global controls use the existing Harvester `pause`, `unpause`, `pauseallbuys`, and `resumeallbuys` commands and require an explicit confirmation. These controls pause or resume the BUY gate only; they do not stop Recovery SELL evaluation, fill accounting, or safety reconciliation. The local API remains loopback-only and must not be exposed to a LAN, reverse proxy, container port mapping, or remote host.
 
 ## Exchanges workspace
 
