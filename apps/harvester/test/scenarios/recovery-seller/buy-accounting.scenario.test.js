@@ -715,6 +715,21 @@ async function applyScenarioConflict({ workflow, fills, order, input }) {
   })
 }
 
+async function runInitialBuyScenario({ input }) {
+  const policy = evaluateBuyPolicyCase({
+    overrides: input.policyOverrides,
+  })
+  const accounting = await runBuyScenario({
+    input: {
+      fills: input.fills,
+    },
+  })
+  return {
+    policy,
+    accounting,
+  }
+}
+
 async function runBuyScenario({ input }) {
   const { workflow, order, positionId, cycleId } = createScenarioWorkflow({ input })
   const fills = input.fills.map((fillInput) => createScenarioFill({
@@ -885,6 +900,7 @@ async function runInvalidBuyFillScenario() {
 
 const applicationHandlers = {
   "apply-recovery-buy-scenario": runBuyScenario,
+  "evaluate-initial-buy-and-accounting-scenario": runInitialBuyScenario,
   "reject-invalid-buy-fill-ownership": runBuyOwnershipRejectionScenario,
   "validate-rejected-buy-fill-values": runInvalidBuyFillScenario,
   "submit-recovery-buy-with-unknown-outcome": runUnknownBuySubmissionScenario,
