@@ -11,6 +11,7 @@ import { adaptFuturesCanonicalOrder } from "./adapters/adapt-futures-canonical-o
 import { adaptFuturesCurrentPositions, adaptFuturesHistoricalPositions } from "./adapters/adapt-futures-positions.js"
 import { adaptFuturesTradeHistory } from "./adapters/adapt-futures-trades.js"
 import { adaptFuturesPendingOrders } from "./adapters/adapt-futures-pending-orders.js"
+import { adaptFuturesPendingTpSlOrders } from "./adapters/adapt-futures-pending-tpsl-orders.js"
 
 function unsupportedResult({ operation, reason }) {
   return {
@@ -754,6 +755,46 @@ function assertCanonicalOrderIdentity({ order, lookup }) {
   }
 }
 
+function createFuturesPendingTpSlQuery(input = {}) {
+  ensure.plainObject({
+    value: input,
+    name: "Futures pending TP/SL query",
+  })
+  const supportedOptions = new Set(["symbol", "positionId", "limit", "skip"])
+  const unsupportedOptions = Object.keys(input).filter((key) => !supportedOptions.has(key))
+  if (unsupportedOptions.length > 0) {
+    throw new TypeError(`Unsupported Futures pending TP/SL query options: ${unsupportedOptions.join(", ")}`)
+  }
+  const limit = input.limit ?? 10
+  const skip = input.skip ?? 0
+  ensure.positiveInteger({
+    value: limit,
+    name: "limit",
+  })
+  if (limit > 100) {
+    throw new RangeError("Bitunix Futures pending TP/SL page limit cannot exceed 100")
+  }
+  if (!Number.isSafeInteger(skip) || skip < 0) {
+    throw new RangeError("Bitunix Futures pending TP/SL skip must be a non-negative safe integer")
+  }
+  return {
+    ...(input.symbol === undefined ? {} : {
+      symbol: ensure.nonEmptyString({
+        value: input.symbol,
+        name: "symbol",
+      }).trim().toUpperCase(),
+    }),
+    ...(input.positionId === undefined ? {} : {
+      positionId: ensure.nonEmptyString({
+        value: input.positionId,
+        name: "positionId",
+      }),
+    }),
+    limit,
+    skip,
+  }
+}
+
 function adaptFuturesTradePriceEvents({ event, symbol }) {
   ensure.plainObject({
     value: event,
@@ -1390,6 +1431,30 @@ export class BitunixFuturesBroker {
    * Returns one page of Bitunix Futures pending orders with exact decimals.
    * This extension does not claim an atomic or exhaustive account snapshot.
    */
+  async getFuturesPendingTpSlOrders(input = {}) {
+    try {
+      const queryParams = createFuturesPendingTpSlQuery(input)
+      const response = await this.restClient.request({
+        method: "GET",
+        path: "/api/v1/futures/tpsl/get_pending_orders",
+        queryParams,
+      })
+      return toResult({
+        data: adaptFuturesPendingTpSlOrders({
+          rows: response.data,
+        }),
+      })
+    } catch (error) {
+      handleErr({
+        where: "BitunixFuturesBroker.getFuturesPendingTpSlOrders()",
+        error,
+      })
+      return toResult({
+        errors: [error],
+      })
+    }
+  }
+
   async getFuturesPendingOrders(input = {}) {
     try {
       const request = createPendingOrdersQuery({
