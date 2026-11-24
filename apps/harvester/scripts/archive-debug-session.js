@@ -949,7 +949,7 @@ async function publishPreparedArchive({
   }
 }
 
-export async function runHarvesterArchivePush({
+export async function runHarvesterDebugArchive({
   args = process.argv.slice(2),
   env = process.env,
   runGit = runGitDefault,
@@ -1020,10 +1020,10 @@ async function main() {
     return
   }
   if (args.length > 0) {
-    throw new TypeError("Usage: archive:push [--version]")
+    throw new TypeError("Usage: archive:debug [--version]")
   }
   process.stdout.write(`${createArchiveCliIdentity()}\n`)
-  const result = await runHarvesterArchivePush({ args })
+  const result = await runHarvesterDebugArchive({ args })
   const summary = [
     "Harvester lightweight debug archive published and remotely verified.",
     `Archive: archives/${result.archiveName}`,
