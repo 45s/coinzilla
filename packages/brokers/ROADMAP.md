@@ -1635,7 +1635,6 @@ Implemented on the PR branch (exact-head tests and required CI must pass before 
 
 No live Futures mutation or exchange request has been performed by the implementation agent or automated tests. Keep Futures outside production execution and Harvester routing until all blockers and acceptance criteria are satisfied.
 
-
 ## 2026-11-24 — Futures Broker stream and transport hardening (#1805)
 
 **Status: in progress; PR #1806 remains Draft and Futures is not production-ready.**
