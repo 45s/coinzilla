@@ -4,7 +4,6 @@ import {
   lstat,
   mkdir,
   mkdtemp,
-  readFile,
   readdir,
   rm,
   stat,
@@ -25,7 +24,6 @@ import { resolveOperationalStateDirectory } from "../src/infrastructure/operatio
 const PACKAGE_DIRECTORY = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const ARCHIVE_REMOTE = "https://github.com/45s/coinzilla-archive.git"
 const MAGIC = Buffer.from("CZDBG001")
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 function run(command, args, { cwd } = {}) {
   return new Promise((resolve, reject) => {
