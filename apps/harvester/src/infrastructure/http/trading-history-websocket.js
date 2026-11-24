@@ -694,12 +694,14 @@ function subscribeToWebSocketUpdates({ eventBus, clients, exchangeAccounts, subs
 /**
  * Attach the local trading-history WebSocket endpoint to the existing HTTP server.
  *
- * The socket carries persisted-history invalidation hints and read-only provider account snapshots.
+ * The socket carries persisted-history invalidation hints, read-only provider account snapshots,
+ * and versioned Bots snapshots from the application-owned operator facade.
  * Account readers are sampled on initial connection and after account-monitor notifications.
- * Failed provider reads remain explicit and never become fabricated empty snapshots.
+ * Bots readers are sampled on connect and after application/runtime invalidation events.
+ * Failed reads remain explicit and never become fabricated empty snapshots.
  * An empty provider list is a valid snapshot for a Harvester with no active accounts.
  *
- * @param {{server: object, eventBus: object}} input
+ * @param {{server: object, eventBus: object, operator?: object}} input
  * @returns {Readonly<{close: () => Promise<void>}>}
  */
 export function attachTradingHistoryWebSocket({ server, eventBus, exchangeAccounts = [], subscribeExchangeAccountUpdates, operator } = {}) {
