@@ -181,7 +181,7 @@ function createExternalSellReservation() {
   })
 }
 
-function createPlannerWorkflow({ includeExternalSellReservation = false } = {}) {
+function createPlannerWorkflow({ includeExternalSellReservation = false, legacyInvested = "0.20" } = {}) {
   const buyOrder = createRecoveryBuyOrder()
   const ownership = createOrderOwnership({
     ownership: {
@@ -207,7 +207,7 @@ function createPlannerWorkflow({ includeExternalSellReservation = false } = {}) 
       market,
       position: Object.freeze({
         ...createLegacyPosition({
-          invested: "0.20",
+          invested: legacyInvested,
           quantity: "0.01",
         }),
         remainingQuantity: "0.01",
@@ -249,9 +249,11 @@ async function createPlannerScenario({
   quantityStepSize = "0.01",
   minimumNotional = "5",
   includeExternalSellReservation = false,
+  legacyInvested = "0.20",
 } = {}) {
   const { workflow, buyOrder } = createPlannerWorkflow({
     includeExternalSellReservation,
+    legacyInvested,
   })
   const buyResult = await workflow.applyBuyFill({
     order: buyOrder,
@@ -348,6 +350,61 @@ function createTransitionEvaluator({ snapshot, onSubmit }) {
   })
 }
 
+
+async function evaluateTransitionAtPrice({ scenario, price }) {
+  let submitted
+  const evaluate = createTransitionEvaluator({
+    snapshot: scenario.snapshot,
+    onSubmit: (input) => {
+      submitted = input
+    },
+  })
+  const result = await evaluate({
+    symbol,
+    marketPrice: {
+      symbol,
+      price,
+    },
+    marketMetadata: scenario.marketMetadata,
+    pairConfig,
+  })
+  return {
+    result,
+    submitted,
+  }
+}
+
+async function assertPriceBoundary({ scenario, belowPrice, targetPrice, abovePrice }) {
+  const below = await evaluateTransitionAtPrice({
+    scenario,
+    price: belowPrice,
+  })
+  assert.equal(below.result.decision.outcome, "WAIT",
+    `Market price ${belowPrice} below planned target ${targetPrice} must not submit a SELL.`)
+  assert.equal(below.submitted, undefined,
+    "A below-target market price must produce zero broker submission attempts.")
+
+  const atTarget = await evaluateTransitionAtPrice({
+    scenario,
+    price: targetPrice,
+  })
+  assert.equal(atTarget.result.ok, true,
+    "The application transition must submit when market price exactly reaches the planned profitability target.")
+  assert.equal(atTarget.submitted.action.side, "SELL",
+    "The exact-threshold transition must submit the planned SELL action.")
+  assert.equal(atTarget.submitted.action.plan.price, targetPrice,
+    "The submitted action must retain the exact independently calculated profitability target.")
+
+  const aboveTarget = await evaluateTransitionAtPrice({
+    scenario,
+    price: abovePrice,
+  })
+  assert.equal(aboveTarget.result.ok, true,
+    "The application transition must submit when market price is one tick above the planned profitability target.")
+  assert.equal(aboveTarget.submitted.action.price, abovePrice,
+    "The submitted action must use the tick-aligned market price at the above-target boundary.")
+}
+
 test("the SELL planner derives the specification ZRO quantity from canonical workflow inventory and verified Spot custody using the canonical lifecycle-state contract", async () => {
   const scenario = await createPlannerScenario()
   assertSpecificationZroSellPlan(scenario)
@@ -373,6 +430,83 @@ test("the SELL planner derives the specification ZRO quantity from canonical wor
     "A market price below the independently derived SELL target must not submit the SELL and may continue through the separate BUY policy.")
   assert.equal(submissions, 0,
     "The application transition must make zero broker submissions while the market remains below the planned profitable SELL price.")
+})
+
+
+test("the pre-submit transition enforces the recovery-dominant profitability boundary", async () => {
+  const scenario = await createPlannerScenario({
+    legacyInvested: "0.0001",
+  })
+  const plan = evaluateRecoverySellerSellDecision({
+    pairConfig,
+    marketMetadata: scenario.marketMetadata,
+    cycleState: scenario.cycleState,
+    stopState: scenario.stopState,
+    planInput: scenario.snapshot.planInput,
+  }).orderIntent.plan
+
+  assert.equal(plan.recoveryRequiredNetQuoteProceeds, "10.1101",
+    "The recovery allocation must set the strictest required proceeds when legacy basis is low.")
+  assert.equal(plan.requiredNetQuoteProceeds, "10.1101",
+    "The recovery allocation must control the planned minimum proceeds.")
+  await assertPriceBoundary({
+    scenario,
+    belowPrice: "10.00",
+    targetPrice: "10.01",
+    abovePrice: "10.02",
+  })
+})
+
+test("the pre-submit transition enforces the legacy-dominant profitability boundary", async () => {
+  const scenario = await createPlannerScenario({
+    legacyInvested: "0.20",
+  })
+  const plan = evaluateRecoverySellerSellDecision({
+    pairConfig,
+    marketMetadata: scenario.marketMetadata,
+    cycleState: scenario.cycleState,
+    stopState: scenario.stopState,
+    planInput: scenario.snapshot.planInput,
+  }).orderIntent.plan
+
+  assert.equal(plan.legacyRequiredNetQuoteProceeds, "20.2",
+    "The fixed historical legacy basis must set the strictest required proceeds when its average cost is high.")
+  assert.equal(plan.requiredNetQuoteProceeds, "20.2",
+    "The legacy allocation must control the planned minimum proceeds.")
+  await assertPriceBoundary({
+    scenario,
+    belowPrice: "19.99",
+    targetPrice: "20.00",
+    abovePrice: "20.01",
+  })
+})
+
+test("the pre-submit transition accepts exact equality when recovery, legacy and combined targets coincide", async () => {
+  const scenario = await createPlannerScenario({
+    legacyInvested: "0.1001",
+  })
+  const plan = evaluateRecoverySellerSellDecision({
+    pairConfig,
+    marketMetadata: scenario.marketMetadata,
+    cycleState: scenario.cycleState,
+    stopState: scenario.stopState,
+    planInput: scenario.snapshot.planInput,
+  }).orderIntent.plan
+
+  assert.equal(plan.recoveryRequiredNetQuoteProceeds, "10.1101",
+    "Recovery profitability threshold must match the common equality target.")
+  assert.equal(plan.legacyRequiredNetQuoteProceeds, "10.1101",
+    "Legacy non-loss threshold must match the common equality target.")
+  assert.equal(plan.combinedRequiredNetQuoteProceeds, "10.1101",
+    "Combined profitability threshold must match the common equality target.")
+  assert.equal(plan.requiredNetQuoteProceeds, "10.1101",
+    "Exact equality across all three gates must remain eligible.")
+  await assertPriceBoundary({
+    scenario,
+    belowPrice: "10.00",
+    targetPrice: "10.01",
+    abovePrice: "10.02",
+  })
 })
 
 test("a smaller verified Spot remainder is the only legacy quantity added to the recovery SELL", async () => {

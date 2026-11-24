@@ -145,7 +145,7 @@ Do not claim 100% correctness from line/branch coverage. Completion means every 
 
 **Newly discovered RS-003 implementation blocker:** the real accounting workflow transition snapshot emits an accumulating cycle state missing fields required by the SELL domain validator. The default evaluator therefore fails closed before planning. Tracked separately in [issue #1809](https://github.com/45s/coinzilla/issues/1809). The planner scenario uses the canonical cycle-state factory to isolate planner economics; it does not claim the production workflow-to-evaluator path is covered.
 
-**Next P0 work:** resolve and test workflow-to-evaluator cycle-state projection in #1809; threshold-adjacent economics; multiple canonical fills and REST/stream order permutations; durable submission/reconciliation boundaries; STOP decision after the owner resolves the contract discrepancy. Continue test-first in small increments. Do not change production policy, configuration, or exchange state under #1780.
+**Next P0 work:** resolve and test workflow-to-evaluator cycle-state projection in #1809; actual fill-commission-aware profitability; multiple canonical fills and REST/stream order permutations; durable submission/reconciliation boundaries; STOP decision after the owner resolves the contract discrepancy. Continue test-first in small increments. Do not change production policy, configuration, or exchange state under #1780.
 
 ## Recovery Seller activation — 2026-11-22
 

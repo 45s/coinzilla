@@ -576,7 +576,7 @@ The accounting workflow's transition snapshot currently emits an incomplete accu
 
 ### RS-004 — Recovery, legacy, and combined profitability gates are independent
 
-**Status:** PARTIAL — four new domain cases prove both cross-subsidy directions, exact-threshold acceptance and recovery-only eligibility. They do not prove the pre-submission evaluator emits no order when a gate fails.
+**Status:** PARTIAL — four new domain cases prove both cross-subsidy directions, exact-threshold acceptance and recovery-only eligibility. Three application-transition boundary cases now prove no submission one tick below recovery-dominant, legacy-dominant and tied recovery/legacy/combined plan prices, and submission at/above those targets. Actual fill-commission-aware profitability and post-fill application outcomes remain incomplete.
 
 **Specification worked example — mixed SELL planning (no fees):**
 
@@ -608,7 +608,13 @@ At `20.00 USDT/ZRO`, recovery receives `20.00 USDT` (profit `+10.00`), legacy re
 - `a mixed recovery and legacy cycle closes at exact profitability thresholds when every gate passes`
 - `recovery-only operation still requires recovery and combined profit after legacy exhaustion`
 
-**Remaining:** pre-submission no-order/evaluator integration; just-below/just-above each threshold; actual fee gross-up/allocation; price tick and quantity step; partial/multiple fill history; post-fill adverse STOP application effects.
+**Additional pre-submit scenario tests:** `recovery-seller-sell-planner.scenario.test.js`
+
+- `the pre-submit transition enforces the recovery-dominant profitability boundary`
+- `the pre-submit transition enforces the legacy-dominant profitability boundary`
+- `the pre-submit transition accepts exact equality when recovery, legacy and combined targets coincide`
+
+**Remaining:** actual fee-aware net proceeds and commission allocation; partial/multiple fill history; durable post-fill accounting and adverse STOP application effects.
 
 ### RS-005 — A recovery cycle may submit only one SELL lifecycle
 
