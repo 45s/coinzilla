@@ -32,6 +32,51 @@ function createObservableBuyControl({ control, eventPublisher, action, scope } =
   }
 }
 
+function createOperatorBuyControls({ engine, operationalStateStore, eventPublisher } = {}) {
+  const pauseBuys = createObservableBuyControl({
+    control: createPauseBuys({
+      engine,
+      operationalStateStore,
+    }),
+    eventPublisher,
+    action: "PAUSE",
+    scope: "MARKET",
+  })
+  const resumeBuys = createObservableBuyControl({
+    control: createResumeBuys({
+      engine,
+      operationalStateStore,
+    }),
+    eventPublisher,
+    action: "RESUME",
+    scope: "MARKET",
+  })
+  const pauseAllBuys = createObservableBuyControl({
+    control: createPauseAllBuys({
+      engine,
+      operationalStateStore,
+    }),
+    eventPublisher,
+    action: "PAUSE",
+    scope: "GLOBAL",
+  })
+  const resumeAllBuys = createObservableBuyControl({
+    control: createResumeAllBuys({
+      engine,
+      operationalStateStore,
+    }),
+    eventPublisher,
+    action: "RESUME",
+    scope: "GLOBAL",
+  })
+  return {
+    pauseBuys,
+    resumeBuys,
+    pauseAllBuys,
+    resumeAllBuys,
+  }
+}
+
 function createReadRecoverySellerStopState({ recoverySellerStopWorkflow }) {
   return async ({ actor } = {}) => {
     try {
@@ -76,41 +121,15 @@ export function createHarvesterOperator({
   getOpenOrders,
   recoverySellerStopWorkflow,
 } = {}) {
-  const pauseBuys = createObservableBuyControl({
-    control: createPauseBuys({
-      engine,
-      operationalStateStore,
-    }),
+  const {
+    pauseBuys,
+    resumeBuys,
+    pauseAllBuys,
+    resumeAllBuys,
+  } = createOperatorBuyControls({
+    engine,
+    operationalStateStore,
     eventPublisher,
-    action: "PAUSE",
-    scope: "MARKET",
-  })
-  const resumeBuys = createObservableBuyControl({
-    control: createResumeBuys({
-      engine,
-      operationalStateStore,
-    }),
-    eventPublisher,
-    action: "RESUME",
-    scope: "MARKET",
-  })
-  const pauseAllBuys = createObservableBuyControl({
-    control: createPauseAllBuys({
-      engine,
-      operationalStateStore,
-    }),
-    eventPublisher,
-    action: "PAUSE",
-    scope: "GLOBAL",
-  })
-  const resumeAllBuys = createObservableBuyControl({
-    control: createResumeAllBuys({
-      engine,
-      operationalStateStore,
-    }),
-    eventPublisher,
-    action: "RESUME",
-    scope: "GLOBAL",
   })
   const operator = {
     pauseMarket: pauseBuys,
