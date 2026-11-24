@@ -5,16 +5,23 @@ import { resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import { calculateRecoverySellerProfitability } from "../../../src/domain/strategies/recovery-seller/calculate-profitability.js"
 import {
+  defineRecoverySellerScenario,
   recoverySellerScenarioRegistry,
   validateRecoverySellerScenarioRegistry,
 } from "./registry/index.js"
+import { runRecoverySellerApplicationScenario } from "./runners/run-application-scenario.js"
 import { runRecoverySellerDomainScenario } from "./runners/run-domain-scenario.js"
 
 const packageRoot = fileURLToPath(new URL("../../../", import.meta.url))
 const scenarioFile = "apps/harvester/test/scenarios/recovery-seller/registry-and-runner.scenario.test.js"
 const implementationFile = "apps/harvester/src/domain/strategies/recovery-seller/calculate-profitability.js"
+const candidatePaths = recoverySellerScenarioRegistry.flatMap((scenario) => [
+  ...scenario.implementation,
+  scenario.test?.file,
+  ...scenario.subcases.map((subcase) => subcase.test?.file),
+]).filter(Boolean)
 const existingPaths = new Set(
-  [scenarioFile, implementationFile].filter((path) =>
+  [scenarioFile, implementationFile, ...candidatePaths].filter((path) =>
     existsSync(resolve(packageRoot, path.replace("apps/harvester/", "")))),
 )
 
@@ -277,6 +284,145 @@ test("the DOMAIN runner rejects application scenarios and missing operation hand
     }),
     /references missing input/,
     "A scenario step must not silently run with an absent Given value.",
+  )
+})
+
+
+test("the shared registry includes every mapped RS-001 and RS-002 family record", () => {
+  const authorizationCases = recoverySellerScenarioRegistry.filter((scenario) =>
+    scenario.family === "RS-001")
+  const buyCases = recoverySellerScenarioRegistry.filter((scenario) =>
+    scenario.family === "RS-002")
+
+  assert.equal(authorizationCases.length, 14,
+    "The shared registry must expose all fourteen RS-001 authorization and custody scenario records.")
+  assert.equal(buyCases.length, 21,
+    "The shared registry must expose every RS-002 BUY accounting scenario ID, including explicit blocked dispositions.")
+})
+
+test("scenario records are deeply immutable and reject non-record inputs", () => {
+  const scenario = defineRecoverySellerScenario({
+    id: "RS-TEST-IMMUTABLE",
+    given: {
+      custody: {
+        available: "1",
+      },
+    },
+  })
+
+  assert.equal(Object.isFrozen(scenario), true,
+    "A registered scenario record must not be mutable after declaration.")
+  assert.equal(Object.isFrozen(scenario.given), true,
+    "Nested Given facts must also be immutable so fixtures cannot drift during execution.")
+  assert.equal(Object.isFrozen(scenario.given.custody), true,
+    "Deeply nested business facts must remain immutable.")
+  assert.throws(
+    () => defineRecoverySellerScenario(null),
+    TypeError,
+    "The scenario definition helper must reject null instead of accepting a malformed registry record.",
+  )
+})
+
+test("the APPLICATION runner executes ordered handlers and reports mapped evidence without promoting status", async () => {
+  const observedOrder = []
+  const result = await runRecoverySellerApplicationScenario({
+    scenario: {
+      id: "RS-TEST-APPLICATION-001",
+      layer: "APPLICATION",
+      given: {
+        intentId: "rs-intent-001",
+      },
+      when: [
+        {
+          type: "persist-intent",
+          inputKey: "intentId",
+          saveAs: "durableIntent",
+        },
+        {
+          type: "read-durable-intent",
+          inputKey: "durableIntent",
+        },
+      ],
+      test: {
+        file: scenarioFile,
+        title: "the APPLICATION runner executes ordered handlers and reports mapped evidence without promoting status",
+      },
+      status: "TEST-MAPPED",
+      evidence: null,
+    },
+    handlers: {
+      "persist-intent": async ({ input }) => {
+        observedOrder.push("persist")
+        return {
+          id: input,
+          durable: true,
+        }
+      },
+      "read-durable-intent": ({ input }) => {
+        observedOrder.push("read")
+        return input
+      },
+    },
+  })
+
+  assert.deepEqual(observedOrder, ["persist", "read"],
+    "APPLICATION scenario handlers must execute sequentially across the real application boundary.")
+  assert.deepEqual(result.results[1], {
+    id: "rs-intent-001",
+    durable: true,
+  }, "A later application step must receive the exact result of the preceding durable operation.")
+  assert.equal(result.layer, "APPLICATION",
+    "The execution report must identify application-level rather than domain-only evidence.")
+  assert.equal(result.report.status, "TEST-MAPPED",
+    "Running an application scenario must never promote its coverage status.")
+  assert.equal(result.report.evidence, null,
+    "A local application run must not invent merge or exact-head verification evidence.")
+})
+
+test("the APPLICATION runner rejects DOMAIN records and missing operation handlers", async () => {
+  await assert.rejects(
+    () => runRecoverySellerApplicationScenario({
+      scenario: {
+        id: "RS-TEST-APPLICATION-002",
+        layer: "DOMAIN",
+        given: {},
+        when: [],
+      },
+      handlers: {},
+    }),
+    /cannot execute a non-APPLICATION scenario/,
+    "The application runner must reject DOMAIN records instead of overstating application coverage.",
+  )
+  await assert.rejects(
+    () => runRecoverySellerApplicationScenario({
+      scenario: {
+        id: "RS-TEST-APPLICATION-003",
+        layer: "APPLICATION",
+        given: {},
+        when: [{ type: "missing-operation" }],
+      },
+      handlers: {},
+    }),
+    /no handler for step type/,
+    "An application scenario with an unregistered operation must fail rather than silently pass.",
+  )
+  await assert.rejects(
+    () => runRecoverySellerApplicationScenario({
+      scenario: {
+        id: "RS-TEST-APPLICATION-004",
+        layer: "APPLICATION",
+        given: {},
+        when: [{
+          type: "read-input",
+          inputKey: "missingInput",
+        }],
+      },
+      handlers: {
+        "read-input": ({ input }) => input,
+      },
+    }),
+    /references missing input/,
+    "An application step must not run with an absent Given fact.",
   )
 })
 
