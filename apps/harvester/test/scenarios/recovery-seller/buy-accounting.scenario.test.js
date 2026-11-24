@@ -457,6 +457,7 @@ async function runUnknownBuySubmissionScenario() {
   return {
     brokerCallCount: runtime.getBrokerCallCount(),
     resultOk: result.ok,
+    errorMessage: result.errors?.[0]?.message ?? null,
     unresolvedCount: runtime.unresolved.length,
     durableFactCount: runtime.durableFacts.length,
     activeOrderStatus: activeOrder?.status ?? null,
