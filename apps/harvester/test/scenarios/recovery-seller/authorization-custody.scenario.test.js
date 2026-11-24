@@ -248,6 +248,85 @@ function createBuyScenarioCommissions({ fillInput }) {
   return commissions
 }
 
+function createRecoveryBuyScenarioWorkflow({ input }) {
+  const clientOrderId = "rs-buy-scenario-order"
+  const brokerOrderId = "broker-rs-buy-scenario"
+  const positionId = "rs-buy-scenario-position"
+  const cycleId = "rs-buy-scenario-cycle"
+  const order = new CanonicalOrder({
+    clientOrderId,
+    brokerOrderId,
+    market,
+    side: "BUY",
+    type: "LIMIT_MAKER",
+    limitPrice: new Money({
+      amount: "2",
+      asset: quoteAsset,
+    }),
+    originalQuantity: new Quantity({
+      amount: "5.01",
+      asset: baseAsset,
+    }),
+    executedQuantity: new Quantity({
+      amount: "0",
+      asset: baseAsset,
+    }),
+    status: "OPEN",
+    createdAt: 100,
+    acknowledgedAt: 101,
+    updatedAt: 101,
+  })
+  const ownerships = input.owned === false
+    ? []
+    : [createOrderOwnership({
+        ownership: {
+          strategyId: StrategyId.RECOVERY_SELLER,
+          positionId,
+          purpose: "RECOVERY_BUY",
+          cycleId,
+        },
+        clientOrderId,
+        brokerOrderId,
+      })]
+  const workflow = createRecoverySellerAccountingWorkflow({
+    initialPortfolio: new Portfolio(),
+    initialOrderRegistry: new OrderRegistry({
+      orders: [order],
+      ownerships,
+    }),
+  })
+  return {
+    workflow,
+    order,
+    positionId,
+    cycleId,
+  }
+}
+
+function createRecoveryBuyScenarioFill({ fillInput, order }) {
+  return new Fill({
+    tradeId: fillInput.tradeId,
+    brokerOrderId: fillInput.brokerOrderId ?? order.brokerOrderId,
+    clientOrderId: order.clientOrderId,
+    market: order.market,
+    side: "BUY",
+    price: new Money({
+      amount: "2",
+      asset: order.market.quoteAsset,
+    }),
+    quantity: new Quantity({
+      amount: fillInput.quantity,
+      asset: order.market.baseAsset,
+    }),
+    quoteQuantity: new Money({
+      amount: fillInput.quoteQuantity,
+      asset: order.market.quoteAsset,
+    }),
+    commissions: createBuyScenarioCommissions({ fillInput }),
+    commissionStatus: "COMPLETE",
+  })
+}
+
 const domainHandlers = {
   "create-legacy-position": ({ input }) => createLegacyPosition(input),
   "record-legacy-sale": ({ input }) => {
@@ -492,73 +571,9 @@ const applicationHandlers = {
     }
   },
   "apply-recovery-buy-scenario": async ({ input }) => {
-    const clientOrderId = "rs-buy-scenario-order"
-    const brokerOrderId = "broker-rs-buy-scenario"
-    const positionId = "rs-buy-scenario-position"
-    const cycleId = "rs-buy-scenario-cycle"
-    const order = new CanonicalOrder({
-      clientOrderId,
-      brokerOrderId,
-      market,
-      side: "BUY",
-      type: "LIMIT_MAKER",
-      limitPrice: new Money({
-        amount: "2",
-        asset: quoteAsset,
-      }),
-      originalQuantity: new Quantity({
-        amount: "5.01",
-        asset: baseAsset,
-      }),
-      executedQuantity: new Quantity({
-        amount: "0",
-        asset: baseAsset,
-      }),
-      status: "OPEN",
-      createdAt: 100,
-      acknowledgedAt: 101,
-      updatedAt: 101,
-    })
-    const ownerships = input.owned === false
-      ? []
-      : [createOrderOwnership({
-          ownership: {
-            strategyId: StrategyId.RECOVERY_SELLER,
-            positionId,
-            purpose: "RECOVERY_BUY",
-            cycleId,
-          },
-          clientOrderId,
-          brokerOrderId,
-        })]
-    const workflow = createRecoverySellerAccountingWorkflow({
-      initialPortfolio: new Portfolio(),
-      initialOrderRegistry: new OrderRegistry({
-        orders: [order],
-        ownerships,
-      }),
-    })
-    const fills = input.fills.map((fillInput) => new Fill({
-      tradeId: fillInput.tradeId,
-      brokerOrderId: fillInput.brokerOrderId ?? brokerOrderId,
-      clientOrderId,
-      market,
-      side: "BUY",
-      price: new Money({
-        amount: "2",
-        asset: quoteAsset,
-      }),
-      quantity: new Quantity({
-        amount: fillInput.quantity,
-        asset: baseAsset,
-      }),
-      quoteQuantity: new Money({
-        amount: fillInput.quoteQuantity,
-        asset: quoteAsset,
-      }),
-      commissions: createBuyScenarioCommissions({ fillInput }),
-      commissionStatus: "COMPLETE",
-    }))
+    const { workflow, order, positionId, cycleId } = createRecoveryBuyScenarioWorkflow({ input })
+    const fills = input.fills.map((fillInput) =>
+      createRecoveryBuyScenarioFill({ fillInput, order }))
     const results = []
     for (const fill of fills) {
       const result = await workflow.applyBuyFill({ fill })
@@ -567,28 +582,25 @@ const applicationHandlers = {
         applied: result.data?.applied === true,
       })
     }
-    let replay
-    if (input.replayFirstFill === true && fills[0]) {
-      const result = await workflow.applyBuyFill({ fill: fills[0] })
-      replay = {
-        ok: result.ok,
-        applied: result.data?.applied === true,
-        duplicate: result.data?.duplicate === true,
-      }
-    }
+    const replay = input.replayFirstFill === true && fills[0]
+      ? await workflow.applyBuyFill({ fill: fills[0] })
+      : undefined
     const portfolio = workflow.getPortfolio()
     const position = portfolio.getPosition({ positionId })
     return {
       appliedFillIds: portfolio.appliedFillIds.length,
       position: position
-        ? {
-            quantity: position.baseQuantity.amount,
-            spent: position.spent.amount,
-          }
+        ? { quantity: position.baseQuantity.amount, spent: position.spent.amount }
         : null,
       executionQuantity: workflow.getBuyExecutionQuantity({ cycleId }) ?? null,
       executionVwap: workflow.getBuyExecutionVwap({ cycleId }) ?? null,
-      ...(input.replayFirstFill === true ? { replay } : {}),
+      ...(replay ? {
+        replay: {
+          ok: replay.ok,
+          applied: replay.data?.applied === true,
+          duplicate: replay.data?.duplicate === true,
+        },
+      } : {}),
       ...(results.some((result) => !result.ok) ? { results } : {}),
     }
   },
