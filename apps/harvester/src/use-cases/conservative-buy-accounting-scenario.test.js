@@ -299,7 +299,11 @@ test("treats an identical repeated BUY execution as a no-op in both accounting p
   assert.equal(duplicate.data.duplicate, true, "An identical replay must be classified as duplicate.")
   assert.strictEqual(duplicate.data.portfolio, state.portfolio)
   assert.strictEqual(duplicate.data.recoveryLedger, state.recoveryLedger)
-  assertAccountingStateUnchanged({ state, portfolioValue, ledgerValue })
+  assertAccountingStateUnchanged({
+    state,
+    portfolioValue,
+    ledgerValue,
+  })
 })
 
 test("rejects a repeated BUY identity with changed commission facts without partial accounting", () => {
@@ -342,10 +346,10 @@ test("rejects inconsistent Portfolio and RecoveryLedger duplicate histories with
     quantity: "100",
     quoteQuantity: "10",
   })
-  const portfolio = new Portfolio().applyFill({
+  const { portfolio } = new Portfolio().applyFill({
     fill: accepted,
     strategyId: StrategyId.COIN_GRABBER,
-  }).portfolio
+  })
   const recoveryLedger = RecoveryLedger.empty({ market })
   const portfolioValue = portfolio.value
   const ledgerValue = recoveryLedger.value
@@ -369,7 +373,10 @@ test("rejects a BUY from another market without committing the Portfolio-only ap
   const state = createAcceptedBuyState()
   const portfolioValue = state.portfolio.value
   const ledgerValue = state.recoveryLedger.value
-  const otherBaseAsset = new Asset({ id: "ada", code: "ADA" })
+  const otherBaseAsset = new Asset({
+    id: "ada",
+    code: "ADA",
+  })
   const otherMarket = new Market({
     venue: "binance",
     symbol: "ADAUSDT",
@@ -381,9 +388,18 @@ test("rejects a BUY from another market without committing the Portfolio-only ap
     brokerOrderId: "foreign-buy-order",
     market: otherMarket,
     side: "BUY",
-    price: new Money({ amount: "0.5", asset: quoteAsset }),
-    quantity: new Quantity({ amount: "20", asset: otherBaseAsset }),
-    quoteQuantity: new Money({ amount: "10", asset: quoteAsset }),
+    price: new Money({
+      amount: "0.5",
+      asset: quoteAsset,
+    }),
+    quantity: new Quantity({
+      amount: "20",
+      asset: otherBaseAsset,
+    }),
+    quoteQuantity: new Money({
+      amount: "10",
+      asset: quoteAsset,
+    }),
     commissions: [],
     commissionStatus: "COMPLETE",
   })
