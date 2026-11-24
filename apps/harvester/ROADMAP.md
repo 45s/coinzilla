@@ -128,7 +128,7 @@ Do not claim 100% correctness from line/branch coverage. Completion means every 
 - RS-009 STOP — BLOCKED by the specification/source resolution discrepancy.
 - RS-010 restart/replay — UNSUPPORTED; third-asset fee valuation — BLOCKED.
 
-**Contract blockers:** STOP resolution, strategy enabled-default wording, third-asset fee valuation source, and dust-versus-filter-STOP boundary remain unresolved. Do not encode invented behavior or change production policy/configuration to clear these blockers.
+**Contract blockers:** STOP resolution, strategy enabled-default wording, third-asset fee valuation source, dust-versus-filter-STOP boundary, and standalone final-residual liquidation without a new BUY remain unresolved. The approved smaller-remainder rule applies only within the current cycle SELL. Do not encode invented behavior or change production policy/configuration to clear these blockers.
 
 **Next implementation sequence (small PRs, test-only unless a separately scoped production defect is demonstrated):**
 
