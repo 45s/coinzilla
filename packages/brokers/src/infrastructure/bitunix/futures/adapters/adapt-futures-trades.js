@@ -38,26 +38,20 @@ function requireEnum({ value, values, field }) {
   return value
 }
 
-function normalizeTrade({ trade }) {
+function requireTradeObject({ trade }) {
   if (trade === null || typeof trade !== "object" || Array.isArray(trade)) {
     throw new TypeError("Bitunix Futures trade should be an object")
   }
+}
+
+function normalizeTradeIdentity({ trade }) {
   const clientId = trade.clientId == null
     ? undefined
     : requireIdentifier({
       value: trade.clientId,
       field: "clientId",
     })
-  if (typeof trade.reduceOnly !== "boolean") {
-    throw new TypeError("Bitunix Futures trade reduceOnly must be a boolean")
-  }
-  if (!Number.isSafeInteger(trade.leverage) || trade.leverage <= 0) {
-    throw new TypeError("Bitunix Futures trade leverage must be a positive safe integer")
-  }
-  if (!Number.isSafeInteger(trade.ctime) || trade.ctime < 0) {
-    throw new TypeError("Bitunix Futures trade ctime must be a non-negative safe integer")
-  }
-  return Object.freeze({
+  return {
     tradeId: requireIdentifier({
       value: trade.tradeId,
       field: "tradeId",
@@ -71,6 +65,11 @@ function normalizeTrade({ trade }) {
       value: trade.symbol,
       field: "symbol",
     }).toUpperCase(),
+  }
+}
+
+function normalizeTradeExecution({ trade }) {
+  return {
     quantity: requireDecimal({
       value: trade.qty,
       field: "qty",
@@ -91,6 +90,22 @@ function normalizeTrade({ trade }) {
       values: ORDER_TYPES,
       field: "orderType",
     }),
+    liquidityRole: requireEnum({
+      value: trade.roleType,
+      values: LIQUIDITY_ROLES,
+      field: "roleType",
+    }),
+  }
+}
+
+function normalizeTradePositionContext({ trade }) {
+  if (!Number.isSafeInteger(trade.leverage) || trade.leverage <= 0) {
+    throw new TypeError("Bitunix Futures trade leverage must be a positive safe integer")
+  }
+  if (typeof trade.reduceOnly !== "boolean") {
+    throw new TypeError("Bitunix Futures trade reduceOnly must be a boolean")
+  }
+  return {
     positionMode: requireEnum({
       value: trade.positionMode,
       values: POSITION_MODES,
@@ -109,6 +124,11 @@ function normalizeTrade({ trade }) {
       }),
     }),
     reduceOnly: trade.reduceOnly,
+  }
+}
+
+function normalizeTradeFinancials({ trade }) {
+  return {
     fee: requireDecimal({
       value: trade.fee,
       field: "fee",
@@ -118,11 +138,35 @@ function normalizeTrade({ trade }) {
       field: "realizedPNL",
       allowNegative: true,
     }),
-    executedAt: trade.ctime,
-    liquidityRole: requireEnum({
-      value: trade.roleType,
-      values: LIQUIDITY_ROLES,
-      field: "roleType",
+  }
+}
+
+function normalizeTradeTimestamp({ trade }) {
+  if (!Number.isSafeInteger(trade.ctime) || trade.ctime < 0) {
+    throw new TypeError("Bitunix Futures trade ctime must be a non-negative safe integer")
+  }
+  return trade.ctime
+}
+
+function normalizeTrade({ trade }) {
+  requireTradeObject({
+    trade,
+  })
+  return Object.freeze({
+    ...normalizeTradeIdentity({
+      trade,
+    }),
+    ...normalizeTradeExecution({
+      trade,
+    }),
+    ...normalizeTradePositionContext({
+      trade,
+    }),
+    ...normalizeTradeFinancials({
+      trade,
+    }),
+    executedAt: normalizeTradeTimestamp({
+      trade,
     }),
   })
 }
