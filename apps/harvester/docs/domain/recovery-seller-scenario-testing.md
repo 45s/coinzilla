@@ -1559,7 +1559,7 @@ This section is a dated baseline, not a permanent status source. #1780 is the li
 - PR #1793 (initial RS scenario slice) is merged. PR head: `4d59272ea22317b3540d2356082b270328542c7e`; merge commit: `9902d6a01d675a988a40f0fb2130c3eb477675ef`.
 - PR #1793 exact-head check runs: all required checks reported success on its PR head; the read-only Binance TESTNET workflow was skipped. The scenario families remain PARTIAL/MISSING/BLOCKED as shown in #1780; successful CI does not make the matrix complete.
 - Issue #1809 remains open for the workflow-to-evaluator cycle-state defect.
-- Issue #1779 was still open at the audit checkpoint despite its shared-methodology PR being merged; reconcile its issue state as completed.
+- Issue #1779 is now closed as completed after shared-methodology PR #1795 merged.
 - Issue #1780 remains the primary open RS scenario matrix.
 - Issue #1783 remains the repository-wide catalog tracker; it should point to this playbook but continue to own cross-domain catalog work.
 
