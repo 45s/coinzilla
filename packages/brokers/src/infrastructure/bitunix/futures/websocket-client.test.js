@@ -120,6 +120,7 @@ test("Bitunix Futures public WebSocket subscribes to documented channels and for
       { ch: "ticker", symbol: "ETHUSDT" },
       { ch: "depth_book1", symbol: "BTCUSDT" },
       { ch: "trade", symbol: "BTCUSDT" },
+      { ch: "market_kline_1min", symbol: "BTCUSDT" },
     ],
   })
 
@@ -131,6 +132,7 @@ test("Bitunix Futures public WebSocket subscribes to documented channels and for
       { ch: "ticker", symbol: "ETHUSDT" },
       { ch: "depth_book1", symbol: "BTCUSDT" },
       { ch: "trade", symbol: "BTCUSDT" },
+      { ch: "market_kline_1min", symbol: "BTCUSDT" },
     ],
   })
   const event = {
@@ -213,6 +215,8 @@ test("Bitunix Futures private WebSocket rejects malformed login and never treats
   assert.equal(client.state, "open")
   assert.ok(statuses.some((status) => status.loginSent === true))
 
+  const events = []
+  client.on("channel", (event) => events.push(event))
   transport.receive({
     ch: "order",
     symbol: "BTCUSDT",
@@ -220,5 +224,6 @@ test("Bitunix Futures private WebSocket rejects malformed login and never treats
     data: { orderId: "order-1" },
   })
   assert.equal(client.authenticated, false)
+  assert.equal(events.length, 0)
   await client.disconnect()
 })
