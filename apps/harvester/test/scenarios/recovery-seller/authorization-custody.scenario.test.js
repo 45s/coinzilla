@@ -1,5 +1,6 @@
 import test from "node:test"
 import assert from "node:assert/strict"
+import { addDecimal } from "@coinzilla/utils"
 import {
   Asset,
   Balance,
@@ -117,9 +118,12 @@ function createPortfolioWithPositions({ positions = [] } = {}) {
 }
 
 function calculatePortfolioBaseQuantity({ portfolio }) {
-  let total = 0
+  let total = "0"
   for (const position of portfolio.positions) {
-    total += Number(position.baseQuantity.amount)
+    total = addDecimal({
+      left: total,
+      right: position.baseQuantity.amount,
+    })
   }
   return total
 }
