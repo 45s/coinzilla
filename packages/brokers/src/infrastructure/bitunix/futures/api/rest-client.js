@@ -3,6 +3,8 @@ import { ensure, SystemCustomError } from "@coinzilla/utils"
 import { createRestSignature } from "../../common/auth/create-rest-signature.js"
 import { quoteDepthLevelNumbers } from "./quote-depth-level-numbers.js"
 
+const MIN_REQUEST_INTERVAL_MS = 100
+
 const ERROR_CODES = Object.freeze({
   authentication: "BITUNIX_FUTURES_AUTHENTICATION_REQUIRED",
   transport: "BITUNIX_FUTURES_REST_TRANSPORT_FAILED",
@@ -321,11 +323,18 @@ export class BitunixFuturesRestClient {
   /**
    * @param {{config: object, fetchFn?: typeof fetch, now?: () => number, nonceFactory?: () => string}} input
    */
+  #rateLimitNow
+  #sleepFn
+  #requestQueue = Promise.resolve()
+  #nextRequestAt = 0
+
   constructor({
     config,
     fetchFn = fetch,
     now = Date.now,
     nonceFactory = () => randomBytes(16).toString("hex"),
+    rateLimitNow = Date.now,
+    sleepFn = (delay) => new Promise((resolve) => setTimeout(resolve, delay)),
   } = {}) {
     if (!config || config.baseUrl !== "https://fapi.bitunix.com") {
       throw new TypeError("Bitunix Futures REST client requires validated Futures configuration")
@@ -342,6 +351,14 @@ export class BitunixFuturesRestClient {
       value: nonceFactory,
       name: "nonceFactory",
     })
+    ensure.function({
+      value: rateLimitNow,
+      name: "rateLimitNow",
+    })
+    ensure.function({
+      value: sleepFn,
+      name: "sleepFn",
+    })
     this.config = config
     this.apiKey = config.apiKey
     this.apiSecret = config.apiSecret
@@ -350,6 +367,28 @@ export class BitunixFuturesRestClient {
     this.fetch = fetchFn
     this.now = now
     this.nonceFactory = nonceFactory
+    this.#rateLimitNow = rateLimitNow
+    this.#sleepFn = sleepFn
+  }
+
+  async #waitForRateLimit() {
+    const scheduled = this.#requestQueue.then(async () => {
+      const now = this.#rateLimitNow()
+      if (!Number.isSafeInteger(now) || now < 0) {
+        throw new TypeError("Bitunix Futures rate-limit clock must return a non-negative safe integer")
+      }
+      const delay = Math.max(0, this.#nextRequestAt - now)
+      if (delay > 0) {
+        await this.#sleepFn(delay)
+      }
+      const dispatchedAt = this.#rateLimitNow()
+      if (!Number.isSafeInteger(dispatchedAt) || dispatchedAt < 0) {
+        throw new TypeError("Bitunix Futures rate-limit clock must return a non-negative safe integer")
+      }
+      this.#nextRequestAt = Math.max(dispatchedAt, this.#nextRequestAt) + MIN_REQUEST_INTERVAL_MS
+    })
+    this.#requestQueue = scheduled.catch(() => {})
+    await scheduled
   }
 
   /**
@@ -365,6 +404,7 @@ export class BitunixFuturesRestClient {
     validateRequest({
       request,
     })
+    await this.#waitForRateLimit()
     const url = createRequestUrl({
       client: this,
       request,
