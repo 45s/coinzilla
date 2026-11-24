@@ -205,11 +205,6 @@ const FUTURES_CAPABILITIES = [
     limitation: "Caller owns skip/limit pagination and exchange retention windows; one page is not proof of complete history.",
   },
   {
-    type: "READ_FILLS",
-    status: "UNKNOWN",
-    reason: "The Futures execution identity and fill-completeness contract have not yet been verified.",
-  },
-  {
     type: "PLACE_LIMIT_ORDER",
     status: "SUPPORTED",
     method: "createFuturesOrder",
