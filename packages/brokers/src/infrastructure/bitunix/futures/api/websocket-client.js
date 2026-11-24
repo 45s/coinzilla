@@ -5,7 +5,7 @@ import { BitunixWebSocketTransport } from "../../spot/api/websocket-transport.js
 import {
   DEFAULT_PRIVATE_WS_URL,
   DEFAULT_PUBLIC_WS_URL,
-} from "./config/bitunix-futures-config.js"
+} from "../config/bitunix-futures-config.js"
 
 const MAX_CHANNELS_PER_CONNECTION = 300
 const MAX_MESSAGES_PER_SECOND = 5
