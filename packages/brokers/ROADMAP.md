@@ -1656,7 +1656,6 @@ No live Futures mutation or exchange request has been performed by the implement
 
 No live Futures request or mutation has been performed. No isolated Futures TESTNET endpoint has been verified.
 
-
 ### Separate pending TP/SL group reads
 
 - [x] Add `getFuturesPendingTpSlOrders()` for the distinct official TP/SL pending endpoint.
