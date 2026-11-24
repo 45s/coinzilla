@@ -59,7 +59,13 @@ function createResponse({ data }) {
   }
 }
 
-function createBroker({ current = [currentPosition], history = { positionList: [historicalPosition], total: 1 } } = {}) {
+function createBroker({
+  current = [currentPosition],
+  history = {
+    positionList: [historicalPosition],
+    total: 1,
+  },
+} = {}) {
   const requests = []
   const broker = new Broker({
     provider: "bitunix-futures",
@@ -67,14 +73,19 @@ function createBroker({ current = [currentPosition], history = { positionList: [
     tradingMode: "live",
     providerOptions: {
       dependencies: {
-        fetchFn: async (url, options) => {
+        fetchFn: async (...args) => {
+          const [url, options] = args
           requests.push({ url: String(url), options })
           const path = new URL(url).pathname
           if (path === "/api/v1/futures/position/get_pending_positions") {
-            return createResponse({ data: current })
+            return createResponse({
+              data: current,
+            })
           }
           if (path === "/api/v1/futures/position/get_history_positions") {
-            return createResponse({ data: history })
+            return createResponse({
+              data: history,
+            })
           }
           throw new Error(`Unexpected Futures request: ${path}`)
         },
@@ -166,7 +177,10 @@ test("Bitunix Futures getFuturesPositionHistory returns one exact paginated hist
 
 test("Bitunix Futures position reads reject malformed exchange decimals and invalid history bounds", async () => {
   const { broker, requests } = createBroker({
-    current: [{ ...currentPosition, unrealizedPNL: "not-a-decimal" }],
+    current: [{
+      ...currentPosition,
+      unrealizedPNL: "not-a-decimal",
+    }],
   })
   const current = await broker.getFuturesPositions({ symbol: "BTCUSDT" })
   assert.equal(current.ok, false)
