@@ -36,7 +36,8 @@ function isLabelColor(value: unknown): value is LabelColor {
 }
 
 function isValidLabelStore(value: unknown): value is LabelStore {
-  if (!isRecord(value) || value['schemaVersion'] !== 1 || !Array.isArray(value['labels']) || !isRecord(value['assignments'])) {
+  if (!isRecord(value) || Object.keys(value).some((key) => !['schemaVersion', 'labels', 'assignments'].includes(key))
+    || value['schemaVersion'] !== 1 || !Array.isArray(value['labels']) || !isRecord(value['assignments'])) {
     return false;
   }
 
@@ -44,7 +45,7 @@ function isValidLabelStore(value: unknown): value is LabelStore {
   const ids = new Set<string>();
   const names = new Set<string>();
   for (const candidate of labels) {
-    if (!isRecord(candidate)) return false;
+    if (!isRecord(candidate) || Object.keys(candidate).some((key) => !['id', 'name', 'color'].includes(key))) return false;
     const id = candidate['id'];
     const name = candidate['name'];
     const color = candidate['color'];
