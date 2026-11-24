@@ -62,6 +62,10 @@ Some documentation URLs may be renamed by Bitunix. If a page moves, update this 
 - Ping is a JSON operation with a seconds-format timestamp; do not substitute a WebSocket control-frame ping for the documented application message.
 - Private push channels include balance, order and position. Their presence does not establish sequence numbers, replay, gap detection or durable fill completeness.
 
+### Trading-pair precision and market constraints
+
+The official trading-pair catalog exposes fields such as `basePrecision`, `quotePrecision`, `minTradeVolume`, maximum order volumes, and price-offset limits. The precision fields describe decimal precision; they are not documented as discrete quantity steps or price ticks. Do not derive `stepSize` or `tickSize` from them. `minTradeVolume` is a base-asset quantity, and price offsets are not minimum quote notional. Preserve the raw contract metadata and map only fields with explicit units/semantics.
+
 ### Futures order semantics
 
 - Futures order requests have Futures-specific fields including `clientId`, `tradeSide`, `positionId`, `reduceOnly`, and position/margin context.
@@ -122,7 +126,9 @@ The library is used as a secondary discovery/reference source. It does not estab
 - [x] Signed REST transport, injected fetch/clock/nonce dependencies, explicit POST mutation-state declaration and no retries.
 - [x] Public trading-pair catalog mapping with OPEN/API-supported filtering.
 - [x] Private USDT account-balance mapping with exact decimal arithmetic.
-- [ ] Public tickers, depth, candles and Futures market filters.
+- [x] Public ticker price and closed kline reads.
+- [x] Public one-shot ticker prices (`lastPrice`, `markPrice`) and closed kline reads with exact decimals and interval-derived close time.
+- [ ] Depth/order-book reads and raw Futures market-filter metadata; do not infer tick/step increments from precision fields.
 - [ ] Pending/history orders, canonical order mapping and clientId-based unknown-outcome reconciliation.
 - [ ] Position reads/history/tiers and explicit account position/leverage/margin controls.
 - [ ] Canonical fill mapping only after identity/completeness evidence is sufficient.
