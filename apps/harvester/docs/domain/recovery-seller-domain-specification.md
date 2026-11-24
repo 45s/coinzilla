@@ -46,17 +46,18 @@ No independent fixed 1% market-rise wait is required merely to release the confi
 
 ### 2.1 Global fail-closed rule — owner-approved
 
-**STOP whenever actual conditions do not match an explicitly covered and approved RS scenario.** This is a global RS invariant, not a SELL-only profitability rule.
+**STOP whenever actual conditions do not match an explicitly covered and approved RS scenario.** STOP is a durable global safety latch whose trading restriction is limited to additional spending.
 
 If any input, state transition, exchange response, order outcome, fill, commission, balance, reservation, accounting result, or other observed condition is missing, contradictory, unexpected, or not covered by the approved domain contract, RS must:
 
-1. **Stop all new trading actions immediately.** Do not submit a new BUY, SELL, replacement, retry, or other trading instruction; do not guess, improvise, or choose an unapproved recovery path.
-2. **Preserve facts and commitments.** Do not erase or reverse confirmed fills, actual commissions, accounting, order ownership, inventory, or reservations. Apply every confirmed canonical fill exactly once using actual exchange facts.
-3. **Reconcile what already exists.** Continue only the non-trading safety work needed to establish authoritative status of already-submitted orders and account for subsequent confirmed fills. Unknown order outcomes retain their original identity and reservations; never blindly resubmit.
-4. **Make the stop visible.** Return a deterministic BLOCK decision with a stable reason code and enough context for operator review. The condition latches terminal global STOP for this runtime. CC-operator may inspect authorized STOP status but cannot clear, reset, unpause or resume it.
-5. **Do not self-resume.** A later observation that appears normal never clears STOP. The underlying cause must be debugged and fixed before any controlled, externally managed restart/recovery procedure; no operator resume path is part of this runtime.
+1. **Block additional spending.** Do not submit a new BUY or any action that commits additional quote investment while STOP is active.
+2. **Keep recovery possible.** STOP itself must not block an otherwise-valid SELL of already-owned RS inventory. The one-SELL-per-cycle rule, profitability, verified custody, account-wide reservations, market readiness, exchange filters, order identity and all other independent SELL gates remain mandatory. STOP does not authorize a second, continuation or replacement SELL.
+3. **Preserve facts and commitments.** Do not erase or reverse confirmed fills, actual commissions, accounting, order ownership, inventory, or reservations. Apply every confirmed canonical fill exactly once using actual exchange facts.
+4. **Reconcile what exists.** Continue authoritative status checks for existing orders and account for subsequent confirmed fills. Unknown order outcomes retain their original identity and reservations; never blindly resubmit.
+5. **Make the stop visible and durable.** Return a deterministic BLOCK decision with a stable reason code and enough context for operator review. Preserve the first STOP evidence until an authorized administrator explicitly resolves it.
+6. **Require explicit administrator resolution.** An authorized administrator may clear STOP only after the cause is fixed, all required order/fill/balance reconciliation is authoritative with zero unresolved discrepancies, Portfolio/legacy/reservation accounting is verified, and the durable operator-resolution fact is acknowledged. No automatic clear or self-resume is allowed.
 
-This rule does **not** mean abandoning, cancelling, replacing, or ignoring an already-submitted order. Existing orders remain owned and must be reconciled; actual fills and fees continue to be accounted. It means RS initiates no further trading action while the unexpected condition is unresolved.
+This rule does **not** mean abandoning, cancelling, replacing, or ignoring an already-submitted order. Existing orders remain owned and must be reconciled; actual fills and fees continue to be accounted. It means RS cannot spend additional money while STOP remains active.
 
 Examples include: a SELL realizes less profit than planned; an order response has an unknown status; actual fees cannot be valued; available Spot quantity disagrees with the verified allocation; a fill cannot be attributed unambiguously; a reservation or accounting projection conflicts; or a state transition occurs that the approved lifecycle does not define. In every case the response is STOP, not an invented workaround.
 
@@ -83,7 +84,7 @@ The valid transitions below apply to one **order lifecycle**, not to the whole r
 
 A direct second `SUBMIT` within the same order lifecycle is forbidden. A later BUY tranche may start a distinct order lifecycle in the same recovery cycle only after the previous BUY order is authoritatively terminal and all its canonical fills/commissions and commitments are reconciled. The caller must supply a fresh order-lifecycle context only after proving that condition. This does not authorize a second SELL: the separate cycle contract allows exactly one SELL order lifecycle per recovery cycle. A terminal partial/canceled/expired/rejected SELL does not close the cycle or authorize another SELL or a new BUY cycle; the unresolved remainder stays blocked pending an approved recovery policy.
 
-When global STOP is latched, only valid `WAIT` and `RECONCILE` outcomes may proceed. They do not clear STOP. Every `SUBMIT`, ordinary `BLOCK`, missing/invalid decision, or unsupported transition retains the original sticky STOP decision. The first STOP evidence remains authoritative. There is no automatic or operator-triggered clear/reset/resume path in this runtime; CC-operator exposes read-only status only. The cause must be debugged and fixed before a controlled, externally managed restart/recovery procedure, which remains outside this task.
+When global STOP is latched, new BUY `SUBMIT` outcomes are blocked. An otherwise-valid first recovery SELL `SUBMIT` may proceed when the cycle has not used its sole SELL lifecycle and every independent SELL gate passes. Valid `WAIT` and `RECONCILE` outcomes continue for existing orders. STOP does not authorize a second/continuation/replacement SELL or blind retry. The first STOP evidence remains authoritative until an authorized administrator explicitly resolves the blocker through the evidence-backed durable resolution use case. Automatic clear and self-resume are forbidden.
 
 An unknown submission result or unmodeled exchange status therefore produces both a sticky global STOP state and a `RECONCILE` outcome for the existing order. This keeps permission to trade distinct from permission to perform non-trading reconciliation.
 
@@ -101,7 +102,7 @@ The four lifecycle outcomes above describe one order lifecycle. Recovery-cycle s
 
 The pure BUY evaluator requires an explicit cycle-state snapshot containing both `cycleId` and `positionId`. It blocks new BUYs for `CLOSED` and `UNRESOLVED` cycles, waits/reconciles the recorded sole SELL while it is active or unknown, and fails closed if an active order has missing/mismatched `OrderOwnership` or the cycle records a SELL without authoritative order evidence. It also requires explicit operator-stop, market-pause and reconciliation-readiness flags. These are policy decisions only; shared account balance and aggregate reservations remain the Trading Engine allocator's responsibility.
 
-Canonical fill processing, terminal reconciliation, reservation conservation and exact-once accounting must continue while global STOP is active. STOP blocks new trading actions; it must never discard or suppress facts about already-submitted orders or confirmed executions.
+Canonical fill processing, terminal reconciliation, reservation conservation and exact-once accounting must continue while global STOP is active. STOP blocks new BUY spending only; it must never block an otherwise-valid recovery SELL or discard/suppress facts about already-submitted orders or confirmed executions.
 
 ## 3. Legacy inventory and authorization
 
@@ -412,7 +413,7 @@ The first-implementation product decisions below are recorded. Items marked as i
 | SELL order type | **OWNER-DECIDED:** `makerPercent === 0` selects `LIMIT_MAKER` (post-only); non-zero selects ordinary `LIMIT`. | Implemented by the pure pre-submission evaluator; no broker submission is included. |
 | Fee role for planning | **OWNER-DECIDED:** `LIMIT_MAKER` reserves configured maker fee; ordinary `LIMIT` reserves the higher configured maker/taker fee. Actual commission amount/asset remains authoritative after fills. | Implemented by the pure pre-submission evaluator using existing pair configuration; no new fee setting is introduced. |
 | SELL exchange filters | **OWNER-DECIDED:** any supported price/quantity increment, min/max price, min/max quantity or min/max notional violation latches global STOP. No adjustment, split, retry or dust classification. | Implemented by the pure pre-submission evaluator; missing required filters also STOP. |
-| Post-fill adverse result | **TERMINAL STOP:** commit the confirmed canonical fill exactly once with actual fees, preserve ownership/reservations, and block every new trading action. No follow-up SELL, replacement, BUY or cycle reset is authorized. | Debug and fix the cause before a controlled externally managed restart; no CC-operator clear/resume. |
+| Post-fill adverse result | **DURABLE STOP:** commit the confirmed canonical fill exactly once with actual fees and preserve ownership/reservations. No follow-up SELL, replacement, BUY or cycle reset is authorized because the cycle's sole SELL lifecycle has already been used. STOP blocks additional BUY spending; an authorized administrator may clear it only after complete reconciliation/accounting evidence and durable acknowledgement. | No automatic clear or self-resume; the existing one-SELL-per-cycle rule remains unchanged. |
 | Terminal partial/canceled SELL | **TERMINAL STOP:** the cycle remains unresolved after terminal underfill/cancel/reject/expiry; no second SELL and no next BUY. Preserve original order identity and reconcile all actual fills; retain any unproven reservation. | Prevents silently replacing or abandoning a partially executed cycle; no operator reset/resume. |
 | Third-asset fee valuation | **UNRESOLVED SOURCE:** use a reliable quote conversion at execution time or an authoritative broker-supplied quote value; missing/ambiguous asset, rate or timestamp fails closed. | Never treat third-asset commission as zero or use an unverified current market price; no profitability decision is valid without reliable quote valuation.
 
@@ -421,7 +422,7 @@ The first-implementation product decisions below are recorded. Items marked as i
 RS-2b accounting, RS-3 pure policy and RS-4 shared-engine runtime composition are implemented. PR #1515 adds production dispatch, engine-owned submission, account-wide quote/base authorization, terminal mixed-SELL reconciliation and durable global STOP. The scoped RS-5 offline lifecycle matrix is covered by deterministic tests and the runtime acceptance gate is open. The following failure conditions remain fail-closed at runtime and are covered by the offline acceptance suite:
 
 - missing/invalid startup legacy configuration and insufficient verified Spot availability; runtime authorization revocation/expiry is deferred under FITDIB;
-- any missing, contradictory, unexpected, or unmodeled condition at every lifecycle boundary produces terminal global STOP, prevents all new trading actions, preserves exact-once accounting and reservations, and continues required reconciliation of already-submitted orders; there is no runtime or operator clear/reset/resume path;
+- any missing, contradictory, unexpected, or unmodeled condition at every lifecycle boundary produces durable global STOP, blocks additional BUY spending, preserves exact-once accounting and reservations, permits otherwise-valid recovery SELLs under the one-SELL-per-cycle and independent safety gates, and continues required reconciliation; an authorized administrator may clear STOP only through the evidence-backed durable resolution use case;
 - configured legacy invested quote / original quantity average-cost calculation, including invalid zero/negative/missing inputs;
 - Spot-available versus EARN/off-Spot custody separation, transfer/redeem changes, and insufficient Spot reserve for the next legacy slice;
 - both cross-subsidy directions (recovery profitable / legacy loss-making, and legacy profitable / recovery loss-making), including cases where the combined cycle passes but one independent gate fails; also cover all-gates-pass and break-even legacy;
@@ -435,7 +436,7 @@ RS-2b accounting, RS-3 pure policy and RS-4 shared-engine runtime composition ar
 - investment-limit behavior: block new BUYs while an existing recovery SELL remains unchanged and reconciled; advanced pause/disable/resume/abandon transitions are deferred under FITDIB;
 - CG and RS running concurrently on different markets and the same market, with independent order attribution and investment budgets; prove one strategy cannot consume the other's unused budget, shared reservations prevent double-spend, and no fill is duplicated or inventory oversold;
 - production runtime composition from a canonical BUY fill through an owned mixed SELL decision and sole-cycle reservation, followed by terminal fill reconciliation, atomic accounting commit, reservation release and next-cycle gating across the runtime and accounting workflow suites;
-- STOP remains terminal across every failure path; CC-operator exposes read-only STOP status and has no clear/reset/unpause/resume capability.
+- STOP remains durable across failure paths until explicit authorized administrator resolution; the operator facade exposes authorized STOP status and the evidence-backed resolution command. No automatic clear or self-resume is permitted.
 - External/manual order isolation while multiple strategies are active.
 
 Use exact decimal strings and meaningful assertion messages. Follow repository TDD: observe each behavior test RED before implementation and GREEN afterward. Never weaken existing Portfolio, Conservative, broker, or safety coverage.
@@ -472,7 +473,7 @@ RS-4 shared Trading Engine integration and scoped RS-5 offline lifecycle verific
 
 - Keep `RECOVERY_SELLER_RUNTIME_ACCEPTANCE_COMPLETE` true after offline acceptance; keep `RS_RECOVERY_SELLER_CONFIG.enabled` false by default. Configuration must be explicitly changed before any RS route can activate.
 - Restart/replay recovery and third-asset commission valuation are explicitly deferred. A third-asset fee without an approved quote value must fail closed.
-- STOP is terminal for this runtime. CC-operator may inspect authorized status but cannot clear, reset, unpause or resume STOP; diagnose and fix the underlying cause before a controlled external restart.
+- STOP is durable for this runtime. An authorized administrator may explicitly clear it only after the cause is fixed, reconciliation/accounting evidence is complete, and the durable resolution fact is acknowledged. No automatic clear or self-resume is permitted.
 - Do not seed Portfolio with synthetic fills or treat wallet balances as RS inventory.
 - Preserve existing CG_coinGrabber and Conservative behavior and all shared Portfolio/broker safety invariants. Any required shared Portfolio extension must be focused, test-first, and preserve canonical exact-once fill accounting.
 - Keep future deterministic RS decisions in pure domain functions and use existing execution/accounting workflows through explicit application ports.
