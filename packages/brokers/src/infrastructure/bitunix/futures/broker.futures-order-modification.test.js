@@ -218,3 +218,34 @@ test("Bitunix Futures modifyFuturesOrder requires exactly one matching pending o
   assert.equal(result.mutationOutcome, "NOT_SENT")
   assert.equal(requests.some(({ path }) => path === "/api/v1/futures/trade/modify_order"), false)
 })
+
+
+test("Bitunix Futures modifyFuturesOrder requires a price for a pending LIMIT order", async () => {
+  const { broker, requests } = createModifyBroker()
+  await broker.connect()
+
+  const result = await broker.modifyFuturesOrder({
+    ...modifyInput,
+    price: undefined,
+  })
+
+  assert.equal(result.ok, false, "a LIMIT order modification must include its required price")
+  assert.equal(result.mutationOutcome, "NOT_SENT", "invalid LIMIT modifications must be rejected before dispatch")
+  assert.equal(requests.some(({ path }) => path === "/api/v1/futures/trade/modify_order"), false, "invalid input must not reach the mutation endpoint")
+})
+
+test("Bitunix Futures modifyFuturesOrder does not confirm an acknowledged but mismatched readback", async () => {
+  const { broker, requests } = createModifyBroker({
+    detailOrder: {
+      qty: "0.03",
+    },
+  })
+  await broker.connect()
+
+  const result = await broker.modifyFuturesOrder(modifyInput)
+
+  assert.equal(result.ok, false, "a different final quantity must not be reported as a successful modification")
+  assert.equal(result.mutationOutcome, "OUTCOME_UNKNOWN", "an acknowledged mutation with mismatched final state is uncertain")
+  assert.equal(result.orderOutcome, "OUTCOME_UNKNOWN", "a mismatched final state must remain unresolved")
+  assert.equal(requests.filter(({ method }) => method === "POST").length, 1, "reconciliation must never repeat the modification POST")
+})
