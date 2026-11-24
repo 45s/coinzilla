@@ -82,7 +82,7 @@ function createFirstBuyState() {
       recoveryLedger: RecoveryLedger.empty({ market }),
     },
     fill: makeBuyFill({
-      tradeId: "buy-fill-1",
+      tradeId: "binance:DOGEUSDT:buy-fill-1",
       price: "0.1",
       quantity: "100",
       quoteQuantity: "10",
@@ -130,7 +130,7 @@ function createCompletedBuyState({ state } = {}) {
   const afterSecondFill = applyBuyFill({
     state,
     fill: makeBuyFill({
-      tradeId: "buy-fill-2",
+      tradeId: "binance:DOGEUSDT:buy-fill-2",
       price: "0.12",
       quantity: "50",
       quoteQuantity: "6",
@@ -163,7 +163,7 @@ function createCompletedBuyState({ state } = {}) {
   return applyBuyFill({
     state: afterSecondFill,
     fill: makeBuyFill({
-      tradeId: "buy-fill-3",
+      tradeId: "binance:DOGEUSDT:buy-fill-3",
       price: "0.08",
       quantity: "25",
       quoteQuantity: "2",
@@ -182,14 +182,14 @@ function assertCompletedBuyAccounting({ state } = {}) {
   assert.equal(state.recoveryLedger.buyCost, "18.066",
     "The RecoveryLedger BUY cost must equal the cumulative Position spent basis.")
   assert.deepEqual(state.portfolio.appliedFillIds, [
-    "buy-fill-1",
-    "buy-fill-2",
-    "buy-fill-3",
+    "binance:DOGEUSDT:buy-fill-1",
+    "binance:DOGEUSDT:buy-fill-2",
+    "binance:DOGEUSDT:buy-fill-3",
   ], "Portfolio must retain each distinct canonical execution identity.")
   assert.deepEqual(state.recoveryLedger.appliedFillIds, [
-    "buy-fill-1",
-    "buy-fill-2",
-    "buy-fill-3",
+    "binance:DOGEUSDT:buy-fill-1",
+    "binance:DOGEUSDT:buy-fill-2",
+    "binance:DOGEUSDT:buy-fill-3",
   ], "RecoveryLedger must retain the same canonical BUY execution identities.")
 }
 
@@ -200,9 +200,9 @@ function assertRejectedBuyPreservesAccounting({ state, rejected } = {}) {
     "A rejected BUY must not return partially updated accounting projections.")
   assert.equal(state.portfolio.getPosition({ marketId: market.id }).value.baseQuantity.amount,
     "100", "Rejecting incomplete commission evidence must preserve accepted Position inventory.")
-  assert.deepEqual(state.portfolio.appliedFillIds, ["accepted-buy"],
+  assert.deepEqual(state.portfolio.appliedFillIds, ["binance:DOGEUSDT:accepted-buy"],
     "Rejecting incomplete commission evidence must not record its Fill ID in Portfolio.")
-  assert.deepEqual(state.recoveryLedger.appliedFillIds, ["accepted-buy"],
+  assert.deepEqual(state.recoveryLedger.appliedFillIds, ["binance:DOGEUSDT:accepted-buy"],
     "Rejecting incomplete commission evidence must not record its Fill ID in RecoveryLedger.")
   assert.equal(state.recoveryLedger.buyCost, "10",
     "Rejecting incomplete commission evidence must preserve the accepted recovery cost.")
@@ -222,7 +222,7 @@ test("rejects a later BUY with an unvalued third-asset commission without changi
       recoveryLedger: RecoveryLedger.empty({ market }),
     },
     fill: makeBuyFill({
-      tradeId: "accepted-buy",
+      tradeId: "binance:DOGEUSDT:accepted-buy",
       price: "0.1",
       quantity: "100",
       quoteQuantity: "10",
