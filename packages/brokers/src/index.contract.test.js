@@ -14,6 +14,8 @@ test("package entry point exposes only the supported public contracts", () => {
     "BinanceWebSocketConfig",
     "BitunixFuturesBroker",
     "BitunixFuturesConfig",
+    "BitunixFuturesRestClient",
+    "BitunixFuturesRestError",
     "BitunixSpotBroker",
     "BitunixSpotConfig",
     "BitunixSpotWebSocketClient",

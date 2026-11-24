@@ -24,7 +24,8 @@ test("Bitunix Futures account reads sign the request and preserve exact availabl
       dependencies: {
         now: () => 1_700_000_000_000,
         nonceFactory: () => "nonce-futures-account",
-        fetchFn: async (url, options) => {
+        fetchFn: async (...requestArgs) => {
+          const [url, options] = requestArgs
           requests.push({ url, options })
           return {
             ok: true,

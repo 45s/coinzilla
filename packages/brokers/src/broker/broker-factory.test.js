@@ -52,7 +52,7 @@ test("Broker rejects a missing or unsupported provider before constructing an ex
     }),
     {
       name: "TypeError",
-      message: /provider must be either "binance" or "bitunix"/,
+      message: /provider must be one of "binance", "bitunix", or "bitunix-futures"/,
     },
     "an unsupported provider must fail instead of silently selecting an exchange",
   )

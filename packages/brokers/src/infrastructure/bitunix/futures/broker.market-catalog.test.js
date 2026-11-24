@@ -71,7 +71,8 @@ test("Broker-created Futures provider sends public catalog reads through injecte
     tradingMode: "live",
     providerOptions: {
       dependencies: {
-        fetchFn: async (url, options) => {
+        fetchFn: async (...requestArgs) => {
+          const [url, options] = requestArgs
           requests.push({ url, options })
           return {
             ok: true,
@@ -98,5 +99,7 @@ test("Broker-created Futures provider sends public catalog reads through injecte
   assert.equal(requests.length, 1, "the market catalog must be fetched exactly once")
   assert.equal(requests[0].url, "https://fapi.bitunix.com/api/v1/futures/market/trading_pairs", "Futures catalog reads must target the official Futures REST host")
   assert.equal(requests[0].options.method, "GET", "market catalog reads must use GET")
-  assert.equal(requests[0].options.headers, undefined, "public market reads must not include private authentication headers")
+  for (const header of ["api-key", "nonce", "timestamp", "sign"]) {
+    assert.equal(Object.hasOwn(requests[0].options.headers, header), false, `public market reads must not include the private ${header} header`)
+  }
 })
