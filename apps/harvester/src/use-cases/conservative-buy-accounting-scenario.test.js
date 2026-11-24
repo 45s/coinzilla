@@ -3,6 +3,7 @@ import assert from "node:assert/strict"
 import { Asset, Commission, Fill, Market, Money, Quantity } from "@coinzilla/entities"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { RecoveryLedger } from "../domain/strategies/conservative/recovery-ledger.js"
+import { StrategyId } from "../domain/strategies/strategy-ids.js"
 import { updateTradingAccounting } from "./update-trading-accounting.js"
 
 const baseAsset = new Asset({
@@ -343,7 +344,7 @@ test("rejects inconsistent Portfolio and RecoveryLedger duplicate histories with
   })
   const portfolio = new Portfolio().applyFill({
     fill: accepted,
-    strategyId: "coin-grabber",
+    strategyId: StrategyId.COIN_GRABBER,
   }).portfolio
   const recoveryLedger = RecoveryLedger.empty({ market })
   const portfolioValue = portfolio.value
