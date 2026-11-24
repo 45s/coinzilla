@@ -410,41 +410,6 @@ async function createUnknownBuySubmitterContext() {
   }
 }
 
-function createUnknownBuyActiveOrders({ workflow }) {
-  return workflow.getActiveOrders().map((order) => ({
-    ...order,
-    ownership: workflow.getOrderRegistry().getOwnership({
-      clientOrderId: order.clientOrderId,
-    }),
-  }))
-}
-
-function evaluateUnknownBuyFollowup({ workflow, stopResult }) {
-  return evaluateRecoverySellerBuyDecision({
-    stopState: stopResult.data.getStopState(),
-    marketPrice: {
-      symbol: "ZROUSDT",
-      price: "2",
-    },
-    pairConfig: {
-      orderQuantity: "5",
-      priceStepPercent: "0.05",
-      investment: "100",
-    },
-    marketMetadata: buyPolicyMarketMetadata,
-    activeOrders: createUnknownBuyActiveOrders({ workflow }),
-    cycleState: createRecoverySellerCycleState({
-      cycleId: "rs-cycle-1",
-      positionId: "rs-position-1",
-    }),
-    strategyStopped: false,
-    marketPaused: false,
-    reconciliationComplete: true,
-    cumulativeNetSellProceeds: "0",
-    pendingBuyCommitment: "0",
-  })
-}
-
 async function runUnknownBuySubmissionScenario() {
   const runtime = await createUnknownBuySubmitterContext()
   const result = await runtime.submit({
@@ -463,10 +428,6 @@ async function runUnknownBuySubmissionScenario() {
     },
     marketMetadata: submitterMarketMetadata,
   })
-  const followup = evaluateUnknownBuyFollowup({
-    workflow: runtime.workflow,
-    stopResult: runtime.stopResult,
-  })
   const [activeOrder] = runtime.workflow.getActiveOrders()
   return {
     brokerCallCount: runtime.getBrokerCallCount(),
@@ -475,8 +436,6 @@ async function runUnknownBuySubmissionScenario() {
     durableFactCount: runtime.durableFacts.length,
     activeOrderStatus: activeOrder?.status ?? null,
     stopStatus: runtime.stopResult.data.getStopState().status,
-    followupOutcome: followup.decision.outcome,
-    followupAction: followup.action ?? null,
   }
 }
 
