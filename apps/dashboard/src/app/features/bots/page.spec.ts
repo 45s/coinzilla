@@ -82,6 +82,7 @@ describe('BotsComponent', () => {
     expect(renderedText, 'The active runtime strategy mode must come from Harvester status.').toContain('conservative-testnet');
     expect(renderedText, 'Process uptime must be calculated from Harvester start and observation timestamps.').toContain('1m 0s');
     expect(renderedText, 'Configured disabled markets must remain visible as disabled.').toContain('SOLUSDT');
+    expect(renderedText, 'Disabled markets must not be conflated with active or blocked markets.').toContain('Disabled markets');
     expect(renderedText, 'Blocked markets must show their actual readiness blocker.').toContain('USER_DATA_NOT_READY');
     expect(renderedText, 'Portfolio base quantity must preserve the exact decimal string.').toContain('0.12500000');
     expect(renderedText, 'Portfolio quote cost must preserve the exact decimal string.').toContain('500.00000000');
@@ -123,6 +124,92 @@ describe('BotsComponent', () => {
     fixture.detectChanges();
 
     expect((fixture.nativeElement as HTMLElement).textContent, 'The page must show the refreshed Harvester pause state after command success.').toContain('BUYs paused');
+  });
+
+  it('cancels a pending pause without sending a command', async () => {
+    await TestBed.configureTestingModule({
+      imports: [BotsComponent],
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    }).compileComponents();
+    http = TestBed.inject(HttpTestingController);
+
+    const fixture = TestBed.createComponent(BotsComponent);
+    fixture.detectChanges();
+    flushInitialSnapshots(http);
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const pauseButton = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button'))
+      .find((button) => button.textContent?.trim() === 'Pause BUYs') as HTMLButtonElement;
+    pauseButton.click();
+    fixture.detectChanges();
+
+    const cancelButton = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button'))
+      .find((button) => button.textContent?.trim() === 'Cancel') as HTMLButtonElement;
+    expect(cancelButton, 'The confirmation panel must let the operator cancel before sending.').toBeDefined();
+    cancelButton.click();
+
+    http.expectNone(`${BASE_URL}/commands`);
+    expect((fixture.nativeElement as HTMLElement).textContent, 'Cancel must close the confirmation panel.').not.toContain('Confirm: Pause BUYs for BTCUSDT');
+  });
+
+  it('sends an explicitly confirmed market resume through the existing unpause command', async () => {
+    await TestBed.configureTestingModule({
+      imports: [BotsComponent],
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    }).compileComponents();
+    http = TestBed.inject(HttpTestingController);
+
+    const fixture = TestBed.createComponent(BotsComponent);
+    fixture.detectChanges();
+    flushInitialSnapshots(http, { paused: true });
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const resumeButton = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button'))
+      .find((button) => button.textContent?.trim() === 'Resume BUYs') as HTMLButtonElement;
+    expect(resumeButton, 'A paused enabled market must expose its market-scoped resume action.').toBeDefined();
+    resumeButton.click();
+    fixture.detectChanges();
+    expect((fixture.nativeElement as HTMLElement).textContent, 'Resuming must require explicit confirmation.').toContain('Confirm: Resume BUYs for BTCUSDT');
+
+    const confirmButton = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('Confirm command')) as HTMLButtonElement;
+    confirmButton.click();
+
+    const command = http.expectOne(`${BASE_URL}/commands`);
+    expect(command.request.body, 'The resume command must target only the selected market BUY gate.').toMatchObject({ command: 'unpause', symbol: 'BTCUSDT' });
+    command.flush({ ok: true, data: { symbol: 'BTCUSDT', paused: false } });
+
+    await Promise.resolve();
+    flushInitialSnapshots(http, { paused: false });
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect((fixture.nativeElement as HTMLElement).textContent, 'The refreshed market state must show BUYs active after resume.').toContain('BUYs active');
+  });
+
+  it('keeps the connection unavailable when any required operator snapshot fails', async () => {
+    await TestBed.configureTestingModule({
+      imports: [BotsComponent],
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    }).compileComponents();
+    http = TestBed.inject(HttpTestingController);
+
+    const fixture = TestBed.createComponent(BotsComponent);
+    fixture.detectChanges();
+    http.expectOne(`${BASE_URL}/status`).flush({ error: { message: 'status unavailable' } }, {
+      status: 503,
+      statusText: 'Service Unavailable',
+    });
+    http.expectOne(`${BASE_URL}/markets`).flush({ ok: true, data: { markets: [] } });
+    http.expectOne(`${BASE_URL}/portfolio`).flush({ ok: true, data: { positions: [] } });
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const renderedText = (fixture.nativeElement as HTMLElement).textContent as string;
+    expect(renderedText, 'A failed Harvester query must not be presented as a connected runtime.').toContain('Harvester unavailable');
+    expect(renderedText, 'The API failure must remain visible to the operator.').toContain('Harvester request failed (503).');
   });
 
   it('shows an explicit empty Portfolio state when Harvester reports no positions', async () => {
