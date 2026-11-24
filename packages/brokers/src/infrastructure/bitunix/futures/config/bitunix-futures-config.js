@@ -13,6 +13,7 @@ const CONFIGURATION_OPTIONS = new Set([
   "requestTimeout",
   "allowLiveOrderMutations",
   "allowLiveAccountMutations",
+  "allowLivePositionMutations",
 ])
 
 function validateConfigurationInput({ input }) {
@@ -61,7 +62,7 @@ function validateEndpoints({ baseUrl, publicWebSocketUrl, privateWebSocketUrl })
   })
 }
 
-function validateSafetyOptions({ requestTimeout, allowLiveOrderMutations, allowLiveAccountMutations }) {
+function validateSafetyOptions({ requestTimeout, allowLiveOrderMutations, allowLiveAccountMutations, allowLivePositionMutations }) {
   ensure.positiveInteger({
     value: requestTimeout,
     name: "requestTimeout",
@@ -73,6 +74,10 @@ function validateSafetyOptions({ requestTimeout, allowLiveOrderMutations, allowL
   ensure.boolean({
     value: allowLiveAccountMutations,
     name: "allowLiveAccountMutations",
+  })
+  ensure.boolean({
+    value: allowLivePositionMutations,
+    name: "allowLivePositionMutations",
   })
 }
 
@@ -95,6 +100,7 @@ export class BitunixFuturesConfig {
       requestTimeout = 10_000,
       allowLiveOrderMutations = false,
       allowLiveAccountMutations = false,
+      allowLivePositionMutations = false,
     } = input
     validateCredentials({
       apiKey,
@@ -110,6 +116,7 @@ export class BitunixFuturesConfig {
       requestTimeout,
       allowLiveOrderMutations,
       allowLiveAccountMutations,
+      allowLivePositionMutations,
     })
 
     this.apiKey = apiKey
@@ -121,6 +128,7 @@ export class BitunixFuturesConfig {
     this.requestTimeout = requestTimeout
     this.allowLiveOrderMutations = allowLiveOrderMutations
     this.allowLiveAccountMutations = allowLiveAccountMutations
+    this.allowLivePositionMutations = allowLivePositionMutations
     Object.freeze(this)
   }
 }

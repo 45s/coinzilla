@@ -53,9 +53,11 @@ test("Bitunix Futures configuration accepts its documented options", () => {
     requestTimeout: 5_000,
     allowLiveOrderMutations: false,
     allowLiveAccountMutations: false,
+    allowLivePositionMutations: false,
   })
 
   assert.equal(config.requestTimeout, 5_000)
   assert.equal(config.allowLiveOrderMutations, false)
   assert.equal(config.allowLiveAccountMutations, false)
+  assert.equal(config.allowLivePositionMutations, false)
 })
