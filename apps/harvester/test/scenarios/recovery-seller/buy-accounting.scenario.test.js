@@ -712,7 +712,7 @@ async function replayScenarioFill({ workflow, fills, input }) {
   return workflow.applyBuyFill({ fill: fills[0] })
 }
 
-async function applyScenarioConflict({ workflow, fills, order, input }) {
+async function applyScenarioConflict({ workflow, fills, order, input, positionId }) {
   if (input.conflictFirstFill !== true) {
     return undefined
   }
@@ -720,7 +720,7 @@ async function applyScenarioConflict({ workflow, fills, order, input }) {
     workflow,
     firstFill: fills[0],
     order,
-    positionId: "rs-buy-scenario-position",
+    positionId,
   })
 }
 
@@ -830,6 +830,7 @@ async function runBuyScenario({ input }) {
     fills,
     order,
     input,
+    positionId,
   })
   return createBuyScenarioResult({
     workflow,
