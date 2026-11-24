@@ -134,7 +134,6 @@ function normalizeOrderLifecycle({ order }) {
   return {
     status,
     createdAt,
-    acknowledgedAt: createdAt,
     updatedAt,
     ...(TERMINAL_STATUSES.has(status) ? { completedAt: updatedAt } : {}),
   }
