@@ -38,7 +38,10 @@ function createBroker({ rows = [tradeRow], total = rows.length } = {}) {
       dependencies: {
         fetchFn: async (...args) => {
           const [url, options] = args
-          requests.push({ url: String(url), options })
+          requests.push({
+            url: String(url),
+            options,
+          })
           return {
             ok: true,
             status: 200,
@@ -54,7 +57,10 @@ function createBroker({ rows = [tradeRow], total = rows.length } = {}) {
       },
     },
   })
-  return { broker, requests }
+  return {
+    broker,
+    requests,
+  }
 }
 
 test("Bitunix Futures trade history preserves execution, fee and realized PnL decimals without claiming canonical fills", async () => {
