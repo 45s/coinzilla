@@ -74,4 +74,16 @@ describe('GitHub PR local label store', () => {
     }).status).toBe('invalid');
     expect(saveLabelStore({ setItem: () => { throw new Error('quota'); } }, assigned)).toBe(false);
   });
+  it('rejects additional properties forbidden by the persisted-store schema', () => {
+    const extraStoreProperty = { ...emptyStore, unexpected: true };
+    const extraLabelProperty = {
+      schemaVersion: 1,
+      labels: [{ id: 'label-1', name: 'Codex', color: 'blue', unexpected: true }],
+      assignments: {},
+    };
+
+    expect(loadLabelStore({ getItem: () => JSON.stringify(extraStoreProperty) }).status).toBe('invalid');
+    expect(loadLabelStore({ getItem: () => JSON.stringify(extraLabelProperty) }).status).toBe('invalid');
+  });
+
 });
