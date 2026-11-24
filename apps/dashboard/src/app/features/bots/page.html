@@ -78,6 +78,16 @@
         <strong>{{ status()?.marketCounts.enabled ?? 0 }} / {{ status()?.marketCounts.configured ?? 0 }} enabled</strong>
         <small>{{ status()?.marketCounts.blocked ?? 0 }} blocked</small>
       </div>
+      <div class="strategy-fact">
+        <span>Individual strategy states</span>
+        <strong>Not exposed</strong>
+        <small>Per-strategy enablement is not in the current API</small>
+      </div>
+      <div class="strategy-fact">
+        <span>Position attribution</span>
+        <strong>Market-level</strong>
+        <small>Portfolio DTOs do not include strategy IDs</small>
+      </div>
     </div>
     @if (status()?.readiness.blockers?.length) {
       <div class="blocker-list">
