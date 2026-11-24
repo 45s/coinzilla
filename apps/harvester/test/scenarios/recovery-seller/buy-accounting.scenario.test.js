@@ -521,6 +521,67 @@ function createCommissions({ fillInput }) {
   return commissions
 }
 
+function createExistingCGPositionPortfolio() {
+  const existingCGBuyFill = new Fill({
+    tradeId: "existing-cg-position-fill",
+    brokerOrderId: "existing-cg-broker-order",
+    clientOrderId: "existing-cg-client-order",
+    market,
+    side: "BUY",
+    price: new Money({
+      amount: "2",
+      asset: quoteAsset,
+    }),
+    quantity: new Quantity({
+      amount: "3",
+      asset: baseAsset,
+    }),
+    quoteQuantity: new Money({
+      amount: "6",
+      asset: quoteAsset,
+    }),
+    commissions: [],
+    commissionStatus: "COMPLETE",
+  })
+  return new Portfolio().applyFill({
+    fill: existingCGBuyFill,
+    positionId: "existing-cg-position",
+    strategyId: StrategyId.COIN_GRABBER,
+  }).portfolio
+}
+
+function createScenarioInitialPortfolio({ input, order }) {
+  let portfolio = input.initialCGPosition === true
+    ? createExistingCGPositionPortfolio()
+    : new Portfolio()
+  if (input.seedFillInput) {
+    const seedFill = createScenarioFill({
+      fillInput: input.seedFillInput,
+      order,
+    })
+    portfolio = portfolio.applyFill({
+      fill: seedFill,
+      positionId: input.seedPositionId ?? "existing-foreign-position",
+      strategyId: input.seedStrategyId ?? StrategyId.RECOVERY_SELLER,
+    }).portfolio
+  }
+  return portfolio
+}
+
+function createScenarioLegacyPositions({ input }) {
+  if (input.includeLegacyBasis !== true) {
+    return []
+  }
+  return [{
+    market,
+    position: createLegacyPosition({
+      invested: input.legacyInvested ?? "50",
+      quantity: input.legacyQuantity ?? "10",
+    }),
+    accounting: createLegacyPositionAccounting(),
+  }]
+}
+
 function createScenarioWorkflow({ input }) {
   const clientOrderId = "rs-buy-scenario-order"
   const brokerOrderId = "broker-rs-buy-scenario"
@@ -561,63 +622,17 @@ function createScenarioWorkflow({ input }) {
         clientOrderId,
         brokerOrderId,
       })]
-  let initialPortfolio = new Portfolio()
-  if (input.initialCGPosition === true) {
-    const existingCGBuyFill = new Fill({
-      tradeId: "existing-cg-position-fill",
-      brokerOrderId: "existing-cg-broker-order",
-      clientOrderId: "existing-cg-client-order",
-      market,
-      side: "BUY",
-      price: new Money({
-        amount: "2",
-        asset: quoteAsset,
-      }),
-      quantity: new Quantity({
-        amount: "3",
-        asset: baseAsset,
-      }),
-      quoteQuantity: new Money({
-        amount: "6",
-        asset: quoteAsset,
-      }),
-      commissions: [],
-      commissionStatus: "COMPLETE",
-    })
-    initialPortfolio = initialPortfolio.applyFill({
-      fill: existingCGBuyFill,
-      positionId: "existing-cg-position",
-      strategyId: StrategyId.COIN_GRABBER,
-    }).portfolio
-  }
-  if (input.seedFillInput) {
-    const seedFill = createScenarioFill({
-      fillInput: input.seedFillInput,
-      order,
-    })
-    initialPortfolio = initialPortfolio.applyFill({
-      fill: seedFill,
-      positionId: input.seedPositionId ?? "existing-foreign-position",
-      strategyId: input.seedStrategyId ?? StrategyId.RECOVERY_SELLER,
-    }).portfolio
-  }
-  const initialLegacyPositions = input.includeLegacyBasis === true
-    ? [{
-        market,
-        position: createLegacyPosition({
-          invested: input.legacyInvested ?? "50",
-          quantity: input.legacyQuantity ?? "10",
-        }),
-        accounting: createLegacyPositionAccounting(),
-      }]
-    : []
+  const initialPortfolio = createScenarioInitialPortfolio({
+    input,
+    order,
+  })
   const workflow = createRecoverySellerAccountingWorkflow({
     initialPortfolio,
     initialOrderRegistry: new OrderRegistry({
       orders: [order],
       ownerships,
     }),
-    initialLegacyPositions,
+    initialLegacyPositions: createScenarioLegacyPositions({ input }),
   })
   return {
     workflow,
