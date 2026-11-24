@@ -460,25 +460,25 @@ test("sends an account snapshot larger than 115,637 bytes without terminating th
 });
 
 test("contains one client's snapshot serialization failure without interrupting an existing client", async (t) => {
-  const eventBus = new EventBus();
-  const account = createExchangeAccount();
-  let snapshotReadCount = 0;
+  const eventBus = new EventBus()
+  const account = createExchangeAccount()
+  let snapshotReadCount = 0
   account.readAccountSnapshot = async () => {
-    snapshotReadCount += 1;
+    snapshotReadCount += 1
     if (snapshotReadCount === 2) {
       const malformedBalance = {
         asset: {
           code: "INVALID",
         },
-      };
-      malformedBalance.self = malformedBalance;
+      }
+      malformedBalance.self = malformedBalance
       return {
         ok: true,
         data: {
           sourceTime: "2026-11-24T19:20:00.000Z",
           balances: [malformedBalance],
         },
-      };
+      }
     }
     return {
       ok: true,
@@ -486,29 +486,29 @@ test("contains one client's snapshot serialization failure without interrupting 
         sourceTime: "2026-11-24T19:21:00.000Z",
         balances: [],
       },
-    };
-  };
+    }
+  }
   const api = await startApi({
     t,
     eventBus,
     exchangeAccounts: [account],
-  });
-  const healthySocket = new WebSocket(`ws://127.0.0.1:${api.address.port}/api/v1/trading/events`);
-  t.after(() => healthySocket.close());
-  await waitForSocketOpen(healthySocket);
-  const initialMessage = await waitForMessage(healthySocket);
-  assert.equal(initialMessage.type, "exchange-accounts.snapshot", "The first client must receive its valid initial account snapshot.");
+  })
+  const healthySocket = new WebSocket(`ws://127.0.0.1:${api.address.port}/api/v1/trading/events`)
+  t.after(() => healthySocket.close())
+  await waitForSocketOpen(healthySocket)
+  const initialMessage = await waitForMessage(healthySocket)
+  assert.equal(initialMessage.type, "exchange-accounts.snapshot", "The first client must receive its valid initial account snapshot.")
 
-  const failingSocket = new WebSocket(`ws://127.0.0.1:${api.address.port}/api/v1/trading/events`);
-  t.after(() => failingSocket.close());
+  const failingSocket = new WebSocket(`ws://127.0.0.1:${api.address.port}/api/v1/trading/events`)
+  t.after(() => failingSocket.close())
   const failingSocketClosed = new Promise((resolve) => {
     failingSocket.addEventListener("close", resolve, {
       once: true,
-    });
-  });
-  await waitForSocketOpen(failingSocket);
-  const closeEvent = await failingSocketClosed;
-  assert.equal(closeEvent.code, 1011, "A client with an unserializable application snapshot must be closed with an internal-error status.");
+    })
+  })
+  await waitForSocketOpen(failingSocket)
+  const closeEvent = await failingSocketClosed
+  assert.equal(closeEvent.code, 1011, "A client with an unserializable application snapshot must be closed with an internal-error status.")
 
   const updateMessage = waitForMessage(healthySocket)
   const publication = eventBus.publish({
@@ -519,6 +519,6 @@ test("contains one client's snapshot serialization failure without interrupting 
   assert.equal(publication.ok, true, "A later account update must still be accepted after the failing client is removed.")
   await eventBus.flush()
   const update = await updateMessage
-  assert.equal(update.type, "exchange-accounts.updated", "An already-connected healthy client must continue receiving account updates.");
-  assert.deepEqual(update.accounts[0].accountSnapshot.balances, [], "The failing client's serialization error must not corrupt the healthy client's snapshot.");
-});
+  assert.equal(update.type, "exchange-accounts.updated", "An already-connected healthy client must continue receiving account updates.")
+  assert.deepEqual(update.accounts[0].accountSnapshot.balances, [], "The failing client's serialization error must not corrupt the healthy client's snapshot.")
+})
