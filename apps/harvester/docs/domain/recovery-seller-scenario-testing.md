@@ -1057,16 +1057,16 @@ Required cases:
 9. Real TradingRules filters, including quantity/notional and tick/step boundaries.
 10. Any candidate SELL violating a supported price/quantity increment, min/max price, min/max quantity or min/max notional filter latches global sticky STOP; no automatic adjustment, split, retry or dust reinterpretation.
 11. Missing required filter metadata fails closed/STOPs under the approved market contract.
-12. After a successfully completed cycle is fully reconciled and all profitability gates pass, a residual unsellable solely because of current quantity/notional filters is retained as bonus dust; record exact residual and limiting filter.
+12. After a successfully completed cycle is fully reconciled and all applicable profitability gates pass, a residual unsellable solely because of current quantity/notional filters is retained as bonus dust; record exact residual and limiting filter.
 13. Retained bonus dust is permanently excluded from all future RS recovery/legacy inventory, SELL targets, profitability and available-inventory calculations.
 14. Price-filter failures, unavailable commission valuation, incomplete fill/order reconciliation, active reservations or other unresolved accounting/risk conditions are not dust and block successful completion.
 15. Ordinary sellable residual is not dust and cannot be hidden or discarded; dust classification cannot bypass the combined profitability gate.
 16. Missing custody, invalid precision, invalid filter metadata and allocation ambiguity fail closed.
-11. Allocation precision/rounding ambiguity fails closed; quantity is never silently shifted between recovery and legacy.
-12. No broker submission occurs for any blocked or below-target plan.
-13. Base-, quote- and mixed-commission allocation follows actual canonical fills.
-14. The complete real accounting-workflow input is accepted by the default SELL evaluator; this application subcase remains blocked by #1809 until fixed.
-15. Exact planned SELL price, quantity, order type, fee reserve, net proceeds and recovery/legacy allocation split are asserted, not only intent count.
+17. Allocation precision/rounding ambiguity fails closed; quantity is never silently shifted between recovery and legacy.
+18. No broker submission occurs for any blocked or below-target plan.
+19. Base-, quote- and mixed-commission allocation follows actual canonical fills.
+20. The complete real accounting-workflow input is accepted by the default SELL evaluator; this application subcase remains blocked by #1809 until fixed.
+21. Exact planned SELL price, quantity, order type, fee reserve, net proceeds and recovery/legacy allocation split are asserted, not only intent count.
 
 Core source ownership: `calculate-sell-plan.js`, `evaluate-sell-decision.js`, `legacy-spot-allocation.js`, accounting workflow, shared allocator/TradingRules.
 
