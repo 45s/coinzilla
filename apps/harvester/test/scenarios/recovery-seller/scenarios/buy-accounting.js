@@ -1277,7 +1277,7 @@ export const recoverySellerBuyAccountingScenarios = Object.freeze([
           },
         },
         {
-          id: "pending-commitment-equal",
+          id: "equal-with-existing-exposure",
           overrides: {
             pairConfig: {
               orderQuantity: "5",
@@ -1287,9 +1287,8 @@ export const recoverySellerBuyAccountingScenarios = Object.freeze([
             recoveryPosition: {
               positionId: "rs-policy-position",
               quantity: "5",
-              spent: "10",
+              spent: "10.005",
             },
-            pendingBuyCommitment: "0.005",
             lastBuyPrice: "2",
           },
         },
@@ -1342,7 +1341,7 @@ export const recoverySellerBuyAccountingScenarios = Object.freeze([
           orderIdentity: null,
         },
         {
-          id: "pending-commitment-equal",
+          id: "equal-with-existing-exposure",
           outcome: "SUBMIT",
           reasonCode: "BUY_TRANCHE_ELIGIBLE",
           action: {
