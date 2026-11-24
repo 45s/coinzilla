@@ -45,7 +45,6 @@ test("Bitunix Futures capability declarations match implemented streams and read
   for (const type of [
     "PLACE_LIMIT_ORDER",
     "PLACE_MARKET_ORDER",
-    "CANCEL_ALL_ORDERS",
   ]) {
     assert.equal(capabilities.getStatus({ type }), "UNSUPPORTED", `${type} must remain disabled`)
   }
@@ -57,6 +56,13 @@ test("Bitunix Futures capability declarations match implemented streams and read
   assert.equal(cancelOrder.status, "SUPPORTED")
   assert.equal(cancelOrder.method, "cancelOrder")
   assert.ok(cancelOrder.conditions.includes("allowLiveOrderMutations === true"))
+
+  const cancelAllOrders = capabilities.getCapability({
+    type: "CANCEL_ALL_ORDERS",
+  })
+  assert.equal(cancelAllOrders.status, "SUPPORTED")
+  assert.equal(cancelAllOrders.method, "cancelAllOpenOrders")
+  assert.ok(cancelAllOrders.conditions.includes("allowLiveOrderMutations === true"))
 
   const userData = capabilities.getCapability({
     type: "SUBSCRIBE_USER_DATA",
