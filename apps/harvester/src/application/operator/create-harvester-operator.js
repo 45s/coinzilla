@@ -61,12 +61,14 @@ function createReadRecoverySellerStopState({ recoverySellerStopWorkflow }) {
  * @param {object} options
  * @param {object} options.engine - Conservative trading engine control boundary.
  * @param {object} options.operationalStateStore - ADR-0001 application-owned Operational State Store port.
+ * @param {object} [options.eventPublisher] - Best-effort application event publisher.
  * @param {Function} [options.getRuntimeSnapshot] - Read-only process runtime snapshot provider.
  * @returns {Readonly<object>} Explicit operator command and query methods.
  */
 export function createHarvesterOperator({
   engine,
   operationalStateStore,
+  eventPublisher,
   getRuntimeSnapshot,
   getPortfolio,
   getRecoveryLedger,
