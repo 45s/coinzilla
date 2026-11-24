@@ -272,14 +272,14 @@ function createSeededRecoveryState() {
 function createRepeatedRecoverySellPolicy() {
   return {
     ...conservativeStrategyPolicy,
-    evaluate: ({ marketPrice, marketMetadata }) => ({
+    evaluate: ({ marketPrice, marketMetadata: metadata }) => ({
       strategy: "CONSERVATIVE",
       symbol: marketPrice.symbol,
       action: "PLACE_ORDERS",
       actions: [{
         side: "SELL",
         purpose: "RECOVERY_SELL",
-        type: marketMetadata.orderType,
+        type: metadata.orderType,
         price: "101",
         quantity: "0.4",
         reason: "RECOVER_INVESTED_CAPITAL_AND_MIN_PROFIT",
