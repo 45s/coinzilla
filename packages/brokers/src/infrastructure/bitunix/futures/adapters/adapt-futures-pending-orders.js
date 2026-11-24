@@ -225,15 +225,17 @@ function normalizePendingOrderTriggers({ order }) {
     ["tpOrderPrice", "takeProfitOrderPrice"],
     ["slOrderPrice", "stopLossOrderPrice"],
   ]
-  return fields.reduce((normalized, [source, target, enumValues]) => ({
-    ...normalized,
-    ...normalizeOptionalTrigger({
+  const normalized = {}
+  for (const field of fields) {
+    const [source, target, enumValues] = field
+    Object.assign(normalized, normalizeOptionalTrigger({
       order,
       source,
       target,
       enumValues,
-    }),
-  }), {})
+    }))
+  }
+  return normalized
 }
 
 function normalizePendingOrder({ order }) {
