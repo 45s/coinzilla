@@ -533,7 +533,7 @@ function createScenarioWorkflow({ input }) {
     side: "BUY",
     type: "LIMIT_MAKER",
     limitPrice: new Money({
-      amount: input.limitPrice ?? "4",
+      amount: input.limitPrice ?? "20",
       asset: quoteAsset,
     }),
     originalQuantity: new Quantity({
@@ -842,6 +842,7 @@ async function runInvalidBuyFillScenario() {
   const excessiveBaseCommissionFill = createScenarioFill({
     fillInput: {
       tradeId: "excessive-base-commission",
+      price: "10",
       quantity: "1",
       quoteQuantity: "10",
       baseCommission: "1.001",
