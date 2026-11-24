@@ -350,6 +350,7 @@ export class BitunixFuturesWebSocketClient extends EventEmitter {
       throw new Error(`Cannot connect Bitunix Futures WebSocket in state ${this.#state}`)
     }
     this.#intentionalClose = false
+    this.#authenticationError = null
     this.#cancelReconnect()
     if (this.#state === "closed") {
       this.#createTransport()
@@ -465,6 +466,7 @@ export class BitunixFuturesWebSocketClient extends EventEmitter {
     this.#cancelReconnect()
     this.#stopHeartbeat()
     this.#authenticated = false
+    this.#authenticationError = null
     this.#recoveryRequired = false
     this.#subscriptions.clear()
     this.#desiredSubscriptions.clear()
