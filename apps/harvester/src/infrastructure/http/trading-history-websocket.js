@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto"
+import { HARVESTER_EVENT_NAMES } from "../../application/events/event-names.js"
 import { consumeWebSocketFrames } from "./trading-history-websocket-frame.js"
 
 const WEBSOCKET_PATH = "/api/v1/trading/events"
@@ -13,27 +14,27 @@ const ALLOWED_BROWSER_ORIGINS = new Set([
 ])
 const HISTORY_UPDATED_EVENT = "trading-history.updated"
 const ACCOUNT_UPDATE_EVENTS = Object.freeze([
-  "account.snapshot_captured",
-  "account.open_orders_captured",
+  HARVESTER_EVENT_NAMES.ACCOUNT_SNAPSHOT_CAPTURED,
+  HARVESTER_EVENT_NAMES.ACCOUNT_OPEN_ORDERS_CAPTURED,
 ])
 const BOTS_UPDATE_EVENTS = Object.freeze([
-  "harvester.operator_buy_control_completed",
-  "harvester.process_started",
-  "harvester.started",
-  "harvester.startup_failed",
-  "harvester.stopped",
-  "broker.connected",
-  "broker.connection_failed",
-  "broker.disconnected",
-  "broker.status_changed",
-  "broker.subscription_established",
-  "broker.subscription_failed",
-  "user_data.readiness_changed",
-  "market.trading_rules_captured",
-  "execution.fill_applied",
-  "execution.accounting_failed",
-  "recovery.cycle_completed",
-  "recovery.cycle_not_completed",
+  HARVESTER_EVENT_NAMES.OPERATOR_BUY_CONTROL_COMPLETED,
+  HARVESTER_EVENT_NAMES.PROCESS_STARTED,
+  HARVESTER_EVENT_NAMES.STARTED,
+  HARVESTER_EVENT_NAMES.STARTUP_FAILED,
+  HARVESTER_EVENT_NAMES.STOPPED,
+  HARVESTER_EVENT_NAMES.BROKER_CONNECTED,
+  HARVESTER_EVENT_NAMES.BROKER_CONNECTION_FAILED,
+  HARVESTER_EVENT_NAMES.BROKER_DISCONNECTED,
+  HARVESTER_EVENT_NAMES.BROKER_STATUS_CHANGED,
+  HARVESTER_EVENT_NAMES.BROKER_SUBSCRIPTION_ESTABLISHED,
+  HARVESTER_EVENT_NAMES.BROKER_SUBSCRIPTION_FAILED,
+  HARVESTER_EVENT_NAMES.USER_DATA_READINESS_CHANGED,
+  HARVESTER_EVENT_NAMES.MARKET_TRADING_RULES_CAPTURED,
+  HARVESTER_EVENT_NAMES.FILL_APPLIED,
+  HARVESTER_EVENT_NAMES.ACCOUNTING_FAILED,
+  HARVESTER_EVENT_NAMES.RECOVERY_CYCLE_COMPLETED,
+  HARVESTER_EVENT_NAMES.RECOVERY_CYCLE_NOT_COMPLETED,
   "account.snapshot_captured",
   "account.open_orders_captured",
 ])
