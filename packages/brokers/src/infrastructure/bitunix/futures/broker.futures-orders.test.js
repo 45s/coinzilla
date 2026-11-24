@@ -56,9 +56,34 @@ function createOrderRow({ status = "NEW", ...overrides } = {}) {
   }
 }
 
+function createPositionRow(overrides = {}) {
+  return {
+    positionId: "position-1",
+    symbol: "BTCUSDT",
+    side: "LONG",
+    positionMode: "HEDGE",
+    marginMode: "ISOLATION",
+    leverage: 10,
+    qty: "0.02",
+    entryValue: "1200",
+    fee: "0",
+    funding: "0",
+    realizedPNL: "0",
+    margin: "120",
+    unrealizedPNL: "0",
+    liqPrice: "30000",
+    marginRate: "0.01",
+    avgOpenPrice: "60000",
+    ctime: 1700000000000,
+    mtime: 1700000001000,
+    ...overrides,
+  }
+}
+
 function createOrderFetch({
   requests,
   symbolInfo = {},
+  positions = [],
   orderStatus = "NEW",
   orderOverrides = {},
   placeResponse,
@@ -78,6 +103,11 @@ function createOrderFetch({
     if (path === "/api/v1/futures/market/trading_pairs") {
       return createFuturesResponse({
         data: [createSymbolInfo(symbolInfo)],
+      })
+    }
+    if (path === "/api/v1/futures/position/get_pending_positions") {
+      return createFuturesResponse({
+        data: positions,
       })
     }
     if (path === "/api/v1/futures/trade/place_order") {
@@ -223,6 +253,111 @@ test("Bitunix Futures createFuturesOrder requires positionId for CLOSE tradeSide
   assert.equal(result.ok, false)
   assert.equal(result.mutationOutcome, "NOT_SENT")
   assert.equal(requests.length, 0)
+})
+
+test("Bitunix Futures CLOSE order preflights the exact open position and requires reduce-only semantics", async () => {
+  const { broker, requests } = createOrderBroker({
+    positions: [createPositionRow()],
+  })
+  await connectAndAcknowledgeUserDataReconciliation(broker)
+
+  const result = await broker.createFuturesOrder({
+    ...limitOrderInput,
+    side: "BUY",
+    tradeSide: "CLOSE",
+    reduceOnly: true,
+    positionId: "position-1",
+  })
+
+  assert.equal(result.ok, true)
+  const positionReadIndex = requests.findIndex(({ path }) => path === "/api/v1/futures/position/get_pending_positions")
+  const placeIndex = requests.findIndex(({ path }) => path === "/api/v1/futures/trade/place_order")
+  assert.ok(positionReadIndex >= 0, "CLOSE must read the exact position before dispatch")
+  assert.ok(positionReadIndex < placeIndex, "position validation must precede the mutation")
+  const positionQuery = new URLSearchParams(requests[positionReadIndex].search)
+  assert.equal(positionQuery.get("symbol"), "BTCUSDT")
+  assert.equal(positionQuery.get("positionId"), "position-1")
+})
+
+test("Bitunix Futures CLOSE order is NOT_SENT when the position is already closed", async () => {
+  const { broker, requests } = createOrderBroker({
+    positions: [],
+  })
+  await connectAndAcknowledgeUserDataReconciliation(broker)
+
+  const result = await broker.createFuturesOrder({
+    ...limitOrderInput,
+    side: "BUY",
+    tradeSide: "CLOSE",
+    reduceOnly: true,
+    positionId: "position-1",
+  })
+
+  assert.equal(result.ok, false)
+  assert.equal(result.mutationOutcome, "NOT_SENT")
+  assert.equal(requests.some(({ path }) => path === "/api/v1/futures/trade/place_order"), false)
+})
+
+test("Bitunix Futures CLOSE order rejects a side that does not match the position side", async () => {
+  const { broker, requests } = createOrderBroker({
+    positions: [createPositionRow({
+      side: "LONG",
+    })],
+  })
+  await connectAndAcknowledgeUserDataReconciliation(broker)
+
+  const result = await broker.createFuturesOrder({
+    ...limitOrderInput,
+    side: "SELL",
+    tradeSide: "CLOSE",
+    reduceOnly: true,
+    positionId: "position-1",
+  })
+
+  assert.equal(result.ok, false)
+  assert.equal(result.mutationOutcome, "NOT_SENT")
+  assert.equal(requests.some(({ path }) => path === "/api/v1/futures/trade/place_order"), false)
+})
+
+test("Bitunix Futures CLOSE order rejects quantity above the exact open position size", async () => {
+  const { broker, requests } = createOrderBroker({
+    positions: [createPositionRow({
+      qty: "0.005",
+    })],
+  })
+  await connectAndAcknowledgeUserDataReconciliation(broker)
+
+  const result = await broker.createFuturesOrder({
+    ...limitOrderInput,
+    side: "BUY",
+    qty: "0.01",
+    tradeSide: "CLOSE",
+    reduceOnly: true,
+    positionId: "position-1",
+  })
+
+  assert.equal(result.ok, false)
+  assert.equal(result.mutationOutcome, "NOT_SENT")
+  assert.equal(requests.some(({ path }) => path === "/api/v1/futures/trade/place_order"), false)
+})
+
+test("Bitunix Futures CLOSE order requires reduceOnly true", async () => {
+  const { broker, requests } = createOrderBroker({
+    positions: [createPositionRow()],
+  })
+  await connectAndAcknowledgeUserDataReconciliation(broker)
+
+  const result = await broker.createFuturesOrder({
+    ...limitOrderInput,
+    side: "BUY",
+    tradeSide: "CLOSE",
+    reduceOnly: false,
+    positionId: "position-1",
+  })
+
+  assert.equal(result.ok, false)
+  assert.equal(result.mutationOutcome, "NOT_SENT")
+  assert.equal(requests.some(({ path }) => path === "/api/v1/futures/trade/place_order"), false)
 })
 
 test("Bitunix Futures createFuturesOrder reconciles a lost acknowledgement by clientId without retrying", async () => {
