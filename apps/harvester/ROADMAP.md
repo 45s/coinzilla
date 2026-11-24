@@ -2184,3 +2184,10 @@ The detailed evidence, implementation commits, CI state and remaining unknowns a
 - Added a later-BUY failure-atomicity regression for incomplete third-asset commission valuation.
 - The scenario asserts exact net base inventory, cumulative spent basis, quote cash flow, RecoveryLedger parity and identical accepted Fill identities.
 - Test-only; no production behavior or trading rules changed. Exact-head CI verification is pending.
+
+## 2026-11-24 — #1763 Phase 4 BUY accounting expansion
+
+- Expanded the real-component BUY accounting scenario in `src/use-cases/conservative-buy-accounting-scenario.test.js`: multiple partial execution fills for one BUY order, different execution prices, base/quote/valued third-asset commissions, zero-fee execution, exact net inventory, full quote cost/cash flow and matching Portfolio/RecoveryLedger execution identities.
+- Added cross-projection regressions for identical duplicate replay, changed commission facts under a reused Fill identity, mismatched Portfolio/RecoveryLedger duplicate history, foreign-market BUY evidence, and failure atomicity. Rejected inputs leave both accepted immutable projections unchanged.
+- Audited the Phase 4 BUY matrix against existing Portfolio/Position, commission-validation, canonical Fill, completed-BUY VWAP, account-snapshot and allocation tests; documented exact test ownership in `docs/domain/DOMAIN_TEST_INVENTORY.md`.
+- Test-only/docs work. No production behavior, strategy rules, exchange access or credentials changed. Exact-head CI verification is pending.
