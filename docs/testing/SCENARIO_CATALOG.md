@@ -601,7 +601,7 @@ The schema intentionally separates *business input* from *derived oracle*. Tests
 
 ### RS-002 — Recovery BUY accounting uses confirmed net fills and actual commissions
 
-**Status:** PARTIAL — 12 of the 20 reserved RS-002 case IDs have new application-level scenario tests; RS-002-012 is PARTIAL (missing third-asset valuation fails closed, while successful valuation remains BLOCKED); seven cases remain explicitly BLOCKED at the BUY evaluator/intent/submitter/event-order/shared-budget boundaries. This is not complete BUY lifecycle coverage.
+**Status:** PARTIAL — 17 of the 20 reserved RS-002 case IDs are TEST-MAPPED; RS-002-002 and RS-002-012 are PARTIAL (their authorization/account-snapshot and successful third-asset-valuation subcases remain BLOCKED); RS-002-017 remains BLOCKED at the fill-before-ack order-event boundary. This is not complete end-to-end BUY lifecycle coverage. This is not complete BUY lifecycle coverage.
 
 **Behavior:** Recovery inventory and cost are derived only from canonical confirmed BUY fills attributed to the current RS Position/cycle/order/market. Requested quantity and acknowledgement are not execution.
 
@@ -619,7 +619,7 @@ The schema intentionally separates *business input* from *derived oracle*. Tests
 
 **Implementation:** RS accounting workflow, Portfolio/Position and canonical Fill ownership.
 
-**New scenario tests:** `apps/harvester/test/scenarios/recovery-seller/buy-accounting.scenario.test.js` with `scenarios/buy-accounting.js`: RS-002-001, RS-002-005 through RS-002-016 (RS-002-012 includes an explicit blocked successful-valuation subcase). The suite proves no inventory before a confirmed fill, RS ownership, full/partial/multiple fills, exact cost/VWAP, base/quote/multiple fees, missing third-asset valuation failure, duplicate replay, conflicting identity, external/wrong-order rejection and invalid base-fee rejection. RS-002-002/003 and RS-002-017 through RS-002-021 remain BLOCKED with exact unblock conditions in the registry. Targeted evidence is tracked in [PR #1820](https://github.com/45s/coinzilla/pull/1820); the family remains PARTIAL until merge and exact merged-head verification.
+**New scenario tests:** `apps/harvester/test/scenarios/recovery-seller/buy-accounting.scenario.test.js` with `scenarios/buy-accounting.js`: RS-002-001, RS-002-005 through RS-002-016 (RS-002-012 includes an explicit blocked successful-valuation subcase). The suite proves no inventory before a confirmed fill, RS ownership, full/partial/multiple fills, exact cost/VWAP, base/quote/multiple fees, missing third-asset valuation failure, duplicate replay, conflicting identity, external/wrong-order rejection, invalid base-fee rejection, readiness gates, exact BUY intent, active-order suppression, investment-cap boundaries, unknown-submission STOP/reconciliation and CG/RS shared quote-budget allocation. RS-002-002-B, RS-002-012-B and RS-002-017 remain BLOCKED with exact unblock conditions in the registry. Targeted evidence is tracked in [PR #1820](https://github.com/45s/coinzilla/pull/1820); the family remains PARTIAL until merge and exact merged-head verification.
 
 ### RS-003 — A mixed recovery/legacy SELL uses the additive legacy slice
 The accounting workflow-to-default-evaluator defect is addressed in [PR #1815](https://github.com/45s/coinzilla/pull/1815). That PR adds composed regressions against the real accounting workflow snapshot and the real default SELL evaluator; the PR remains unmerged, so this is not yet VERIFIED evidence.
