@@ -288,6 +288,21 @@ function createRepeatedRecoverySellPolicy() {
   }
 }
 
+function createRecoverySellPolicyWithEvaluationFailure() {
+  const repeatedPolicy = createRepeatedRecoverySellPolicy()
+  let evaluationCount = 0
+  return {
+    ...repeatedPolicy,
+    evaluate: (input) => {
+      evaluationCount += 1
+      if (evaluationCount === 2) {
+        throw new Error("injected strategy evaluation failure")
+      }
+      return repeatedPolicy.evaluate(input)
+    },
+  }
+}
+
 async function publishRecoveryMarketBook({ engine }) {
   return engine.processBookTicker({
     symbol: "DOGEUSDT",
@@ -406,6 +421,75 @@ test("retains a PENDING recovery SELL reservation while its broker acknowledgeme
   assert.equal(repeated.ok, true, repeated.errors?.[0]?.message ?? "The queued repeated evaluation must defer safely after acknowledgement.")
   assert.equal(brokerState.orders.length, 1, "Only one broker SELL may be submitted while the Position reservation is active.")
   assert.deepEqual(calls, ["intent", "broker", "outcome"], "The delayed acknowledgement must not produce a second durable intent or broker call.")
+})
+
+test("retains an active recovery SELL across recoverable market-data failures", async () => {
+  const calls = []
+  const seeded = createSeededRecoveryState()
+  const { engine, brokerState } = createEngine({
+    calls,
+    strategyPolicy: createRepeatedRecoverySellPolicy(),
+    portfolio: seeded.portfolio,
+    recoveryLedger: seeded.recoveryLedger,
+    baseFreeBalance: "1",
+    portfolioBaseQuantityBaseline: "1",
+  })
+  const first = await submitFirstMarketDecision({ engine })
+  assert.equal(first.ok, true, first.errors?.[0]?.message ?? "The first recovery SELL must be accepted.")
+  const bookFailure = await engine.processBookTicker({
+    symbol: "DOGEUSDT",
+    bookTicker: {
+      symbol: "DOGEUSDT",
+      bestBidPrice: "invalid",
+      bestBidQuantity: "1",
+      bestAskPrice: "1000",
+      bestAskQuantity: "1",
+      timestamp: 2,
+    },
+  })
+  assert.equal(bookFailure.ok, false, "Malformed market-book evidence must be rejected.")
+  const priceFailure = await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: {
+      symbol: "DOGEUSDT",
+      price: "invalid",
+      timestamp: 2,
+    },
+  })
+  assert.equal(priceFailure.ok, false, "Malformed market-price evidence must be rejected.")
+  const repeated = await processRecoveryPriceEvent({
+    engine,
+    price: "100.01",
+    timestamp: 3,
+  })
+  assert.equal(repeated.ok, true, "A later valid market event must safely continue with the existing SELL reservation.")
+  assert.equal(brokerState.orders.length, 1, "Recoverable market-data errors must not release an active SELL reservation.")
+  assert.deepEqual(calls, ["intent", "broker", "outcome"], "Market-data failures must not cause a second durable intent or broker request.")
+})
+
+test("keeps the active recovery SELL and pauses safely when a later strategy evaluation fails", async () => {
+  const calls = []
+  const seeded = createSeededRecoveryState()
+  const { engine, brokerState } = createEngine({
+    calls,
+    strategyPolicy: createRecoverySellPolicyWithEvaluationFailure(),
+    portfolio: seeded.portfolio,
+    recoveryLedger: seeded.recoveryLedger,
+    baseFreeBalance: "1",
+    portfolioBaseQuantityBaseline: "1",
+  })
+  const first = await submitFirstMarketDecision({ engine })
+  assert.equal(first.ok, true, first.errors?.[0]?.message ?? "The first recovery SELL must be accepted.")
+  const failure = await processRecoveryPriceEvent({
+    engine,
+    price: "100.01",
+    timestamp: 2,
+  })
+  assert.equal(failure.ok, false, "A failed strategy evaluation must remain an explicit failure.")
+  assert.ok(engine.getPausedMarkets().includes("DOGEUSDT"), "A strategy-evaluation failure must pause the affected market.")
+  assert.equal(engine.getActiveOrders().filter((order) => order.side === "SELL").length, 1, "The existing recovery SELL reservation must remain registered.")
+  assert.equal(brokerState.orders.length, 1, "A strategy-evaluation failure must not create a second broker SELL.")
+  assert.deepEqual(calls, ["intent", "broker", "outcome"], "A failed evaluation must not create another durable intent or broker request.")
 })
 
 test("commits the operational-state submission intent and outcome around Conservative broker placement", async () => {

@@ -412,6 +412,16 @@
           "kind": "integration"
         },
         {
+          "path": "src/use-cases/conservative-submission-durability.integration.test.js",
+          "name": "retains an active recovery SELL across recoverable market-data failures",
+          "kind": "integration"
+        },
+        {
+          "path": "src/use-cases/conservative-submission-durability.integration.test.js",
+          "name": "keeps the active recovery SELL and pauses safely when a later strategy evaluation fails",
+          "kind": "failure"
+        },
+        {
           "path": "src/use-cases/conservative-trading-engine.test.js",
           "name": "suppresses trailing BUY repricing while an actual active Position exists",
           "kind": "normal"
