@@ -18,6 +18,10 @@ import { Portfolio } from "../../../src/domain/portfolio/portfolio.js"
 import { createOrderOwnership } from "../../../src/domain/orders/order-ownership.js"
 import { OrderRegistry } from "../../../src/domain/orders/order-registry.js"
 import { createRecoverySellerAccountingWorkflow } from "../../../src/use-cases/create-recovery-seller-accounting-workflow.js"
+import {
+  createLegacyPosition,
+  createLegacyPositionAccounting,
+} from "../../../src/domain/strategies/recovery-seller/legacy-position.js"
 import { allocateOrderCommitments } from "../../../src/domain/orders/allocate-order-commitments.js"
 import { createRecoverySellerActionAuthorizer } from "../../../src/use-cases/create-recovery-seller-action-authorizer.js"
 import { createRecoverySellerOrderSubmitter } from "../../../src/use-cases/create-recovery-seller-order-submitter.js"
@@ -39,6 +43,16 @@ const market = new Market({
   symbol: "ZROUSDT",
   baseAsset,
   quoteAsset,
+})
+const alternateQuoteAsset = new Asset({
+  id: "binance:FDUSD",
+  code: "FDUSD",
+})
+const alternateMarket = new Market({
+  venue: "binance",
+  symbol: "ZROFDUSD",
+  baseAsset,
+  quoteAsset: alternateQuoteAsset,
 })
 
 const buyPolicyMarketMetadata = {
@@ -510,8 +524,8 @@ function createCommissions({ fillInput }) {
 function createScenarioWorkflow({ input }) {
   const clientOrderId = "rs-buy-scenario-order"
   const brokerOrderId = "broker-rs-buy-scenario"
-  const positionId = "rs-buy-scenario-position"
-  const cycleId = "rs-buy-scenario-cycle"
+  const positionId = input.positionId ?? "rs-buy-scenario-position"
+  const cycleId = input.cycleId ?? "rs-buy-scenario-cycle"
   const order = new CanonicalOrder({
     clientOrderId,
     brokerOrderId,
@@ -523,7 +537,7 @@ function createScenarioWorkflow({ input }) {
       asset: quoteAsset,
     }),
     originalQuantity: new Quantity({
-      amount: "5.01",
+      amount: input.originalQuantity ?? "5.01",
       asset: baseAsset,
     }),
     executedQuantity: new Quantity({
@@ -539,7 +553,7 @@ function createScenarioWorkflow({ input }) {
     ? []
     : [createOrderOwnership({
         ownership: {
-          strategyId: StrategyId.RECOVERY_SELLER,
+          strategyId: input.strategyId ?? StrategyId.RECOVERY_SELLER,
           positionId,
           purpose: "RECOVERY_BUY",
           cycleId,
@@ -547,42 +561,95 @@ function createScenarioWorkflow({ input }) {
         clientOrderId,
         brokerOrderId,
       })]
+  let initialPortfolio = new Portfolio()
+  if (input.initialCGPosition === true) {
+    const existingCGBuyFill = new Fill({
+      tradeId: "existing-cg-position-fill",
+      brokerOrderId: "existing-cg-broker-order",
+      clientOrderId: "existing-cg-client-order",
+      market,
+      side: "BUY",
+      price: new Money({
+        amount: "2",
+        asset: quoteAsset,
+      }),
+      quantity: new Quantity({
+        amount: "3",
+        asset: baseAsset,
+      }),
+      quoteQuantity: new Money({
+        amount: "6",
+        asset: quoteAsset,
+      }),
+      commissions: [],
+      commissionStatus: "COMPLETE",
+    })
+    initialPortfolio = initialPortfolio.applyFill({
+      fill: existingCGBuyFill,
+      positionId: "existing-cg-position",
+      strategyId: StrategyId.COIN_GRABBER,
+    }).portfolio
+  }
+  if (input.seedFillInput) {
+    const seedFill = createScenarioFill({
+      fillInput: input.seedFillInput,
+      order,
+    })
+    initialPortfolio = initialPortfolio.applyFill({
+      fill: seedFill,
+      positionId: input.seedPositionId ?? "existing-foreign-position",
+      strategyId: input.seedStrategyId ?? StrategyId.RECOVERY_SELLER,
+    }).portfolio
+  }
+  const initialLegacyPositions = input.includeLegacyBasis === true
+    ? [{
+        market,
+        position: createLegacyPosition({
+          invested: input.legacyInvested ?? "50",
+          quantity: input.legacyQuantity ?? "10",
+        }),
+        accounting: createLegacyPositionAccounting(),
+      }]
+    : []
   const workflow = createRecoverySellerAccountingWorkflow({
-    initialPortfolio: new Portfolio(),
+    initialPortfolio,
     initialOrderRegistry: new OrderRegistry({
       orders: [order],
       ownerships,
     }),
+    initialLegacyPositions,
   })
   return {
     workflow,
     order,
     positionId,
     cycleId,
+    initialPortfolio,
   }
 }
 
 function createScenarioFill({ fillInput, order }) {
+  const fillMarket = fillInput.marketSymbol === "ZROFDUSD" ? alternateMarket : order.market
   return new Fill({
     tradeId: fillInput.tradeId,
     brokerOrderId: fillInput.brokerOrderId ?? order.brokerOrderId,
     clientOrderId: order.clientOrderId,
-    market: order.market,
-    side: "BUY",
+    market: fillMarket,
+    side: fillInput.side ?? "BUY",
     price: new Money({
       amount: fillInput.price ?? "2",
-      asset: order.market.quoteAsset,
+      asset: fillMarket.quoteAsset,
     }),
     quantity: new Quantity({
       amount: fillInput.quantity,
-      asset: order.market.baseAsset,
+      asset: fillMarket.baseAsset,
     }),
     quoteQuantity: new Money({
       amount: fillInput.quoteQuantity,
-      asset: order.market.quoteAsset,
+      asset: fillMarket.quoteAsset,
     }),
     commissions: createCommissions({ fillInput }),
-    commissionStatus: "COMPLETE",
+    commissionStatus: fillInput.commissionStatus ?? "COMPLETE",
   })
 }
 
@@ -655,6 +722,9 @@ async function runBuyScenario({ input }) {
   })
   const portfolio = workflow.getPortfolio()
   const position = portfolio.getPosition({ positionId })
+  const legacyPosition = input.includeLegacyBasis === true
+    ? workflow.getLegacyPosition({ marketId: market.id })
+    : undefined
   return {
     appliedFillIds: portfolio.appliedFillIds.length,
     position: position
@@ -668,6 +738,22 @@ async function runBuyScenario({ input }) {
     ...(input.assertStrategyOwnership === true ? {
       positionStrategyId: position?.strategyId ?? null,
     } : {}),
+    ...(input.includePositionOwnerships === true ? {
+      positions: portfolio.positions.map((item) => ({
+        positionId: item.positionId,
+        strategyId: item.strategyId,
+        quantity: item.baseQuantity.amount,
+        spent: item.spent.amount,
+      })),
+    } : {}),
+    ...(legacyPosition ? {
+      legacyPosition: {
+        invested: legacyPosition.invested,
+        originalQuantity: legacyPosition.originalQuantity,
+        averageCost: legacyPosition.averageCost,
+        remainingQuantity: legacyPosition.remainingQuantity,
+      },
+    } : {}),
     ...(replay ? {
       replay: {
         ok: replay.ok,
@@ -680,8 +766,110 @@ async function runBuyScenario({ input }) {
   }
 }
 
+async function runBuyOwnershipRejectionScenario({ input }) {
+  const cases = []
+  for (const scenarioCase of input.cases) {
+    const { workflow, order, initialPortfolio } = createScenarioWorkflow({
+      input: scenarioCase,
+    })
+    const fill = createScenarioFill({
+      fillInput: scenarioCase.fillInput,
+      order,
+    })
+    const result = await workflow.applyBuyFill({ fill })
+    const portfolio = workflow.getPortfolio()
+    cases.push({
+      id: scenarioCase.id,
+      accepted: result.ok === true,
+      appliedFillIdsBefore: initialPortfolio.appliedFillIds.length,
+      appliedFillIdsAfter: portfolio.appliedFillIds.length,
+      positionIdsBefore: initialPortfolio.positions.map((position) => position.positionId),
+      positionIdsAfter: portfolio.positions.map((position) => position.positionId),
+    })
+  }
+  return { cases }
+}
+
+function isInvalidCanonicalBuyFillRejected({ quantityAmount }) {
+  try {
+    new Fill({
+      tradeId: "invalid-buy-fill",
+      brokerOrderId: "broker-invalid-buy-fill",
+      clientOrderId: "rs-buy-scenario-order",
+      market,
+      side: "BUY",
+      price: new Money({
+        amount: "10",
+        asset: quoteAsset,
+      }),
+      quantity: new Quantity({
+        amount: quantityAmount,
+        asset: baseAsset,
+      }),
+      quoteQuantity: new Money({
+        amount: "10",
+        asset: quoteAsset,
+      }),
+      commissions: [],
+      commissionStatus: "COMPLETE",
+    })
+    return false
+  } catch {
+    return true
+  }
+}
+
+function isNegativeBuyCommissionRejected() {
+  try {
+    new Commission({
+      amount: new Money({
+        amount: "-0.001",
+        asset: baseAsset,
+      }),
+    })
+    return false
+  } catch {
+    return true
+  }
+}
+
+async function runInvalidBuyFillScenario() {
+  const { workflow, order } = createScenarioWorkflow({
+    input: {
+      originalQuantity: "1",
+    },
+  })
+  const excessiveBaseCommissionFill = createScenarioFill({
+    fillInput: {
+      tradeId: "excessive-base-commission",
+      quantity: "1",
+      quoteQuantity: "10",
+      baseCommission: "1.001",
+    },
+    order,
+  })
+  const excessiveCommissionResult = await workflow.applyBuyFill({
+    fill: excessiveBaseCommissionFill,
+  })
+  const portfolio = workflow.getPortfolio()
+  return {
+    zeroQuantityRejected: isInvalidCanonicalBuyFillRejected({
+      quantityAmount: "0",
+    }),
+    negativeQuantityRejected: isInvalidCanonicalBuyFillRejected({
+      quantityAmount: "-1",
+    }),
+    negativeCommissionRejected: isNegativeBuyCommissionRejected(),
+    excessiveBaseCommissionRejected: excessiveCommissionResult.ok !== true,
+    appliedFillIds: portfolio.appliedFillIds.length,
+    positionCount: portfolio.positions.length,
+  }
+}
+
 const applicationHandlers = {
   "apply-recovery-buy-scenario": runBuyScenario,
+  "reject-invalid-buy-fill-ownership": runBuyOwnershipRejectionScenario,
+  "validate-rejected-buy-fill-values": runInvalidBuyFillScenario,
   "submit-recovery-buy-with-unknown-outcome": runUnknownBuySubmissionScenario,
   "evaluate-recovery-buy-budget-isolation": runBuyBudgetIsolationScenario,
 }
