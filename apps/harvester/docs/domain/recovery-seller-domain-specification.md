@@ -46,20 +46,20 @@ No independent fixed 1% market-rise wait is required merely to release the confi
 
 ### 2.1 Global fail-closed rule — owner-approved
 
-**STOP whenever actual conditions do not match an explicitly covered and approved RS scenario.** This is a global RS invariant, not a SELL-only profitability rule.
+**STOP blocks additional BUY spending only.** STOP is a durable safety latch, not a blanket prohibition on recovering already-owned inventory.
 
 If any input, state transition, exchange response, order outcome, fill, commission, balance, reservation, accounting result, or other observed condition is missing, contradictory, unexpected, or not covered by the approved domain contract, RS must:
 
-1. **Stop all new trading actions immediately.** Do not submit a new BUY, SELL, replacement, retry, or other trading instruction; do not guess, improvise, or choose an unapproved recovery path.
+1. **Block additional investment.** Do not submit a new BUY or any other action that spends additional quote funds while STOP is active.
 2. **Preserve facts and commitments.** Do not erase or reverse confirmed fills, actual commissions, accounting, order ownership, inventory, or reservations. Apply every confirmed canonical fill exactly once using actual exchange facts.
-3. **Reconcile what already exists.** Continue only the non-trading safety work needed to establish authoritative status of already-submitted orders and account for subsequent confirmed fills. Unknown order outcomes retain their original identity and reservations; never blindly resubmit.
-4. **Make the stop visible.** Return a deterministic BLOCK decision with a stable reason code and enough context for operator review. The condition latches terminal global STOP for this runtime. CC-operator may inspect authorized STOP status but cannot clear, reset, unpause or resume it.
-5. **Do not self-resume.** A later observation that appears normal never clears STOP. The underlying cause must be debugged and fixed before any controlled, externally managed restart/recovery procedure; no operator resume path is part of this runtime.
+3. **Continue existing-order safety work.** Reconcile already-submitted orders and account for subsequent confirmed fills and commissions. Unknown order outcomes retain their original identity and reservations; never blindly resubmit.
+4. **Allow only an independently valid first recovery SELL.** STOP does not itself block a recovery SELL of already-owned inventory when the cycle has not used its sole SELL lifecycle and every independent SELL safety, custody, ownership, exchange-filter and profitability gate passes. STOP never authorizes a second, continuation, replacement or retry SELL.
+5. **Make the stop visible and durable.** Return a deterministic BLOCK decision with a stable reason code and enough context for operator review. Preserve the first STOP evidence until an authorized administrator resolves it through the evidence-backed durable resolution use case.
+6. **Require explicit administrator resolution.** The cause must be fixed; authoritative order/fill/balance reconciliation must be complete; Portfolio, legacy and reservation accounting must be verified; and the durable resolution fact must be acknowledged. Unauthorized resolution is rejected. Automatic clear, self-resume and implicit resume are forbidden.
 
-This rule does **not** mean abandoning, cancelling, replacing, or ignoring an already-submitted order. Existing orders remain owned and must be reconciled; actual fills and fees continue to be accounted. It means RS initiates no further trading action while the unexpected condition is unresolved.
+This rule does **not** mean abandoning, cancelling, replacing, or ignoring an already-submitted order. Existing orders remain owned and must be reconciled; actual fills and fees continue to be accounted. A recovery SELL is allowed only under the first-SELL and independent safety gates above; STOP does not waive any other trading rule.
 
-Examples include: a SELL realizes less profit than planned; an order response has an unknown status; actual fees cannot be valued; available Spot quantity disagrees with the verified allocation; a fill cannot be attributed unambiguously; a reservation or accounting projection conflicts; or a state transition occurs that the approved lifecycle does not define. In every case the response is STOP, not an invented workaround.
-
+Examples include: a SELL realizes less profit than planned; an order response has an unknown status; actual fees cannot be valued; available Spot quantity disagrees with the verified allocation; a fill cannot be attributed unambiguously; a reservation or accounting projection conflicts; or a state transition occurs that the approved lifecycle does not define. Such evidence latches STOP and blocks further BUY spending. An otherwise-valid first recovery SELL may still proceed only if its independent gates pass.
 ### 2.2 Deterministic lifecycle outcomes and transitions
 
 Every RS policy evaluation returns exactly one of these outcomes:
