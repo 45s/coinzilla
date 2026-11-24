@@ -52,6 +52,13 @@ function createBuyCaseCoverage({ rules, invariants }) {
   }
 }
 
+const BUY_ACCOUNTING_MUST_NOT = Object.freeze([
+  "create recovery inventory from a submitted or acknowledged BUY without a confirmed canonical Fill",
+  "derive invested quote cost from the limit price when actual Fill quote quantity is available",
+  "apply one canonical Fill more than once",
+  "adopt an external Fill without immutable RS order ownership",
+])
+
 function createBuyCaseDefinition({
   id,
   name,
@@ -92,12 +99,7 @@ function createBuyCaseDefinition({
       saveAs: "actual",
     }],
     then: expected,
-    mustNot: [
-      "create recovery inventory from a submitted or acknowledged BUY without a confirmed canonical Fill",
-      "derive invested quote cost from the limit price when actual Fill quote quantity is available",
-      "apply one canonical Fill more than once",
-      "adopt an external Fill without immutable RS order ownership",
-    ],
+    mustNot: BUY_ACCOUNTING_MUST_NOT,
     subcases: mappings.subcases,
     implementation: [
       workflowSource,
