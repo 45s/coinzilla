@@ -79,6 +79,72 @@ function createClient({ channelType = "public", now = () => 1_700_000_000_000 } 
   }
 }
 
+function createPublicChannels() {
+  return [
+    {
+      ch: "price",
+      symbol: "btcusdt",
+    },
+    {
+      ch: "ticker",
+      symbol: "ETHUSDT",
+    },
+    {
+      ch: "depth_book1",
+      symbol: "BTCUSDT",
+    },
+    {
+      ch: "trade",
+      symbol: "BTCUSDT",
+    },
+    {
+      ch: "market_kline_1min",
+      symbol: "BTCUSDT",
+    },
+  ]
+}
+
+function createPublicSubscribeFrame() {
+  return {
+    op: "subscribe",
+    args: [
+      {
+        ch: "price",
+        symbol: "BTCUSDT",
+      },
+      {
+        ch: "ticker",
+        symbol: "ETHUSDT",
+      },
+      {
+        ch: "depth_book1",
+        symbol: "BTCUSDT",
+      },
+      {
+        ch: "trade",
+        symbol: "BTCUSDT",
+      },
+      {
+        ch: "market_kline_1min",
+        symbol: "BTCUSDT",
+      },
+    ],
+  }
+}
+
+function createPriceEvent() {
+  return {
+    ch: "price",
+    symbol: "BTCUSDT",
+    ts: 1_700_000_000_000,
+    data: {
+      mp: "65000.10",
+      ip: "64999.90",
+      fr: "0.0001",
+    },
+  }
+}
+
 test("Bitunix Futures private WebSocket signs login with seconds timestamp and waits for login acknowledgement", async () => {
   const { client, transport, intervals } = createClient({
     channelType: "private",
@@ -133,66 +199,12 @@ test("Bitunix Futures public WebSocket subscribes to documented channels and for
   client.on("channel", (event) => events.push(event))
 
   const result = client.subscribe({
-    channels: [
-      {
-        ch: "price",
-        symbol: "btcusdt",
-      },
-      {
-        ch: "ticker",
-        symbol: "ETHUSDT",
-      },
-      {
-        ch: "depth_book1",
-        symbol: "BTCUSDT",
-      },
-      {
-        ch: "trade",
-        symbol: "BTCUSDT",
-      },
-      {
-        ch: "market_kline_1min",
-        symbol: "BTCUSDT",
-      },
-    ],
+    channels: createPublicChannels(),
   })
 
   assert.equal(result.sent, true)
-  assert.deepEqual(transport.sent[0], {
-    op: "subscribe",
-    args: [
-      {
-        ch: "price",
-        symbol: "BTCUSDT",
-      },
-      {
-        ch: "ticker",
-        symbol: "ETHUSDT",
-      },
-      {
-        ch: "depth_book1",
-        symbol: "BTCUSDT",
-      },
-      {
-        ch: "trade",
-        symbol: "BTCUSDT",
-      },
-      {
-        ch: "market_kline_1min",
-        symbol: "BTCUSDT",
-      },
-    ],
-  })
-  const event = {
-    ch: "price",
-    symbol: "BTCUSDT",
-    ts: 1_700_000_000_000,
-    data: {
-      mp: "65000.10",
-      ip: "64999.90",
-      fr: "0.0001",
-    },
-  }
+  assert.deepEqual(transport.sent[0], createPublicSubscribeFrame())
+  const event = createPriceEvent()
   transport.receive(event)
   assert.deepEqual(events, [event])
   await client.disconnect()
