@@ -365,7 +365,8 @@ This exact shape is a source observation. The canonical factory remains the pref
 - One recovery cycle may submit only one SELL order lifecycle.
 - Repeated evaluation cannot create a second SELL.
 - An unknown submission keeps the original client identity and reservation; reconciliation is not permission to resubmit.
-- CANCELED, REJECTED and EXPIRED outcomes do not authorize a replacement SELL or a new BUY cycle.
+- `PARTIALLY_FILLED` is a nonterminal order status, not a terminal outcome. Its canonical fills are staged, the sole SELL remains active, and the reservation remains held while the order is still open; do not close the cycle or treat the status itself as terminal STOP.
+- A terminal `CANCELED` or `EXPIRED` order may contain prior partial fills. Reconcile the complete canonical fill set and commissions before applying the approved terminal outcome; the cycle remains unresolved and the terminal STOP contract applies. `REJECTED` and other terminal outcomes likewise do not authorize a replacement SELL or a new BUY cycle.
 - A cycle closes only after a fully reconciled FILLED SELL, successful accounting/commitment handling and all applicable profitability gates.
 - A later cycle is distinct and requires an eligible CLOSED prior cycle under the approved contract.
 - Reaching the RS recovery investment limit blocks new BUYs only. An already-open recovery SELL remains live and untouched: do not cancel, replace or reprice it because the BUY budget is exhausted. Continue canonical fill/order reconciliation until its terminal outcome is known before considering another cycle.
