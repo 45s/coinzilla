@@ -8,15 +8,42 @@ const OPERATOR_UPDATE_EVENT = "harvester.operator_buy_control_completed"
 function createQueries() {
   const emptyPage = {
     items: [],
-    pagination: { limit: 50, offset: 0, total: 0, hasMore: false },
+    pagination: {
+      limit: 50,
+      offset: 0,
+      total: 0,
+      hasMore: false,
+    },
   }
   return {
-    getSummary: () => ({ ok: true, data: { orders: 0, fills: 0, commissions: 0 } }),
-    listOrders: () => ({ ok: true, data: emptyPage }),
-    getOrder: () => ({ ok: true, data: null }),
-    listFills: () => ({ ok: true, data: emptyPage }),
-    getFill: () => ({ ok: true, data: null }),
-    listCommissions: () => ({ ok: true, data: emptyPage }),
+    getSummary: () => ({
+      ok: true,
+      data: {
+        orders: 0,
+        fills: 0,
+        commissions: 0,
+      },
+    }),
+    listOrders: () => ({
+      ok: true,
+      data: emptyPage,
+    }),
+    getOrder: () => ({
+      ok: true,
+      data: null,
+    }),
+    listFills: () => ({
+      ok: true,
+      data: emptyPage,
+    }),
+    getFill: () => ({
+      ok: true,
+      data: null,
+    }),
+    listCommissions: () => ({
+      ok: true,
+      data: emptyPage,
+    }),
   }
 }
 
@@ -31,9 +58,20 @@ function createOperatorState() {
       tradingMode: "testnet",
       strategyMode: "conservative-testnet",
       stopping: false,
-      readiness: { state: "READY", blockers: [] },
-      userData: { ready: true, status: "READY", ageMs: 10 },
-      markets: { configured: 1, enabled: 1, blocked: 0 },
+      readiness: {
+        state: "READY",
+        blockers: [],
+      },
+      userData: {
+        ready: true,
+        status: "READY",
+        ageMs: 10,
+      },
+      markets: {
+        configured: 1,
+        enabled: 1,
+        blocked: 0,
+      },
     },
     markets: {
       observedAt: 120000,
@@ -53,29 +91,46 @@ function createOperatorState() {
         symbol: "BTCUSDT",
         activeQuantity: "0.12500000",
         investedQuote: "500.00000000",
-        recovery: { outstandingRecoveryAmount: "500.00000000" },
+        recovery: {
+          outstandingRecoveryAmount: "500.00000000",
+        },
       }],
     },
   }
   return {
     state,
     operator: {
-      getStatus: async () => ({ ok: true, data: state.status }),
-      getMarkets: async () => ({ ok: true, data: state.markets }),
-      getPositions: async () => ({ ok: true, data: state.portfolio }),
+      getStatus: async () => ({
+        ok: true,
+        data: state.status,
+      }),
+      getMarkets: async () => ({
+        ok: true,
+        data: state.markets,
+      }),
+      getPositions: async () => ({
+        ok: true,
+        data: state.portfolio,
+      }),
     },
   }
 }
 
 function waitForSocketOpen(socket) {
-  return new Promise((resolve, reject) => {
-    socket.addEventListener("open", resolve, { once: true })
-    socket.addEventListener("error", reject, { once: true })
+  return new Promise((...callbacks) => {
+    const [resolve, reject] = callbacks
+    socket.addEventListener("open", resolve, {
+      once: true,
+    })
+    socket.addEventListener("error", reject, {
+      once: true,
+    })
   })
 }
 
-function waitForMessage(socket, predicate = () => true) {
-  return new Promise((resolve, reject) => {
+function waitForMessage({ socket, predicate = () => true } = {}) {
+  return new Promise((...callbacks) => {
+    const [resolve, reject] = callbacks
     const timeout = setTimeout(() => {
       cleanup()
       reject(new Error("Timed out waiting for the expected WebSocket message"))
@@ -87,7 +142,9 @@ function waitForMessage(socket, predicate = () => true) {
     }
     function onMessage(event) {
       const message = JSON.parse(event.data)
-      if (!predicate(message)) return
+      if (!predicate(message)) {
+        return
+      }
       cleanup()
       resolve(message)
     }
@@ -108,7 +165,9 @@ async function startApi({ t, eventBus, operator } = {}) {
     port: 0,
     eventBus,
     operator,
-    logger: { error() {} },
+    logger: {
+      error() {},
+    },
   })
   t.after(async () => {
     await api.close()
@@ -120,12 +179,19 @@ async function startApi({ t, eventBus, operator } = {}) {
 test("sends a versioned complete operator snapshot to every new Bots WebSocket client", async (t) => {
   const eventBus = new EventBus()
   const { operator } = createOperatorState()
-  const api = await startApi({ t, eventBus, operator })
+  const api = await startApi({
+    t,
+    eventBus,
+    operator,
+  })
   const socket = new WebSocket(`ws://127.0.0.1:${api.address.port}/api/v1/trading/events`)
   t.after(() => socket.close())
 
   await waitForSocketOpen(socket)
-  const message = await waitForMessage(socket, (item) => item.type === "bots.snapshot")
+  const message = await waitForMessage({
+    socket,
+    predicate: (item) => item.type === "bots.snapshot",
+  })
 
   assert.equal(message.version, 1, "Bots snapshots must declare the supported contract version.")
   assert.equal(message.revision, 1, "A newly connected client must receive the first authoritative snapshot revision.")
@@ -137,21 +203,36 @@ test("sends a versioned complete operator snapshot to every new Bots WebSocket c
 test("broadcasts a newer complete snapshot after a successful operator BUY-control transition", async (t) => {
   const eventBus = new EventBus()
   const { operator, state } = createOperatorState()
-  const api = await startApi({ t, eventBus, operator })
+  const api = await startApi({
+    t,
+    eventBus,
+    operator,
+  })
   const socket = new WebSocket(`ws://127.0.0.1:${api.address.port}/api/v1/trading/events`)
   t.after(() => socket.close())
 
   await waitForSocketOpen(socket)
-  await waitForMessage(socket, (item) => item.type === "bots.snapshot")
+  await waitForMessage({
+    socket,
+    predicate: (item) => item.type === "bots.snapshot",
+  })
   state.markets.markets[0].operatorBuysPaused = true
   const publication = eventBus.publish({
     name: OPERATOR_UPDATE_EVENT,
     source: "harvester",
-    data: { action: "PAUSE", scope: "MARKET", symbol: "BTCUSDT", requestId: "dashboard-1" },
+    data: {
+      action: "PAUSE",
+      scope: "MARKET",
+      symbol: "BTCUSDT",
+      requestId: "dashboard-1",
+    },
   })
   assert.equal(publication.ok, true, "The application-owned BUY-control completion event must be accepted.")
 
-  const update = await waitForMessage(socket, (item) => item.type === "bots.snapshot" && item.revision > 1)
+  const update = await waitForMessage({
+    socket,
+    predicate: (item) => item.type === "bots.snapshot" && item.revision > 1,
+  })
   assert.equal(update.data.markets.data.markets[0].operatorBuysPaused, true, "The next full snapshot must reflect the completed market BUY pause.")
   assert.equal(update.data.portfolio.data.positions[0].activeQuantity, "0.12500000", "An operator-state update must keep the complete Portfolio snapshot alongside market state.")
 })
@@ -161,16 +242,27 @@ test("does not lose an operator transition that occurs while the initial snapsho
   const { state, operator: baseOperator } = createOperatorState()
   let releaseInitialStatus
   let statusReads = 0
-  const initialStatus = new Promise((resolve) => { releaseInitialStatus = resolve })
+  const initialStatus = new Promise((resolve) => {
+    releaseInitialStatus = resolve
+  })
   const operator = {
     ...baseOperator,
     getStatus: async () => {
       statusReads += 1
-      if (statusReads === 1) return initialStatus
-      return { ok: true, data: state.status }
+      if (statusReads === 1) {
+        return initialStatus
+      }
+      return {
+        ok: true,
+        data: state.status,
+      }
     },
   }
-  const api = await startApi({ t, eventBus, operator })
+  const api = await startApi({
+    t,
+    eventBus,
+    operator,
+  })
   const socket = new WebSocket(`ws://127.0.0.1:${api.address.port}/api/v1/trading/events`)
   t.after(() => socket.close())
 
@@ -179,13 +271,24 @@ test("does not lose an operator transition that occurs while the initial snapsho
   const publication = eventBus.publish({
     name: OPERATOR_UPDATE_EVENT,
     source: "harvester",
-    data: { action: "PAUSE", scope: "MARKET", symbol: "BTCUSDT", requestId: "dashboard-race" },
+    data: {
+      action: "PAUSE",
+      scope: "MARKET",
+      symbol: "BTCUSDT",
+      requestId: "dashboard-race",
+    },
   })
   assert.equal(publication.ok, true, "The state transition racing the initial read must be accepted.")
   await eventBus.flush()
-  releaseInitialStatus({ ok: true, data: state.status })
+  releaseInitialStatus({
+    ok: true,
+    data: state.status,
+  })
 
-  const snapshot = await waitForMessage(socket, (item) => item.type === "bots.snapshot")
+  const snapshot = await waitForMessage({
+    socket,
+    predicate: (item) => item.type === "bots.snapshot",
+  })
   assert.equal(snapshot.revision, 2, "A snapshot made stale by an intervening event must be discarded and reread at the newer revision.")
   assert.equal(snapshot.data.markets.data.markets[0].operatorBuysPaused, true, "The initial synchronization must not hide a transition that raced the snapshot read.")
 })
@@ -193,12 +296,19 @@ test("does not lose an operator transition that occurs while the initial snapsho
 test("a reconnect receives a fresh full snapshot rather than relying on missed event replay", async (t) => {
   const eventBus = new EventBus()
   const { operator, state } = createOperatorState()
-  const api = await startApi({ t, eventBus, operator })
+  const api = await startApi({
+    t,
+    eventBus,
+    operator,
+  })
   const firstSocket = new WebSocket(`ws://127.0.0.1:${api.address.port}/api/v1/trading/events`)
   t.after(() => firstSocket.close())
 
   await waitForSocketOpen(firstSocket)
-  await waitForMessage(firstSocket, (item) => item.type === "bots.snapshot")
+  await waitForMessage({
+    socket: firstSocket,
+    predicate: (item) => item.type === "bots.snapshot",
+  })
   firstSocket.close()
 
   state.markets.markets[0].operatorBuysPaused = true
@@ -206,7 +316,10 @@ test("a reconnect receives a fresh full snapshot rather than relying on missed e
   t.after(() => secondSocket.close())
   await waitForSocketOpen(secondSocket)
 
-  const snapshot = await waitForMessage(secondSocket, (item) => item.type === "bots.snapshot")
+  const snapshot = await waitForMessage({
+    socket: secondSocket,
+    predicate: (item) => item.type === "bots.snapshot",
+  })
   assert.ok(snapshot.revision > 1, "A reconnect must receive a newly sampled snapshot revision.")
   assert.equal(snapshot.data.markets.data.markets[0].operatorBuysPaused, true, "A reconnect must synchronize current authoritative state without replaying missed deltas.")
 })
