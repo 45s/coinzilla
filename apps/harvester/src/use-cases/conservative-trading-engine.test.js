@@ -25,6 +25,7 @@ import { createHarnessBroker } from "./conservative-trading-engine-harness.js"
 import { conservativeStrategyPolicy } from "../domain/strategies/conservative/strategy-policy.js"
 import { addDecimal, compareDecimal, multiplyDecimal, subtractDecimal } from "@coinzilla/utils"
 import { evaluateConservativeStrategy } from "../domain/strategies/conservative/strategy.js"
+import { updateTradingAccounting } from "./update-trading-accounting.js"
 
 const baseAsset = new Asset({
   id: "doge",
@@ -3136,32 +3137,17 @@ function createZeroFeeCycleConfig({ keepQuantity }) {
 }
 
 async function updateCompleteCycleAccounting({ scenario, fill }) {
-  try {
-    const portfolioResult = scenario.currentPortfolio.applyFill({ strategyId: StrategyId.COIN_GRABBER,
-      fill,
-    })
-    const ledgerResult = scenario.currentRecoveryLedger.applyFill({ strategyId: StrategyId.COIN_GRABBER,
-      fill,
-    })
-    if (portfolioResult.applied !== ledgerResult.applied ||
-        portfolioResult.duplicate !== ledgerResult.duplicate) {
-      throw new Error("Portfolio and RecoveryLedger execution identities are inconsistent")
-    }
-    scenario.currentPortfolio = portfolioResult.portfolio
-    scenario.currentRecoveryLedger = ledgerResult.ledger
-    return {
-      ok: true,
-      data: {
-        applied: portfolioResult.applied,
-        duplicate: portfolioResult.duplicate,
-      },
-    }
-  } catch (error) {
-    return {
-      ok: false,
-      errors: [error],
-    }
+  const result = updateTradingAccounting({
+    portfolio: scenario.currentPortfolio,
+    recoveryLedger: scenario.currentRecoveryLedger,
+    fill,
+  })
+  if (!result.ok) {
+    return result
   }
+  scenario.currentPortfolio = result.data.portfolio
+  scenario.currentRecoveryLedger = result.data.recoveryLedger
+  return result
 }
 
 async function completeCycleRecovery({ scenario, marketId, keepQuantity, minProfit }) {
@@ -3358,6 +3344,23 @@ async function runFirstCycleBuy({ scenario }) {
   }
 }
 
+function assertSecondBuyAccountingState({ scenario, expectedQuantity, expectedSpent, expectedFillCount }) {
+  const position = scenario.currentPortfolio.getPosition({
+    strategyId: StrategyId.COIN_GRABBER,
+    marketId: market.id,
+  })
+  assert.equal(position.baseQuantity.amount, expectedQuantity,
+    "The real accounting workflow must reconcile BUY inventory and cancellation-race SELL fills.")
+  assert.equal(position.spent.amount, expectedSpent,
+    "The second BUY must extend the original Position cost basis without resetting it.")
+  assert.equal(scenario.currentRecoveryLedger.buyCost, expectedSpent,
+    "RecoveryLedger must mirror the complete Position BUY cost after every execution.")
+  assert.equal(scenario.currentPortfolio.appliedFillIds.length, expectedFillCount,
+    "Every distinct BUY and cancellation-race SELL execution must be committed once.")
+  assert.equal(scenario.currentRecoveryLedger.appliedFillIds.length, expectedFillCount,
+    "Portfolio and RecoveryLedger must retain the same canonical execution count.")
+}
+
 async function applySecondBuyPartialFill({ scenario, secondBuy, firstRecoverySell }) {
   const fill = makeCommissionedCycleFill({
     order: secondBuy,
@@ -3380,6 +3383,12 @@ async function applySecondBuyPartialFill({ scenario, secondBuy, firstRecoverySel
   assert.equal(result.ok, true, result.errors?.[0]?.message)
   assert.equal(result.data.waitingForFullFill, true)
   assert.equal(result.data.recoverySellReplaced, true)
+  assertSecondBuyAccountingState({
+    scenario,
+    expectedQuantity: "1.15",
+    expectedSpent: "124.925",
+    expectedFillCount: 4,
+  })
   assert.equal(
     scenario.harness.engine.getOrders().find((order) => order.clientOrderId === secondBuy.clientOrderId).status,
     "PARTIALLY_FILLED",
@@ -3414,6 +3423,12 @@ async function applySecondBuyFinalFill({ scenario, secondBuy, firstRecoverySell,
   })
   assert.equal(result.ok, true, result.errors?.[0]?.message)
   assert.equal(result.data.reevaluate, true)
+  assertSecondBuyAccountingState({
+    scenario,
+    expectedQuantity: "1.8",
+    expectedSpent: "199.85",
+    expectedFillCount: 6,
+  })
   assert.deepEqual(scenario.harness.cancellationIds, [
     firstRecoverySell.brokerOrderId,
     replacementSell.brokerOrderId,
