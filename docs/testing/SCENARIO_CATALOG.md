@@ -32,7 +32,7 @@ The catalog is a navigation and traceability layer. Domain specifications, accep
 
 ### OPS-001 — Live Bots snapshots remain authoritative across updates and reconnects
 
-**Status:** TEST-MAPPED — named regression cases are present; exact-head verification is pending.
+**Status:** TEST-MAPPED — all mapped regression cases pass on PR #1812 head `0f82c3eaef16b37da3e97e55b283fba1df63adee`; this remains PR-branch evidence until merge to `develop`.
 
 **Behavior:** The Dashboard Bots workspace receives a complete, versioned view of Harvester runtime status, configured markets, and Portfolio positions over the existing local WebSocket. Relevant application/runtime events produce newer complete snapshots. A reconnect always synchronizes current state without replaying missed deltas.
 
@@ -105,7 +105,7 @@ The catalog is a navigation and traceability layer. Domain specifications, accep
 - [Dashboard Bots stream behavior](../../apps/dashboard/src/app/features/bots/page.spec.ts)
   - `reconnects and accepts a new server revision epoch after Harvester restarts`
 
-**Evidence note:** Test mappings are recorded; this scenario is not VERIFIED until the final PR head passes the relevant Harvester, Dashboard, workspace, coverage, and repository-quality checks.
+**Evidence note:** Exact PR-head GitHub Actions passed on `0f82c3eaef16b37da3e97e55b283fba1df63adee`: Harvester targeted regressions, all unit tests (including Dashboard production build), all coverage jobs, repository quality, external documentation links, and dependency audit. The optional read-only Binance TESTNET integration job was skipped by workflow configuration. The scenario remains `TEST-MAPPED` until this PR is merged to `develop`.
 
 ## Harvester — shared account, order, and portfolio behavior
 
