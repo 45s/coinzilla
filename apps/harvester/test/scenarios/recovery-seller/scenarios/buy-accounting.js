@@ -4,6 +4,8 @@ const testFile = "apps/harvester/test/scenarios/recovery-seller/buy-accounting.s
 const workflowSource = "apps/harvester/src/use-cases/create-recovery-seller-accounting-workflow.js"
 const portfolioSource = "apps/harvester/src/domain/portfolio/portfolio.js"
 const buyPolicySource = "apps/harvester/src/domain/strategies/recovery-seller/evaluate-buy-decision.js"
+const orderOwnershipSource = "apps/harvester/src/domain/orders/order-ownership.js"
+const orderRegistrySource = "apps/harvester/src/domain/orders/order-registry.js"
 
 function createBuySubcases({ id, name, status, blocker, title }) {
   return [{
@@ -62,6 +64,7 @@ function createBuyCaseDefinition({
   layer,
   stepType,
   mappings,
+  configFields,
 }) {
   return defineRecoverySellerScenario({
     id,
@@ -73,7 +76,7 @@ function createBuyCaseDefinition({
       "issue-1780: RS-002 BUY accounting",
     ],
     layer,
-    configFields: [
+    configFields: configFields ?? [
       "RS_PAIR.orderQuantity",
       "RS_PAIR.investment",
     ],
@@ -99,6 +102,8 @@ function createBuyCaseDefinition({
       workflowSource,
       portfolioSource,
       buyPolicySource,
+      orderOwnershipSource,
+      orderRegistrySource,
     ],
     test: mappings.test,
     status,
@@ -286,6 +291,607 @@ export const recoverySellerBuyAccountingScenarios = Object.freeze([
       }],
     },
     rules: ["RS_BUY_INTENT_CONTRACT"],
+  }),
+  makeBuyCase({
+    id: "RS-002-004",
+    name: "a canonical BUY Fill is attributed to the RS Position without changing CG accounting",
+    input: {
+      initialCGPosition: true,
+      includePositionOwnerships: true,
+      assertStrategyOwnership: true,
+      originalQuantity: "1",
+      fills: [{
+        tradeId: "rs-owned-buy-fill",
+        price: "10",
+        quantity: "1",
+        quoteQuantity: "10",
+      }],
+    },
+    expected: {
+      appliedFillIds: 2,
+      position: {
+        quantity: "1",
+        spent: "10",
+      },
+      executionQuantity: "1",
+      executionVwap: "10",
+      positionStrategyId: "RS_recoverySeller",
+      positions: [
+        {
+          positionId: "existing-cg-position",
+          strategyId: "CG_coinGrabber",
+          quantity: "3",
+          spent: "6",
+        },
+        {
+          positionId: "rs-buy-scenario-position",
+          strategyId: "RS_recoverySeller",
+          quantity: "1",
+          spent: "10",
+        },
+      ],
+    },
+    rules: ["RS_STRATEGY_OWNERSHIP_ISOLATION"],
+    invariants: ["RS_NO_CROSS_SUBSIDY"],
+  }),
+  makeBuyCase({
+    id: "RS-002-005",
+    name: "a full confirmed BUY Fill updates the RS Position and actual quote cost exactly once",
+    input: {
+      originalQuantity: "1",
+      fills: [{
+        tradeId: "rs-full-buy-fill",
+        price: "10",
+        quantity: "1",
+        quoteQuantity: "10",
+      }],
+      assertStrategyOwnership: true,
+    },
+    expected: {
+      appliedFillIds: 1,
+      position: {
+        quantity: "1",
+        spent: "10",
+      },
+      executionQuantity: "1",
+      executionVwap: "10",
+      positionStrategyId: "RS_recoverySeller",
+    },
+    rules: ["RS_BUY_CONFIRMED_FILL_ONLY"],
+    invariants: ["RS_QUANTITY_CONSERVATION"],
+  }),
+  makeBuyCase({
+    id: "RS-002-006",
+    name: "a partial BUY Fill accounts only confirmed quantity and cost while the remaining commitment stays reserved",
+    input: {
+      originalQuantity: "1",
+      fills: [{
+        tradeId: "rs-partial-buy-fill",
+        price: "10",
+        quantity: "0.4",
+        quoteQuantity: "4",
+        baseCommission: "0.0004",
+      }],
+    },
+    expected: {
+      appliedFillIds: 1,
+      position: {
+        quantity: "0.3996",
+        spent: "4",
+      },
+      executionQuantity: "0.4",
+      executionVwap: "10",
+    },
+    status: "PARTIAL",
+    subcases: [
+      {
+        id: "RS-002-006-A",
+        description: "the confirmed partial Fill changes only net acquired RS quantity and actual quote cost",
+        status: "TEST-MAPPED",
+        test: {
+          file: testFile,
+          title: "RS-002-006: a partial BUY Fill accounts only confirmed quantity and cost while the remaining commitment stays reserved",
+        },
+        evidence: null,
+      },
+      {
+        id: "RS-002-006-B",
+        description: "the unfilled portion of an OPEN or PARTIALLY_FILLED BUY remains reserved in the shared account allocator",
+        status: "BLOCKED",
+        test: null,
+        blocker: {
+          reason: "The accounting workflow scenario applies canonical fills but does not compose the order-event workflow and shared quote allocator that own pending BUY commitments.",
+          unblockCondition: "Add an APPLICATION scenario that applies a partial order update through the production order-event workflow, reads the shared account allocation, and proves the exact remaining quote commitment is retained until the approved terminal boundary.",
+        },
+        evidence: null,
+      },
+    ],
+    rules: ["RS_BUY_CONFIRMED_FILL_ONLY", "RS_ACCOUNT_QUOTE_RESERVATION"],
+    invariants: ["RS_RESERVATION_CONSERVATION"],
+  }),
+  makeBuyCase({
+    id: "RS-002-007",
+    name: "multiple BUY fills at different prices accumulate exact net base, quote cost and gross execution VWAP",
+    input: {
+      originalQuantity: "1",
+      fills: [
+        {
+          tradeId: "rs-multiple-buy-fill-a",
+          price: "10",
+          quantity: "0.4",
+          quoteQuantity: "4",
+          baseCommission: "0.0004",
+        },
+        {
+          tradeId: "rs-multiple-buy-fill-b",
+          price: "11",
+          quantity: "0.6",
+          quoteQuantity: "6.6",
+          baseCommission: "0.0006",
+        },
+      ],
+    },
+    expected: {
+      appliedFillIds: 2,
+      position: {
+        quantity: "0.999",
+        spent: "10.6",
+      },
+      executionQuantity: "1",
+      executionVwap: "10.6",
+    },
+    rules: ["RS_BUY_NET_BASE_AFTER_FEES", "RS_BUY_ACTUAL_QUOTE_COST"],
+    invariants: ["RS_QUANTITY_CONSERVATION", "RS_FINANCIAL_CONSERVATION"],
+  }),
+  makeBuyCase({
+    id: "RS-002-008",
+    name: "a BUY base-asset commission reduces net acquired Position quantity",
+    input: {
+      originalQuantity: "1",
+      fills: [{
+        tradeId: "rs-base-fee-buy-fill",
+        price: "10",
+        quantity: "1",
+        quoteQuantity: "10",
+        baseCommission: "0.001",
+      }],
+    },
+    expected: {
+      appliedFillIds: 1,
+      position: {
+        quantity: "0.999",
+        spent: "10",
+      },
+      executionQuantity: "1",
+      executionVwap: "10",
+    },
+    rules: ["RS_BUY_NET_BASE_AFTER_FEES"],
+    invariants: ["RS_QUANTITY_CONSERVATION"],
+  }),
+  makeBuyCase({
+    id: "RS-002-009",
+    name: "a BUY quote-asset commission increases actual quote cost without reducing base quantity",
+    input: {
+      originalQuantity: "1",
+      fills: [{
+        tradeId: "rs-quote-fee-buy-fill",
+        price: "10",
+        quantity: "1",
+        quoteQuantity: "10",
+        quoteCommission: "0.01",
+      }],
+    },
+    expected: {
+      appliedFillIds: 1,
+      position: {
+        quantity: "1",
+        spent: "10.01",
+      },
+      executionQuantity: "1",
+      executionVwap: "10",
+    },
+    rules: ["RS_BUY_ACTUAL_QUOTE_COST"],
+    invariants: ["RS_FINANCIAL_CONSERVATION"],
+  }),
+  makeBuyCase({
+    id: "RS-002-010",
+    name: "zero commission and multiple supported commission records are accounted exactly",
+    input: {
+      originalQuantity: "2",
+      fills: [
+        {
+          tradeId: "rs-zero-fee-buy-fill",
+          price: "10",
+          quantity: "1",
+          quoteQuantity: "10",
+        },
+        {
+          tradeId: "rs-multiple-fee-buy-fill",
+          price: "10",
+          quantity: "1",
+          quoteQuantity: "10",
+          baseCommissions: ["0.001", "0.002"],
+          quoteCommissions: ["0.01", "0.02"],
+        },
+      ],
+    },
+    expected: {
+      appliedFillIds: 2,
+      position: {
+        quantity: "1.997",
+        spent: "20.03",
+      },
+      executionQuantity: "2",
+      executionVwap: "10",
+    },
+    subcases: [
+      {
+        id: "RS-002-010-A",
+        description: "a canonical BUY Fill with no commission records preserves gross base and quote amounts",
+        status: "TEST-MAPPED",
+        test: {
+          file: testFile,
+          title: "RS-002-010: zero commission and multiple supported commission records are accounted exactly",
+        },
+        evidence: null,
+      },
+      {
+        id: "RS-002-010-B",
+        description: "multiple supported base and quote commission records are summed exactly by asset",
+        status: "TEST-MAPPED",
+        test: {
+          file: testFile,
+          title: "RS-002-010: zero commission and multiple supported commission records are accounted exactly",
+        },
+        evidence: null,
+      },
+    ],
+    rules: ["RS_BUY_NET_BASE_AFTER_FEES", "RS_BUY_ACTUAL_QUOTE_COST"],
+    invariants: ["RS_QUANTITY_CONSERVATION", "RS_FINANCIAL_CONSERVATION"],
+  }),
+  makeBuyCase({
+    id: "RS-002-011",
+    name: "replaying an identical canonical BUY Fill is an exact-once no-op",
+    input: {
+      originalQuantity: "1",
+      fills: [{
+        tradeId: "rs-replayed-buy-fill",
+        price: "10",
+        quantity: "1",
+        quoteQuantity: "10",
+      }],
+      replayFirstFill: true,
+    },
+    expected: {
+      appliedFillIds: 1,
+      position: {
+        quantity: "1",
+        spent: "10",
+      },
+      executionQuantity: "1",
+      executionVwap: "10",
+      replay: {
+        ok: true,
+        applied: false,
+        duplicate: true,
+      },
+    },
+    rules: ["RS_CANONICAL_FILL_EXACT_ONCE"],
+    invariants: ["RS_EXACT_ONCE"],
+  }),
+  makeBuyCase({
+    id: "RS-002-012",
+    name: "a third-asset BUY commission without authoritative quote valuation fails closed",
+    input: {
+      originalQuantity: "1",
+      fills: [{
+        tradeId: "rs-third-asset-fee-buy-fill",
+        price: "10",
+        quantity: "1",
+        quoteQuantity: "10",
+        thirdAssetCommission: "0.01",
+      }],
+    },
+    expected: {
+      appliedFillIds: 0,
+      position: null,
+      executionQuantity: null,
+      executionVwap: null,
+      results: [{
+        ok: false,
+        applied: false,
+      }],
+    },
+    status: "PARTIAL",
+    subcases: [
+      {
+        id: "RS-002-012-A",
+        description: "missing authoritative execution-time quote valuation rejects the Fill before Portfolio mutation",
+        status: "TEST-MAPPED",
+        test: {
+          file: testFile,
+          title: "RS-002-012: a third-asset BUY commission without authoritative quote valuation fails closed",
+        },
+        evidence: null,
+      },
+      {
+        id: "RS-002-012-B",
+        description: "a third-asset commission with an approved authoritative execution-time quote value and freshness source is accepted",
+        status: "BLOCKED",
+        test: null,
+        blocker: {
+          reason: "No authoritative execution-time third-asset quote-value source and freshness contract is approved.",
+          unblockCondition: "Approve the execution-time valuation source and identity/freshness contract, then test exact fee conversion and quote-cost attribution without using an operator-configured or fabricated rate.",
+        },
+        evidence: null,
+      },
+    ],
+    rules: ["RS_BUY_ACTUAL_QUOTE_COST"],
+    invariants: ["RS_FINANCIAL_CONSERVATION"],
+  }),
+  makeBuyCase({
+    id: "RS-002-013",
+    name: "reusing a canonical BUY Fill identity with changed execution facts is rejected atomically",
+    input: {
+      originalQuantity: "1",
+      fills: [{
+        tradeId: "rs-conflicting-buy-fill",
+        price: "10",
+        quantity: "1",
+        quoteQuantity: "10",
+      }],
+      conflictFirstFill: true,
+    },
+    expected: {
+      appliedFillIds: 1,
+      position: {
+        quantity: "1",
+        spent: "10",
+      },
+      executionQuantity: "1",
+      executionVwap: "10",
+      conflict: {
+        ok: false,
+        applied: false,
+      },
+    },
+    rules: ["RS_CANONICAL_FILL_EXACT_ONCE"],
+    invariants: ["RS_EXACT_ONCE", "RS_CONFLICT_REJECTION"],
+  }),
+  makeBuyCase({
+    id: "RS-002-014",
+    name: "BUY fills with unowned, wrong-strategy, wrong-position, wrong-order, wrong-market or wrong-side identity are rejected",
+    layer: "APPLICATION",
+    stepType: "reject-invalid-buy-fill-ownership",
+    input: {
+      cases: [
+        {
+          id: "unowned-order",
+          owned: false,
+          fillInput: {
+            tradeId: "rs-unowned-buy-fill",
+            quantity: "1",
+            quoteQuantity: "10",
+          },
+        },
+        {
+          id: "wrong-strategy",
+          strategyId: "CG_coinGrabber",
+          fillInput: {
+            tradeId: "rs-wrong-strategy-buy-fill",
+            quantity: "1",
+            quoteQuantity: "10",
+          },
+        },
+        {
+          id: "wrong-position",
+          seedPositionId: "foreign-position",
+          seedFillInput: {
+            tradeId: "rs-wrong-position-buy-fill",
+            quantity: "1",
+            quoteQuantity: "10",
+          },
+          fillInput: {
+            tradeId: "rs-wrong-position-buy-fill",
+            quantity: "1",
+            quoteQuantity: "10",
+          },
+        },
+        {
+          id: "wrong-broker-order",
+          fillInput: {
+            tradeId: "rs-wrong-order-buy-fill",
+            brokerOrderId: "foreign-broker-order",
+            quantity: "1",
+            quoteQuantity: "10",
+          },
+        },
+        {
+          id: "wrong-market",
+          fillInput: {
+            tradeId: "rs-wrong-market-buy-fill",
+            marketSymbol: "ZROFDUSD",
+            quantity: "1",
+            quoteQuantity: "10",
+          },
+        },
+        {
+          id: "wrong-side",
+          fillInput: {
+            tradeId: "rs-wrong-side-buy-fill",
+            side: "SELL",
+            quantity: "1",
+            quoteQuantity: "10",
+          },
+        },
+      ],
+    },
+    expected: {
+      cases: [
+        {
+          id: "unowned-order",
+          accepted: false,
+          appliedFillIdsBefore: 0,
+          appliedFillIdsAfter: 0,
+          positionIdsBefore: [],
+          positionIdsAfter: [],
+        },
+        {
+          id: "wrong-strategy",
+          accepted: false,
+          appliedFillIdsBefore: 0,
+          appliedFillIdsAfter: 0,
+          positionIdsBefore: [],
+          positionIdsAfter: [],
+        },
+        {
+          id: "wrong-position",
+          accepted: false,
+          appliedFillIdsBefore: 1,
+          appliedFillIdsAfter: 1,
+          positionIdsBefore: ["foreign-position"],
+          positionIdsAfter: ["foreign-position"],
+        },
+        {
+          id: "wrong-broker-order",
+          accepted: false,
+          appliedFillIdsBefore: 0,
+          appliedFillIdsAfter: 0,
+          positionIdsBefore: [],
+          positionIdsAfter: [],
+        },
+        {
+          id: "wrong-market",
+          accepted: false,
+          appliedFillIdsBefore: 0,
+          appliedFillIdsAfter: 0,
+          positionIdsBefore: [],
+          positionIdsAfter: [],
+        },
+        {
+          id: "wrong-side",
+          accepted: false,
+          appliedFillIdsBefore: 0,
+          appliedFillIdsAfter: 0,
+          positionIdsBefore: [],
+          positionIdsAfter: [],
+        },
+      ],
+    },
+    rules: ["RS_STRATEGY_OWNERSHIP_ISOLATION"],
+    invariants: ["RS_STABLE_OWNERSHIP", "RS_NO_CROSS_SUBSIDY", "RS_CONFLICT_REJECTION"],
+  }),
+  makeBuyCase({
+    id: "RS-002-015",
+    name: "invalid BUY quantities and commission bounds fail before accounting mutation",
+    stepType: "validate-rejected-buy-fill-values",
+    input: {},
+    expected: {
+      zeroQuantityRejected: true,
+      negativeQuantityRejected: true,
+      negativeCommissionRejected: true,
+      excessiveBaseCommissionRejected: true,
+      appliedFillIds: 0,
+      positionCount: 0,
+    },
+    status: "PARTIAL",
+    subcases: [
+      {
+        id: "RS-002-015-A",
+        description: "zero and negative canonical BUY quantities and negative commission amounts are rejected at value construction",
+        status: "TEST-MAPPED",
+        test: {
+          file: testFile,
+          title: "RS-002-015: invalid BUY quantities and commission bounds fail before accounting mutation",
+        },
+        evidence: null,
+      },
+      {
+        id: "RS-002-015-B",
+        description: "base commission greater than the canonical Fill gross base quantity is rejected without Portfolio mutation",
+        status: "TEST-MAPPED",
+        test: {
+          file: testFile,
+          title: "RS-002-015: invalid BUY quantities and commission bounds fail before accounting mutation",
+        },
+        evidence: null,
+      },
+      {
+        id: "RS-002-015-C",
+        description: "a canonical BUY Fill whose cumulative quantity exceeds registered order original quantity is rejected",
+        status: "BLOCKED",
+        test: null,
+        blocker: {
+          reason: "The current accounting workflow validates order identity and ownership but does not compare applied BUY Fill quantity against the registered order original quantity.",
+          unblockCondition: "Add the approved order-event/accounting boundary check for cumulative executed quantity versus original quantity, then prove overfill rejection is atomic and does not mutate Portfolio or execution aggregates.",
+        },
+        evidence: null,
+      },
+      {
+        id: "RS-002-015-D",
+        description: "BUY Fill precision and exchange TradingRules bounds are enforced before accounting",
+        status: "BLOCKED",
+        test: null,
+        blocker: {
+          reason: "The direct accounting workflow has no TradingRules input and cannot prove exchange tick, step or notional validity.",
+          unblockCondition: "Compose the production order-event/market-readiness boundary with canonical TradingRules and assert invalid precision is rejected before any Fill accounting mutation.",
+        },
+        evidence: null,
+      },
+    ],
+    rules: ["RS_BUY_NET_BASE_AFTER_FEES", "RS_BUY_ACTUAL_QUOTE_COST"],
+    invariants: ["RS_QUANTITY_CONSERVATION", "RS_FINANCIAL_CONSERVATION"],
+  }),
+  makeBuyCase({
+    id: "RS-002-016",
+    name: "multiple recovery BUY tranches leave the operator-declared legacy basis unchanged",
+    input: {
+      originalQuantity: "3",
+      includeLegacyBasis: true,
+      legacyInvested: "50",
+      legacyQuantity: "10",
+      fills: [
+        {
+          tradeId: "rs-tranche-buy-fill-a",
+          price: "10",
+          quantity: "1",
+          quoteQuantity: "10",
+          baseCommission: "0.001",
+        },
+        {
+          tradeId: "rs-tranche-buy-fill-b",
+          price: "12",
+          quantity: "2",
+          quoteQuantity: "24",
+          quoteCommission: "0.024",
+        },
+      ],
+      assertStrategyOwnership: true,
+    },
+    expected: {
+      appliedFillIds: 2,
+      position: {
+        quantity: "2.999",
+        spent: "34.024",
+      },
+      executionQuantity: "3",
+      executionVwap: "11.333333333333333333",
+      positionStrategyId: "RS_recoverySeller",
+      legacyPosition: {
+        invested: "50",
+        originalQuantity: "10",
+        averageCost: "5",
+        remainingQuantity: "10",
+      },
+    },
+    configFields: [
+      "RS_PAIR.orderQuantity",
+      "RS_PAIR.investment",
+      "RS_PAIR.legacyPosition.invested",
+      "RS_PAIR.legacyPosition.quantity",
+    ],
+    rules: ["RS_BUY_NET_BASE_AFTER_FEES", "RS_BUY_ACTUAL_QUOTE_COST"],
+    invariants: ["RS_FINANCIAL_CONSERVATION", "RS_NO_CROSS_SUBSIDY"],
   }),
   blockedCase({
     id: "RS-002-017",
