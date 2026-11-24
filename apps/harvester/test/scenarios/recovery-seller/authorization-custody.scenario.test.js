@@ -116,6 +116,14 @@ function createPortfolioWithPositions({ positions = [] } = {}) {
   return portfolio
 }
 
+function calculatePortfolioBaseQuantity({ portfolio }) {
+  let total = 0
+  for (const position of portfolio.positions) {
+    total += Number(position.baseQuantity.amount)
+  }
+  return total
+}
+
 function createLegacySpotInput({
   invested = "50",
   quantity = "10",
@@ -167,10 +175,7 @@ function createLegacySpotInput({
     allocation,
     verifiedSpotQuantity: allocation.find((item) => item.assetId === baseAsset.id)?.amount ?? "0",
     offSpotQuantityUsed: "0",
-    otherStrategyPositionQuantity: portfolio.positions.reduce(
-      (total, positionItem) => total + Number(positionItem.baseQuantity.amount),
-      0,
-    ),
+    otherStrategyPositionQuantity: calculatePortfolioBaseQuantity({ portfolio }),
     offSpotQuantity,
   }
 }
