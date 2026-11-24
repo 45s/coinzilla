@@ -1477,7 +1477,283 @@ This family is a disposition register, not permission to invent functionality.
 - Any behavior without an explicit canonical decision remains BLOCKED rather than inferred.
 - A future owner-approved issue must define the contract, source of truth, replay semantics and acceptance criteria before implementation scenarios are added.
 
-### 11.1 Crosswalk to the owning issue's A–K matrix
+
+### 11.1 Complete 22-field family contracts
+
+Every family below explicitly answers the 22 contract questions required by the owner brief. “N/A” means that the field does not apply to that family’s boundary; it is not permission to omit a required assertion in another family. Existing test paths are listed for source discovery only and receive **zero scenario-coverage credit** under #1780.
+
+#### RS-001 — Authorization, legacy basis and verified Spot custody
+
+| Contract field | RS-001 definition |
+| --- | --- |
+| 1. Purpose | Prove that RS may use only explicitly authorized legacy quantity that is currently verified, available and unreserved in Spot. |
+| 2. Preconditions | RS strategy/pair route is configured; operator-declared original invested quote and original base quantity are valid; authoritative account snapshot, Portfolio and active-order commitments are available and fresh. |
+| 3. Configuration inputs | Pair enabled/environment; legacyPosition.invested; legacyPosition.quantity; sellQuantity; canonical market/base/quote identity. Do not add a second legacy-basis field. |
+| 4. Runtime-derived inputs | Spot total/free/locked balances; EARN/off-Spot balances; all Portfolio base Positions; active OrderRegistry commitments; external/manual orders; snapshot timestamp and account identity. |
+| 5. Domain rules | Historical average cost derives from original invested quote/original quantity. Verified additional Spot is authoritative Spot total minus aggregate Portfolio base quantity, capped by remaining authorized legacy quantity. The shared allocator accounts for reservations once. |
+| 6. Decision inputs | Basis validity, account/market identity, snapshot freshness, Spot custody, aggregate Portfolio base, active commitments and configured legacy remainder. |
+| 7. Expected decision | Permit only the eligible authorized slice when every gate passes; otherwise WAIT/BLOCK/STOP according to the missing or contradictory evidence. Never adopt an external order or balance as RS-owned. |
+| 8. State before | Operator-declared legacy basis exists separately from verified custody; recovery Position may be empty; no synthetic Fill or Portfolio Position is created. |
+| 9. State after | Authorization snapshot is derived; original basis is unchanged. Remaining legacy quantity changes only after a successfully reconciled legacy sale. |
+| 10. Portfolio effects | None during authorization. Portfolio remains the actual-accounting aggregate; wallet balances do not create Positions or fills. |
+| 11. Reservation effects | Available Spot is reduced by aggregate Portfolio base and active commitments exactly once. Do not subtract locked balances or reservations twice. |
+| 12. Order effects | No order is submitted by this family. External/manual/startup-snapshot orders remain external and cannot become RS-owned. |
+| 13. Commission effects | N/A before execution. Later canonical SELL commissions belong to RS-006 and must not change historical basis. |
+| 14. Profitability calculation | N/A at authorization. A valid legacy allocation is only an input to the separate RS-004 profitability gates. |
+| 15. Invariants | Legacy basis, recovery inventory and verified Spot custody remain distinct; no synthetic inventory; no cross-strategy ownership; no double-subtracted commitments. |
+| 16. Failure cases | Missing/zero/negative/malformed basis; stale/missing snapshot; Spot total below aggregate Portfolio base; EARN-only custody; conflicting account/market identity; insufficient Spot; unexplained locked balance. |
+| 17. Duplicate/replay cases | Repeated identical snapshots are idempotent. Conflicting snapshots/identities are rejected. Restart restoration is not supported by this family. |
+| 18. Required assertions | Exact original basis and average cost; authorized remaining legacy; verified Spot; unreserved quantity; unchanged Portfolio; no synthetic Fill; no unauthorized SELL intent. |
+| 19. Existing regression tests | legacy-position.test.js; legacy-spot-allocation.test.js; create-recovery-seller-action-authorizer.test.js. These are regression references, not #1780 scenario evidence. |
+| 20. Missing scenario tests | New named scenarios for basis validation, Spot/EARN custody, external inventory isolation, stale snapshots, aggregate Portfolio subtraction and reservation interaction. |
+| 21. Blocked decisions | Runtime authorization revocation/expiry remains deferred under FITDIB. Missing or contradictory current custody evidence fails closed; do not infer a recovery path. |
+| 22. Acceptance criteria | Every #1780 section A case is mapped to stable IDs; exact basis/custody/reservation assertions pass on a recorded SHA; no existing regression test is counted as scenario credit. |
+
+#### RS-002 — Recovery BUY eligibility and canonical BUY accounting
+
+| Contract field | RS-002 definition |
+| --- | --- |
+| 1. Purpose | Prove that recovery inventory and cost basis arise only from confirmed canonical RS BUY fills and actual commission facts. |
+| 2. Preconditions | RS route and pair are eligible; legacy authorization/custody, market metadata, account snapshot and shared allocator are valid; no conflicting active BUY/SELL lifecycle blocks the action. |
+| 3. Configuration inputs | Pair enabled/environment; orderQuantity; investment cap; BUY cadence/reference-price settings; market precision and configured fee assumptions used for reservation. |
+| 4. Runtime-derived inputs | Market price/readiness; TradingRules; current recovery Position; account quote availability; Portfolio; OrderRegistry; active commitments; canonical order ownership and Fill history. |
+| 5. Domain rules | Only confirmed canonical BUY fills change recovery inventory. Base commission reduces net base; quote commission increases actual quote cost. Unknown outcomes preserve identity and commitment. |
+| 6. Decision inputs | Eligibility, market readiness, investment remaining after commitments, outstanding order state, order ownership, precision and authoritative Fill/commission facts. |
+| 7. Expected decision | SUBMIT only for a valid BUY intent; WAIT for a known active order; RECONCILE for unknown outcome; BLOCK/STOP for invalid or contradictory evidence. |
+| 8. State before | Empty or accumulating recovery allocation with a stable cycle/Position identity and no unresolved prior BUY lifecycle. |
+| 9. State after | Confirmed fills update recovery net quantity/cost once; partial fills leave unfilled commitments reserved; next tranche is allowed only after prior BUY terminal reconciliation. |
+| 10. Portfolio effects | Apply each accepted Fill to the correct RS Position exactly once. Do not apply RS BUY fills to CG accounting or create inventory from intent/acknowledgement. |
+| 11. Reservation effects | Quote commitment is held through open/partial/unknown outcomes and released only at the approved terminal accounting boundary. Do not double-count committed quote. |
+| 12. Order effects | Preserve strategy/Position/cycle/purpose ownership; no duplicate BUY while an order is active or unresolved; exact intent fields and broker-call count are asserted. |
+| 13. Commission effects | Base fee reduces acquired net base; quote fee increases actual quote cost; multiple records are summed exactly. Third-asset valuation is BLOCKED without an approved execution-time quote-value source. |
+| 14. Profitability calculation | BUY eligibility is not a SELL profitability decision. Record actual cost/quantity/VWAP for later recovery and combined profitability; do not use requested quantity or gross VWAP as net cost basis. |
+| 15. Invariants | Applied Fill IDs are unique; recovery quantity equals gross acquired base less base fees; quote cost includes quote fees; legacy basis is unchanged; no cross-strategy attribution. |
+| 16. Failure cases | Invalid/negative/zero Fill; overfill; wrong order/Position/strategy/market; invalid precision; contradictory commission identity; missing account state; unknown acknowledgement; persistence failure. |
+| 17. Duplicate/replay cases | Identical Fill replay is a no-op; same identity with changed facts is rejected atomically. Process restart/replay restoration remains unsupported. |
+| 18. Required assertions | Exact net base, quote cost, actual execution VWAP inputs, applied Fill identities, pending quote commitment, order ownership, cycle state and exact broker-call count. |
+| 19. Existing regression tests | create-recovery-seller-accounting-workflow.test.js; create-recovery-seller-accounting-workflow.buy-vwap.test.js; create-recovery-seller-runtime-evaluator.test.js; order-event-workflow.test.js. Zero scenario credit. |
+| 20. Missing scenario tests | New RS-002 registry cases for full/partial/multiple BUY fills, base/quote fees, duplicate/conflicting identity, investment boundaries, unknown submission and CG exclusion. |
+| 21. Blocked decisions | Third-asset quote valuation source and process restart/replay remain deferred. Missing/ambiguous third-asset valuation must fail closed, never equal zero by assumption. |
+| 22. Acceptance criteria | Every #1780 section B case has stable IDs and independent exact-decimal expected values; real Portfolio/Fill ownership is asserted; new scenarios are merged and verified before status changes. |
+
+#### RS-003 — Additive mixed SELL planning and allocation
+
+| Contract field | RS-003 definition |
+| --- | --- |
+| 1. Purpose | Prove that SELL quantity is actual net recovery inventory plus only the currently eligible legacy slice, with no over-allocation. |
+| 2. Preconditions | Canonical recovery inventory exists; legacy basis and current Spot availability are verified; cycle is accumulating; no active/unknown SELL; account commitments and TradingRules are authoritative. |
+| 3. Configuration inputs | sellQuantity; minProfit; makerPercent; maker/taker fee assumptions; pair enabled/environment; market precision/filter metadata. |
+| 4. Runtime-derived inputs | Net recovery quantity; remaining authorized legacy quantity; verified unreserved Spot; shared base commitments; current fee reserves; tick/step/min/max price/quantity/notional. |
+| 5. Domain rules | SELL target is additive. A smaller authorized legacy remainder may be used within the current cycle. Recovery-only operation is allowed after legacy exhaustion. Candidate filter violations latch STOP; only post-completion constrained dust may be classified as dust. |
+| 6. Decision inputs | Recovery/legacy quantities, custody, account reservations, cycle state, fee assumptions, price target, TradingRules and market readiness. |
+| 7. Expected decision | Produce an exact planned SELL only when every quantity, ownership, profitability and filter gate passes; otherwise WAIT/BLOCK/STOP and never submit. |
+| 8. State before | ACCUMULATING cycle with canonical recovery inventory, eligible legacy remainder and no sole SELL identity. |
+| 9. State after | Planning alone does not mutate cycle or inventory. At the authorized submission boundary the sole SELL identity/reservation is recorded; a blocked plan leaves no intent. |
+| 10. Portfolio effects | None during planning. The plan must reconcile to existing net Portfolio inventory; no synthetic quantity is created. |
+| 11. Reservation effects | Shared account-wide base commitments are included. One cycle-scoped SELL reservation is created only at the approved durable submission boundary. |
+| 12. Order effects | Assert exact side, type, quantity, price, quote commitment, fee reserve and ownership. No broker call for a blocked/below-target plan; no second SELL per cycle. |
+| 13. Commission effects | Planning reserves supported base/quote fees. Actual base/quote/third-asset commissions are allocated only from canonical fills; third-asset quote valuation is BLOCKED. |
+| 14. Profitability calculation | Use the max of recovery, legacy and combined net-proceeds requirements, then gross up supported fee reserves and round price/quantity using exact TradingRules. Detailed gates are RS-004. |
+| 15. Invariants | Recovery plus legacy allocation equals planned gross SELL quantity; base debit includes base commission; no quantity shifts silently between allocations; shared reservations prevent oversell. |
+| 16. Failure cases | Insufficient Spot; stale snapshot; missing filters; tick/step/min/max/min-notional violation; invalid fee; precision ambiguity; active reservation; incomplete reconciliation. |
+| 17. Duplicate/replay cases | Repeated evaluation cannot create another SELL; duplicate planner invocation is side-effect-free; stale prior-cycle facts cannot change a new cycle. |
+| 18. Required assertions | Exact plan fields, allocation split, fee reserve, net-proceeds target, filter result, no Portfolio mutation and zero broker calls for blocked cases. |
+| 19. Existing regression tests | calculate-sell-plan.test.js; legacy-spot-allocation.test.js; mixed-sell-fill-allocation.test.js; recovery-seller-sell-planner.scenario.test.js. New planner scenario evidence remains PARTIAL. |
+| 20. Missing scenario tests | Full workflow-to-default-evaluator composition, cross-market reservations, legacy exhaustion, all fee-asset boundaries and complete dust/filter subcases. |
+| 21. Blocked decisions | #1809 blocks the real workflow-to-evaluator projection proof. Third-asset valuation and standalone final-residual liquidation remain blocked/unsupported. |
+| 22. Acceptance criteria | All #1780 sections C/H/I planner cases have stable IDs; exact intent and no-submit assertions pass; #1809 is separately fixed/tested before its subcase is unblocked. |
+
+#### RS-004 — Independent profitability and fee-aware SELL economics
+
+| Contract field | RS-004 definition |
+| --- | --- |
+| 1. Purpose | Prove that recovery, legacy and combined-cycle profitability each pass independently and cannot subsidize one another. |
+| 2. Preconditions | Canonical cost bases, allocated SELL quantities, actual or explicitly reserved fee assumptions and quote-currency proceeds are valid. |
+| 3. Configuration inputs | Pair minProfit; makerPercent; maker/taker fee assumptions; order type; market tick/step/quote precision. |
+| 4. Runtime-derived inputs | Recovery cost basis; legacy cost consumed; recovery/legacy SELL quantities; gross proceeds; actual commissions; fee asset identity; market filters. |
+| 5. Domain rules | Recovery and combined profit must meet minProfit; legacy must meet its approved non-loss/break-even gate. Combined success cannot repair either allocation failure. |
+| 6. Decision inputs | Exact cost bases, net proceeds after fees, allocated quantities, fee reserve/actual fee facts and threshold precision. |
+| 7. Expected decision | SUBMIT only when all independent gates pass and the planned order satisfies filters; otherwise BLOCK/STOP with the failed gate identified. |
+| 8. State before | A valid accumulating cycle with recovery and applicable legacy allocations; no SELL intent or reservation yet. |
+| 9. State after | Evaluation returns an eligible/ineligible decision and exact plan; no accounting/cycle state changes before canonical execution facts. |
+| 10. Portfolio effects | None during pre-submit profitability evaluation. Post-fill accounting belongs to RS-006 and must commit confirmed facts even when actual profit fails. |
+| 11. Reservation effects | No reservation on failed gates. A passing plan may proceed to the sole-cycle durable reservation boundary; release follows RS-005/006. |
+| 12. Order effects | Assert exact order type, price, quantity, fee reserve and no-submit on every failing gate. |
+| 13. Commission effects | Use actual base/quote fees for realized profitability. Planning reserves maker fee for LIMIT_MAKER and approved higher maker/taker fee for ordinary LIMIT. Third-asset valuation remains blocked. |
+| 14. Profitability calculation | Recovery: recovery net proceeds minus recovery cost basis >= minProfit. Legacy: legacy net proceeds minus legacy cost consumed >= 0 where break-even is approved. Combined: total net proceeds minus both cost bases >= minProfit. SELL net proceeds exclude quote fees and any approved third-asset quote value. |
+| 15. Invariants | Three gates are independent; exact equality passes only where specified; no cross-subsidy; gross proceeds are never substituted for net proceeds. |
+| 16. Failure cases | Below/equal/above thresholds; missing fee; wrong fee asset; invalid division/precision; filter failure; one allocation profitable while another loses; post-fill adverse result. |
+| 17. Duplicate/replay cases | Repeated pure evaluation is deterministic and side-effect-free; duplicate actual Fill accounting is handled by RS-006, not by recalculating a synthetic result. |
+| 18. Required assertions | Exact per-allocation cost/proceeds/profit, combined profit, target max, fee gross-up, rounded order fields and failed-gate reason. |
+| 19. Existing regression tests | calculate-profitability.test.js; calculate-sell-plan.test.js; recovery-seller-profitability.scenario.test.js; recovery-seller-sell-planner.scenario.test.js. New scenario evidence remains PARTIAL. |
+| 20. Missing scenario tests | Actual partial/multiple fill fees, all exact threshold neighbors, complete mixed-commission cases and post-fill adverse application outcomes. |
+| 21. Blocked decisions | Third-asset fee quote valuation source is not approved. Do not compute a successful third-asset profitability case or assume a zero fee. |
+| 22. Acceptance criteria | Every #1780 section D case has independent oracle values and complete plan assertions; both cross-subsidy directions and recovery-only operation are proved. |
+
+#### RS-005 — One SELL lifecycle per cycle
+
+| Contract field | RS-005 definition |
+| --- | --- |
+| 1. Purpose | Prove that a recovery cycle can create only one SELL order lifecycle and cannot release its reservation prematurely. |
+| 2. Preconditions | Stable cycleId/positionId; canonical accumulating cycle state; no prior SELL identity; durable submission/OrderRegistry boundary available. |
+| 3. Configuration inputs | Pair enabled/environment; sellQuantity and investment cap as upstream policy inputs. No configuration flag permits a second SELL or retry. |
+| 4. Runtime-derived inputs | Cycle state; active/pending SELL identity; broker acknowledgement/status; durable intent/outcome; reservation; canonical REST/stream fill history. |
+| 5. Domain rules | Record one SELL identity before broker I/O; active/unknown order is WAIT/RECONCILE; terminal incomplete outcomes leave cycle UNRESOLVED; no replacement SELL or next BUY. |
+| 6. Decision inputs | Existing cycle/order identity, terminal status, reconciliation completeness, profitability and accounting commit result. |
+| 7. Expected decision | SUBMIT only for the first eligible SELL; WAIT for known active order; RECONCILE for unknown/incomplete status; BLOCK/STOP for invalid or conflicting transition. |
+| 8. State before | ACCUMULATING cycle with no SELL identity and no SELL reservation. |
+| 9. State after | SELL_SUBMITTED while active; CLOSED only after terminal FILLED, complete reconciliation, atomic accounting and all gates; otherwise UNRESOLVED/STOP under the approved contract. |
+| 10. Portfolio effects | Partial SELL fills are staged; no premature recovery/legacy projection commit. Complete canonical fills are applied once after terminal reconciliation. |
+| 11. Reservation effects | Create once at durable submission; retain for active/unknown/incomplete/failed commit; release once only after successful terminal accounting. |
+| 12. Order effects | One immutable SELL identity per cycle; repeated evaluation must not create another broker call; preserve client/broker IDs and ownership. |
+| 13. Commission effects | Commissions follow canonical partial/terminal fills; no commission is invented from intent/acknowledgement; final allocation belongs to RS-006. |
+| 14. Profitability calculation | Cycle closes only when recovery, applicable legacy and combined gates pass on actual net proceeds after complete fee reconciliation. |
+| 15. Invariants | One SELL per cycle; no replacement/retry/continuation SELL; no next BUY from unresolved cycle; reservation conservation. |
+| 16. Failure cases | Unknown acknowledgement; partial terminal; CANCELED/REJECTED/EXPIRED; incomplete REST/stream history; persistence failure; duplicate terminal event; conflicting order identity. |
+| 17. Duplicate/replay cases | Duplicate event/completion is idempotent; conflicting identity rejected; stale prior-cycle fills cannot close or mutate a later cycle. |
+| 18. Required assertions | Exact broker-call count; stable order/cycle identity; state before/after; reservation held/released once; no second SELL/BUY; exact terminal disposition. |
+| 19. Existing regression tests | recovery-seller-cycle-lifecycle.scenario.test.js; create-recovery-seller-accounting-workflow.test.js; create-recovery-seller-order-submitter.test.js. New lifecycle scenario evidence remains PARTIAL. |
+| 20. Missing scenario tests | Application-composed broker-call count, durable reservation races, partial-fill race, full terminal history and complete STOP integration. |
+| 21. Blocked decisions | Terminal STOP resolver/source-contract discrepancy remains BLOCKED; do not infer a reset, replacement SELL or next-cycle path. |
+| 22. Acceptance criteria | Every #1780 section E case is mapped and proved through real lifecycle composition; no cycle closes/releases before all required gates. |
+
+#### RS-006 — Exact-once mixed SELL accounting and atomicity
+
+| Contract field | RS-006 definition |
+| --- | --- |
+| 1. Purpose | Prove that recovery and legacy accounting consume the same canonical mixed-SELL Fill set and commit atomically. |
+| 2. Preconditions | Registered RS SELL ownership; complete authoritative terminal order/fill history; valid recovery/legacy snapshots and durable commit boundary. |
+| 3. Configuration inputs | sellQuantity; legacy original basis; pair minProfit; supported fee settings and market precision. |
+| 4. Runtime-derived inputs | Canonical REST/stream Fills; registered order identity; recovery Position; legacy position; commission assets/values; current reservations and durable facts. |
+| 5. Domain rules | Split each canonical Fill by the approved recovery/legacy allocation; allocate commissions exactly; commit both projections together; confirmed fills are accounted even if profitability fails. |
+| 6. Decision inputs | Fill identity/completeness, ownership, allocation precision, commission facts, both projection results, profitability and persistence acknowledgement. |
+| 7. Expected decision | Commit both projections only when all evidence and persistence barriers pass; otherwise preserve both prior projections, retain reservation and apply the specified fail-closed disposition. |
+| 8. State before | SELL terminal candidate exists, but cycle/projections remain unresolved until complete canonical history is reconciled. |
+| 9. State after | Successful commit updates recovery and legacy once and then permits the approved completion/reservation transition; failure leaves both snapshots unchanged. |
+| 10. Portfolio effects | Recovery Portfolio/Position and legacy projection consume the same accepted Fill facts atomically; no partial mutation or synthetic Fill. |
+| 11. Reservation effects | Retain the sole SELL reservation through incomplete history, projection failure or durable commit failure; release only after successful atomic commit. |
+| 12. Order effects | Publish terminal OrderRegistry/cycle completion only after the accounting barrier; duplicate completion cannot publish twice. |
+| 13. Commission effects | Base commission increases base debit; quote commission reduces net quote proceeds; multiple records split exactly. Third-asset valuation is BLOCKED without an approved source. |
+| 14. Profitability calculation | Derive actual recovery, legacy and combined net proceeds/costs from accepted fills and actual fee assets; a failed gate does not erase confirmed execution facts. |
+| 15. Invariants | Recovery + legacy allocations conserve canonical execution facts; exact-once Fill IDs; atomic projections; no duplicate commission; reservation release after commit only. |
+| 16. Failure cases | Partial fill history; conflicting REST/stream facts; duplicate identity with changed facts; invalid commission; precision ambiguity; one projection fails; persistence fails. |
+| 17. Duplicate/replay cases | Identical terminal replay is a no-op; conflicting replay rejects atomically; duplicate REST/stream order in either sequence is exact-once. Process restart restoration remains deferred. |
+| 18. Required assertions | Both complete before/after snapshots; allocation and commission sums; durable fact; registry/cycle state; reservation retention/release; no partial commit. |
+| 19. Existing regression tests | mixed-sell-fill-allocation.test.js; mixed-sell-fill-accounting.test.js; mixed-sell-fill-reconciliation.test.js; record-recovery-seller-mixed-sell-reconciled.test.js; recovery-seller-mixed-sell-accounting.scenario.test.js. New scenario evidence remains PARTIAL. |
+| 20. Missing scenario tests | Multiple partial fills with reordered REST/stream facts, mixed fee assets, durable commit barrier and failure at every projection/publication boundary. |
+| 21. Blocked decisions | Third-asset quote valuation remains BLOCKED; STOP disposition after some failure paths remains subject to RS-009 contract resolution. |
+| 22. Acceptance criteria | Every #1780 sections C/E/F/J atomicity row has stable IDs; complete canonical history and all failure boundaries are proved with independent exact-decimal assertions. |
+
+#### RS-007 — Unknown outcomes and no blind retry
+
+| Contract field | RS-007 definition |
+| --- | --- |
+| 1. Purpose | Prove that unknown broker outcomes preserve original order identity/commitment and reconcile without blind resubmission. |
+| 2. Preconditions | Durable submission intent exists or external submission may have occurred; original client identity is known; broker response/acknowledgement is missing or ambiguous. |
+| 3. Configuration inputs | Pair enabled/environment and ordinary order settings only; no retry count/backoff setting authorizes resubmission. |
+| 4. Runtime-derived inputs | clientOrderId; brokerOrderId when known; durable intent/outcome; active reservation; broker lookup result; stream/REST events; current STOP. |
+| 5. Domain rules | Unknown is not rejection or proof of non-acceptance. Preserve original identity and reservation; continue non-trading reconciliation; never blindly retry. |
+| 6. Decision inputs | Submission result, identity completeness, authoritative lookup, order history, canonical fills, durable persistence status. |
+| 7. Expected decision | RECONCILE for the original order; WAIT only when authoritative active status is known; BLOCK/STOP for unsupported or contradictory evidence. Never create a second SUBMIT from unknown. |
+| 8. State before | Submission pending/unknown with original client identity and durable intent. |
+| 9. State after | RECONCILIATION_REQUIRED until authoritative resolution; identity and original commitment remain intact. |
+| 10. Portfolio effects | No synthetic execution. Apply only confirmed canonical fills exactly once if discovered during reconciliation. |
+| 11. Reservation effects | Retain the original reservation until authoritative terminal facts and accounting permit release. |
+| 12. Order effects | No second broker call; preserve clientOrderId and brokerOrderId if known; lookup failure does not authorize retry. |
+| 13. Commission effects | No fee is inferred from an unknown response. Apply actual commissions only with canonical confirmed fills; third-asset valuation remains blocked. |
+| 14. Profitability calculation | No new profitability decision from unknown status. Evaluate actual proceeds only after complete authoritative Fill/commission reconciliation. |
+| 15. Invariants | One original order identity; no blind retry; no duplicate reservation; no synthetic fill; reconciliation remains allowed under STOP. |
+| 16. Failure cases | Timeout before/after broker acceptance; missing response; lookup not found; lookup failed; partial/incomplete history; durable outcome write failure. |
+| 17. Duplicate/replay cases | Repeated identical unknown event is idempotent; conflicting identity/status is rejected; duplicate lookup results do not create new orders. |
+| 18. Required assertions | Exact broker-call count stays one; original IDs/intent/reservation retained; correct RECONCILE/WAIT/BLOCK; confirmed fills applied once. |
+| 19. Existing regression tests | create-recovery-seller-order-submitter.test.js; recovery-seller-cycle-lifecycle.scenario.test.js; recovery-seller-order-callbacks.test.js. New scenario evidence remains PARTIAL. |
+| 20. Missing scenario tests | Real submitter plus durable store and broker lookup across every unknown timing point, including lookup not-found and persistence failure. |
+| 21. Blocked decisions | No automatic retry/replacement policy is approved. Restart/replay is separately deferred under RS-010. |
+| 22. Acceptance criteria | Every #1780 section E/F/J unknown-outcome case has exact identity, reservation and broker-call assertions; no scenario permits retry. |
+
+#### RS-008 — CG/RS shared account resources and concurrency
+
+| Contract field | RS-008 definition |
+| --- | --- |
+| 1. Purpose | Prove that CG and RS may operate independently without double-spending quote or double-selling shared physical base inventory. |
+| 2. Preconditions | One authoritative provider-account runtime; shared Portfolio/OrderRegistry/serialized transition path; both strategy configurations and account snapshot valid. |
+| 3. Configuration inputs | Independent CG and RS pair maps, strategy budgets/investment limits, pair enabled/environment selectors and supported order settings. |
+| 4. Runtime-derived inputs | Shared Portfolio; Spot/free/locked balances; EARN custody; all active orders/commitments; strategy-owned Positions; market subscriptions; account identity. |
+| 5. Domain rules | Physical account custody is represented once. Strategy Positions/ownership/budgets remain separate. Shared allocator serializes and reserves account-wide quote/base commitments. |
+| 6. Decision inputs | Each strategy's own eligibility/budget plus account-wide free quote/base after all strategies and active orders are accounted for. |
+| 7. Expected decision | SUBMIT only when both the strategy-specific budget and shared account allocator permit it; otherwise WAIT/BLOCK without borrowing another strategy's budget. |
+| 8. State before | Concurrent strategy evaluations may target same or different markets against one shared account state. |
+| 9. State after | Independent Position/order ownership remains; serialized allocation prevents double-spend/oversell and deterministic conflicts defer/block one action. |
+| 10. Portfolio effects | One actual Portfolio aggregate; multiple independent strategy-owned Positions; no duplicate wallet balance or cross-attribution. |
+| 11. Reservation effects | Quote/base commitments are account-wide across markets/strategies; each strategy retains its own budget; no double subtraction or double reservation. |
+| 12. Order effects | Immutable strategy/Position/cycle/purpose ownership survives submit, acknowledgement, stream, REST and terminal reconciliation. |
+| 13. Commission effects | Actual fee facts are applied to the owning strategy Position and shared account baseline; no fee or asset is attributed to both strategies. |
+| 14. Profitability calculation | Each strategy evaluates its own cost basis and net proceeds. A profitable CG/RS outcome cannot subsidize the other strategy or borrow its budget. |
+| 15. Invariants | Shared custody conserved once; no double-spend/double-sell; budgets independent; ownership immutable; same-symbol market-data deduplication does not merge strategy identity. |
+| 16. Failure cases | Concurrent reservation race; missing account snapshot; conflicting order ownership; one projection fails; Spot/EARN mismatch; stale market/environment route. |
+| 17. Duplicate/replay cases | Duplicate Fill is attributed once to its owner; conflicting strategy identity is rejected; replay restoration remains deferred. |
+| 18. Required assertions | Same/different-market concurrency; quote/base before/after; active commitments; strategy-owned Positions; broker calls; no cross-budget/cross-fill attribution. |
+| 19. Existing regression tests | create-recovery-seller-action-authorizer.test.js; create-recovery-seller-accounting-workflow.test.js; account-runtime-registry.test.js; order-event-workflow.test.js. Zero scenario credit. |
+| 20. Missing scenario tests | New deterministic same-market and different-market CG/RS concurrency scenarios covering both quote and base contention and failure atomicity. |
+| 21. Blocked decisions | No additional strategy borrowing or shared-budget policy is implied. Runtime authorization revocation/expiry remains deferred under FITDIB. |
+| 22. Acceptance criteria | Every #1780 section G/J case has stable IDs and exact concurrent outcomes; prove no double-spend, double-sell or ownership leakage. |
+
+#### RS-009 — STOP, failure atomicity and continued reconciliation
+
+| Contract field | RS-009 definition |
+| --- | --- |
+| 1. Purpose | Prove that unexpected/contradictory evidence blocks new trading while preserving canonical facts, commitments and required reconciliation. |
+| 2. Preconditions | A supported STOP reason is latched or a failure is injected at a defined lifecycle boundary; original order/fill identities and durable state are available where applicable. |
+| 3. Configuration inputs | Existing RS global/pair enabled and environment settings only. No new reset, resume or recovery configuration is approved. |
+| 4. Runtime-derived inputs | Sticky STOP state/reason; durable store; active order identities; canonical REST/stream history; account snapshot; Portfolio/legacy projections; reservations. |
+| 5. Domain rules | STOP blocks new trading. Valid WAIT/RECONCILE for already-submitted orders may continue. Confirmed canonical fills remain exact-once. No self-resume. Internal resolver semantics conflict with the later #1780 no-reset contract. |
+| 6. Decision inputs | STOP latch, existing order identity/status, reconciliation completeness, durable facts, fill ownership, accounting and reservation consistency. |
+| 7. Expected decision | BLOCK/STOP for new BUY/SELL/replacement/retry; WAIT or RECONCILE only for already-submitted orders when valid. Reset outcome remains BLOCKED pending owner resolution. |
+| 8. State before | Normal lifecycle or unknown/failed operation; STOP may be absent or already latched. |
+| 9. State after | STOP remains sticky; no new trading action; existing order reconciliation and confirmed Fill accounting continue under the contract. |
+| 10. Portfolio effects | No synthetic changes. Confirmed canonical fills are applied exactly once even when the result causes STOP; failed projections remain atomic. |
+| 11. Reservation effects | Preserve unknown/unresolved commitments; do not release on STOP, incomplete reconciliation or failed accounting. |
+| 12. Order effects | No new order/retry/replacement. Preserve original order identity; existing orders may only WAIT/RECONCILE as authorized. |
+| 13. Commission effects | Apply actual commission facts with confirmed Fills. Missing/ambiguous third-asset quote value remains fail-closed and cannot be treated as zero. |
+| 14. Profitability calculation | A post-fill adverse recovery/legacy/combined result is committed as fact and latches STOP; no follow-up SELL or cycle reset is inferred. |
+| 15. Invariants | Sticky STOP; no new trading; exact-once fills; preserved reservations; reconciliation continues; no hidden reset. |
+| 16. Failure cases | Missing/malformed/conflicting evidence; persistence failure; unknown acknowledgement; invalid filters; invalid precision; projection failure; unmodeled terminal outcome. |
+| 17. Duplicate/replay cases | Repeated STOP evidence preserves first reason; duplicate reconciliation/fill is idempotent; conflicting evidence cannot clear STOP. Restart/replay remains unsupported. |
+| 18. Required assertions | No broker submission; STOP state/reason retained; original identity and reservation preserved; existing reconciliation allowed; atomic Portfolio/legacy state. |
+| 19. Existing regression tests | stop-decision.test.js; resolve-recovery-seller-stop.test.js; create-harvester-operator.test.js. These prove implementation surfaces, not the #1780 STOP scenario contract. |
+| 20. Missing scenario tests | New scenario suite proving the approved terminal/no-reset interpretation after the owner reconciles the historical #1475 internal resolver approval with later #1780. |
+| 21. Blocked decisions | BLOCKED: whether the earlier evidence-backed internal resolver is obsolete/forbidden or whether only that gated administrative resolution is permitted. No test may silently choose. |
+| 22. Acceptance criteria | Owner resolves the contract in canonical docs/issue; then stable scenarios prove every allowed/disallowed STOP action, durable boundary and continued reconciliation. |
+
+#### RS-010 — Explicitly deferred capabilities
+
+| Contract field | RS-010 definition |
+| --- | --- |
+| 1. Purpose | Keep unsupported/deferred behavior visible so agents do not invent restart, fee valuation, liquidation or advanced lifecycle support. |
+| 2. Preconditions | A proposed scenario concerns a deferred capability or lacks an approved source/contract. |
+| 3. Configuration inputs | No new restart, replay, third-asset valuation, final-residual liquidation or advanced pause/resume configuration is approved by this family. |
+| 4. Runtime-derived inputs | Durable facts, restart boundary, order/fill/reservation history and third-asset fee identity/value/timestamp would be required by a future approved design. |
+| 5. Domain rules | Unsupported behavior stays unsupported. Missing third-asset valuation fails closed. No synthetic restore, fabricated quote conversion, blind order replay or standalone final-residual SELL. |
+| 6. Decision inputs | Explicit owner-approved contract, authoritative source, freshness policy, implementation prerequisites and recovery semantics; absent any prerequisite, disposition is BLOCKED/UNSUPPORTED. |
+| 7. Expected decision | BLOCK/STOP or explicit UNSUPPORTED disposition; never claim a successful unsupported operation. |
+| 8. State before | Existing process state may contain in-memory RS facts, but durable restart restoration is not implemented/accepted. |
+| 9. State after | No fabricated restored state; no invented next cycle/order; unsupported state remains visibly blocked. |
+| 10. Portfolio effects | Do not seed Portfolio from wallet balances or synthetic fills. Restore only after a separate approved replay contract and canonical evidence path exist. |
+| 11. Reservation effects | Do not release or recreate reservations from incomplete/unrestored facts. No restart assumption may free a live commitment. |
+| 12. Order effects | No blind resubmission or standalone final-residual SELL; preserve existing identity and reconciliation requirements. |
+| 13. Commission effects | Third-asset fee valuation requires an approved authoritative execution-time quote value/rate/timestamp source; until then the fee is not zero and profitability cannot be accepted. |
+| 14. Profitability calculation | No valid profitability result exists when a required third-asset fee value is missing/ambiguous; no final-residual liquidation target is inferred. |
+| 15. Invariants | No fabricated history, cost basis, fee conversion, order, reservation release or cycle transition. |
+| 16. Failure cases | Missing/corrupt replay facts; incomplete order/fill history; missing fee source; stale/ambiguous quote conversion; unsupported lifecycle request. |
+| 17. Duplicate/replay cases | Replay semantics are not approved. Do not claim idempotent restart restoration; future work must define interruption-point behavior first. |
+| 18. Required assertions | Explicit BLOCKED/UNSUPPORTED status; no broker call; no Portfolio mutation; no reservation release; no fabricated commission/profitability result. |
+| 19. Existing regression tests | Shared DTO, operational-state and commission-accounting regression tests may exist, but none constitutes RS restart/replay or authoritative third-asset scenario evidence. Zero #1780 scenario credit. |
+| 20. Missing scenario tests | All restart interruption points; authoritative third-asset valuation; standalone final-residual liquidation; advanced pause/disable/abandon/resume; authorization revocation/expiry. |
+| 21. Blocked decisions | Restart/replay contract; third-asset source/freshness; standalone final-residual liquidation; advanced lifecycle; authorization revocation/expiry remain deferred or unresolved under their owning decisions. |
+| 22. Acceptance criteria | A separate owner-approved issue/spec defines each capability, source of truth and safety boundary before a new scenario family/case is authored or any status changes. |
+
+
+### 11.2 Crosswalk to the owning issue's A–K matrix
 
 Every checkbox in [#1780](https://github.com/45s/coinzilla/issues/1780) must map to at least one stable scenario/subcase ID. This crosswalk prevents a future agent from accidentally treating the RS-001…RS-010 family names as permission to omit an original matrix section.
 
