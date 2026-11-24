@@ -305,6 +305,38 @@ test("does not lose an operator transition that occurs while the initial snapsho
   assert.equal(snapshot.data.markets.data.markets[0].operatorBuysPaused, true, "The initial synchronization must not hide a transition that raced the snapshot read.")
 })
 
+test("reports failed operator reads explicitly instead of fabricating empty resources", async (t) => {
+  const eventBus = new EventBus()
+  const { operator } = createOperatorState()
+  operator.getMarkets = async () => ({
+    ok: false,
+    errors: [{
+      code: "HARVESTER_OPERATOR_MARKETS_UNAVAILABLE",
+      message: "Market read failed",
+    }],
+  })
+  const api = await startApi({
+    t,
+    eventBus,
+    operator,
+  })
+  const socket = new WebSocket(`ws://127.0.0.1:${api.address.port}/api/v1/trading/events`)
+  t.after(() => socket.close())
+
+  await waitForSocketOpen(socket)
+  const message = await waitForMessage({
+    socket,
+    predicate: (item) => item.type === "bots.snapshot.unavailable",
+  })
+
+  assert.equal(message.version, 1)
+  assert.equal(message.data.markets.ok, false)
+  assert.equal(message.data.markets.error.code, "HARVESTER_OPERATOR_MARKETS_UNAVAILABLE")
+  assert.equal("data" in message.data.markets, false)
+  assert.equal(message.data.status.ok, true)
+  assert.equal(message.data.portfolio.ok, true)
+})
+
 test("a reconnect receives a fresh full snapshot rather than relying on missed event replay", async (t) => {
   const eventBus = new EventBus()
   const { operator, state } = createOperatorState()
