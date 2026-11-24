@@ -1,0 +1,132 @@
+<section class="github-prs-page" aria-labelledby="github-prs-title">
+  <header class="page-heading">
+    <div>
+      <div class="eyebrow">PUBLIC GITHUB REPOSITORY · READ ONLY</div>
+      <h1 id="github-prs-title">GitHub <span>PRs</span></h1>
+      <p class="page-description">Open pull requests in 45s/coinzilla and locally maintained work labels.</p>
+    </div>
+    <button class="refresh-button" type="button" [disabled]="refreshing()" (click)="refresh()">
+      {{ refreshing() ? 'Refreshing…' : 'Refresh' }}
+    </button>
+  </header>
+
+  <div class="summary-strip">
+    <div><strong class="summary-value">{{ pullRequests().length }}</strong><span class="summary-label">Open pull requests</span></div>
+    @if (lastSuccessfulRefresh(); as refreshedAt) {
+      <div><strong class="summary-value">{{ refreshedAt | date:'shortTime' }}</strong><span class="summary-label">Last successful refresh</span></div>
+    }
+    @if (stale()) { <span class="state-pill warning">STALE SNAPSHOT</span> }
+    @if (refreshing()) { <span class="state-pill">UPDATING</span> }
+  </div>
+
+  @if (labelStoreStatus() !== 'ready') {
+    <div class="notice warning" role="status">
+      @if (labelStoreStatus() === 'invalid') {
+        Local label data is invalid or uses an unsupported version. It has not been overwritten; GitHub PR viewing remains available.
+      } @else if (labelStoreStatus() === 'unavailable') {
+        Browser storage is unavailable. GitHub PR viewing remains available, but local labels are disabled.
+      } @else {
+        Label changes could not be saved. Previously saved label data was not changed.
+      }
+    </div>
+  }
+  @if (rateLimitReset()) {
+    <div class="notice warning" role="status">
+      GitHub rate limit reached. Reset: {{ rateLimitReset() === 'unknown' ? 'unknown' : rateLimitReset() }}
+    </div>
+  }
+  @if (unavailableCommitCount() > 0 && hasSnapshot()) {
+    <div class="notice warning" role="status">
+      Commit metadata is unavailable for {{ unavailableCommitCount() }} pull request(s). Other PR data remains available.
+    </div>
+  }
+  @if (errorMessage()) {
+    <div class="notice error" role="alert">
+      {{ errorMessage() }}
+      @if (hasSnapshot()) { The last complete snapshot is still shown. }
+    </div>
+  }
+
+  <section class="label-manager" aria-labelledby="label-manager-title">
+    <div class="section-heading">
+      <div><h2 id="label-manager-title">Local work labels</h2><p>Saved only in this browser. Never sent to GitHub.</p></div>
+    </div>
+    <form class="label-create" (submit)="$event.preventDefault(); createNewLabel()">
+      <label>New label
+        <input [value]="newLabelName()" (input)="newLabelName.set($any($event.target).value)" maxlength="40" placeholder="e.g. Codex, Testing">
+      </label>
+      <label>Color
+        <select [value]="newLabelColor()" (change)="newLabelColor.set($any($event.target).value)">
+          @for (color of labelColors; track color) { <option [value]="color">{{ color }}</option> }
+        </select>
+      </label>
+      <button type="submit" [disabled]="!labelEditingEnabled()">Add label</button>
+    </form>
+    @if (labelError()) { <p class="label-error" role="alert">{{ labelError() }}</p> }
+    @if (labels().labels.length > 0) {
+      <div class="label-list">
+        @for (label of labels().labels; track label.id) {
+          <div class="label-definition">
+            <span class="label-chip" [attr.data-color]="label.color">{{ label.name }}</span>
+            <input #renameInput [value]="label.name" [disabled]="!labelEditingEnabled()" [attr.aria-label]="'Rename ' + label.name">
+            <button type="button" class="quiet-button" [disabled]="!labelEditingEnabled()" (click)="renameExistingLabel(label.id, renameInput.value)">Rename</button>
+            <select [value]="label.color" [disabled]="!labelEditingEnabled()" [attr.aria-label]="'Color for ' + label.name" (change)="recolorExistingLabel(label.id, $any($event.target).value)">
+              @for (color of labelColors; track color) { <option [value]="color">{{ color }}</option> }
+            </select>
+            <button type="button" class="quiet-button danger" [disabled]="!labelEditingEnabled()" (click)="removeLabel(label.id)">Delete</button>
+          </div>
+        }
+      </div>
+    } @else {
+      <p class="muted-copy">No local labels yet. Create labels to organize PR work.</p>
+    }
+  </section>
+
+  @if (loading()) {
+    <div class="state-panel" role="status"><span class="loading-mark">…</span><strong>Loading open pull requests</strong><p>Reading public GitHub data. No sample rows are shown.</p></div>
+  } @else if (!hasSnapshot() && errorMessage()) {
+    <div class="state-panel"><strong>GitHub PRs are unavailable</strong><p>Check the connection and try again.</p><button class="refresh-button" type="button" (click)="refresh()">Retry</button></div>
+  } @else if (pullRequests().length === 0) {
+    <div class="state-panel"><span class="empty-mark">—</span><strong>No open Pull Requests found.</strong><p>The repository currently returned an empty open-PR list.</p></div>
+  } @else {
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th scope="col">Number</th><th scope="col">Title</th><th scope="col">Last commit</th><th scope="col">Custom labels</th></tr></thead>
+        <tbody>
+          @for (pullRequest of pullRequests(); track pullRequest.number) {
+            <tr>
+              <td><a class="pr-number" [href]="pullRequest.htmlUrl" target="_blank" rel="noopener noreferrer">#{{ pullRequest.number }}</a></td>
+              <td class="title-cell"><span>{{ pullRequest.title }}</span>@if (pullRequest.isDraft) { <span class="draft-pill">Draft</span> }</td>
+              <td>
+                @if (pullRequest.lastCommit.status === 'available') {
+                  <time [attr.datetime]="pullRequest.lastCommit.committerDate" [attr.title]="pullRequest.lastCommit.committerDate">
+                    {{ relativeTime(pullRequest.lastCommit.committerDate) }}
+                    <span class="visually-hidden">{{ pullRequest.lastCommit.committerDate }}</span>
+                  </time>
+                } @else { <span class="muted-copy">Unavailable</span> }
+              </td>
+              <td>
+                <div class="assigned-labels">
+                  @for (label of labelsFor(pullRequest); track label.id) { <span class="label-chip" [attr.data-color]="label.color">{{ label.name }}</span> }
+                  @if (labels().labels.length === 0) { <span class="muted-copy">No labels</span> }
+                </div>
+                <details class="assignment-editor">
+                  <summary>Manage labels</summary>
+                  @if (labels().labels.length === 0) { <span class="muted-copy">Create a label above first.</span> }
+                  @for (label of labels().labels; track label.id) {
+                    <label class="assignment-option">
+                      <input type="checkbox" [checked]="isAssigned(pullRequest, label.id)" [disabled]="!labelEditingEnabled()" (change)="toggleLabel(pullRequest, label.id, $any($event.target).checked)">
+                      <span class="label-chip" [attr.data-color]="label.color">{{ label.name }}</span>
+                    </label>
+                  }
+                </details>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+
+  <footer class="page-note">Read-only GitHub REST data · Commit time is the current head commit's committer date · Local labels stay in this browser.</footer>
+</section>

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatRelativeCommitTime, normalizePullRequest } from './model';
+import { formatRelativeCommitTime, mapWithConcurrency, normalizePullRequest } from './model';
 
 describe('GitHub PR view model', () => {
   it('normalizes GitHub PR metadata without changing the canonical URL or title', () => {
@@ -31,6 +31,20 @@ describe('GitHub PR view model', () => {
       draft: false,
       head: { sha: 'not-a-sha' },
     })).toThrow(/head SHA/i);
+  });
+
+  it('limits concurrent work to the configured number of workers', async () => {
+    let active = 0;
+    let maximum = 0;
+    const result = await mapWithConcurrency([1, 2, 3, 4, 5, 6], 2, async (value) => {
+      active += 1;
+      maximum = Math.max(maximum, active);
+      await Promise.resolve();
+      active -= 1;
+      return value * 2;
+    });
+    expect(maximum).toBe(2);
+    expect(result).toEqual([2, 4, 6, 8, 10, 12]);
   });
 
   it('formats relative time from the committer timestamp and handles future timestamps', () => {

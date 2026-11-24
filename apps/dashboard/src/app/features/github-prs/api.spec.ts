@@ -1,4 +1,4 @@
-import { HttpClient, provideHttpClient } from '@angular/common/http';
+import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -35,6 +35,7 @@ describe('GitHubPullRequestsApi', () => {
       headers: { Link: '<https://api.github.com/repos/45s/coinzilla/pulls?state=open&per_page=100&page=2>; rel="next"' },
     });
 
+    await Promise.resolve();
     const secondPage = http.expectOne('https://api.github.com/repos/45s/coinzilla/pulls?state=open&per_page=100&page=2');
     secondPage.flush([{
       number: 1823,
@@ -44,15 +45,17 @@ describe('GitHubPullRequestsApi', () => {
       head: { sha: 'b'.repeat(40) },
     }]);
 
-    const firstCommit = http.expectOne(`https://api.github.com/repos/45s/coinzilla/commits/${'a'.repeat(40)}`);
-    const secondCommit = http.expectOne(`https://api.github.com/repos/45s/coinzilla/commits/${'b'.repeat(40)}`);
-    firstCommit.flush({ commit: { author: { date: '2026-11-24T11:00:00.000Z' }, committer: { date: '2026-11-24T11:50:00.000Z' } } });
-    secondCommit.flush({ commit: { committer: { date: '2026-11-24T10:50:00.000Z' } } });
+    await Promise.resolve();
+    await Promise.resolve();
+    const firstCommit = http.expectOne('https://api.github.com/repos/45s/coinzilla/commits/' + 'a'.repeat(40));
+    const secondCommit = http.expectOne('https://api.github.com/repos/45s/coinzilla/commits/' + 'b'.repeat(40));
+    firstCommit.flush({ sha: 'a'.repeat(40), commit: { author: { date: '2026-11-24T11:00:00.000Z' }, committer: { date: '2026-11-24T11:50:00.000Z' } } });
+    secondCommit.flush({ sha: 'b'.repeat(40), commit: { committer: { date: '2026-11-24T10:50:00.000Z' } } });
 
     const result = await resultPromise;
-    expect(result.map((item) => item.number)).toEqual([1824, 1823]);
-    expect(result[0].lastCommit.committerDate).toBe('2026-11-24T11:50:00.000Z');
-    expect(result[0].isDraft).toBe(true);
+    expect(result.pullRequests.map((item) => item.number)).toEqual([1824, 1823]);
+    expect(result.pullRequests[0].lastCommit.committerDate).toBe('2026-11-24T11:50:00.000Z');
+    expect(result.pullRequests[0].isDraft).toBe(true);
   });
 
   it('keeps a PR when its individual commit lookup fails', async () => {
@@ -65,10 +68,13 @@ describe('GitHubPullRequestsApi', () => {
         draft: false,
         head: { sha: 'a'.repeat(40) },
       }]);
-    http.expectOne(`https://api.github.com/repos/45s/coinzilla/commits/${'a'.repeat(40)}`)
+    await Promise.resolve();
+    await Promise.resolve();
+    http.expectOne('https://api.github.com/repos/45s/coinzilla/commits/' + 'a'.repeat(40))
       .flush({ message: 'Not found' }, { status: 404, statusText: 'Not Found' });
 
-    const [item] = await resultPromise;
+    const result = await resultPromise;
+    const [item] = result.pullRequests;
     expect(item.number).toBe(1824);
     expect(item.lastCommit.status).toBe('unavailable');
   });

@@ -55,6 +55,7 @@ describe('GitHub PR local label store', () => {
 
     expect(loadLabelStore(storage).status).toBe('invalid');
     expect(written).toBeNull();
+    expect(loadLabelStore({ getItem: () => { throw new Error('storage unavailable'); } }).status).toBe('unavailable');
   });
 
   it('persists valid stores under the specified key and tolerates storage failures', () => {

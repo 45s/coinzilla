@@ -1,11 +1,11 @@
 # GitHub PR Dashboard — domain scenarios
 
-- Status: draft
+- Status: active
 - Type: feature behavior scenarios
 - Owner: dashboard
 - Created: 2026-11-24
 - Canonical contract: [SPEC.md](SPEC.md)
-- Tracking: [Issue #1816](https://github.com/45s/coinzilla/issues/1816)
+- Tracking: [Implementation Issue #1821](https://github.com/45s/coinzilla/issues/1821); specification [Issue #1816](https://github.com/45s/coinzilla/issues/1816)
 
 ## Purpose
 
@@ -496,6 +496,14 @@ These rules apply to every scenario:
 
 ## Test mapping guidance
 
-When implementation is authorized, create deterministic tests mapped to these scenario IDs. Use mocked HTTP responses, a controlled clock and controlled storage. Default tests must not call GitHub or require credentials.
+The implementation is in [PR #1822](https://github.com/45s/coinzilla/pull/1822). Current deterministic test mapping:
 
-At minimum, keep scenario identifiers in test names or test descriptions so a reviewer can trace a failed assertion back to this catalog. Do not claim scenario coverage solely because a similarly named test file exists.
+| Test file | Verified behavior represented |
+| --- | --- |
+| `model.spec.ts` | PR normalization, malformed head SHA rejection, bounded concurrency, relative time and future/invalid timestamps |
+| `api.spec.ts` | Linked-page pagination, current head SHA commit lookup, committer-date selection and isolated commit lookup failure |
+| `label-store.spec.ts` | Label creation, duplicate/empty-name rejection, many-to-many assignment, unassignment, rename, recolor, deletion, valid persistence, corrupted data, unavailable storage and failed writes |
+| `page.spec.ts` | PR row/link/title/draft/time rendering, local label creation/assignment and stale-snapshot retention |
+| `app.spec.ts` | Dashboard navigation to GitHub PRs and public GitHub data loading |
+
+The test mapping is intentionally limited to behaviors asserted by those tests; remaining scenarios still require additional automated coverage before the feature can be considered fully verified. Default tests do not call GitHub or require credentials.
