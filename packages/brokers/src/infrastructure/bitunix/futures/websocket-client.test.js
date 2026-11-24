@@ -51,16 +51,31 @@ class FakeTransport {
 }
 
 function createClient({ channelType = "public", now = () => 1_700_000_000_000 } = {}) {
-  const transport = new FakeTransport()
+  const transports = []
   const intervals = []
   const clearedIntervals = []
+  const timeouts = []
+  const clearedTimeouts = []
   const client = new BitunixFuturesWebSocketClient({
     channelType,
     apiKey: channelType === "private" ? "key" : undefined,
     apiSecret: channelType === "private" ? "secret" : undefined,
     now,
     nonceFactory: () => "nonce",
-    transportFactory: () => transport,
+    transportFactory: () => {
+      const transport = new FakeTransport()
+      transports.push(transport)
+      return transport
+    },
+    setTimeoutFn: (...args) => {
+      const [callback, delay] = args
+      timeouts.push({
+        callback,
+        delay,
+      })
+      return timeouts.length
+    },
+    clearTimeoutFn: (id) => clearedTimeouts.push(id),
     setIntervalFn: (...args) => {
       const [callback, delay] = args
       intervals.push({
@@ -73,9 +88,12 @@ function createClient({ channelType = "public", now = () => 1_700_000_000_000 } 
   })
   return {
     client,
-    transport,
+    transport: transports[0],
+    transports,
     intervals,
     clearedIntervals,
+    timeouts,
+    clearedTimeouts,
   }
 }
 
@@ -299,5 +317,84 @@ test("Bitunix Futures private WebSocket rejects malformed login and never treats
   })
   assert.equal(client.authenticated, false)
   assert.equal(events.length, 0)
+  await client.disconnect()
+})
+
+
+test("Bitunix Futures public WebSocket reconnects with bounded backoff and requires explicit market resynchronization", async () => {
+  const {
+    client,
+    transport,
+    transports,
+    timeouts,
+  } = createClient()
+  await client.connect()
+  client.subscribe({
+    channels: [{
+      ch: "ticker",
+      symbol: "BTCUSDT",
+    }],
+  })
+
+  transport.drop()
+  assert.equal(client.state, "closed")
+  assert.equal(client.recoveryRequired, true)
+  assert.equal(timeouts[0].delay, 1_000)
+
+  await timeouts[0].callback()
+  assert.equal(transports.length, 2)
+  assert.equal(client.state, "open")
+  assert.equal(client.recoveryRequired, true)
+  assert.deepEqual(transports[1].sent[0], {
+    op: "subscribe",
+    args: [{
+      ch: "ticker",
+      symbol: "BTCUSDT",
+    }],
+  })
+
+  client.markReconciled()
+  assert.equal(client.recoveryRequired, false)
+  await client.disconnect()
+})
+
+test("Bitunix Futures private WebSocket reauthenticates and resubscribes but stays unreconciled", async () => {
+  const {
+    client,
+    transport,
+    transports,
+    timeouts,
+  } = createClient({
+    channelType: "private",
+  })
+  await client.connect()
+  transport.receive({
+    op: "login",
+    code: 0,
+    msg: "success",
+  })
+  client.subscribe({
+    channels: [{ ch: "order" }],
+  })
+
+  transport.drop()
+  await timeouts[0].callback()
+  assert.equal(transports.length, 2)
+  assert.deepEqual(transports[1].sent[0].op, "login")
+  assert.equal(client.authenticated, false)
+
+  transports[1].receive({
+    op: "login",
+    code: 0,
+    msg: "success",
+  })
+  assert.equal(client.authenticated, true)
+  assert.equal(client.recoveryRequired, true)
+  assert.deepEqual(transports[1].sent[1], {
+    op: "subscribe",
+    args: [{ ch: "order" }],
+  })
+  client.markReconciled()
+  assert.equal(client.recoveryRequired, false)
   await client.disconnect()
 })
