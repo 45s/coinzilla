@@ -146,7 +146,6 @@ The library is used as a secondary discovery/reference source. It does not estab
 
 No LIVE mutation has been performed by the implementation agent or automated tests. The partial provider is not production-ready and must not be used for Harvester execution or routing.
 
-
 ## 2026-11-24 implementation continuation
 
 ### Additional official REST contracts inspected
