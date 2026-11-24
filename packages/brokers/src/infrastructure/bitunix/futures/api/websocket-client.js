@@ -10,6 +10,9 @@ import {
 const MAX_CHANNELS_PER_CONNECTION = 300
 const MAX_MESSAGES_PER_SECOND = 5
 const HEARTBEAT_INTERVAL_MS = 3_000
+const DEFAULT_RECONNECT_INITIAL_DELAY_MS = 1_000
+const DEFAULT_RECONNECT_MAX_DELAY_MS = 30_000
+const DEFAULT_MAX_RECONNECT_ATTEMPTS = 5
 const PRIVATE_CHANNELS = new Set(["balance", "position", "order", "tpsl"])
 const PUBLIC_CHANNELS = new Set([
   "depth_books",
@@ -64,6 +67,11 @@ function validateOptions({
   nonceFactory,
   setIntervalFn,
   clearIntervalFn,
+  setTimeoutFn,
+  clearTimeoutFn,
+  reconnectInitialDelayMs,
+  reconnectMaxDelayMs,
+  maxReconnectAttempts,
 }) {
   if (!["public", "private"].includes(channelType)) {
     throw new TypeError("Bitunix Futures WebSocket channelType must be public or private")
@@ -79,8 +87,21 @@ function validateOptions({
   }
   if (typeof transportFactory !== "function" || typeof now !== "function" ||
       typeof nonceFactory !== "function" || typeof setIntervalFn !== "function" ||
-      typeof clearIntervalFn !== "function") {
+      typeof clearIntervalFn !== "function" || typeof setTimeoutFn !== "function" ||
+      typeof clearTimeoutFn !== "function") {
     throw new TypeError("Bitunix Futures WebSocket dependencies must be functions")
+  }
+  for (const [value, name] of [
+    [reconnectInitialDelayMs, "reconnectInitialDelayMs"],
+    [reconnectMaxDelayMs, "reconnectMaxDelayMs"],
+    [maxReconnectAttempts, "maxReconnectAttempts"],
+  ]) {
+    if (!Number.isSafeInteger(value) || value <= 0) {
+      throw new RangeError(`Bitunix Futures WebSocket ${name} must be a positive safe integer`)
+    }
+  }
+  if (reconnectMaxDelayMs < reconnectInitialDelayMs) {
+    throw new RangeError("Bitunix Futures WebSocket reconnectMaxDelayMs cannot be less than the initial delay")
   }
 }
 
@@ -118,9 +139,19 @@ export class BitunixFuturesWebSocketClient extends EventEmitter {
   #nonceFactory
   #setInterval
   #clearInterval
+  #setTimeout
+  #clearTimeout
+  #reconnectInitialDelayMs
+  #reconnectMaxDelayMs
+  #maxReconnectAttempts
   #heartbeatTimer = null
+  #reconnectTimer = null
+  #reconnectAttempts = 0
+  #intentionalClose = false
+  #recoveryRequired = false
   #sentAt = []
   #subscriptions = new Map()
+  #desiredSubscriptions = new Map()
   #state = "idle"
   #authenticated = false
 
@@ -136,6 +167,11 @@ export class BitunixFuturesWebSocketClient extends EventEmitter {
       nonceFactory = () => randomBytes(16).toString("hex"),
       setIntervalFn = setInterval,
       clearIntervalFn = clearInterval,
+      setTimeoutFn = setTimeout,
+      clearTimeoutFn = clearTimeout,
+      reconnectInitialDelayMs = DEFAULT_RECONNECT_INITIAL_DELAY_MS,
+      reconnectMaxDelayMs = DEFAULT_RECONNECT_MAX_DELAY_MS,
+      maxReconnectAttempts = DEFAULT_MAX_RECONNECT_ATTEMPTS,
     } = options
     validateOptions({
       apiKey,
@@ -147,6 +183,11 @@ export class BitunixFuturesWebSocketClient extends EventEmitter {
       nonceFactory,
       setIntervalFn,
       clearIntervalFn,
+      setTimeoutFn,
+      clearTimeoutFn,
+      reconnectInitialDelayMs,
+      reconnectMaxDelayMs,
+      maxReconnectAttempts,
     })
     this.channelType = channelType
     this.url = url
@@ -157,6 +198,11 @@ export class BitunixFuturesWebSocketClient extends EventEmitter {
     this.#nonceFactory = nonceFactory
     this.#setInterval = setIntervalFn
     this.#clearInterval = clearIntervalFn
+    this.#setTimeout = setTimeoutFn
+    this.#clearTimeout = clearTimeoutFn
+    this.#reconnectInitialDelayMs = reconnectInitialDelayMs
+    this.#reconnectMaxDelayMs = reconnectMaxDelayMs
+    this.#maxReconnectAttempts = maxReconnectAttempts
     this.#createTransport()
   }
 
@@ -166,6 +212,10 @@ export class BitunixFuturesWebSocketClient extends EventEmitter {
 
   get authenticated() {
     return this.#authenticated
+  }
+
+  get recoveryRequired() {
+    return this.#recoveryRequired
   }
 
   get subscriptions() {
@@ -179,26 +229,23 @@ export class BitunixFuturesWebSocketClient extends EventEmitter {
     if (this.#state !== "idle" && this.#state !== "closed") {
       throw new Error(`Cannot connect Bitunix Futures WebSocket in state ${this.#state}`)
     }
+    this.#intentionalClose = false
+    this.#cancelReconnect()
     if (this.#state === "closed") {
       this.#createTransport()
     }
     this.#state = "connecting"
     try {
       await this.#transport.connect()
-      this.#state = "open"
-      if (this.channelType === "private") {
-        this.#sendLogin()
-      }
-      this.#startHeartbeat()
-      this.emit("status", Object.freeze({
-        state: this.#state,
-        authenticated: this.#authenticated,
-        recoveryRequired: false,
-      }))
+      this.#onTransportConnected({
+        reconnected: false,
+      })
       return this
     } catch (error) {
       this.#state = "closed"
       this.#removeTransportListeners()
+      this.emit("clientError", error)
+      this.#scheduleReconnect()
       throw error
     }
   }
@@ -230,7 +277,9 @@ export class BitunixFuturesWebSocketClient extends EventEmitter {
       args: newChannels,
     })
     for (const channel of newChannels) {
-      this.#subscriptions.set(createChannelKey({ channel }), channel)
+      const key = createChannelKey({ channel })
+      this.#subscriptions.set(key, channel)
+      this.#desiredSubscriptions.set(key, channel)
     }
     const result = Object.freeze({
       sent: true,
@@ -264,7 +313,9 @@ export class BitunixFuturesWebSocketClient extends EventEmitter {
       args: existing,
     })
     for (const channel of existing) {
-      this.#subscriptions.delete(createChannelKey({ channel }))
+      const key = createChannelKey({ channel })
+      this.#subscriptions.delete(key)
+      this.#desiredSubscriptions.delete(key)
     }
     const result = Object.freeze({
       sent: true,
@@ -289,13 +340,18 @@ export class BitunixFuturesWebSocketClient extends EventEmitter {
   }
 
   async disconnect() {
-    if (this.#state === "closed") {
+    this.#intentionalClose = true
+    this.#cancelReconnect()
+    this.#stopHeartbeat()
+    this.#authenticated = false
+    this.#recoveryRequired = false
+    this.#subscriptions.clear()
+    this.#desiredSubscriptions.clear()
+    if (this.#state === "closed" || this.#state === "idle") {
+      this.#state = "closed"
       return
     }
     this.#state = "closing"
-    this.#stopHeartbeat()
-    this.#authenticated = false
-    this.#subscriptions.clear()
     try {
       await this.#transport.close()
     } finally {
@@ -307,6 +363,18 @@ export class BitunixFuturesWebSocketClient extends EventEmitter {
         recoveryRequired: false,
       }))
     }
+  }
+
+  markReconciled() {
+    if (this.#state !== "open" || (this.channelType === "private" && !this.#authenticated)) {
+      throw new Error("Bitunix Futures WebSocket must be open and authenticated before reconciliation can be acknowledged")
+    }
+    this.#recoveryRequired = false
+    this.emit("status", Object.freeze({
+      state: this.#state,
+      authenticated: this.#authenticated,
+      recoveryRequired: false,
+    }))
   }
 
   #createTransport() {
@@ -476,18 +544,19 @@ export class BitunixFuturesWebSocketClient extends EventEmitter {
   }
 
   #handleLoginMessage(data) {
-    if (data.code === 0 || data.code === "0") {
-      this.#authenticated = true
-      this.emit("authenticated")
-      this.emit("status", Object.freeze({
-        state: this.#state,
-        authenticated: true,
-        recoveryRequired: true,
-      }))
+    if (data.code !== 0 && data.code !== "0") {
+      this.#authenticated = false
+      this.emit("clientError", new Error(`Bitunix Futures WebSocket login failed: ${String(data.msg ?? data.code ?? "unknown error")}`))
       return
     }
-    this.#authenticated = false
-    this.emit("clientError", new Error(`Bitunix Futures WebSocket login failed: ${String(data.msg ?? data.code ?? "unknown error")}`))
+    this.#authenticated = true
+    this.#reconnectAttempts = 0
+    this.#recoveryRequired = true
+    this.#resubscribeDesired()
+    this.emit("authenticated")
+    this.#emitStatus({
+      loginAcknowledged: true,
+    })
   }
 
   #handleChannelMessage(data) {
@@ -510,30 +579,132 @@ export class BitunixFuturesWebSocketClient extends EventEmitter {
     if (this.#state === "closed" || this.#state === "closing") {
       return
     }
-    this.#stopHeartbeat()
-    this.#state = "closed"
-    this.#authenticated = false
-    this.#subscriptions.clear()
-    this.#removeTransportListeners()
-    this.emit("status", Object.freeze({
-      state: this.#state,
-      authenticated: false,
-      recoveryRequired: true,
+    this.#handleTransportLoss({
       closeEvent: event,
-    }))
+    })
   }
 
   #handleError(error) {
     this.emit("clientError", error)
+    this.#handleTransportLoss({})
+  }
+
+  #handleTransportLoss({ closeEvent } = {}) {
     this.#stopHeartbeat()
     this.#state = "closed"
     this.#authenticated = false
+    this.#recoveryRequired = true
     this.#subscriptions.clear()
     this.#removeTransportListeners()
+    this.#emitStatus({
+      recoveryRequired: true,
+      closeEvent,
+    })
+    this.#scheduleReconnect()
+  }
+
+  #onTransportConnected({ reconnected }) {
+    this.#state = "open"
+    this.#startHeartbeat()
+    if (this.channelType === "private") {
+      this.#sendLogin()
+    } else {
+      this.#resubscribeDesired()
+      if (reconnected) {
+        this.#recoveryRequired = true
+        this.#reconnectAttempts = 0
+      }
+    }
+    this.#emitStatus({
+      reconnected,
+    })
+  }
+
+  #resubscribeDesired() {
+    if (this.#desiredSubscriptions.size === 0 || this.#state !== "open") {
+      return
+    }
+    if (this.channelType === "private" && !this.#authenticated) {
+      return
+    }
+    const channels = [...this.#desiredSubscriptions.values()]
+    this.#send({
+      op: "subscribe",
+      args: channels,
+    })
+    for (const channel of channels) {
+      this.#subscriptions.set(createChannelKey({
+        channel,
+      }), channel)
+    }
+    this.emit("subscriptionSent", Object.freeze({
+      sent: true,
+      channels: Object.freeze(channels),
+      reconnected: true,
+    }))
+  }
+
+  #scheduleReconnect() {
+    if (this.#intentionalClose || this.#reconnectTimer !== null) {
+      return
+    }
+    if (this.#reconnectAttempts >= this.#maxReconnectAttempts) {
+      this.#emitStatus({
+        reconnectExhausted: true,
+        recoveryRequired: true,
+      })
+      return
+    }
+    const exponent = this.#reconnectAttempts
+    const delay = Math.min(
+      this.#reconnectInitialDelayMs * (2 ** exponent),
+      this.#reconnectMaxDelayMs,
+    )
+    this.#reconnectAttempts += 1
+    this.#reconnectTimer = this.#setTimeout(() => {
+      this.#reconnectTimer = null
+      this.#reconnect()
+    }, delay)
+    this.#emitStatus({
+      reconnectScheduled: true,
+      reconnectAttempt: this.#reconnectAttempts,
+      reconnectDelayMs: delay,
+      recoveryRequired: true,
+    })
+  }
+
+  async #reconnect() {
+    if (this.#intentionalClose || this.#state !== "closed") {
+      return
+    }
+    try {
+      this.#createTransport()
+      this.#state = "connecting"
+      await this.#transport.connect()
+      this.#onTransportConnected({
+        reconnected: true,
+      })
+    } catch (error) {
+      this.#state = "closed"
+      this.#removeTransportListeners()
+      this.emit("clientError", error)
+      this.#scheduleReconnect()
+    }
+  }
+
+  #cancelReconnect() {
+    if (this.#reconnectTimer !== null) {
+      this.#clearTimeout(this.#reconnectTimer)
+      this.#reconnectTimer = null
+    }
+  }
+
+  #emitStatus(additional = {}) {
     this.emit("status", Object.freeze({
       state: this.#state,
-      authenticated: false,
-      recoveryRequired: true,
+      authenticated: this.#authenticated,
+      recoveryRequired: this.#recoveryRequired,
+      ...additional,
     }))
   }
 
