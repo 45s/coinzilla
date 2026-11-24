@@ -69,7 +69,11 @@ test("adaptFuturesCandles rejects inconsistent OHLC data and duplicate open time
       high: "101",
       low: "99",
     },
-    { ...invalidCandle, high: "101", low: "99" },
+    {
+      ...invalidCandle,
+      high: "101",
+      low: "99",
+    },
   ]
   assert.throws(
     () => adaptFuturesCandles({

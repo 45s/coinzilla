@@ -114,6 +114,65 @@ function createCapabilities({ config }) {
   })
 }
 
+function createFuturesCandleRequest({ input }) {
+  ensure.plainObject({
+    value: input,
+    name: "getCandles input",
+  })
+  if (Object.hasOwn(input, "startTime")) {
+    throw new TypeError("Bitunix Futures kline endpoint does not support startTime")
+  }
+  const symbol = ensure.nonEmptyString({
+    value: input.symbol,
+    name: "symbol",
+  }).trim().toUpperCase()
+  const interval = ensure.oneOf({
+    value: input.interval,
+    values: BITUNIX_FUTURES_CANDLE_INTERVALS,
+    name: "interval",
+  })
+  const limit = input.limit ?? 100
+  ensure.positiveInteger({
+    value: limit,
+    name: "limit",
+  })
+  if (limit > 200) {
+    throw new RangeError("Bitunix Futures kline limit cannot exceed 200")
+  }
+  const type = ensure.oneOf({
+    value: input.type ?? "LAST_PRICE",
+    values: ["LAST_PRICE", "MARK_PRICE"],
+    name: "type",
+  })
+  const { endTime } = input
+  if (endTime !== undefined) {
+    ensure.nonNegativeInteger({
+      value: endTime,
+      name: "endTime",
+    })
+  }
+  const queryParams = {
+    symbol,
+    interval,
+    limit,
+    type,
+  }
+  if (endTime !== undefined) {
+    queryParams.endTime = endTime
+  }
+  return {
+    symbol,
+    interval,
+    endTime,
+    request: {
+      method: "GET",
+      path: "/api/v1/futures/market/kline",
+      queryParams,
+      authenticated: false,
+    },
+  }
+}
+
 function validateFuturesMarketRow({ symbolInfo, symbols }) {
   ensure.plainObject({
     value: symbolInfo,
@@ -395,63 +454,16 @@ export class BitunixFuturesBroker {
 
   async getCandles(input = {}) {
     try {
-      ensure.plainObject({
-        value: input,
-        name: "getCandles input",
+      const candleRequest = createFuturesCandleRequest({
+        input,
       })
-      if (Object.hasOwn(input, "startTime")) {
-        throw new TypeError("Bitunix Futures kline endpoint does not support startTime")
-      }
-      const symbol = ensure.nonEmptyString({
-        value: input.symbol,
-        name: "symbol",
-      }).trim().toUpperCase()
-      const interval = ensure.oneOf({
-        value: input.interval,
-        values: BITUNIX_FUTURES_CANDLE_INTERVALS,
-        name: "interval",
-      })
-      const limit = input.limit ?? 100
-      ensure.positiveInteger({
-        value: limit,
-        name: "limit",
-      })
-      if (limit > 200) {
-        throw new RangeError("Bitunix Futures kline limit cannot exceed 200")
-      }
-      const type = ensure.oneOf({
-        value: input.type ?? "LAST_PRICE",
-        values: ["LAST_PRICE", "MARK_PRICE"],
-        name: "type",
-      })
-      const { endTime } = input
-      if (endTime !== undefined) {
-        ensure.nonNegativeInteger({
-          value: endTime,
-          name: "endTime",
-        })
-      }
-      const queryParams = {
-        symbol,
-        interval,
-        limit,
-        type,
-      }
-      if (endTime !== undefined) {
-        queryParams.endTime = endTime
-      }
-      const response = await this.restClient.request({
-        method: "GET",
-        path: "/api/v1/futures/market/kline",
-        queryParams,
-        authenticated: false,
-      })
+      const response = await this.restClient.request(candleRequest.request)
       return toResult({
         data: adaptFuturesCandles({
           rows: response.data,
-          symbol,
-          interval,
-          endTime,
+          symbol: candleRequest.symbol,
+          interval: candleRequest.interval,
+          endTime: candleRequest.endTime,
         }),
       })
     } catch (error) {
