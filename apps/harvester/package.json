@@ -91,6 +91,7 @@
       "src/use-cases/conservative-trading-engine.test.js",
       "src/use-cases/conservative-trading-engine.multi-market.test.js",
       "src/application/operator/create-harvester-operator.test.js",
+      "src/application/operator/create-harvester-operator-events.test.js",
       "src/application/operator/constants.test.js",
       "src/infrastructure/operational-state/operational-state-control.test.js",
       "src/infrastructure/operational-state/project-harvester-operational-state.test.js",
