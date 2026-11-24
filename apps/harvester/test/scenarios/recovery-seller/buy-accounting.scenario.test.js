@@ -10,11 +10,15 @@ import {
   Quantity,
 } from "@coinzilla/entities"
 import { StrategyId } from "../../../src/domain/strategies/strategy-ids.js"
+import { evaluateRecoverySellerBuyDecision } from "../../../src/domain/strategies/recovery-seller/evaluate-buy-decision.js"
+import { createRecoverySellerCycleState } from "../../../src/domain/strategies/recovery-seller/cycle-state.js"
+import { createRecoverySellerStopState } from "../../../src/domain/strategies/recovery-seller/stop-decision.js"
 import { Portfolio } from "../../../src/domain/portfolio/portfolio.js"
 import { createOrderOwnership } from "../../../src/domain/orders/order-ownership.js"
 import { OrderRegistry } from "../../../src/domain/orders/order-registry.js"
 import { createRecoverySellerAccountingWorkflow } from "../../../src/use-cases/create-recovery-seller-accounting-workflow.js"
 import { runRecoverySellerApplicationScenario } from "./runners/run-application-scenario.js"
+import { runRecoverySellerDomainScenario } from "./runners/run-domain-scenario.js"
 import { recoverySellerBuyAccountingScenarios } from "./scenarios/buy-accounting.js"
 
 const baseAsset = new Asset({
@@ -31,6 +35,93 @@ const market = new Market({
   baseAsset,
   quoteAsset,
 })
+
+const buyPolicyMarketMetadata = {
+  market: {
+    id: "binance:ZROUSDT",
+    symbol: "ZROUSDT",
+  },
+  orderType: "LIMIT_MAKER",
+  tradingRules: {
+    constraints: [
+      ["PRICE_INCREMENT", "0.001"],
+      ["QUANTITY_INCREMENT", "0.01"],
+      ["MIN_QUANTITY", "0.01"],
+      ["MIN_NOTIONAL", "5"],
+      ["MAX_QUANTITY", "100"],
+      ["MAX_NOTIONAL", "1000"],
+      ["MIN_PRICE", "0.001"],
+      ["MAX_PRICE", "100"],
+    ].map(([type, amount]) => ({
+      type,
+      status: "SUPPORTED",
+      value: { amount },
+    })),
+  },
+}
+
+function createBuyPolicyOrder({ status }) {
+  return {
+    market: { symbol: "ZROUSDT" },
+    side: "BUY",
+    status,
+    clientOrderId: `rs-buy-${status.toLowerCase()}`,
+    ...(status === "UNKNOWN" ? {} : {
+      brokerOrderId: "broker-rs-buy-policy",
+    }),
+    ownership: {
+      strategyId: StrategyId.RECOVERY_SELLER,
+      purpose: "RECOVERY_BUY",
+      positionId: "rs-policy-position",
+      cycleId: "rs-policy-cycle",
+    },
+  }
+}
+
+function evaluateBuyPolicyCase({ overrides }) {
+  const result = evaluateRecoverySellerBuyDecision({
+    stopState: createRecoverySellerStopState(),
+    marketPrice: {
+      symbol: "ZROUSDT",
+      price: "2",
+    },
+    pairConfig: {
+      orderQuantity: "5",
+      priceStepPercent: "0.05",
+      investment: "100",
+    },
+    marketMetadata: buyPolicyMarketMetadata,
+    activeOrders: [],
+    cycleState: createRecoverySellerCycleState({
+      cycleId: "rs-policy-cycle",
+      positionId: "rs-policy-position",
+    }),
+    strategyStopped: false,
+    marketPaused: false,
+    reconciliationComplete: true,
+    cumulativeNetSellProceeds: "0",
+    pendingBuyCommitment: "0",
+    ...overrides,
+  })
+  return {
+    outcome: result.decision.outcome,
+    reasonCode: result.decision.reasonCode ?? null,
+    action: result.action ?? null,
+    stopStatus: result.stopState.status,
+    orderIdentity: result.decision.orderIdentity ?? null,
+  }
+}
+
+function evaluateBuyPolicyScenario({ input }) {
+  return {
+    cases: input.cases.map((scenarioCase) => ({
+      id: scenarioCase.id,
+      ...evaluateBuyPolicyCase({
+        overrides: scenarioCase.overrides,
+      }),
+    })),
+  }
+}
 
 function createCommissions({ fillInput }) {
   const commissions = []
@@ -249,13 +340,21 @@ async function runBuyScenario({ input }) {
 const applicationHandlers = {
   "apply-recovery-buy-scenario": runBuyScenario,
 }
+const domainHandlers = {
+  "evaluate-recovery-buy-policy-scenario": evaluateBuyPolicyScenario,
+}
 
 for (const scenario of recoverySellerBuyAccountingScenarios.filter((item) => item.status !== "BLOCKED")) {
   test(scenario.test.title, async () => {
-    const result = await runRecoverySellerApplicationScenario({
-      scenario,
-      handlers: applicationHandlers,
-    })
+    const result = scenario.layer === "DOMAIN"
+      ? await runRecoverySellerDomainScenario({
+          scenario,
+          handlers: domainHandlers,
+        })
+      : await runRecoverySellerApplicationScenario({
+          scenario,
+          handlers: applicationHandlers,
+        })
     assert.deepEqual(result.results[0], scenario.then,
       `${scenario.id} must match its independent BUY accounting oracle.`)
   })
