@@ -121,6 +121,7 @@ test("private order-event waiter times out and releases its listeners", async ()
     clientOrderId: "client-1",
     symbol: "BTCUSDT",
   })
+  waiter.startTimeout()
   const result = await waiter.promise
 
   assert.equal(result.event, null, "a missing private event must not confirm a mutation")
@@ -144,4 +145,28 @@ test("private order-event waiter can be canceled without leaving a pending liste
   assert.equal(result.error, null, "intentional waiter cleanup must not be treated as a timeout")
   assert.equal(broker.privateWebSocketClient.listenerCount("channel"), 0, "canceling must remove the channel listener")
   assert.equal(broker.privateWebSocketClient.listenerCount("status"), 0, "canceling must remove the status listener")
+})
+
+
+test("private order-event waiter starts its timeout only after the request phase asks it to wait", async () => {
+  const broker = createBroker({
+    timeoutMs: 5,
+  })
+  const waiter = createPrivateOrderEventWaiter({
+    broker,
+    orderId: "order-1",
+    clientOrderId: "client-1",
+    symbol: "BTCUSDT",
+  })
+  let settled = false
+  waiter.promise.then(() => {
+    settled = true
+  })
+  await new Promise((resolve) => setTimeout(resolve, 10))
+
+  assert.equal(settled, false, "the event listener must remain active while the REST request is still in flight")
+  waiter.startTimeout()
+  const result = await waiter.promise
+  assert.equal(result.event, null, "the explicit wait phase must still time out when no matching event arrives")
+  assert.match(result.error.message, /timed out/i, "the explicit timeout must remain diagnosable")
 })
