@@ -299,6 +299,7 @@ async function dispatchModifyOrder({ broker, input, order }) {
       error,
     })
     if (error?.outcomeUnknown === true) {
+      eventWaiter.startTimeout()
       const confirmation = await eventWaiter.promise
       return reconcileModifiedOrder({
         broker,
@@ -309,6 +310,16 @@ async function dispatchModifyOrder({ broker, input, order }) {
       })
     }
     eventWaiter.cancel()
+    const confirmation = await eventWaiter.promise
+    if (confirmation.event) {
+      return reconcileModifiedOrder({
+        broker,
+        input,
+        order,
+        event: confirmation.event,
+        error,
+      })
+    }
     const outcome = error?.kind === "exchange" || error?.kind === "http"
       ? "REJECTED"
       : "NOT_SENT"
@@ -318,6 +329,7 @@ async function dispatchModifyOrder({ broker, input, order }) {
       orderOutcome: outcome,
     })
   }
+  eventWaiter.startTimeout()
   const confirmation = await eventWaiter.promise
   return reconcileModifiedOrder({
     broker,

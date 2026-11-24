@@ -24,7 +24,7 @@ export function matchesPrivateOrderEventIdentity({
 /**
  * Wait for one matching private order event, a private-session failure, or a bounded timeout.
  * @param {{broker: object, orderId?: string, clientOrderId?: string, symbol: string}} options
- * @returns {{promise: Promise<{event: object|null, error: Error|null}>, cancel: () => void}}
+ * @returns {{promise: Promise<{event: object|null, error: Error|null}>, startTimeout: () => void, cancel: () => void}}
  */
 export function createPrivateOrderEventWaiter({ broker, orderId, clientOrderId, symbol } = {}) {
   const client = broker?.privateWebSocketClient
@@ -82,15 +82,19 @@ export function createPrivateOrderEventWaiter({ broker, orderId, clientOrderId, 
   }
   client.on("channel", onChannel)
   client.on("status", onStatus)
-  timer = setTimeout(() => {
-    settle({
-      event: null,
-      error: new Error("Timed out waiting for the matching Bitunix Futures private order event"),
-    })
-  }, timeoutMs)
-
   return {
     promise,
+    startTimeout: () => {
+      if (settled || timer !== null) {
+        return
+      }
+      timer = setTimeout(() => {
+        settle({
+          event: null,
+          error: new Error("Timed out waiting for the matching Bitunix Futures private order event"),
+        })
+      }, timeoutMs)
+    },
     cancel: () => settle({
       event: null,
       error: null,
