@@ -252,7 +252,6 @@ test("Bitunix Futures common open-order method remains explicitly unsupported", 
 
 function createCancellationBroker({ allowLiveOrderMutations = true } = {}) {
   const requests = []
-  let detailReadCount = 0
   const broker = new Broker({
     provider: "bitunix-futures",
     ...credentials,
@@ -268,11 +267,23 @@ function createCancellationBroker({ allowLiveOrderMutations = true } = {}) {
             method: options.method,
             body: options.body,
           })
+          if (path === "/api/v1/futures/trade/get_pending_orders") {
+            return createFuturesResponse({
+              data: {
+                orderList: [createOrderRow({
+                  fee: "0.0001",
+                  realizedPNL: "0",
+                  effect: "GTC",
+                  status: "PART_FILLED",
+                })],
+                total: 1,
+              },
+            })
+          }
           if (path === "/api/v1/futures/trade/get_order_detail") {
-            detailReadCount += 1
             return createFuturesResponse({
               data: createOrderRow({
-                status: detailReadCount === 1 ? "PART_FILLED" : "PART_FILLED_CANCELED",
+                status: "PART_FILLED_CANCELED",
               }),
             })
           }
@@ -312,7 +323,7 @@ test("Bitunix Futures cancelOrder is one-shot and confirms the final canceled or
   assert.equal(result.cancellationOutcome, "CONFIRMED")
   assert.equal(result.data.status, "CANCELED")
   assert.deepEqual(requests.map(({ path, method }) => [path, method]), [
-    ["/api/v1/futures/trade/get_order_detail", "GET"],
+    ["/api/v1/futures/trade/get_pending_orders", "GET"],
     ["/api/v1/futures/trade/cancel_orders", "POST"],
     ["/api/v1/futures/trade/get_order_detail", "GET"],
   ])
