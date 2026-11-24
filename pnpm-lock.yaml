@@ -213,8 +213,8 @@ importers:
         specifier: 22.3.0
         version: 22.3.0(@angular/compiler@22.3.0)(typescript@6.0.3)
       '@vitest/coverage-v8':
-        specifier: ^4.1.11
-        version: 4.1.12(vitest@5.1.1)
+        specifier: ^5.1.1
+        version: 5.1.1(vitest@5.1.1)
       jsdom:
         specifier: ^28.1.0
         version: 28.1.0(supports-color@8.1.1)
@@ -223,7 +223,7 @@ importers:
         version: 6.0.3
       vitest:
         specifier: ^5.1.1
-        version: 5.1.1(@vitest/coverage-v8@4.1.12)(jsdom@28.1.0(supports-color@8.1.1))(vite@8.3.8(esbuild@0.28.2)(sass-embedded@1.108.2)(sass@1.108.2))
+        version: 5.1.1(@vitest/coverage-v8@5.1.1)(jsdom@28.1.0(supports-color@8.1.1))(vite@8.3.8(esbuild@0.28.2)(sass-embedded@1.108.2)(sass@1.108.2))
 
   apps/harvester:
     dependencies:
@@ -1636,14 +1636,22 @@ packages:
     peerDependencies:
       vite: ^6.0.0 || ^7.0.0 || ^8.0.0
 
-  '@vitest/coverage-v8@4.1.12':
-    resolution: {integrity: sha512-6S7/iVknKglLAxMFxQGNppBI0iqJS2NgM6FBxavitj7KaDq/vywOWGf6dGu7F2L1Qy0G6S3uTp7aGshHrzK8JA==}
+  '@vitest/coverage-v8@5.1.1':
+    resolution: {integrity: sha512-xL4NkbVx/UqqDHaXSOyvB8qsSoLQ+dVNGR9H2Bh/4ggQtmaPFNPUC9gZQwKZePLOQ6WDcgwXVnPulFW9eCHt0w==}
     peerDependencies:
-      '@vitest/browser': 4.1.12
-      vitest: 4.1.12
+      '@vitest/browser': 5.1.1
+      vitest: 5.1.1
     peerDependenciesMeta:
       '@vitest/browser':
         optional: true
+
+  '@vitest/istanbul-lib-coverage@2.1.1':
+    resolution: {integrity: sha512-pF9nMHHuyQzyEXdkWX3d4wElEKjymfL5TEoofegJn/jK2WjmTLOcJKfJ7/YwYGYdbZf8Ebrt4VDUoBPiTuO9zg==}
+    engines: {node: '>=22'}
+
+  '@vitest/istanbul-lib-report@2.1.1':
+    resolution: {integrity: sha512-Qba+8OpQQAbWrmq3u1olh6jqE/vyW4OYJe6TLrrTBpXhjJhbY7Os69wyVvMQmNA64KJhGd5nQ/c7l4io8tPCHQ==}
+    engines: {node: '>=22'}
 
   '@vitest/mocker@5.1.1':
     resolution: {integrity: sha512-b2OgTB4+3ImWIVafXKazJXwLKwQxUNnix6b3xUvUTMh7RyXlrtzoxfZr8aEz9zkHOMAS4K5lu3TvFWoiVeVTQg==}
@@ -3963,19 +3971,23 @@ snapshots:
     dependencies:
       vite: 8.3.8(esbuild@0.28.2)(sass-embedded@1.108.2)(sass@1.108.2)
 
-  '@vitest/coverage-v8@4.1.12(vitest@5.1.1)':
+  '@vitest/coverage-v8@5.1.1(vitest@5.1.1)':
     dependencies:
       '@bcoe/v8-coverage': 1.0.2
-      '@vitest/utils': 4.1.12
+      '@vitest/istanbul-lib-coverage': 2.1.1
+      '@vitest/istanbul-lib-report': 2.1.1
       ast-v8-to-istanbul: 1.0.8
-      istanbul-lib-coverage: 3.2.2
-      istanbul-lib-report: 3.0.1
-      istanbul-reports: 3.2.0
       magicast: 0.5.5
-      obug: 2.2.1
+      obug: 3.0.0
       std-env: 4.3.0
       tinyrainbow: 3.2.0
-      vitest: 5.1.1(@vitest/coverage-v8@4.1.12)(jsdom@28.1.0(supports-color@8.1.1))(vite@8.3.8(esbuild@0.28.2)(sass-embedded@1.108.2)(sass@1.108.2))
+      vitest: 5.1.1(@vitest/coverage-v8@5.1.1)(jsdom@28.1.0(supports-color@8.1.1))(vite@8.3.8(esbuild@0.28.2)(sass-embedded@1.108.2)(sass@1.108.2))
+
+  '@vitest/istanbul-lib-coverage@2.1.1': {}
+
+  '@vitest/istanbul-lib-report@2.1.1':
+    dependencies:
+      '@vitest/istanbul-lib-coverage': 2.1.1
 
   '@vitest/mocker@5.1.1(vite@8.3.8(esbuild@0.28.2)(sass-embedded@1.108.2)(sass@1.108.2))':
     dependencies:
@@ -5137,7 +5149,7 @@ snapshots:
       vite: 8.3.8(esbuild@0.28.2)(sass-embedded@1.108.2)(sass@1.108.2)
       why-is-node-running: 3.2.1
     optionalDependencies:
-      '@vitest/coverage-v8': 4.1.12(vitest@5.1.1)
+      '@vitest/coverage-v8': 5.1.1(vitest@5.1.1)
       jsdom: 28.1.0(supports-color@8.1.1)
     transitivePeerDependencies:
       - msw
