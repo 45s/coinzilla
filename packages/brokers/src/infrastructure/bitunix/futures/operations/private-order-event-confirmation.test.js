@@ -5,6 +5,7 @@ import test from "node:test"
 import {
   createPrivateOrderEventWaiter,
   createPrivateOrderEventsWaiter,
+  createPrivateTpSlEventWaiter,
   matchesPrivateOrderCancellationEvent,
   matchesPrivateOrderEventIdentity,
 } from "./private-order-event-confirmation.js"
@@ -251,6 +252,63 @@ test("private cancellation event matching accepts only CLOSE events with cancele
     }),
     order,
   }), false, "an UPDATE event must not be treated as a CLOSE event")
+})
+
+test("private TP/SL event waiter matches the tpsl channel, event, status and position identity", async () => {
+  const broker = createBroker()
+  const waiter = createPrivateTpSlEventWaiter({
+    broker,
+    symbol: "BTCUSDT",
+    positionId: "position-1",
+    eventType: "CREATE",
+    status: "NEW",
+  })
+  let settled = false
+  const observed = waiter.promise.then((result) => {
+    settled = true
+    return result
+  })
+
+  broker.privateWebSocketClient.emit("channel", {
+    ch: "order",
+    data: {
+      event: "CREATE",
+      status: "NEW",
+      symbol: "BTCUSDT",
+      positionId: "position-1",
+      orderId: "tp-1",
+    },
+  })
+  broker.privateWebSocketClient.emit("channel", {
+    ch: "tpsl",
+    data: {
+      event: "UPDATE",
+      status: "NEW",
+      symbol: "BTCUSDT",
+      positionId: "position-1",
+      orderId: "tp-1",
+    },
+  })
+  await Promise.resolve()
+  assert.equal(settled, false, "order-channel and wrong TP/SL events must not confirm placement")
+
+  const event = {
+    ch: "tpsl",
+    data: {
+      event: "CREATE",
+      status: "NEW",
+      symbol: "BTCUSDT",
+      positionId: "position-1",
+      orderId: "tp-1",
+    },
+  }
+  broker.privateWebSocketClient.emit("channel", event)
+  const result = await observed
+
+  assert.strictEqual(result.event, event)
+  assert.equal(result.error, null)
+  assert.equal(broker.privateWebSocketClient.listenerCount("channel"), 0)
+  assert.equal(broker.privateWebSocketClient.listenerCount("status"), 0)
 })
 
 test("private multi-order waiter resolves only after every unique order identity is observed", async () => {
