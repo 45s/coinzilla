@@ -466,11 +466,7 @@ test("contains one client's snapshot serialization failure without interrupting 
   account.readAccountSnapshot = async () => {
     snapshotReadCount += 1
     if (snapshotReadCount === 2) {
-      const malformedBalance = {
-        asset: {
-          code: "INVALID",
-        },
-      }
+      const malformedBalance = {}
       malformedBalance.self = malformedBalance
       return {
         ok: true,
