@@ -289,14 +289,14 @@ test("TEMPORARY forensic probe: decode immutable issue 1827 session artifacts", 
     assert.equal(createHash("sha256").update(compressed).digest("hex"), file.sha256, `${file.name} archive SHA-256 mismatch`)
     decoded[file.name] = gunzipSync(compressed).toString("utf8")
   }
-  const incidentId = /h-e05d425b3f344d8bbfbf12-(?:6|8|10|19|21|23|25|27|29|33|35|39|43|47|49|51|53)(?!\\d)/
+  const incidentId = /h-e05d425b3f344d8bbfbf12-(?:6|8|10|19|21|23|25|27|29|33|35|39|43|47|49|51|53)(?!\d)/
   const relevant = /ORDER_SUBMISSION|SUBMITTED|ACKNOWLEDGED|REJECTED|UNKNOWN|POST_ONLY|next strategy evaluation failed|market (?:book|price) processing failed/i
   const summary = Object.fromEntries(Object.entries(decoded).map(([name, value]) => {
-    const lines = value.split(/\\r?\\n/)
+    const lines = value.split(/\r?\n/)
     const selected = name === "terminal"
       ? lines
       : lines.filter((line) => incidentId.test(line) || relevant.test(line))
     return [name, selected.slice(0, 250)]
   }))
-  assert.fail(`ARCHIVE_1827_DECODED_EVIDENCE\\n${JSON.stringify(summary, null, 2)}`)
+  assert.fail(`ARCHIVE_1827_DECODED_EVIDENCE\n${JSON.stringify(summary, null, 2)}`)
 })
