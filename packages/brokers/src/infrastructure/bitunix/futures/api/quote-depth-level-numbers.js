@@ -1,33 +1,14 @@
-function isDigit({ character }) {
-  return character >= "0" && character <= "9"
-}
+const JSON_NUMBER_PATTERN = /-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?/g
+const DEPTH_LEVEL_PATTERN = /\[(?:\s*-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?\s*,?)+\s*\]/g
 
-function readJsonNumber({ text, index }) {
-  const match = text.slice(index).match(/^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?/)
-  return match?.[0]
-}
-
-function isDepthNumberStart({ character, text, index }) {
-  if (character !== "-" && !isDigit({ character })) {
-    return false
-  }
-  let previous = index - 1
-  while (previous >= 0 && /\s/.test(text[previous])) {
-    previous -= 1
-  }
-  return text[previous] === "[" || text[previous] === ","
-}
-
-function quoteDepthArray({ text, startIndex }) {
+function findArrayEnd({ text, startIndex }) {
   let index = startIndex
   let depth = 1
   let inString = false
   let escaped = false
-  let output = ""
   while (index < text.length && depth > 0) {
     const character = text[index]
     if (inString) {
-      output += character
       if (escaped) {
         escaped = false
       } else if (character === "\\") {
@@ -35,48 +16,35 @@ function quoteDepthArray({ text, startIndex }) {
       } else if (character === '"') {
         inString = false
       }
-      index += 1
-      continue
-    }
-    if (character === '"') {
+    } else if (character === '"') {
       inString = true
-      output += character
-      index += 1
-      continue
-    }
-    if (character === "[") {
+    } else if (character === "[") {
       depth += 1
-      output += character
-      index += 1
-      continue
-    }
-    if (character === "]") {
+    } else if (character === "]") {
       depth -= 1
-      output += character
-      index += 1
-      continue
     }
-    if (depth === 2 && isDepthNumberStart({
-      character,
-      text,
-      index,
-    })) {
-      const number = readJsonNumber({
-        text,
-        index,
-      })
-      if (number !== undefined) {
-        output += JSON.stringify(number)
-        index += number.length
-        continue
-      }
-    }
-    output += character
     index += 1
   }
+  return index
+}
+
+function quoteNumericLevelArrays({ arrayText }) {
+  return arrayText.replace(DEPTH_LEVEL_PATTERN, (level) => (
+    level.replace(JSON_NUMBER_PATTERN, (number) => JSON.stringify(number))
+  ))
+}
+
+function quoteDepthArray({ text, startIndex }) {
+  const endIndex = findArrayEnd({
+    text,
+    startIndex,
+  })
+  const arrayText = text.slice(startIndex - 1, endIndex)
   return {
-    output,
-    index,
+    output: quoteNumericLevelArrays({
+      arrayText,
+    }).slice(1),
+    index: endIndex,
   }
 }
 
