@@ -2315,20 +2315,25 @@ The RS specification distinguishes a candidate SELL order that violates an excha
 
 These distinctions are specified in the RS domain contract and must be scenario-tested. They are not owner-decision blockers. The STOP policy blocker is resolved in §13.1; RS-009 remains SPECIFIED until its new scenario evidence is implemented and verified.
 
-### 13.5 Workflow-to-evaluator cycle-state defect — RS-003 application proof BLOCKED by #1809
+### 13.5 Workflow-to-evaluator cycle-state defect — fix in PR #1815, merge/verification pending
 
-Issue #1809 documents that the accounting workflow snapshot's accumulating cycle state lacks required invariant fields, causing the real default SELL evaluator to reject the state before planning.
+Issue #1809 identified that the real accounting workflow emitted an accumulating cycle-state projection without the canonical domain invariant fields. The default SELL evaluator therefore rejected the workflow snapshot before it reached the SELL planner.
 
-Required fix belongs to #1809, not the documentation/scenario-only issue. The fix must preserve the domain validator and make the real workflow-to-evaluator boundary produce a canonical valid state. Acceptance must include:
+The production fix is isolated in [PR #1815](https://github.com/45s/coinzilla/pull/1815), separate from this scenario initiative. It uses the canonical cycle-state factory at the application boundary, preserves the sole SELL identity for submitted cycles, and does not reinterpret unresolved outcomes as accumulating.
 
-- Real accounting workflow.
-- Real transition snapshot.
-- Real default SELL evaluator.
-- Eligible mixed SELL reaches planner and produces expected intent.
-- Missing verified Spot still fails closed.
-- Existing order, STOP, pause and reconciliation gates keep precedence.
+The new composed cases in `test/scenarios/recovery-seller-sell-planner.scenario.test.js` use the real accounting workflow and real default SELL evaluator. They prove:
 
-Until merged and covered, an isolated planner test using the canonical state factory proves planner economics only, not the full application path.
+- An eligible mixed SELL reaches the planner and submits exactly `1.01 ZRO` (1.00 recovery + 0.01 verified legacy), preserving cycle and Position identity.
+- Missing verified Spot custody reaches the actual custody guard and produces zero broker submissions.
+- Existing account orders, STOP, market pause and incomplete reconciliation take precedence over SELL submission.
+- The test uses only deterministic BUY-policy and broker-submit port controls; it does not bypass the workflow, domain validator or default SELL policy.
+
+TDD evidence:
+- RED: test-first head `65761e992c86e2fd59bdc0811ab8737dbf3c6a31` failed with `UNEXPECTED_OR_UNMODELED_CONDITION` from the malformed workflow cycle-state projection.
+- GREEN: the three composed cases passed Harvester Targeted Tests on `23dbbe303221ea49820eeb9820323512b2fe38df` (11/11 tests in the scenario file); a later test-only refactor passed strict changed-file ESLint on `ed165125f47bcc31047460f3317b5e1496a0719c`.
+- Final PR head and full exact-head CI are being revalidated after documentation synchronization.
+
+This defect is not a reason to skip the prescribed seven-PR scenario sequence. Keep RS-003 PARTIAL until PR #1815 is merged and its exact merged-head verification is recorded; the remaining RS-003 cases stay open.
 
 ## 14. Implementation roadmap: exact AI-agent execution sequence
 
