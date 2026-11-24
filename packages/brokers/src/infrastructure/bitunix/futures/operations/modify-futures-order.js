@@ -281,9 +281,8 @@ async function dispatchModifyOrder({ broker, input, order }) {
     clientOrderId: input.clientId,
     symbol: input.symbol,
   })
-  let response
   try {
-    response = await broker.restClient.request({
+    await broker.restClient.request({
       method: "POST",
       path: MODIFY_ORDER_PATH,
       body: {

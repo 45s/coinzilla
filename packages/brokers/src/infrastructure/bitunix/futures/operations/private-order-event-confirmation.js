@@ -1,3 +1,8 @@
+/**
+ * Match a raw private order-channel event against exchange and caller order identities.
+ * @param {{event: object, orderId?: string, clientOrderId?: string, symbol: string}} options
+ * @returns {boolean}
+ */
 export function matchesPrivateOrderEventIdentity({
   event,
   orderId,
@@ -16,6 +21,11 @@ export function matchesPrivateOrderEventIdentity({
     (!hasClientOrderId || payload.clientId === clientOrderId)
 }
 
+/**
+ * Wait for one matching private order event, a private-session failure, or a bounded timeout.
+ * @param {{broker: object, orderId?: string, clientOrderId?: string, symbol: string}} options
+ * @returns {{promise: Promise<{event: object|null, error: Error|null}>, cancel: () => void}}
+ */
 export function createPrivateOrderEventWaiter({ broker, orderId, clientOrderId, symbol } = {}) {
   const client = broker?.privateWebSocketClient
   const timeoutMs = broker?.privateEventTimeoutMs
@@ -28,17 +38,15 @@ export function createPrivateOrderEventWaiter({ broker, orderId, clientOrderId, 
   }
 
   let settled = false
-  let timer
+  let timer = null
   let resolveResult
-  let onChannel
-  let onStatus
   const promise = new Promise((resolve) => {
     resolveResult = resolve
   })
   const cleanup = () => {
     client.off("channel", onChannel)
     client.off("status", onStatus)
-    if (timer !== undefined) {
+    if (timer !== null) {
       clearTimeout(timer)
     }
   }
@@ -50,7 +58,7 @@ export function createPrivateOrderEventWaiter({ broker, orderId, clientOrderId, 
     cleanup()
     resolveResult(result)
   }
-  onChannel = (event) => {
+  const onChannel = (event) => {
     if (matchesPrivateOrderEventIdentity({
       event,
       orderId,
@@ -63,7 +71,7 @@ export function createPrivateOrderEventWaiter({ broker, orderId, clientOrderId, 
       })
     }
   }
-  onStatus = (status) => {
+  const onStatus = (status) => {
     if (status?.state !== "open" || status.authenticated !== true ||
         status.recoveryRequired !== false) {
       settle({

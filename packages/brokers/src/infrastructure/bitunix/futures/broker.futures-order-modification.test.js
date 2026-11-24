@@ -184,12 +184,20 @@ const modifyInput = {
 }
 
 test("Bitunix Futures modifyFuturesOrder preflights and verifies exact order changes", async () => {
-  const { broker, requests } = createModifyBroker()
+  const { broker, requests, privateClients } = createModifyBroker()
   await connectAndAcknowledgeUserDataReconciliation(broker)
+  const observedEvents = []
+  const observePrivateEvent = (event) => observedEvents.push(event)
+  privateClients[0].on("channel", observePrivateEvent)
 
   const result = await broker.modifyFuturesOrder(modifyInput)
 
-  assert.equal(result.ok, true)
+  privateClients[0].off("channel", observePrivateEvent)
+  assert.equal(result.ok, true, `a matching private UPDATE event and REST readback should confirm the modification: ${result.errors?.map((error) => error.message).join("; ") ?? "no errors"}`)
+  assert.equal(observedEvents.length, 1, "the exchange fixture must emit one private order event for the modification")
+  assert.equal(observedEvents[0].data.event, "UPDATE", "the observed private event must represent an order update")
+  assert.equal(observedEvents[0].data.qty, modifyInput.qty, "the private event must carry the requested exact quantity")
+  assert.equal(observedEvents[0].data.price, modifyInput.price, "the private event must carry the requested exact price")
   assert.equal(result.mutationOutcome, "CONFIRMED")
   assert.equal(result.orderOutcome, "CONFIRMED")
   assert.equal(result.data.originalQuantity.amount, "0.02")
