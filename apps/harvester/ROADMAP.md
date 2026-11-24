@@ -113,7 +113,11 @@ Do not claim 100% correctness from line/branch coverage. Completion means every 
 
 **Purpose:** independently prove RS business behavior from the approved domain contract. This is a test-evidence workstream, not a new trading-policy or runtime-activation task. Shared scenario methodology is owned by [#1779](https://github.com/45s/coinzilla/issues/1779) and merged in [PR #1795](https://github.com/45s/coinzilla/pull/1795). The repository-wide human-readable index is [SCENARIO_CATALOG.md](../../docs/testing/SCENARIO_CATALOG.md); #1780 owns the detailed RS matrix and evidence.
 
-**Current PR:** [#1793](https://github.com/45s/coinzilla/pull/1793), branch `test/rs-profitability-domain-scenarios-v2`. The PR branch was originally based on `44ed6ce4dd32437e5343c2b1c43171f290f4836e`; it is being synchronized with current `develop` before any new exact-head verification. Do not reuse old CI claims as evidence for the synchronized head.
+**Merged scenario baseline:** [PR #1793](https://github.com/45s/coinzilla/pull/1793) is merged. Its four scenario files provide initial, deliberately PARTIAL evidence across RS-003 through RS-007; they do not complete any family.
+
+**Agent playbook:** [PR #1810](https://github.com/45s/coinzilla/pull/1810) is open for review and defines the complete scenario registry, case schemas, worked examples and seven-PR implementation sequence.
+
+**Current application prerequisite:** [PR #1815](https://github.com/45s/coinzilla/pull/1815) addresses #1809 with a real workflow-to-default-SELL-evaluator regression. The test-first RED failure was observed on `65761e992c86e2fd59bdc0811ab8737dbf3c6a31`; the composed regression cases passed Harvester Targeted Tests on `23dbbe303221ea49820eeb9820323512b2fe38df`. The final PR head still requires exact-head CI verification.
 
 **New files in the current slice:**
 
@@ -143,9 +147,9 @@ Do not claim 100% correctness from line/branch coverage. Completion means every 
 2. Default enabled state: current config sets `RS_RECOVERY_SELLER_CONFIG.enabled: true`, while specification §15 says keep it false by default; the specification's earlier text and implementation roadmap say enabled by default. Keep this as a documentation/owner-decision blocker; this scenario PR must not change configuration.
 3. Third-asset commission valuation: calculation examples exist, but the authoritative runtime quote valuation source remains unresolved/deferred.
 
-**Newly discovered RS-003 implementation blocker:** the real accounting workflow transition snapshot emits an accumulating cycle state missing fields required by the SELL domain validator. The default evaluator therefore fails closed before planning. Tracked separately in [issue #1809](https://github.com/45s/coinzilla/issues/1809). The planner scenario uses the canonical cycle-state factory to isolate planner economics; it does not claim the production workflow-to-evaluator path is covered.
+**RS-003 workflow-to-evaluator defect — implementation in [PR #1815](https://github.com/45s/coinzilla/pull/1815):** the accounting workflow previously emitted an accumulating cycle state without the canonical domain invariants, so the default SELL evaluator stopped before planning. The fix constructs workflow snapshots from the canonical cycle-state factory, preserves the sole SELL identity for submitted cycles, and keeps unresolved outcomes unresolved. Three new application-composed cases use the real accounting workflow and default SELL evaluator: eligible mixed SELL submission for exactly `1.01 ZRO`, missing verified Spot custody with zero submissions, and existing-order/STOP/pause/incomplete-reconciliation precedence. These cases pass the Harvester Targeted Tests on the recorded test head; the final PR head and merge are still pending.
 
-**Next P0 work:** resolve and test workflow-to-evaluator cycle-state projection in #1809; actual fill-commission-aware profitability; multiple canonical fills and REST/stream order permutations; durable submission/reconciliation boundaries; STOP decision after the owner resolves the contract discrepancy. Continue test-first in small increments. Do not change production policy, configuration, or exchange state under #1780.
+**Next P0 work:** follow PR 1 in the [RS Scenario Testing Playbook](https://github.com/45s/coinzilla/blob/develop/apps/harvester/docs/domain/recovery-seller-scenario-testing.md): implement the scenario registry/schema/traceability and thin runner. Then continue the prescribed RS-001/002, RS-003/004, RS-005/007, RS-006, RS-008 and RS-009 slices. Remaining RS-003 gaps include cross-market reservations, legacy exhaustion, multi-fill/commission permutations and durable submission/reconciliation boundaries. No exchange operations or runtime activation are authorized by #1780.
 
 ## Recovery Seller activation — 2026-11-22
 

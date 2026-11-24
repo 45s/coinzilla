@@ -38,6 +38,11 @@ import {
 
 const TERMINAL_ORDER_STATUSES = new Set(["FILLED", "CANCELED", "REJECTED", "EXPIRED"])
 
+/**
+ * Build the canonical domain cycle state while retaining application market routing context.
+ * @param {object} input Cycle identity, lifecycle status and optional sole-SELL identity.
+ * @returns {object} Immutable canonical RS cycle state with its application market identifier.
+ */
 function createRecoverySellerTransitionCycleState({
   marketId,
   cycleId,

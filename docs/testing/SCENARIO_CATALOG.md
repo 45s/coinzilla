@@ -543,9 +543,9 @@ The schema intentionally separates *business input* from *derived oracle*. Tests
 **New scenario tests:** not mapped. Existing RS tests are not credited.
 
 ### RS-003 — A mixed recovery/legacy SELL uses the additive legacy slice
-The accounting workflow's transition snapshot currently emits an incomplete accumulating cycle-state shape that the default SELL evaluator rejects; full workflow-to-evaluator proof is tracked separately in [#1809](https://github.com/45s/coinzilla/issues/1809). The planner scenarios normalize only the lifecycle state using the canonical domain factory so that planner economics and no-submit boundaries can be tested without changing production behavior.
+The accounting workflow-to-default-evaluator defect is addressed in [PR #1815](https://github.com/45s/coinzilla/pull/1815). That PR adds composed regressions against the real accounting workflow snapshot and the real default SELL evaluator; the PR remains unmerged, so this is not yet VERIFIED evidence.
 
-**Status:** PARTIAL — the new planner scenario verifies canonical BUY-derived recovery quantity, Spot-verified additive legacy quantity, the independent ZRO proceeds oracle, smaller eligible Spot remainder, missing-custody fail-closed behavior, a same-market active SELL reservation gate, a real TradingRules minimum-notional rejection, and no-submit boundaries. It supplies a canonical lifecycle state to isolate planner behavior because the real workflow-to-evaluator cycle-state projection is blocked by [#1809](https://github.com/45s/coinzilla/issues/1809); it does not prove the full runtime wiring.
+**Status:** PARTIAL — the existing planner scenario verifies canonical BUY-derived recovery quantity, Spot-verified additive legacy quantity, the independent ZRO proceeds oracle, smaller eligible Spot remainder, missing-custody fail-closed behavior, a same-market active SELL reservation gate, a real TradingRules minimum-notional rejection, and no-submit boundaries. PR #1815 adds three real-workflow cases: eligible mixed SELL submission for exactly `1.01 ZRO` with cycle/Position identity preserved; missing verified Spot custody reaching the actual custody guard with zero submissions; and existing-order, STOP, market-pause and incomplete-reconciliation gates taking precedence with zero SELL submissions. The new cases passed Harvester Targeted Tests on test head `23dbbe303221ea49820eeb9820323512b2fe38df`; final PR-head verification and merge are still pending.
 
 **Behavior:** Conceptual SELL quantity is actual net recovery quantity plus the configured legacy `sellQuantity`, limited by the authorized remaining legacy amount that is verified, Spot-available and unreserved. `sellQuantity` is additive, not total quantity or a cap.
 
@@ -572,7 +572,7 @@ The accounting workflow's transition snapshot currently emits an incomplete accu
   - `one 401 DOGE canonical SELL Fill allocates 400 DOGE to recovery and 1 DOGE to legacy`
   - `recovery and legacy allocations must sum exactly to the canonical SELL Fill quantity`
 
-**Remaining:** fix and prove the real workflow-to-evaluator cycle-state mapping (#1809); cross-market/shared account reservations; legacy exhaustion at scenario level; partial and multiple fills; base/quote/mixed commission allocation; exchange tick/step/min/max boundaries beyond the minimum-notional case; durable reservation/commit behavior; precision failure.
+**Remaining:** merge and verify the #1809 fix in PR #1815; cross-market/shared account reservations; legacy exhaustion at scenario level; partial and multiple fills; base/quote/mixed commission allocation; exchange tick/step/min/max boundaries beyond the minimum-notional case; durable reservation/commit behavior; precision failure.
 
 ### RS-004 — Recovery, legacy, and combined profitability gates are independent
 
