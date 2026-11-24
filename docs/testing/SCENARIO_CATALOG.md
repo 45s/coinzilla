@@ -518,7 +518,7 @@ The schema intentionally separates *business input* from *derived oracle*. Tests
 
 **New scenario tests:** not mapped. Existing RS tests are not credited.
 
-### RS-002 — Recovery BUY accounting uses confirmed net fills
+### RS-002 — Recovery BUY accounting uses confirmed net fills and actual commissions
 
 **Status:** MISSING — no new RS scenario test accepted.
 
@@ -539,7 +539,7 @@ The schema intentionally separates *business input* from *derived oracle*. Tests
 
 **New scenario tests:** not mapped. Existing RS tests are not credited.
 
-### RS-003 — Mixed SELL quantity is recovery plus eligible legacy slice
+### RS-003 — A mixed recovery/legacy SELL uses the additive legacy slice
 
 **Status:** PARTIAL — one post-fill allocation example is newly mapped; pre-submission planning, verified custody, reservations and exchange-filter behavior are not proved by that case.
 
@@ -562,7 +562,7 @@ The schema intentionally separates *business input* from *derived oracle*. Tests
 
 **Remaining:** planner/no-order proof; smaller legacy remainder; legacy exhaustion; partial fills; base/quote/mixed commission allocation; exchange tick/step/min/max/notional; insufficient Spot; central reservations; precision failure.
 
-### RS-004 — Recovery, legacy and combined profitability gates are independent
+### RS-004 — Recovery, legacy, and combined profitability gates are independent
 
 **Status:** PARTIAL — four new domain cases prove both cross-subsidy directions, exact-threshold acceptance and recovery-only eligibility. They do not prove the pre-submission evaluator emits no order when a gate fails.
 
@@ -595,7 +595,7 @@ At `20.00 USDT/ZRO`, recovery receives `20.00 USDT` (profit `+10.00`), legacy re
 
 **Remaining:** pre-submission no-order/evaluator integration; just-below/just-above each threshold; actual fee gross-up/allocation; price tick and quantity step; partial/multiple fill history; post-fill adverse STOP application effects.
 
-### RS-005 — One SELL lifecycle per recovery cycle
+### RS-005 — A recovery cycle may submit only one SELL lifecycle
 
 **Status:** PARTIAL — new pure cycle-state scenarios prove identity retention and reject selected invalid transitions. They do not prove application broker-call counts or reservation persistence.
 
@@ -614,7 +614,7 @@ At `20.00 USDT/ZRO`, recovery receives `20.00 USDT` (profit `+10.00`), legacy re
 
 **Remaining:** repeated application evaluation proves zero extra broker submissions; reservation retention/release; partial-fill/cancel races; lookup not-found/failure; duplicate terminal delivery; global STOP and unknown BUY.
 
-### RS-006 — Mixed SELL accounting is exact-once and projection-atomic
+### RS-006 — Mixed SELL accounting commits both allocations atomically
 
 **Status:** PARTIAL — new cases prove single-Fill projection, replay no-op, staged duplicate/conflict handling and one domain-projection failure boundary. This is not proof of multi-fill REST/stream or durable transaction atomicity.
 
@@ -632,7 +632,7 @@ At `20.00 USDT/ZRO`, recovery receives `20.00 USDT` (profit `+10.00`), legacy re
 
 **Remaining:** two-or-more canonical fills; stream-first and REST-first; duplicate cross-channel delivery; incomplete fill history; base/quote/mixed/third-asset fee behavior; commit failure at each persistence boundary; registry publication failure; durable transaction barrier; reservation and STOP effects.
 
-### RS-007 — Unknown submission outcome retains identity and forbids blind retry
+### RS-007 — Unknown submission outcome preserves identity and forbids blind retry
 
 **Status:** PARTIAL — the new cycle-state test proves state-level identity retention and replacement rejection only. The broker/application no-retry behavior is not proved by this test.
 
@@ -644,7 +644,7 @@ At `20.00 USDT/ZRO`, recovery receives `20.00 USDT` (profit `+10.00`), legacy re
 
 **Remaining:** actual submitter invocation count; lookup not-found and lookup-failure; original reservation retention; STOP latch; durable intent/outcome failure; unknown BUY.
 
-### RS-008 — CG and RS share physical resources, not strategy ownership
+### RS-008 — CG and RS share account availability without sharing strategy ownership
 
 **Status:** MISSING — no new RS scenario test accepted.
 
@@ -656,7 +656,7 @@ At `20.00 USDT/ZRO`, recovery receives `20.00 USDT` (profit `+10.00`), legacy re
 
 **Tests:** not mapped.
 
-### RS-009 — STOP blocks new trading but does not suppress reconciliation
+### RS-009 — STOP is terminal, visible, and does not suppress reconciliation
 
 **Status:** BLOCKED — a contract/source discrepancy must be resolved before this row can be claimed as terminal or tested as an unconditional no-reset invariant.
 
@@ -670,7 +670,7 @@ At `20.00 USDT/ZRO`, recovery receives `20.00 USDT` (profit `+10.00`), legacy re
 
 **Tests:** not mapped by this initiative. Existing tests receive no coverage credit.
 
-### RS-010 — Deferred and unresolved capabilities remain explicit
+### RS-010 — Unsupported restart and fee-valuation capabilities remain blocked
 
 **Status:** mixed disposition — restart/replay is UNSUPPORTED for this initiative; third-asset fee valuation is BLOCKED until an authoritative execution-time quote valuation source is approved.
 

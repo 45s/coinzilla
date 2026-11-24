@@ -111,7 +111,7 @@ Do not claim 100% correctness from line/branch coverage. Completion means every 
 
 ## Recovery Seller domain scenario coverage — issue #1780
 
-**Purpose:** independently prove RS business behavior from the approved domain contract. This is a test-evidence workstream, not a new trading-policy or runtime-activation task. Shared scenario methodology is owned by [#1779](https://github.com/45s/coinzilla/issues/1779) and merged in [PR #1795](https://github.com/45s/coinzilla/pull/1795). The repository-wide human-readable index is [SCENARIO_CATALOG.md](../docs/testing/SCENARIO_CATALOG.md); #1780 owns the detailed RS matrix and evidence.
+**Purpose:** independently prove RS business behavior from the approved domain contract. This is a test-evidence workstream, not a new trading-policy or runtime-activation task. Shared scenario methodology is owned by [#1779](https://github.com/45s/coinzilla/issues/1779) and merged in [PR #1795](https://github.com/45s/coinzilla/pull/1795). The repository-wide human-readable index is [SCENARIO_CATALOG.md](../../docs/testing/SCENARIO_CATALOG.md); #1780 owns the detailed RS matrix and evidence.
 
 **Current PR:** [#1793](https://github.com/45s/coinzilla/pull/1793), branch `test/rs-profitability-domain-scenarios-v2`. The PR branch was originally based on `44ed6ce4dd32437e5343c2b1c43171f290f4836e`; it is being synchronized with current `develop` before any new exact-head verification. Do not reuse old CI claims as evidence for the synchronized head.
 
