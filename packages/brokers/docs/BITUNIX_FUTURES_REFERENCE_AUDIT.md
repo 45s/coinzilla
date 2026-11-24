@@ -145,3 +145,41 @@ The library is used as a secondary discovery/reference source. It does not estab
 - [ ] Full capability matrix, common Broker conformance tests, package README/BROKER_API docs and exact-head CI.
 
 No LIVE mutation has been performed by the implementation agent or automated tests. The partial provider is not production-ready and must not be used for Harvester execution or routing.
+
+
+## 2026-11-24 implementation continuation
+
+### Additional official REST contracts inspected
+
+- [Pending orders](https://www.bitunix.com/api-docs/futures/trade/get_pending_orders.html): one page, maximum 100, sorted newest first; `orderList` plus `total`; optional `symbol`, `orderId`, `clientId`, `status`, and time bounds. LIMIT rows require `price` and `effect`; MARKET rows do not require `price`.
+- [Order detail](https://www.bitunix.com/api-docs/futures/trade/get_order_detail.html): accepts at least one of `orderId` or `clientId`; response includes optional caller `clientId`, so canonical mapping must fail closed when it is absent.
+- [Order history](https://www.bitunix.com/api-docs/futures/trade/get_history_orders.html): one bounded page; canceled-only query has a 3-day range, non-canceled query has a 90-day range. `PART_FILLED_CANCELED` is a distinct exchange status and maps to canonical CANCELED while retaining executed quantity.
+- [Current positions](https://www.bitunix.com/api-docs/futures/position/get_pending_positions.html): `data` is an array; the endpoint can include subaccounts unless explicitly disabled. The adapter requests `includeSubAccounts=false` and preserves a returned `subAccountId`.
+- [Position history](https://www.bitunix.com/api-docs/futures/position/get_history_positions.html): one `positionList` page plus total; supports `symbol` / `positionId` and create-time bounds.
+- [Trade history](https://www.bitunix.com/api-docs/futures/trade/get_history_trades.html): one `tradeList` page plus total; exposes `tradeId`, `orderId`, quantity, price, fee, realized PnL, timestamp and liquidity role. It does not establish complete/gap-free execution history or fee asset semantics.
+- [Pending TP/SL orders](https://www.bitunix.com/api-docs/futures/tp_sl/get_pending_tp_sl_order.html): a separate endpoint/model. The generic pending-order adapter does not treat this endpoint as equivalent to standard orders.
+
+### Additional discrepancies
+
+- Pending/history order and trade response examples use `type` in some examples while the response parameter table names `orderType`. The DTO adapters accept either field but normalize to `orderType`.
+- TP/SL stop-type tables use `MARK_PRICE` / `LAST_PRICE`, while response examples include `MARK`. The pending-order DTO preserves the documented/example aliases instead of silently rewriting them.
+- The official Futures WebSocket preparation page and official Node demo use seconds for login/ping timestamps. The inspected JKorf .NET implementation uses a millisecond timestamp helper. The provider follows the dedicated Futures protocol page and official Node demo (seconds); this discrepancy remains recorded for a live read-only verification before any stream capability is advertised.
+- The official Node demo sends explicit private channel subscribe frames. The inspected JKorf private subscription abstraction does not expose a corresponding subscription query. The provider follows the explicit channel subscription protocol; no claim is made that a successful send proves server-side subscription.
+
+### Current code increment
+
+- [x] Strict canonical order-detail mapping by exactly one exchange order ID or caller client ID; verifies response symbol and requested identity.
+- [x] Bounded canonical order history with explicit status/type/time/page filters and canceled-order status normalization. Rows missing optional exchange client identity fail closed.
+- [x] Bounded pending-order page projection preserving decimal strings and TP/SL trigger fields; market orders may omit price; LIMIT trigger orders require their documented trigger price.
+- [x] Current and historical Futures position projections, preserving exact financial strings, leverage/modes, timestamps and optional subaccount identity.
+- [x] Account-wide position-mode and symbol leverage/margin-mode reads.
+- [x] Bounded raw Futures execution history preserving trade identity, fee and realized PnL without falsely promoting it to canonical Fill.
+- [x] Low-level Futures WebSocket client with public/private endpoints, login acknowledgement gating, channel validation, heartbeat and outbound rate limit.
+- [ ] Broker integration for public/private WebSocket subscriptions and lifecycle cleanup.
+- [ ] Bounded reconnect, resubscribe and mandatory REST reconciliation before user-data recovery.
+- [ ] Canonical Fill mapping only after fee currency and history-completeness evidence are resolved.
+- [ ] Safe order create/modify/cancel/close/TP-SL lifecycle and mutation-outcome reconciliation.
+- [ ] Safe account-setting mutations and common Broker capability conformance.
+- [ ] Exact-head unit tests, coverage and all required CI checks.
+
+The Futures provider remains **not production-ready**. The WebSocket client is currently a low-level exported component, not a Broker stream capability. LIVE order/account mutation flags remain disabled by default. No live exchange request or mutation was performed by this implementation agent or its tests.
