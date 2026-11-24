@@ -2393,12 +2393,11 @@ export class BitunixFuturesBroker {
         mutationOutcome: "NOT_SENT",
         positionOutcome: "NOT_SENT",
       }
-
+    }
     if (!this.isUserDataReady) {
       return positionMutationNotReadyResult({
         operation: "closeFuturesPosition",
       })
-    }
     }
     return closeFuturesPositionOperation({
       broker: this,
@@ -2416,12 +2415,11 @@ export class BitunixFuturesBroker {
         mutationOutcome: "NOT_SENT",
         positionOutcome: "NOT_SENT",
       }
-
+    }
     if (!this.isUserDataReady) {
       return positionMutationNotReadyResult({
         operation: "closeFuturesPositionBySide",
       })
-    }
     }
     return closeFuturesPositionBySideOperation({
       broker: this,
@@ -2439,12 +2437,11 @@ export class BitunixFuturesBroker {
         mutationOutcome: "NOT_SENT",
         positionOutcome: "NOT_SENT",
       }
-
+    }
     if (!this.isUserDataReady) {
       return positionMutationNotReadyResult({
         operation: "closeAllFuturesPositions",
       })
-    }
     }
     return closeAllFuturesPositionsOperation({
       broker: this,
