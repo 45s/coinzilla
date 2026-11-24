@@ -312,9 +312,9 @@ describe('BotsComponent', () => {
     const renderedText = (fixture.nativeElement as HTMLElement).textContent as string;
     expect(renderedText).toContain('Snapshot unavailable');
     expect(renderedText).toContain('A Harvester operator read model is unavailable');
-    const pauseButton = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button'))
-      .find((button) => button.textContent?.trim() === 'Pause BUYs') as HTMLButtonElement;
-    expect(pauseButton.disabled).toBe(true);
+    const pauseAllButton = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button'))
+      .find((button) => button.textContent?.trim() === 'Pause all BUYs') as HTMLButtonElement;
+    expect(pauseAllButton.disabled).toBe(true);
     http.expectNone(`${BASE_URL}/status`);
     http.expectNone(`${BASE_URL}/markets`);
     http.expectNone(`${BASE_URL}/portfolio`);
