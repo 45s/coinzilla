@@ -12,7 +12,7 @@ created: 2026-11-24
 
 **Scope:** scenario design, executable scenario architecture, fixtures, domain/application boundaries, financial oracles, coverage evidence, documentation synchronization, issue maintenance, and phased delivery.
 
-**This document does not change RS trading behavior.** The draft [Recovery Seller Domain Specification](recovery-seller-domain-specification.md), its accepted decisions, and the owning issue remain the authority for business behavior. This playbook explains how to prove that behavior. It must never invent retry, replacement, STOP reset, liquidation, dust, restart, or recovery policy.
+**This document does not change RS trading behavior.** The draft [Recovery Seller Domain Specification](recovery-seller-domain-specification.md), its accepted decisions, and the owning issue remain the authority for business behavior. This playbook explains how to prove that behavior. It must never invent retry, replacement, automatic STOP clearing, liquidation, dust, restart, or recovery policy.
 
 ## 1. Read this first: authority and ownership
 
@@ -84,7 +84,7 @@ This initiative does not authorize:
 - Implementing a second Portfolio, Position, Fill, OrderRegistry, accounting engine, exchange-filter engine or RS state machine inside test helpers.
 - Broker/API calls, order placement/cancellation, credential use, exchange sessions, TESTNET/LIVE experiments, or exchange-state changes.
 - Restart/replay support, standalone final-residual liquidation, advanced pause/disable/abandon/resume lifecycle flows, or third-asset commission valuation without an independently approved contract and source.
-- Inventing STOP reset/resume, SELL retry/replacement, post-fill recovery, continuation after terminal CANCELED/EXPIRED outcomes with prior partial fills, dust treatment or new-cycle behavior.
+- Inventing automatic STOP clearing, weakening the evidence-backed administrator resolution contract, SELL retry/replacement, post-fill recovery, continuation after terminal CANCELED/EXPIRED outcomes with prior partial fills, dust treatment or new-cycle behavior.
 - Building a generic test framework for all strategies inside this RS-specific task.
 
 ### 2.3 What counts as success
@@ -161,7 +161,7 @@ This table describes the current develop implementation at the audit checkpoint.
 | apps/harvester/src/domain/strategies/recovery-seller/mixed-sell-fill-allocation.js | Binds one canonical Fill to registered RS order ownership and splits gross base quantity, quote proceeds and commission facts between recovery and legacy. |
 | apps/harvester/src/domain/strategies/recovery-seller/mixed-sell-fill-reconciliation.js | Stages canonical Fill allocations, detects duplicate/conflicting identities, validates terminal order/history completeness and produces reconciled allocation evidence. |
 | apps/harvester/src/domain/strategies/recovery-seller/recovery-seller-accounting-error.js | Defines typed RS accounting errors for domain/application failure boundaries. |
-| apps/harvester/src/domain/strategies/recovery-seller/stop-decision.js | Defines sticky STOP decisions/state/gating and an internal evidence-backed resolution function. Its resolution semantics conflict with the later #1780 no-reset contract; do not infer that the function is an approved runtime/operator capability. |
+| apps/harvester/src/domain/strategies/recovery-seller/stop-decision.js | Defines sticky STOP decisions/state/gating and the evidence-backed administrator resolution preconditions. STOP blocks new BUY spending, not an otherwise valid recovery SELL. |
 | apps/harvester/src/use-cases/create-recovery-seller-accounting-workflow.js | Coordinates RS BUY accounting and terminal mixed-SELL accounting across shared Portfolio, legacy accounting, order registry and cycle snapshots. |
 | apps/harvester/src/use-cases/create-recovery-seller-action-authorizer.js | Authorizes RS actions against shared account-wide quote/base commitments, RS budget, recovery inventory and verified unreserved legacy Spot. |
 | apps/harvester/src/use-cases/create-recovery-seller-order-submitter.js | Coordinates durable submission intent, broker submission, acknowledgement and unknown/unresolved submission outcomes for RS-owned orders. |
@@ -171,7 +171,7 @@ This table describes the current develop implementation at the audit checkpoint.
 | apps/harvester/src/use-cases/record-recovery-seller-mixed-sell-reconciled.js | Persists the durable terminal mixed-SELL completion fact only after both accounting projections and profitability outcome are verified; controls reservation-release boundary. |
 | apps/harvester/src/use-cases/recovery-seller-order-callbacks.js | Supplies RS-owned pending, acknowledgement, submission-failure/deferred and execution callbacks to the shared submitter/event workflow. |
 | apps/harvester/src/use-cases/recovery-seller-submission-ownership.js | Re-exports the shared domain validator for immutable RS submission ownership; do not duplicate ownership validation in scenario helpers. |
-| apps/harvester/src/use-cases/resolve-recovery-seller-stop.js | Implements an evidence-backed durable operator-action resolution use case. It is not exposed by the current CC-operator facade and remains part of the #1780 STOP contract discrepancy. |
+| apps/harvester/src/use-cases/resolve-recovery-seller-stop.js | Implements the evidence-backed durable administrator resolution use case. The operator facade must expose it only through its existing trusted-operator authorization boundary. |
 
 Shared collaborators live outside the RS-specific tree: shared Portfolio/Position accounting, canonical Fill/Order identity and OrderRegistry, account snapshots and commitment allocation, the serialized Trading Engine, market TradingRules, Journal and Operational State Store. Inspect their actual consumers and imports before adding a fake port or duplicate abstraction.
 
@@ -397,7 +397,7 @@ An order intent, broker acknowledgement, requested quantity, price quote, cancel
 
 The RS contract requires unexpected, missing, contradictory or unsupported conditions to fail closed. Already-submitted orders and confirmed fills still require reconciliation/accounting; STOP is not permission to abandon them.
 
-The exact STOP resolution contract is currently disputed by specification and source. Keep RS-009 BLOCKED until the owner resolves it. See section 13.
+The owner resolved the STOP contract on 2026-11-24: STOP blocks additional BUY investment only; otherwise-valid recovery SELLs and reconciliation continue; an authorized administrator may clear STOP only after the cause is fixed, reconciliation/accounting evidence is complete, and the resolution fact is durable. See section 13.
 
 ## 5. Configuration inventory and change impact
 
@@ -812,7 +812,7 @@ Start with these invariant categories:
 - Atomicity: recovery and legacy projections commit together or neither changes.
 - One SELL: a cycle cannot acquire a second SELL identity.
 - Reservation conservation: commitments cannot exceed account-available quote/base.
-- STOP safety: new trading actions stop while permitted reconciliation/accounting continues.
+- STOP safety: new BUY spending is blocked; otherwise-valid recovery SELLs and permitted reconciliation/accounting continue.
 - Cycle closure: only approved fully reconciled outcomes close a cycle.
 
 An invariant ID is not covered by one happy-path test. It needs adversarial cases that could falsify it.
@@ -879,7 +879,7 @@ Full RS process restart/replay is currently unsupported/deferred. Do not add tes
 | REST-first and stream-first duplicate handling | APPLICATION with controlled event delivery |
 | Recovery/legacy projections commit together | DOMAIN projection plus APPLICATION durable boundary when persistence is part of the claim |
 | CG and RS cannot over-reserve account base/quote | Real shared allocator, composed in APPLICATION scenario for cross-strategy runtime claims |
-| STOP blocks new orders but reconciliation continues | APPLICATION |
+| STOP blocks new BUY spending; eligible recovery SELL and reconciliation continue | APPLICATION |
 | Process restart restores RS state | UNSUPPORTED until separately authorized |
 
 ## 9. Fixtures, builders and deterministic external ports
@@ -1495,7 +1495,7 @@ Use the same structure for every high-risk family, not only the three examples a
 - Recovery/legacy atomic projection failure at each commit boundary (RS-006).
 - CG/RS shared account base and quote commitments, snapshot-relative allocation, and strategy-budget isolation (RS-008).
 - Market-owned volatility gate for RS-only markets, including the approved recovery-SELL exception (RS-008).
-- STOP blocking new trading while permitted fill/order reconciliation continues (RS-009), only after the STOP contract blocker is resolved.
+- STOP blocking new BUY spending while eligible recovery SELL and permitted fill/order reconciliation continue (RS-009).
 - Third-asset commission valuation missing, stale, ambiguous and authoritative (RS-004/006), only when an approved valuation source exists.
 - Restart/replay behavior only after a separate contract and implementation are authorized (RS-010).
 
@@ -1639,7 +1639,7 @@ Required cases:
 7. Partial SELL fills are staged and do not prematurely commit mixed allocation projections.
 8. Complete terminal SELL reconciles the complete canonical REST/stream Fill set before atomic commit.
 9. Reservation releases only after successful terminal mixed-SELL accounting.
-10. PARTIALLY_FILLED is nonterminal: keep the sole SELL active and its reservation held. A terminal CANCELED/REJECTED/EXPIRED outcome may include prior partial fills; reconcile the complete canonical Fill set and commissions, then leave the cycle unresolved under the approved terminal STOP contract. No replacement SELL or next BUY is created. This STOP outcome remains subject to the documented source/spec discrepancy.
+10. PARTIALLY_FILLED is nonterminal: keep the sole SELL active and its reservation held. A terminal CANCELED/REJECTED/EXPIRED outcome may include prior partial fills; reconcile the complete canonical Fill set and commissions, then leave the cycle unresolved under the approved terminal STOP contract. No replacement SELL or next BUY is created. The global STOP latch does not itself prohibit an otherwise-valid SELL in a cycle that has not used its sole SELL lifecycle.
 11. Unknown, incomplete, conflicting or duplicate terminal facts cannot close twice or release twice.
 12. Duplicate completion request/event is idempotent; stale fills/reports from a completed cycle cannot affect the next cycle.
 13. A new cycle is created only after approved terminal reconciliation, accounting commit and completion gates pass.
@@ -1665,7 +1665,7 @@ Required cases:
 9. Mixed commission assets are allocated without duplication or loss.
 10. Allocation precision/rounding ambiguity fails closed rather than silently shifting quantity between recovery and legacy.
 11. Successful commit updates both recovery and legacy projections.
-12. Failure in either projection leaves both unchanged; the cycle reservation remains held and no partial projection is published. Any STOP disposition remains subject to the unresolved STOP contract.
+12. Failure in either projection leaves both unchanged; the cycle reservation remains held and no partial projection is published. STOP blocks additional BUY spending; SELL eligibility remains governed by the cycle's one-SELL rule and all independent SELL safety gates.
 13. Identical terminal mixed-SELL replay is an exact no-op; conflicting replay is rejected.
 14. Duplicate Fill through REST and stream in either order produces exact-once behavior.
 15. Conflicting REST/stream facts are rejected atomically.
@@ -1729,28 +1729,32 @@ Required cases:
 
 Core source ownership: shared Portfolio, account snapshot/commitment allocator, Trading Engine serialization, RS/CG ownership and action authorization.
 
-### RS-009 — STOP, failure atomicity and continued reconciliation (P0; BLOCKED)
+### RS-009 — STOP, failure atomicity and continued reconciliation (P0; SPECIFIED)
 
-**Business question:** does unexpected evidence block new trading while preserving order/fill facts and required reconciliation?
+**Business question:** does STOP prevent additional spending without preventing recovery of already-owned inventory or processing exchange facts?
 
-Potential cases after owner resolution:
+Owner-approved contract, recorded in [#1780](https://github.com/45s/coinzilla/issues/1780) on 2026-11-24:
 
-1. STOP is sticky across later market updates and unrelated operator commands.
-2. No new BUY/SELL/replacement/retry occurs while STOP is active.
-3. Existing active order may be WAITed/reconciled under the contract.
-4. Confirmed canonical fills continue to be accounted exactly once.
-5. Missing, malformed, conflicting or unmodeled evidence fails closed.
-6. Persistence/commit failure preserves projections and reservations as specified.
-7. Any candidate SELL exchange-filter violation latches global sticky STOP with no adjustment/split/retry/dust reinterpretation; only a residual after a successfully completed, fully reconciled cycle may qualify as quantity/notional-constrained retained bonus dust.
-8. Operator visibility and permitted actions match the approved STOP contract; the operator facade remains read-only unless the owner changes the contract.
-9. No implicit reset or self-resume occurs.
-10. Missing account snapshot, stale market data, invalid market metadata, missing filters or invalid precision blocks new actions.
-11. Durable intent failure prevents broker submission when required; durable outcome failure preserves uncertainty and prevents blind retry.
-12. Invalid BUY/SELL intent is never submitted; invalid Fill identity cannot mutate Portfolio, allocations, reservations or completion state.
-13. Failure after external submission but before local acknowledgement retains canonical identity for reconciliation and blocks duplicate submission.
-14. STOP does not prevent required reconciliation of already-submitted orders/fills.
+1. STOP blocks every new BUY and any action that commits additional quote investment.
+2. STOP does **not** block an otherwise-valid SELL of already-owned RS inventory. The normal one-SELL-per-cycle rule, profitability, custody, account-wide reservation, exchange-filter, market-readiness and order-identity gates still apply.
+3. STOP does not create a replacement/second SELL. A cycle whose sole SELL is active or unresolved remains governed by its existing identity and terminal lifecycle contract.
+4. Existing orders continue through WAIT/RECONCILE as appropriate. Confirmed canonical fills and commissions continue to be accounted exactly once.
+5. The first STOP reason remains durable and visible. Later market events cannot clear or replace it.
+6. An authorized administrator may manually clear STOP only after the cause is fixed, all required order/fill/balance reconciliation is authoritative, unresolved counts and balance discrepancies are zero, Portfolio/legacy/reservation accounting is verified, and the durable operator-resolution fact is acknowledged.
+7. No automatic clear, self-resume or implicit resume is allowed. Clearing is an explicit administrator action.
+8. Persistence, reconciliation or accounting failure keeps STOP active and preserves unresolved commitments.
+9. Unknown broker submission outcomes retain the original client identity and reservation; no blind retry or duplicate order is permitted.
+10. Duplicate confirmed fills are idempotent; conflicting duplicate facts fail safely.
+11. STOP must not suppress terminal order history, confirmed fills, accounting updates or reservation release when authoritative terminal facts and successful accounting justify release.
+12. Process shutdown, market pause, stale market data, unresolved orders and independent safety blockers remain separate gates; this contract changes only the effect of the RS STOP latch.
 
-**Do not implement this family as if its contract were settled.** The specification says terminal STOP/no reset, while current source contains `resolveRecoverySellerStopState` and `resolveRecoverySellerStop`; the operator facade exposes read-only status. Record and wait for owner resolution. The existence of a source helper is not approval to expose it.
+**Allowed while STOP is active:** existing-order WAIT/RECONCILE; exact-once confirmed-fill accounting; and a new recovery SELL only when the cycle has not already used its sole SELL lifecycle and every independent SELL gate passes.
+
+**Forbidden while STOP is active:** new BUYs, additional investment, blind retries, duplicate/second/replacement SELLs, automatic clearing, and implicit resume.
+
+**Tests:** add the RS-009 scenario suite and application composition tests. Existing STOP unit/use-case tests are regression evidence only and do not receive #1780 scenario credit.
+
+**Remaining implementation/evidence:** prove the BUY block and SELL allowance at the real runtime boundary; prove authorized durable administrator resolution and unauthorized rejection; cover partial/terminal/unknown order histories, exact-once fills, persistence failure, reconciliation failure, accounting failure, duplicate/out-of-order events and restart boundaries. Full process restart/replay remains unsupported under RS-010.
 
 ### RS-010 — Explicitly deferred capabilities (P2; UNSUPPORTED/BLOCKED)
 
@@ -2000,28 +2004,28 @@ Every family below explicitly answers the 22 contract questions required by the 
 
 | Contract field | RS-009 definition |
 | --- | --- |
-| 1. Purpose | Prove that unexpected/contradictory evidence blocks new trading while preserving canonical facts, commitments and required reconciliation. |
-| 2. Preconditions | A supported STOP reason is latched or a failure is injected at a defined lifecycle boundary; original order/fill identities and durable state are available where applicable. |
-| 3. Configuration inputs | Existing RS global/pair enabled and environment settings only. No new reset, resume or recovery configuration is approved. |
+| 1. Purpose | Prove STOP blocks additional BUY investment only, while eligible recovery SELL, existing-order reconciliation and confirmed-fill accounting continue safely. |
+| 2. Preconditions | STOP is durably latched or a failure is injected at a defined lifecycle boundary; original order/fill identities and durable state are available where applicable. |
+| 3. Configuration inputs | Existing RS global/pair enabled and environment settings only. No new reset/resume configuration is introduced. |
 | 4. Runtime-derived inputs | Sticky STOP state/reason; durable store; active order identities; canonical REST/stream history; account snapshot; Portfolio/legacy projections; reservations. |
-| 5. Domain rules | STOP blocks new trading. Valid WAIT/RECONCILE for already-submitted orders may continue. Confirmed canonical fills remain exact-once. No self-resume. Internal resolver semantics conflict with the later #1780 no-reset contract. |
-| 6. Decision inputs | STOP latch, existing order identity/status, reconciliation completeness, durable facts, fill ownership, accounting and reservation consistency. |
-| 7. Expected decision | BLOCK/STOP for new BUY/SELL/replacement/retry; WAIT or RECONCILE only for already-submitted orders when valid. Reset outcome remains BLOCKED pending owner resolution. |
+| 5. Domain rules | STOP blocks new BUY spending. An otherwise-valid SELL remains eligible only if the cycle has not used its sole SELL lifecycle and all independent SELL gates pass. WAIT/RECONCILE and confirmed-fill accounting continue. |
+| 6. Decision inputs | STOP latch, proposed order side/purpose, cycle SELL identity/status, reconciliation completeness, durable facts, fill ownership, accounting and reservation consistency. |
+| 7. Expected decision | BLOCK/STOP for new BUY; permit an otherwise-valid first recovery SELL; WAIT/RECONCILE for existing orders; never create a second/replacement SELL or blind retry. |
 | 8. State before | Normal lifecycle or unknown/failed operation; STOP may be absent or already latched. |
-| 9. State after | STOP remains sticky; no new trading action; existing order reconciliation and confirmed Fill accounting continue under the contract. |
-| 10. Portfolio effects | No synthetic changes. Confirmed canonical fills are applied exactly once even when the result causes STOP; failed projections remain atomic. |
-| 11. Reservation effects | Preserve unknown/unresolved commitments; do not release on STOP, incomplete reconciliation or failed accounting. |
-| 12. Order effects | No new order/retry/replacement. Preserve original order identity; existing orders may only WAIT/RECONCILE as authorized. |
+| 9. State after | STOP remains sticky until explicit authorized administrator resolution; eligible recovery SELL and existing-order reconciliation remain possible. |
+| 10. Portfolio effects | No synthetic changes. Confirmed canonical fills are applied exactly once even when STOP is active; failed projections remain atomic. |
+| 11. Reservation effects | Preserve unknown/unresolved commitments; release only after authoritative terminal facts and successful accounting. |
+| 12. Order effects | No new BUY. An eligible first SELL may proceed under all normal gates. Preserve the original order identity; no retry, second SELL or replacement SELL. |
 | 13. Commission effects | Apply actual commission facts with confirmed Fills. Missing/ambiguous third-asset quote value remains fail-closed and cannot be treated as zero. |
-| 14. Profitability calculation | A post-fill adverse recovery/legacy/combined result is committed as fact and latches STOP; no follow-up SELL or cycle reset is inferred. |
-| 15. Invariants | Sticky STOP; no new trading; exact-once fills; preserved reservations; reconciliation continues; no hidden reset. |
-| 16. Failure cases | Missing/malformed/conflicting evidence; persistence failure; unknown acknowledgement; invalid filters; invalid precision; projection failure; unmodeled terminal outcome. |
-| 17. Duplicate/replay cases | Repeated STOP evidence preserves first reason; duplicate reconciliation/fill is idempotent; conflicting evidence cannot clear STOP. Restart/replay remains unsupported. |
-| 18. Required assertions | No broker submission; STOP state/reason retained; original identity and reservation preserved; existing reconciliation allowed; atomic Portfolio/legacy state. |
-| 19. Existing regression tests | stop-decision.test.js; resolve-recovery-seller-stop.test.js; create-harvester-operator.test.js. These prove implementation surfaces, not the #1780 STOP scenario contract. |
-| 20. Missing scenario tests | New scenario suite proving the approved terminal/no-reset interpretation after the owner reconciles the historical #1475 internal resolver approval with later #1780. |
-| 21. Blocked decisions | BLOCKED: whether the earlier evidence-backed internal resolver is obsolete/forbidden or whether only that gated administrative resolution is permitted. No test may silently choose. |
-| 22. Acceptance criteria | Owner resolves the contract in canonical docs/issue; then stable scenarios prove every allowed/disallowed STOP action, durable boundary and continued reconciliation. |
+| 14. Profitability calculation | A post-fill adverse recovery/legacy/combined result is committed as fact and latches STOP; the already-used sole SELL lifecycle is not repeated and no cycle reset is inferred. |
+| 15. Invariants | Sticky STOP; no additional BUY spending; eligible recovery SELL remains possible; exact-once fills; preserved reservations; reconciliation continues; no automatic clear/resume. |
+| 16. Failure cases | Missing/malformed/conflicting evidence; persistence failure; unknown acknowledgement; invalid filters; invalid precision; projection failure; unmodeled terminal outcome; administrator-resolution failure. |
+| 17. Duplicate/replay cases | Repeated STOP evidence preserves first reason; duplicate reconciliation/fill is idempotent; conflicting evidence cannot clear STOP; administrator resolution is explicit and evidence-backed. Restart/replay remains unsupported. |
+| 18. Required assertions | No BUY broker submission; valid eligible SELL can submit; no second/replacement SELL; STOP state/reason retained; original identity/reservation preserved; reconciliation allowed; atomic Portfolio/legacy state. |
+| 19. Existing regression tests | stop-decision.test.js; resolve-recovery-seller-stop.test.js; create-harvester-operator.test.js. These prove existing implementation surfaces, not complete #1780 scenario coverage. |
+| 20. Missing scenario tests | New scenario suite proving BUY blocking, eligible SELL allowance, reconciliation/accounting under STOP, and authorized durable administrator resolution. |
+| 21. Blocked decisions | No STOP contract blocker remains. Restart/replay and third-asset valuation remain separately deferred/blocked under RS-010. |
+| 22. Acceptance criteria | Owner decision is recorded in the canonical specification and #1780; all approved STOP cases have named positive/negative assertions and exact-head evidence.
 
 #### RS-010 — Explicitly deferred capabilities
 
@@ -2259,14 +2263,15 @@ Do not use a generated test count as evidence that a named business matrix row i
 
 These blockers must appear in the registry, #1780, the repository catalog where relevant, and the Harvester roadmap summary. Do not resolve them in scenario code.
 
-### 13.1 STOP resolution discrepancy — RS-009 BLOCKED
+### 13.1 STOP contract — RESOLVED by owner on 2026-11-24
 
-- The later #1780 contract describes STOP as sticky/terminal with no clear/reset/resume path; the current specification carries the same statement.
-- Earlier owner-approved work is recorded in #1475 (2026-11-19): it introduced an evidence-backed resolveRecoverySellerStopState domain gate and durable resolveRecoverySellerStop application use case.
-- The current CC-operator facade exposes read-only STOP status and does not expose that resolution use case as a command.
-- The source therefore contains a real historical contract discrepancy: the existence and earlier approval of the internal resolver do not prove that the later #1780 no-reset contract permits its use.
-- The owner must decide whether the internal resolution path is obsolete/forbidden or whether the current contract permits only that tightly gated durable administrative resolution.
-- Until the later contract is reconciled with the earlier approval, do not write positive or negative assertions that assume one interpretation. RS-009 stays BLOCKED.
+- STOP blocks **additional spending/new BUY investment only**. It does not block an otherwise-valid recovery SELL of already-owned inventory.
+- All independent SELL rules remain mandatory: one SELL lifecycle per cycle, profitability, verified custody, shared account-wide reservations, exchange filters, market readiness and order identity. STOP does not authorize a second or replacement SELL.
+- Existing orders remain eligible for WAIT/RECONCILE as appropriate. Confirmed canonical fills and commissions continue to be accounted exactly once.
+- An authorized administrator may manually clear STOP only after the underlying cause is fixed, authoritative order/fill/balance reconciliation is complete with zero unresolved discrepancies, Portfolio/legacy/reservation accounting is verified, and the durable operator-resolution fact is acknowledged.
+- No automatic clear, self-resume or implicit resume is permitted.
+- Earlier owner-approved work in #1475 introduced the evidence-backed domain resolver and durable application use case. The owner decision now confirms that this gated manual resolution is permitted; the operator facade must expose it through the existing trusted-operator authorization boundary.
+- The source/spec discrepancy is resolved. RS-009 is no longer BLOCKED by STOP policy; its implementation and scenario evidence remain required.
 
 ### 13.2 Strategy enabled default — RESOLVED by #1713 / PR #1711
 
@@ -2308,7 +2313,7 @@ The RS specification distinguishes a candidate SELL order that violates an excha
 - A remaining authorized legacy quantity smaller than configured sellQuantity may be sold as the legacy component of the current cycle SELL if it is Spot-available/unreserved and all independent profitability and exchange filters pass. Use the smaller actual quantity; never round up, force, silently discard or classify an ordinary sellable remainder as dust.
 - A separate final residual from an already completed recovery cycle, with no new BUY, remains unresolved/deferred. The smaller-remainder rule does not authorize that standalone liquidation.
 
-These distinctions are specified in the RS domain contract and must be scenario-tested. They are not owner-decision blockers. RS-009 remains BLOCKED only for the separate STOP resolver/source-contract discrepancy described in §13.1.
+These distinctions are specified in the RS domain contract and must be scenario-tested. They are not owner-decision blockers. The STOP policy blocker is resolved in §13.1; RS-009 remains SPECIFIED until its new scenario evidence is implemented and verified.
 
 ### 13.5 Workflow-to-evaluator cycle-state defect — RS-003 application proof BLOCKED by #1809
 
@@ -2395,16 +2400,16 @@ This is the approved test-only implementation sequence. Deliver one focused PR p
 - **Out of scope:** new shared infrastructure, provider migration, new strategy policies, volatility calculations/candle-history/state-machine implementation (owned by market-level tests), any RS-specific volatility engine and live exchange concurrency.
 - **Exit:** all unblocked RS-008 cases have same/different-market evidence; exact-head tests/CI pass; catalog/issue/roadmap reflect actual evidence.
 
-### PR 7 — RS-009: STOP and failure atomicity, only after owner resolution
+### PR 7 — RS-009: STOP and failure atomicity
 
-- **Objective:** encode one owner-approved STOP contract without choosing between historical #1475 internal resolver approval and later #1780 terminal/no-reset statements.
-- **Scope:** do not start until the owner records the resolution in the canonical specification and #1780. Then test sticky STOP, no new trading, allowed WAIT/RECONCILE, durable evidence, confirmed-fill accounting and forbidden reset/resume/retry/replacement. Dust/filter behavior is already specified in §13.4 and is not a separate blocker.
-- **Files:** add `scenarios/stop-and-failures.js`, `stop-and-failures.scenario.test.js`; update targeted-test registration. Exercise `stop-decision.js`, `lifecycle-decision.js`, `lifecycle-state.js`, `create-recovery-seller-stop-workflow.js`, `create-recovery-seller-accounting-workflow.js`, and `resolve-recovery-seller-stop.js` only if explicitly approved by the owner.
-- **Tests:** DOMAIN transition gates and APPLICATION durable STOP/reconciliation with deterministic ports; inject malformed/conflicting evidence, persistence/projection failures and post-fill adverse outcomes. Assert first STOP evidence, no new broker calls, reservation conservation and continued reconciliation.
-- **Acceptance:** the owner decision is explicit and linked before testing contested behavior; no unsupported clear/reset/resume path is added; all approved STOP cases have named positive and negative assertions.
-- **Dependencies:** owner resolution of #1475 versus #1780; PR 1 and relevant PR 4/5 evidence; existing durable STOP contract.
-- **Out of scope:** restart/replay, automatic restoration, new operator commands, retry/replacement policy and any behavior outside the owner decision.
-- **Exit:** RS-009 leaves BLOCKED only after the decision and all approved cases are proved; otherwise keep it BLOCKED and do not write speculative tests.
+- **Objective:** prove the owner-approved investment-only STOP contract end to end.
+- **Scope:** block new BUY spending; permit otherwise-valid recovery SELL only when the cycle's sole SELL lifecycle remains unused; continue existing-order reconciliation and exact-once confirmed-fill accounting; expose explicit evidence-backed administrator resolution through the trusted operator facade.
+- **Files:** add `scenarios/stop-and-failures.js`, `stop-and-failures.scenario.test.js`; update targeted-test registration. Exercise `stop-decision.js`, `lifecycle-decision.js`, `lifecycle-state.js`, `create-recovery-seller-stop-workflow.js`, `create-recovery-seller-accounting-workflow.js`, `resolve-recovery-seller-stop.js`, and `create-harvester-operator.js`.
+- **Tests:** DOMAIN policy gates and APPLICATION durable STOP/reconciliation with deterministic ports; inject malformed/conflicting evidence, persistence/projection failures, duplicate/out-of-order events and post-fill adverse outcomes. Assert no BUY submission, valid eligible SELL submission, no second/replacement SELL, first STOP evidence, reservation conservation and continued reconciliation. Prove authorized manual resolution and unauthorized rejection.
+- **Acceptance:** no additional BUY spending while STOP is active; all independent SELL gates remain intact; reconciliation and exact-once accounting continue; only an authorized administrator can clear STOP after complete evidence and durable acknowledgement; no automatic clear/resume occurs.
+- **Dependencies:** owner decision recorded in [#1780](https://github.com/45s/coinzilla/issues/1780); PR 1 and relevant PR 4/5 evidence; existing durable STOP workflow.
+- **Out of scope:** restart/replay, automatic restoration, automatic STOP clearing, new retry/replacement policy, standalone final-residual liquidation, and any behavior outside the owner decision.
+- **Exit:** RS-009 leaves SPECIFIED only when the complete scenario suite and exact-head verification are recorded; it becomes VERIFIED only after merge to develop and required CI evidence.
 
 ### RS-010 — deferred capability dispositions; not an implementation PR
 
