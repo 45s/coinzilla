@@ -749,18 +749,14 @@ test("the real accounting workflow snapshot still fails closed when verified leg
     "Missing verified legacy Spot custody must result in zero broker submission attempts.")
 })
 
-test("real workflow snapshots preserve existing-order, STOP, pause and reconciliation gates before SELL submission", async () => {
-  const baseScenario = await createPlannerScenario()
-  const existingOrderScenario = await createPlannerScenario({
-    includeExternalSellReservation: true,
-  })
+function createWorkflowGateScenarios({ baseScenario, existingOrderScenario }) {
   const stoppedState = latchRecoverySellerStop({
     state: createRecoverySellerStopState(),
     decision: createRecoverySellerStopDecision({
       explanation: "Owner STOP must prevent new SELL submissions.",
     }),
   })
-  const gatedSnapshots = [
+  return [
     {
       name: "existing account order",
       snapshot: existingOrderScenario.snapshot,
@@ -787,41 +783,59 @@ test("real workflow snapshots preserve existing-order, STOP, pause and reconcili
       }),
     },
   ]
+}
 
-  for (const { name, snapshot } of gatedSnapshots) {
-    let submissions = 0
-    const evaluate = createRecoverySellerTransitionEvaluator({
-      getSnapshot: async () => snapshot,
-      submitOrder: async () => {
-        submissions += 1
-        return {
-          ok: true,
-          data: {
-            submitted: true,
-          },
-        }
-      },
-      evaluateBuyDecision: () => ({
-        decision: {
-          outcome: "WAIT",
-          reasonCode: "SCENARIO_BUY_WAIT",
-          explanation: "The gate scenario must not submit a new BUY.",
+async function assertWorkflowGateBlocksSell({ name, snapshot, marketMetadata }) {
+  let submissions = 0
+  const evaluate = createRecoverySellerTransitionEvaluator({
+    getSnapshot: async () => snapshot,
+    submitOrder: async () => {
+      submissions += 1
+      return {
+        ok: true,
+        data: {
+          submitted: true,
         },
-      }),
-    })
-    const result = await evaluate({
-      symbol,
-      marketPrice: {
-        symbol,
-        price: "25",
+      }
+    },
+    evaluateBuyDecision: () => ({
+      decision: {
+        outcome: "WAIT",
+        reasonCode: "SCENARIO_BUY_WAIT",
+        explanation: "The gate scenario must not submit a new BUY.",
       },
-      marketMetadata: baseScenario.marketMetadata,
-      pairConfig,
-    })
+    }),
+  })
+  const result = await evaluate({
+    symbol,
+    marketPrice: {
+      symbol,
+      price: "25",
+    },
+    marketMetadata,
+    pairConfig,
+  })
 
-    assert.equal(submissions, 0,
-      `The real workflow snapshot must not submit a SELL while ${name} is active.`)
-    assert.equal(result.decision.outcome, "WAIT",
-      `The ${name} gate must take precedence over a profitable SELL plan.`)
+  assert.equal(submissions, 0,
+    `The real workflow snapshot must not submit a SELL while ${name} is active.`)
+  assert.equal(result.decision.outcome, "WAIT",
+    `The ${name} gate must take precedence over a profitable SELL plan.`)
+}
+
+test("real workflow snapshots preserve existing-order, STOP, pause and reconciliation gates before SELL submission", async () => {
+  const baseScenario = await createPlannerScenario()
+  const existingOrderScenario = await createPlannerScenario({
+    includeExternalSellReservation: true,
+  })
+  const gatedSnapshots = createWorkflowGateScenarios({
+    baseScenario,
+    existingOrderScenario,
+  })
+
+  for (const scenario of gatedSnapshots) {
+    await assertWorkflowGateBlocksSell({
+      ...scenario,
+      marketMetadata: baseScenario.marketMetadata,
+    })
   }
 })
