@@ -339,3 +339,8 @@ Do not treat the conceptual diagram as a new production state model: map every t
 - Test-only coverage; no production behavior, trading rules, exchange access, or credentials changed. Corrected exact-head CI is pending.
 - Exact-head lint then identified one remaining multi-property helper-call formatting violation in the accounting assertion call; it now uses one property per line. No assertion or production behavior changed.
 - Repository Quality reported repeated blank lines in this checkpoint; the extra blank lines were removed without changing document meaning.
+
+### 2026-11-24 — Phase 3 recovery proceeds boundary
+
+- Added tests for exact-target, immediately-below-target, and over-target confirmed SELL proceeds. Only the exact/over-target cases clamp required net proceeds to zero; the below-target case preserves the exact positive remainder and rounds the minimum price up to one tick.
+- Test-only audit addition; exact-head CI validation pending.
