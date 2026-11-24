@@ -274,6 +274,27 @@ export class BitunixFuturesWebSocketClient extends EventEmitter {
     return Object.freeze([...this.#subscriptions.values()])
   }
 
+  waitUntilOpen() {
+    if (this.#state === "open") {
+      return Promise.resolve(this)
+    }
+    return new Promise((resolve, reject) => {
+      const onStatus = (status) => {
+        if (status.state === "open") {
+          this.off("status", onStatus)
+          resolve(this)
+          return
+        }
+        if (status.state === "closed" &&
+            (status.reconnectExhausted || status.recoveryRequired === false)) {
+          this.off("status", onStatus)
+          reject(new Error("Bitunix Futures WebSocket could not reconnect"))
+        }
+      }
+      this.on("status", onStatus)
+    })
+  }
+
   async connect() {
     if (this.#state === "open") {
       return this
