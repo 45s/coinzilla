@@ -993,7 +993,7 @@ export class BitunixFuturesBroker {
     }
   }
 
-  async getCanonicalOrderHistory({ symbol, startTime, endTime, limit = 10, skip = 0 } = {}) {
+  async getCanonicalOrderHistory({ symbol, status, orderType, queryCanceled = false, startTime, endTime, limit = 10, skip = 0 } = {}) {
     try {
       const normalizedSymbol = ensure.nonEmptyString({
         value: symbol,
@@ -1036,10 +1036,29 @@ export class BitunixFuturesBroker {
       if (!market) {
         throw new TypeError(`Bitunix Futures symbol ${normalizedSymbol} is not present in the current tradable market catalog`)
       }
+      ensure.boolean({
+        value: queryCanceled,
+        name: "queryCanceled",
+      })
       const queryParams = {
         symbol: normalizedSymbol,
         limit,
         skip,
+        queryCanceled,
+      }
+      if (status !== undefined) {
+        queryParams.status = ensure.oneOf({
+          value: status,
+          values: ["FILLED", "CANCELED", "PART_FILLED_CANCELED", "EXPIRED"],
+          name: "status",
+        })
+      }
+      if (orderType !== undefined) {
+        queryParams.type = ensure.oneOf({
+          value: orderType,
+          values: ["LIMIT", "MARKET"],
+          name: "orderType",
+        })
       }
       if (startTime !== undefined) {
         queryParams.startTime = startTime
