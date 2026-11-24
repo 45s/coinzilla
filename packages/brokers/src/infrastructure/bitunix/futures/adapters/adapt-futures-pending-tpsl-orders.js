@@ -1,5 +1,4 @@
-import { ensure } from "@coinzilla/utils"
-import { assertDecimalString, compareDecimal } from "./decimal.js"
+import { assertDecimalString, compareDecimal, ensure } from "@coinzilla/utils"
 
 const STOP_TYPES = ["LAST_PRICE", "MARK_PRICE"]
 const ORDER_TYPES = ["LIMIT", "MARKET"]
