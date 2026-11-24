@@ -185,7 +185,7 @@ export const recoverySellerBuyAccountingScenarios = Object.freeze([
         { id: "orphaned-commitment", outcome: "BLOCK", reasonCode: "UNEXPECTED_OR_UNMODELED_CONDITION", action: null, stopStatus: "STOPPED", orderIdentity: null },
       ],
     },
-    rules: ["RS_BUY_ELIGIBILITY", "RS_UNKNOWN_OUTCOME_NO_RETRY"],
+    rules: ["RS_BUY_READINESS_REQUIRED", "RS_UNKNOWN_OUTCOME_NO_RETRY"],
     status: "PARTIAL",
     subcases: [
       {
@@ -239,7 +239,7 @@ export const recoverySellerBuyAccountingScenarios = Object.freeze([
         orderIdentity: null,
       }],
     },
-    rules: ["RS_BUY_ELIGIBILITY"],
+    rules: ["RS_BUY_INTENT_CONTRACT"],
   }),
   blockedCase({
     id: "RS-002-017",
@@ -324,7 +324,7 @@ export const recoverySellerBuyAccountingScenarios = Object.freeze([
         },
       ],
     },
-    rules: ["RS_BUY_ELIGIBILITY", "RS_NO_DUPLICATE_BUY"],
+    rules: ["RS_BUY_ACTIVE_ORDER_GATE"],
   }),
   makeBuyCase({
     id: "RS-002-020",
