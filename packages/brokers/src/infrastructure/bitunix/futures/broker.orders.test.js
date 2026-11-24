@@ -248,3 +248,94 @@ test("Bitunix Futures common open-order method remains explicitly unsupported", 
   assert.equal(result.ok, false)
   assert.match(result.errors[0].message, /not supported safely/i)
 })
+
+
+function createCancellationBroker({ allowLiveOrderMutations = true } = {}) {
+  const requests = []
+  let detailReadCount = 0
+  const broker = new Broker({
+    provider: "bitunix-futures",
+    ...credentials,
+    tradingMode: "live",
+    allowLiveOrderMutations,
+    providerOptions: {
+      dependencies: {
+        fetchFn: async (url, options) => {
+          const path = new URL(url).pathname
+          requests.push({
+            path,
+            method: options.method,
+            body: options.body,
+          })
+          if (path === "/api/v1/futures/trade/get_order_detail") {
+            detailReadCount += 1
+            return createFuturesResponse({
+              data: createOrderRow({
+                status: detailReadCount === 1 ? "PART_FILLED" : "PART_FILLED_CANCELED",
+              }),
+            })
+          }
+          if (path === "/api/v1/futures/trade/cancel_orders") {
+            return createFuturesResponse({
+              data: {
+                successList: [{
+                  orderId: "futures-order-123",
+                  clientId: "strategy-order-456",
+                }],
+                failureList: [],
+              },
+            })
+          }
+          throw new Error(`Unexpected Futures cancellation request: ${path}`)
+        },
+      },
+    },
+  })
+  return {
+    broker,
+    requests,
+  }
+}
+
+test("Bitunix Futures cancelOrder is one-shot and confirms the final canceled order state", async () => {
+  const { broker, requests } = createCancellationBroker()
+  await broker.connect()
+
+  const result = await broker.cancelOrder({
+    symbol: "BTCUSDT",
+    orderId: "futures-order-123",
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.mutationOutcome, "CONFIRMED")
+  assert.equal(result.cancellationOutcome, "CONFIRMED")
+  assert.equal(result.data.status, "CANCELED")
+  assert.deepEqual(requests.map(({ path, method }) => [path, method]), [
+    ["/api/v1/futures/trade/get_order_detail", "GET"],
+    ["/api/v1/futures/trade/cancel_orders", "POST"],
+    ["/api/v1/futures/trade/get_order_detail", "GET"],
+  ])
+  const cancelRequest = requests[1]
+  assert.deepEqual(JSON.parse(cancelRequest.body), {
+    symbol: "BTCUSDT",
+    orderList: [{
+      orderId: "futures-order-123",
+    }],
+  })
+})
+
+test("Bitunix Futures cancelOrder remains NOT_SENT without explicit live mutation opt-in", async () => {
+  const { broker, requests } = createCancellationBroker({
+    allowLiveOrderMutations: false,
+  })
+
+  const result = await broker.cancelOrder({
+    symbol: "BTCUSDT",
+    orderId: "futures-order-123",
+  })
+
+  assert.equal(result.ok, false)
+  assert.equal(result.mutationOutcome, "NOT_SENT")
+  assert.equal(result.cancellationOutcome, "NOT_SENT")
+  assert.equal(requests.length, 0)
+})
