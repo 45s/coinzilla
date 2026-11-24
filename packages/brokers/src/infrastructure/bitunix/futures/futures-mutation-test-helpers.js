@@ -46,7 +46,10 @@ export class FakePrivateWebSocketClient extends EventEmitter {
 
   unsubscribe({ channels }) {
     this.unsubscriptions.push(...channels)
-    return { sent: true, channels }
+    return {
+      sent: true,
+      channels,
+    }
   }
 
   async disconnect() {
