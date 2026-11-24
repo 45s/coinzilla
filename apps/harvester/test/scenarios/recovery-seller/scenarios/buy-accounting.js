@@ -1102,6 +1102,23 @@ export const recoverySellerBuyAccountingScenarios = Object.freeze([
             lastBuyPrice: "2",
           },
         },
+        {
+          id: "pending-commitment-equal",
+          overrides: {
+            pairConfig: {
+              orderQuantity: "5",
+              priceStepPercent: "0.05",
+              investment: "20",
+            },
+            recoveryPosition: {
+              positionId: "rs-policy-position",
+              quantity: "5",
+              spent: "10",
+            },
+            pendingBuyCommitment: "0.005",
+            lastBuyPrice: "2",
+          },
+        },
       ],
     },
     expected: {
@@ -1134,6 +1151,24 @@ export const recoverySellerBuyAccountingScenarios = Object.freeze([
         },
         {
           id: "above",
+          outcome: "SUBMIT",
+          reasonCode: "BUY_TRANCHE_ELIGIBLE",
+          action: {
+            side: "BUY",
+            purpose: "RECOVERY_BUY",
+            cycleId: "rs-policy-cycle",
+            positionId: "rs-policy-position",
+            type: "LIMIT_MAKER",
+            price: "1.999",
+            quantity: "5",
+            notional: "9.995",
+            reason: "NEXT_STANDING_BUY",
+          },
+          stopStatus: "CLEAR",
+          orderIdentity: null,
+        },
+        {
+          id: "pending-commitment-equal",
           outcome: "SUBMIT",
           reasonCode: "BUY_TRANCHE_ELIGIBLE",
           action: {
