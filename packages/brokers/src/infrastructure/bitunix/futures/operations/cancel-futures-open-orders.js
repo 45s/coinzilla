@@ -191,6 +191,14 @@ async function reconcileCancelAll({ broker, symbol, orders, eventResult, error }
     confirmedOrders,
   })
   if (!pending.error && pending.total === 0 && confirmedOrders.length === orders.length) {
+    if (error !== undefined) {
+      return createOutcomeResult({
+        data,
+        errors: [error],
+        mutationOutcome: error.outcomeUnknown === true ? "OUTCOME_UNKNOWN" : "REJECTED",
+        cancellationOutcome: "CONFIRMED",
+      })
+    }
     return createOutcomeResult({
       data,
       mutationOutcome: "CONFIRMED",

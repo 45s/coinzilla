@@ -193,16 +193,20 @@ function validatePrivateOrderEventsWaiter({ broker, orders }) {
   if (new Set(expectedKeys).size !== expectedKeys.length) {
     throw new RangeError("Bitunix Futures multi-order event waiter cannot track duplicate order identities")
   }
-  return { client, timeoutMs }
+  return {
+    client,
+    timeoutMs,
+  }
 }
 
-export function createPrivateOrderEventsWaiter({ broker, orders } = {}) {
-  const { client, timeoutMs } = validatePrivateOrderEventsWaiter({
-    broker,
-    orders,
-  })
-
-  const received = new Map()
+function createPrivateEventWaiter({
+  client,
+  timeoutMs,
+  onChannel,
+  onStatus,
+  onTimeout,
+  onCancel,
+}) {
   let settled = false
   let timer = null
   let resolveResult
@@ -210,58 +214,135 @@ export function createPrivateOrderEventsWaiter({ broker, orders } = {}) {
     resolveResult = resolve
   })
   function cleanup() {
-    client.off("channel", onChannel)
-    client.off("status", onStatus)
+    client.off("channel", handleChannel)
+    client.off("status", handleStatus)
     if (timer !== null) {
       clearTimeout(timer)
     }
   }
-  function settle(error = null) {
+  function settle(result) {
     if (settled) {
       return
     }
     settled = true
     cleanup()
-    resolveResult(createOrderEventsResult({
-      orders,
-      received,
-      error,
-    }))
+    resolveResult(result)
   }
-  function onChannel(event) {
-    if (event?.data?.event !== "CLOSE") {
-      return
-    }
-    const order = findMatchingOrder({
-      event,
-      orders,
-    })
-    if (!order) {
-      return
-    }
-    received.set(getOrderEventKey(order), event)
-    if (received.size === orders.length) {
-      settle()
+  function handleChannel(event) {
+    const result = onChannel(event)
+    if (result !== undefined) {
+      settle(result)
     }
   }
-  function onStatus(status) {
-    if (isPrivateSessionUnavailable(status)) {
-      settle(new Error("Bitunix Futures private user-data session became unavailable before all CLOSE events were observed"))
+  function handleStatus(status) {
+    const result = onStatus(status)
+    if (result !== undefined) {
+      settle(result)
     }
   }
   function startTimeout() {
     if (settled || timer !== null) {
       return
     }
-    timer = setTimeout(() => settle(
-      new Error("Timed out waiting for every matching Bitunix Futures private CLOSE event"),
-    ), timeoutMs)
+    timer = setTimeout(() => settle(onTimeout()), timeoutMs)
   }
-  client.on("channel", onChannel)
-  client.on("status", onStatus)
+  client.on("channel", handleChannel)
+  client.on("status", handleStatus)
   return {
     promise,
     startTimeout,
-    cancel: () => settle(),
+    cancel: () => settle(onCancel()),
   }
+}
+
+/**
+ * Wait for one matching private order event, a private-session failure, or a bounded timeout.
+ * @param {{broker: object, orderId?: string, clientOrderId?: string, symbol: string}} options
+ * @returns {{promise: Promise<{event: object|null, error: Error|null}>, startTimeout: () => void, cancel: () => void}}
+ */
+export function createPrivateOrderEventWaiter({ broker, orderId, clientOrderId, symbol } = {}) {
+  const { client, timeoutMs } = validatePrivateOrderEventsWaiter({
+    broker,
+    orders: [{
+      orderId: orderId ?? "event-waiter-order",
+      clientId: clientOrderId ?? "event-waiter-client",
+      symbol,
+    }],
+  })
+  return createPrivateEventWaiter({
+    client,
+    timeoutMs,
+    onChannel: (event) => matchesPrivateOrderEventIdentity({
+      event,
+      orderId,
+      clientOrderId,
+      symbol,
+    }) ? {
+      event,
+      error: null,
+    } : undefined,
+    onStatus: (status) => isPrivateSessionUnavailable(status) ? {
+      event: null,
+      error: new Error("Bitunix Futures private user-data session became unavailable before order-event confirmation"),
+    } : undefined,
+    onTimeout: () => ({
+      event: null,
+      error: new Error("Timed out waiting for the matching Bitunix Futures private order event"),
+    }),
+    onCancel: () => ({
+      event: null,
+      error: null,
+    }),
+  })
+}
+
+/**
+ * Wait for one CLOSE event per expected order identity using a single private-session listener.
+ * @param {{broker: object, orders: object[]}} options
+ * @returns {{promise: Promise<{events: object[], missingOrders: object[], error: Error|null}>, startTimeout: () => void, cancel: () => void}}
+ */
+export function createPrivateOrderEventsWaiter({ broker, orders } = {}) {
+  const { client, timeoutMs } = validatePrivateOrderEventsWaiter({
+    broker,
+    orders,
+  })
+  const received = new Map()
+  return createPrivateEventWaiter({
+    client,
+    timeoutMs,
+    onChannel: (event) => {
+      if (event?.data?.event !== "CLOSE") {
+        return undefined
+      }
+      const order = findMatchingOrder({
+        event,
+        orders,
+      })
+      if (!order) {
+        return undefined
+      }
+      received.set(getOrderEventKey(order), event)
+      return received.size === orders.length ? createOrderEventsResult({
+        orders,
+        received,
+        error: null,
+      }) : undefined
+    },
+    onStatus: (status) => isPrivateSessionUnavailable(status)
+      ? createOrderEventsResult({
+        orders,
+        received,
+        error: new Error("Bitunix Futures private user-data session became unavailable before all CLOSE events were observed"),
+      }) : undefined,
+    onTimeout: () => createOrderEventsResult({
+      orders,
+      received,
+      error: new Error("Timed out waiting for every matching Bitunix Futures private CLOSE event"),
+    }),
+    onCancel: () => createOrderEventsResult({
+      orders,
+      received,
+      error: null,
+    }),
+  })
 }
