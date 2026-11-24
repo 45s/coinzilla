@@ -38,7 +38,7 @@ function createSymbolInfo(overrides = {}) {
   }
 }
 
-function createOrderRow({ status = "NEW" } = {}) {
+function createOrderRow({ status = "NEW", ...overrides } = {}) {
   return {
     orderId: "futures-order-123",
     clientId: "strategy-order-456",
@@ -51,6 +51,7 @@ function createOrderRow({ status = "NEW" } = {}) {
     status,
     ctime: 1700000000000,
     mtime: 1700000001000,
+    ...overrides,
   }
 }
 
@@ -95,6 +96,7 @@ function createOrderFetch({
       return createFuturesResponse({
         data: createOrderRow({
           status: orderStatus,
+          ...orderOverrides,
         }),
       })
     }
