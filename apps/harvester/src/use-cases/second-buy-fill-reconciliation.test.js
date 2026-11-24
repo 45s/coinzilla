@@ -61,8 +61,9 @@ function applyBuy({ state, fill }) {
   }
 }
 
-test("a second BUY extends the first tranche's net inventory and recovery cost without resetting either", () => {
-  const initial = applyBuy({
+
+function createInitialBuyState() {
+  return applyBuy({
     state: {
       portfolio: new Portfolio(),
       recoveryLedger: RecoveryLedger.empty({ market }),
@@ -98,8 +99,10 @@ test("a second BUY extends the first tranche's net inventory and recovery cost w
       ],
     }),
   })
+}
 
-  const afterSecondBuy = applyBuy({
+function applySecondBuy({ initial }) {
+  return applyBuy({
     state: initial,
     fill: createBuyFill({
       tradeId: "second-buy-fill",
@@ -132,8 +135,10 @@ test("a second BUY extends the first tranche's net inventory and recovery cost w
       ],
     }),
   })
+}
 
-  const position = afterSecondBuy.portfolio.getPosition({ marketId: market.id })
+function assertSecondBuyReconciliation({ state }) {
+  const position = state.portfolio.getPosition({ marketId: market.id })
   assert.equal(
     position.baseQuantity.amount,
     "149.85",
@@ -150,18 +155,28 @@ test("a second BUY extends the first tranche's net inventory and recovery cost w
     "Cumulative BUY quote cash flow must reconcile to both tranches' complete quote-denominated cost.",
   )
   assert.equal(
-    afterSecondBuy.recoveryLedger.buyCost,
+    state.recoveryLedger.buyCost,
     "16.066",
     "The RecoveryLedger must extend, not reset, the first BUY's recovery basis.",
   )
+  const expectedFillIds = [
+    "binance:DOGEUSDT:first-buy-fill",
+    "binance:DOGEUSDT:second-buy-fill",
+  ]
   assert.deepEqual(
-    afterSecondBuy.portfolio.appliedFillIds,
-    ["binance:DOGEUSDT:first-buy-fill", "binance:DOGEUSDT:second-buy-fill"],
+    state.portfolio.appliedFillIds,
+    expectedFillIds,
     "Portfolio must retain both canonical execution identities in order.",
   )
   assert.deepEqual(
-    afterSecondBuy.recoveryLedger.appliedFillIds,
-    ["binance:DOGEUSDT:first-buy-fill", "binance:DOGEUSDT:second-buy-fill"],
+    state.recoveryLedger.appliedFillIds,
+    expectedFillIds,
     "RecoveryLedger must retain the same two canonical execution identities.",
   )
+}
+
+test("a second BUY extends the first tranche's net inventory and recovery cost without resetting either", () => {
+  const initial = createInitialBuyState()
+  const afterSecondBuy = applySecondBuy({ initial })
+  assertSecondBuyReconciliation({ state: afterSecondBuy })
 })
