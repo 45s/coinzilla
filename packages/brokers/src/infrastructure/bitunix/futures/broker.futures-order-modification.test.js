@@ -94,6 +94,7 @@ function createModifyResponse({
   modifyError,
   privateClients,
   emitModifyEvent = true,
+  emitModifyEventOnError = false,
   modifyEventOverrides = {},
 }) {
   if (emitModifyEvent && (!modifyError || emitModifyEventOnError)) {
