@@ -968,7 +968,11 @@ export class BitunixFuturesBroker {
     }
     if (this.publicWebSocketClient.state !== "open") {
       if (!this.publicWebSocketConnectPromise) {
-        this.publicWebSocketConnectPromise = this.publicWebSocketClient.connect().finally(() => {
+        const connect = this.publicWebSocketClient.state === "connecting" &&
+          typeof this.publicWebSocketClient.waitUntilOpen === "function"
+          ? this.publicWebSocketClient.waitUntilOpen()
+          : this.publicWebSocketClient.connect()
+        this.publicWebSocketConnectPromise = connect.finally(() => {
           this.publicWebSocketConnectPromise = null
         })
       }
