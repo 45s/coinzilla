@@ -672,7 +672,7 @@ export class BitunixFuturesWebSocketClient extends EventEmitter {
   }
 
   #handleControlMessage(data) {
-    if (data.op === "pong") {
+    if (data.op === "pong" || (data.op === "ping" && data.pong !== undefined)) {
       this.#lastPongAt = this.#now()
       this.emit("pong", data)
       return true
