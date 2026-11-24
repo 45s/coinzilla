@@ -452,6 +452,14 @@ export const recoveryOnlyProfitabilityScenario = Object.freeze({
     ],
   },
   given: {
+    cycle: {
+      cycleId: "rs-scenario-cycle-001",
+      positionId: "rs-scenario-position-001",
+      status: "ACCUMULATING",
+    },
+    sellOrderIdentity: {
+      clientOrderId: "rs-scenario-mixed-sell-001",
+    },
     recoveryCostBasisQuote: "10",
     recoveryNetQuoteProceeds: "10.01",
     legacyBaseDebit: "0",
@@ -460,6 +468,10 @@ export const recoveryOnlyProfitabilityScenario = Object.freeze({
   },
   when: [
     { type: "evaluate-recovery-only-profitability" },
+    {
+      type: "record-sole-sell-submission",
+      identity: "rs-scenario-mixed-sell-001",
+    },
     {
       type: "reconcile-filled-sell",
       identity: "rs-scenario-mixed-sell-001",
