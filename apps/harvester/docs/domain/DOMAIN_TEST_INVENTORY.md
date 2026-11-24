@@ -355,9 +355,9 @@ Do not treat the conceptual diagram as a new production state model: map every t
 
 ## From-scratch Recovery Seller scenario evidence — issue #1780
 
-The planner scenario intentionally supplies a canonical lifecycle cycle-state value to isolate the SELL planner. The real accounting workflow snapshot currently omits required accumulating-state invariants; see [#1809](https://github.com/45s/coinzilla/issues/1809). Do not describe this suite as proving the complete runtime workflow-to-SELL-evaluator path until that issue is fixed and covered.
+The planner scenario intentionally supplies a canonical lifecycle cycle-state value to isolate the SELL planner. The real accounting workflow snapshot currently omits required accumulating-state invariants; see [#1809](https://github.com/45s/coinzilla/issues/1809). Do not describe this suite as proving the complete runtime workflow-to-SELL-evaluator path until that issue is fixed and covered. The RS-specific AI-agent scenario contract, schema, file trees and implementation sequence are documented in [recovery-seller-scenario-testing.md](recovery-seller-scenario-testing.md).
 
-The separate initiative adds four package-level scenario files; it does not replace or retroactively credit the existing RS unit/runtime tests listed above.
+The separate initiative adds four package-level scenario files in merged [PR #1793](https://github.com/45s/coinzilla/pull/1793); its PR head `4d59272ea22317b3540d2356082b270328542c7e` passed 29 checks, with the read-only Binance TESTNET workflow skipped. It does not replace or retroactively credit the existing RS unit/runtime tests listed above.
 
 | Scenario family | New scenario evidence | Current disposition |
 | --- | --- | --- |
@@ -366,6 +366,6 @@ The separate initiative adds four package-level scenario files; it does not repl
 | RS-005 one SELL lifecycle / RS-007 unknown outcome | `test/scenarios/recovery-seller-cycle-lifecycle.scenario.test.js`: original identity retained through unknown/incomplete reconciliation; CANCELED/REJECTED/EXPIRED remain unresolved; conflicting identity rejected | PARTIAL — pure cycle-state only; no broker-call-count, durable reservation or application STOP proof |
 | RS-006 domain projection atomicity | `test/scenarios/recovery-seller-mixed-sell-accounting.scenario.test.js`: one-Fill commit, replay no-op, staged duplicate/conflict, failed legacy projection leaves original recovery input unchanged | PARTIAL — no multi-Fill REST/stream or durable transaction barrier proof |
 
-The scenario catalog is the single repository-wide human-readable behavior index. Issue #1780 owns the detailed RS matrix and exact-head evidence. No RS row is COVERED until its complete requirement is proved by new scenario evidence, merged to `develop`, and required CI is verified on the exact merged head.
+The scenario catalog is the single repository-wide human-readable behavior index. Issue #1780 owns the detailed RS matrix and exact-head evidence. No RS row is VERIFIED until its complete requirement is proved by new scenario evidence, merged to `develop`, and required CI is verified on the exact merged head.
 
 **Open contract discrepancies:** (1) STOP is described as terminal/no-reset, but a pure state resolver and durable resolution use case exist even though the operator facade exposes read-only status only; (2) the config currently sets `enabled: true`, while specification §15 says false by default; (3) third-asset fee quote valuation has no approved authoritative runtime source. Keep affected rows BLOCKED rather than inferring a resolution.
