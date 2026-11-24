@@ -43,8 +43,18 @@ function resolveBuySubcases({ subcases, id, name, status, blocker, title }) {
 
 function createBuyCaseMappings({ id, name, status, blocker, title, subcases }) {
   return {
-    test: createBuyCaseTest({ status, title }),
-    subcases: mappings.subcases,
+    test: createBuyCaseTest({
+      status,
+      title,
+    }),
+    subcases: resolveBuySubcases({
+      subcases,
+      id,
+      name,
+      status,
+      blocker,
+      title,
+    }),
   }
 }
 
