@@ -1,5 +1,31 @@
 const DEFAULT_MAX_FRAME_BYTES = 1024
 
+/**
+ * Encode an unmasked final server frame using the RFC 6455 payload-length forms.
+ *
+ * @param {{opcode: number, payload?: Buffer|string}} input
+ * @returns {Buffer}
+ */
+export function encodeWebSocketFrame({ opcode, payload = Buffer.alloc(0) } = {}) {
+  const body = Buffer.isBuffer(payload) ? payload : Buffer.from(payload)
+  let header
+  if (body.length < 126) {
+    header = Buffer.from([0x80 | opcode, body.length])
+  } else if (body.length <= 0xffff) {
+    header = Buffer.alloc(4)
+    header[0] = 0x80 | opcode
+    header[1] = 126
+    header.writeUInt16BE(body.length, 2)
+  } else {
+    header = Buffer.alloc(10)
+    header[0] = 0x80 | opcode
+    header[1] = 127
+    header.writeBigUInt64BE(BigInt(body.length), 2)
+  }
+  return Buffer.concat([header, body])
+}
+
+
 function createProtocolFailure(reason) {
   return {
     frames: [],
