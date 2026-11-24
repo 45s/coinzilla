@@ -1,6 +1,6 @@
 # GitHub Pull Request Dashboard
 
-- Status: active
+- Status: draft
 - Type: feature specification
 - Owner: dashboard
 - Created: 2026-11-24
@@ -407,4 +407,4 @@ Possible later work, requiring explicit scope approval:
 - [Dashboard roadmap](../../../ROADMAP.md)
 - [Tracking Issue #1816](https://github.com/45s/coinzilla/issues/1816)
 
-Implementation has not been authorized or delivered by this specification-only task. Track implementation through the linked Issue and a separate reviewed task increment.
+This proposal remains draft pending review. Issue #1816 tracks the documentation and specification work only; eventual application implementation requires its own explicitly scoped Issue and reviewed task PR.
