@@ -138,7 +138,11 @@
       "src/infrastructure/http/start-trading-history-api.test.js",
       "src/infrastructure/http/market-data-api.test.js",
       "src/infrastructure/http/bitunix-futures-market-data.test.js",
-      "test/use-cases/conservative-trading-engine.test.js"
+      "test/use-cases/conservative-trading-engine.test.js",
+      "test/scenarios/recovery-seller-profitability.scenario.test.js",
+      "test/scenarios/recovery-seller-mixed-sell-accounting.scenario.test.js",
+      "test/scenarios/recovery-seller-cycle-lifecycle.scenario.test.js",
+      "test/scenarios/recovery-seller-sell-planner.scenario.test.js"
     ]
   },
   "scripts": {
