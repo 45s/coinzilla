@@ -218,6 +218,8 @@ describe('BotsComponent', () => {
     http.expectNone(`${BASE_URL}/status`);
     http.expectNone(`${BASE_URL}/markets`);
     http.expectNone(`${BASE_URL}/portfolio`);
+    http.expectNone(`${BASE_URL}/orders`);
+    http.expectNone(`${BASE_URL}/balances`);
   });
 
   it('confirms a market BUY pause and waits for the next authoritative stream snapshot', async () => {
