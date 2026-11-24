@@ -251,3 +251,153 @@ test("rejects a later BUY with an unvalued third-asset commission without changi
     rejected,
   })
 })
+
+function createAcceptedBuyState({ fill = makeBuyFill({
+  tradeId: "accepted-buy",
+  price: "0.1",
+  quantity: "100",
+  quoteQuantity: "10",
+}) } = {}) {
+  return {
+    fill,
+    ...applyBuyFill({
+      state: {
+        portfolio: new Portfolio(),
+        recoveryLedger: RecoveryLedger.empty({ market }),
+      },
+      fill,
+    }),
+  }
+}
+
+function assertAccountingStateUnchanged({ state, portfolioValue, ledgerValue } = {}) {
+  assert.deepEqual(
+    state.portfolio.value,
+    portfolioValue,
+    "A rejected or duplicate BUY must not mutate the accepted Portfolio projection.",
+  )
+  assert.deepEqual(
+    state.recoveryLedger.value,
+    ledgerValue,
+    "A rejected or duplicate BUY must not mutate the accepted RecoveryLedger projection.",
+  )
+}
+
+test("treats an identical repeated BUY execution as a no-op in both accounting projections", () => {
+  const state = createAcceptedBuyState()
+  const portfolioValue = state.portfolio.value
+  const ledgerValue = state.recoveryLedger.value
+  const duplicate = updateTradingAccounting({
+    portfolio: state.portfolio,
+    recoveryLedger: state.recoveryLedger,
+    fill: state.fill,
+  })
+
+  assert.equal(duplicate.ok, true, "An identical replay must be accepted as a harmless duplicate.")
+  assert.equal(duplicate.data.applied, false, "An identical replay must not apply a second BUY.")
+  assert.equal(duplicate.data.duplicate, true, "An identical replay must be classified as duplicate.")
+  assert.strictEqual(duplicate.data.portfolio, state.portfolio)
+  assert.strictEqual(duplicate.data.recoveryLedger, state.recoveryLedger)
+  assertAccountingStateUnchanged({ state, portfolioValue, ledgerValue })
+})
+
+test("rejects a repeated BUY identity with changed commission facts without partial accounting", () => {
+  const state = createAcceptedBuyState()
+  const portfolioValue = state.portfolio.value
+  const ledgerValue = state.recoveryLedger.value
+  const conflictingFill = makeBuyFill({
+    tradeId: "accepted-buy",
+    price: "0.1",
+    quantity: "100",
+    quoteQuantity: "10",
+    commissions: [
+      new Commission({
+        amount: new Money({
+          amount: "0.01",
+          asset: quoteAsset,
+        }),
+      }),
+    ],
+  })
+  const rejected = updateTradingAccounting({
+    portfolio: state.portfolio,
+    recoveryLedger: state.recoveryLedger,
+    fill: conflictingFill,
+  })
+
+  assert.equal(rejected.ok, false, "Changed actual commission facts under one execution ID must fail closed.")
+  assert.match(
+    rejected.errors[0].message,
+    /Conflicting execution facts reused Fill ID/,
+    "The failure must identify the conflicting canonical execution evidence.",
+  )
+  assertAccountingStateUnchanged({ state, portfolioValue, ledgerValue })
+})
+
+test("rejects inconsistent Portfolio and RecoveryLedger duplicate histories without committing either projection", () => {
+  const accepted = makeBuyFill({
+    tradeId: "already-in-portfolio",
+    price: "0.1",
+    quantity: "100",
+    quoteQuantity: "10",
+  })
+  const portfolio = new Portfolio().applyFill({
+    fill: accepted,
+    strategyId: "coin-grabber",
+  }).portfolio
+  const recoveryLedger = RecoveryLedger.empty({ market })
+  const portfolioValue = portfolio.value
+  const ledgerValue = recoveryLedger.value
+  const rejected = updateTradingAccounting({
+    portfolio,
+    recoveryLedger,
+    fill: accepted,
+  })
+
+  assert.equal(rejected.ok, false, "Different duplicate status across projections must fail closed.")
+  assert.match(
+    rejected.errors[0].message,
+    /execution identities are inconsistent/,
+    "The failure must identify disagreement between the two execution histories.",
+  )
+  assert.deepEqual(portfolio.value, portfolioValue, "The accepted Portfolio history must remain unchanged.")
+  assert.deepEqual(recoveryLedger.value, ledgerValue, "The accepted RecoveryLedger history must remain unchanged.")
+})
+
+test("rejects a BUY from another market without committing the Portfolio-only application", () => {
+  const state = createAcceptedBuyState()
+  const portfolioValue = state.portfolio.value
+  const ledgerValue = state.recoveryLedger.value
+  const otherBaseAsset = new Asset({ id: "ada", code: "ADA" })
+  const otherMarket = new Market({
+    venue: "binance",
+    symbol: "ADAUSDT",
+    baseAsset: otherBaseAsset,
+    quoteAsset,
+  })
+  const foreignFill = new Fill({
+    tradeId: "foreign-market-buy",
+    brokerOrderId: "foreign-buy-order",
+    market: otherMarket,
+    side: "BUY",
+    price: new Money({ amount: "0.5", asset: quoteAsset }),
+    quantity: new Quantity({ amount: "20", asset: otherBaseAsset }),
+    quoteQuantity: new Money({ amount: "10", asset: quoteAsset }),
+    commissions: [],
+    commissionStatus: "COMPLETE",
+  })
+  const rejected = updateTradingAccounting({
+    portfolio: state.portfolio,
+    recoveryLedger: state.recoveryLedger,
+    fill: foreignFill,
+  })
+
+  assert.equal(rejected.ok, false, "A foreign-market BUY must not enter the DOGEUSDT recovery projection.")
+  assert.match(
+    rejected.errors[0].message,
+    /Fill market does not match RecoveryLedger market/,
+    "The failure must identify the mismatched recovery market.",
+  )
+  assertAccountingStateUnchanged({ state, portfolioValue, ledgerValue })
+})
+
