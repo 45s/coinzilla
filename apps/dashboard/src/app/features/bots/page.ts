@@ -106,9 +106,11 @@ export class BotsComponent implements OnInit, OnDestroy {
   private handleSocketClose(socket: WebSocket): void {
     if (this.socket !== socket || this.destroyed) return;
     this.socket = null;
+    const hadSnapshot = this.status() !== null;
+    this.lastRevision = 0;
     this.socketState.set('reconnecting');
     this.loading.set(false);
-    this.snapshotFreshness.set(this.lastRevision > 0 ? 'stale' : 'waiting');
+    this.snapshotFreshness.set(hadSnapshot ? 'stale' : 'waiting');
     this.scheduleReconnect();
   }
 
