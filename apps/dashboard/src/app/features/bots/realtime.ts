@@ -59,15 +59,70 @@ function isUnavailableResource(value: unknown): value is BotsUnavailableResource
   return typeof error['code'] === 'string' && typeof error['message'] === 'string';
 }
 
-function isSnapshotResource(value: unknown): value is BotsSnapshotResource {
-  return isAvailableResource(value) || isUnavailableResource(value);
+function isStatusData(value: unknown): boolean {
+  if (!isRecord(value) || !Number.isSafeInteger(value['observedAt'])
+    || typeof value['runtimeState'] !== 'string'
+    || typeof value['tradingEnabled'] !== 'boolean'
+    || !isRecord(value['userData'])
+    || typeof value['userData']['ready'] !== 'boolean'
+    || !isRecord(value['readiness'])
+    || typeof value['readiness']['state'] !== 'string'
+    || !Array.isArray(value['readiness']['blockers'])
+    || !isRecord(value['markets'])) {
+    return false;
+  }
+  const marketCounts = value['markets'];
+  return Number.isSafeInteger(marketCounts['configured'])
+    && Number.isSafeInteger(marketCounts['enabled'])
+    && Number.isSafeInteger(marketCounts['blocked']);
+}
+
+function isMarketsData(value: unknown): boolean {
+  if (!isRecord(value) || !Number.isSafeInteger(value['observedAt'])
+    || typeof value['tradingEnabled'] !== 'boolean'
+    || typeof value['userDataReady'] !== 'boolean'
+    || typeof value['userDataStatus'] !== 'string'
+    || !Array.isArray(value['markets'])) {
+    return false;
+  }
+  return value['markets'].every((market) => isRecord(market)
+    && typeof market['symbol'] === 'string'
+    && typeof market['enabled'] === 'boolean'
+    && typeof market['readiness'] === 'string'
+    && Array.isArray(market['blockers']));
+}
+
+function isPortfolioData(value: unknown): boolean {
+  if (!isRecord(value) || !Number.isSafeInteger(value['observedAt'])
+    || !Array.isArray(value['positions'])) {
+    return false;
+  }
+  return value['positions'].every((position) => isRecord(position)
+    && typeof position['symbol'] === 'string'
+    && typeof position['activeQuantity'] === 'string'
+    && typeof position['investedQuote'] === 'string');
+}
+
+function isStatusResource(value: unknown): value is BotsSnapshotResource {
+  return isUnavailableResource(value)
+    || (isAvailableResource(value) && isStatusData(value['data']));
+}
+
+function isMarketsResource(value: unknown): value is BotsSnapshotResource {
+  return isUnavailableResource(value)
+    || (isAvailableResource(value) && isMarketsData(value['data']));
+}
+
+function isPortfolioResource(value: unknown): value is BotsSnapshotResource {
+  return isUnavailableResource(value)
+    || (isAvailableResource(value) && isPortfolioData(value['data']));
 }
 
 function isSnapshotData(value: unknown): value is BotsSnapshotUnavailableData {
   return isRecord(value)
-    && isSnapshotResource(value['status'])
-    && isSnapshotResource(value['markets'])
-    && isSnapshotResource(value['portfolio']);
+    && isStatusResource(value['status'])
+    && isMarketsResource(value['markets'])
+    && isPortfolioResource(value['portfolio']);
 }
 
 function isSnapshotEnvelope(value: unknown): value is Record<string, unknown> {
