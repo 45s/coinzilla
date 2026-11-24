@@ -29,7 +29,10 @@ test("Bitunix Futures reads account-wide position mode from the documented priva
       dependencies: {
         fetchFn: async (...args) => {
           const [url, options] = args
-          requests.push({ url: String(url), options })
+          requests.push({
+            url: String(url),
+            options,
+          })
           return response({ positionMode: "HEDGE" })
         },
       },
@@ -56,7 +59,10 @@ test("Bitunix Futures reads symbol leverage and margin mode with explicit USDT m
       dependencies: {
         fetchFn: async (...args) => {
           const [url, options] = args
-          requests.push({ url: String(url), options })
+          requests.push({
+            url: String(url),
+            options,
+          })
           return response({
             symbol: "BTCUSDT",
             marginCoin: "USDT",
