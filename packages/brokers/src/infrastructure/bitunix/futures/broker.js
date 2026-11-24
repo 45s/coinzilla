@@ -1,8 +1,54 @@
-import { Asset, Market } from "@coinzilla/entities"
+import { Asset, Balance, Market, Quantity } from "@coinzilla/entities"
 import { toResult, handleErr } from "@coinzilla/utils"
 import { BrokerCapabilities } from "../../../broker/broker-capabilities.js"
 import { BrokerUnsupportedOperationError } from "../../../broker/errors/broker-unsupported-operation-error.js"
 import { BitunixFuturesRestClient } from "./api/rest-client.js"
+
+function addNonNegativeDecimals({ left, right }) {
+  const pattern = /^(?:0|[1-9]\\d*)(?:\\.\\d+)?$/
+  if (typeof left !== "string" || !pattern.test(left) ||
+      typeof right !== "string" || !pattern.test(right)) {
+    throw new TypeError("Bitunix Futures account amounts must be non-negative decimal strings")
+  }
+  const [leftWhole, leftFraction = ""] = left.split(".")
+  const [rightWhole, rightFraction = ""] = right.split(".")
+  const scale = Math.max(leftFraction.length, rightFraction.length)
+  const leftValue = BigInt(`${leftWhole}${leftFraction}`) * 10n ** BigInt(scale - leftFraction.length)
+  const rightValue = BigInt(`${rightWhole}${rightFraction}`) * 10n ** BigInt(scale - rightFraction.length)
+  const digits = (leftValue + rightValue).toString().padStart(scale + 1, "0")
+  if (scale === 0) {
+    return digits
+  }
+  return `${digits.slice(0, -scale)}.${digits.slice(-scale)}`.replace(/0+$/, "").replace(/\\.$/, "")
+}
+
+function adaptFuturesBalances({ rows, marginCoin }) {
+  if (!Array.isArray(rows)) {
+    throw new TypeError("Bitunix Futures account response must be an array")
+  }
+  const matches = rows.filter((row) => row?.marginCoin === marginCoin)
+  if (matches.length !== 1) {
+    throw new TypeError(`Bitunix Futures account response must contain exactly one ${marginCoin} margin account`)
+  }
+  const row = matches[0]
+  const asset = new Asset({
+    id: marginCoin.toLowerCase(),
+    code: marginCoin,
+  })
+  return [new Balance({
+    free: new Quantity({
+      amount: row.available,
+      asset,
+    }),
+    locked: new Quantity({
+      amount: addNonNegativeDecimals({
+        left: row.frozen,
+        right: row.margin,
+      }),
+      asset,
+    }),
+  })]
+}
 
 function unsupportedResult({ operation, reason }) {
   return {
@@ -18,8 +64,10 @@ function unsupportedResult({ operation, reason }) {
 const FUTURES_CAPABILITIES = [
   {
     type: "READ_BALANCES",
-    status: "UNKNOWN",
-    reason: "The Futures account response adapter and source-freshness contract have not yet been implemented.",
+    status: "SUPPORTED",
+    method: "getBalances",
+    guarantee: "Returns USDT Futures account available funds and combines order-frozen and position-margin amounts using exact decimal arithmetic.",
+    limitation: "The endpoint does not provide an authoritative source timestamp; this is not an account snapshot.",
   },
   {
     type: "READ_ACCOUNT_SNAPSHOT",
@@ -130,8 +178,33 @@ export class BitunixFuturesBroker {
     this.connected = false
   }
 
-  async getBalances() {
-    return unsupportedResult({ operation: "getBalances", reason: "Futures account reads are not implemented yet." })
+  async getBalances(input = {}) {
+    try {
+      if (!input || typeof input !== "object" || Array.isArray(input)) {
+        throw new TypeError("Bitunix Futures getBalances input must be an object")
+      }
+      const marginCoin = input.marginCoin ?? "USDT"
+      if (marginCoin !== "USDT") {
+        throw new TypeError('Bitunix USDT Futures getBalances marginCoin must be "USDT"')
+      }
+      const response = await this.restClient.request({
+        method: "GET",
+        path: "/api/v1/futures/account",
+        queryParams: { marginCoin },
+      })
+      return toResult({
+        data: adaptFuturesBalances({
+          rows: response.data,
+          marginCoin,
+        }),
+      })
+    } catch (error) {
+      handleErr({
+        where: "BitunixFuturesBroker.getBalances()",
+        error,
+      })
+      return toResult({ errors: [error] })
+    }
   }
 
   async getAccountSnapshot() {
