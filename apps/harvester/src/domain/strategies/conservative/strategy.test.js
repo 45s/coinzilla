@@ -440,9 +440,11 @@ settings,
 portfolio,
 recoveryLedger,
 marketMetadata,
-    activeOrders: [{ market,
-side: "BUY",
-status: "PARTIALLY_FILLED" }],
+    activeOrders: [{
+      market,
+      side: "BUY",
+      status: "PARTIALLY_FILLED",
+    }],
     lastBuyPrice: "0.1",
   })
   assert.equal(decision.actions.some((action) => action.side === "SELL"), true)
@@ -500,9 +502,11 @@ test("reserves the higher takerPercent for recovery SELL planning when taker is 
   const { portfolio, recoveryLedger } = makeBoughtState()
   const decision = evaluateConservativeStrategy({
     marketPrice,
-    pairConfig: { ...pairConfig,
-makerPercent: 0.1,
-takerPercent: 0.2 },
+    pairConfig: {
+      ...pairConfig,
+      makerPercent: 0.1,
+      takerPercent: 0.2,
+    },
     settings,
     portfolio,
     recoveryLedger,
