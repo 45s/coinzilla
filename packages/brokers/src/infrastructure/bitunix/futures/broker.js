@@ -103,7 +103,7 @@ const FUTURES_CAPABILITIES = [
     status: "SUPPORTED",
     method: "getFuturesTradeHistory",
     guarantee: "Returns one validated, symbol/order/position-filterable Futures execution-history page with stable tradeId/orderId and exact quantity, price, fee and realized-PnL strings.",
-    limitation: "This provider-specific DTO is not canonical Fill; fee currency/semantics and complete gap-free history are not established.",
+    limitation: "The raw Futures extension retains exact fee and realized-PnL fields; fee asset/semantics and complete gap-free history are not established.",
   },
   {
     type: "READ_FILLS",
