@@ -3047,7 +3047,7 @@ snapshots:
       '@oxc-parser/binding-wasm32-wasi': 0.158.0
       lmdb: 3.5.9
       postcss: 8.5.33
-      vitest: 5.1.1(@vitest/coverage-v8@4.1.12)(jsdom@28.1.0(supports-color@8.1.1))(vite@8.3.8(esbuild@0.28.2)(sass-embedded@1.108.2)(sass@1.108.2))
+      vitest: 5.1.1(@vitest/coverage-v8@5.1.1)(jsdom@28.1.0(supports-color@8.1.1))(vite@8.3.8(esbuild@0.28.2)(sass-embedded@1.108.2)(sass@1.108.2))
     transitivePeerDependencies:
       - '@types/node'
       - '@vitejs/devtools'
@@ -5132,7 +5132,7 @@ snapshots:
       sass: 1.108.2
       sass-embedded: 1.108.2
 
-  vitest@5.1.1(@vitest/coverage-v8@4.1.12)(jsdom@28.1.0(supports-color@8.1.1))(vite@8.3.8(esbuild@0.28.2)(sass-embedded@1.108.2)(sass@1.108.2)):
+  vitest@5.1.1(@vitest/coverage-v8@5.1.1)(jsdom@28.1.0(supports-color@8.1.1))(vite@8.3.8(esbuild@0.28.2)(sass-embedded@1.108.2)(sass@1.108.2)):
     dependencies:
       '@types/chai': 5.2.3
       '@vitest/mocker': 5.1.1(vite@8.3.8(esbuild@0.28.2)(sass-embedded@1.108.2)(sass@1.108.2))
