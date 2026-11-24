@@ -118,32 +118,34 @@ function archiveDependencies({ fixture, overrides = {} } = {}) {
       directory,
       remote
     }) => {
-      assert.equal(remote, ARCHIVE_REMOTE)
+      assert.equal(remote, ARCHIVE_REMOTE, "Archive publication must target the configured private archive repository")
       const manifest = JSON.parse(await readFile(path.join(directory, "manifest.json"), "utf8"))
-      assert.deepEqual(manifest.includedDirectories, ["logs", "recovery-facts"])
+      assert.deepEqual(manifest.includedDirectories, ["logs", "recovery-facts"], "Debug archives must contain only logs and recovery facts")
       assert.deepEqual(manifest.excludedPaths, [
         "data/** (all databases and backups)",
         "logs/cumulative/**",
-      ])
-      assert.equal(manifest.logRuntimeSessionId, RUNTIME_SESSION_ID)
-      assert.equal(manifest.recoveryRuntimeSessionId, RUNTIME_SESSION_ID)
-      assert.equal(manifest.dataCommitHash, DATA_COMMIT_HASH)
+      ], "Debug archives must declare databases and cumulative logs excluded")
+      assert.equal(manifest.logRuntimeSessionId, RUNTIME_SESSION_ID, "Selected log evidence must identify the completed TESTNET runtime session")
+      assert.equal(manifest.recoveryRuntimeSessionId, RUNTIME_SESSION_ID, "Recovery facts must identify the same runtime session as the logs")
+      assert.equal(manifest.dataCommitHash, DATA_COMMIT_HASH, "Archive manifest must preserve the latest committed recovery checkpoint digest")
       assert.deepEqual(manifest.logSelection, {
         cumulative: "excluded",
         sessions: "newest-completed-TESTNET-session-only; gzip-compressed",
-      })
+      }, "Debug archive manifest must mark cumulative logs excluded and selected session logs gzip-compressed")
       assert.equal(
         await readFile(path.join(directory, "data_commit_hash"), "utf8"),
         `${DATA_COMMIT_HASH}\n`,
+        "Published checkpoint identity file must match the recovery-facts manifest",
       )
       assert.equal(
         gunzipSync(await readFile(path.join(directory, "logs/sessions/2026-11-24_testnet/terminal.log.gz"))).toString("utf8"),
         "selected TESTNET session evidence",
+        "Selected completed TESTNET log must be preserved in gzip form",
       )
-      await assert.rejects(readdir(path.join(directory, "logs/sessions/2026-11-20_old")), { code: "ENOENT" })
-      await assert.rejects(readdir(path.join(directory, "logs/sessions/2026-11-25_live")), { code: "ENOENT" })
-      await assert.rejects(readdir(path.join(directory, "logs/cumulative")), { code: "ENOENT" })
-      await assert.rejects(readdir(path.join(directory, "data")), { code: "ENOENT" })
+      await assert.rejects(readdir(path.join(directory, "logs/sessions/2026-11-20_old")), { code: "ENOENT" }, "Older sessions must not be copied into the debug archive")
+      await assert.rejects(readdir(path.join(directory, "logs/sessions/2026-11-25_live")), { code: "ENOENT" }, "LIVE session evidence must never enter a TESTNET debug archive")
+      await assert.rejects(readdir(path.join(directory, "logs/cumulative")), { code: "ENOENT" }, "Cumulative logs must be excluded from the debug archive")
+      await assert.rejects(readdir(path.join(directory, "data")), { code: "ENOENT" }, "Database and backup data must be excluded from the debug archive")
       return {
         commit: REMOTE_COMMIT,
         fileCount: manifest.files.length + 1
@@ -159,6 +161,7 @@ test("adds _debug to the existing timestamp and archive-ID directory name", () =
       archiveId: ARCHIVE_ID
     }),
     "2026-11-24T18-30-00Z_123e4567_debug",
+    "Debug archive directory must retain the established timestamp/ID format with the debug suffix",
   )
 })
 
@@ -169,8 +172,8 @@ test("publishes only the selected TESTNET session and recovery facts", async (t)
     force: true
   }))
   const result = await runHarvesterDebugArchive(archiveDependencies({ fixture }))
-  assert.equal(result.archiveName, "2026-11-24T18-30-00Z_123e4567_debug")
-  assert.equal(result.remoteCommit, REMOTE_COMMIT)
+  assert.equal(result.archiveName, "2026-11-24T18-30-00Z_123e4567_debug", "Published archive must use the deterministic debug directory name")
+  assert.equal(result.remoteCommit, REMOTE_COMMIT, "Archive publication must return the verified remote commit")
   for (const [relativePath, expected] of Object.entries(fixture.files)) {
     assert.equal(
       await readFile(path.join(fixture.packageDirectory, relativePath), "utf8"),
@@ -193,6 +196,7 @@ test("refuses to combine logs and recovery facts from different runtime sessions
   await assert.rejects(
     runHarvesterDebugArchive(archiveDependencies({ fixture })),
     /runtime identities do not match/i,
+    "Archive must reject log and recovery-fact evidence from different runtime sessions",
   )
 })
 
@@ -203,8 +207,8 @@ test("refuses to archive while a Harvester process lock exists", async (t) => {
     force: true
   }))
   await writeFile(path.join(fixture.lockDirectory, ".harvester-trading-test.lock"), "active")
-  await assert.rejects(runHarvesterDebugArchive(archiveDependencies({ fixture })), /process lock exists/i)
-  await assert.rejects(readdir(path.join(fixture.packageDirectory, "archive-output")), { code: "ENOENT" })
+  await assert.rejects(runHarvesterDebugArchive(archiveDependencies({ fixture })), /process lock exists/i, "Archive must refuse to run while a Harvester process lock exists")
+  await assert.rejects(readdir(path.join(fixture.packageDirectory, "archive-output")), { code: "ENOENT" }, "A rejected active-process preflight must not create archive output")
 })
 
 test("rejects LIVE mode before creating an archive", async (t) => {
@@ -221,6 +225,7 @@ test("rejects LIVE mode before creating an archive", async (t) => {
       },
     })),
     /TRADING_MODE=testnet/,
+    "Debug archive command must fail closed unless trading mode is explicitly TESTNET",
   )
-  await assert.rejects(readdir(path.join(fixture.packageDirectory, "archive-output")), { code: "ENOENT" })
+  await assert.rejects(readdir(path.join(fixture.packageDirectory, "archive-output")), { code: "ENOENT" }, "LIVE mode rejection must happen before archive output is created")
 })
