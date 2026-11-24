@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto"
 import { ensure, SystemCustomError } from "@coinzilla/utils"
-import { createRestSignature } from "../../spot/auth/create-rest-signature.js"
+import { createRestSignature } from "../../common/auth/create-rest-signature.js"
 
 const ERROR_CODES = Object.freeze({
   authentication: "BITUNIX_FUTURES_AUTHENTICATION_REQUIRED",
