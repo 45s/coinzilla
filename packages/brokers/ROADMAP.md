@@ -1634,3 +1634,25 @@ Implemented on the PR branch (exact-head tests and required CI must pass before 
 - [ ] Update the capability matrix and conformance tests only when the actual common Broker guarantees are met.
 
 No live Futures mutation or exchange request has been performed by the implementation agent or automated tests. Keep Futures outside production execution and Harvester routing until all blockers and acceptance criteria are satisfied.
+
+
+## 2026-11-24 — Futures Broker stream and transport hardening (#1805)
+
+**Status: in progress; PR #1806 remains Draft and Futures is not production-ready.**
+
+- Public trade-price and one-level depth-book subscriptions are integrated into the Broker lifecycle, with shared connections, multiple listeners, idempotent cleanup and exact decimal event values.
+- Private balance/position/order/TP-SL subscriptions wait for login acknowledgement and expose raw observations only. Observations are explicitly non-authoritative, non-replayable and always recovery-required.
+- Low-level WebSocket reconnect is bounded, reauthenticates and resubscribes private channels, detects heartbeat loss, and recognizes the official `op: "ping"` / `pong` response envelope. Reconnect never implies recovery.
+- REST requests are dispatched at a conservative 10 requests/second per client, with concurrency-safe slot reservation at fetch invocation and deterministic fake-clock tests.
+- Restored common `getBalances()` using exact USDT free/locked balances; bonus is excluded. `getAccountSnapshot()` and `getServerTime()` remain explicitly unsupported.
+- Capability declarations now distinguish supported public market streams and raw private observations from unsupported candles/mutations and unknown recovery/completeness guarantees.
+
+**Still required before production use:**
+
+- [ ] Finish exact-head CI, including workspace quality, coverage, external docs links and package tests.
+- [ ] Implement safe create/modify/cancel/close/TP-SL mutation lifecycle with account-scoped exclusion, client IDs, readback and unknown-outcome reconciliation. No live mutation is permitted during implementation.
+- [ ] Resolve canonical Fill fee-asset and history-completeness semantics.
+- [ ] Provide defensible account-state recovery despite missing WebSocket replay/sequence guarantees, or explicitly keep recovery-dependent capabilities unavailable.
+- [ ] Complete common Broker conformance and consuming-app integration.
+
+No live Futures request or mutation has been performed. No isolated Futures TESTNET endpoint has been verified.
