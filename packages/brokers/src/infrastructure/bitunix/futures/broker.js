@@ -851,6 +851,62 @@ function createFuturesPendingTpSlQuery(input = {}) {
   }
 }
 
+function createFuturesTpSlHistoryQuery(input = {}) {
+  ensure.plainObject({
+    value: input,
+    name: "Futures TP/SL history query",
+  })
+  const supportedOptions = new Set(["symbol", "side", "positionMode", "startTime", "endTime", "limit", "skip"])
+  const unsupportedOptions = Object.keys(input).filter((key) => !supportedOptions.has(key))
+  if (unsupportedOptions.length > 0) {
+    throw new TypeError(`Unsupported Futures TP/SL history query options: ${unsupportedOptions.join(", ")}`)
+  }
+  const queryParams = {}
+  const symbol = normalizeOptionalSymbol({
+    symbol: input.symbol,
+  })
+  if (symbol !== undefined) {
+    queryParams.symbol = symbol
+  }
+  for (const field of ["side", "positionMode"]) {
+    if (input[field] !== undefined) {
+      if (!Number.isSafeInteger(input[field])) {
+        throw new TypeError(`Bitunix Futures TP/SL history ${field} must be a safe integer`)
+      }
+      queryParams[field] = input[field]
+    }
+  }
+  const pagination = createPaginationOptions({
+    limit: input.limit ?? 10,
+    skip: input.skip ?? 0,
+    label: "TP/SL-history",
+  })
+  const timeRange = createTimeRange({
+    startTime: input.startTime,
+    endTime: input.endTime,
+    label: "TP/SL-history",
+  })
+  return {
+    queryParams: {
+      ...queryParams,
+      ...timeRange,
+      ...pagination,
+    },
+    filters: {
+      ...(symbol === undefined ? {} : { symbol }),
+    },
+    ...pagination,
+  }
+}
+
+function assertTpSlHistoryFilters({ orders, filters }) {
+  for (const order of orders) {
+    if (filters.symbol !== undefined && order.symbol !== filters.symbol) {
+      throw new TypeError("Bitunix Futures TP/SL history symbol does not match the requested symbol")
+    }
+  }
+}
+
 function adaptFuturesTradePriceEvents({ event, symbol }) {
   ensure.plainObject({
     value: event,
@@ -1549,6 +1605,47 @@ export class BitunixFuturesBroker {
     } catch (error) {
       handleErr({
         where: "BitunixFuturesBroker.getFuturesPendingTpSlOrders()",
+        error,
+      })
+      return toResult({
+        errors: [error],
+      })
+    }
+  }
+
+  /**
+   * Returns one bounded page of historical Futures TP/SL orders.
+   * Exchange order fields and decimal strings are preserved without implying complete history.
+   */
+  async getFuturesTpSlOrderHistory(input = {}) {
+    try {
+      const request = createFuturesTpSlHistoryQuery(input)
+      const response = await this.restClient.request({
+        method: "GET",
+        path: "/api/v1/futures/tpsl/get_history_orders",
+        queryParams: request.queryParams,
+      })
+      const page = normalizeFuturesPage({
+        response,
+        listKey: "orderList",
+        label: "Futures TP/SL history",
+        adapter: adaptFuturesPendingTpSlOrders,
+      })
+      assertTpSlHistoryFilters({
+        orders: page.items,
+        filters: request.filters,
+      })
+      return toResult({
+        data: Object.freeze({
+          orders: page.items,
+          total: page.total,
+          skip: request.skip,
+          limit: request.limit,
+        }),
+      })
+    } catch (error) {
+      handleErr({
+        where: "BitunixFuturesBroker.getFuturesTpSlOrderHistory()",
         error,
       })
       return toResult({
