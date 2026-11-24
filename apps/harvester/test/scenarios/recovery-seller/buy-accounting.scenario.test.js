@@ -224,38 +224,40 @@ function createBudgetAuthorizer({ activeOrders }) {
   }
 }
 
-async function runBuyBudgetIsolationScenario({ input }) {
-  const rsBudget = evaluateBuyPolicyCase({
-    overrides: {
-      pairConfig: {
-        orderQuantity: "5",
-        priceStepPercent: "0.05",
-        investment: "9.994",
-      },
-      recoveryPosition: {
-        positionId: "rs-policy-position",
-        quantity: "5",
-        spent: "0",
-      },
-      lastBuyPrice: "2",
+function createRSBudgetPolicyOverrides() {
+  return {
+    pairConfig: {
+      orderQuantity: "5",
+      priceStepPercent: "0.05",
+      investment: "19.994",
     },
-  })
-  const runtime = createBudgetAuthorizer({
-    activeOrders: [{
-      clientOrderId: "cg-same-market-buy",
-      strategyId: StrategyId.COIN_GRABBER,
-      market: {
-        id: "ZROUSDT",
-        symbol: "ZROUSDT",
-        baseAsset: { id: "ZRO" },
-        quoteAsset: { id: "USDT" },
-      },
-      side: "BUY",
-      remainingQuantity: { amount: "9.1" },
-      limitPrice: { amount: "10" },
-    }],
-  })
-  const allocation = await runtime.authorize({
+    recoveryPosition: {
+      positionId: "rs-policy-position",
+      quantity: "5",
+      spent: "10",
+    },
+    lastBuyPrice: "2",
+  }
+}
+
+function createCGBudgetCommitment() {
+  return {
+    clientOrderId: "cg-same-market-buy",
+    strategyId: StrategyId.COIN_GRABBER,
+    market: {
+      id: "ZROUSDT",
+      symbol: "ZROUSDT",
+      baseAsset: { id: "ZRO" },
+      quoteAsset: { id: "USDT" },
+    },
+    side: "BUY",
+    remainingQuantity: { amount: "9.1" },
+    limitPrice: { amount: "10" },
+  }
+}
+
+function createRSBudgetAuthorizationRequest() {
+  return {
     action: {
       side: "BUY",
       quantity: "1",
@@ -280,7 +282,17 @@ async function runBuyBudgetIsolationScenario({ input }) {
         },
       },
     },
+  }
+}
+
+async function runBuyBudgetIsolationScenario({ input }) {
+  const rsBudget = evaluateBuyPolicyCase({
+    overrides: createRSBudgetPolicyOverrides(),
   })
+  const runtime = createBudgetAuthorizer({
+    activeOrders: [createCGBudgetCommitment()],
+  })
+  const allocation = await runtime.authorize(createRSBudgetAuthorizationRequest())
   return {
     otherStrategyInvestment: input.otherStrategyInvestment,
     rsPairBudgetOutcome: rsBudget.outcome,
