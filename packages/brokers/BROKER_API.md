@@ -278,7 +278,7 @@ The `bitunix-futures` provider is a separate Futures adapter under [issue #1805]
 | `getCandles()` | Supported | Closed REST klines with exact decimals and deterministic close-time derivation |
 | `createCanonicalOrder()` | Unsupported | LIVE order mutations remain disabled and no verified Futures TESTNET exists |
 | `cancelOrder({ symbol, orderId })` | Supported behind `allowLiveOrderMutations` | Exact pending-order preflight requires an exchange `clientId`; one-shot cancel request is followed by canonical order-detail readback. Lost acknowledgements reconcile once and are never retried. |
-| `cancelAllOpenOrders({ symbol? })` | Unsupported | Account/symbol-wide cancel-all is not enabled until its pending-order scope and final-state verification are implemented. |
+| `cancelAllOpenOrders({ symbol? })` | Supported behind `allowLiveOrderMutations` | Optional symbol or account-wide one-shot cancel-all; preflight and final pending-order count verification. Unknown acknowledgements are reconciled once without retry; callers must ensure single-writer ownership. |
 | `subscribeForPrices()` | Supported | Public trade channel; exact price/quantity and exchange ISO trade timestamp; no stable trade ID |
 | `subscribeForCandles()` | Unsupported | Public kline payload does not document the candle open timestamp required by the common Candle contract |
 | `subscribeForBookTicker()` | Supported | One-level depth channel; exact best bid/ask; timestamp is local receipt time and has no source sequence |
@@ -305,8 +305,8 @@ These provider-specific projections do not imply common canonical account, posit
 
 ### Safety and production status
 
-The REST client serializes request dispatch at a conservative 10 requests/second per client and never automatically retries requests. POST calls must explicitly declare mutation state. LIVE order/account mutation flags default to false. Single-order `cancelOrder()` is supported only behind `allowLiveOrderMutations: true` and its exact preflight/readback conditions; other mutation capabilities remain unsupported. No LIVE Futures request or mutation has been performed by the implementation agent or automated tests. No isolated Futures TESTNET endpoint has been verified.
+The REST client serializes request dispatch at a conservative 10 requests/second per client and never automatically retries requests. POST calls must explicitly declare mutation state. LIVE order/account mutation flags default to false. Single-order `cancelOrder()` and scoped/account-wide `cancelAllOpenOrders()` are supported only behind `allowLiveOrderMutations: true` and their preflight/readback conditions; order creation, modification, position close, TP/SL and account-setting mutations remain unsupported. No LIVE Futures request or mutation has been performed by the implementation agent or automated tests. No isolated Futures TESTNET endpoint has been verified.
 
-The provider remains **not production-ready** and must not be selected for production execution or Harvester routing. Required blockers include Futures order creation/modify/cancel-all/close and TP/SL/account-setting mutations, authoritative account-state recovery, canonical Fill semantics, and consumer integration.
+The provider remains **not production-ready** and must not be selected for production execution or Harvester routing. Required blockers include Futures order creation/modify/close and TP/SL/account-setting mutations, authoritative account-state recovery, canonical Fill semantics, and consumer integration.
 
 See the maintained [Bitunix Futures reference audit](./docs/bitunix-futures-reference-audit.md) for official protocol facts, third-party source comparison, discrepancies and remaining blockers.
