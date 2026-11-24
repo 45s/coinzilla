@@ -65,6 +65,7 @@ function createBuyCaseDefinition({
   stepType,
   mappings,
   configFields,
+  implementation = [],
 }) {
   return defineRecoverySellerScenario({
     id,
@@ -104,6 +105,7 @@ function createBuyCaseDefinition({
       buyPolicySource,
       orderOwnershipSource,
       orderRegistrySource,
+      ...implementation,
     ],
     test: mappings.test,
     status,
@@ -130,20 +132,6 @@ function makeBuyCase(options) {
     ...normalized,
     title,
     mappings,
-  })
-}
-
-function blockedCase({ id, name, reason, unblockCondition }) {
-  return makeBuyCase({
-    id,
-    name,
-    input: {},
-    expected: { blocked: true },
-    status: "BLOCKED",
-    blocker: {
-      reason,
-      unblockCondition,
-    },
   })
 }
 
@@ -1002,11 +990,120 @@ export const recoverySellerBuyAccountingScenarios = Object.freeze([
     rules: ["RS_BUY_NET_BASE_AFTER_FEES", "RS_BUY_ACTUAL_QUOTE_COST"],
     invariants: ["RS_FINANCIAL_CONSERVATION", "RS_NO_CROSS_SUBSIDY"],
   }),
-  blockedCase({
+  makeBuyCase({
     id: "RS-002-017",
-    name: "fill-before-acknowledgement and immediate terminal acknowledgement preserve ownership",
-    reason: "The current RS accounting workflow requires a broker-order identity already registered in OrderRegistry; the new scenario boundary does not yet compose out-of-order broker events through the real order-event workflow.",
-    unblockCondition: "Add application scenarios that deliver fill-before-ack, acknowledgement-before-fill and immediate terminal acknowledgement through the production order-event workflow with controlled event ordering.",
+    name: "acknowledgement before fill, fill before acknowledgement and immediate terminal acknowledgement preserve BUY ownership",
+    stepType: "process-recovery-buy-order-event-orderings",
+    input: {
+      cases: [
+        {
+          id: "ack-before-fill",
+          quantity: "0.4",
+          quoteQuantity: "4",
+        },
+        {
+          id: "fill-before-ack",
+          quantity: "0.4",
+          quoteQuantity: "4",
+        },
+        {
+          id: "immediate-terminal-ack",
+          quantity: "1",
+          quoteQuantity: "10",
+        },
+      ],
+    },
+    expected: {
+      cases: [
+        {
+          id: "ack-before-fill",
+          resultOk: true,
+          eventCount: 2,
+          orderStatus: "PARTIALLY_FILLED",
+          orderBrokerOrderId: "broker-rs-order-event-buy",
+          brokerCallCount: 0,
+          pauseCount: 0,
+          appliedFillIds: 1,
+          position: {
+            quantity: "0.4",
+            spent: "4",
+          },
+          executionQuantity: "0.4",
+          executionVwap: "10",
+        },
+        {
+          id: "fill-before-ack",
+          resultOk: true,
+          eventCount: 1,
+          orderStatus: "PARTIALLY_FILLED",
+          orderBrokerOrderId: "broker-rs-order-event-buy",
+          brokerCallCount: 0,
+          pauseCount: 0,
+          appliedFillIds: 1,
+          position: {
+            quantity: "0.4",
+            spent: "4",
+          },
+          executionQuantity: "0.4",
+          executionVwap: "10",
+        },
+        {
+          id: "immediate-terminal-ack",
+          resultOk: true,
+          eventCount: 1,
+          orderStatus: "FILLED",
+          orderBrokerOrderId: "broker-rs-order-event-buy",
+          brokerCallCount: 1,
+          pauseCount: 0,
+          appliedFillIds: 1,
+          position: {
+            quantity: "1",
+            spent: "10",
+          },
+          executionQuantity: "1",
+          executionVwap: "10",
+        },
+      ],
+    },
+    subcases: [
+      {
+        id: "RS-002-017-A",
+        description: "an acknowledged BUY order accepts its later partial TRADE event and applies the canonical Fill exactly once",
+        status: "TEST-MAPPED",
+        test: {
+          file: testFile,
+          title: "RS-002-017: acknowledgement before fill, fill before acknowledgement and immediate terminal acknowledgement preserve BUY ownership",
+        },
+        evidence: null,
+      },
+      {
+        id: "RS-002-017-B",
+        description: "a partial TRADE event arriving before a separate acknowledgement attaches broker identity and applies the owned Fill exactly once",
+        status: "TEST-MAPPED",
+        test: {
+          file: testFile,
+          title: "RS-002-017: acknowledgement before fill, fill before acknowledgement and immediate terminal acknowledgement preserve BUY ownership",
+        },
+        evidence: null,
+      },
+      {
+        id: "RS-002-017-C",
+        description: "an immediate FILLED acknowledgement reconciles broker Fill history and applies the BUY accounting exactly once",
+        status: "TEST-MAPPED",
+        test: {
+          file: testFile,
+          title: "RS-002-017: acknowledgement before fill, fill before acknowledgement and immediate terminal acknowledgement preserve BUY ownership",
+        },
+        evidence: null,
+      },
+    ],
+    implementation: [
+      "apps/harvester/src/use-cases/order-event-workflow.js",
+      "apps/harvester/src/use-cases/create-user-data-event-transition.js",
+      "apps/harvester/src/use-cases/reconcile-terminal-order-fills.js",
+    ],
+    rules: ["RS_BUY_CONFIRMED_FILL_ONLY", "RS_CANONICAL_FILL_EXACT_ONCE"],
+    invariants: ["RS_STABLE_OWNERSHIP", "RS_EXACT_ONCE", "RS_RECONCILIATION_CONTINUES"],
   }),
   makeBuyCase({
     id: "RS-002-018",
