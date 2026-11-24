@@ -60,8 +60,8 @@ function sendJson({ client, message } = {}) {
     if (typeof serialized !== "string") {
       throw new TypeError("WebSocket messages must serialize to JSON text.")
     }
-    const payload = Buffer.from(serialized, "utf8")
-    if (payload.length > MAX_MESSAGE_BYTES) {
+    const payloadBytes = Buffer.byteLength(serialized, "utf8")
+    if (payloadBytes > MAX_MESSAGE_BYTES) {
       closeClient({
         client,
         code: 1009,
@@ -69,6 +69,7 @@ function sendJson({ client, message } = {}) {
       })
       return false
     }
+    const payload = Buffer.from(serialized, "utf8")
     frame = encodeWebSocketFrame({
       opcode: 0x1,
       payload,
@@ -339,10 +340,15 @@ function handleUpgrade({ request, socket, head, clients, exchangeAccounts, reque
   if (!key) {
     return
   }
-  writeUpgradeResponse({
-    socket,
-    key,
-  })
+  try {
+    writeUpgradeResponse({
+      socket,
+      key,
+    })
+  } catch {
+    socket.destroy()
+    return
+  }
   const client = createClient({
     socket,
     clients,
