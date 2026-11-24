@@ -61,6 +61,35 @@ flowchart LR
   WebSocket -->|versioned full snapshot| Dashboard
 ```
 
+The connection and synchronization sequence is:
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant UI as Dashboard Bots
+  participant WS as Existing WebSocket adapter
+  participant Bus as Application EventBus
+  participant Read as Operator read models
+
+  UI->>WS: Connect /api/v1/trading/events
+  WS->>Bus: Subscribe to invalidation events
+  WS->>Read: Read status, markets, Portfolio
+  Read-->>WS: Initial authoritative DTOs
+  WS-->>UI: bots.snapshot (version 1, revision N)
+  Note over WS,Read: If invalidated during the read, discard stale result and coalesce a fresh read
+  Bus-->>WS: State invalidation
+  WS->>Read: Read current authoritative DTOs
+  Read-->>WS: Current DTOs
+  WS-->>UI: bots.state.updated / full revisioned state
+  UI->>UI: Validate and apply only a newer revision
+  WS--xUI: Connection closes
+  UI->>WS: Reconnect
+  WS->>Bus: Subscribe before snapshot read
+  WS->>Read: Read fresh full state
+  Read-->>WS: Current DTOs
+  WS-->>UI: Fresh full snapshot (new revision epoch)
+```
+
 The application facade publishes `harvester.operator_buy_control_completed` only after a market/global BUY pause or resume use case returns success. Its payload distinguishes `MARKET` plus symbol from `GLOBAL` without symbol and records `PAUSE` or `RESUME`. Strategy safety pauses are a separate concern: they are not operator BUY-control events and are never presented as operator commands.
 
 The EventBus message is an invalidation hint, not a copy of trading state. The WebSocket adapter reads the authoritative application query facade (`getStatus`, `getMarkets`, and `getPositions`) and sends a complete `bots.snapshot` version-1 envelope containing a server-process revision, observation time, and status/markets/portfolio resources. It subscribes before accepting connections; if a newer event arrives during an in-flight read, the stale read is discarded and sampled again. A reconnect receives a fresh full snapshot. A process restart begins a new revision epoch, which the reconnecting client accepts before applying normal duplicate/out-of-order revision checks.
