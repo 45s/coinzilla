@@ -119,7 +119,7 @@ async function hashFile({ filename } = {}) {
   return hash.digest("hex")
 }
 
-function validateArchiveRequest({ args, env } = {}) {
+export function validateArchiveRequest({ args, env } = {}) {
   if (env.TRADING_MODE !== "testnet") {
     throw new Error("Debug archiving requires TRADING_MODE=testnet; LIVE and unspecified modes are rejected.")
   }
@@ -128,7 +128,7 @@ function validateArchiveRequest({ args, env } = {}) {
   }
 }
 
-function createArchiveName({ createdAt } = {}) {
+export function createArchiveName({ createdAt } = {}) {
   const timestamp = createdAt.replaceAll(":", "-").replaceAll(".", "-")
   return `harvester-debug-${timestamp}-${randomUUID().slice(0, 8)}.tar.gz`
 }
@@ -338,7 +338,7 @@ async function createAndPublishArchive({
     `Missing: ${missingSources.length ? missingSources.join(", ") : "none"}`,
     `Remote commit: ${commit}`,
     `Local archive: ${archiveFile}`,
-  ].join("\\n") + "\\n")
+  ].join("\n") + "\n")
   return {
     archiveName,
     archiveFile,
