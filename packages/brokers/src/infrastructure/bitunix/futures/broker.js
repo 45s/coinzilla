@@ -2,6 +2,7 @@ import { Asset, Market } from "@coinzilla/entities"
 import { toResult, handleErr } from "@coinzilla/utils"
 import { BrokerCapabilities } from "../../../broker/broker-capabilities.js"
 import { BrokerUnsupportedOperationError } from "../../../broker/errors/broker-unsupported-operation-error.js"
+import { BitunixFuturesRestClient } from "./api/rest-client.js"
 
 function unsupportedResult({ operation, reason }) {
   return {
@@ -102,12 +103,17 @@ function createCapabilities({ config }) {
  * their exchange contract, adapter and lifecycle tests are delivered.
  */
 export class BitunixFuturesBroker {
-  constructor({ config, logger } = {}) {
+  constructor({ config, logger, dependencies = {} } = {}) {
     if (!config || config.tradingMode !== "live") {
       throw new TypeError("Bitunix Futures broker requires validated LIVE configuration")
     }
+    const { restClientFactory = (options) => new BitunixFuturesRestClient(options), fetchFn, now, nonceFactory } = dependencies
+    if (typeof restClientFactory !== "function") {
+      throw new TypeError("Bitunix Futures restClientFactory must be a function")
+    }
     this.config = config
     this.logger = logger
+    this.restClient = restClientFactory({ config, fetchFn, now, nonceFactory })
     this.connected = false
     this.canonicalMarkets = new Map()
     Object.defineProperty(this, "capabilities", {

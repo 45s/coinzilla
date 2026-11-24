@@ -113,6 +113,7 @@ export class Broker {
       broker = new BitunixFuturesBroker({
         config,
         logger,
+        dependencies,
       })
     }
 
