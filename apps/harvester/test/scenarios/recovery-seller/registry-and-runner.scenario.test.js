@@ -18,7 +18,7 @@ const implementationFile = "apps/harvester/src/domain/strategies/recovery-seller
 const candidatePaths = recoverySellerScenarioRegistry.flatMap((scenario) => [
   ...scenario.implementation,
   scenario.test?.file,
-  ...scenario.subcases.map((subcase) => subcase.test?.file),
+  ...(scenario.subcases ?? []).map((subcase) => subcase.test?.file),
 ]).filter(Boolean)
 const existingPaths = new Set(
   [scenarioFile, implementationFile, ...candidatePaths].filter((path) =>
