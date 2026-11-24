@@ -269,7 +269,7 @@ Never fabricate BUY fills or seed Portfolio from unverified wallet snapshots.
 
 **Implemented pure policy in merged PRs #1325, #1379 and #1127:**
 
-- a global fail-closed decision primitive: any missing, contradictory, unexpected, or unmodeled condition produces a stable BLOCK/STOP decision, prevents all new trading actions, preserves accounting and reservations, and requires reconciliation plus operator review before any resumption;
+- a global fail-closed decision primitive: any missing, contradictory, unexpected, or unmodeled condition produces a stable BLOCK/STOP decision and preserves accounting/reservations; STOP blocks additional BUY spending only, while an otherwise-valid first recovery SELL remains eligible under the one-SELL-per-cycle and independent SELL safety gates; existing orders continue through reconciliation and exact-once accounting; only an authorized administrator may resolve STOP after cause-fixed authoritative reconciliation, verified accounting/reservations and durable acknowledgement; no automatic clear or self-resume;
 - recovery-tranche and eligible legacy quantity decisions from actual net fills, fixed legacy basis, verified Spot availability and shared reservations;
 - BUY planning within the RS strategy/pair investment budget, reusing only the explicitly approved Conservative-neutral cadence and fee rules;
 - mixed SELL planning whose quantity never exceeds actual net recovery inventory plus the authorized, verified, unreserved legacy slice;
