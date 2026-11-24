@@ -80,7 +80,7 @@ function createBuyFill({
     market: targetMarket,
     side: "BUY",
     price: new Money({
-      amount: "2",
+      amount: "1",
       asset: targetMarket.quoteAsset,
     }),
     quantity: new Quantity({
@@ -128,7 +128,7 @@ function createLegacySpotInput({
     quantity,
   })
   const portfolioPositionsToApply = portfolioPositions
-    ? input.portfolioPositions.map((item) => ({
+    ? portfolioPositions.map((item) => ({
         market: item.market === "ZROFDUSD" ? alternateMarket : market,
         quantity: item.quantity,
         quoteQuantity: item.quantity,
