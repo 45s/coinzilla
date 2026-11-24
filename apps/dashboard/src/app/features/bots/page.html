@@ -236,7 +236,10 @@
               <th>Total inventory</th>
               <th>Invested</th>
               <th>Net quote flow</th>
+              <th>Buy cost</th>
+              <th>Net sell proceeds</th>
               <th>Recovery outstanding</th>
+              <th>Realized net profit</th>
             </tr>
           </thead>
           <tbody>
@@ -248,16 +251,14 @@
                 <td>{{ position.totalQuantity ?? '—' }}</td>
                 <td>{{ position.investedQuote ?? '—' }}</td>
                 <td>{{ position.quoteNetCashFlow ?? '—' }}</td>
+                <td>{{ position.recovery?.buyCost ?? '—' }}</td>
+                <td>{{ position.recovery?.netSellProceeds ?? '—' }}</td>
                 <td>{{ position.recovery?.outstandingRecoveryAmount ?? '—' }}</td>
+                <td>{{ position.recovery?.realizedNetProfit ?? '—' }}</td>
               </tr>
             }
           </tbody>
         </table>
-      </div>
-      <div class="portfolio-footnote">
-        <span>Buy cost: {{ positions()[0]?.recovery?.buyCost ?? '—' }}</span>
-        <span>Net sell proceeds: {{ positions()[0]?.recovery?.netSellProceeds ?? '—' }}</span>
-        <span>Realized net profit: {{ positions()[0]?.recovery?.realizedNetProfit ?? '—' }}</span>
       </div>
     } @else {
       <div class="empty-state">{{ loading() ? 'Loading Portfolio positions…' : connected() ? 'No Portfolio positions' : 'Portfolio snapshot unavailable until Harvester connects.' }}</div>
