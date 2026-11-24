@@ -48,6 +48,16 @@ class FakeTransport {
       listener(JSON.stringify(message))
     }
   }
+
+  drop() {
+    for (const listener of this.listeners.close) {
+      listener({
+        code: 1006,
+        reason: "network interrupted",
+        wasClean: false,
+      })
+    }
+  }
 }
 
 function createClient({ channelType = "public", now = () => 1_700_000_000_000 } = {}) {
