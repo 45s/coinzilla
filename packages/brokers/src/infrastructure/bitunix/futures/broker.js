@@ -372,6 +372,364 @@ function adaptFuturesMarketCatalog({ rows }) {
  * Bitunix USDT-margined Futures provider. Unsupported operations fail closed
  * until their exchange contract, adapter and lifecycle tests are delivered.
  */
+function createPaginationOptions({ limit, skip, label }) {
+  ensure.positiveInteger({
+    value: limit,
+    name: "limit",
+  })
+  if (limit > 100) {
+    throw new RangeError(`Bitunix Futures ${label} limit cannot exceed 100`)
+  }
+  ensure.nonNegativeInteger({
+    value: skip,
+    name: "skip",
+  })
+  return {
+    limit,
+    skip,
+  }
+}
+
+function createTimeRange({ startTime, endTime, label }) {
+  const range = {}
+  if (startTime !== undefined) {
+    ensure.nonNegativeInteger({
+      value: startTime,
+      name: "startTime",
+    })
+    range.startTime = startTime
+  }
+  if (endTime !== undefined) {
+    ensure.nonNegativeInteger({
+      value: endTime,
+      name: "endTime",
+    })
+    range.endTime = endTime
+  }
+  if (startTime !== undefined && endTime !== undefined && endTime < startTime) {
+    throw new RangeError(`Bitunix Futures ${label} endTime must not precede startTime`)
+  }
+  return range
+}
+
+function normalizeOptionalSymbol({ symbol }) {
+  if (symbol === undefined) {
+    return undefined
+  }
+  return ensure.nonEmptyString({
+    value: symbol,
+    name: "symbol",
+  }).trim().toUpperCase()
+}
+
+function normalizeOptionalIdentifier({ value, name }) {
+  if (value === undefined) {
+    return undefined
+  }
+  return ensure.nonEmptyString({
+    value: String(value),
+    name,
+  }).trim()
+}
+
+function createPendingOrdersQuery({ input }) {
+  ensure.plainObject({
+    value: input,
+    name: "pending order query",
+  })
+  const queryParams = {}
+  const symbol = normalizeOptionalSymbol({
+    symbol: input.symbol,
+  })
+  const orderId = normalizeOptionalIdentifier({
+    value: input.orderId,
+    name: "orderId",
+  })
+  const clientId = normalizeOptionalIdentifier({
+    value: input.clientOrderId,
+    name: "clientOrderId",
+  })
+  if (symbol !== undefined) queryParams.symbol = symbol
+  if (orderId !== undefined) queryParams.orderId = orderId
+  if (clientId !== undefined) queryParams.clientId = clientId
+  if (input.status !== undefined) {
+    queryParams.status = ensure.oneOf({
+      value: input.status,
+      values: ["NEW", "PART_FILLED"],
+      name: "status",
+    })
+  }
+  const pagination = createPaginationOptions({
+    limit: input.limit ?? 10,
+    skip: input.skip ?? 0,
+    label: "pending-order",
+  })
+  const timeRange = createTimeRange({
+    startTime: input.startTime,
+    endTime: input.endTime,
+    label: "pending-order",
+  })
+  return {
+    queryParams: {
+      ...queryParams,
+      ...timeRange,
+      ...pagination,
+    },
+    ...pagination,
+  }
+}
+
+function createTradeHistoryQuery({ input }) {
+  ensure.plainObject({
+    value: input,
+    name: "trade history query",
+  })
+  const queryParams = {}
+  const symbol = normalizeOptionalSymbol({
+    symbol: input.symbol,
+  })
+  const orderId = normalizeOptionalIdentifier({
+    value: input.orderId,
+    name: "orderId",
+  })
+  const positionId = normalizeOptionalIdentifier({
+    value: input.positionId,
+    name: "positionId",
+  })
+  if (symbol !== undefined) queryParams.symbol = symbol
+  if (orderId !== undefined) queryParams.orderId = orderId
+  if (positionId !== undefined) queryParams.positionId = positionId
+  if (Object.keys(queryParams).length === 0) {
+    throw new TypeError("Bitunix Futures trade history requires symbol, orderId or positionId")
+  }
+  const pagination = createPaginationOptions({
+    limit: input.limit ?? 10,
+    skip: input.skip ?? 0,
+    label: "trade-history",
+  })
+  const timeRange = createTimeRange({
+    startTime: input.startTime,
+    endTime: input.endTime,
+    label: "trade-history",
+  })
+  return {
+    queryParams: {
+      ...queryParams,
+      ...timeRange,
+      ...pagination,
+    },
+    filters: queryParams,
+    ...pagination,
+  }
+}
+
+function createPositionHistoryQuery({ input }) {
+  ensure.plainObject({
+    value: input,
+    name: "position history query",
+  })
+  const queryParams = {}
+  const symbol = normalizeOptionalSymbol({
+    symbol: input.symbol,
+  })
+  const positionId = normalizeOptionalIdentifier({
+    value: input.positionId,
+    name: "positionId",
+  })
+  if (symbol !== undefined) queryParams.symbol = symbol
+  if (positionId !== undefined) queryParams.positionId = positionId
+  if (symbol === undefined && positionId === undefined) {
+    throw new TypeError("Bitunix Futures position history requires symbol or positionId")
+  }
+  const pagination = createPaginationOptions({
+    limit: input.limit ?? 10,
+    skip: input.skip ?? 0,
+    label: "position-history",
+  })
+  const timeRange = createTimeRange({
+    startTime: input.startTime,
+    endTime: input.endTime,
+    label: "position-history",
+  })
+  return {
+    queryParams: {
+      ...queryParams,
+      ...timeRange,
+      ...pagination,
+    },
+    filters: queryParams,
+    ...pagination,
+  }
+}
+
+function createCanonicalOrderHistoryQuery({ input }) {
+  ensure.plainObject({
+    value: input,
+    name: "canonical order history query",
+  })
+  const symbol = ensure.nonEmptyString({
+    value: input.symbol,
+    name: "symbol",
+  }).trim().toUpperCase()
+  const pagination = createPaginationOptions({
+    limit: input.limit ?? 10,
+    skip: input.skip ?? 0,
+    label: "order-history",
+  })
+  const timeRange = createTimeRange({
+    startTime: input.startTime,
+    endTime: input.endTime,
+    label: "order-history",
+  })
+  ensure.boolean({
+    value: input.queryCanceled ?? false,
+    name: "queryCanceled",
+  })
+  const queryParams = {
+    symbol,
+    ...pagination,
+    ...timeRange,
+    queryCanceled: input.queryCanceled ?? false,
+  }
+  if (input.status !== undefined) {
+    queryParams.status = ensure.oneOf({
+      value: input.status,
+      values: ["FILLED", "CANCELED", "PART_FILLED_CANCELED", "EXPIRED"],
+      name: "status",
+    })
+  }
+  if (input.orderType !== undefined) {
+    queryParams.type = ensure.oneOf({
+      value: input.orderType,
+      values: ["LIMIT", "MARKET"],
+      name: "orderType",
+    })
+  }
+  return {
+    queryParams,
+    symbol,
+  }
+}
+
+function normalizeFuturesPage({ response, listKey, label, adapter }) {
+  ensure.plainObject({
+    value: response.data,
+    name: label,
+  })
+  const rows = response.data[listKey]
+  ensure.array({
+    value: rows,
+    name: listKey,
+  })
+  const total = response.data.total
+  if (!Number.isSafeInteger(total) || total < 0) {
+    throw new TypeError(`Bitunix Futures ${label} total must be a non-negative safe integer`)
+  }
+  return {
+    items: adapter({
+      rows,
+    }),
+    total,
+  }
+}
+
+function assertPendingOrderFilters({ orders, queryParams }) {
+  for (const order of orders) {
+    if (queryParams.symbol !== undefined && order.symbol !== queryParams.symbol) {
+      throw new TypeError("Bitunix Futures pending order symbol does not match the requested symbol")
+    }
+    if (queryParams.orderId !== undefined && order.orderId !== queryParams.orderId) {
+      throw new TypeError("Bitunix Futures pending order ID does not match the requested order")
+    }
+    if (queryParams.clientId !== undefined && order.clientId !== queryParams.clientId) {
+      throw new TypeError("Bitunix Futures pending order client ID does not match the requested client ID")
+    }
+  }
+}
+
+function assertTradeHistoryFilters({ trades, filters }) {
+  for (const trade of trades) {
+    if (filters.symbol !== undefined && trade.symbol !== filters.symbol) {
+      throw new TypeError("Bitunix Futures trade symbol does not match the requested symbol")
+    }
+    if (filters.orderId !== undefined && trade.orderId !== filters.orderId) {
+      throw new TypeError("Bitunix Futures trade order ID does not match the requested order")
+    }
+  }
+}
+
+function assertPositionHistoryFilters({ positions, filters }) {
+  for (const position of positions) {
+    if (filters.symbol !== undefined && position.symbol !== filters.symbol) {
+      throw new TypeError("Bitunix Futures historical position symbol does not match the requested symbol")
+    }
+    if (filters.positionId !== undefined && position.positionId !== filters.positionId) {
+      throw new TypeError("Bitunix Futures historical position ID does not match the requested position")
+    }
+  }
+}
+
+async function resolveCanonicalMarket({ broker, symbol }) {
+  let market = broker.canonicalMarkets.get(symbol)
+  if (!market) {
+    const marketsResult = await broker.getExchangeMarkets()
+    if (!marketsResult.ok) {
+      return {
+        error: marketsResult,
+      }
+    }
+    market = broker.canonicalMarkets.get(symbol)
+  }
+  if (!market) {
+    throw new TypeError(`Bitunix Futures symbol ${symbol} is not present in the current tradable market catalog`)
+  }
+  return {
+    market,
+  }
+}
+
+function createCanonicalOrderLookup({ input }) {
+  ensure.plainObject({
+    value: input,
+    name: "canonical order lookup",
+  })
+  const symbol = ensure.nonEmptyString({
+    value: input.symbol,
+    name: "symbol",
+  }).trim().toUpperCase()
+  const hasOrderId = input.orderId !== undefined && input.orderId !== null
+  const hasClientOrderId = input.clientOrderId !== undefined && input.clientOrderId !== null
+  if (hasOrderId === hasClientOrderId) {
+    throw new TypeError("Bitunix Futures canonical order lookup requires exactly one of orderId or clientOrderId")
+  }
+  const identifier = hasOrderId
+    ? normalizeOptionalIdentifier({
+      value: input.orderId,
+      name: "orderId",
+    })
+    : normalizeOptionalIdentifier({
+      value: input.clientOrderId,
+      name: "clientOrderId",
+    })
+  return {
+    symbol,
+    identifier,
+    identifierType: hasOrderId ? "orderId" : "clientId",
+    queryParams: hasOrderId
+      ? { orderId: identifier }
+      : { clientId: identifier },
+  }
+}
+
+function assertCanonicalOrderIdentity({ order, lookup }) {
+  if (order.brokerOrderId !== lookup.identifier && lookup.identifierType === "orderId") {
+    throw new TypeError("Bitunix Futures order detail identity does not match the requested identifier")
+  }
+  if (order.clientOrderId !== lookup.identifier && lookup.identifierType === "clientId") {
+    throw new TypeError("Bitunix Futures order detail identity does not match the requested identifier")
+  }
+}
+
 export class BitunixFuturesBroker {
   constructor({ config, logger, dependencies = {} } = {}) {
     if (!config || config.tradingMode !== "live") {
@@ -492,96 +850,32 @@ export class BitunixFuturesBroker {
    * Returns one page of Bitunix Futures pending orders with exact decimals.
    * This extension does not claim an atomic or exhaustive account snapshot.
    */
-  async getFuturesPendingOrders({ symbol, orderId, clientOrderId, status, startTime, endTime, limit = 10, skip = 0 } = {}) {
+  async getFuturesPendingOrders(input = {}) {
     try {
-      const queryParams = {}
-      if (symbol !== undefined) {
-        queryParams.symbol = ensure.nonEmptyString({
-          value: symbol,
-          name: "symbol",
-        }).trim().toUpperCase()
-      }
-      if (orderId !== undefined) {
-        queryParams.orderId = ensure.nonEmptyString({
-          value: String(orderId),
-          name: "orderId",
-        }).trim()
-      }
-      if (clientOrderId !== undefined) {
-        queryParams.clientId = ensure.nonEmptyString({
-          value: clientOrderId,
-          name: "clientOrderId",
-        }).trim()
-      }
-      if (status !== undefined) {
-        queryParams.status = ensure.oneOf({
-          value: status,
-          values: ["NEW", "PART_FILLED"],
-          name: "status",
-        })
-      }
-      ensure.positiveInteger({
-        value: limit,
-        name: "limit",
+      const request = createPendingOrdersQuery({
+        input,
       })
-      if (limit > 100) {
-        throw new RangeError("Bitunix Futures pending-order limit cannot exceed 100")
-      }
-      ensure.nonNegativeInteger({
-        value: skip,
-        name: "skip",
-      })
-      if (startTime !== undefined) {
-        ensure.nonNegativeInteger({
-          value: startTime,
-          name: "startTime",
-        })
-        queryParams.startTime = startTime
-      }
-      if (endTime !== undefined) {
-        ensure.nonNegativeInteger({
-          value: endTime,
-          name: "endTime",
-        })
-        queryParams.endTime = endTime
-      }
-      if (startTime !== undefined && endTime !== undefined && endTime < startTime) {
-        throw new RangeError("Bitunix Futures pending-order endTime must not precede startTime")
-      }
-      queryParams.limit = limit
-      queryParams.skip = skip
       const response = await this.restClient.request({
         method: "GET",
         path: "/api/v1/futures/trade/get_pending_orders",
-        queryParams,
+        queryParams: request.queryParams,
       })
-      ensure.plainObject({
-        value: response.data,
-        name: "Futures pending orders",
+      const page = normalizeFuturesPage({
+        response,
+        listKey: "orderList",
+        label: "Futures pending orders",
+        adapter: adaptFuturesPendingOrders,
       })
-      if (!Number.isSafeInteger(response.data.total) || response.data.total < 0) {
-        throw new TypeError("Bitunix Futures pending-order total must be a non-negative safe integer")
-      }
-      const orders = adaptFuturesPendingOrders({
-        rows: response.data.orderList,
+      assertPendingOrderFilters({
+        orders: page.items,
+        queryParams: request.queryParams,
       })
-      for (const order of orders) {
-        if (queryParams.symbol !== undefined && order.symbol !== queryParams.symbol) {
-          throw new TypeError("Bitunix Futures pending order symbol does not match the requested symbol")
-        }
-        if (queryParams.orderId !== undefined && order.orderId !== queryParams.orderId) {
-          throw new TypeError("Bitunix Futures pending order ID does not match the requested order")
-        }
-        if (queryParams.clientId !== undefined && order.clientId !== queryParams.clientId) {
-          throw new TypeError("Bitunix Futures pending order client ID does not match the requested client ID")
-        }
-      }
       return toResult({
         data: Object.freeze({
-          orders,
-          total: response.data.total,
-          skip,
-          limit,
+          orders: page.items,
+          total: page.total,
+          skip: request.skip,
+          limit: request.limit,
         }),
       })
     } catch (error) {
@@ -595,89 +889,32 @@ export class BitunixFuturesBroker {
     }
   }
 
-  async getFuturesTradeHistory({ symbol, orderId, positionId, startTime, endTime, limit = 10, skip = 0 } = {}) {
+  async getFuturesTradeHistory(input = {}) {
     try {
-      const queryParams = {}
-      if (symbol !== undefined) {
-        queryParams.symbol = ensure.nonEmptyString({
-          value: symbol,
-          name: "symbol",
-        }).trim().toUpperCase()
-      }
-      if (orderId !== undefined) {
-        queryParams.orderId = ensure.nonEmptyString({
-          value: String(orderId),
-          name: "orderId",
-        }).trim()
-      }
-      if (positionId !== undefined) {
-        queryParams.positionId = ensure.nonEmptyString({
-          value: positionId,
-          name: "positionId",
-        }).trim()
-      }
-      if (Object.keys(queryParams).length === 0) {
-        throw new TypeError("Bitunix Futures trade history requires symbol, orderId or positionId")
-      }
-      ensure.positiveInteger({
-        value: limit,
-        name: "limit",
+      const request = createTradeHistoryQuery({
+        input,
       })
-      if (limit > 100) {
-        throw new RangeError("Bitunix Futures trade-history limit cannot exceed 100")
-      }
-      ensure.nonNegativeInteger({
-        value: skip,
-        name: "skip",
-      })
-      if (startTime !== undefined) {
-        ensure.nonNegativeInteger({
-          value: startTime,
-          name: "startTime",
-        })
-        queryParams.startTime = startTime
-      }
-      if (endTime !== undefined) {
-        ensure.nonNegativeInteger({
-          value: endTime,
-          name: "endTime",
-        })
-        queryParams.endTime = endTime
-      }
-      if (startTime !== undefined && endTime !== undefined && endTime < startTime) {
-        throw new RangeError("Bitunix Futures trade-history endTime must not precede startTime")
-      }
-      queryParams.limit = limit
-      queryParams.skip = skip
       const response = await this.restClient.request({
         method: "GET",
         path: "/api/v1/futures/trade/get_history_trades",
-        queryParams,
+        queryParams: request.queryParams,
       })
-      ensure.plainObject({
-        value: response.data,
-        name: "Futures trade history",
+      const page = normalizeFuturesPage({
+        response,
+        listKey: "tradeList",
+        label: "Futures trade history",
+        adapter: adaptFuturesTradeHistory,
       })
-      if (!Number.isSafeInteger(response.data.total) || response.data.total < 0) {
-        throw new TypeError("Bitunix Futures trade-history total must be a non-negative safe integer")
-      }
-      const trades = adaptFuturesTradeHistory({
-        rows: response.data.tradeList,
+      assertTradeHistoryFilters({
+        trades: page.items,
+        filters: request.filters,
       })
-      for (const trade of trades) {
-        if (queryParams.symbol !== undefined && trade.symbol !== queryParams.symbol) {
-          throw new TypeError("Bitunix Futures trade symbol does not match the requested symbol")
-        }
-        if (queryParams.orderId !== undefined && trade.orderId !== queryParams.orderId) {
-          throw new TypeError("Bitunix Futures trade order ID does not match the requested order")
-        }
-      }
       return toResult({
         data: Object.freeze({
-          trades,
-          total: response.data.total,
-          skip,
-          limit,
+          trades: page.items,
+          total: page.total,
+          skip: request.skip,
+          limit: request.limit,
         }),
       })
     } catch (error) {
@@ -835,83 +1072,32 @@ export class BitunixFuturesBroker {
    * Returns one Futures position-history page. The caller owns pagination;
    * total and the requested page are returned separately.
    */
-  async getFuturesPositionHistory({ symbol, positionId, startTime, endTime, limit = 10, skip = 0 } = {}) {
+  async getFuturesPositionHistory(input = {}) {
     try {
-      const queryParams = {}
-      if (symbol !== undefined) {
-        queryParams.symbol = ensure.nonEmptyString({
-          value: symbol,
-          name: "symbol",
-        }).trim().toUpperCase()
-      }
-      if (positionId !== undefined) {
-        queryParams.positionId = ensure.nonEmptyString({
-          value: positionId,
-          name: "positionId",
-        }).trim()
-      }
-      if (queryParams.symbol === undefined && queryParams.positionId === undefined) {
-        throw new TypeError("Bitunix Futures position history requires symbol or positionId")
-      }
-      ensure.positiveInteger({
-        value: limit,
-        name: "limit",
+      const request = createPositionHistoryQuery({
+        input,
       })
-      if (limit > 100) {
-        throw new RangeError("Bitunix Futures position-history limit cannot exceed 100")
-      }
-      ensure.nonNegativeInteger({
-        value: skip,
-        name: "skip",
-      })
-      if (startTime !== undefined) {
-        ensure.nonNegativeInteger({
-          value: startTime,
-          name: "startTime",
-        })
-        queryParams.startTime = startTime
-      }
-      if (endTime !== undefined) {
-        ensure.nonNegativeInteger({
-          value: endTime,
-          name: "endTime",
-        })
-        queryParams.endTime = endTime
-      }
-      if (startTime !== undefined && endTime !== undefined && endTime < startTime) {
-        throw new RangeError("Bitunix Futures position-history endTime must not precede startTime")
-      }
-      queryParams.limit = limit
-      queryParams.skip = skip
       const response = await this.restClient.request({
         method: "GET",
         path: "/api/v1/futures/position/get_history_positions",
-        queryParams,
+        queryParams: request.queryParams,
       })
-      ensure.plainObject({
-        value: response.data,
-        name: "Futures position history",
+      const page = normalizeFuturesPage({
+        response,
+        listKey: "positionList",
+        label: "Futures position history",
+        adapter: adaptFuturesHistoricalPositions,
       })
-      if (!Number.isSafeInteger(response.data.total) || response.data.total < 0) {
-        throw new TypeError("Bitunix Futures position-history total must be a non-negative safe integer")
-      }
-      const positions = adaptFuturesHistoricalPositions({
-        rows: response.data.positionList,
+      assertPositionHistoryFilters({
+        positions: page.items,
+        filters: request.filters,
       })
-      for (const position of positions) {
-        if (queryParams.symbol !== undefined && position.symbol !== queryParams.symbol) {
-          throw new TypeError("Bitunix Futures historical position symbol does not match the requested symbol")
-        }
-        if (queryParams.positionId !== undefined && position.positionId !== queryParams.positionId) {
-          throw new TypeError("Bitunix Futures historical position ID does not match the requested position")
-        }
-      }
       return toResult({
         data: Object.freeze({
-          positions,
-          total: response.data.total,
-          skip,
-          limit,
+          positions: page.items,
+          total: page.total,
+          skip: request.skip,
+          limit: request.limit,
         }),
       })
     } catch (error) {
@@ -925,60 +1111,38 @@ export class BitunixFuturesBroker {
     }
   }
 
-  async getOpenOrders() {
-    return unsupportedResult({
-      operation: "getOpenOrders",
-      reason: "Futures open-order reads are not implemented yet.",
-    })
-  }
-
-  async getCanonicalOrder({ symbol, orderId, clientOrderId } = {}) {
+  async getCanonicalOrder(input = {}) {
     try {
-      const normalizedSymbol = ensure.nonEmptyString({
-        value: symbol,
-        name: "symbol",
-      }).trim().toUpperCase()
-      const hasOrderId = orderId !== undefined && orderId !== null
-      const hasClientOrderId = clientOrderId !== undefined && clientOrderId !== null
-      if (hasOrderId === hasClientOrderId) {
-        throw new TypeError("Bitunix Futures canonical order lookup requires exactly one of orderId or clientOrderId")
-      }
-      const identifier = hasOrderId
-        ? ensure.nonEmptyString({ value: String(orderId), name: "orderId" }).trim()
-        : ensure.nonEmptyString({ value: clientOrderId, name: "clientOrderId" }).trim()
-      let market = this.canonicalMarkets.get(normalizedSymbol)
-      if (!market) {
-        const marketsResult = await this.getExchangeMarkets()
-        if (!marketsResult.ok) {
-          return marketsResult
-        }
-        market = this.canonicalMarkets.get(normalizedSymbol)
-      }
-      if (!market) {
-        throw new TypeError(`Bitunix Futures symbol ${normalizedSymbol} is not present in the current tradable market catalog`)
+      const lookup = createCanonicalOrderLookup({
+        input,
+      })
+      const resolved = await resolveCanonicalMarket({
+        broker: this,
+        symbol: lookup.symbol,
+      })
+      if (resolved.error) {
+        return resolved.error
       }
       const response = await this.restClient.request({
         method: "GET",
         path: "/api/v1/futures/trade/get_order_detail",
-        queryParams: hasOrderId
-          ? { orderId: identifier }
-          : { clientId: identifier },
+        queryParams: lookup.queryParams,
       })
       ensure.plainObject({
         value: response.data,
         name: "Futures order detail",
       })
-      if (String(response.data.symbol ?? "").toUpperCase() !== normalizedSymbol) {
+      if (String(response.data.symbol ?? "").toUpperCase() !== lookup.symbol) {
         throw new TypeError("Bitunix Futures order detail symbol does not match the requested symbol")
       }
       const order = adaptFuturesCanonicalOrder({
         order: response.data,
-        market,
+        market: resolved.market,
       })
-      if ((hasOrderId && order.brokerOrderId !== identifier) ||
-          (hasClientOrderId && order.clientOrderId !== identifier)) {
-        throw new TypeError("Bitunix Futures order detail identity does not match the requested identifier")
-      }
+      assertCanonicalOrderIdentity({
+        order,
+        lookup,
+      })
       return toResult({
         data: order,
       })
@@ -993,101 +1157,34 @@ export class BitunixFuturesBroker {
     }
   }
 
-  async getCanonicalOrderHistory({ symbol, status, orderType, queryCanceled = false, startTime, endTime, limit = 10, skip = 0 } = {}) {
+  async getCanonicalOrderHistory(input = {}) {
     try {
-      const normalizedSymbol = ensure.nonEmptyString({
-        value: symbol,
-        name: "symbol",
-      }).trim().toUpperCase()
-      ensure.positiveInteger({
-        value: limit,
-        name: "limit",
+      const request = createCanonicalOrderHistoryQuery({
+        input,
       })
-      if (limit > 100) {
-        throw new RangeError("Bitunix Futures order-history limit cannot exceed 100")
-      }
-      ensure.nonNegativeInteger({
-        value: skip,
-        name: "skip",
+      const resolved = await resolveCanonicalMarket({
+        broker: this,
+        symbol: request.symbol,
       })
-      if (startTime !== undefined) {
-        ensure.nonNegativeInteger({
-          value: startTime,
-          name: "startTime",
-        })
-      }
-      if (endTime !== undefined) {
-        ensure.nonNegativeInteger({
-          value: endTime,
-          name: "endTime",
-        })
-      }
-      if (startTime !== undefined && endTime !== undefined && endTime < startTime) {
-        throw new RangeError("Bitunix Futures order-history endTime must not precede startTime")
-      }
-      let market = this.canonicalMarkets.get(normalizedSymbol)
-      if (!market) {
-        const marketsResult = await this.getExchangeMarkets()
-        if (!marketsResult.ok) {
-          return marketsResult
-        }
-        market = this.canonicalMarkets.get(normalizedSymbol)
-      }
-      if (!market) {
-        throw new TypeError(`Bitunix Futures symbol ${normalizedSymbol} is not present in the current tradable market catalog`)
-      }
-      ensure.boolean({
-        value: queryCanceled,
-        name: "queryCanceled",
-      })
-      const queryParams = {
-        symbol: normalizedSymbol,
-        limit,
-        skip,
-        queryCanceled,
-      }
-      if (status !== undefined) {
-        queryParams.status = ensure.oneOf({
-          value: status,
-          values: ["FILLED", "CANCELED", "PART_FILLED_CANCELED", "EXPIRED"],
-          name: "status",
-        })
-      }
-      if (orderType !== undefined) {
-        queryParams.type = ensure.oneOf({
-          value: orderType,
-          values: ["LIMIT", "MARKET"],
-          name: "orderType",
-        })
-      }
-      if (startTime !== undefined) {
-        queryParams.startTime = startTime
-      }
-      if (endTime !== undefined) {
-        queryParams.endTime = endTime
+      if (resolved.error) {
+        return resolved.error
       }
       const response = await this.restClient.request({
         method: "GET",
         path: "/api/v1/futures/trade/get_history_orders",
-        queryParams,
+        queryParams: request.queryParams,
       })
-      ensure.plainObject({
-        value: response.data,
-        name: "Futures order history",
+      const page = normalizeFuturesPage({
+        response,
+        listKey: "orderList",
+        label: "Futures order history",
+        adapter: (options) => options.rows.map((order) => adaptFuturesCanonicalOrder({
+          order,
+          market: resolved.market,
+        })),
       })
-      ensure.array({
-        value: response.data.orderList,
-        name: "Futures orderList",
-      })
-      if (!Number.isSafeInteger(response.data.total) || response.data.total < 0) {
-        throw new TypeError("Bitunix Futures order-history total must be a non-negative safe integer")
-      }
-      const orders = response.data.orderList.map((order) => adaptFuturesCanonicalOrder({
-        order,
-        market,
-      }))
       return toResult({
-        data: orders,
+        data: page.items,
       })
     } catch (error) {
       handleErr({
