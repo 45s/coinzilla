@@ -556,7 +556,7 @@ When credentials are configured, the read-only diagnostic runner also exercises 
 
 ## Bitunix USDT Futures
 
-The `bitunix-futures` adapter is separate from Bitunix Spot. Current implementation includes signed REST reads for markets, USDT balances, ticker prices, closed candles, raw symbol metadata, order-book depth, canonical order detail/history, pending orders, current/history positions, position-mode/leverage/margin-mode reads, and raw trade history. All exchange financial values remain exact decimal strings in provider-specific DTOs.
+The `bitunix-futures` adapter is separate from Bitunix Spot. Current implementation includes signed REST reads for markets, USDT balances, ticker prices, closed candles, raw symbol metadata, order-book depth, canonical order detail/history, pending orders and separate pending TP/SL groups, current/history positions, position-mode/leverage/margin-mode reads, and raw trade history. All exchange financial values remain exact decimal strings in provider-specific DTOs.
 
 Public trade-price and one-level book-ticker subscriptions are integrated with the Broker lifecycle. Private balance, position, order and TP/SL channels are exposed as raw `onObservation` messages only; they are not authoritative, replayable or sufficient to establish recovery. The WebSocket client performs bounded reconnect/resubscribe and heartbeat detection, but it deliberately leaves recovery required after reconnect. The REST client limits dispatch to 10 requests/second per client and never automatically retries.
 
