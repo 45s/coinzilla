@@ -850,11 +850,18 @@ function getOrCreateRecoverySellerCycleState({ state, marketId, createCycleId })
   if (latestExecution) {
     const outcome = state.recoverySellerCycleOutcomes.get(latestExecution.cycleId)
     if (outcome?.status !== "CLOSED") {
-      const cycleState = createRecoverySellerTransitionCycleState({
-        marketId,
-        cycleId: latestExecution.cycleId,
-        positionId: latestExecution.positionId,
-      })
+      const cycleState = outcome?.status === undefined || outcome.status === "ACCUMULATING"
+        ? createRecoverySellerTransitionCycleState({
+            marketId,
+            cycleId: latestExecution.cycleId,
+            positionId: latestExecution.positionId,
+          })
+        : Object.freeze({
+            marketId,
+            cycleId: latestExecution.cycleId,
+            positionId: latestExecution.positionId,
+            status: outcome.status,
+          })
       state.recoverySellerCycleStates.set(marketId, cycleState)
       return cycleState
     }
