@@ -11,10 +11,13 @@ import {
 import { runRecoverySellerDomainScenario } from "./runners/run-domain-scenario.js"
 
 const packageRoot = fileURLToPath(new URL("../../../", import.meta.url))
-const scenarioFile = "apps/harvester/test/scenarios/recovery-seller/registry-and-runner.scenario.test.js"
-const implementationFile = "apps/harvester/src/domain/strategies/recovery-seller/calculate-profitability.js"
+const registeredPaths = recoverySellerScenarioRegistry.flatMap((scenario) => [
+  ...scenario.implementation,
+  scenario.test?.file,
+  ...scenario.subcases.map((subcase) => subcase.test?.file),
+]).filter(Boolean)
 const existingPaths = new Set(
-  [scenarioFile, implementationFile].filter((path) =>
+  registeredPaths.filter((path) =>
     existsSync(resolve(packageRoot, path.replace("apps/harvester/", "")))),
 )
 
