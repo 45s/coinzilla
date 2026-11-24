@@ -154,6 +154,8 @@ export const recoverySellerBuyAccountingScenarios = Object.freeze([
     stepType: "evaluate-initial-buy-and-accounting-scenario",
     input: {
       policyOverrides: {},
+      limitPrice: "1.999",
+      originalQuantity: "5",
       fills: [],
     },
     expected: {
