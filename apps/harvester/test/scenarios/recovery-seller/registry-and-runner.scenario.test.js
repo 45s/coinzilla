@@ -382,6 +382,14 @@ test("the APPLICATION runner executes ordered handlers and reports mapped eviden
 test("the APPLICATION runner rejects DOMAIN records and missing operation handlers", async () => {
   await assert.rejects(
     () => runRecoverySellerApplicationScenario({
+      scenario: null,
+      handlers: {},
+    }),
+    TypeError,
+    "The application runner must reject a missing scenario record before attempting step execution.",
+  )
+  await assert.rejects(
+    () => runRecoverySellerApplicationScenario({
       scenario: {
         id: "RS-TEST-APPLICATION-002",
         layer: "DOMAIN",
