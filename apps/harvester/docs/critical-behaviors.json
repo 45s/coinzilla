@@ -398,7 +398,7 @@
         },
         {
           "path": "src/use-cases/create-submission-gate.test.js",
-          "name": "releases the Conservative recovery SELL reservation after a terminal order transition",
+          "name": "releases the Conservative recovery SELL reservation after terminal order transitions",
           "kind": "normal"
         },
         {
