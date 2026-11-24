@@ -111,6 +111,35 @@ test("the RS registry rejects malformed scenario steps", () => {
     "The validator must identify a malformed ordered step.")
 })
 
+test("the RS registry reports malformed non-string subcase IDs without throwing", () => {
+  const scenario = {
+    ...recoverySellerScenarioRegistry.find((item) => item.id === "RS-004-011"),
+    subcases: [{
+      id: {
+        toString: () => "RS-004-011-A",
+      },
+      description: "malformed identifier must be rejected",
+      status: "TEST-MAPPED",
+      test: {
+        file: scenarioFile,
+        title: "malformed subcase identifier",
+      },
+      evidence: null,
+    }],
+  }
+  let result
+  assert.doesNotThrow(() => {
+    result = validateRecoverySellerScenarioRegistry({
+      scenarios: [scenario],
+      existingPaths,
+    })
+  }, "Untrusted malformed registry data must produce validation errors, not crash the validator.")
+  assert.equal(result.valid, false,
+    "A non-string subcase identifier must be rejected.")
+  assert.ok(result.errors.some((error) => error.includes("parent scenario ID plus a letter suffix")),
+    "The validator must report the malformed subcase identifier.")
+})
+
 test("the RS registry rejects missing required fields and invalid status values", () => {
   const scenario = cloneScenario({
     status: "DONE",
