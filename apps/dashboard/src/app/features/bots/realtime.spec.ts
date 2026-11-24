@@ -11,18 +11,37 @@ const validSnapshot = {
     status: {
       ok: true,
       data: {
+        observedAt: 120000,
         runtimeState: 'RUNNING',
+        tradingEnabled: true,
+        userData: {
+          ready: true,
+        },
+        readiness: {
+          state: 'READY',
+          blockers: [],
+        },
+        markets: {
+          configured: 0,
+          enabled: 0,
+          blocked: 0,
+        },
       },
     },
     markets: {
       ok: true,
       data: {
+        observedAt: 120000,
+        tradingEnabled: true,
+        userDataReady: true,
+        userDataStatus: 'READY',
         markets: [],
       },
     },
     portfolio: {
       ok: true,
       data: {
+        observedAt: 120000,
         positions: [],
       },
     },
