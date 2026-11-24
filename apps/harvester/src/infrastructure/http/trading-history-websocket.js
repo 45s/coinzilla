@@ -636,23 +636,8 @@ function subscribeToBotsUpdates({ eventBus, requestSnapshot } = {}) {
   return subscriptions
 }
 
-/**
- * Attach the local trading-history WebSocket endpoint to the existing HTTP server.
- *
- * The socket carries persisted-history invalidation hints and read-only provider account snapshots.
- * Account readers are sampled on initial connection and after account-monitor notifications.
- * Failed provider reads remain explicit and never become fabricated empty snapshots.
- * An empty provider list is a valid snapshot for a Harvester with no active accounts.
- *
- * @param {{server: object, eventBus: object}} input
- * @returns {Readonly<{close: () => Promise<void>}>}
- */
-export function attachTradingHistoryWebSocket({ server, eventBus, exchangeAccounts = [], subscribeExchangeAccountUpdates, operator } = {}) {
-  if (!server || typeof server.on !== "function" || typeof server.off !== "function") {
-    throw new TypeError("Trading-history WebSocket requires the existing HTTP server.")
-  }
-  const clients = new Set()
-  const subscription = subscribeToHistoryUpdates({
+function subscribeToWebSocketUpdates({ eventBus, clients, exchangeAccounts, subscribeExchangeAccountUpdates, operator } = {}) {
+  const historySubscription = subscribeToHistoryUpdates({
     eventBus,
     clients,
   })
@@ -678,12 +663,43 @@ export function attachTradingHistoryWebSocket({ server, eventBus, exchangeAccoun
       subscribeExchangeAccountUpdates,
     })
   } catch (error) {
-    subscription.unsubscribe()
+    historySubscription.unsubscribe()
     for (const botsSubscription of botsSubscriptions) {
       botsSubscription.unsubscribe()
     }
     throw error
   }
+  return {
+    historySubscription,
+    botsCoordinator,
+    botsSubscriptions,
+    accountSubscriptions,
+  }
+}
+
+/**
+ * Attach the local trading-history WebSocket endpoint to the existing HTTP server.
+ *
+ * The socket carries persisted-history invalidation hints and read-only provider account snapshots.
+ * Account readers are sampled on initial connection and after account-monitor notifications.
+ * Failed provider reads remain explicit and never become fabricated empty snapshots.
+ * An empty provider list is a valid snapshot for a Harvester with no active accounts.
+ *
+ * @param {{server: object, eventBus: object}} input
+ * @returns {Readonly<{close: () => Promise<void>}>}
+ */
+export function attachTradingHistoryWebSocket({ server, eventBus, exchangeAccounts = [], subscribeExchangeAccountUpdates, operator } = {}) {
+  if (!server || typeof server.on !== "function" || typeof server.off !== "function") {
+    throw new TypeError("Trading-history WebSocket requires the existing HTTP server.")
+  }
+  const clients = new Set()
+  const subscriptions = subscribeToWebSocketUpdates({
+    eventBus,
+    clients,
+    exchangeAccounts,
+    subscribeExchangeAccountUpdates,
+    operator,
+  })
   const onUpgrade = (...upgradeArguments) => {
     const [request, socket, head] = upgradeArguments
     handleUpgrade({
@@ -692,18 +708,18 @@ export function attachTradingHistoryWebSocket({ server, eventBus, exchangeAccoun
       head,
       clients,
       exchangeAccounts,
-      requestBotsSnapshot: botsCoordinator?.requestSnapshot,
+      requestBotsSnapshot: subscriptions.botsCoordinator?.requestSnapshot,
     })
   }
   server.on("upgrade", onUpgrade)
   return Object.freeze({
     close: async () => {
       server.off("upgrade", onUpgrade)
-      subscription.unsubscribe()
-      for (const botsSubscription of botsSubscriptions) {
+      subscriptions.historySubscription.unsubscribe()
+      for (const botsSubscription of subscriptions.botsSubscriptions) {
         botsSubscription.unsubscribe()
       }
-      for (const accountSubscription of accountSubscriptions) {
+      for (const accountSubscription of subscriptions.accountSubscriptions) {
         accountSubscription.unsubscribe()
       }
       for (const client of [...clients]) {
