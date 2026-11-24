@@ -1,37 +1,8 @@
+import { ensure } from "@coinzilla/utils"
+
 const DEFAULT_BASE_URL = "https://fapi.bitunix.com"
 const DEFAULT_PUBLIC_WS_URL = "wss://fapi.bitunix.com/public/"
 const DEFAULT_PRIVATE_WS_URL = "wss://fapi.bitunix.com/private/"
-
-function validateCredentials({ apiKey, apiSecret }) {
-  if (typeof apiKey !== "string" || !apiKey.trim() ||
-      typeof apiSecret !== "string" || !apiSecret.trim()) {
-    throw new TypeError("Bitunix Futures API credentials are required")
-  }
-}
-
-function validateTradingMode({ tradingMode }) {
-  if (tradingMode !== "live") {
-    throw new TypeError('Bitunix Futures tradingMode is unsupported unless explicitly set to "live"; no Futures TESTNET endpoint is documented')
-  }
-}
-
-function validateBaseUrl({ baseUrl }) {
-  if (typeof baseUrl !== "string" || baseUrl !== DEFAULT_BASE_URL) {
-    throw new TypeError("Bitunix Futures REST base URL must use the official Bitunix Futures REST endpoint")
-  }
-}
-
-function validateTimeout({ value, field }) {
-  if (!Number.isSafeInteger(value) || value < 1) {
-    throw new RangeError(`Bitunix Futures ${field} must be a positive safe integer`)
-  }
-}
-
-function validateMutationFlag({ value, field }) {
-  if (typeof value !== "boolean") {
-    throw new TypeError(`Bitunix Futures ${field} must be a boolean`)
-  }
-}
 
 /** Validated configuration for the Bitunix USDT-margined Futures API. */
 export class BitunixFuturesConfig {
@@ -49,16 +20,48 @@ export class BitunixFuturesConfig {
     allowLiveOrderMutations = false,
     allowLiveAccountMutations = false,
   } = {}) {
-    validateCredentials({ apiKey, apiSecret })
-    validateTradingMode({ tradingMode })
-    validateBaseUrl({ baseUrl })
-    if (publicWebSocketUrl !== DEFAULT_PUBLIC_WS_URL ||
-        privateWebSocketUrl !== DEFAULT_PRIVATE_WS_URL) {
-      throw new TypeError("Bitunix Futures WebSocket URLs must use the official Bitunix Futures endpoints")
-    }
-    validateTimeout({ value: requestTimeout, field: "requestTimeout" })
-    validateMutationFlag({ value: allowLiveOrderMutations, field: "allowLiveOrderMutations" })
-    validateMutationFlag({ value: allowLiveAccountMutations, field: "allowLiveAccountMutations" })
+    ensure.nonEmptyString({
+      value: apiKey,
+      name: "apiKey",
+    })
+    ensure.nonEmptyString({
+      value: apiSecret,
+      name: "apiSecret",
+    })
+    ensure.oneOf({
+      value: tradingMode,
+      values: ["live"],
+      name: "tradingMode",
+      errMsg: 'Bitunix Futures tradingMode is unsupported unless explicitly set to "live"; no Futures TESTNET endpoint is documented',
+    })
+    ensure.oneOf({
+      value: baseUrl,
+      values: [DEFAULT_BASE_URL],
+      name: "baseUrl",
+      errMsg: "Bitunix Futures REST base URL must use the official Bitunix Futures REST endpoint",
+    })
+    ensure.oneOf({
+      value: publicWebSocketUrl,
+      values: [DEFAULT_PUBLIC_WS_URL],
+      name: "publicWebSocketUrl",
+    })
+    ensure.oneOf({
+      value: privateWebSocketUrl,
+      values: [DEFAULT_PRIVATE_WS_URL],
+      name: "privateWebSocketUrl",
+    })
+    ensure.positiveInteger({
+      value: requestTimeout,
+      name: "requestTimeout",
+    })
+    ensure.boolean({
+      value: allowLiveOrderMutations,
+      name: "allowLiveOrderMutations",
+    })
+    ensure.boolean({
+      value: allowLiveAccountMutations,
+      name: "allowLiveAccountMutations",
+    })
 
     this.apiKey = apiKey
     this.apiSecret = apiSecret

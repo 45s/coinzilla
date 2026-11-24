@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto"
-import { SystemCustomError } from "@coinzilla/utils"
+import { ensure, SystemCustomError } from "@coinzilla/utils"
 import { createRestSignature } from "../../spot/auth/create-rest-signature.js"
 
 const ERROR_CODES = Object.freeze({
@@ -10,106 +10,34 @@ const ERROR_CODES = Object.freeze({
   response: "BITUNIX_FUTURES_REST_RESPONSE_INVALID",
 })
 
-function validateRequest({ method, path, queryParams, body, stateChanging, authenticated }) {
-  if (method !== "GET" && method !== "POST") {
-    throw new TypeError("Bitunix Futures REST method must be GET or POST")
-  }
-  if (typeof path !== "string" || !path.startsWith("/") || path.startsWith("//")) {
-    throw new TypeError("Bitunix Futures REST path must be an absolute API path")
-  }
-  if (!queryParams || typeof queryParams !== "object" || Array.isArray(queryParams)) {
-    throw new TypeError("Bitunix Futures REST queryParams must be an object")
-  }
-  if (body !== undefined && (!body || typeof body !== "object" || Array.isArray(body))) {
-    throw new TypeError("Bitunix Futures REST body must be an object")
-  }
-  if (method === "GET" && body !== undefined) {
-    throw new TypeError("Bitunix Futures REST GET requests cannot include a body")
-  }
-  if (method === "POST" && typeof stateChanging !== "boolean") {
-    throw new TypeError("Bitunix Futures REST POST requests must explicitly set stateChanging")
-  }
-  if (stateChanging === true && method !== "POST") {
-    throw new TypeError("Bitunix Futures state-changing requests must use POST")
-  }
-  if (typeof authenticated !== "boolean") {
-    throw new TypeError("Bitunix Futures REST authenticated flag must be a boolean")
-  }
-  if (!authenticated && (method !== "GET" || stateChanging === true)) {
-    throw new TypeError("Unauthenticated Bitunix Futures requests must be read-only GET requests")
-  }
-}
-
-function createQueryString({ queryParams }) {
-  const params = new URLSearchParams()
-  for (const key of Object.keys(queryParams).sort()) {
-    const value = queryParams[key]
-    if (value !== undefined && value !== null) {
-      params.set(key, String(value))
-    }
-  }
-  return params.toString()
-}
-
-function createHeaders({ client, method, queryParams, body, authenticated }) {
-  const headers = {
-    "Content-Type": "application/json",
-    Accept: "application/json",
-    language: "en-US",
-  }
-  if (!authenticated) {
-    return headers
-  }
-  if (typeof client.apiKey !== "string" || !client.apiKey.trim() ||
-      typeof client.apiSecret !== "string" || !client.apiSecret.trim()) {
-    throw new BitunixFuturesRestError({
-      message: "Bitunix Futures API credentials are required for private requests",
-      kind: "authentication",
-      outcomeUnknown: false,
-    })
-  }
-
-  const nonce = client.nonceFactory()
-  const timestamp = String(client.now())
-  if (typeof nonce !== "string" || !nonce.trim()) {
-    throw new TypeError("Bitunix Futures REST nonce must be a non-empty string")
-  }
-  if (!/^\d+$/.test(timestamp) || !Number.isSafeInteger(Number(timestamp))) {
-    throw new RangeError("Bitunix Futures REST timestamp must be a non-negative safe integer")
-  }
-  const bodyText = method === "POST" && body !== undefined ? JSON.stringify(body) : undefined
-  headers["api-key"] = client.apiKey
-  headers.nonce = nonce
-  headers.timestamp = timestamp
-  headers.sign = createRestSignature({
-    nonce,
-    timestamp,
-    apiKey: client.apiKey,
-    secretKey: client.apiSecret,
-    queryParams,
-    ...(bodyText === undefined ? {} : { body: bodyText, bodyIsSerialized: true }),
-  })
-  return {
-    headers,
-    bodyText,
-  }
-}
-
 /** Structured error for Bitunix USDT Futures REST failures. */
 export class BitunixFuturesRestError extends SystemCustomError {
   /**
    * @param {{message: string, kind?: "authentication"|"transport"|"http"|"exchange"|"response", cause?: unknown, path?: string, status?: number|null, exchangeCode?: string|null, outcomeUnknown?: boolean}} input
    */
-  constructor({ message, kind = "response", cause, path = null, status = null, exchangeCode = null, outcomeUnknown = false } = {}) {
-    if (!Object.hasOwn(ERROR_CODES, kind)) {
-      throw new TypeError("Bitunix Futures REST error kind is unsupported")
-    }
-    const options = {
+  constructor({
+    message,
+    kind = "response",
+    cause,
+    path = null,
+    status = null,
+    exchangeCode = null,
+    outcomeUnknown = false,
+  } = {}) {
+    ensure.oneOf({
+      value: kind,
+      values: Object.keys(ERROR_CODES),
+      name: "kind",
+    })
+    super(message, {
       code: ERROR_CODES[kind],
-      context: { path, status, exchangeCode },
+      context: {
+        path,
+        status,
+        exchangeCode,
+      },
       ...(cause === undefined ? {} : { cause }),
-    }
-    super(message, options)
+    })
     this.kind = kind
     this.path = path
     this.status = status
@@ -118,21 +46,290 @@ export class BitunixFuturesRestError extends SystemCustomError {
   }
 }
 
-/**
- * Signed and unsigned REST transport for the official Bitunix USDT Futures API.
- * It sends one request only; callers own mutation authorization and reconciliation.
- */
+function validateMethod({ method }) {
+  ensure.oneOf({
+    value: method,
+    values: ["GET", "POST"],
+    name: "method",
+  })
+}
+
+function validatePath({ path }) {
+  ensure.nonEmptyString({
+    value: path,
+    name: "path",
+  })
+  if (!path.startsWith("/") || path.startsWith("//")) {
+    throw new TypeError("Bitunix Futures REST path must be an absolute API path")
+  }
+}
+
+function validateQueryParams({ queryParams }) {
+  ensure.plainObject({
+    value: queryParams,
+    name: "queryParams",
+  })
+}
+
+function validateBody({ method, body }) {
+  if (body === undefined) {
+    return
+  }
+  ensure.plainObject({
+    value: body,
+    name: "body",
+  })
+  if (method === "GET") {
+    throw new TypeError("Bitunix Futures REST GET requests cannot include a body")
+  }
+}
+
+function validateMutationState({ method, stateChanging }) {
+  ensure.boolean({
+    value: stateChanging,
+    name: "stateChanging",
+  })
+  if (stateChanging && method !== "POST") {
+    throw new TypeError("Bitunix Futures state-changing requests must use POST")
+  }
+}
+
+function validateAuthenticationMode({ method, stateChanging, authenticated }) {
+  ensure.boolean({
+    value: authenticated,
+    name: "authenticated",
+  })
+  if (!authenticated && (method !== "GET" || stateChanging)) {
+    throw new TypeError("Unauthenticated Bitunix Futures requests must be read-only GET requests")
+  }
+}
+
+function validateRequest({ request }) {
+  validateMethod({ method: request.method })
+  validatePath({ path: request.path })
+  validateQueryParams({ queryParams: request.queryParams })
+  validateBody({
+    method: request.method,
+    body: request.body,
+  })
+  validateMutationState({
+    method: request.method,
+    stateChanging: request.stateChanging,
+  })
+  validateAuthenticationMode({
+    method: request.method,
+    stateChanging: request.stateChanging,
+    authenticated: request.authenticated,
+  })
+}
+
+function normalizeRequest({ input }) {
+  const {
+    method,
+    path,
+    queryParams = {},
+    body,
+    authenticated = true,
+    stateChanging = false,
+  } = input
+  return {
+    method,
+    path,
+    queryParams,
+    body,
+    authenticated,
+    stateChanging,
+  }
+}
+
+function createQueryString({ queryParams }) {
+  const params = new URLSearchParams()
+  for (const key of Object.keys(queryParams).sort()) {
+    const value = queryParams[key]
+    if (value === undefined || value === null) {
+      continue
+    }
+    params.set(key, String(value))
+  }
+  return params.toString()
+}
+
+function createRequestUrl({ client, request }) {
+  const url = new URL(request.path, client.baseUrl)
+  const queryString = createQueryString({
+    queryParams: request.queryParams,
+  })
+  if (queryString) {
+    url.search = queryString
+  }
+  return url.toString()
+}
+
+function createRequestHeaders({ client, request }) {
+  const headers = {
+    "Content-Type": "application/json",
+    Accept: "application/json",
+    language: "en-US",
+  }
+  if (!request.authenticated) {
+    return {
+      headers,
+      bodyText: undefined,
+    }
+  }
+  ensure.nonEmptyString({
+    value: client.apiKey,
+    name: "apiKey",
+  })
+  ensure.nonEmptyString({
+    value: client.apiSecret,
+    name: "apiSecret",
+  })
+  const nonce = ensure.nonEmptyString({
+    value: client.nonceFactory(),
+    name: "nonce",
+  })
+  const timestamp = String(ensure.nonNegativeInteger({
+    value: client.now(),
+    name: "timestamp",
+  }))
+  const bodyText = request.method === "POST" && request.body !== undefined
+    ? JSON.stringify(request.body)
+    : undefined
+  headers["api-key"] = client.apiKey
+  headers.nonce = nonce
+  headers.timestamp = timestamp
+  headers.sign = createRestSignature({
+    nonce,
+    timestamp,
+    apiKey: client.apiKey,
+    secretKey: client.apiSecret,
+    queryParams: request.queryParams,
+    ...(bodyText === undefined ? {} : {
+      body: bodyText,
+      bodyIsSerialized: true,
+    }),
+  })
+  return {
+    headers,
+    bodyText,
+  }
+}
+
+function createRequestOptions({ client, request }) {
+  const { headers, bodyText } = createRequestHeaders({
+    client,
+    request,
+  })
+  return {
+    method: request.method,
+    headers,
+    signal: AbortSignal.timeout(client.requestTimeout),
+    ...(bodyText === undefined ? {} : { body: bodyText }),
+  }
+}
+
+async function sendRestRequest({ client, request, url, options }) {
+  try {
+    return await client.fetch(url, options)
+  } catch (error) {
+    throw new BitunixFuturesRestError({
+      message: error instanceof Error ? error.message : String(error),
+      kind: "transport",
+      cause: error,
+      path: request.path,
+      outcomeUnknown: request.stateChanging,
+    })
+  }
+}
+
+async function readResponsePayload({ response, request }) {
+  try {
+    if (typeof response?.text === "function") {
+      return JSON.parse(await response.text())
+    }
+    if (typeof response?.json === "function") {
+      return await response.json()
+    }
+    throw new TypeError("Bitunix Futures response has no JSON reader")
+  } catch (error) {
+    throw new BitunixFuturesRestError({
+      message: "Bitunix Futures REST response is not valid JSON",
+      kind: "response",
+      cause: error,
+      path: request.path,
+      status: response?.status ?? null,
+      outcomeUnknown: request.stateChanging,
+    })
+  }
+}
+
+function validateHttpResponse({ response, request }) {
+  if (!Number.isInteger(response?.status) || response.status < 100 || response.status > 599) {
+    throw new BitunixFuturesRestError({
+      message: "Bitunix Futures REST response has invalid HTTP status metadata",
+      kind: "response",
+      path: request.path,
+      outcomeUnknown: request.stateChanging,
+    })
+  }
+  if (response.ok) {
+    return
+  }
+  const outcomeUnknown = request.stateChanging &&
+    (response.status === 408 || response.status === 409 || response.status >= 500)
+  throw new BitunixFuturesRestError({
+    message: `Bitunix Futures REST request failed with HTTP ${response.status}`,
+    kind: "http",
+    path: request.path,
+    status: response.status,
+    outcomeUnknown,
+  })
+}
+
+function validateExchangeEnvelope({ payload, request }) {
+  if (payload && typeof payload === "object" && !Array.isArray(payload) && payload.code === 0) {
+    return
+  }
+  const hasExchangeCode = payload && typeof payload === "object" &&
+    Number.isInteger(payload.code)
+  throw new BitunixFuturesRestError({
+    message: typeof payload?.msg === "string"
+      ? payload.msg
+      : "Bitunix Futures exchange returned an invalid response envelope",
+    kind: hasExchangeCode ? "exchange" : "response",
+    path: request.path,
+    exchangeCode: hasExchangeCode ? String(payload.code) : null,
+    outcomeUnknown: request.stateChanging && !hasExchangeCode,
+  })
+}
+
+/** Signed and unsigned REST transport for the official Bitunix USDT Futures API. */
 export class BitunixFuturesRestClient {
   /**
    * @param {{config: object, fetchFn?: typeof fetch, now?: () => number, nonceFactory?: () => string}} input
    */
-  constructor({ config, fetchFn = fetch, now = Date.now, nonceFactory = () => randomBytes(16).toString("hex") } = {}) {
+  constructor({
+    config,
+    fetchFn = fetch,
+    now = Date.now,
+    nonceFactory = () => randomBytes(16).toString("hex"),
+  } = {}) {
     if (!config || config.baseUrl !== "https://fapi.bitunix.com") {
       throw new TypeError("Bitunix Futures REST client requires validated Futures configuration")
     }
-    if (typeof fetchFn !== "function" || typeof now !== "function" || typeof nonceFactory !== "function") {
-      throw new TypeError("Bitunix Futures REST dependencies must be functions")
-    }
+    ensure.function({
+      value: fetchFn,
+      name: "fetchFn",
+    })
+    ensure.function({
+      value: now,
+      name: "now",
+    })
+    ensure.function({
+      value: nonceFactory,
+      name: "nonceFactory",
+    })
     this.config = config
     this.apiKey = config.apiKey
     this.apiSecret = config.apiSecret
@@ -144,112 +341,46 @@ export class BitunixFuturesRestClient {
   }
 
   /**
+   * Send one request. No automatic retries are performed; callers own mutation
+   * authorization and reconciliation of unknown outcomes.
+   *
    * @param {{method: "GET"|"POST", path: string, queryParams?: object, body?: object, authenticated?: boolean, stateChanging?: boolean}} input
    */
   async request(input = {}) {
-    const {
-      method,
-      path,
-      queryParams = {},
-      body,
-      authenticated = true,
-      stateChanging = false,
-    } = input
-    validateRequest({ method, path, queryParams, body, stateChanging, authenticated })
-    const queryString = createQueryString({ queryParams })
-    const url = new URL(path, this.baseUrl)
-    if (queryString) {
-      url.search = queryString
+    const request = normalizeRequest({
+      input,
+    })
+    validateRequest({
+      request,
+    })
+    const url = createRequestUrl({
+      client: this,
+      request,
+    })
+    const options = createRequestOptions({
+      client: this,
+      request,
+    })
+    const response = await sendRestRequest({
+      client: this,
+      request,
+      url,
+      options,
+    })
+    const payload = await readResponsePayload({
+      response,
+      request,
+    })
+    validateHttpResponse({
+      response,
+      request,
+    })
+    validateExchangeEnvelope({
+      payload,
+      request,
+    })
+    return {
+      data: payload.data,
     }
-
-    let signed
-    try {
-      signed = createHeaders({
-        client: this,
-        method,
-        queryParams,
-        body,
-        authenticated,
-      })
-    } catch (error) {
-      if (error instanceof BitunixFuturesRestError) {
-        throw error
-      }
-      throw new BitunixFuturesRestError({
-        message: "Bitunix Futures request authentication could not be prepared",
-        kind: "authentication",
-        cause: error,
-        path,
-        outcomeUnknown: false,
-      })
-    }
-
-    const options = {
-      method,
-      headers: signed.headers ?? signed,
-      signal: AbortSignal.timeout(this.requestTimeout),
-      ...(signed.bodyText === undefined ? {} : { body: signed.bodyText }),
-    }
-    let response
-    try {
-      response = await this.fetch(url.toString(), options)
-    } catch (error) {
-      throw new BitunixFuturesRestError({
-        message: error instanceof Error ? error.message : String(error),
-        kind: "transport",
-        cause: error,
-        path,
-        outcomeUnknown: stateChanging,
-      })
-    }
-
-    let payload
-    try {
-      if (typeof response?.text === "function") {
-        const text = await response.text()
-        payload = JSON.parse(text)
-      } else if (typeof response?.json === "function") {
-        payload = await response.json()
-      } else {
-        throw new TypeError("response has no JSON reader")
-      }
-    } catch (error) {
-      throw new BitunixFuturesRestError({
-        message: "Bitunix Futures REST response is not valid JSON",
-        kind: "response",
-        cause: error,
-        path,
-        status: response?.status ?? null,
-        outcomeUnknown: stateChanging,
-      })
-    }
-
-    if (!Number.isInteger(response.status) || response.status < 100 || response.status > 599) {
-      throw new BitunixFuturesRestError({
-        message: "Bitunix Futures REST response has invalid HTTP status metadata",
-        kind: "response",
-        path,
-        outcomeUnknown: stateChanging,
-      })
-    }
-    if (!response.ok) {
-      throw new BitunixFuturesRestError({
-        message: `Bitunix Futures REST request failed with HTTP ${response.status}`,
-        kind: "http",
-        path,
-        status: response.status,
-        outcomeUnknown: stateChanging && (response.status === 408 || response.status === 409 || response.status >= 500),
-      })
-    }
-    if (!payload || typeof payload !== "object" || Array.isArray(payload) || payload.code !== 0) {
-      throw new BitunixFuturesRestError({
-        message: typeof payload?.msg === "string" ? payload.msg : "Bitunix Futures exchange returned an invalid response envelope",
-        kind: payload && typeof payload === "object" && Number.isInteger(payload.code) ? "exchange" : "response",
-        path,
-        exchangeCode: Number.isInteger(payload?.code) ? String(payload.code) : null,
-        outcomeUnknown: stateChanging && !Number.isInteger(payload?.code),
-      })
-    }
-    return { data: payload.data }
   }
 }
