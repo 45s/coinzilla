@@ -657,6 +657,7 @@ async function applyConflictingFill({ workflow, firstFill, order }) {
   const conflictFill = createScenarioFill({
     fillInput: {
       tradeId: firstFill.tradeId,
+      price: "5.01",
       quantity: firstFill.quantity.amount,
       quoteQuantity: "5.01",
     },
