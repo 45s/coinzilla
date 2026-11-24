@@ -13,6 +13,7 @@ import { adaptFuturesTradeHistory } from "./adapters/adapt-futures-trades.js"
 import { adaptFuturesPendingOrders } from "./adapters/adapt-futures-pending-orders.js"
 import { adaptFuturesPendingTpSlOrders } from "./adapters/adapt-futures-pending-tpsl-orders.js"
 import { cancelFuturesOrder } from "./operations/cancel-futures-order.js"
+import { cancelFuturesOpenOrders } from "./operations/cancel-futures-open-orders.js"
 
 function unsupportedResult({ operation, reason }) {
   return {
@@ -218,8 +219,16 @@ const FUTURES_CAPABILITIES = [
   },
   {
     type: "CANCEL_ALL_ORDERS",
-    status: "UNSUPPORTED",
-    reason: "Futures cancellation is not enabled until its final-state verification and unknown-outcome handling are implemented.",
+    status: "SUPPORTED",
+    method: "cancelAllOpenOrders",
+    guarantee: "Cancels all pending Futures orders for an optional symbol scope and verifies the final pending-order count.",
+    limitation: "Requires allowLiveOrderMutations: true and a connected broker. Concurrent order writers can make the final count non-zero or ambiguous; callers must enforce account-scoped single-writer ownership.",
+    conditions: [
+      "allowLiveOrderMutations === true",
+      "Broker.connect() completed",
+      "The final pending-order query for the requested scope returns total === 0",
+      "The caller ensures there is no concurrent order writer",
+    ],
   },
   {
     type: "SUBSCRIBE_USER_DATA",
@@ -1969,10 +1978,20 @@ export class BitunixFuturesBroker {
     })
   }
 
-  async cancelAllOpenOrders() {
-    return unsupportedResult({
-      operation: "cancelAllOpenOrders",
-      reason: "Futures cancellation is disabled until the mutation lifecycle is verified.",
+  async cancelAllOpenOrders(input = {}) {
+    if (!this.config.allowLiveOrderMutations) {
+      return {
+        ...unsupportedResult({
+          operation: "cancelAllOpenOrders",
+          reason: "live Futures order mutations are disabled by default; set allowLiveOrderMutations: true only after independent live-account authorization",
+        }),
+        mutationOutcome: "NOT_SENT",
+        cancellationOutcome: "NOT_SENT",
+      }
+    }
+    return cancelFuturesOpenOrders({
+      broker: this,
+      input,
     })
   }
 
