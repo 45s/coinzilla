@@ -1,11 +1,13 @@
 import { handleErr, toResult } from "@coinzilla/utils"
 import { BitunixFuturesRestError } from "../api/rest-client.js"
-import { createPrivateOrderEventWaiter } from "./private-order-event-confirmation.js"
+import {
+  createPrivateOrderEventWaiter,
+  matchesPrivateOrderCancellationEvent,
+} from "./private-order-event-confirmation.js"
 import { createUserDataReadinessError } from "./user-data-readiness.js"
 
 const CANCEL_ORDERS_PATH = "/api/v1/futures/trade/cancel_orders"
 const OPEN_ORDER_STATUSES = new Set(["INIT", "NEW", "PART_FILLED"])
-const CANCELED_EVENT_STATUSES = new Set(["CANCELED", "PART_FILLED_CANCELED"])
 
 function normalizeCancelInput({ input }) {
   if (input === null || typeof input !== "object" || Array.isArray(input)) {
@@ -138,13 +140,6 @@ async function findPendingOrder({ broker, symbol, orderId }) {
   }
 }
 
-function isMatchingCancellationEvent({ event, order, symbol }) {
-  const payload = event?.data
-  return event?.ch === "order" && payload?.event === "CLOSE" &&
-    payload.orderId === order.orderId && payload.clientId === order.clientId &&
-    payload.symbol === symbol && CANCELED_EVENT_STATUSES.has(payload.orderStatus)
-}
-
 async function reconcileCancellation({ broker, symbol, order, event, error }) {
   const detail = await broker.getCanonicalOrder({
     symbol,
@@ -160,10 +155,9 @@ async function reconcileCancellation({ broker, symbol, order, event, error }) {
       cancellationOutcome: "OUTCOME_UNKNOWN",
     })
   }
-  const eventConfirmed = isMatchingCancellationEvent({
+  const eventConfirmed = matchesPrivateOrderCancellationEvent({
     event,
     order,
-    symbol,
   })
   if (detail.data.status === "CANCELED" && eventConfirmed) {
     return createOutcomeResult({

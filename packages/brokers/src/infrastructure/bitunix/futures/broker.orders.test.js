@@ -542,45 +542,87 @@ test("Bitunix Futures cancelOrder remains NOT_SENT without explicit live mutatio
 })
 
 
+function createCancelAllOrders(total) {
+  return Array.from({ length: total }, (_, index) => createOrderRow({
+    orderId: `futures-order-${123 + index}`,
+    clientId: `strategy-order-${456 + index}`,
+    fee: "0",
+    realizedPNL: "0",
+    effect: "GTC",
+    status: "NEW",
+    tradeQty: "0",
+  }))
+}
+
+function emitCancelAllEvents({ privateClients, orders }) {
+  for (const order of orders) {
+    privateClients[0]?.emit("channel", {
+      ch: "order",
+      symbol: order.symbol,
+      ts: 1_700_000_002_000,
+      data: {
+        event: "CLOSE",
+        orderId: order.orderId,
+        clientId: order.clientId,
+        symbol: order.symbol,
+        orderStatus: "CANCELED",
+      },
+    })
+  }
+}
+
 function createCancelAllFetch({
   requests,
+  privateClients,
   pendingTotals = [2, 0],
   cancelAllResponse,
   cancelAllError,
+  emitCancelEvents = true,
 }) {
   let pendingReadCount = 0
+  let snapshot = null
   return async (...request) => {
     const [url, options] = request
     const path = new URL(url).pathname
+    const search = new URL(url).searchParams
     requests.push({
       path,
       method: options.method,
       body: options.body,
     })
     if (path === "/api/v1/futures/trade/get_pending_orders") {
-      const total = pendingTotals[Math.min(pendingReadCount, pendingTotals.length - 1)]
-      pendingReadCount += 1
+      const skip = Number(search.get("skip") ?? 0)
+      const limit = Number(search.get("limit") ?? 100)
+      if (skip === 0 || snapshot === null) {
+        const total = pendingTotals[Math.min(pendingReadCount, pendingTotals.length - 1)]
+        pendingReadCount += 1
+        snapshot = {
+          total,
+          orders: createCancelAllOrders(total),
+        }
+      }
       return createFuturesResponse({
         data: {
-          orderList: total > 0 ? [createOrderRow({
-            fee: "0",
-            realizedPNL: "0",
-            effect: "GTC",
-            status: "NEW",
-          })] : [],
-          total,
+          orderList: snapshot.orders.slice(skip, skip + limit),
+          total: snapshot.total,
         },
       })
     }
     if (path === "/api/v1/futures/trade/cancel_all_orders") {
+      if (emitCancelEvents) {
+        emitCancelAllEvents({
+          privateClients,
+          orders: snapshot?.orders ?? [],
+        })
+      }
       if (cancelAllError) {
         throw cancelAllError
       }
       return createFuturesResponse({
         data: cancelAllResponse ?? {
-          successList: [{
-            orderId: "futures-order-123",
-          }],
+          successList: (snapshot?.orders ?? []).map((order) => ({
+            orderId: order.orderId,
+          })),
           failureList: [],
         },
       })
@@ -594,6 +636,7 @@ function createCancelAllBroker({
   ...fetchOptions
 } = {}) {
   const requests = []
+  const privateClients = []
   const broker = new Broker({
     provider: "bitunix-futures",
     ...credentials,
@@ -601,9 +644,17 @@ function createCancelAllBroker({
     providerOptions: {
       allowLiveOrderMutations,
       dependencies: {
-        webSocketClientFactory: createFakePrivateWebSocketClientFactory(),
+        privateEventTimeoutMs: 10,
+        webSocketClientFactory: ({ channelType }) => {
+          const client = new FakePrivateWebSocketClient()
+          if (channelType === "private") {
+            privateClients.push(client)
+          }
+          return client
+        },
         fetchFn: createCancelAllFetch({
           requests,
+          privateClients,
           ...fetchOptions,
         }),
       },
@@ -612,6 +663,7 @@ function createCancelAllBroker({
   return {
     broker,
     requests,
+    privateClients,
   }
 }
 
@@ -671,6 +723,7 @@ test("Bitunix Futures cancelAllOpenOrders remains NOT_SENT without explicit live
 test("Bitunix Futures cancelAllOpenOrders does not confirm an empty final scope without private CLOSE events", async () => {
   const { broker, requests } = createCancelAllBroker({
     pendingTotals: [2, 0],
+    emitCancelEvents: false,
   })
   await connectAndAcknowledgeUserDataReconciliation(broker)
 
@@ -691,7 +744,7 @@ test("Bitunix Futures cancelAllOpenOrders reports unknown while pending orders r
   const result = await broker.cancelAllOpenOrders()
 
   assert.equal(result.ok, false)
-  assert.equal(result.mutationOutcome, "CONFIRMED")
+  assert.equal(result.mutationOutcome, "OUTCOME_UNKNOWN")
   assert.equal(result.cancellationOutcome, "OUTCOME_UNKNOWN")
   assert.equal(result.data.remainingOpenOrders, 1)
   assert.equal(requests.filter(({ method }) => method === "POST").length, 1)
