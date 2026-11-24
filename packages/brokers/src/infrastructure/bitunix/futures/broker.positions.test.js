@@ -45,7 +45,7 @@ const historicalPosition = {
   fee: "0.05",
   funding: "-0.01",
   realizedPNL: "-500.05",
-  liqPrice: "0",
+  liqPrice: "-1",
   ctime: 1_700_000_000_000,
   mtime: 1_700_000_002_000,
 }
@@ -170,7 +170,7 @@ test("Bitunix Futures getFuturesPositionHistory returns one exact paginated hist
     fee: "0.05",
     funding: "-0.01",
     realizedPNL: "-500.05",
-    liquidationPrice: "0",
+    liquidationPrice: "-1",
     createdAt: 1_700_000_000_000,
     updatedAt: 1_700_000_002_000,
     lifecycle: "HISTORICAL",
