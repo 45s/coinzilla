@@ -330,14 +330,27 @@ test("the shared registry includes every mapped RS-001 and RS-002 family record"
 })
 
 test("scenario records are deeply immutable and reject non-record inputs", () => {
-  const scenario = defineRecoverySellerScenario({
-    id: "RS-TEST-IMMUTABLE",
-    given: {
-      custody: {
-        available: "1",
-      },
+  const preFrozenChild = {
+    nested: {
+      mutable: true,
     },
-  })
+  }
+  Object.freeze(preFrozenChild)
+  const cyclicFacts = {}
+  cyclicFacts.self = cyclicFacts
+  let scenario
+  assert.doesNotThrow(() => {
+    scenario = defineRecoverySellerScenario({
+      id: "RS-TEST-IMMUTABLE",
+      given: {
+        custody: {
+          available: "1",
+        },
+      },
+      preFrozenChild,
+      cyclicFacts,
+    })
+  }, "Deep freezing must handle already-frozen ancestors and cyclic input without throwing.")
 
   assert.equal(Object.isFrozen(scenario), true,
     "A registered scenario record must not be mutable after declaration.")
@@ -345,6 +358,10 @@ test("scenario records are deeply immutable and reject non-record inputs", () =>
     "Nested Given facts must also be immutable so fixtures cannot drift during execution.")
   assert.equal(Object.isFrozen(scenario.given.custody), true,
     "Deeply nested business facts must remain immutable.")
+  assert.equal(Object.isFrozen(preFrozenChild.nested), true,
+    "An already-frozen ancestor must not prevent its nested objects from being frozen.")
+  assert.equal(Object.isFrozen(cyclicFacts), true,
+    "Cyclic scenario facts must still be frozen.")
   assert.throws(
     () => defineRecoverySellerScenario(null),
     TypeError,
