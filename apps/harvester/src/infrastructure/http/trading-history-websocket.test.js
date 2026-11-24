@@ -422,3 +422,96 @@ test("broadcasts refreshed account and open-order snapshots after monitor update
   assert.equal(message.type, "exchange-accounts.updated");
   assert.equal(message.accounts[0].openOrders[0].price, "64000.00000000");
 });
+
+
+test("sends an account snapshot larger than 115,637 bytes without terminating the HTTP server", async (t) => {
+  const eventBus = new EventBus();
+  const balances = Array.from({ length: 1600 }, (_, index) => ({
+    asset: {
+      code: `ASSET${String(index).padStart(4, "0")}`,
+    },
+    free: "12345678901234567890",
+    locked: "12345678901234567890",
+    total: "24691357802469135780",
+  }));
+  const api = await startApi({
+    t,
+    eventBus,
+    exchangeAccounts: [
+      createExchangeAccount({
+        snapshotResult: {
+          ok: true,
+          data: {
+            sourceTime: "2026-11-24T19:20:00.000Z",
+            balances,
+          },
+        },
+      }),
+    ],
+  });
+  const socket = new WebSocket(`ws://127.0.0.1:${api.address.port}/api/v1/trading/events`);
+  t.after(() => socket.close());
+
+  await waitForSocketOpen(socket);
+  const message = await waitForMessage(socket);
+  const payloadBytes = Buffer.byteLength(JSON.stringify(message), "utf8");
+  assert.ok(payloadBytes > 115637, "The regression fixture must exceed the 115,637-byte production failure payload.");
+  assert.equal(message.accounts[0].accountSnapshot.balances.length, balances.length, "A large account snapshot must arrive without dropping balance rows.");
+
+  const response = await fetch(`http://127.0.0.1:${api.address.port}/api/v1/trading/metadata`);
+  assert.equal(response.status, 200, "The HTTP listener must remain available after sending a large WebSocket snapshot.");
+});
+
+test("contains one client's account-snapshot serialization failure and serves the next client", async (t) => {
+  const eventBus = new EventBus();
+  const account = createExchangeAccount();
+  let snapshotReadCount = 0;
+  account.readAccountSnapshot = async () => {
+    snapshotReadCount += 1;
+    if (snapshotReadCount === 1) {
+      const malformedBalance = {
+        asset: {
+          code: "INVALID",
+        },
+      };
+      malformedBalance.self = malformedBalance;
+      return {
+        ok: true,
+        data: {
+          sourceTime: "2026-11-24T19:20:00.000Z",
+          balances: [malformedBalance],
+        },
+      };
+    }
+    return {
+      ok: true,
+      data: {
+        sourceTime: "2026-11-24T19:21:00.000Z",
+        balances: [],
+      },
+    };
+  };
+  const api = await startApi({
+    t,
+    eventBus,
+    exchangeAccounts: [account],
+  });
+  const failingSocket = new WebSocket(`ws://127.0.0.1:${api.address.port}/api/v1/trading/events`);
+  t.after(() => failingSocket.close());
+  const failingSocketClosed = new Promise((resolve) => {
+    failingSocket.addEventListener("close", resolve, {
+      once: true,
+    });
+  });
+
+  await waitForSocketOpen(failingSocket);
+  const closeEvent = await failingSocketClosed;
+  assert.equal(closeEvent.code, 1011, "A client with an unserializable application snapshot must be closed with an internal-error status.");
+
+  const healthySocket = new WebSocket(`ws://127.0.0.1:${api.address.port}/api/v1/trading/events`);
+  t.after(() => healthySocket.close());
+  await waitForSocketOpen(healthySocket);
+  const message = await waitForMessage(healthySocket);
+  assert.equal(message.type, "exchange-accounts.snapshot", "A later client must still receive its initial account snapshot.");
+  assert.deepEqual(message.accounts[0].accountSnapshot.balances, [], "The serialization failure for one client must not corrupt another client's valid snapshot.");
+});
