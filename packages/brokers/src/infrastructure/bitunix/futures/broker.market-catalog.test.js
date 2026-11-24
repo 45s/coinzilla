@@ -62,3 +62,41 @@ test("Bitunix Futures market catalog returns only open API-tradable USDT markets
   assert.equal(result.data[0].baseAsset.code, "BTC", "the base asset must be mapped from the documented pair metadata")
   assert.equal(result.data[0].quoteAsset.code, "USDT", "the quote asset must be mapped from the documented pair metadata")
 })
+
+test("Broker-created Futures provider sends public catalog reads through injected fetch", async () => {
+  const requests = []
+  const broker = new Broker({
+    provider: "bitunix-futures",
+    ...credentials,
+    tradingMode: "live",
+    providerOptions: {
+      dependencies: {
+        fetchFn: async (url, options) => {
+          requests.push({ url, options })
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({
+              code: 0,
+              data: [{
+                symbol: "BTCUSDT",
+                base: "BTC",
+                quote: "USDT",
+                symbolStatus: "OPEN",
+                isApiSupported: true,
+              }],
+            }),
+          }
+        },
+      },
+    },
+  })
+
+  const result = await broker.getExchangeMarkets()
+
+  assert.equal(result.ok, true, "the configured provider must use its real REST client for public market discovery")
+  assert.equal(requests.length, 1, "the market catalog must be fetched exactly once")
+  assert.equal(requests[0].url, "https://fapi.bitunix.com/api/v1/futures/market/trading_pairs", "Futures catalog reads must target the official Futures REST host")
+  assert.equal(requests[0].options.method, "GET", "market catalog reads must use GET")
+  assert.equal(requests[0].options.headers, undefined, "public market reads must not include private authentication headers")
+})
