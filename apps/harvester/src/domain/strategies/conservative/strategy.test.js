@@ -449,8 +449,17 @@ status: "PARTIALLY_FILLED" }],
   assert.equal(decision.actions.some((action) => action.side === "BUY"), false)
 })
 
-test("respects exact investment-cap equality and blocks the next BUY immediately below it", () => {
+function assertInvestmentCapScenario({ investment, expectedBuy }) {
   const { portfolio, recoveryLedger } = makeBoughtState()
+  const decision = evaluateConservativeStrategy({
+    marketPrice,
+    pairConfig: { ...pairConfig, investment },
+    settings,
+    portfolio,
+    recoveryLedger,
+    marketMetadata,
+    lastBuyPrice: "0.1",
+  })
   const expectedRecoverySell = {
     side: "SELL",
     purpose: "RECOVERY_SELL",
@@ -467,54 +476,26 @@ test("respects exact investment-cap equality and blocks the next BUY immediately
     quantity: "100",
     reason: "NEXT_STANDING_BUY",
   }
-  const scenarios = [
-    {
-      name: "exact capital equality",
-      investment: 19.9,
-      expectedActions: [expectedRecoverySell, expectedNextStandingBuy],
-    },
-    {
-      name: "capital limit one thousandth above the required amount",
-      investment: 19.901,
-      expectedActions: [expectedRecoverySell, expectedNextStandingBuy],
-    },
-    {
-      name: "capital limit one thousandth below the required amount",
-      investment: 19.899,
-      expectedActions: [expectedRecoverySell],
-    },
-    {
-      name: "capital limit materially below the required amount",
-      investment: 15,
-      expectedActions: [expectedRecoverySell],
-    },
-  ]
 
-  for (const scenario of scenarios) {
-    const decision = evaluateConservativeStrategy({
-      marketPrice,
-      pairConfig: { ...pairConfig,
-investment: scenario.investment },
-      settings,
-      portfolio,
-      recoveryLedger,
-      marketMetadata,
-      lastBuyPrice: "0.1",
-    })
+  assert.deepEqual(
+    decision.actions,
+    expectedBuy
+      ? [expectedRecoverySell, expectedNextStandingBuy]
+      : [expectedRecoverySell],
+  )
+  assert.equal(decision.action, "PLACE_ORDERS")
+}
 
-    assert.deepEqual(
-      decision.actions,
-      scenario.expectedActions,
-      `The ${  scenario.name  } scenario must preserve the recovery SELL and permit a next BUY only when the outstanding 10.00 recovery plus the 9.90 BUY notional fits the configured investment.`,
-    )
-    assert.equal(
-      decision.action,
-      "PLACE_ORDERS",
-      `The recovery SELL must remain executable even when the configured investment limit blocks the next BUY in the ${  scenario.name  } scenario.`,
-    )
+test("respects investment-cap equality and both sides of the BUY eligibility boundary", () => {
+  for (const scenario of [
+    { investment: 19.9, expectedBuy: true },
+    { investment: 19.901, expectedBuy: true },
+    { investment: 19.899, expectedBuy: false },
+    { investment: 15, expectedBuy: false },
+  ]) {
+    assertInvestmentCapScenario(scenario)
   }
 })
-
 test("reserves the higher takerPercent for recovery SELL planning when taker is more expensive", () => {
   const { portfolio, recoveryLedger } = makeBoughtState()
   const decision = evaluateConservativeStrategy({
