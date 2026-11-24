@@ -498,12 +498,12 @@ These rules apply to every scenario:
 
 The implementation is in [PR #1822](https://github.com/45s/coinzilla/pull/1822). Current deterministic test mapping:
 
-| Test file | Verified behavior represented |
-| --- | --- |
-| `model.spec.ts` | PR normalization, malformed head SHA rejection, bounded concurrency, relative time and future/invalid timestamps |
-| `api.spec.ts` | Linked-page pagination, current head SHA commit lookup, committer-date selection and isolated commit lookup failure |
-| `label-store.spec.ts` | Label creation, duplicate/empty-name rejection, many-to-many assignment, unassignment, rename, recolor, deletion, valid persistence, corrupted data, unavailable storage and failed writes |
-| `page.spec.ts` | PR row/link/title/draft/time rendering, local label creation/assignment and stale-snapshot retention |
-| `app.spec.ts` | Dashboard navigation to GitHub PRs and public GitHub data loading |
+| Test file | Scenario IDs | Verified behavior represented |
+| --- | --- | --- |
+| `model.spec.ts` | 01–04, 07–08, 23, 25 | PR normalization, malformed head SHA rejection, bounded concurrency, relative time, future clock skew and invalid timestamps |
+| `api.spec.ts` | 01–07, 20–21, 25 | Pagination, draft inclusion, current-head committer date, same-SHA cache, changed-head refresh, isolated commit failure, invalid timestamp, incomplete-page failure, rate limit and four-request concurrency |
+| `label-store.spec.ts` | 09–16, 22 | Create/rename/recolor/delete, duplicate-name rejection, multi-assignment, reuse across PRs, persistence, assignment retention, corrupt/unsupported data and storage failures |
+| `page.spec.ts` | 01–03, 09–11, 15, 17–19, 21–24 | PR rendering, local labels, empty/initial-error/stale/rate-limit states, local relative-time update, refresh guard and corrupt-storage preservation |
+| `app.spec.ts` | Navigation integration | Dashboard navigation to GitHub PRs and public GitHub data loading |
 
 The test mapping is intentionally limited to behaviors asserted by those tests; remaining scenarios still require additional automated coverage before the feature can be considered fully verified. Default tests do not call GitHub or require credentials.
