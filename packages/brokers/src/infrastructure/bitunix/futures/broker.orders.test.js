@@ -257,10 +257,11 @@ function createCancellationBroker({ allowLiveOrderMutations = true } = {}) {
     provider: "bitunix-futures",
     ...credentials,
     tradingMode: "live",
-    allowLiveOrderMutations,
     providerOptions: {
+      allowLiveOrderMutations,
       dependencies: {
-        fetchFn: async (url, options) => {
+        fetchFn: async (...request) => {
+          const [url, options] = request
           const path = new URL(url).pathname
           requests.push({
             path,
@@ -315,7 +316,7 @@ test("Bitunix Futures cancelOrder is one-shot and confirms the final canceled or
     ["/api/v1/futures/trade/cancel_orders", "POST"],
     ["/api/v1/futures/trade/get_order_detail", "GET"],
   ])
-  const cancelRequest = requests[1]
+  const [, cancelRequest] = requests
   assert.deepEqual(JSON.parse(cancelRequest.body), {
     symbol: "BTCUSDT",
     orderList: [{
