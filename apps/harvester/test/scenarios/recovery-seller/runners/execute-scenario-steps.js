@@ -1,3 +1,54 @@
+function resolveStepInput({ step, context, index }) {
+  const { inputKey } = step
+  if (inputKey === undefined) {
+    return step.input
+  }
+  if (typeof inputKey !== "string" || inputKey.trim().length === 0 ||
+      !Object.hasOwn(context, inputKey)) {
+    throw new Error(`Recovery Seller scenario step ${index} references missing input "${inputKey}"`)
+  }
+  const { [inputKey]: input } = context
+  return input
+}
+
+function validateStep({ step, index }) {
+  if (!step || typeof step !== "object" || Array.isArray(step) ||
+      typeof step.type !== "string" || step.type.length === 0) {
+    throw new TypeError(`Recovery Seller scenario step ${index} must have a type`)
+  }
+}
+
+function saveStepOutput({ step, index, result, context }) {
+  if (step.saveAs === undefined) {
+    return
+  }
+  if (typeof step.saveAs !== "string" || step.saveAs.trim().length === 0) {
+    throw new TypeError(`Recovery Seller scenario step ${index} saveAs must be non-empty`)
+  }
+  context[step.saveAs] = result
+}
+
+async function executeStep({ step, index, handlers, context }) {
+  validateStep({
+    step,
+    index,
+  })
+  const handler = handlers[step.type]
+  if (typeof handler !== "function") {
+    throw new Error(`Recovery Seller scenario has no handler for step type "${step.type}"`)
+  }
+  const input = resolveStepInput({
+    step,
+    context,
+    index,
+  })
+  return handler({
+    input,
+    context: Object.freeze({ ...context }),
+    step,
+  })
+}
+
 /**
  * Execute a declarative scenario's ordered steps through explicitly supplied
  * handlers. The runner contains no RS business logic.
@@ -22,38 +73,20 @@ export async function executeRecoverySellerScenarioSteps({
 
   const context = { ...initialContext }
   const results = []
-
   for (const [index, step] of steps.entries()) {
-    if (!step || typeof step !== "object" || Array.isArray(step) ||
-        typeof step.type !== "string" || step.type.length === 0) {
-      throw new TypeError(`Recovery Seller scenario step ${index} must have a type`)
-    }
-    const handler = handlers[step.type]
-    if (typeof handler !== "function") {
-      throw new Error(`Recovery Seller scenario has no handler for step type "${step.type}"`)
-    }
-
-    let input = step.input
-    if (step.inputKey !== undefined) {
-      if (typeof step.inputKey !== "string" || step.inputKey.trim().length === 0 ||
-          !Object.hasOwn(context, step.inputKey)) {
-        throw new Error(`Recovery Seller scenario step ${index} references missing input "${step.inputKey}"`)
-      }
-      input = context[step.inputKey]
-    }
-
-    const result = await handler({
-      input,
-      context: Object.freeze({ ...context }),
+    const result = await executeStep({
       step,
+      index,
+      handlers,
+      context,
     })
     results.push(result)
-    if (step.saveAs !== undefined) {
-      if (typeof step.saveAs !== "string" || step.saveAs.trim().length === 0) {
-        throw new TypeError(`Recovery Seller scenario step ${index} saveAs must be non-empty`)
-      }
-      context[step.saveAs] = result
-    }
+    saveStepOutput({
+      step,
+      index,
+      result,
+      context,
+    })
   }
 
   return Object.freeze({

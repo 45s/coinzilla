@@ -74,6 +74,36 @@ test("the RS registry rejects unknown family, config, rule, decision, state, tra
     "The validator must report unknown catalog references.")
 })
 
+test("the RS registry rejects invalid execution layer ownership", () => {
+  const scenario = cloneScenario({
+    layer: "BROKER",
+  })
+  const result = validateRecoverySellerScenarioRegistry({
+    scenarios: [scenario],
+    existingPaths,
+  })
+
+  assert.equal(result.valid, false,
+    "A domain scenario must declare a supported execution layer and must not claim broker/application ownership.")
+  assert.ok(result.errors.some((error) => error.includes("must be DOMAIN or APPLICATION")),
+    "The validator must identify invalid scenario layer ownership.")
+})
+
+test("the RS registry rejects malformed scenario steps", () => {
+  const scenario = cloneScenario({
+    when: [{ inputKey: "profitabilityInput" }],
+  })
+  const result = validateRecoverySellerScenarioRegistry({
+    scenarios: [scenario],
+    existingPaths,
+  })
+
+  assert.equal(result.valid, false,
+    "Every ordered step must declare an executable operation type.")
+  assert.ok(result.errors.some((error) => error.includes("ordered step with a non-empty type")),
+    "The validator must identify a malformed ordered step.")
+})
+
 test("the RS registry rejects missing required fields and invalid status values", () => {
   const scenario = cloneScenario({
     status: "DONE",
@@ -234,7 +264,12 @@ test("the DOMAIN runner rejects application scenarios and missing operation hand
         id: "RS-TEST-004",
         layer: "DOMAIN",
         given: {},
-        when: [{ type: "read-input", inputKey: "missingInput" }],
+        when: [
+          {
+            type: "read-input",
+            inputKey: "missingInput",
+          },
+        ],
       },
       handlers: {
         "read-input": ({ input }) => input,
@@ -253,10 +288,21 @@ test("RS-004-011: recovery, legacy and combined profitability gates all pass ind
         calculateRecoverySellerProfitability(input),
     },
   })
-  const profitability = result.results[0]
+  const [profitability] = result.results
 
   assert.equal(result.scenarioId, "RS-004-011",
     "The runner must report the stable scenario ID for the executed business case.")
+  assert.deepEqual(result.report, {
+    scenarioId: "RS-004-011",
+    test: recoverySellerScenarioRegistry[0].test,
+    status: "TEST-MAPPED",
+    evidence: null,
+    result: [recoverySellerScenarioRegistry[0].then],
+  }, "The execution report must name the case, exact test mapping, unchanged status, evidence and actual result.")
+  assert.equal(result.report.status, "TEST-MAPPED",
+    "Executing a scenario must never auto-promote its coverage status.")
+  assert.equal(result.report.evidence, null,
+    "A local execution must not invent merged-head or CI evidence.")
   assert.deepEqual(profitability, recoverySellerScenarioRegistry[0].then,
     "The real RS profitability policy must match the independently authored exact-decimal oracle for recovery, legacy and combined gates.")
 })

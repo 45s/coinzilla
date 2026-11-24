@@ -23,9 +23,18 @@ export async function runRecoverySellerDomainScenario({ scenario, handlers } = {
     initialContext: scenario.given,
   })
 
+  const report = Object.freeze({
+    scenarioId: scenario.id,
+    test: scenario.test ?? null,
+    status: scenario.status ?? "UNREGISTERED",
+    evidence: scenario.evidence ?? null,
+    result: execution.results,
+  })
+
   return Object.freeze({
     scenarioId: scenario.id,
     layer: scenario.layer,
+    report,
     results: execution.results,
     context: execution.context,
   })
