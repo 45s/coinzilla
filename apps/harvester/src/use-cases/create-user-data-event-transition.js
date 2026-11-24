@@ -132,7 +132,7 @@ function getRegisteredOrder({ registry, order } = {}) {
   return undefined
 }
 
-function resolveUpdatedOrderHistoryContext({ registry, previousOrder, order } = {}) {
+function publishOrderUpdatedEvent({ eventPublisher, registry, previousOrder, order, event } = {}) {
   const canonicalClientOrderId = previousOrder?.clientOrderId ?? order.clientOrderId
   const updatedOrder = registry.getOrder?.({
     clientOrderId: canonicalClientOrderId,
@@ -142,7 +142,16 @@ function resolveUpdatedOrderHistoryContext({ registry, previousOrder, order } = 
     brokerOrderId: updatedOrder.brokerOrderId,
     marketId: updatedOrder.market.id,
   })
-  return { order: updatedOrder, ownership }
+  publishLifecycleEvent({
+    eventPublisher,
+    eventName: HARVESTER_EVENT_NAMES.ORDER_UPDATED,
+    dataResult: mapOrderUpdatedData({
+      order: updatedOrder,
+      executionType: event.executionType,
+      evidence: event.brokerEvidence,
+      ownership,
+    }),
+  })
 }
 
 async function prepareOrderEvent({ dependencies, event } = {}) {
@@ -184,23 +193,20 @@ async function prepareOrderEvent({ dependencies, event } = {}) {
   }
   state.registry = update.registry
   if (update.applied === true) {
-    const { order: updatedRegisteredOrder, ownership } = resolveUpdatedOrderHistoryContext({
+    publishOrderUpdatedEvent({
+      eventPublisher,
       registry: state.registry,
       previousOrder,
       order,
-    })
-    publishLifecycleEvent({
-      eventPublisher,
-      eventName: HARVESTER_EVENT_NAMES.ORDER_UPDATED,
-      dataResult: mapOrderUpdatedData({
-        order: updatedRegisteredOrder,
-        executionType: event.executionType,
-        evidence: event.brokerEvidence,
-        ownership,
-      }),
+      event,
     })
   }
-  return { order, symbol, update, previousOrder }
+  return {
+    order,
+    symbol,
+    update,
+    previousOrder,
+  }
 }
 
 async function handlePreFillRecoveryState({ dependencies, order, symbol, recoveryMode } = {}) {
