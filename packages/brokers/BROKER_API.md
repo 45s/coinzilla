@@ -164,7 +164,7 @@ These methods remain present on both facades for existing consumers. They are no
 | `getOrder({ symbol, orderId, clientOrderId? })` | Legacy `Order` lookup. Binance accepts broker or client identity; Bitunix accepts broker `orderId` only and returns an explicit unsupported error for `clientOrderId`. |
 | `getOrderHistory(...)` | Legacy provider history. Binance returns its bounded `allOrders` response; Bitunix returns one symbol-scoped page. Pagination and legacy row shape are not interchangeable. Use `getCanonicalOrderHistory()` when canonical order history is required. |
 | `getMyTrades(...)` | Legacy trade-history operation. Binance supports a bounded symbol-scoped response; Bitunix explicitly reports unsupported. It is not equivalent to canonical `getFills()`. |
-| `getPrice({ symbol })` | Compatibility alias for `getPrices({ symbol })` on both providers. |
+| `getPrice({ symbol })` | Compatibility alias for `getPrices({ symbol })` on Binance, Bitunix Spot, and Bitunix Futures. |
 | `createOrder(input)` | Legacy `Order` placement facade. Binance supports it behind the same safety gates; Bitunix implements LIMIT with base `quantity` and MARKET with quote `quoteQuantity` behind explicit opt-in. Caller-supplied client IDs remain unsupported; canonical placement remains unsupported. |
 | `getSymbolFilters({ symbol })` | Raw provider metadata retained for existing infrastructure adapters. It is not a normalized `TradingRules` value and is not part of the canonical method catalog. |
 
