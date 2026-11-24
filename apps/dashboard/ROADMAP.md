@@ -8,6 +8,8 @@
 
 ## Current milestone
 
+- **Planned — GitHub PR Dashboard (specification only):** define a read-only Dashboard page for all open `45s/coinzilla` PRs, showing PR number/title, the current head commit's committer-relative time, and Dashboard-local work labels. The AI-readable specification, scenarios and schemas are documented in [the GitHub PR Dashboard feature folder](docs/features/github-pr-dashboard/SPEC.md), under [the repository Feature Specification Standard](../../docs/FEATURE_SPECIFICATION_STANDARD.md). Documentation is being established in [Issue #1816](https://github.com/45s/coinzilla/issues/1816); application source implementation has **not** started and is not part of that documentation task.
+
 - **In progress in Dashboard PR [#1737](https://github.com/45s/coinzilla/pull/1737), tracked by [#1736](https://github.com/45s/coinzilla/issues/1736):** make Exchanges searchable/filterable with persistent favourites pinned first; add a separate live Open Orders page grouped by connected CEX/provider; stream initial and refreshed account/order snapshots from Harvester over WebSocket only. The two pages make no HTTP requests. Existing persisted trading-history and Operator workflows remain unchanged.
 
 - **Selectable dashboard themes in [PR #1686](https://github.com/45s/coinzilla/pull/1686), tracked by [#1685](https://github.com/45s/coinzilla/issues/1685):** preserve the existing Emerald appearance as default; add Midnight Terminal, Clean Light, OLED / Neon, Green Terminal, Arctic, and Warm Graphite palettes plus System mode, with browser-local preference persistence. No operator or trading behavior changes.
