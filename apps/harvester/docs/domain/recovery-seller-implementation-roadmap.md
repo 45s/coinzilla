@@ -432,7 +432,7 @@ The diagrams do not override the [RS Domain Specification](./recovery-seller-dom
 - [x] Share account Portfolio, OrderRegistry, snapshots, account-wide quote/base commitment allocation and canonical fill processing without sharing strategy budgets/Positions.
 - [x] Prove same-market and different-market CG+RS accounting concurrency offline with exact-once shared-Portfolio attribution.
 - [x] Complete the scoped RS-5 offline lifecycle, partial/terminal outcome, reservation and failure matrix in PR #1515; exact-head required CI is the final delivery gate.
-- [x] Keep STOP terminal: CC-operator exposes status only and cannot clear, reset or resume it.
+- [x] Keep STOP durable and investment-only: block additional BUY spending, allow otherwise-valid first recovery SELLs and continued reconciliation/accounting, and permit only evidence-backed authorized administrator resolution after cause-fixed reconciliation and verified accounting/reservations. No automatic clear or self-resume; the operator facade still needs to expose the authorized resolution command.
 
 Restart/replay and third-asset commission valuation are explicitly deferred from this initial runtime acceptance.
 
