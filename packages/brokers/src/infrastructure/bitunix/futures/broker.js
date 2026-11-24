@@ -1060,28 +1060,7 @@ export class BitunixFuturesBroker {
     return this.privateWebSocketClient
   }
 
-  async #createPrivateUserDataSession({ onObservation, onStatus }) {
-    const client = await this.#ensurePrivateWebSocketClient()
-    if (this.privateWebSocketSession) {
-      const observer = {
-        onObservation,
-        onStatus,
-      }
-      this.privateWebSocketSession.observers.add(observer)
-      deliverFuturesUserDataStatus({
-        status: {
-          state: client.state,
-          authenticated: client.authenticated,
-          recoveryRequired: true,
-        },
-        onStatus,
-      })
-      return this.#createPrivateUserDataUnsubscriber({
-        client,
-        observer,
-      })
-    }
-    const observers = new Set()
+  #createPrivateUserDataDispatchers({ observers }) {
     const dispatchObservation = (event) => {
       for (const observer of observers) {
         deliverFuturesPrivateObservation({
@@ -1099,39 +1078,72 @@ export class BitunixFuturesBroker {
         })
       }
     }
-    client.on("channel", dispatchObservation)
-    client.on("status", dispatchStatus)
+    return {
+      dispatchObservation,
+      dispatchStatus,
+    }
+  }
+
+  async #attachPrivateUserDataSession({ client, session }) {
+    client.on("channel", session.dispatchObservation)
+    client.on("status", session.dispatchStatus)
+    try {
+      client.subscribe({
+        channels: session.channels,
+      })
+    } catch (error) {
+      client.off("channel", session.dispatchObservation)
+      client.off("status", session.dispatchStatus)
+      this.privateWebSocketSession = null
+      session.observers.clear()
+      await client.disconnect()
+      this.privateWebSocketClient = null
+      this.privateWebSocketConnectPromise = null
+      throw error
+    }
+  }
+
+  async #createPrivateUserDataSession({ onObservation, onStatus }) {
+    const client = await this.#ensurePrivateWebSocketClient()
+    const observer = {
+      onObservation,
+      onStatus,
+    }
+    if (this.privateWebSocketSession) {
+      this.privateWebSocketSession.observers.add(observer)
+      deliverFuturesUserDataStatus({
+        status: {
+          state: client.state,
+          authenticated: client.authenticated,
+          recoveryRequired: true,
+        },
+        onStatus,
+      })
+      return this.#createPrivateUserDataUnsubscriber({
+        client,
+        observer,
+      })
+    }
+    const observers = new Set([observer])
     const channels = [
       { ch: "balance" },
       { ch: "position" },
       { ch: "order" },
       { ch: "tpsl" },
     ]
-    const observer = {
-      onObservation,
-      onStatus,
-    }
-    observers.add(observer)
-    this.privateWebSocketSession = {
+    const dispatchers = this.#createPrivateUserDataDispatchers({
+      observers,
+    })
+    const session = {
       channels,
-      dispatchObservation,
-      dispatchStatus,
+      ...dispatchers,
       observers,
     }
-    try {
-      client.subscribe({
-        channels,
-      })
-    } catch (error) {
-      client.off("channel", dispatchObservation)
-      client.off("status", dispatchStatus)
-      this.privateWebSocketSession = null
-      observers.clear()
-      await client.disconnect()
-      this.privateWebSocketClient = null
-      this.privateWebSocketConnectPromise = null
-      throw error
-    }
+    this.privateWebSocketSession = session
+    await this.#attachPrivateUserDataSession({
+      client,
+      session,
+    })
     deliverFuturesUserDataStatus({
       status: {
         state: client.state,
