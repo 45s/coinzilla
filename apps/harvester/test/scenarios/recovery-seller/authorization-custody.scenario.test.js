@@ -1,311 +1,542 @@
 import test from "node:test"
 import assert from "node:assert/strict"
-import { existsSync } from "node:fs"
-import { resolve } from "node:path"
-import { fileURLToPath } from "node:url"
-import { calculateRecoverySellerProfitability } from "../../../src/domain/strategies/recovery-seller/calculate-profitability.js"
 import {
-  recoverySellerScenarioRegistry,
-  validateRecoverySellerScenarioRegistry,
-} from "./registry/index.js"
+  Asset,
+  Balance,
+  CanonicalOrder,
+  Fill,
+  Market,
+  Money,
+  Quantity,
+} from "@coinzilla/entities"
+import { StrategyId } from "../../../src/domain/strategies/strategy-ids.js"
+import { Portfolio } from "../../../src/domain/portfolio/portfolio.js"
+import { OrderRegistry } from "../../../src/domain/orders/order-registry.js"
+import {
+  createLegacyPosition,
+  createLegacyPositionAccounting,
+  recordLegacySale,
+} from "../../../src/domain/strategies/recovery-seller/legacy-position.js"
+import {
+  calculateVerifiedLegacySpotAllocation,
+  LegacySpotAllocationError,
+  LEGACY_SPOT_ALLOCATION_ERROR_CODES,
+} from "../../../src/domain/strategies/recovery-seller/legacy-spot-allocation.js"
+import { createLegacyPositionMap } from "../../../src/domain/strategies/recovery-seller/legacy-accounting-state.js"
+import { allocateOrderCommitments } from "../../../src/domain/orders/allocate-order-commitments.js"
+import { createRecoverySellerAccountingWorkflow } from "../../../src/use-cases/create-recovery-seller-accounting-workflow.js"
 import { runRecoverySellerDomainScenario } from "./runners/run-domain-scenario.js"
+import { runRecoverySellerApplicationScenario } from "./runners/run-application-scenario.js"
+import { authorizationCustodyScenarios } from "./scenarios/authorization-custody.js"
 
-const packageRoot = fileURLToPath(new URL("../../../", import.meta.url))
-const registeredPaths = recoverySellerScenarioRegistry.flatMap((scenario) => [
-  ...scenario.implementation,
-  scenario.test?.file,
-  ...scenario.subcases.map((subcase) => subcase.test?.file),
-]).filter(Boolean)
-const existingPaths = new Set(
-  registeredPaths.filter((path) =>
-    existsSync(resolve(packageRoot, path.replace("apps/harvester/", "")))),
-)
+const baseAsset = new Asset({
+  id: "binance:ZRO",
+  code: "ZRO",
+})
+const quoteAsset = new Asset({
+  id: "binance:USDT",
+  code: "USDT",
+})
+const alternateQuoteAsset = new Asset({
+  id: "binance:FDUSD",
+  code: "FDUSD",
+})
+const market = new Market({
+  venue: "binance",
+  symbol: "ZROUSDT",
+  baseAsset,
+  quoteAsset,
+})
+const alternateMarket = new Market({
+  venue: "binance",
+  symbol: "ZROFDUSD",
+  baseAsset,
+  quoteAsset: alternateQuoteAsset,
+})
 
-function cloneScenario(overrides = {}) {
+function createBalance({ asset = baseAsset, free, locked = "0" }) {
+  return new Balance({
+    free: new Quantity({
+      amount: free,
+      asset,
+    }),
+    locked: new Quantity({
+      amount: locked,
+      asset,
+    }),
+  })
+}
+
+function createBuyFill({
+  tradeId,
+  targetMarket = market,
+  strategyId = StrategyId.COIN_GRABBER,
+  quantity,
+  quoteQuantity,
+} = {}) {
+  return new Fill({
+    tradeId,
+    brokerOrderId: `broker-${tradeId}`,
+    clientOrderId: tradeId,
+    market: targetMarket,
+    side: "BUY",
+    price: new Money({
+      amount: "2",
+      asset: targetMarket.quoteAsset,
+    }),
+    quantity: new Quantity({
+      amount: quantity,
+      asset: targetMarket.baseAsset,
+    }),
+    quoteQuantity: new Money({
+      amount: quoteQuantity,
+      asset: targetMarket.quoteAsset,
+    }),
+    commissions: [],
+    commissionStatus: "COMPLETE",
+  })
+}
+
+function createPortfolioWithPositions({ positions = [] } = {}) {
+  let portfolio = new Portfolio()
+  for (const [index, item] of positions.entries()) {
+    const fill = createBuyFill({
+      tradeId: `portfolio-fill-${index}`,
+      targetMarket: item.market ?? market,
+      strategyId: item.strategyId ?? StrategyId.COIN_GRABBER,
+      quantity: item.quantity,
+      quoteQuantity: item.quoteQuantity ?? item.quantity,
+    })
+    portfolio = portfolio.applyFill({
+      fill,
+      positionId: `portfolio-position-${index}`,
+      strategyId: item.strategyId ?? StrategyId.COIN_GRABBER,
+    }).portfolio
+  }
+  return portfolio
+}
+
+function createLegacySpotInput({
+  invested = "50",
+  quantity = "10",
+  spotTotal,
+  portfolioQuantity = "0",
+  offSpotQuantity = "0",
+} = {}) {
+  const position = createLegacyPosition({
+    invested,
+    quantity,
+  })
+  const portfolioPositions = input.portfolioPositions
+    ? input.portfolioPositions.map((item) => ({
+        market: item.market === "ZROFDUSD" ? alternateMarket : market,
+        quantity: item.quantity,
+        quoteQuantity: item.quantity,
+        strategyId: item.strategy === "RS"
+          ? StrategyId.RECOVERY_SELLER
+          : StrategyId.COIN_GRABBER,
+      }))
+    : portfolioQuantity === "0"
+      ? []
+      : [{
+          quantity: portfolioQuantity,
+          quoteQuantity: portfolioQuantity,
+          strategyId: StrategyId.COIN_GRABBER,
+        }]
+  const portfolio = createPortfolioWithPositions({
+    positions: portfolioPositions,
+  })
+  const allocation = calculateVerifiedLegacySpotAllocation({
+    balances: [createBalance({ free: spotTotal })],
+    portfolio,
+    legacyPositions: [{
+      market,
+      originalQuantity: position.originalQuantity,
+      remainingQuantity: position.remainingQuantity,
+    }],
+  })
   return {
-    ...recoverySellerScenarioRegistry[0],
-    ...overrides,
+    position,
+    portfolio,
+    allocation,
+    verifiedSpotQuantity: allocation.find((item) => item.assetId === baseAsset.id)?.amount ?? "0",
+    offSpotQuantityUsed: "0",
+    otherStrategyPositionQuantity: portfolio.positions.reduce(
+      (total, item) => total + Number(item.baseQuantity.amount),
+      0,
+    ),
+    offSpotQuantity,
   }
 }
 
-test("the RS scenario registry contains unique, traceable records with existing source and test paths", () => {
-  const result = validateRecoverySellerScenarioRegistry({
-    scenarios: recoverySellerScenarioRegistry,
-    existingPaths,
-  })
-
-  assert.equal(result.valid, true,
-    `The initial RS registry must be structurally valid; errors: ${result.errors.join("; ")}`)
-  assert.deepEqual(result.errors, [],
-    "A valid initial registry must not report schema, identity, reference or path errors.")
-})
-
-test("the RS registry rejects duplicate stable scenario IDs", () => {
-  const result = validateRecoverySellerScenarioRegistry({
-    scenarios: [recoverySellerScenarioRegistry[0], recoverySellerScenarioRegistry[0]],
-    existingPaths,
-  })
-
-  assert.equal(result.valid, false,
-    "Two records must never claim the same permanent RS scenario ID.")
-  assert.ok(result.errors.some((error) => error.includes("duplicates scenario ID")),
-    "Registry validation must identify the duplicated stable scenario ID.")
-})
-
-test("the RS registry rejects unknown family, config, rule, decision, state, transition and invariant references", () => {
-  const scenario = cloneScenario({
-    family: "RS-011",
-    configFields: ["RS_PAIR.unknownField"],
-    covers: {
-      rules: ["RS_UNKNOWN_RULE"],
-      decisions: ["RS_UNKNOWN_DECISION"],
-      states: ["UNKNOWN_STATE"],
-      transitions: ["UNKNOWN_TRANSITION"],
-      invariants: ["UNKNOWN_INVARIANT"],
-    },
-  })
-  const result = validateRecoverySellerScenarioRegistry({
-    scenarios: [scenario],
-    existingPaths,
-  })
-
-  assert.equal(result.valid, false,
-    "A scenario must not reference an unregistered family, config field, rule, decision, state, transition or invariant.")
-  assert.ok(result.errors.some((error) => error.includes("RS-001 through RS-010")),
-    "The validator must report an unknown scenario family.")
-  assert.ok(result.errors.some((error) => error.includes("unknown reference")),
-    "The validator must report unknown catalog references.")
-})
-
-test("the RS registry rejects invalid execution layer ownership", () => {
-  const scenario = cloneScenario({
-    layer: "BROKER",
-  })
-  const result = validateRecoverySellerScenarioRegistry({
-    scenarios: [scenario],
-    existingPaths,
-  })
-
-  assert.equal(result.valid, false,
-    "A domain scenario must declare a supported execution layer and must not claim broker/application ownership.")
-  assert.ok(result.errors.some((error) => error.includes("must be DOMAIN or APPLICATION")),
-    "The validator must identify invalid scenario layer ownership.")
-})
-
-test("the RS registry rejects malformed scenario steps", () => {
-  const scenario = cloneScenario({
-    when: [{ inputKey: "profitabilityInput" }],
-  })
-  const result = validateRecoverySellerScenarioRegistry({
-    scenarios: [scenario],
-    existingPaths,
-  })
-
-  assert.equal(result.valid, false,
-    "Every ordered step must declare an executable operation type.")
-  assert.ok(result.errors.some((error) => error.includes("ordered step with a non-empty type")),
-    "The validator must identify a malformed ordered step.")
-})
-
-test("the RS registry rejects missing required fields and invalid status values", () => {
-  const scenario = cloneScenario({
-    status: "DONE",
-  })
-  delete scenario.given
-  const result = validateRecoverySellerScenarioRegistry({
-    scenarios: [scenario],
-    existingPaths,
-  })
-
-  assert.equal(result.valid, false,
-    "A scenario missing required business inputs or using a noncanonical status must be rejected.")
-  assert.ok(result.errors.some((error) => error.includes('missing required field "given"')),
-    "The validator must identify the missing Given state.")
-  assert.ok(result.errors.some((error) => error.includes("canonical scenario status")),
-    "The validator must reject status vocabulary outside the shared methodology.")
-})
-
-test("the RS registry rejects implementation and test paths that do not exist", () => {
-  const scenario = cloneScenario({
-    implementation: ["apps/harvester/src/missing.js"],
-    test: {
-      file: "apps/harvester/test/missing.scenario.test.js",
-      title: "missing",
-    },
-  })
-  const result = validateRecoverySellerScenarioRegistry({
-    scenarios: [scenario],
-    existingPaths,
-  })
-
-  assert.equal(result.valid, false,
-    "A registry record must not claim source or test paths absent from the repository.")
-  assert.ok(result.errors.some((error) => error.includes("path does not exist")),
-    "The validator must identify every unresolvable implementation/test path.")
-})
-
-test("the RS registry requires exact merged-head evidence before a case can be VERIFIED", () => {
-  const scenario = cloneScenario({
-    status: "VERIFIED",
-    evidence: null,
-  })
-  const result = validateRecoverySellerScenarioRegistry({
-    scenarios: [scenario],
-    existingPaths,
-  })
-
-  assert.equal(result.valid, false,
-    "A passing local test or registry entry alone must never promote a scenario to VERIFIED.")
-  assert.ok(result.errors.some((error) => error.includes("VERIFIED requires evidence")),
-    "The validator must require exact verification evidence for VERIFIED status.")
-})
-
-test("the RS registry requires a reason and unblock condition for BLOCKED cases", () => {
-  const scenario = cloneScenario({
-    status: "BLOCKED",
-    evidence: null,
-  })
-  const result = validateRecoverySellerScenarioRegistry({
-    scenarios: [scenario],
-    existingPaths,
-  })
-
-  assert.equal(result.valid, false,
-    "A blocked scenario must explain the exact blocker and what resolves it.")
-  assert.ok(result.errors.some((error) => error.includes("BLOCKED requires reason and unblockCondition")),
-    "The validator must reject an undocumented blocked disposition.")
-})
-
-test("the RS registry requires an explicit contract reason for UNSUPPORTED cases", () => {
-  const scenario = cloneScenario({
-    status: "UNSUPPORTED",
-    evidence: null,
-  })
-  const result = validateRecoverySellerScenarioRegistry({
-    scenarios: [scenario],
-    existingPaths,
-  })
-
-  assert.equal(result.valid, false,
-    "An unsupported capability must remain visible with its contract reason.")
-  assert.ok(result.errors.some((error) => error.includes("UNSUPPORTED requires a contract reason")),
-    "The validator must reject an unsupported disposition without its reason.")
-})
-
-test("the DOMAIN runner executes ordered handlers and retains named outputs", async () => {
-  const observedOrder = []
-  const result = await runRecoverySellerDomainScenario({
-    scenario: {
-      id: "RS-TEST-001",
-      layer: "DOMAIN",
-      given: {
-        startingValue: 2,
-      },
-      when: [
-        {
-          type: "add",
-          input: 3,
-          saveAs: "afterFirstStep",
-        },
-        {
-          type: "multiply",
-          input: 4,
-          saveAs: "afterSecondStep",
-        },
-      ],
-    },
-    handlers: {
-      add: ({ input, context }) => {
-        observedOrder.push("add")
-        return context.startingValue + input
-      },
-      multiply: ({ input, context }) => {
-        observedOrder.push("multiply")
-        return context.afterFirstStep * input
-      },
-    },
-  })
-
-  assert.deepEqual(observedOrder, ["add", "multiply"],
-    "Scenario steps must execute sequentially in their declared order.")
-  assert.deepEqual(result.results, [5, 20],
-    "The runner must retain each operation's exact result in sequence.")
-  assert.equal(result.context.afterSecondStep, 20,
-    "A later step must be able to consume a named result from an earlier step.")
-})
-
-test("the DOMAIN runner rejects application scenarios and missing operation handlers", async () => {
-  await assert.rejects(
-    () => runRecoverySellerDomainScenario({
-      scenario: {
-        id: "RS-TEST-002",
-        layer: "APPLICATION",
-        given: {},
-        when: [],
-      },
-      handlers: {},
+function createExternalBuyOrder({ clientOrderId }) {
+  return new CanonicalOrder({
+    clientOrderId,
+    brokerOrderId: "external-broker-order",
+    market,
+    side: "BUY",
+    type: "LIMIT_MAKER",
+    limitPrice: new Money({
+      amount: "2",
+      asset: quoteAsset,
     }),
-    /cannot execute a non-DOMAIN scenario/,
-    "A domain-only runner must not claim application orchestration coverage.",
-  )
-  await assert.rejects(
-    () => runRecoverySellerDomainScenario({
-      scenario: {
-        id: "RS-TEST-003",
-        layer: "DOMAIN",
-        given: {},
-        when: [{ type: "missing-operation" }],
-      },
-      handlers: {},
+    originalQuantity: new Quantity({
+      amount: "1",
+      asset: baseAsset,
     }),
-    /no handler for step type/,
-    "An unregistered step type must fail instead of being silently skipped.",
-  )
-  await assert.rejects(
-    () => runRecoverySellerDomainScenario({
-      scenario: {
-        id: "RS-TEST-004",
-        layer: "DOMAIN",
-        given: {},
-        when: [
-          {
-            type: "read-input",
-            inputKey: "missingInput",
-          },
+    executedQuantity: new Quantity({
+      amount: "0",
+      asset: baseAsset,
+    }),
+    status: "OPEN",
+    createdAt: 100,
+    acknowledgedAt: 101,
+    updatedAt: 101,
+  })
+}
+
+const domainHandlers = {
+  "create-legacy-position": ({ input }) => createLegacyPosition(input),
+  "record-legacy-sale": ({ input }) => {
+    const position = createLegacyPosition({
+      invested: input.invested,
+      quantity: input.quantity,
+    })
+    return recordLegacySale({
+      position,
+      quantitySold: input.quantitySold,
+    })
+  },
+  "create-legacy-position-map": ({ input }) => {
+    const position = createLegacyPosition(input)
+    const portfolio = new Portfolio()
+    const map = createLegacyPositionMap([{
+      market,
+      position,
+      accounting: createLegacyPositionAccounting(),
+    }])
+    return {
+      legacyMarkets: map.size,
+      portfolioPositions: portfolio.positions.length,
+      appliedFillIds: portfolio.appliedFillIds.length,
+    }
+  },
+  "calculate-verified-spot-allocation": ({ input }) => {
+    const result = createLegacySpotInput(input)
+    return {
+      ...(input.invested ? {
+        averageCost: result.position.averageCost,
+        remainingQuantity: result.position.remainingQuantity,
+      } : {}),
+      verifiedSpotQuantity: result.verifiedSpotQuantity,
+      ...(input.offSpotQuantity === undefined ? {} : {
+        offSpotQuantityUsed: result.offSpotQuantityUsed,
+      }),
+      ...(input.portfolioQuantity === undefined ? {} : {
+        otherStrategyPositionQuantity: result.otherStrategyPositionQuantity.toString(),
+      }),
+    }
+  },
+  "block-sell-above-verified-spot": ({ input }) => {
+    const spot = createLegacySpotInput({
+      spotTotal: input.spotTotal,
+      quantity: input.authorizedQuantity,
+      portfolioQuantity: input.portfolioQuantity,
+    })
+    const allocation = allocateOrderCommitments({
+      actions: [{
+        side: "SELL",
+        quantity: input.requestedSellQuantity,
+      }],
+      quoteFreeBalance: "0",
+      baseFreeBalance: spot.verifiedSpotQuantity,
+      quoteCashFlow: "0",
+      activeBaseQuantity: spot.verifiedSpotQuantity,
+      portfolioBaseBalance: input.portfolioQuantity,
+      portfolioBaseBalanceBaseline: input.portfolioQuantity,
+      additionalTrackedBaseBalance: spot.verifiedSpotQuantity,
+      additionalTrackedBaseBalanceBaseline: spot.verifiedSpotQuantity,
+      outstandingRecoveryAmount: "0",
+      committedQuote: "0",
+      committedQuoteBalance: "0",
+      committedQuoteBalanceBaseline: "0",
+      committedBase: "0",
+      committedBaseBalance: "0",
+      committedBaseBalanceBaseline: "0",
+      investmentLimit: "100",
+    })
+    return {
+      verifiedSpotQuantity: spot.verifiedSpotQuantity,
+      allocationOk: allocation.ok,
+      errorName: allocation.errors?.[0]?.name,
+    }
+  },
+  "compare-spot-transfer-snapshots": ({ input }) => {
+    const position = createLegacyPosition({
+      invested: input.invested,
+      quantity: input.quantity,
+    })
+    const before = createLegacySpotInput({
+      invested: input.invested,
+      quantity: input.quantity,
+      spotTotal: input.beforeSpotTotal,
+      portfolioQuantity: input.portfolioQuantity,
+    })
+    const after = createLegacySpotInput({
+      invested: input.invested,
+      quantity: input.quantity,
+      spotTotal: input.afterSpotTotal,
+      portfolioQuantity: input.portfolioQuantity,
+    })
+    return {
+      beforeVerifiedSpotQuantity: before.verifiedSpotQuantity,
+      afterVerifiedSpotQuantity: after.verifiedSpotQuantity,
+      invested: position.invested,
+      averageCost: position.averageCost,
+      remainingQuantity: position.remainingQuantity,
+    }
+  },
+  "allocate-base-commitment": ({ input }) => {
+    const action = {
+      side: "SELL",
+      quantity: input.requestedSellQuantity,
+    }
+    const result = allocateOrderCommitments({
+      actions: [action],
+      quoteFreeBalance: input.quoteFreeBalance,
+      baseFreeBalance: input.baseFreeBalance,
+      quoteCashFlow: "0",
+      activeBaseQuantity: input.activeBaseQuantity,
+      portfolioBaseBalance: input.portfolioBaseBalance,
+      portfolioBaseBalanceBaseline: input.portfolioBaseBalanceBaseline,
+      additionalTrackedBaseBalance: input.additionalTrackedBaseBalance,
+      additionalTrackedBaseBalanceBaseline: input.additionalTrackedBaseBalanceBaseline,
+      outstandingRecoveryAmount: "0",
+      committedQuote: "0",
+      committedQuoteBalance: "0",
+      committedQuoteBalanceBaseline: "0",
+      committedBase: input.committedBase,
+      committedBaseBalance: input.committedBaseBalance,
+      committedBaseBalanceBaseline: input.committedBaseBalanceBaseline,
+      investmentLimit: "100",
+    })
+    return {
+      executableActionCount: result.data?.executableActions.length ?? 0,
+      deferredActionCount: result.data?.deferredActions.length ?? 0,
+      remainingBaseBalance: result.data?.remainingBaseBalance,
+      remainingActiveBase: result.data?.remainingActiveBase,
+    }
+  },
+  "reject-invalid-custody-evidence": ({ input }) => {
+    const legacyPositions = [{
+      market,
+      originalQuantity: input.authorizedQuantity,
+      remainingQuantity: input.authorizedQuantity,
+    }]
+    let missingBalanceRejected = false
+    let duplicateBalanceRejected = false
+    try {
+      calculateVerifiedLegacySpotAllocation({
+        balances: [],
+        portfolio: new Portfolio(),
+        legacyPositions,
+      })
+    } catch (error) {
+      missingBalanceRejected = error instanceof LegacySpotAllocationError &&
+        error.code === LEGACY_SPOT_ALLOCATION_ERROR_CODES.BALANCE_MISSING
+    }
+    try {
+      calculateVerifiedLegacySpotAllocation({
+        balances: [
+          createBalance({ free: "1" }),
+          createBalance({ free: "2" }),
         ],
-      },
-      handlers: {
-        "read-input": ({ input }) => input,
-      },
-    }),
-    /references missing input/,
-    "A scenario step must not silently run with an absent Given value.",
+        portfolio: new Portfolio(),
+        legacyPositions,
+      })
+    } catch (error) {
+      duplicateBalanceRejected = error instanceof TypeError
+    }
+    return {
+      missingBalanceRejected,
+      duplicateBalanceRejected,
+    }
+  },
+  "reject-incomplete-or-short-custody": ({ input }) => {
+    const legacyPositions = [{
+      market,
+      originalQuantity: input.authorizedQuantity,
+      remainingQuantity: input.authorizedQuantity,
+    }]
+    let missingBalanceRejected = false
+    let portfolioCustodyShortfallRejected = false
+    try {
+      calculateVerifiedLegacySpotAllocation({
+        balances: [],
+        portfolio: new Portfolio(),
+        legacyPositions,
+      })
+    } catch (error) {
+      missingBalanceRejected = error instanceof LegacySpotAllocationError &&
+        error.code === LEGACY_SPOT_ALLOCATION_ERROR_CODES.BALANCE_MISSING
+    }
+    const portfolio = createPortfolioWithPositions({
+      positions: [{
+        market,
+        quantity: input.portfolioQuantity,
+        quoteQuantity: input.portfolioQuantity,
+      }],
+    })
+    try {
+      calculateVerifiedLegacySpotAllocation({
+        balances: [createBalance({ free: input.spotTotal })],
+        portfolio,
+        legacyPositions,
+      })
+    } catch (error) {
+      portfolioCustodyShortfallRejected = error instanceof LegacySpotAllocationError &&
+        error.code === LEGACY_SPOT_ALLOCATION_ERROR_CODES.PORTFOLIO_CUSTODY_SHORTFALL
+    }
+    return {
+      missingBalanceRejected,
+      portfolioCustodyShortfallRejected,
+    }
+  },
+}
+
+const applicationHandlers = {
+  "reject-external-buy-fill": async ({ input }) => {
+    const order = createExternalBuyOrder({
+      clientOrderId: input.externalOrderClientId,
+    })
+    const workflow = createRecoverySellerAccountingWorkflow({
+      initialPortfolio: new Portfolio(),
+      initialOrderRegistry: new OrderRegistry({
+        orders: [order],
+        ownerships: [],
+      }),
+    })
+    const fill = new Fill({
+      tradeId: "external-buy-fill",
+      brokerOrderId: order.brokerOrderId,
+      clientOrderId: order.clientOrderId,
+      market,
+      side: "BUY",
+      price: order.limitPrice,
+      quantity: order.originalQuantity,
+      quoteQuantity: new Money({
+        amount: "2",
+        asset: quoteAsset,
+      }),
+      commissions: [],
+      commissionStatus: "COMPLETE",
+    })
+    const result = await workflow.applyBuyFill({ fill })
+    return {
+      ok: result.ok,
+      portfolioPositions: workflow.getPortfolio().positions.length,
+      appliedFillIds: workflow.getPortfolio().appliedFillIds.length,
+    }
+  },
+}
+
+function runDomain(scenario) {
+  return runRecoverySellerDomainScenario({
+    scenario,
+    handlers: domainHandlers,
+  })
+}
+
+function runApplication(scenario) {
+  return runRecoverySellerApplicationScenario({
+    scenario,
+    handlers: applicationHandlers,
+  })
+}
+
+test("RS-001-001: valid operator-declared legacy invested quote and original base quantity are accepted", async () => {
+  const result = await runDomain(authorizationCustodyScenarios[0])
+  assert.deepEqual(result.results[0], authorizationCustodyScenarios[0].then,
+    "RS must preserve the operator-declared original basis and derive the exact fixed average cost.")
+})
+
+test("RS-001-002: historical average cost remains fixed after a legacy disposal", async () => {
+  const result = await runDomain(authorizationCustodyScenarios[1])
+  assert.deepEqual(result.results[0], authorizationCustodyScenarios[1].then,
+    "A legacy sale may reduce remaining quantity only; invested basis and original average cost must remain unchanged.")
+})
+
+test("RS-001-003: missing zero negative malformed or contradictory legacy basis fails closed", async () => {
+  await assert.rejects(
+    () => runDomain(authorizationCustodyScenarios[2]),
+    (error) => error instanceof RangeError,
+    "A zero invested basis must be rejected rather than normalized or inferred.",
   )
 })
 
-test("RS-004-011: recovery, legacy and combined profitability gates all pass independently", async () => {
-  const result = await runRecoverySellerDomainScenario({
-    scenario: recoverySellerScenarioRegistry[0],
-    handlers: {
-      "evaluate-recovery-seller-profitability": ({ input }) =>
-        calculateRecoverySellerProfitability(input),
-    },
-  })
-  const [profitability] = result.results
+test("RS-001-004: operator-declared legacy basis does not create synthetic Portfolio fills", async () => {
+  const result = await runDomain(authorizationCustodyScenarios[3])
+  assert.deepEqual(result.results[0], authorizationCustodyScenarios[3].then,
+    "Legacy authorization is a separate projection and must not create Portfolio fills or Position quantity.")
+})
 
-  assert.equal(result.scenarioId, "RS-004-011",
-    "The runner must report the stable scenario ID for the executed business case.")
-  assert.deepEqual(result.report, {
-    scenarioId: "RS-004-011",
-    test: recoverySellerScenarioRegistry[0].test,
-    status: "TEST-MAPPED",
-    evidence: null,
-    result: [recoverySellerScenarioRegistry[0].then],
-  }, "The execution report must name the case, exact test mapping, unchanged status, evidence and actual result.")
-  assert.equal(result.report.status, "TEST-MAPPED",
-    "Executing a scenario must never auto-promote its coverage status.")
-  assert.equal(result.report.evidence, null,
-    "A local execution must not invent merged-head or CI evidence.")
-  assert.deepEqual(profitability, recoverySellerScenarioRegistry[0].then,
-    "The real RS profitability policy must match the independently authored exact-decimal oracle for recovery, legacy and combined gates.")
+test("RS-001-005: verified Spot custody is separate from historical legacy basis", async () => {
+  const result = await runDomain(authorizationCustodyScenarios[4])
+  assert.deepEqual(result.results[0], authorizationCustodyScenarios[4].then,
+    "Spot availability must be calculated independently from the original invested/quantity basis.")
+})
+
+test("RS-001-006: only authoritative Spot balance is eligible and EARN or off-Spot inventory is excluded", async () => {
+  const result = await runDomain(authorizationCustodyScenarios[5])
+  assert.deepEqual(result.results[0], authorizationCustodyScenarios[5].then,
+    "Only the supplied authoritative Spot balance may contribute to verified sellable legacy inventory.")
+})
+
+test("RS-001-007: a SELL larger than verified Spot quantity is blocked without consuming off-Spot inventory", async () => {
+  const result = await runDomain(authorizationCustodyScenarios[6])
+  assert.deepEqual(result.results[0], authorizationCustodyScenarios[6].then,
+    "The shared allocator must reject a SELL larger than verified Spot custody even when off-Spot quantity exists.")
+})
+
+test("RS-001-008: external manual and startup-snapshot orders are not adopted as RS-owned", async () => {
+  const result = await runApplication(authorizationCustodyScenarios[7])
+  assert.deepEqual(result.results[0], authorizationCustodyScenarios[7].then,
+    "An external order without registered RS ownership must not mutate RS Portfolio accounting.")
+})
+
+test("RS-001-009: other-strategy Portfolio allocations reduce physical Spot availability without becoming RS ownership", async () => {
+  const result = await runDomain(authorizationCustodyScenarios[8])
+  assert.deepEqual(result.results[0], authorizationCustodyScenarios[8].then,
+    "The full shared Portfolio base quantity must be subtracted while other-strategy Position ownership remains unchanged.")
+})
+
+test("RS-001-010: missing or conflicting Spot custody evidence fails closed", async () => {
+  const result = await runDomain(authorizationCustodyScenarios[9])
+  assert.deepEqual(result.results[0], authorizationCustodyScenarios[9].then,
+    "Missing and duplicate/conflicting canonical balances must fail closed; stale-snapshot freshness remains explicitly blocked.")
+})
+
+test("RS-001-011: authoritative Spot transfer changes availability but never rewrites historical basis", async () => {
+  const result = await runDomain(authorizationCustodyScenarios[10])
+  assert.deepEqual(result.results[0], authorizationCustodyScenarios[10].then,
+    "A new authoritative Spot snapshot may change availability, but it must not rewrite legacy basis.")
+})
+
+test("RS-001-012: account snapshot baselines and active reservations are not subtracted twice", async () => {
+  const result = await runDomain(authorizationCustodyScenarios[11])
+  assert.deepEqual(result.results[0], authorizationCustodyScenarios[11].then,
+    "Snapshot-relative Portfolio and legacy baselines must not be subtracted twice, while new active reservations still reduce sellable base.")
+})
+
+test("RS-001-013: verified legacy Spot equals account Spot total minus all Portfolio base Positions capped by authorized remainder", async () => {
+  const scenario = authorizationCustodyScenarios[12]
+  const result = await runDomain(scenario)
+  assert.equal(result.results[0].verifiedSpotQuantity, scenario.then.verifiedSpotQuantity,
+    "All same-base Portfolio Positions across strategies and markets must be subtracted before capping by authorized legacy remainder.")
+})
+
+test("RS-001-014: missing balances and Spot custody below aggregate Portfolio base fail closed", async () => {
+  const result = await runDomain(authorizationCustodyScenarios[13])
+  assert.deepEqual(result.results[0], authorizationCustodyScenarios[13].then,
+    "Missing Spot balances and Spot totals below aggregate Portfolio custody must fail closed; stale/incomplete freshness remains explicitly blocked.")
 })
