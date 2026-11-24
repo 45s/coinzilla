@@ -351,24 +351,32 @@ function validateSubcase({ subcase, scenarioIndex, subcaseIndex, scenario, exist
     existingPaths,
     errors,
   })
+  validateSubcaseOutcome({
+    subcase,
+    path: subcasePath,
+    errors,
+  })
+}
+
+function validateSubcaseOutcome({ subcase, path, errors }) {
   if (subcase.status === "BLOCKED") {
     validateBlocker({
       blocker: subcase.blocker,
-      path: `${subcasePath}.blocker`,
+      path: `${path}.blocker`,
       errors,
     })
   }
   if (subcase.status === "UNSUPPORTED") {
     validateUnsupportedReason({
       reason: subcase.unsupportedReason,
-      path: `${subcasePath}.unsupportedReason`,
+      path: `${path}.unsupportedReason`,
       errors,
     })
   }
   validateEvidence({
     evidence: subcase.evidence,
     status: subcase.status,
-    path: `${subcasePath}.evidence`,
+    path: `${path}.evidence`,
     errors,
   })
 }
@@ -520,23 +528,54 @@ function validateScenario({ scenario, index, ids, existingPaths, errors }) {
     return
   }
 
-  validateRequiredFields({ scenario, path, errors })
-  validateScenarioIdentity({ scenario, path, ids, errors })
-  validateScenarioMetadata({ scenario, path, errors })
+  validateRequiredFields({
+    scenario,
+    path,
+    errors,
+  })
+  validateScenarioIdentity({
+    scenario,
+    path,
+    ids,
+    errors,
+  })
+  validateScenarioMetadata({
+    scenario,
+    path,
+    errors,
+  })
   validateScenarioCovers({
     covers: scenario.covers,
     path: `${path}.covers`,
     errors,
   })
-  validateScenarioSteps({ scenario, path, errors })
+  validateScenarioSteps({
+    scenario,
+    path,
+    errors,
+  })
   validateStringArray({
     value: scenario.mustNot,
     path: `${path}.mustNot`,
     errors,
   })
-  validateSubcases({ scenario, index, existingPaths, errors })
-  validateScenarioPaths({ scenario, index, existingPaths, errors })
-  validateScenarioStatus({ scenario, index, errors })
+  validateSubcases({
+    scenario,
+    index,
+    existingPaths,
+    errors,
+  })
+  validateScenarioPaths({
+    scenario,
+    index,
+    existingPaths,
+    errors,
+  })
+  validateScenarioStatus({
+    scenario,
+    index,
+    errors,
+  })
 }
 
 /**
