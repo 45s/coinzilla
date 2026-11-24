@@ -1012,18 +1012,18 @@ function createRSOrderEventState({ registry }) {
   }
 }
 
-function createRSOrderEventHarness({ terminalFills = [] } = {}) {
-  const state = createRSOrderEventState({
-    registry: createRSOrderEventRegistry(),
-  })
-  const pauseCalls = []
-  let accountingWorkflow
-  let brokerCallCount = 0
-  const workflow = makeOrderEventWorkflow({
+function createRSOrderEventWorkflowOptions({
+  state,
+  terminalFills,
+  pauseCalls,
+  onBrokerCall,
+  onAccounting,
+}) {
+  return {
     state,
     broker: {
       getFills: async () => {
-        brokerCallCount += 1
+        onBrokerCall()
         return toResult({ data: terminalFills })
       },
     },
@@ -1035,13 +1035,7 @@ function createRSOrderEventHarness({ terminalFills = [] } = {}) {
         applied: true,
       },
     }),
-    updateRecoverySellerAccounting: async ({ fill }) => {
-      accountingWorkflow = createRecoverySellerAccountingWorkflow({
-        initialPortfolio: new Portfolio(),
-        initialOrderRegistry: state.registry,
-      })
-      return accountingWorkflow.applyBuyFill({ fill })
-    },
+    updateRecoverySellerAccounting: onAccounting,
     recordBuyExecutionFill: () => {},
     recordSellExecutionFill: () => {},
     pause: async (input) => pauseCalls.push(input),
@@ -1066,7 +1060,31 @@ function createRSOrderEventHarness({ terminalFills = [] } = {}) {
     assertReconciledSellExecution: () => {},
     completeRecoveryCycle: async () => toResult({ data: {} }),
     publishRecoveryCycleNotCompleted: () => {},
+  }
+}
+
+function createRSOrderEventHarness({ terminalFills = [] } = {}) {
+  const state = createRSOrderEventState({
+    registry: createRSOrderEventRegistry(),
   })
+  const pauseCalls = []
+  let accountingWorkflow
+  let brokerCallCount = 0
+  const workflow = makeOrderEventWorkflow(createRSOrderEventWorkflowOptions({
+    state,
+    terminalFills,
+    pauseCalls,
+    onBrokerCall: () => {
+      brokerCallCount += 1
+    },
+    onAccounting: async ({ fill }) => {
+      accountingWorkflow = createRecoverySellerAccountingWorkflow({
+        initialPortfolio: new Portfolio(),
+        initialOrderRegistry: state.registry,
+      })
+      return accountingWorkflow.applyBuyFill({ fill })
+    },
+  }))
   return {
     state,
     workflow,
@@ -1127,14 +1145,10 @@ function createRSOrderEventFill({ quantity, quoteQuantity }) {
   })
 }
 
-async function runRSOrderEventCase({ scenarioCase }) {
-  const fill = createRSOrderEventFill(scenarioCase)
-  const terminalFills = scenarioCase.id === "immediate-terminal-ack" ? [fill] : []
-  const harness = createRSOrderEventHarness({ terminalFills })
-  const results = []
+function createRSOrderEventEvents({ scenarioCase, fill }) {
   if (scenarioCase.id === "ack-before-fill") {
-    results.push(await harness.workflow.processUserDataEventTransition({
-      event: {
+    return [
+      {
         eventType: "executionReport",
         executionType: "NEW",
         executedOrder: createRSOrderEventOrder({
@@ -1143,9 +1157,7 @@ async function runRSOrderEventCase({ scenarioCase }) {
           updatedAt: 101,
         }),
       },
-    }))
-    results.push(await harness.workflow.processUserDataEventTransition({
-      event: {
+      {
         eventType: "executionReport",
         executionType: "TRADE",
         executedOrder: createRSOrderEventOrder({
@@ -1155,32 +1167,42 @@ async function runRSOrderEventCase({ scenarioCase }) {
         }),
         fill,
       },
-    }))
-  } else if (scenarioCase.id === "fill-before-ack") {
-    results.push(await harness.workflow.processUserDataEventTransition({
-      event: {
-        eventType: "executionReport",
-        executionType: "TRADE",
-        executedOrder: createRSOrderEventOrder({
-          status: "PARTIALLY_FILLED",
-          executedQuantity: scenarioCase.quantity,
-          updatedAt: 102,
-        }),
-        fill,
-      },
-    }))
-  } else {
-    results.push(await harness.workflow.processUserDataEventTransition({
-      event: {
-        eventType: "executionReport",
-        executionType: "NEW",
-        executedOrder: createRSOrderEventOrder({
-          status: "FILLED",
-          executedQuantity: scenarioCase.quantity,
-          updatedAt: 102,
-        }),
-      },
-    }))
+    ]
+  }
+  if (scenarioCase.id === "fill-before-ack") {
+    return [{
+      eventType: "executionReport",
+      executionType: "TRADE",
+      executedOrder: createRSOrderEventOrder({
+        status: "PARTIALLY_FILLED",
+        executedQuantity: scenarioCase.quantity,
+        updatedAt: 102,
+      }),
+      fill,
+    }]
+  }
+  return [{
+    eventType: "executionReport",
+    executionType: "NEW",
+    executedOrder: createRSOrderEventOrder({
+      status: "FILLED",
+      executedQuantity: scenarioCase.quantity,
+      updatedAt: 102,
+    }),
+  }]
+}
+
+async function runRSOrderEventCase({ scenarioCase }) {
+  const fill = createRSOrderEventFill(scenarioCase)
+  const terminalFills = scenarioCase.id === "immediate-terminal-ack" ? [fill] : []
+  const harness = createRSOrderEventHarness({ terminalFills })
+  const events = createRSOrderEventEvents({
+    scenarioCase,
+    fill,
+  })
+  const results = []
+  for (const event of events) {
+    results.push(await harness.workflow.processUserDataEventTransition({ event }))
   }
   return createRSOrderEventResult({
     scenarioCase,
