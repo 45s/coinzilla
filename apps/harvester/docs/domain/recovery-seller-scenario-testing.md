@@ -232,6 +232,16 @@ apps/harvester/test/scenarios/
 │   └── reports/
 │       ├── parse-test-results.js                # Actual test-run evidence
 │       └── generate-coverage-report.js          # Registry + execution + review status
+├── registry-and-runner.scenario.test.js         # PR 1 / RS-004-011
+├── authorization-custody.scenario.test.js       # PR 2 / RS-001
+├── buy-accounting.scenario.test.js              # PR 2 / RS-002
+├── mixed-sell-planning.scenario.test.js          # PR 3 / RS-003
+├── profitability.scenario.test.js               # PR 3 / RS-004
+├── sell-lifecycle.scenario.test.js               # PR 4 / RS-005
+├── unknown-outcomes.scenario.test.js              # PR 4 / RS-007
+├── mixed-sell-accounting.scenario.test.js         # PR 5 / RS-006
+├── shared-account-concurrency.scenario.test.js   # PR 6 / RS-008
+└── stop-and-failures.scenario.test.js             # PR 7 / RS-009, after owner decision
 ├── recovery-seller-cycle-lifecycle.scenario.test.js
 ├── recovery-seller-mixed-sell-accounting.scenario.test.js
 ├── recovery-seller-profitability.scenario.test.js
@@ -2045,67 +2055,95 @@ Until merged and covered, an isolated planner test using the canonical state fac
 
 ## 14. Implementation roadmap: exact AI-agent execution sequence
 
-This sequence is the approved working roadmap. Deliver small PRs against develop. Do not combine unrelated families. Every PR must update affected docs and issues in the same logical increment.
+This is the approved test-only implementation sequence. Deliver one focused PR per stage, targeting `develop`. Every new scenario test file must be added to `apps/harvester/package.json` under `config.targetedTestFiles` (paths relative to the Harvester package root). A discovered production defect is not fixed inside #1780: preserve the failing evidence and use a separate owner-authorized production issue/PR.
 
 ### PR 1 — Registry, schema, traceability and thin runner
 
-**Goal:** prove the framework itself with one real scenario before adding a large matrix.
-
-Deliver:
-
-1. Registry record schema and stable ID validation.
-2. Family/config/rule/decision/state/transition/invariant catalogs with only source-verified entries.
-3. Registry validator with meaningful failure messages.
-4. Thin domain runner and ordered step contract.
-5. Test-result mapping/evidence shape.
-6. One representative RS-004 profitability scenario registered and executed through the new runner.
-7. Documentation of implemented schema and exact file tree.
-8. Update #1780 and roadmap with exact implementation/evidence state.
-
-Do not:
-
-- Change production code/configuration.
-- Create fake RS domain rules.
-- Move all four existing scenario files.
-- Build an elaborate application simulator before a family needs it.
-- Claim registry completeness equals scenario coverage.
-
-Acceptance:
-
-- Duplicate/unknown IDs and references fail validation.
-- Representative scenario executes real production domain behavior.
-- Expected values are independently calculated.
-- Negative assertions execute.
-- Runner output identifies scenario ID and named test.
-- No production behavior changes.
+- **Objective:** prove the framework with one real RS domain scenario before expanding the matrix.
+- **Scope:** implement stable family/case records, schema validation, rule/decision/state/invariant catalogs, ordered Given/When/Then steps, a thin DOMAIN runner, evidence output, and one registered `RS-004-011` all-gates-pass scenario.
+- **Files:** add only the necessary planned files: `test/scenarios/recovery-seller/registry/{index,define-scenario,validate-registry,config-fields,domain-rules,decisions,states,transitions,invariants}.js`; `runners/{execute-scenario-steps,run-domain-scenario}.js`; `scenarios/profitability.js`; `registry-and-runner.scenario.test.js`. Update `apps/harvester/package.json` targeted-test registration, this playbook, #1780 and the Harvester roadmap.
+- **Tests:** duplicate/unknown IDs, broken references, malformed records, missing fields, invalid status/ownership; run the real `calculateRecoverySellerProfitability()` for RS-004-011 and assert all applicable gates using an independent exact-decimal oracle.
+- **Acceptance:** the real domain path runs; detailed assertion messages exist; the report names the case/test/result; the runner does not auto-promote status; no production/config/runtime behavior changes.
+- **Dependencies:** merged #1779 methodology, #1780 matrix/case IDs, existing Harvester Node test conventions and exact-decimal utilities.
+- **Out of scope:** application runner, fake broker/store, all-family pre-registration, mass migration of PR #1793 tests, new dependencies, production changes and exchange operations.
+- **Exit:** one scenario is registered and executed; registry failures are tested; exact-head checks pass; issue/roadmap record the next P0 case and exact SHA.
 
 ### PR 2 — RS-001 and RS-002: authorization/custody and BUY accounting
 
-Deliver highest-risk legacy ownership and confirmed BUY accounting cases. Separate basis from custody, canonical fills from requested quantities, and actual fee assets. Include duplicate/conflict/unknown BUY cases. Use application composition only where order identity, broker calls or reservation behavior is part of the claim.
+- **Objective:** prove legacy basis, verified Spot custody, recovery BUY eligibility and canonical BUY accounting are distinct and fail closed.
+- **Scope:** operator-declared basis; immutable average cost; Spot total versus free balance; Portfolio-owned base; EARN/off-Spot and external/manual isolation; shared reservations; BUY intent, full/partial/multiple fills, base/quote/zero/multiple supported fees, identity conflicts, ownership, overfill, unknown outcomes, investment cap and pair-budget isolation.
+- **Files:** add `scenarios/authorization-custody.js`, `scenarios/buy-accounting.js`, `authorization-custody.scenario.test.js`, `buy-accounting.scenario.test.js`; update `apps/harvester/package.json`. Exercise `legacy-position.js`, `legacy-spot-allocation.js`, `legacy-accounting-state.js`, `evaluate-buy-decision.js`, `create-recovery-seller-action-authorizer.js`, `strategy-account-balance-context.js`, `allocate-order-commitments.js` and `create-recovery-seller-accounting-workflow.js`.
+- **Tests:** DOMAIN for basis/custody/BUY policy; APPLICATION with the real accounting workflow, shared Portfolio/OrderRegistry and deterministic fake external ports only where identity/acknowledgement/reservation is the behavior. Cover all RS-001/002 cases and applicable zero/missing/invalid, boundary, partial/full, duplicate/conflict and failure variants.
+- **Acceptance:** A/B and linked C.03/C.05/J.01 mappings have named evidence; no synthetic fills or basis rewrite; custody is not spendable balance; no double-subtraction; canonical fills/fees apply once; unknown BUY cannot duplicate; third-asset valuation is never zero-filled.
+- **Dependencies:** PR 1; #1780; actual shared Portfolio, account snapshot and commitment contracts.
+- **Out of scope:** mixed SELL planning, STOP changes, restart/replay, third-asset valuation, config changes, broker network calls and exchange operations.
+- **Exit:** every unblocked RS-001/002 case has exact evidence; blocked cases retain reasons; targeted/full Harvester tests and required exact-head CI pass.
 
 ### PR 3 — RS-003 and RS-004: mixed SELL planning and profitability
 
-Complete planner-derived additive target, verified/unreserved Spot, shared reservations, TradingRules, exact proceeds and all three profitability gates. Include exact/adjacent boundaries and no-submit assertions. Fix #1809 in its own appropriately scoped production issue/PR; do not hide the defect with a test-only canonical state.
+- **Objective:** prove the exact additive SELL plan and all independent profitability gates.
+- **Scope:** recovery net quantity + eligible legacy slice; smaller remainder/exhaustion; verified unreserved Spot; shared reservations; allocation split; fee reserves/gross-up; maker/taker order type; tick/step/min/max filters; minimum notional; exact net proceeds; all three profitability gates; no-submit behavior; post-completion dust distinction.
+- **Files:** add `scenarios/mixed-sell-planning.js`, `scenarios/profitability.js`, `mixed-sell-planning.scenario.test.js`, `profitability.scenario.test.js`; update targeted-test registration. Exercise `calculate-sell-plan.js`, `calculate-profitability.js`, `evaluate-sell-decision.js`, `create-recovery-seller-transition-evaluator.js`, the action authorizer and shared allocator.
+- **Tests:** real DOMAIN planner/evaluator/profitability with independent decimal oracles; assert exact price, quantity, order type, fee reserve, net proceeds, split, filter result and broker non-submission. Include exact/adjacent thresholds, precision, tiny serialized quantities and missing metadata.
+- **Acceptance:** all unblocked RS-003/004 cases have stable IDs/tests; neither allocation subsidizes another; all supported fees are netted; filter violation follows the approved STOP contract; dust is only post-successful-completion quantity/notional residual. Full application wiring must use the real workflow snapshot.
+- **Dependencies:** PR 1/2; canonical RS §§3/5/8/9; #1809 for the workflow-to-evaluator proof. If #1809 is not fixed, keep that application case BLOCKED—never inject a canonical state to claim end-to-end coverage.
+- **Out of scope:** production fixes under #1780, order submission lifecycle, multi-fill commit, third-asset valuation, restart/replay, standalone residual liquidation and exchange operations.
+- **Exit:** planner/economics boundaries have independent expected values; #1809 is fixed separately or remains an explicit blocker; exact-head checks pass.
 
 ### PR 4 — RS-005 and RS-007: one SELL lifecycle and unknown outcomes
 
-Prove actual broker-call count, original identity retention, no blind retry, durable reservation, lookup reconciliation, partial fill staging, terminal outcomes and no premature release. Use real order submitter/workflow with deterministic broker/store fakes.
+- **Objective:** prove one SELL per cycle and no blind retry under unknown outcomes.
+- **Scope:** durable reservation/identity boundary, broker-call count, repeated evaluation, acknowledgement, timeout before/after acceptance, active/terminal/not-found/failed lookup, partial-fill staging, terminal reconciliation and reservation release. Keep open `PARTIALLY_FILLED` distinct from terminal cancel/expiry with prior fills.
+- **Files:** add `scenarios/sell-lifecycle.js`, `scenarios/unknown-outcomes.js`, `sell-lifecycle.scenario.test.js`, `unknown-outcomes.scenario.test.js`; update targeted-test registration. Exercise `cycle-state.js`, `lifecycle-decision.js`, `lifecycle-state.js`, `create-recovery-seller-order-submitter.js`, `recovery-seller-order-callbacks.js` and the accounting workflow.
+- **Tests:** DOMAIN state/transition tests; APPLICATION real submitter/workflow with deterministic broker/store fakes and a recorded broker-call log. Cover every RS-005/007 case, including identity conflicts, duplicate delivery, lookup outcomes, partial/cancel races, incomplete reconciliation and persistence failures.
+- **Acceptance:** at most one SELL submission per cycle; original identity persists; reservation is created/retained/released only at approved boundaries; no replacement SELL/next BUY/reset; required reconciliation continues while STOP is active.
+- **Dependencies:** PR 1–3; existing durable intent/outcome and OrderRegistry contracts; #1809 only if the tested path traverses the real default evaluator.
+- **Out of scope:** STOP resolution, process restart/replay, new retry/replacement behavior, production policy changes and exchange operations.
+- **Exit:** application evidence proves broker calls, identity and reservation behavior for unblocked cases; exact-head tests/CI pass; remaining blockers are linked.
 
 ### PR 5 — RS-006: multi-fill reconciliation and atomic accounting
 
-Prove multiple canonical fills, REST/stream permutations, duplicate/conflict behavior, incomplete history, exact recovery/legacy split, failure atomicity and the actual application durability barrier.
+- **Objective:** prove exact-once recovery/legacy allocation over the complete canonical SELL Fill set and atomic projection commit.
+- **Scope:** multiple partial fills; REST/stream permutations; duplicates/conflicts; incomplete history; base/quote commissions; exact allocation; Portfolio + legacy atomicity; durable completion; reservation and registry publication boundaries; post-fill adverse profitability.
+- **Files:** add `scenarios/mixed-sell-accounting.js`, `mixed-sell-accounting.scenario.test.js`; update targeted-test registration. Exercise `mixed-sell-fill-allocation.js`, `mixed-sell-fill-reconciliation.js`, `mixed-sell-fill-accounting.js`, `legacy-position.js`, `create-recovery-seller-accounting-workflow.js` and `record-recovery-seller-mixed-sell-reconciled.js`.
+- **Tests:** real DOMAIN allocation/accounting plus APPLICATION workflow with canonical OrderRegistry, controlled event delivery and persistence failure injection. Assert Portfolio, legacy state, Fill identities, terminal order, cycle, reservation, durable fact and registry publication before/after every failure.
+- **Acceptance:** identical Fill replay is a no-op; conflicting facts reject atomically; incomplete history cannot commit; both projections remain unchanged on either-side failure; reservation remains held; confirmed fills are never discarded for failed profitability.
+- **Dependencies:** PR 1–4 and existing durable completion/shared Portfolio contracts.
+- **Out of scope:** restart/replay, automatic repair, third-asset valuation, standalone liquidation and production policy changes.
+- **Exit:** every unblocked RS-006 case has multi-Fill/atomicity evidence; targeted/full tests and exact-head CI pass.
 
 ### PR 6 — RS-008: CG/RS shared account concurrency
 
-Prove shared physical account allocation with independent strategy ownership/budgets across same-market and different-market cases. Exercise real shared allocator/Trading Engine boundaries; do not implement a fake allocator in the scenario framework.
+- **Objective:** prove physical account resources are shared once while strategy ownership, Positions and budgets remain independent.
+- **Scope:** same/different markets; shared quote/base commitments; budget isolation; immutable order/Fill ownership; serialized decisions; market-data subscription deduplication; pause/STOP isolation; external/manual order isolation.
+- **Files:** add `scenarios/shared-account-concurrency.js`, `shared-account-concurrency.scenario.test.js`; update targeted-test registration. Exercise `allocate-order-commitments.js`, `strategy-account-balance-context.js`, `strategy-order-commitments.js`, the RS action authorizer/accounting workflow and actual shared Trading Engine/market-subscription coordinator.
+- **Tests:** shared allocator DOMAIN tests and APPLICATION tests with real engine composition, two independent Positions and deterministic concurrent event ordering. Do not create a fake allocator or second Portfolio.
+- **Acceptance:** no double-spend/oversell/duplicate custody/cross-strategy budget borrowing; each Fill has one owner; serialized decisions are deterministic; one strategy's policy state cannot silently change another's.
+- **Dependencies:** PR 1–5 and existing shared Trading Engine, Portfolio and OrderRegistry contracts.
+- **Out of scope:** new shared infrastructure, provider migration, new strategy policies, volatility duplication and live exchange concurrency.
+- **Exit:** all unblocked RS-008 cases have same/different-market evidence; exact-head tests/CI pass; catalog/issue/roadmap reflect actual evidence.
 
-### PR 7 — RS-009 after owner decision
+### PR 7 — RS-009: STOP and failure atomicity, only after owner resolution
 
-Only after STOP resolution and dust/filter boundary are explicitly settled. Encode the approved decision and test both allowed reconciliation and forbidden trading effects.
+- **Objective:** encode one owner-approved STOP contract without choosing between historical #1475 internal resolver approval and later #1780 terminal/no-reset statements.
+- **Scope:** do not start until the owner records the resolution in the canonical specification and #1780. Then test sticky STOP, no new trading, allowed WAIT/RECONCILE, durable evidence, confirmed-fill accounting and forbidden reset/resume/retry/replacement. Dust/filter behavior is already specified in §13.4 and is not a separate blocker.
+- **Files:** add `scenarios/stop-and-failures.js`, `stop-and-failures.scenario.test.js`; update targeted-test registration. Exercise `stop-decision.js`, `lifecycle-decision.js`, `lifecycle-state.js`, `create-recovery-seller-stop-workflow.js`, `create-recovery-seller-accounting-workflow.js`, and `resolve-recovery-seller-stop.js` only if explicitly approved by the owner.
+- **Tests:** DOMAIN transition gates and APPLICATION durable STOP/reconciliation with deterministic ports; inject malformed/conflicting evidence, persistence/projection failures and post-fill adverse outcomes. Assert first STOP evidence, no new broker calls, reservation conservation and continued reconciliation.
+- **Acceptance:** the owner decision is explicit and linked before testing contested behavior; no unsupported clear/reset/resume path is added; all approved STOP cases have named positive and negative assertions.
+- **Dependencies:** owner resolution of #1475 versus #1780; PR 1 and relevant PR 4/5 evidence; existing durable STOP contract.
+- **Out of scope:** restart/replay, automatic restoration, new operator commands, retry/replacement policy and any behavior outside the owner decision.
+- **Exit:** RS-009 leaves BLOCKED only after the decision and all approved cases are proved; otherwise keep it BLOCKED and do not write speculative tests.
 
-### RS-010
+### RS-010 — deferred capability dispositions; not an implementation PR
 
-Remain UNSUPPORTED/BLOCKED until separate owner-approved product work defines restart/replay and third-asset fee valuation. Do not treat this as a missing test to fill speculatively.
+- **Objective:** preserve unsupported capabilities without implying product support.
+- **Scope:** register `RS-010-001` through `RS-010-007` as explicit BLOCKED/UNSUPPORTED disposition records. Add only tests for the disposition and absence of unsafe side effects.
+- **Files:** `scenarios/deferred-capabilities.js` under the PR 1 registry; #1780 and this playbook only when an owner-approved contract/source changes.
+- **Tests:** assert no broker call, Portfolio mutation, reservation release, synthetic restored state, fabricated third-asset conversion or standalone residual SELL.
+- **Acceptance:** each deferred ID has a reason and unblock condition; no report claims unsupported behavior is implemented.
+- **Dependencies:** PR 1 registry and a separate owner-approved product issue/specification for each capability.
+- **Out of scope:** runtime implementation, restart/replay activation, fee valuation invention, automatic STOP resolution and standalone liquidation.
+- **Exit:** all deferred IDs remain visible and explicitly blocked until their own approved contract is implemented and proved.
 
 ### 14.1 PR sizing and commit discipline
 
