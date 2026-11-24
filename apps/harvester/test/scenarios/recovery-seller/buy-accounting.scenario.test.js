@@ -18,6 +18,8 @@ import { Portfolio } from "../../../src/domain/portfolio/portfolio.js"
 import { createOrderOwnership } from "../../../src/domain/orders/order-ownership.js"
 import { OrderRegistry } from "../../../src/domain/orders/order-registry.js"
 import { createRecoverySellerAccountingWorkflow } from "../../../src/use-cases/create-recovery-seller-accounting-workflow.js"
+import { allocateOrderCommitments } from "../../../src/domain/orders/allocate-order-commitments.js"
+import { createRecoverySellerActionAuthorizer } from "../../../src/use-cases/create-recovery-seller-action-authorizer.js"
 import { createRecoverySellerOrderSubmitter } from "../../../src/use-cases/create-recovery-seller-order-submitter.js"
 import { createRecoverySellerStopWorkflow } from "../../../src/use-cases/create-recovery-seller-stop-workflow.js"
 import { runRecoverySellerApplicationScenario } from "./runners/run-application-scenario.js"
@@ -267,6 +269,126 @@ async function runUnknownBuySubmissionScenario() {
   }
 }
 
+function createBudgetAuthorizer({ activeOrders }) {
+  let stopLatchCount = 0
+  const ownershipByClientOrderId = new Map(activeOrders.map((order) => [
+    order.clientOrderId,
+    { strategyId: order.strategyId ?? "CG_coinGrabber" },
+  ]))
+  const state = {
+    registry: {
+      getActiveOrders: () => activeOrders,
+      getOwnership: ({ clientOrderId }) => ownershipByClientOrderId.get(clientOrderId),
+    },
+  }
+  const authorize = createRecoverySellerActionAuthorizer({
+    state,
+    recoverySellerPairs: {
+      ZROUSDT: { investment: 100 },
+    },
+    recoverySellerStopWorkflow: {
+      latch: async () => {
+        stopLatchCount += 1
+        return { ok: true, data: { durable: true } }
+      },
+    },
+    getPortfolio: () => ({
+      positions: [],
+      getPosition: () => undefined,
+    }),
+    getAccountSnapshot: () => ({
+      balances: [],
+      getFreeBalance: ({ assetId }) => ({
+        amount: assetId === "USDT" ? "100" : "0",
+      }),
+      getPortfolioBaseQuantityBaseline: () => "0",
+      getAdditionalTrackedBaseQuantityBaseline: () => "0",
+      getQuoteCashFlowBaseline: () => "0",
+      getCommittedQuoteBalanceBaseline: () => "0",
+      getCommittedBaseBalanceBaseline: () => "0",
+    }),
+    getAdditionalTrackedBaseQuantity: () => [],
+    getAdditionalTrackedQuoteCashFlow: () => [],
+    allocateOrderCommitments,
+  })
+  return {
+    authorize,
+    getStopLatchCount: () => stopLatchCount,
+  }
+}
+
+async function runBuyBudgetIsolationScenario({ input }) {
+  const rsBudget = evaluateBuyPolicyCase({
+    overrides: {
+      pairConfig: {
+        orderQuantity: "5",
+        priceStepPercent: "0.05",
+        investment: "9.994",
+      },
+      recoveryPosition: {
+        positionId: "rs-policy-position",
+        quantity: "5",
+        spent: "0",
+      },
+      lastBuyPrice: "2",
+    },
+  })
+  const conservativeOrder = {
+    clientOrderId: "cg-same-market-buy",
+    strategyId: "CG_coinGrabber",
+    market: {
+      id: "ZROUSDT",
+      symbol: "ZROUSDT",
+      baseAsset: { id: "ZRO" },
+      quoteAsset: { id: "USDT" },
+    },
+    side: "BUY",
+    remainingQuantity: { amount: "9.1" },
+    limitPrice: { amount: "10" },
+  }
+  const runtime = createBudgetAuthorizer({
+    activeOrders: [conservativeOrder],
+  })
+  const allocation = await runtime.authorize({
+    action: {
+      side: "BUY",
+      quantity: "1",
+      price: "10",
+      positionId: "rs-position-1",
+    },
+    snapshot: {
+      planInput: {
+        recoveryQuantity: "0",
+        verifiedUnreservedLegacyQuantity: "0",
+        recoveryCostBasis: "0",
+      },
+      cumulativeNetSellProceeds: "0",
+    },
+    input: {
+      symbol: "ZROUSDT",
+      marketMetadata: {
+        market: {
+          id: "ZROUSDT",
+          baseAsset: { id: "ZRO" },
+          quoteAsset: { id: "USDT" },
+        },
+      },
+    },
+  })
+  return {
+    otherStrategyInvestment: input.otherStrategyInvestment,
+    rsPairBudgetOutcome: rsBudget.outcome,
+    rsPairBudgetReason: rsBudget.reasonCode,
+    sharedAccountAllocation: {
+      ok: allocation.ok,
+      allowed: allocation.data?.allowed ?? false,
+      skipped: allocation.data?.skipped ?? false,
+      reason: allocation.data?.reason ?? null,
+    },
+    stopLatchCount: runtime.getStopLatchCount(),
+  }
+}
+
 function createCommissions({ fillInput }) {
   const commissions = []
   const baseAmounts = fillInput.baseCommissions ?? [fillInput.baseCommission].filter(Boolean)
@@ -484,6 +606,7 @@ async function runBuyScenario({ input }) {
 const applicationHandlers = {
   "apply-recovery-buy-scenario": runBuyScenario,
   "submit-recovery-buy-with-unknown-outcome": runUnknownBuySubmissionScenario,
+  "evaluate-recovery-buy-budget-isolation": runBuyBudgetIsolationScenario,
 }
 const domainHandlers = {
   "evaluate-recovery-buy-policy-scenario": evaluateBuyPolicyScenario,
