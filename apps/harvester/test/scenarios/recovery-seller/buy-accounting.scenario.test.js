@@ -520,11 +520,12 @@ function createScenarioInitialPortfolio({ input, order }) {
       fillInput: input.seedFillInput,
       order,
     })
-    portfolio = portfolio.applyFill({
+    const { portfolio: seededPortfolio } = portfolio.applyFill({
       fill: seedFill,
       positionId: input.seedPositionId ?? "existing-foreign-position",
       strategyId: input.seedStrategyId ?? StrategyId.RECOVERY_SELLER,
-    }).portfolio
+    })
+    portfolio = seededPortfolio
   }
   return portfolio
 }
@@ -790,7 +791,7 @@ function createBuyScenarioResult({
         strategyId: item.strategyId,
         quantity: item.baseQuantity.amount,
         spent: item.spent.amount,
-      })).sort((left, right) => left.positionId.localeCompare(right.positionId)),
+      })).sort((...positions) => positions[0].positionId.localeCompare(positions[1].positionId)),
     } : {}),
     ...(legacyPosition ? {
       legacyPosition: {
