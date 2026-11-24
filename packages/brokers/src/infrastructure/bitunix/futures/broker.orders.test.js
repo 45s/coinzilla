@@ -668,6 +668,20 @@ test("Bitunix Futures cancelAllOpenOrders remains NOT_SENT without explicit live
   assert.equal(requests.length, 0)
 })
 
+test("Bitunix Futures cancelAllOpenOrders does not confirm an empty final scope without private CLOSE events", async () => {
+  const { broker, requests } = createCancelAllBroker({
+    pendingTotals: [2, 0],
+  })
+  await connectAndAcknowledgeUserDataReconciliation(broker)
+
+  const result = await broker.cancelAllOpenOrders()
+
+  assert.equal(result.ok, false, "an empty REST snapshot alone must not confirm cancellation of every preflight order")
+  assert.equal(result.mutationOutcome, "OUTCOME_UNKNOWN", "missing private order events must leave the mutation outcome unknown")
+  assert.equal(result.cancellationOutcome, "OUTCOME_UNKNOWN", "the final empty pending scope cannot replace per-order private CLOSE evidence")
+  assert.equal(requests.filter(({ path, options }) => path === "/api/v1/futures/trade/cancel_all_orders" && options.method === "POST").length, 1, "an uncertain cancel-all operation must never be retried")
+})
+
 test("Bitunix Futures cancelAllOpenOrders reports unknown while pending orders remain", async () => {
   const { broker, requests } = createCancelAllBroker({
     pendingTotals: [2, 1],
