@@ -541,14 +541,10 @@ function createScenarioLegacyPositions({ input }) {
   }]
 }
 
-function createScenarioWorkflow({ input }) {
-  const clientOrderId = "rs-buy-scenario-order"
-  const brokerOrderId = "broker-rs-buy-scenario"
-  const positionId = input.positionId ?? "rs-buy-scenario-position"
-  const cycleId = input.cycleId ?? "rs-buy-scenario-cycle"
-  const order = new CanonicalOrder({
-    clientOrderId,
-    brokerOrderId,
+function createScenarioOrder({ input }) {
+  return new CanonicalOrder({
+    clientOrderId: "rs-buy-scenario-order",
+    brokerOrderId: "broker-rs-buy-scenario",
     market,
     side: "BUY",
     type: "LIMIT_MAKER",
@@ -569,18 +565,28 @@ function createScenarioWorkflow({ input }) {
     acknowledgedAt: 101,
     updatedAt: 101,
   })
-  const ownerships = input.owned === false
-    ? []
-    : [createOrderOwnership({
-        ownership: {
-          strategyId: input.strategyId ?? StrategyId.RECOVERY_SELLER,
-          positionId,
-          purpose: "RECOVERY_BUY",
-          cycleId,
-        },
-        clientOrderId,
-        brokerOrderId,
-      })]
+}
+
+function createScenarioOwnerships({ input, positionId, cycleId }) {
+  if (input.owned === false) {
+    return []
+  }
+  return [createOrderOwnership({
+    ownership: {
+      strategyId: input.strategyId ?? StrategyId.RECOVERY_SELLER,
+      positionId,
+      purpose: "RECOVERY_BUY",
+      cycleId,
+    },
+    clientOrderId: "rs-buy-scenario-order",
+    brokerOrderId: "broker-rs-buy-scenario",
+  })]
+}
+
+function createScenarioWorkflow({ input }) {
+  const positionId = input.positionId ?? "rs-buy-scenario-position"
+  const cycleId = input.cycleId ?? "rs-buy-scenario-cycle"
+  const order = createScenarioOrder({ input })
   const initialPortfolio = createScenarioInitialPortfolio({
     input,
     order,
@@ -589,7 +595,11 @@ function createScenarioWorkflow({ input }) {
     initialPortfolio,
     initialOrderRegistry: new OrderRegistry({
       orders: [order],
-      ownerships,
+      ownerships: createScenarioOwnerships({
+        input,
+        positionId,
+        cycleId,
+      }),
     }),
     initialLegacyPositions: createScenarioLegacyPositions({ input }),
   })
@@ -702,27 +712,22 @@ async function runBuyFeeRecordScenario({ input }) {
   }
 }
 
-async function runBuyScenario({ input }) {
-  const { workflow, order, positionId, cycleId } = createScenarioWorkflow({ input })
-  const fills = input.fills.map((fillInput) => createScenarioFill({
+function createScenarioFills({ input, order }) {
+  return input.fills.map((fillInput) => createScenarioFill({
     fillInput,
     order,
   }))
-  const results = await applyScenarioFills({
-    workflow,
-    fills,
-  })
-  const replay = await replayScenarioFill({
-    workflow,
-    fills,
-    input,
-  })
-  const conflict = await applyScenarioConflict({
-    workflow,
-    fills,
-    order,
-    input,
-  })
+}
+
+function createBuyScenarioResult({
+  workflow,
+  positionId,
+  cycleId,
+  input,
+  replay,
+  conflict,
+  results,
+}) {
   const portfolio = workflow.getPortfolio()
   const position = portfolio.getPosition({ positionId })
   const legacyPosition = input.includeLegacyBasis === true
@@ -767,6 +772,38 @@ async function runBuyScenario({ input }) {
     ...(conflict ? { conflict } : {}),
     ...(results.some((result) => !result.ok) ? { results } : {}),
   }
+}
+
+async function runBuyScenario({ input }) {
+  const { workflow, order, positionId, cycleId } = createScenarioWorkflow({ input })
+  const fills = createScenarioFills({
+    input,
+    order,
+  })
+  const results = await applyScenarioFills({
+    workflow,
+    fills,
+  })
+  const replay = await replayScenarioFill({
+    workflow,
+    fills,
+    input,
+  })
+  const conflict = await applyScenarioConflict({
+    workflow,
+    fills,
+    order,
+    input,
+  })
+  return createBuyScenarioResult({
+    workflow,
+    positionId,
+    cycleId,
+    input,
+    replay,
+    conflict,
+    results,
+  })
 }
 
 async function runBuyOwnershipRejectionScenario({ input }) {
@@ -836,13 +873,25 @@ function isNegativeBuyCommissionRejected() {
   }
 }
 
-async function runInvalidBuyFillScenario() {
+function createInvalidBuyFillConstructionResults() {
+  return {
+    zeroQuantityRejected: isInvalidCanonicalBuyFillRejected({
+      quantityAmount: "0",
+    }),
+    negativeQuantityRejected: isInvalidCanonicalBuyFillRejected({
+      quantityAmount: "-1",
+    }),
+    negativeCommissionRejected: isNegativeBuyCommissionRejected(),
+  }
+}
+
+async function applyExcessiveBaseCommissionFill() {
   const { workflow, order } = createScenarioWorkflow({
     input: {
       originalQuantity: "1",
     },
   })
-  const excessiveBaseCommissionFill = createScenarioFill({
+  const fill = createScenarioFill({
     fillInput: {
       tradeId: "excessive-base-commission",
       price: "10",
@@ -852,21 +901,22 @@ async function runInvalidBuyFillScenario() {
     },
     order,
   })
-  const excessiveCommissionResult = await workflow.applyBuyFill({
-    fill: excessiveBaseCommissionFill,
-  })
-  const portfolio = workflow.getPortfolio()
+  const result = await workflow.applyBuyFill({ fill })
   return {
-    zeroQuantityRejected: isInvalidCanonicalBuyFillRejected({
-      quantityAmount: "0",
-    }),
-    negativeQuantityRejected: isInvalidCanonicalBuyFillRejected({
-      quantityAmount: "-1",
-    }),
-    negativeCommissionRejected: isNegativeBuyCommissionRejected(),
-    excessiveBaseCommissionRejected: excessiveCommissionResult.ok !== true,
-    appliedFillIds: portfolio.appliedFillIds.length,
-    positionCount: portfolio.positions.length,
+    rejected: result.ok !== true,
+    appliedFillIds: workflow.getPortfolio().appliedFillIds.length,
+    positionCount: workflow.getPortfolio().positions.length,
+  }
+}
+
+async function runInvalidBuyFillScenario() {
+  const construction = createInvalidBuyFillConstructionResults()
+  const excessiveCommission = await applyExcessiveBaseCommissionFill()
+  return {
+    ...construction,
+    excessiveBaseCommissionRejected: excessiveCommission.rejected,
+    appliedFillIds: excessiveCommission.appliedFillIds,
+    positionCount: excessiveCommission.positionCount,
   }
 }
 
