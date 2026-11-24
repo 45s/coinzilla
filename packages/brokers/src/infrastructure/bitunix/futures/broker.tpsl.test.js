@@ -123,3 +123,44 @@ test("Bitunix Futures pending TP/SL reads reject pages above the documented maxi
   assert.equal(result.ok, false)
   assert.equal(requests.length, 0)
 })
+
+
+test("Bitunix Futures TP/SL history reads preserve exchange history fields and pagination", async () => {
+  const historyRow = {
+    ...tpSlRow,
+    status: "TRIGGERED",
+    ctime: 1_700_000_000_000,
+    triggerTime: 1_700_000_001_000,
+  }
+  const { broker, requests } = createBroker({
+    rows: [historyRow],
+  })
+  const result = await broker.getFuturesTpSlOrderHistory({
+    symbol: "BTCUSDT",
+    side: 1,
+    positionMode: 2,
+    startTime: 1_700_000_000_000,
+    endTime: 1_700_000_100_000,
+    limit: 50,
+    skip: 10,
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.data.length, 1)
+  assert.equal(result.data[0].id, "tpsl-1")
+  assert.equal(result.data[0].tpPrice, "70000.00000001")
+  assert.equal(result.data[0].slPrice, "65000.00000002")
+  assert.equal(result.data[0].status, "TRIGGERED")
+  assert.equal(result.data[0].ctime, 1_700_000_000_000)
+  assert.equal(result.data[0].triggerTime, 1_700_000_001_000)
+
+  const url = new URL(requests[0].url)
+  assert.equal(url.pathname, "/api/v1/futures/tpsl/get_history_orders")
+  assert.equal(url.searchParams.get("symbol"), "BTCUSDT")
+  assert.equal(url.searchParams.get("side"), "1")
+  assert.equal(url.searchParams.get("positionMode"), "2")
+  assert.equal(url.searchParams.get("startTime"), "1700000000000")
+  assert.equal(url.searchParams.get("endTime"), "1700000100000")
+  assert.equal(url.searchParams.get("limit"), "50")
+  assert.equal(url.searchParams.get("skip"), "10")
+})
