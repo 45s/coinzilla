@@ -250,7 +250,7 @@ describe('GitHubPullRequestsApi', () => {
     http.expectOne('https://api.github.com/repos/45s/coinzilla/pulls?state=open&per_page=100&page=1')
       .flush([], {
         headers: {
-          Link: '<https://api.github.com/repos/45s/coinzilla/pulls?state=open&per_page=100&page=2>; title="Next page", rel="next"',
+          Link: '<https://api.github.com/repos/45s/coinzilla/pulls?state=open&per_page=100&page=2>; rel="next"; title="Next page"',
         },
       });
     await Promise.resolve();
