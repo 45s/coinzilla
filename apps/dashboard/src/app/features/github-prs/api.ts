@@ -23,13 +23,11 @@ export interface GitHubPullRequestsSnapshot {
 function getNextPageUrl(response: HttpResponse<unknown[]>): string | null {
   const linkHeader = response.headers.get('Link');
   if (!linkHeader) return null;
-  const nextLink = linkHeader.split(',').map((part) => part.trim())
-    .find((part) => /;\s*rel="next"$/.test(part));
+  const nextLink = [...linkHeader.matchAll(/<([^>]+)>((?:\\s*;\\s*(?:[^,;"<>]+|"[^"]*"))*)/g)]
+    .find(([, , parameters]) => /(?:^|;)\\s*rel\\s*=\\s*(?:"next"|'next'|next)\\s*(?=;|$)/i.test(parameters ?? ''));
   if (!nextLink) return null;
 
-  const match = nextLink.match(/^<([^>]+)>;/);
-  if (!match) throw new Error('GitHub returned an invalid pagination link.');
-  const nextUrl = new URL(match[1]);
+  const nextUrl = new URL(nextLink[1] as string);
   if (nextUrl.origin !== API_ROOT || nextUrl.pathname !== '/repos/45s/coinzilla/pulls') {
     throw new Error('GitHub returned an unexpected pagination destination.');
   }
