@@ -342,5 +342,5 @@ Do not treat the conceptual diagram as a new production state model: map every t
 
 ### 2026-11-24 — Phase 3 recovery proceeds boundary
 
-- Added a test asserting confirmed SELL proceeds above the cost-plus-minimum-profit target clamp required net proceeds to zero and leave price unset (market-reference pricing).
-- Test-only audit addition; execution validation is pending CI on the follow-up PR.
+- Added tests for exact-target, immediately-below-target, and over-target confirmed SELL proceeds. Only the exact/over-target cases clamp required net proceeds to zero; the below-target case preserves the exact positive remainder and rounds the minimum price up to one tick.
+- Test-only audit addition; exact-head CI validation pending.
