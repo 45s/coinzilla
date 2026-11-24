@@ -238,3 +238,12 @@ test("Bitunix Futures canonical history supports canceled-order filters and norm
   assert.equal(query.get("type"), "LIMIT")
   assert.equal(query.get("queryCanceled"), "true")
 })
+
+
+test("Bitunix Futures common open-order method remains explicitly unsupported", async () => {
+  const { broker } = createBroker()
+  const result = await broker.getOpenOrders()
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /unsupported/i)
+})
