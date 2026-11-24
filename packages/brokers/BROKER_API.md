@@ -288,6 +288,7 @@ The `bitunix-futures` provider is a separate Futures adapter under [issue #1805]
 These provider-specific projections do not imply common canonical account, position or fill semantics:
 
 - `getFuturesPendingOrders({ symbol?, orderId?, clientOrderId?, status?, startTime?, endTime?, limit?, skip? })`: one pending-order page preserving exact decimals and documented TP/SL fields.
+- `getFuturesPendingTpSlOrders({ symbol?, positionId?, limit?, skip? })`: separate position TP/SL group endpoint; validates each present leg and preserves exact trigger/limit/quantity strings. One page, maximum 100; no total count is returned.
 - `getFuturesPositions({ symbol?, positionId? })`: current position projections; explicitly excludes subaccount aggregation and preserves optional subaccount identity.
 - `getFuturesPositionHistory({ symbol | positionId, startTime?, endTime?, limit?, skip? })`: one bounded historical-position page.
 - `getFuturesPositionMode()` and `getFuturesLeverageAndMarginMode({ symbol, marginCoin: "USDT" })`: authenticated account-setting reads.
