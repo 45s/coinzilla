@@ -92,15 +92,30 @@ function isMarketsData(value: unknown): boolean {
     && Array.isArray(market['blockers']));
 }
 
+function isPositionData(value: unknown): boolean {
+  if (!isRecord(value)
+    || typeof value['symbol'] !== 'string'
+    || typeof value['activeQuantity'] !== 'string'
+    || typeof value['investedQuote'] !== 'string') {
+    return false;
+  }
+  if (value['recovery'] === null) {
+    return true;
+  }
+  const recovery = value['recovery'];
+  return isRecord(recovery)
+    && typeof recovery['buyCost'] === 'string'
+    && typeof recovery['netSellProceeds'] === 'string'
+    && typeof recovery['outstandingRecoveryAmount'] === 'string'
+    && typeof recovery['realizedNetProfit'] === 'string';
+}
+
 function isPortfolioData(value: unknown): boolean {
   if (!isRecord(value) || !Number.isSafeInteger(value['observedAt'])
     || !Array.isArray(value['positions'])) {
     return false;
   }
-  return value['positions'].every((position) => isRecord(position)
-    && typeof position['symbol'] === 'string'
-    && typeof position['activeQuantity'] === 'string'
-    && typeof position['investedQuote'] === 'string');
+  return value['positions'].every(isPositionData);
 }
 
 function isStatusResource(value: unknown): value is BotsSnapshotResource {
