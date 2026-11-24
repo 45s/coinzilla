@@ -487,10 +487,29 @@ export const recoverySellerBuyAccountingScenarios = Object.freeze([
     },
     rules: ["RS_BUY_BUDGET_LIMIT"],
   }),
-  blockedCase({
+  makeBuyCase({
     id: "RS-002-021",
-    name: "RS per-pair investment budget cannot borrow unused CG or other-strategy budget",
-    reason: "The scenario runner does not yet compose strategy-specific investment budgets with the account-wide shared quote allocator for competing CG/RS intents.",
-    unblockCondition: "Add a same-market offline CG/RS application scenario with separate pair budgets and shared quote availability; assert budget rejection/deferment and exact broker-call count for each strategy.",
+    name: "RS keeps its own pair investment cap and shared account reservations include CG commitments",
+    stepType: "evaluate-recovery-buy-budget-isolation",
+    input: {
+      otherStrategyInvestment: "1000",
+    },
+    expected: {
+      otherStrategyInvestment: "1000",
+      rsPairBudgetOutcome: "BLOCK",
+      rsPairBudgetReason: "INVESTMENT_LIMIT_REACHED",
+      sharedAccountAllocation: {
+        ok: true,
+        allowed: false,
+        skipped: true,
+        reason: "INSUFFICIENT_QUOTE_BALANCE",
+      },
+      stopLatchCount: 0,
+    },
+    rules: [
+      "RS_NO_CROSS_SUBSIDY",
+      "RS_BUY_BUDGET_LIMIT",
+      "RS_ACCOUNT_QUOTE_RESERVATION",
+    ],
   }),
 ])
