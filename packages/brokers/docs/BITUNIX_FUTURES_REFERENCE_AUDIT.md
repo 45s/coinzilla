@@ -183,7 +183,6 @@ No LIVE mutation has been performed by the implementation agent or automated tes
 
 The Futures provider remains **not production-ready**. The WebSocket client is currently a low-level exported component, not a Broker stream capability. LIVE order/account mutation flags remain disabled by default. No live exchange request or mutation was performed by this implementation agent or its tests.
 
-
 ## 2026-11-24 — Broker stream and REST lifecycle continuation
 
 ### Implemented and covered by offline tests
