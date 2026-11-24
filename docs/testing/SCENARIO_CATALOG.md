@@ -665,7 +665,7 @@ At `20.00 USDT/ZRO`, recovery receives `20.00 USDT` (profit `+10.00`), legacy re
 
 **Status:** MISSING — no new RS scenario test accepted.
 
-**Example:** CG and RS each request a SELL against the same market. Their strategy budgets and Positions remain separate, while the shared account allocator must ensure combined reserved base never exceeds verified available Spot. Repeat with competing BUY quote commitments and with different markets sharing the same quote asset. An RS-only market must also consume the same market-owned volatility gate as CG when protection is enabled; no RS-specific volatility engine is permitted.
+**Example:** CG and RS each request a SELL against the same market. Their strategy budgets and Positions remain separate, while the shared account allocator must ensure combined reserved base never exceeds verified available Spot. Repeat with competing BUY quote commitments and with different markets sharing the same quote asset. An RS-only market must also consume the same market-owned volatility gate as CG when protection is enabled; no RS-specific volatility engine is permitted. An RS-only market must also consume the same market-owned volatility gate as CG when protection is enabled; no RS-specific volatility engine is permitted.
 
 **Required outputs:** deterministic serialized allocation; one canonical order owner; one Fill credited to exactly one Position; no strategy budget borrowing; no aggregate oversell/double-spend; shared RS/CG market-volatility eligibility and the approved recovery-SELL exception.
 
