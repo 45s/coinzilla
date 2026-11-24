@@ -2176,3 +2176,11 @@ The detailed evidence, implementation commits, CI state and remaining unknowns a
 
 - Next: review the remaining recovery arithmetic matrix against the canonical specification, add only evidenced missing boundary cases, and keep the issue/PR/inventory synchronized.
 - Repository Quality reported repeated blank lines in this checkpoint; the extra blank lines were removed without changing document meaning.
+
+## 2026-11-24 — #1763 Phase 4 BUY accounting
+
+- Started Phase 4 on branch `test/1763-phase4-buy-accounting` from current `develop`.
+- Added an offline canonical Fill → Portfolio/Position + RecoveryLedger accounting scenario for multiple BUY executions at different prices, with base-, quote-, and valued third-asset commissions plus a zero-fee fill.
+- Added a later-BUY failure-atomicity regression for incomplete third-asset commission valuation.
+- The scenario asserts exact net base inventory, cumulative spent basis, quote cash flow, RecoveryLedger parity and identical accepted Fill identities.
+- Test-only; no production behavior or trading rules changed. Exact-head CI verification is pending.
