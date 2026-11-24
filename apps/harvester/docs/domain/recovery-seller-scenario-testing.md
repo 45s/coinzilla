@@ -1075,8 +1075,8 @@ Required cases:
 10. Mixed SELL target is the max of independent net proceeds requirements with correct fee gross-up.
 11. LIMIT_MAKER uses the configured maker fee reserve; ordinary LIMIT uses the approved higher maker/taker reserve.
 12. makerPercent zero/non-zero selects the owner-approved order type exactly.
-12. Exact price/quantity rounding preserves net proceeds.
-13. No intent/submission if any gate or required metadata fails.
+13. Exact price/quantity rounding preserves net proceeds.
+14. No intent/submission if any gate or required metadata fails.
 15. Post-fill actual adverse profitability commits confirmed facts exactly once, preserves ownership/reservation evidence and latches the approved STOP; no follow-up SELL, replacement, BUY or cycle reset is invented.
 
 Core source ownership: `calculate-profitability.js`, `calculate-sell-plan.js`, `evaluate-sell-decision.js`, application transition evaluator and accounting workflow.
@@ -1109,19 +1109,19 @@ Required cases:
 
 1. Recovery and legacy allocations remain distinct while sharing one actual Portfolio/custody aggregate.
 2. One canonical SELL Fill split between recovery and legacy.
-2. Multiple partial SELL fills.
-3. Allocation sum equals canonical Fill quantity under approved fee treatment.
-4. Recovery and legacy projections derive from identical accepted Fill facts.
-5. Successful commit updates both.
-6. Failure in either projection leaves both unchanged; the cycle reservation remains held and the prescribed STOP behavior occurs.
-7. Identical terminal replay is an exact no-op.
-8. Same identity with changed facts is rejected.
-9. Duplicate Fill through REST and stream in both orders.
-10. Conflicting REST/stream facts are rejected atomically.
-11. Incomplete fill history cannot commit a terminal allocation.
-12. Durable barrier and reservation retention/release are verified at application layer.
-13. Confirmed fills are accounted even if post-fill profitability fails.
-14. Shared Portfolio totals reconcile to the sum of strategy-owned allocations plus correctly classified unallocated inventory; no synthetic custody is created.
+3. Multiple partial SELL fills.
+4. Allocation sum equals canonical Fill quantity under approved fee treatment; partial SELL consumes exact allocated quantities and fees from the correct allocation.
+5. Recovery and legacy projections derive from identical accepted Fill facts; recovery allocation uses only canonical RS recovery fills and attributed proceeds.
+6. Successful commit updates both.
+7. Failure in either projection leaves both unchanged; the cycle reservation remains held and no partial projection is published. Any STOP disposition remains subject to the unresolved STOP contract.
+8. Identical terminal replay is an exact no-op.
+9. Same identity with changed facts is rejected.
+10. Duplicate Fill through REST and stream in both orders.
+11. Conflicting REST/stream facts are rejected atomically.
+12. Incomplete fill history cannot commit a terminal allocation.
+13. Durable barrier and reservation retention/release are verified at application layer.
+14. Confirmed fills are accounted even if post-fill profitability fails.
+15. Shared Portfolio totals reconcile to the sum of strategy-owned allocations plus correctly classified unallocated inventory; no synthetic custody is created.
 
 Core source ownership: mixed SELL allocation/accounting/reconciliation, Portfolio, accounting workflow, record-reconciled use case, persistence boundary.
 
@@ -1186,8 +1186,7 @@ Potential cases after owner resolution:
 9. No implicit reset or self-resume.
 10. Missing account snapshot, stale market data, invalid market metadata, missing filters or invalid precision blocks new actions.
 11. Durable intent failure prevents broker submission when required; durable outcome failure preserves uncertainty and prevents blind retry.
-12. Persistence/commit failure preserves both projections and reservations as specified.
-13. Operator visibility remains read-only unless the owner explicitly changes the contract.
+12. Operator visibility remains read-only unless the owner explicitly changes the contract.
 
 **Do not implement this family as if its contract were settled.** The specification says terminal STOP/no reset, while current source contains `resolveRecoverySellerStopState` and `resolveRecoverySellerStop`; the operator facade exposes read-only status. Record and wait for owner resolution. The existence of a source helper is not approval to expose it.
 
