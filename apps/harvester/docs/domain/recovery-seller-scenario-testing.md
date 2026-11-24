@@ -1770,6 +1770,20 @@ Every family below explicitly answers the 22 contract questions required by the 
 | 22. Acceptance criteria | A separate owner-approved issue/spec defines each capability, source of truth and safety boundary before a new scenario family/case is authored or any status changes. |
 
 
+#### RS-010 disposition case IDs
+
+RS-010 intentionally has no executable success path while the capabilities remain deferred. Reserve these explicit disposition IDs so the K-section checkboxes are still traceable without implying support:
+
+1. `RS-010-001` — process restart/restoration request remains unsupported.
+2. `RS-010-002` — each listed restart interruption point remains unsupported.
+3. `RS-010-003` — third-asset commission conversion remains blocked pending an authoritative execution-time source.
+4. `RS-010-004` — advanced pause/disable/abandon/resume remains deferred.
+5. `RS-010-005` — standalone final-residual liquidation remains unresolved and must not be invented.
+6. `RS-010-006` — authorization revocation/expiry remains deferred pending its approved contract.
+7. `RS-010-007` — any behavior without a canonical decision remains blocked.
+
+These records must assert the unsupported disposition and absence of unsafe side effects; they must not call a broker, mutate Portfolio, release reservations or fabricate a successful result.
+
 ### 11.2 Checkbox-level crosswalk to the owning issue's A–K matrix
 
 Every business-behavior checkbox in sections A–K of [#1780](https://github.com/45s/coinzilla/issues/1780) maps to one or more stable case IDs below. The checkbox suffix is its one-based position within that section (for example, `C.04` is the fourth checkbox in section C). The IDs are reserved requirements, not evidence that a test already exists. Their current status remains the status recorded in #1780 and §11.1.
@@ -1779,7 +1793,25 @@ The mapping is intentionally many-to-many where one behavior needs both a domain
 | #1780 checkbox | Reserved scenario case ID(s) |
 | --- | --- |
 | A.01–A.11 | `RS-001-001` through `RS-001-011` (same order as issue checkboxes) |
-| B.01–B.19 | `RS-002-001` through `RS-002-019` (same order as issue checkboxes) |
+| B.01 | `RS-002-001` |
+| B.02 | `RS-002-002` |
+| B.03 | `RS-002-003` |
+| B.04 | `RS-002-005` |
+| B.05 | `RS-002-006` |
+| B.06 | `RS-002-007` |
+| B.07 | `RS-002-008` |
+| B.08 | `RS-002-009` |
+| B.09 | `RS-002-010` |
+| B.10 | `RS-002-011` |
+| B.11 | `RS-002-012` |
+| B.12 | `RS-002-013` |
+| B.13 | `RS-002-014` |
+| B.14 | `RS-002-015` |
+| B.15 | `RS-002-016` |
+| B.16 | `RS-002-017` |
+| B.17 | `RS-002-018` |
+| B.18 | `RS-002-019` |
+| B.19 | `RS-002-021` |
 | C.01 | `RS-006-001` |
 | C.02 | `RS-006-005` |
 | C.03 | `RS-001-005`, `RS-001-013` |
@@ -1796,7 +1828,16 @@ The mapping is intentionally many-to-many where one behavior needs both a domain
 | C.14 | `RS-006-013` |
 | C.15 | `RS-006-018` |
 | C.16 | `RS-006-019` |
-| D.01–D.20 | `RS-004-001` through `RS-004-020` (same order as issue checkboxes) |
+| D.01–D.11 | `RS-004-001` through `RS-004-011` (same order as issue checkboxes) |
+| D.12 | `RS-004-013` |
+| D.13 | `RS-004-014` |
+| D.14 | `RS-004-017` |
+| D.15 | `RS-004-015` |
+| D.16 | `RS-004-015` |
+| D.17 | `RS-004-016` |
+| D.18 | `RS-004-018` |
+| D.19 | `RS-004-019` |
+| D.20 | `RS-004-020` |
 | E.01 | `RS-005-001` |
 | E.02 | `RS-005-003` |
 | E.03 | `RS-005-004` |
@@ -1814,7 +1855,20 @@ The mapping is intentionally many-to-many where one behavior needs both a domain
 | E.15 | `RS-004-021` |
 | E.16 | `RS-005-013` |
 | E.17 | `RS-005-014` |
-| F.01–F.14 | `RS-009-001` through `RS-009-014` (same order as issue checkboxes) |
+| F.01 | `RS-009-001` |
+| F.02 | `RS-009-001` |
+| F.03 | `RS-009-008` |
+| F.04 | `RS-009-005` |
+| F.05 | `RS-009-012` |
+| F.06 | `RS-009-010` |
+| F.07 | `RS-009-007` |
+| F.08 | `RS-009-006`, `RS-009-011` |
+| F.09 | `RS-009-011` |
+| F.10 | `RS-009-012` |
+| F.11 | `RS-009-012` |
+| F.12 | `RS-009-013` |
+| F.13 | `RS-009-014` |
+| F.14 | `RS-009-009` |
 | G.01–G.08 | `RS-008-001` through `RS-008-008` (same order as issue checkboxes) |
 | G.09 | `RS-008-011` |
 | G.10 | `RS-008-009` |
@@ -1825,7 +1879,7 @@ The mapping is intentionally many-to-many where one behavior needs both a domain
 | H.03 | `RS-005-012` |
 | H.04 | `RS-005-012`, `RS-006-013` |
 | H.05 | `RS-005-012` |
-| H.06 | `RS-005-014` |
+| H.06 | `RS-005-014`, `RS-004-012` |
 | H.07 | `RS-003-002` |
 | H.08 | `RS-003-013` |
 | H.09 | `RS-010-005` |
