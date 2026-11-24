@@ -69,11 +69,11 @@ Each active application/package owns its local README, agent instructions, roadm
 - [Brokers](../packages/brokers/README.md) — exchange integration and broker operations
 - [Bitunix Spot development workflow](../packages/brokers/docs/BITUNIX_WORKFLOW.md) — mandatory evidence-to-implementation process and operator-only LIVE investigation boundary
 - [Database](../packages/db/README.md) — provider-neutral CRUD infrastructure with built-in SQLite provider
-- [Entities](../packages/entities/README.md) — exchange-neutral domain entities and financial value objects
+- [Entities](../packages/entities/README.md) — exchange-neutral domain contracts and financial value objects
 - [Event Bus](../packages/event-bus/README.md) — bounded in-process event delivery
-- [Indicators](../packages/indicators/README.md) — exchange-neutral technical indicator calculations over normalized caller-supplied market data
+- [Indicators](../packages/indicators/README.md) — exchange-neutral technical-indicator calculations
 - [Journal](../packages/journal/README.md) — durable event recording and replay
 - [Notifiers](../packages/notifiers/README.md) — optional operational notifications
-- [Utils](../packages/utils/README.md) — domain-neutral reusable helpers, logging and generic utilities
+- [Utils](../packages/utils/README.md) — shared domain-neutral helpers
 
 For other domains, start at the owning directory's README and AGENTS.md, then follow its ROADMAP.md and local docs index.
