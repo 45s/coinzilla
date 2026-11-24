@@ -10,6 +10,7 @@ const POSITION_MODES = new Set(["ONE_WAY", "HEDGE"])
 const MARGIN_MODES = new Set(["ISOLATION", "CROSS"])
 const STOP_TYPES = new Set(["MARK_PRICE", "LAST_PRICE"])
 const TP_SL_ORDER_TYPES = new Set(["LIMIT", "MARKET"])
+const ORDER_EFFECTS = new Set(["GTC", "IOC", "FOK", "POST_ONLY"])
 
 function requireIdentifier({ value, field }) {
   if (typeof value !== "string" || value.trim() === "") {
@@ -47,26 +48,48 @@ function requireTimestamp({ value, field }) {
   return value
 }
 
-function normalizeOptionalTrigger({ order, field, enumValues }) {
-  if (order[field] === undefined || order[field] === null) {
-    return undefined
-  }
-  return requireEnum({
-    value: order[field],
-    values: enumValues,
-    field,
-  })
-}
-
-function normalizePendingOrder({ order }) {
+function requirePendingOrderObject({ order }) {
   if (order === null || typeof order !== "object" || Array.isArray(order)) {
     throw new TypeError("Bitunix Futures pending order should be an object")
   }
-  const orderType = requireEnum({
-    value: order.orderType ?? order.type,
-    values: ORDER_TYPES,
-    field: "orderType",
-  })
+}
+
+function normalizePendingOrderIdentity({ order }) {
+  const clientId = order.clientId == null
+    ? undefined
+    : requireIdentifier({
+      value: order.clientId,
+      field: "clientId",
+    })
+  return {
+    orderId: requireIdentifier({
+      value: order.orderId,
+      field: "orderId",
+    }),
+    symbol: requireIdentifier({
+      value: order.symbol,
+      field: "symbol",
+    }).toUpperCase(),
+    ...(clientId === undefined ? {} : { clientId }),
+    side: requireEnum({
+      value: order.side,
+      values: SIDES,
+      field: "side",
+    }),
+    positionMode: requireEnum({
+      value: order.positionMode,
+      values: POSITION_MODES,
+      field: "positionMode",
+    }),
+    marginMode: requireEnum({
+      value: order.marginMode,
+      values: MARGIN_MODES,
+      field: "marginMode",
+    }),
+  }
+}
+
+function normalizePendingOrderQuantities({ order }) {
   const quantity = requireDecimal({
     value: order.qty,
     field: "qty",
@@ -82,73 +105,68 @@ function normalizePendingOrder({ order }) {
   }) > 0) {
     throw new RangeError("Bitunix Futures pending order executed quantity exceeds original quantity")
   }
-  const clientId = order.clientId == null
-    ? undefined
-    : requireIdentifier({
-      value: order.clientId,
-      field: "clientId",
-    })
-  const price = orderType === "LIMIT"
-    ? requireDecimal({
-      value: order.price,
-      field: "price",
-      allowZero: false,
-    })
-    : undefined
-  const effect = orderType === "LIMIT"
-    ? requireEnum({
+  return {
+    quantity,
+    executedQuantity,
+  }
+}
+
+function normalizePendingOrderType({ order }) {
+  return requireEnum({
+    value: order.orderType ?? order.type,
+    values: ORDER_TYPES,
+    field: "orderType",
+  })
+}
+
+function normalizePendingOrderPrice({ order, orderType }) {
+  if (orderType !== "LIMIT") {
+    return undefined
+  }
+  return requireDecimal({
+    value: order.price,
+    field: "price",
+    allowZero: false,
+  })
+}
+
+function normalizePendingOrderEffect({ order, orderType }) {
+  if (orderType === "LIMIT") {
+    return requireEnum({
       value: order.effect,
-      values: new Set(["GTC", "IOC", "FOK", "POST_ONLY"]),
+      values: ORDER_EFFECTS,
       field: "effect",
     })
-    : order.effect === undefined ? undefined : requireIdentifier({
-      value: order.effect,
-      field: "effect",
-    })
+  }
+  if (order.effect === undefined || order.effect === null) {
+    return undefined
+  }
+  return requireIdentifier({
+    value: order.effect,
+    field: "effect",
+  })
+}
+
+function normalizePendingOrderSettings({ order }) {
   if (typeof order.reduceOnly !== "boolean") {
     throw new TypeError("Bitunix Futures pending order reduceOnly must be a boolean")
   }
   if (!Number.isSafeInteger(order.leverage) || order.leverage <= 0) {
     throw new TypeError("Bitunix Futures pending order leverage must be a positive safe integer")
   }
-
-  const normalized = {
-    orderId: requireIdentifier({
-      value: order.orderId,
-      field: "orderId",
-    }),
-    symbol: requireIdentifier({
-      value: order.symbol,
-      field: "symbol",
-    }).toUpperCase(),
-    quantity,
-    executedQuantity,
-    positionMode: requireEnum({
-      value: order.positionMode,
-      values: POSITION_MODES,
-      field: "positionMode",
-    }),
-    marginMode: requireEnum({
-      value: order.marginMode,
-      values: MARGIN_MODES,
-      field: "marginMode",
-    }),
+  return {
     leverage: order.leverage,
-    ...(price === undefined ? {} : { price }),
-    side: requireEnum({
-      value: order.side,
-      values: SIDES,
-      field: "side",
-    }),
-    orderType,
-    ...(effect === undefined ? {} : { effect }),
-    ...(clientId === undefined ? {} : { clientId }),
     reduceOnly: order.reduceOnly,
     status: requireEnum({
       value: order.status,
       values: ORDER_STATUSES,
       field: "status",
     }),
+  }
+}
+
+function normalizePendingOrderFinancials({ order }) {
+  return {
     fee: requireDecimal({
       value: order.fee,
       field: "fee",
@@ -158,6 +176,11 @@ function normalizePendingOrder({ order }) {
       field: "realizedPNL",
       allowNegative: true,
     }),
+  }
+}
+
+function normalizePendingOrderTimestamps({ order }) {
+  return {
     createdAt: requireTimestamp({
       value: order.ctime,
       field: "ctime",
@@ -167,38 +190,90 @@ function normalizePendingOrder({ order }) {
       field: "mtime",
     }),
   }
+}
 
-  for (const [source, target, enumValues] of [
-    ["tpPrice", "takeProfitPrice", null],
-    ["slPrice", "stopLossPrice", null],
+function normalizeOptionalTrigger({ order, source, target, enumValues }) {
+  if (order[source] === undefined || order[source] === null) {
+    return undefined
+  }
+  if (enumValues) {
+    return {
+      [target]: requireEnum({
+        value: order[source],
+        values: enumValues,
+        field: source,
+      }),
+    }
+  }
+  return {
+    [target]: requireDecimal({
+      value: order[source],
+      field: source,
+      allowZero: false,
+    }),
+  }
+}
+
+function normalizePendingOrderTriggers({ order }) {
+  const fields = [
+    ["tpPrice", "takeProfitPrice"],
+    ["slPrice", "stopLossPrice"],
     ["tpStopType", "takeProfitStopType", STOP_TYPES],
     ["slStopType", "stopLossStopType", STOP_TYPES],
     ["tpOrderType", "takeProfitOrderType", TP_SL_ORDER_TYPES],
     ["slOrderType", "stopLossOrderType", TP_SL_ORDER_TYPES],
-  ]) {
-    if (order[source] !== undefined && order[source] !== null) {
-      normalized[target] = enumValues
-        ? normalizeOptionalTrigger({ order, field: source, enumValues })
-        : requireDecimal({
-          value: order[source],
-          field: source,
-          allowZero: false,
-        })
-    }
-  }
-  for (const [source, target] of [
     ["tpOrderPrice", "takeProfitOrderPrice"],
     ["slOrderPrice", "stopLossOrderPrice"],
-  ]) {
-    if (order[source] !== undefined && order[source] !== null) {
-      normalized[target] = requireDecimal({
-        value: order[source],
-        field: source,
-        allowZero: false,
-      })
-    }
-  }
-  return Object.freeze(normalized)
+  ]
+  return fields.reduce((normalized, [source, target, enumValues]) => ({
+    ...normalized,
+    ...normalizeOptionalTrigger({
+      order,
+      source,
+      target,
+      enumValues,
+    }),
+  }), {})
+}
+
+function normalizePendingOrder({ order }) {
+  requirePendingOrderObject({
+    order,
+  })
+  const orderType = normalizePendingOrderType({
+    order,
+  })
+  const price = normalizePendingOrderPrice({
+    order,
+    orderType,
+  })
+  const effect = normalizePendingOrderEffect({
+    order,
+    orderType,
+  })
+  return Object.freeze({
+    ...normalizePendingOrderIdentity({
+      order,
+    }),
+    ...normalizePendingOrderQuantities({
+      order,
+    }),
+    ...normalizePendingOrderSettings({
+      order,
+    }),
+    ...normalizePendingOrderFinancials({
+      order,
+    }),
+    ...normalizePendingOrderTimestamps({
+      order,
+    }),
+    ...(price === undefined ? {} : { price }),
+    ...(effect === undefined ? {} : { effect }),
+    orderType,
+    ...normalizePendingOrderTriggers({
+      order,
+    }),
+  })
 }
 
 export function adaptFuturesPendingOrders({ rows } = {}) {
