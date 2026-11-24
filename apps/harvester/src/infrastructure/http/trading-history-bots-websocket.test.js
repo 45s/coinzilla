@@ -370,6 +370,46 @@ test("rejects malformed successful read models as unavailable snapshots", async 
   assert.equal(message.data.portfolio.ok, true)
 })
 
+test("rejects non-string recovery amounts in successful Portfolio reads", async (t) => {
+  const eventBus = new EventBus()
+  const { operator } = createOperatorState()
+  operator.getPositions = async () => ({
+    ok: true,
+    data: {
+      observedAt: 120000,
+      positions: [{
+        symbol: "BTCUSDT",
+        activeQuantity: "0.1",
+        investedQuote: "500",
+        recovery: {
+          buyCost: 500,
+          netSellProceeds: "0",
+          outstandingRecoveryAmount: "500",
+          realizedNetProfit: "0",
+        },
+      }],
+    },
+  })
+  const api = await startApi({
+    t,
+    eventBus,
+    operator,
+  })
+  const socket = new WebSocket(`ws://127.0.0.1:${api.address.port}/api/v1/trading/events`)
+  t.after(() => socket.close())
+
+  await waitForSocketOpen(socket)
+  const message = await waitForMessage({
+    socket,
+    predicate: (item) => item.type === "bots.snapshot.unavailable",
+  })
+
+  assert.equal(message.data.portfolio.ok, false)
+  assert.equal(message.data.portfolio.error.code, "HARVESTER_OPERATOR_SNAPSHOT_INVALID")
+  assert.equal(message.data.status.ok, true)
+  assert.equal(message.data.markets.ok, true)
+})
+
 test("a reconnect receives a fresh full snapshot rather than relying on missed event replay", async (t) => {
   const eventBus = new EventBus()
   const { operator, state } = createOperatorState()
