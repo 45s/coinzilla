@@ -171,7 +171,7 @@ test("Bitunix Futures getFuturesPositionHistory returns one exact paginated hist
     updatedAt: 1_700_000_002_000,
     lifecycle: "HISTORICAL",
   })
-  const request = requests[0]
+  const [request] = requests
   const query = new URL(request.url).searchParams
   assert.equal(new URL(request.url).pathname, "/api/v1/futures/position/get_history_positions")
   assert.equal(query.get("symbol"), "BTCUSDT")
