@@ -5,18 +5,13 @@
       <h1>Bots<span>.</span></h1>
       <p class="page-description">A live view of the running strategy mode, configured markets, Portfolio inventory and BUY-side operator controls.</p>
     </div>
-    <button type="button" class="refresh-button" (click)="refresh()" [disabled]="loading()">
-      {{ loading() ? 'Refreshing…' : 'Refresh snapshots' }}
-    </button>
   </header>
 
   <div class="connection-strip" [class.online]="connected()" [class.offline]="!connected()">
     <span class="connection-dot"></span>
-    <strong>{{ connected() ? 'Connected to local Harvester' : 'Harvester unavailable' }}</strong>
+    <strong>{{ socketState() === 'live' ? 'WebSocket connected' : socketState() === 'reconnecting' ? 'Reconnecting to Harvester' : socketState() === 'offline' ? 'Harvester offline' : 'Connecting to Harvester' }}</strong>
     <span class="connection-address">127.0.0.1:4201</span>
-    @if (status(); as runtime) {
-      <span class="observed-at">Observed {{ formatStartedAt(runtime.observedAt) }}</span>
-    }
+    <span class="observed-at">Snapshot {{ snapshotFreshness() }} · {{ formatObservedAt(lastObservedAt()) }}</span>
   </div>
 
   @if (errorMessage(); as message) {
@@ -195,7 +190,7 @@
     </div>
 
     @if (markets().length === 0) {
-      <div class="empty-state">{{ loading() ? 'Loading market snapshots…' : 'No market snapshots available. Refresh or check the local Harvester connection.' }}</div>
+      <div class="empty-state">{{ loading() ? 'Loading market snapshots…' : 'No market snapshots available. Waiting for the local Harvester stream.' }}</div>
     }
 
     <div class="global-controls">
@@ -271,7 +266,7 @@
         </table>
       </div>
     } @else {
-      <div class="empty-state">{{ loading() ? 'Loading Portfolio positions…' : connected() ? 'No Portfolio positions' : 'Portfolio snapshot unavailable until Harvester connects.' }}</div>
+      <div class="empty-state">{{ loading() ? 'Loading Portfolio positions…' : connected() ? 'No Portfolio positions' : 'Portfolio snapshot unavailable until a fresh Harvester snapshot arrives.' }}</div>
     }
   </section>
 </section>
