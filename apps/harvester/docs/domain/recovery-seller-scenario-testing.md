@@ -1344,14 +1344,31 @@ These blockers must appear in the registry, #1780, the repository catalog where 
 - Missing/ambiguous valuation must fail closed; it is not zero.
 - Do not add a fabricated conversion rate, ticker lookup, config property or test default.
 
-### 13.4 Dust versus exchange-filter STOP — affected RS-003/009 cases BLOCKED
+### 13.4 Dust and exchange-filter behavior — specified contract, not a blocker
 
-- The contract includes global STOP for exchange-filter violations.
-- It also discusses retained residual dust when fully reconciled quantity/notional filters make a remainder unsellable.
-- Do not assume every filter violation is dust.
-- Do not assume every residual must trigger STOP.
-- The separate final-residual/no-new-BUY liquidation policy is unresolved. The approved smaller-remainder rule permits a smaller authorized legacy remainder as part of the current cycle SELL when Spot-available/unreserved and all gates/filters pass; it does not authorize a standalone SELL of a residual after the cycle without a new BUY.
-- The exact applicability boundary requires an owner-approved decision before encoding ambiguous cases.
+The RS specification distinguishes a candidate SELL order that violates an exchange filter from a residual remaining after a successfully completed cycle. These are different events and must have different scenario outcomes.
+
+**Candidate SELL filter violation:**
+
+- Any candidate SELL violating a supported price/quantity increment, minimum/maximum price, minimum/maximum quantity or minimum/maximum notional filter latches global sticky STOP.
+- Do not adjust price/quantity, increase legacy allocation, split the SELL, retry automatically or reinterpret the candidate order violation as dust.
+- Missing required filter metadata also fails closed/STOPs according to the approved market contract.
+
+**Residual after successful cycle:**
+
+- Only after the SELL is terminal and fully reconciled, all canonical fills/commissions/proceeds/reservations are resolved, and all applicable recovery, legacy and combined profitability gates pass, may a precisely identified residual that cannot be sold solely because of current exchange quantity/notional filters be classified as retained bonus dust.
+- Record the exact residual quantity and the specific limiting quantity/notional filter.
+- Retained bonus dust remains in the account but is permanently excluded from all future RS cycle calculations: it is not recovery inventory, not legacy inventory, not part of a later SELL target, not part of later profitability, and not counted again as available RS inventory.
+- Ordinary sellable residual is not dust and cannot be hidden or discarded.
+- Price-filter failures, unavailable commission valuation, incomplete fill/order reconciliation, active reservations and other unresolved accounting/risk conditions are not dust and block successful completion.
+- Dust classification cannot bypass the combined profitability gate.
+
+**Smaller remainder versus final residual:**
+
+- A remaining authorized legacy quantity smaller than configured sellQuantity may be sold as the legacy component of the current cycle SELL if it is Spot-available/unreserved and all independent profitability and exchange filters pass. Use the smaller actual quantity; never round up, force, silently discard or classify an ordinary sellable remainder as dust.
+- A separate final residual from an already completed recovery cycle, with no new BUY, remains unresolved/deferred. The smaller-remainder rule does not authorize that standalone liquidation.
+
+These distinctions are specified in the RS domain contract and must be scenario-tested. They are not owner-decision blockers. RS-009 remains BLOCKED only for the separate STOP resolver/source-contract discrepancy described in §13.1.
 
 ### 13.5 Workflow-to-evaluator cycle-state defect — RS-003 application proof BLOCKED by #1809
 
