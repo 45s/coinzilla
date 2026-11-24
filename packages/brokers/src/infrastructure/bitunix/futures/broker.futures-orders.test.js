@@ -219,3 +219,84 @@ test("Bitunix Futures createFuturesOrder requires positionId for CLOSE tradeSide
   assert.equal(result.mutationOutcome, "NOT_SENT")
   assert.equal(requests.length, 0)
 })
+
+test("Bitunix Futures createFuturesOrder reconciles a lost acknowledgement by clientId without retrying", async () => {
+  const { broker, requests } = createOrderBroker({
+    placeError: new Error("connection lost after dispatch"),
+  })
+  await broker.connect()
+
+  const result = await broker.createFuturesOrder(limitOrderInput)
+
+  assert.equal(result.ok, true)
+  assert.equal(result.mutationOutcome, "CONFIRMED")
+  assert.equal(result.orderOutcome, "CONFIRMED")
+  assert.equal(requests.filter(({ method }) => method === "POST").length, 1)
+})
+
+test("Bitunix Futures createFuturesOrder returns a definitive exchange rejection", async () => {
+  const { broker, requests } = createOrderBroker({
+    responseCode: 10001,
+    responseMessage: "invalid Futures order",
+  })
+  await broker.connect()
+
+  const result = await broker.createFuturesOrder(limitOrderInput)
+
+  assert.equal(result.ok, false)
+  assert.equal(result.mutationOutcome, "REJECTED")
+  assert.equal(result.orderOutcome, "REJECTED")
+  assert.equal(requests.some(({ path }) => path === "/api/v1/futures/trade/get_order_detail"), false)
+})
+
+test("Bitunix Futures createFuturesOrder supports explicit MARKET order semantics", async () => {
+  const { broker, requests } = createOrderBroker()
+  await broker.connect()
+
+  const result = await broker.createFuturesOrder({
+    ...limitOrderInput,
+    orderType: "MARKET",
+    price: undefined,
+    effect: undefined,
+  })
+
+  assert.equal(result.ok, true)
+  const placeRequest = requests.find(({ path }) => path === "/api/v1/futures/trade/place_order")
+  assert.deepEqual(JSON.parse(placeRequest.body), {
+    symbol: "BTCUSDT",
+    side: "BUY",
+    orderType: "MARKET",
+    qty: "0.01",
+    tradeSide: "OPEN",
+    reduceOnly: false,
+    clientId: "strategy-order-456",
+  })
+})
+
+test("Bitunix Futures createFuturesOrder validates and preserves explicit TP/SL parameters", async () => {
+  const { broker, requests } = createOrderBroker()
+  await broker.connect()
+
+  const result = await broker.createFuturesOrder({
+    ...limitOrderInput,
+    tpPrice: "61000.1",
+    tpStopType: "MARK_PRICE",
+    tpOrderType: "LIMIT",
+    tpOrderPrice: "61000.1",
+    slPrice: "59000.1",
+    slStopType: "LAST_PRICE",
+    slOrderType: "MARKET",
+  })
+
+  assert.equal(result.ok, true)
+  const placeRequest = requests.find(({ path }) => path === "/api/v1/futures/trade/place_order")
+  const body = JSON.parse(placeRequest.body)
+  assert.equal(body.tpPrice, "61000.1")
+  assert.equal(body.tpStopType, "MARK_PRICE")
+  assert.equal(body.tpOrderType, "LIMIT")
+  assert.equal(body.tpOrderPrice, "61000.1")
+  assert.equal(body.slPrice, "59000.1")
+  assert.equal(body.slStopType, "LAST_PRICE")
+  assert.equal(body.slOrderType, "MARKET")
+  assert.equal(Object.hasOwn(body, "slOrderPrice"), false)
+})
