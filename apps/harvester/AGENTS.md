@@ -26,6 +26,12 @@ Follow the repository [task workflow](../../docs/engineering/TASK_WORKFLOWS.md) 
 
 Follow the canonical [ENGINEERING_STANDARDS.md](../../ENGINEERING_STANDARDS.md) and [Modularity Standard](../../docs/engineering/MODULARITY_STANDARD.md). This file records only Harvester-specific constraints.
 
+## Recovery Seller scenario work — mandatory
+
+For any Recovery Seller domain-scenario task, read [recovery-seller-scenario-testing.md](./docs/domain/recovery-seller-scenario-testing.md) and the live [RS scenario matrix, issue #1780](https://github.com/45s/coinzilla/issues/1780) before editing. The playbook owns the RS-001…RS-010 family/subcase schema, A–K matrix crosswalk, existing/planned file trees, domain/application boundaries, canonical fixture and fake-port contracts, independent financial oracles, test registration/commands, evidence requirements and phased PR sequence.
+
+Do not treat existing RS unit/workflow/runtime/operator tests as scenario coverage. Do not invent or resolve STOP, enabled-default, third-asset valuation, final-residual liquidation, restart/replay or other deferred behavior in a scenario PR. Keep #1780, the repository scenario catalog, Harvester/root roadmaps and affected domain docs synchronized. Leave PRs open for owner review; never merge.
+
 ## Tests and verification
 
 Follow the canonical [human-readable test design standard](../../ENGINEERING_STANDARDS.md#human-readable-test-design) and engineering verification requirements. Harvester tests must read as plain-English behavior specifications: precise domain variable names, named-field comparisons instead of opaque tuples, descriptive test names, and a detailed message on every assertion. Keep exchange-order verification deterministic and offline by default; exchange-order verification is opt-in and TESTNET-only.
