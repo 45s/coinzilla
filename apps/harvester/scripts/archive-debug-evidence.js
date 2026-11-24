@@ -1,18 +1,12 @@
 import {
-  createCipheriv,
-  createDecipheriv,
   createHash,
-  randomBytes,
   randomUUID,
-  scryptSync,
 } from "node:crypto"
 import {
-  appendFile,
   copyFile,
   lstat,
   mkdir,
   mkdtemp,
-  open as openFile,
   readdir,
   rm,
   stat,
@@ -30,7 +24,6 @@ import { resolveOperationalStateDirectory } from "../src/infrastructure/operatio
 
 const PACKAGE_DIRECTORY = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const ARCHIVE_REMOTE = "https://github.com/45s/coinzilla-archive.git"
-const MAGIC = Buffer.from("CZDBG001")
 
 function runCommand({ command, args, cwd } = {}) {
   return new Promise((resolve, reject) => {
@@ -133,15 +126,11 @@ function validateArchiveRequest({ args, env } = {}) {
   if (args.length !== 1 || args[0] !== "--confirm-stopped") {
     throw new TypeError("Usage: pnpm --filter @coinzilla/harvester archive:debug -- --confirm-stopped")
   }
-  if (typeof env.HARVESTER_ARCHIVE_PASSPHRASE !== "string" ||
-      env.HARVESTER_ARCHIVE_PASSPHRASE.length < 16) {
-    throw new Error("Set HARVESTER_ARCHIVE_PASSPHRASE (at least 16 characters) before archiving.")
-  }
 }
 
 function createArchiveName({ createdAt } = {}) {
   const timestamp = createdAt.replaceAll(":", "-").replaceAll(".", "-")
-  return `harvester-debug-${timestamp}-${randomUUID().slice(0, 8)}.tar.gz.enc`
+  return `harvester-debug-${timestamp}-${randomUUID().slice(0, 8)}.tar.gz`
 }
 
 function resolveRecoveryFactsDirectory({ packageDirectory, env } = {}) {
@@ -239,88 +228,7 @@ async function writeArchiveManifest({
   )
 }
 
-export async function encryptDebugBundle({ inputFile, outputFile, passphrase } = {}) {
-  if (typeof passphrase !== "string" || passphrase.length < 16) {
-    throw new Error("HARVESTER_ARCHIVE_PASSPHRASE must contain at least 16 characters.")
-  }
-  const salt = randomBytes(16)
-  const iv = randomBytes(12)
-  const key = scryptSync(passphrase, salt, 32, {
-    N: 32768,
-    r: 8,
-    p: 1,
-    maxmem: 64 * 1024 * 1024,
-  })
-  const cipher = createCipheriv("aes-256-gcm", key, iv)
-  await writeFile(outputFile, Buffer.concat([MAGIC, salt, iv]), {
-    flag: "wx",
-    mode: 0o600,
-  })
-  await pipeline(
-    createReadStream(inputFile),
-    cipher,
-    createWriteStream(outputFile, {
-      flags: "a",
-      mode: 0o600,
-    }),
-  )
-  await appendFile(outputFile, cipher.getAuthTag(), { mode: 0o600 })
-  return {
-    algorithm: "aes-256-gcm",
-    kdf: "scrypt",
-  }
-}
-
-export async function decryptDebugBundle({ inputFile, outputFile, passphrase } = {}) {
-  if (typeof passphrase !== "string" || passphrase.length < 16) {
-    throw new Error("HARVESTER_ARCHIVE_PASSPHRASE must contain at least 16 characters.")
-  }
-  const details = await stat(inputFile)
-  if (details.size < 52) {
-    throw new Error("Encrypted debug archive is truncated.")
-  }
-  const handle = await openFile(inputFile, "r")
-  const header = Buffer.alloc(36)
-  const tag = Buffer.alloc(16)
-  try {
-    await handle.read(header, 0, header.length, 0)
-    await handle.read(tag, 0, tag.length, details.size - tag.length)
-  } finally {
-    await handle.close()
-  }
-  if (!header.subarray(0, 8).equals(MAGIC)) {
-    throw new Error("Unsupported debug archive format.")
-  }
-  const salt = header.subarray(8, 24)
-  const iv = header.subarray(24, 36)
-  const key = scryptSync(passphrase, salt, 32, {
-    N: 32768,
-    r: 8,
-    p: 1,
-    maxmem: 64 * 1024 * 1024,
-  })
-  const decipher = createDecipheriv("aes-256-gcm", key, iv)
-  decipher.setAuthTag(tag)
-  try {
-    await pipeline(
-      createReadStream(inputFile, {
-        start: 36,
-        end: details.size - 17,
-      }),
-      decipher,
-      createWriteStream(outputFile, {
-        flags: "wx",
-        mode: 0o600,
-      }),
-    )
-  } catch (error) {
-    await rm(outputFile, { force: true })
-    throw error
-  }
-  return outputFile
-}
-
-async function publishEncryptedArchive({ encryptedFile, archiveName, temporaryRoot } = {}) {
+async function publishArchive({ archiveFile, archiveName, temporaryRoot } = {}) {
   const checkout = path.join(temporaryRoot, "archive-repo")
   await runCommand({
     command: "git",
@@ -331,7 +239,7 @@ async function publishEncryptedArchive({ encryptedFile, archiveName, temporaryRo
     recursive: true,
     mode: 0o700,
   })
-  await copyFile(encryptedFile, destination, { flag: "wx" })
+  await copyFile(archiveFile, destination, { flag: "wx" })
   await runCommand({
     command: "git",
     args: ["add", "--", `archives/${archiveName}`],
@@ -342,7 +250,7 @@ async function publishEncryptedArchive({ encryptedFile, archiveName, temporaryRo
     args: [
       "-c", "user.name=Coinzilla Harvester",
       "-c", "user.email=harvester-archive@users.noreply.github.com",
-      "commit", "-m", `chore(archive): add encrypted debug bundle ${archiveName}`,
+      "commit", "-m", `chore(archive): add debug evidence bundle ${archiveName}`,
     ],
     cwd: checkout,
   })
@@ -403,43 +311,37 @@ async function buildArchiveStaging({
   }
 }
 
-async function encryptAndPublishArchive({
+async function createAndPublishArchive({
   tarFile,
   packageDirectory,
   archiveName,
-  passphrase,
   temporaryRoot,
   includedSources,
   missingSources,
 } = {}) {
   const outputDirectory = path.join(packageDirectory, "archive-output", "debug")
-  const encryptedFile = path.join(outputDirectory, archiveName)
+  const archiveFile = path.join(outputDirectory, archiveName)
   await mkdir(outputDirectory, {
     recursive: true,
     mode: 0o700,
   })
-  const encryption = await encryptDebugBundle({
-    inputFile: tarFile,
-    outputFile: encryptedFile,
-    passphrase,
-  })
-  const commit = await publishEncryptedArchive({
-    encryptedFile,
+  await copyFile(tarFile, archiveFile, { flag: "wx" })
+  const commit = await publishArchive({
+    archiveFile,
     archiveName,
     temporaryRoot,
   })
   process.stdout.write([
-    "Encrypted Harvester debug archive published and verified.",
+    "Harvester debug archive published and verified.",
     `Archive: archives/${archiveName}`,
     `Included: ${includedSources.join(", ")}`,
     `Missing: ${missingSources.length ? missingSources.join(", ") : "none"}`,
-    `Encryption: ${encryption.algorithm} / scrypt`,
     `Remote commit: ${commit}`,
-    `Local encrypted copy: ${encryptedFile}`,
-  ].join("\n") + "\n")
+    `Local archive: ${archiveFile}`,
+  ].join("\\n") + "\\n")
   return {
     archiveName,
-    encryptedFile,
+    archiveFile,
     commit,
     includedSources,
     missingSources,
@@ -467,11 +369,10 @@ export async function runHarvesterDebugArchive({
       temporaryRoot,
       createdAt,
     })
-    return await encryptAndPublishArchive({
+    return await createAndPublishArchive({
       ...staging,
       packageDirectory,
       archiveName,
-      passphrase: env.HARVESTER_ARCHIVE_PASSPHRASE,
       temporaryRoot,
     })
   } finally {
@@ -483,19 +384,7 @@ export async function runHarvesterDebugArchive({
 }
 
 async function main() {
-  const args = process.argv.slice(2)
-  if (args[0] === "--decrypt" && args.length === 3) {
-    const outputFile = await decryptDebugBundle({
-      inputFile: path.resolve(args[1]),
-      outputFile: path.resolve(args[2]),
-      passphrase: process.env.HARVESTER_ARCHIVE_PASSPHRASE,
-    })
-    process.stdout.write(
-      `Decrypted archive: ${outputFile}\nExtract it with: tar -xzf "${outputFile}" -C <empty-output-directory>\n`,
-    )
-    return
-  }
-  await runHarvesterDebugArchive({ args })
+  await runHarvesterDebugArchive({ args: process.argv.slice(2) })
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
