@@ -26,15 +26,27 @@ const spotBroker = new Broker({
   apiSecret,
   tradingMode: "live",
 })
+
+const futuresBroker = new Broker({
+  provider: "bitunix-futures",
+  apiKey,
+  apiSecret,
+  tradingMode: "live",
+  providerOptions: {
+    allowLiveOrderMutations: false,
+    allowLiveAccountMutations: false,
+  },
+})
 ```
 
-- `provider` is required and must be exactly `"binance"` or `"bitunix"`; missing and unknown providers fail during construction.
+- `provider` is required and must be exactly `"binance"`, `"bitunix"`, or `"bitunix-futures"`; missing and unknown providers fail during construction.
 - `apiKey`, `apiSecret`, and `tradingMode` are common top-level options. The selected provider validates credentials and its supported environment.
 - Binance requires explicit `tradingMode: "testnet" | "live"`; `NODE_ENV` never selects exchange endpoints.
-- Bitunix Spot requires explicit `tradingMode: "live"`. No Spot TESTNET endpoint is documented; the constructor does not silently infer LIVE.
+- Bitunix Spot and Bitunix USDT Futures require explicit `tradingMode: "live"`. No isolated TESTNET endpoint is documented for either product; the constructor does not silently infer LIVE.
+- Bitunix Futures uses the separate `bitunix-futures` provider ID and a Futures-specific configuration. LIVE order and account-setting mutations are disabled by default; `providerOptions.allowLiveOrderMutations` and `providerOptions.allowLiveAccountMutations` are explicit opt-ins, not readiness approvals.
 - Provider-specific configuration is namespaced under `providerOptions`. For example, use `providerOptions: { baseUrl, requestTimeout }` for Bitunix or `providerOptions: { websocketApiUrl, websocketStreamsUrl }` for Binance. Provider options cannot override common credentials, logger, or environment selection.
 - The optional common `logger` is passed to the selected adapter. Unknown top-level options fail fast rather than being silently ignored.
-- The constructor returns the selected existing concrete provider instance and validates it against `assertBrokerContract`. Existing `BinanceWebSocketBroker` and `BitunixSpotBroker` constructors remain supported. Concrete provider `instanceof` checks remain valid; both providers also satisfy `instanceof Broker` via the structural contract.
+- The constructor returns the selected concrete provider instance and validates it against `assertBrokerContract`. Existing `BinanceWebSocketBroker` and `BitunixSpotBroker` constructors remain supported; `BitunixFuturesBroker` is a separate Futures implementation. Concrete provider `instanceof` checks remain valid; both providers also satisfy `instanceof Broker` via the structural contract.
 - `Broker` is a constructor convenience, not an application provider registry or market-routing policy. Consuming applications retain ownership of account/market routing and composition.
 
 ## 1. Ownership and capability-model decision
@@ -244,3 +256,17 @@ A successful observation subscription is therefore not evidence that native user
 Binance declares `SUBSCRIBE_USER_DATA: SUPPORTED` and `OBSERVE_USER_DATA: UNSUPPORTED`: its authenticated native WebSocket events use `onEvent`, not a polling observation channel. Bitunix declares the inverse delivery capabilities and remains non-authoritative.
 
 The Binance subscription result retains the live `subscriptionId` getter and recovery acknowledgement controls from `UserDataSession`. Delivery metadata is attached without spreading/snapshotting the handle, so reconnects continue to expose the current remote subscription ID.
+
+
+## Bitunix USDT Futures provider — implementation status
+
+The `bitunix-futures` provider is being implemented independently from Bitunix Spot under [issue #1805](https://github.com/45s/coinzilla/issues/1805) and [Draft PR #1806](https://github.com/45s/coinzilla/pull/1806).
+
+Current verified capabilities:
+- `getExchangeMarkets()`: public trading-pair catalog, filtered to OPEN and API-enabled contracts.
+- `getBalances()`: authenticated USDT margin-account read; exact available/frozen/margin decimal mapping. This is not an authoritative account snapshot because the source does not provide a verified snapshot timestamp.
+- Signed Futures REST transport with explicit POST mutation-state declaration and no automatic retries.
+
+All other Futures operations remain `UNKNOWN` or `UNSUPPORTED` until their protocol mapping, lifecycle and deterministic tests are complete. In particular, the presence of Futures endpoints does not establish canonical fill completeness, order recovery, or private WebSocket event durability. Do not use this provider for Harvester routing or production execution based on the partial capability set. No LIVE mutation has been performed by automated tests or the implementation agent.
+
+See the maintained [Bitunix Futures reference audit](./docs/BITUNIX_FUTURES_REFERENCE_AUDIT.md) for official protocol facts, third-party source comparison, discrepancies and remaining blockers.

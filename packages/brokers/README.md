@@ -32,7 +32,8 @@ The `@coinzilla/brokers` entry point exports:
 - `Broker` — exchange-neutral constructor selecting the existing Binance or Bitunix Spot implementation.
 - `BinanceWebSocketBroker` — the concrete Binance WebSocket API/Streams broker.
 - `BinanceWebSocketConfig` — validated Binance broker configuration.
-- `BitunixSpotBroker` and `BitunixSpotConfig` — the partial Bitunix Spot REST broker implementation and its validated configuration.
+- `BitunixSpotBroker` and `BitunixSpotConfig` — the Bitunix Spot REST broker implementation and its validated configuration.
+- `BitunixFuturesBroker` and `BitunixFuturesConfig` — the separate Bitunix USDT-margined Futures provider and its validated LIVE-only configuration. Futures order/account-setting mutations are disabled by default; no isolated Futures TESTNET endpoint has been verified.
 - `BitunixSpotWebSocketClient` and `BitunixWebSocketError` — a separately managed, authenticated Spot WebSocket request/response RPC client; it does not add subscriptions or order mutations.
 - Bitunix polling reconciliation remains a private infrastructure helper, but the public `subscribeForUserData()` method exposes its explicitly scoped snapshots through `onObservation` and the `OBSERVE_USER_DATA` capability. This is not a native user-data stream, canonical fill feed, authoritative account snapshot, or Harvester provider. See [the polling boundary](./docs/BITUNIX_SPOT_POLLING.md).
 - `normalizeBinanceId` — exact non-negative Binance identifier normalization, exported for package consumers that need the same identifier contract.
@@ -64,9 +65,20 @@ const spotBroker = new Broker({
     requestTimeout: 10_000,
   },
 })
+
+const futuresBroker = new Broker({
+  provider: "bitunix-futures",
+  apiKey,
+  apiSecret,
+  tradingMode: "live",
+  providerOptions: {
+    allowLiveOrderMutations: false,
+    allowLiveAccountMutations: false,
+  },
+})
 ```
 
-The provider must be exactly `"binance"` or `"bitunix"`. Environment selection is explicit: Binance requires `tradingMode: "testnet" | "live"`; Bitunix Spot currently requires `tradingMode: "live"` because no Spot TESTNET endpoint is documented. Provider-specific options (such as `baseUrl`, `websocketApiUrl`, `requestTimeout`, or injected dependencies) belong inside `providerOptions`. Common credentials, environment selection, and the optional logger cannot be overridden there.
+The provider must be exactly `"binance"`, `"bitunix"`, or `"bitunix-futures"`. Environment selection is explicit: Binance requires `tradingMode: "testnet" | "live"`; Bitunix Spot and Bitunix USDT Futures currently require `tradingMode: "live"` because no isolated TESTNET endpoint is documented for either product. Provider-specific options (such as `baseUrl`, `websocketApiUrl`, `requestTimeout`, or injected dependencies) belong inside `providerOptions`. Common credentials, environment selection, and the optional logger cannot be overridden there.
 
 The constructor returns the existing concrete provider instance, preserving its behavior and concrete `instanceof` checks. Both instances also satisfy `instanceof Broker` through the shared structural contract. Existing direct constructors remain supported. The factory selects an adapter only; application-specific account/market routing remains with the consuming application.
 
@@ -541,3 +553,8 @@ For state-changing Bitunix REST calls, an HTTP-success response with an unusable
 ### Bitunix Spot deposit and withdrawal diagnostics
 
 When credentials are configured, the read-only diagnostic runner also exercises `getDeposits({ limit: 1 })` and `getWithdrawalHistory({ limit: 1 })` through the public Broker facade. These are single bounded page probes only; they do not establish complete history. Reports retain structural schema observations and never persist deposit amounts, withdrawal amounts, addresses, transaction hashes, or record values. Public-only mode skips both private reads.
+
+
+## Bitunix USDT Futures
+
+The Futures implementation is a separate provider and does not reuse the Spot REST/WS adapter. It currently supports only the public market catalog and private USDT account-balance read; other Futures methods remain explicitly unknown or unsupported until implemented and verified. It is not production-ready and must not be selected by an application for execution. See the [Bitunix Futures reference audit](./docs/BITUNIX_FUTURES_REFERENCE_AUDIT.md), [Broker API status](./BROKER_API.md#bitunix-usdt-futures-provider--implementation-status), and [tracking issue #1805](https://github.com/45s/coinzilla/issues/1805).
