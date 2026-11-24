@@ -9,6 +9,7 @@ import { adaptFuturesCandles, BITUNIX_FUTURES_CANDLE_INTERVALS } from "./adapter
 import { adaptFuturesCanonicalOrder } from "./adapters/adapt-futures-canonical-order.js"
 import { adaptFuturesCurrentPositions, adaptFuturesHistoricalPositions } from "./adapters/adapt-futures-positions.js"
 import { adaptFuturesTradeHistory } from "./adapters/adapt-futures-trades.js"
+import { adaptFuturesPendingOrders } from "./adapters/adapt-futures-pending-orders.js"
 
 function unsupportedResult({ operation, reason }) {
   return {
@@ -481,6 +482,113 @@ export class BitunixFuturesBroker {
    * Provider-specific raw Futures executions. Fee and realized PnL are
    * preserved exactly; this is not the canonical Fill contract.
    */
+  /**
+   * Returns one page of Bitunix Futures pending orders with exact decimals.
+   * This extension does not claim an atomic or exhaustive account snapshot.
+   */
+  async getFuturesPendingOrders({ symbol, orderId, clientOrderId, status, startTime, endTime, limit = 10, skip = 0 } = {}) {
+    try {
+      const queryParams = {}
+      if (symbol !== undefined) {
+        queryParams.symbol = ensure.nonEmptyString({
+          value: symbol,
+          name: "symbol",
+        }).trim().toUpperCase()
+      }
+      if (orderId !== undefined) {
+        queryParams.orderId = ensure.nonEmptyString({
+          value: String(orderId),
+          name: "orderId",
+        }).trim()
+      }
+      if (clientOrderId !== undefined) {
+        queryParams.clientId = ensure.nonEmptyString({
+          value: clientOrderId,
+          name: "clientOrderId",
+        }).trim()
+      }
+      if (status !== undefined) {
+        queryParams.status = ensure.oneOf({
+          value: status,
+          values: ["NEW", "PART_FILLED"],
+          name: "status",
+        })
+      }
+      ensure.positiveInteger({
+        value: limit,
+        name: "limit",
+      })
+      if (limit > 100) {
+        throw new RangeError("Bitunix Futures pending-order limit cannot exceed 100")
+      }
+      ensure.nonNegativeInteger({
+        value: skip,
+        name: "skip",
+      })
+      if (startTime !== undefined) {
+        ensure.nonNegativeInteger({
+          value: startTime,
+          name: "startTime",
+        })
+        queryParams.startTime = startTime
+      }
+      if (endTime !== undefined) {
+        ensure.nonNegativeInteger({
+          value: endTime,
+          name: "endTime",
+        })
+        queryParams.endTime = endTime
+      }
+      if (startTime !== undefined && endTime !== undefined && endTime < startTime) {
+        throw new RangeError("Bitunix Futures pending-order endTime must not precede startTime")
+      }
+      queryParams.limit = limit
+      queryParams.skip = skip
+      const response = await this.restClient.request({
+        method: "GET",
+        path: "/api/v1/futures/trade/get_pending_orders",
+        queryParams,
+      })
+      ensure.plainObject({
+        value: response.data,
+        name: "Futures pending orders",
+      })
+      if (!Number.isSafeInteger(response.data.total) || response.data.total < 0) {
+        throw new TypeError("Bitunix Futures pending-order total must be a non-negative safe integer")
+      }
+      const orders = adaptFuturesPendingOrders({
+        rows: response.data.orderList,
+      })
+      for (const order of orders) {
+        if (queryParams.symbol !== undefined && order.symbol !== queryParams.symbol) {
+          throw new TypeError("Bitunix Futures pending order symbol does not match the requested symbol")
+        }
+        if (queryParams.orderId !== undefined && order.orderId !== queryParams.orderId) {
+          throw new TypeError("Bitunix Futures pending order ID does not match the requested order")
+        }
+        if (queryParams.clientId !== undefined && order.clientId !== queryParams.clientId) {
+          throw new TypeError("Bitunix Futures pending order client ID does not match the requested client ID")
+        }
+      }
+      return toResult({
+        data: Object.freeze({
+          orders,
+          total: response.data.total,
+          skip,
+          limit,
+        }),
+      })
+    } catch (error) {
+      handleErr({
+        where: "BitunixFuturesBroker.getFuturesPendingOrders()",
+        error,
+      })
+      return toResult({
+        errors: [error],
+      })
+    }
+  }
+
   async getFuturesTradeHistory({ symbol, orderId, positionId, startTime, endTime, limit = 10, skip = 0 } = {}) {
     try {
       const queryParams = {}
