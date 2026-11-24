@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto"
 import { EventEmitter } from "node:events"
-import { createBitunixWebSocketSignature } from "../auth/create-websocket-signature.js"
+import { createBitunixWebSocketSignature } from "../../auth/create-websocket-signature.js"
 import { BitunixWebSocketTransport } from "../../api/websocket-transport.js"
 import {
   DEFAULT_PRIVATE_WS_URL,
