@@ -137,7 +137,10 @@ const submitterMarketMetadata = {
       {
         type: "MIN_QUANTITY",
         status: "SUPPORTED",
-        value: new Quantity({ amount: "0.01", asset: baseAsset }),
+        value: new Quantity({
+          amount: "0.01",
+          asset: baseAsset,
+        }),
       },
       {
         type: "MIN_NOTIONAL",
@@ -349,7 +352,10 @@ async function createUnknownBuySubmitterContext() {
     },
     onDurableSubmissionOutcome: async (fact) => {
       durableFacts.push(fact)
-      return { ok: true, data: { durable: true } }
+      return {
+        ok: true,
+        data: { durable: true },
+      }
     },
     onUnresolvedSubmission: async ({ order, outcome }) => {
       unresolved.push({
