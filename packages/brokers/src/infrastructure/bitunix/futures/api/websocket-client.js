@@ -57,11 +57,7 @@ function validateUrl({ channelType, url }) {
   }
 }
 
-function validateOptions({
-  apiKey,
-  apiSecret,
-  channelType,
-  url,
+function validateWebSocketDependencies({
   transportFactory,
   now,
   nonceFactory,
@@ -69,33 +65,32 @@ function validateOptions({
   clearIntervalFn,
   setTimeoutFn,
   clearTimeoutFn,
+}) {
+  const dependencies = [
+    transportFactory,
+    now,
+    nonceFactory,
+    setIntervalFn,
+    clearIntervalFn,
+    setTimeoutFn,
+    clearTimeoutFn,
+  ]
+  if (dependencies.some((dependency) => typeof dependency !== "function")) {
+    throw new TypeError("Bitunix Futures WebSocket dependencies must be functions")
+  }
+}
+
+function validateReconnectOptions({
   reconnectInitialDelayMs,
   reconnectMaxDelayMs,
   maxReconnectAttempts,
 }) {
-  if (!["public", "private"].includes(channelType)) {
-    throw new TypeError("Bitunix Futures WebSocket channelType must be public or private")
-  }
-  validateUrl({
-    channelType,
-    url,
-  })
-  if (channelType === "private" &&
-      (typeof apiKey !== "string" || !apiKey.trim() ||
-       typeof apiSecret !== "string" || !apiSecret.trim())) {
-    throw new TypeError("Bitunix Futures private WebSocket credentials are required")
-  }
-  if (typeof transportFactory !== "function" || typeof now !== "function" ||
-      typeof nonceFactory !== "function" || typeof setIntervalFn !== "function" ||
-      typeof clearIntervalFn !== "function" || typeof setTimeoutFn !== "function" ||
-      typeof clearTimeoutFn !== "function") {
-    throw new TypeError("Bitunix Futures WebSocket dependencies must be functions")
-  }
-  for (const [value, name] of [
+  const options = [
     [reconnectInitialDelayMs, "reconnectInitialDelayMs"],
     [reconnectMaxDelayMs, "reconnectMaxDelayMs"],
     [maxReconnectAttempts, "maxReconnectAttempts"],
-  ]) {
+  ]
+  for (const [value, name] of options) {
     if (!Number.isSafeInteger(value) || value <= 0) {
       throw new RangeError(`Bitunix Futures WebSocket ${name} must be a positive safe integer`)
     }
@@ -103,6 +98,61 @@ function validateOptions({
   if (reconnectMaxDelayMs < reconnectInitialDelayMs) {
     throw new RangeError("Bitunix Futures WebSocket reconnectMaxDelayMs cannot be less than the initial delay")
   }
+}
+
+function validatePrivateCredentials({ channelType, apiKey, apiSecret }) {
+  if (channelType !== "private") {
+    return
+  }
+  if (typeof apiKey !== "string" || !apiKey.trim() ||
+      typeof apiSecret !== "string" || !apiSecret.trim()) {
+    throw new TypeError("Bitunix Futures private WebSocket credentials are required")
+  }
+}
+
+function validateOptions(options) {
+  const {
+    apiKey,
+    apiSecret,
+    channelType,
+    url,
+    transportFactory,
+    now,
+    nonceFactory,
+    setIntervalFn,
+    clearIntervalFn,
+    setTimeoutFn,
+    clearTimeoutFn,
+    reconnectInitialDelayMs,
+    reconnectMaxDelayMs,
+    maxReconnectAttempts,
+  } = options
+  if (!["public", "private"].includes(channelType)) {
+    throw new TypeError("Bitunix Futures WebSocket channelType must be public or private")
+  }
+  validateUrl({
+    channelType,
+    url,
+  })
+  validatePrivateCredentials({
+    channelType,
+    apiKey,
+    apiSecret,
+  })
+  validateWebSocketDependencies({
+    transportFactory,
+    now,
+    nonceFactory,
+    setIntervalFn,
+    clearIntervalFn,
+    setTimeoutFn,
+    clearTimeoutFn,
+  })
+  validateReconnectOptions({
+    reconnectInitialDelayMs,
+    reconnectMaxDelayMs,
+    maxReconnectAttempts,
+  })
 }
 
 function normalizeMessage({ message }) {
