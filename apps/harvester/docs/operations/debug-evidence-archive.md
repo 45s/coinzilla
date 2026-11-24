@@ -25,7 +25,7 @@ Git must be authenticated for the private archive repository (for example, throu
 Use the same passphrase on a trusted machine:
 
 ```sh
-pnpm --filter @coinzilla/harvester exec node scripts/archive-debug-evidence.js --decrypt "<path-to-archive.tar.gz.enc>" "<output.tar.gz>"
+pnpm --filter @coinzilla/harvester exec node --env-file=.env.development scripts/archive-debug-evidence.js --decrypt "<path-to-archive.tar.gz.enc>" "<output.tar.gz>"
 tar -xzf "<output.tar.gz>" -C "<empty-output-directory>"
 ```
 
