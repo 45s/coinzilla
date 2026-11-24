@@ -491,3 +491,144 @@ test("Bitunix Futures cancelOrder remains NOT_SENT without explicit live mutatio
   assert.equal(result.cancellationOutcome, "NOT_SENT")
   assert.equal(requests.length, 0)
 })
+
+
+function createCancelAllFetch({
+  requests,
+  pendingTotals = [2, 0],
+  cancelAllResponse,
+  cancelAllError,
+}) {
+  let pendingReadCount = 0
+  return async (...request) => {
+    const [url, options] = request
+    const path = new URL(url).pathname
+    requests.push({
+      path,
+      method: options.method,
+      body: options.body,
+    })
+    if (path === "/api/v1/futures/trade/get_pending_orders") {
+      const total = pendingTotals[Math.min(pendingReadCount, pendingTotals.length - 1)]
+      pendingReadCount += 1
+      return createFuturesResponse({
+        data: {
+          orderList: total > 0 ? [createOrderRow({
+            fee: "0",
+            realizedPNL: "0",
+            effect: "GTC",
+            status: "NEW",
+          })] : [],
+          total,
+        },
+      })
+    }
+    if (path === "/api/v1/futures/trade/cancel_all_orders") {
+      if (cancelAllError) {
+        throw cancelAllError
+      }
+      return createFuturesResponse({
+        data: cancelAllResponse ?? {
+          successList: [{
+            orderId: "futures-order-123",
+          }],
+          failureList: [],
+        },
+      })
+    }
+    throw new Error(`Unexpected Futures cancel-all request: ${path}`)
+  }
+}
+
+function createCancelAllBroker({
+  allowLiveOrderMutations = true,
+  ...fetchOptions
+} = {}) {
+  const requests = []
+  const broker = new Broker({
+    provider: "bitunix-futures",
+    ...credentials,
+    tradingMode: "live",
+    providerOptions: {
+      allowLiveOrderMutations,
+      dependencies: {
+        fetchFn: createCancelAllFetch({
+          requests,
+          ...fetchOptions,
+        }),
+      },
+    },
+  })
+  return {
+    broker,
+    requests,
+  }
+}
+
+test("Bitunix Futures cancelAllOpenOrders verifies an empty final pending-order scope", async () => {
+  const { broker, requests } = createCancelAllBroker({
+    pendingTotals: [2, 0],
+  })
+  await broker.connect()
+
+  const result = await broker.cancelAllOpenOrders({
+    symbol: "BTCUSDT",
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.mutationOutcome, "CONFIRMED")
+  assert.equal(result.cancellationOutcome, "CONFIRMED")
+  assert.equal(result.data.remainingOpenOrders, 0)
+  assert.deepEqual(requests.map(({ path, method }) => [path, method]), [
+    ["/api/v1/futures/trade/get_pending_orders", "GET"],
+    ["/api/v1/futures/trade/cancel_all_orders", "POST"],
+    ["/api/v1/futures/trade/get_pending_orders", "GET"],
+  ])
+  const [, cancelRequest] = requests
+  assert.deepEqual(JSON.parse(cancelRequest.body), {
+    symbol: "BTCUSDT",
+  })
+})
+
+test("Bitunix Futures cancelAllOpenOrders does not dispatch when no pending orders exist", async () => {
+  const { broker, requests } = createCancelAllBroker({
+    pendingTotals: [0],
+  })
+  await broker.connect()
+
+  const result = await broker.cancelAllOpenOrders()
+
+  assert.equal(result.ok, true)
+  assert.equal(result.mutationOutcome, "NOT_SENT")
+  assert.equal(result.cancellationOutcome, "NOT_SENT")
+  assert.equal(requests.length, 1)
+})
+
+test("Bitunix Futures cancelAllOpenOrders remains NOT_SENT without explicit live mutation opt-in", async () => {
+  const { broker, requests } = createCancelAllBroker({
+    allowLiveOrderMutations: false,
+  })
+  await broker.connect()
+
+  const result = await broker.cancelAllOpenOrders()
+
+  assert.equal(result.ok, false)
+  assert.equal(result.mutationOutcome, "NOT_SENT")
+  assert.equal(result.cancellationOutcome, "NOT_SENT")
+  assert.equal(requests.length, 0)
+})
+
+test("Bitunix Futures cancelAllOpenOrders reports unknown while pending orders remain", async () => {
+  const { broker, requests } = createCancelAllBroker({
+    pendingTotals: [2, 1],
+  })
+  await broker.connect()
+
+  const result = await broker.cancelAllOpenOrders()
+
+  assert.equal(result.ok, false)
+  assert.equal(result.mutationOutcome, "CONFIRMED")
+  assert.equal(result.cancellationOutcome, "OUTCOME_UNKNOWN")
+  assert.equal(result.data.remainingOpenOrders, 1)
+  assert.equal(requests.filter(({ method }) => method === "POST").length, 1)
+})
