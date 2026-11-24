@@ -1,5 +1,8 @@
 import test from "node:test"
 import assert from "node:assert/strict"
+import { existsSync } from "node:fs"
+import { resolve } from "node:path"
+import { fileURLToPath } from "node:url"
 import { calculateRecoverySellerProfitability } from "../../../src/domain/strategies/recovery-seller/calculate-profitability.js"
 import {
   recoverySellerScenarioRegistry,
@@ -7,9 +10,13 @@ import {
 } from "./registry/index.js"
 import { runRecoverySellerDomainScenario } from "./runners/run-domain-scenario.js"
 
+const packageRoot = fileURLToPath(new URL("../../../", import.meta.url))
 const scenarioFile = "apps/harvester/test/scenarios/recovery-seller/registry-and-runner.scenario.test.js"
 const implementationFile = "apps/harvester/src/domain/strategies/recovery-seller/calculate-profitability.js"
-const existingPaths = new Set([scenarioFile, implementationFile])
+const existingPaths = new Set(
+  [scenarioFile, implementationFile].filter((path) =>
+    existsSync(resolve(packageRoot, path.replace("apps/harvester/", "")))),
+)
 
 function cloneScenario(overrides = {}) {
   return {

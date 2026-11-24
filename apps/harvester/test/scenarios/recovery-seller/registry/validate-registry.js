@@ -151,6 +151,21 @@ function validateScenario({ scenario, index, ids, existingPaths, errors }) {
   if (!isRecord(scenario.given) || !Array.isArray(scenario.when) ||
       !isRecord(scenario.then)) {
     addError(errors, path, "given/then must be objects and when must be an ordered array")
+  } else {
+    for (const [stepIndex, step] of scenario.when.entries()) {
+      if (!isRecord(step) || typeof step.type !== "string" || step.type.trim().length === 0) {
+        addError(errors, `${path}.when[${stepIndex}]`, "must be an ordered step with a non-empty type")
+        continue
+      }
+      if (step.inputKey !== undefined &&
+          (typeof step.inputKey !== "string" || step.inputKey.trim().length === 0)) {
+        addError(errors, `${path}.when[${stepIndex}].inputKey`, "must be a non-empty Given-context key")
+      }
+      if (step.saveAs !== undefined &&
+          (typeof step.saveAs !== "string" || step.saveAs.trim().length === 0)) {
+        addError(errors, `${path}.when[${stepIndex}].saveAs`, "must be a non-empty output name")
+      }
+    }
   }
   if (!Array.isArray(scenario.mustNot) ||
       scenario.mustNot.some((item) => typeof item !== "string" || item.trim().length === 0)) {
@@ -181,14 +196,21 @@ function validateScenario({ scenario, index, ids, existingPaths, errors }) {
       if (!STATUSES.has(subcase.status)) {
         addError(errors, `${subcasePath}.status`, "is not a canonical scenario status")
       }
+      if (["TEST-MAPPED", "VERIFIED"].includes(subcase.status) && subcase.test === null) {
+        addError(errors, `${subcasePath}.test`, "TEST-MAPPED/VERIFIED requires an exact test file and title")
+      }
       if (subcase.test !== null && (!isRecord(subcase.test) ||
-          typeof subcase.test.file !== "string" || typeof subcase.test.title !== "string")) {
-        addError(errors, `${subcasePath}.test`, "must be null or contain file and title")
+          typeof subcase.test.file !== "string" || subcase.test.file.trim().length === 0 ||
+          typeof subcase.test.title !== "string" || subcase.test.title.trim().length === 0)) {
+        addError(errors, `${subcasePath}.test`, "must be null or contain non-empty file and title")
+      } else if (subcase.test !== null && existingPaths &&
+          !existingPaths.has(subcase.test.file)) {
+        addError(errors, `${subcasePath}.test.file`, `path does not exist: "${subcase.test.file}"`)
       }
       if (subcase.status === "BLOCKED" &&
           (!isRecord(subcase.blocker) ||
-           typeof subcase.blocker.reason !== "string" ||
-           typeof subcase.blocker.unblockCondition !== "string")) {
+           typeof subcase.blocker.reason !== "string" || subcase.blocker.reason.trim().length === 0 ||
+           typeof subcase.blocker.unblockCondition !== "string" || subcase.blocker.unblockCondition.trim().length === 0)) {
         addError(errors, `${subcasePath}.blocker`, "BLOCKED requires reason and unblockCondition")
       }
       if (subcase.status === "UNSUPPORTED" &&
@@ -217,14 +239,22 @@ function validateScenario({ scenario, index, ids, existingPaths, errors }) {
     }
   }
 
+  if (["TEST-MAPPED", "VERIFIED"].includes(scenario.status) && scenario.test === null) {
+    addError(errors, `${path}.test`, "TEST-MAPPED/VERIFIED requires an exact test file and title")
+  }
   if (scenario.test !== null) {
     if (!isRecord(scenario.test) ||
-        typeof scenario.test.file !== "string" ||
-        typeof scenario.test.title !== "string") {
-      addError(errors, `${path}.test`, "must be null or contain file and title")
+        typeof scenario.test.file !== "string" || scenario.test.file.trim().length === 0 ||
+        typeof scenario.test.title !== "string" || scenario.test.title.trim().length === 0) {
+      addError(errors, `${path}.test`, "must be null or contain non-empty file and title")
     } else if (existingPaths && !existingPaths.has(scenario.test.file)) {
       addError(errors, `${path}.test.file`, `path does not exist: "${scenario.test.file}"`)
     }
+  }
+  if (scenario.status === "VERIFIED" &&
+      Array.isArray(scenario.subcases) &&
+      scenario.subcases.some((subcase) => subcase?.status !== "VERIFIED")) {
+    addError(errors, `${path}.subcases`, "VERIFIED requires every registered subcase to be VERIFIED")
   }
 
   if (!STATUSES.has(scenario.status)) {
@@ -232,8 +262,8 @@ function validateScenario({ scenario, index, ids, existingPaths, errors }) {
   }
   if (scenario.status === "BLOCKED" &&
       (!isRecord(scenario.blocker) ||
-       typeof scenario.blocker.reason !== "string" ||
-       typeof scenario.blocker.unblockCondition !== "string")) {
+       typeof scenario.blocker.reason !== "string" || scenario.blocker.reason.trim().length === 0 ||
+       typeof scenario.blocker.unblockCondition !== "string" || scenario.blocker.unblockCondition.trim().length === 0)) {
     addError(errors, `${path}.blocker`, "BLOCKED requires reason and unblockCondition")
   }
   if (scenario.status === "UNSUPPORTED" &&
