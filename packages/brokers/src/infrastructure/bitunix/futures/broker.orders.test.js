@@ -2,6 +2,7 @@ import assert from "node:assert/strict"
 import test from "node:test"
 
 import { Broker } from "../../../index.js"
+import { connectAndAcknowledgeUserDataReconciliation, createFakePrivateWebSocketClientFactory } from "./futures-mutation-test-helpers.js"
 import { CanonicalOrder } from "@coinzilla/entities"
 
 const credentials = {
@@ -49,6 +50,7 @@ function createBroker({ orderRow = createOrderRow() } = {}) {
     tradingMode: "live",
     providerOptions: {
       dependencies: {
+        webSocketClientFactory: createFakePrivateWebSocketClientFactory(),
         fetchFn: async (...args) => {
           const [url, options] = args
           requests.push({
@@ -349,6 +351,7 @@ function createCancellationBroker({
     providerOptions: {
       allowLiveOrderMutations,
       dependencies: {
+        webSocketClientFactory: createFakePrivateWebSocketClientFactory(),
         fetchFn: createCancellationFetch({
           requests,
           ...fetchOptions,
@@ -364,7 +367,7 @@ function createCancellationBroker({
 
 test("Bitunix Futures cancelOrder is one-shot and confirms the final canceled order state", async () => {
   const { broker, requests } = createCancellationBroker()
-  await broker.connect()
+  await connectAndAcknowledgeUserDataReconciliation(broker)
   await broker.getExchangeMarkets()
 
   const result = await broker.cancelOrder({
@@ -396,7 +399,7 @@ test("Bitunix Futures cancelOrder reconciles a lost acknowledgement by client ID
   const { broker, requests } = createCancellationBroker({
     cancelError: new Error("connection lost after dispatch"),
   })
-  await broker.connect()
+  await connectAndAcknowledgeUserDataReconciliation(broker)
   await broker.getExchangeMarkets()
 
   const result = await broker.cancelOrder({
@@ -415,7 +418,7 @@ test("Bitunix Futures cancelOrder reports unknown when a lost acknowledgement ca
     cancelError: new Error("connection lost after dispatch"),
     detailStatus: "PART_FILLED",
   })
-  await broker.connect()
+  await connectAndAcknowledgeUserDataReconciliation(broker)
   await broker.getExchangeMarkets()
 
   const result = await broker.cancelOrder({
@@ -441,7 +444,7 @@ test("Bitunix Futures cancelOrder returns a per-order exchange rejection", async
       }],
     },
   })
-  await broker.connect()
+  await connectAndAcknowledgeUserDataReconciliation(broker)
   await broker.getExchangeMarkets()
 
   const result = await broker.cancelOrder({
@@ -462,7 +465,7 @@ test("Bitunix Futures cancelOrder does not dispatch when pending-order identity 
       clientId: undefined,
     },
   })
-  await broker.connect()
+  await connectAndAcknowledgeUserDataReconciliation(broker)
   await broker.getExchangeMarkets()
 
   const result = await broker.cancelOrder({
@@ -552,6 +555,7 @@ function createCancelAllBroker({
     providerOptions: {
       allowLiveOrderMutations,
       dependencies: {
+        webSocketClientFactory: createFakePrivateWebSocketClientFactory(),
         fetchFn: createCancelAllFetch({
           requests,
           ...fetchOptions,
@@ -569,7 +573,7 @@ test("Bitunix Futures cancelAllOpenOrders verifies an empty final pending-order 
   const { broker, requests } = createCancelAllBroker({
     pendingTotals: [2, 0],
   })
-  await broker.connect()
+  await connectAndAcknowledgeUserDataReconciliation(broker)
 
   const result = await broker.cancelAllOpenOrders({
     symbol: "BTCUSDT",
@@ -594,7 +598,7 @@ test("Bitunix Futures cancelAllOpenOrders does not dispatch when no pending orde
   const { broker, requests } = createCancelAllBroker({
     pendingTotals: [0],
   })
-  await broker.connect()
+  await connectAndAcknowledgeUserDataReconciliation(broker)
 
   const result = await broker.cancelAllOpenOrders()
 
@@ -608,7 +612,7 @@ test("Bitunix Futures cancelAllOpenOrders remains NOT_SENT without explicit live
   const { broker, requests } = createCancelAllBroker({
     allowLiveOrderMutations: false,
   })
-  await broker.connect()
+  await connectAndAcknowledgeUserDataReconciliation(broker)
 
   const result = await broker.cancelAllOpenOrders()
 
@@ -622,7 +626,7 @@ test("Bitunix Futures cancelAllOpenOrders reports unknown while pending orders r
   const { broker, requests } = createCancelAllBroker({
     pendingTotals: [2, 1],
   })
-  await broker.connect()
+  await connectAndAcknowledgeUserDataReconciliation(broker)
 
   const result = await broker.cancelAllOpenOrders()
 
@@ -637,7 +641,7 @@ test("Bitunix Futures cancelAllOpenOrders supports an account-wide scope", async
   const { broker, requests } = createCancelAllBroker({
     pendingTotals: [1, 0],
   })
-  await broker.connect()
+  await connectAndAcknowledgeUserDataReconciliation(broker)
 
   const result = await broker.cancelAllOpenOrders()
 
@@ -653,7 +657,7 @@ test("Bitunix Futures cancelAllOpenOrders reconciles a lost acknowledgement with
     pendingTotals: [2, 0],
     cancelAllError: new Error("connection lost after dispatch"),
   })
-  await broker.connect()
+  await connectAndAcknowledgeUserDataReconciliation(broker)
 
   const result = await broker.cancelAllOpenOrders()
 

@@ -5,6 +5,7 @@ import {
   toResult,
 } from "@coinzilla/utils"
 import { BitunixFuturesRestError } from "../api/rest-client.js"
+import { createUserDataReadinessError } from "./user-data-readiness.js"
 
 const MODIFY_ORDER_PATH = "/api/v1/futures/trade/modify_order"
 const OPEN_ORDER_STATUSES = new Set(["INIT", "NEW", "PART_FILLED"])
@@ -305,6 +306,11 @@ export async function modifyFuturesOrder({ broker, input } = {}) {
   try {
     if (!broker.connected) {
       throw new Error("Bitunix Futures broker must be connected before modifying an order")
+    }
+    if (!broker.isUserDataReady) {
+      throw createUserDataReadinessError({
+        operation: "modifyFuturesOrder",
+      })
     }
     const normalized = normalizeModifyInput({
       input,

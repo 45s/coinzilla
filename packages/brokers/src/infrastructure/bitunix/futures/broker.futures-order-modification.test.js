@@ -1,6 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 import { Broker } from "../../../index.js"
+import { connectAndAcknowledgeUserDataReconciliation, createFakePrivateWebSocketClientFactory } from "./futures-mutation-test-helpers.js"
 
 const credentials = {
   apiKey: "test-api-key",
@@ -136,6 +137,7 @@ function createModifyBroker({
     providerOptions: {
       allowLiveOrderMutations,
       dependencies: {
+        webSocketClientFactory: createFakePrivateWebSocketClientFactory(),
         fetchFn: createModifyFetch({
           requests,
           ...fetchOptions,
@@ -159,7 +161,7 @@ const modifyInput = {
 
 test("Bitunix Futures modifyFuturesOrder preflights and verifies exact order changes", async () => {
   const { broker, requests } = createModifyBroker()
-  await broker.connect()
+  await connectAndAcknowledgeUserDataReconciliation(broker)
 
   const result = await broker.modifyFuturesOrder(modifyInput)
 
@@ -182,7 +184,7 @@ test("Bitunix Futures modifyFuturesOrder is NOT_SENT without explicit live mutat
   const { broker, requests } = createModifyBroker({
     allowLiveOrderMutations: false,
   })
-  await broker.connect()
+  await connectAndAcknowledgeUserDataReconciliation(broker)
 
   const result = await broker.modifyFuturesOrder(modifyInput)
 
@@ -194,7 +196,7 @@ test("Bitunix Futures modifyFuturesOrder is NOT_SENT without explicit live mutat
 
 test("Bitunix Futures modifyFuturesOrder rejects quantities below already executed quantity", async () => {
   const { broker, requests } = createModifyBroker()
-  await broker.connect()
+  await connectAndAcknowledgeUserDataReconciliation(broker)
 
   const result = await broker.modifyFuturesOrder({
     ...modifyInput,
@@ -210,7 +212,7 @@ test("Bitunix Futures modifyFuturesOrder requires exactly one matching pending o
   const { broker, requests } = createModifyBroker({
     pendingTotal: 0,
   })
-  await broker.connect()
+  await connectAndAcknowledgeUserDataReconciliation(broker)
 
   const result = await broker.modifyFuturesOrder(modifyInput)
 
@@ -222,7 +224,7 @@ test("Bitunix Futures modifyFuturesOrder requires exactly one matching pending o
 
 test("Bitunix Futures modifyFuturesOrder requires a price for a pending LIMIT order", async () => {
   const { broker, requests } = createModifyBroker()
-  await broker.connect()
+  await connectAndAcknowledgeUserDataReconciliation(broker)
 
   const result = await broker.modifyFuturesOrder({
     ...modifyInput,
@@ -240,7 +242,7 @@ test("Bitunix Futures modifyFuturesOrder does not confirm an acknowledged but mi
       qty: "0.03",
     },
   })
-  await broker.connect()
+  await connectAndAcknowledgeUserDataReconciliation(broker)
 
   const result = await broker.modifyFuturesOrder(modifyInput)
 

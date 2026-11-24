@@ -1,69 +1,12 @@
 import assert from "node:assert/strict"
-import { EventEmitter } from "node:events"
 import test from "node:test"
 
 import { Broker } from "../../../index.js"
+import { FakePrivateWebSocketClient } from "./futures-mutation-test-helpers.js"
 
 const credentials = {
   apiKey: "bitunix-futures-private-websocket-test-key",
   apiSecret: "bitunix-futures-private-websocket-test-secret",
-}
-
-class FakePrivateWebSocketClient extends EventEmitter {
-  state = "idle"
-
-  authenticated = false
-
-  subscriptions = []
-
-  unsubscriptions = []
-
-  disconnectCount = 0
-
-  status() {
-    return {
-      state: this.state,
-      authenticated: this.authenticated,
-      recoveryRequired: this.recoveryRequired,
-    }
-  }
-
-  async connect() {
-    this.state = "open"
-    this.emit("status", this.status())
-  }
-
-  async waitUntilAuthenticated() {
-    this.authenticated = true
-    this.emit("status", this.status())
-  }
-
-  markReconciled() {
-    this.recoveryRequired = false
-    this.emit("status", this.status())
-  }
-
-  subscribe({ channels }) {
-    this.subscriptions.push(...channels)
-    return {
-      sent: true,
-      channels,
-    }
-  }
-
-  unsubscribe({ channels }) {
-    this.unsubscriptions.push(...channels)
-    return {
-      sent: true,
-      channels,
-    }
-  }
-
-  async disconnect() {
-    this.disconnectCount += 1
-    this.state = "closed"
-    this.authenticated = false
-  }
 }
 
 function createBroker() {

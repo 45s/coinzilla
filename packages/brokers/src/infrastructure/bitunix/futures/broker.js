@@ -22,7 +22,7 @@ function unsupportedResult({ operation, reason }) {
   return {
     ok: false,
     errors: [new BrokerUnsupportedOperationError({
-      provider: "bitunix",
+      provider: "bitunix-futures",
       operation,
       reason,
     })],
@@ -209,10 +209,11 @@ const FUTURES_CAPABILITIES = [
     status: "SUPPORTED",
     method: "createFuturesOrder",
     guarantee: "Places one explicit Futures LIMIT order with exact decimal inputs and verifies the created order by caller-supplied clientId.",
-    limitation: "Requires allowLiveOrderMutations: true. The common createCanonicalOrder method remains unsupported because its exchange-neutral entity cannot express tradeSide, positionId or reduceOnly.",
+    limitation: "Requires allowLiveOrderMutations: true and an active private user-data session acknowledged after consumer REST reconciliation. REST readback does not make the private event stream authoritative or replayable.",
     conditions: [
       "allowLiveOrderMutations === true",
       "Broker.connect() completed",
+      "An authenticated private user-data session is active and acknowledgeUserDataReconciliation({ reconciliationCompleted: true }) has completed after REST reconciliation",
       "clientId is caller-generated and unique",
       "tradeSide and reduceOnly are explicit",
       "positionId is supplied for CLOSE",
@@ -229,6 +230,7 @@ const FUTURES_CAPABILITIES = [
     conditions: [
       "allowLiveOrderMutations === true",
       "Broker.connect() completed",
+      "An authenticated private user-data session is active and acknowledgeUserDataReconciliation({ reconciliationCompleted: true }) has completed after REST reconciliation",
       "clientId is caller-generated and unique",
       "tradeSide and reduceOnly are explicit",
       "positionId is supplied for CLOSE",
@@ -241,10 +243,11 @@ const FUTURES_CAPABILITIES = [
     status: "SUPPORTED",
     method: "cancelOrder",
     guarantee: "Cancels one exact pending order with one POST and verifies its final state through canonical order detail.",
-    limitation: "Requires allowLiveOrderMutations: true, a connected broker, and an exchange-provided clientId on the pending order. A lost acknowledgement is reconciled by clientId; unknown outcomes are never retried.",
+    limitation: "Requires allowLiveOrderMutations: true, an authenticated and reconciled private user-data session, and an exchange-provided clientId on the pending order. A lost acknowledgement is reconciled by clientId; unknown outcomes are never retried.",
     conditions: [
       "allowLiveOrderMutations === true",
       "Broker.connect() completed",
+      "An authenticated private user-data session is active and acknowledgeUserDataReconciliation({ reconciliationCompleted: true }) has completed after REST reconciliation",
       "The pending-order preflight returns exactly one matching row with clientId",
     ],
   },
@@ -253,10 +256,11 @@ const FUTURES_CAPABILITIES = [
     status: "SUPPORTED",
     method: "cancelAllOpenOrders",
     guarantee: "Cancels all pending Futures orders for an optional symbol scope and verifies the final pending-order count.",
-    limitation: "Requires allowLiveOrderMutations: true and a connected broker. Concurrent order writers can make the final count non-zero or ambiguous; callers must enforce account-scoped single-writer ownership.",
+    limitation: "Requires allowLiveOrderMutations: true and an authenticated, reconciled private user-data session. Concurrent order writers can make the final count non-zero or ambiguous; callers must enforce account-scoped single-writer ownership.",
     conditions: [
       "allowLiveOrderMutations === true",
       "Broker.connect() completed",
+      "An authenticated private user-data session is active and acknowledgeUserDataReconciliation({ reconciliationCompleted: true }) has completed after REST reconciliation",
       "The final pending-order query for the requested scope returns total === 0",
       "The caller ensures there is no concurrent order writer",
     ],
@@ -266,7 +270,7 @@ const FUTURES_CAPABILITIES = [
     status: "SUPPORTED",
     method: "subscribeForUserData",
     guarantee: "Authenticates the private Futures WebSocket and subscribes to balance, position, order and TP/SL channels.",
-    limitation: "Only raw onObservation delivery is supported; no canonical event, replay cursor or recovery guarantee is claimed.",
+    limitation: "Only raw onObservation delivery is supported; no canonical event, replay cursor, sequence number or replay guarantee is claimed. Consumers must reconcile balances, positions, open orders and TP/SL orders, then explicitly acknowledge reconciliation before state-changing operations.",
   },
   {
     type: "SUBSCRIBE_MARKET_PRICES",
@@ -966,7 +970,7 @@ function adaptFuturesBookTicker({ event, symbol, timestamp }) {
   })
 }
 
-function deliverFuturesPrivateObservation({ event, now, onObservation }) {
+function deliverFuturesPrivateObservation({ event, now, onObservation, recoveryRequired = true }) {
   try {
     const observedAt = now()
     if (!Number.isSafeInteger(observedAt) || observedAt < 0) {
@@ -981,7 +985,7 @@ function deliverFuturesPrivateObservation({ event, now, onObservation }) {
       payload: event.data,
       authoritative: false,
       replayable: false,
-      recoveryRequired: true,
+      recoveryRequired,
     })
     onObservation(observation)
   } catch (error) {
@@ -1002,7 +1006,7 @@ function deliverFuturesUserDataStatus({ status, onStatus }) {
       deliveryMode: "NATIVE_EVENTS",
       authoritative: false,
       replayable: false,
-      recoveryRequired: true,
+      recoveryRequired: status.recoveryRequired !== false,
     }))
   } catch (error) {
     handleErr({
@@ -1081,6 +1085,55 @@ export class BitunixFuturesBroker {
     })
   }
 
+  get isUserDataReady() {
+    const client = this.privateWebSocketClient
+    return this.connected &&
+      this.privateWebSocketSession !== null &&
+      client?.state === "open" &&
+      client.authenticated === true &&
+      client.recoveryRequired === false
+  }
+
+  async acknowledgeUserDataReconciliation({ reconciliationCompleted } = {}) {
+    if (reconciliationCompleted !== true) {
+      return unsupportedResult({
+        operation: "acknowledgeUserDataReconciliation",
+        reason: "The caller must complete REST reconciliation of balances, positions, pending orders and TP/SL orders before acknowledging the private user-data session.",
+      })
+    }
+    const client = this.privateWebSocketClient
+    if (
+      !this.connected ||
+      !this.privateWebSocketSession ||
+      client?.state !== "open" ||
+      client.authenticated !== true ||
+      typeof client.markReconciled !== "function"
+    ) {
+      return unsupportedResult({
+        operation: "acknowledgeUserDataReconciliation",
+        reason: "An active, authenticated private user-data session is required before reconciliation can be acknowledged.",
+      })
+    }
+    try {
+      client.markReconciled()
+      return toResult({
+        data: Object.freeze({
+          recoveryRequired: false,
+          authoritative: false,
+          replayable: false,
+        }),
+      })
+    } catch (error) {
+      handleErr({
+        where: "BitunixFuturesBroker.acknowledgeUserDataReconciliation()",
+        error,
+      })
+      return toResult({
+        errors: [error],
+      })
+    }
+  }
+
   async connect() {
     this.connected = true
   }
@@ -1156,6 +1209,7 @@ export class BitunixFuturesBroker {
           event,
           now: this.now,
           onObservation: observer.onObservation,
+          recoveryRequired: this.privateWebSocketClient?.recoveryRequired !== false,
         })
       }
     }
@@ -1204,7 +1258,7 @@ export class BitunixFuturesBroker {
         status: {
           state: client.state,
           authenticated: client.authenticated,
-          recoveryRequired: true,
+          recoveryRequired: client.recoveryRequired !== false,
         },
         onStatus,
       })
@@ -2197,7 +2251,7 @@ export class BitunixFuturesBroker {
           deliveryMode: "NATIVE_EVENTS",
           authoritative: false,
           replayable: false,
-          recoveryRequired: true,
+          recoveryRequired: this.privateWebSocketClient?.recoveryRequired !== false,
           unsubscribe,
         }),
       })

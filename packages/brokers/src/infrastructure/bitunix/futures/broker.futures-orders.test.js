@@ -1,6 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 import { Broker } from "../../../index.js"
+import { connectAndAcknowledgeUserDataReconciliation, createFakePrivateWebSocketClientFactory } from "./futures-mutation-test-helpers.js"
 
 const credentials = {
   apiKey: "test-api-key",
@@ -116,6 +117,7 @@ function createOrderBroker({
     providerOptions: {
       allowLiveOrderMutations,
       dependencies: {
+        webSocketClientFactory: createFakePrivateWebSocketClientFactory(),
         fetchFn: createOrderFetch({
           requests,
           ...fetchOptions,
@@ -143,7 +145,7 @@ const limitOrderInput = {
 
 test("Bitunix Futures createFuturesOrder preserves explicit Futures semantics and verifies the created order", async () => {
   const { broker, requests } = createOrderBroker()
-  await broker.connect()
+  await connectAndAcknowledgeUserDataReconciliation(broker)
 
   const result = await broker.createFuturesOrder(limitOrderInput)
 
@@ -171,7 +173,7 @@ test("Bitunix Futures createFuturesOrder is NOT_SENT without explicit live mutat
   const { broker, requests } = createOrderBroker({
     allowLiveOrderMutations: false,
   })
-  await broker.connect()
+  await connectAndAcknowledgeUserDataReconciliation(broker)
 
   const result = await broker.createFuturesOrder(limitOrderInput)
 
@@ -183,7 +185,7 @@ test("Bitunix Futures createFuturesOrder is NOT_SENT without explicit live mutat
 
 test("Bitunix Futures createFuturesOrder rejects missing client identity before network access", async () => {
   const { broker, requests } = createOrderBroker()
-  await broker.connect()
+  await connectAndAcknowledgeUserDataReconciliation(broker)
 
   const result = await broker.createFuturesOrder({
     ...limitOrderInput,
@@ -197,7 +199,7 @@ test("Bitunix Futures createFuturesOrder rejects missing client identity before 
 
 test("Bitunix Futures createFuturesOrder rejects quantity precision beyond exchange metadata", async () => {
   const { broker, requests } = createOrderBroker()
-  await broker.connect()
+  await connectAndAcknowledgeUserDataReconciliation(broker)
 
   const result = await broker.createFuturesOrder({
     ...limitOrderInput,
@@ -211,7 +213,7 @@ test("Bitunix Futures createFuturesOrder rejects quantity precision beyond excha
 
 test("Bitunix Futures createFuturesOrder requires positionId for CLOSE tradeSide", async () => {
   const { broker, requests } = createOrderBroker()
-  await broker.connect()
+  await connectAndAcknowledgeUserDataReconciliation(broker)
 
   const result = await broker.createFuturesOrder({
     ...limitOrderInput,
@@ -227,7 +229,7 @@ test("Bitunix Futures createFuturesOrder reconciles a lost acknowledgement by cl
   const { broker, requests } = createOrderBroker({
     placeError: new Error("connection lost after dispatch"),
   })
-  await broker.connect()
+  await connectAndAcknowledgeUserDataReconciliation(broker)
 
   const result = await broker.createFuturesOrder(limitOrderInput)
 
@@ -242,7 +244,7 @@ test("Bitunix Futures createFuturesOrder returns a definitive exchange rejection
     responseCode: 10001,
     responseMessage: "invalid Futures order",
   })
-  await broker.connect()
+  await connectAndAcknowledgeUserDataReconciliation(broker)
 
   const result = await broker.createFuturesOrder(limitOrderInput)
 
@@ -258,7 +260,7 @@ test("Bitunix Futures createFuturesOrder supports explicit MARKET order semantic
       orderType: "MARKET",
     },
   })
-  await broker.connect()
+  await connectAndAcknowledgeUserDataReconciliation(broker)
 
   const result = await broker.createFuturesOrder({
     ...limitOrderInput,
@@ -282,7 +284,7 @@ test("Bitunix Futures createFuturesOrder supports explicit MARKET order semantic
 
 test("Bitunix Futures createFuturesOrder validates and preserves explicit TP/SL parameters", async () => {
   const { broker, requests } = createOrderBroker()
-  await broker.connect()
+  await connectAndAcknowledgeUserDataReconciliation(broker)
 
   const result = await broker.createFuturesOrder({
     ...limitOrderInput,
@@ -315,7 +317,7 @@ test("Bitunix Futures createFuturesOrder does not confirm a mismatched order rea
       qty: "0.02",
     },
   })
-  await broker.connect()
+  await connectAndAcknowledgeUserDataReconciliation(broker)
 
   const result = await broker.createFuturesOrder(limitOrderInput)
 
@@ -332,7 +334,7 @@ test("Bitunix Futures createFuturesOrder does not confirm a mismatched order pri
       price: "60001.1",
     },
   })
-  await broker.connect()
+  await connectAndAcknowledgeUserDataReconciliation(broker)
 
   const result = await broker.createFuturesOrder(limitOrderInput)
 

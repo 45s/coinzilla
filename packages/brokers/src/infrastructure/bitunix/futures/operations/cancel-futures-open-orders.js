@@ -1,5 +1,6 @@
 import { handleErr, toResult } from "@coinzilla/utils"
 import { BitunixFuturesRestError } from "../api/rest-client.js"
+import { createUserDataReadinessError } from "./user-data-readiness.js"
 
 const CANCEL_ALL_ORDERS_PATH = "/api/v1/futures/trade/cancel_all_orders"
 
@@ -192,6 +193,11 @@ export async function cancelFuturesOpenOrders({ broker, input } = {}) {
   try {
     if (!broker.connected) {
       throw new Error("Bitunix Futures broker must be connected before canceling all orders")
+    }
+    if (!broker.isUserDataReady) {
+      throw createUserDataReadinessError({
+        operation: "cancelAllOpenOrders",
+      })
     }
     const { symbol } = normalizeCancelAllInput({
       input,
