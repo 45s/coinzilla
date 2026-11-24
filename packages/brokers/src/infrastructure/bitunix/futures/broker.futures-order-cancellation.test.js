@@ -50,12 +50,85 @@ function createOrderRow({ status = "PART_FILLED", ...overrides } = {}) {
   }
 }
 
-function createCancelBroker({
-  emitCancelEvent = true,
-  eventStatus = "CANCELED",
-  detailStatus = "CANCELED",
-  cancelError,
-} = {}) {
+function createCancelEvent({ privateClients, eventStatus }) {
+  privateClients[0]?.emit("channel", {
+    ch: "order",
+    symbol: "BTCUSDT",
+    ts: 1_700_000_002_000,
+    data: {
+      event: "CLOSE",
+      orderId: "futures-order-123",
+      clientId: "strategy-order-456",
+      symbol: "BTCUSDT",
+      orderStatus: eventStatus,
+    },
+  })
+}
+
+function createCancelResponse({ cancelError, emitCancelEvent, eventStatus, privateClients }) {
+  if (emitCancelEvent) {
+    createCancelEvent({
+      privateClients,
+      eventStatus,
+    })
+  }
+  if (cancelError) {
+    throw cancelError
+  }
+  return createFuturesResponse({
+    data: {
+      successList: [{
+        orderId: "futures-order-123",
+      }],
+      failureList: [],
+    },
+  })
+}
+
+function createCancelFetch(options) {
+  return async (...request) => {
+    const [url, fetchOptions] = request
+    const path = new URL(url).pathname
+    options.requests.push({
+      path,
+      method: fetchOptions.method,
+      body: fetchOptions.body,
+      search: new URL(url).search,
+    })
+    if (path === "/api/v1/futures/market/trading_pairs") {
+      return createFuturesResponse({
+        data: [{
+          symbol: "BTCUSDT",
+          base: "BTC",
+          quote: "USDT",
+          symbolStatus: "OPEN",
+          isApiSupported: true,
+        }],
+      })
+    }
+    if (path === "/api/v1/futures/trade/get_pending_orders") {
+      return createFuturesResponse({
+        data: {
+          orderList: [createOrderRow()],
+          total: 1,
+        },
+      })
+    }
+    if (path === "/api/v1/futures/trade/cancel_orders") {
+      return createCancelResponse(options)
+    }
+    if (path === "/api/v1/futures/trade/get_order_detail") {
+      return createFuturesResponse({
+        data: createOrderRow({
+          status: options.detailStatus,
+        }),
+      })
+    }
+    throw new Error(`Unexpected Futures cancellation request: ${path}`)
+  }
+}
+
+function createCancelBroker(options = {}) {
   const requests = []
   const privateClients = []
   const broker = new Broker({
@@ -73,70 +146,14 @@ function createCancelBroker({
           }
           return client
         },
-        fetchFn: async (...request) => {
-          const [url, options] = request
-          const path = new URL(url).pathname
-          requests.push({
-            path,
-            method: options.method,
-            body: options.body,
-            search: new URL(url).search,
-          })
-          if (path === "/api/v1/futures/market/trading_pairs") {
-            return createFuturesResponse({
-              data: [{
-                symbol: "BTCUSDT",
-                base: "BTC",
-                quote: "USDT",
-                symbolStatus: "OPEN",
-                isApiSupported: true,
-              }],
-            })
-          }
-          if (path === "/api/v1/futures/trade/get_pending_orders") {
-            return createFuturesResponse({
-              data: {
-                orderList: [createOrderRow()],
-                total: 1,
-              },
-            })
-          }
-          if (path === "/api/v1/futures/trade/cancel_orders") {
-            if (emitCancelEvent) {
-              privateClients[0]?.emit("channel", {
-                ch: "order",
-                symbol: "BTCUSDT",
-                ts: 1_700_000_002_000,
-                data: {
-                  event: "CLOSE",
-                  orderId: "futures-order-123",
-                  clientId: "strategy-order-456",
-                  symbol: "BTCUSDT",
-                  orderStatus: eventStatus,
-                },
-              })
-            }
-            if (cancelError) {
-              throw cancelError
-            }
-            return createFuturesResponse({
-              data: {
-                successList: [{
-                  orderId: "futures-order-123",
-                }],
-                failureList: [],
-              },
-            })
-          }
-          if (path === "/api/v1/futures/trade/get_order_detail") {
-            return createFuturesResponse({
-              data: createOrderRow({
-                status: detailStatus,
-              }),
-            })
-          }
-          throw new Error(`Unexpected Futures cancellation request: ${path}`)
-        },
+        fetchFn: createCancelFetch({
+          requests,
+          privateClients,
+          emitCancelEvent: true,
+          eventStatus: "CANCELED",
+          detailStatus: "CANCELED",
+          ...options,
+        }),
       },
     },
   })

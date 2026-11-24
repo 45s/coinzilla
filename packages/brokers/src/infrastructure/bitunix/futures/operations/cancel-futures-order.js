@@ -1,9 +1,11 @@
 import { handleErr, toResult } from "@coinzilla/utils"
 import { BitunixFuturesRestError } from "../api/rest-client.js"
+import { createPrivateOrderEventWaiter } from "./private-order-event-confirmation.js"
 import { createUserDataReadinessError } from "./user-data-readiness.js"
 
 const CANCEL_ORDERS_PATH = "/api/v1/futures/trade/cancel_orders"
 const OPEN_ORDER_STATUSES = new Set(["INIT", "NEW", "PART_FILLED"])
+const CANCELED_EVENT_STATUSES = new Set(["CANCELED", "PART_FILLED_CANCELED"])
 
 function normalizeCancelInput({ input }) {
   if (input === null || typeof input !== "object" || Array.isArray(input)) {
@@ -59,7 +61,6 @@ function parseCancelAcknowledgement({ data, orderId }) {
   const failureList = data?.failureList
   if (!Array.isArray(successList) || !Array.isArray(failureList)) {
     return {
-      acknowledged: false,
       error: createUnknownCancelResponseError(),
     }
   }
@@ -69,7 +70,6 @@ function parseCancelAcknowledgement({ data, orderId }) {
   if (hasUnexpectedOrder || successes.length > 1 || failures.length > 1 ||
       (successes.length > 0 && failures.length > 0)) {
     return {
-      acknowledged: false,
       error: createUnknownCancelResponseError(),
     }
   }
@@ -82,12 +82,9 @@ function parseCancelAcknowledgement({ data, orderId }) {
     }
   }
   if (successes.length === 1) {
-    return {
-      acknowledged: true,
-    }
+    return {}
   }
   return {
-    acknowledged: false,
     error: createUnknownCancelResponseError(),
   }
 }
@@ -137,20 +134,21 @@ async function findPendingOrder({ broker, symbol, orderId }) {
     }
   }
   return {
-    clientOrderId: order.clientId,
+    order,
   }
 }
 
-async function reconcileCancellation({
-  broker,
-  symbol,
-  clientOrderId,
-  acknowledged,
-  error,
-}) {
+function isMatchingCancellationEvent({ event, order, symbol }) {
+  const payload = event?.data
+  return event?.ch === "order" && payload?.event === "CLOSE" &&
+    payload.orderId === order.orderId && payload.clientId === order.clientId &&
+    payload.symbol === symbol && CANCELED_EVENT_STATUSES.has(payload.orderStatus)
+}
+
+async function reconcileCancellation({ broker, symbol, order, event, error }) {
   const detail = await broker.getCanonicalOrder({
     symbol,
-    clientOrderId,
+    clientOrderId: order.clientId,
   })
   if (!detail.ok) {
     return createOutcomeResult({
@@ -158,11 +156,16 @@ async function reconcileCancellation({
         ...(error === undefined ? [] : [error]),
         ...(detail.errors ?? []),
       ],
-      mutationOutcome: acknowledged ? "CONFIRMED" : "OUTCOME_UNKNOWN",
+      mutationOutcome: "OUTCOME_UNKNOWN",
       cancellationOutcome: "OUTCOME_UNKNOWN",
     })
   }
-  if (detail.data.status === "CANCELED") {
+  const eventConfirmed = isMatchingCancellationEvent({
+    event,
+    order,
+    symbol,
+  })
+  if (detail.data.status === "CANCELED" && eventConfirmed) {
     return createOutcomeResult({
       data: detail.data,
       mutationOutcome: "CONFIRMED",
@@ -173,10 +176,12 @@ async function reconcileCancellation({
     data: detail.data,
     errors: [
       error ?? new Error(
-        `Bitunix Futures cancellation was not confirmed; final order status is ${detail.data.status}`,
+        !eventConfirmed
+          ? "Bitunix Futures matching private CLOSE/CANCELED event was not observed for the requested order"
+          : `Bitunix Futures final order status ${detail.data.status} does not confirm cancellation`,
       ),
     ],
-    mutationOutcome: acknowledged ? "CONFIRMED" : "OUTCOME_UNKNOWN",
+    mutationOutcome: "OUTCOME_UNKNOWN",
     cancellationOutcome: "OUTCOME_UNKNOWN",
   })
 }
@@ -198,23 +203,36 @@ async function dispatchCancelRequest({ broker, symbol, orderId }) {
       response,
     }
   } catch (error) {
-    handleErr({
-      where: "cancelFuturesOrder()",
-      error,
-    })
     return {
       error,
     }
   }
 }
 
-async function handleCancelDispatchError({ broker, symbol, clientOrderId, error }) {
+async function handleCancelDispatchError({ broker, symbol, order, eventWaiter, error }) {
+  handleErr({
+    where: "cancelFuturesOrder()",
+    error,
+  })
   if (error?.outcomeUnknown === true) {
+    eventWaiter.startTimeout()
+    const confirmation = await eventWaiter.promise
     return reconcileCancellation({
       broker,
       symbol,
-      clientOrderId,
-      acknowledged: false,
+      order,
+      event: confirmation.event,
+      error: confirmation.error ?? error,
+    })
+  }
+  eventWaiter.cancel()
+  const confirmation = await eventWaiter.promise
+  if (confirmation.event) {
+    return reconcileCancellation({
+      broker,
+      symbol,
+      order,
+      event: confirmation.event,
       error,
     })
   }
@@ -228,48 +246,73 @@ async function handleCancelDispatchError({ broker, symbol, clientOrderId, error 
   })
 }
 
-async function dispatchAndReconcile({
-  broker,
-  symbol,
-  orderId,
-  clientOrderId,
-}) {
-  const dispatch = await dispatchCancelRequest({
-    broker,
-    symbol,
-    orderId,
-  })
-  if (dispatch.error) {
-    return handleCancelDispatchError({
-      broker,
-      symbol,
-      clientOrderId,
-      error: dispatch.error,
-    })
-  }
+async function handleCancelAcknowledgement({ broker, symbol, order, eventWaiter, response }) {
   const acknowledgement = parseCancelAcknowledgement({
-    data: dispatch.response.data,
-    orderId,
+    data: response.data,
+    orderId: order.orderId,
   })
   if (acknowledgement.rejected) {
+    eventWaiter.cancel()
+    const confirmation = await eventWaiter.promise
+    if (confirmation.event) {
+      return reconcileCancellation({
+        broker,
+        symbol,
+        order,
+        event: confirmation.event,
+        error: acknowledgement.error,
+      })
+    }
     return createOutcomeResult({
       errors: [acknowledgement.error],
       mutationOutcome: "REJECTED",
       cancellationOutcome: "REJECTED",
     })
   }
+  eventWaiter.startTimeout()
+  const confirmation = await eventWaiter.promise
   return reconcileCancellation({
     broker,
     symbol,
-    clientOrderId,
-    acknowledged: acknowledgement.acknowledged,
-    error: acknowledgement.error,
+    order,
+    event: confirmation.event,
+    error: confirmation.error ?? acknowledgement.error,
+  })
+}
+
+async function dispatchAndReconcile({ broker, symbol, order }) {
+  const eventWaiter = createPrivateOrderEventWaiter({
+    broker,
+    orderId: order.orderId,
+    clientOrderId: order.clientId,
+    symbol,
+  })
+  const dispatch = await dispatchCancelRequest({
+    broker,
+    symbol,
+    orderId: order.orderId,
+  })
+  if (dispatch.error) {
+    return handleCancelDispatchError({
+      broker,
+      symbol,
+      order,
+      eventWaiter,
+      error: dispatch.error,
+    })
+  }
+  return handleCancelAcknowledgement({
+    broker,
+    symbol,
+    order,
+    eventWaiter,
+    response: dispatch.response,
   })
 }
 
 /**
- * Cancel one Futures order only after an exact pending-order preflight.
- * A stable exchange client ID is required for final-state reconciliation.
+ * Cancel one pending Futures order after identity, state and private-event preflight.
+ * A cancellation is confirmed only by a matching private CLOSE event plus REST readback.
  *
  * @param {{broker: object, input: object}} options
  */
@@ -297,8 +340,7 @@ export async function cancelFuturesOrder({ broker, input } = {}) {
     return dispatchAndReconcile({
       broker,
       symbol,
-      orderId,
-      clientOrderId: preflight.clientOrderId,
+      order: preflight.order,
     })
   } catch (error) {
     handleErr({

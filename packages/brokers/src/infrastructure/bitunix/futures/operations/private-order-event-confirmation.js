@@ -1,24 +1,35 @@
+function hasIdentifier(value) {
+  return typeof value === "string" && value.trim() !== ""
+}
+
+function matchesIdentifier({ actual, expected }) {
+  return expected === undefined || actual === expected
+}
+
+function isPrivateSessionUnavailable(status) {
+  return status?.state !== "open" || status.authenticated !== true ||
+    status.recoveryRequired !== false
+}
+
 /**
  * Match a raw private order-channel event against exchange and caller order identities.
  * @param {{event: object, orderId?: string, clientOrderId?: string, symbol: string}} options
  * @returns {boolean}
  */
-export function matchesPrivateOrderEventIdentity({
-  event,
-  orderId,
-  clientOrderId,
-  symbol,
-} = {}) {
+export function matchesPrivateOrderEventIdentity({ event, orderId, clientOrderId, symbol } = {}) {
   const payload = event?.data
-  const hasOrderId = typeof orderId === "string" && orderId.length > 0
-  const hasClientOrderId = typeof clientOrderId === "string" && clientOrderId.length > 0
   if (event?.ch !== "order" || payload === null || typeof payload !== "object" ||
-      Array.isArray(payload) || (!hasOrderId && !hasClientOrderId)) {
+      Array.isArray(payload)) {
+    return false
+  }
+  const expectedOrderId = hasIdentifier(orderId) ? orderId : undefined
+  const expectedClientOrderId = hasIdentifier(clientOrderId) ? clientOrderId : undefined
+  if (expectedOrderId === undefined && expectedClientOrderId === undefined) {
     return false
   }
   return payload.symbol === symbol &&
-    (!hasOrderId || payload.orderId === orderId) &&
-    (!hasClientOrderId || payload.clientId === clientOrderId)
+    matchesIdentifier({ actual: payload.orderId, expected: expectedOrderId }) &&
+    matchesIdentifier({ actual: payload.clientId, expected: expectedClientOrderId })
 }
 
 /**
@@ -50,54 +61,37 @@ export function createPrivateOrderEventWaiter({ broker, orderId, clientOrderId, 
       clearTimeout(timer)
     }
   }
-  function settle(result) {
+  function settle(event, error = null) {
     if (settled) {
       return
     }
     settled = true
     cleanup()
-    resolveResult(result)
+    resolveResult({ event, error })
   }
   function onChannel(event) {
-    if (matchesPrivateOrderEventIdentity({
-      event,
-      orderId,
-      clientOrderId,
-      symbol,
-    })) {
-      settle({
-        event,
-        error: null,
-      })
+    if (matchesPrivateOrderEventIdentity({ event, orderId, clientOrderId, symbol })) {
+      settle(event)
     }
   }
   function onStatus(status) {
-    if (status?.state !== "open" || status.authenticated !== true ||
-        status.recoveryRequired !== false) {
-      settle({
-        event: null,
-        error: new Error("Bitunix Futures private user-data session became unavailable before order-event confirmation"),
-      })
+    if (isPrivateSessionUnavailable(status)) {
+      settle(null, new Error("Bitunix Futures private user-data session became unavailable before order-event confirmation"))
     }
+  }
+  function startTimeout() {
+    if (settled || timer !== null) {
+      return
+    }
+    timer = setTimeout(() => {
+      settle(null, new Error("Timed out waiting for the matching Bitunix Futures private order event"))
+    }, timeoutMs)
   }
   client.on("channel", onChannel)
   client.on("status", onStatus)
   return {
     promise,
-    startTimeout: () => {
-      if (settled || timer !== null) {
-        return
-      }
-      timer = setTimeout(() => {
-        settle({
-          event: null,
-          error: new Error("Timed out waiting for the matching Bitunix Futures private order event"),
-        })
-      }, timeoutMs)
-    },
-    cancel: () => settle({
-      event: null,
-      error: null,
-    }),
+    startTimeout,
+    cancel: () => settle(null),
   }
 }

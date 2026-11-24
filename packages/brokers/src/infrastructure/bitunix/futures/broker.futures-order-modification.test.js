@@ -72,76 +72,75 @@ function createCanonicalOrder({ qty = "0.02", price = "61000.1", status = "PART_
   }
 }
 
-function createModifyFetch({
-  requests,
-  pendingOrder,
-  pendingTotal = 1,
-  detailOrder,
-  modifyResponse,
-  modifyError,
-  responseCode = 0,
-  responseMessage = "Success",
-  privateClients = [],
-  emitModifyEvent = true,
-  modifyEventOverrides = {},
-}) {
-  return async (...request) => {
-    const [url, options] = request
-    const path = new URL(url).pathname
-    requests.push({
-      path,
-      method: options.method,
-      body: options.body,
-      search: new URL(url).search,
+function createModifyEvent({ privateClients, modifyEventOverrides }) {
+  return privateClients[0]?.emit("channel", {
+    ch: "order",
+    symbol: "BTCUSDT",
+    ts: 1_700_000_002_000,
+    data: {
+      event: "UPDATE",
+      orderId: "futures-order-123",
+      clientId: "strategy-order-456",
+      symbol: "BTCUSDT",
+      orderStatus: "PART_FILLED",
+      qty: "0.02",
+      price: "61000.1",
+      ...modifyEventOverrides,
+    },
+  })
+}
+
+function createModifyResponse({ modifyError, privateClients, emitModifyEvent, modifyEventOverrides }) {
+  if (modifyError) {
+    throw modifyError
+  }
+  if (emitModifyEvent) {
+    createModifyEvent({
+      privateClients,
+      modifyEventOverrides,
     })
-    if (path === "/api/v1/futures/market/trading_pairs") {
-      return createFuturesResponse({
-        data: [createSymbolInfo()],
-      })
-    }
+  }
+  return createFuturesResponse({
+    data: {
+      orderId: "futures-order-123",
+      clientId: "strategy-order-456",
+    },
+  })
+}
+
+function createModifyDetailResponse({ detailError, detailOptions }) {
+  if (detailError) {
+    throw detailError
+  }
+  return createFuturesResponse({
+    data: createCanonicalOrder(detailOptions),
+  })
+}
+
+function createModifyFetch(options) {
+  return async (...request) => {
+    const [url, fetchOptions] = request
+    const path = new URL(url).pathname
+    options.requests.push({
+      path,
+      method: fetchOptions.method,
+      body: fetchOptions.body,
+    })
     if (path === "/api/v1/futures/trade/get_pending_orders") {
       return createFuturesResponse({
         data: {
-          orderList: pendingTotal === 0 ? [] : [createPendingOrder(pendingOrder)],
-          total: pendingTotal,
+          orderList: [createPendingOrder()],
+          total: 1,
         },
       })
     }
     if (path === "/api/v1/futures/trade/modify_order") {
-      if (modifyError) {
-        throw modifyError
-      }
-      if (emitModifyEvent) {
-        privateClients[0]?.emit("channel", {
-          ch: "order",
-          symbol: "BTCUSDT",
-          ts: 1_700_000_002_000,
-          data: {
-            event: "UPDATE",
-            orderId: "futures-order-123",
-            clientId: "strategy-order-456",
-            symbol: "BTCUSDT",
-            orderStatus: "PART_FILLED",
-            qty: "0.02",
-            price: "61000.1",
-            ...modifyEventOverrides,
-          },
-        })
-      }
-      return createFuturesResponse({
-        data: modifyResponse ?? {
-          orderId: "futures-order-123",
-        },
-        code: responseCode,
-        message: responseMessage,
-      })
+      return createModifyResponse(options)
     }
     if (path === "/api/v1/futures/trade/get_order_detail") {
-      return createFuturesResponse({
-        data: createCanonicalOrder(detailOrder),
-      })
+      return createModifyDetailResponse(options)
     }
-    throw new Error(`Unexpected Futures modify request: ${path}`)
+    throw new Error(`Unexpected modify-order request: ${path}`)
   }
 }
 

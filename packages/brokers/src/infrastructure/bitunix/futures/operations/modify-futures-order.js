@@ -274,6 +274,43 @@ async function reconcileModifiedOrder({ broker, input, order, event, error }) {
   })
 }
 
+async function handleModifyDispatchError({ broker, input, order, eventWaiter, error }) {
+  handleErr({
+    where: "modifyFuturesOrder()",
+    error,
+  })
+  if (error?.outcomeUnknown === true) {
+    eventWaiter.startTimeout()
+    const confirmation = await eventWaiter.promise
+    return reconcileModifiedOrder({
+      broker,
+      input,
+      order,
+      event: confirmation.event,
+      error: confirmation.error ?? error,
+    })
+  }
+  eventWaiter.cancel()
+  const confirmation = await eventWaiter.promise
+  if (confirmation.event) {
+    return reconcileModifiedOrder({
+      broker,
+      input,
+      order,
+      event: confirmation.event,
+      error,
+    })
+  }
+  const outcome = error?.kind === "exchange" || error?.kind === "http"
+    ? "REJECTED"
+    : "NOT_SENT"
+  return createOutcomeResult({
+    errors: [error],
+    mutationOutcome: outcome,
+    orderOutcome: outcome,
+  })
+}
+
 async function dispatchModifyOrder({ broker, input, order }) {
   const eventWaiter = createPrivateOrderEventWaiter({
     broker,
@@ -294,39 +331,12 @@ async function dispatchModifyOrder({ broker, input, order }) {
       stateChanging: true,
     })
   } catch (error) {
-    handleErr({
-      where: "modifyFuturesOrder()",
+    return handleModifyDispatchError({
+      broker,
+      input,
+      order,
+      eventWaiter,
       error,
-    })
-    if (error?.outcomeUnknown === true) {
-      eventWaiter.startTimeout()
-      const confirmation = await eventWaiter.promise
-      return reconcileModifiedOrder({
-        broker,
-        input,
-        order,
-        event: confirmation.event,
-        error: confirmation.error ?? error,
-      })
-    }
-    eventWaiter.cancel()
-    const confirmation = await eventWaiter.promise
-    if (confirmation.event) {
-      return reconcileModifiedOrder({
-        broker,
-        input,
-        order,
-        event: confirmation.event,
-        error,
-      })
-    }
-    const outcome = error?.kind === "exchange" || error?.kind === "http"
-      ? "REJECTED"
-      : "NOT_SENT"
-    return createOutcomeResult({
-      errors: [error],
-      mutationOutcome: outcome,
-      orderOutcome: outcome,
     })
   }
   eventWaiter.startTimeout()
