@@ -106,11 +106,12 @@ function createPortfolioWithPositions({ positions = [] } = {}) {
       quantity: item.quantity,
       quoteQuantity: item.quoteQuantity ?? item.quantity,
     })
-    portfolio = portfolio.applyFill({
+    const { portfolio: updatedPortfolio } = portfolio.applyFill({
       fill,
       positionId: `portfolio-position-${index}`,
       strategyId: item.strategyId ?? StrategyId.COIN_GRABBER,
-    }).portfolio
+    })
+    portfolio = updatedPortfolio
   }
   return portfolio
 }
@@ -127,22 +128,27 @@ function createLegacySpotInput({
     invested,
     quantity,
   })
-  const portfolioPositionsToApply = portfolioPositions
-    ? input.portfolioPositions.map((item) => ({
-        market: item.market === "ZROFDUSD" ? alternateMarket : market,
+  const portfolioPositionsToApply = []
+  if (Array.isArray(portfolioPositions)) {
+    for (const item of portfolioPositions) {
+      const strategyId = item.strategy === "RS"
+        ? StrategyId.RECOVERY_SELLER
+        : StrategyId.COIN_GRABBER
+      const targetMarket = item.market === "ZROFDUSD" ? alternateMarket : market
+      portfolioPositionsToApply.push({
+        market: targetMarket,
         quantity: item.quantity,
         quoteQuantity: item.quantity,
-        strategyId: item.strategy === "RS"
-          ? StrategyId.RECOVERY_SELLER
-          : StrategyId.COIN_GRABBER,
-      }))
-    : portfolioQuantity === "0"
-      ? []
-      : [{
-          quantity: portfolioQuantity,
-          quoteQuantity: portfolioQuantity,
-          strategyId: StrategyId.COIN_GRABBER,
-        }]
+        strategyId,
+      })
+    }
+  } else if (portfolioQuantity !== "0") {
+    portfolioPositionsToApply.push({
+      quantity: portfolioQuantity,
+      quoteQuantity: portfolioQuantity,
+      strategyId: StrategyId.COIN_GRABBER,
+    })
+  }
   const portfolio = createPortfolioWithPositions({
     positions: portfolioPositionsToApply,
   })
@@ -162,7 +168,7 @@ function createLegacySpotInput({
     verifiedSpotQuantity: allocation.find((item) => item.assetId === baseAsset.id)?.amount ?? "0",
     offSpotQuantityUsed: "0",
     otherStrategyPositionQuantity: portfolio.positions.reduce(
-      (total, item) => total + Number(item.baseQuantity.amount),
+      (total, positionItem) => total + Number(positionItem.baseQuantity.amount),
       0,
     ),
     offSpotQuantity,
@@ -529,7 +535,7 @@ test("RS-001-012: account snapshot baselines and active reservations are not sub
 })
 
 test("RS-001-013: verified legacy Spot equals account Spot total minus all Portfolio base Positions capped by authorized remainder", async () => {
-  const scenario = authorizationCustodyScenarios[12]
+  const [scenario] = authorizationCustodyScenarios.slice(12, 13)
   const result = await runDomain(scenario)
   assert.equal(result.results[0].verifiedSpotQuantity, scenario.then.verifiedSpotQuantity,
     "All same-base Portfolio Positions across strategies and markets must be subtracted before capping by authorized legacy remainder.")
