@@ -291,6 +291,7 @@ Historical basis/provenance and current custody are independent facts. A transfe
 2. The shared account allocator obtains the account snapshot's free base/quote balances and compares current Portfolio, additional tracked inventory, and account-wide active-order commitments with the corresponding snapshot baselines. It applies only post-snapshot deltas. Pair-owned active inventory/SELL commitments are evaluated separately from account-wide commitments. This prevents historical locks/commitments already reflected in the snapshot free balance from being subtracted a second time, while still accounting for new commitments created after the snapshot.
 
 Relevant production boundaries:
+
 - `apps/harvester/src/domain/strategies/recovery-seller/legacy-spot-allocation.js` — total Spot custody minus aggregate Portfolio base, capped by authorized legacy remainder.
 - `apps/harvester/src/use-cases/strategy-account-balance-context.js` — reads snapshot free balances and computes account-wide active BUY/SELL commitments.
 - `apps/harvester/src/domain/orders/allocate-order-commitments.js` — applies snapshot-relative Portfolio/additional-inventory/commitment deltas and enforces remaining account and pair capacity.
@@ -1494,7 +1495,6 @@ This family is a disposition register, not permission to invent functionality.
 - Any behavior without an explicit canonical decision remains BLOCKED rather than inferred.
 - A future owner-approved issue must define the contract, source of truth, replay semantics and acceptance criteria before implementation scenarios are added.
 
-
 ### 11.1 Complete 22-field family contracts
 
 Every family below explicitly answers the 22 contract questions required by the owner brief. “N/A” means that the field does not apply to that family’s boundary; it is not permission to omit a required assertion in another family. Existing test paths are listed for source discovery only and receive **zero scenario-coverage credit** under #1780.
@@ -1768,7 +1768,6 @@ Every family below explicitly answers the 22 contract questions required by the 
 | 20. Missing scenario tests | All restart interruption points; authoritative third-asset valuation; standalone final-residual liquidation; advanced pause/disable/abandon/resume; authorization revocation/expiry. |
 | 21. Blocked decisions | Restart/replay contract; third-asset source/freshness; standalone final-residual liquidation; advanced lifecycle; authorization revocation/expiry remain deferred or unresolved under their owning decisions. |
 | 22. Acceptance criteria | A separate owner-approved issue/spec defines each capability, source of truth and safety boundary before a new scenario family/case is authored or any status changes. |
-
 
 #### RS-010 disposition case IDs
 
