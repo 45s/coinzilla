@@ -24,8 +24,13 @@ function adaptDepthSide({ levels, side }) {
       value: quantity,
       field: `Bitunix Futures ${side} quantity`,
     })
-    if (compareDecimal({ left: price, right: "0" }) <= 0 ||
-        compareDecimal({ left: quantity, right: "0" }) <= 0) {
+    if (compareDecimal({
+      left: price,
+      right: "0",
+    }) <= 0 || compareDecimal({
+      left: quantity,
+      right: "0",
+    }) <= 0) {
       throw new RangeError(`Bitunix Futures ${side} price and quantity must be positive`)
     }
     if (previousPrice !== undefined) {
