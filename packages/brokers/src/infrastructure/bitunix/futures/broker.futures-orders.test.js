@@ -253,7 +253,11 @@ test("Bitunix Futures createFuturesOrder returns a definitive exchange rejection
 })
 
 test("Bitunix Futures createFuturesOrder supports explicit MARKET order semantics", async () => {
-  const { broker, requests } = createOrderBroker()
+  const { broker, requests } = createOrderBroker({
+    orderOverrides: {
+      orderType: "MARKET",
+    },
+  })
   await broker.connect()
 
   const result = await broker.createFuturesOrder({
