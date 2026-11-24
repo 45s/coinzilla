@@ -4,6 +4,17 @@ import test from "node:test"
 import { Broker } from "../../../index.js"
 import { Market } from "@coinzilla/entities"
 
+function createFuturesResponse({ data }) {
+  return {
+    ok: true,
+    status: 200,
+    json: async () => ({
+      code: 0,
+      data,
+    }),
+  }
+}
+
 const credentials = {
   apiKey: "bitunix-futures-market-test-key",
   apiSecret: "bitunix-futures-market-test-secret",
@@ -73,21 +84,19 @@ test("Broker-created Futures provider sends public catalog reads through injecte
       dependencies: {
         fetchFn: async (...requestArgs) => {
           const [url, options] = requestArgs
-          requests.push({ url, options })
-          return {
-            ok: true,
-            status: 200,
-            json: async () => ({
-              code: 0,
-              data: [{
-                symbol: "BTCUSDT",
-                base: "BTC",
-                quote: "USDT",
-                symbolStatus: "OPEN",
-                isApiSupported: true,
-              }],
-            }),
-          }
+          requests.push({
+            url,
+            options,
+          })
+          return createFuturesResponse({
+            data: [{
+              symbol: "BTCUSDT",
+              base: "BTC",
+              quote: "USDT",
+              symbolStatus: "OPEN",
+              isApiSupported: true,
+            }],
+          })
         },
       },
     },

@@ -5,6 +5,17 @@ import test from "node:test"
 import { Balance } from "@coinzilla/entities"
 import { Broker } from "../../../index.js"
 
+function createFuturesResponse({ data }) {
+  return {
+    ok: true,
+    status: 200,
+    json: async () => ({
+      code: 0,
+      data,
+    }),
+  }
+}
+
 const credentials = {
   apiKey: "bitunix-futures-account-test-key",
   apiSecret: "bitunix-futures-account-test-secret",
@@ -26,25 +37,23 @@ test("Bitunix Futures account reads sign the request and preserve exact availabl
         nonceFactory: () => "nonce-futures-account",
         fetchFn: async (...requestArgs) => {
           const [url, options] = requestArgs
-          requests.push({ url, options })
-          return {
-            ok: true,
-            status: 200,
-            json: async () => ({
-              code: 0,
-              data: [{
-                marginCoin: "USDT",
-                available: "1.200000000000000001",
-                frozen: "0.1",
-                margin: "0.2",
-                transfer: "1.2",
-                positionMode: "HEDGE",
-                crossUnrealizedPNL: "0",
-                isolationUnrealizedPNL: "0",
-                bonus: "100",
-              }],
-            }),
-          }
+          requests.push({
+            url,
+            options,
+          })
+          return createFuturesResponse({
+            data: [{
+              marginCoin: "USDT",
+              available: "1.200000000000000001",
+              frozen: "0.1",
+              margin: "0.2",
+              transfer: "1.2",
+              positionMode: "HEDGE",
+              crossUnrealizedPNL: "0",
+              isolationUnrealizedPNL: "0",
+              bonus: "100",
+            }],
+          })
         },
       },
     },
