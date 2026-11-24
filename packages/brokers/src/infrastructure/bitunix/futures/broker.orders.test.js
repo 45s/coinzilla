@@ -250,6 +250,53 @@ test("Bitunix Futures common open-order method remains explicitly unsupported", 
 })
 
 
+function createCancellationMarketResponse() {
+  return createFuturesResponse({
+    data: [{
+      symbol: "BTCUSDT",
+      base: "BTC",
+      quote: "USDT",
+      symbolStatus: "OPEN",
+      isApiSupported: true,
+    }],
+  })
+}
+
+function createCancellationPendingResponse({ pendingOrder }) {
+  return createFuturesResponse({
+    data: {
+      orderList: [createOrderRow({
+        fee: "0.0001",
+        realizedPNL: "0",
+        effect: "GTC",
+        status: "PART_FILLED",
+        ...pendingOrder,
+      })],
+      total: 1,
+    },
+  })
+}
+
+function createCancellationDetailResponse({ detailStatus }) {
+  return createFuturesResponse({
+    data: createOrderRow({
+      status: detailStatus,
+    }),
+  })
+}
+
+function createCancellationAckResponse({ cancelResponse }) {
+  return createFuturesResponse({
+    data: cancelResponse ?? {
+      successList: [{
+        orderId: "futures-order-123",
+        clientId: "strategy-order-456",
+      }],
+      failureList: [],
+    },
+  })
+}
+
 function createCancellationFetch({
   requests,
   cancelResponse,
@@ -266,49 +313,24 @@ function createCancellationFetch({
       body: options.body,
     })
     if (path === "/api/v1/futures/market/trading_pairs") {
-      return createFuturesResponse({
-        data: [{
-          symbol: "BTCUSDT",
-          base: "BTC",
-          quote: "USDT",
-          symbolStatus: "OPEN",
-          isApiSupported: true,
-        }],
-      })
+      return createCancellationMarketResponse()
     }
     if (path === "/api/v1/futures/trade/get_pending_orders") {
-      return createFuturesResponse({
-        data: {
-          orderList: [createOrderRow({
-            fee: "0.0001",
-            realizedPNL: "0",
-            effect: "GTC",
-            status: "PART_FILLED",
-            ...pendingOrder,
-          })],
-          total: 1,
-        },
+      return createCancellationPendingResponse({
+        pendingOrder,
       })
     }
     if (path === "/api/v1/futures/trade/get_order_detail") {
-      return createFuturesResponse({
-        data: createOrderRow({
-          status: detailStatus,
-        }),
+      return createCancellationDetailResponse({
+        detailStatus,
       })
     }
     if (path === "/api/v1/futures/trade/cancel_orders") {
       if (cancelError) {
         throw cancelError
       }
-      return createFuturesResponse({
-        data: cancelResponse ?? {
-          successList: [{
-            orderId: "futures-order-123",
-            clientId: "strategy-order-456",
-          }],
-          failureList: [],
-        },
+      return createCancellationAckResponse({
+        cancelResponse,
       })
     }
     throw new Error(`Unexpected Futures cancellation request: ${path}`)
