@@ -150,6 +150,7 @@ function normalizeCurrentPositionAmounts({ position }) {
     liquidationPrice: requireDecimal({
       value: position.liqPrice,
       field: "liqPrice",
+      allowNegative: true,
     }),
     marginRate: requireDecimal({
       value: position.marginRate,
