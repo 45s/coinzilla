@@ -1509,43 +1509,56 @@ A review-ready scenario PR should make every applicable answer obvious:
 
 ## 19. Frequently asked implementation questions
 
-**Should an agent inspect and grade all existing RS tests first?**  
+**Should an agent inspect and grade all existing RS tests first?**
+
 No. Existing RS tests remain ordinary regression protection and receive zero scenario-matrix credit. Build the new matrix from the RS specification and #1780. Inspect existing source/tests only to understand real production composition and avoid duplicating helpers; do not use them as proof.
 
-**Should all scenarios be in one file?**  
+**Should all scenarios be in one file?**
+
 No. One coherent family module/file, readable test cases, stable IDs. Do not create a mega-test or a Cartesian-product test.
 
-**Should the registry contain every future scenario before the first test is written?**  
+**Should the registry contain every future scenario before the first test is written?**
+
 No. Define stable family/rule/decision/state vocabulary and the first executable records. Expand family modules when their first cases are implemented. The issue matrix still lists the full required behavior from the beginning.
 
-**Can a scenario call a production helper to calculate its expected result?**  
+**Can a scenario call a production helper to calculate its expected result?**
+
 No. That would make the test oracle circular. Use an independent exact-decimal derivation.
 
-**Can a DOMAIN scenario prove no broker call occurred?**  
+**Can a DOMAIN scenario prove no broker call occurred?**
+
 No. It can prove no intent/decision was produced. A broker-call assertion belongs to an APPLICATION scenario with the real submitter and a fake broker.
 
-**Can a pure state test prove reservation durability?**  
+**Can a pure state test prove reservation durability?**
+
 No. It proves only the state function. Durable reservation and release require the real application workflow and a controlled persistence boundary.
 
-**Can a test normalize an invalid production workflow state with a factory?**  
+**Can a test normalize an invalid production workflow state with a factory?**
+
 Only to isolate a narrower domain planner claim, and the test/documentation must say exactly that. It cannot claim full workflow-to-evaluator coverage. #1809 owns the known wiring defect.
 
-**Should the runner automatically mark a passing case VERIFIED?**  
+**Should the runner automatically mark a passing case VERIFIED?**
+
 No. It can report execution. Human-reviewed authority, independent oracle, all required subcases, exact SHA and CI evidence are also required.
 
-**Should a blocked scenario be deleted or skipped forever?**  
+**Should a blocked scenario be deleted or skipped forever?**
+
 No. Keep it in the registry/matrix with BLOCKED status, exact reason and unblock condition. Unsupported capabilities remain UNSUPPORTED.
 
-**Should RS inherit Conservative replacement SELL behavior?**  
+**Should RS inherit Conservative replacement SELL behavior?**
+
 No. RS has its own one-SELL-per-cycle contract. Shared infrastructure does not imply shared strategy semantics.
 
-**Should the agent fix STOP, enabled-default, dust or third-asset conflicts while writing tests?**  
+**Should the agent fix STOP, enabled-default, dust or third-asset conflicts while writing tests?**
+
 No. Record them and wait for owner-approved decisions. Do not make policy decisions in a test PR.
 
-**Does a merged PR mean the family is complete?**  
+**Does a merged PR mean the family is complete?**
+
 No. PR #1793 is the initial partial scenario slice. Its four files and exact assertions do not complete RS-001…RS-010.
 
-**What should the next agent do first?**  
+**What should the next agent do first?**
+
 Read the current #1780 checkpoint and this playbook, verify latest develop, then implement PR 1 (registry/schema/traceability/thin runner with one representative real scenario) unless #1780 has since recorded a different owner-approved next action.
 
 ## 20. Current baseline at initial publication
