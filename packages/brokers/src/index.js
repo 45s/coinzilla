@@ -1,7 +1,7 @@
 export { Broker } from "./broker/broker.js"
 export { BinanceWebSocketBroker, BinanceWebSocketConfig } from "./infrastructure/binance/spot/index.js"
 export { BitunixSpotBroker, BitunixSpotConfig } from "./infrastructure/bitunix/spot/index.js"
-export { BitunixFuturesBroker, BitunixFuturesConfig } from "./infrastructure/bitunix/futures/index.js"
+export { BitunixFuturesBroker, BitunixFuturesConfig, BitunixFuturesWebSocketClient } from "./infrastructure/bitunix/futures/index.js"
 export { BitunixSpotWebSocketClient, BitunixWebSocketError } from "./infrastructure/bitunix/spot/api/websocket-client.js"
 export { normalizeBinanceId } from "./infrastructure/binance/spot/adapters/normalize-binance-id.js"
 export {
