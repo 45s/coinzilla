@@ -128,3 +128,34 @@ test("Bitunix Futures getCandles returns chronologically ordered closed candles 
   assert.equal(Object.hasOwn(requests[0].options.headers, "api-key"), false, "public candle reads must not include authentication")
 })
 
+
+
+test("Bitunix Futures getPrice preserves the legacy one-shot price alias", async () => {
+  const broker = new Broker({
+    provider: "bitunix-futures",
+    ...credentials,
+    tradingMode: "live",
+    providerOptions: {
+      dependencies: {
+        fetchFn: async () => createFuturesResponse({
+          data: [{
+            symbol: "BTCUSDT",
+            markPrice: "100.20",
+            lastPrice: "100.25",
+          }],
+        }),
+      },
+    },
+  })
+
+  const result = await broker.getPrice({
+    symbol: "BTCUSDT",
+  })
+
+  assert.equal(result.ok, true)
+  assert.deepEqual(result.data, {
+    symbol: "BTCUSDT",
+    price: "100.25",
+    markPrice: "100.20",
+  })
+})
