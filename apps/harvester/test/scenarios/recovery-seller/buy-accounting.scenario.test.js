@@ -1181,15 +1181,18 @@ function createRSOrderEventEvents({ scenarioCase, fill }) {
       fill,
     }]
   }
-  return [{
-    eventType: "executionReport",
-    executionType: "NEW",
-    executedOrder: createRSOrderEventOrder({
-      status: "FILLED",
-      executedQuantity: scenarioCase.quantity,
-      updatedAt: 102,
-    }),
-  }]
+  if (scenarioCase.id === "immediate-terminal-ack") {
+    return [{
+      eventType: "executionReport",
+      executionType: "NEW",
+      executedOrder: createRSOrderEventOrder({
+        status: "FILLED",
+        executedQuantity: scenarioCase.quantity,
+        updatedAt: 102,
+      }),
+    }]
+  }
+  throw new Error(`Unsupported RS BUY event-order case: ${scenarioCase.id}`)
 }
 
 async function runRSOrderEventCase({ scenarioCase }) {
