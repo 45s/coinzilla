@@ -1,7 +1,7 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { AppComponent, readSavedDashboardTheme } from './app';
 
@@ -79,6 +79,11 @@ function createBotsSnapshot() {
 }
 
 describe('AppComponent', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    BotsTestWebSocket.instances = [];
+  });
+
   it('renders the Coinzilla dashboard shell and keeps the Overview explicitly labeled as preview data', async () => {
     await TestBed.configureTestingModule({
       imports: [AppComponent],
