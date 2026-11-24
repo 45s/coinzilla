@@ -2106,11 +2106,8 @@ export class BitunixFuturesBroker {
     })
   }
 
-  async getPrice() {
-    return unsupportedResult({
-      operation: "getPrice",
-      reason: "Futures price reads are not implemented yet.",
-    })
+  async getPrice(input = {}) {
+    return this.getPrices(input)
   }
 
   async createOrder() {
