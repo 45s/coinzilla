@@ -129,8 +129,8 @@ const FUTURES_CAPABILITIES = [
   },
   {
     type: "SUBSCRIBE_CANDLES",
-    status: "UNKNOWN",
-    reason: "The public Futures kline payload does not provide a documented candle open timestamp required by the common Candle contract.",
+    status: "UNSUPPORTED",
+    reason: "The public Futures kline WebSocket payload provides a push timestamp but no documented candle open timestamp required by the common Candle contract; use getCandles() for closed REST candles.",
   },
   {
     type: "SUBSCRIBE_BOOK_TICKER",
@@ -171,8 +171,8 @@ const FUTURES_CAPABILITIES = [
   },
   {
     type: "READ_OPEN_ORDERS",
-    status: "UNKNOWN",
-    reason: "The Futures open-order adapter and completeness contract have not yet been implemented.",
+    status: "UNSUPPORTED",
+    reason: "The Futures pending-order DTO cannot satisfy the common legacy Order[] contract without losing exact decimals and Futures position/trade-side semantics; use getFuturesPendingOrders() for the exact provider-specific projection.",
   },
   {
     type: "READ_ORDER",
