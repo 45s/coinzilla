@@ -4,6 +4,7 @@ import { adaptFuturesBalances } from "./adapters/adapt-futures-balances.js"
 import { BrokerCapabilities } from "../../../broker/broker-capabilities.js"
 import { BrokerUnsupportedOperationError } from "../../../broker/errors/broker-unsupported-operation-error.js"
 import { BitunixFuturesRestClient } from "./api/rest-client.js"
+import { adaptFuturesCandles, BITUNIX_FUTURES_CANDLE_INTERVALS } from "./adapters/adapt-futures-candles.js"
 
 function unsupportedResult({ operation, reason }) {
   return {
@@ -28,6 +29,12 @@ const FUTURES_CAPABILITIES = [
     type: "READ_ACCOUNT_SNAPSHOT",
     status: "UNKNOWN",
     reason: "The Futures account snapshot and source-freshness contract have not yet been verified.",
+  },
+  {
+    type: "READ_CANDLES",
+    status: "SUPPORTED",
+    method: "getCandles",
+    guarantee: "Returns chronologically ordered, closed Futures klines with exact decimal fields; closeTime is derived from the documented interval because the exchange response provides open time only.",
   },
   {
     type: "READ_MARKET_PRICE",
@@ -386,11 +393,76 @@ export class BitunixFuturesBroker {
     }
   }
 
-  async getCandles() {
-    return unsupportedResult({
-      operation: "getCandles",
-      reason: "Futures candle reads are not implemented yet.",
-    })
+  async getCandles(input = {}) {
+    try {
+      ensure.plainObject({
+        value: input,
+        name: "getCandles input",
+      })
+      if (Object.hasOwn(input, "startTime")) {
+        throw new TypeError("Bitunix Futures kline endpoint does not support startTime")
+      }
+      const symbol = ensure.nonEmptyString({
+        value: input.symbol,
+        name: "symbol",
+      }).trim().toUpperCase()
+      const interval = ensure.oneOf({
+        value: input.interval,
+        values: BITUNIX_FUTURES_CANDLE_INTERVALS,
+        name: "interval",
+      })
+      const limit = input.limit ?? 100
+      ensure.positiveInteger({
+        value: limit,
+        name: "limit",
+      })
+      if (limit > 200) {
+        throw new RangeError("Bitunix Futures kline limit cannot exceed 200")
+      }
+      const type = ensure.oneOf({
+        value: input.type ?? "LAST_PRICE",
+        values: ["LAST_PRICE", "MARK_PRICE"],
+        name: "type",
+      })
+      const endTime = input.endTime
+      if (endTime !== undefined) {
+        ensure.nonNegativeInteger({
+          value: endTime,
+          name: "endTime",
+        })
+      }
+      const queryParams = {
+        symbol,
+        interval,
+        limit,
+        type,
+      }
+      if (endTime !== undefined) {
+        queryParams.endTime = endTime
+      }
+      const response = await this.restClient.request({
+        method: "GET",
+        path: "/api/v1/futures/market/kline",
+        queryParams,
+        authenticated: false,
+      })
+      return toResult({
+        data: adaptFuturesCandles({
+          rows: response.data,
+          symbol,
+          interval,
+          endTime,
+        }),
+      })
+    } catch (error) {
+      handleErr({
+        where: "BitunixFuturesBroker.getCandles()",
+        error,
+      })
+      return toResult({
+        errors: [error],
+      })
+    }
   }
 
   async createCanonicalOrder() {
