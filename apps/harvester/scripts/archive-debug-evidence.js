@@ -136,6 +136,15 @@ export function createArchiveName({ createdAt } = {}) {
   return `harvester-debug-${timestamp}-${randomUUID().slice(0, 8)}.tar.gz`
 }
 
+export function createTarInvocation({ staging } = {}) {
+  // Keep the archive operand relative. Git for Windows' tar treats an
+  // absolute path such as C:\\Users\\... as a remote-host archive spec.
+  return {
+    args: ["-czf", "evidence.tar.gz", "-C", staging, "."],
+    archiveFile: "evidence.tar.gz",
+  }
+}
+
 function resolveRecoveryFactsDirectory({ packageDirectory, env } = {}) {
   const directory = resolveOperationalStateDirectory({ env })
   if (path.basename(directory) !== "recovery-facts") {
@@ -303,9 +312,11 @@ async function buildArchiveStaging({
     includedSources,
     missingSources,
   })
+  const tarInvocation = createTarInvocation({ staging })
   await runCommand({
     command: "tar",
-    args: ["-czf", tarFile, "-C", staging, "."],
+    args: tarInvocation.args,
+    cwd: temporaryRoot,
   })
   return {
     tarFile,
