@@ -1,6 +1,7 @@
 import { Asset, Market } from "@coinzilla/entities"
 import { assertDecimalString, compareDecimal, ensure, handleErr, toResult } from "@coinzilla/utils"
 import { adaptFuturesBalances } from "./adapters/adapt-futures-balances.js"
+import { adaptFuturesOrderBook } from "./adapters/adapt-futures-order-book.js"
 import { BrokerCapabilities } from "../../../broker/broker-capabilities.js"
 import { BrokerUnsupportedOperationError } from "../../../broker/errors/broker-unsupported-operation-error.js"
 import { BitunixFuturesRestClient } from "./api/rest-client.js"
@@ -41,6 +42,13 @@ const FUTURES_CAPABILITIES = [
     status: "SUPPORTED",
     method: "getPrices",
     guarantee: "Returns the requested Futures symbol last traded price and mark price as exact decimal strings from the public ticker endpoint.",
+  },
+  {
+    type: "READ_ORDER_BOOK",
+    status: "SUPPORTED",
+    method: "getOrderBook",
+    guarantee: "Returns exact public bid and ask levels in exchange order using lossless depth-number parsing.",
+    limitation: "The REST depth response has no source timestamp or sequence; it is a point-in-time snapshot, not a gap-free stream.",
   },
   {
     type: "READ_SYMBOL_FILTERS",
@@ -398,6 +406,43 @@ export class BitunixFuturesBroker {
       operation: "getFills",
       reason: "Futures canonical fills are not implemented yet.",
     })
+  }
+
+  async getOrderBook({ symbol, limit = "max" } = {}) {
+    try {
+      const normalizedSymbol = ensure.nonEmptyString({
+        value: symbol,
+        name: "symbol",
+      }).trim().toUpperCase()
+      const normalizedLimit = ensure.oneOf({
+        value: limit,
+        values: ["1", "5", "15", "50", "max"],
+        name: "limit",
+      })
+      const response = await this.restClient.request({
+        method: "GET",
+        path: "/api/v1/futures/market/depth",
+        queryParams: {
+          symbol: normalizedSymbol,
+          limit: normalizedLimit,
+        },
+        authenticated: false,
+      })
+      return toResult({
+        data: adaptFuturesOrderBook({
+          data: response.data,
+          symbol: normalizedSymbol,
+        }),
+      })
+    } catch (error) {
+      handleErr({
+        where: "BitunixFuturesBroker.getOrderBook()",
+        error,
+      })
+      return toResult({
+        errors: [error],
+      })
+    }
   }
 
   async getPrices({ symbol } = {}) {
