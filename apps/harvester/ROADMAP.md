@@ -124,7 +124,7 @@ Do not claim 100% correctness from line/branch coverage. Completion means every 
 - RS-005 one SELL lifecycle — PARTIAL.
 - RS-006 mixed SELL accounting atomicity — PARTIAL.
 - RS-007 unknown outcome/no blind retry — PARTIAL (state-level evidence only).
-- RS-008 CG/RS shared account resources and market-owned volatility gate — MISSING.
+- RS-008 CG/RS shared account resources and market-owned volatility gate (including RS-008-017) — MISSING.
 - RS-009 STOP — BLOCKED by the specification/source resolution discrepancy.
 - RS-010 restart/replay — UNSUPPORTED; third-asset fee valuation — BLOCKED.
 
