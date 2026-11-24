@@ -14,6 +14,7 @@ test("package entry point exposes only the supported public contracts", () => {
     "BinanceWebSocketConfig",
     "BitunixFuturesBroker",
     "BitunixFuturesConfig",
+    "BitunixFuturesWebSocketClient",
     "BitunixSpotBroker",
     "BitunixSpotConfig",
     "BitunixSpotWebSocketClient",
@@ -111,4 +112,21 @@ test("public Bitunix Spot WebSocket client is independently constructible withou
   assert.equal(typeof client.getLastPrice, "function", "public market RPC methods must be exposed")
   assert.equal(typeof client.getAccount, "function", "private read-only RPC methods must be exposed")
   assert.equal(typeof client.placeOrder, "undefined", "the RPC client must not expose order mutation methods")
+})
+
+test("public Bitunix Futures WebSocket client is independently constructible without connecting", () => {
+  const client = new brokers.BitunixFuturesWebSocketClient({
+    channelType: "public",
+    transportFactory: () => ({
+      connect: async () => {},
+      send: () => {},
+      close: async () => {},
+      onMessage: () => () => {},
+      onClose: () => () => {},
+      onError: () => () => {},
+    }),
+  })
+
+  assert.equal(client.state, "idle")
+  assert.equal(client.authenticated, false)
 })
