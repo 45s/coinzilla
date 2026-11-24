@@ -36,14 +36,18 @@ function createBroker({ rows = [tradeRow], total = rows.length } = {}) {
     tradingMode: "live",
     providerOptions: {
       dependencies: {
-        fetchFn: async (url, options) => {
+        fetchFn: async (...args) => {
+          const [url, options] = args
           requests.push({ url: String(url), options })
           return {
             ok: true,
             status: 200,
             json: async () => ({
               code: 0,
-              data: { tradeList: rows, total },
+              data: {
+                tradeList: rows,
+                total,
+              },
             }),
           }
         },
@@ -93,7 +97,11 @@ test("Bitunix Futures trade history preserves execution, fee and realized PnL de
 
 test("Bitunix Futures trade history rejects malformed identity and financial fields", async () => {
   const { broker } = createBroker({
-    rows: [{ ...tradeRow, tradeId: "", fee: "NaN" }],
+    rows: [{
+      ...tradeRow,
+      tradeId: "",
+      fee: "NaN",
+    }],
   })
   const result = await broker.getFuturesTradeHistory({
     symbol: "BTCUSDT",
