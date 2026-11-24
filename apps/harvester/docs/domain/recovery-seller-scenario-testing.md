@@ -325,7 +325,7 @@ An order intent, broker acknowledgement, requested quantity, price quote, cancel
 
 The RS contract requires unexpected, missing, contradictory or unsupported conditions to fail closed. Already-submitted orders and confirmed fills still require reconciliation/accounting; STOP is not permission to abandon them.
 
-The exact STOP resolution contract is currently disputed by specification and source. Keep RS-009 BLOCKED until the owner resolves it. See `13.
+The exact STOP resolution contract is currently disputed by specification and source. Keep RS-009 BLOCKED until the owner resolves it. See section 13.
 
 ## 5. Configuration inventory and change impact
 
@@ -348,8 +348,8 @@ The audited strategy-level configuration is:
 | Pair | `priceStepPercent` | Price planning input |
 | Pair | `makerPercent` | Maker fee reserve |
 | Pair | `takerPercent` | Taker fee reserve |
-| Pair | `pricePrecision` | Resolved exchange price precision |
-| Pair | `quantityPrecision` | Resolved exchange quantity precision |
+| Resolved runtime market metadata (not operator-authored pair fields) | `pricePrecision` | Exchange-derived price precision from token/market metadata |
+| Resolved runtime market metadata (not operator-authored pair fields) | `quantityPrecision` | Exchange-derived quantity precision from token/market metadata |
 
 Primary source paths:
 
@@ -357,7 +357,7 @@ Primary source paths:
 - Strategy config composition: `apps/harvester/config/strategies/rs-recovery-seller.js`.
 - Config validation/resolution: `apps/harvester/src/domain/app-config.js`.
 
-The strategy config currently sets `enabled: true` at the audited checkpoint. The RS specification `15 contains a conflicting disabled-by-default statement. Do not create a default assertion or change config until the owner resolves that discrepancy. Per-pair environment eligibility remains a separate control.
+The strategy config currently sets `enabled: true` at the audited checkpoint. The RS specification's section 15 contains a conflicting disabled-by-default statement. Do not create a default assertion or change config until the owner resolves that discrepancy. Per-pair environment eligibility remains a separate control.
 
 The runtime references `thirdAssetFeeQuoteValue` in some paths, but it is not part of the validated operator pair configuration contract. Do not document it as a supported user-configurable field or fabricate its source.
 
@@ -406,7 +406,7 @@ Every executable registry record must contain:
 | `when` | Ordered actions/events with identities |
 | `then` | Exact observable outputs and state/accounting effects |
 | `mustNot` | Forbidden behavior and side effects |
-| `subcases` | Required variants and their own status/evidence |
+| `subcases` | Array of stable subcase records; each has its own ID, description, status, exact test mapping and evidence |
 | `implementation` | Actual production source ownership paths |
 | `test` | Exact test file and named test title |
 | `status` | Canonical shared-method status |
@@ -457,20 +457,20 @@ export const recoveryOnlyProfitabilityScenario = Object.freeze({
     },
     legacy: {
       remainingQuantity: "0",
-      originalInvestedQuote: "0.02",
-      originalQuantity: "0.01",
     },
     minProfitQuote: "0.01",
+    expectedNetSellProceedsQuote: "10.01",
   },
   when: [
-    { type: "evaluate-sell" },
-    { type: "reconcile-filled-sell", identity: "rs-cycle-001-sell" },
+    { type: "evaluate-recovery-only-profitability" },
   ],
   then: {
-    legacyAllocation: "0",
-    recoveryProfitQuote: "at least 0.01",
-    combinedProfitQuote: "at least 0.01",
-    cycleStatus: "CLOSED",
+    recoveryProfitQuote: "0.01",
+    recoveryGate: true,
+    legacyGate: "not-applicable",
+    combinedProfitQuote: "0.01",
+    combinedGate: true,
+    sellEligibility: true,
   },
   mustNot: [
     "invent or reuse exhausted legacy quantity",
@@ -478,9 +478,27 @@ export const recoveryOnlyProfitabilityScenario = Object.freeze({
     "close before complete terminal reconciliation",
   ],
   subcases: [
-    "recovery profit exactly at minProfit",
-    "recovery profit one smallest exact unit below minProfit",
-    "recovery profit one smallest exact unit above minProfit",
+    {
+      id: "RS-004-001-A",
+      description: "recovery profit exactly at minProfit",
+      status: "SPECIFIED",
+      test: null,
+      evidence: null,
+    },
+    {
+      id: "RS-004-001-B",
+      description: "recovery profit one smallest exact unit below minProfit",
+      status: "SPECIFIED",
+      test: null,
+      evidence: null,
+    },
+    {
+      id: "RS-004-001-C",
+      description: "recovery profit one smallest exact unit above minProfit",
+      status: "SPECIFIED",
+      test: null,
+      evidence: null,
+    },
   ],
   implementation: [
     "apps/harvester/src/domain/strategies/recovery-seller/calculate-profitability.js",
@@ -488,7 +506,7 @@ export const recoveryOnlyProfitabilityScenario = Object.freeze({
     "apps/harvester/src/domain/strategies/recovery-seller/cycle-state.js",
   ],
   test: {
-    file: "apps/harvester/test/scenarios/recovery-seller/profitability.scenario.test.js",
+    file: "apps/harvester/test/scenarios/recovery-seller-profitability.scenario.test.js",
     title: "recovery-only cycle still passes its required profit gates",
   },
   status: "SPECIFIED",
@@ -539,9 +557,21 @@ scenario:
     - include off-Spot or reserved legacy quantity
     - replace independent gates with combined-only profitability
   subcases:
-    - configured legacy slice exceeds verified Spot remainder
-    - legacy exhausted and recovery-only operation
-    - exact tick, step and notional boundaries
+    - id: RS-003-001-A
+      description: configured legacy slice exceeds verified Spot remainder
+      status: SPECIFIED
+      test: null
+      evidence: null
+    - id: RS-003-001-B
+      description: legacy exhausted and recovery-only operation
+      status: SPECIFIED
+      test: null
+      evidence: null
+    - id: RS-003-001-C
+      description: exact tick, step and notional boundaries
+      status: SPECIFIED
+      test: null
+      evidence: null
   implementation:
     - apps/harvester/src/domain/strategies/recovery-seller/calculate-sell-plan.js
   test:
@@ -628,7 +658,7 @@ Actual decision outcome strings are the production contract. Current lifecycle o
 
 ### 7.4 State and transition IDs
 
-Cycle states are the five values listed in `4.3. Transition IDs should describe actual permitted transitions, not every imagined graph edge. Examples:
+Cycle states are the five values listed in section 4.3. Transition IDs should describe actual permitted transitions, not every imagined graph edge. Examples:
 
 - `RS_ACCUMULATING_TO_SELL_SUBMITTED`
 - `RS_SELL_SUBMITTED_TO_RECONCILIATION_REQUIRED`
@@ -1167,7 +1197,7 @@ These blockers must appear in the registry, #1780, the repository catalog where 
 ### 13.2 Strategy enabled default discrepancy
 
 - At the audited develop checkpoint, `apps/harvester/config/strategies/rs-recovery-seller.js` sets `enabled: true`.
-- The RS specification `15 contains a disabled-by-default statement.
+- The RS specification's section 15 contains a disabled-by-default statement.
 - Other specification/roadmap language says enabled by default.
 - Do not silently change config or assert a default in scenarios until the owner resolves the canonical statement.
 - Keep global strategy activation distinct from per-pair `enabled` and `tradingEnvironment`.
