@@ -100,7 +100,10 @@ function createOperatorPortfolio() {
       activeQuantity: "0.12500000",
       investedQuote: "500.00000000",
       recovery: {
+        buyCost: "500.00000000",
+        netSellProceeds: "0",
         outstandingRecoveryAmount: "500.00000000",
+        realizedNetProfit: "0",
       },
     }],
   }
