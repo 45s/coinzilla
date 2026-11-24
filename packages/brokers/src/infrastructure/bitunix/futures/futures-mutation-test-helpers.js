@@ -38,7 +38,10 @@ export class FakePrivateWebSocketClient extends EventEmitter {
 
   subscribe({ channels }) {
     this.subscriptions.push(...channels)
-    return { sent: true, channels }
+    return {
+      sent: true,
+      channels,
+    }
   }
 
   unsubscribe({ channels }) {

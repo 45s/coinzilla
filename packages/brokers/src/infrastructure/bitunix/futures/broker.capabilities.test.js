@@ -66,5 +66,5 @@ test("Bitunix Futures capability declarations match implemented operations and e
   const userData = capabilities.getCapability({
     type: "SUBSCRIBE_USER_DATA",
   })
-  assert.match(userData.limitation, /no canonical event, replay cursor or recovery guarantee/i)
+  assert.match(userData.limitation, /no canonical event, replay cursor, sequence number or replay guarantee is claimed/i)
 })
