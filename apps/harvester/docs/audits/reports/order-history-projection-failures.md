@@ -222,3 +222,69 @@ git -C /path/to/coinzilla-archive show f283c90db9143c74683ae5bf9c7bb52e09590d56:
 Before analysis, calculate SHA-256 on each reconstructed original byte stream and require exact matches to the manifest hashes above. If exporting chunks, include byte offsets, preserve chunk order and bytes exactly, and verify the final concatenated file size and SHA-256. A partial export is not sufficient to claim integrity or to conclude that a missing event was absent.
 
 Until those exact bytes are supplied and verified, the historical invalid fields/input shapes, distinct invalid-record classes, historical projection stage/build, and operational impact remain unknown. Do not inspect the database dump; explicit owner authorization is still required.
+
+
+## 2026-11-24 TESTNET archive follow-up — provider provenance loss confirmed
+
+This is a separate occurrence set from the 28 visible failures in the 2026-11-22 cumulative terminal log. It does not retroactively identify any 2026-11-22 invalid input.
+
+### Immutable archive and integrity
+
+- Archive: \`45s/coinzilla-archive@e965b979ad74e8d2a0caaa19071afd2bc6b38e6c\`.
+- Directory: \`archives/2026-11-24T18-21-57Z_c8823d4c_debug/\`.
+- Session: \`386708f6-29e6-46e1-87fe-3a9665e97871\`; command mode TESTNET; recovery facts sequence 0–24.
+- Manifest blob: \`41d3ccfd60e6f06f166b56a03d4b8694838084bc\`. The manifest explicitly excludes database files and cumulative logs.
+- All four compressed log artifacts were retrieved at the immutable commit. Their byte counts and computed SHA-256 values match the manifest:
+
+| Artifact | Compressed bytes | SHA-256 | Git blob |
+| --- | ---: | --- | --- |
+| Journal JSONL | 11,007 | \`612d7c54333fb432c5c5add8e0b5d3148abca4e151b4723f070118bd101744ff\` | \`f6da878f1acfefeb2b8668ce313d1cf3a143a1f4\` |
+| \`harvester.log.gz\` | 30,767 | \`5a9a1b3c041e1dc59989d8d27733b118a6fcd84789441b22efa4c0141ad3d5c9\` | \`480575978da34074370f2dc05b5b945f4a56905a\` |
+| \`trace.log.gz\` | 33,490 | \`de435982eae23d3113b99c1eed7cab43f214c1fc0aae11f15a87986cacf553ee\` | \`8ae1b60a9af64583bc54329ce2cd49415d94b39b\` |
+| \`terminal.log.gz\` | 2,124 | \`e1f6228faab1657468d33f86a4e280df211dffa8bae66b7478fe5f40ce7de125\` | \`48df62aae51769a6fe20d455c261413adfb3d4ad\` |
+
+Decompressed outputs: Journal 108,986 bytes / 151 lines; Harvester log 932,947 bytes / 443 lines; trace 1,047,075 bytes / 623 lines. The terminal artifact was also retrieved and decompressed. The archive remains unchanged.
+
+### Exact occurrence-to-source index
+
+The Journal contains one \`order.updated\` event for each failure. Each event's data omits \`providerInstanceId\`, \`providerType\` and \`accountId\`; the corresponding structured Harvester diagnostic reports \`OrderHistoryValidationError\`, code \`HARVESTER_ORDER_HISTORY_RECORD_INVALID\`, stage \`mapping\`, field \`providerInstanceId\`, and null provider/account identity.
+
+| UTC event time | Market | Client order ID | Broker order ID | Journal event ID |
+| --- | --- | --- | --- | --- |
+| 17:13:45.102 | DOGEUSDT | \`h-e05d425b3f344d8bbfbf12-5\` | \`2012789\` | \`d5d82718-0515-4b49-8632-4ec1e13bd36d\` |
+| 17:15:45.177 | ZROUSDT | \`h-e05d425b3f344d8bbfbf12-12\` | \`1034198\` | \`b81951e8-3924-4230-bb5b-39c420414356\` |
+| 17:18:53.239 | ADAUSDT | \`h-e05d425b3f344d8bbfbf12-4\` | \`841228\` | \`8eaed43e-97c8-43cc-bb39-6fbb7ea95e7e\` |
+
+For each event, \`harvester.log\` and \`trace.log\` contain two identical diagnostic writes one millisecond apart. These are duplicate projection-observer diagnostics, not additional unique invalid Journal events. The trace and Harvester log agree on event ID, event name, source timestamp, market, client order ID, validation field and null provider identity.
+
+The durable facts independently retain complete provider identity for the corresponding accepted orders and fills:
+
+- DOGE: submission intent sequence 16 and fill sequence 18.
+- ZRO: submission intent sequence 21 and fill sequence 23.
+- ADA: submission intent sequence 11 and fill sequence 24.
+
+Each fact records \`providerInstanceId: binanceTestnet\`, \`providerType: binance\`, and \`accountId: binance-primary\`. Thus the identity exists in the accepted submission/fill evidence but is absent from the three raw \`order.updated\` Journal payloads.
+
+### Source-level cause in the recorded develop baseline
+
+The archived logger context reports \`develop@3ecc3366f16317e84a2cdc32b7c39c79148dd8b5\`, with \`workingTree: dirty\`. The committed source at that SHA contains the following matching path; the dirty-worktree marker means an uncommitted runtime-only source difference cannot be excluded.
+
+1. \`apps/harvester/src/use-cases/create-user-data-event-transition.js:159-173\` finds the previously registered order, applies the incoming update, and replaces \`state.registry\`.
+2. \`apps/harvester/src/domain/orders/order-registry.js:168-188\` creates the next canonical order and preserves provider identity from the current registered order when the incoming order omits it.
+3. Despite that merge, \`create-user-data-event-transition.js:179-187\` calls \`mapOrderUpdatedData({ order, ... })\` with the original incoming event order, not the enriched canonical order now held by the registry.
+4. \`apps/harvester/src/application/events/lifecycle-event-dtos.js:72-91\` allows all three provenance fields to be absent together; \`mapOrderUpdatedData\` then publishes an \`order.updated\` payload without them.
+5. \`apps/harvester/src/infrastructure/persistence/create-order-history-observer.js:193-207\` passes that payload to \`createOrderHistoryRecord()\`, which rejects the missing \`providerInstanceId\` during mapping.
+
+This is a source-proven defect path matching all three archived payloads and diagnostics. The narrow correction is to map the post-update canonical order resolved from the registry using the previously registered order's canonical client ID, rather than serializing the raw incoming order. Preserve strict order-history validation; do not make missing provider identity acceptable.
+
+### Duplicate observer diagnostics
+
+The current persistence composition creates a legacy order-history observer in \`prepare-order-history-persistence.js:248-268\` and a relational order-history observer in \`141-154\`, both subscribed to the same EventBus. The same event is published once, and both projections independently receive it. The two diagnostic writes per event match this composition. The error payload does not identify an observer instance, so the individual writes cannot be labelled retrospectively beyond that source-level composition.
+
+### Disposition and remaining scope
+
+- Confirmed for this separate 2026-11-24 session: three unique \`order.updated\` records lost provider provenance before publication; both history projections report mapping failures.
+- Not established: whether the 2026-11-22 28-group set shares this defect. Its two large cumulative source logs remain unavailable through the current connector; no conclusion is inferred.
+- PR #1796 is merged as \`4adde09fbbfabac10e54d689644e5c473824f65f\`. It fixes prospective terminal diagnostic visibility only, not the missing provider provenance.
+- The code correction and RED/GREEN regression are deferred until #1826 is integrated, as required by the issue's integration order. This checkpoint does not touch #1826's WebSocket files.
+- No database dump was inspected; no exchange requests/writes, order cancellations, account mutations, restarts or archive rewrites were performed.
