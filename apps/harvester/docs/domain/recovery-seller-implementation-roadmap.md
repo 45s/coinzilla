@@ -13,7 +13,7 @@ created: 2026-11-14
 **Domain contract:** [Recovery Seller Domain Specification](./recovery-seller-domain-specification.md).
 **Scenario testing:** [RS Scenario Testing Playbook](./recovery-seller-scenario-testing.md) defines the from-scratch AI-agent scenario suite, schema and evidence contract. [Issue #1780](https://github.com/45s/coinzilla/issues/1780) owns its matrix and progress; scenario work does not change this production implementation roadmap.
 
-**Scenario-contract discrepancies:** STOP is specified as terminal/read-only, while the current source contains an evidence-backed internal resolution helper/use case; the strategy enabled-default wording also conflicts with specification §15. These are recorded as unresolved in #1780. This implementation roadmap does not settle either policy question.
+**Scenario-contract discrepancy:** the later #1780 contract describes STOP as terminal/no-reset, while earlier owner-approved work in #1475 introduced an evidence-backed internal resolution helper/use case; the operator facade remains read-only. This conflict remains BLOCKED in #1780 and is not settled by this implementation roadmap. The enabled default is settled by owner-approved #1713 / merged PR #1711 and is recorded in the canonical RS specification.
 **CG baseline:** [Conservative Domain Specification](./CONSERVATIVE_DOMAIN_SPECIFICATION.md).
 
 ## Historical RS-4 checkpoint — provider route handoff (superseded)

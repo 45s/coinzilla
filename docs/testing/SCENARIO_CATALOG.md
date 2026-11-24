@@ -682,7 +682,7 @@ At `20.00 USDT/ZRO`, recovery receives `20.00 USDT` (profit `+10.00`), legacy re
 - The RS specification and #1780 describe STOP as terminal with no operator clear/reset/resume path; the operator facade exposes read-only STOP status.
 - `stop-decision.js` exports `resolveRecoverySellerStopState`, and `resolve-recovery-seller-stop.js` implements an evidence-backed durable `SAFETY_BLOCKER_RESOLVED` operator-action workflow.
 - `create-harvester-operator.js` currently exposes only `getRecoverySellerStopState`, not the resolution use case.
-- Therefore “no operator method is exposed” is supported, but “there is no domain/application STOP resolution capability” is not. The owner must decide whether the resolution use case is obsolete/forbidden or the terminal-STOP specification needs revision. Do not write a scenario that silently chooses.
+- Earlier owner-approved work recorded in #1475 introduced an evidence-backed internal domain/application resolution gate and durable use case. The later #1780 contract states STOP is terminal/no-reset, while the CC-operator remains read-only. Therefore “no operator method is exposed” is supported, but the current supported domain/application contract is still disputed. RS-009 remains BLOCKED until the owner reconciles the later #1780 contract with the earlier #1475 approval. Do not write a scenario that silently chooses.
 
 **Invariant still required:** while STOP is latched, no new BUY/SELL/retry/replacement may pass; WAIT/RECONCILE of already-submitted work remains possible; first STOP evidence is preserved.
 

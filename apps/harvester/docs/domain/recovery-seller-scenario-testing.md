@@ -140,6 +140,41 @@ apps/harvester/
 
 This is a responsibility map, not a promise that every listed module must be imported by every scenario. Follow dependency direction and use the smallest real production composition that proves the business claim.
 
+### 3.1.1 Existing production-file responsibilities
+
+This table describes the current develop implementation at the audit checkpoint. It is a source map, not a requirement to import every module into every scenario. Tests should exercise the narrowest public production boundary that proves the business claim.
+
+| Existing file | Responsibility and scenario boundary |
+| --- | --- |
+| apps/harvester/src/domain/app-config.js | Validates application configuration, selects pairs for the resolved trading environment and resolves runtime configuration. It does not own RS profitability or inventory policy. |
+| apps/harvester/src/domain/strategies/recovery-seller/calculate-profitability.js | Calculates the independent recovery, legacy and combined-cycle profitability gates from supplied exact values. |
+| apps/harvester/src/domain/strategies/recovery-seller/calculate-sell-plan.js | Plans the additive recovery-plus-legacy SELL, eligible legacy slice, fee gross-up, quantity allocation and minimum price using exact decimal arithmetic. |
+| apps/harvester/src/domain/strategies/recovery-seller/cycle-state.js | Owns immutable cycle identity, one SELL identity per cycle, unknown submission state, terminal reconciliation outcome and next-cycle preconditions. |
+| apps/harvester/src/domain/strategies/recovery-seller/evaluate-buy-decision.js | Pure RS BUY eligibility and intent planning using configured tranche quantity, cadence/reference price and market precision. |
+| apps/harvester/src/domain/strategies/recovery-seller/evaluate-sell-decision.js | Pure pre-submission SELL policy: fee/order-type selection, filter validation, planned order and fail-closed STOP outcome. It does not submit or retry. |
+| apps/harvester/src/domain/strategies/recovery-seller/legacy-accounting-state.js | Creates/reads the legacy-position map and derives additional tracked quote cash flow/base quantity from verified account and Portfolio state. |
+| apps/harvester/src/domain/strategies/recovery-seller/legacy-position.js | Creates fixed original legacy basis, caps each cycle's legacy slice at the remaining quantity and records reconciled legacy sales without rewriting original average cost. |
+| apps/harvester/src/domain/strategies/recovery-seller/legacy-spot-allocation.js | Derives verified additional Spot custody by subtracting aggregate Portfolio base quantity from authoritative Spot totals and capping by authorized legacy remainder. |
+| apps/harvester/src/domain/strategies/recovery-seller/lifecycle-decision.js | Defines pure per-order lifecycle outcomes/transitions, including WAIT/RECONCILE behavior and the one-order lifecycle rules. |
+| apps/harvester/src/domain/strategies/recovery-seller/lifecycle-state.js | Composes cycle lifecycle state with sticky STOP state for unknown sole-SELL outcomes and guarded next-cycle transitions. |
+| apps/harvester/src/domain/strategies/recovery-seller/mixed-sell-fill-accounting.js | Applies a fully reconciled canonical mixed SELL to both recovery Portfolio and legacy projections atomically; no input snapshot is mutated on failure. |
+| apps/harvester/src/domain/strategies/recovery-seller/mixed-sell-fill-allocation.js | Binds one canonical Fill to registered RS order ownership and splits gross base quantity, quote proceeds and commission facts between recovery and legacy. |
+| apps/harvester/src/domain/strategies/recovery-seller/mixed-sell-fill-reconciliation.js | Stages canonical Fill allocations, detects duplicate/conflicting identities, validates terminal order/history completeness and produces reconciled allocation evidence. |
+| apps/harvester/src/domain/strategies/recovery-seller/recovery-seller-accounting-error.js | Defines typed RS accounting errors for domain/application failure boundaries. |
+| apps/harvester/src/domain/strategies/recovery-seller/stop-decision.js | Defines sticky STOP decisions/state/gating and an internal evidence-backed resolution function. Its resolution semantics conflict with the later #1780 no-reset contract; do not infer that the function is an approved runtime/operator capability. |
+| apps/harvester/src/use-cases/create-recovery-seller-accounting-workflow.js | Coordinates RS BUY accounting and terminal mixed-SELL accounting across shared Portfolio, legacy accounting, order registry and cycle snapshots. |
+| apps/harvester/src/use-cases/create-recovery-seller-action-authorizer.js | Authorizes RS actions against shared account-wide quote/base commitments, RS budget, recovery inventory and verified unreserved legacy Spot. |
+| apps/harvester/src/use-cases/create-recovery-seller-order-submitter.js | Coordinates durable submission intent, broker submission, acknowledgement and unknown/unresolved submission outcomes for RS-owned orders. |
+| apps/harvester/src/use-cases/create-recovery-seller-runtime-evaluator.js | Composes RS runtime readiness, market state, STOP and strategy evaluation at the runtime boundary. |
+| apps/harvester/src/use-cases/create-recovery-seller-stop-workflow.js | Restores and persists the durable RS STOP blocker/state used by runtime safety gates. |
+| apps/harvester/src/use-cases/create-recovery-seller-transition-evaluator.js | Composes pure RS BUY/SELL policies with the real accounting-workflow snapshot and decides whether to continue a BUY tranche or submit the sole SELL. |
+| apps/harvester/src/use-cases/record-recovery-seller-mixed-sell-reconciled.js | Persists the durable terminal mixed-SELL completion fact only after both accounting projections and profitability outcome are verified; controls reservation-release boundary. |
+| apps/harvester/src/use-cases/recovery-seller-order-callbacks.js | Supplies RS-owned pending, acknowledgement, submission-failure/deferred and execution callbacks to the shared submitter/event workflow. |
+| apps/harvester/src/use-cases/recovery-seller-submission-ownership.js | Re-exports the shared domain validator for immutable RS submission ownership; do not duplicate ownership validation in scenario helpers. |
+| apps/harvester/src/use-cases/resolve-recovery-seller-stop.js | Implements an evidence-backed durable operator-action resolution use case. It is not exposed by the current CC-operator facade and remains part of the #1780 STOP contract discrepancy. |
+
+Shared collaborators live outside the RS-specific tree: shared Portfolio/Position accounting, canonical Fill/Order identity and OrderRegistry, account snapshots and commitment allocation, the serialized Trading Engine, market TradingRules, Journal and Operational State Store. Inspect their actual consumers and imports before adding a fake port or duplicate abstraction.
+
 ### 3.2 Existing scenario test tree
 
 PR #1793 is merged. These four files are the initial new scenario-evidence slice:
@@ -979,6 +1014,203 @@ For each applicable monetary/quantity threshold, cover:
 
 For exchange rules, use the real TradingRules contract and test tick size, step size, minimum/maximum price, minimum/maximum quantity and minimum/maximum notional as applicable. Assert exact rounded quantity/price and net proceeds, not only whether a plan exists. Include tiny quantities whose decimal serialization may use exponent notation, wrong symbol/base/quote metadata, and UTC timestamp/freshness plus canonical market-readiness boundaries wherever they gate an RS decision.
 
+
+### 10.6 Worked fee and accounting oracle examples
+
+These examples are synthetic fixtures designed to make the arithmetic auditable. They are not market recommendations, runtime defaults or approved fee schedules. Expected values are derived below from the stated facts; never call the production planner/accounting/profitability function to calculate the expected result. Use exact decimal strings (or exact rational arithmetic) in the test. Do not convert any input to JavaScript Number.
+
+#### 10.6.1 BUY commission asset changes a different quantity
+
+**Base-asset fee**
+
+~~~text
+Canonical BUY Fill:
+  gross base quantity = 1.000000 BTC
+  gross quote quantity = 10.000000 USDT
+  base commission = 0.001000 BTC
+
+Net acquired base = 1.000000 - 0.001000
+                  = 0.999000 BTC
+
+Actual quote cost = 10.000000 USDT
+~~~
+
+The base fee reduces acquired Position quantity. It does not increase quote spend.
+
+**Quote-asset fee**
+
+~~~text
+Canonical BUY Fill:
+  gross base quantity = 1.000000 BTC
+  gross quote quantity = 10.000000 USDT
+  quote commission = 0.010000 USDT
+
+Net acquired base = 1.000000 BTC
+Actual quote cost = 10.000000 + 0.010000
+                  = 10.010000 USDT
+~~~
+
+The quote fee increases the recovery cost basis. Do not subtract it from base quantity.
+
+#### 10.6.2 Partial fills and multiple BUY tranches
+
+One BUY order may produce multiple canonical fills. Apply each Fill once; aggregate confirmed facts, not the requested order quantity.
+
+~~~text
+Partial Fill A:
+  gross base = 0.400000
+  gross quote = 4.000000
+  base fee = 0.000400
+  net base = 0.399600
+
+Partial Fill B:
+  gross base = 0.600000
+  gross quote = 6.600000
+  base fee = 0.000600
+  net base = 0.599400
+
+Order totals:
+  gross base = 1.000000
+  gross quote = 10.600000
+  base fees = 0.001000
+  net acquired base = 0.999000
+  actual quote cost = 10.600000
+~~~
+
+For separate BUY tranches at different prices, retain each canonical Fill's actual cost and fee asset:
+
+~~~text
+Tranche A:
+  gross base = 1.000000
+  gross quote = 10.000000
+  base fee = 0.001000
+  net base = 0.999000
+  quote cost = 10.000000
+
+Tranche B:
+  gross base = 2.000000
+  gross quote = 24.000000
+  quote fee = 0.024000
+  net base = 2.000000
+  quote cost = 24.024000
+
+Combined:
+  gross base = 3.000000
+  net base = 2.999000
+  gross quote = 34.000000
+  actual quote cost = 34.024000
+  gross execution VWAP = 34.000000 / 3.000000
+  net-base cost per unit = 34.024000 / 2.999000
+~~~
+
+The VWAP expression and the net-base cost expression are deliberately different. Do not use gross execution VWAP as a substitute for fee-aware cost per acquired net base. Legacy original invested quote/quantity/average cost is independent and must not be rewritten by these recovery BUY tranches.
+
+#### 10.6.3 One canonical mixed SELL Fill with base and quote commissions
+
+This example demonstrates the exact split implemented for a single canonical Fill. The legacy authorization has 0.010010 ZRO verified and unreserved; the configured per-cycle legacy slice is sellQuantity = 0.010000 ZRO. The extra 0.000010 ZRO covers the base-asset commission. Recovery inventory available is 0.990990 ZRO.
+
+~~~text
+Canonical SELL Fill:
+  gross base quantity = 1.000000 ZRO
+  gross quote proceeds = 21.000000 USDT
+  base commission = 0.001000 ZRO
+  quote commission = 0.021000 USDT
+
+Gross allocation:
+  recovery = 0.990000 ZRO (99% of Fill quantity)
+  legacy   = 0.010000 ZRO (1% of Fill quantity)
+
+Base commission split:
+  recovery = 0.001000 * 99% = 0.000990 ZRO
+  legacy   = 0.001000 - 0.000990 = 0.000010 ZRO
+
+Base debit:
+  recovery = 0.990000 + 0.000990 = 0.990990 ZRO
+  legacy   = 0.010000 + 0.000010 = 0.010010 ZRO
+  total    = 1.001000 ZRO
+
+Gross quote proceeds split:
+  recovery = 21.000000 * 99% = 20.790000 USDT
+  legacy   = 21.000000 - 20.790000 = 0.210000 USDT
+
+Quote commission split:
+  recovery = 0.021000 * 99% = 0.020790 USDT
+  legacy   = 0.021000 - 0.020790 = 0.000210 USDT
+
+Net quote proceeds:
+  recovery = 20.790000 - 0.020790 = 20.769210 USDT
+  legacy   = 0.210000 - 0.000210 = 0.209790 USDT
+  total    = 20.979000 USDT
+~~~
+
+For this illustrative profitability check, use recovery cost basis 10.000000 USDT, legacy average cost 20.000000 USDT/ZRO, and minProfit = 0.010000 USDT:
+
+~~~text
+Legacy cost consumed = 0.010010 * 20.000000
+                     = 0.200200 USDT
+
+Recovery net profit = 20.769210 - 10.000000
+                    = 10.769210 USDT  (passes 0.010000 minimum)
+
+Legacy net profit   = 0.209790 - 0.200200
+                    = 0.009590 USDT   (passes non-loss gate)
+
+Combined net profit = 20.979000 - (10.000000 + 0.200200)
+                    = 10.778800 USDT  (passes 0.010000 minimum)
+~~~
+
+The accounting assertions are the base debits 0.990990 + 0.010010 = 1.001000 ZRO and net proceeds 20.769210 + 0.209790 = 20.979000 USDT. The original Fill remains the sole execution fact. The allocation metadata does not create synthetic recovery or legacy Fills.
+
+#### 10.6.4 Quote-fee gross-up and exchange tick rounding
+
+Assume the independent proceeds oracle requires 20.20 USDT net, the quote fee reserve is 0.001 (0.1%), total SELL quantity is 1.01, and the market price tick is 0.01.
+
+~~~text
+Gross quote target = 20.20 / (1 - 0.001)
+                   = 20.20 / 0.999
+                   = 20.220220... USDT
+
+Unrounded minimum price = 20.220220... / 1.01
+                        = 20.020020... USDT
+
+Round price UP to 0.01 tick:
+  planned price = 20.03 USDT
+
+At 1.01 quantity:
+  gross quote proceeds = 1.01 * 20.03
+                       = 20.2303 USDT
+  quote fee = 20.2303 * 0.001
+            = 0.0202303 USDT
+  net quote proceeds = 20.2303 - 0.0202303
+                     = 20.2100697 USDT
+~~~
+
+The rounded plan preserves the required 20.20 USDT net proceeds. The repeating division must use the repository's exact decimal scale/rounding contract; the independent oracle should compare the resulting tick-aligned price and proceeds, not a JavaScript floating-point approximation.
+
+For a base-asset SELL fee, the order quantity must also be grossed up against available base. Example: 1.001000 ZRO available, base fee rate 0.001, and quantity step 0.001 produce a gross order quantity of 1.000 ZRO, base fee 0.001 ZRO, and total base debit 1.001 ZRO. The order quantity alone is not the full base debit.
+
+#### 10.6.5 Exact profitability threshold neighbors
+
+If the quote precision for the scenario supports six decimal places, use this illustrative boundary:
+
+~~~text
+recoveryCostBasis = 10.000000 USDT
+minProfit = 0.010000 USDT
+required recovery net proceeds = 10.010000 USDT
+
+10.009999 -> FAIL (one quote unit below)
+10.010000 -> PASS (exact equality)
+10.010001 -> PASS (one quote unit above)
+~~~
+
+The actual smallest unit must come from the market/quote precision under test. Do not assume six decimal places for every market. Test recovery, legacy and combined gates independently; a passing combined result never repairs a failing allocation gate.
+
+#### 10.6.6 Dust is a post-completion classification, not a filter bypass
+
+Assume a cycle has already reached terminal FILLED, complete reconciliation, atomic accounting commit, released reservations and passed every applicable profitability gate. A residual of 0.020 ZRO at 100 USDT/ZRO is worth 2.00 USDT. If the current MIN_NOTIONAL is 5.00 USDT and quantity/step constraints otherwise pass, this residual may be recorded as retained bonus dust with exact quantity 0.020 ZRO and limiting filter MIN_NOTIONAL. It is permanently excluded from future recovery inventory, legacy inventory, SELL targets and profitability.
+
+The same 0.020 ZRO proposed as a candidate SELL before successful cycle completion is not dust: the candidate violates MIN_NOTIONAL and follows the approved global STOP/filter-failure contract. A residual that remains sellable is not dust and cannot be silently discarded. This example does not authorize standalone final-residual liquidation without a new BUY; that behavior remains unresolved.
+
 ## 11. Scenario family matrix and required subcases
 
 Issue #1780 is the live detailed checklist. This section explains what each family must prove and how to recognize incomplete coverage. Do not delete or silently reduce any row from #1780.
@@ -1024,7 +1256,7 @@ Required cases:
 8. BUY base-asset commission reduces net acquired base.
 9. BUY quote-asset commission increases actual quote cost.
 10. Zero commission and multiple supported fee records are accounted exactly.
-11. Third-asset fee follows an approved authoritative valuation path; missing/ambiguous valuation fails closed and is not treated as zero.
+11. Third-asset fee valuation is currently UNSUPPORTED/BLOCKED: no authoritative execution-time quote-value source is approved. Missing/ambiguous valuation fails closed and is not treated as zero. If a source is approved later, test its asset identity, quote asset, rate/value and timestamp/freshness.
 12. Duplicate identical BUY Fill is idempotent across repeated delivery.
 13. Same Fill identity with changed quantity, price, market, order or commission is rejected without partial mutation.
 14. Fill for wrong strategy/Position/order/market/side cannot be attributed to RS.
@@ -1139,7 +1371,7 @@ Required cases:
 5. Recovery and legacy projections derive from identical accepted Fill facts; recovery allocation uses only canonical RS recovery fills and attributed proceeds.
 6. SELL base-asset commission reduces net base quantity/proceeds allocation according to the approved accounting contract.
 7. SELL quote-asset commission reduces net quote proceeds exactly.
-8. Third-asset SELL commission requires authoritative quote valuation; unsupported valuation fails closed.
+8. Third-asset SELL commission valuation is currently UNSUPPORTED/BLOCKED because no authoritative execution-time quote-value source is approved; missing/ambiguous valuation fails closed.
 9. Mixed commission assets are allocated without duplication or loss.
 10. Allocation precision/rounding ambiguity fails closed rather than silently shifting quantity between recovery and legacy.
 11. Successful commit updates both recovery and legacy projections.
@@ -1326,21 +1558,20 @@ These blockers must appear in the registry, #1780, the repository catalog where 
 
 ### 13.1 STOP resolution discrepancy — RS-009 BLOCKED
 
-- Specification and #1780 describe terminal STOP with no clear/reset/resume path.
-- Source currently exports `resolveRecoverySellerStopState` from `stop-decision.js`.
-- `resolve-recovery-seller-stop.js` implements an evidence-backed durable resolution flow.
-- The operator facade is documented/tested as read-only for STOP status.
-- This is a real contract/source discrepancy, not proof of a public operator reset.
-- Owner must decide whether the internal resolution path is obsolete/forbidden or whether the contract must explicitly permit a controlled resolution path.
-- Until decided, do not write positive or negative assertions that assume one interpretation. RS-009 stays BLOCKED.
+- The later #1780 contract describes STOP as sticky/terminal with no clear/reset/resume path; the current specification carries the same statement.
+- Earlier owner-approved work is recorded in #1475 (2026-11-19): it introduced an evidence-backed resolveRecoverySellerStopState domain gate and durable resolveRecoverySellerStop application use case.
+- The current CC-operator facade exposes read-only STOP status and does not expose that resolution use case as a command.
+- The source therefore contains a real historical contract discrepancy: the existence and earlier approval of the internal resolver do not prove that the later #1780 no-reset contract permits its use.
+- The owner must decide whether the internal resolution path is obsolete/forbidden or whether the current contract permits only that tightly gated durable administrative resolution.
+- Until the later contract is reconciled with the earlier approval, do not write positive or negative assertions that assume one interpretation. RS-009 stays BLOCKED.
 
-### 13.2 Strategy enabled default discrepancy
+### 13.2 Strategy enabled default — RESOLVED by #1713 / PR #1711
 
-- At the audited develop checkpoint, `apps/harvester/config/strategies/rs-recovery-seller.js` sets `enabled: true`.
-- The RS specification's section 15 contains a disabled-by-default statement.
-- Other specification/roadmap language says enabled by default.
-- Do not silently change config or assert a default in scenarios until the owner resolves the canonical statement.
-- Keep global strategy activation distinct from per-pair `enabled` and `tradingEnvironment`.
+- Owner-approved issue #1713 and merged PR #1711 explicitly set RS_RECOVERY_SELLER_CONFIG.enabled: true by default.
+- The current config test asserts this default; the canonical RS specification §15 now records the same decision.
+- Each pair's enabled and tradingEnvironment remain authoritative for market route eligibility.
+- Enabling the strategy in configuration does not start Harvester, open an exchange connection, or authorize a TESTNET/LIVE session.
+- This is no longer a scenario-contract blocker. Do not revert to the historical disabled-default checkpoint.
 
 ### 13.3 Third-asset commission valuation — RS-010 BLOCKED
 

@@ -470,7 +470,7 @@ The prose is authoritative. BUY cadence and tranche sizing follow the owner-appr
 
 RS-4 shared Trading Engine integration and scoped RS-5 offline lifecycle verification are complete in PR #1515. PR #1696 completes legacy single-provider routing and RS-only startup. `RECOVERY_SELLER_RUNTIME_ACCEPTANCE_COMPLETE` is `true`, and required exact-head CI passed. RS is enabled by default; LINEAUSDT is TESTNET-only through its per-market selector. The controlled TESTNET runbook remains CLOSED / PAUSED pending a separate bounded session plan and explicit joint start. Before any RS exchange session can start:
 
-- Keep `RECOVERY_SELLER_RUNTIME_ACCEPTANCE_COMPLETE` true after offline acceptance; keep `RS_RECOVERY_SELLER_CONFIG.enabled` false by default. Configuration must be explicitly changed before any RS route can activate.
+- Keep `RECOVERY_SELLER_RUNTIME_ACCEPTANCE_COMPLETE` true after offline acceptance. `RS_RECOVERY_SELLER_CONFIG.enabled` is `true` by default under owner-approved issue #1713 and merged PR #1711. Each market's own `enabled` and `tradingEnvironment` settings remain authoritative for route eligibility. This configuration default does not start Harvester or authorize a TESTNET/LIVE session.
 - Restart/replay recovery and third-asset commission valuation are explicitly deferred. A third-asset fee without an approved quote value must fail closed.
 - STOP is terminal for this runtime. CC-operator may inspect authorized status but cannot clear, reset, unpause or resume STOP; diagnose and fix the underlying cause before a controlled external restart.
 - Do not seed Portfolio with synthetic fills or treat wallet balances as RS inventory.
