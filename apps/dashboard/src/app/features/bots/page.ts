@@ -1,5 +1,5 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { ChangeDetectionStrategy, Component, computed, inject, OnInit, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 
 import { OperatorApi, type OperatorCommand } from '../operator/api';
@@ -187,7 +187,7 @@ function formatRuntimeDuration(status: RuntimeStatus | null): string {
   styleUrl: './page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class BotsComponent implements OnInit {
+export class BotsComponent {
   private readonly api = inject(OperatorApi);
 
   readonly connected = signal(false);
@@ -199,6 +199,7 @@ export class BotsComponent implements OnInit {
   readonly markets = signal<readonly MarketRow[]>([]);
   readonly positions = signal<readonly PortfolioPosition[]>([]);
   readonly pendingCommand = signal<PendingCommand | null>(null);
+  lastRefresh: Promise<void> = Promise.resolve();
 
   readonly runtimeDuration = computed(() => formatRuntimeDuration(this.status()));
   readonly activeMarkets = computed(() =>
@@ -209,13 +210,18 @@ export class BotsComponent implements OnInit {
   );
   readonly disabledMarkets = computed(() => this.markets().filter((market) => !market.enabled));
 
-  ngOnInit(): void {
+  constructor() {
     void this.refresh();
   }
 
-  async refresh(): Promise<void> {
+  refresh(): Promise<void> {
     this.loading.set(true);
     this.errorMessage.set(null);
+    this.lastRefresh = this.loadSnapshots();
+    return this.lastRefresh;
+  }
+
+  private async loadSnapshots(): Promise<void> {
     try {
       const [status, markets, portfolio] = await Promise.all([
         firstValueFrom(this.api.getStatus()),
