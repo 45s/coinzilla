@@ -1,6 +1,6 @@
 import { defineRecoverySellerScenario } from "../registry/define-scenario.js"
 
-const testFile = "apps/harvester/test/scenarios/recovery-seller/authorization-custody.scenario.test.js"
+const testFile = "apps/harvester/test/scenarios/recovery-seller/buy-accounting.scenario.test.js"
 const workflowSource = "apps/harvester/src/use-cases/create-recovery-seller-accounting-workflow.js"
 const portfolioSource = "apps/harvester/src/domain/portfolio/portfolio.js"
 
