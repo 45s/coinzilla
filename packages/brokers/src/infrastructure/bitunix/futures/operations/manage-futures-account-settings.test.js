@@ -178,11 +178,30 @@ test("setFuturesPositionMode does not mutate while pending orders exist", async 
 })
 
 test("account setting mutations fail closed while any pending TP/SL order exists", async () => {
-  for (const [operation, input] of [
-    [setFuturesLeverage, { symbol: "BTCUSDT", leverage: 20 }],
-    [setFuturesMarginMode, { symbol: "BTCUSDT", marginMode: "ISOLATION" }],
-    [setFuturesPositionMode, { positionMode: "HEDGE" }],
-  ]) {
+  const operations = [
+    [
+      setFuturesLeverage,
+      {
+        symbol: "BTCUSDT",
+        leverage: 20,
+      },
+    ],
+    [
+      setFuturesMarginMode,
+      {
+        symbol: "BTCUSDT",
+        marginMode: "ISOLATION",
+      },
+    ],
+    [
+      setFuturesPositionMode,
+      {
+        positionMode: "HEDGE",
+      },
+    ],
+  ]
+
+  for (const [operation, input] of operations) {
     const { broker, requests } = createBroker({
       pendingTpSl: [{
         symbol: "BTCUSDT",
