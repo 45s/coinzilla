@@ -5,9 +5,18 @@ import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { RecoveryLedger } from "../domain/strategies/conservative/recovery-ledger.js"
 import { updateTradingAccounting } from "./update-trading-accounting.js"
 
-const baseAsset = new Asset({ id: "doge", code: "DOGE" })
-const quoteAsset = new Asset({ id: "usdt", code: "USDT" })
-const thirdAsset = new Asset({ id: "bnb", code: "BNB" })
+const baseAsset = new Asset({
+  id: "doge",
+  code: "DOGE",
+})
+const quoteAsset = new Asset({
+  id: "usdt",
+  code: "USDT",
+})
+const thirdAsset = new Asset({
+  id: "bnb",
+  code: "BNB",
+})
 const market = new Market({
   venue: "binance",
   symbol: "DOGEUSDT",
@@ -79,14 +88,26 @@ function createFirstBuyState() {
       quoteQuantity: "10",
       commissions: [
         new Commission({
-          amount: new Money({ amount: "0.1", asset: baseAsset }),
+          amount: new Money({
+            amount: "0.1",
+            asset: baseAsset,
+          }),
         }),
         new Commission({
-          amount: new Money({ amount: "0.01", asset: quoteAsset }),
+          amount: new Money({
+            amount: "0.01",
+            asset: quoteAsset,
+          }),
         }),
         new Commission({
-          amount: new Money({ amount: "0.001", asset: thirdAsset }),
-          quoteValue: new Money({ amount: "0.02", asset: quoteAsset }),
+          amount: new Money({
+            amount: "0.001",
+            asset: thirdAsset,
+          }),
+          quoteValue: new Money({
+            amount: "0.02",
+            asset: quoteAsset,
+          }),
         }),
       ],
     }),
@@ -115,14 +136,26 @@ function createCompletedBuyState({ state } = {}) {
       quoteQuantity: "6",
       commissions: [
         new Commission({
-          amount: new Money({ amount: "0.05", asset: baseAsset }),
+          amount: new Money({
+            amount: "0.05",
+            asset: baseAsset,
+          }),
         }),
         new Commission({
-          amount: new Money({ amount: "0.006", asset: quoteAsset }),
+          amount: new Money({
+            amount: "0.006",
+            asset: quoteAsset,
+          }),
         }),
         new Commission({
-          amount: new Money({ amount: "0.002", asset: thirdAsset }),
-          quoteValue: new Money({ amount: "0.03", asset: quoteAsset }),
+          amount: new Money({
+            amount: "0.002",
+            asset: thirdAsset,
+          }),
+          quoteValue: new Money({
+            amount: "0.03",
+            asset: quoteAsset,
+          }),
         }),
       ],
     }),
@@ -205,10 +238,16 @@ test("rejects a later BUY with an unvalued third-asset commission without changi
       quoteQuantity: "6",
       commissions: [
         new Commission({
-          amount: new Money({ amount: "0.001", asset: thirdAsset }),
+          amount: new Money({
+            amount: "0.001",
+            asset: thirdAsset,
+          }),
         }),
       ],
     }),
   })
-  assertRejectedBuyPreservesAccounting({ state, rejected })
+  assertRejectedBuyPreservesAccounting({
+    state,
+    rejected,
+  })
 })
