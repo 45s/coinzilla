@@ -36,6 +36,9 @@ function createOrderRow({ status = "PART_FILLED", ...overrides } = {}) {
     qty: "0.02",
     tradeQty: "0.01",
     price: "61000.1",
+    effect: "GTC",
+    fee: "0",
+    realizedPNL: "0",
     status,
     positionMode: "HEDGE",
     marginMode: "ISOLATION",
@@ -156,6 +159,7 @@ test("Bitunix Futures cancelOrder does not confirm REST-canceled state without a
     orderId: "futures-order-123",
   })
 
+  assert.equal(requests.some(({ path }) => path === "/api/v1/futures/trade/cancel_orders"), true, "the cancellation test must reach the exchange mutation endpoint after a valid pending-order preflight")
   assert.equal(result.ok, false, "REST readback alone must not confirm cancellation when Bitunix requires the private order push")
   assert.equal(result.mutationOutcome, "OUTCOME_UNKNOWN", "missing private cancellation evidence must leave the mutation outcome unknown")
   assert.equal(result.cancellationOutcome, "OUTCOME_UNKNOWN", "a canceled REST snapshot cannot replace the required private event")
@@ -175,6 +179,7 @@ test("Bitunix Futures cancelOrder confirms only a matching private CLOSE event p
   })
 
   privateClients[0].off("channel", observePrivateEvent)
+  assert.equal(requests.some(({ path }) => path === "/api/v1/futures/trade/cancel_orders"), true, "the cancellation test must reach the exchange mutation endpoint after a valid pending-order preflight")
   assert.equal(observedEvents.length, 1, "the exchange fixture must emit one private order event for the cancellation")
   assert.equal(observedEvents[0].data.event, "CLOSE", "the private event must represent the order closing")
   assert.equal(observedEvents[0].data.orderStatus, "CANCELED", "the private event must carry the canceled terminal status")
@@ -196,6 +201,7 @@ test("Bitunix Futures cancelOrder does not treat a FILLED private CLOSE event as
     orderId: "futures-order-123",
   })
 
+  assert.equal(requests.some(({ path }) => path === "/api/v1/futures/trade/cancel_orders"), true, "the terminal-event test must reach the exchange mutation endpoint after a valid pending-order preflight")
   assert.equal(result.ok, false, "a FILLED event must not be mistaken for a successful cancellation")
   assert.equal(result.mutationOutcome, "OUTCOME_UNKNOWN", "a non-cancellation terminal event must leave the requested mutation unconfirmed")
   assert.equal(result.cancellationOutcome, "OUTCOME_UNKNOWN", "a FILLED event is not evidence of a canceled order")
