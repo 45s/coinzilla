@@ -271,6 +271,36 @@ describe('BotsComponent', () => {
     http.expectNone(`${BASE_URL}/portfolio`);
   });
 
+  it('confirms a global BUY pause through the existing HTTP operator command', async () => {
+    vi.stubGlobal('WebSocket', MockWebSocket);
+    const result = await createBotsFixture();
+    http = result.http;
+    const { fixture } = result;
+    const pauseAllButton = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button'))
+      .find((button) => button.textContent?.trim() === 'Pause all BUYs') as HTMLButtonElement;
+    pauseAllButton.click();
+    fixture.detectChanges();
+
+    const confirmButton = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('Confirm command')) as HTMLButtonElement;
+    confirmButton.click();
+    const command = http.expectOne(`${BASE_URL}/commands`);
+    expect(command.request.method).toBe('POST');
+    expect(command.request.body).toMatchObject({
+      command: 'pauseallbuys',
+    });
+    expect(command.request.body.symbol).toBeUndefined();
+    command.flush({
+      ok: true,
+      data: {
+        paused: true,
+      },
+    });
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain('Pause BUYs across all markets accepted');
+  });
+
   it('cancels a pending market pause without sending a command', async () => {
     vi.stubGlobal('WebSocket', MockWebSocket);
     const result = await createBotsFixture();
