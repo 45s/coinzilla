@@ -1078,6 +1078,52 @@ export class BitunixFuturesBroker {
     })
   }
 
+  async getBalances({ marginCoin = "USDT" } = {}) {
+    try {
+      ensure.oneOf({
+        value: marginCoin,
+        values: ["USDT"],
+        name: "marginCoin",
+        errMsg: 'Bitunix USDT Futures balance reads require marginCoin "USDT"',
+      })
+      const response = await this.restClient.request({
+        method: "GET",
+        path: "/api/v1/futures/account",
+        queryParams: {
+          marginCoin,
+        },
+      })
+      return toResult({
+        data: adaptFuturesBalances({
+          rows: response.data,
+          marginCoin,
+        }),
+      })
+    } catch (error) {
+      handleErr({
+        where: "BitunixFuturesBroker.getBalances()",
+        error,
+      })
+      return toResult({
+        errors: [error],
+      })
+    }
+  }
+
+  async getAccountSnapshot() {
+    return unsupportedResult({
+      operation: "getAccountSnapshot",
+      reason: "Bitunix Futures account responses do not provide a documented source timestamp or snapshot version.",
+    })
+  }
+
+  async getServerTime() {
+    return unsupportedResult({
+      operation: "getServerTime",
+      reason: "A documented Bitunix Futures server-time endpoint has not been verified.",
+    })
+  }
+
   async getExchangeMarkets() {
     try {
       const response = await this.restClient.request({
