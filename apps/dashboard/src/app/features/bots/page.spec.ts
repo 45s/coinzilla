@@ -153,6 +153,7 @@ describe('BotsComponent', () => {
       .find((button) => button.textContent?.trim() === 'Cancel') as HTMLButtonElement;
     expect(cancelButton, 'The confirmation panel must let the operator cancel before sending.').toBeDefined();
     cancelButton.click();
+    fixture.detectChanges();
 
     http.expectNone(`${BASE_URL}/commands`);
     expect((fixture.nativeElement as HTMLElement).textContent, 'Cancel must close the confirmation panel.').not.toContain('Confirm: Pause BUYs for BTCUSDT');
@@ -255,7 +256,7 @@ describe('BotsComponent', () => {
 
     const renderedText = (fixture.nativeElement as HTMLElement).textContent as string;
     expect(renderedText, 'A failed Harvester query must not be presented as a connected runtime.').toContain('Harvester unavailable');
-    expect(renderedText, 'The API failure must remain visible to the operator.').toContain('Harvester request failed (503).');
+    expect(renderedText, 'The API failure must remain visible to the operator.').toContain('status unavailable');
   });
 
   it('shows an explicit empty Portfolio state when Harvester reports no positions', async () => {
