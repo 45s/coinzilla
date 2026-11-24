@@ -14,6 +14,7 @@ import { adaptFuturesPendingOrders } from "./adapters/adapt-futures-pending-orde
 import { adaptFuturesPendingTpSlOrders } from "./adapters/adapt-futures-pending-tpsl-orders.js"
 import { cancelFuturesOrder } from "./operations/cancel-futures-order.js"
 import { cancelFuturesOpenOrders } from "./operations/cancel-futures-open-orders.js"
+import { createFuturesOrder as createFuturesOrderOperation } from "./operations/create-futures-order.js"
 
 function unsupportedResult({ operation, reason }) {
   return {
@@ -197,13 +198,35 @@ const FUTURES_CAPABILITIES = [
   },
   {
     type: "PLACE_LIMIT_ORDER",
-    status: "UNSUPPORTED",
-    reason: "Futures order placement is not enabled until the complete request, outcome and reconciliation path is implemented.",
+    status: "SUPPORTED",
+    method: "createFuturesOrder",
+    guarantee: "Places one explicit Futures LIMIT order with exact decimal inputs and verifies the created order by caller-supplied clientId.",
+    limitation: "Requires allowLiveOrderMutations: true. The common createCanonicalOrder method remains unsupported because its exchange-neutral entity cannot express tradeSide, positionId or reduceOnly.",
+    conditions: [
+      "allowLiveOrderMutations === true",
+      "Broker.connect() completed",
+      "clientId is caller-generated and unique",
+      "tradeSide and reduceOnly are explicit",
+      "positionId is supplied for CLOSE",
+      "The symbol is OPEN and API-tradable",
+      "Quantity and price satisfy documented precision and volume limits",
+    ],
   },
   {
     type: "PLACE_MARKET_ORDER",
-    status: "UNSUPPORTED",
-    reason: "Futures order placement is not enabled until the complete request, outcome and reconciliation path is implemented.",
+    status: "SUPPORTED",
+    method: "createFuturesOrder",
+    guarantee: "Places one explicit Futures MARKET order with exact quantity and verifies the created order by caller-supplied clientId.",
+    limitation: "Requires allowLiveOrderMutations: true. The common createCanonicalOrder method remains unsupported because its exchange-neutral entity cannot express tradeSide, positionId or reduceOnly.",
+    conditions: [
+      "allowLiveOrderMutations === true",
+      "Broker.connect() completed",
+      "clientId is caller-generated and unique",
+      "tradeSide and reduceOnly are explicit",
+      "positionId is supplied for CLOSE",
+      "The symbol is OPEN and API-tradable",
+      "Quantity satisfies documented precision and volume limits",
+    ],
   },
   {
     type: "CANCEL_ORDER",
@@ -1952,6 +1975,23 @@ export class BitunixFuturesBroker {
         errors: [error],
       })
     }
+  }
+
+  async createFuturesOrder(input = {}) {
+    if (!this.config.allowLiveOrderMutations) {
+      return {
+        ...unsupportedResult({
+          operation: "createFuturesOrder",
+          reason: "live Futures order mutations are disabled by default; set allowLiveOrderMutations: true only after independent live-account authorization",
+        }),
+        mutationOutcome: "NOT_SENT",
+        orderOutcome: "NOT_SENT",
+      }
+    }
+    return createFuturesOrderOperation({
+      broker: this,
+      input,
+    })
   }
 
   async createCanonicalOrder() {
