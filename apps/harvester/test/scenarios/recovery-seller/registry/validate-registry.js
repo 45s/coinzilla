@@ -321,7 +321,8 @@ function validateSubcase({ subcase, scenarioIndex, subcaseIndex, scenario, exist
   }
 
   const subcasePath = path
-  const validId = /^RS-\d{3}-\d{3}-[A-Z]$/.test(subcase.id || "") &&
+  const validId = typeof subcase.id === "string" &&
+    /^RS-\d{3}-\d{3}-[A-Z]$/.test(subcase.id) &&
     subcase.id.startsWith(`${scenario.id}-`)
   if (!validId) {
     addError({
