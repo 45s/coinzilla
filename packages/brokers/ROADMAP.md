@@ -1599,3 +1599,39 @@ See [the private polling contract](./docs/BITUNIX_SPOT_POLLING.md) and [the Bitu
 - The operator probe prints placement confirmation separately from reconciliation health and persists reconciliation metadata in its private one-shot marker. A confirmed placement must never be retried because a later read failed.
 - Tests cover verified/unavailable reconciliation metadata, the exact signed order-detail query, and persistence of confirmed placement evidence when readback fails.
 - No live exchange mutation is part of CI. The existing HYPE order's later cancellation and independent status verification are documented under [PR #1727](https://github.com/45s/coinzilla/pull/1727).
+
+
+## 2026-11-24 — Bitunix Futures lifecycle implementation continuation (#1805)
+
+**Status: in progress; PR #1806 remains Draft and the provider is not production-ready.**
+
+Implemented on the PR branch (exact-head tests and required CI must pass before these are treated as accepted capabilities):
+
+- Signed canonical order-detail reads by exactly one exchange `orderId` or caller `clientOrderId`; response symbol and identity are verified, and missing exchange `clientId` fails closed.
+- Bounded canonical order-history pages with explicit status/type/time/skip/limit filters, including canceled-only history and partial-fill cancellation normalization.
+- Bounded pending-order reads preserving exact decimal strings, caller ID when supplied, fee/realized-PnL fields and known TP/SL trigger details.
+- Current and historical position projections preserving exact decimal values, position side/mode, margin mode, leverage, fee/funding/PnL, timestamps and optional subaccount identity.
+- Account-wide position-mode and per-symbol leverage/margin-mode reads.
+- Bounded raw Futures execution-history pages preserving trade identity and fee/realized-PnL values. These are provider-specific DTOs, not canonical Fill records.
+- Low-level public/private Futures WebSocket client with official endpoint validation, login signature/ack gating, documented channel names, heartbeat and outbound 5-message/second limit. It is not yet wired into common Broker subscriptions and does not yet implement bounded reconnect/REST recovery.
+
+**Verified protocol constraints / unresolved blockers:**
+
+- Order history canceled-only queries are limited to three days; non-canceled queries to 90 days. Pages do not provide an atomic snapshot cursor.
+- Futures order detail can omit the optional client ID; canonical identity is therefore conditional and must fail closed when absent.
+- Trade-history response fields do not prove fee currency semantics or complete/gap-free execution history; `getFills()` remains unavailable.
+- Current position queries can include subaccounts unless explicitly disabled. Current-position reads send `includeSubAccounts=false`; historical scope remains subject to the documented endpoint behavior.
+- Futures private WebSocket protocol documents no event replay cursor or monotonic sequence. Reconnect must force REST reconciliation; it cannot silently restore readiness.
+- No verified Futures TESTNET endpoint is available. Automated tests must remain offline; no LIVE mutation probes are permitted.
+
+**Still required before production use:**
+
+- [ ] Finish exact-head package unit tests, coverage, strict lint and all required CI.
+- [ ] Integrate public price/candle/book streams and private user-data observations into Broker lifecycle.
+- [ ] Add bounded reconnect, resubscribe, heartbeat failure handling and mandatory REST reconciliation before declaring user-data recovered.
+- [ ] Implement and test one-shot create/modify/cancel/close/TP-SL mutations with caller client IDs, mutation outcome classification and no blind retries.
+- [ ] Implement safe position-mode/margin-mode/leverage mutations with explicit preconditions and account-scoped exclusion.
+- [ ] Resolve fee-asset semantics and execution-history completeness before canonical Fill support.
+- [ ] Update the capability matrix and conformance tests only when the actual common Broker guarantees are met.
+
+No live Futures mutation or exchange request has been performed by the implementation agent or automated tests. Keep Futures outside production execution and Harvester routing until all blockers and acceptance criteria are satisfied.
