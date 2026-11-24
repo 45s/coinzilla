@@ -10,6 +10,7 @@ import {
   stat,
   writeFile,
   appendFile,
+  open as openFile,
 } from "node:fs/promises"
 import { createReadStream, createWriteStream } from "node:fs"
 import { pipeline } from "node:stream/promises"
@@ -96,6 +97,37 @@ export async function encryptDebugBundle({ inputFile, outputFile, passphrase } =
   await pipeline(createReadStream(inputFile), cipher, createWriteStream(outputFile, { flags: "a", mode: 0o600 }))
   await appendFile(outputFile, cipher.getAuthTag(), { mode: 0o600 })
   return { algorithm: "aes-256-gcm", kdf: "scrypt", salt: salt.toString("hex"), iv: iv.toString("hex") }
+}
+
+export async function decryptDebugBundle({ inputFile, outputFile, passphrase } = {}) {
+  if (typeof passphrase !== "string" || passphrase.length < 16) {
+    throw new Error("HARVESTER_ARCHIVE_PASSPHRASE must contain at least 16 characters.")
+  }
+  const details = await stat(inputFile)
+  if (details.size < 52) throw new Error("Encrypted debug archive is truncated.")
+  const handle = await openFile(inputFile, "r")
+  let header
+  let tag
+  try {
+    header = Buffer.alloc(36)
+    tag = Buffer.alloc(16)
+    await handle.read(header, 0, header.length, 0)
+    await handle.read(tag, 0, tag.length, details.size - tag.length)
+  } finally {
+    await handle.close()
+  }
+  if (!header.subarray(0, 8).equals(MAGIC)) throw new Error("Unsupported debug archive format.")
+  const salt = header.subarray(8, 24)
+  const iv = header.subarray(24, 36)
+  const key = scryptSync(passphrase, salt, 32, { N: 32768, r: 8, p: 1, maxmem: 64 * 1024 * 1024 })
+  const decipher = createDecipheriv("aes-256-gcm", key, iv)
+  decipher.setAuthTag(tag)
+  await pipeline(
+    createReadStream(inputFile, { start: 36, end: details.size - 17 }),
+    decipher,
+    createWriteStream(outputFile, { flags: "wx", mode: 0o600 }),
+  )
+  return outputFile
 }
 
 async function publishEncryptedArchive({ encryptedFile, archiveName, temporaryRoot }) {
@@ -209,8 +241,17 @@ export async function runHarvesterDebugArchive({
 }
 
 async function main() {
-  const result = await runHarvesterDebugArchive()
-  return result
+  const args = process.argv.slice(2)
+  if (args[0] === "--decrypt" && args.length === 3) {
+    const outputFile = await decryptDebugBundle({
+      inputFile: path.resolve(args[1]),
+      outputFile: path.resolve(args[2]),
+      passphrase: process.env.HARVESTER_ARCHIVE_PASSPHRASE,
+    })
+    process.stdout.write(`Decrypted archive: ${outputFile}\\nExtract it with: tar -xzf "${outputFile}" -C <empty-output-directory>\\n`)
+    return
+  }
+  return runHarvesterDebugArchive({ args })
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
