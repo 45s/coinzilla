@@ -259,43 +259,52 @@ The Binance subscription result retains the live `subscriptionId` getter and rec
 
 ## Bitunix USDT Futures provider — implementation status
 
-The `bitunix-futures` provider is being implemented independently from Bitunix Spot under [issue #1805](https://github.com/45s/coinzilla/issues/1805) and [Draft PR #1806](https://github.com/45s/coinzilla/pull/1806). The methods below describe the current branch implementation, not a production-readiness declaration.
+The `bitunix-futures` provider is a separate Futures adapter under [issue #1805](https://github.com/45s/coinzilla/issues/1805) and [Draft PR #1806](https://github.com/45s/coinzilla/pull/1806). This matrix describes implemented surfaces and their limitations; it is not a production-readiness declaration.
 
-### Common Broker methods currently implemented
+### Common Broker methods
 
-- `getExchangeMarkets()`: public trading-pair catalog, filtered to OPEN and API-enabled contracts.
-- `getBalances()`: authenticated USDT margin-account read; exact available/frozen/margin decimal mapping. This is not an authoritative account snapshot because the source does not provide a verified snapshot timestamp/version.
-- `getPrices()`: one-shot public ticker read returning exact last and mark prices.
-- `getCandles()`: public closed-kline read with exact decimals, chronological ordering and interval-derived close time.
-- `getSymbolFilters()`: raw trading-pair metadata; it does not invent `tickSize` or `stepSize` from decimal precision.
-- `getOrderBook()`: Futures-specific extension returning exact bid/ask level strings; the REST response has no source timestamp or sequence.
-- `getCanonicalOrder({ symbol, orderId | clientOrderId })`: signed order-detail read; returned identifier and symbol are checked. Canonical mapping fails closed if Bitunix omits its optional `clientId`.
-- `getCanonicalOrderHistory({ symbol, status?, orderType?, queryCanceled?, startTime?, endTime?, limit?, skip? })`: one bounded symbol-scoped page. The caller owns pagination and retention windows. `queryCanceled: true` only covers the last three days; false excludes canceled orders and has a documented 90-day range.
+| Method | Status | Evidence / limitation |
+|---|---|---|
+| `connect()` / `disconnect()` | Supported | Idempotent lifecycle; cleans up both public and private WebSocket clients and all registered listeners |
+| `getBalances()` | Supported | Exact USDT free/locked balances; promotional bonus is excluded |
+| `getAccountSnapshot()` | Unsupported | Futures account response has no documented source timestamp or snapshot version |
+| `getServerTime()` | Unsupported | No verified Futures server-time endpoint |
+| `getExchangeMarkets()` | Supported | OPEN and API-enabled Futures markets |
+| `getOpenOrders()` | Unsupported | Pending-order DTOs are provider-specific and do not satisfy the common legacy `Order[]` completeness/precision contract |
+| `getCanonicalOrder()` | Supported | Signed detail lookup by exactly one exchange order ID or caller client ID; identity and symbol correlation enforced |
+| `getCanonicalOrderHistory()` | Supported | One bounded symbol-scoped page; caller owns pagination and retention-window coverage |
+| `getFills()` | Unsupported | Trade history lacks proven fee-asset semantics and gap-free completeness |
+| `getPrices()` | Supported | One-shot ticker result with exact last and mark prices |
+| `getCandles()` | Supported | Closed REST klines with exact decimals and deterministic close-time derivation |
+| `createCanonicalOrder()` | Unsupported | LIVE order mutations remain disabled and no verified Futures TESTNET exists |
+| `cancelOrder()` / `cancelAllOpenOrders()` | Unsupported | No verified mutation outcome/reconciliation lifecycle |
+| `subscribeForPrices()` | Supported | Public trade channel; exact price/quantity and exchange ISO trade timestamp; no stable trade ID |
+| `subscribeForCandles()` | Unsupported | Public kline payload does not document the candle open timestamp required by the common Candle contract |
+| `subscribeForBookTicker()` | Supported | One-level depth channel; exact best bid/ask; timestamp is local receipt time and has no source sequence |
+| `subscribeForUserData()` | Observation-only | Requires `onObservation`; native balance/position/order/TP-SL messages are explicitly non-authoritative, non-replayable and always require external reconciliation |
 
 ### Futures-specific read extensions
 
-These are provider-specific projections, not common Broker methods or canonical account/position entities:
+These provider-specific projections do not imply common canonical account, position or fill semantics:
 
-- `getFuturesPendingOrders({ symbol?, orderId?, clientOrderId?, status?, startTime?, endTime?, limit?, skip? })`: one pending-order page, preserving exact decimal strings and known TP/SL fields. It is not an atomic or exhaustive account snapshot.
-- `getFuturesPositions({ symbol?, positionId? })`: current position projections. Requests explicitly set `includeSubAccounts: false`; any returned `subAccountId` is preserved.
-- `getFuturesPositionHistory({ symbol | positionId, startTime?, endTime?, limit?, skip? })`: one bounded historical-position page with total count and exact decimal values.
+- `getFuturesPendingOrders({ symbol?, orderId?, clientOrderId?, status?, startTime?, endTime?, limit?, skip? })`: one pending-order page preserving exact decimals and documented TP/SL fields.
+- `getFuturesPositions({ symbol?, positionId? })`: current position projections; explicitly excludes subaccount aggregation and preserves optional subaccount identity.
+- `getFuturesPositionHistory({ symbol | positionId, startTime?, endTime?, limit?, skip? })`: one bounded historical-position page.
 - `getFuturesPositionMode()` and `getFuturesLeverageAndMarginMode({ symbol, marginCoin: "USDT" })`: authenticated account-setting reads.
-- `getFuturesTradeHistory({ symbol | orderId | positionId, startTime?, endTime?, limit?, skip? })`: one bounded execution-history page preserving `tradeId`, `orderId`, exact quantity/price/fee/realized-PnL values and timestamps. This is not a canonical `Fill[]`: fee-asset semantics and gap-free history completeness are not established.
+- `getFuturesTradeHistory({ symbol | orderId | positionId, startTime?, endTime?, limit?, skip? })`: one bounded raw execution-history page; exact trade identity, quantity, price, fee and realized PnL are preserved. This is not canonical `Fill[]`.
 
-### WebSocket status
+### WebSocket lifecycle and recovery
 
-The exported `BitunixFuturesWebSocketClient` is a low-level protocol client with separate official public/private endpoints, login signing, login-ack gating, channel validation, subscription limits, a bounded outbound message rate and heartbeat. It is **not yet integrated into the Broker subscription methods**, and automatic reconnect/REST recovery is not complete. `subscribeForPrices`, `subscribeForCandles`, `subscribeForBookTicker`, and `subscribeForUserData` therefore remain unavailable through the common Broker facade. A private stream is not a durable ledger: the protocol has no documented replay cursor or monotonic event sequence.
+- Public `trade` and `depth_book1` subscriptions are integrated with the Broker facade, share one public connection, and provide idempotent cleanup.
+- Private `balance`, `position`, `order` and `tpsl` subscriptions wait for login acknowledgement and deliver raw observations through `onObservation`.
+- The low-level client validates official endpoints/channels, uses the documented seconds timestamp and double-SHA256 login signature, enforces the 300-channel limit and 5-outbound-message/second limit, sends periodic ping, detects missed pong, and performs bounded exponential reconnect/resubscribe.
+- Reconnect status always retains `recoveryRequired: true`. There is no documented event replay cursor or monotonic sequence, and the Broker does not claim gap-free REST reconciliation. Private observations are therefore never authoritative and cannot authorize order mutations.
+- Public kline subscription remains unavailable through the common contract because its payload lacks a documented candle timestamp.
 
-### Not implemented / not production-ready
+### Safety and production status
 
-- `getOpenOrders()` and the legacy `getOrder()` compatibility projection.
-- Canonical fills and defensible completeness evidence.
-- `getAccountSnapshot()` and authoritative private-event reconciliation.
-- Create/modify/cancel/close/TP-SL order mutations and unknown-outcome reconciliation.
-- Position-mode, margin-mode and leverage mutation operations with safe account-state preconditions.
-- Broker-integrated public/private subscriptions, bounded reconnect and REST recovery.
-- Exact-head package tests, coverage and required repository CI for the latest implementation increment.
+The REST client serializes request dispatch at a conservative 10 requests/second per client and never automatically retries requests. POST calls must explicitly declare mutation state. LIVE order/account mutation flags default to false; mutation capabilities remain unsupported. No LIVE Futures request or mutation has been performed by the implementation agent or automated tests. No isolated Futures TESTNET endpoint has been verified.
 
-The provider remains **not production-ready** and must not be selected for Harvester routing or live execution. LIVE mutation flags default to false. No LIVE mutation or exchange request was performed by the implementation agent or automated tests.
+The provider remains **not production-ready** and must not be selected for production execution or Harvester routing. Required blockers include mutation lifecycle/outcome reconciliation, authoritative account-state recovery, canonical Fill semantics, and exact-head CI plus consumer integration.
 
 See the maintained [Bitunix Futures reference audit](./docs/BITUNIX_FUTURES_REFERENCE_AUDIT.md) for official protocol facts, third-party source comparison, discrepancies and remaining blockers.
