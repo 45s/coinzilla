@@ -1013,6 +1013,7 @@ Required assertions: exact legacy basis, remaining quantity, verified Spot quant
 **Business question:** does recovery inventory reflect only confirmed canonical RS BUY fills and actual commissions?
 
 Required cases:
+
 1. Valid initial recovery BUY eligibility from an empty recovery allocation.
 2. BUY is blocked when authorization, legacy basis, market readiness, account snapshot, investment budget or safety evidence is invalid/missing.
 3. Exact BUY intent identity, market, side, order type, price, quantity, quote commitment and reason/disposition.
@@ -1044,6 +1045,7 @@ Required assertions: actual net base, quote cost, VWAP, applied Fill identities,
 **Business question:** is the SELL target derived from actual net recovery inventory plus only eligible legacy quantity, with exact ownership and no over-allocation?
 
 Required cases:
+
 1. Recovery net base quantity plus the configured additive legacy slice.
 2. Legacy remaining quantity smaller than configured sellQuantity uses only the approved smaller remainder.
 3. Legacy exhaustion selects recovery-only cycle behavior; no legacy quantity is fabricated or reused.
@@ -1069,6 +1071,7 @@ Core source ownership: `calculate-sell-plan.js`, `evaluate-sell-decision.js`, `l
 **Business question:** do recovery, legacy and combined profitability independently satisfy their own requirements?
 
 Required cases:
+
 1. Recovery profitability gate passes exactly at the configured minimum-profit threshold.
 2. Recovery profitability fails just below the threshold.
 3. Recovery profitability exceeds the threshold by the smallest meaningful exact increment.
@@ -1098,6 +1101,7 @@ Core source ownership: `calculate-profitability.js`, `calculate-sell-plan.js`, `
 **Business question:** can one cycle ever create more than one SELL lifecycle or release its reservation too early?
 
 Required cases:
+
 1. A cycle can acquire only one SELL reservation and one SELL order identity.
 2. First SELL identity is recorded before the approved broker-I/O boundary.
 3. Repeated evaluation while the SELL is pending/open cannot create another SELL broker call.
@@ -1121,6 +1125,7 @@ Core source ownership: cycle state, lifecycle decision, accounting workflow, ord
 **Business question:** do recovery and legacy projections consume the same canonical execution evidence and commit together?
 
 Required cases:
+
 1. Recovery and legacy allocations remain distinct while sharing one actual Portfolio/custody aggregate.
 2. One canonical SELL Fill is split between recovery and legacy using the approved allocation contract.
 3. Multiple partial SELL fills are accumulated and reconciled exactly.
@@ -1151,6 +1156,7 @@ Core source ownership: mixed SELL allocation/accounting/reconciliation, Portfoli
 **Business question:** when broker outcome is unknown, does RS preserve original identity/commitment and reconcile without resubmitting?
 
 Required cases:
+
 1. Timeout before broker acceptance.
 2. Timeout after broker acceptance but before response.
 3. Unknown response retains the original client order identity.
@@ -1175,6 +1181,7 @@ Core source ownership: order submitter, lifecycle decision, order callbacks, acc
 **Business question:** can CG and RS run independently while never spending/selling the same physical account inventory twice?
 
 Required cases:
+
 1. CG and RS run concurrently on different markets with independent Position/order ownership.
 2. CG and RS run concurrently on the same market with multiple independent Positions.
 3. Shared Portfolio represents actual account custody once; strategy Positions do not duplicate wallet balance.
@@ -1199,6 +1206,7 @@ Core source ownership: shared Portfolio, account snapshot/commitment allocator, 
 **Business question:** does unexpected evidence block new trading while preserving order/fill facts and required reconciliation?
 
 Potential cases after owner resolution:
+
 1. STOP is sticky across later market updates and unrelated operator commands.
 2. No new BUY/SELL/replacement/retry occurs while STOP is active.
 3. Existing active order may be WAITed/reconciled under the contract.
