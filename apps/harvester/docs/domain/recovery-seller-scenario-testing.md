@@ -2342,11 +2342,13 @@ This is the approved test-only implementation sequence. Deliver one focused PR p
 
 ### PR 1 — Registry, schema, traceability and thin runner
 
+**Status: IN PROGRESS — [PR #1819](https://github.com/45s/coinzilla/pull/1819), exact head `bbd9626029df03cf6c7ad90980df0222c5c1fa4d`.** The branch adds the initial registry/catalogs, immutable scenario record helper, traceability validator, ordered DOMAIN runner, targeted-test registration, and the first real case `RS-004-011`. Its test is `registry-and-runner.scenario.test.js`; the case remains **TEST-MAPPED**, not VERIFIED, until exact-head checks pass, the PR is reviewed/merged, and merged-head evidence is recorded. No application runner, production behavior, config or exchange operation is included.
+
 - **Objective:** prove the framework with one real RS domain scenario before expanding the matrix.
 - **Scope:** implement stable family/case records, schema validation, rule/decision/state/invariant catalogs, ordered Given/When/Then steps, a thin DOMAIN runner, evidence output, and one registered `RS-004-011` all-gates-pass scenario.
 - **Files:** add only the necessary planned files: `test/scenarios/recovery-seller/registry/{index,define-scenario,validate-registry,config-fields,domain-rules,decisions,states,transitions,invariants}.js`; `runners/{execute-scenario-steps,run-domain-scenario}.js`; `scenarios/profitability.js`; `registry-and-runner.scenario.test.js`. Update `apps/harvester/package.json` targeted-test registration, this playbook, #1780 and the Harvester roadmap.
 - **Tests:** duplicate/unknown IDs, broken references, malformed records, missing fields, invalid status/ownership; run the real `calculateRecoverySellerProfitability()` for RS-004-011 and assert all applicable gates using an independent exact-decimal oracle.
-- **Acceptance:** the real domain path runs; detailed assertion messages exist; the report names the case/test/result; the runner does not auto-promote status; no production/config/runtime behavior changes.
+- **Acceptance:** the real domain path runs; detailed assertion messages exist; the execution report names the case, exact test mapping, status, evidence and result; the runner does not auto-promote status; no production/config/runtime behavior changes.
 - **Dependencies:** merged #1779 methodology, #1780 matrix/case IDs, existing Harvester Node test conventions and exact-decimal utilities.
 - **Out of scope:** application runner, fake broker/store, all-family pre-registration, mass migration of PR #1793 tests, new dependencies, production changes and exchange operations.
 - **Exit:** one scenario is registered and executed; registry failures are tested; exact-head checks pass; issue/roadmap record the next P0 case and exact SHA.
