@@ -1438,7 +1438,8 @@ Remain UNSUPPORTED/BLOCKED until separate owner-approved product work defines re
 - Keep test-only scenario work separate from production bug fixes when that improves review and preserves issue ownership.
 - If a scenario exposes a real defect, capture the reproduction and exact failure first; create/update the production issue; fix the smallest behavior boundary with TDD.
 - Never weaken an assertion or alter an expected oracle to make CI pass.
-- Keep branch based on latest develop and target develop.
+- Work only on a feature branch based on latest develop and target develop. Never push directly to main/develop.
+- Never force-push, rewrite history or bypass branch protection; use normal incremental commits.
 - Leave every PR open for owner review/merge. Never merge or enable auto-merge.
 - Update #1780 after every material matrix/evidence change; update the repository catalog when human-readable status/mapping changes.
 - Keep the Harvester roadmap concise and synchronized with the current phase/blockers.
