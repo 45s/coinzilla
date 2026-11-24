@@ -148,25 +148,54 @@ test("Bitunix Futures TP/SL history reads preserve exchange history fields and p
     skip: 10,
   })
 
-  assert.equal(result.ok, true)
-  assert.equal(result.data.orders.length, 1)
-  assert.equal(result.data.orders[0].id, "tpsl-1")
-  assert.equal(result.data.orders[0].tpPrice, "70000.00000001")
-  assert.equal(result.data.orders[0].slPrice, "65000.00000002")
-  assert.equal(result.data.orders[0].status, "TRIGGERED")
-  assert.equal(result.data.orders[0].ctime, 1_700_000_000_000)
-  assert.equal(result.data.orders[0].triggerTime, 1_700_000_001_000)
-  assert.equal(result.data.total, 1)
-  assert.equal(result.data.skip, 10)
-  assert.equal(result.data.limit, 50)
+  assert.equal(result.ok, true, "A valid historical TP/SL page must be returned successfully")
+  assert.equal(result.data.orders.length, 1, "The documented orderList must be exposed as one historical TP/SL order")
+  assert.equal(result.data.orders[0].id, "tpsl-1", "The exchange TP/SL order identity must be preserved")
+  assert.equal(result.data.orders[0].tpPrice, "70000.00000001", "The exact take-profit trigger price must not be rounded")
+  assert.equal(result.data.orders[0].slPrice, "65000.00000002", "The exact stop-loss trigger price must not be rounded")
+  assert.equal(result.data.orders[0].status, "TRIGGERED", "The exchange TP/SL lifecycle status must be preserved")
+  assert.equal(result.data.orders[0].ctime, 1_700_000_000_000, "The exchange creation timestamp must be preserved")
+  assert.equal(result.data.orders[0].triggerTime, 1_700_000_001_000, "The exchange trigger timestamp must be preserved")
+  assert.equal(result.data.total, 1, "The exchange total must remain distinct from the current page length")
+  assert.equal(result.data.skip, 10, "The requested history offset must be returned unchanged")
+  assert.equal(result.data.limit, 50, "The requested history page size must be returned unchanged")
 
   const url = new URL(requests[0].url)
-  assert.equal(url.pathname, "/api/v1/futures/tpsl/get_history_orders")
-  assert.equal(url.searchParams.get("symbol"), "BTCUSDT")
-  assert.equal(url.searchParams.get("side"), "1")
-  assert.equal(url.searchParams.get("positionMode"), "2")
-  assert.equal(url.searchParams.get("startTime"), "1700000000000")
-  assert.equal(url.searchParams.get("endTime"), "1700000100000")
-  assert.equal(url.searchParams.get("limit"), "50")
-  assert.equal(url.searchParams.get("skip"), "10")
+  assert.equal(url.pathname, "/api/v1/futures/tpsl/get_history_orders", "TP/SL history must use the dedicated Futures history endpoint")
+  assert.equal(url.searchParams.get("symbol"), "BTCUSDT", "The requested Futures symbol must be sent unchanged after normalization")
+  assert.equal(url.searchParams.get("side"), "1", "The requested trade side filter must reach the exchange")
+  assert.equal(url.searchParams.get("positionMode"), "2", "The requested position mode filter must reach the exchange")
+  assert.equal(url.searchParams.get("startTime"), "1700000000000", "The requested history start timestamp must reach the exchange")
+  assert.equal(url.searchParams.get("endTime"), "1700000100000", "The requested history end timestamp must reach the exchange")
+  assert.equal(url.searchParams.get("limit"), "50", "The bounded page limit must reach the exchange")
+  assert.equal(url.searchParams.get("skip"), "10", "The page offset must reach the exchange")
+})
+
+test("Bitunix Futures TP/SL history rejects an oversized page before dispatch", async () => {
+  const { broker, requests } = createBroker()
+  const result = await broker.getFuturesTpSlOrderHistory({
+    symbol: "BTCUSDT",
+    limit: 101,
+  })
+
+  assert.equal(result.ok, false, "A history request above the documented 100-row maximum must fail validation")
+  assert.equal(requests.length, 0, "Invalid TP/SL history pagination must be rejected before any exchange request")
+})
+
+test("Bitunix Futures TP/SL history rejects rows for a different requested symbol", async () => {
+  const { broker, requests } = createBroker({
+    responseData: {
+      orderList: [{
+        ...tpSlRow,
+        symbol: "ETHUSDT",
+      }],
+      total: 1,
+    },
+  })
+  const result = await broker.getFuturesTpSlOrderHistory({
+    symbol: "BTCUSDT",
+  })
+
+  assert.equal(result.ok, false, "A TP/SL history row for another market must not be returned as the requested market")
+  assert.equal(requests.length, 1, "The exchange response must be checked after the single requested history read")
 })
