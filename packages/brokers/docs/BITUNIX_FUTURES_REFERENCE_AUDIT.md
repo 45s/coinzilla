@@ -17,25 +17,25 @@
 
 - [Futures API introduction](https://www.bitunix.com/api-docs/futures/common/introduction.html)
 - [REST and WebSocket signing](https://www.bitunix.com/api-docs/futures/common/sign.html)
-- [Trading pairs](https://www.bitunix.com/api-docs/futures/market/get_symbols.html)
+- [Trading pairs](https://www.bitunix.com/api-docs/futures/market/get_trading_pairs.html)
 - [Tickers](https://www.bitunix.com/api-docs/futures/market/get_tickers.html)
 - [Depth](https://www.bitunix.com/api-docs/futures/market/get_depth.html)
 - [Klines](https://www.bitunix.com/api-docs/futures/market/get_kline.html)
-- [Single account](https://www.bitunix.com/api-docs/futures/account/get_account.html)
+- [Single account](https://www.bitunix.com/api-docs/futures/account/get_single_account.html)
 - [Pending positions](https://www.bitunix.com/api-docs/futures/position/get_pending_positions.html)
 - [Position history](https://www.bitunix.com/api-docs/futures/position/get_history_positions.html)
 - [Position mode](https://www.bitunix.com/api-docs/futures/account/get_position_mode.html)
-- [Leverage and margin mode](https://www.bitunix.com/api-docs/futures/account/get_leverage_margin_mode.html)
+- [Leverage and margin mode](https://www.bitunix.com/api-docs/futures/account/get_leverage_and_margin_mode.html)
 - [Place order](https://www.bitunix.com/api-docs/futures/trade/place_order.html)
 - [Pending orders](https://www.bitunix.com/api-docs/futures/trade/get_pending_orders.html)
 - [Order detail](https://www.bitunix.com/api-docs/futures/trade/get_order_detail.html)
 - [Order history](https://www.bitunix.com/api-docs/futures/trade/get_history_orders.html)
 - [Trade history](https://www.bitunix.com/api-docs/futures/trade/get_history_trades.html)
 - [WebSocket protocol](https://www.bitunix.com/api-docs/futures/websocket/prepare/WebSocket.html)
-- [Private balance channel](https://www.bitunix.com/api-docs/futures/websocket/private/balance.html)
-- [Private order channel](https://www.bitunix.com/api-docs/futures/websocket/private/order.html)
-- [Private position channel](https://www.bitunix.com/api-docs/futures/websocket/private/position.html)
-- [Public market-price channel](https://www.bitunix.com/api-docs/futures/websocket/public/market_price.html)
+- [Private balance channel](https://www.bitunix.com/api-docs/futures/websocket/private/Balance%20Channel.html)
+- [Private order channel](https://www.bitunix.com/api-docs/futures/websocket/private/Order%20Channel.html)
+- [Private position channel](https://www.bitunix.com/api-docs/futures/websocket/private/Position%20Channel.html)
+- [Public market-price channel](https://www.bitunix.com/api-docs/futures/websocket/public/MarketPrice%20Channel.html)
 
 Some documentation URLs may be renamed by Bitunix. If a page moves, update this audit with the current official link; do not silently replace official evidence with a third-party mirror.
 
@@ -84,6 +84,7 @@ Some documentation URLs may be renamed by Bitunix. If a page moves, update this 
 Repository: [BitunixOfficial/open-api](https://github.com/BitunixOfficial/open-api)
 
 Inspected Futures files:
+
 - `Demo/Node/openApiHttpSign.js`
 - `Demo/Node/openApiHttpFuturePrivate.js`
 - `Demo/Node/openApiWsSign.js`
@@ -96,6 +97,7 @@ Use these files to cross-check request construction and signature examples. They
 Repository: [JKorf/Bitunix.Net](https://github.com/JKorf/Bitunix.Net)
 
 Inspected Futures source:
+
 - `Bitunix.Net/Clients/FuturesApi/Rest/BitunixRestClientFuturesApiTrading.cs`
 - `Bitunix.Net/Clients/FuturesApi/Rest/BitunixRestClientFuturesApiAccount.cs`
 - `Bitunix.Net/Clients/FuturesApi/Rest/BitunixRestClientFuturesApiExchangeData.cs`

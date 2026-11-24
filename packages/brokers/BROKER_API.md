@@ -263,6 +263,7 @@ The Binance subscription result retains the live `subscriptionId` getter and rec
 The `bitunix-futures` provider is being implemented independently from Bitunix Spot under [issue #1805](https://github.com/45s/coinzilla/issues/1805) and [Draft PR #1806](https://github.com/45s/coinzilla/pull/1806).
 
 Current verified capabilities:
+
 - `getExchangeMarkets()`: public trading-pair catalog, filtered to OPEN and API-enabled contracts.
 - `getBalances()`: authenticated USDT margin-account read; exact available/frozen/margin decimal mapping. This is not an authoritative account snapshot because the source does not provide a verified snapshot timestamp.
 - Signed Futures REST transport with explicit POST mutation-state declaration and no automatic retries.
