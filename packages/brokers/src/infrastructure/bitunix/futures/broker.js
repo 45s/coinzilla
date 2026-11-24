@@ -15,6 +15,7 @@ import { adaptFuturesPendingTpSlOrders } from "./adapters/adapt-futures-pending-
 import { cancelFuturesOrder } from "./operations/cancel-futures-order.js"
 import { cancelFuturesOpenOrders } from "./operations/cancel-futures-open-orders.js"
 import { createFuturesOrder as createFuturesOrderOperation } from "./operations/create-futures-order.js"
+import { modifyFuturesOrder as modifyFuturesOrderOperation } from "./operations/modify-futures-order.js"
 
 function unsupportedResult({ operation, reason }) {
   return {
@@ -1989,6 +1990,23 @@ export class BitunixFuturesBroker {
       }
     }
     return createFuturesOrderOperation({
+      broker: this,
+      input,
+    })
+  }
+
+  async modifyFuturesOrder(input = {}) {
+    if (!this.config.allowLiveOrderMutations) {
+      return {
+        ...unsupportedResult({
+          operation: "modifyFuturesOrder",
+          reason: "live Futures order mutations are disabled by default; set allowLiveOrderMutations: true only after independent live-account authorization",
+        }),
+        mutationOutcome: "NOT_SENT",
+        orderOutcome: "NOT_SENT",
+      }
+    }
+    return modifyFuturesOrderOperation({
       broker: this,
       input,
     })
