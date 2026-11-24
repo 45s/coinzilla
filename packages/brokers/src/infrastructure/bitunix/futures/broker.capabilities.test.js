@@ -10,7 +10,7 @@ const broker = new Broker({
   tradingMode: "live",
 })
 
-test("Bitunix Futures capability declarations match implemented streams and read-only safety limits", () => {
+test("Bitunix Futures capability declarations match implemented operations and explicit mutation gates", () => {
   const { capabilities } = broker
   assert.equal(capabilities.provider, "bitunix")
   assert.equal(capabilities.product, "futures")
@@ -42,13 +42,12 @@ test("Bitunix Futures capability declarations match implemented streams and read
     assert.ok(capabilities.getCapability({ type }).reason, `${type} must explain its unsupported common projection`)
   }
 
-  for (const type of [
-    "PLACE_LIMIT_ORDER",
-    "PLACE_MARKET_ORDER",
-  ]) {
-    assert.equal(capabilities.getStatus({ type }), "UNSUPPORTED", `${type} must remain disabled`)
+  for (const type of ["PLACE_LIMIT_ORDER", "PLACE_MARKET_ORDER"]) {
+    const capability = capabilities.getCapability({ type })
+    assert.equal(capability.status, "SUPPORTED")
+    assert.equal(capability.method, "createFuturesOrder")
+    assert.ok(capability.conditions.includes("allowLiveOrderMutations === true"))
   }
-
 
   const cancelOrder = capabilities.getCapability({
     type: "CANCEL_ORDER",
