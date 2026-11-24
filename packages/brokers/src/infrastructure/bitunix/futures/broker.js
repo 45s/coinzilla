@@ -7,6 +7,7 @@ import { BrokerUnsupportedOperationError } from "../../../broker/errors/broker-u
 import { BitunixFuturesRestClient } from "./api/rest-client.js"
 import { adaptFuturesCandles, BITUNIX_FUTURES_CANDLE_INTERVALS } from "./adapters/adapt-futures-candles.js"
 import { adaptFuturesCanonicalOrder } from "./adapters/adapt-futures-canonical-order.js"
+import { adaptFuturesCurrentPositions, adaptFuturesHistoricalPositions } from "./adapters/adapt-futures-positions.js"
 
 function unsupportedResult({ operation, reason }) {
   return {
@@ -467,6 +468,156 @@ export class BitunixFuturesBroker {
     } catch (error) {
       handleErr({
         where: "BitunixFuturesBroker.getExchangeMarkets()",
+        error,
+      })
+      return toResult({
+        errors: [error],
+      })
+    }
+  }
+
+  /**
+   * Futures-specific position projection. This is deliberately not a Spot
+   * Position entity or a canonical account snapshot.
+   */
+  async getFuturesPositions({ symbol, positionId } = {}) {
+    try {
+      const queryParams = {
+        includeSubAccounts: false,
+      }
+      if (symbol !== undefined) {
+        queryParams.symbol = ensure.nonEmptyString({
+          value: symbol,
+          name: "symbol",
+        }).trim().toUpperCase()
+      }
+      if (positionId !== undefined) {
+        queryParams.positionId = ensure.nonEmptyString({
+          value: positionId,
+          name: "positionId",
+        }).trim()
+      }
+      const response = await this.restClient.request({
+        method: "GET",
+        path: "/api/v1/futures/position/get_pending_positions",
+        queryParams,
+      })
+      const positions = adaptFuturesCurrentPositions({
+        rows: response.data,
+      })
+      const identities = new Set()
+      for (const position of positions) {
+        if (queryParams.symbol !== undefined && position.symbol !== queryParams.symbol) {
+          throw new TypeError("Bitunix Futures current position symbol does not match the requested symbol")
+        }
+        if (queryParams.positionId !== undefined && position.positionId !== queryParams.positionId) {
+          throw new TypeError("Bitunix Futures current position ID does not match the requested position")
+        }
+        if (identities.has(position.positionId)) {
+          throw new TypeError("Bitunix Futures current positions contain duplicate position IDs")
+        }
+        identities.add(position.positionId)
+      }
+      return toResult({
+        data: positions,
+      })
+    } catch (error) {
+      handleErr({
+        where: "BitunixFuturesBroker.getFuturesPositions()",
+        error,
+      })
+      return toResult({
+        errors: [error],
+      })
+    }
+  }
+
+  /**
+   * Returns one Futures position-history page. The caller owns pagination;
+   * total and the requested page are returned separately.
+   */
+  async getFuturesPositionHistory({ symbol, positionId, startTime, endTime, limit = 10, skip = 0 } = {}) {
+    try {
+      const queryParams = {}
+      if (symbol !== undefined) {
+        queryParams.symbol = ensure.nonEmptyString({
+          value: symbol,
+          name: "symbol",
+        }).trim().toUpperCase()
+      }
+      if (positionId !== undefined) {
+        queryParams.positionId = ensure.nonEmptyString({
+          value: positionId,
+          name: "positionId",
+        }).trim()
+      }
+      if (queryParams.symbol === undefined && queryParams.positionId === undefined) {
+        throw new TypeError("Bitunix Futures position history requires symbol or positionId")
+      }
+      ensure.positiveInteger({
+        value: limit,
+        name: "limit",
+      })
+      if (limit > 100) {
+        throw new RangeError("Bitunix Futures position-history limit cannot exceed 100")
+      }
+      ensure.nonNegativeInteger({
+        value: skip,
+        name: "skip",
+      })
+      if (startTime !== undefined) {
+        ensure.nonNegativeInteger({
+          value: startTime,
+          name: "startTime",
+        })
+        queryParams.startTime = startTime
+      }
+      if (endTime !== undefined) {
+        ensure.nonNegativeInteger({
+          value: endTime,
+          name: "endTime",
+        })
+        queryParams.endTime = endTime
+      }
+      if (startTime !== undefined && endTime !== undefined && endTime < startTime) {
+        throw new RangeError("Bitunix Futures position-history endTime must not precede startTime")
+      }
+      queryParams.limit = limit
+      queryParams.skip = skip
+      const response = await this.restClient.request({
+        method: "GET",
+        path: "/api/v1/futures/position/get_history_positions",
+        queryParams,
+      })
+      ensure.plainObject({
+        value: response.data,
+        name: "Futures position history",
+      })
+      if (!Number.isSafeInteger(response.data.total) || response.data.total < 0) {
+        throw new TypeError("Bitunix Futures position-history total must be a non-negative safe integer")
+      }
+      const positions = adaptFuturesHistoricalPositions({
+        rows: response.data.positionList,
+      })
+      for (const position of positions) {
+        if (queryParams.symbol !== undefined && position.symbol !== queryParams.symbol) {
+          throw new TypeError("Bitunix Futures historical position symbol does not match the requested symbol")
+        }
+        if (queryParams.positionId !== undefined && position.positionId !== queryParams.positionId) {
+          throw new TypeError("Bitunix Futures historical position ID does not match the requested position")
+        }
+      }
+      return toResult({
+        data: Object.freeze({
+          positions,
+          total: response.data.total,
+          skip,
+          limit,
+        }),
+      })
+    } catch (error) {
+      handleErr({
+        where: "BitunixFuturesBroker.getFuturesPositionHistory()",
         error,
       })
       return toResult({
