@@ -1057,6 +1057,7 @@ async function startHarvesterPreflightServices({ startup,
   activateTradingEngine()
   await startup.operatorControlLifecycle.start({
     engine: resources.tradingEngine,
+    eventPublisher: startup.eventPublisher,
     getRuntimeSnapshot: accountSnapshots.getOperatorRuntimeSnapshot,
     getPortfolio: portfolio.getPortfolio,
     getRecoveryLedger: portfolio.getRecoveryLedger,
