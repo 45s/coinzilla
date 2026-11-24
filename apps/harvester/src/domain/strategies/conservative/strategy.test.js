@@ -455,7 +455,10 @@ function assertInvestmentCapScenario({ investment, expectedBuy }) {
   const { portfolio, recoveryLedger } = makeBoughtState()
   const decision = evaluateConservativeStrategy({
     marketPrice,
-    pairConfig: { ...pairConfig, investment },
+    pairConfig: {
+      ...pairConfig,
+      investment,
+    },
     settings,
     portfolio,
     recoveryLedger,
@@ -490,10 +493,22 @@ function assertInvestmentCapScenario({ investment, expectedBuy }) {
 
 test("respects investment-cap equality and both sides of the BUY eligibility boundary", () => {
   for (const scenario of [
-    { investment: 19.9, expectedBuy: true },
-    { investment: 19.901, expectedBuy: true },
-    { investment: 19.899, expectedBuy: false },
-    { investment: 15, expectedBuy: false },
+    {
+      investment: 19.9,
+      expectedBuy: true,
+    },
+    {
+      investment: 19.901,
+      expectedBuy: true,
+    },
+    {
+      investment: 19.899,
+      expectedBuy: false,
+    },
+    {
+      investment: 15,
+      expectedBuy: false,
+    },
   ]) {
     assertInvestmentCapScenario(scenario)
   }
