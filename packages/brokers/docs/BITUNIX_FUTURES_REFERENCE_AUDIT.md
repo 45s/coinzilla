@@ -182,3 +182,30 @@ No LIVE mutation has been performed by the implementation agent or automated tes
 - [ ] Exact-head unit tests, coverage and all required CI checks.
 
 The Futures provider remains **not production-ready**. The WebSocket client is currently a low-level exported component, not a Broker stream capability. LIVE order/account mutation flags remain disabled by default. No live exchange request or mutation was performed by this implementation agent or its tests.
+
+
+## 2026-11-24 — Broker stream and REST lifecycle continuation
+
+### Implemented and covered by offline tests
+
+- Public `trade` channel is integrated with `subscribeForPrices()`. Each trade message is validated and delivered with exact price/quantity strings, side and parsed ISO exchange trade timestamp. No stable trade ID is fabricated.
+- Public `depth_book1` is integrated with `subscribeForBookTicker()`. Best bid/ask levels remain exact strings; timestamp is local receipt time because the channel does not provide a sequence or book version.
+- One public WebSocket connection is shared across Broker subscriptions. Per-channel listener sets support multiple consumers; unsubscribe is idempotent and the connection closes when the final consumer releases it.
+- Private `balance`, `position`, `order` and `tpsl` channels are integrated through `subscribeForUserData({ onObservation, onStatus })`. The method waits for login acknowledgement and delivers raw observation envelopes. It requires `onObservation`; it does not call `onEvent` with fake canonical events.
+- Private observations carry `authoritative: false`, `replayable: false`, and `recoveryRequired: true`. Reconnect/resubscribe never clears the recovery requirement.
+- Low-level WebSocket reconnect is bounded (five attempts, exponential 1s–30s backoff), reauthenticates private sessions, resubscribes desired channels, and detects missed heartbeat responses. The documented pong envelope is `op: "ping"` with a `pong` field; both this and legacy `op: "pong"` are recognized.
+- REST request dispatch is serialized at 100ms intervals (10 requests/second per client), while responses may complete concurrently. The limiter reserves the dispatch slot at the actual fetch invocation so concurrent requests cannot overtake one another. It has an injectable clock/sleep function and deterministic concurrency tests.
+- The common `getBalances()` method is restored with exact free/locked USDT values; promotional bonus funds are excluded. Account snapshot and server-time methods explicitly return unsupported results.
+
+### Capability matrix updates
+
+- [x] Public trade-price subscription and one-level book-ticker subscription are declared supported with timestamp/sequence limitations.
+- [x] Private user-data observation is declared supported only as raw native observations.
+- [ ] User-data recovery remains UNKNOWN because the protocol provides no replay cursor or monotonic sequence and no gap-free REST reconciliation can be proved.
+- [ ] Canonical fill history remains unavailable because fee asset and completeness semantics are not established.
+- [ ] Candle subscription remains unavailable because the documented kline event lacks the candle open timestamp required by the common Candle entity.
+- [ ] Order/account mutations remain unsupported; LIVE mutation flags remain false by default.
+
+### Verification notes
+
+The implementation and regression tests are offline and use injected fake transports/fetchers. No LIVE Futures request or mutation was performed. No isolated Futures TESTNET endpoint has been verified. Production readiness remains blocked by mutation lifecycle/outcome reconciliation, authoritative account-state recovery, canonical Fill semantics, consumer integration, and all required exact-head CI checks.
