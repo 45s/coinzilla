@@ -507,18 +507,84 @@ function subscribeToHistoryUpdates({ eventBus, clients } = {}) {
   return result.subscription
 }
 
-function serializeOperatorQuery(result) {
-  if (result?.ok === true && result.data && typeof result.data === "object" && !Array.isArray(result.data)) {
+function isRecord(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+}
+
+function isValidStatusSnapshot(data) {
+  return isRecord(data)
+    && Number.isSafeInteger(data.observedAt)
+    && typeof data.runtimeState === "string"
+    && typeof data.tradingEnabled === "boolean"
+    && isRecord(data.userData)
+    && typeof data.userData.ready === "boolean"
+    && isRecord(data.readiness)
+    && typeof data.readiness.state === "string"
+    && Array.isArray(data.readiness.blockers)
+    && isRecord(data.markets)
+    && Number.isSafeInteger(data.markets.configured)
+    && Number.isSafeInteger(data.markets.enabled)
+    && Number.isSafeInteger(data.markets.blocked)
+}
+
+function isValidMarketsSnapshot(data) {
+  if (!isRecord(data) || !Number.isSafeInteger(data.observedAt)
+    || typeof data.tradingEnabled !== "boolean"
+    || typeof data.userDataReady !== "boolean"
+    || typeof data.userDataStatus !== "string"
+    || !Array.isArray(data.markets)) {
+    return false
+  }
+  return data.markets.every((market) => isRecord(market)
+    && typeof market.symbol === "string"
+    && typeof market.enabled === "boolean"
+    && typeof market.readiness === "string"
+    && Array.isArray(market.blockers))
+}
+
+function isValidPortfolioSnapshot(data) {
+  if (!isRecord(data) || !Number.isSafeInteger(data.observedAt) || !Array.isArray(data.positions)) {
+    return false
+  }
+  return data.positions.every((position) => isRecord(position)
+    && typeof position.symbol === "string"
+    && typeof position.activeQuantity === "string"
+    && typeof position.investedQuote === "string")
+}
+
+function isValidOperatorResourceData({ method, data } = {}) {
+  if (method === "getStatus") {
+    return isValidStatusSnapshot(data)
+  }
+  if (method === "getMarkets") {
+    return isValidMarketsSnapshot(data)
+  }
+  if (method === "getPositions") {
+    return isValidPortfolioSnapshot(data)
+  }
+  return false
+}
+
+function serializeOperatorQuery({ result, method } = {}) {
+  if (result?.ok === true && isValidOperatorResourceData({
+    method,
+    data: result.data,
+  })) {
     return {
       ok: true,
       data: result.data,
     }
   }
   const error = result?.errors?.[0]
+  const code = result?.ok === true
+    ? "HARVESTER_OPERATOR_SNAPSHOT_INVALID"
+    : typeof error?.code === "string"
+      ? error.code
+      : "HARVESTER_OPERATOR_SNAPSHOT_UNAVAILABLE"
   return {
     ok: false,
     error: {
-      code: typeof error?.code === "string" ? error.code : "HARVESTER_OPERATOR_SNAPSHOT_UNAVAILABLE",
+      code,
       message: "Harvester operator snapshot is unavailable.",
     },
   }
@@ -535,9 +601,12 @@ async function readOperatorResource({ operator, method } = {}) {
     }
   }
   try {
-    return serializeOperatorQuery(await operator[method]({
-      actor: BOTS_OPERATOR_ACTOR,
-    }))
+    return serializeOperatorQuery({
+      result: await operator[method]({
+        actor: BOTS_OPERATOR_ACTOR,
+      }),
+      method,
+    })
   } catch {
     return {
       ok: false,
