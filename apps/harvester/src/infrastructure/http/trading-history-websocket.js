@@ -539,7 +539,10 @@ function isValidMarketsSnapshot(data) {
     && typeof market.symbol === "string"
     && typeof market.enabled === "boolean"
     && typeof market.readiness === "string"
-    && Array.isArray(market.blockers))
+    && Array.isArray(market.blockers)
+    && (market.operatorBuysPaused === undefined || typeof market.operatorBuysPaused === "boolean")
+    && (market.latestPrice === undefined || market.latestPrice === null || typeof market.latestPrice === "string")
+    && (market.priceFresh === undefined || typeof market.priceFresh === "boolean"))
 }
 
 function isValidPositionSnapshot(position) {
@@ -551,6 +554,11 @@ function isValidPositionSnapshot(position) {
   }
   if (position.recovery === null) {
     return true
+  }
+  for (const field of ["freeQuantity", "totalQuantity", "quoteNetCashFlow"]) {
+    if (position[field] !== undefined && position[field] !== null && typeof position[field] !== "string") {
+      return false
+    }
   }
   return isRecord(position.recovery)
     && typeof position.recovery.buyCost === "string"
