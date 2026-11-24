@@ -237,7 +237,6 @@ test("broadcasts exchange-account invalidations from Harvester snapshot events",
   assert.deepEqual(message.accounts, [])
 })
 
-
 test("broadcasts live updates from Harvester's existing user-data subscription", async (t) => {
   const eventBus = new EventBus()
   let notify
@@ -262,8 +261,6 @@ test("broadcasts live updates from Harvester's existing user-data subscription",
   await api.close()
   assert.equal(unsubscribed, true, "Closing the API must detach the monitor listener without managing the exchange stream.")
 })
-
-
 
 function createExchangeAccount({ providerInstanceId = "binance-testnet", providerType = "binance", accountId = "primary", snapshotResult, ordersResult } = {}) {
   return {
@@ -423,7 +420,6 @@ test("broadcasts refreshed account and open-order snapshots after monitor update
   assert.equal(message.accounts[0].openOrders[0].price, "64000.00000000");
 });
 
-
 test("sends an account snapshot larger than 115,637 bytes without terminating the HTTP server", async (t) => {
   const eventBus = new EventBus();
   const balances = Array.from({ length: 1600 }, (_, index) => ({
@@ -516,7 +512,6 @@ test("contains one client's account-snapshot serialization failure and serves th
   assert.equal(message.type, "exchange-accounts.snapshot", "A later client must still receive its initial account snapshot.");
   assert.deepEqual(message.accounts[0].accountSnapshot.balances, [], "The serialization failure for one client must not corrupt another client's valid snapshot.");
 });
-
 
 test("rejects an oversized application snapshot for its client without stopping the HTTP server", async (t) => {
   const eventBus = new EventBus();
