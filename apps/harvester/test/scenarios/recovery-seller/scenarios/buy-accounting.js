@@ -3,6 +3,7 @@ import { defineRecoverySellerScenario } from "../registry/define-scenario.js"
 const testFile = "apps/harvester/test/scenarios/recovery-seller/buy-accounting.scenario.test.js"
 const workflowSource = "apps/harvester/src/use-cases/create-recovery-seller-accounting-workflow.js"
 const portfolioSource = "apps/harvester/src/domain/portfolio/portfolio.js"
+const buyPolicySource = "apps/harvester/src/domain/strategies/recovery-seller/evaluate-buy-decision.js"
 
 function createBuySubcases({ id, name, status, blocker, title }) {
   return [{
@@ -18,37 +19,13 @@ function createBuySubcases({ id, name, status, blocker, title }) {
   }]
 }
 
-function createBuyCaseTest({ status, title }) {
-  if (status === "BLOCKED") {
-    return null
-  }
-  return {
-    file: testFile,
-    title,
-  }
-}
-
-function resolveBuySubcases({ subcases, id, name, status, blocker, title }) {
-  if (subcases) {
-    return subcases
-  }
-  return createBuySubcases({
-    id,
-    name,
-    status,
-    blocker,
-    title,
-  })
-}
-
 function createBuyCaseMappings({ id, name, status, blocker, title, subcases }) {
   return {
-    test: createBuyCaseTest({
-      status,
+    test: status === "BLOCKED" ? null : {
+      file: testFile,
       title,
-    }),
-    subcases: resolveBuySubcases({
-      subcases,
+    },
+    subcases: subcases ?? createBuySubcases({
       id,
       name,
       status,
@@ -58,28 +35,34 @@ function createBuyCaseMappings({ id, name, status, blocker, title, subcases }) {
   }
 }
 
-function makeBuyCase({
+function createBuyCaseCoverage({ rules, invariants }) {
+  return {
+    rules,
+    decisions: ["RS_BUY_ELIGIBILITY"],
+    states: ["ACCUMULATING"],
+    transitions: [],
+    invariants: [
+      "RS_STABLE_OWNERSHIP",
+      "RS_EXACT_ONCE",
+      "RS_FINANCIAL_CONSERVATION",
+      ...invariants,
+    ],
+  }
+}
+
+function createBuyCaseDefinition({
   id,
   name,
   input,
   expected,
-  rules = [],
-  invariants = [],
-  status = "TEST-MAPPED",
+  rules,
+  invariants,
+  status,
   blocker,
-  subcases,
-  layer = "APPLICATION",
-  stepType = "apply-recovery-buy-scenario",
+  layer,
+  stepType,
+  mappings,
 }) {
-  const title = `${id}: ${name}`
-  const mappings = createBuyCaseMappings({
-    id,
-    name,
-    status,
-    blocker,
-    title,
-    subcases,
-  })
   return defineRecoverySellerScenario({
     id,
     family: "RS-002",
@@ -94,18 +77,7 @@ function makeBuyCase({
       "RS_PAIR.orderQuantity",
       "RS_PAIR.investment",
     ],
-    covers: {
-      rules,
-      decisions: ["RS_BUY_ELIGIBILITY"],
-      states: ["ACCUMULATING"],
-      transitions: [],
-      invariants: [
-        "RS_STABLE_OWNERSHIP",
-        "RS_EXACT_ONCE",
-        "RS_FINANCIAL_CONSERVATION",
-        ...invariants,
-      ],
-    },
+    covers: createBuyCaseCoverage({ rules, invariants }),
     given: { input },
     when: [{
       type: stepType,
@@ -119,19 +91,29 @@ function makeBuyCase({
       "apply one canonical Fill more than once",
       "adopt an external Fill without immutable RS order ownership",
     ],
-    subcases: resolveBuySubcases({
-      subcases,
-      id,
-      name,
-      status,
-      blocker,
-      title,
-    }),
-    implementation: [workflowSource, portfolioSource],
+    subcases: mappings.subcases,
+    implementation: [
+      workflowSource,
+      portfolioSource,
+      buyPolicySource,
+    ],
     test: mappings.test,
     status,
     evidence: null,
     ...(status === "BLOCKED" ? { blocker } : {}),
+  })
+}
+
+function makeBuyCase(options) {
+  const title = `${options.id}: ${options.name}`
+  const mappings = createBuyCaseMappings({
+    ...options,
+    title,
+  })
+  return createBuyCaseDefinition({
+    ...options,
+    title,
+    mappings,
   })
 }
 
@@ -385,22 +367,56 @@ export const recoverySellerBuyAccountingScenarios = Object.freeze([
     layer: "DOMAIN",
     stepType: "evaluate-recovery-buy-policy-scenario",
     input: {
-      cases: ["19.994", "19.995", "19.996"].map((investment, index) => ({
-        id: ["below", "equal", "above"][index],
-        overrides: {
-          pairConfig: {
-            orderQuantity: "5",
-            priceStepPercent: "0.05",
-            investment,
+      cases: [
+        {
+          id: "below",
+          overrides: {
+            pairConfig: {
+              orderQuantity: "5",
+              priceStepPercent: "0.05",
+              investment: "19.994",
+            },
+            recoveryPosition: {
+              positionId: "rs-policy-position",
+              quantity: "5",
+              spent: "10",
+            },
+            lastBuyPrice: "2",
           },
-          recoveryPosition: {
-            positionId: "rs-policy-position",
-            quantity: "5",
-            spent: "10",
-          },
-          lastBuyPrice: "2",
         },
-      })),
+        {
+          id: "equal",
+          overrides: {
+            pairConfig: {
+              orderQuantity: "5",
+              priceStepPercent: "0.05",
+              investment: "19.995",
+            },
+            recoveryPosition: {
+              positionId: "rs-policy-position",
+              quantity: "5",
+              spent: "10",
+            },
+            lastBuyPrice: "2",
+          },
+        },
+        {
+          id: "above",
+          overrides: {
+            pairConfig: {
+              orderQuantity: "5",
+              priceStepPercent: "0.05",
+              investment: "19.996",
+            },
+            recoveryPosition: {
+              positionId: "rs-policy-position",
+              quantity: "5",
+              spent: "10",
+            },
+            lastBuyPrice: "2",
+          },
+        },
+      ],
     },
     expected: {
       cases: [
