@@ -2179,5 +2179,5 @@ The detailed evidence, implementation commits, CI state and remaining unknowns a
 
 ### 2026-11-24 — #1763 Phase 3 follow-up
 
-- Added the over-target confirmed-proceeds boundary test: proceeds above position cost plus minimum profit clamp required proceeds to zero and return no recovery limit price.
-- Test-only change; CI validation pending in follow-up PR.
+- Added confirmed-proceeds threshold boundaries: exact-target and over-target proceeds clamp required proceeds to zero; proceeds immediately below target preserve the exact positive remainder and require a tick-rounded recovery price.
+- Test-only change; exact-head CI validation pending.
