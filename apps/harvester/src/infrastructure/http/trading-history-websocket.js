@@ -22,7 +22,6 @@ const BOTS_UPDATE_EVENTS = Object.freeze([
   "harvester.started",
   "harvester.startup_failed",
   "harvester.stopped",
-  "config.validated",
   "broker.connected",
   "broker.connection_failed",
   "broker.disconnected",
