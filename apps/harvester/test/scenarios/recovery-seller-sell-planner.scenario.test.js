@@ -299,7 +299,7 @@ function assertSpecificationZroSellPlan({ snapshot, marketMetadata, stopState })
     planInput: snapshot.planInput,
   })
   assert.equal(result.decision.outcome, "SUBMIT",
-    "A fully verified mixed SELL that satisfies all independent profitability and TradingRules gates must produce one eligible intent.")
+    `A fully verified mixed SELL must produce one eligible intent. Actual policy result: ${result.decision.reasonCode} — ${result.decision.explanation}`)
   assert.equal(result.orderIntent.quantity, "1.01",
     "The planner must derive 1.01 ZRO as 1.00 recovery plus the additive 0.01 authorized legacy slice.")
   assert.equal(result.orderIntent.plan.recoveryRequiredNetQuoteProceeds, "10.1101",
@@ -379,7 +379,7 @@ test("a smaller verified Spot remainder is the only legacy quantity added to the
   assert.equal(scenario.snapshot.planInput.verifiedUnreservedLegacyQuantity, "0.005",
     "Verified legacy Spot availability must exclude the one ZRO already represented by the Recovery Portfolio.")
   assert.equal(result.decision.outcome, "SUBMIT",
-    "A smaller verified legacy remainder may be planned when it is authorized and exchange-step representable.")
+    `A smaller verified legacy remainder may be planned when authorized and exchange-step representable. Actual policy result: ${result.decision.reasonCode} — ${result.decision.explanation}`)
   assert.equal(result.orderIntent.plan.legacyQuantity, "0.005",
     "The additive legacy slice must be capped at the smaller verified unreserved Spot quantity.")
   assert.equal(result.orderIntent.quantity, "1.005",
