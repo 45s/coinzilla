@@ -8,7 +8,7 @@ const ORDER_TYPES = new Set(["LIMIT", "MARKET"])
 const ORDER_STATUSES = new Set(["INIT", "NEW", "PART_FILLED", "CANCELED", "FILLED"])
 const POSITION_MODES = new Set(["ONE_WAY", "HEDGE"])
 const MARGIN_MODES = new Set(["ISOLATION", "CROSS"])
-const STOP_TYPES = new Set(["MARK_PRICE", "LAST_PRICE"])
+const STOP_TYPES = new Set(["MARK", "MARK_PRICE", "LAST_PRICE"])
 const TP_SL_ORDER_TYPES = new Set(["LIMIT", "MARKET"])
 const ORDER_EFFECTS = new Set(["GTC", "IOC", "FOK", "POST_ONLY"])
 
@@ -214,7 +214,24 @@ function normalizeOptionalTrigger({ order, source, target, enumValues }) {
   }
 }
 
+function validateTriggerOrderPrice({ order, orderTypeField, orderPriceField }) {
+  if (order[orderTypeField] === "LIMIT" &&
+      (order[orderPriceField] === undefined || order[orderPriceField] === null)) {
+    throw new TypeError(`Bitunix Futures pending order ${orderPriceField} is required for a LIMIT trigger order`)
+  }
+}
+
 function normalizePendingOrderTriggers({ order }) {
+  validateTriggerOrderPrice({
+    order,
+    orderTypeField: "tpOrderType",
+    orderPriceField: "tpOrderPrice",
+  })
+  validateTriggerOrderPrice({
+    order,
+    orderTypeField: "slOrderType",
+    orderPriceField: "slOrderPrice",
+  })
   const fields = [
     ["tpPrice", "takeProfitPrice"],
     ["slPrice", "stopLossPrice"],
