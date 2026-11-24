@@ -115,7 +115,12 @@ test("Bitunix Futures private WebSocket signs login with seconds timestamp and w
   assert.equal(subscription.sent, true)
   assert.deepEqual(transport.sent[1], {
     op: "subscribe",
-    args: [{ ch: "balance" }, { ch: "position" }, { ch: "order" }, { ch: "tpsl" }],
+    args: [
+      { ch: "balance" },
+      { ch: "position" },
+      { ch: "order" },
+      { ch: "tpsl" },
+    ],
   })
   assert.equal(client.subscriptions.length, 4)
   await client.disconnect()
@@ -156,11 +161,26 @@ test("Bitunix Futures public WebSocket subscribes to documented channels and for
   assert.deepEqual(transport.sent[0], {
     op: "subscribe",
     args: [
-      { ch: "price", symbol: "BTCUSDT" },
-      { ch: "ticker", symbol: "ETHUSDT" },
-      { ch: "depth_book1", symbol: "BTCUSDT" },
-      { ch: "trade", symbol: "BTCUSDT" },
-      { ch: "market_kline_1min", symbol: "BTCUSDT" },
+      {
+        ch: "price",
+        symbol: "BTCUSDT",
+      },
+      {
+        ch: "ticker",
+        symbol: "ETHUSDT",
+      },
+      {
+        ch: "depth_book1",
+        symbol: "BTCUSDT",
+      },
+      {
+        ch: "trade",
+        symbol: "BTCUSDT",
+      },
+      {
+        ch: "market_kline_1min",
+        symbol: "BTCUSDT",
+      },
     ],
   })
   const event = {
