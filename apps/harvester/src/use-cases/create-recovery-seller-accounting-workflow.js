@@ -20,6 +20,10 @@ import {
 } from "../domain/strategies/recovery-seller/recovery-seller-accounting-error.js"
 import { applyReconciledMixedSellOrder } from "../domain/strategies/recovery-seller/mixed-sell-fill-accounting.js"
 import { calculateRecoverySellerProfitability } from "../domain/strategies/recovery-seller/calculate-profitability.js"
+import {
+  createRecoverySellerCycleState,
+  recordRecoverySellerCycleSellSubmission,
+} from "../domain/strategies/recovery-seller/cycle-state.js"
 
 import {
   createLegacyPositionMap,
@@ -33,6 +37,29 @@ import {
 } from "./recovery-seller-order-callbacks.js"
 
 const TERMINAL_ORDER_STATUSES = new Set(["FILLED", "CANCELED", "REJECTED", "EXPIRED"])
+
+function createRecoverySellerTransitionCycleState({
+  marketId,
+  cycleId,
+  positionId,
+  status = "ACCUMULATING",
+  orderIdentity,
+}) {
+  const accumulatingState = createRecoverySellerCycleState({
+    cycleId,
+    positionId,
+  })
+  const cycleState = status === "SELL_SUBMITTED"
+    ? recordRecoverySellerCycleSellSubmission({
+        state: accumulatingState,
+        orderIdentity,
+      })
+    : accumulatingState
+  return Object.freeze({
+    ...cycleState,
+    marketId,
+  })
+}
 
 function calculateNetAllocatedQuoteProceeds({ allocationSide, quoteAssetId }) {
   let netProceeds = allocationSide.quoteProceeds
@@ -241,11 +268,10 @@ async function applyRecoverySellerBuyFillTransition({
   state.portfolio = result.portfolio
   if (nextBuyExecution) {
     state.recoverySellerBuyExecutionByCycle.set(ownership.cycleId, nextBuyExecution)
-    state.recoverySellerCycleStates.set(nextBuyExecution.marketId, Object.freeze({
+    state.recoverySellerCycleStates.set(nextBuyExecution.marketId, createRecoverySellerTransitionCycleState({
       marketId: nextBuyExecution.marketId,
       cycleId: ownership.cycleId,
       positionId: ownership.positionId,
-      status: "ACCUMULATING",
     }))
   }
   return Object.freeze({
@@ -696,11 +722,15 @@ function reserveRecoverySellerSellCycleTransition({
     cycleId: normalizedOwnership.cycleId,
     marketId: order.market.id,
   }))
-  state.recoverySellerCycleStates.set(order.market.id, Object.freeze({
+  state.recoverySellerCycleStates.set(order.market.id, createRecoverySellerTransitionCycleState({
     marketId: order.market.id,
     cycleId: normalizedOwnership.cycleId,
     positionId: normalizedOwnership.positionId,
     status: "SELL_SUBMITTED",
+    orderIdentity: {
+      clientOrderId: order.clientOrderId,
+      brokerOrderId: order.brokerOrderId ?? undefined,
+    },
   }))
   return Object.freeze({
     durable: true,
@@ -802,6 +832,15 @@ function getLatestBuyExecutionForMarket({ state, marketId }) {
 function getOrCreateRecoverySellerCycleState({ state, marketId, createCycleId }) {
   const current = state.recoverySellerCycleStates.get(marketId)
   if (current && current.status !== "CLOSED") {
+    if (current.status === "ACCUMULATING") {
+      const cycleState = createRecoverySellerTransitionCycleState({
+        marketId,
+        cycleId: current.cycleId,
+        positionId: current.positionId,
+      })
+      state.recoverySellerCycleStates.set(marketId, cycleState)
+      return cycleState
+    }
     return Object.freeze({ ...current })
   }
   const latestExecution = getLatestBuyExecutionForMarket({
@@ -811,11 +850,10 @@ function getOrCreateRecoverySellerCycleState({ state, marketId, createCycleId })
   if (latestExecution) {
     const outcome = state.recoverySellerCycleOutcomes.get(latestExecution.cycleId)
     if (outcome?.status !== "CLOSED") {
-      const cycleState = Object.freeze({
+      const cycleState = createRecoverySellerTransitionCycleState({
         marketId,
         cycleId: latestExecution.cycleId,
         positionId: latestExecution.positionId,
-        status: outcome?.status ?? "ACCUMULATING",
       })
       state.recoverySellerCycleStates.set(marketId, cycleState)
       return cycleState
@@ -825,14 +863,13 @@ function getOrCreateRecoverySellerCycleState({ state, marketId, createCycleId })
   if (typeof cycleId !== "string" || !cycleId.trim()) {
     throw new TypeError("createCycleId must return a non-empty string")
   }
-  const cycleState = Object.freeze({
+  const cycleState = createRecoverySellerTransitionCycleState({
     marketId,
     cycleId,
     positionId: createPositionId({
       marketId,
       strategyId: StrategyId.RECOVERY_SELLER,
     }),
-    status: "ACCUMULATING",
   })
   state.recoverySellerCycleStates.set(marketId, cycleState)
   return cycleState
@@ -866,11 +903,15 @@ function resolveRecoverySellerTransitionCycleState({
     (order) => order.ownership?.strategyId === StrategyId.RECOVERY_SELLER,
   )
   if (activeRecoveryOrder) {
-    const cycleState = Object.freeze({
+    const cycleState = createRecoverySellerTransitionCycleState({
       marketId,
       cycleId: activeRecoveryOrder.ownership.cycleId,
       positionId: activeRecoveryOrder.ownership.positionId,
       status: activeRecoveryOrder.side === "SELL" ? "SELL_SUBMITTED" : "ACCUMULATING",
+      orderIdentity: {
+        clientOrderId: activeRecoveryOrder.clientOrderId,
+        brokerOrderId: activeRecoveryOrder.brokerOrderId ?? undefined,
+      },
     })
     state.recoverySellerCycleStates.set(marketId, cycleState)
     return cycleState
@@ -878,11 +919,15 @@ function resolveRecoverySellerTransitionCycleState({
   const reservation = [...state.recoverySellerSellReservations.values()]
     .find((item) => item.marketId === marketId)
   if (reservation) {
-    const cycleState = Object.freeze({
+    const cycleState = createRecoverySellerTransitionCycleState({
       marketId,
       cycleId: reservation.cycleId,
       positionId: reservation.positionId,
       status: "SELL_SUBMITTED",
+      orderIdentity: {
+        clientOrderId: reservation.clientOrderId,
+        brokerOrderId: reservation.brokerOrderId ?? undefined,
+      },
     })
     state.recoverySellerCycleStates.set(marketId, cycleState)
     return cycleState
