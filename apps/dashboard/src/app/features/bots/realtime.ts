@@ -38,7 +38,7 @@ export interface BotsStateUpdatedMessage {
   readonly version: 1;
   readonly revision: number;
   readonly observedAt: string;
-  readonly data: BotsSnapshotUnavailableData;
+  readonly data: BotsSnapshotData;
 }
 
 export interface BotsStateUpdatedUnavailableMessage {
@@ -198,7 +198,12 @@ export function parseBotsWebSocketMessage(raw: string): BotsWebSocketMessage | n
     }
     return value as unknown as BotsSnapshotUnavailableMessage;
   }
-  if (value['type'] === 'bots.state.updated') return value as unknown as BotsStateUpdatedMessage;
+  if (value['type'] === 'bots.state.updated') {
+    if (!isAvailableResource(status) || !isAvailableResource(markets) || !isAvailableResource(portfolio)) {
+      return null;
+    }
+    return value as unknown as BotsStateUpdatedMessage;
+  }
   if (value['type'] === 'bots.state.updated.unavailable') {
     if (isAvailableResource(status) && isAvailableResource(markets) && isAvailableResource(portfolio)) return null;
     return value as unknown as BotsStateUpdatedUnavailableMessage;

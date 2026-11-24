@@ -136,9 +136,7 @@ export class BotsComponent implements OnInit, OnDestroy {
     const hadSnapshot = this.status() !== null;
     this.lastRevision = message.revision;
     const unavailable = message.type === 'bots.snapshot.unavailable'
-      || message.type === 'bots.state.updated.unavailable'
-      || (message.type === 'bots.state.updated'
-        && (!message.data.status.ok || !message.data.markets.ok || !message.data.portfolio.ok));
+      || message.type === 'bots.state.updated.unavailable';
     if (unavailable) {
       this.loading.set(false);
       this.snapshotFreshness.set(hadSnapshot ? 'stale' : 'unavailable');
