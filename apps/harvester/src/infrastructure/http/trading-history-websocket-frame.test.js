@@ -18,7 +18,7 @@ function createMaskedFrame({ opcode = 0x1, payload = "hello", final = true } = {
     header.writeUInt16BE(body.length, 2)
   }
   const masked = Buffer.alloc(body.length)
-  for (let index = 0 index < body.length index += 1) {
+  for (let index = 0; index < body.length; index += 1) {
     masked[index] = body[index] ^ mask[index % 4]
   }
   return Buffer.concat([header, mask, masked])
