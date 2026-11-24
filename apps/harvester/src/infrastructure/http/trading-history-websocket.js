@@ -1,13 +1,15 @@
 import { createHash } from "node:crypto"
 import { HARVESTER_EVENT_NAMES } from "../../application/events/event-names.js"
-import { consumeWebSocketFrames } from "./trading-history-websocket-frame.js"
+import { consumeWebSocketFrames, encodeWebSocketFrame } from "./trading-history-websocket-frame.js"
 
 const WEBSOCKET_PATH = "/api/v1/trading/events"
 const WEBSOCKET_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 const HEARTBEAT_INTERVAL_MS = 30_000
 const MAX_CONNECTIONS = 32
 const MAX_FRAME_BYTES = 1024
-const MAX_BUFFERED_BYTES = 64 * 1024
+// One complete snapshot may be large; keep the application message cap explicit and bounded.
+const MAX_MESSAGE_BYTES = 1024 * 1024
+const MAX_BUFFERED_BYTES = 2 * 1024 * 1024
 const ALLOWED_BROWSER_ORIGINS = new Set([
   "http://127.0.0.1:4200",
   "http://localhost:4200",
@@ -48,28 +50,37 @@ const BOTS_OPERATOR_ACTOR = Object.freeze({
 })
 const ALLOWED_RESOURCES = new Set(["orders", "fills", "commissions"])
 
-function encodeFrame({ opcode, payload = Buffer.alloc(0) } = {}) {
-  const body = Buffer.isBuffer(payload) ? payload : Buffer.from(payload)
-  let header
-  if (body.length < 126) {
-    header = Buffer.from([0x80 | opcode, body.length])
-  } else {
-    header = Buffer.alloc(4)
-    header[0] = 0x80 | opcode
-    header[1] = 126
-    header.writeUInt16BE(body.length, 2)
-  }
-  return Buffer.concat([header, body])
-}
-
 function sendJson({ client, message } = {}) {
   if (client.closed || client.socket.destroyed || !client.socket.writable) {
     return false
   }
-  const frame = encodeFrame({
-    opcode: 0x1,
-    payload: JSON.stringify(message),
-  })
+  let frame
+  try {
+    const serialized = JSON.stringify(message)
+    if (typeof serialized !== "string") {
+      throw new TypeError("WebSocket messages must serialize to JSON text.")
+    }
+    const payload = Buffer.from(serialized, "utf8")
+    if (payload.length > MAX_MESSAGE_BYTES) {
+      closeClient({
+        client,
+        code: 1009,
+        reason: "WebSocket message exceeds the 1 MiB limit.",
+      })
+      return false
+    }
+    frame = encodeWebSocketFrame({
+      opcode: 0x1,
+      payload,
+    })
+  } catch {
+    closeClient({
+      client,
+      code: 1011,
+      reason: "Unable to encode a WebSocket message.",
+    })
+    return false
+  }
   if (client.socket.writableLength + frame.length > MAX_BUFFERED_BYTES) {
     closeClient({
       client,
@@ -100,13 +111,40 @@ function closeClient({ client, code = 1000, reason = "" } = {}) {
   const payload = Buffer.alloc(2 + reasonBytes.length)
   payload.writeUInt16BE(code, 0)
   reasonBytes.copy(payload, 2)
-  if (!client.socket.destroyed && client.socket.writable) {
-    client.socket.end(encodeFrame({
-      opcode: 0x8,
+  try {
+    if (!client.socket.destroyed && client.socket.writable) {
+      client.socket.end(encodeWebSocketFrame({
+        opcode: 0x8,
+        payload,
+      }))
+    }
+  } catch {
+    client.socket.destroy()
+  } finally {
+    client.clients.delete(client)
+  }
+}
+
+/**
+ * Send a small control frame without allowing a socket failure to escape its client.
+ */
+function sendControlFrame({ client, opcode, payload = Buffer.alloc(0) } = {}) {
+  if (client.closed || client.socket.destroyed || !client.socket.writable) {
+    return false
+  }
+  try {
+    return client.socket.write(encodeWebSocketFrame({
+      opcode,
       payload,
     }))
+  } catch {
+    closeClient({
+      client,
+      code: 1011,
+      reason: "Unable to write a WebSocket control frame.",
+    })
+    return false
   }
-  client.clients.delete(client)
 }
 
 function startHeartbeat(client) {
@@ -120,9 +158,10 @@ function startHeartbeat(client) {
       return
     }
     client.awaitingPong = true
-    client.socket.write(encodeFrame({
+    sendControlFrame({
+      client,
       opcode: 0x9,
-    }))
+    })
   }, HEARTBEAT_INTERVAL_MS)
   client.heartbeatTimer.unref?.()
 }
@@ -136,10 +175,11 @@ function handleClientFrame({ client, frame } = {}) {
   }
   if (frame.opcode === 0x9) {
     if (!client.closed) {
-      client.socket.write(encodeFrame({
+      sendControlFrame({
+        client,
         opcode: 0xa,
         payload: frame.payload,
-      }))
+      })
     }
     return
   }
