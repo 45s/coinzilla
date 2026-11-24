@@ -422,7 +422,7 @@ test("broadcasts refreshed account and open-order snapshots after monitor update
 
 test("sends an account snapshot larger than 115,637 bytes without terminating the HTTP server", async (t) => {
   const eventBus = new EventBus();
-  const balances = Array.from({ length: 1600 }, (_, index) => ({
+  const balances = [...Array(1600).keys()].map((index) => ({
     asset: {
       code: `ASSET${String(index).padStart(4, "0")}`,
     },
@@ -515,7 +515,7 @@ test("contains one client's account-snapshot serialization failure and serves th
 
 test("rejects an oversized application snapshot for its client without stopping the HTTP server", async (t) => {
   const eventBus = new EventBus();
-  const balances = Array.from({ length: 12000 }, (_, index) => ({
+  const balances = [...Array(12000).keys()].map((index) => ({
     asset: {
       code: `OVERSIZED${String(index).padStart(5, "0")}`,
     },
