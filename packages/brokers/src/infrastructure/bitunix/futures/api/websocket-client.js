@@ -206,6 +206,7 @@ export class BitunixFuturesWebSocketClient extends EventEmitter {
   #desiredSubscriptions = new Map()
   #state = "idle"
   #authenticated = false
+  #authenticationError = null
 
   constructor(options = {}) {
     super()
