@@ -21,6 +21,23 @@ const PUBLIC_CHANNELS = new Set([
   "tickers",
   "price",
 ])
+const FUTURES_KLINE_INTERVALS = new Set([
+  "1min",
+  "3min",
+  "5min",
+  "15min",
+  "30min",
+  "60min",
+  "2h",
+  "4h",
+  "6h",
+  "8h",
+  "12h",
+  "1day",
+  "3day",
+  "1week",
+  "1month",
+])
 
 function validateUrl({ channelType, url }) {
   let parsed
@@ -355,7 +372,10 @@ export class BitunixFuturesWebSocketClient extends EventEmitter {
         throw new TypeError("Bitunix Futures WebSocket channel must be an object")
       }
       const ch = typeof channel.ch === "string" ? channel.ch : ""
-      if (!allowed.has(ch)) {
+      const isKlineChannel = this.channelType === "public" &&
+        /^(market|mark)_kline_/.test(ch) &&
+        FUTURES_KLINE_INTERVALS.has(ch.replace(/^(market|mark)_kline_/, ""))
+      if (!allowed.has(ch) && !isKlineChannel) {
         throw new TypeError(`Bitunix Futures WebSocket channel is unsupported: ${ch || "unknown"}`)
       }
       if (this.channelType === "private") {
@@ -454,8 +474,12 @@ export class BitunixFuturesWebSocketClient extends EventEmitter {
     }
     if (typeof data.ch === "string") {
       const allowed = this.channelType === "private" ? PRIVATE_CHANNELS : PUBLIC_CHANNELS
-      if (!allowed.has(data.ch)) {
-        this.emit("clientError", new TypeError(`Bitunix Futures WebSocket received unsupported channel ${data.ch}`))
+      const isKlineChannel = this.channelType === "public" &&
+        /^(market|mark)_kline_/.test(data.ch) &&
+        FUTURES_KLINE_INTERVALS.has(data.ch.replace(/^(market|mark)_kline_/, ""))
+      if ((!allowed.has(data.ch) && !isKlineChannel) ||
+          (this.channelType === "private" && !this.#authenticated)) {
+        this.emit("clientError", new TypeError(`Bitunix Futures WebSocket received unsupported or unauthenticated channel ${data.ch}`))
         return
       }
       this.emit("channel", data)
