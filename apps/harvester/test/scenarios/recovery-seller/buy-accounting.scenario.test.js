@@ -688,11 +688,7 @@ async function runInitialBuyScenario({ input }) {
   const policy = evaluateBuyPolicyCase({
     overrides: input.policyOverrides,
   })
-  const accounting = await runBuyScenario({
-    input: {
-      fills: input.fills,
-    },
-  })
+  const accounting = await runBuyScenario({ input })
   return {
     policy,
     accounting,
