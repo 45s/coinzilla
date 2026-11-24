@@ -26,8 +26,8 @@ This is a read-only GitHub overview with Dashboard-owned organization metadata. 
 - Initial repository: `45s/coinzilla`.
 - GitHub is authoritative for PR metadata and commit details.
 - The Dashboard is authoritative for its custom label definitions and assignments.
-- The feature must respect [Dashboard agent instructions](../../AGENTS.md): the browser remains a presentation/client layer and must not access database files, Harvester internals, broker APIs or exchange APIs.
-- The repository-wide [Feature Specification Standard](../../../../docs/FEATURE_SPECIFICATION_STANDARD.md) defines how this and future feature specifications are authored and maintained.
+- The feature must respect [Dashboard agent instructions](../../../AGENTS.md): the browser remains a presentation/client layer and must not access database files, Harvester internals, broker APIs or exchange APIs.
+- The repository-wide [Feature Specification Standard](../../../../../docs/FEATURE_SPECIFICATION_STANDARD.md) defines how this and future feature specifications are authored and maintained.
 
 ## 3. Scope
 
@@ -398,13 +398,13 @@ Possible later work, requiring explicit scope approval:
 
 ## 12. Related documents and tracking
 
-- [Feature specification standard](../../../../docs/FEATURE_SPECIFICATION_STANDARD.md)
+- [Feature specification standard](../../../../../docs/FEATURE_SPECIFICATION_STANDARD.md)
 - [Domain scenarios](DOMAIN_SCENARIOS.md)
 - [Normalized PR schema](schemas/pull-request.schema.json)
 - [Local label-store schema](schemas/label-store.schema.json)
 - [Dashboard documentation index](../../README.md)
-- [Dashboard agent instructions](../../AGENTS.md)
-- [Dashboard roadmap](../../ROADMAP.md)
+- [Dashboard agent instructions](../../../AGENTS.md)
+- [Dashboard roadmap](../../../ROADMAP.md)
 - [Tracking Issue #1816](https://github.com/45s/coinzilla/issues/1816)
 
 Implementation has not been authorized or delivered by this specification-only task. Track implementation through the linked Issue and a separate reviewed task increment.
