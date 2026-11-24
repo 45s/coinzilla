@@ -55,18 +55,16 @@ function normalizeModifyInput({ input }) {
     value: input.qty,
     field: "qty",
   })
-  const price = input.price === undefined
-    ? undefined
-    : requirePositiveDecimal({
-      value: input.price,
-      field: "price",
-    })
+  const price = requirePositiveDecimal({
+    value: input.price,
+    field: "price",
+  })
   return {
     symbol,
     clientId,
     ...(orderId === undefined ? {} : { orderId }),
     qty,
-    ...(price === undefined ? {} : { price }),
+    price,
   }
 }
 
@@ -224,7 +222,7 @@ async function reconcileModifiedOrder({ broker, input, acknowledged, error }) {
         ...(error === undefined ? [] : [error]),
         ...(detail.errors ?? []),
       ],
-      mutationOutcome: acknowledged ? "CONFIRMED" : "OUTCOME_UNKNOWN",
+      mutationOutcome: "OUTCOME_UNKNOWN",
       orderOutcome: "OUTCOME_UNKNOWN",
     })
   }
