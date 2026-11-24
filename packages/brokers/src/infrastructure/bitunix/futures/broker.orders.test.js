@@ -141,3 +141,56 @@ test("Bitunix Futures canonical order lookup requires exactly one identifier", a
   assert.equal(result.ok, false)
   assert.equal(requests.length, 0)
 })
+
+
+test("Bitunix Futures getCanonicalOrderHistory returns one bounded symbol-scoped page", async () => {
+  const { broker, requests } = createBroker()
+  const result = await broker.getCanonicalOrderHistory({
+    symbol: "BTCUSDT",
+    startTime: 1_699_999_000_000,
+    endTime: 1_700_001_000_000,
+    limit: 25,
+    skip: 50,
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.data.length, 1)
+  assert.ok(result.data[0] instanceof CanonicalOrder)
+  const historyRequest = requests.find(({ url }) => new URL(url).pathname === "/api/v1/futures/trade/get_history_orders")
+  assert.ok(historyRequest)
+  const query = new URL(historyRequest.url).searchParams
+  assert.equal(query.get("symbol"), "BTCUSDT")
+  assert.equal(query.get("startTime"), "1699999000000")
+  assert.equal(query.get("endTime"), "1700001000000")
+  assert.equal(query.get("limit"), "25")
+  assert.equal(query.get("skip"), "50")
+  assert.equal(historyRequest.options.method, "GET")
+  assert.equal(Object.hasOwn(historyRequest.options.headers, "api-key"), true)
+})
+
+test("Bitunix Futures canonical history rejects pages containing orders without caller identity", async () => {
+  const { broker } = createBroker({
+    orderRow: createOrderRow({ clientId: undefined }),
+  })
+  const result = await broker.getCanonicalOrderHistory({
+    symbol: "BTCUSDT",
+    limit: 10,
+    skip: 0,
+  })
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /client.*id/i)
+})
+
+test("Bitunix Futures canonical history validates pagination and time bounds before network I/O", async () => {
+  const { broker, requests } = createBroker()
+  for (const input of [
+    { symbol: "BTCUSDT", limit: 101 },
+    { symbol: "BTCUSDT", skip: -1 },
+    { symbol: "BTCUSDT", startTime: 20, endTime: 10 },
+  ]) {
+    const result = await broker.getCanonicalOrderHistory(input)
+    assert.equal(result.ok, false)
+  }
+  assert.equal(requests.length, 0)
+})
