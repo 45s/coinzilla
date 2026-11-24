@@ -463,6 +463,7 @@ test("retains an active recovery SELL across recoverable market-data failures", 
     timestamp: 3,
   })
   assert.equal(repeated.ok, true, "A later valid market event must safely continue with the existing SELL reservation.")
+  assert.equal(engine.getActiveOrders().filter((order) => order.side === "SELL").length, 1, "The original SELL must remain active after market-data failures.")
   assert.equal(brokerState.orders.length, 1, "Recoverable market-data errors must not release an active SELL reservation.")
   assert.deepEqual(calls, ["intent", "broker", "outcome"], "Market-data failures must not cause a second durable intent or broker request.")
 })

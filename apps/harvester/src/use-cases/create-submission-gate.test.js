@@ -239,19 +239,21 @@ test("does not treat a Recovery Seller order as a Conservative Position reservat
 })
 
 
-test("releases the Conservative recovery SELL reservation after a terminal order transition", () => {
-  const { dependencies } = createActiveRecoverySellDependencies({
-    status: "CANCELED",
-  })
-  const gate = createSubmissionGate(dependencies)
-  const result = gate({
-    order: createRecoverySellCandidate(),
-    purpose: "RECOVERY_SELL",
-  })
+test("releases the Conservative recovery SELL reservation after terminal order transitions", () => {
+  for (const status of ["FILLED", "CANCELED", "REJECTED", "EXPIRED"]) {
+    const { dependencies } = createActiveRecoverySellDependencies({
+      status,
+    })
+    const gate = createSubmissionGate(dependencies)
+    const result = gate({
+      order: createRecoverySellCandidate(),
+      purpose: "RECOVERY_SELL",
+    })
 
-  assert.deepEqual(result, {
-    allowed: true,
-  }, "A canonical terminal SELL must release the Position reservation for a later recovery intent.")
+    assert.deepEqual(result, {
+      allowed: true,
+    }, `A canonical ${status} SELL must release the Position reservation for a later recovery intent.`)
+  }
 })
 
 
