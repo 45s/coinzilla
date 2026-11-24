@@ -1,5 +1,5 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, OnInit, signal } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 
 import { OperatorApi, type OperatorCommand } from '../operator/api';
@@ -187,7 +187,7 @@ function formatRuntimeDuration(status: RuntimeStatus | null): string {
   styleUrl: './page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class BotsComponent {
+export class BotsComponent implements OnInit {
   private readonly api = inject(OperatorApi);
 
   readonly connected = signal(false);
@@ -209,7 +209,7 @@ export class BotsComponent {
   );
   readonly disabledMarkets = computed(() => this.markets().filter((market) => !market.enabled));
 
-  constructor() {
+  ngOnInit(): void {
     void this.refresh();
   }
 
