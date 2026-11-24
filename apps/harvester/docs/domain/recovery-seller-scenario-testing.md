@@ -1247,6 +1247,260 @@ Assume a cycle has already reached terminal FILLED, complete reconciliation, ato
 
 The same 0.020 ZRO proposed as a candidate SELL before successful cycle completion is not dust: the candidate violates MIN_NOTIONAL and follows the approved global STOP/filter-failure contract. A residual that remains sellable is not dust and cannot be silently discarded. This example does not authorize standalone final-residual liquidation without a new BUY; that behavior remains unresolved.
 
+### 10.7 Complete end-to-end worked scenarios
+
+Sections 10.2–10.6 provide focused arithmetic oracles. The scenarios below connect those calculations to Portfolio/Position facts, legacy custody, order identity, lifecycle transitions, final accounting and forbidden side effects. They are **illustrative contract walkthroughs**, not production DTO fixtures: the Portfolio/Position blocks are logical audit views, not claims about the exact serialized object shape. Executable tests must construct the actual production entities through their canonical factories and assert their real fields.
+
+Every important scenario added to the registry must include this same evidence sequence:
+
+1. Initial shared Portfolio and strategy-owned Position snapshot.
+2. Separately identified legacy basis, verified Spot custody and unreserved quantity.
+3. Exact canonical BUY/SELL Fill facts, including fee asset and amount.
+4. Ordered decisions, order identities, state transitions and reservation changes.
+5. Independently calculated recovery, legacy and combined accounting.
+6. Final Portfolio/Position and legacy projection, including unchanged unrelated ownership.
+7. Explicit expected decision and a list of side effects that must not occur.
+
+A scenario that starts only from a prebuilt recovery Position may still be useful for a narrow SELL-domain rule, but it does not prove the preceding BUY workflow. Link it to a separate BUY scenario rather than claiming full-cycle coverage.
+
+#### RS-E2E-001 — successful mixed cycle with two BUY fills and two SELL fills
+
+**Purpose:** prove that actual BUY commissions establish net recovery inventory/cost, that the configured legacy slice is additive, that partial SELL fills are staged under one order identity, and that terminal reconciliation commits both accounting projections exactly once.
+
+**Configuration and initial facts**
+
+~~~text
+Market: ZRO/USDT
+orderQuantity: 1.000000 ZRO
+sellQuantity: 0.010000 ZRO
+legacyPosition.quantity: 0.010000 ZRO
+legacyPosition.invested: 0.200000 USDT
+legacy average cost: 20.000000 USDT/ZRO
+minProfit: 0.010000 USDT
+SELL quote commission: 0.1%
+Other commissions: none
+~~~
+
+Logical initial Portfolio / Position snapshot:
+
+| Owner / projection | Base quantity | Recovery cost / spent | Notes |
+| --- | ---: | ---: | --- |
+| RS recovery Position | 0.000000 ZRO | 0.000000 USDT | New cycle; no confirmed BUY fills |
+| Other strategy Position(s) | 0.000000 ZRO | 0.000000 USDT | No ZRO claim in this fixture |
+| RS legacy authorization | 0.010000 ZRO | 0.200000 USDT historical basis | Separate from the RS recovery Position |
+| Spot ZRO custody snapshot | 0.010000 ZRO | — | Total and free are both 0.010000 before the recovery BUY |
+
+The fixture must also state that there are no active ZRO SELL reservations, no pending/unknown RS order, and no other account commitment that reduces the available balance. Do not infer free balance from total custody in a test that includes locks or commitments.
+
+**BUY facts and first transition**
+
+One BUY order identity, `rs-e2e-001-buy`, is filled in two canonical executions:
+
+~~~text
+Fill B1:
+  gross base = 0.400000 ZRO
+  gross quote = 4.000000 USDT
+  quote commission = 0.004000 USDT
+  net base = 0.400000 ZRO
+  actual quote cost = 4.004000 USDT
+
+Fill B2:
+  gross base = 0.600000 ZRO
+  gross quote = 6.000000 USDT
+  quote commission = 0.006000 USDT
+  net base = 0.600000 ZRO
+  actual quote cost = 6.006000 USDT
+
+BUY totals:
+  confirmed gross base = 1.000000 ZRO
+  net recovery quantity = 1.000000 ZRO
+  actual recovery cost = 10.010000 USDT
+~~~
+
+After B1, the RS Position reflects only 0.400000 net ZRO and 4.004000 USDT cost. After B2, it reflects 1.000000 net ZRO and 10.010000 USDT cost. The cycle remains `ACCUMULATING`; an order acknowledgement alone must not create either amount.
+
+**SELL planning and fills**
+
+The target is the net recovery inventory plus the eligible legacy slice:
+
+~~~text
+Recovery quantity = 1.000000 ZRO
+Legacy quantity = 0.010000 ZRO
+SELL target = 1.010000 ZRO
+~~~
+
+One SELL identity, `rs-e2e-001-sell`, is submitted. Its two canonical partial fills are:
+
+~~~text
+Fill S1:
+  gross base = 0.500000 ZRO
+  gross quote = 10.500000 USDT
+  quote commission = 0.010500 USDT
+  net quote = 10.489500 USDT
+
+Fill S2:
+  gross base = 0.510000 ZRO
+  gross quote = 10.710000 USDT
+  quote commission = 0.010710 USDT
+  net quote = 10.699290 USDT
+
+SELL totals:
+  gross base = 1.010000 ZRO
+  gross quote = 21.210000 USDT
+  quote commission = 0.021210 USDT
+  net quote proceeds = 21.188790 USDT
+~~~
+
+The order remains the sole active SELL after S1. S2 does not by itself prove terminal completion. The scenario then supplies authoritative terminal `FILLED` order history containing exactly S1 and S2; REST/stream duplicates of either canonical Fill are delivered and must be idempotent.
+
+For the independent allocation oracle, the gross base split is 1.000000 ZRO recovery and 0.010000 ZRO legacy (100:1). The quote proceeds and quote fee use that same split:
+
+~~~text
+Recovery gross proceeds = 21.000000 USDT
+Recovery quote fee = 0.021000 USDT
+Recovery net proceeds = 20.979000 USDT
+
+Legacy gross proceeds = 0.210000 USDT
+Legacy quote fee = 0.000210 USDT
+Legacy net proceeds = 0.209790 USDT
+
+Recovery cost = 10.010000 USDT
+Legacy cost consumed = 0.010000 * 20.000000
+                    = 0.200000 USDT
+
+Recovery net profit = 20.979000 - 10.010000
+                    = 10.969000 USDT
+
+Legacy net profit = 0.209790 - 0.200000
+                  = 0.009790 USDT
+
+Combined net profit = 21.188790 - (10.010000 + 0.200000)
+                    = 10.978790 USDT
+~~~
+
+All applicable gates pass: recovery profit is at least 0.010000 USDT, legacy is non-loss-making, and combined profit is at least 0.010000 USDT.
+
+**Required transition and final state**
+
+~~~text
+ACCUMULATING
+  -- confirmed BUY fills B1 and B2 -->
+ACCUMULATING (1.000000 net recovery ZRO; 10.010000 USDT cost)
+  -- submit sole SELL identity rs-e2e-001-sell -->
+SELL_SUBMITTED
+  -- S1 partial fill -->
+SELL_SUBMITTED (S1 staged; reservation remains)
+  -- S2 partial fill -->
+SELL_SUBMITTED (S1 and S2 staged; reservation remains until terminal facts)
+  -- terminal FILLED + complete canonical history + atomic accounting -->
+CLOSED
+~~~
+
+Final logical accounting:
+
+| Projection | Final base quantity | Cost basis consumed | Net proceeds | Net result |
+| --- | ---: | ---: | ---: | ---: |
+| RS recovery Position/cycle | 0.000000 ZRO | 10.010000 USDT | 20.979000 USDT | +10.969000 USDT |
+| RS legacy allocation | 0.000000 ZRO remaining from authorized slice | 0.200000 USDT | 0.209790 USDT | +0.009790 USDT |
+| Combined cycle | 1.010000 ZRO sold | 10.210000 USDT | 21.188790 USDT | +10.978790 USDT |
+
+The RS recovery Position has no remaining quantity from this cycle. The legacy remainder is decremented by exactly 0.010000 ZRO, once, only after the complete terminal reconciliation and atomic recovery/legacy accounting commit. Unrelated Portfolio Positions and other strategy budgets remain unchanged. The order reservation is released only after the authoritative terminal state and complete fill reconciliation.
+
+**Expected decision:** SELL is eligible; after complete terminal reconciliation and successful accounting, the cycle is `CLOSED`.
+
+**Forbidden side effects:** no second SELL identity; no replacement/reprice after S1; no legacy decrement on planning, submission or partial-fill delivery; no duplicate accounting for replayed S1/S2; no fee treated as zero; no double subtraction of Spot locks/commitments; no mutation of another strategy's Position or budget; no next cycle before closure.
+
+#### RS-E2E-002 — recovery profit cannot subsidize a legacy loss
+
+**Purpose:** prove that a positive recovery result and positive combined result cannot override a failing legacy gate.
+
+Initial logical state:
+
+| Projection | Quantity | Cost |
+| --- | ---: | ---: |
+| RS recovery Position | 1.000000 ZRO | 10.000000 USDT |
+| RS legacy authorization | 0.010000 ZRO | 0.200000 USDT (20.000000 USDT/ZRO) |
+| Combined candidate | 1.010000 ZRO | 10.200000 USDT |
+
+There are no active orders or reservations. The single SELL order is fully filled for 1.010000 ZRO at 15.000000 USDT/ZRO. No commission applies. The exact allocation is:
+
+~~~text
+Recovery gross/net proceeds = 1.000000 * 15.000000
+                            = 15.000000 USDT
+Legacy gross/net proceeds = 0.010000 * 15.000000
+                          = 0.150000 USDT
+
+Recovery profit = 15.000000 - 10.000000
+                = +5.000000 USDT  (passes)
+
+Legacy profit = 0.150000 - 0.200000
+              = -0.050000 USDT  (fails)
+
+Combined profit = 15.150000 - 10.200000
+                = +4.950000 USDT  (passes)
+~~~
+
+The actual SELL Fill is still a fact. Reconcile and account it exactly once; do not erase or reverse the fill because the profitability decision fails. The final accounting projections show recovery proceeds 15.000000 USDT and legacy proceeds 0.150000 USDT, with the legacy loss visible. The cycle must not be reported as a successful `CLOSED` cycle. Preserve the source-defined unresolved/STOP disposition and do not invent a follow-up trading action.
+
+**Expected decision:** reject successful cycle eligibility because `RS_PROFIT_LEGACY_NON_NEGATIVE` fails, even though recovery and combined gates pass.
+
+**Forbidden side effects:** no cross-subsidy; no hiding the legacy loss in a combined number; no skipping confirmed-fill accounting; no new BUY or replacement SELL while the adverse realized outcome is unresolved; no silent legacy decrement as though the cycle succeeded.
+
+#### RS-E2E-003 — unknown SELL submission is reconciled, never blindly retried
+
+**Purpose:** prove that an ambiguous broker response preserves the original order identity and reservation and does not create a duplicate SELL.
+
+Initial logical state:
+
+| Projection | Quantity | Cost |
+| --- | ---: | ---: |
+| RS recovery Position | 1.000000 ZRO | 10.000000 USDT |
+| RS legacy authorization | 0.010000 ZRO | 0.200000 USDT |
+| Eligible SELL candidate | 1.010000 ZRO | — |
+
+There are no pre-existing orders or reservations. The application durably records the sole client identity `rs-e2e-003-sell` and its base reservation, then calls the broker once. The broker may have accepted the order, but the response times out before the application receives an acknowledgement.
+
+~~~text
+Before submit:
+  cycle = ACCUMULATING
+  sell identity = none
+  confirmed SELL fills = none
+  SELL reservation = 0
+
+Durable intent + broker call:
+  client identity = rs-e2e-003-sell
+  broker submit calls = 1
+  response = unknown / timeout
+
+After unknown outcome:
+  cycle = RECONCILIATION_REQUIRED
+  sell identity = rs-e2e-003-sell (preserved)
+  confirmed SELL fills = none
+  reservation = 1.010000 ZRO (retained)
+  Portfolio / Position accounting = unchanged
+~~~
+
+The next application action is reconciliation using the same client/order identity. The test must cover at least: order found active; terminal order found with complete fills; order lookup not found; and lookup itself unavailable. Until authoritative facts resolve the outcome, no new SELL or BUY is permitted. A not-found response alone is not permission to submit a replacement unless an explicitly approved contract says so; the current contract says no blind retry.
+
+**Expected decision:** `RECONCILE`; retain the original identity and commitment. If reconciliation remains unavailable, remain blocked/unresolved according to the current state contract.
+
+**Forbidden side effects:** no second broker submit; no new client ID; no reservation release on timeout; no synthetic fill or Portfolio mutation; no treating timeout as rejection; no new cycle.
+
+#### 10.7.4 How to extend these walkthroughs
+
+Use the same structure for every high-risk family, not only the three examples above. At minimum, the scenario implementation sequence should add complete walkthroughs for:
+
+- BUY base-fee and quote-fee attribution, multiple tranches, duplicate and conflicting canonical fills (RS-002).
+- SELL partial fill followed by terminal `CANCELED`/`EXPIRED` with prior fills, including full fill-history reconciliation and reservation release (RS-005/006).
+- Recovery/legacy atomic projection failure at each commit boundary (RS-006).
+- CG/RS shared account base and quote commitments, snapshot-relative allocation, and strategy-budget isolation (RS-008).
+- Market-owned volatility gate for RS-only markets, including the approved recovery-SELL exception (RS-008).
+- STOP blocking new trading while permitted fill/order reconciliation continues (RS-009), only after the STOP contract blocker is resolved.
+- Third-asset commission valuation missing, stale, ambiguous and authoritative (RS-004/006), only when an approved valuation source exists.
+- Restart/replay behavior only after a separate contract and implementation are authorized (RS-010).
+
+Do not mark a family VERIFIED merely because one walkthrough exists. Each required case/subcase still needs its own stable ID, exact assertions, named test, evidence and status in the registry and #1780. The examples here are explanatory oracles until executable tests are mapped and merged.
+
 ## 11. Scenario family matrix and required subcases
 
 Issue #1780 is the live detailed checklist. This section explains what each family must prove and how to recognize incomplete coverage. Do not delete or silently reduce any row from #1780.
