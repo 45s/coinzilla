@@ -201,6 +201,7 @@ function normalizeHistoricalPositionAmounts({ position }) {
     liquidationPrice: requireDecimal({
       value: position.liqPrice,
       field: "liqPrice",
+      allowNegative: true,
     }),
   }
 }
