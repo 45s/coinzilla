@@ -11,7 +11,7 @@ const LEVERAGE_PATH = "/api/v1/futures/account/change_leverage"
 const MARGIN_MODE_PATH = "/api/v1/futures/account/change_margin_mode"
 const POSITION_MODE_PATH = "/api/v1/futures/account/change_position_mode"
 
-function createRestClient({ requests, state, dispatchError, acceptBeforeError }) {
+function createRestClient({ requests, state, dispatchError }) {
   return {
     request: async (request) => {
       requests.push(request)
@@ -21,9 +21,6 @@ function createRestClient({ requests, state, dispatchError, acceptBeforeError })
         state.marginMode = request.body.marginMode
       } else if (request.path === POSITION_MODE_PATH) {
         state.positionMode = request.body.positionMode
-      }
-      if (dispatchError && acceptBeforeError) {
-        throw dispatchError
       }
       if (dispatchError) {
         throw dispatchError
@@ -35,30 +32,8 @@ function createRestClient({ requests, state, dispatchError, acceptBeforeError })
   }
 }
 
-function createBroker({
-  positions = [],
-  pendingOrders = [],
-  pendingTpSl = [],
-  leverage = 10,
-  marginMode = "CROSS",
-  positionMode = "ONE_WAY",
-  maximumLeverage = 100,
-  dispatchError,
-  acceptBeforeError = true,
-} = {}) {
-  const requests = []
-  const state = {
-    leverage,
-    marginMode,
-    positionMode,
-  }
-  const broker = {
-    restClient: createRestClient({
-      requests,
-      state,
-      dispatchError,
-      acceptBeforeError,
-    }),
+function createBrokerReadMethods({ positions, pendingOrders, pendingTpSl, maximumLeverage, state }) {
+  return {
     getFuturesPositions: async () => ({
       ok: true,
       data: positions,
@@ -94,6 +69,38 @@ function createBroker({
       data: {
         positionMode: state.positionMode,
       },
+    }),
+  }
+}
+
+function createBroker({
+  positions = [],
+  pendingOrders = [],
+  pendingTpSl = [],
+  leverage = 10,
+  marginMode = "CROSS",
+  positionMode = "ONE_WAY",
+  maximumLeverage = 100,
+  dispatchError,
+} = {}) {
+  const requests = []
+  const state = {
+    leverage,
+    marginMode,
+    positionMode,
+  }
+  const broker = {
+    restClient: createRestClient({
+      requests,
+      state,
+      dispatchError,
+    }),
+    ...createBrokerReadMethods({
+      positions,
+      pendingOrders,
+      pendingTpSl,
+      maximumLeverage,
+      state,
     }),
   }
   return {
