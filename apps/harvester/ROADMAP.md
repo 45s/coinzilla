@@ -2220,7 +2220,6 @@ The detailed evidence, implementation commits, CI state and remaining unknowns a
 - Added confirmed-proceeds threshold boundaries: exact-target and over-target proceeds clamp required proceeds to zero; proceeds immediately below target preserve the exact positive remainder and require a tick-rounded recovery price.
 - Test-only change; exact-head CI validation pending.
 
-
 ## 2026-11-24 — #1763 Phase 4 Conservative BUY accounting (PR #1808)
 
 - Added composed initial and multiple BUY accounting in `src/use-cases/conservative-buy-accounting-scenario.test.js`, applying canonical fills through production `updateTradingAccounting` and asserting exact Position/RecoveryLedger inventory, cost, quote cash flow, commission treatment, execution identities, duplicate behavior and failure atomicity.
