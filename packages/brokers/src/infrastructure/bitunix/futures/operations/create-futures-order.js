@@ -74,7 +74,7 @@ function normalizeConditionalOrder({ input, prefix }) {
   }
 }
 
-function normalizeFuturesOrderInput({ input }) {
+function normalizeOrderIdentity({ input }) {
   if (input === null || typeof input !== "object" || Array.isArray(input)) {
     throw new TypeError("Bitunix Futures createFuturesOrder input must be an object")
   }
@@ -119,6 +119,18 @@ function normalizeFuturesOrderInput({ input }) {
   if (tradeSide === "OPEN" && positionId !== undefined) {
     throw new TypeError("Bitunix Futures OPEN orders must omit positionId")
   }
+  return {
+    symbol,
+    side,
+    orderType,
+    tradeSide,
+    clientId,
+    reduceOnly: input.reduceOnly,
+    ...(positionId === undefined ? {} : { positionId }),
+  }
+}
+
+function normalizeOrderSize({ input, orderType }) {
   const qty = requirePositiveDecimal({
     value: input.qty,
     field: "qty",
@@ -151,16 +163,23 @@ function normalizeFuturesOrderInput({ input }) {
     throw new TypeError("Bitunix Futures MARKET orders must omit effect")
   }
   return {
-    symbol,
-    side,
-    orderType,
     qty,
     ...(price === undefined ? {} : { price }),
-    tradeSide,
-    ...(positionId === undefined ? {} : { positionId }),
-    reduceOnly: input.reduceOnly,
     ...(effect === undefined ? {} : { effect }),
-    clientId,
+  }
+}
+
+function normalizeFuturesOrderInput({ input }) {
+  const identity = normalizeOrderIdentity({
+    input,
+  })
+  const size = normalizeOrderSize({
+    input,
+    orderType: identity.orderType,
+  })
+  return {
+    ...identity,
+    ...size,
     ...normalizeConditionalOrder({
       input,
       prefix: "tp",
@@ -171,7 +190,6 @@ function normalizeFuturesOrderInput({ input }) {
     }),
   }
 }
-
 function readPrecision({ value, field }) {
   if (!Number.isSafeInteger(value) || value < 0) {
     throw new TypeError(`Bitunix Futures ${field} must be a non-negative integer`)
@@ -225,7 +243,10 @@ function validateFuturesOrderFilters({ order, filters }) {
   }) < 0) {
     throw new RangeError("Bitunix Futures order qty is below minTradeVolume")
   }
-  if (compareDecimal({ left: order.qty, right: maxVolume }) > 0) {
+  if (compareDecimal({
+    left: order.qty,
+    right: maxVolume,
+  }) > 0) {
     throw new RangeError(`Bitunix Futures order qty exceeds ${maxVolumeField}`)
   }
   for (const field of ["price", "tpPrice", "tpOrderPrice", "slPrice", "slOrderPrice"]) {
