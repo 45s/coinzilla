@@ -190,21 +190,7 @@ async function validateLeverageAgainstTiers({ broker, symbol, leverage }) {
   return {}
 }
 
-async function prepareLeverageChange({ broker, input }) {
-  ensure.plainObject({
-    value: input,
-    name: "setFuturesLeverage input",
-  })
-  const symbol = normalizeSymbol({
-    value: input.symbol,
-  })
-  const marginCoin = normalizeMarginCoin({
-    value: input.marginCoin,
-  })
-  const leverage = ensure.positiveInteger({
-    value: input.leverage,
-    name: "leverage",
-  })
+async function validateLeverageChange({ broker, symbol, marginCoin, leverage }) {
   const current = await readCurrentLeverageSettings({
     broker,
     symbol,
@@ -252,6 +238,33 @@ async function prepareLeverageChange({ broker, input }) {
         errors: preflight.errors,
       }),
     }
+  }
+  return {}
+}
+
+async function prepareLeverageChange({ broker, input }) {
+  ensure.plainObject({
+    value: input,
+    name: "setFuturesLeverage input",
+  })
+  const symbol = normalizeSymbol({
+    value: input.symbol,
+  })
+  const marginCoin = normalizeMarginCoin({
+    value: input.marginCoin,
+  })
+  const leverage = ensure.positiveInteger({
+    value: input.leverage,
+    name: "leverage",
+  })
+  const validation = await validateLeverageChange({
+    broker,
+    symbol,
+    marginCoin,
+    leverage,
+  })
+  if (validation.result) {
+    return validation
   }
   return {
     symbol,
