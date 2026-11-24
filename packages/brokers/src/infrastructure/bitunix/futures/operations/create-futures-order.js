@@ -304,7 +304,33 @@ function createUnknownPlaceOrderError() {
   })
 }
 
-async function reconcileCreatedOrder({ broker, order, acknowledged, error }) {
+function isCreatedOrderMatch({ actual, requested, acknowledgedOrderId }) {
+  return actual.clientOrderId === requested.clientId &&
+    actual.market.symbol === requested.symbol &&
+    actual.side === requested.side &&
+    actual.type === requested.orderType &&
+    actual.originalQuantity.amount === requested.qty &&
+    (requested.orderType !== "LIMIT" || actual.limitPrice?.amount === requested.price) &&
+    (requested.orderType !== "MARKET" || actual.limitPrice === undefined) &&
+    (acknowledgedOrderId === undefined || actual.brokerOrderId === acknowledgedOrderId)
+}
+
+function createMismatchedOrderReadbackError() {
+  return new BitunixFuturesRestError({
+    message: "Bitunix Futures order detail does not match the requested order",
+    kind: "response",
+    path: PLACE_ORDER_PATH,
+    outcomeUnknown: true,
+  })
+}
+
+async function reconcileCreatedOrder({
+  broker,
+  order,
+  acknowledged,
+  acknowledgedOrderId,
+  error,
+}) {
   const detail = await broker.getCanonicalOrder({
     symbol: order.symbol,
     clientOrderId: order.clientId,
@@ -316,6 +342,21 @@ async function reconcileCreatedOrder({ broker, order, acknowledged, error }) {
         ...(detail.errors ?? []),
       ],
       mutationOutcome: acknowledged ? "CONFIRMED" : "OUTCOME_UNKNOWN",
+      orderOutcome: "OUTCOME_UNKNOWN",
+    })
+  }
+  if (!isCreatedOrderMatch({
+    actual: detail.data,
+    requested: order,
+    acknowledgedOrderId,
+  })) {
+    return createOutcomeResult({
+      data: detail.data,
+      errors: [
+        ...(error === undefined ? [] : [error]),
+        createMismatchedOrderReadbackError(),
+      ],
+      mutationOutcome: "OUTCOME_UNKNOWN",
       orderOutcome: "OUTCOME_UNKNOWN",
     })
   }
@@ -387,13 +428,17 @@ async function dispatchPlaceOrder({ broker, order }) {
     })
   }
   const responseData = response.data
-  const acknowledged = typeof responseData?.orderId === "string" &&
-    responseData.orderId.trim() !== "" &&
+  const acknowledgedOrderId = typeof responseData?.orderId === "string" &&
+    responseData.orderId.trim() !== ""
+    ? responseData.orderId.trim()
+    : undefined
+  const acknowledged = acknowledgedOrderId !== undefined &&
     responseData.clientId === order.clientId
   return reconcileCreatedOrder({
     broker,
     order,
     acknowledged,
+    ...(acknowledged ? { acknowledgedOrderId } : {}),
     ...(acknowledged ? {} : { error: createUnknownPlaceOrderError() }),
   })
 }
