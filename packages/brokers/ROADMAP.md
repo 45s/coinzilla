@@ -1600,7 +1600,6 @@ See [the private polling contract](./docs/BITUNIX_SPOT_POLLING.md) and [the Bitu
 - Tests cover verified/unavailable reconciliation metadata, the exact signed order-detail query, and persistence of confirmed placement evidence when readback fails.
 - No live exchange mutation is part of CI. The existing HYPE order's later cancellation and independent status verification are documented under [PR #1727](https://github.com/45s/coinzilla/pull/1727).
 
-
 ## 2026-11-24 — Bitunix Futures lifecycle implementation continuation (#1805)
 
 **Status: in progress; PR #1806 remains Draft and the provider is not production-ready.**
