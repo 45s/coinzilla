@@ -8,6 +8,7 @@ import { BitunixFuturesRestClient } from "./api/rest-client.js"
 import { adaptFuturesCandles, BITUNIX_FUTURES_CANDLE_INTERVALS } from "./adapters/adapt-futures-candles.js"
 import { adaptFuturesCanonicalOrder } from "./adapters/adapt-futures-canonical-order.js"
 import { adaptFuturesCurrentPositions, adaptFuturesHistoricalPositions } from "./adapters/adapt-futures-positions.js"
+import { adaptFuturesTradeHistory } from "./adapters/adapt-futures-trades.js"
 
 function unsupportedResult({ operation, reason }) {
   return {
@@ -468,6 +469,106 @@ export class BitunixFuturesBroker {
     } catch (error) {
       handleErr({
         where: "BitunixFuturesBroker.getExchangeMarkets()",
+        error,
+      })
+      return toResult({
+        errors: [error],
+      })
+    }
+  }
+
+  /**
+   * Provider-specific raw Futures executions. Fee and realized PnL are
+   * preserved exactly; this is not the canonical Fill contract.
+   */
+  async getFuturesTradeHistory({ symbol, orderId, positionId, startTime, endTime, limit = 10, skip = 0 } = {}) {
+    try {
+      const queryParams = {}
+      if (symbol !== undefined) {
+        queryParams.symbol = ensure.nonEmptyString({
+          value: symbol,
+          name: "symbol",
+        }).trim().toUpperCase()
+      }
+      if (orderId !== undefined) {
+        queryParams.orderId = ensure.nonEmptyString({
+          value: String(orderId),
+          name: "orderId",
+        }).trim()
+      }
+      if (positionId !== undefined) {
+        queryParams.positionId = ensure.nonEmptyString({
+          value: positionId,
+          name: "positionId",
+        }).trim()
+      }
+      if (Object.keys(queryParams).length === 0) {
+        throw new TypeError("Bitunix Futures trade history requires symbol, orderId or positionId")
+      }
+      ensure.positiveInteger({
+        value: limit,
+        name: "limit",
+      })
+      if (limit > 100) {
+        throw new RangeError("Bitunix Futures trade-history limit cannot exceed 100")
+      }
+      ensure.nonNegativeInteger({
+        value: skip,
+        name: "skip",
+      })
+      if (startTime !== undefined) {
+        ensure.nonNegativeInteger({
+          value: startTime,
+          name: "startTime",
+        })
+        queryParams.startTime = startTime
+      }
+      if (endTime !== undefined) {
+        ensure.nonNegativeInteger({
+          value: endTime,
+          name: "endTime",
+        })
+        queryParams.endTime = endTime
+      }
+      if (startTime !== undefined && endTime !== undefined && endTime < startTime) {
+        throw new RangeError("Bitunix Futures trade-history endTime must not precede startTime")
+      }
+      queryParams.limit = limit
+      queryParams.skip = skip
+      const response = await this.restClient.request({
+        method: "GET",
+        path: "/api/v1/futures/trade/get_history_trades",
+        queryParams,
+      })
+      ensure.plainObject({
+        value: response.data,
+        name: "Futures trade history",
+      })
+      if (!Number.isSafeInteger(response.data.total) || response.data.total < 0) {
+        throw new TypeError("Bitunix Futures trade-history total must be a non-negative safe integer")
+      }
+      const trades = adaptFuturesTradeHistory({
+        rows: response.data.tradeList,
+      })
+      for (const trade of trades) {
+        if (queryParams.symbol !== undefined && trade.symbol !== queryParams.symbol) {
+          throw new TypeError("Bitunix Futures trade symbol does not match the requested symbol")
+        }
+        if (queryParams.orderId !== undefined && trade.orderId !== queryParams.orderId) {
+          throw new TypeError("Bitunix Futures trade order ID does not match the requested order")
+        }
+      }
+      return toResult({
+        data: Object.freeze({
+          trades,
+          total: response.data.total,
+          skip,
+          limit,
+        }),
+      })
+    } catch (error) {
+      handleErr({
+        where: "BitunixFuturesBroker.getFuturesTradeHistory()",
         error,
       })
       return toResult({
