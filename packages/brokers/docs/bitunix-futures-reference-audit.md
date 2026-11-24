@@ -126,6 +126,7 @@ No isolated Futures TESTNET endpoint has been verified. No LIVE mutation integra
 - A dispatched mutation with lost acknowledgement, timeout, malformed response or mismatched readback is an unknown outcome unless a documented response/readback proves otherwise. Never blindly retry; reconcile by stable order/position identity.
 - The official Node demo's immediate subscribe-after-login-send is not proof that subscription is accepted before authentication acknowledgement. Keep Coinzilla's login acknowledgement gate.
 - A WebSocket event timestamp is not automatically a candle open time, account source timestamp or sequence number.
+
 ## 6. Next implementation order
 
 1. Correlate placement, modification and cancellation with matching private order/TP-SL events where the official API identifies those events as the accurate operation result. Missing events, disconnects and mismatched payloads remain `OUTCOME_UNKNOWN`; never retry a dispatched mutation.
