@@ -1034,7 +1034,7 @@ export const recoverySellerBuyAccountingScenarios = Object.freeze([
         status: "TEST-MAPPED",
         test: {
           file: testFile,
-          title: "RS-002-018: an unknown BUY submission is durably retained and STOP blocks replacement; reconciliation remains blocked",
+          title: "RS-002-018: an unknown BUY submission is durably retained after one broker call and latches STOP",
         },
         evidence: null,
       },
