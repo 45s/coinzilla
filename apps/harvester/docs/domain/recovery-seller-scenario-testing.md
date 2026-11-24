@@ -1014,7 +1014,6 @@ For each applicable monetary/quantity threshold, cover:
 
 For exchange rules, use the real TradingRules contract and test tick size, step size, minimum/maximum price, minimum/maximum quantity and minimum/maximum notional as applicable. Assert exact rounded quantity/price and net proceeds, not only whether a plan exists. Include tiny quantities whose decimal serialization may use exponent notation, wrong symbol/base/quote metadata, and UTC timestamp/freshness plus canonical market-readiness boundaries wherever they gate an RS decision.
 
-
 ### 10.6 Worked fee and accounting oracle examples
 
 These examples are synthetic fixtures designed to make the arithmetic auditable. They are not market recommendations, runtime defaults or approved fee schedules. Expected values are derived below from the stated facts; never call the production planner/accounting/profitability function to calculate the expected result. Use exact decimal strings (or exact rational arithmetic) in the test. Do not convert any input to JavaScript Number.
