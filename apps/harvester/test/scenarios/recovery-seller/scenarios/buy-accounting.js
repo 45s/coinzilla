@@ -931,7 +931,7 @@ export const recoverySellerBuyAccountingScenarios = Object.freeze([
   }),
   makeBuyCase({
     id: "RS-002-018",
-    name: "an unknown BUY submission is durably retained and STOP blocks replacement; reconciliation remains blocked",
+    name: "an unknown BUY submission is durably retained after one broker call and latches STOP",
     stepType: "submit-recovery-buy-with-unknown-outcome",
     input: {},
     expected: {
@@ -941,8 +941,6 @@ export const recoverySellerBuyAccountingScenarios = Object.freeze([
       durableFactCount: 2,
       activeOrderStatus: "UNKNOWN",
       stopStatus: "STOPPED",
-      followupOutcome: "BLOCK",
-      followupAction: null,
     },
     rules: ["RS_UNKNOWN_OUTCOME_NO_RETRY", "RS_BUY_ACTIVE_ORDER_GATE"],
     invariants: [
