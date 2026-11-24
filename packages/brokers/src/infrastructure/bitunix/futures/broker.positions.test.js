@@ -2,6 +2,7 @@ import assert from "node:assert/strict"
 import test from "node:test"
 
 import { Broker } from "../../../index.js"
+import { connectAndAcknowledgeUserDataReconciliation, createFakePrivateWebSocketClientFactory } from "./futures-mutation-fixtures.js"
 
 const credentials = {
   apiKey: "bitunix-futures-position-test-key",
@@ -200,6 +201,7 @@ function createBroker({
       allowLivePositionMutations,
       dependencies: {
         fetchFn,
+        webSocketClientFactory: createFakePrivateWebSocketClientFactory(),
       },
     },
   })
@@ -209,12 +211,37 @@ function createBroker({
   }
 }
 
+
+test("Bitunix Futures position mutations are NOT_SENT until the private user-data session is reconciled", async () => {
+  const operations = [
+    ["closeFuturesPosition", { positionId: "position-123" }],
+    ["closeFuturesPositionBySide", { symbol: "BTCUSDT", side: "LONG" }],
+    ["closeAllFuturesPositions", { symbol: "BTCUSDT" }],
+  ]
+
+  for (const [method, input] of operations) {
+    const { broker, requests } = createBroker({
+      allowLivePositionMutations: true,
+      current: [currentPosition],
+    })
+
+    const result = await broker[method](input)
+
+    assert.equal(result.ok, false, method)
+    assert.equal(result.mutationOutcome, "NOT_SENT", method)
+    assert.equal(result.positionOutcome, "NOT_SENT", method)
+    assert.equal(requests.length, 0, method)
+  }
+})
+
 test("Bitunix Futures closeFuturesPosition closes one exact position and verifies REST readback", async () => {
   const { broker, requests } = createBroker({
     allowLivePositionMutations: true,
     current: [currentPosition],
     afterClose: [],
   })
+
+  await connectAndAcknowledgeUserDataReconciliation(broker)
 
   const result = await broker.closeFuturesPosition({
     positionId: "position-123",
@@ -252,6 +279,8 @@ test("Bitunix Futures closeFuturesPosition treats an already-closed position as 
     current: [],
   })
 
+  await connectAndAcknowledgeUserDataReconciliation(broker)
+
   const result = await broker.closeFuturesPosition({
     positionId: "position-123",
   })
@@ -270,6 +299,8 @@ test("Bitunix Futures closeFuturesPosition preserves a lost acknowledgement when
     closeError: new TypeError("socket closed after dispatch"),
     closeAcceptedOnError: true,
   })
+
+  await connectAndAcknowledgeUserDataReconciliation(broker)
 
   const result = await broker.closeFuturesPosition({
     positionId: "position-123",
@@ -290,6 +321,8 @@ test("Bitunix Futures closeFuturesPosition reports an open position when REST re
     afterClose: [currentPosition],
   })
 
+  await connectAndAcknowledgeUserDataReconciliation(broker)
+
   const result = await broker.closeFuturesPosition({
     positionId: "position-123",
   })
@@ -305,6 +338,8 @@ test("Bitunix Futures closeFuturesPositionBySide resolves exactly one position s
     current: [currentPosition],
     afterClose: [],
   })
+
+  await connectAndAcknowledgeUserDataReconciliation(broker)
 
   const result = await broker.closeFuturesPositionBySide({
     symbol: "BTCUSDT",
@@ -331,6 +366,8 @@ test("Bitunix Futures closeFuturesPositionBySide refuses ambiguous position iden
     ],
   })
 
+  await connectAndAcknowledgeUserDataReconciliation(broker)
+
   const result = await broker.closeFuturesPositionBySide({
     symbol: "BTCUSDT",
     side: "LONG",
@@ -346,6 +383,8 @@ test("Bitunix Futures closeAllFuturesPositions requires explicit confirmation fo
     allowLivePositionMutations: true,
     current: [currentPosition],
   })
+
+  await connectAndAcknowledgeUserDataReconciliation(broker)
 
   const result = await broker.closeAllFuturesPositions()
 
@@ -366,6 +405,8 @@ test("Bitunix Futures closeAllFuturesPositions closes only the requested symbol 
     afterClose: [otherPosition],
   })
 
+  await connectAndAcknowledgeUserDataReconciliation(broker)
+
   const result = await broker.closeAllFuturesPositions({
     symbol: "BTCUSDT",
   })
@@ -385,6 +426,8 @@ test("Bitunix Futures closeAllFuturesPositions requires explicit account-wide co
     current: [currentPosition],
     afterClose: [],
   })
+
+  await connectAndAcknowledgeUserDataReconciliation(broker)
 
   const result = await broker.closeAllFuturesPositions({
     confirmAccountWideClose: true,
