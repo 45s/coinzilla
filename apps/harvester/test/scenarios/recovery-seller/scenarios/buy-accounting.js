@@ -19,7 +19,9 @@ function createBuySubcases({ id, name, status, blocker, title }) {
 }
 
 function createBuyCaseTest({ status, title }) {
-  if (status === "BLOCKED") return null
+  if (status === "BLOCKED") {
+    return null
+  }
   return {
     file: testFile,
     title,
@@ -27,7 +29,9 @@ function createBuyCaseTest({ status, title }) {
 }
 
 function resolveBuySubcases({ subcases, id, name, status, blocker, title }) {
-  if (subcases) return subcases
+  if (subcases) {
+    return subcases
+  }
   return createBuySubcases({
     id,
     name,
@@ -35,6 +39,13 @@ function resolveBuySubcases({ subcases, id, name, status, blocker, title }) {
     blocker,
     title,
   })
+}
+
+function createBuyCaseMappings({ id, name, status, blocker, title, subcases }) {
+  return {
+    test: createBuyCaseTest({ status, title }),
+    subcases: mappings.subcases,
+  }
 }
 
 function makeBuyCase({
@@ -49,7 +60,14 @@ function makeBuyCase({
   subcases,
 }) {
   const title = `${id}: ${name}`
-  const test = createBuyCaseTest({ status, title })
+  const mappings = createBuyCaseMappings({
+    id,
+    name,
+    status,
+    blocker,
+    title,
+    subcases,
+  })
   return defineRecoverySellerScenario({
     id,
     family: "RS-002",
@@ -98,7 +116,7 @@ function makeBuyCase({
       title,
     }),
     implementation: [workflowSource, portfolioSource],
-    test,
+    test: mappings.test,
     status,
     evidence: null,
     ...(status === "BLOCKED" ? { blocker } : {}),
