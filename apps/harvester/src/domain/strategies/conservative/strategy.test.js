@@ -474,6 +474,11 @@ test("respects exact investment-cap equality and blocks the next BUY immediately
       expectedActions: [expectedRecoverySell, expectedNextStandingBuy],
     },
     {
+      name: "capital limit one thousandth above the required amount",
+      investment: 19.901,
+      expectedActions: [expectedRecoverySell, expectedNextStandingBuy],
+    },
+    {
       name: "capital limit one thousandth below the required amount",
       investment: 19.899,
       expectedActions: [expectedRecoverySell],
