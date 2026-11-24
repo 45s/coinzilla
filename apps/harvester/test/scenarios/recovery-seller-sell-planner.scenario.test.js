@@ -437,13 +437,15 @@ test("the pre-submit transition enforces the recovery-dominant profitability bou
   const scenario = await createPlannerScenario({
     legacyInvested: "0.0001",
   })
-  const plan = evaluateRecoverySellerSellDecision({
+  const {
+    orderIntent: { plan },
+  } = evaluateRecoverySellerSellDecision({
     pairConfig,
     marketMetadata: scenario.marketMetadata,
     cycleState: scenario.cycleState,
     stopState: scenario.stopState,
     planInput: scenario.snapshot.planInput,
-  }).orderIntent.plan
+  })
 
   assert.equal(plan.recoveryRequiredNetQuoteProceeds, "10.1101",
     "The recovery allocation must set the strictest required proceeds when legacy basis is low.")
@@ -461,13 +463,15 @@ test("the pre-submit transition enforces the legacy-dominant profitability bound
   const scenario = await createPlannerScenario({
     legacyInvested: "0.20",
   })
-  const plan = evaluateRecoverySellerSellDecision({
+  const {
+    orderIntent: { plan },
+  } = evaluateRecoverySellerSellDecision({
     pairConfig,
     marketMetadata: scenario.marketMetadata,
     cycleState: scenario.cycleState,
     stopState: scenario.stopState,
     planInput: scenario.snapshot.planInput,
-  }).orderIntent.plan
+  })
 
   assert.equal(plan.legacyRequiredNetQuoteProceeds, "20.2",
     "The fixed historical legacy basis must set the strictest required proceeds when its average cost is high.")
@@ -485,13 +489,15 @@ test("the pre-submit transition accepts exact equality when recovery, legacy and
   const scenario = await createPlannerScenario({
     legacyInvested: "0.1001",
   })
-  const plan = evaluateRecoverySellerSellDecision({
+  const {
+    orderIntent: { plan },
+  } = evaluateRecoverySellerSellDecision({
     pairConfig,
     marketMetadata: scenario.marketMetadata,
     cycleState: scenario.cycleState,
     stopState: scenario.stopState,
     planInput: scenario.snapshot.planInput,
-  }).orderIntent.plan
+  })
 
   assert.equal(plan.recoveryRequiredNetQuoteProceeds, "10.1101",
     "Recovery profitability threshold must match the common equality target.")
