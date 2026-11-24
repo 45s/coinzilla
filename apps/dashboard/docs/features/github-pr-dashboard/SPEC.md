@@ -1,10 +1,10 @@
 # GitHub Pull Request Dashboard
 
-- Status: draft
+- Status: active
 - Type: feature specification
 - Owner: dashboard
 - Created: 2026-11-24
-- Tracking: [Issue #1816](https://github.com/45s/coinzilla/issues/1816)
+- Tracking: implementation [Issue #1821](https://github.com/45s/coinzilla/issues/1821); specification [Issue #1816](https://github.com/45s/coinzilla/issues/1816)
 
 ## 1. Purpose
 
@@ -284,7 +284,7 @@ Do not:
 - Modify GitHub PRs, labels, branches, comments or reviews.
 - Introduce global state infrastructure for this isolated page without a demonstrated cross-feature need.
 
-Use the existing Dashboard conventions: standalone Angular components, strict TypeScript/template checking, feature-oriented folders, colocated tests and local reactive state. Implementation details must be verified against the current source and standards when implementation is authorized; this specification does not prescribe speculative filenames or a complete source tree.
+Use the existing Dashboard conventions: standalone Angular components, strict TypeScript/template checking, feature-oriented folders, colocated tests and local reactive state. The implementation is owned by this feature folder and follows the Dashboard's standalone Angular component, strict TypeScript/template, feature-oriented and colocated-test conventions. Source and tests remain the authority for delivered behavior; this specification remains the behavior contract.
 
 ## 8. Loading, refresh and failure states
 
@@ -405,6 +405,8 @@ Possible later work, requiring explicit scope approval:
 - [Dashboard documentation index](../../README.md)
 - [Dashboard agent instructions](../../../AGENTS.md)
 - [Dashboard roadmap](../../../ROADMAP.md)
-- [Tracking Issue #1816](https://github.com/45s/coinzilla/issues/1816)
+- [Specification Issue #1816](https://github.com/45s/coinzilla/issues/1816)
+- [Implementation Issue #1821](https://github.com/45s/coinzilla/issues/1821)
+- [Implementation PR #1822](https://github.com/45s/coinzilla/pull/1822)
 
-This proposal remains draft pending review. Issue #1816 tracks the documentation and specification work only; eventual application implementation requires its own explicitly scoped Issue and reviewed task PR.
+This specification is active. The documentation standard and feature contract were delivered in [PR #1817](https://github.com/45s/coinzilla/pull/1817). Application implementation is tracked separately by [Issue #1821](https://github.com/45s/coinzilla/issues/1821) and is under review in [PR #1822](https://github.com/45s/coinzilla/pull/1822). The specification remains authoritative for required behavior; delivered and verified implementation status is recorded in the task Issue and PR.

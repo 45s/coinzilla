@@ -204,6 +204,30 @@ describe('AppComponent', () => {
     vi.unstubAllGlobals();
   });
 
+  it('navigates to the read-only GitHub PRs page and loads public GitHub data', async () => {
+    await TestBed.configureTestingModule({
+      imports: [AppComponent],
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    }).compileComponents();
+
+    const fixture = TestBed.createComponent(AppComponent);
+    fixture.detectChanges();
+    const root = fixture.nativeElement as HTMLElement;
+    const githubButton = Array.from(root.querySelectorAll('button.nav-item'))
+      .find((button) => button.textContent?.includes('GitHub PRs')) as HTMLButtonElement;
+    expect(githubButton).toBeDefined();
+    githubButton.click();
+    fixture.detectChanges();
+
+    const request = TestBed.inject(HttpTestingController)
+      .expectOne('https://api.github.com/repos/45s/coinzilla/pulls?state=open&per_page=100&page=1');
+    expect(root.textContent).toContain('GitHub PRs');
+    expect(root.textContent).toContain('PUBLIC READ ONLY');
+    request.flush([]);
+
+    fixture.destroy();
+  });
+
   it('offers the existing theme plus six palettes and persists the selected theme', async () => {
     window.localStorage.removeItem('coinzilla.dashboard.theme');
     await TestBed.configureTestingModule({
