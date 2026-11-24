@@ -191,7 +191,7 @@ function createExternalBuyOrder({ clientOrderId }) {
     side: "BUY",
     type: "LIMIT_MAKER",
     limitPrice: new Money({
-      amount: input.limitPrice ?? "4",
+      amount: "2",
       asset: quoteAsset,
     }),
     originalQuantity: new Quantity({
@@ -262,7 +262,7 @@ function createRecoveryBuyScenarioWorkflow({ input }) {
     side: "BUY",
     type: "LIMIT_MAKER",
     limitPrice: new Money({
-      amount: "2",
+      amount: input.limitPrice ?? "4",
       asset: quoteAsset,
     }),
     originalQuantity: new Quantity({
@@ -603,6 +603,9 @@ const applicationHandlers = {
     const replay = input.replayFirstFill === true && fills[0]
       ? await workflow.applyBuyFill({ fill: fills[0] })
       : undefined
+    const conflict = input.conflictFirstFill === true
+      ? await applyConflictingBuyFill({ workflow, firstFill: fills[0], order })
+      : undefined
     const portfolio = workflow.getPortfolio()
     const position = portfolio.getPosition({ positionId })
     return {
@@ -612,6 +615,10 @@ const applicationHandlers = {
         : null,
       executionQuantity: workflow.getBuyExecutionQuantity({ cycleId }) ?? null,
       executionVwap: workflow.getBuyExecutionVwap({ cycleId }) ?? null,
+      ...(input.assertStrategyOwnership === true ? {
+        positionStrategyId: position?.strategyId ?? null,
+      } : {}),
+      ...(conflict ? { conflict } : {}),
       ...(replay ? {
         replay: {
           ok: replay.ok,
