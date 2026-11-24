@@ -402,6 +402,11 @@
           "kind": "normal"
         },
         {
+          "path": "src/use-cases/create-submission-gate.test.js",
+          "name": "blocks a Conservative-owned active SELL when its persisted Position identity is stale or absent",
+          "kind": "failure"
+        },
+        {
           "path": "src/use-cases/conservative-submission-durability.integration.test.js",
           "name": "does not submit repeated recovery SELL intents for one active Conservative Position",
           "kind": "integration"

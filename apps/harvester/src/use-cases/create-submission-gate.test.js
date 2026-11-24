@@ -136,6 +136,7 @@ function createActiveRecoverySellDependencies({
   status = "PENDING",
   clientOrderId = "existing-recovery-sell",
   strategyId = StrategyId.COIN_GRABBER,
+  positionId = CONSERVATIVE_POSITION_ID,
 } = {}) {
   const dependencies = createDependencies()
   dependencies.state.shutdownBuyGate = false
@@ -158,7 +159,7 @@ function createActiveRecoverySellDependencies({
       requestedClientOrderId === activeOrder.clientOrderId
         ? {
           strategyId,
-          positionId: CONSERVATIVE_POSITION_ID,
+          positionId,
           purpose: "RECOVERY_SELL",
         }
         : undefined,
@@ -251,4 +252,29 @@ test("releases the Conservative recovery SELL reservation after a terminal order
   assert.deepEqual(result, {
     allowed: true,
   }, "A canonical terminal SELL must release the Position reservation for a later recovery intent.")
+})
+
+
+test("blocks a Conservative-owned active SELL when its persisted Position identity is stale or absent", () => {
+  for (const positionId of ["stale-position-id", null]) {
+    const { dependencies, activeOrder } = createActiveRecoverySellDependencies({
+      status: "OPEN",
+      positionId,
+    })
+    const gate = createSubmissionGate(dependencies)
+    const result = gate({
+      order: createRecoverySellCandidate(),
+      purpose: "RECOVERY_SELL",
+    })
+
+    assert.deepEqual(result, {
+      allowed: false,
+      reason: "RECOVERY_SELL_ALREADY_ACTIVE",
+      details: {
+        symbol: "DOGEUSDT",
+        existingClientOrderId: activeOrder.clientOrderId,
+        existingStatus: "OPEN",
+      },
+    }, "A stale or absent ownership Position ID must not release an active SELL reservation for the same Conservative market.")
+  }
 })

@@ -1,4 +1,3 @@
-import { createPositionId } from "../domain/portfolio/position.js"
 import { StrategyId } from "../domain/strategies/strategy-ids.js"
 import { compareDecimal } from "@coinzilla/utils"
 import {
@@ -81,10 +80,8 @@ function getConservativeRecoverySellReservationBlocker({
       typeof registry.getOwnership !== "function") {
     return null
   }
-  const positionId = createPositionId({
-    marketId: order.market.id,
-    strategyId: StrategyId.COIN_GRABBER,
-  })
+  // Conservative has one Position per strategy/market. An active owned SELL
+  // still reserves that market if its persisted Position ID is stale or absent.
   const activeOrder = registry.getActiveOrders({
     marketId: order.market.id,
   }).find((candidate) => {
@@ -96,8 +93,7 @@ function getConservativeRecoverySellReservationBlocker({
       brokerOrderId: candidate.brokerOrderId,
       marketId: candidate.market.id,
     })
-    return ownership?.strategyId === StrategyId.COIN_GRABBER &&
-      ownership.positionId === positionId
+    return ownership?.strategyId === StrategyId.COIN_GRABBER
   })
   if (!activeOrder) {
     return null
