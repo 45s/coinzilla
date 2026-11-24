@@ -460,6 +460,7 @@ test("sends an account snapshot larger than 115,637 bytes without terminating th
 
   const response = await fetch(`http://127.0.0.1:${api.address.port}/api/v1/trading/metadata`);
   assert.equal(response.status, 200, "The HTTP listener must remain available after sending a large WebSocket snapshot.");
+  await response.text();
 });
 
 test("contains one client's account-snapshot serialization failure and serves the next client", async (t) => {
@@ -514,4 +515,47 @@ test("contains one client's account-snapshot serialization failure and serves th
   const message = await waitForMessage(healthySocket);
   assert.equal(message.type, "exchange-accounts.snapshot", "A later client must still receive its initial account snapshot.");
   assert.deepEqual(message.accounts[0].accountSnapshot.balances, [], "The serialization failure for one client must not corrupt another client's valid snapshot.");
+});
+
+
+test("rejects an oversized application snapshot for its client without stopping the HTTP server", async (t) => {
+  const eventBus = new EventBus();
+  const balances = Array.from({ length: 12000 }, (_, index) => ({
+    asset: {
+      code: `OVERSIZED${String(index).padStart(5, "0")}`,
+    },
+    free: "12345678901234567890",
+    locked: "12345678901234567890",
+    total: "24691357802469135780",
+  }));
+  const api = await startApi({
+    t,
+    eventBus,
+    exchangeAccounts: [
+      createExchangeAccount({
+        snapshotResult: {
+          ok: true,
+          data: {
+            sourceTime: "2026-11-24T19:20:00.000Z",
+            balances,
+          },
+        },
+      }),
+    ],
+  });
+  const socket = new WebSocket(`ws://127.0.0.1:${api.address.port}/api/v1/trading/events`);
+  t.after(() => socket.close());
+  const closed = new Promise((resolve) => {
+    socket.addEventListener("close", resolve, {
+      once: true,
+    });
+  });
+
+  await waitForSocketOpen(socket);
+  const closeEvent = await closed;
+  assert.equal(closeEvent.code, 1009, "An application message above the documented 1 MiB limit must close the client with message-too-big status.");
+
+  const response = await fetch(`http://127.0.0.1:${api.address.port}/api/v1/trading/metadata`);
+  assert.equal(response.status, 200, "Rejecting an oversized WebSocket message must not stop the shared HTTP server.");
+  await response.text();
 });
