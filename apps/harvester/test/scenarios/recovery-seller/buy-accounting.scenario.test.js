@@ -637,21 +637,60 @@ function createScenarioFill({ fillInput, order }) {
   })
 }
 
-async function applyConflictingFill({ workflow, firstFill, order }) {
-  const conflictFill = createScenarioFill({
-    fillInput: {
-      tradeId: firstFill.tradeId,
-      price: "5.01",
-      quantity: firstFill.quantity.amount,
-      quoteQuantity: "5.01",
+async function applyConflictingFillVariants({ workflow, firstFill, order, positionId }) {
+  const variants = [
+    {
+      id: "changed-quantity",
+      fillInput: {
+        tradeId: firstFill.tradeId,
+        price: "10",
+        quantity: "2",
+        quoteQuantity: "20",
+      },
     },
-    order,
-  })
-  const result = await workflow.applyBuyFill({ fill: conflictFill })
-  return {
-    ok: result.ok,
-    applied: result.data?.applied === true,
+    {
+      id: "changed-price",
+      fillInput: {
+        tradeId: firstFill.tradeId,
+        price: "5.01",
+        quantity: "1",
+        quoteQuantity: "5.01",
+      },
+    },
+    {
+      id: "changed-commission",
+      fillInput: {
+        tradeId: firstFill.tradeId,
+        price: "10",
+        quantity: "1",
+        quoteQuantity: "10",
+        baseCommission: "0.001",
+      },
+    },
+  ]
+  const cases = []
+  for (const variant of variants) {
+    const fill = createScenarioFill({
+      fillInput: variant.fillInput,
+      order,
+    })
+    const result = await workflow.applyBuyFill({ fill })
+    const portfolio = workflow.getPortfolio()
+    const position = portfolio.getPosition({ positionId })
+    cases.push({
+      id: variant.id,
+      ok: result.ok,
+      applied: result.data?.applied === true,
+      appliedFillIds: portfolio.appliedFillIds.length,
+      position: position
+        ? {
+            quantity: position.baseQuantity.amount,
+            spent: position.spent.amount,
+          }
+        : null,
+    })
   }
+  return { cases }
 }
 
 async function applyScenarioFills({ workflow, fills }) {
@@ -677,10 +716,11 @@ async function applyScenarioConflict({ workflow, fills, order, input }) {
   if (input.conflictFirstFill !== true) {
     return undefined
   }
-  return applyConflictingFill({
+  return applyConflictingFillVariants({
     workflow,
     firstFill: fills[0],
     order,
+    positionId: "rs-buy-scenario-position",
   })
 }
 
