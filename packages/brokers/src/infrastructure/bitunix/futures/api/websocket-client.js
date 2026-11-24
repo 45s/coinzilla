@@ -149,6 +149,8 @@ export class BitunixFuturesWebSocketClient extends EventEmitter {
   #reconnectAttempts = 0
   #intentionalClose = false
   #recoveryRequired = false
+  #lastPingAt = null
+  #lastPongAt = null
   #sentAt = []
   #subscriptions = new Map()
   #desiredSubscriptions = new Map()
@@ -337,6 +339,7 @@ export class BitunixFuturesWebSocketClient extends EventEmitter {
       op: "ping",
       ping: timestamp,
     })
+    this.#lastPingAt = this.#now()
   }
 
   async disconnect() {
@@ -490,10 +493,16 @@ export class BitunixFuturesWebSocketClient extends EventEmitter {
       if (this.#state !== "open") {
         return
       }
+      if (this.#hasMissedHeartbeat()) {
+        this.emit("clientError", new Error("Bitunix Futures WebSocket heartbeat timed out"))
+        this.#handleTransportLoss({})
+        return
+      }
       try {
         this.ping()
       } catch (error) {
         this.emit("clientError", error)
+        this.#handleTransportLoss({})
       }
     }, HEARTBEAT_INTERVAL_MS)
   }
@@ -503,6 +512,17 @@ export class BitunixFuturesWebSocketClient extends EventEmitter {
       this.#clearInterval(this.#heartbeatTimer)
       this.#heartbeatTimer = null
     }
+    this.#lastPingAt = null
+    this.#lastPongAt = null
+  }
+
+  #hasMissedHeartbeat() {
+    if (this.#lastPingAt === null) {
+      return false
+    }
+    const elapsed = this.#now() - this.#lastPingAt
+    const pongMissing = this.#lastPongAt === null || this.#lastPongAt < this.#lastPingAt
+    return elapsed > HEARTBEAT_INTERVAL_MS * 2 && pongMissing
   }
 
   #handleMessage(message) {
@@ -529,6 +549,7 @@ export class BitunixFuturesWebSocketClient extends EventEmitter {
 
   #handleControlMessage(data) {
     if (data.op === "pong") {
+      this.#lastPongAt = this.#now()
       this.emit("pong", data)
       return true
     }
@@ -605,6 +626,8 @@ export class BitunixFuturesWebSocketClient extends EventEmitter {
 
   #onTransportConnected({ reconnected }) {
     this.#state = "open"
+    this.#lastPingAt = null
+    this.#lastPongAt = null
     this.#startHeartbeat()
     if (this.channelType === "private") {
       this.#sendLogin()
@@ -663,7 +686,7 @@ export class BitunixFuturesWebSocketClient extends EventEmitter {
     this.#reconnectAttempts += 1
     this.#reconnectTimer = this.#setTimeout(() => {
       this.#reconnectTimer = null
-      this.#reconnect()
+      return this.#reconnect()
     }, delay)
     this.#emitStatus({
       reconnectScheduled: true,
