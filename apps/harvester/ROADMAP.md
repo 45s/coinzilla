@@ -117,6 +117,7 @@ Do not claim 100% correctness from line/branch coverage. Completion means every 
 
 **New files in the current slice:**
 
+- `test/scenarios/recovery-seller-sell-planner.scenario.test.js` — five application-composed planner cases for canonical BUY-derived recovery quantity, verified Spot legacy availability, the specification ZRO proceeds oracle, account SELL reservation blocking, exchange-filter STOP and no-submission behavior.
 - `test/scenarios/recovery-seller-profitability.scenario.test.js` — four named cases for both cross-subsidy directions, exact threshold equality, and recovery-only profitability.
 - `test/scenarios/recovery-seller-mixed-sell-accounting.scenario.test.js` — six named cases for a supplied canonical DOGE Fill split, exact allocation sum, domain projection commit, replay no-op, one failure-atomicity boundary, and staged duplicate/conflict handling.
 - `test/scenarios/recovery-seller-cycle-lifecycle.scenario.test.js` — two explicit cases plus three loop-generated terminal-status cases for unknown identity retention, terminal unsuccessful outcomes, and conflicting client identity rejection.
@@ -142,7 +143,7 @@ Do not claim 100% correctness from line/branch coverage. Completion means every 
 2. Default enabled state: current config sets `RS_RECOVERY_SELLER_CONFIG.enabled: true`, while specification §15 says keep it false by default; the specification's earlier text and implementation roadmap say enabled by default. Keep this as a documentation/owner-decision blocker; this scenario PR must not change configuration.
 3. Third-asset commission valuation: calculation examples exist, but the authoritative runtime quote valuation source remains unresolved/deferred.
 
-**Next P0 work:** pre-submission planner/no-order scenarios; verified custody and central reservations; threshold-adjacent economics; multiple canonical fills and REST/stream order permutations; durable submission/reconciliation boundaries; STOP decision after the owner resolves the contract discrepancy. Continue test-first in small increments. Do not change production policy, configuration, or exchange state under #1780.
+**Next P0 work:** threshold-adjacent economics; multiple canonical fills and REST/stream order permutations; durable submission/reconciliation boundaries; STOP decision after the owner resolves the contract discrepancy. Continue test-first in small increments. Do not change production policy, configuration, or exchange state under #1780.
 
 ## Recovery Seller activation — 2026-11-22
 

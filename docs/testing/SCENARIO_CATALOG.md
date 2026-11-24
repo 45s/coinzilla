@@ -561,6 +561,12 @@ The schema intentionally separates *business input* from *derived oracle*. Tests
 
 **New scenario tests:**
 
+- `recovery-seller-sell-planner.scenario.test.js`
+  - `the SELL planner derives the specification ZRO quantity and strictest independent proceeds target from canonical inventory and Spot custody`
+  - `a smaller verified Spot remainder is the only legacy quantity added to the recovery SELL`
+  - `missing verified Spot custody blocks the SELL intent and produces no broker submission`
+  - `an existing account SELL reservation blocks a second Recovery SELL evaluation`
+  - `actual TradingRules minimum-notional violations block the derived SELL without adjustment or submission`
 - `recovery-seller-mixed-sell-accounting.scenario.test.js`
   - `one 401 DOGE canonical SELL Fill allocates 400 DOGE to recovery and 1 DOGE to legacy`
   - `recovery and legacy allocations must sum exactly to the canonical SELL Fill quantity`

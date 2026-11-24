@@ -141,7 +141,8 @@
       "test/use-cases/conservative-trading-engine.test.js",
       "test/scenarios/recovery-seller-profitability.scenario.test.js",
       "test/scenarios/recovery-seller-mixed-sell-accounting.scenario.test.js",
-      "test/scenarios/recovery-seller-cycle-lifecycle.scenario.test.js"
+      "test/scenarios/recovery-seller-cycle-lifecycle.scenario.test.js",
+      "test/scenarios/recovery-seller-sell-planner.scenario.test.js"
     ]
   },
   "scripts": {
