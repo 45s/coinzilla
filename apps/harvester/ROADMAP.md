@@ -125,10 +125,10 @@ Do not claim 100% correctness from line/branch coverage. Completion means every 
 - RS-006 mixed SELL accounting atomicity — PARTIAL.
 - RS-007 unknown outcome/no blind retry — PARTIAL (state-level evidence only).
 - RS-008 CG/RS shared account resources and market-owned volatility gate (including RS-008-017) — MISSING.
-- RS-009 STOP — BLOCKED by the specification/source resolution discrepancy.
+- RS-009 STOP — SPECIFIED by owner on 2026-11-24; implementation and complete scenario evidence remain MISSING.
 - RS-010 restart/replay — UNSUPPORTED; third-asset fee valuation — BLOCKED.
 
-**Contract blockers:** STOP resolution, third-asset fee valuation source, and standalone final-residual liquidation without a new BUY remain unresolved. The strategy enabled-default decision is settled by owner-approved #1713 / merged PR #1711 and is recorded in the canonical RS specification. The approved smaller-remainder and constrained-dust contracts are specified and must be scenario-tested; candidate SELL filter violations still latch STOP. Do not encode invented behavior or change production policy/configuration to clear the remaining blockers.
+**Contract blockers:** the STOP owner decision is resolved; the authorized operator-facade command and complete RS-009 lifecycle/scenario proof remain implementation gaps. Third-asset fee valuation source and standalone final-residual liquidation without a new BUY remain blocked/deferred. The strategy enabled-default decision is settled by owner-approved #1713 / merged PR #1711 and is recorded in the canonical RS specification. The approved smaller-remainder and constrained-dust contracts are specified and must be scenario-tested; candidate SELL filter violations still latch STOP. Do not encode invented behavior or change production policy/configuration to clear the remaining blockers.
 
 **Next implementation sequence (small PRs, test-only unless a separately scoped production defect is demonstrated):**
 
@@ -138,7 +138,7 @@ Do not claim 100% correctness from line/branch coverage. Completion means every 
 4. PR 4 — RS-005/007 one-SELL lifecycle, unknown outcomes, broker-call count and reservation proof.
 5. PR 5 — RS-006 multi-fill reconciliation and atomic accounting.
 6. PR 6 — RS-008 shared CG/RS account concurrency.
-7. PR 7 — RS-009 only after owner resolves the STOP resolver/source-contract discrepancy. Dust/filter distinctions are specified and are tested under RS-003.
+7. PR 7 — RS-009 STOP lifecycle and continued reconciliation under the approved investment-only contract; implement authorized evidence-backed administrator resolution and prove continued SELL/reconciliation/accounting. Dust/filter distinctions are specified and tested under RS-003.
 8. Keep RS-010 deferred until separately approved product contracts exist.
 
 **Non-negotiable evidence rule:** existing RS unit/workflow/runtime/operator tests receive no scenario-coverage credit for #1780. A family becomes VERIFIED only when every required subcase is proved by new named scenario assertions, independently reviewed, passed on an exact SHA, merged to develop, and recorded with exact CI evidence. Use the shared methodology's status vocabulary; do not use test count or registry presence as coverage.

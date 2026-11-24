@@ -136,7 +136,7 @@ The catalog is a navigation and traceability layer. Domain specifications, accep
 - [RS-006 — Atomic mixed SELL accounting](#rs-006--mixed-sell-accounting-commits-both-allocations-atomically)
 - [RS-007 — Unknown outcome and no blind retry](#rs-007--unknown-submission-outcome-preserves-identity-and-forbids-blind-retry)
 - [RS-008 — CG/RS shared account availability](#rs-008--cg-and-rs-share-account-availability-and-market-owned-volatility-without-sharing-strategy-ownership)
-- [RS-009 — Terminal STOP and continued reconciliation](#rs-009--stop-is-terminal-visible-and-does-not-suppress-reconciliation)
+- [RS-009 — Investment-only STOP and continued recovery](#rs-009--stop-blocks-additional-buy-spending-only)
 - [RS-010 — Deferred restart and fee valuation](#rs-010--unsupported-restart-and-fee-valuation-capabilities-remain-blocked)
 
 ### Shared packages
@@ -188,7 +188,7 @@ This map is deliberately incomplete. It gives the reader a starting point across
 | --- | --- | --- | --- |
 | Harvester — shared account/order/portfolio | Account-wide commitments, canonical fill identity, exchange filters | TEST-MAPPED | [Harvester domain test inventory](../../apps/harvester/docs/domain/DOMAIN_TEST_INVENTORY.md) |
 | Harvester — Conservative (CG) | Initial BUY, recovery SELL, next-BUY gating, partial fills, residual/dust completion | TEST-MAPPED | [Conservative Domain Specification](../../apps/harvester/docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md) |
-| Harvester — Recovery Seller (RS) | Legacy authorization/custody, BUY accounting, mixed SELL, profitability, one-SELL lifecycle, STOP, concurrency | PARTIAL — RS-003/004/005/006/007 have limited new scenario evidence; RS-001/002/008 MISSING; RS-009 BLOCKED; RS-010 UNSUPPORTED/BLOCKED | [RS scenario issue #1780](https://github.com/45s/coinzilla/issues/1780) and [RS domain specification](../../apps/harvester/docs/domain/recovery-seller-domain-specification.md) |
+| Harvester — Recovery Seller (RS) | Legacy authorization/custody, BUY accounting, mixed SELL, profitability, one-SELL lifecycle, STOP, concurrency | PARTIAL — RS-003/004/005/006/007 have limited new scenario evidence; RS-001/002/008 MISSING; RS-009 SPECIFIED / scenario evidence MISSING; RS-010 UNSUPPORTED/BLOCKED | [RS scenario issue #1780](https://github.com/45s/coinzilla/issues/1780) and [RS domain specification](../../apps/harvester/docs/domain/recovery-seller-domain-specification.md) |
 | Brokers | Canonical request/response contracts, unknown mutation outcomes, provider capability boundaries | SPECIFIED / mapping incomplete | [Broker API contract](../../packages/brokers/BROKER_API.md) |
 | Entities | Exact financial values, canonical market/order/fill identity, immutable domain contracts | SPECIFIED / mapping incomplete | [Entities roadmap](../../packages/entities/ROADMAP.md) |
 | Database | CRUD conformance, transaction rollback, persistence across connections, locking | SPECIFIED / mapping incomplete | [Database CRUD decision](../../packages/db/docs/decisions/0001-provider-neutral-record-crud-api.md) |
@@ -758,20 +758,40 @@ At `20.00 USDT/ZRO`, recovery receives `20.00 USDT` (profit `+10.00`), legacy re
 
 **Tests:** RS-008-017 is reserved for the shared market-volatility gate; no new scenario evidence yet.
 
-### RS-009 — STOP is terminal, visible, and does not suppress reconciliation
+### RS-009 — STOP blocks additional BUY spending only
 
-**Status:** BLOCKED — a contract/source discrepancy must be resolved before this row can be claimed as terminal or tested as an unconditional no-reset invariant.
+**Status:** SPECIFIED — owner decision recorded in #1780 on 2026-11-24; implementation and scenario evidence are still MISSING.
 
-**Current evidence and discrepancy:**
+**Owner-approved contract:**
 
-- The RS specification and #1780 describe STOP as terminal with no operator clear/reset/resume path; the operator facade exposes read-only STOP status.
-- `stop-decision.js` exports `resolveRecoverySellerStopState`, and `resolve-recovery-seller-stop.js` implements an evidence-backed durable `SAFETY_BLOCKER_RESOLVED` operator-action workflow.
-- `create-harvester-operator.js` currently exposes only `getRecoverySellerStopState`, not the resolution use case.
-- Therefore “no operator method is exposed” is supported, but “there is no domain/application STOP resolution capability” is not. The owner must decide whether the resolution use case is obsolete/forbidden or the terminal-STOP specification needs revision. Do not write a scenario that silently chooses.
+- STOP blocks new BUYs and any action that spends additional quote funds.
+- STOP does not block an otherwise-valid recovery SELL of already-owned inventory.
+- The one-SELL-per-cycle rule remains mandatory. STOP does not authorize a second, continuation or replacement SELL.
+- Existing orders may WAIT/RECONCILE; confirmed fills and commissions continue through exact-once accounting.
+- An authorized administrator may manually clear STOP only after the cause is fixed, authoritative order/fill/balance reconciliation is complete, Portfolio/legacy/reservation accounting is verified, and the durable resolution fact is acknowledged.
+- No automatic clear, self-resume or implicit resume is allowed.
 
-**Invariant still required:** while STOP is latched, no new BUY/SELL/retry/replacement may pass; WAIT/RECONCILE of already-submitted work remains possible; first STOP evidence is preserved.
+**Current implementation gaps found:**
 
-**Tests:** not mapped by this initiative. Existing tests receive no coverage credit.
+- The SELL policy returns the STOP decision before evaluating an otherwise-valid SELL.
+- Runtime SELL eligibility also rejects STOPPED state, and runtime snapshot construction combines durable STOP with process `strategyStopped`.
+- The transition evaluator returns early on STOPPED state instead of submitting an eligible SELL.
+- The durable resolution use case exists, but the operator facade currently exposes read-only STOP status and does not expose the administrator resolution command.
+
+**Required scenarios:**
+
+1. STOP active + eligible first recovery SELL: submit exactly one SELL; preserve the STOP latch.
+2. STOP active + BUY candidate: zero broker BUY calls and no new quote commitment.
+3. STOP active + existing active/unknown SELL: retain original identity and reservation; WAIT/RECONCILE only.
+4. Partial and terminal histories: reconcile every confirmed fill/commission exactly once; preserve the one-SELL-per-cycle rule.
+5. Duplicate, conflicting and out-of-order events: idempotent for identical facts; fail safely for conflicts.
+6. Persistence, reconciliation and accounting failures: retain STOP and unresolved reservations; never invent missing facts.
+7. Authorized administrator resolution: require cause-fixed, complete reconciliation and accounting evidence; clear only after durable acknowledgement.
+8. Unauthorized resolution: reject without changing STOP or appending a resolution fact.
+
+**Existing tests:** `stop-decision.test.js`, `resolve-recovery-seller-stop.test.js`, `create-harvester-operator.test.js`, `evaluate-sell-decision.test.js`, `create-recovery-seller-transition-evaluator.test.js`, and `create-recovery-seller-runtime-evaluator.test.js`. These are regression starting points, not complete RS-009 scenario evidence.
+
+**Restart/replay:** remains unsupported under RS-010. Do not claim STOP/cycle/reservation restoration or replay coverage.
 
 ### RS-010 — Unsupported restart and fee-valuation capabilities remain blocked
 
