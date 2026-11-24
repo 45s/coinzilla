@@ -78,4 +78,84 @@ describe('GitHubPullRequestsApi', () => {
     expect(item.number).toBe(1824);
     expect(item.lastCommit.status).toBe('unavailable');
   });
+
+  it('does not treat a failed later page as a complete result', async () => {
+    const resultPromise = api.loadOpenPullRequests();
+    http.expectOne('https://api.github.com/repos/45s/coinzilla/pulls?state=open&per_page=100&page=1')
+      .flush([{
+        number: 1824,
+        title: 'A PR',
+        html_url: 'https://github.com/45s/coinzilla/pull/1824',
+        draft: false,
+        head: { sha: 'a'.repeat(40) },
+      }], {
+        headers: { Link: '<https://api.github.com/repos/45s/coinzilla/pulls?state=open&per_page=100&page=2>; rel="next"' },
+      });
+    await Promise.resolve();
+    http.expectOne('https://api.github.com/repos/45s/coinzilla/pulls?state=open&per_page=100&page=2')
+      .flush({ message: 'temporary failure' }, { status: 500, statusText: 'Server Error' });
+
+    await expect(resultPromise).rejects.toThrow();
+    expect(http.match((request) => request.url.includes('/commits/'))).toHaveLength(0);
+  });
+
+  it('reports rate limits from isolated commit lookups without hiding the PR', async () => {
+    const resultPromise = api.loadOpenPullRequests();
+    http.expectOne('https://api.github.com/repos/45s/coinzilla/pulls?state=open&per_page=100&page=1')
+      .flush([{
+        number: 1824,
+        title: 'A PR',
+        html_url: 'https://github.com/45s/coinzilla/pull/1824',
+        draft: false,
+        head: { sha: 'a'.repeat(40) },
+      }]);
+    await Promise.resolve();
+    await Promise.resolve();
+    http.expectOne('https://api.github.com/repos/45s/coinzilla/commits/' + 'a'.repeat(40))
+      .flush({ message: 'API rate limit exceeded' }, {
+        status: 403,
+        statusText: 'Forbidden',
+        headers: { 'X-RateLimit-Remaining': '0', 'X-RateLimit-Reset': '1795525200' },
+      });
+
+    const result = await resultPromise;
+    expect(result.pullRequests).toHaveLength(1);
+    expect(result.pullRequests[0].lastCommit.status).toBe('unavailable');
+    expect(result.rateLimitReset).toBe(new Date(1795525200 * 1000).toISOString());
+  });
+
+
+  it('limits actual commit HTTP requests to four at a time', async () => {
+    const pullRequests = Array.from({ length: 5 }, (_value, index) => ({
+      number: 1900 - index,
+      title: 'PR ' + index,
+      html_url: 'https://github.com/45s/coinzilla/pull/' + (1900 - index),
+      draft: false,
+      head: { sha: String(index + 1).repeat(40) },
+    }));
+    const resultPromise = api.loadOpenPullRequests();
+    http.expectOne('https://api.github.com/repos/45s/coinzilla/pulls?state=open&per_page=100&page=1')
+      .flush(pullRequests);
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const firstBatch = http.match((request) => request.url.includes('/commits/'));
+    expect(firstBatch).toHaveLength(4);
+    firstBatch[0].flush({ sha: '1'.repeat(40), commit: { committer: { date: '2026-11-24T11:00:00.000Z' } } });
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const fifthRequest = http.expectOne('https://api.github.com/repos/45s/coinzilla/commits/' + '5'.repeat(40));
+    for (const request of firstBatch.slice(1)) {
+      const sha = request.request.url.split('/').at(-1);
+      request.flush({ sha, commit: { committer: { date: '2026-11-24T11:00:00.000Z' } } });
+    }
+    fifthRequest.flush({ sha: '5'.repeat(40), commit: { committer: { date: '2026-11-24T11:00:00.000Z' } } });
+
+    const result = await resultPromise;
+    expect(result.pullRequests).toHaveLength(5);
+  });
+
 });

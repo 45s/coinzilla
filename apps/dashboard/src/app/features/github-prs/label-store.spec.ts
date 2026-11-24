@@ -56,6 +56,8 @@ describe('GitHub PR local label store', () => {
     expect(loadLabelStore(storage).status).toBe('invalid');
     expect(written).toBeNull();
     expect(loadLabelStore({ getItem: () => { throw new Error('storage unavailable'); } }).status).toBe('unavailable');
+    expect(loadLabelStore({ getItem: () => JSON.stringify({ ...emptyStore, schemaVersion: 2 }) }).status).toBe('invalid');
+    expect(loadLabelStore({ getItem: () => JSON.stringify({ schemaVersion: 1, labels: [{ id: 'known', name: 'Codex', color: 'blue' }], assignments: { '45s/coinzilla#1824': ['missing'] } }) }).status).toBe('invalid');
   });
 
   it('persists valid stores under the specified key and tolerates storage failures', () => {

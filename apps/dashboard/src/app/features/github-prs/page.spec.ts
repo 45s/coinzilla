@@ -86,4 +86,23 @@ describe('GitHubPullRequestsComponent', () => {
     expect(fixture.nativeElement.textContent).toContain('Add the GitHub dashboard');
     expect(fixture.nativeElement.textContent).toContain('GitHub is unavailable');
   });
+
+  it('preserves the previous complete snapshot when commit metadata is rate-limited', async () => {
+    const changedSnapshot = {
+      pullRequests: [{ ...snapshot.pullRequests[0], title: 'New but rate-limited snapshot' }],
+      rateLimitReset: 'unknown',
+    };
+    loadOpenPullRequests.mockResolvedValueOnce(changedSnapshot);
+    const refresh = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('Refresh')) as HTMLButtonElement;
+    refresh.click();
+    await Promise.resolve();
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).toContain('STALE SNAPSHOT');
+    expect(fixture.nativeElement.textContent).toContain('Add the GitHub dashboard');
+    expect(fixture.nativeElement.textContent).not.toContain('New but rate-limited snapshot');
+    expect(fixture.nativeElement.textContent).toContain('GitHub rate limit reached');
+  });
+
 });

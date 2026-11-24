@@ -52,6 +52,7 @@ describe('GitHub PR view model', () => {
 
     expect(formatRelativeCommitTime('2026-11-24T11:56:00.000Z', now)).toBe('4 min ago');
     expect(formatRelativeCommitTime('2026-11-24T12:02:00.000Z', now)).toBe('in the future');
+    expect(formatRelativeCommitTime('2026-11-24T12:00:30.000Z', now)).toBe('in the future');
     expect(formatRelativeCommitTime('invalid', now)).toBe('Unavailable');
   });
 });
