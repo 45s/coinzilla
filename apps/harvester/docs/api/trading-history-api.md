@@ -146,7 +146,7 @@ The same socket streams the authoritative runtime, configured-market, and Portfo
 }
 ```
 
-The versioned envelope contains a monotonically increasing server-process revision and a sampling timestamp. Resource values are the existing application query DTOs: runtime status from `getStatus`, market readiness/control state from `getMarkets`, and Portfolio positions/recovery accounting from `getPositions`. Decimal financial values remain strings. The WebSocket adapter does not query the broker, construct an exchange connection, derive strategy registrations, or calculate financial values.
+The versioned envelope contains a monotonically increasing server-process revision and a sampling timestamp. A Harvester process restart begins a new revision epoch; after the socket reconnects, the Dashboard accepts the new connection's full snapshot before comparing later revisions. Resource values are the existing application query DTOs: runtime status from `getStatus`, market readiness/control state from `getMarkets`, and Portfolio positions/recovery accounting from `getPositions`. Decimal financial values remain strings. The WebSocket adapter does not query the broker, construct an exchange connection, derive strategy registrations, or calculate financial values.
 
 If any required read fails or is malformed, the server sends `bots.snapshot.unavailable` with the same versioned envelope and an explicit per-resource `ok: false` error. A failed read is never converted into an empty market or Portfolio list. The Dashboard retains its last complete snapshot as stale (or unavailable before the first complete snapshot) and disables commands until a complete snapshot is received again.
 
