@@ -4,9 +4,9 @@ import test from "node:test"
 import { BitunixFuturesConfig } from "../config/bitunix-futures-config.js"
 import { BitunixFuturesRestClient } from "./rest-client.js"
 
-function createConfig() {
+function createConfig({ apiKey = "bitunix-rate-limit-test-key" } = {}) {
   return new BitunixFuturesConfig({
-    apiKey: "bitunix-rate-limit-test-key",
+    apiKey,
     apiSecret: "bitunix-rate-limit-test-secret",
     tradingMode: "live",
   })
@@ -73,7 +73,12 @@ test("Bitunix Futures REST client serializes concurrent requests at a conservati
 test("Bitunix Futures REST rate limiting is shared across clients using the same API key", async () => {
   let clock = 0
   const calls = []
-  const config = createConfig()
+  const firstConfig = createConfig({
+    apiKey: "bitunix-rate-limit-shared-test-key",
+  })
+  const secondConfig = createConfig({
+    apiKey: "bitunix-rate-limit-shared-test-key",
+  })
   const dependencies = {
     config,
     now: () => 1_700_000_000_000,
@@ -94,8 +99,14 @@ test("Bitunix Futures REST rate limiting is shared across clients using the same
       }
     },
   }
-  const firstClient = new BitunixFuturesRestClient(dependencies)
-  const secondClient = new BitunixFuturesRestClient(dependencies)
+  const firstClient = new BitunixFuturesRestClient({
+    ...dependencies,
+    config: firstConfig,
+  })
+  const secondClient = new BitunixFuturesRestClient({
+    ...dependencies,
+    config: secondConfig,
+  })
 
   await Promise.all([
     firstClient.request({
