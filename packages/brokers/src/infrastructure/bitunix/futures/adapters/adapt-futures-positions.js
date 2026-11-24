@@ -87,6 +87,18 @@ function normalizePositionContext({ position }) {
   }
 }
 
+function normalizeSubAccountId({ position }) {
+  if (position.subAccountId === undefined || position.subAccountId === null) {
+    return {}
+  }
+  if (!Number.isSafeInteger(position.subAccountId) || position.subAccountId < 0) {
+    throw new TypeError("Bitunix Futures position subAccountId must be a non-negative safe integer")
+  }
+  return {
+    subAccountId: position.subAccountId,
+  }
+}
+
 function normalizePositionTimestamps({ position }) {
   return {
     createdAt: requireTimestamp({
@@ -201,6 +213,9 @@ function normalizeCurrentPosition({ position }) {
     ...normalizePositionContext({
       position,
     }),
+    ...normalizeSubAccountId({
+      position,
+    }),
     ...normalizeCurrentPositionAmounts({
       position,
     }),
@@ -218,6 +233,9 @@ function normalizeHistoricalPosition({ position }) {
   })
   return Object.freeze({
     ...normalizePositionContext({
+      position,
+    }),
+    ...normalizeSubAccountId({
       position,
     }),
     ...normalizeHistoricalPositionAmounts({
