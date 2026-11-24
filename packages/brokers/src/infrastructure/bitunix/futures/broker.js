@@ -1,3 +1,5 @@
+import { Asset, Market } from "@coinzilla/entities"
+import { toResult, handleErr } from "@coinzilla/utils"
 import { BrokerCapabilities } from "../../../broker/broker-capabilities.js"
 import { BrokerUnsupportedOperationError } from "../../../broker/errors/broker-unsupported-operation-error.js"
 
@@ -25,8 +27,9 @@ const FUTURES_CAPABILITIES = [
   },
   {
     type: "READ_EXCHANGE_MARKETS",
-    status: "UNKNOWN",
-    reason: "The Futures market catalog adapter has not yet been implemented.",
+    status: "SUPPORTED",
+    method: "getExchangeMarkets",
+    guarantee: "Returns the validated Bitunix USDT Futures contract catalog and includes only contracts with OPEN status and API trading enabled.",
   },
   {
     type: "READ_OPEN_ORDERS",
@@ -106,6 +109,7 @@ export class BitunixFuturesBroker {
     this.config = config
     this.logger = logger
     this.connected = false
+    this.canonicalMarkets = new Map()
     Object.defineProperty(this, "capabilities", {
       enumerable: true,
       value: createCapabilities({ config }),
@@ -133,7 +137,62 @@ export class BitunixFuturesBroker {
   }
 
   async getExchangeMarkets() {
-    return unsupportedResult({ operation: "getExchangeMarkets", reason: "Futures market catalog reads are not implemented yet." })
+    try {
+      const response = await this.restClient.request({
+        method: "GET",
+        path: "/api/v1/futures/market/trading_pairs",
+        authenticated: false,
+      })
+      if (!Array.isArray(response?.data)) {
+        throw new TypeError("Bitunix Futures trading-pairs response must be an array")
+      }
+
+      const markets = []
+      const symbols = new Set()
+      for (const symbolInfo of response.data) {
+        if (!symbolInfo || typeof symbolInfo !== "object" || Array.isArray(symbolInfo)) {
+          throw new TypeError("Bitunix Futures trading-pairs rows must be objects")
+        }
+        if (typeof symbolInfo.base !== "string" || !symbolInfo.base.trim() ||
+            typeof symbolInfo.quote !== "string" || !symbolInfo.quote.trim() ||
+            typeof symbolInfo.symbol !== "string" || !symbolInfo.symbol.trim()) {
+          throw new TypeError("Bitunix Futures market metadata must include symbol, base and quote")
+        }
+        const symbol = symbolInfo.symbol.trim().toUpperCase()
+        const expectedSymbol = `${symbolInfo.base.trim()}${symbolInfo.quote.trim()}`.toUpperCase()
+        if (symbol !== expectedSymbol) {
+          throw new TypeError("Bitunix Futures market symbol must match its base and quote assets")
+        }
+        if (symbols.has(symbol)) {
+          throw new TypeError(`Bitunix Futures market catalog contains duplicate symbol ${symbol}`)
+        }
+        symbols.add(symbol)
+
+        if (symbolInfo.symbolStatus !== "OPEN" || symbolInfo.isApiSupported !== true) {
+          continue
+        }
+        markets.push(new Market({
+          venue: "bitunix",
+          symbol,
+          baseAsset: new Asset({
+            id: symbolInfo.base.trim().toLowerCase(),
+            code: symbolInfo.base.trim().toUpperCase(),
+          }),
+          quoteAsset: new Asset({
+            id: symbolInfo.quote.trim().toLowerCase(),
+            code: symbolInfo.quote.trim().toUpperCase(),
+          }),
+        }))
+      }
+      this.canonicalMarkets = new Map(markets.map((market) => [market.symbol, market]))
+      return toResult({ data: markets })
+    } catch (error) {
+      handleErr({
+        where: "BitunixFuturesBroker.getExchangeMarkets()",
+        error,
+      })
+      return toResult({ errors: [error] })
+    }
   }
 
   async getOpenOrders() {
