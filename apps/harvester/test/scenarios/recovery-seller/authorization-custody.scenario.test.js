@@ -4,6 +4,7 @@ import {
   Asset,
   Balance,
   CanonicalOrder,
+  Commission,
   Fill,
   Market,
   Money,
@@ -206,6 +207,45 @@ function createExternalBuyOrder({ clientOrderId }) {
     acknowledgedAt: 101,
     updatedAt: 101,
   })
+}
+
+function createBuyScenarioCommissions({ fillInput }) {
+  const commissions = []
+  if (fillInput.baseCommission) {
+    commissions.push(new Commission({
+      amount: new Money({
+        amount: fillInput.baseCommission,
+        asset: baseAsset,
+      }),
+    }))
+  }
+  if (fillInput.quoteCommission) {
+    commissions.push(new Commission({
+      amount: new Money({
+        amount: fillInput.quoteCommission,
+        asset: quoteAsset,
+      }),
+    }))
+  }
+  if (fillInput.thirdAssetCommission) {
+    const feeAsset = new Asset({
+      id: "binance:BNB",
+      code: "BNB",
+    })
+    commissions.push(new Commission({
+      amount: new Money({
+        amount: fillInput.thirdAssetCommission,
+        asset: feeAsset,
+      }),
+      ...(fillInput.thirdAssetQuoteValue === undefined ? {} : {
+        quoteValue: new Money({
+          amount: fillInput.thirdAssetQuoteValue,
+          asset: quoteAsset,
+        }),
+      }),
+    }))
+  }
+  return commissions
 }
 
 const domainHandlers = {
@@ -516,7 +556,7 @@ const applicationHandlers = {
         amount: fillInput.quoteQuantity,
         asset: quoteAsset,
       }),
-      commissions: [],
+      commissions: createBuyScenarioCommissions({ fillInput }),
       commissionStatus: "COMPLETE",
     }))
     const results = []
