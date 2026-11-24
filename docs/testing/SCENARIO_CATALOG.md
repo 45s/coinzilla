@@ -842,7 +842,7 @@ The package entries below make the repository-wide scope visible, but their exac
 
 ### BRK-003 — Futures position closes require reconciled private user data
 
-**Status:** TEST-MAPPED — the readiness regression was observed RED on test-only commit `b410108338eefba65d70e8a9393140e53ed247e0`; the implementation gate and updated tests are on the current #1806 branch. Do not mark VERIFIED until the exact implementation head passes the Brokers test suite.
+**Status:** VERIFIED — the regression was observed RED on test-only commit `b410108338eefba65d70e8a9393140e53ed247e0`, then GREEN on PR #1806 head `0b131add3aa31ff5f0171710fb7b254dc6cdf592`. The Brokers unit-test job passed all 1,172 tests (0 failures), including the readiness regression and pending TP/SL account-setting preflight test.
 
 **Behavior:** Explicit `allowLivePositionMutations: true` is not sufficient to close a Futures position. The consumer must first establish an authenticated private user-data session, reconcile balances, positions, pending orders and TP/SL orders through REST, and acknowledge that reconciliation.
 
