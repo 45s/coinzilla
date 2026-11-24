@@ -8,6 +8,7 @@ import {
   Market,
   Money,
   Quantity,
+  TradingRules,
 } from "@coinzilla/entities"
 import { StrategyId } from "../../../src/domain/strategies/strategy-ids.js"
 import { evaluateRecoverySellerBuyDecision } from "../../../src/domain/strategies/recovery-seller/evaluate-buy-decision.js"
@@ -17,6 +18,8 @@ import { Portfolio } from "../../../src/domain/portfolio/portfolio.js"
 import { createOrderOwnership } from "../../../src/domain/orders/order-ownership.js"
 import { OrderRegistry } from "../../../src/domain/orders/order-registry.js"
 import { createRecoverySellerAccountingWorkflow } from "../../../src/use-cases/create-recovery-seller-accounting-workflow.js"
+import { createRecoverySellerOrderSubmitter } from "../../../src/use-cases/create-recovery-seller-order-submitter.js"
+import { createRecoverySellerStopWorkflow } from "../../../src/use-cases/create-recovery-seller-stop-workflow.js"
 import { runRecoverySellerApplicationScenario } from "./runners/run-application-scenario.js"
 import { runRecoverySellerDomainScenario } from "./runners/run-domain-scenario.js"
 import { recoverySellerBuyAccountingScenarios } from "./scenarios/buy-accounting.js"
@@ -103,6 +106,161 @@ function evaluateBuyPolicyScenario({ input }) {
         overrides: scenarioCase.overrides,
       }),
     })),
+  }
+}
+
+const submitterMarketMetadata = {
+  market,
+  orderType: "LIMIT_MAKER",
+  supportedOrderTypes: ["LIMIT_MAKER", "LIMIT"],
+  tradingRules: new TradingRules({
+    market,
+    constraints: [
+      {
+        type: "PRICE_INCREMENT",
+        status: "SUPPORTED",
+        value: new Money({ amount: "0.001", asset: quoteAsset }),
+      },
+      {
+        type: "QUANTITY_INCREMENT",
+        status: "SUPPORTED",
+        value: new Quantity({ amount: "0.01", asset: baseAsset }),
+      },
+      {
+        type: "MIN_QUANTITY",
+        status: "SUPPORTED",
+        value: new Quantity({ amount: "0.01", asset: baseAsset }),
+      },
+      {
+        type: "MIN_NOTIONAL",
+        status: "SUPPORTED",
+        value: new Money({ amount: "5", asset: quoteAsset }),
+      },
+    ],
+  }),
+}
+
+function createSubmitterSharedState() {
+  return {
+    portfolio: new Portfolio(),
+    recoveryLedgers: new Map(),
+    orderRegistry: OrderRegistry.empty(),
+    legacyPositions: new Map(),
+    recoverySellerBuyExecutionByCycle: new Map(),
+    updateQueue: Promise.resolve(),
+  }
+}
+
+function createOperationalStateStore() {
+  const records = []
+  return {
+    records,
+    append: async (fact) => ({
+      ok: true,
+      data: {
+        durable: true,
+        record: records.push(fact),
+      },
+    }),
+    readAll: async () => ({
+      ok: true,
+      data: {
+        records: [...records],
+      },
+    }),
+  }
+}
+
+async function runUnknownBuySubmissionScenario() {
+  const sharedState = createSubmitterSharedState()
+  const workflow = createRecoverySellerAccountingWorkflow({ sharedState })
+  const operationalStateStore = createOperationalStateStore()
+  const stopResult = await createRecoverySellerStopWorkflow({
+    operationalStateStore,
+  })
+  const durableFacts = []
+  const unresolved = []
+  let brokerCallCount = 0
+  const submit = createRecoverySellerOrderSubmitter({
+    broker: {
+      providerInstanceId: "binance-testnet-primary",
+      providerType: "binance",
+      accountId: "harvester-testnet",
+      placeOrder: async () => {
+        brokerCallCount += 1
+        throw new Error("broker acknowledgement timed out")
+      },
+    },
+    recoverySellerAccountingWorkflow: workflow,
+    onDurableSubmissionIntent: async (fact) => {
+      durableFacts.push(fact)
+      return { ok: true, data: { durable: true } }
+    },
+    onDurableSubmissionOutcome: async (fact) => {
+      durableFacts.push(fact)
+      return { ok: true, data: { durable: true } }
+    },
+    onUnresolvedSubmission: async ({ order, outcome }) => {
+      unresolved.push({ order, outcome })
+      return stopResult.data.latch({
+        explanation: `RS BUY submission is unresolved: ${outcome}`,
+        orderIdentity: {
+          clientOrderId: order.clientOrderId,
+        },
+      })
+    },
+  })
+  const result = await submit({
+    lifecycleDecision: {
+      outcome: "SUBMIT",
+      reasonCode: "BUY_TRANCHE_ELIGIBLE",
+    },
+    action: {
+      side: "BUY",
+      purpose: "RECOVERY_BUY",
+      cycleId: "rs-cycle-1",
+      positionId: "rs-position-1",
+      type: "LIMIT_MAKER",
+      price: "1.999",
+      quantity: "5",
+    },
+    marketMetadata: submitterMarketMetadata,
+  })
+  const activeOrders = workflow.getActiveOrders().map((order) => ({
+    ...order,
+    ownership: workflow.getOrderRegistry().getOwnership({
+      clientOrderId: order.clientOrderId,
+    }),
+  }))
+  const followup = evaluateRecoverySellerBuyDecision({
+    stopState: stopResult.data.getStopState(),
+    marketPrice: { symbol: "ZROUSDT", price: "2" },
+    pairConfig: {
+      orderQuantity: "5",
+      priceStepPercent: "0.05",
+      investment: "100",
+    },
+    marketMetadata: buyPolicyMarketMetadata,
+    activeOrders,
+    cycleState: createRecoverySellerCycleState({
+      cycleId: "rs-cycle-1",
+      positionId: "rs-position-1",
+    }),
+    strategyStopped: false,
+    marketPaused: false,
+    reconciliationComplete: true,
+    cumulativeNetSellProceeds: "0",
+    pendingBuyCommitment: "0",
+  })
+  return {
+    brokerCallCount,
+    resultOk: result.ok,
+    unresolvedCount: unresolved.length,
+    durableFactCount: durableFacts.length,
+    activeOrderStatus: activeOrders[0]?.status ?? null,
+    stopStatus: stopResult.data.getStopState().status,
+    followupOutcome: followup.decision.outcome,
+    followupAction: followup.action ?? null,
   }
 }
 
@@ -322,6 +480,7 @@ async function runBuyScenario({ input }) {
 
 const applicationHandlers = {
   "apply-recovery-buy-scenario": runBuyScenario,
+  "submit-recovery-buy-with-unknown-outcome": runUnknownBuySubmissionScenario,
 }
 const domainHandlers = {
   "evaluate-recovery-buy-policy-scenario": evaluateBuyPolicyScenario,
