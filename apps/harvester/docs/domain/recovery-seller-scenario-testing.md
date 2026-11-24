@@ -1602,10 +1602,12 @@ No. Keep it in the registry/matrix with BLOCKED status, exact reason and unblock
 
 No. RS has its own one-SELL-per-cycle contract. Shared infrastructure does not imply shared strategy semantics.
 
-**Should the agent add a separate final residual SELL without a new BUY?**  
+**Should the agent add a separate final residual SELL without a new BUY?**
+
 No. The smaller-remainder rule applies to the legacy slice within the current cycle SELL. Standalone final-residual liquidation without a new BUY remains unresolved and must not be invented.
 
-**Should volatility protection be implemented or asserted as an RS-only state machine?**  
+**Should volatility protection be implemented or asserted as an RS-only state machine?**
+
 No. Volatility protection is market-owned and strategy-neutral. RS is one strategy route that must respect the market gate; it does not own candle history or volatility state transitions.
 
 **Should the agent fix STOP, enabled-default, dust or third-asset conflicts while writing tests?**
