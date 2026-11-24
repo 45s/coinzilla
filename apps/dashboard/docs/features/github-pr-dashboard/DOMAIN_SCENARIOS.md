@@ -1,6 +1,6 @@
 # GitHub PR Dashboard — domain scenarios
 
-- Status: active
+- Status: draft
 - Type: feature behavior scenarios
 - Owner: dashboard
 - Created: 2026-11-24
