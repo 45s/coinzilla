@@ -355,7 +355,7 @@ DEBUG/TRACE logs and the Journal JSONL file live in that same session directory.
 Standalone `start` creates structured session files but does not create
 terminal-capture files. See [Logging](./docs/LOGGING.md) for destinations, lifecycle and retention.
 
-## Implementation style
+## Encrypted debug evidence archive\n\nFor a read-only, encrypted forensic snapshot of all Journal/session logs (including incomplete crash sessions) and the configured recovery-facts ledger, run `pnpm --filter @coinzilla/harvester archive:debug -- --confirm-stopped`. The command is TESTNET-only, requires `HARVESTER_ARCHIVE_PASSPHRASE`, and publishes only an AES-256-GCM encrypted bundle to the private `45s/coinzilla-archive` repository. See the [debug archive runbook](./docs/operations/debug-evidence-archive.md) for decryption and limitations.\n\n## Implementation style
 
 See [Architecture](./docs/architecture.md) and [Harvester agent instructions](./AGENTS.md).
 
