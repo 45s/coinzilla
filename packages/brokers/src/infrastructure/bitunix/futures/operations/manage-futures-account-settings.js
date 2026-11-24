@@ -140,11 +140,12 @@ async function dispatchAndVerifyConfiguration({
     })
   }
   const confirmed = matches(finalRead.data)
-  const errors = dispatchError === undefined
-    ? confirmed
-      ? undefined
-      : [new Error(`Bitunix Futures ${operation} readback does not match the requested configuration`)]
-    : [dispatchError]
+  let errors
+  if (dispatchError !== undefined) {
+    errors = [dispatchError]
+  } else if (!confirmed) {
+    errors = [new Error(`Bitunix Futures ${operation} readback does not match the requested configuration`)]
+  }
   return createConfigurationResult({
     data: {
       requested: body,
@@ -189,34 +190,36 @@ async function validateLeverageAgainstTiers({ broker, symbol, leverage }) {
   return {}
 }
 
-export async function setFuturesLeverage({ broker, input } = {}) {
-  try {
-    ensure.plainObject({
-      value: input,
-      name: "setFuturesLeverage input",
-    })
-    const symbol = normalizeSymbol({
-      value: input.symbol,
-    })
-    const marginCoin = normalizeMarginCoin({
-      value: input.marginCoin,
-    })
-    const leverage = ensure.positiveInteger({
-      value: input.leverage,
-      name: "leverage",
-    })
-    const current = await readCurrentLeverageSettings({
-      broker,
-      symbol,
-      marginCoin,
-    })
-    if (current.errors) {
-      return createNotSentResult({
+async function prepareLeverageChange({ broker, input }) {
+  ensure.plainObject({
+    value: input,
+    name: "setFuturesLeverage input",
+  })
+  const symbol = normalizeSymbol({
+    value: input.symbol,
+  })
+  const marginCoin = normalizeMarginCoin({
+    value: input.marginCoin,
+  })
+  const leverage = ensure.positiveInteger({
+    value: input.leverage,
+    name: "leverage",
+  })
+  const current = await readCurrentLeverageSettings({
+    broker,
+    symbol,
+    marginCoin,
+  })
+  if (current.errors) {
+    return {
+      result: createNotSentResult({
         errors: current.errors,
-      })
+      }),
     }
-    if (current.settings.leverage === leverage) {
-      return createConfigurationResult({
+  }
+  if (current.settings.leverage === leverage) {
+    return {
+      result: createConfigurationResult({
         data: {
           symbol,
           marginCoin,
@@ -224,27 +227,49 @@ export async function setFuturesLeverage({ broker, input } = {}) {
         },
         mutationOutcome: "NOT_SENT",
         configurationOutcome: "ALREADY_SET",
-      })
+      }),
     }
-    const tierValidation = await validateLeverageAgainstTiers({
-      broker,
-      symbol,
-      leverage,
-    })
-    if (tierValidation.errors) {
-      return createNotSentResult({
+  }
+  const tierValidation = await validateLeverageAgainstTiers({
+    broker,
+    symbol,
+    leverage,
+  })
+  if (tierValidation.errors) {
+    return {
+      result: createNotSentResult({
         errors: tierValidation.errors,
-      })
+      }),
     }
-    const preflight = await readNoOpenExposure({
-      broker,
-      symbol,
-    })
-    if (preflight.errors) {
-      return createNotSentResult({
+  }
+  const preflight = await readNoOpenExposure({
+    broker,
+    symbol,
+  })
+  if (preflight.errors) {
+    return {
+      result: createNotSentResult({
         errors: preflight.errors,
-      })
+      }),
     }
+  }
+  return {
+    symbol,
+    marginCoin,
+    leverage,
+  }
+}
+
+export async function setFuturesLeverage({ broker, input } = {}) {
+  try {
+    const prepared = await prepareLeverageChange({
+      broker,
+      input,
+    })
+    if (prepared.result) {
+      return prepared.result
+    }
+    const { symbol, marginCoin, leverage } = prepared
     return dispatchAndVerifyConfiguration({
       broker,
       path: CHANGE_LEVERAGE_PATH,
@@ -271,35 +296,37 @@ export async function setFuturesLeverage({ broker, input } = {}) {
   }
 }
 
-export async function setFuturesMarginMode({ broker, input } = {}) {
-  try {
-    ensure.plainObject({
-      value: input,
-      name: "setFuturesMarginMode input",
-    })
-    const symbol = normalizeSymbol({
-      value: input.symbol,
-    })
-    const marginCoin = normalizeMarginCoin({
-      value: input.marginCoin,
-    })
-    const marginMode = ensure.oneOf({
-      value: input.marginMode,
-      values: ["ISOLATION", "CROSS"],
-      name: "marginMode",
-    })
-    const current = await readCurrentLeverageSettings({
-      broker,
-      symbol,
-      marginCoin,
-    })
-    if (current.errors) {
-      return createNotSentResult({
+async function prepareMarginModeChange({ broker, input }) {
+  ensure.plainObject({
+    value: input,
+    name: "setFuturesMarginMode input",
+  })
+  const symbol = normalizeSymbol({
+    value: input.symbol,
+  })
+  const marginCoin = normalizeMarginCoin({
+    value: input.marginCoin,
+  })
+  const marginMode = ensure.oneOf({
+    value: input.marginMode,
+    values: ["ISOLATION", "CROSS"],
+    name: "marginMode",
+  })
+  const current = await readCurrentLeverageSettings({
+    broker,
+    symbol,
+    marginCoin,
+  })
+  if (current.errors) {
+    return {
+      result: createNotSentResult({
         errors: current.errors,
-      })
+      }),
     }
-    if (current.settings.marginMode === marginMode) {
-      return createConfigurationResult({
+  }
+  if (current.settings.marginMode === marginMode) {
+    return {
+      result: createConfigurationResult({
         data: {
           symbol,
           marginCoin,
@@ -307,17 +334,37 @@ export async function setFuturesMarginMode({ broker, input } = {}) {
         },
         mutationOutcome: "NOT_SENT",
         configurationOutcome: "ALREADY_SET",
-      })
+      }),
     }
-    const preflight = await readNoOpenExposure({
-      broker,
-      symbol,
-    })
-    if (preflight.errors) {
-      return createNotSentResult({
+  }
+  const preflight = await readNoOpenExposure({
+    broker,
+    symbol,
+  })
+  if (preflight.errors) {
+    return {
+      result: createNotSentResult({
         errors: preflight.errors,
-      })
+      }),
     }
+  }
+  return {
+    symbol,
+    marginCoin,
+    marginMode,
+  }
+}
+
+export async function setFuturesMarginMode({ broker, input } = {}) {
+  try {
+    const prepared = await prepareMarginModeChange({
+      broker,
+      input,
+    })
+    if (prepared.result) {
+      return prepared.result
+    }
+    const { symbol, marginCoin, marginMode } = prepared
     return dispatchAndVerifyConfiguration({
       broker,
       path: CHANGE_MARGIN_MODE_PATH,
