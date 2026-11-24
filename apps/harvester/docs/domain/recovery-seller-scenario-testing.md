@@ -374,7 +374,7 @@ External pair entries must use the existing `TRADING_ENVIRONMENTS.BOTH`, `.TESTN
 
 The strategy config currently sets `enabled: true` at the audited checkpoint. The RS specification's section 15 contains a conflicting disabled-by-default statement. Do not create a default assertion or change config until the owner resolves that discrepancy. Per-pair environment eligibility remains a separate control.
 
-**Volatility is market-owned, not RS-owned.** The effective protection market set is derived from the union of enabled strategy market configurations, not from a CG or RS execution route. A configured market with market-level enablement and `enableVolatilityProtection: true` receives volatility history/state/protection even when it has no CG route. When the same market is configured in CG and RS, both explicit protection values must agree; startup rejects conflicting values. Do not make volatility calculation, candle history or protection depend on RS strategy activation. RS scenarios may prove that the real market-level protection gate is respected, but volatility calculations and market-state transitions belong to their strategy-neutral market tests. See [Harvester Volatility Protection](../volatility-protection.md) and [#1016](https://github.com/45s/coinzilla/issues/1016).
+**Volatility is market-owned, not RS-owned.** The effective protection market set is derived from the union of enabled strategy market configurations, not from a CG or RS execution route. A configured market with market-level enablement and `enableVolatilityProtection: true` receives volatility history/state/protection even when it has no CG route. When the same market is configured in CG and RS, both explicit protection values must agree; startup rejects conflicting values. Do not route volatility calculation, candle history or protection through an RS-specific BUY/SELL execution path or strategy lifecycle. Market inclusion follows the shared market-configuration aggregation rules. RS scenarios may prove that the real market-level protection gate is respected, but volatility calculations and market-state transitions belong to their strategy-neutral market tests. See [Harvester Volatility Protection](../volatility-protection.md) and [#1016](https://github.com/45s/coinzilla/issues/1016).
 
 The runtime references `thirdAssetFeeQuoteValue` in some paths, but it is not part of the validated operator pair configuration contract. Do not document it as a supported user-configurable field or fabricate its source.
 
@@ -1716,7 +1716,8 @@ No. Record them and wait for owner-approved decisions. Do not make policy decisi
 
 No. PR #1793 is the initial partial scenario slice. Its four files and exact assertions do not complete RS-001…RS-010.
 
-**Can an agent stop because no local checkout or test runner is available?**  
+**Can an agent stop because no local checkout or test runner is available?**
+
 No. Harvester AGENTS requires GitHub repository operations and GitHub Actions as the verification runner when local tools are unavailable. Implement the real changes, open/update the PR, inspect the exact PR-head checks, and fix failures. Never ask the owner to run the tests and never claim success without exact-head evidence.
 
 **What should the next agent do first?**
