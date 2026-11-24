@@ -83,7 +83,7 @@ This initiative does not authorize:
 - Rewriting existing tests into a new framework before the new scenario design is understood.
 - Implementing a second Portfolio, Position, Fill, OrderRegistry, accounting engine, exchange-filter engine or RS state machine inside test helpers.
 - Broker/API calls, order placement/cancellation, credential use, exchange sessions, TESTNET/LIVE experiments, or exchange-state changes.
-- Restart/replay support or third-asset commission valuation without an independently approved contract and source.
+- Restart/replay support, standalone final-residual liquidation, advanced pause/disable/abandon/resume lifecycle flows, or third-asset commission valuation without an independently approved contract and source.
 - Inventing STOP reset/resume, SELL retry/replacement, post-fill recovery, partial terminal SELL continuation, dust treatment or new-cycle behavior.
 - Building a generic test framework for all strategies inside this RS-specific task.
 
@@ -371,6 +371,8 @@ Primary source paths:
 - Exchange-derived precision source: `apps/harvester/token-specification.json`; do not add `pricePrecision` or `quantityPrecision` to operator-maintained RS pair entries.
 
 The strategy config currently sets `enabled: true` at the audited checkpoint. The RS specification's section 15 contains a conflicting disabled-by-default statement. Do not create a default assertion or change config until the owner resolves that discrepancy. Per-pair environment eligibility remains a separate control.
+
+**Volatility is market-owned, not RS-owned.** The effective protection market set is derived from the union of enabled strategy market configurations, not from a CG or RS execution route. A configured market with market-level enablement and `enableVolatilityProtection: true` receives volatility history/state/protection even when it has no CG route. When the same market is configured in CG and RS, both explicit protection values must agree; startup rejects conflicting values. Do not make volatility calculation, candle history or protection depend on RS strategy activation. RS scenarios may prove that the real market-level protection gate is respected, but volatility calculations and market-state transitions belong to their strategy-neutral market tests. See [Harvester Volatility Protection](../volatility-protection.md) and [#1016](https://github.com/45s/coinzilla/issues/1016).
 
 The runtime references `thirdAssetFeeQuoteValue` in some paths, but it is not part of the validated operator pair configuration contract. Do not document it as a supported user-configurable field or fabricate its source.
 
@@ -1259,6 +1261,7 @@ These blockers must appear in the registry, #1780, the repository catalog where 
 - It also discusses retained residual dust when fully reconciled quantity/notional filters make a remainder unsellable.
 - Do not assume every filter violation is dust.
 - Do not assume every residual must trigger STOP.
+- The separate final-residual/no-new-BUY liquidation policy is unresolved. The approved smaller-remainder rule permits a smaller authorized legacy remainder as part of the current cycle SELL when Spot-available/unreserved and all gates/filters pass; it does not authorize a standalone SELL of a residual after the cycle without a new BUY.
 - The exact applicability boundary requires an owner-approved decision before encoding ambiguous cases.
 
 ### 13.5 Workflow-to-evaluator cycle-state defect — RS-003 application proof BLOCKED by #1809
@@ -1598,6 +1601,12 @@ No. Keep it in the registry/matrix with BLOCKED status, exact reason and unblock
 **Should RS inherit Conservative replacement SELL behavior?**
 
 No. RS has its own one-SELL-per-cycle contract. Shared infrastructure does not imply shared strategy semantics.
+
+**Should the agent add a separate final residual SELL without a new BUY?**  
+No. The smaller-remainder rule applies to the legacy slice within the current cycle SELL. Standalone final-residual liquidation without a new BUY remains unresolved and must not be invented.
+
+**Should volatility protection be implemented or asserted as an RS-only state machine?**  
+No. Volatility protection is market-owned and strategy-neutral. RS is one strategy route that must respect the market gate; it does not own candle history or volatility state transitions.
 
 **Should the agent fix STOP, enabled-default, dust or third-asset conflicts while writing tests?**
 
