@@ -238,6 +238,71 @@ export function createPrivateOrderEventWaiter({
 }
 
 /**
+ * Wait for a matching TP/SL channel event for one symbol and position/order identity.
+ * @param {{broker: object, symbol: string, positionId?: string, orderId?: string, eventType: string, status?: string}} options
+ * @returns {{promise: Promise<{event: object|null, error: Error|null}>, startTimeout: () => void, cancel: () => void}}
+ */
+export function createPrivateTpSlEventWaiter({
+  broker,
+  symbol,
+  positionId,
+  orderId,
+  eventType,
+  status,
+} = {}) {
+  const { client, timeoutMs } = validatePrivateEventClient({
+    broker,
+  })
+  if (!hasIdentifier(symbol)) {
+    throw new TypeError("Bitunix Futures TP/SL event waiter requires a symbol")
+  }
+  if (!hasIdentifier(positionId) && !hasIdentifier(orderId)) {
+    throw new TypeError("Bitunix Futures TP/SL event waiter requires a positionId or orderId")
+  }
+  if (!["CREATE", "UPDATE", "CLOSE"].includes(eventType)) {
+    throw new TypeError("Bitunix Futures TP/SL event waiter requires CREATE, UPDATE or CLOSE")
+  }
+  if (status !== undefined && !["NEW", "CANCELED", "SYSTEM_CANCELED", "FILLED", "FAILED"].includes(status)) {
+    throw new TypeError("Bitunix Futures TP/SL event waiter received an unsupported status")
+  }
+  return createPrivateEventWaiter({
+    client,
+    timeoutMs,
+    onChannel: (event) => {
+      const data = event?.data
+      if (event?.ch !== "tpsl" || data === null || typeof data !== "object" || Array.isArray(data)) {
+        return undefined
+      }
+      if (
+        data.event !== eventType ||
+        (status !== undefined && data.status !== status) ||
+        data.symbol !== symbol ||
+        (positionId !== undefined && data.positionId !== positionId) ||
+        (orderId !== undefined && data.orderId !== orderId)
+      ) {
+        return undefined
+      }
+      return {
+        event,
+        error: null,
+      }
+    },
+    onStatus: (currentStatus) => isPrivateSessionUnavailable(currentStatus) ? {
+      event: null,
+      error: new Error("Bitunix Futures private user-data session became unavailable before TP/SL event confirmation"),
+    } : undefined,
+    onTimeout: () => ({
+      event: null,
+      error: new Error("Timed out waiting for the matching Bitunix Futures TP/SL event"),
+    }),
+    onCancel: () => ({
+      event: null,
+      error: null,
+    }),
+  })
+}
+
+/**
  * Wait for one CLOSE event per expected order identity using a single private-session listener.
  * @param {{broker: object, orders: object[]}} options
  * @returns {{promise: Promise<{events: object[], missingOrders: object[], error: Error|null}>, startTimeout: () => void, cancel: () => void}}
