@@ -1922,7 +1922,7 @@ export class BitunixFuturesBroker {
     return {
       ...unsupportedResult({
         operation: "adjustFuturesPositionMargin",
-        reason: "the current official Bitunix Futures API reference does not document an isolated position-margin adjustment endpoint; do not emulate this operation with leverage or margin-mode mutations",
+        reason: "no documented Futures API endpoint exists for isolated position-margin adjustment; do not emulate this operation with leverage or margin-mode mutations",
       }),
       mutationOutcome: "NOT_SENT",
       configurationOutcome: "UNSUPPORTED",
