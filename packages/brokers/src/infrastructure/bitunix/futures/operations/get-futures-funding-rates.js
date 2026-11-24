@@ -7,7 +7,7 @@ function normalizeSymbol(value) {
   }).trim().toUpperCase()
 }
 
-function normalizeTimestamp(value, name) {
+function normalizeTimestamp({ value, name }) {
   const timestamp = typeof value === "string" && /^\d+$/.test(value)
     ? Number(value)
     : value
@@ -17,7 +17,7 @@ function normalizeTimestamp(value, name) {
   return timestamp
 }
 
-function adaptFundingRate(row, expectedSymbol) {
+function adaptFundingRate({ row, expectedSymbol }) {
   ensure.plainObject({
     value: row,
     name: "Futures funding rate",
@@ -38,7 +38,10 @@ function adaptFundingRate(row, expectedSymbol) {
     lastPrice: row.lastPrice,
     indexPrice: row.indexPrice,
     fundingRate: row.fundingRate,
-    nextFundingTime: normalizeTimestamp(row.nextFundingTime, "nextFundingTime"),
+    nextFundingTime: normalizeTimestamp({
+      value: row.nextFundingTime,
+      name: "nextFundingTime",
+    }),
     fundingInterval: ensure.positiveInteger({
       value: row.fundingInterval,
       name: "fundingInterval",
@@ -48,13 +51,16 @@ function adaptFundingRate(row, expectedSymbol) {
   })
 }
 
-function adaptFundingRates(data, expectedSymbol) {
+function adaptFundingRates({ data, expectedSymbol }) {
   if (!Array.isArray(data)) {
     throw new TypeError("Bitunix Futures funding-rate response data must be an array")
   }
   const seenSymbols = new Set()
   const rates = data.map((row) => {
-    const rate = adaptFundingRate(row, expectedSymbol)
+    const rate = adaptFundingRate({
+      row,
+      expectedSymbol,
+    })
     if (seenSymbols.has(rate.symbol)) {
       throw new TypeError(`Bitunix Futures funding-rate response contains duplicate symbol ${rate.symbol}`)
     }
@@ -75,7 +81,10 @@ export async function getFuturesFundingRate({ broker, input = {} }) {
       },
       authenticated: false,
     })
-    const rates = adaptFundingRates(response.data, symbol)
+    const rates = adaptFundingRates({
+      data: response.data,
+      expectedSymbol: symbol,
+    })
     if (rates.length !== 1) {
       throw new TypeError("Bitunix Futures single-symbol funding-rate response must contain exactly one row")
     }
@@ -101,7 +110,9 @@ export async function getFuturesFundingRates({ broker }) {
       authenticated: false,
     })
     return toResult({
-      data: adaptFundingRates(response.data),
+      data: adaptFundingRates({
+        data: response.data,
+      }),
     })
   } catch (error) {
     handleErr({

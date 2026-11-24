@@ -266,7 +266,7 @@ test("Bitunix Futures market metadata reads reject invalid filters and malformed
 
   const invalidSettings = createBroker()
   const invalidSettingsResult = await invalidSettings.broker.getFuturesTradingSettings({
-    symbols: Array.from({ length: 51 }, (_, index) => `COIN${index}USDT`),
+    symbols: Array(51).fill("COINUSDT"),
   })
   assert.equal(invalidSettingsResult.ok, false)
   assert.equal(invalidSettings.requests.length, 0, "trading settings must enforce the documented 50-symbol maximum")
