@@ -83,6 +83,7 @@ describe('BotsComponent', () => {
     expect(renderedText, 'Process uptime must be calculated from Harvester start and observation timestamps.').toContain('1m 0s');
     expect(renderedText, 'Configured disabled markets must remain visible as disabled.').toContain('SOLUSDT');
     expect(renderedText, 'Disabled markets must not be conflated with active or blocked markets.').toContain('Disabled markets');
+    expect(renderedText, 'An explicitly disabled market must not be shown as an actionable market.').toContain('Unavailable');
     expect(renderedText, 'Blocked markets must show their actual readiness blocker.').toContain('USER_DATA_NOT_READY');
     expect(renderedText, 'Portfolio base quantity must preserve the exact decimal string.').toContain('0.12500000');
     expect(renderedText, 'Portfolio quote cost must preserve the exact decimal string.').toContain('500.00000000');
@@ -187,6 +188,42 @@ describe('BotsComponent', () => {
     fixture.detectChanges();
 
     expect((fixture.nativeElement as HTMLElement).textContent, 'The refreshed market state must show BUYs active after resume.').toContain('BUYs active');
+  });
+
+  it('confirms a global BUY pause without adding a market symbol', async () => {
+    await TestBed.configureTestingModule({
+      imports: [BotsComponent],
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    }).compileComponents();
+    http = TestBed.inject(HttpTestingController);
+
+    const fixture = TestBed.createComponent(BotsComponent);
+    fixture.detectChanges();
+    flushInitialSnapshots(http);
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const pauseAllButton = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button'))
+      .find((button) => button.textContent?.trim() === 'Pause all BUYs') as HTMLButtonElement;
+    expect(pauseAllButton, 'The workspace must expose the existing global BUY pause control.').toBeDefined();
+    pauseAllButton.click();
+    fixture.detectChanges();
+    expect((fixture.nativeElement as HTMLElement).textContent, 'Global BUY pause must require explicit confirmation.').toContain('Confirm: Pause BUYs across all markets');
+
+    const confirmButton = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('Confirm command')) as HTMLButtonElement;
+    confirmButton.click();
+
+    const command = http.expectOne(`${BASE_URL}/commands`);
+    expect(command.request.body, 'Global pause must use the existing global command without a market symbol.').toMatchObject({ command: 'pauseallbuys' });
+    expect(command.request.body, 'A global pause must not accidentally target one market.').not.toHaveProperty('symbol');
+    command.flush({ ok: true, data: { paused: true, canceled: 0, reconciled: 0, unresolved: 0 } });
+
+    await Promise.resolve();
+    flushInitialSnapshots(http);
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect((fixture.nativeElement as HTMLElement).textContent, 'The global pause action must complete and refresh the authoritative snapshot.').toContain('Pause BUYs across all markets accepted by Harvester.');
   });
 
   it('keeps the connection unavailable when any required operator snapshot fails', async () => {
