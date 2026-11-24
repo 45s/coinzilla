@@ -81,6 +81,8 @@ describe('BotsComponent', () => {
     const renderedText = (fixture.nativeElement as HTMLElement).textContent as string;
     expect(renderedText, 'The Bots page must identify the live Harvester control surface.').toContain('HARVESTER / BOT CONTROL');
     expect(renderedText, 'The active runtime strategy mode must come from Harvester status.').toContain('conservative-testnet');
+    expect(renderedText, 'The page must explicitly disclose unavailable per-strategy enablement data.').toContain('Individual strategy states');
+    expect(renderedText, 'The page must not imply strategy-level Portfolio ownership when the DTO omits strategy IDs.').toContain('Market-level');
     expect(renderedText, 'Process uptime must be calculated from Harvester start and observation timestamps.').toContain('1m 0s');
     expect(renderedText, 'Configured disabled markets must remain visible as disabled.').toContain('SOLUSDT');
     expect(renderedText, 'Disabled markets must not be conflated with active or blocked markets.').toContain('Disabled markets');
