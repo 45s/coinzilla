@@ -82,7 +82,7 @@ export class BotsComponent implements OnInit, OnDestroy {
   private connectToStream(): void {
     if (this.destroyed) return;
     this.socketState.set(this.reconnectAttempt === 0 ? 'connecting' : 'reconnecting');
-    this.loading.set(this.lastRevision === 0);
+    this.loading.set(this.status() === null);
     try {
       const socket = this.api.createEventSocket();
       this.socket = socket;
