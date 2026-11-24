@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://coinzilla.local/schemas/github-pr-dashboard-label-store.schema.json",
+  "title": "GitHub PR Dashboard local label store",
+  "description": "Browser-local Dashboard metadata. This data is never synchronized to GitHub.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "labels",
+    "assignments"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "labels": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/label"
+      }
+    },
+    "assignments": {
+      "type": "object",
+      "description": "Maps repository-scoped PR identities to reusable label IDs.",
+      "propertyNames": {
+        "pattern": "^[^/]+/[^#]+#[1-9][0-9]*$"
+      },
+      "additionalProperties": {
+        "type": "array",
+        "uniqueItems": true,
+        "items": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  },
+  "$defs": {
+    "label": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "color"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Stable identity; assignments refer to this value, not the label name."
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 40,
+          "description": "Trimmed, non-empty, case-insensitively unique display name."
+        },
+        "color": {
+          "type": "string",
+          "enum": [
+            "blue",
+            "green",
+            "red",
+            "orange",
+            "purple",
+            "cyan",
+            "yellow",
+            "gray"
+          ]
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://coinzilla.local/schemas/github-pr-dashboard-pull-request.schema.json",
+  "title": "GitHub PR Dashboard normalized pull request",
+  "description": "Normalized read-only GitHub pull request model. Dashboard-local labels are stored separately.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "repository",
+    "number",
+    "title",
+    "htmlUrl",
+    "isDraft",
+    "headSha",
+    "lastCommit"
+  ],
+  "properties": {
+    "repository": {
+      "type": "string",
+      "const": "45s/coinzilla"
+    },
+    "number": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "GitHub pull request number."
+    },
+    "title": {
+      "type": "string",
+      "description": "Original title returned by GitHub."
+    },
+    "htmlUrl": {
+      "type": "string",
+      "format": "uri",
+      "description": "Canonical html_url returned by GitHub."
+    },
+    "isDraft": {
+      "type": "boolean"
+    },
+    "headSha": {
+      "type": "string",
+      "pattern": "^[a-fA-F0-9]{40}$",
+      "description": "Current head.sha returned by the pull request endpoint."
+    },
+    "lastCommit": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "status",
+            "sha",
+            "committerDate"
+          ],
+          "properties": {
+            "status": {
+              "const": "available"
+            },
+            "sha": {
+              "type": "string",
+              "pattern": "^[a-fA-F0-9]{40}$",
+              "description": "Must equal the current pull request headSha."
+            },
+            "committerDate": {
+              "type": "string",
+              "format": "date-time",
+              "description": "commit.committer.date from GET /repos/{owner}/{repo}/commits/{headSha}."
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "status",
+            "sha",
+            "committerDate"
+          ],
+          "properties": {
+            "status": {
+              "const": "unavailable"
+            },
+            "sha": {
+              "type": "string",
+              "pattern": "^[a-fA-F0-9]{40}$",
+              "description": "Head SHA whose commit timestamp could not be retrieved or validated."
+            },
+            "committerDate": {
+              "type": "null"
+            }
+          }
+        }
+      ]
+    }
+  }
+}
