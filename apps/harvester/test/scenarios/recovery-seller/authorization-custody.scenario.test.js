@@ -12,6 +12,7 @@ import {
 import { StrategyId } from "../../../src/domain/strategies/strategy-ids.js"
 import { Portfolio } from "../../../src/domain/portfolio/portfolio.js"
 import { OrderRegistry } from "../../../src/domain/orders/order-registry.js"
+import { createOrderOwnership } from "../../../src/domain/orders/order-ownership.js"
 import {
   createLegacyPosition,
   createLegacyPositionAccounting,
@@ -28,6 +29,7 @@ import { createRecoverySellerAccountingWorkflow } from "../../../src/use-cases/c
 import { runRecoverySellerDomainScenario } from "./runners/run-domain-scenario.js"
 import { runRecoverySellerApplicationScenario } from "./runners/run-application-scenario.js"
 import { authorizationCustodyScenarios } from "./scenarios/authorization-custody.js"
+import { recoverySellerBuyAccountingScenarios } from "./scenarios/buy-accounting.js"
 
 const baseAsset = new Asset({
   id: "binance:ZRO",
@@ -449,6 +451,107 @@ const applicationHandlers = {
       appliedFillIds: workflow.getPortfolio().appliedFillIds.length,
     }
   },
+  "apply-recovery-buy-scenario": async ({ input }) => {
+    const clientOrderId = "rs-buy-scenario-order"
+    const brokerOrderId = "broker-rs-buy-scenario"
+    const positionId = "rs-buy-scenario-position"
+    const cycleId = "rs-buy-scenario-cycle"
+    const order = new CanonicalOrder({
+      clientOrderId,
+      brokerOrderId,
+      market,
+      side: "BUY",
+      type: "LIMIT_MAKER",
+      limitPrice: new Money({
+        amount: "2",
+        asset: quoteAsset,
+      }),
+      originalQuantity: new Quantity({
+        amount: "5.01",
+        asset: baseAsset,
+      }),
+      executedQuantity: new Quantity({
+        amount: "0",
+        asset: baseAsset,
+      }),
+      status: "OPEN",
+      createdAt: 100,
+      acknowledgedAt: 101,
+      updatedAt: 101,
+    })
+    const ownerships = input.owned === false
+      ? []
+      : [createOrderOwnership({
+          ownership: {
+            strategyId: StrategyId.RECOVERY_SELLER,
+            positionId,
+            purpose: "RECOVERY_BUY",
+            cycleId,
+          },
+          clientOrderId,
+          brokerOrderId,
+        })]
+    const workflow = createRecoverySellerAccountingWorkflow({
+      initialPortfolio: new Portfolio(),
+      initialOrderRegistry: new OrderRegistry({
+        orders: [order],
+        ownerships,
+      }),
+    })
+    const fills = input.fills.map((fillInput) => new Fill({
+      tradeId: fillInput.tradeId,
+      brokerOrderId: fillInput.brokerOrderId ?? brokerOrderId,
+      clientOrderId,
+      market,
+      side: "BUY",
+      price: new Money({
+        amount: "2",
+        asset: quoteAsset,
+      }),
+      quantity: new Quantity({
+        amount: fillInput.quantity,
+        asset: baseAsset,
+      }),
+      quoteQuantity: new Money({
+        amount: fillInput.quoteQuantity,
+        asset: quoteAsset,
+      }),
+      commissions: [],
+      commissionStatus: "COMPLETE",
+    }))
+    const results = []
+    for (const fill of fills) {
+      const result = await workflow.applyBuyFill({ fill })
+      results.push({
+        ok: result.ok,
+        applied: result.data?.applied === true,
+      })
+    }
+    let replay
+    if (input.replayFirstFill === true && fills[0]) {
+      const result = await workflow.applyBuyFill({ fill: fills[0] })
+      replay = {
+        ok: result.ok,
+        applied: result.data?.applied === true,
+        duplicate: result.data?.duplicate === true,
+      }
+    }
+    const portfolio = workflow.getPortfolio()
+    const position = portfolio.getPosition({ positionId })
+    return {
+      appliedFillIds: portfolio.appliedFillIds.length,
+      position: position
+        ? {
+            quantity: position.baseQuantity.amount,
+            spent: position.spent.amount,
+          }
+        : null,
+      executionQuantity: workflow.getBuyExecutionQuantity({ cycleId }) ?? null,
+      executionVwap: workflow.getBuyExecutionVwap({ cycleId }) ?? null,
+      ...(input.replayFirstFill === true ? { replay } : {}),
+      ...(results.some((result) => !result.ok) ? { results } : {}),
+    }
+  },
 }
 
 function runDomain(scenario) {
@@ -551,3 +654,12 @@ test("RS-001-014: missing balances and Spot custody below aggregate Portfolio ba
   assert.deepEqual(result.results[0], authorizationCustodyScenarios[13].then,
     "Missing Spot balances and Spot totals below aggregate Portfolio custody must fail closed; stale/incomplete freshness remains explicitly blocked.")
 })
+
+
+for (const scenario of recoverySellerBuyAccountingScenarios) {
+  test(scenario.test.title, async () => {
+    const result = await runApplication(scenario)
+    assert.deepEqual(result.results[0], scenario.then,
+      `${scenario.id} must match its independent BUY accounting oracle.`)
+  })
+}
