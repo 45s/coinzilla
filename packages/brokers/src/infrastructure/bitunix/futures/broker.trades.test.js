@@ -156,7 +156,7 @@ test("Bitunix Futures getFills maps stable trade IDs into exact canonical Fill v
   assert.equal(result.data[0].clientOrderId, "client-789", "the fill must retain the optional client order identity")
   assert.equal(result.data[0].quantity.amount, "0.125000000000000001", "base quantity must remain an exact decimal string")
   assert.equal(result.data[0].price.amount, "65000.123456789012345", "execution price must remain an exact decimal string")
-  assert.equal(result.data[0].quoteQuantity.amount, "8125.015432098626608125123457", "quote notional must be derived with exact decimal arithmetic")
+  assert.equal(result.data[0].quoteQuantity.amount, "8125.015432098626608125123456789012345", "quote notional must be derived with exact decimal arithmetic")
   assert.equal(result.data[0].liquidityRole, "MAKER", "the exchange roleType must map to the canonical liquidity role")
   assert.equal(result.data[0].commissionStatus, "UNKNOWN", "the fee asset is not supplied by the exchange response")
   assert.equal(result.data[0].commissions.length, 0, "unknown fee denomination must not be fabricated")
