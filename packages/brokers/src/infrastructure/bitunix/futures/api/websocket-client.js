@@ -290,6 +290,10 @@ export class BitunixFuturesWebSocketClient extends EventEmitter {
     }
     return new Promise((...args) => {
       const [resolve, reject] = args
+      let timeout
+      let onAuthenticated
+      let onClientError
+      let onStatus
       const finish = (error) => {
         this.off("authenticated", onAuthenticated)
         this.off("clientError", onClientError)
@@ -301,18 +305,18 @@ export class BitunixFuturesWebSocketClient extends EventEmitter {
           resolve(this)
         }
       }
-      const onAuthenticated = () => finish()
-      const onClientError = (error) => {
+      onAuthenticated = () => finish()
+      onClientError = (error) => {
         if (this.#authenticationError === error) {
           finish(error)
         }
       }
-      const onStatus = (status) => {
+      onStatus = (status) => {
         if (status.reconnectExhausted || (status.state === "closed" && status.recoveryRequired === false)) {
           finish(new Error("Bitunix Futures WebSocket authentication could not be established"))
         }
       }
-      const timeout = this.#setTimeout(() => {
+      timeout = this.#setTimeout(() => {
         finish(new Error("Bitunix Futures WebSocket login acknowledgement timed out"))
       }, timeoutMs)
       this.on("authenticated", onAuthenticated)
