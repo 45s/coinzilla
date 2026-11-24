@@ -32,6 +32,98 @@ class MockWebSocket extends EventTarget {
   }
 }
 
+function createStatusResource() {
+  return {
+    ok: true,
+    data: {
+      observedAt: 120000,
+      startedAt: 60000,
+      runtimeState: 'RUNNING',
+      broker: 'binance',
+      tradingEnabled: true,
+      tradingMode: 'testnet',
+      strategyMode: 'conservative-testnet',
+      stopping: false,
+      readiness: {
+        state: 'READY',
+        blockers: [],
+      },
+      userData: {
+        ready: true,
+        status: 'READY',
+        ageMs: 500,
+        lastEventAt: 119500,
+      },
+      markets: {
+        configured: 3,
+        enabled: 2,
+        blocked: 1,
+      },
+    },
+  };
+}
+
+function createMarketsResource({ paused = false } = {}) {
+  return {
+    ok: true,
+    data: {
+      markets: [
+        {
+          symbol: 'BTCUSDT',
+          enabled: true,
+          operatorBuysPaused: paused,
+          readiness: 'READY',
+          blockers: [],
+          latestPrice: '65000.00000000',
+          priceFresh: true,
+        },
+        {
+          symbol: 'ADAUSDT',
+          enabled: true,
+          operatorBuysPaused: false,
+          readiness: 'BLOCKED',
+          blockers: ['USER_DATA_NOT_READY'],
+          latestPrice: null,
+          priceFresh: false,
+        },
+        {
+          symbol: 'SOLUSDT',
+          enabled: false,
+          operatorBuysPaused: false,
+          readiness: 'DISABLED',
+          blockers: [],
+        },
+      ],
+    },
+  };
+}
+
+function createPortfolioResource({ positions = true } = {}) {
+  return {
+    ok: true,
+    data: {
+      positions: positions ? [
+        {
+          symbol: 'BTCUSDT',
+          baseAsset: 'BTC',
+          quoteAsset: 'USDT',
+          activeQuantity: '0.12500000',
+          freeQuantity: '0.00100000',
+          totalQuantity: '0.12600000',
+          investedQuote: '500.00000000',
+          quoteNetCashFlow: '-500.00000000',
+          recovery: {
+            buyCost: '500.00000000',
+            netSellProceeds: '0',
+            outstandingRecoveryAmount: '500.00000000',
+            realizedNetProfit: '0',
+          },
+        },
+      ] : [],
+    },
+  };
+}
+
 function createSnapshotMessage({ revision = 1, paused = false, positions = true } = {}) {
   return {
     type: 'bots.snapshot',
@@ -39,89 +131,13 @@ function createSnapshotMessage({ revision = 1, paused = false, positions = true 
     revision,
     observedAt: '2026-11-24T09:00:00.000Z',
     data: {
-      status: {
-        ok: true,
-        data: {
-          observedAt: 120000,
-          startedAt: 60000,
-          runtimeState: 'RUNNING',
-          broker: 'binance',
-          tradingEnabled: true,
-          tradingMode: 'testnet',
-          strategyMode: 'conservative-testnet',
-          stopping: false,
-          readiness: {
-            state: 'READY',
-            blockers: [],
-          },
-          userData: {
-            ready: true,
-            status: 'READY',
-            ageMs: 500,
-            lastEventAt: 119500,
-          },
-          markets: {
-            configured: 3,
-            enabled: 2,
-            blocked: 1,
-          },
-        },
-      },
-      markets: {
-        ok: true,
-        data: {
-          markets: [
-            {
-              symbol: 'BTCUSDT',
-              enabled: true,
-              operatorBuysPaused: paused,
-              readiness: 'READY',
-              blockers: [],
-              latestPrice: '65000.00000000',
-              priceFresh: true,
-            },
-            {
-              symbol: 'ADAUSDT',
-              enabled: true,
-              operatorBuysPaused: false,
-              readiness: 'BLOCKED',
-              blockers: ['USER_DATA_NOT_READY'],
-              latestPrice: null,
-              priceFresh: false,
-            },
-            {
-              symbol: 'SOLUSDT',
-              enabled: false,
-              operatorBuysPaused: false,
-              readiness: 'DISABLED',
-              blockers: [],
-            },
-          ],
-        },
-      },
-      portfolio: {
-        ok: true,
-        data: {
-          positions: positions ? [
-            {
-              symbol: 'BTCUSDT',
-              baseAsset: 'BTC',
-              quoteAsset: 'USDT',
-              activeQuantity: '0.12500000',
-              freeQuantity: '0.00100000',
-              totalQuantity: '0.12600000',
-              investedQuote: '500.00000000',
-              quoteNetCashFlow: '-500.00000000',
-              recovery: {
-                buyCost: '500.00000000',
-                netSellProceeds: '0',
-                outstandingRecoveryAmount: '500.00000000',
-                realizedNetProfit: '0',
-              },
-            },
-          ] : [],
-        },
-      },
+      status: createStatusResource(),
+      markets: createMarketsResource({
+        paused,
+      }),
+      portfolio: createPortfolioResource({
+        positions,
+      }),
     },
   };
 }
