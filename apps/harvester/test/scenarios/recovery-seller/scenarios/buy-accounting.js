@@ -671,7 +671,7 @@ export const recoverySellerBuyAccountingScenarios = Object.freeze([
   }),
   makeBuyCase({
     id: "RS-002-013",
-    name: "reusing a canonical BUY Fill identity with changed execution facts is rejected atomically",
+    name: "reusing a canonical BUY Fill identity with changed quantity, price or commission is rejected atomically",
     input: {
       originalQuantity: "1",
       fills: [{
@@ -691,10 +691,72 @@ export const recoverySellerBuyAccountingScenarios = Object.freeze([
       executionQuantity: "1",
       executionVwap: "10",
       conflict: {
-        ok: false,
-        applied: false,
+        cases: [
+          {
+            id: "changed-quantity",
+            ok: false,
+            applied: false,
+            appliedFillIds: 1,
+            position: {
+              quantity: "1",
+              spent: "10",
+            },
+          },
+          {
+            id: "changed-price",
+            ok: false,
+            applied: false,
+            appliedFillIds: 1,
+            position: {
+              quantity: "1",
+              spent: "10",
+            },
+          },
+          {
+            id: "changed-commission",
+            ok: false,
+            applied: false,
+            appliedFillIds: 1,
+            position: {
+              quantity: "1",
+              spent: "10",
+            },
+          },
+        ],
       },
     },
+    subcases: [
+      {
+        id: "RS-002-013-A",
+        description: "the same Fill ID with changed gross quantity is rejected without a second Portfolio mutation",
+        status: "TEST-MAPPED",
+        test: {
+          file: testFile,
+          title: "RS-002-013: reusing a canonical BUY Fill identity with changed quantity, price or commission is rejected atomically",
+        },
+        evidence: null,
+      },
+      {
+        id: "RS-002-013-B",
+        description: "the same Fill ID with changed execution price and quote quantity is rejected without changing the first result",
+        status: "TEST-MAPPED",
+        test: {
+          file: testFile,
+          title: "RS-002-013: reusing a canonical BUY Fill identity with changed quantity, price or commission is rejected atomically",
+        },
+        evidence: null,
+      },
+      {
+        id: "RS-002-013-C",
+        description: "the same Fill ID with changed commission facts is rejected without changing the first result",
+        status: "TEST-MAPPED",
+        test: {
+          file: testFile,
+          title: "RS-002-013: reusing a canonical BUY Fill identity with changed quantity, price or commission is rejected atomically",
+        },
+        evidence: null,
+      },
+    ],
     rules: ["RS_CANONICAL_FILL_EXACT_ONCE"],
     invariants: ["RS_EXACT_ONCE", "RS_CONFLICT_REJECTION"],
   }),
