@@ -1440,11 +1440,11 @@ Combined profit = 15.150000 - 10.200000
                 = +4.950000 USDT  (passes)
 ~~~
 
-The actual SELL Fill is still a fact. Reconcile and account it exactly once; do not erase or reverse the fill because the profitability decision fails. The final accounting projections show recovery proceeds 15.000000 USDT and legacy proceeds 0.150000 USDT, with the legacy loss visible. The cycle must not be reported as a successful `CLOSED` cycle. Preserve the source-defined unresolved/STOP disposition and do not invent a follow-up trading action.
+This is a pre-submission decision scenario: the SELL is only a candidate, not an execution. No canonical SELL Fill exists. The production evaluator must reject the candidate before broker submission. The Portfolio/Position and legacy projections therefore remain exactly as initialized: recovery quantity 1.000000 ZRO and cost 10.000000 USDT; legacy quantity 0.010000 ZRO and basis 0.200000 USDT; no proceeds and no realized accounting delta. The cycle remains `ACCUMULATING`.
 
-**Expected decision:** reject successful cycle eligibility because `RS_PROFIT_LEGACY_NON_NEGATIVE` fails, even though recovery and combined gates pass.
+**Expected decision:** `BLOCK`/ineligible before submission because `RS_PROFIT_LEGACY_NON_NEGATIVE` fails, even though recovery and combined gates pass. Assert the exact production decision value returned by the evaluator.
 
-**Forbidden side effects:** no cross-subsidy; no hiding the legacy loss in a combined number; no skipping confirmed-fill accounting; no new BUY or replacement SELL while the adverse realized outcome is unresolved; no silent legacy decrement as though the cycle succeeded.
+**Forbidden side effects:** no broker call; no SELL identity or reservation; no Portfolio/Position mutation; no legacy decrement; no cross-subsidy; no hiding the legacy loss in a combined number.
 
 #### RS-E2E-003 — unknown SELL submission is reconciled, never blindly retried
 
