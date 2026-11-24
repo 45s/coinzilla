@@ -1,0 +1,266 @@
+<section class="bots-page">
+  <header class="page-heading">
+    <div>
+      <div class="eyebrow">HARVESTER / BOT CONTROL</div>
+      <h1>Bots<span>.</span></h1>
+      <p class="page-description">A live view of the running strategy mode, configured markets, Portfolio inventory and BUY-side operator controls.</p>
+    </div>
+    <button type="button" class="refresh-button" (click)="refresh()" [disabled]="loading()">
+      {{ loading() ? 'Refreshing…' : 'Refresh snapshots' }}
+    </button>
+  </header>
+
+  <div class="connection-strip" [class.online]="connected()" [class.offline]="!connected()">
+    <span class="connection-dot"></span>
+    <strong>{{ connected() ? 'Connected to local Harvester' : 'Harvester unavailable' }}</strong>
+    <span class="connection-address">127.0.0.1:4201</span>
+    @if (status(); as runtime) {
+      <span class="observed-at">Observed {{ formatStartedAt(runtime.observedAt) }}</span>
+    }
+  </div>
+
+  @if (errorMessage(); as message) {
+    <div class="feedback error" role="alert">{{ message }}</div>
+  }
+  @if (successMessage(); as message) {
+    <div class="feedback success" role="status">{{ message }}</div>
+  }
+
+  <section class="summary-grid" aria-label="Harvester runtime summary">
+    <article class="summary-card">
+      <span class="summary-label">Runtime state</span>
+      <strong>{{ status()?.runtimeState ?? '—' }}</strong>
+      <small>{{ status()?.stopping ? 'Shutdown in progress' : 'Harvester process' }}</small>
+    </article>
+    <article class="summary-card">
+      <span class="summary-label">Strategy mode</span>
+      <strong class="strategy-value">{{ status()?.strategyMode ?? '—' }}</strong>
+      <small>{{ status()?.tradingEnabled ? 'Trading enabled' : 'Trading disabled' }}</small>
+    </article>
+    <article class="summary-card">
+      <span class="summary-label">Environment</span>
+      <strong>{{ status()?.tradingMode ?? '—' }}</strong>
+      <small>{{ status()?.broker ?? 'Broker not reported' }}</small>
+    </article>
+    <article class="summary-card">
+      <span class="summary-label">Running time</span>
+      <strong>{{ runtimeDuration() }}</strong>
+      <small>Started {{ formatStartedAt(status()?.startedAt ?? null) }}</small>
+    </article>
+  </section>
+
+  <section class="strategy-panel panel" aria-labelledby="strategy-title">
+    <div class="section-heading">
+      <div>
+        <div class="eyebrow">STRATEGY / RUNTIME</div>
+        <h2 id="strategy-title">Current strategy</h2>
+      </div>
+      <span class="state-pill" [class.state-good]="status()?.readiness.state === 'READY'" [class.state-warn]="status()?.readiness.state !== 'READY'">
+        {{ status()?.readiness.state ?? 'UNKNOWN' }}
+      </span>
+    </div>
+    <div class="strategy-details">
+      <div class="strategy-mode">
+        <span>Effective strategy mode</span>
+        <strong>{{ status()?.strategyMode ?? 'Not reported' }}</strong>
+      </div>
+      <div class="strategy-fact">
+        <span>Trading</span>
+        <strong>{{ status()?.tradingEnabled ? 'Enabled' : 'Disabled' }}</strong>
+      </div>
+      <div class="strategy-fact">
+        <span>User data</span>
+        <strong>{{ status()?.userData.ready ? 'Ready' : 'Not ready' }}</strong>
+        <small>{{ status()?.userData.status ?? 'Not reported' }}</small>
+      </div>
+      <div class="strategy-fact">
+        <span>Market readiness</span>
+        <strong>{{ status()?.marketCounts.enabled ?? 0 }} / {{ status()?.marketCounts.configured ?? 0 }} enabled</strong>
+        <small>{{ status()?.marketCounts.blocked ?? 0 }} blocked</small>
+      </div>
+    </div>
+    @if (status()?.readiness.blockers?.length) {
+      <div class="blocker-list">
+        <span>Runtime blockers</span>
+        @for (blocker of status()?.readiness?.blockers ?? []; track blocker) {
+          <code>{{ blocker }}</code>
+        }
+      </div>
+    }
+    <p class="contract-note">
+      This snapshot reports Harvester's effective strategy mode and market state. Individual strategy registration/enablement and per-position strategy ownership are not included in the current operator API, so they are not inferred here.
+    </p>
+  </section>
+
+  <section class="panel market-panel" aria-labelledby="markets-title">
+    <div class="section-heading">
+      <div>
+        <div class="eyebrow">CONFIGURATION / OPERATOR CONTROLS</div>
+        <h2 id="markets-title">Market controls</h2>
+      </div>
+      <span class="count-label">{{ markets().length }} configured snapshots</span>
+    </div>
+    <p class="section-description">
+      Pause and resume affect the BUY gate only. Harvester keeps recovery SELL evaluation, fill accounting and safety reconciliation active. Global and per-market BUY gates remain independent.
+    </p>
+
+    <div class="market-groups">
+      <section class="market-group" aria-label="Enabled and ready markets">
+        <div class="group-heading">
+          <h3>Enabled · ready</h3>
+          <span>{{ activeMarkets().length }}</span>
+        </div>
+        @for (market of activeMarkets(); track market.symbol) {
+          <article class="market-row">
+            <div class="market-identity">
+              <strong>{{ market.symbol }}</strong>
+              <span class="market-status ready">{{ market.readiness }}</span>
+              <small>{{ market.priceFresh ? 'Fresh price' : 'Price not confirmed fresh' }} · {{ market.latestPrice ?? 'No latest price' }}</small>
+            </div>
+            <div class="market-actions">
+              <span class="pause-indicator" [class.paused]="market.operatorBuysPaused">
+                {{ market.operatorBuysPaused ? 'BUYs paused' : 'BUYs active' }}
+              </span>
+              @if (market.operatorBuysPaused) {
+                <button type="button" class="action-button resume" (click)="requestCommand('unpause', market.symbol)" [disabled]="!connected() || commandRunning()">Resume BUYs</button>
+              } @else {
+                <button type="button" class="action-button pause" (click)="requestCommand('pause', market.symbol)" [disabled]="!connected() || commandRunning()">Pause BUYs</button>
+              }
+            </div>
+          </article>
+        } @empty {
+          <p class="empty-inline">No enabled and ready markets reported.</p>
+        }
+      </section>
+
+      <section class="market-group" aria-label="Enabled but blocked markets">
+        <div class="group-heading">
+          <h3>Enabled · blocked / observation only</h3>
+          <span>{{ blockedMarkets().length }}</span>
+        </div>
+        @for (market of blockedMarkets(); track market.symbol) {
+          <article class="market-row">
+            <div class="market-identity">
+              <strong>{{ market.symbol }}</strong>
+              <span class="market-status blocked">{{ market.readiness }}</span>
+              <small>{{ market.blockers.length ? market.blockers.join(' · ') : 'No blocker details reported' }}</small>
+            </div>
+            <div class="market-actions">
+              <span class="pause-indicator" [class.paused]="market.operatorBuysPaused">
+                {{ market.operatorBuysPaused ? 'BUYs paused' : 'BUY gate open' }}
+              </span>
+              @if (market.operatorBuysPaused) {
+                <button type="button" class="action-button resume" (click)="requestCommand('unpause', market.symbol)" [disabled]="!connected() || commandRunning()">Resume BUYs</button>
+              } @else {
+                <button type="button" class="action-button pause" (click)="requestCommand('pause', market.symbol)" [disabled]="!connected() || commandRunning()">Pause BUYs</button>
+              }
+            </div>
+          </article>
+        } @empty {
+          <p class="empty-inline">No enabled markets are currently reported as blocked.</p>
+        }
+      </section>
+
+      <section class="market-group" aria-label="Disabled markets">
+        <div class="group-heading">
+          <h3>Disabled markets</h3>
+          <span>{{ disabledMarkets().length }}</span>
+        </div>
+        @for (market of disabledMarkets(); track market.symbol) {
+          <article class="market-row disabled-row">
+            <div class="market-identity">
+              <strong>{{ market.symbol }}</strong>
+              <span class="market-status disabled">DISABLED</span>
+              <small>Explicitly disabled in the Harvester market snapshot</small>
+            </div>
+            <div class="market-actions">
+              <span class="pause-indicator muted">No market command</span>
+              <button type="button" class="action-button pause" disabled>Unavailable</button>
+            </div>
+          </article>
+        } @empty {
+          <p class="empty-inline">No disabled markets reported.</p>
+        }
+      </section>
+    </div>
+
+    @if (markets().length === 0) {
+      <div class="empty-state">{{ loading() ? 'Loading market snapshots…' : 'No market snapshots available. Refresh or check the local Harvester connection.' }}</div>
+    }
+
+    <div class="global-controls">
+      <div>
+        <strong>Global BUY gate</strong>
+        <small>These commands pause or resume BUYs across all markets.</small>
+      </div>
+      <div class="global-actions">
+        <button type="button" class="action-button pause" (click)="requestCommand('pauseallbuys')" [disabled]="!connected() || commandRunning()">Pause all BUYs</button>
+        <button type="button" class="action-button resume" (click)="requestCommand('resumeallbuys')" [disabled]="!connected() || commandRunning()">Resume all BUYs</button>
+      </div>
+    </div>
+
+    @if (pendingCommand(); as pending) {
+      <div class="confirmation-panel" role="alertdialog" aria-label="Confirm operator command">
+        <div>
+          <strong>Confirm: {{ pending.label }}</strong>
+          <p>This sends a live command to the running Harvester process. Pause uses the existing current-process-owned BUY cancellation and reconciliation workflow. Resume removes only the operator BUY gate; other safety gates remain active.</p>
+        </div>
+        <div class="confirmation-actions">
+          <button type="button" class="action-button quiet" (click)="cancelCommand()" [disabled]="commandRunning()">Cancel</button>
+          <button type="button" class="action-button confirm" (click)="confirmCommand()" [disabled]="commandRunning() || !connected()">
+            {{ commandRunning() ? 'Sending…' : 'Confirm command' }}
+          </button>
+        </div>
+      </div>
+    }
+  </section>
+
+  <section class="panel portfolio-panel" aria-labelledby="portfolio-title">
+    <div class="section-heading">
+      <div>
+        <div class="eyebrow">CANONICAL PORTFOLIO</div>
+        <h2 id="portfolio-title">Portfolio positions</h2>
+      </div>
+      <span class="count-label">{{ positions().length }} positions</span>
+    </div>
+    <p class="section-description">Inventory and recovery accounting are shown exactly as returned by Harvester. Decimal values are kept as strings; no browser-side financial calculations are performed.</p>
+
+    @if (positions().length > 0) {
+      <div class="portfolio-table-wrap">
+        <table class="portfolio-table">
+          <thead>
+            <tr>
+              <th>Market</th>
+              <th>Active inventory</th>
+              <th>Free inventory</th>
+              <th>Total inventory</th>
+              <th>Invested</th>
+              <th>Net quote flow</th>
+              <th>Recovery outstanding</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (position of positions(); track $index) {
+              <tr>
+                <td><strong>{{ position.symbol }}</strong><small>{{ position.baseAsset ?? '—' }} / {{ position.quoteAsset ?? '—' }}</small></td>
+                <td>{{ position.activeQuantity ?? '—' }}</td>
+                <td>{{ position.freeQuantity ?? '—' }}</td>
+                <td>{{ position.totalQuantity ?? '—' }}</td>
+                <td>{{ position.investedQuote ?? '—' }}</td>
+                <td>{{ position.quoteNetCashFlow ?? '—' }}</td>
+                <td>{{ position.recovery?.outstandingRecoveryAmount ?? '—' }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      <div class="portfolio-footnote">
+        <span>Buy cost: {{ positions()[0]?.recovery?.buyCost ?? '—' }}</span>
+        <span>Net sell proceeds: {{ positions()[0]?.recovery?.netSellProceeds ?? '—' }}</span>
+        <span>Realized net profit: {{ positions()[0]?.recovery?.realizedNetProfit ?? '—' }}</span>
+      </div>
+    } @else {
+      <div class="empty-state">{{ loading() ? 'Loading Portfolio positions…' : connected() ? 'No Portfolio positions' : 'Portfolio snapshot unavailable until Harvester connects.' }}</div>
+    }
+  </section>
+</section>
