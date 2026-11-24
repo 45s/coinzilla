@@ -119,7 +119,7 @@ Do not claim 100% correctness from line/branch coverage. Completion means every 
 
 - RS-001 authorization / legacy basis / Spot custody — MISSING.
 - RS-002 confirmed BUY and net-fee accounting — MISSING.
-- RS-003 additive mixed SELL planning/allocation — PARTIAL; real workflow-to-evaluator state projection is separately tracked by [#1809](https://github.com/45s/coinzilla/issues/1809).
+- RS-003 additive mixed SELL planning/allocation — PARTIAL; the #1809 workflow-to-evaluator fix is in [PR #1815](https://github.com/45s/coinzilla/pull/1815) and ready for owner review. The application subcase remains uncredited until merge and exact merged-head verification.
 - RS-004 independent profitability — PARTIAL.
 - RS-005 one SELL lifecycle — PARTIAL.
 - RS-006 mixed SELL accounting atomicity — PARTIAL.
@@ -134,7 +134,7 @@ Do not claim 100% correctness from line/branch coverage. Completion means every 
 
 1. PR 1 — scenario registry/schema, stable IDs, traceability catalogs, validation, thin runner, and one real RS-004 scenario through the runner.
 2. PR 2 — RS-001/002 authorization, custody and confirmed BUY accounting.
-3. PR 3 — RS-003/004 planner, fee-aware economics and profitability boundaries; fix #1809 in its own production issue/PR.
+3. PR 3 — RS-003/004 planner, fee-aware economics and profitability boundaries; merge and verify production fix [PR #1815](https://github.com/45s/coinzilla/pull/1815) before claiming the real workflow-to-evaluator application subcase.
 4. PR 4 — RS-005/007 one-SELL lifecycle, unknown outcomes, broker-call count and reservation proof.
 5. PR 5 — RS-006 multi-fill reconciliation and atomic accounting.
 6. PR 6 — RS-008 shared CG/RS account concurrency.

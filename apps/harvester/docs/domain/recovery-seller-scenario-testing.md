@@ -1592,7 +1592,7 @@ Required cases:
 
 Core source ownership: `calculate-sell-plan.js`, `evaluate-sell-decision.js`, `legacy-spot-allocation.js`, accounting workflow, shared allocator/TradingRules.
 
-**Known blocker:** #1809 records the real accounting-workflow transition snapshot emitting an accumulating cycle state that the default SELL evaluator rejects. An isolated planner scenario using the canonical cycle-state factory does not prove this workflow-to-evaluator path. Keep that subcase explicitly blocked until #1809 is fixed and tested through real composition.
+**Known blocker:** #1809 recorded the real accounting-workflow transition snapshot emitting an accumulating cycle state that the default SELL evaluator rejected. The production fix is in [PR #1815](https://github.com/45s/coinzilla/pull/1815), with real workflow/default-evaluator tests for eligible mixed SELL, missing verified Spot custody and existing-order/STOP/pause/reconciliation precedence. Keep the application subcase blocked until that PR is merged and exact merged-head verification is recorded.
 
 ### RS-004 — Independent profitability and fee-aware SELL economics (P0)
 
@@ -1854,8 +1854,8 @@ Every family below explicitly answers the 22 contract questions required by the 
 | 18. Required assertions | Exact plan fields, allocation split, fee reserve, net-proceeds target, filter result, no Portfolio mutation and zero broker calls for blocked cases. |
 | 19. Existing regression tests | calculate-sell-plan.test.js; legacy-spot-allocation.test.js; mixed-sell-fill-allocation.test.js; recovery-seller-sell-planner.scenario.test.js. New planner scenario evidence remains PARTIAL. |
 | 20. Missing scenario tests | Full workflow-to-default-evaluator composition, cross-market reservations, legacy exhaustion, all fee-asset boundaries and complete dust/filter subcases. |
-| 21. Blocked decisions | #1809 blocks the real workflow-to-evaluator projection proof. Third-asset valuation and standalone final-residual liquidation remain blocked/unsupported. |
-| 22. Acceptance criteria | All #1780 sections C/H/I planner cases have stable IDs; exact intent and no-submit assertions pass; #1809 is separately fixed/tested before its subcase is unblocked. |
+| 21. Blocked decisions | The #1809 production fix is in PR #1815; keep the real-workflow application subcase blocked until that PR is merged and verified. Third-asset valuation and standalone final-residual liquidation remain blocked/unsupported. |
+| 22. Acceptance criteria | All #1780 sections C/H/I planner cases have stable IDs; exact intent and no-submit assertions pass; the real workflow/default-evaluator subcase is proved by PR #1815 and may be unblocked only after merge and exact merged-head verification. |
 
 #### RS-004 — Independent profitability and fee-aware SELL economics
 
@@ -2331,8 +2331,8 @@ The new composed cases in `test/scenarios/recovery-seller-sell-planner.scenario.
 TDD evidence:
 
 - RED: test-first head `65761e992c86e2fd59bdc0811ab8737dbf3c6a31` failed with `UNEXPECTED_OR_UNMODELED_CONDITION` from the malformed workflow cycle-state projection.
-- GREEN: the three composed cases passed Harvester Targeted Tests on `23dbbe303221ea49820eeb9820323512b2fe38df` (11/11 tests in the scenario file); a later test-only refactor passed strict changed-file ESLint on `ed165125f47bcc31047460f3317b5e1496a0719c`.
-- Final PR head and full exact-head CI are being revalidated after documentation synchronization.
+- GREEN: the three composed cases passed Harvester Targeted Tests on synchronized PR head `0a84a78285aa2dfb3c4f16319c765e436edea275` (11/11 tests in the scenario file). Unit Tests, Test Coverage, Repository Quality and Dependency Audit also pass on that exact head; External Documentation Links remains in progress.
+- The PR is ready for owner review. Do not merge until the remaining documentation-link check completes; do not mark the scenario family VERIFIED until the production PR is merged and exact merged-head evidence is recorded.
 
 This defect is not a reason to skip the prescribed seven-PR scenario sequence. Keep RS-003 PARTIAL until PR #1815 is merged and its exact merged-head verification is recorded; the remaining RS-003 cases stay open.
 
