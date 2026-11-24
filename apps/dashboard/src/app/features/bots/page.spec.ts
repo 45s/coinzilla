@@ -67,6 +67,10 @@ function createMarketsResource({ paused = false } = {}) {
   return {
     ok: true,
     data: {
+      observedAt: 120000,
+      tradingEnabled: true,
+      userDataReady: true,
+      userDataStatus: 'READY',
       markets: [
         {
           symbol: 'BTCUSDT',
@@ -102,6 +106,7 @@ function createPortfolioResource({ positions = true } = {}) {
   return {
     ok: true,
     data: {
+      observedAt: 120000,
       positions: positions ? [
         {
           symbol: 'BTCUSDT',
