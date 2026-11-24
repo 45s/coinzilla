@@ -233,7 +233,8 @@ test("Bitunix Futures canonical history supports canceled-order filters and norm
   assert.equal(result.ok, true)
   assert.equal(result.data[0].status, "CANCELED")
   assert.equal(result.data[0].executedQuantity.amount, "0.125000000000000001")
-  const query = new URL(requests[0].url).searchParams
+  const historyRequest = requests.find(({ url }) => new URL(url).pathname === "/api/v1/futures/trade/get_history_orders")
+  const query = new URL(historyRequest.url).searchParams
   assert.equal(query.get("status"), "PART_FILLED_CANCELED")
   assert.equal(query.get("type"), "LIMIT")
   assert.equal(query.get("queryCanceled"), "true")
@@ -245,5 +246,5 @@ test("Bitunix Futures common open-order method remains explicitly unsupported", 
   const result = await broker.getOpenOrders()
 
   assert.equal(result.ok, false)
-  assert.match(result.errors[0].message, /unsupported/i)
+  assert.match(result.errors[0].message, /not supported safely/i)
 })
