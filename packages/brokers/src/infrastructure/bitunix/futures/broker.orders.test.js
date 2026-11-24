@@ -632,3 +632,34 @@ test("Bitunix Futures cancelAllOpenOrders reports unknown while pending orders r
   assert.equal(result.data.remainingOpenOrders, 1)
   assert.equal(requests.filter(({ method }) => method === "POST").length, 1)
 })
+
+test("Bitunix Futures cancelAllOpenOrders supports an account-wide scope", async () => {
+  const { broker, requests } = createCancelAllBroker({
+    pendingTotals: [1, 0],
+  })
+  await broker.connect()
+
+  const result = await broker.cancelAllOpenOrders()
+
+  assert.equal(result.ok, true)
+  assert.equal(result.mutationOutcome, "CONFIRMED")
+  assert.equal(result.cancellationOutcome, "CONFIRMED")
+  const [, cancelRequest] = requests
+  assert.deepEqual(JSON.parse(cancelRequest.body), {})
+})
+
+test("Bitunix Futures cancelAllOpenOrders reconciles a lost acknowledgement without retrying", async () => {
+  const { broker, requests } = createCancelAllBroker({
+    pendingTotals: [2, 0],
+    cancelAllError: new Error("connection lost after dispatch"),
+  })
+  await broker.connect()
+
+  const result = await broker.cancelAllOpenOrders()
+
+  assert.equal(result.ok, false)
+  assert.equal(result.mutationOutcome, "OUTCOME_UNKNOWN")
+  assert.equal(result.cancellationOutcome, "CONFIRMED")
+  assert.equal(result.data.remainingOpenOrders, 0)
+  assert.equal(requests.filter(({ method }) => method === "POST").length, 1)
+})
