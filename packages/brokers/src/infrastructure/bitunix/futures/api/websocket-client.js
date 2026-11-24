@@ -399,8 +399,8 @@ export class BitunixFuturesWebSocketClient extends EventEmitter {
   #sendLogin() {
     const nonce = this.#nonceFactory()
     const timestamp = String(Math.floor(this.#now() / 1000))
-    if (typeof nonce !== "string" || !nonce.trim()) {
-      throw new TypeError("Bitunix Futures WebSocket nonce must be a non-empty string")
+    if (typeof nonce !== "string" || !/^[A-Za-z0-9]{32}$/.test(nonce)) {
+      throw new TypeError("Bitunix Futures WebSocket nonce must be a 32-character alphanumeric string")
     }
     if (!Number.isSafeInteger(Number(timestamp)) || Number(timestamp) < 0) {
       throw new RangeError("Bitunix Futures WebSocket login timestamp must be a non-negative safe integer")
