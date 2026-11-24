@@ -453,40 +453,57 @@ export class BitunixFuturesWebSocketClient extends EventEmitter {
       this.emit("clientError", new TypeError("Bitunix Futures WebSocket message must be an object"))
       return
     }
-    if (data.op === "pong") {
-      this.emit("pong", data)
-      return
-    }
-    if (data.op === "login") {
-      if (data.code === 0 || data.code === "0") {
-        this.#authenticated = true
-        this.emit("authenticated")
-        this.emit("status", Object.freeze({
-          state: this.#state,
-          authenticated: true,
-          recoveryRequired: true,
-        }))
-      } else {
-        this.#authenticated = false
-        this.emit("clientError", new Error(`Bitunix Futures WebSocket login failed: ${String(data.msg ?? data.code ?? "unknown error")}`))
-      }
-      return
-    }
-    if (typeof data.ch === "string") {
-      const allowed = this.channelType === "private" ? PRIVATE_CHANNELS : PUBLIC_CHANNELS
-      const isKlineChannel = this.channelType === "public" &&
-        /^(market|mark)_kline_/.test(data.ch) &&
-        FUTURES_KLINE_INTERVALS.has(data.ch.replace(/^(market|mark)_kline_/, ""))
-      if ((!allowed.has(data.ch) && !isKlineChannel) ||
-          (this.channelType === "private" && !this.#authenticated)) {
-        this.emit("clientError", new TypeError(`Bitunix Futures WebSocket received unsupported or unauthenticated channel ${data.ch}`))
-        return
-      }
-      this.emit("channel", data)
-      this.emit(data.ch, data)
+    if (this.#handleControlMessage(data)) {
       return
     }
     this.emit("controlMessage", data)
+  }
+
+  #handleControlMessage(data) {
+    if (data.op === "pong") {
+      this.emit("pong", data)
+      return true
+    }
+    if (data.op === "login") {
+      this.#handleLoginMessage(data)
+      return true
+    }
+    if (typeof data.ch === "string") {
+      this.#handleChannelMessage(data)
+      return true
+    }
+    return false
+  }
+
+  #handleLoginMessage(data) {
+    if (data.code === 0 || data.code === "0") {
+      this.#authenticated = true
+      this.emit("authenticated")
+      this.emit("status", Object.freeze({
+        state: this.#state,
+        authenticated: true,
+        recoveryRequired: true,
+      }))
+      return
+    }
+    this.#authenticated = false
+    this.emit("clientError", new Error(`Bitunix Futures WebSocket login failed: ${String(data.msg ?? data.code ?? "unknown error")}`))
+  }
+
+  #handleChannelMessage(data) {
+    const allowed = this.channelType === "private" ? PRIVATE_CHANNELS : PUBLIC_CHANNELS
+    const interval = data.ch.replace(/^(market|mark)_kline_/, "")
+    const isKlineChannel = this.channelType === "public" &&
+      /^(market|mark)_kline_/.test(data.ch) &&
+      FUTURES_KLINE_INTERVALS.has(interval)
+    const unsupportedChannel = !allowed.has(data.ch) && !isKlineChannel
+    const unauthenticatedPrivateEvent = this.channelType === "private" && !this.#authenticated
+    if (unsupportedChannel || unauthenticatedPrivateEvent) {
+      this.emit("clientError", new TypeError(`Bitunix Futures WebSocket received unsupported or unauthenticated channel ${data.ch}`))
+      return
+    }
+    this.emit("channel", data)
+    this.emit(data.ch, data)
   }
 
   #handleClose(event) {
