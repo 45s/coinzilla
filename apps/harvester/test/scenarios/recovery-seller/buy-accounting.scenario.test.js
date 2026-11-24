@@ -348,10 +348,7 @@ async function createUnknownBuySubmitterContext() {
   const unresolved = []
   let brokerCallCount = 0
   const submit = createRecoverySellerOrderSubmitter({
-    canSubmit: async () => ({
-      ok: true,
-      data: { allowed: true },
-    }),
+    canSubmit: async () => ({ allowed: true }),
     broker: {
       providerInstanceId: "binance-testnet-primary",
       providerType: "binance",
