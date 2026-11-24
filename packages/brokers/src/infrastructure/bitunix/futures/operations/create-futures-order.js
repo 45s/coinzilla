@@ -77,6 +77,37 @@ function normalizeConditionalOrder({ input, prefix }) {
   }
 }
 
+function validateOrderEnums({ side, orderType, tradeSide }) {
+  if (!ORDER_SIDES.has(side) || !ORDER_TYPES.has(orderType) || !TRADE_SIDES.has(tradeSide)) {
+    throw new TypeError("Bitunix Futures order side, orderType or tradeSide is invalid")
+  }
+}
+
+function validateReduceOnly({ tradeSide, reduceOnly }) {
+  if (typeof reduceOnly !== "boolean") {
+    throw new TypeError("Bitunix Futures order reduceOnly must be an explicit boolean")
+  }
+  if (tradeSide === "OPEN" && reduceOnly) {
+    throw new TypeError("Bitunix Futures OPEN orders cannot set reduceOnly: true")
+  }
+}
+
+function normalizePositionId({ input, tradeSide }) {
+  const positionId = input.positionId === undefined
+    ? undefined
+    : requireText({
+      value: input.positionId,
+      field: "positionId",
+    })
+  if (tradeSide === "CLOSE" && positionId === undefined) {
+    throw new TypeError("Bitunix Futures CLOSE orders require positionId")
+  }
+  if (tradeSide === "OPEN" && positionId !== undefined) {
+    throw new TypeError("Bitunix Futures OPEN orders must omit positionId")
+  }
+  return positionId
+}
+
 function normalizeOrderIdentity({ input }) {
   if (input === null || typeof input !== "object" || Array.isArray(input)) {
     throw new TypeError("Bitunix Futures createFuturesOrder input must be an object")
@@ -101,27 +132,19 @@ function normalizeOrderIdentity({ input }) {
     value: input.clientId,
     field: "clientId",
   })
-  if (!ORDER_SIDES.has(side) || !ORDER_TYPES.has(orderType) || !TRADE_SIDES.has(tradeSide)) {
-    throw new TypeError("Bitunix Futures order side, orderType or tradeSide is invalid")
-  }
-  if (typeof input.reduceOnly !== "boolean") {
-    throw new TypeError("Bitunix Futures order reduceOnly must be an explicit boolean")
-  }
-  if (tradeSide === "OPEN" && input.reduceOnly) {
-    throw new TypeError("Bitunix Futures OPEN orders cannot set reduceOnly: true")
-  }
-  const positionId = input.positionId === undefined
-    ? undefined
-    : requireText({
-      value: input.positionId,
-      field: "positionId",
-    })
-  if (tradeSide === "CLOSE" && positionId === undefined) {
-    throw new TypeError("Bitunix Futures CLOSE orders require positionId")
-  }
-  if (tradeSide === "OPEN" && positionId !== undefined) {
-    throw new TypeError("Bitunix Futures OPEN orders must omit positionId")
-  }
+  validateOrderEnums({
+    side,
+    orderType,
+    tradeSide,
+  })
+  validateReduceOnly({
+    tradeSide,
+    reduceOnly: input.reduceOnly,
+  })
+  const positionId = normalizePositionId({
+    input,
+    tradeSide,
+  })
   return {
     symbol,
     side,
