@@ -79,6 +79,33 @@ describe('Bots WebSocket protocol', () => {
     expect(parseBotsWebSocketMessage(JSON.stringify(incomplete))).toBeNull();
   });
 
+  it('rejects numeric market prices instead of accepting lossy price data', () => {
+    const malformed = {
+      ...validSnapshot,
+      data: {
+        ...validSnapshot.data,
+        markets: {
+          ok: true,
+          data: {
+            observedAt: 120000,
+            tradingEnabled: true,
+            userDataReady: true,
+            userDataStatus: 'READY',
+            markets: [{
+              symbol: 'BTCUSDT',
+              enabled: true,
+              readiness: 'READY',
+              blockers: [],
+              latestPrice: 65000,
+              priceFresh: true,
+            }],
+          },
+        },
+      },
+    };
+    expect(parseBotsWebSocketMessage(JSON.stringify(malformed))).toBeNull();
+  });
+
   it('rejects numeric recovery values instead of accepting lossy financial data', () => {
     const malformed = {
       ...validSnapshot,
