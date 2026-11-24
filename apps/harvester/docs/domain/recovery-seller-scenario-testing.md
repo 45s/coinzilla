@@ -2329,6 +2329,7 @@ The new composed cases in `test/scenarios/recovery-seller-sell-planner.scenario.
 - The test uses only deterministic BUY-policy and broker-submit port controls; it does not bypass the workflow, domain validator or default SELL policy.
 
 TDD evidence:
+
 - RED: test-first head `65761e992c86e2fd59bdc0811ab8737dbf3c6a31` failed with `UNEXPECTED_OR_UNMODELED_CONDITION` from the malformed workflow cycle-state projection.
 - GREEN: the three composed cases passed Harvester Targeted Tests on `23dbbe303221ea49820eeb9820323512b2fe38df` (11/11 tests in the scenario file); a later test-only refactor passed strict changed-file ESLint on `ed165125f47bcc31047460f3317b5e1496a0719c`.
 - Final PR head and full exact-head CI are being revalidated after documentation synchronization.
