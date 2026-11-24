@@ -222,3 +222,14 @@ test("Bitunix Futures exposes an explicit, non-authoritative user-data reconcili
   assert.equal(broker.isUserDataReady, false, "unsubscribing must close the mutation-readiness gate")
   await broker.disconnect()
 })
+
+
+test("Bitunix Futures cannot acknowledge user-data reconciliation without an active private session", async () => {
+  const { broker } = createBroker()
+  const result = await broker.acknowledgeUserDataReconciliation({
+    reconciliationCompleted: true,
+  })
+
+  assert.equal(result.ok, false, "reconciliation acknowledgement must require an active authenticated private session")
+  assert.equal(broker.isUserDataReady, false, "no private session must never authorize order mutations")
+})
