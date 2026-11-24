@@ -259,67 +259,68 @@ The Binance subscription result retains the live `subscriptionId` getter and rec
 
 ## Bitunix USDT Futures provider — implementation status
 
-The `bitunix-futures` provider is a separate Futures adapter under [issue #1805](https://github.com/45s/coinzilla/issues/1805) and [Draft PR #1806](https://github.com/45s/coinzilla/pull/1806). This matrix describes implemented surfaces and their limitations; it is not a production-readiness declaration.
+The `bitunix-futures` provider is a separate USDT-margined Futures adapter tracked by [issue #1805](https://github.com/45s/coinzilla/issues/1805) and [Draft PR #1806](https://github.com/45s/coinzilla/pull/1806). This status describes implemented functionality and explicit limitations; it is not a production-readiness declaration.
 
 ### Common Broker methods
 
 | Method | Status | Evidence / limitation |
 |---|---|---|
-| `connect()` / `disconnect()` | Supported | Idempotent lifecycle; cleans up public/private WebSocket clients and registered listeners. |
-| `getBalances()` | Supported | Exact USDT free/locked balances; promotional bonus excluded. |
-| `getAccountSnapshot()` | Unsupported | Futures account response has no documented source timestamp or snapshot version. |
+| `connect()` / `disconnect()` | Supported | Lifecycle cleanup for public/private WebSocket clients and listeners. |
+| `getBalances()` | Supported | Exact USDT free/locked projection; promotional bonus excluded. |
+| `getAccountSnapshot()` | Unsupported | Independent account, position, order and TP/SL reads have no shared source timestamp/version. |
 | `getServerTime()` | Unsupported | No verified Futures server-time endpoint. |
-| `getExchangeMarkets()` | Supported | OPEN and API-enabled Futures markets. |
-| `getOpenOrders()` | Unsupported | Use provider-specific `getFuturesPendingOrders()`; common legacy `Order[]` cannot preserve Futures semantics/completeness. |
-| `getCanonicalOrder()` | Supported | Signed detail lookup by exactly one exchange order ID or caller client ID; identity and symbol correlation enforced. |
-| `getCanonicalOrderHistory()` | Supported | One bounded symbol-scoped page; caller owns pagination and retention-window coverage. |
-| `getFills()` | Supported (bounded page) | Stable trade/order identity and exact decimal quote notional; `commissionStatus: "UNKNOWN"` because fee asset is absent. Complete history is not claimed. |
-| `getPrices()` | Supported | One-shot ticker result with exact last and mark prices. |
-| `getCandles()` | Supported | Closed REST klines with exact decimals and deterministic close-time derivation. |
-| `createCanonicalOrder()` | Unsupported | Spot-shaped common input cannot express Futures `tradeSide`, `positionId`, `reduceOnly` and hedge-mode selection. |
-| `cancelOrder({ symbol, orderId })` | Supported behind readiness/permission gates | Explicit live opt-in, authenticated private session and caller-acknowledged REST reconciliation; pending-order preflight, one-shot request and canonical detail readback. No blind retry. |
-| `cancelAllOpenOrders({ symbol? })` | Supported behind readiness/permission gates | Optional symbol or account-wide one-shot cancellation, pending-order preflight and final readback; callers must enforce single-writer ownership. |
+| `getExchangeMarkets()` | Supported | Returns OPEN and API-enabled Futures contracts. |
+| `getOpenOrders()` | Unsupported | Use `getFuturesPendingOrders()`; the common legacy `Order[]` cannot preserve Futures semantics/completeness. |
+| `getCanonicalOrder()` | Supported | Detail lookup by exchange order ID or caller client ID; identity and symbol correlation enforced. |
+| `getCanonicalOrderHistory()` | Supported | One bounded symbol-scoped page; caller owns pagination and retention coverage. |
+| `getFills()` | Supported (bounded page) | Stable trade/order identity and exact quote notional; commission denomination is UNKNOWN because fee asset is absent. Complete account-wide history is not claimed. |
+| `getPrices()` | Supported | One-shot ticker with exact last and mark prices. |
+| `getCandles()` | Supported | Closed REST klines with exact decimals and documented interval-based close-time derivation. |
+| `createCanonicalOrder()` | Unsupported | Spot-shaped input cannot express Futures `tradeSide`, `positionId`, `reduceOnly` and hedge-mode semantics. |
+| `cancelOrder({ symbol, orderId })` | Supported behind gates | Explicit live opt-in, authenticated/reconciled private session, exact pending-order preflight, one-shot dispatch, matching CLOSE event and canonical readback. |
+| `cancelAllOpenOrders({ symbol? })` | Supported behind gates | One-shot symbol/account scope, preflight, matching CLOSE events and final pending-order readback; caller must enforce single-writer ownership. |
 | `subscribeForPrices()` | Supported | Public trade channel; exact price/quantity and exchange trade timestamp; no stable trade ID. |
-| `subscribeForCandles()` | Unsupported | Public kline payload does not document the candle open timestamp required by the common Candle contract. |
-| `subscribeForBookTicker()` | Supported | One-level depth channel; exact best bid/ask; timestamp is local receipt time and has no source sequence. |
-| `subscribeForUserData()` | Supported (raw observations) | Native balance/position/order/TP-SL channels through `onObservation`; no replay cursor, sequence or authoritative snapshot guarantee. Mutations require consumer reconciliation acknowledgement. |
+| `subscribeForCandles()` | Unsupported | Public kline payload lacks the documented candle-open timestamp required by the common contract. |
+| `subscribeForBookTicker()` | Supported | One-level depth channel; exact best bid/ask, local receipt timestamp and no source sequence. |
+| `subscribeForUserData()` | Supported (raw observations) | Native balance/position/order/TP-SL observations; no replay cursor, sequence or authoritative snapshot guarantee. |
 
-### Futures-specific read extensions
+### Futures-specific reads
 
-These provider-specific projections do not imply common canonical account, position or fill semantics:
+- `getFuturesPendingOrders({ symbol?, orderId?, clientOrderId?, status?, startTime?, endTime?, limit?, skip? })`: one bounded pending-order page with exact decimals and Futures identity.
+- `getFuturesPendingTpSlOrders({ symbol?, positionId?, limit?, skip? })`: pending position TP/SL groups; exact trigger/quantity values, one bounded page.
+- `getFuturesTpSlOrderHistory({ symbol?, side?, positionMode?, startTime?, endTime?, limit?, skip? })`: bounded historical TP/SL page with exchange total and identity-preserving fields.
+- `getFuturesPositions({ symbol?, positionId? })` and `getFuturesPositionHistory(...)`: current and bounded historical position projections.
+- `getFuturesPositionMode()`, `getFuturesLeverageAndMarginMode({ symbol, marginCoin: "USDT" })`, and `getFuturesTradingSettings({ symbols? })`: authenticated account-setting reads.
+- `getFuturesFundingRate({ symbol })`, `getFuturesFundingRates()`, `getFuturesFundingRateHistory(...)`, and `getFuturesPositionTiers({ symbol })`: funding and risk-tier reads.
+- `getFuturesTradeHistory(...)`: one bounded raw execution-history page preserving exact fee and realized-PnL values.
 
-- `getFuturesPendingOrders({ symbol?, orderId?, clientOrderId?, status?, startTime?, endTime?, limit?, skip? })`: one pending-order page preserving exact decimals and documented TP/SL fields.
-- `getFuturesPendingTpSlOrders({ symbol?, positionId?, limit?, skip? })`: separate position TP/SL group endpoint; validates each present leg and preserves exact trigger/limit/quantity strings. One page, maximum 100; no total count is returned.
-- `getFuturesTpSlOrderHistory({ symbol?, side?, positionMode?, startTime?, endTime?, limit?, skip? })`: one bounded historical TP/SL page using the documented `orderList`/`total` response; `side` and `positionMode` are signed int32 filters, `limit` is capped at 100, and the caller owns pagination and exchange retention coverage. Exact trigger/execution values and status/timestamps are preserved.
-- `getFuturesPositions({ symbol?, positionId? })`: current position projections; explicitly excludes subaccount aggregation and preserves optional subaccount identity.
-- `getFuturesPositionHistory({ symbol | positionId, startTime?, endTime?, limit?, skip? })`: one bounded historical-position page.
-- `getFuturesPositionMode()` and `getFuturesLeverageAndMarginMode({ symbol, marginCoin: "USDT" })`: authenticated account-setting reads.
-- `getFuturesFundingRate({ symbol })` and `getFuturesFundingRates()`: current single-symbol and batch funding-rate reads; exact decimal strings and normalized millisecond next-funding time.
-- `getFuturesFundingRateHistory({ symbol, startTime?, endTime?, limit? })`: bounded funding history; maximum 200 rows per request, caller owns time-window pagination.
-- `getFuturesPositionTiers({ symbol })`: position leverage tiers with exact notional boundaries and maintenance-margin rates.
-- `getFuturesTradingSettings({ symbols? })`: authenticated all-symbol or up-to-50-symbol read; preserves account margin coin/mode and separate long/short leverage where supplied.
-- `getFuturesTradeHistory({ symbol | orderId | positionId, startTime?, endTime?, limit?, skip? })`: one bounded raw execution-history page; exact trade identity, quantity, price, fee and realized PnL are preserved. This is not a complete account-wide history.
+### Futures-specific mutations
+
+All mutation flags default to false. These provider-specific operations do not change the exchange-neutral Broker order model.
+
+| Operation | Status and safety contract |
+|---|---|
+| `createFuturesOrder()` | MARKET/LIMIT placement with explicit Futures semantics, caller `clientId`, exact market-filter validation, private-session readiness and `allowLiveOrderMutations: true`. Placement is one-shot; mismatched or uncertain readback remains UNKNOWN. |
+| `modifyFuturesOrder()` | Identified pending LIMIT orders only; exact quantity and price; requires order-mutation opt-in/readiness, matching UPDATE event and final readback. |
+| `cancelOrder()` / `cancelAllOpenOrders()` | Require order-mutation opt-in/readiness; one-shot dispatch, matching CLOSE events and REST reconciliation. Never blindly retry. |
+| `closeFuturesPosition()`, `closeFuturesPositionBySide()`, `closeAllFuturesPositions()` | Require `allowLivePositionMutations: true` **and** an authenticated private session acknowledged after REST reconciliation. Exact position preflight, explicit account-wide confirmation, one-shot close and REST post-readback. |
+| `placeFuturesPositionTpSlOrder()` / `modifyFuturesPositionTpSlOrder()` | Position-level TP/SL only; exact open position and trigger validation; require matching private CREATE/UPDATE NEW event. |
+| `cancelFuturesPositionTpSlOrder()` / `cancelFuturesTpSlOrder()` | Exact symbol/order identity and matching private CLOSE event. Only CANCELED confirms user cancellation; SYSTEM_CANCELED, FAILED and FILLED remain distinct outcomes. A triggered child-order fill remains UNKNOWN. |
+| `setFuturesLeverage()`, `setFuturesMarginMode()`, `setFuturesPositionMode()` | Require `allowLiveAccountMutations: true`; reject unsafe exposure/pending-order/TP-SL preconditions; verify configuration through REST readback. Lost acknowledgements remain OUTCOME_UNKNOWN even if readback shows the requested setting. |
+| `adjustFuturesPositionMargin()` | Unsupported: no documented isolated-position-margin endpoint was found; do not emulate it with leverage or margin-mode changes. |
+
+Order-level TP/SL placement/modification remains unsupported because the documented child-order surface does not establish the required reduce-only/close-position guarantee. Attached TP/SL parameters on `createFuturesOrder()` and position-level TP/SL operations are separate, explicitly scoped capabilities.
 
 ### WebSocket lifecycle and recovery
 
-- Public `trade` and `depth_book1` subscriptions are integrated with the Broker facade, share one public connection, and provide idempotent cleanup.
-- Private `balance`, `position`, `order` and `tpsl` subscriptions wait for login acknowledgement and deliver raw observations through `onObservation`.
-- The low-level client validates official endpoints/channels, uses the documented seconds timestamp and double-SHA256 login signature, enforces the 300-channel limit and 5-outbound-message/second limit, sends periodic ping, detects missed pong, and performs bounded exponential reconnect/resubscribe.
-- A new private session starts with `recoveryRequired: true`. The consumer must reconcile balances, positions, pending orders and TP/SL orders, then call `acknowledgeUserDataReconciliation({ reconciliationCompleted: true })`. The resulting readiness state is a caller attestation only; it does not make events authoritative or replayable.
-- Disconnect, reconnect and unsubscribe reset readiness. No documented event replay cursor or monotonic sequence exists, so reconnect cannot silently restore mutation readiness or prove gap-free recovery.
-- Public kline subscription remains unavailable through the common contract because its payload lacks a documented candle timestamp.
+- Public `trade` and `depth_book1` subscriptions share the public connection and return cleanup handles.
+- Private `balance`, `position`, `order` and `tpsl` subscriptions wait for login acknowledgement and emit raw observations through `onObservation`.
+- The client validates official channels, enforces documented outbound message/channel limits, sends heartbeat pings, detects missed pong, and uses bounded reconnect/resubscribe.
+- Every new private session starts with recovery required. Consumers must reconcile balances, positions, pending orders and TP/SL orders, then call `acknowledgeUserDataReconciliation({ reconciliationCompleted: true })`.
+- The acknowledgement is a consumer attestation, not proof of atomicity, event authority, sequence continuity or replay. Disconnect, reconnect and unsubscribe reset readiness.
 
-### Safety and production status
+### Production status and limitations
 
-The REST client serializes request dispatch at a conservative 10 requests/second per client and never automatically retries requests. POST calls must explicitly declare mutation state. LIVE order/account mutation flags default to false.
+The REST client serializes dispatch conservatively and never automatically retries. State-changing requests are one-shot and explicitly marked `stateChanging: true`. Private observations are non-authoritative and non-replayable; complete account-wide fill history, atomic snapshots, gap-free recovery and process-restart recovery remain UNKNOWN. No isolated Futures TESTNET endpoint has been verified, and no LIVE mutation is permitted as an implementation test.
 
-- `createFuturesOrder()` supports explicit MARKET/LIMIT Futures orders, required `tradeSide`, `reduceOnly`, position identity for CLOSE, explicit LIMIT effect, exact market-filter validation and attached TP/SL parameters. It requires `allowLiveOrderMutations: true` and an acknowledged private-session readiness state.
-- `modifyFuturesOrder()` is limited to identified pending LIMIT orders and exact quantity/price changes. Attached TP/SL modification is not implemented.
-- `cancelOrder()` and `cancelAllOpenOrders()` require the same opt-in/readiness gate and perform one-shot dispatch plus REST readback. Matching private-event correlation/confirmation is still incomplete; REST readback alone is not a production recovery guarantee.
-- Position close/close-all, separate order-level/position-level TP/SL place/modify/cancel mutations, attached TP/SL modification, and account-setting/isolated-margin mutations remain unimplemented.
-- Canonical `getFills()` is bounded to one page; fee asset remains unknown and complete account-wide execution history is not claimed.
-- No LIVE Futures request or mutation has been performed by implementation work or automated tests. No isolated Futures TESTNET endpoint has been verified.
-
-The provider remains **not production-ready** and must not be selected for production execution or Harvester routing. Required blockers include matching private-event confirmation, position close/TP-SL/account mutation completion, authoritative snapshot/recovery guarantees, and safe TESTNET verification.
-
-See the maintained [Bitunix Futures reference audit](./docs/bitunix-futures-reference-audit.md) for official protocol facts, third-party source comparison, discrepancies and remaining blockers.
+The provider remains **NOT PRODUCTION READY** and must not be routed to Harvester or production execution. The remaining blockers are external protocol guarantees and verification, not a reason to fabricate support for unsupported common-model operations. See the [maintained Futures reference audit](./docs/bitunix-futures-reference-audit.md) and [issue #1805](https://github.com/45s/coinzilla/issues/1805).
