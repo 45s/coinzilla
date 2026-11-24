@@ -90,7 +90,10 @@ export const authorizationCustodyScenarios = Object.freeze([
   makeCase({
     id: "RS-001-001",
     name: "valid operator-declared legacy invested quote and original base quantity are accepted",
-    input: { invested: "50", quantity: "10" },
+    input: {
+      invested: "50",
+      quantity: "10",
+    },
     step: "create-legacy-position",
     expected: {
       invested: "50",
@@ -116,7 +119,7 @@ export const authorizationCustodyScenarios = Object.freeze([
     expected: {
       invested: "1",
       originalQuantity: "3",
-      averageCost: "0.333333333333333334",
+      averageCost: "0.333333333333333333333333333333333334",
       remainingQuantity: "2",
     },
     mustNot: [
@@ -128,7 +131,10 @@ export const authorizationCustodyScenarios = Object.freeze([
   makeCase({
     id: "RS-001-003",
     name: "missing zero negative malformed or contradictory legacy basis fails closed",
-    input: { invested: "0", quantity: "10" },
+    input: {
+      invested: "0",
+      quantity: "10",
+    },
     step: "create-legacy-position",
     expected: { errorName: "RangeError" },
     mustNot: [
@@ -170,6 +176,7 @@ export const authorizationCustodyScenarios = Object.freeze([
       averageCost: "5",
       remainingQuantity: "10",
       verifiedSpotQuantity: "0.5",
+      otherStrategyPositionQuantity: "1",
     },
     mustNot: [
       "derive legacy basis from the Spot balance",
@@ -189,8 +196,11 @@ export const authorizationCustodyScenarios = Object.freeze([
     },
     step: "calculate-verified-spot-allocation",
     expected: {
+      averageCost: "5",
+      remainingQuantity: "10",
       verifiedSpotQuantity: "0.4",
       offSpotQuantityUsed: "0",
+      otherStrategyPositionQuantity: "0",
     },
     mustNot: [
       "add EARN or other off-Spot balance to sellable legacy quantity",
@@ -262,7 +272,10 @@ export const authorizationCustodyScenarios = Object.freeze([
       authorizedQuantity: "1",
     },
     step: "reject-invalid-custody-evidence",
-    expected: { missingBalanceRejected: true, duplicateBalanceRejected: true },
+    expected: {
+      missingBalanceRejected: true,
+      duplicateBalanceRejected: true,
+    },
     mustNot: [
       "interpret a missing base balance as zero available inventory",
       "choose one of two conflicting balances arbitrarily",
@@ -363,8 +376,16 @@ export const authorizationCustodyScenarios = Object.freeze([
       spotTotal: "5.5",
       portfolioQuantity: "5",
       portfolioPositions: [
-        { market: "ZROUSDT", quantity: "2", strategy: "CG" },
-        { market: "ZROFDUSD", quantity: "3", strategy: "RS" },
+        {
+          market: "ZROUSDT",
+          quantity: "2",
+          strategy: "CG",
+        },
+        {
+          market: "ZROFDUSD",
+          quantity: "3",
+          strategy: "RS",
+        },
       ],
       authorizedQuantity: "50",
     },
