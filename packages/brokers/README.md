@@ -556,8 +556,39 @@ When credentials are configured, the read-only diagnostic runner also exercises 
 
 ## Bitunix USDT Futures
 
-The `bitunix-futures` adapter is separate from Bitunix Spot. Current implementation includes signed REST reads for markets, USDT balances, ticker prices, closed candles, raw symbol metadata, order-book depth, canonical order detail/history, pending orders and separate pending TP/SL groups, current/history positions, position-mode/leverage/margin-mode reads, and raw trade history. All exchange financial values remain exact decimal strings in provider-specific DTOs.
+The `bitunix-futures` provider is a separate USDT-margined Futures adapter; it must not inherit Spot order or position semantics.
 
-Public trade-price and one-level book-ticker subscriptions are integrated with the Broker lifecycle. Private balance, position, order and TP/SL channels are exposed as raw `onObservation` messages only; they are not authoritative, replayable or sufficient to establish recovery. The WebSocket client performs bounded reconnect/resubscribe and heartbeat detection, but it deliberately leaves recovery required after reconnect. The REST client limits dispatch to 10 requests/second per client and never automatically retries.
+**Status: implemented provider-specific reads and guarded trading mutations; not production-ready.** See the [maintained Futures reference audit](./docs/bitunix-futures-reference-audit.md), [shared Broker API matrix](./BROKER_API.md#bitunix-usdt-futures-provider--implementation-status), and [tracking issue #1805](https://github.com/45s/coinzilla/issues/1805).
 
-Canonical fills, complete open-order projections, candle subscriptions, order/account mutations and authoritative account recovery remain unavailable. LIVE mutation flags default to false. The provider is **not production-ready** and must not be selected for execution or Harvester routing. See the [Bitunix Futures reference audit](./docs/BITUNIX_FUTURES_REFERENCE_AUDIT.md), [Broker API status](./BROKER_API.md#bitunix-usdt-futures-provider--implementation-status), and [tracking issue #1805](https://github.com/45s/coinzilla/issues/1805).
+### Implemented surface
+
+- Market catalog, ticker/mark prices, order-book depth and closed REST candles.
+- Current and batch funding rates, bounded funding-rate history, position tiers and authenticated per-symbol trading settings.
+- Exact USDT balance projection, current/historical positions, position mode and leverage/margin-mode reads.
+- Canonical order detail and bounded canonical order history; provider-specific pending-order and pending TP/SL reads.
+- Canonical `getFills()` for one bounded execution-history page. Exact decimal quote notional is derived without floating-point arithmetic; commission asset is unknown because the exchange history row does not supply it. Complete account-wide fill history is not claimed.
+- Provider-specific `createFuturesOrder()`, LIMIT-only `modifyFuturesOrder()`, `cancelOrder()` and `cancelAllOpenOrders()`, all behind explicit live-mutation opt-in and private user-data readiness.
+- Public trade and one-level book-ticker subscriptions; authenticated private balance, position, order and TP/SL observations through `onObservation`.
+
+### Mutation safety and recovery
+
+LIVE order mutations remain disabled by default. Enabling `providerOptions.allowLiveOrderMutations` is not sufficient by itself: the consumer must establish an authenticated private user-data session, complete REST reconciliation of balances, positions, pending orders and TP/SL orders, then call:
+
+```js
+await broker.acknowledgeUserDataReconciliation({
+  reconciliationCompleted: true,
+})
+```
+
+Disconnect, reconnect and unsubscribe reset the readiness gate. The acknowledgement is a consumer attestation; it does not make private observations authoritative or replayable. Bitunix documents no monotonic event sequence or replay cursor. Mutation requests are one-shot, are not automatically retried, and uncertain outcomes require reconciliation by stable exchange identity.
+
+### Remaining blockers
+
+- Correlate matching private order/TP-SL events with placement, modification and cancellation outcomes; retain `OUTCOME_UNKNOWN` when evidence is missing or ambiguous.
+- Complete attached TP/SL modification and separate order-level/position-level TP/SL place, modify, cancel and history operations.
+- Implement explicit-scope position close and close-all operations with verified postconditions.
+- Implement account-level position-mode, symbol margin-mode/leverage and isolated-position-margin mutations behind separate account-mutation safeguards.
+- Keep common Spot-shaped `createCanonicalOrder()`, `getOpenOrders()` and legacy order/trade projections unsupported where they cannot preserve Futures semantics.
+- Establish authoritative snapshot/recovery guarantees and verify a safe isolated Futures TESTNET before any integration mutation testing.
+
+No LIVE Futures mutation was performed by implementation work or ordinary CI. The provider must not be selected for production execution or Harvester routing until the remaining blockers are closed and reviewed.
