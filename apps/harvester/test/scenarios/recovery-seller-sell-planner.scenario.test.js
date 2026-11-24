@@ -180,13 +180,7 @@ function createExternalSellReservation() {
   })
 }
 
-async function createPlannerScenario({
-  spotTotalQuantity = "1.01",
-  legacyRemainingQuantity = "0.01",
-  quantityStepSize = "0.01",
-  minimumNotional = "5",
-  includeExternalSellReservation = false,
-} = {}) {
+function createPlannerWorkflow({ includeExternalSellReservation = false } = {}) {
   const buyOrder = createRecoveryBuyOrder()
   const ownership = createOrderOwnership({
     ownership: {
@@ -215,7 +209,7 @@ async function createPlannerScenario({
           invested: "0.20",
           quantity: "0.01",
         }),
-        remainingQuantity: legacyRemainingQuantity,
+        remainingQuantity: "0.01",
       }),
       accounting: createLegacyPositionAccounting(),
     }],
@@ -226,14 +220,14 @@ async function createPlannerScenario({
       },
     }),
   })
-  const buyResult = await workflow.applyBuyFill({
-    order: buyOrder,
-    fill: createRecoveryBuyFill(),
-  })
-  assert.equal(buyResult.ok, true,
-    "The scenario must seed the Recovery Position through one confirmed canonical BUY Fill before evaluating SELL planning.")
+  return {
+    workflow,
+    buyOrder,
+  }
+}
 
-  const accountSnapshot = Object.freeze({
+function createAccountSnapshot({ spotTotalQuantity }) {
+  return Object.freeze({
     balances: Object.freeze([
       new Balance({
         free: new Quantity({
@@ -247,6 +241,23 @@ async function createPlannerScenario({
       }),
     ]),
   })
+}
+
+async function createPlannerScenario({
+  spotTotalQuantity = "1.01",
+  quantityStepSize = "0.01",
+  minimumNotional = "5",
+  includeExternalSellReservation = false,
+} = {}) {
+  const { workflow, buyOrder } = createPlannerWorkflow({
+    includeExternalSellReservation,
+  })
+  const buyResult = await workflow.applyBuyFill({
+    order: buyOrder,
+    fill: createRecoveryBuyFill(),
+  })
+  assert.equal(buyResult.ok, true,
+    "The scenario must seed the Recovery Position through one confirmed canonical BUY Fill before evaluating SELL planning.")
   const marketMetadata = createMarketMetadata({
     quantityStepSize,
     minimumNotional,
@@ -255,19 +266,52 @@ async function createPlannerScenario({
   const snapshot = workflow.getTransitionSnapshot({
     marketMetadata,
     pairConfig,
-    accountSnapshot,
+    accountSnapshot: createAccountSnapshot({ spotTotalQuantity }),
     stopState,
     strategyStopped: false,
     marketPaused: false,
     reconciliationComplete: true,
   })
-
   return Object.freeze({
     workflow,
     snapshot,
     marketMetadata,
     stopState,
   })
+}
+
+function assertSpecificationZroSellPlan({ snapshot, marketMetadata, stopState }) {
+  assert.equal(snapshot.recoveryPosition.quantity, "1",
+    "The Recovery Position quantity must come from the confirmed canonical BUY Fill, not a caller-selected SELL split.")
+  assert.equal(snapshot.recoveryPosition.spent, "10",
+    "The recovery cost basis must come from the actual quote quantity of the canonical BUY Fill.")
+  assert.equal(snapshot.planInput.legacyRemainingQuantity, "0.01",
+    "The legacy remainder must come from the operator-authorized legacy Position.")
+  assert.equal(snapshot.planInput.verifiedUnreservedLegacyQuantity, "0.01",
+    "Only the additional ZRO quantity verified by the Spot snapshot beyond Portfolio custody may support the legacy slice.")
+  assert.equal(snapshot.planInput.legacyAverageCost, "20",
+    "Legacy average cost must remain the fixed historical basis of 0.20 USDT divided by 0.01 ZRO.")
+  const result = evaluateRecoverySellerSellDecision({
+    pairConfig,
+    marketMetadata,
+    cycleState: snapshot.cycleState,
+    stopState,
+    planInput: snapshot.planInput,
+  })
+  assert.equal(result.decision.outcome, "SUBMIT",
+    "A fully verified mixed SELL that satisfies all independent profitability and TradingRules gates must produce one eligible intent.")
+  assert.equal(result.orderIntent.quantity, "1.01",
+    "The planner must derive 1.01 ZRO as 1.00 recovery plus the additive 0.01 authorized legacy slice.")
+  assert.equal(result.orderIntent.plan.recoveryRequiredNetQuoteProceeds, "10.1101",
+    "Recovery proceeds must independently satisfy its 10.00 USDT basis plus 0.01 USDT minimum profit.")
+  assert.equal(result.orderIntent.plan.legacyRequiredNetQuoteProceeds, "20.2",
+    "Legacy proceeds must independently recover its 0.20 USDT historical basis.")
+  assert.equal(result.orderIntent.plan.combinedRequiredNetQuoteProceeds, "10.21",
+    "Combined proceeds must independently recover both bases plus the 0.01 USDT minimum profit.")
+  assert.equal(result.orderIntent.plan.requiredNetQuoteProceeds, "20.2",
+    "The planner must choose the maximum independent target, not the weaker combined-only 10.21 USDT target.")
+  assert.equal(result.orderIntent.plan.price, "20",
+    "The unrounded 20.00 USDT/ZRO oracle must be represented at the supplied 0.01 TradingRules price increment.")
 }
 
 function createTransitionEvaluator({ snapshot, onSubmit }) {
@@ -294,45 +338,11 @@ function createTransitionEvaluator({ snapshot, onSubmit }) {
 
 test("the SELL planner derives the specification ZRO quantity and strictest independent proceeds target from canonical inventory and Spot custody", async () => {
   const scenario = await createPlannerScenario()
-  const { snapshot, marketMetadata, stopState } = scenario
-
-  assert.equal(snapshot.recoveryPosition.quantity, "1",
-    "The Recovery Position quantity must come from the confirmed canonical BUY Fill, not a caller-selected SELL split.")
-  assert.equal(snapshot.recoveryPosition.spent, "10",
-    "The recovery cost basis must come from the actual quote quantity of the canonical BUY Fill.")
-  assert.equal(snapshot.planInput.legacyRemainingQuantity, "0.01",
-    "The legacy remainder must come from the operator-authorized legacy Position.")
-  assert.equal(snapshot.planInput.verifiedUnreservedLegacyQuantity, "0.01",
-    "Only the additional ZRO quantity verified by the Spot snapshot beyond Portfolio custody may support the legacy slice.")
-  assert.equal(snapshot.planInput.legacyAverageCost, "20",
-    "Legacy average cost must remain the fixed historical basis of 0.20 USDT divided by 0.01 ZRO.")
-
-  const result = evaluateRecoverySellerSellDecision({
-    pairConfig,
-    marketMetadata,
-    cycleState: snapshot.cycleState,
-    stopState,
-    planInput: snapshot.planInput,
-  })
-
-  assert.equal(result.decision.outcome, "SUBMIT",
-    "A fully verified mixed SELL that satisfies all independent profitability and TradingRules gates must produce one eligible intent.")
-  assert.equal(result.orderIntent.quantity, "1.01",
-    "The planner must derive 1.01 ZRO as 1.00 recovery plus the additive 0.01 authorized legacy slice.")
-  assert.equal(result.orderIntent.plan.recoveryRequiredNetQuoteProceeds, "10.1101",
-    "Recovery proceeds must independently satisfy its 10.00 USDT basis plus 0.01 USDT minimum profit.")
-  assert.equal(result.orderIntent.plan.legacyRequiredNetQuoteProceeds, "20.2",
-    "Legacy proceeds must independently recover its 0.20 USDT historical basis.")
-  assert.equal(result.orderIntent.plan.combinedRequiredNetQuoteProceeds, "10.21",
-    "Combined proceeds must independently recover both bases plus the 0.01 USDT minimum profit.")
-  assert.equal(result.orderIntent.plan.requiredNetQuoteProceeds, "20.2",
-    "The planner must choose the maximum independent target, not the weaker combined-only 10.21 USDT target.")
-  assert.equal(result.orderIntent.plan.price, "20",
-    "The unrounded 20.00 USDT/ZRO oracle must be represented at the supplied 0.01 TradingRules price increment.")
+  assertSpecificationZroSellPlan(scenario)
 
   let submissions = 0
   const evaluate = createTransitionEvaluator({
-    snapshot,
+    snapshot: scenario.snapshot,
     onSubmit: () => {
       submissions += 1
     },
@@ -343,7 +353,7 @@ test("the SELL planner derives the specification ZRO quantity and strictest inde
       symbol,
       price: "19.99",
     },
-    marketMetadata,
+    marketMetadata: scenario.marketMetadata,
     pairConfig,
   })
 
