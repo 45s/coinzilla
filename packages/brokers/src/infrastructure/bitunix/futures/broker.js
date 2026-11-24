@@ -6,6 +6,7 @@ import { BrokerCapabilities } from "../../../broker/broker-capabilities.js"
 import { BrokerUnsupportedOperationError } from "../../../broker/errors/broker-unsupported-operation-error.js"
 import { BitunixFuturesRestClient } from "./api/rest-client.js"
 import { adaptFuturesCandles, BITUNIX_FUTURES_CANDLE_INTERVALS } from "./adapters/adapt-futures-candles.js"
+import { adaptFuturesCanonicalOrder } from "./adapters/adapt-futures-canonical-order.js"
 
 function unsupportedResult({ operation, reason }) {
   return {
@@ -75,13 +76,17 @@ const FUTURES_CAPABILITIES = [
   },
   {
     type: "READ_CANONICAL_ORDER",
-    status: "UNKNOWN",
-    reason: "The Futures canonical order adapter and clientId recovery path have not yet been implemented.",
+    status: "SUPPORTED",
+    method: "getCanonicalOrder",
+    guarantee: "Reads one Futures order by broker order ID or client ID and maps only rows with an exchange-supplied client ID into the exact-decimal CanonicalOrder entity.",
+    limitation: "Rows without a client ID fail closed because CanonicalOrder requires stable client identity.",
   },
   {
     type: "READ_CANONICAL_ORDER_HISTORY",
-    status: "UNKNOWN",
-    reason: "The Futures canonical order-history adapter and pagination contract have not yet been implemented.",
+    status: "SUPPORTED",
+    method: "getCanonicalOrderHistory",
+    guarantee: "Returns one explicitly bounded, symbol-scoped history page with exact decimal order quantities and exchange-provided client identity.",
+    limitation: "The caller owns skip/limit pagination and the API's documented history retention windows; a page is not proof of complete account history.",
   },
   {
     type: "READ_TRADE_HISTORY",
@@ -477,18 +482,153 @@ export class BitunixFuturesBroker {
     })
   }
 
-  async getCanonicalOrder() {
-    return unsupportedResult({
-      operation: "getCanonicalOrder",
-      reason: "Futures canonical order reads are not implemented yet.",
-    })
+  async getCanonicalOrder({ symbol, orderId, clientOrderId } = {}) {
+    try {
+      const normalizedSymbol = ensure.nonEmptyString({
+        value: symbol,
+        name: "symbol",
+      }).trim().toUpperCase()
+      const hasOrderId = orderId !== undefined && orderId !== null
+      const hasClientOrderId = clientOrderId !== undefined && clientOrderId !== null
+      if (hasOrderId === hasClientOrderId) {
+        throw new TypeError("Bitunix Futures canonical order lookup requires exactly one of orderId or clientOrderId")
+      }
+      const identifier = hasOrderId
+        ? ensure.nonEmptyString({ value: String(orderId), name: "orderId" }).trim()
+        : ensure.nonEmptyString({ value: clientOrderId, name: "clientOrderId" }).trim()
+      let market = this.canonicalMarkets.get(normalizedSymbol)
+      if (!market) {
+        const marketsResult = await this.getExchangeMarkets()
+        if (!marketsResult.ok) {
+          return marketsResult
+        }
+        market = this.canonicalMarkets.get(normalizedSymbol)
+      }
+      if (!market) {
+        throw new TypeError(`Bitunix Futures symbol ${normalizedSymbol} is not present in the current tradable market catalog`)
+      }
+      const response = await this.restClient.request({
+        method: "GET",
+        path: "/api/v1/futures/trade/get_order_detail",
+        queryParams: hasOrderId
+          ? { orderId: identifier }
+          : { clientId: identifier },
+      })
+      ensure.plainObject({
+        value: response.data,
+        name: "Futures order detail",
+      })
+      if (String(response.data.symbol ?? "").toUpperCase() !== normalizedSymbol) {
+        throw new TypeError("Bitunix Futures order detail symbol does not match the requested symbol")
+      }
+      const order = adaptFuturesCanonicalOrder({
+        order: response.data,
+        market,
+      })
+      if ((hasOrderId && order.brokerOrderId !== identifier) ||
+          (hasClientOrderId && order.clientOrderId !== identifier)) {
+        throw new TypeError("Bitunix Futures order detail identity does not match the requested identifier")
+      }
+      return toResult({
+        data: order,
+      })
+    } catch (error) {
+      handleErr({
+        where: "BitunixFuturesBroker.getCanonicalOrder()",
+        error,
+      })
+      return toResult({
+        errors: [error],
+      })
+    }
   }
 
-  async getCanonicalOrderHistory() {
-    return unsupportedResult({
-      operation: "getCanonicalOrderHistory",
-      reason: "Futures canonical order history is not implemented yet.",
-    })
+  async getCanonicalOrderHistory({ symbol, startTime, endTime, limit = 10, skip = 0 } = {}) {
+    try {
+      const normalizedSymbol = ensure.nonEmptyString({
+        value: symbol,
+        name: "symbol",
+      }).trim().toUpperCase()
+      ensure.positiveInteger({
+        value: limit,
+        name: "limit",
+      })
+      if (limit > 100) {
+        throw new RangeError("Bitunix Futures order-history limit cannot exceed 100")
+      }
+      ensure.nonNegativeInteger({
+        value: skip,
+        name: "skip",
+      })
+      if (startTime !== undefined) {
+        ensure.nonNegativeInteger({
+          value: startTime,
+          name: "startTime",
+        })
+      }
+      if (endTime !== undefined) {
+        ensure.nonNegativeInteger({
+          value: endTime,
+          name: "endTime",
+        })
+      }
+      if (startTime !== undefined && endTime !== undefined && endTime < startTime) {
+        throw new RangeError("Bitunix Futures order-history endTime must not precede startTime")
+      }
+      let market = this.canonicalMarkets.get(normalizedSymbol)
+      if (!market) {
+        const marketsResult = await this.getExchangeMarkets()
+        if (!marketsResult.ok) {
+          return marketsResult
+        }
+        market = this.canonicalMarkets.get(normalizedSymbol)
+      }
+      if (!market) {
+        throw new TypeError(`Bitunix Futures symbol ${normalizedSymbol} is not present in the current tradable market catalog`)
+      }
+      const queryParams = {
+        symbol: normalizedSymbol,
+        limit,
+        skip,
+      }
+      if (startTime !== undefined) {
+        queryParams.startTime = startTime
+      }
+      if (endTime !== undefined) {
+        queryParams.endTime = endTime
+      }
+      const response = await this.restClient.request({
+        method: "GET",
+        path: "/api/v1/futures/trade/get_history_orders",
+        queryParams,
+      })
+      ensure.plainObject({
+        value: response.data,
+        name: "Futures order history",
+      })
+      ensure.array({
+        value: response.data.orderList,
+        name: "Futures orderList",
+      })
+      if (!Number.isSafeInteger(response.data.total) || response.data.total < 0) {
+        throw new TypeError("Bitunix Futures order-history total must be a non-negative safe integer")
+      }
+      const orders = response.data.orderList.map((order) => adaptFuturesCanonicalOrder({
+        order,
+        market,
+      }))
+      return toResult({
+        data: orders,
+      })
+    } catch (error) {
+      handleErr({
+        where: "BitunixFuturesBroker.getCanonicalOrderHistory()",
+        error,
+      })
+      return toResult({
+        errors: [error],
+      })
+    }
   }
 
   async getFills() {
