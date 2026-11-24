@@ -1302,7 +1302,7 @@ Required cases:
 6. Account-wide existing SELL reservations and shared base commitments are respected.
 7. Cross-market reservations and same-market CG/RS reservations cannot double-sell the same physical base inventory.
 8. Exact recovery/legacy allocation split and quantity conservation.
-9. Real TradingRules filters, including quantity/notional and tick/step boundaries.
+9. Real TradingRules filters, including quantity/notional and tick/step boundaries; include tiny exact decimal quantities whose serialized representation may use exponent notation as subcase `RS-003-009-A`.
 10. Any candidate SELL violating a supported price/quantity increment, min/max price, min/max quantity or min/max notional filter latches global sticky STOP; no automatic adjustment, split, retry or dust reinterpretation.
 11. Missing required filter metadata fails closed/STOPs under the approved market contract.
 12. After a successfully completed cycle is fully reconciled and all applicable profitability gates pass, a residual unsellable solely because of current quantity/notional filters is retained as bonus dust; record exact residual and limiting filter.
