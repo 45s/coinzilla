@@ -345,7 +345,6 @@ Do not treat the conceptual diagram as a new production state model: map every t
 - Added tests for exact-target, immediately-below-target, and over-target confirmed SELL proceeds. Only the exact/over-target cases clamp required net proceeds to zero; the below-target case preserves the exact positive remainder and rounds the minimum price up to one tick.
 - Test-only audit addition; exact-head CI validation pending.
 
-
 ## From-scratch Recovery Seller scenario evidence — issue #1780
 
 The separate initiative adds three package-level scenario files; it does not replace or retroactively credit the existing RS unit/runtime tests listed above.
