@@ -1,5 +1,10 @@
 # Harvester Roadmap
 
+## Trading-history WebSocket large-frame crash — issue #1826
+
+**In progress in draft [PR #1830](https://github.com/45s/coinzilla/pull/1830)** on the existing branch `fix/harvester/1826-websocket-frame-length`. The test-first checkpoint confirmed both the 16-bit encoder overflow (198,918-byte UTF-8 snapshot) and an uncaught circular-JSON serialization failure. The implementation now uses RFC 6455 7-bit/16-bit/64-bit server framing, a 1 MiB complete-message cap, a 2 MiB per-client buffered-write cap, and client-local cleanup for serialization/encoding/write failures. Regression coverage includes 125/126, 65,535/65,536, 115,638-byte and multibyte UTF-8 frames, a large account-snapshot integration, malformed serialization isolation and oversized-message rejection. API and operator documentation record the actual limits and close codes. Exact-head GREEN and full required CI verification remain pending; no trading or exchange-write behavior is changed.
+
+
 ## Conservative trading correctness and exhaustive scenario coverage — issue #1763
 
 **Objective:** prove Conservative trading calculations, accounting, lifecycle transitions and safety decisions with source-mapped deterministic evidence. This complements (does not replace) focused unit tests and existing application/replay tests. The canonical [Conservative Domain Specification](./docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md) remains the sole behavior authority; the [scenario-test guide](./docs/domain/CONSERVATIVE_DOMAIN_SCENARIO_TESTS.md) defines authoring conventions; [issue #1763](https://github.com/45s/coinzilla/issues/1763) owns the exhaustive matrix and phase-by-phase evidence.
