@@ -788,7 +788,7 @@ function createBuyScenarioResult({
         strategyId: item.strategyId,
         quantity: item.baseQuantity.amount,
         spent: item.spent.amount,
-      })),
+      })).sort((left, right) => left.positionId.localeCompare(right.positionId)),
     } : {}),
     ...(legacyPosition ? {
       legacyPosition: {
