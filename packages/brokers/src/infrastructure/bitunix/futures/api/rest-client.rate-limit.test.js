@@ -80,7 +80,6 @@ test("Bitunix Futures REST rate limiting is shared across clients using the same
     apiKey: "bitunix-rate-limit-shared-test-key",
   })
   const dependencies = {
-    config,
     now: () => 1_700_000_000_000,
     rateLimitNow: () => clock,
     sleepFn: async (delay) => {
