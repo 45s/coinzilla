@@ -248,7 +248,7 @@ async function main() {
       outputFile: path.resolve(args[2]),
       passphrase: process.env.HARVESTER_ARCHIVE_PASSPHRASE,
     })
-    process.stdout.write(`Decrypted archive: ${outputFile}\\nExtract it with: tar -xzf "${outputFile}" -C <empty-output-directory>\\n`)
+    process.stdout.write(`Decrypted archive: ${outputFile}\nExtract it with: tar -xzf "${outputFile}" -C <empty-output-directory>\n`)
     return
   }
   return runHarvesterDebugArchive({ args })
