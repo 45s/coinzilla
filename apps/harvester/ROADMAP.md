@@ -2181,3 +2181,10 @@ The detailed evidence, implementation commits, CI state and remaining unknowns a
 
 - Added confirmed-proceeds threshold boundaries: exact-target and over-target proceeds clamp required proceeds to zero; proceeds immediately below target preserve the exact positive remainder and require a tick-rounded recovery price.
 - Test-only change; exact-head CI validation pending.
+
+## 2026-11-24 — #1763 Phase 4 BUY accounting expansion
+
+- Added a real-component BUY accounting scenario in `src/use-cases/conservative-buy-accounting-scenario.test.js`: multiple execution fills for one BUY order at different prices, base/quote/valued third-asset commissions, zero-fee execution, exact net inventory, full quote cost/cash flow and matching Portfolio/RecoveryLedger execution identities.
+- Added cross-projection regressions for identical duplicate replay, changed commission facts under a reused Fill identity, Portfolio/RecoveryLedger history disagreement, foreign-market BUY evidence and failure atomicity. Rejected inputs leave both accepted immutable projections unchanged.
+- Audited the Phase 4 BUY matrix against existing Portfolio/Position, commission-validation, canonical Fill, completed-BUY VWAP, account-snapshot and allocation tests; source/test evidence is recorded in `docs/domain/DOMAIN_TEST_INVENTORY.md`.
+- Test-only/docs work. No production behavior, strategy rules, exchange access or credentials changed. Exact-head CI verification is pending.
