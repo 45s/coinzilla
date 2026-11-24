@@ -1,4 +1,4 @@
-import { Market } from "@coinzilla/entities"
+import { Asset, Market } from "@coinzilla/entities"
 import { ensure, handleErr, toResult } from "@coinzilla/utils"
 import { adaptFuturesBalances } from "./adapters/adapt-futures-balances.js"
 import { BrokerCapabilities } from "../../../broker/broker-capabilities.js"
