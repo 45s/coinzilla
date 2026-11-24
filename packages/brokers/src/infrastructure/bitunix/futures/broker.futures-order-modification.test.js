@@ -90,7 +90,12 @@ function createModifyEvent({ privateClients, modifyEventOverrides }) {
   })
 }
 
-function createModifyResponse({ modifyError, privateClients, emitModifyEvent, modifyEventOverrides }) {
+function createModifyResponse({
+  modifyError,
+  privateClients,
+  emitModifyEvent = true,
+  modifyEventOverrides = {},
+}) {
   if (modifyError) {
     throw modifyError
   }
@@ -126,6 +131,11 @@ function createModifyFetch(options) {
       method: fetchOptions.method,
       body: fetchOptions.body,
     })
+    if (path === "/api/v1/futures/market/trading_pairs") {
+      return createFuturesResponse({
+        data: [createSymbolInfo()],
+      })
+    }
     if (path === "/api/v1/futures/trade/get_pending_orders") {
       return createFuturesResponse({
         data: {

@@ -28,8 +28,14 @@ export function matchesPrivateOrderEventIdentity({ event, orderId, clientOrderId
     return false
   }
   return payload.symbol === symbol &&
-    matchesIdentifier({ actual: payload.orderId, expected: expectedOrderId }) &&
-    matchesIdentifier({ actual: payload.clientId, expected: expectedClientOrderId })
+    matchesIdentifier({
+      actual: payload.orderId,
+      expected: expectedOrderId,
+    }) &&
+    matchesIdentifier({
+      actual: payload.clientId,
+      expected: expectedClientOrderId,
+    })
 }
 
 /**
@@ -61,22 +67,28 @@ export function createPrivateOrderEventWaiter({ broker, orderId, clientOrderId, 
       clearTimeout(timer)
     }
   }
-  function settle(event, error = null) {
+  function settle(result) {
     if (settled) {
       return
     }
     settled = true
     cleanup()
-    resolveResult({ event, error })
+    resolveResult(result)
   }
   function onChannel(event) {
     if (matchesPrivateOrderEventIdentity({ event, orderId, clientOrderId, symbol })) {
-      settle(event)
+      settle({
+        event,
+        error: null,
+      })
     }
   }
   function onStatus(status) {
     if (isPrivateSessionUnavailable(status)) {
-      settle(null, new Error("Bitunix Futures private user-data session became unavailable before order-event confirmation"))
+      settle({
+        event: null,
+        error: new Error("Bitunix Futures private user-data session became unavailable before order-event confirmation"),
+      })
     }
   }
   function startTimeout() {
@@ -84,7 +96,10 @@ export function createPrivateOrderEventWaiter({ broker, orderId, clientOrderId, 
       return
     }
     timer = setTimeout(() => {
-      settle(null, new Error("Timed out waiting for the matching Bitunix Futures private order event"))
+      settle({
+        event: null,
+        error: new Error("Timed out waiting for the matching Bitunix Futures private order event"),
+      })
     }, timeoutMs)
   }
   client.on("channel", onChannel)
@@ -92,6 +107,9 @@ export function createPrivateOrderEventWaiter({ broker, orderId, clientOrderId, 
   return {
     promise,
     startTimeout,
-    cancel: () => settle(null),
+    cancel: () => settle({
+      event: null,
+      error: null,
+    }),
   }
 }
