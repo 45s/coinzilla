@@ -77,6 +77,9 @@ function createOperatorStatus() {
 function createOperatorMarkets() {
   return {
     observedAt: 120000,
+    tradingEnabled: true,
+    userDataReady: true,
+    userDataStatus: "READY",
     markets: [{
       symbol: "BTCUSDT",
       enabled: true,
