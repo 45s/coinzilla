@@ -644,8 +644,8 @@ async function applyConflictingFillVariants({ workflow, firstFill, order, positi
       fillInput: {
         tradeId: firstFill.tradeId,
         price: "10",
-        quantity: "2",
-        quoteQuantity: "20",
+        quantity: "1.5",
+        quoteQuantity: "15",
       },
     },
     {
