@@ -19,6 +19,7 @@
   },
   "config": {
     "targetedTestFiles": [
+      "scripts/archive-debug-evidence.test.js",
       "scripts/archive-testnet-session.test.js",
       "scripts/capture-harvester-archive-process-identity.test.js",
       "scripts/reset-operational-state.test.js",
