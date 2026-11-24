@@ -28,7 +28,7 @@ Download the `.tar.gz` file from the private archive repository and extract it d
 tar -xzf "<path-to-archive.tar.gz>" -C "<empty-output-directory>"
 ```
 
-The bundle contains `ARCHIVE-MANIFEST.json` with creation time, source commit/worktree metadata, included/missing source directories, and SHA-256 hashes for the copied files. Treat decrypted logs and Journal records as sensitive operational data.
+The bundle contains `ARCHIVE-MANIFEST.json` with creation time, source commit/worktree metadata, included/missing source directories, and SHA-256 hashes for the copied files. Treat logs and Journal records as sensitive operational data.
 
 ## Safety and limitations
 
