@@ -135,7 +135,11 @@ export class BotsComponent implements OnInit, OnDestroy {
     if (!message || message.revision <= this.lastRevision) return;
     const hadSnapshot = this.status() !== null;
     this.lastRevision = message.revision;
-    if (message.type === 'bots.snapshot.unavailable') {
+    const unavailable = message.type === 'bots.snapshot.unavailable'
+      || message.type === 'bots.state.updated.unavailable'
+      || (message.type === 'bots.state.updated'
+        && (!message.data.status.ok || !message.data.markets.ok || !message.data.portfolio.ok));
+    if (unavailable) {
       this.loading.set(false);
       this.snapshotFreshness.set(hadSnapshot ? 'stale' : 'unavailable');
       this.errorMessage.set(hadSnapshot

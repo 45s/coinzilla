@@ -33,6 +33,14 @@ export interface BotsSnapshotMessage {
   readonly data: BotsSnapshotData;
 }
 
+export interface BotsStateUpdatedMessage {
+  readonly type: 'bots.state.updated';
+  readonly version: 1;
+  readonly revision: number;
+  readonly observedAt: string;
+  readonly data: BotsSnapshotUnavailableData;
+}
+
 export interface BotsSnapshotUnavailableMessage {
   readonly type: 'bots.snapshot.unavailable';
   readonly version: 1;
@@ -41,7 +49,7 @@ export interface BotsSnapshotUnavailableMessage {
   readonly data: BotsSnapshotUnavailableData;
 }
 
-export type BotsWebSocketMessage = BotsSnapshotMessage | BotsSnapshotUnavailableMessage;
+export type BotsWebSocketMessage = BotsSnapshotMessage | BotsStateUpdatedMessage | BotsSnapshotUnavailableMessage;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -180,6 +188,11 @@ export function parseBotsWebSocketMessage(raw: string): BotsWebSocketMessage | n
     if (isAvailableResource(status) && isAvailableResource(markets) && isAvailableResource(portfolio)) {
       return null;
     }
+    return value as unknown as BotsSnapshotUnavailableMessage;
+  }
+  if (value['type'] === 'bots.state.updated') return value as unknown as BotsStateUpdatedMessage;
+  if (value['type'] === 'bots.state.updated.unavailable') {
+    if (isAvailableResource(status) && isAvailableResource(markets) && isAvailableResource(portfolio)) return null;
     return value as unknown as BotsSnapshotUnavailableMessage;
   }
   return null;

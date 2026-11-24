@@ -53,6 +53,16 @@ describe('Bots WebSocket protocol', () => {
     expect(parseBotsWebSocketMessage(JSON.stringify(validSnapshot))).toEqual(validSnapshot);
   });
 
+  it('accepts a complete revisioned state update using the full authoritative DTO shape', () => {
+    const update = { ...validSnapshot, type: 'bots.state.updated', revision: 2 };
+    expect(parseBotsWebSocketMessage(JSON.stringify(update))).toEqual(update);
+  });
+
+  it('accepts an explicit unavailable follow-up state update', () => {
+    const update = { ...validSnapshot, type: 'bots.state.updated.unavailable', revision: 2, data: { ...validSnapshot.data, markets: { ok: false, error: { code: 'HARVESTER_OPERATOR_SNAPSHOT_READ_FAILED', message: 'Harvester operator snapshot is unavailable.' } } };
+    expect(parseBotsWebSocketMessage(JSON.stringify(update))).toEqual(update);
+  });
+
   it('rejects malformed JSON, unsupported versions and invalid revisions', () => {
     expect(parseBotsWebSocketMessage('{not-json')).toBeNull();
     expect(parseBotsWebSocketMessage(JSON.stringify({

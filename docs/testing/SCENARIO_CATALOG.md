@@ -109,7 +109,7 @@ The catalog is a navigation and traceability layer. Domain specifications, accep
   - `reconnects and accepts a new server revision epoch after Harvester restarts`
   - `confirms a global BUY pause through the existing HTTP operator command`
 
-**Evidence note:** Exact PR-head GitHub Actions passed on `dbdecc978eb4de5a81bbc289ba67179a55374aff`: Harvester targeted regressions, all unit tests (including Dashboard production build), all coverage jobs, repository quality, external documentation links, and dependency audit. The optional read-only Binance TESTNET integration job was skipped by workflow configuration. The scenario remains `TEST-MAPPED` until this PR is merged to `develop`.
+**Evidence note:** This scenario is mapped to the deterministic Harvester and Dashboard regression cases listed above. CI evidence is exact-head scoped; use the current PR #1812 checks and linked issue #1813 for the latest verification result rather than treating an older commit SHA as current. The optional read-only Binance TESTNET integration job is skipped by workflow configuration. The scenario remains `TEST-MAPPED` until this PR is merged to `develop`.
 
 ## Harvester — shared account, order, and portfolio behavior
 

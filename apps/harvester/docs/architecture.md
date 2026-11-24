@@ -76,7 +76,7 @@ sequenceDiagram
   WS->>Read: Read status, markets, Portfolio
   Read-->>WS: Initial authoritative DTOs
   WS-->>UI: bots.snapshot (version 1, revision N)
-  Note over WS,Read: If invalidated during the read, discard stale result and coalesce a fresh read
+  Note over WS,Read: If invalidated during the read, send captured snapshot then coalesce a follow-up update
   Bus-->>WS: State invalidation
   WS->>Read: Read current authoritative DTOs
   Read-->>WS: Current DTOs
@@ -92,7 +92,7 @@ sequenceDiagram
 
 The application facade publishes `harvester.operator_buy_control_completed` only after a market/global BUY pause or resume use case returns success. Its payload distinguishes `MARKET` plus symbol from `GLOBAL` without symbol and records `PAUSE` or `RESUME`. Strategy safety pauses are a separate concern: they are not operator BUY-control events and are never presented as operator commands.
 
-The EventBus message is an invalidation hint, not a copy of trading state. The WebSocket adapter reads the authoritative application query facade (`getStatus`, `getMarkets`, and `getPositions`) and sends a complete `bots.snapshot` version-1 envelope containing a server-process revision, observation time, and status/markets/portfolio resources. It subscribes before accepting connections; if a newer event arrives during an in-flight read, the stale read is discarded and sampled again. A reconnect receives a fresh full snapshot. A process restart begins a new revision epoch, which the reconnecting client accepts before applying normal duplicate/out-of-order revision checks.
+The EventBus message is an invalidation hint, not a copy of trading state. The WebSocket adapter reads the authoritative application query facade (`getStatus`, `getMarkets`, and `getPositions`) and sends a complete `bots.snapshot` version-1 envelope containing a server-process revision, observation time, and status/markets/portfolio resources. It subscribes before accepting connections; if a newer event arrives during an in-flight read, the captured revision is sent and a follow-up state update is sampled at the newest requested revision. A reconnect receives a fresh full snapshot. A process restart begins a new revision epoch, which the reconnecting client accepts before applying normal duplicate/out-of-order revision checks.
 
 If one of the required application reads fails, the adapter sends `bots.snapshot.unavailable` with explicit per-resource errors. It must not replace an unavailable market or Portfolio read with an empty list. The Dashboard retains its last complete snapshot as stale, distinguishes socket health from snapshot freshness, and disables controls until a complete snapshot returns. Financial values remain the exact strings supplied by the application read models. The stream does not publish every market-price tick; the latest price and its freshness flag are sampled when a relevant state invalidation triggers a snapshot.
 

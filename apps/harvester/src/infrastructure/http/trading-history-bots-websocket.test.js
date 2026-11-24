@@ -249,9 +249,9 @@ test("broadcasts a newer complete snapshot after a successful operator BUY-contr
 
   const update = await waitForMessage({
     socket,
-    predicate: (item) => item.type === "bots.snapshot" && item.revision > 1,
+    predicate: (item) => item.type === "bots.state.updated" && item.revision > 1,
   })
-  assert.equal(update.data.markets.data.markets[0].operatorBuysPaused, true, "The next full snapshot must reflect the completed market BUY pause.")
+  assert.equal(update.data.markets.data.markets[0].operatorBuysPaused, true, "The next full state update must reflect the completed market BUY pause.")
   assert.equal(update.data.portfolio.data.positions[0].activeQuantity, "0.12500000", "An operator-state update must keep the complete Portfolio snapshot alongside market state.")
 })
 
@@ -285,6 +285,8 @@ test("does not lose an operator transition that occurs while the initial snapsho
   t.after(() => socket.close())
 
   await waitForSocketOpen(socket)
+  const initialSnapshotPromise = waitForMessage({ socket, predicate: (item) => item.type === "bots.snapshot" })
+  const stateUpdatePromise = waitForMessage({ socket, predicate: (item) => item.type === "bots.state.updated" })
   state.markets.markets[0].operatorBuysPaused = true
   const publication = eventBus.publish({
     name: OPERATOR_UPDATE_EVENT,
@@ -303,12 +305,11 @@ test("does not lose an operator transition that occurs while the initial snapsho
     data: state.status,
   })
 
-  const snapshot = await waitForMessage({
-    socket,
-    predicate: (item) => item.type === "bots.snapshot",
-  })
-  assert.equal(snapshot.revision, 2, "A snapshot made stale by an intervening event must be discarded and reread at the newer revision.")
-  assert.equal(snapshot.data.markets.data.markets[0].operatorBuysPaused, true, "The initial synchronization must not hide a transition that raced the snapshot read.")
+  const snapshot = await initialSnapshotPromise
+  const update = await stateUpdatePromise
+  assert.equal(snapshot.revision, 1, "The initial synchronization must publish its captured snapshot revision.")
+  assert.equal(update.revision, 2, "An invalidation during the initial read must produce a newer follow-up revision.")
+  assert.equal(update.data.markets.data.markets[0].operatorBuysPaused, true, "The follow-up state update must include the transition that raced the initial read.")
 })
 
 test("reports failed operator reads explicitly instead of fabricating empty resources", async (t) => {

@@ -129,9 +129,9 @@ function createPortfolioResource({ positions = true } = {}) {
   };
 }
 
-function createSnapshotMessage({ revision = 1, paused = false, positions = true } = {}) {
+function createSnapshotMessage({ revision = 1, paused = false, positions = true, type = 'bots.snapshot' } = {}) {
   return {
-    type: 'bots.snapshot',
+    type,
     version: 1,
     revision,
     observedAt: '2026-11-24T09:00:00.000Z',
@@ -266,6 +266,7 @@ describe('BotsComponent', () => {
     socket.sendMessage(createSnapshotMessage({
       revision: 2,
       paused: true,
+      type: 'bots.state.updated',
     }));
     fixture.detectChanges();
     expect((fixture.nativeElement as HTMLElement).textContent).toContain('BUYs paused');

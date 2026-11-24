@@ -311,7 +311,7 @@ function handleUpgrade({ request, socket, head, clients, exchangeAccounts, reque
     client,
     exchangeAccounts,
   })
-  requestBotsSnapshot?.()
+  requestBotsSnapshot?.({ type: "bots.snapshot" })
   if (head.length > 0) {
     handleSocketData({
       client,
@@ -642,87 +642,52 @@ async function readOperatorResource({ operator, method } = {}) {
   }
 }
 
-async function createBotsSnapshotMessage({ operator, revision } = {}) {
+async function createBotsSnapshotMessage({ operator, revision, type } = {}) {
   const [status, markets, portfolio] = await Promise.all([
-    readOperatorResource({
-      operator,
-      method: "getStatus",
-    }),
-    readOperatorResource({
-      operator,
-      method: "getMarkets",
-    }),
-    readOperatorResource({
-      operator,
-      method: "getPositions",
-    }),
+    readOperatorResource({ operator, method: "getStatus" }),
+    readOperatorResource({ operator, method: "getMarkets" }),
+    readOperatorResource({ operator, method: "getPositions" }),
   ])
-  const data = {
-    status,
-    markets,
-    portfolio,
-  }
+  const data = { status, markets, portfolio }
   const complete = status.ok && markets.ok && portfolio.ok
-  return {
-    type: complete ? "bots.snapshot" : "bots.snapshot.unavailable",
-    version: 1,
-    revision,
-    observedAt: new Date().toISOString(),
-    data,
-  }
+  const messageType = complete ? type : type === "bots.snapshot" ? "bots.snapshot.unavailable" : "bots.state.updated.unavailable"
+  return { type: messageType, version: 1, revision, observedAt: new Date().toISOString(), data }
 }
 
 function broadcastBotsSnapshot({ clients, message } = {}) {
-  for (const client of clients) {
-    sendJson({
-      client,
-      message,
-    })
-  }
+  for (const client of clients) sendJson({ client, message })
 }
 
 function createBotsSnapshotCoordinator({ operator, clients } = {}) {
   let requestedRevision = 0
   let publishedRevision = 0
+  let requestedType = "bots.snapshot"
   let reading = false
 
   async function drainSnapshots() {
-    if (reading || clients.size === 0) {
-      return
-    }
+    if (reading || clients.size === 0) return
     reading = true
     try {
       while (clients.size > 0 && publishedRevision < requestedRevision) {
         const revision = requestedRevision
-        const message = await createBotsSnapshotMessage({
-          operator,
-          revision,
-        })
-        if (revision !== requestedRevision) {
-          continue
-        }
-        broadcastBotsSnapshot({
-          clients,
-          message,
-        })
+        const type = requestedType
+        const message = await createBotsSnapshotMessage({ operator, revision, type })
+        broadcastBotsSnapshot({ clients, message })
         publishedRevision = revision
       }
     } finally {
       reading = false
-      if (clients.size > 0 && publishedRevision < requestedRevision) {
-        void drainSnapshots()
-      }
+      if (clients.size > 0 && publishedRevision < requestedRevision) void drainSnapshots()
     }
   }
 
-  function requestSnapshot() {
+  function requestSnapshot({ type = "bots.state.updated" } = {}) {
     requestedRevision += 1
+    requestedType = type
     void drainSnapshots()
   }
 
-  return Object.freeze({
-    requestSnapshot,
-  })
+  return Object.freeze({ requestSnapshot })
 }
 
 function subscribeToBotsUpdates({ eventBus, requestSnapshot } = {}) {
@@ -731,7 +696,7 @@ function subscribeToBotsUpdates({ eventBus, requestSnapshot } = {}) {
     for (const name of BOTS_UPDATE_EVENTS) {
       const result = eventBus.subscribe({
         name,
-        handler: requestSnapshot,
+        handler: () => requestSnapshot(),
       })
       if (result?.ok !== true || typeof result.subscription?.unsubscribe !== "function") {
         throw new TypeError("Trading-history WebSocket could not subscribe to Harvester Bots updates.")
