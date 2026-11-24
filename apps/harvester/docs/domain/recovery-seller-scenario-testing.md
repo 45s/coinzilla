@@ -446,6 +446,9 @@ Use a stable family ID and stable case ID:
 
 - Family IDs: `RS-001` through `RS-010`.
 - Individual case IDs: `RS-001-001`, `RS-001-002`, and so on.
+- In §11.1, each numbered required case reserves the matching case ID in that family. For example, RS-004 required case 3 is `RS-004-003`. The IDs remain reserved even while their status is `MISSING`, `BLOCKED` or `UNSUPPORTED`.
+- If one numbered case contains multiple independently falsifiable behaviors, retain its parent ID and use letter suffixes such as `RS-003-009-A` and `RS-003-009-B`. Do not hide distinct assertions inside one opaque test.
+- Add new cases with the next unused numeric ID in their primary family; never renumber existing cases when inserting or splitting work.
 - Never recycle a removed ID for a different behavior.
 - A rename of a test title does not change its scenario ID.
 - If one case is split, preserve the original ID for the behavior that remains and assign new IDs to genuinely new behaviors; document the mapping.
@@ -1767,25 +1770,101 @@ Every family below explicitly answers the 22 contract questions required by the 
 | 22. Acceptance criteria | A separate owner-approved issue/spec defines each capability, source of truth and safety boundary before a new scenario family/case is authored or any status changes. |
 
 
-### 11.2 Crosswalk to the owning issue's A–K matrix
+### 11.2 Checkbox-level crosswalk to the owning issue's A–K matrix
 
-Every checkbox in [#1780](https://github.com/45s/coinzilla/issues/1780) must map to at least one stable scenario/subcase ID. This crosswalk prevents a future agent from accidentally treating the RS-001…RS-010 family names as permission to omit an original matrix section.
+Every business-behavior checkbox in sections A–K of [#1780](https://github.com/45s/coinzilla/issues/1780) maps to one or more stable case IDs below. The checkbox suffix is its one-based position within that section (for example, `C.04` is the fourth checkbox in section C). The IDs are reserved requirements, not evidence that a test already exists. Their current status remains the status recorded in #1780 and §11.1.
 
-| #1780 matrix section | Playbook family ownership |
+The mapping is intentionally many-to-many where one behavior needs both a domain and an application proof. A family is not complete merely because one of its cases passes.
+
+| #1780 checkbox | Reserved scenario case ID(s) |
 | --- | --- |
-| A. Authorization, legacy declaration and custody | RS-001 |
-| B. Initial recovery BUY and BUY accounting | RS-002 |
-| C. Recovery and legacy allocation accounting | RS-001, RS-002, RS-003 and RS-006 |
-| D. Independent profitability and SELL economics | RS-004 |
-| E. One-SELL-per-cycle lifecycle and reservations | RS-005, with application evidence in RS-007 |
-| F. STOP, failure atomicity and fail-closed behavior | RS-006, RS-007 and RS-009 |
-| G. Concurrent strategies and account-wide resource safety | RS-008 |
-| H. Cycle completion, residuals and next-cycle behavior | RS-003, RS-005, RS-006 and RS-010 |
-| I. Market, exchange precision and exact arithmetic | RS-002, RS-003 and RS-004 |
-| J. Application integration scenarios | RS-002, RS-005, RS-006, RS-007 and RS-008 |
-| K. Explicitly deferred / blocked scenarios | RS-009 and RS-010 |
+| A.01–A.11 | `RS-001-001` through `RS-001-011` (same order as issue checkboxes) |
+| B.01–B.19 | `RS-002-001` through `RS-002-019` (same order as issue checkboxes) |
+| C.01 | `RS-006-001` |
+| C.02 | `RS-006-005` |
+| C.03 | `RS-001-005`, `RS-001-013` |
+| C.04 | `RS-003-001` |
+| C.05 | `RS-002-020` |
+| C.06 | `RS-006-003`, `RS-006-004` |
+| C.07 | `RS-006-006` |
+| C.08 | `RS-006-007` |
+| C.09 | `RS-006-008` |
+| C.10 | `RS-006-009` |
+| C.11 | `RS-006-010` |
+| C.12 | `RS-006-011` |
+| C.13 | `RS-006-012` |
+| C.14 | `RS-006-013` |
+| C.15 | `RS-006-018` |
+| C.16 | `RS-006-019` |
+| D.01–D.20 | `RS-004-001` through `RS-004-020` (same order as issue checkboxes) |
+| E.01 | `RS-005-001` |
+| E.02 | `RS-005-003` |
+| E.03 | `RS-005-004` |
+| E.04 | `RS-005-005`, `RS-007-009` |
+| E.05 | `RS-005-006` |
+| E.06 | `RS-005-007` |
+| E.07 | `RS-005-008` |
+| E.08 | `RS-005-009` |
+| E.09 | `RS-005-010` |
+| E.10 | `RS-005-010` |
+| E.11 | `RS-007-010`, `RS-007-016` |
+| E.12 | `RS-005-011` |
+| E.13 | `RS-005-012`, `RS-006-013` |
+| E.14 | `RS-005-011` |
+| E.15 | `RS-004-021` |
+| E.16 | `RS-005-013` |
+| E.17 | `RS-005-014` |
+| F.01–F.14 | `RS-009-001` through `RS-009-014` (same order as issue checkboxes) |
+| G.01–G.08 | `RS-008-001` through `RS-008-008` (same order as issue checkboxes) |
+| G.09 | `RS-008-011` |
+| G.10 | `RS-008-009` |
+| G.11 | `RS-008-012` |
+| G.12 | `RS-008-013` |
+| H.01 | `RS-005-013` |
+| H.02 | `RS-006-011`, `RS-006-012` |
+| H.03 | `RS-005-012` |
+| H.04 | `RS-005-012`, `RS-006-013` |
+| H.05 | `RS-005-012` |
+| H.06 | `RS-005-014` |
+| H.07 | `RS-003-002` |
+| H.08 | `RS-003-013` |
+| H.09 | `RS-010-005` |
+| H.10 | `RS-005-015` |
+| H.11 | `RS-005-015` |
+| I.01 | `RS-002-001` through `RS-002-020`; `RS-003-009` through `RS-003-017`; `RS-004-001` through `RS-004-021` |
+| I.02 | `RS-002-001` through `RS-002-020`; `RS-003-009` through `RS-003-017`; `RS-004-001` through `RS-004-021` |
+| I.03 | `RS-003-009`, `RS-004-017` |
+| I.04 | `RS-003-009`, `RS-004-001` through `RS-004-003`, `RS-004-017` |
+| I.05 | `RS-003-009` through `RS-003-011` |
+| I.06 | `RS-003-009-A` |
+| I.07 | `RS-003-011`, `RS-003-016`, `RS-004-018` |
+| I.08 | `RS-003-016` |
+| I.09 | `RS-003-016` |
+| I.10 | `RS-003-021`, `RS-006-004` |
+| J.01 | `RS-002-004` |
+| J.02 | `RS-006-020` |
+| J.03 | `RS-006-021` |
+| J.04 | `RS-006-014`, `RS-006-015` |
+| J.05 | `RS-007-012` |
+| J.06 | `RS-007-013` |
+| J.07 | `RS-008-014` |
+| J.08 | `RS-005-004`, `RS-005-009` |
+| J.09 | `RS-006-022` |
+| J.10 | `RS-009-014` |
+| J.11 | `RS-008-015` |
+| J.12 | `RS-008-016` |
+| K.01 | `RS-010-001` |
+| K.02 | `RS-010-002` |
+| K.03 | `RS-010-003` |
+| K.04 | `RS-010-004` |
+| K.05 | `RS-009-009` |
+| K.06 | `RS-010-005` |
+| K.07 | `RS-010-006` |
+| K.08 | `RS-010-007` |
 
-A matrix checkbox is not complete merely because the family is implemented. Split it into individual stable subcase IDs where it contains more than one independently falsifiable behavior. Keep every missing/blocked/unsupported subcase visible in the registry and #1780.
+The issue's separate acceptance/delivery checklist is not another business-scenario family. Track those items as PR-level acceptance evidence (exact test/CI SHA, documentation synchronization, no exchange operations), not as synthetic domain cases. When a checkbox is split, append a letter suffix to its reserved case ID and add the new mapping here; do not silently change the parent ID.
+
+A matrix checkbox is not complete merely because its family is implemented. Keep every missing/blocked/unsupported case visible in the registry and #1780, and only promote it after all required subcases and evidence are complete.
 
 ## 12. Adversarial sequence and failure matrix
 
