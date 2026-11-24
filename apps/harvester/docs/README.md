@@ -12,6 +12,8 @@ This is the entry point for Harvester-specific documentation. Repository-wide ru
 
 - [Repository test scenario catalog](../../../docs/testing/SCENARIO_CATALOG.md) — cross-workspace human-readable scenarios with business inputs/outputs, subcases, implementation links, and named test mappings. RS entries intentionally start without scenario-coverage credit from existing tests; see [#1780](https://github.com/45s/coinzilla/issues/1780).
 
+- [Recovery Seller scenario testing playbook](domain/recovery-seller-scenario-testing.md) — exact AI-agent instructions for RS scenario implementation, schemas, fixtures, financial oracles, family matrix, evidence and issue synchronization.
+
 - [Application configuration and Telegram notification profiles](../README.md#configuration) — the named `appConfig` export composed from named modules, including `config/operator-control.js` and `config/notifications-tg-profiles.js`; profile behavior, event overrides, and environment-only credentials.
 - [Repository Configuration Standard](../../../docs/engineering/CONFIGURATION_STANDARD.md) — shared ownership, validation, defaults, environment access, secrets and migration rules.
 - [Harvester README](../README.md) — setup, runtime, configuration and operational overview
