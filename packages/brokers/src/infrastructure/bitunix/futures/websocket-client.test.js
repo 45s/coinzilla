@@ -432,3 +432,35 @@ test("Bitunix Futures WebSocket heartbeat timeout enters bounded reconnect and r
   await client.disconnect()
   assert.equal(client.state, "closed")
 })
+
+
+test("Bitunix Futures private WebSocket exposes login acknowledgement readiness", async () => {
+  const { client, transport } = createClient({
+    channelType: "private",
+  })
+  await client.connect()
+  const authenticated = client.waitUntilAuthenticated()
+  transport.receive({
+    op: "login",
+    code: 0,
+    msg: "success",
+  })
+  await authenticated
+  assert.equal(client.authenticated, true)
+  await client.disconnect()
+})
+
+test("Bitunix Futures private WebSocket rejects failed login acknowledgement", async () => {
+  const { client, transport } = createClient({
+    channelType: "private",
+  })
+  await client.connect()
+  const authenticated = client.waitUntilAuthenticated()
+  transport.receive({
+    op: "login",
+    code: 1001,
+    msg: "permission denied",
+  })
+  await assert.rejects(authenticated, /login failed/i)
+  await client.disconnect()
+})
