@@ -564,7 +564,7 @@ The accounting workflow's transition snapshot currently emits an incomplete accu
 **New scenario tests:**
 
 - `recovery-seller-sell-planner.scenario.test.js` (planner-focused; canonical cycle state is supplied to isolate planner behavior)
-  - `the SELL planner derives the specification ZRO quantity and strictest independent proceeds target from canonical inventory and Spot custody`
+  - `the SELL planner derives the specification ZRO quantity from canonical workflow inventory and verified Spot custody using the canonical lifecycle-state contract`
   - `a smaller verified Spot remainder is the only legacy quantity added to the recovery SELL`
   - `missing verified Spot custody blocks the SELL intent and produces no broker submission`
   - `an existing account SELL reservation blocks a second Recovery SELL evaluation`

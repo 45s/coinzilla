@@ -348,7 +348,7 @@ function createTransitionEvaluator({ snapshot, onSubmit }) {
   })
 }
 
-test("the SELL planner derives the specification ZRO quantity and strictest independent proceeds target from canonical inventory and Spot custody", async () => {
+test("the SELL planner derives the specification ZRO quantity from canonical workflow inventory and verified Spot custody using the canonical lifecycle-state contract", async () => {
   const scenario = await createPlannerScenario()
   assertSpecificationZroSellPlan(scenario)
 
@@ -405,7 +405,7 @@ test("missing verified Spot custody blocks the SELL intent and produces no broke
   const result = evaluateRecoverySellerSellDecision({
     pairConfig,
     marketMetadata: scenario.marketMetadata,
-    cycleState: scenario.snapshot.cycleState,
+    cycleState: scenario.cycleState,
     stopState: scenario.stopState,
     planInput: scenario.snapshot.planInput,
   })
@@ -480,7 +480,7 @@ test("actual TradingRules minimum-notional violations block the derived SELL wit
   const result = evaluateRecoverySellerSellDecision({
     pairConfig,
     marketMetadata: scenario.marketMetadata,
-    cycleState: scenario.snapshot.cycleState,
+    cycleState: scenario.cycleState,
     stopState: scenario.stopState,
     planInput: scenario.snapshot.planInput,
   })
