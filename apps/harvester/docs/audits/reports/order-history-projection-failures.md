@@ -288,3 +288,8 @@ The current persistence composition creates a legacy order-history observer in \
 - PR #1796 is merged as \`4adde09fbbfabac10e54d689644e5c473824f65f\`. It fixes prospective terminal diagnostic visibility only, not the missing provider provenance.
 - The code correction and RED/GREEN regression are deferred until #1826 is integrated, as required by the issue's integration order. This checkpoint does not touch #1826's WebSocket files.
 - No database dump was inspected; no exchange requests/writes, order cancellations, account mutations, restarts or archive rewrites were performed.
+
+
+### Regression test — provider provenance on lifecycle updates
+
+A deterministic regression now seeds a real `OrderRegistry` with an accepted provider-attributed order, then applies a valid partial-fill update whose incoming canonical order omits all provider provenance. It asserts that the registry retains the original identity and that the published `order.updated` event carries all three provenance fields. The fixture is offline and uses the existing canonical Order/Fill entities. Exact-head RED verification is pending; the production mapper remains unchanged in this checkpoint.
