@@ -825,6 +825,9 @@ function deliverFuturesTradePrice({ event, symbol, onPrice }) {
 }
 
 function adaptFuturesBookTicker({ event, symbol, timestamp }) {
+  if (!Number.isSafeInteger(timestamp) || timestamp < 0) {
+    throw new TypeError("Bitunix Futures book ticker receipt timestamp must be a non-negative safe integer")
+  }
   ensure.plainObject({
     value: event,
     name: "Futures depth WebSocket event",
@@ -948,9 +951,11 @@ export class BitunixFuturesBroker {
       } finally {
         this.publicWebSocketClient = null
         this.publicWebSocketConnectPromise = null
+        this.connected = false
       }
+    } else {
+      this.connected = false
     }
-    this.connected = false
   }
 
   async #ensurePublicWebSocketClient() {
@@ -1032,9 +1037,12 @@ export class BitunixFuturesBroker {
         })
       } finally {
         if (this.publicWebSocketSubscriptions.size === 0) {
-          await current.client.disconnect()
-          this.publicWebSocketClient = null
-          this.publicWebSocketConnectPromise = null
+          try {
+            await current.client.disconnect()
+          } finally {
+            this.publicWebSocketClient = null
+            this.publicWebSocketConnectPromise = null
+          }
         }
       }
     }
