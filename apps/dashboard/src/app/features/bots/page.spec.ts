@@ -265,6 +265,7 @@ describe('BotsComponent', () => {
     fixture.detectChanges();
     expect((fixture.nativeElement as HTMLElement).textContent).toContain('BUYs paused');
     expect((fixture.nativeElement as HTMLElement).textContent).toContain('Snapshot fresh');
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain('state synchronized');
     http.expectNone(`${BASE_URL}/status`);
     http.expectNone(`${BASE_URL}/markets`);
     http.expectNone(`${BASE_URL}/portfolio`);
