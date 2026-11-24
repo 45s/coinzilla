@@ -19,7 +19,7 @@ import path from "node:path"
 import os from "node:os"
 import { fileURLToPath } from "node:url"
 import { captureBuildMetadata } from "@coinzilla/utils"
-import packageMetadata from "../package.json" with { type: "json" }
+import packageMetadata from "../package.json" with { type: "json" }\nimport { resolveOperationalStateDirectory } from "../src/infrastructure/operational-state/resolve-directory.js"
 
 const PACKAGE_DIRECTORY = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const ARCHIVE_REMOTE = "https://github.com/45s/coinzilla-archive.git"
