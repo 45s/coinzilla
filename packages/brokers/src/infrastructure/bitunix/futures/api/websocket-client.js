@@ -274,6 +274,52 @@ export class BitunixFuturesWebSocketClient extends EventEmitter {
     return Object.freeze([...this.#subscriptions.values()])
   }
 
+  waitUntilAuthenticated({ timeoutMs = 10_000 } = {}) {
+    if (this.channelType !== "private") {
+      return Promise.reject(new Error("Only private Bitunix Futures WebSocket clients authenticate"))
+    }
+    if (this.#authenticated) {
+      return Promise.resolve(this)
+    }
+    if (this.#authenticationError) {
+      return Promise.reject(this.#authenticationError)
+    }
+    if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0) {
+      return Promise.reject(new RangeError("Bitunix Futures authentication timeout must be a positive safe integer"))
+    }
+    return new Promise((...args) => {
+      const [resolve, reject] = args
+      const finish = (error) => {
+        this.off("authenticated", onAuthenticated)
+        this.off("clientError", onClientError)
+        this.off("status", onStatus)
+        this.#clearTimeout(timeout)
+        if (error) {
+          reject(error)
+        } else {
+          resolve(this)
+        }
+      }
+      const onAuthenticated = () => finish()
+      const onClientError = (error) => {
+        if (this.#authenticationError === error) {
+          finish(error)
+        }
+      }
+      const onStatus = (status) => {
+        if (status.reconnectExhausted || (status.state === "closed" && status.recoveryRequired === false)) {
+          finish(new Error("Bitunix Futures WebSocket authentication could not be established"))
+        }
+      }
+      const timeout = this.#setTimeout(() => {
+        finish(new Error("Bitunix Futures WebSocket login acknowledgement timed out"))
+      }, timeoutMs)
+      this.on("authenticated", onAuthenticated)
+      this.on("clientError", onClientError)
+      this.on("status", onStatus)
+    })
+  }
+
   waitUntilOpen() {
     if (this.#state === "open") {
       return Promise.resolve(this)
@@ -639,9 +685,11 @@ export class BitunixFuturesWebSocketClient extends EventEmitter {
   #handleLoginMessage(data) {
     if (data.code !== 0 && data.code !== "0") {
       this.#authenticated = false
-      this.emit("clientError", new Error(`Bitunix Futures WebSocket login failed: ${String(data.msg ?? data.code ?? "unknown error")}`))
+      this.#authenticationError = new Error(`Bitunix Futures WebSocket login failed: ${String(data.msg ?? data.code ?? "unknown error")}`)
+      this.emit("clientError", this.#authenticationError)
       return
     }
+    this.#authenticationError = null
     this.#authenticated = true
     this.#reconnectAttempts = 0
     this.#recoveryRequired = true
@@ -692,6 +740,7 @@ export class BitunixFuturesWebSocketClient extends EventEmitter {
     this.#stopHeartbeat()
     this.#state = "closed"
     this.#authenticated = false
+    this.#authenticationError = null
     this.#recoveryRequired = true
     this.#subscriptions.clear()
     this.#removeTransportListeners()
