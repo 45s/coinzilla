@@ -500,11 +500,13 @@ The schema intentionally separates *business input* from *derived oracle*. Tests
 **Behavior:** Operator-declared original quote investment and original base quantity establish historical basis/authorization. Current sellability is a separate fact obtained from verified Spot custody, less existing reservations and other account commitments.
 
 **Given / example:**
+
 - Operator declaration: `invested="100" USDT`, `originalQuantity="50" ZRO`.
 - Configured legacy release: `sellQuantity="0.01" ZRO`.
 - Verified Spot free quantity: `"0.50" ZRO`; the remaining logical quantity may be in EARN/off-Spot custody.
 
 **Then:**
+
 - Fixed historical average cost is `100 / 50 = 2 USDT/ZRO`.
 - Only verified, unreserved Spot quantity is available for the current Spot SELL.
 - A Spot/EARN transfer changes custody/availability, not the original cost basis.
@@ -525,6 +527,7 @@ The schema intentionally separates *business input* from *derived oracle*. Tests
 **Behavior:** Recovery inventory and cost are derived only from canonical confirmed BUY fills attributed to the current RS Position/cycle/order/market. Requested quantity and acknowledgement are not execution.
 
 **Given / worked fee variants (kept separate):**
+
 - Fill: `10 ZRO @ 2 USDT/ZRO`; gross execution cost = `20 USDT`.
 - Base-fee variant: commission `0.01 ZRO` => net acquired recovery quantity `9.99 ZRO`; quote execution cost remains `20 USDT`.
 - Quote-fee variant: commission `0.02 USDT` => net acquired base `10 ZRO`; quote cost becomes `20.02 USDT`.
@@ -546,6 +549,7 @@ The schema intentionally separates *business input* from *derived oracle*. Tests
 **Behavior:** Conceptual SELL quantity is actual net recovery quantity plus the configured legacy `sellQuantity`, limited by the authorized remaining legacy amount that is verified, Spot-available and unreserved. `sellQuantity` is additive, not total quantity or a cap.
 
 **Specification example (illustrative quantities, not pair defaults):**
+
 - DOGE example: `400 DOGE recovery + 1 DOGE legacy = 401 DOGE`.
 - The example establishes additive semantics only. It does not approve a DOGE price, notional, commission rate, or trading configuration.
 
@@ -556,6 +560,7 @@ The schema intentionally separates *business input* from *derived oracle*. Tests
 **Must not happen:** interpret legacy slice as total/cap; use gross BUY quantity rather than net base; consume unverified/reserved legacy; round allocation ownership silently; invent fee assumptions.
 
 **New scenario tests:**
+
 - `recovery-seller-mixed-sell-accounting.scenario.test.js`
   - `one 401 DOGE canonical SELL Fill allocates 400 DOGE to recovery and 1 DOGE to legacy`
   - `recovery and legacy allocations must sum exactly to the canonical SELL Fill quantity`
@@ -567,6 +572,7 @@ The schema intentionally separates *business input* from *derived oracle*. Tests
 **Status:** PARTIAL — four new domain cases prove both cross-subsidy directions, exact-threshold acceptance and recovery-only eligibility. They do not prove the pre-submission evaluator emits no order when a gate fails.
 
 **Specification worked example — mixed SELL planning (no fees):**
+
 - Recovery: `1 ZRO`, cost `10 USDT`.
 - Legacy: `0.01 ZRO`, fixed average cost `20 USDT/ZRO`, legacy cost `0.20 USDT`.
 - `minProfit = 0.01 USDT`; combined quantity = `1.01 ZRO`.
@@ -579,6 +585,7 @@ The schema intentionally separates *business input* from *derived oracle*. Tests
 At `20.00 USDT/ZRO`, recovery receives `20.00 USDT` (profit `+10.00`), legacy receives `0.20 USDT` (break-even), and combined profit is `+10.00 USDT`; every applicable gate passes. Using only the combined requirement `10.21` would fail the legacy gate and is therefore incorrect.
 
 **Cross-subsidy negative oracle:**
+
 - Recovery cost `10.00`, proceeds `10.15` => `+0.15`.
 - Legacy cost `0.20`, proceeds `0.19` => `-0.01`.
 - Combined cost `10.20`, proceeds `10.34` => `+0.14`.
@@ -588,6 +595,7 @@ At `20.00 USDT/ZRO`, recovery receives `20.00 USDT` (profit `+10.00`), legacy re
 **Must not happen:** collapse three gates into one; let either allocation subsidize the other; evaluate gross rather than actual net proceeds; close an executed cycle after a failed realized gate.
 
 **New scenario tests:** `recovery-seller-profitability.scenario.test.js`
+
 - `a profitable recovery allocation cannot subsidize a legacy loss`
 - `profitable legacy proceeds cannot subsidize a recovery loss`
 - `a mixed recovery and legacy cycle closes at exact profitability thresholds when every gate passes`
@@ -608,6 +616,7 @@ At `20.00 USDT/ZRO`, recovery receives `20.00 USDT` (profit `+10.00`), legacy re
 **Must not happen:** no replacement/continuation SELL, no next-cycle BUY, no premature reservation release, no second close from duplicate terminal delivery.
 
 **New scenario tests:** `recovery-seller-cycle-lifecycle.scenario.test.js`
+
 - `an unknown SELL outcome retains its only identity until reconciliation completes`
 - loop-generated cases: `a terminal canceled SELL remains unresolved and forbids replacement`, `a terminal rejected SELL remains unresolved and forbids replacement`, `a terminal expired SELL remains unresolved and forbids replacement`
 - `a terminal SELL with a different client identity cannot reconcile the submitted cycle`
@@ -625,6 +634,7 @@ At `20.00 USDT/ZRO`, recovery receives `20.00 USDT` (profit `+10.00`), legacy re
 **Must not happen:** apply a partial RS SELL as a standalone CG fill; partially mutate recovery while legacy fails; release a reservation before the required commit succeeds.
 
 **New scenario tests:** `recovery-seller-mixed-sell-accounting.scenario.test.js`
+
 - `a reconciled mixed SELL commits recovery and legacy accounting from the same canonical Fill`
 - `replaying the same terminal mixed SELL is an exact no-op in both accounting projections`
 - `a failed legacy projection leaves the recovery Portfolio and both original inputs unchanged`
@@ -661,6 +671,7 @@ At `20.00 USDT/ZRO`, recovery receives `20.00 USDT` (profit `+10.00`), legacy re
 **Status:** BLOCKED — a contract/source discrepancy must be resolved before this row can be claimed as terminal or tested as an unconditional no-reset invariant.
 
 **Current evidence and discrepancy:**
+
 - The RS specification and #1780 describe STOP as terminal with no operator clear/reset/resume path; the operator facade exposes read-only STOP status.
 - `stop-decision.js` exports `resolveRecoverySellerStopState`, and `resolve-recovery-seller-stop.js` implements an evidence-backed durable `SAFETY_BLOCKER_RESOLVED` operator-action workflow.
 - `create-harvester-operator.js` currently exposes only `getRecoverySellerStopState`, not the resolution use case.
