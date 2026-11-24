@@ -1,8 +1,10 @@
 import { assertBrokerContract, BROKER_COMPATIBILITY_METHODS, BROKER_METHODS } from "./broker-contract.js"
 import { BinanceWebSocketBroker } from "../infrastructure/binance/spot/broker-websocket/broker.js"
 import { BitunixSpotBroker } from "../infrastructure/bitunix/spot/broker.js"
+import { BitunixFuturesBroker } from "../infrastructure/bitunix/futures/broker.js"
+import { BitunixFuturesConfig } from "../infrastructure/bitunix/futures/config/bitunix-futures-config.js"
 
-const SUPPORTED_PROVIDERS = Object.freeze(["binance", "bitunix"])
+const SUPPORTED_PROVIDERS = Object.freeze(["binance", "bitunix", "bitunix-futures"])
 const COMMON_OPTIONS = new Set([
   "provider",
   "apiKey",
@@ -23,7 +25,7 @@ function validateBrokerInput({ input }) {
   }
 
   if (!SUPPORTED_PROVIDERS.includes(input.provider)) {
-    throw new TypeError('Broker provider must be either "binance" or "bitunix"')
+    throw new TypeError('Broker provider must be one of "binance", "bitunix", or "bitunix-futures"')
   }
 
   const providerOptions = input.providerOptions ?? {}
@@ -55,8 +57,8 @@ function isBrokerImplementation({ candidate }) {
  *
  * Provider-specific configuration belongs in `providerOptions`. Credentials,
  * environment selection and the optional logger are common constructor inputs.
- * Binance requires an explicit `tradingMode`; Bitunix Spot currently accepts
- * only explicit `tradingMode: "live"` because no Spot TESTNET is documented.
+ * Binance requires an explicit `tradingMode`; Bitunix Spot and Futures currently
+ * accept only explicit `tradingMode: "live"` because no TESTNET is documented.
  *
  * The constructor returns the selected concrete provider instance so existing
  * provider behavior and concrete `instanceof` checks remain intact.
@@ -64,7 +66,7 @@ function isBrokerImplementation({ candidate }) {
 export class Broker {
   /**
    * @param {{
-   *   provider: "binance" | "bitunix",
+   *   provider: "binance" | "bitunix" | "bitunix-futures",
    *   apiKey: string,
    *   apiSecret: string,
    *   tradingMode: "testnet" | "live",
@@ -101,10 +103,16 @@ export class Broker {
     let broker
     if (provider === "binance") {
       broker = new BinanceWebSocketBroker(providerInput, dependencies)
-    } else {
+    } else if (provider === "bitunix") {
       broker = new BitunixSpotBroker({
         ...providerInput,
         ...(dependencies === undefined ? {} : { dependencies }),
+      })
+    } else {
+      const config = new BitunixFuturesConfig(providerInput)
+      broker = new BitunixFuturesBroker({
+        config,
+        logger,
       })
     }
 
