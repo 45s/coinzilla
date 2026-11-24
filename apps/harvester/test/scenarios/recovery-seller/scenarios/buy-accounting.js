@@ -77,7 +77,10 @@ function createBuyCaseDefinition({
       "RS_PAIR.orderQuantity",
       "RS_PAIR.investment",
     ],
-    covers: createBuyCaseCoverage({ rules, invariants }),
+    covers: createBuyCaseCoverage({
+      rules,
+      invariants,
+    }),
     given: { input },
     when: [{
       type: stepType,
