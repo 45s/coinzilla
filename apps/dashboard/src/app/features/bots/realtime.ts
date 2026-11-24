@@ -65,9 +65,9 @@ function isSnapshotResource(value: unknown): value is BotsSnapshotResource {
 
 function isSnapshotData(value: unknown): value is BotsSnapshotUnavailableData {
   return isRecord(value)
-    && isSnapshotResource(value.status)
-    && isSnapshotResource(value.markets)
-    && isSnapshotResource(value.portfolio);
+    && isSnapshotResource(value['status'])
+    && isSnapshotResource(value['markets'])
+    && isSnapshotResource(value['portfolio']);
 }
 
 function isSnapshotEnvelope(value: unknown): value is Record<string, unknown> {
