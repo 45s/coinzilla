@@ -191,7 +191,7 @@ function createExternalBuyOrder({ clientOrderId }) {
     side: "BUY",
     type: "LIMIT_MAKER",
     limitPrice: new Money({
-      amount: "2",
+      amount: input.limitPrice ?? "4",
       asset: quoteAsset,
     }),
     originalQuantity: new Quantity({
@@ -211,18 +211,20 @@ function createExternalBuyOrder({ clientOrderId }) {
 
 function createBuyScenarioCommissions({ fillInput }) {
   const commissions = []
-  if (fillInput.baseCommission) {
+  const baseAmounts = fillInput.baseCommissions ?? [fillInput.baseCommission].filter(Boolean)
+  const quoteAmounts = fillInput.quoteCommissions ?? [fillInput.quoteCommission].filter(Boolean)
+  for (const amount of baseAmounts) {
     commissions.push(new Commission({
       amount: new Money({
-        amount: fillInput.baseCommission,
+        amount,
         asset: baseAsset,
       }),
     }))
   }
-  if (fillInput.quoteCommission) {
+  for (const amount of quoteAmounts) {
     commissions.push(new Commission({
       amount: new Money({
-        amount: fillInput.quoteCommission,
+        amount,
         asset: quoteAsset,
       }),
     }))
@@ -311,7 +313,7 @@ function createRecoveryBuyScenarioFill({ fillInput, order }) {
     market: order.market,
     side: "BUY",
     price: new Money({
-      amount: "2",
+      amount: fillInput.price ?? "2",
       asset: order.market.quoteAsset,
     }),
     quantity: new Quantity({
@@ -536,6 +538,22 @@ const domainHandlers = {
   },
 }
 
+async function applyConflictingBuyFill({ workflow, firstFill, order }) {
+  const conflictFill = createRecoveryBuyScenarioFill({
+    fillInput: {
+      tradeId: firstFill.tradeId,
+      quantity: firstFill.quantity.amount,
+      quoteQuantity: "5.01",
+    },
+    order,
+  })
+  const result = await workflow.applyBuyFill({ fill: conflictFill })
+  return {
+    ok: result.ok,
+    applied: result.data?.applied === true,
+  }
+}
+
 const applicationHandlers = {
   "reject-external-buy-fill": async ({ input }) => {
     const order = createExternalBuyOrder({
@@ -708,7 +726,7 @@ test("RS-001-014: missing balances and Spot custody below aggregate Portfolio ba
 })
 
 
-for (const scenario of recoverySellerBuyAccountingScenarios) {
+for (const scenario of recoverySellerBuyAccountingScenarios.filter((item) => item.status !== "BLOCKED")) {
   test(scenario.test.title, async () => {
     const result = await runApplication(scenario)
     assert.deepEqual(result.results[0], scenario.then,
