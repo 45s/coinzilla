@@ -26,6 +26,7 @@ function makeBuyCase({
   rules = [],
   status = "TEST-MAPPED",
   blocker,
+  subcases,
 }) {
   const title = `${id}: ${name}`
   const test = status === "BLOCKED" ? null : {
@@ -58,7 +59,7 @@ function makeBuyCase({
       ],
     },
     given: { input },
-    when: status === "BLOCKED" ? [] : [{
+    when: [{
       type: "apply-recovery-buy-scenario",
       inputKey: "input",
       saveAs: "actual",
@@ -70,7 +71,7 @@ function makeBuyCase({
       "apply one canonical Fill more than once",
       "adopt an external Fill without immutable RS order ownership",
     ],
-    subcases: createBuySubcases({
+    subcases: subcases ?? createBuySubcases({
       id,
       name,
       status,
@@ -319,10 +320,29 @@ export const recoverySellerBuyAccountingScenarios = Object.freeze([
     },
     rules: ["RS_BUY_ACTUAL_QUOTE_COST"],
     status: "PARTIAL",
-    blocker: {
-      reason: "Missing or ambiguous third-asset valuation is rejected, but no authoritative execution-time quote-value source is approved; successful third-asset valuation is unsupported.",
-      unblockCondition: "Approve an authoritative execution-time valuation source and define its asset identity, quote asset, rate/value and freshness contract before adding a successful valuation scenario.",
-    },
+    subcases: [
+      {
+        id: "RS-002-012-A",
+        description: "missing third-asset quote valuation fails closed",
+        status: "TEST-MAPPED",
+        test: {
+          file: testFile,
+          title: "RS-002-012: an unvalued third-asset BUY commission fails closed and is never treated as zero",
+        },
+        evidence: null,
+      },
+      {
+        id: "RS-002-012-B",
+        description: "successful third-asset valuation is blocked until an authoritative execution-time source is approved",
+        status: "BLOCKED",
+        test: null,
+        blocker: {
+          reason: "No authoritative execution-time quote-value source is approved for third-asset commissions.",
+          unblockCondition: "Approve a source with asset identity, quote asset, rate/value and freshness semantics, then add a successful valuation scenario.",
+        },
+        evidence: null,
+      },
+    ],
   }),
   makeBuyCase({
     id: "RS-002-013",
