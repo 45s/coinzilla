@@ -84,7 +84,7 @@ This initiative does not authorize:
 - Implementing a second Portfolio, Position, Fill, OrderRegistry, accounting engine, exchange-filter engine or RS state machine inside test helpers.
 - Broker/API calls, order placement/cancellation, credential use, exchange sessions, TESTNET/LIVE experiments, or exchange-state changes.
 - Restart/replay support, standalone final-residual liquidation, advanced pause/disable/abandon/resume lifecycle flows, or third-asset commission valuation without an independently approved contract and source.
-- Inventing STOP reset/resume, SELL retry/replacement, post-fill recovery, partial terminal SELL continuation, dust treatment or new-cycle behavior.
+- Inventing STOP reset/resume, SELL retry/replacement, post-fill recovery, continuation after terminal CANCELED/EXPIRED outcomes with prior partial fills, dust treatment or new-cycle behavior.
 - Building a generic test framework for all strategies inside this RS-specific task.
 
 ### 2.3 What counts as success
@@ -1362,7 +1362,7 @@ Required cases:
 7. Partial SELL fills are staged and do not prematurely commit mixed allocation projections.
 8. Complete terminal SELL reconciles the complete canonical REST/stream Fill set before atomic commit.
 9. Reservation releases only after successful terminal mixed-SELL accounting.
-10. Terminal partial/CANCELED/REJECTED/EXPIRED outcomes leave the cycle unresolved and follow the approved terminal STOP contract; no replacement SELL or next BUY is created. This STOP outcome remains subject to the documented source/spec discrepancy.
+10. PARTIALLY_FILLED is nonterminal: keep the sole SELL active and its reservation held. A terminal CANCELED/REJECTED/EXPIRED outcome may include prior partial fills; reconcile the complete canonical Fill set and commissions, then leave the cycle unresolved under the approved terminal STOP contract. No replacement SELL or next BUY is created. This STOP outcome remains subject to the documented source/spec discrepancy.
 11. Unknown, incomplete, conflicting or duplicate terminal facts cannot close twice or release twice.
 12. Duplicate completion request/event is idempotent; stale fills/reports from a completed cycle cannot affect the next cycle.
 13. A new cycle is created only after approved terminal reconciliation, accounting commit and completion gates pass.
@@ -1616,14 +1616,14 @@ Every family below explicitly answers the 22 contract questions required by the 
 | 6. Decision inputs | Existing cycle/order identity, terminal status, reconciliation completeness, profitability and accounting commit result. |
 | 7. Expected decision | SUBMIT only for the first eligible SELL; WAIT for known active order; RECONCILE for unknown/incomplete status; BLOCK/STOP for invalid or conflicting transition. |
 | 8. State before | ACCUMULATING cycle with no SELL identity and no SELL reservation. |
-| 9. State after | SELL_SUBMITTED while active; CLOSED only after terminal FILLED, complete reconciliation, atomic accounting and all gates; otherwise UNRESOLVED/STOP under the approved contract. |
+| 9. State after | SELL_SUBMITTED while active, including PARTIALLY_FILLED; keep the reservation held. CLOSED only after terminal FILLED, complete reconciliation, atomic accounting and all gates; terminal CANCELED/REJECTED/EXPIRED with prior fills remains UNRESOLVED/STOP under the approved contract. |
 | 10. Portfolio effects | Partial SELL fills are staged; no premature recovery/legacy projection commit. Complete canonical fills are applied once after terminal reconciliation. |
 | 11. Reservation effects | Create once at durable submission; retain for active/unknown/incomplete/failed commit; release once only after successful terminal accounting. |
 | 12. Order effects | One immutable SELL identity per cycle; repeated evaluation must not create another broker call; preserve client/broker IDs and ownership. |
 | 13. Commission effects | Commissions follow canonical partial/terminal fills; no commission is invented from intent/acknowledgement; final allocation belongs to RS-006. |
 | 14. Profitability calculation | Cycle closes only when recovery, applicable legacy and combined gates pass on actual net proceeds after complete fee reconciliation. |
 | 15. Invariants | One SELL per cycle; no replacement/retry/continuation SELL; no next BUY from unresolved cycle; reservation conservation. |
-| 16. Failure cases | Unknown acknowledgement; partial terminal; CANCELED/REJECTED/EXPIRED; incomplete REST/stream history; persistence failure; duplicate terminal event; conflicting order identity. |
+| 16. Failure cases | Unknown acknowledgement; PARTIALLY_FILLED while order remains active; terminal CANCELED/REJECTED/EXPIRED with prior partial fills; incomplete REST/stream history; persistence failure; duplicate terminal event; conflicting order identity. |
 | 17. Duplicate/replay cases | Duplicate event/completion is idempotent; conflicting identity rejected; stale prior-cycle fills cannot close or mutate a later cycle. |
 | 18. Required assertions | Exact broker-call count; stable order/cycle identity; state before/after; reservation held/released once; no second SELL/BUY; exact terminal disposition. |
 | 19. Existing regression tests | recovery-seller-cycle-lifecycle.scenario.test.js; create-recovery-seller-accounting-workflow.test.js; create-recovery-seller-order-submitter.test.js. New lifecycle scenario evidence remains PARTIAL. |
