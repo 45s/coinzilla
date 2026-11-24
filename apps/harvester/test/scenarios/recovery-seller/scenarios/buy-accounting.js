@@ -673,7 +673,7 @@ export const recoverySellerBuyAccountingScenarios = Object.freeze([
     id: "RS-002-013",
     name: "reusing a canonical BUY Fill identity with changed quantity, price or commission is rejected atomically",
     input: {
-      originalQuantity: "1",
+      originalQuantity: "2",
       fills: [{
         tradeId: "rs-conflicting-buy-fill",
         price: "10",
