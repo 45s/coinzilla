@@ -82,7 +82,7 @@ function createFirstBuyState() {
       recoveryLedger: RecoveryLedger.empty({ market }),
     },
     fill: makeBuyFill({
-      tradeId: "binance:DOGEUSDT:buy-fill-1",
+      tradeId: "buy-fill-1",
       price: "0.1",
       quantity: "100",
       quoteQuantity: "10",
@@ -130,7 +130,7 @@ function createCompletedBuyState({ state } = {}) {
   const afterSecondFill = applyBuyFill({
     state,
     fill: makeBuyFill({
-      tradeId: "binance:DOGEUSDT:buy-fill-2",
+      tradeId: "buy-fill-2",
       price: "0.12",
       quantity: "50",
       quoteQuantity: "6",
@@ -163,7 +163,7 @@ function createCompletedBuyState({ state } = {}) {
   return applyBuyFill({
     state: afterSecondFill,
     fill: makeBuyFill({
-      tradeId: "binance:DOGEUSDT:buy-fill-3",
+      tradeId: "buy-fill-3",
       price: "0.08",
       quantity: "25",
       quoteQuantity: "2",
@@ -222,7 +222,7 @@ test("rejects a later BUY with an unvalued third-asset commission without changi
       recoveryLedger: RecoveryLedger.empty({ market }),
     },
     fill: makeBuyFill({
-      tradeId: "binance:DOGEUSDT:accepted-buy",
+      tradeId: "accepted-buy",
       price: "0.1",
       quantity: "100",
       quoteQuantity: "10",
