@@ -376,8 +376,8 @@ This exact shape is a source observation. The canonical factory remains the pref
 - One recovery cycle may submit only one SELL order lifecycle.
 - Repeated evaluation cannot create a second SELL.
 - An unknown submission keeps the original client identity and reservation; reconciliation is not permission to resubmit.
-- `PARTIALLY_FILLED` is a nonterminal order status, not a terminal outcome. Its canonical fills are staged, the sole SELL remains active, and the reservation remains held while the order is still open; do not close the cycle or treat the status itself as terminal STOP.
-- A terminal `CANCELED` or `EXPIRED` order may contain prior partial fills. Reconcile the complete canonical fill set and commissions before applying the approved terminal outcome; the cycle remains unresolved and the terminal STOP contract applies. `REJECTED` and other terminal outcomes likewise do not authorize a replacement SELL or a new BUY cycle.
+- `PARTIALLY_FILLED` is a nonterminal order status, not a terminal outcome. Its canonical fills are staged, the sole SELL remains active, and the reservation remains held while the order is still open; do not close the cycle or latch global STOP solely because of this nonterminal status.
+- A terminal `CANCELED` or `EXPIRED` order may contain prior partial fills. Reconcile the complete canonical fill set and commissions before applying the approved terminal outcome; the cycle remains UNRESOLVED. A global STOP latched for the outcome blocks additional BUY spending only. `REJECTED` and other terminal outcomes likewise do not authorize a replacement SELL or a new BUY cycle.
 - A cycle closes only after a fully reconciled FILLED SELL, successful accounting/commitment handling and all applicable profitability gates.
 - A later cycle is distinct and requires an eligible CLOSED prior cycle under the approved contract.
 - Reaching the RS recovery investment limit blocks new BUYs only. An already-open recovery SELL remains live and untouched: do not cancel, replace or reprice it because the BUY budget is exhausted. Continue canonical fill/order reconciliation until its terminal outcome is known before considering another cycle.
@@ -1639,7 +1639,7 @@ Required cases:
 7. Partial SELL fills are staged and do not prematurely commit mixed allocation projections.
 8. Complete terminal SELL reconciles the complete canonical REST/stream Fill set before atomic commit.
 9. Reservation releases only after successful terminal mixed-SELL accounting.
-10. PARTIALLY_FILLED is nonterminal: keep the sole SELL active and its reservation held. A terminal CANCELED/REJECTED/EXPIRED outcome may include prior partial fills; reconcile the complete canonical Fill set and commissions, then leave the cycle unresolved under the approved terminal STOP contract. No replacement SELL or next BUY is created. The global STOP latch does not itself prohibit an otherwise-valid SELL in a cycle that has not used its sole SELL lifecycle.
+10. PARTIALLY_FILLED is nonterminal: keep the sole SELL active and its reservation held. A terminal CANCELED/REJECTED/EXPIRED outcome may include prior partial fills; reconcile the complete canonical Fill set and commissions, then leave the cycle UNRESOLVED. A global STOP blocks additional BUY spending only; no replacement SELL or next BUY is created from this unresolved cycle. The STOP latch does not itself prohibit an otherwise-valid first SELL in a different cycle whose sole SELL lifecycle remains unused.
 11. Unknown, incomplete, conflicting or duplicate terminal facts cannot close twice or release twice.
 12. Duplicate completion request/event is idempotent; stale fills/reports from a completed cycle cannot affect the next cycle.
 13. A new cycle is created only after approved terminal reconciliation, accounting commit and completion gates pass.
@@ -1908,7 +1908,7 @@ Every family below explicitly answers the 22 contract questions required by the 
 | 18. Required assertions | Exact broker-call count; stable order/cycle identity; state before/after; reservation held/released once; no second SELL/BUY; exact terminal disposition. |
 | 19. Existing regression tests | recovery-seller-cycle-lifecycle.scenario.test.js; create-recovery-seller-accounting-workflow.test.js; create-recovery-seller-order-submitter.test.js. New lifecycle scenario evidence remains PARTIAL. |
 | 20. Missing scenario tests | Application-composed broker-call count, durable reservation races, partial-fill race, full terminal history and complete STOP integration. |
-| 21. Blocked decisions | Terminal STOP resolver/source-contract discrepancy remains BLOCKED; do not infer a reset, replacement SELL or next-cycle path. |
+| 21. STOP decision | Owner-approved investment-only contract is RESOLVED. The remaining RS-009 gaps are implementation and scenario proof: the runtime SELL gate must permit only an otherwise-valid first SELL, and the trusted operator facade must expose evidence-backed administrator resolution. No automatic clear, replacement SELL or next-cycle path is permitted. |
 | 22. Acceptance criteria | Every #1780 section E case is mapped and proved through real lifecycle composition; no cycle closes/releases before all required gates. |
 
 #### RS-006 — Exact-once mixed SELL accounting and atomicity
