@@ -556,23 +556,43 @@ When credentials are configured, the read-only diagnostic runner also exercises 
 
 ## Bitunix USDT Futures
 
-The `bitunix-futures` provider is a separate USDT-margined Futures adapter; it must not inherit Spot order or position semantics.
+The `bitunix-futures` provider is a separate USDT-margined Futures adapter. Do not infer Futures order, position or TP/SL behavior from Bitunix Spot.
 
-**Status: implemented provider-specific reads and guarded trading mutations; not production-ready.** See the [maintained Futures reference audit](./docs/bitunix-futures-reference-audit.md), [shared Broker API matrix](./BROKER_API.md#bitunix-usdt-futures-provider--implementation-status), and [tracking issue #1805](https://github.com/45s/coinzilla/issues/1805).
+**Status: broad provider-specific read and mutation functionality implemented; NOT PRODUCTION READY.** See the [Futures reference audit](./docs/bitunix-futures-reference-audit.md), [Broker API status matrix](./BROKER_API.md#bitunix-usdt-futures-provider--implementation-status), and [tracking issue #1805](https://github.com/45s/coinzilla/issues/1805).
 
-### Implemented surface
+### Implemented reads
 
-- Market catalog, ticker/mark prices, order-book depth and closed REST candles.
-- Current and batch funding rates, bounded funding-rate history, position tiers and authenticated per-symbol trading settings.
-- Exact USDT balance projection, current/historical positions, position mode and leverage/margin-mode reads.
-- Canonical order detail and bounded canonical order history; provider-specific pending-order, pending TP/SL and historical TP/SL reads.
-- Canonical `getFills()` for one bounded execution-history page. Exact decimal quote notional is derived without floating-point arithmetic; commission asset is unknown because the exchange history row does not supply it. Complete account-wide fill history is not claimed.
-- Provider-specific `createFuturesOrder()`, LIMIT-only `modifyFuturesOrder()`, `cancelOrder()` and `cancelAllOpenOrders()`, all behind explicit live-mutation opt-in and private user-data readiness.
-- Public trade and one-level book-ticker subscriptions; authenticated private balance, position, order and TP/SL observations through `onObservation`.
+- Contract catalog, ticker/mark price, REST depth and closed REST candles.
+- Exact USDT balance projection; current and historical positions.
+- Position mode, leverage/margin mode and authenticated trading-settings reads.
+- Current/batch/historical funding rates and position tiers.
+- Canonical order detail/history and bounded canonical `getFills()`; raw Futures trade history preserves fee and realized-PnL fields.
+- Provider-specific pending orders, pending TP/SL groups and historical TP/SL pages.
+- Public trade/book-ticker subscriptions and authenticated private balance/position/order/TP-SL observations.
+
+Canonical fills are limited to one bounded page per call. Quote notional uses exact decimal arithmetic; commission denomination remains UNKNOWN because the exchange response omits fee asset. No complete account-wide execution-history guarantee is claimed.
+
+### Implemented mutations
+
+- `createFuturesOrder()`: explicit MARKET/LIMIT Futures order semantics, caller client identity, exact market-filter checks and attached TP/SL creation fields.
+- `modifyFuturesOrder()`: identified pending LIMIT order modification with exact quantity and price.
+- `cancelOrder()` and `cancelAllOpenOrders()`: one-shot cancellation, matching private CLOSE events and REST readback.
+- `closeFuturesPosition()`, `closeFuturesPositionBySide()` and `closeAllFuturesPositions()`: exact position preflight, explicit account-wide confirmation, one-shot dispatch and REST post-readback.
+- `placeFuturesPositionTpSlOrder()` and `modifyFuturesPositionTpSlOrder()`: position-level TP/SL operations confirmed by matching private CREATE/UPDATE events.
+- `cancelFuturesPositionTpSlOrder()` and `cancelFuturesTpSlOrder()`: cancellation outcome is derived from the matching private CLOSE status.
+- `setFuturesLeverage()`, `setFuturesMarginMode()` and `setFuturesPositionMode()`: explicit account-mutation opt-in, no-exposure preflight and REST configuration readback.
+
+Order-level TP/SL placement/modification remains unsupported because the documented child-order API does not establish a reduce-only/close-position guarantee. `adjustFuturesPositionMargin()` remains unsupported because no documented endpoint was found.
 
 ### Mutation safety and recovery
 
-LIVE order mutations remain disabled by default. Enabling `providerOptions.allowLiveOrderMutations` is not sufficient by itself: the consumer must establish an authenticated private user-data session, complete REST reconciliation of balances, positions, pending orders and TP/SL orders, then call:
+All LIVE mutation flags default to false:
+
+- `providerOptions.allowLiveOrderMutations`
+- `providerOptions.allowLivePositionMutations`
+- `providerOptions.allowLiveAccountMutations`
+
+Order and position mutations require an authenticated private user-data session and caller-acknowledged REST reconciliation. Consumers must reconcile balances, positions, pending orders and TP/SL orders before calling:
 
 ```js
 await broker.acknowledgeUserDataReconciliation({
@@ -580,15 +600,13 @@ await broker.acknowledgeUserDataReconciliation({
 })
 ```
 
-Disconnect, reconnect and unsubscribe reset the readiness gate. The acknowledgement is a consumer attestation; it does not make private observations authoritative or replayable. Bitunix documents no monotonic event sequence or replay cursor. Mutation requests are one-shot, are not automatically retried, and uncertain outcomes require reconciliation by stable exchange identity.
+The acknowledgement is a consumer attestation only. Private observations are not authoritative or replayable; the protocol has no documented monotonic event sequence or replay cursor. Disconnect, reconnect and unsubscribe reset readiness. State-changing requests are one-shot, marked `stateChanging: true`, and never automatically retried. Lost acknowledgements, missing/mismatched private events and uncertain readback remain UNKNOWN.
 
 ### Remaining blockers
 
-- Correlate matching private order/TP-SL events with placement, modification and cancellation outcomes; retain `OUTCOME_UNKNOWN` when evidence is missing or ambiguous.
-- Complete attached TP/SL modification and separate order-level/position-level TP/SL place, modify and cancel mutations. Historical TP/SL reads are available through `getFuturesTpSlOrderHistory()`.
-- Implement explicit-scope position close and close-all operations with verified postconditions.
-- Implement account-level position-mode, symbol margin-mode/leverage and isolated-position-margin mutations behind separate account-mutation safeguards.
-- Keep common Spot-shaped `createCanonicalOrder()`, `getOpenOrders()` and legacy order/trade projections unsupported where they cannot preserve Futures semantics.
-- Establish authoritative snapshot/recovery guarantees and verify a safe isolated Futures TESTNET before any integration mutation testing.
+- No verified isolated Bitunix Futures TESTNET endpoint or credentials; therefore no mutation integration test may be run. Never test mutations against LIVE.
+- Private events remain non-authoritative and non-replayable; no gap-free session or process-restart recovery guarantee exists.
+- Account snapshots, server time, complete account-wide fill history and common Spot-shaped Futures order projections remain unsupported/unknown where the documented contract cannot satisfy the common API.
+- Order-level TP/SL place/modify and isolated-position-margin adjustment remain unsupported for the documented reasons above.
 
-No LIVE Futures mutation was performed by implementation work or ordinary CI. The provider must not be selected for production execution or Harvester routing until the remaining blockers are closed and reviewed.
+No LIVE Futures mutation was performed by implementation work or ordinary CI. Keep this provider out of production execution and Harvester routing until external guarantees, safe TESTNET verification and final acceptance are complete.
