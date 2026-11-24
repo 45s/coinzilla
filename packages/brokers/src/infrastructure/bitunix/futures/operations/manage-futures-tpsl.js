@@ -262,23 +262,40 @@ async function dispatchAndWaitForPositionTpSlEvent({ broker, symbol, positionId,
   }
 }
 
-function createPositionTpSlMutationResult({ symbol, positionId, dispatch, confirmation }) {
-  const responseOrderId = dispatch.response?.data?.orderId
-  const eventOrderId = confirmation.event?.data?.orderId
+function matchesPositionTpSlEvent({ responseOrderId, eventOrderId }) {
   const hasEventOrderId = typeof eventOrderId === "string" && eventOrderId.trim() !== ""
-  const identityMatches = hasEventOrderId &&
+  return hasEventOrderId &&
     (responseOrderId === undefined || responseOrderId === eventOrderId)
+}
+
+function getPositionTpSlMutationErrors({ dispatchError, responseOrderId, identityMatches, confirmationError }) {
   const errors = []
-  if (dispatch.error) {
-    errors.push(dispatch.error)
+  if (dispatchError) {
+    errors.push(dispatchError)
   } else if (responseOrderId === undefined) {
     errors.push(new Error("Bitunix Futures TP/SL mutation response omitted orderId"))
   }
-  if (!identityMatches && confirmation.error) {
-    errors.push(confirmation.error)
-  } else if (!identityMatches && !confirmation.error) {
+  if (!identityMatches && confirmationError) {
+    errors.push(confirmationError)
+  } else if (!identityMatches && !confirmationError) {
     errors.push(new Error("Bitunix Futures TP/SL event identity did not match the mutation response"))
   }
+  return errors
+}
+
+function createPositionTpSlMutationResult({ symbol, positionId, dispatch, confirmation }) {
+  const responseOrderId = dispatch.response?.data?.orderId
+  const eventOrderId = confirmation.event?.data?.orderId
+  const identityMatches = matchesPositionTpSlEvent({
+    responseOrderId,
+    eventOrderId,
+  })
+  const errors = getPositionTpSlMutationErrors({
+    dispatchError: dispatch.error,
+    responseOrderId,
+    identityMatches,
+    confirmationError: confirmation.error,
+  })
   return createTpSlResult({
     data: {
       symbol,
@@ -320,7 +337,7 @@ async function executePositionTpSlMutation({ broker, input, path, eventType, ope
     })
   } catch (error) {
     handleErr({
-      where: operation + "()",
+      where: `${operation}()`,
       error,
     })
     return createTpSlResult({

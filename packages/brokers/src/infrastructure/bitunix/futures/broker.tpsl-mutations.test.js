@@ -63,7 +63,7 @@ function createBroker({
     restClient: {
       request: async (request) => {
         requests.push(request)
-        const path = request.path
+        const { path } = request
         let event = "CLOSE"
         if (path.endsWith("/place_order")) {
           event = "CREATE"
