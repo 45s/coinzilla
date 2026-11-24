@@ -21,13 +21,13 @@ function createPositionResult({ data, errors, mutationOutcome, positionOutcome }
 
 function requireInputObject({ input, operation }) {
   if (input === null || typeof input !== "object" || Array.isArray(input)) {
-    throw new TypeError("Bitunix Futures " + operation + " input must be an object")
+    throw new TypeError(\`Bitunix Futures \${operation} input must be an object\`)
   }
 }
 
 function requireText({ value, field }) {
   if (typeof value !== "string" || value.trim() === "") {
-    throw new TypeError("Bitunix Futures " + field + " must be a non-empty string")
+    throw new TypeError(\`Bitunix Futures \${field} must be a non-empty string\`)
   }
   return value.trim()
 }
@@ -80,11 +80,15 @@ function createAlreadyClosedResult({ data }) {
 
 function getMutationOutcome({ dispatchError, positionOutcome }) {
   if (dispatchError) {
-    return dispatchError.outcomeUnknown === true
-      ? "OUTCOME_UNKNOWN"
-      : "REJECTED"
+    if (dispatchError.outcomeUnknown === true) {
+      return "OUTCOME_UNKNOWN"
+    }
+    return "REJECTED"
   }
-  return positionOutcome === "CLOSED" ? "CONFIRMED" : "OUTCOME_UNKNOWN"
+  if (positionOutcome === "CLOSED") {
+    return "CONFIRMED"
+  }
+  return "OUTCOME_UNKNOWN"
 }
 
 async function reconcilePositionMutation({
@@ -104,7 +108,10 @@ async function reconcilePositionMutation({
         ...(dispatchError === undefined ? [] : [dispatchError]),
         ...finalRead.errors,
       ],
-      mutationOutcome: "OUTCOME_UNKNOWN",
+      mutationOutcome: getMutationOutcome({
+        dispatchError,
+        positionOutcome: "UNKNOWN",
+      }),
       positionOutcome: "UNKNOWN",
     })
   }
@@ -112,16 +119,18 @@ async function reconcilePositionMutation({
   const initialIds = initialPositions.map((position) => position.positionId)
   const remainingIds = remaining.map((position) => position.positionId)
   const closedPositionIds = initialIds.filter((id) => !remainingIds.includes(id))
-  const positionOutcome = remaining.length === 0
-    ? "CLOSED"
-    : closedPositionIds.length > 0
-      ? "PARTIALLY_CLOSED"
-      : "OPEN"
-  const errors = dispatchError !== undefined
-    ? [dispatchError]
-    : positionOutcome === "CLOSED"
-      ? undefined
-      : [new Error("Bitunix Futures " + operation + " did not close every position in the requested scope")]
+  let positionOutcome = "OPEN"
+  if (remaining.length === 0) {
+    positionOutcome = "CLOSED"
+  } else if (closedPositionIds.length > 0) {
+    positionOutcome = "PARTIALLY_CLOSED"
+  }
+  let errors
+  if (dispatchError !== undefined) {
+    errors = [dispatchError]
+  } else if (positionOutcome !== "CLOSED") {
+    errors = [new Error(`Bitunix Futures ${operation} did not close every position in the requested scope`)]
+  }
   return createPositionResult({
     data: {
       operation,
