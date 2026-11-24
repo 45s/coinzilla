@@ -3344,6 +3344,23 @@ async function runFirstCycleBuy({ scenario }) {
   }
 }
 
+function assertSecondBuyAccountingState({ scenario, expectedQuantity, expectedSpent, expectedFillCount }) {
+  const position = scenario.currentPortfolio.getPosition({
+    strategyId: StrategyId.COIN_GRABBER,
+    marketId: market.id,
+  })
+  assert.equal(position.baseQuantity.amount, expectedQuantity,
+    "The real accounting workflow must reconcile BUY inventory and cancellation-race SELL fills.")
+  assert.equal(position.spent.amount, expectedSpent,
+    "The second BUY must extend the original Position cost basis without resetting it.")
+  assert.equal(scenario.currentRecoveryLedger.buyCost, expectedSpent,
+    "RecoveryLedger must mirror the complete Position BUY cost after every execution.")
+  assert.equal(scenario.currentPortfolio.appliedFillIds.length, expectedFillCount,
+    "Every distinct BUY and cancellation-race SELL execution must be committed once.")
+  assert.equal(scenario.currentRecoveryLedger.appliedFillIds.length, expectedFillCount,
+    "Portfolio and RecoveryLedger must retain the same canonical execution count.")
+}
+
 async function applySecondBuyPartialFill({ scenario, secondBuy, firstRecoverySell }) {
   const fill = makeCommissionedCycleFill({
     order: secondBuy,
@@ -3366,6 +3383,12 @@ async function applySecondBuyPartialFill({ scenario, secondBuy, firstRecoverySel
   assert.equal(result.ok, true, result.errors?.[0]?.message)
   assert.equal(result.data.waitingForFullFill, true)
   assert.equal(result.data.recoverySellReplaced, true)
+  assertSecondBuyAccountingState({
+    scenario,
+    expectedQuantity: "1.15",
+    expectedSpent: "117.5625",
+    expectedFillCount: 4,
+  })
   assert.equal(
     scenario.harness.engine.getOrders().find((order) => order.clientOrderId === secondBuy.clientOrderId).status,
     "PARTIALLY_FILLED",
@@ -3400,6 +3423,12 @@ async function applySecondBuyFinalFill({ scenario, secondBuy, firstRecoverySell,
   })
   assert.equal(result.ok, true, result.errors?.[0]?.message)
   assert.equal(result.data.reevaluate, true)
+  assertSecondBuyAccountingState({
+    scenario,
+    expectedQuantity: "1.8",
+    expectedSpent: "185.25",
+    expectedFillCount: 6,
+  })
   assert.deepEqual(scenario.harness.cancellationIds, [
     firstRecoverySell.brokerOrderId,
     replacementSell.brokerOrderId,
