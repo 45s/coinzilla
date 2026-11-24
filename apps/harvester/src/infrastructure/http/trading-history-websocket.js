@@ -542,14 +542,28 @@ function isValidMarketsSnapshot(data) {
     && Array.isArray(market.blockers))
 }
 
+function isValidPositionSnapshot(position) {
+  if (!isRecord(position)
+    || typeof position.symbol !== "string"
+    || typeof position.activeQuantity !== "string"
+    || typeof position.investedQuote !== "string") {
+    return false
+  }
+  if (position.recovery === null) {
+    return true
+  }
+  return isRecord(position.recovery)
+    && typeof position.recovery.buyCost === "string"
+    && typeof position.recovery.netSellProceeds === "string"
+    && typeof position.recovery.outstandingRecoveryAmount === "string"
+    && typeof position.recovery.realizedNetProfit === "string"
+}
+
 function isValidPortfolioSnapshot(data) {
   if (!isRecord(data) || !Number.isSafeInteger(data.observedAt) || !Array.isArray(data.positions)) {
     return false
   }
-  return data.positions.every((position) => isRecord(position)
-    && typeof position.symbol === "string"
-    && typeof position.activeQuantity === "string"
-    && typeof position.investedQuote === "string")
+  return data.positions.every(isValidPositionSnapshot)
 }
 
 function isValidOperatorResourceData({ method, data } = {}) {
