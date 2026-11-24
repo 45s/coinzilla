@@ -10,7 +10,7 @@ This roadmap tracks work owned by `@coinzilla/brokers`. Historical entries may r
 
 ## Bitunix USDT Futures provider — #1805
 
-**Status: IN PROGRESS** — [issue #1805](https://github.com/45s/coinzilla/issues/1805) / [Draft PR #1806](https://github.com/45s/coinzilla/pull/1806). A distinct `bitunix-futures` provider is being added to the existing `Broker` facade. The verified slice includes the explicit LIVE-only configuration, separate Futures product identity, double-SHA256 REST transport, public trading-pair catalog, exact USDT account-balance mapping (`available`, `frozen`, `margin`; promotional bonus excluded), one-shot ticker prices, and closed kline reads. No Futures TESTNET endpoint has been verified; order and account-setting mutations default to disabled. Remaining work includes open/history orders and positions, canonical fill evidence, order lifecycle and unknown-outcome reconciliation, position/margin/leverage controls, public/private WebSocket lifecycle, and final capability/source evidence and CI. No automated LIVE mutation is permitted; do not use the partial provider for application execution or Harvester routing.
+**Status: IN PROGRESS** — [issue #1805](https://github.com/45s/coinzilla/issues/1805) / [Draft PR #1806](https://github.com/45s/coinzilla/pull/1806). A distinct `bitunix-futures` provider is being added to the existing `Broker` facade. Implemented reads include exact USDT balances, market catalog/tickers/depth/closed REST klines, canonical order detail/history, provider-specific pending orders and TP/SL groups, current/historical positions, position/leverage/margin-mode reads, and bounded raw execution history. Public trade/book-ticker and authenticated private observations are integrated with login-ack gating, heartbeat, bounded reconnect/resubscribe and cleanup. The [Futures reference audit](./docs/bitunix-futures-reference-audit.md) records the wider documented endpoint surface and remaining gaps. Still incomplete: common open-order/account snapshot/server-time/fill projections, order/position/TP-SL/account-setting mutations, and private-stream reconciliation/recovery. No Futures TESTNET endpoint has been verified and no LIVE mutation is permitted. Keep this provider out of production execution and Harvester routing.
 
 ## Bitunix Spot one-at-a-time LIVE order probe matrix — #1690
 
@@ -1604,7 +1604,7 @@ See [the private polling contract](./docs/BITUNIX_SPOT_POLLING.md) and [the Bitu
 
 **Status: in progress; PR #1806 remains Draft and the provider is not production-ready.**
 
-Implemented on the PR branch (exact-head tests and required CI must pass before these are treated as accepted capabilities):
+Implemented on the PR branch; exact current head and CI status are recorded in issue #1805 and PR #1806:
 
 - Signed canonical order-detail reads by exactly one exchange `orderId` or caller `clientOrderId`; response symbol and identity are verified, and missing exchange `clientId` fails closed.
 - Bounded canonical order-history pages with explicit status/type/time/skip/limit filters, including canceled-only history and partial-fill cancellation normalization.
@@ -1612,7 +1612,7 @@ Implemented on the PR branch (exact-head tests and required CI must pass before 
 - Current and historical position projections preserving exact decimal values, position side/mode, margin mode, leverage, fee/funding/PnL, timestamps and optional subaccount identity.
 - Account-wide position-mode and per-symbol leverage/margin-mode reads.
 - Bounded raw Futures execution-history pages preserving trade identity and fee/realized-PnL values. These are provider-specific DTOs, not canonical Fill records.
-- Low-level public/private Futures WebSocket client with official endpoint validation, login signature/ack gating, documented channel names, heartbeat and outbound 5-message/second limit. It is not yet wired into common Broker subscriptions and does not yet implement bounded reconnect/REST recovery.
+- Public trade-price and one-level book-ticker subscriptions are wired into common Broker lifecycle with shared connections, multiple listeners, idempotent cleanup and exact decimal values. Private balance/position/order/TP-SL observations wait for login acknowledgement. Bounded reconnect reauthenticates and resubscribes; it always leaves recovery required because the protocol has no replay cursor/sequence and complete REST reconciliation is unproven.
 
 **Verified protocol constraints / unresolved blockers:**
 
@@ -1625,13 +1625,14 @@ Implemented on the PR branch (exact-head tests and required CI must pass before 
 
 **Still required before production use:**
 
-- [ ] Finish exact-head package unit tests, coverage, strict lint and all required CI.
-- [ ] Integrate public price/candle/book streams and private user-data observations into Broker lifecycle.
-- [ ] Add bounded reconnect, resubscribe, heartbeat failure handling and mandatory REST reconciliation before declaring user-data recovered.
-- [ ] Implement and test one-shot create/modify/cancel/close/TP-SL mutations with caller client IDs, mutation outcome classification and no blind retries.
-- [ ] Implement safe position-mode/margin-mode/leverage mutations with explicit preconditions and account-scoped exclusion.
+- [x] Exact-head package tests, coverage thresholds, strict changed-file lint and required CI pass on the current PR head.
+- [x] Public trade/book-ticker and private balance/position/order/TP-SL observations are integrated into Broker lifecycle with cleanup and bounded reconnect; private observations remain non-authoritative and recovery-required.
+- [ ] Implement one-shot create/modify/cancel/close/TP-SL operations with explicit Futures fields, caller client IDs, account-scoped exclusion, mutation outcome classification, final-state readback and no blind retries.
+- [ ] Implement position-mode/margin-mode/leverage and margin-adjustment writes with explicit preconditions, account-mutation opt-in and post-write verification.
 - [ ] Resolve fee-asset semantics and execution-history completeness before canonical Fill support.
-- [ ] Update the capability matrix and conformance tests only when the actual common Broker guarantees are met.
+- [ ] Resolve account-wide open-order projection and timestamped account snapshot/server-time semantics; keep unsupported/unknown capability states explicit where the common contract cannot be met.
+- [x] Maintain the capability matrix and common Broker conformance tests against actual supported/unsupported guarantees.
+- [x] Record external evidence and discrepancies in [the Futures reference audit](./docs/bitunix-futures-reference-audit.md).
 
 No live Futures mutation or exchange request has been performed by the implementation agent or automated tests. Keep Futures outside production execution and Harvester routing until all blockers and acceptance criteria are satisfied.
 
@@ -1648,11 +1649,13 @@ No live Futures mutation or exchange request has been performed by the implement
 
 **Still required before production use:**
 
-- [ ] Finish exact-head CI, including workspace quality, coverage, external docs links and package tests.
-- [ ] Implement safe create/modify/cancel/close/TP-SL mutation lifecycle with account-scoped exclusion, client IDs, readback and unknown-outcome reconciliation. No live mutation is permitted during implementation.
+- [x] Exact-head required CI passes on the current PR head; this is offline verification, not exchange acceptance.
+- [ ] Implement safe create/modify/cancel/close/TP-SL mutation lifecycle with account-scoped exclusion, explicit Futures semantics, caller client IDs, final-state readback and unknown-outcome reconciliation. No live mutation is permitted during implementation.
+- [ ] Implement position-mode/margin-mode/leverage and margin adjustment with explicit preconditions and post-write verification.
 - [ ] Resolve canonical Fill fee-asset and history-completeness semantics.
 - [ ] Provide defensible account-state recovery despite missing WebSocket replay/sequence guarantees, or explicitly keep recovery-dependent capabilities unavailable.
-- [ ] Complete common Broker conformance and consuming-app integration.
+- [ ] Resolve common open-order and account-snapshot/server-time projections without weakening exactness or source-time guarantees.
+- [ ] Complete common Broker conformance before any consuming-app admission; Harvester integration remains out of scope for this PR.
 
 No live Futures request or mutation has been performed. No isolated Futures TESTNET endpoint has been verified.
 
