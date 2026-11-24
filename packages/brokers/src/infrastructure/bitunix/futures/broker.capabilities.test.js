@@ -10,6 +10,24 @@ const broker = new Broker({
   tradingMode: "live",
 })
 
+test("Bitunix Futures unsupported common operations explain their Futures-specific alternatives", async () => {
+  const cases = [
+    ["getAccountSnapshot", /no atomic.*snapshot|source timestamp/i],
+    ["getServerTime", /no documented.*server-time endpoint/i],
+    ["getOrder", /getCanonicalOrder/i],
+    ["getOrderHistory", /getCanonicalOrderHistory/i],
+    ["getMyTrades", /getFuturesTradeHistory|bounded.*Fills/i],
+    ["createOrder", /createFuturesOrder/i],
+    ["createCanonicalOrder", /tradeSide.*positionId.*reduceOnly/i],
+    ["subscribeForCandles", /candle open timestamp.*getCandles/i],
+  ]
+  for (const [method, reason] of cases) {
+    const result = await broker[method]()
+    assert.equal(result.ok, false, method + " must fail closed")
+    assert.match(result.errors[0].message, reason, method + " must explain its actual limitation and alternative")
+  }
+})
+
 test("Bitunix Futures capability declarations match implemented operations and explicit mutation gates", () => {
   const { capabilities } = broker
   assert.equal(capabilities.provider, "bitunix")
@@ -27,6 +45,16 @@ test("Bitunix Futures capability declarations match implemented operations and e
     "OBSERVE_USER_DATA",
   ]) {
     assert.equal(capabilities.getStatus({ type }), "SUPPORTED", `${type} should be supported`)
+  }
+
+  for (const type of [
+    "READ_ACCOUNT_SNAPSHOT",
+    "READ_SERVER_TIME",
+    "READ_ORDER",
+    "READ_ORDER_HISTORY",
+  ]) {
+    assert.equal(capabilities.getStatus({ type }), "UNSUPPORTED", type + " must match the runtime's explicit unsupported result")
+    assert.ok(capabilities.getCapability({ type }).reason, type + " must explain its semantic limitation")
   }
 
   for (const type of [
