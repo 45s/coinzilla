@@ -67,13 +67,31 @@ function createBroker({
     positionList: [historicalPosition],
     total: 1,
   },
+  allowLivePositionMutations = false,
+  afterClose,
+  closeError,
+  closeAcceptedOnError = false,
 } = {}) {
   const requests = []
+  let currentState = [...current]
+  const applyCloseState = ({ positionId, symbol }) => {
+    if (afterClose !== undefined) {
+      currentState = [...afterClose]
+      return
+    }
+    currentState = currentState.filter((position) => {
+      if (positionId !== undefined) {
+        return position.positionId !== positionId
+      }
+      return symbol !== undefined && position.symbol !== symbol
+    })
+  }
   const broker = new Broker({
     provider: "bitunix-futures",
     ...credentials,
     tradingMode: "live",
     providerOptions: {
+      allowLivePositionMutations,
       dependencies: {
         fetchFn: async (...args) => {
           const [url, options] = args
@@ -84,7 +102,43 @@ function createBroker({
           const path = new URL(url).pathname
           if (path === "/api/v1/futures/position/get_pending_positions") {
             return createResponse({
-              data: current,
+              data: currentState,
+            })
+          }
+          if (path === "/api/v1/futures/trade/flash_close_position") {
+            const body = JSON.parse(options.body)
+            if (closeError) {
+              if (closeAcceptedOnError) {
+                applyCloseState({
+                  positionId: body.positionId,
+                })
+              }
+              throw closeError
+            }
+            applyCloseState({
+              positionId: body.positionId,
+            })
+            return createResponse({
+              data: {
+                positionId: body.positionId,
+              },
+            })
+          }
+          if (path === "/api/v1/futures/trade/close_all_position") {
+            const body = JSON.parse(options.body)
+            if (closeError) {
+              if (closeAcceptedOnError) {
+                applyCloseState({
+                  symbol: body.symbol,
+                })
+              }
+              throw closeError
+            }
+            applyCloseState({
+              symbol: body.symbol,
+            })
+            return createResponse({
+              data: [],
             })
           }
           if (path === "/api/v1/futures/position/get_history_positions") {
@@ -102,6 +156,193 @@ function createBroker({
     requests,
   }
 }
+
+test("Bitunix Futures closeFuturesPosition closes one exact position and verifies REST readback", async () => {
+  const { broker, requests } = createBroker({
+    allowLivePositionMutations: true,
+    current: [currentPosition],
+    afterClose: [],
+  })
+
+  const result = await broker.closeFuturesPosition({
+    positionId: "position-123",
+    symbol: "BTCUSDT",
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.mutationOutcome, "CONFIRMED")
+  assert.equal(result.positionOutcome, "CLOSED")
+  const closeRequest = requests.find(({ url }) => new URL(url).pathname === "/api/v1/futures/trade/flash_close_position")
+  assert.deepEqual(JSON.parse(closeRequest.options.body), {
+    positionId: "position-123",
+  })
+  assert.equal(requests.filter(({ url }) => new URL(url).pathname === "/api/v1/futures/position/get_pending_positions").length, 2)
+})
+
+test("Bitunix Futures position mutations are disabled by default", async () => {
+  const { broker, requests } = createBroker({
+    current: [currentPosition],
+  })
+
+  const result = await broker.closeFuturesPosition({
+    positionId: "position-123",
+  })
+
+  assert.equal(result.ok, false)
+  assert.equal(result.mutationOutcome, "NOT_SENT")
+  assert.equal(result.positionOutcome, "NOT_SENT")
+  assert.equal(requests.length, 0)
+})
+
+test("Bitunix Futures closeFuturesPosition treats an already-closed position as an idempotent no-op", async () => {
+  const { broker, requests } = createBroker({
+    allowLivePositionMutations: true,
+    current: [],
+  })
+
+  const result = await broker.closeFuturesPosition({
+    positionId: "position-123",
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.mutationOutcome, "NOT_SENT")
+  assert.equal(result.positionOutcome, "ALREADY_CLOSED")
+  assert.equal(requests.some(({ options }) => options.method === "POST"), false)
+})
+
+test("Bitunix Futures closeFuturesPosition preserves a lost acknowledgement when REST readback confirms closure", async () => {
+  const { broker, requests } = createBroker({
+    allowLivePositionMutations: true,
+    current: [currentPosition],
+    afterClose: [],
+    closeError: new TypeError("socket closed after dispatch"),
+    closeAcceptedOnError: true,
+  })
+
+  const result = await broker.closeFuturesPosition({
+    positionId: "position-123",
+    symbol: "BTCUSDT",
+  })
+
+  assert.equal(result.ok, false)
+  assert.equal(result.mutationOutcome, "OUTCOME_UNKNOWN")
+  assert.equal(result.positionOutcome, "CLOSED")
+  assert.ok(result.errors.length > 0)
+  assert.equal(requests.filter(({ options }) => options.method === "POST").length, 1)
+})
+
+test("Bitunix Futures closeFuturesPosition reports an open position when REST readback does not confirm closure", async () => {
+  const { broker } = createBroker({
+    allowLivePositionMutations: true,
+    current: [currentPosition],
+    afterClose: [currentPosition],
+  })
+
+  const result = await broker.closeFuturesPosition({
+    positionId: "position-123",
+  })
+
+  assert.equal(result.ok, false)
+  assert.equal(result.mutationOutcome, "OUTCOME_UNKNOWN")
+  assert.equal(result.positionOutcome, "OPEN")
+})
+
+test("Bitunix Futures closeFuturesPositionBySide resolves exactly one position side", async () => {
+  const { broker, requests } = createBroker({
+    allowLivePositionMutations: true,
+    current: [currentPosition],
+    afterClose: [],
+  })
+
+  const result = await broker.closeFuturesPositionBySide({
+    symbol: "BTCUSDT",
+    side: "LONG",
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.positionOutcome, "CLOSED")
+  const closeRequest = requests.find(({ url }) => new URL(url).pathname === "/api/v1/futures/trade/flash_close_position")
+  assert.deepEqual(JSON.parse(closeRequest.options.body), {
+    positionId: "position-123",
+  })
+})
+
+test("Bitunix Futures closeFuturesPositionBySide refuses ambiguous position identities", async () => {
+  const { broker, requests } = createBroker({
+    allowLivePositionMutations: true,
+    current: [
+      currentPosition,
+      {
+        ...currentPosition,
+        positionId: "position-456",
+      },
+    ],
+  })
+
+  const result = await broker.closeFuturesPositionBySide({
+    symbol: "BTCUSDT",
+    side: "LONG",
+  })
+
+  assert.equal(result.ok, false)
+  assert.equal(result.mutationOutcome, "NOT_SENT")
+  assert.equal(requests.some(({ options }) => options.method === "POST"), false)
+})
+
+test("Bitunix Futures closeAllFuturesPositions requires explicit confirmation for account-wide scope", async () => {
+  const { broker, requests } = createBroker({
+    allowLivePositionMutations: true,
+    current: [currentPosition],
+  })
+
+  const result = await broker.closeAllFuturesPositions()
+
+  assert.equal(result.ok, false)
+  assert.equal(result.mutationOutcome, "NOT_SENT")
+  assert.equal(requests.length, 0)
+})
+
+test("Bitunix Futures closeAllFuturesPositions closes only the requested symbol and verifies the final scope", async () => {
+  const otherPosition = {
+    ...currentPosition,
+    positionId: "position-eth-123",
+    symbol: "ETHUSDT",
+  }
+  const { broker, requests } = createBroker({
+    allowLivePositionMutations: true,
+    current: [currentPosition, otherPosition],
+    afterClose: [otherPosition],
+  })
+
+  const result = await broker.closeAllFuturesPositions({
+    symbol: "BTCUSDT",
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.mutationOutcome, "CONFIRMED")
+  assert.equal(result.positionOutcome, "CLOSED")
+  const closeRequest = requests.find(({ url }) => new URL(url).pathname === "/api/v1/futures/trade/close_all_position")
+  assert.deepEqual(JSON.parse(closeRequest.options.body), {
+    symbol: "BTCUSDT",
+  })
+})
+
+test("Bitunix Futures closeAllFuturesPositions requires explicit account-wide confirmation", async () => {
+  const { broker, requests } = createBroker({
+    allowLivePositionMutations: true,
+    current: [currentPosition],
+    afterClose: [],
+  })
+
+  const result = await broker.closeAllFuturesPositions({
+    confirmAccountWideClose: true,
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.positionOutcome, "CLOSED")
+  const closeRequest = requests.find(({ url }) => new URL(url).pathname === "/api/v1/futures/trade/close_all_position")
+  assert.deepEqual(JSON.parse(closeRequest.options.body), {})
+})
 
 test("Bitunix Futures getFuturesPositions returns exact current position facts and excludes subaccounts by default", async () => {
   const { broker, requests } = createBroker()
