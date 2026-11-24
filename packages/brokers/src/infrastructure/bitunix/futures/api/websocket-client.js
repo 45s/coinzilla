@@ -637,6 +637,9 @@ export class BitunixFuturesWebSocketClient extends EventEmitter {
     this.#state = "open"
     this.#lastPingAt = null
     this.#lastPongAt = null
+    if (!reconnected) {
+      this.#reconnectAttempts = 0
+    }
     this.#startHeartbeat()
     if (this.channelType === "private") {
       this.#sendLogin()
