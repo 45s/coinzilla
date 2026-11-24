@@ -2331,8 +2331,8 @@ The new composed cases in `test/scenarios/recovery-seller-sell-planner.scenario.
 TDD evidence:
 
 - RED: test-first head `65761e992c86e2fd59bdc0811ab8737dbf3c6a31` failed with `UNEXPECTED_OR_UNMODELED_CONDITION` from the malformed workflow cycle-state projection.
-- GREEN: the three composed cases passed Harvester Targeted Tests on synchronized PR head `0a84a78285aa2dfb3c4f16319c765e436edea275` (11/11 tests in the scenario file). Unit Tests, Test Coverage, Repository Quality and Dependency Audit also pass on that exact head; External Documentation Links remains in progress.
-- The PR is ready for owner review. Do not merge until the remaining documentation-link check completes; do not mark the scenario family VERIFIED until the production PR is merged and exact merged-head evidence is recorded.
+- GREEN: the three composed cases passed Harvester Targeted Tests on synchronized PR head `0a84a78285aa2dfb3c4f16319c765e436edea275` (11/11 tests in the scenario file). Unit Tests, Test Coverage, Repository Quality, Dependency Audit and External Documentation Links also pass on that exact head.
+- The PR is ready for owner review; do not mark the scenario family VERIFIED until the production PR is merged and exact merged-head evidence is recorded.
 
 This defect is not a reason to skip the prescribed seven-PR scenario sequence. Keep RS-003 PARTIAL until PR #1815 is merged and its exact merged-head verification is recorded; the remaining RS-003 cases stay open.
 

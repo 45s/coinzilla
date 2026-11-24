@@ -113,13 +113,13 @@ Do not claim 100% correctness from line/branch coverage. Completion means every 
 
 **Purpose:** deliver a from-scratch, source-grounded RS scenario suite. This is a test-evidence workstream, not a trading-policy, configuration, activation or exchange-operation task. The detailed AI-agent implementation contract is [Recovery Seller Scenario Testing Playbook](./docs/domain/recovery-seller-scenario-testing.md). The shared strategy-neutral method is [Domain Scenario Testing Methodology](../../docs/testing/DOMAIN_SCENARIO_TESTING.md), owned by [#1779](https://github.com/45s/coinzilla/issues/1779). The repository-wide navigation index is [SCENARIO_CATALOG.md](../../docs/testing/SCENARIO_CATALOG.md). Issue [#1780](https://github.com/45s/coinzilla/issues/1780) owns the complete RS matrix, subcases, blockers and evidence.
 
-**Current baseline — develop `a72cfb0fb66461290a8855a6df774dcdd87b2c6e`:** PR [#1793](https://github.com/45s/coinzilla/pull/1793) is merged at `9902d6a01d675a988a40f0fb2130c3eb477675ef`. Its PR head `4d59272ea22317b3540d2356082b270328542c7e` had 29 successful checks and one intentionally skipped read-only Binance TESTNET workflow. This is the initial partial scenario slice, not complete RS coverage.
+**Current baseline — develop `eb70e65fe06630379ff2b7c57131dd5a47774d1c`:** PR [#1793](https://github.com/45s/coinzilla/pull/1793) is merged at `9902d6a01d675a988a40f0fb2130c3eb477675ef`. Its PR head `4d59272ea22317b3540d2356082b270328542c7e` had 29 successful checks and one intentionally skipped read-only Binance TESTNET workflow. This is the initial partial scenario slice, not complete RS coverage.
 
 **Current family disposition:**
 
 - RS-001 authorization / legacy basis / Spot custody — MISSING.
 - RS-002 confirmed BUY and net-fee accounting — MISSING.
-- RS-003 additive mixed SELL planning/allocation — PARTIAL; the #1809 workflow-to-evaluator fix is in [PR #1815](https://github.com/45s/coinzilla/pull/1815) and ready for owner review. The application subcase remains uncredited until merge and exact merged-head verification.
+- RS-003 additive mixed SELL planning/allocation — PARTIAL; the #1809 workflow-to-evaluator fix is in [PR #1815](https://github.com/45s/coinzilla/pull/1815). The real composed tests and all six exact-head workflows pass on synchronized head `0a84a78285aa2dfb3c4f16319c765e436edea275`; the application subcase remains uncredited until merge and exact merged-head verification.
 - RS-004 independent profitability — PARTIAL.
 - RS-005 one SELL lifecycle — PARTIAL.
 - RS-006 mixed SELL accounting atomicity — PARTIAL.
