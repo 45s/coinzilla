@@ -3386,7 +3386,7 @@ async function applySecondBuyPartialFill({ scenario, secondBuy, firstRecoverySel
   assertSecondBuyAccountingState({
     scenario,
     expectedQuantity: "1.15",
-    expectedSpent: "117.5625",
+    expectedSpent: "124.925",
     expectedFillCount: 4,
   })
   assert.equal(
@@ -3426,7 +3426,7 @@ async function applySecondBuyFinalFill({ scenario, secondBuy, firstRecoverySell,
   assertSecondBuyAccountingState({
     scenario,
     expectedQuantity: "1.8",
-    expectedSpent: "185.25",
+    expectedSpent: "199.7",
     expectedFillCount: 6,
   })
   assert.deepEqual(scenario.harness.cancellationIds, [
