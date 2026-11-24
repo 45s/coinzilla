@@ -285,8 +285,14 @@ test("does not lose an operator transition that occurs while the initial snapsho
   t.after(() => socket.close())
 
   await waitForSocketOpen(socket)
-  const initialSnapshotPromise = waitForMessage({ socket, predicate: (item) => item.type === "bots.snapshot" })
-  const stateUpdatePromise = waitForMessage({ socket, predicate: (item) => item.type === "bots.state.updated" })
+  const initialSnapshotPromise = waitForMessage({
+    socket,
+    predicate: (item) => item.type === "bots.snapshot",
+  })
+  const stateUpdatePromise = waitForMessage({
+    socket,
+    predicate: (item) => item.type === "bots.state.updated",
+  })
   state.markets.markets[0].operatorBuysPaused = true
   const publication = eventBus.publish({
     name: OPERATOR_UPDATE_EVENT,

@@ -644,18 +644,49 @@ async function readOperatorResource({ operator, method } = {}) {
 
 async function createBotsSnapshotMessage({ operator, revision, type } = {}) {
   const [status, markets, portfolio] = await Promise.all([
-    readOperatorResource({ operator, method: "getStatus" }),
-    readOperatorResource({ operator, method: "getMarkets" }),
-    readOperatorResource({ operator, method: "getPositions" }),
+    readOperatorResource({
+      operator,
+      method: "getStatus",
+    }),
+    readOperatorResource({
+      operator,
+      method: "getMarkets",
+    }),
+    readOperatorResource({
+      operator,
+      method: "getPositions",
+    }),
   ])
-  const data = { status, markets, portfolio }
+  const data = {
+    status,
+    markets,
+    portfolio,
+  }
   const complete = status.ok && markets.ok && portfolio.ok
-  const messageType = complete ? type : type === "bots.snapshot" ? "bots.snapshot.unavailable" : "bots.state.updated.unavailable"
-  return { type: messageType, version: 1, revision, observedAt: new Date().toISOString(), data }
+  let messageType = type
+  if (!complete) {
+    if (type === "bots.snapshot") {
+      messageType = "bots.snapshot.unavailable"
+    } else {
+      messageType = "bots.state.updated.unavailable"
+    }
+  }
+  return {
+    type: messageType,
+    version: 1,
+    revision,
+    observedAt: new Date().toISOString(),
+    data,
+  }
 }
 
 function broadcastBotsSnapshot({ clients, message } = {}) {
-  for (const client of clients) sendJson({ client, message })
+  for (const client of clients) {
+    sendJson({
+      client,
+      message,
+    })
+  }
 }
 
 function createBotsSnapshotCoordinator({ operator, clients } = {}) {
@@ -665,19 +696,30 @@ function createBotsSnapshotCoordinator({ operator, clients } = {}) {
   let reading = false
 
   async function drainSnapshots() {
-    if (reading || clients.size === 0) return
+    if (reading || clients.size === 0) {
+      return
+    }
     reading = true
     try {
       while (clients.size > 0 && publishedRevision < requestedRevision) {
         const revision = requestedRevision
         const type = requestedType
-        const message = await createBotsSnapshotMessage({ operator, revision, type })
-        broadcastBotsSnapshot({ clients, message })
+        const message = await createBotsSnapshotMessage({
+          operator,
+          revision,
+          type,
+        })
+        broadcastBotsSnapshot({
+          clients,
+          message,
+        })
         publishedRevision = revision
       }
     } finally {
       reading = false
-      if (clients.size > 0 && publishedRevision < requestedRevision) void drainSnapshots()
+      if (clients.size > 0 && publishedRevision < requestedRevision) {
+        void drainSnapshots()
+      }
     }
   }
 
@@ -687,7 +729,9 @@ function createBotsSnapshotCoordinator({ operator, clients } = {}) {
     void drainSnapshots()
   }
 
-  return Object.freeze({ requestSnapshot })
+  return Object.freeze({
+    requestSnapshot,
+  })
 }
 
 function subscribeToBotsUpdates({ eventBus, requestSnapshot } = {}) {
