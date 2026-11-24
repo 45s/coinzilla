@@ -1,5 +1,7 @@
+import { createHash } from "node:crypto"
 import assert from "node:assert/strict"
 import nodeTest from "node:test"
+import { gunzipSync } from "node:zlib"
 
 import { StrategyId } from "../domain/strategies/strategy-ids.js"
 import { createSubmissionGate } from "./create-submission-gate.js"
@@ -251,4 +253,50 @@ test("releases the Conservative recovery SELL reservation after a terminal order
   assert.deepEqual(result, {
     allowed: true,
   }, "A canonical terminal SELL must release the Position reservation for a later recovery intent.")
+})
+
+
+// TEMPORARY forensic probe. Remove after reading the immutable archive in CI.
+test("TEMPORARY forensic probe: decode immutable issue 1827 session artifacts", async () => {
+  const archiveRoot = "https://raw.githubusercontent.com/45s/coinzilla-archive/e965b979ad74e8d2a0caaa19071afd2bc6b38e6c/archives/2026-11-24T18-21-57Z_c8823d4c_debug/logs/sessions/2026-11-24_17-12-20-386708f6-29e6-46e1-87fe-3a9665e97871"
+  const files = [
+    {
+      name: "journal",
+      path: "2026-11-24_17-12-20-386708f6-29e6-46e1-87fe-3a9665e97871.jsonl.gz",
+      sha256: "612d7c54333fb432c5c5add8e0b5d3148abca4e151b4723f070118bd101744ff",
+    },
+    {
+      name: "terminal",
+      path: "terminal.log.gz",
+      sha256: "e1f6228faab1657468d33f86a4e280df211dffa8bae66b7478fe5f40ce7de125",
+    },
+    {
+      name: "harvester",
+      path: "harvester.log.gz",
+      sha256: "5a9a1b3c041e1dc59989d8d27733b118a6fcd84789441b22efa4c0141ad3d5c9",
+    },
+    {
+      name: "trace",
+      path: "trace.log.gz",
+      sha256: "de435982eae23d3113b99c1eed7cab43f214c1fc0aae11f15a87986cacf553ee",
+    },
+  ]
+  const decoded = {}
+  for (const file of files) {
+    const response = await fetch(`${archiveRoot}/${file.path}`)
+    assert.equal(response.ok, true, `Unable to fetch immutable ${file.name} evidence: HTTP ${response.status}`)
+    const compressed = Buffer.from(await response.arrayBuffer())
+    assert.equal(createHash("sha256").update(compressed).digest("hex"), file.sha256, `${file.name} archive SHA-256 mismatch`)
+    decoded[file.name] = gunzipSync(compressed).toString("utf8")
+  }
+  const incidentId = /h-e05d425b3f344d8bbfbf12-(?:6|8|10|19|21|23|25|27|29|33|35|39|43|47|49|51|53)(?!\\d)/
+  const relevant = /ORDER_SUBMISSION|SUBMITTED|ACKNOWLEDGED|REJECTED|UNKNOWN|POST_ONLY|next strategy evaluation failed|market (?:book|price) processing failed/i
+  const summary = Object.fromEntries(Object.entries(decoded).map(([name, value]) => {
+    const lines = value.split(/\\r?\\n/)
+    const selected = name === "terminal"
+      ? lines
+      : lines.filter((line) => incidentId.test(line) || relevant.test(line))
+    return [name, selected.slice(0, 250)]
+  }))
+  assert.fail(`ARCHIVE_1827_DECODED_EVIDENCE\\n${JSON.stringify(summary, null, 2)}`)
 })
