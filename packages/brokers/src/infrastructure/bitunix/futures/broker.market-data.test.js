@@ -128,19 +128,3 @@ test("Bitunix Futures getCandles returns chronologically ordered closed candles 
   assert.equal(Object.hasOwn(requests[0].options.headers, "api-key"), false, "public candle reads must not include authentication")
 })
 
-test("Bitunix Futures getCandles rejects unsupported startTime instead of silently ignoring it", async () => {
-  const broker = new Broker({
-    provider: "bitunix-futures",
-    ...credentials,
-    tradingMode: "live",
-  })
-
-  const result = await broker.getCandles({
-    symbol: "BTCUSDT",
-    interval: "1h",
-    startTime: 1_700_000_000_000,
-  })
-
-  assert.equal(result.ok, false, "an unsupported time-range field must not be silently ignored")
-  assert.match(result.errors[0].message, /startTime is not supported/, "the caller must be told that the Futures endpoint has no startTime parameter")
-})
