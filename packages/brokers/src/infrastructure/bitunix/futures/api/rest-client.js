@@ -371,7 +371,11 @@ export class BitunixFuturesRestClient {
     this.#sleepFn = sleepFn
   }
 
-  async #waitForRateLimit() {
+  async #dispatchAtRateLimit({ dispatch }) {
+    ensure.function({
+      value: dispatch,
+      name: "dispatch",
+    })
     const scheduled = this.#requestQueue.then(async () => {
       const now = this.#rateLimitNow()
       if (!Number.isSafeInteger(now) || now < 0) {
@@ -386,9 +390,13 @@ export class BitunixFuturesRestClient {
         throw new TypeError("Bitunix Futures rate-limit clock must return a non-negative safe integer")
       }
       this.#nextRequestAt = Math.max(dispatchedAt, this.#nextRequestAt) + MIN_REQUEST_INTERVAL_MS
+      return {
+        result: dispatch(),
+      }
     })
-    this.#requestQueue = scheduled.catch(() => {})
-    await scheduled
+    this.#requestQueue = scheduled.then(() => undefined, () => undefined)
+    const { result } = await scheduled
+    return result
   }
 
   /**
@@ -404,20 +412,20 @@ export class BitunixFuturesRestClient {
     validateRequest({
       request,
     })
-    await this.#waitForRateLimit()
     const url = createRequestUrl({
       client: this,
       request,
     })
-    const options = createRequestOptions({
-      client: this,
-      request,
-    })
-    const response = await sendRestRequest({
-      client: this,
-      request,
-      url,
-      options,
+    const response = await this.#dispatchAtRateLimit({
+      dispatch: () => sendRestRequest({
+        client: this,
+        request,
+        url,
+        options: createRequestOptions({
+          client: this,
+          request,
+        }),
+      }),
     })
     const payload = await readResponsePayload({
       response,
