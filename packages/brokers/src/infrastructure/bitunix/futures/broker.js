@@ -49,6 +49,17 @@ function unsupportedResult({ operation, reason }) {
   }
 }
 
+function positionMutationNotReadyResult({ operation }) {
+  return {
+    ...unsupportedResult({
+      operation,
+      reason: "An authenticated private user-data session with caller-acknowledged REST reconciliation is required before Futures position mutations. The private stream remains non-authoritative and non-replayable.",
+    }),
+    mutationOutcome: "NOT_SENT",
+    positionOutcome: "NOT_SENT",
+  }
+}
+
 const FUTURES_CAPABILITIES = [
   {
     type: "READ_BALANCES",
@@ -2382,6 +2393,12 @@ export class BitunixFuturesBroker {
         mutationOutcome: "NOT_SENT",
         positionOutcome: "NOT_SENT",
       }
+
+    if (!this.isUserDataReady) {
+      return positionMutationNotReadyResult({
+        operation: "closeFuturesPosition",
+      })
+    }
     }
     return closeFuturesPositionOperation({
       broker: this,
@@ -2399,6 +2416,12 @@ export class BitunixFuturesBroker {
         mutationOutcome: "NOT_SENT",
         positionOutcome: "NOT_SENT",
       }
+
+    if (!this.isUserDataReady) {
+      return positionMutationNotReadyResult({
+        operation: "closeFuturesPositionBySide",
+      })
+    }
     }
     return closeFuturesPositionBySideOperation({
       broker: this,
@@ -2416,6 +2439,12 @@ export class BitunixFuturesBroker {
         mutationOutcome: "NOT_SENT",
         positionOutcome: "NOT_SENT",
       }
+
+    if (!this.isUserDataReady) {
+      return positionMutationNotReadyResult({
+        operation: "closeAllFuturesPositions",
+      })
+    }
     }
     return closeAllFuturesPositionsOperation({
       broker: this,
