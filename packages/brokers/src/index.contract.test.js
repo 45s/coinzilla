@@ -12,6 +12,8 @@ test("package entry point exposes only the supported public contracts", () => {
     "BROKER_MUTATION_OUTCOMES",
     "BinanceWebSocketBroker",
     "BinanceWebSocketConfig",
+    "BitunixFuturesBroker",
+    "BitunixFuturesConfig",
     "BitunixSpotBroker",
     "BitunixSpotConfig",
     "BitunixSpotWebSocketClient",
@@ -63,6 +65,13 @@ test("both public broker facades implement the same exchange-neutral method surf
       apiKey: "contract-test-key",
       apiSecret: "contract-test-secret",
       tradingMode: "live",
+    }),
+    new brokers.BitunixFuturesBroker({
+      config: new brokers.BitunixFuturesConfig({
+        apiKey: "contract-test-key",
+        apiSecret: "contract-test-secret",
+        tradingMode: "live",
+      }),
     }),
   ]
   const methods = [
