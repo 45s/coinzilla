@@ -91,12 +91,27 @@ function evaluateBuyPolicyCase({ overrides }) {
     pendingBuyCommitment: "0",
     ...overrides,
   })
+  const action = result.action
+  const orderIdentity = result.decision.orderIdentity
   return {
     outcome: result.decision.outcome,
     reasonCode: result.decision.reasonCode ?? null,
-    action: result.action ?? null,
+    action: action ? {
+      side: action.side,
+      purpose: action.purpose,
+      cycleId: action.cycleId,
+      positionId: action.positionId,
+      type: action.type,
+      price: action.price,
+      quantity: action.quantity,
+      notional: action.notional,
+      reason: action.reason,
+    } : null,
     stopStatus: result.stopState.status,
-    orderIdentity: result.decision.orderIdentity ?? null,
+    orderIdentity: orderIdentity ? {
+      clientOrderId: orderIdentity.clientOrderId,
+      brokerOrderId: orderIdentity.brokerOrderId ?? null,
+    } : null,
   }
 }
 
