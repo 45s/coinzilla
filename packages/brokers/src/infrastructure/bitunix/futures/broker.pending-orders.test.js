@@ -37,14 +37,18 @@ function createBroker({ rows = [pendingOrder], total = rows.length } = {}) {
     tradingMode: "live",
     providerOptions: {
       dependencies: {
-        fetchFn: async (url, options) => {
+        fetchFn: async (...args) => {
+          const [url, options] = args
           requests.push({ url: String(url), options })
           return {
             ok: true,
             status: 200,
             json: async () => ({
               code: 0,
-              data: { orderList: rows, total },
+              data: {
+                orderList: rows,
+                total,
+              },
             }),
           }
         },
@@ -114,7 +118,10 @@ test("Bitunix Futures pending-order read permits market orders without an undocu
 
 test("Bitunix Futures pending-order read rejects malformed quantities and pagination", async () => {
   const { broker, requests } = createBroker({
-    rows: [{ ...pendingOrder, tradeQty: "0.6" }],
+    rows: [{
+      ...pendingOrder,
+      tradeQty: "0.6",
+    }],
   })
   const malformed = await broker.getFuturesPendingOrders({ symbol: "BTCUSDT" })
   assert.equal(malformed.ok, false)
