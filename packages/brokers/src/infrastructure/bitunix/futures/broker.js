@@ -17,6 +17,10 @@ import { cancelFuturesOrder } from "./operations/cancel-futures-order.js"
 import { cancelFuturesOpenOrders } from "./operations/cancel-futures-open-orders.js"
 import { createFuturesOrder as createFuturesOrderOperation } from "./operations/create-futures-order.js"
 import { modifyFuturesOrder as modifyFuturesOrderOperation } from "./operations/modify-futures-order.js"
+import { getFuturesFundingRate as getFuturesFundingRateOperation, getFuturesFundingRates as getFuturesFundingRatesOperation } from "./operations/get-futures-funding-rates.js"
+import { getFuturesFundingRateHistory as getFuturesFundingRateHistoryOperation } from "./operations/get-futures-funding-rate-history.js"
+import { getFuturesPositionTiers as getFuturesPositionTiersOperation } from "./operations/get-futures-position-tiers.js"
+import { getFuturesTradingSettings as getFuturesTradingSettingsOperation } from "./operations/get-futures-trading-settings.js"
 
 function unsupportedResult({ operation, reason }) {
   return {
@@ -1633,6 +1637,40 @@ export class BitunixFuturesBroker {
         errors: [error],
       })
     }
+  }
+
+  async getFuturesFundingRate(input = {}) {
+    return getFuturesFundingRateOperation({
+      broker: this,
+      input,
+    })
+  }
+
+  async getFuturesFundingRates() {
+    return getFuturesFundingRatesOperation({
+      broker: this,
+    })
+  }
+
+  async getFuturesFundingRateHistory(input = {}) {
+    return getFuturesFundingRateHistoryOperation({
+      broker: this,
+      input,
+    })
+  }
+
+  async getFuturesPositionTiers(input = {}) {
+    return getFuturesPositionTiersOperation({
+      broker: this,
+      input,
+    })
+  }
+
+  async getFuturesTradingSettings(input = {}) {
+    return getFuturesTradingSettingsOperation({
+      broker: this,
+      input,
+    })
   }
 
   async getFuturesPositionMode() {
