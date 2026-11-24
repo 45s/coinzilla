@@ -21,7 +21,7 @@ describe('GitHubPullRequestsApi', () => {
     http.verify();
   });
 
-  it('retrieves every linked page and uses only the current head commit committer date', async () => {
+  it('Scenario 01/02/03/04/25 — follows pages and uses the current head committer date, not updated_at or author date', async () => {
     const resultPromise = api.loadOpenPullRequests();
     const firstPage = http.expectOne('https://api.github.com/repos/45s/coinzilla/pulls?state=open&per_page=100&page=1');
     firstPage.flush([{
@@ -58,7 +58,76 @@ describe('GitHubPullRequestsApi', () => {
     expect(result.pullRequests[0].isDraft).toBe(true);
   });
 
-  it('keeps a PR when its individual commit lookup fails', async () => {
+
+  it('Scenario 04 — a PR metadata update with the same head SHA reuses the cached commit date', async () => {
+    const firstResult = api.loadOpenPullRequests();
+    http.expectOne('https://api.github.com/repos/45s/coinzilla/pulls?state=open&per_page=100&page=1')
+      .flush([{
+        number: 1824,
+        title: 'A PR',
+        html_url: 'https://github.com/45s/coinzilla/pull/1824',
+        draft: false,
+        updated_at: '2026-11-24T11:00:00.000Z',
+        head: { sha: 'a'.repeat(40) },
+      }]);
+    await Promise.resolve();
+    await Promise.resolve();
+    http.expectOne('https://api.github.com/repos/45s/coinzilla/commits/' + 'a'.repeat(40))
+      .flush({ sha: 'a'.repeat(40), commit: { committer: { date: '2026-11-24T10:00:00.000Z' } } });
+    await firstResult;
+
+    const secondResult = api.loadOpenPullRequests();
+    http.expectOne('https://api.github.com/repos/45s/coinzilla/pulls?state=open&per_page=100&page=1')
+      .flush([{
+        number: 1824,
+        title: 'Updated title',
+        html_url: 'https://github.com/45s/coinzilla/pull/1824',
+        draft: false,
+        updated_at: '2026-11-24T11:59:00.000Z',
+        head: { sha: 'a'.repeat(40) },
+      }]);
+    const refreshed = await secondResult;
+
+    expect(refreshed.pullRequests[0].title).toBe('Updated title');
+    expect(refreshed.pullRequests[0].lastCommit.committerDate).toBe('2026-11-24T10:00:00.000Z');
+    expect(http.match((request) => request.url.includes('/commits/'))).toHaveLength(0);
+  });
+
+  it('Scenario 05 — a changed head SHA retrieves and displays its new commit time', async () => {
+    const firstResult = api.loadOpenPullRequests();
+    http.expectOne('https://api.github.com/repos/45s/coinzilla/pulls?state=open&per_page=100&page=1')
+      .flush([{
+        number: 1824,
+        title: 'A PR',
+        html_url: 'https://github.com/45s/coinzilla/pull/1824',
+        draft: false,
+        head: { sha: 'a'.repeat(40) },
+      }]);
+    await Promise.resolve();
+    await Promise.resolve();
+    http.expectOne('https://api.github.com/repos/45s/coinzilla/commits/' + 'a'.repeat(40))
+      .flush({ sha: 'a'.repeat(40), commit: { committer: { date: '2026-11-24T10:00:00.000Z' } } });
+    await firstResult;
+
+    const secondResult = api.loadOpenPullRequests();
+    http.expectOne('https://api.github.com/repos/45s/coinzilla/pulls?state=open&per_page=100&page=1')
+      .flush([{
+        number: 1824,
+        title: 'A PR',
+        html_url: 'https://github.com/45s/coinzilla/pull/1824',
+        draft: false,
+        head: { sha: 'b'.repeat(40) },
+      }]);
+    await Promise.resolve();
+    await Promise.resolve();
+    http.expectOne('https://api.github.com/repos/45s/coinzilla/commits/' + 'b'.repeat(40))
+      .flush({ sha: 'b'.repeat(40), commit: { committer: { date: '2026-11-24T11:00:00.000Z' } } });
+
+    const refreshed = await secondResult;
+    expect(refreshed.pullRequests[0].lastCommit.committerDate).toBe('2026-11-24T11:00:00.000Z');
+  });
+
+  it('Scenario 06 — keeps a PR when its individual commit lookup fails', async () => {
     const resultPromise = api.loadOpenPullRequests();
     http.expectOne('https://api.github.com/repos/45s/coinzilla/pulls?state=open&per_page=100&page=1')
       .flush([{
@@ -79,7 +148,27 @@ describe('GitHubPullRequestsApi', () => {
     expect(item.lastCommit.status).toBe('unavailable');
   });
 
-  it('does not treat a failed later page as a complete result', async () => {
+  it('Scenario 07 — missing or invalid committer date remains unavailable', async () => {
+    const resultPromise = api.loadOpenPullRequests();
+    http.expectOne('https://api.github.com/repos/45s/coinzilla/pulls?state=open&per_page=100&page=1')
+      .flush([{
+        number: 1824,
+        title: 'A PR',
+        html_url: 'https://github.com/45s/coinzilla/pull/1824',
+        draft: false,
+        head: { sha: 'c'.repeat(40) },
+      }]);
+    await Promise.resolve();
+    await Promise.resolve();
+    http.expectOne('https://api.github.com/repos/45s/coinzilla/commits/' + 'c'.repeat(40))
+      .flush({ sha: 'c'.repeat(40), commit: { committer: { date: 'not-a-date' } } });
+
+    const result = await resultPromise;
+    expect(result.pullRequests[0].lastCommit.status).toBe('unavailable');
+    expect(result.pullRequests[0].lastCommit.committerDate).toBeNull();
+  });
+
+  it('Scenario 20 — does not treat a failed later page as a complete result', async () => {
     const resultPromise = api.loadOpenPullRequests();
     http.expectOne('https://api.github.com/repos/45s/coinzilla/pulls?state=open&per_page=100&page=1')
       .flush([{
@@ -99,7 +188,7 @@ describe('GitHubPullRequestsApi', () => {
     expect(http.match((request) => request.url.includes('/commits/'))).toHaveLength(0);
   });
 
-  it('reports rate limits from isolated commit lookups without hiding the PR', async () => {
+  it('Scenario 21 — reports rate limits from isolated commit lookups without hiding the PR', async () => {
     const resultPromise = api.loadOpenPullRequests();
     http.expectOne('https://api.github.com/repos/45s/coinzilla/pulls?state=open&per_page=100&page=1')
       .flush([{
@@ -124,8 +213,7 @@ describe('GitHubPullRequestsApi', () => {
     expect(result.rateLimitReset).toBe(new Date(1795525200 * 1000).toISOString());
   });
 
-
-  it('limits actual commit HTTP requests to four at a time', async () => {
+  it('Scenario 25 — limits actual commit HTTP requests to four at a time', async () => {
     const pullRequests = Array.from({ length: 5 }, (_value, index) => ({
       number: 1900 - index,
       title: 'PR ' + index,
@@ -157,5 +245,4 @@ describe('GitHubPullRequestsApi', () => {
     const result = await resultPromise;
     expect(result.pullRequests).toHaveLength(5);
   });
-
 });

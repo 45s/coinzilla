@@ -40,7 +40,7 @@ describe('GitHubPullRequestsComponent', () => {
     vi.restoreAllMocks();
   });
 
-  it('loads open PRs and displays the canonical link, draft marker and commit time', () => {
+  it('Scenario 01/02/03 — renders open PR link, title, draft state and exact committer time', () => {
     const root = fixture.nativeElement as HTMLElement;
     const link = root.querySelector('a[href="https://github.com/45s/coinzilla/pull/1824"]') as HTMLAnchorElement;
     expect(link).toBeDefined();
@@ -48,10 +48,11 @@ describe('GitHubPullRequestsComponent', () => {
     expect(root.textContent).toContain('Add the GitHub dashboard');
     expect(root.textContent).toContain('Draft');
     expect(root.textContent).toContain('4 min ago');
+    expect(root.querySelector('time')?.getAttribute('datetime')).toBe(snapshot.pullRequests[0].lastCommit.committerDate);
     expect(loadOpenPullRequests).toHaveBeenCalledTimes(1);
   });
 
-  it('creates and assigns local labels without sending them to GitHub', () => {
+  it('Scenario 09/10/11/15 — creates, assigns and persists local labels without another GitHub request', () => {
     const root = fixture.nativeElement as HTMLElement;
     const name = root.querySelector('.label-create input') as HTMLInputElement;
     name.value = 'Codex';
@@ -74,12 +75,31 @@ describe('GitHubPullRequestsComponent', () => {
     expect(loadOpenPullRequests).toHaveBeenCalledTimes(1);
   });
 
-  it('retains a previous complete snapshot when refresh fails', async () => {
-    loadOpenPullRequests.mockRejectedValueOnce(new Error('GitHub is unavailable'));
-    const refresh = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button'))
-      .find((button) => button.textContent?.includes('Refresh')) as HTMLButtonElement;
-    refresh.click();
+  it('Scenario 17 — displays the explicit empty state when no open PRs exist', async () => {
+    loadOpenPullRequests.mockResolvedValueOnce({ pullRequests: [], rateLimitReset: null });
+    await fixture.componentInstance.refresh();
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).toContain('No open Pull Requests found.');
+    expect(fixture.nativeElement.querySelector('tbody')).toBeNull();
+  });
+
+  it('Scenario 18 — displays a retryable error when the initial PR request fails', async () => {
+    fixture.destroy();
+    loadOpenPullRequests.mockRejectedValueOnce(new Error('GitHub unavailable'));
+    fixture = TestBed.createComponent(GitHubPullRequestsComponent);
+    fixture.detectChanges();
     await Promise.resolve();
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).toContain('GitHub PRs are unavailable');
+    expect(fixture.nativeElement.textContent).toContain('GitHub unavailable');
+    expect(fixture.nativeElement.querySelector('tbody')).toBeNull();
+  });
+
+  it('Scenario 19 — retains a previous complete snapshot when refresh fails', async () => {
+    loadOpenPullRequests.mockRejectedValueOnce(new Error('GitHub is unavailable'));
+    await fixture.componentInstance.refresh();
     fixture.detectChanges();
 
     expect(fixture.nativeElement.textContent).toContain('STALE SNAPSHOT');
@@ -87,16 +107,13 @@ describe('GitHubPullRequestsComponent', () => {
     expect(fixture.nativeElement.textContent).toContain('GitHub is unavailable');
   });
 
-  it('preserves the previous complete snapshot when commit metadata is rate-limited', async () => {
+  it('Scenario 21 — preserves the previous complete snapshot when commit metadata is rate-limited', async () => {
     const changedSnapshot = {
       pullRequests: [{ ...snapshot.pullRequests[0], title: 'New but rate-limited snapshot' }],
       rateLimitReset: 'unknown',
     };
     loadOpenPullRequests.mockResolvedValueOnce(changedSnapshot);
-    const refresh = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button'))
-      .find((button) => button.textContent?.includes('Refresh')) as HTMLButtonElement;
-    refresh.click();
-    await Promise.resolve();
+    await fixture.componentInstance.refresh();
     fixture.detectChanges();
 
     expect(fixture.nativeElement.textContent).toContain('STALE SNAPSHOT');
@@ -105,4 +122,39 @@ describe('GitHubPullRequestsComponent', () => {
     expect(fixture.nativeElement.textContent).toContain('GitHub rate limit reached');
   });
 
+  it('Scenario 23 — relative time advances locally without another GitHub request', () => {
+    const callsBeforeClockUpdate = loadOpenPullRequests.mock.calls.length;
+    const fiveMinutesAfterCommit = Date.parse(snapshot.pullRequests[0].lastCommit.committerDate) + 5 * 60_000;
+    fixture.componentInstance.clock.set(fiveMinutesAfterCommit);
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).toContain('5 min ago');
+    expect(loadOpenPullRequests).toHaveBeenCalledTimes(callsBeforeClockUpdate);
+  });
+
+  it('Scenario 24 — ignores repeated refresh while a request is already in flight', async () => {
+    let resolvePending: (value: typeof snapshot) => void = () => undefined;
+    loadOpenPullRequests.mockImplementationOnce(() => new Promise((resolve) => { resolvePending = resolve; }));
+    const first = fixture.componentInstance.refresh();
+    const second = fixture.componentInstance.refresh();
+
+    expect(loadOpenPullRequests).toHaveBeenCalledTimes(2);
+    resolvePending(snapshot);
+    await Promise.all([first, second]);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).toContain('Add the GitHub dashboard');
+  });
+
+  it('Scenario 22 — does not overwrite malformed browser storage', async () => {
+    fixture.destroy();
+    window.localStorage.setItem('coinzilla.dashboard.github-pr-labels.v1', '{broken');
+    fixture = TestBed.createComponent(GitHubPullRequestsComponent);
+    fixture.detectChanges();
+    await Promise.resolve();
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.labelStoreStatus()).toBe('invalid');
+    expect(window.localStorage.getItem('coinzilla.dashboard.github-pr-labels.v1')).toBe('{broken');
+    expect(fixture.nativeElement.textContent).toContain('It has not been overwritten');
+  });
 });

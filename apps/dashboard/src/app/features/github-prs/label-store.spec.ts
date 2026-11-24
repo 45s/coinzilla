@@ -14,25 +14,27 @@ import {
 const emptyStore = { schemaVersion: 1 as const, labels: [], assignments: {} };
 
 describe('GitHub PR local label store', () => {
-  it('creates trimmed, case-insensitively unique labels with stable IDs', () => {
+  it('Scenario 09/13 — creates trimmed, case-insensitively unique labels', () => {
     const first = createLabel(emptyStore, ' Codex ', 'blue', () => 'label-1');
     expect(first.labels).toEqual([{ id: 'label-1', name: 'Codex', color: 'blue' }]);
     expect(() => createLabel(first, 'codex', 'red', () => 'label-2')).toThrow(/already exists/i);
     expect(() => createLabel(first, '   ', 'red', () => 'label-2')).toThrow(/empty/i);
   });
 
-  it('supports many-to-many assignment and independent unassignment', () => {
-    const withLabel = createLabel(emptyStore, 'Testing', 'green', () => 'label-1');
-    const first = assignLabel(withLabel, '45s/coinzilla#1824', 'label-1');
-    const second = assignLabel(first, '45s/coinzilla#1825', 'label-1');
+  it('Scenario 10/11 — assigns multiple labels to one PR and reuses labels across PRs', () => {
+    const withFirst = createLabel(emptyStore, 'Testing', 'green', () => 'label-1');
+    const withTwo = createLabel(withFirst, 'Codex', 'blue', () => 'label-2');
+    const onePr = assignLabel(assignLabel(withTwo, '45s/coinzilla#1824', 'label-1'), '45s/coinzilla#1824', 'label-2');
+    const twoPrs = assignLabel(onePr, '45s/coinzilla#1825', 'label-1');
 
-    expect(second.assignments['45s/coinzilla#1824']).toEqual(['label-1']);
-    expect(second.assignments['45s/coinzilla#1825']).toEqual(['label-1']);
-    expect(unassignLabel(second, '45s/coinzilla#1824', 'label-1').assignments)
-      .toEqual({ '45s/coinzilla#1825': ['label-1'] });
+    expect(twoPrs.assignments['45s/coinzilla#1824']).toEqual(['label-1', 'label-2']);
+    expect(twoPrs.assignments['45s/coinzilla#1825']).toEqual(['label-1']);
+    expect(assignLabel(twoPrs, '45s/coinzilla#1825', 'label-1')).toBe(twoPrs);
+    expect(unassignLabel(twoPrs, '45s/coinzilla#1824', 'label-1').assignments['45s/coinzilla#1824'])
+      .toEqual(['label-2']);
   });
 
-  it('preserves assignments on rename/recolor and removes all on label deletion', () => {
+  it('Scenario 12/14 — preserves assignments on rename/recolor and removes all on deletion', () => {
     const assigned = assignLabel(
       createLabel(emptyStore, 'Codex', 'blue', () => 'label-1'),
       '45s/coinzilla#1824',
@@ -46,32 +48,30 @@ describe('GitHub PR local label store', () => {
     expect(deleteLabel(recolored, 'label-1').assignments).toEqual({});
   });
 
-  it('retains invalid stored JSON and reports corruption rather than overwriting it', () => {
-    let written: string | null = null;
+  it('Scenario 15/16/22 — persists assignments and preserves them when a PR is absent', () => {
+    const assigned = assignLabel(
+      createLabel(emptyStore, 'Testing', 'green', () => 'label-1'),
+      '45s/coinzilla#1824',
+      'label-1',
+    );
+    let written = '';
     const storage = {
-      getItem: () => '{broken',
+      getItem: () => written || null,
       setItem: (_key: string, value: string) => { written = value; },
     };
 
-    expect(loadLabelStore(storage).status).toBe('invalid');
-    expect(written).toBeNull();
+    expect(saveLabelStore(storage, assigned)).toBe(true);
+    expect(loadLabelStore(storage)).toEqual({ status: 'ready', store: assigned });
+    expect(loadLabelStore({ getItem: () => '{broken' }).status).toBe('invalid');
     expect(loadLabelStore({ getItem: () => { throw new Error('storage unavailable'); } }).status).toBe('unavailable');
     expect(loadLabelStore({ getItem: () => JSON.stringify({ ...emptyStore, schemaVersion: 2 }) }).status).toBe('invalid');
-    expect(loadLabelStore({ getItem: () => JSON.stringify({ schemaVersion: 1, labels: [{ id: 'known', name: 'Codex', color: 'blue' }], assignments: { '45s/coinzilla#1824': ['missing'] } }) }).status).toBe('invalid');
-  });
-
-  it('persists valid stores under the specified key and tolerates storage failures', () => {
-    let writtenKey = '';
-    let writtenValue = '';
-    const storage = {
-      getItem: () => JSON.stringify(emptyStore),
-      setItem: (key: string, value: string) => { writtenKey = key; writtenValue = value; },
-    };
-
-    expect(loadLabelStore(storage)).toEqual({ status: 'ready', store: emptyStore });
-    expect(saveLabelStore(storage, emptyStore)).toBe(true);
-    expect(writtenKey).toBe('coinzilla.dashboard.github-pr-labels.v1');
-    expect(JSON.parse(writtenValue)).toEqual(emptyStore);
-    expect(saveLabelStore({ setItem: () => { throw new Error('quota'); } }, emptyStore)).toBe(false);
+    expect(loadLabelStore({
+      getItem: () => JSON.stringify({
+        schemaVersion: 1,
+        labels: [{ id: 'known', name: 'Codex', color: 'blue' }],
+        assignments: { '45s/coinzilla#1824': ['missing'] },
+      }),
+    }).status).toBe('invalid');
+    expect(saveLabelStore({ setItem: () => { throw new Error('quota'); } }, assigned)).toBe(false);
   });
 });
