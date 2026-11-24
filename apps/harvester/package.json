@@ -146,7 +146,8 @@
       "test/scenarios/recovery-seller-cycle-lifecycle.scenario.test.js",
       "test/scenarios/recovery-seller-sell-planner.scenario.test.js",
       "test/scenarios/recovery-seller/registry-and-runner.scenario.test.js",
-      "test/scenarios/recovery-seller/authorization-custody.scenario.test.js"
+      "test/scenarios/recovery-seller/authorization-custody.scenario.test.js",
+      "test/scenarios/recovery-seller/buy-accounting.scenario.test.js"
     ]
   },
   "scripts": {
