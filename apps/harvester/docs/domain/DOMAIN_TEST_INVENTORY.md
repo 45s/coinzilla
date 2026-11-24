@@ -27,6 +27,14 @@ Phase 1 audits existing assertions only. The source-to-test matrix below records
 
 Planned scenario behaviors include initial BUY fill → standing BUY and recovery SELL; second BUY fill → recovery SELL replacement/recalculation; partial recovery SELL accounting; terminal recovery completion → next cycle; retained inventory and constrained dust; commission assets and exact-decimal/filter boundaries; and invalid, duplicate, conflicting, reordered, or incomplete evidence. This initiative adds coverage without redefining the canonical Conservative specification or authorizing exchange operations.
 
+### 2026-11-24 — Phase 4 Conservative BUY accounting evidence (PR #1808)
+
+- `src/use-cases/conservative-buy-accounting-scenario.test.js`: composes canonical initial/multiple BUY fills through production `updateTradingAccounting`; verifies net base inventory, cumulative quote cost/cash flow, base/quote/valued third-asset and zero-fee commissions, canonical fill identity, duplicate replay, conflicting facts, foreign-market rejection, valuation failure and failure atomicity.
+- `src/use-cases/second-buy-fill-reconciliation.test.js`: proves a second BUY extends the first tranche's Position and RecoveryLedger cost basis rather than resetting it.
+- `src/use-cases/conservative-trading-engine.test.js`: the full lifecycle now uses production `updateTradingAccounting`; verifies exact accounting after partial and completed second BUY fills while recovery SELL cancellation/fill reconciliation and replacement occur.
+- `src/domain/strategies/conservative/strategy.test.js`: investment-cap equality, just-above and below-boundary behavior; recovery SELL remains eligible when the next BUY is blocked.
+- Evidence remains pending until PR #1808 is merged and exact merged-head CI is verified; do not mark the broader audit matrix COVERED solely from this PR.
+
 ## Existing behavior-to-test inventory
 
 | Area | Existing test files | Behaviors already protected |
