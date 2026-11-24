@@ -32,7 +32,7 @@ The catalog is a navigation and traceability layer. Domain specifications, accep
 
 ### OPS-001 — Live Bots snapshots remain authoritative across updates and reconnects
 
-**Status:** TEST-MAPPED — all mapped regression cases pass on PR #1812 head `0f82c3eaef16b37da3e97e55b283fba1df63adee`; this remains PR-branch evidence until merge to `develop`.
+**Status:** TEST-MAPPED — all mapped regression cases pass on PR #1812 source head `dbdecc978eb4de5a81bbc289ba67179a55374aff`; this remains PR-branch evidence until merge to `develop`.
 
 **Behavior:** The Dashboard Bots workspace receives a complete, versioned view of Harvester runtime status, configured markets, and Portfolio positions over the existing local WebSocket. Relevant application/runtime events produce newer complete snapshots. A reconnect always synchronizes current state without replaying missed deltas.
 
@@ -96,16 +96,20 @@ The catalog is a navigation and traceability layer. Domain specifications, accep
   - `broadcasts a newer complete snapshot after a successful operator BUY-control transition`
   - `does not lose an operator transition that occurs while the initial snapshot is being read`
   - `reports failed operator reads explicitly instead of fabricating empty resources`
+  - `rejects malformed successful read models as unavailable snapshots`
+  - `rejects non-string recovery amounts in successful Portfolio reads`
   - `a reconnect receives a fresh full snapshot rather than relying on missed event replay`
 - [Operator BUY-control event regressions](../../apps/harvester/src/application/operator/create-harvester-operator-events.test.js)
   - `publishes market-scoped pause and resume events only after successful BUY transitions`
   - `publishes global BUY-control events without inventing a market symbol`
   - `does not publish a BUY-control completion event when the engine rejects the transition`
 - [Dashboard protocol validation](../../apps/dashboard/src/app/features/bots/realtime.spec.ts)
+  - Rejects malformed envelopes, numeric market prices, and numeric Portfolio recovery values
 - [Dashboard Bots stream behavior](../../apps/dashboard/src/app/features/bots/page.spec.ts)
   - `reconnects and accepts a new server revision epoch after Harvester restarts`
+  - `confirms a global BUY pause through the existing HTTP operator command`
 
-**Evidence note:** Exact PR-head GitHub Actions passed on `0f82c3eaef16b37da3e97e55b283fba1df63adee`: Harvester targeted regressions, all unit tests (including Dashboard production build), all coverage jobs, repository quality, external documentation links, and dependency audit. The optional read-only Binance TESTNET integration job was skipped by workflow configuration. The scenario remains `TEST-MAPPED` until this PR is merged to `develop`.
+**Evidence note:** Exact PR-head GitHub Actions passed on `dbdecc978eb4de5a81bbc289ba67179a55374aff`: Harvester targeted regressions, all unit tests (including Dashboard production build), all coverage jobs, repository quality, external documentation links, and dependency audit. The optional read-only Binance TESTNET integration job was skipped by workflow configuration. The scenario remains `TEST-MAPPED` until this PR is merged to `develop`.
 
 ## Harvester — shared account, order, and portfolio behavior
 
