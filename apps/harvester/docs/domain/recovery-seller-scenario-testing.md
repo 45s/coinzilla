@@ -279,11 +279,24 @@ Keep these concepts distinct in every fixture and assertion:
 | Recovery cost | Actual quote cost attributed to confirmed recovery BUY fills, including supported actual fee treatment | Recalculating from a current market price |
 | Legacy basis | Operator-declared historical investment and original quantity | Treating configuration as a synthetic Portfolio fill |
 | Legacy remaining quantity | Authorized legacy quantity remaining after completed cycles | Resetting it to original configured amount every cycle |
-| Verified Spot custody | Authoritative currently available Spot quantity | Treating wallet total, EARN or off-Spot quantity as sellable |
+| Verified Spot custody | Authoritative Spot `Balance.total` attributable to authorized legacy inventory after subtracting aggregate Portfolio base custody; this proves custody, not free-to-trade quantity | Treating wallet total, EARN or off-Spot quantity as sellable; treating total Spot custody as immediately spendable |
 | Account reservation | Inventory/quote committed by active account orders and strategies | Counting a reservation twice or ignoring another strategy's reservation |
 | Canonical Portfolio | Actual confirmed account accounting with strategy-owned Positions | Creating a parallel test Portfolio implementation |
 
 Historical basis/provenance and current custody are independent facts. A transfer between Spot and EARN changes custody/availability; it does not rewrite historical acquisition basis.
+
+**Do not collapse custody verification and spendable-balance allocation into one subtraction.** The current production flow has two distinct stages:
+
+1. `calculateVerifiedLegacySpotAllocation()` uses the authoritative Spot `Balance.total.amount`, subtracts aggregate base quantity already represented by every shared Portfolio Position for that asset, and caps the additional quantity at authorized remaining legacy quantity. This produces an additional tracked Spot-custody allocation outside Portfolio; it does not prove that all of that quantity is free or unreserved.
+2. The shared account allocator obtains the account snapshot's free base/quote balances and compares current Portfolio, additional tracked inventory, and account-wide active-order commitments with the corresponding snapshot baselines. It applies only post-snapshot deltas. Pair-owned active inventory/SELL commitments are evaluated separately from account-wide commitments. This prevents historical locks/commitments already reflected in the snapshot free balance from being subtracted a second time, while still accounting for new commitments created after the snapshot.
+
+Relevant production boundaries:
+- `apps/harvester/src/domain/strategies/recovery-seller/legacy-spot-allocation.js` — total Spot custody minus aggregate Portfolio base, capped by authorized legacy remainder.
+- `apps/harvester/src/use-cases/strategy-account-balance-context.js` — reads snapshot free balances and computes account-wide active BUY/SELL commitments.
+- `apps/harvester/src/domain/orders/allocate-order-commitments.js` — applies snapshot-relative Portfolio/additional-inventory/commitment deltas and enforces remaining account and pair capacity.
+- `apps/harvester/src/use-cases/create-recovery-seller-action-authorizer.js` — supplies RS-owned active orders and the recovery-plus-verified-legacy candidate to the shared allocator.
+
+**Never subtract `Balance.locked`, the same active-order commitment, or the same Portfolio quantity twice.** Do not replace the snapshot-relative allocator with a naive formula such as `Balance.total - Portfolio - all active orders`; the actual account-free-balance and baseline contract is more specific. Scenarios must assert both the custody result and the final executable/deferred allocation when testing these boundaries.
 
 ### 4.2 Additive legacy SELL quantity
 
@@ -407,7 +420,7 @@ Primary source paths:
 
 External pair entries must use the existing `TRADING_ENVIRONMENTS.BOTH`, `.TESTNET` or `.LIVE` constants and the existing `EXTERNAL_ORDERS_POLICIES.IGNORE` or `.BLOCK` constants; preserve their serialized values. Do not add a second environment/policy vocabulary or create duplicate pair configuration boundaries.
 
-The strategy config currently sets `enabled: true` at the audited checkpoint. The RS specification's section 15 contains a conflicting disabled-by-default statement. Do not create a default assertion or change config until the owner resolves that discrepancy. Per-pair environment eligibility remains a separate control.
+The strategy config currently sets `enabled: true`. This is settled, not an open discrepancy: owner-approved issue [#1713](https://github.com/45s/coinzilla/issues/1713) and merged [PR #1711](https://github.com/45s/coinzilla/pull/1711) approved the enabled-by-default setting, and the canonical RS specification §15 was corrected to match. Preserve this decision; do not reintroduce a disabled-default blocker or change the default in scenario work. Per-pair `enabled` and `tradingEnvironment` remain authoritative for market-route eligibility. This configuration default does not start Harvester or authorize a TESTNET/LIVE exchange session.
 
 **Volatility is market-owned, not RS-owned.** The effective protection market set is derived from the union of enabled strategy market configurations, not from a CG or RS execution route. A configured market with market-level enablement and `enableVolatilityProtection: true` receives volatility history/state/protection even when it has no CG route. When the same market is configured in CG and RS, both explicit protection values must agree; startup rejects conflicting values. Do not route volatility calculation, candle history or protection through an RS-specific BUY/SELL execution path or strategy lifecycle. Market inclusion follows the shared market-configuration aggregation rules. RS scenarios may prove that the real market-level protection gate is respected, but volatility calculations and market-state transitions belong to their strategy-neutral market tests. See [Harvester Volatility Protection](../volatility-protection.md) and [#1016](https://github.com/45s/coinzilla/issues/1016).
 
