@@ -1586,45 +1586,6 @@ export class BitunixFuturesBroker {
     }
   }
 
-  /**
-   * Return one bounded canonical Fill page. Quote notional is derived exactly
-   * from the exchange's base quantity and execution price; fee denomination
-   * remains unknown because the history response omits the fee asset.
-   */
-  async getFills(input = {}) {
-    const history = await this.getFuturesTradeHistory(input)
-    if (!history.ok) {
-      return history
-    }
-    if (history.data.trades.length === 0) {
-      return toResult({
-        data: [],
-      })
-    }
-    const markets = await this.getExchangeMarkets()
-    if (!markets.ok) {
-      return toResult({
-        errors: markets.errors,
-      })
-    }
-    try {
-      return toResult({
-        data: adaptFuturesFills({
-          trades: history.data.trades,
-          markets: markets.data,
-        }),
-      })
-    } catch (error) {
-      handleErr({
-        where: "BitunixFuturesBroker.getFills()",
-        error,
-      })
-      return toResult({
-        errors: [error],
-      })
-    }
-  }
-
   async getFuturesPositionMode() {
     try {
       const response = await this.restClient.request({
@@ -1901,11 +1862,43 @@ export class BitunixFuturesBroker {
     })
   }
 
-  async getFills() {
-    return unsupportedResult({
-      operation: "getFills",
-      reason: "Futures canonical fills are not implemented yet.",
-    })
+  /**
+   * Return one bounded canonical Fill page. Quote notional is derived exactly
+   * from the exchange's base quantity and execution price; fee denomination
+   * remains unknown because the history response omits the fee asset.
+   */
+  async getFills(input = {}) {
+    const history = await this.getFuturesTradeHistory(input)
+    if (!history.ok) {
+      return history
+    }
+    if (history.data.trades.length === 0) {
+      return toResult({
+        data: [],
+      })
+    }
+    const markets = await this.getExchangeMarkets()
+    if (!markets.ok) {
+      return toResult({
+        errors: markets.errors,
+      })
+    }
+    try {
+      return toResult({
+        data: adaptFuturesFills({
+          trades: history.data.trades,
+          markets: markets.data,
+        }),
+      })
+    } catch (error) {
+      handleErr({
+        where: "BitunixFuturesBroker.getFills()",
+        error,
+      })
+      return toResult({
+        errors: [error],
+      })
+    }
   }
 
   async getOrderBook({ symbol, limit = "max" } = {}) {
