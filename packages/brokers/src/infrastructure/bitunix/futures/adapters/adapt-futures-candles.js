@@ -56,15 +56,36 @@ function validateCandleRow({ row, symbol, endTime }) {
       field: `Bitunix Futures kline ${field}`,
     })
   }
-  if (compareDecimal({ left: row.high, right: row.low }) < 0 ||
-      compareDecimal({ left: row.high, right: row.open }) < 0 ||
-      compareDecimal({ left: row.high, right: row.close }) < 0 ||
-      compareDecimal({ left: row.low, right: row.open }) > 0 ||
-      compareDecimal({ left: row.low, right: row.close }) > 0) {
+  if (compareDecimal({
+        left: row.high,
+        right: row.low,
+      }) < 0 ||
+      compareDecimal({
+        left: row.high,
+        right: row.open,
+      }) < 0 ||
+      compareDecimal({
+        left: row.high,
+        right: row.close,
+      }) < 0 ||
+      compareDecimal({
+        left: row.low,
+        right: row.open,
+      }) > 0 ||
+      compareDecimal({
+        left: row.low,
+        right: row.close,
+      }) > 0) {
     throw new RangeError("Bitunix Futures kline OHLC values are inconsistent")
   }
-  if (compareDecimal({ left: row.baseVol, right: "0" }) < 0 ||
-      compareDecimal({ left: row.quoteVol, right: "0" }) < 0) {
+  if (compareDecimal({
+        left: row.baseVol,
+        right: "0",
+      }) < 0 ||
+      compareDecimal({
+        left: row.quoteVol,
+        right: "0",
+      }) < 0) {
     throw new RangeError("Bitunix Futures kline volume must not be negative")
   }
   return openTime
@@ -119,5 +140,8 @@ export function adaptFuturesCandles({ rows, symbol, interval, endTime } = {}) {
       isClosed: true,
     })
   }
-  return candles.sort((left, right) => left.openTime - right.openTime)
+  return candles.sort((...items) => {
+    const [left, right] = items
+    return left.openTime - right.openTime
+  })
 }

@@ -424,7 +424,7 @@ export class BitunixFuturesBroker {
         values: ["LAST_PRICE", "MARK_PRICE"],
         name: "type",
       })
-      const endTime = input.endTime
+      const { endTime } = input
       if (endTime !== undefined) {
         ensure.nonNegativeInteger({
           value: endTime,
