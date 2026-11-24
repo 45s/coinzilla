@@ -25,7 +25,6 @@ export function encodeWebSocketFrame({ opcode, payload = Buffer.alloc(0) } = {})
   return Buffer.concat([header, body])
 }
 
-
 function createProtocolFailure(reason) {
   return {
     frames: [],
