@@ -250,6 +250,61 @@ test("Bitunix Futures common open-order method remains explicitly unsupported", 
 })
 
 
+function createCancellationFetch({ requests }) {
+  return async (...request) => {
+    const [url, options] = request
+    const path = new URL(url).pathname
+    requests.push({
+      path,
+      method: options.method,
+      body: options.body,
+    })
+    if (path === "/api/v1/futures/market/trading_pairs") {
+      return createFuturesResponse({
+        data: [{
+          symbol: "BTCUSDT",
+          base: "BTC",
+          quote: "USDT",
+          symbolStatus: "OPEN",
+          isApiSupported: true,
+        }],
+      })
+    }
+    if (path === "/api/v1/futures/trade/get_pending_orders") {
+      return createFuturesResponse({
+        data: {
+          orderList: [createOrderRow({
+            fee: "0.0001",
+            realizedPNL: "0",
+            effect: "GTC",
+            status: "PART_FILLED",
+          })],
+          total: 1,
+        },
+      })
+    }
+    if (path === "/api/v1/futures/trade/get_order_detail") {
+      return createFuturesResponse({
+        data: createOrderRow({
+          status: "PART_FILLED_CANCELED",
+        }),
+      })
+    }
+    if (path === "/api/v1/futures/trade/cancel_orders") {
+      return createFuturesResponse({
+        data: {
+          successList: [{
+            orderId: "futures-order-123",
+            clientId: "strategy-order-456",
+          }],
+          failureList: [],
+        },
+      })
+    }
+    throw new Error(`Unexpected Futures cancellation request: ${path}`)
+  }
+}
+
 function createCancellationBroker({ allowLiveOrderMutations = true } = {}) {
   const requests = []
   const broker = new Broker({
@@ -259,58 +314,9 @@ function createCancellationBroker({ allowLiveOrderMutations = true } = {}) {
     providerOptions: {
       allowLiveOrderMutations,
       dependencies: {
-        fetchFn: async (...request) => {
-          const [url, options] = request
-          const path = new URL(url).pathname
-          requests.push({
-            path,
-            method: options.method,
-            body: options.body,
-          })
-          if (path === "/api/v1/futures/market/trading_pairs") {
-            return createFuturesResponse({
-              data: [{
-                symbol: "BTCUSDT",
-                base: "BTC",
-                quote: "USDT",
-                symbolStatus: "OPEN",
-                isApiSupported: true,
-              }],
-            })
-          }
-          if (path === "/api/v1/futures/trade/get_pending_orders") {
-            return createFuturesResponse({
-              data: {
-                orderList: [createOrderRow({
-                  fee: "0.0001",
-                  realizedPNL: "0",
-                  effect: "GTC",
-                  status: "PART_FILLED",
-                })],
-                total: 1,
-              },
-            })
-          }
-          if (path === "/api/v1/futures/trade/get_order_detail") {
-            return createFuturesResponse({
-              data: createOrderRow({
-                status: "PART_FILLED_CANCELED",
-              }),
-            })
-          }
-          if (path === "/api/v1/futures/trade/cancel_orders") {
-            return createFuturesResponse({
-              data: {
-                successList: [{
-                  orderId: "futures-order-123",
-                  clientId: "strategy-order-456",
-                }],
-                failureList: [],
-              },
-            })
-          }
-          throw new Error(`Unexpected Futures cancellation request: ${path}`)
-        },
+        fetchFn: createCancellationFetch({
+          requests,
+        }),
       },
     },
   })
