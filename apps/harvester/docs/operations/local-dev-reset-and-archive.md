@@ -45,6 +45,24 @@ LIVE production database files and sidecars are never copied. Unclassified top-l
 
 The snapshot is a raw folder copy, not a transactional SQLite backup. Stop Harvester before archiving so SQLite files and recovery facts are quiescent.
 
+## Publish a lightweight debug archive
+
+For focused debugging, run this after Harvester has stopped:
+
+```bash
+pnpm run archive:debug
+```
+
+This uses the same TESTNET session selection, recovery-facts consistency checks, manifest, checksums, and verified directory-based publication as `archive:push`. The archive folder keeps the normal timestamp/ID format with a `_debug` suffix.
+
+The debug archive includes only:
+
+- `logs/sessions/`: newest completed TESTNET session, gzip-compressed.
+- `recovery-facts/`: complete Operational State Store facts and manifest.
+- `data_commit_hash` and `manifest.json`: checkpoint identity, file inventory, sizes, and SHA-256 checksums.
+
+It deliberately excludes all of `data/` (including TESTNET/LIVE databases and backups) and all of `logs/cumulative/`. The regular `archive:push` command remains unchanged and continues to publish the fuller evidence archive.
+
 ## Reset only local Operational State history
 
 Archive first if you need to preserve the current session's evidence. Then ensure Harvester is stopped and run:
