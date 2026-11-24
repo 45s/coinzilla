@@ -12,6 +12,7 @@ import { adaptFuturesCurrentPositions, adaptFuturesHistoricalPositions } from ".
 import { adaptFuturesTradeHistory } from "./adapters/adapt-futures-trades.js"
 import { adaptFuturesPendingOrders } from "./adapters/adapt-futures-pending-orders.js"
 import { adaptFuturesPendingTpSlOrders } from "./adapters/adapt-futures-pending-tpsl-orders.js"
+import { cancelFuturesOrder } from "./operations/cancel-futures-order.js"
 
 function unsupportedResult({ operation, reason }) {
   return {
@@ -205,8 +206,15 @@ const FUTURES_CAPABILITIES = [
   },
   {
     type: "CANCEL_ORDER",
-    status: "UNSUPPORTED",
-    reason: "Futures cancellation is not enabled until its final-state verification and unknown-outcome handling are implemented.",
+    status: "SUPPORTED",
+    method: "cancelOrder",
+    guarantee: "Cancels one exact pending order with one POST and verifies its final state through canonical order detail.",
+    limitation: "Requires allowLiveOrderMutations: true, a connected broker, and an exchange-provided clientId on the pending order. A lost acknowledgement is reconciled by clientId; unknown outcomes are never retried.",
+    conditions: [
+      "allowLiveOrderMutations === true",
+      "Broker.connect() completed",
+      "The pending-order preflight returns exactly one matching row with clientId",
+    ],
   },
   {
     type: "CANCEL_ALL_ORDERS",
@@ -1944,10 +1952,20 @@ export class BitunixFuturesBroker {
     })
   }
 
-  async cancelOrder() {
-    return unsupportedResult({
-      operation: "cancelOrder",
-      reason: "Futures cancellation is disabled until the mutation lifecycle is verified.",
+  async cancelOrder(input = {}) {
+    if (!this.config.allowLiveOrderMutations) {
+      return {
+        ...unsupportedResult({
+          operation: "cancelOrder",
+          reason: "live Futures order mutations are disabled by default; set allowLiveOrderMutations: true only after independent live-account authorization",
+        }),
+        mutationOutcome: "NOT_SENT",
+        cancellationOutcome: "NOT_SENT",
+      }
+    }
+    return cancelFuturesOrder({
+      broker: this,
+      input,
     })
   }
 
