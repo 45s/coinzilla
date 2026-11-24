@@ -434,7 +434,14 @@ External pair entries must use the existing `TRADING_ENVIRONMENTS.BOTH`, `.TESTN
 
 The strategy config currently sets `enabled: true`. This is settled, not an open discrepancy: owner-approved issue [#1713](https://github.com/45s/coinzilla/issues/1713) and merged [PR #1711](https://github.com/45s/coinzilla/pull/1711) approved the enabled-by-default setting, and the canonical RS specification §15 was corrected to match. Preserve this decision; do not reintroduce a disabled-default blocker or change the default in scenario work. Per-pair `enabled` and `tradingEnvironment` remain authoritative for market-route eligibility. This configuration default does not start Harvester or authorize a TESTNET/LIVE exchange session.
 
-**Volatility is market-owned, not RS-owned.** The effective protection market set is derived from the union of enabled strategy market configurations, not from a CG or RS execution route. A configured market with market-level enablement and `enableVolatilityProtection: true` receives volatility history/state/protection even when it has no CG route. When the same market is configured in CG and RS, both explicit protection values must agree; startup rejects conflicting values. Do not route volatility calculation, candle history or protection through an RS-specific BUY/SELL execution path or strategy lifecycle. Market inclusion follows the shared market-configuration aggregation rules. RS scenarios may prove that the real market-level protection gate is respected, but volatility calculations and market-state transitions belong to their strategy-neutral market tests. See [Harvester Volatility Protection](../volatility-protection.md) and [#1016](https://github.com/45s/coinzilla/issues/1016).
+**Volatility is market-owned, not RS-owned.** This is an implemented shared-market contract, not a planned RS-specific engine. Current production path (verified after merged [PR #1744](https://github.com/45s/coinzilla/pull/1744), tracked by [#1728](https://github.com/45s/coinzilla/issues/1728)):
+
+- `src/bootstrap/config/resolve-harvester-options.js` builds `marketPairs` from the environment-selected CG pairs plus enabled RS pairs; when both strategies enable the same market, conflicting explicit `enableVolatilityProtection` values are rejected.
+- `src/bootstrap/start-harvester.js` passes the effective `startup.pairs` as `volatilityPairs` to the shared Trading Engine and passes the market-data pair set to candle-history startup.
+- `src/use-cases/conservative-trading-engine.js` initializes volatility state from `volatilityPairs` and supplies one common market protection eligibility gate to strategy submissions.
+- `src/use-cases/create-candle-history-service.js` creates history/state by market symbol for enabled markets with volatility protection enabled; it does not own CG/RS strategy inventory.
+
+An enabled RS-only market therefore receives the same market-level state/gate without a CG execution route. RS scenarios must prove that the real RS submission path respects this shared gate, including the approved recovery-SELL exception and disabled-market behavior. They must not calculate volatility, own candle history, create an RS volatility state machine or duplicate market tests. See [Harvester Volatility Protection](../volatility-protection.md), [#1728](https://github.com/45s/coinzilla/issues/1728) and [PR #1744](https://github.com/45s/coinzilla/pull/1744). This RS proof is reserved as `RS-008-017`.
 
 The runtime references `thirdAssetFeeQuoteValue` in some paths, but it is not part of the validated operator pair configuration contract. Do not document it as a supported user-configurable field or fabricate its source.
 
@@ -1705,10 +1712,10 @@ Every family below explicitly answers the 22 contract questions required by the 
 | 1. Purpose | Prove that CG and RS may operate independently without double-spending quote or double-selling shared physical base inventory. |
 | 2. Preconditions | One authoritative provider-account runtime; shared Portfolio/OrderRegistry/serialized transition path; both strategy configurations and account snapshot valid. |
 | 3. Configuration inputs | Independent CG and RS pair maps, strategy budgets/investment limits, pair enabled/environment selectors and supported order settings. |
-| 4. Runtime-derived inputs | Shared Portfolio; Spot/free/locked balances; EARN custody; all active orders/commitments; strategy-owned Positions; market subscriptions; account identity. |
-| 5. Domain rules | Physical account custody is represented once. Strategy Positions/ownership/budgets remain separate. Shared allocator serializes and reserves account-wide quote/base commitments. |
-| 6. Decision inputs | Each strategy's own eligibility/budget plus account-wide free quote/base after all strategies and active orders are accounted for. |
-| 7. Expected decision | SUBMIT only when both the strategy-specific budget and shared account allocator permit it; otherwise WAIT/BLOCK without borrowing another strategy's budget. |
+| 4. Runtime-derived inputs | Shared Portfolio; Spot/free/locked balances; EARN custody; all active orders/commitments; strategy-owned Positions; effective market volatility configuration/state; market subscriptions; account identity. |
+| 5. Domain rules | Physical account custody is represented once. Strategy Positions/ownership/budgets remain separate. Shared allocator serializes account-wide quote/base commitments. Volatility protection is market-owned and strategy-neutral; RS consumes the common gate and never owns a separate volatility engine. |
+| 6. Decision inputs | Each strategy's own eligibility/budget, account-wide free quote/base, and the shared market-level volatility protection decision. |
+| 7. Expected decision | SUBMIT only when strategy budget, shared allocator and market safety gates permit it; otherwise WAIT/BLOCK. An active market-volatility block applies consistently to RS and CG, subject to the approved recovery-SELL exception. |
 | 8. State before | Concurrent strategy evaluations may target same or different markets against one shared account state. |
 | 9. State after | Independent Position/order ownership remains; serialized allocation prevents double-spend/oversell and deterministic conflicts defer/block one action. |
 | 10. Portfolio effects | One actual Portfolio aggregate; multiple independent strategy-owned Positions; no duplicate wallet balance or cross-attribution. |
@@ -1717,13 +1724,21 @@ Every family below explicitly answers the 22 contract questions required by the 
 | 13. Commission effects | Actual fee facts are applied to the owning strategy Position and shared account baseline; no fee or asset is attributed to both strategies. |
 | 14. Profitability calculation | Each strategy evaluates its own cost basis and net proceeds. A profitable CG/RS outcome cannot subsidize the other strategy or borrow its budget. |
 | 15. Invariants | Shared custody conserved once; no double-spend/double-sell; budgets independent; ownership immutable; same-symbol market-data deduplication does not merge strategy identity. |
-| 16. Failure cases | Concurrent reservation race; missing account snapshot; conflicting order ownership; one projection fails; Spot/EARN mismatch; stale market/environment route. |
+| 16. Failure cases | Concurrent reservation race; missing account snapshot; conflicting order ownership; one projection fails; Spot/EARN mismatch; stale market/environment route; conflicting CG/RS volatility settings or unavailable market protection state. |
 | 17. Duplicate/replay cases | Duplicate Fill is attributed once to its owner; conflicting strategy identity is rejected; replay restoration remains deferred. |
-| 18. Required assertions | Same/different-market concurrency; quote/base before/after; active commitments; strategy-owned Positions; broker calls; no cross-budget/cross-fill attribution. |
+| 18. Required assertions | Same/different-market concurrency; quote/base before/after; active commitments; strategy-owned Positions; broker calls; no cross-budget/cross-fill attribution; RS-only market protection; shared RS/CG gate; disabled-market behavior; recovery-SELL exception. |
 | 19. Existing regression tests | create-recovery-seller-action-authorizer.test.js; create-recovery-seller-accounting-workflow.test.js; account-runtime-registry.test.js; order-event-workflow.test.js. Zero scenario credit. |
-| 20. Missing scenario tests | New deterministic same-market and different-market CG/RS concurrency scenarios covering both quote and base contention and failure atomicity. |
+| 20. Missing scenario tests | New deterministic same-market and different-market CG/RS concurrency scenarios covering quote/base contention and failure atomicity, plus RS-008-017 for the shared market-owned volatility gate. |
 | 21. Blocked decisions | No additional strategy borrowing or shared-budget policy is implied. Runtime authorization revocation/expiry remains deferred under FITDIB. |
-| 22. Acceptance criteria | Every #1780 section G/J case has stable IDs and exact concurrent outcomes; prove no double-spend, double-sell or ownership leakage. |
+| 22. Acceptance criteria | Every #1780 section G/J case has stable IDs and exact concurrent outcomes; prove no double-spend, double-sell, ownership leakage, or RS bypass of the shared market-volatility gate. |
+
+**Required scenario case `RS-008-017` — RS respects the market-owned volatility gate**
+
+- **Given:** an enabled market in the effective market-pair union, with `enableVolatilityProtection` explicitly enabled; the shared market service reports a protection-active snapshot.
+- **When:** the real RS BUY/SELL submission path evaluates that market.
+- **Then:** RS consumes the same market protection eligibility/state as CG. A blocked RS BUY is deferred and any permitted BUY cancellation remains limited to RS-owned orders. Recovery SELL follows the explicit shared market policy/exception; the scenario must not invent an RS-only bypass.
+- **Subcases:** `RS-008-017-A` RS-only market receives the market-level gate without a CG route; `RS-008-017-B` same-market CG/RS configurations with conflicting explicit protection values fail during configuration resolution; `RS-008-017-C` disabled protection bypasses only volatility-specific work while all other safety gates remain active; `RS-008-017-D` recovery SELL follows the approved market-level exception.
+- **Boundary:** do not recalculate ATR/volatility, construct candles, test market-state transitions or duplicate the market-owned volatility test suite here. Those belong to the market-level tests and [#1728](https://github.com/45s/coinzilla/issues/1728).
 
 #### RS-009 — STOP, failure atomicity and continued reconciliation
 
@@ -1883,6 +1898,7 @@ The mapping is intentionally many-to-many where one behavior needs both a domain
 | G.10 | `RS-008-009` |
 | G.11 | `RS-008-012` |
 | G.12 | `RS-008-013` |
+| G.13 | `RS-008-017` |
 | H.01 | `RS-005-013` |
 | H.02 | `RS-006-011`, `RS-006-012` |
 | H.03 | `RS-005-012` |
@@ -2115,10 +2131,10 @@ This is the approved test-only implementation sequence. Deliver one focused PR p
 ### PR 6 — RS-008: CG/RS shared account concurrency
 
 - **Objective:** prove physical account resources are shared once while strategy ownership, Positions and budgets remain independent.
-- **Scope:** same/different markets; shared quote/base commitments; budget isolation; immutable order/Fill ownership; serialized decisions; market-data subscription deduplication; pause/STOP isolation; external/manual order isolation.
+- **Scope:** same/different markets; shared quote/base commitments; budget isolation; immutable order/Fill ownership; serialized decisions; market-data subscription deduplication; pause/STOP isolation; external/manual order isolation; RS compliance with the shared market-owned volatility gate.
 - **Files:** add `scenarios/shared-account-concurrency.js`, `shared-account-concurrency.scenario.test.js`; update targeted-test registration. Exercise `allocate-order-commitments.js`, `strategy-account-balance-context.js`, `strategy-order-commitments.js`, the RS action authorizer/accounting workflow and actual shared Trading Engine/market-subscription coordinator.
-- **Tests:** shared allocator DOMAIN tests and APPLICATION tests with real engine composition, two independent Positions and deterministic concurrent event ordering. Do not create a fake allocator or second Portfolio.
-- **Acceptance:** no double-spend/oversell/duplicate custody/cross-strategy budget borrowing; each Fill has one owner; serialized decisions are deterministic; one strategy's policy state cannot silently change another's.
+- **Tests:** shared allocator DOMAIN tests and APPLICATION tests with real engine composition, two independent Positions and deterministic concurrent event ordering. Assert RS-only market gate availability, shared RS/CG protection eligibility, conflicting config rejection, disabled-market behavior and the recovery-SELL exception without reimplementing volatility calculations. Do not create a fake allocator or second Portfolio.
+- **Acceptance:** no double-spend/oversell/duplicate custody/cross-strategy budget borrowing; each Fill has one owner; serialized decisions are deterministic; one strategy's policy state cannot silently change another's; RS cannot bypass the shared market-volatility gate or own a duplicate volatility engine.
 - **Dependencies:** PR 1–5 and existing shared Trading Engine, Portfolio and OrderRegistry contracts.
 - **Out of scope:** new shared infrastructure, provider migration, new strategy policies, volatility duplication and live exchange concurrency.
 - **Exit:** all unblocked RS-008 cases have same/different-market evidence; exact-head tests/CI pass; catalog/issue/roadmap reflect actual evidence.
