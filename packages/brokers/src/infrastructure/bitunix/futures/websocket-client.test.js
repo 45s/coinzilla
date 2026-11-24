@@ -464,3 +464,29 @@ test("Bitunix Futures private WebSocket rejects failed login acknowledgement", a
   await assert.rejects(authenticated, /login failed/i)
   await client.disconnect()
 })
+
+
+test("Bitunix Futures WebSocket recognizes the documented op=ping pong response", async () => {
+  let nowMs = 1_700_000_000_000
+  const {
+    client,
+    transport,
+    intervals,
+    timeouts,
+  } = createClient({
+    now: () => nowMs,
+  })
+  await client.connect()
+  intervals[0].callback()
+  transport.receive({
+    op: "ping",
+    pong: 1_700_000_000,
+    ping: 1_700_000_003,
+  })
+  nowMs += 7_000
+  intervals[0].callback()
+
+  assert.equal(client.state, "open")
+  assert.equal(timeouts.length, 0)
+  await client.disconnect()
+})
