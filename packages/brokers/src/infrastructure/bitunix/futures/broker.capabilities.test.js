@@ -51,5 +51,5 @@ test("Bitunix Futures capability declarations match implemented streams and read
   const userData = capabilities.getCapability({
     type: "SUBSCRIBE_USER_DATA",
   })
-  assert.match(userData.limitation, /not authoritative or replayable/i)
+  assert.match(userData.limitation, /no canonical event, replay cursor or recovery guarantee/i)
 })
