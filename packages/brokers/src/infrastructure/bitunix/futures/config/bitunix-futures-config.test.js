@@ -28,6 +28,25 @@ test("Bitunix Futures configuration rejects non-object constructor inputs", () =
   }
 })
 
+test("Bitunix Futures configuration defaults position mutations to disabled and accepts explicit opt-in", () => {
+  const defaults = new BitunixFuturesConfig(credentials)
+  assert.equal(defaults.allowLivePositionMutations, false)
+
+  const config = new BitunixFuturesConfig({
+    ...credentials,
+    allowLivePositionMutations: true,
+  })
+  assert.equal(config.allowLivePositionMutations, true)
+
+  assert.throws(
+    () => new BitunixFuturesConfig({
+      ...credentials,
+      allowLivePositionMutations: "true",
+    }),
+    /allowLivePositionMutations must be a boolean/i,
+  )
+})
+
 test("Bitunix Futures configuration accepts its documented options", () => {
   const config = new BitunixFuturesConfig({
     ...credentials,
