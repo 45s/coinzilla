@@ -5,6 +5,7 @@ import { adaptFuturesOrderBook } from "./adapters/adapt-futures-order-book.js"
 import { BrokerCapabilities } from "../../../broker/broker-capabilities.js"
 import { BrokerUnsupportedOperationError } from "../../../broker/errors/broker-unsupported-operation-error.js"
 import { BitunixFuturesRestClient } from "./api/rest-client.js"
+import { BitunixFuturesWebSocketClient } from "./api/websocket-client.js"
 import { adaptFuturesCandles, BITUNIX_FUTURES_CANDLE_INTERVALS } from "./adapters/adapt-futures-candles.js"
 import { adaptFuturesCanonicalOrder } from "./adapters/adapt-futures-canonical-order.js"
 import { adaptFuturesCurrentPositions, adaptFuturesHistoricalPositions } from "./adapters/adapt-futures-positions.js"
@@ -742,6 +743,149 @@ function assertCanonicalOrderIdentity({ order, lookup }) {
   }
   if (order.clientOrderId !== lookup.identifier && lookup.identifierType === "clientId") {
     throw new TypeError("Bitunix Futures order detail identity does not match the requested identifier")
+  }
+}
+
+function adaptFuturesTradePriceEvents({ event, symbol }) {
+  ensure.plainObject({
+    value: event,
+    name: "Futures trade WebSocket event",
+  })
+  if (event.ch !== "trade" || event.symbol !== symbol) {
+    throw new TypeError("Bitunix Futures trade WebSocket event does not match the subscribed symbol")
+  }
+  ensure.array({
+    value: event.data,
+    name: "Futures trade event data",
+  })
+  return event.data.map((trade) => {
+    ensure.plainObject({
+      value: trade,
+      name: "Futures public trade",
+    })
+    const timestamp = Date.parse(trade.t)
+    if (!Number.isSafeInteger(timestamp) || timestamp < 0) {
+      throw new TypeError("Bitunix Futures trade timestamp must be a valid ISO-8601 timestamp")
+    }
+    for (const [field, name] of [
+      ["p", "price"],
+      ["v", "quantity"],
+    ]) {
+      assertDecimalString({
+        value: trade[field],
+        field: `Bitunix Futures trade ${name}`,
+      })
+      if (compareDecimal({
+        left: trade[field],
+        right: "0",
+      }) <= 0) {
+        throw new RangeError(`Bitunix Futures trade ${name} must be positive`)
+      }
+    }
+    const side = ensure.oneOf({
+      value: String(trade.s ?? "").toUpperCase(),
+      values: ["BUY", "SELL"],
+      name: "side",
+    })
+    return Object.freeze({
+      eventType: "trade",
+      eventTime: timestamp,
+      timestamp,
+      sourceTimestamp: trade.t,
+      symbol,
+      price: trade.p,
+      quantity: trade.v,
+      side,
+    })
+  })
+}
+
+function deliverFuturesTradePrice({ event, symbol, onPrice }) {
+  try {
+    const prices = adaptFuturesTradePriceEvents({
+      event,
+      symbol,
+    })
+    for (const price of prices) {
+      try {
+        onPrice(price)
+      } catch (error) {
+        handleErr({
+          where: "BitunixFuturesBroker.subscribeForPrices().onPrice",
+          error,
+        })
+      }
+    }
+  } catch (error) {
+    handleErr({
+      where: "BitunixFuturesBroker.subscribeForPrices()",
+      error,
+    })
+  }
+}
+
+function adaptFuturesBookTicker({ event, symbol, timestamp }) {
+  ensure.plainObject({
+    value: event,
+    name: "Futures depth WebSocket event",
+  })
+  if (event.ch !== "depth_book1" || event.symbol !== symbol) {
+    throw new TypeError("Bitunix Futures depth event does not match the subscribed symbol")
+  }
+  ensure.plainObject({
+    value: event.data,
+    name: "Futures depth data",
+  })
+  const bid = event.data.b?.[0]
+  const ask = event.data.a?.[0]
+  if (!Array.isArray(bid) || bid.length < 2 || !Array.isArray(ask) || ask.length < 2) {
+    throw new TypeError("Bitunix Futures depth event must contain a best bid and best ask")
+  }
+  const values = {
+    bestBidPrice: bid[0],
+    bestBidQuantity: bid[1],
+    bestAskPrice: ask[0],
+    bestAskQuantity: ask[1],
+  }
+  for (const [field, value] of Object.entries(values)) {
+    assertDecimalString({
+      value,
+      field: `Bitunix Futures ${field}`,
+    })
+    if (compareDecimal({
+      left: value,
+      right: "0",
+    }) <= 0) {
+      throw new RangeError(`Bitunix Futures ${field} must be positive`)
+    }
+  }
+  return Object.freeze({
+    symbol,
+    ...values,
+    timestamp,
+  })
+}
+
+function deliverFuturesBookTicker({ event, symbol, now, onBookTicker }) {
+  try {
+    const bookTicker = adaptFuturesBookTicker({
+      event,
+      symbol,
+      timestamp: now(),
+    })
+    try {
+      onBookTicker(bookTicker)
+    } catch (error) {
+      handleErr({
+        where: "BitunixFuturesBroker.subscribeForBookTicker().onBookTicker",
+        error,
+      })
+    }
+  } catch (error) {
+    handleErr({
+      where: "BitunixFuturesBroker.subscribeForBookTicker()",
+      error,
+    })
   }
 }
 
