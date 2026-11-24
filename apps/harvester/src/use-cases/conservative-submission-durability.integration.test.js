@@ -288,8 +288,8 @@ function createRepeatedRecoverySellPolicy() {
   }
 }
 
-async function submitFirstMarketDecision({ engine }) {
-  await engine.processBookTicker({
+async function publishRecoveryMarketBook({ engine }) {
+  return engine.processBookTicker({
     symbol: "DOGEUSDT",
     bookTicker: {
       symbol: "DOGEUSDT",
@@ -300,13 +300,32 @@ async function submitFirstMarketDecision({ engine }) {
       timestamp: 1,
     },
   })
-  return engine.processMarketPrice({
+}
+
+function createRecoveryPriceEvent({ price, timestamp }) {
+  return {
     symbol: "DOGEUSDT",
     priceEvent: {
       symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1,
+      price,
+      timestamp,
     },
+  }
+}
+
+function processRecoveryPriceEvent({ engine, price, timestamp }) {
+  return engine.processMarketPrice(createRecoveryPriceEvent({
+    price,
+    timestamp,
+  }))
+}
+
+async function submitFirstMarketDecision({ engine }) {
+  await publishRecoveryMarketBook({ engine })
+  return processRecoveryPriceEvent({
+    engine,
+    price: "100",
+    timestamp: 1,
   })
 }
 
@@ -365,36 +384,20 @@ test("retains a PENDING recovery SELL reservation while its broker acknowledgeme
       signalPlacementStarted(order)
     },
   })
-  await engine.processBookTicker({
-    symbol: "DOGEUSDT",
-    bookTicker: {
-      symbol: "DOGEUSDT",
-      bestBidPrice: "0.01",
-      bestBidQuantity: "1",
-      bestAskPrice: "1000",
-      bestAskQuantity: "1",
-      timestamp: 1,
-    },
-  })
-  const firstPromise = engine.processMarketPrice({
-    symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1,
-    },
+  await publishRecoveryMarketBook({ engine })
+  const firstPromise = processRecoveryPriceEvent({
+    engine,
+    price: "100",
+    timestamp: 1,
   })
   const submittedIntent = await placementStarted
   const pendingOrder = engine.getOrders().find((order) =>
     order.clientOrderId === submittedIntent.clientOrderId)
   assert.equal(pendingOrder.status, "PENDING", "The durable pending order must reserve the Position before broker acknowledgement.")
-  const repeatedPromise = engine.processMarketPrice({
-    symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100.01",
-      timestamp: 2,
-    },
+  const repeatedPromise = processRecoveryPriceEvent({
+    engine,
+    price: "100.01",
+    timestamp: 2,
   })
   assert.equal(brokerState.orders.length, 1, "A repeated market event during delayed acknowledgement must not start a second broker request.")
   releasePlacement()
