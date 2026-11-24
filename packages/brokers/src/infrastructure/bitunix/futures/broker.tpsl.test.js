@@ -199,3 +199,19 @@ test("Bitunix Futures TP/SL history rejects rows for a different requested symbo
   assert.equal(result.ok, false, "A TP/SL history row for another market must not be returned as the requested market")
   assert.equal(requests.length, 1, "The exchange response must be checked after the single requested history read")
 })
+
+
+test("Bitunix Futures TP/SL history rejects values outside the documented int32 query range", async () => {
+  const { broker, requests } = createBroker({
+    responseData: {
+      orderList: [tpSlRow],
+      total: 1,
+    },
+  })
+  const result = await broker.getFuturesTpSlOrderHistory({
+    side: 2_147_483_648,
+  })
+
+  assert.equal(result.ok, false, "An int32 query field outside the signed 32-bit range must be rejected")
+  assert.equal(requests.length, 0, "Out-of-range TP/SL history filters must be rejected before dispatch")
+})
