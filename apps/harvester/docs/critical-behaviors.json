@@ -526,7 +526,8 @@
       "runtimeStatus": "active",
       "invariants": [
         "Gate trading until configured-asset balances and account-wide open orders are captured and durably recorded; startup-snapshot orders are external to the current process and are never adopted.",
-        "Incomplete snapshots, ownership uncertainty, or balance/order discrepancies fail closed."
+        "Incomplete snapshots, ownership uncertainty, or balance/order discrepancies fail closed.",
+        "External open orders are unowned audit evidence and follow configured per-market policy: IGNORE permits scoped continuation; BLOCK blocks only the affected market. Audit readiness classification alone is not a global stop."
       ]
     },
     {
@@ -997,7 +998,42 @@
         "Cancel only active BUY orders owned by the current process through the existing serialized cancellation and reconciliation transition.",
         "Reconcile cancellation-racing fills exactly once; unresolved or UNKNOWN orders keep the BUY gate active and raise a durable safety blocker.",
         "Keep Recovery Seller evaluation and only purpose-tagged RECOVERY_SELL submissions available; ordinary SELL and every BUY remain blocked.",
-        "Never cancel startup-snapshot, manual, external, or prior-process orders."
+        "Never cancel startup-snapshot, manual, external, or prior-process orders.",
+        "The RECOVERY_SELL exception applies only to this market-level strategy pause; an active ACCOUNT-scope blocker overrides it and blocks every side and purpose across all markets."
+      ]
+    },
+    {
+      "id": "ACCOUNT_SAFETY_BLOCKER_ADMISSION",
+      "title": "Account-scoped safety blockers close every strategy submission path",
+      "sourceModules": [
+        "src/use-cases/conservative-trading-engine.js",
+        "src/bootstrap/start-harvester.js"
+      ],
+      "integrationRequired": true,
+      "tests": [
+        {
+          "path": "src/use-cases/create-recovery-seller-stop-workflow.test.js",
+          "name": "closes account admission before awaiting durable STOP persistence",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/create-submission-gate.test.js",
+          "name": "an account safety blocker overrides every order path, including shutdown recovery SELL",
+          "kind": "failure"
+        },
+        {
+          "path": "src/bootstrap/user-data/subscribe-to-user-data.test.js",
+          "name": "rejects trading startup while an account-scoped safety blocker is active",
+          "kind": "failure"
+        }
+      ],
+      "runtimeStatus": "active",
+      "invariants": [
+        "An active ACCOUNT blocker prevents every strategy, symbol, side and purpose from reaching broker I/O, including shutdown Recovery Seller SELL.",
+        "The final admission gate reads current blocker state on every check; a runtime STOP closes admission before its durable append is awaited and remains closed on persistence failure.",
+        "A restored account blocker prevents trading readiness/activation; explicit durable resolution is required before admission can reopen.",
+        "Market-scoped ownership and strategy pauses remain scoped to the affected symbol; ADR-0008's Recovery Seller SELL exception never bypasses an account blocker.",
+        "External open orders are never adopted or cancelled by this gate; IGNORE and BLOCK retain their ADR-0004 per-market semantics."
       ]
     }
   ],
