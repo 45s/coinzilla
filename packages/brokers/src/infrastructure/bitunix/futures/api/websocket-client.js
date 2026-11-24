@@ -290,38 +290,37 @@ export class BitunixFuturesWebSocketClient extends EventEmitter {
     }
     return new Promise((...args) => {
       const [resolve, reject] = args
-      let timeout
-      let onAuthenticated
-      let onClientError
-      let onStatus
-      const finish = (error) => {
-        this.off("authenticated", onAuthenticated)
-        this.off("clientError", onClientError)
-        this.off("status", onStatus)
-        this.#clearTimeout(timeout)
+      const client = this
+      const timeout = client.#setTimeout(() => {
+        finish(new Error("Bitunix Futures WebSocket login acknowledgement timed out"))
+      }, timeoutMs)
+      function finish(error) {
+        client.off("authenticated", onAuthenticated)
+        client.off("clientError", onClientError)
+        client.off("status", onStatus)
+        client.#clearTimeout(timeout)
         if (error) {
           reject(error)
         } else {
-          resolve(this)
+          resolve(client)
         }
       }
-      onAuthenticated = () => finish()
-      onClientError = (error) => {
-        if (this.#authenticationError === error) {
+      function onAuthenticated() {
+        finish()
+      }
+      function onClientError(error) {
+        if (client.#authenticationError === error) {
           finish(error)
         }
       }
-      onStatus = (status) => {
+      function onStatus(status) {
         if (status.reconnectExhausted || (status.state === "closed" && status.recoveryRequired === false)) {
           finish(new Error("Bitunix Futures WebSocket authentication could not be established"))
         }
       }
-      timeout = this.#setTimeout(() => {
-        finish(new Error("Bitunix Futures WebSocket login acknowledgement timed out"))
-      }, timeoutMs)
-      this.on("authenticated", onAuthenticated)
-      this.on("clientError", onClientError)
-      this.on("status", onStatus)
+      client.on("authenticated", onAuthenticated)
+      client.on("clientError", onClientError)
+      client.on("status", onStatus)
     })
   }
 
