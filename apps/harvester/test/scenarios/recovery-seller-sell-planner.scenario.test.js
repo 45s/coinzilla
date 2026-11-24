@@ -701,3 +701,46 @@ test("the real accounting workflow snapshot reaches the default SELL evaluator a
   assert.equal(submitted.action.positionId, scenario.snapshot.cycleState.positionId,
     "The workflow Position identity must be preserved through the evaluator and submitted SELL.")
 })
+
+test("the real accounting workflow snapshot still fails closed when verified legacy Spot custody is missing", async () => {
+  const scenario = await createPlannerScenario({
+    spotTotalQuantity: "1",
+  })
+  let submissions = 0
+  const evaluate = createRecoverySellerTransitionEvaluator({
+    getSnapshot: async () => scenario.snapshot,
+    submitOrder: async () => {
+      submissions += 1
+      return {
+        ok: true,
+        data: {
+          submitted: true,
+        },
+      }
+    },
+    evaluateBuyDecision: () => ({
+      decision: {
+        outcome: "WAIT",
+        reasonCode: "SCENARIO_BUY_WAIT",
+        explanation: "The missing-custody scenario must not fall through to a new BUY.",
+      },
+    }),
+  })
+
+  const result = await evaluate({
+    symbol,
+    marketPrice: {
+      symbol,
+      price: "25",
+    },
+    marketMetadata: scenario.marketMetadata,
+    pairConfig,
+  })
+
+  assert.equal(result.decision?.outcome, "BLOCK",
+    "The composed workflow must preserve the fail-closed legacy-custody decision.")
+  assert.match(result.decision.explanation, /no verified unreserved Spot quantity is available/,
+    "The default SELL evaluator must reach the legacy-custody guard, not stop earlier on a malformed cycle-state projection.")
+  assert.equal(submissions, 0,
+    "Missing verified legacy Spot custody must result in zero broker submission attempts.")
+})
