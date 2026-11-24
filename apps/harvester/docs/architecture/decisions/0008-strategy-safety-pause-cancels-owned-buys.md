@@ -44,3 +44,8 @@ flowchart TD
 - An incomplete pause is visible and fail-closed. No automatic resume, exchange-wide cancellation, or process-restart restoration is introduced.
 - `STRATEGY_MARKET_PAUSED` and `SAFETY_BLOCKER_RAISED` are evidence facts, not a replay/restoration mechanism.
 - Operator Pause/Resume remains the separate capability defined by ADR-0006.
+
+
+### Account-level STOP precedence
+
+The Recovery Seller SELL exception above applies only to this market-level strategy safety pause. An active safety blocker with `scope: ACCOUNT` is a stronger, independent admission gate and blocks every strategy, symbol, side and purpose, including Recovery Seller SELL during shutdown. The account gate is checked before this ADR's exception is considered.

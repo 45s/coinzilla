@@ -1027,3 +1027,10 @@ This database is not the Operational State Store. ADR-0001 remains authoritative
 The initial SQLite files are separated by explicit validated `TRADING_MODE`: `live` selects `data/production/harvester.db`, and `testnet` selects `data/testnet/harvester.db`. `NODE_ENV` never selects a trading environment. An optional absolute `HARVESTER_DATABASE_DIRECTORY` supplies only the common parent directory; Harvester validates distinct canonical environment directories and rejects overlapping or aliased database files.
 
 See the [ordinary persistence contract](./persistence/README.md) for the exact schema, lifecycle transition table, provider capabilities, path validation, failure handling, test evidence, and subsequent migration slices. The first implementation remains in progress until PR #1369 is merged and verified.
+
+
+## Global account admission precedence
+
+The shared order-admission sequence checks active account-scoped safety blockers before shutdown, strategy-pause, volatility, or market-specific exceptions. An account blocker prevents every strategy and every order side/purpose from reaching broker I/O. A market-scoped blocker remains local to its symbol, with the ADR-0008 Recovery Seller SELL exception retained only for `STRATEGY_SAFETY_PAUSE_INCOMPLETE`.
+
+Startup readiness performs the same account-blocker check after PREFLIGHT account/open-order capture and before trading activation. The final submission boundary re-reads blocker state immediately before broker I/O so a runtime STOP cannot be bypassed by an already-created engine or in-flight strategy evaluation.
