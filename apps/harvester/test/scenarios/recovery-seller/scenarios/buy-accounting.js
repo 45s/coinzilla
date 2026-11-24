@@ -519,33 +519,48 @@ export const recoverySellerBuyAccountingScenarios = Object.freeze([
   makeBuyCase({
     id: "RS-002-010",
     name: "zero commission and multiple supported commission records are accounted exactly",
+    stepType: "apply-recovery-buy-fee-record-scenarios",
     input: {
-      originalQuantity: "2",
-      fills: [
-        {
+      zeroCommission: {
+        originalQuantity: "1",
+        fills: [{
           tradeId: "rs-zero-fee-buy-fill",
           price: "10",
           quantity: "1",
           quoteQuantity: "10",
-        },
-        {
+        }],
+      },
+      multipleFeeRecords: {
+        originalQuantity: "1",
+        fills: [{
           tradeId: "rs-multiple-fee-buy-fill",
           price: "10",
           quantity: "1",
           quoteQuantity: "10",
           baseCommissions: ["0.001", "0.002"],
           quoteCommissions: ["0.01", "0.02"],
-        },
-      ],
+        }],
+      },
     },
     expected: {
-      appliedFillIds: 2,
-      position: {
-        quantity: "1.997",
-        spent: "20.03",
+      zeroCommission: {
+        appliedFillIds: 1,
+        position: {
+          quantity: "1",
+          spent: "10",
+        },
+        executionQuantity: "1",
+        executionVwap: "10",
       },
-      executionQuantity: "2",
-      executionVwap: "10",
+      multipleFeeRecords: {
+        appliedFillIds: 1,
+        position: {
+          quantity: "0.997",
+          spent: "10.03",
+        },
+        executionQuantity: "1",
+        executionVwap: "10",
+      },
     },
     subcases: [
       {
