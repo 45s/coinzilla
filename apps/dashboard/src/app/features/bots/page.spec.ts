@@ -142,8 +142,8 @@ function createSnapshotMessage({ revision = 1, paused = false, positions = true 
   };
 }
 
-function createUnavailableMessage() {
-  const snapshot = createSnapshotMessage();
+function createUnavailableMessage({ revision = 1 } = {}) {
+  const snapshot = createSnapshotMessage({ revision });
   return {
     ...snapshot,
     type: 'bots.snapshot.unavailable',
@@ -304,8 +304,12 @@ describe('BotsComponent', () => {
       revision: 1,
       paused: false,
     }));
+    socket.sendMessage(createUnavailableMessage({
+      revision: 3,
+    }));
     fixture.detectChanges();
     expect((fixture.nativeElement as HTMLElement).textContent).toContain('BUYs paused');
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain('Snapshot stale');
 
     socket.close();
     fixture.detectChanges();
@@ -367,7 +371,10 @@ describe('BotsComponent', () => {
     const result = await createBotsFixture();
     http = result.http;
     const { fixture, socket } = result;
+    vi.useFakeTimers();
+    socket.close();
     fixture.destroy();
+    await vi.advanceTimersByTimeAsync(30_000);
     expect(socket.closed).toBe(true);
     expect(MockWebSocket.instances).toHaveLength(1);
   });
