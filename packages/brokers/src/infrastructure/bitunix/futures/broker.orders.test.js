@@ -49,7 +49,8 @@ function createBroker({ orderRow = createOrderRow() } = {}) {
     tradingMode: "live",
     providerOptions: {
       dependencies: {
-        fetchFn: async (url, options) => {
+        fetchFn: async (...args) => {
+          const [url, options] = args
           requests.push({ url: String(url), options })
           const path = new URL(url).pathname
           if (path === "/api/v1/futures/market/trading_pairs") {
@@ -64,7 +65,9 @@ function createBroker({ orderRow = createOrderRow() } = {}) {
             })
           }
           if (path === "/api/v1/futures/trade/get_order_detail") {
-            return createFuturesResponse({ data: orderRow })
+            return createFuturesResponse({
+              data: orderRow,
+            })
           }
           if (path === "/api/v1/futures/trade/get_history_orders") {
             return createFuturesResponse({
@@ -185,9 +188,19 @@ test("Bitunix Futures canonical history rejects pages containing orders without 
 test("Bitunix Futures canonical history validates pagination and time bounds before network I/O", async () => {
   const { broker, requests } = createBroker()
   for (const input of [
-    { symbol: "BTCUSDT", limit: 101 },
-    { symbol: "BTCUSDT", skip: -1 },
-    { symbol: "BTCUSDT", startTime: 20, endTime: 10 },
+    {
+      symbol: "BTCUSDT",
+      limit: 101,
+    },
+    {
+      symbol: "BTCUSDT",
+      skip: -1,
+    },
+    {
+      symbol: "BTCUSDT",
+      startTime: 20,
+      endTime: 10,
+    },
   ]) {
     const result = await broker.getCanonicalOrderHistory(input)
     assert.equal(result.ok, false)
