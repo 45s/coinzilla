@@ -1,5 +1,12 @@
 import assert from "node:assert/strict"
-import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises"
+import {
+  mkdtemp,
+  mkdir,
+  readFile,
+  readdir,
+  rm,
+  writeFile
+} from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import test from "node:test"
@@ -54,12 +61,28 @@ async function createFixture() {
     "data/testnet/harvester.db": "DATABASE MUST NOT BE INCLUDED",
     "data/production/harvester.db": "PRODUCTION DATABASE MUST NOT BE INCLUDED",
     "recovery-facts/facts.jsonl": jsonLines([
-      { sequence: "0", digest: "0".repeat(64), runtimeSessionId: RUNTIME_SESSION_ID },
-      { sequence: "1", digest: DATA_COMMIT_HASH, runtimeSessionId: RUNTIME_SESSION_ID },
+      {
+        sequence: "0",
+        digest: "0".repeat(64),
+        runtimeSessionId: RUNTIME_SESSION_ID
+      },
+      {
+        sequence: "1",
+        digest: DATA_COMMIT_HASH,
+        runtimeSessionId: RUNTIME_SESSION_ID
+      },
     ]),
     "recovery-facts/manifest.jsonl": jsonLines([
-      { sequence: "0", recordCount: "1", lastCommittedDigest: "0".repeat(64) },
-      { sequence: "1", recordCount: "2", lastCommittedDigest: DATA_COMMIT_HASH },
+      {
+        sequence: "0",
+        recordCount: "1",
+        lastCommittedDigest: "0".repeat(64)
+      },
+      {
+        sequence: "1",
+        recordCount: "2",
+        lastCommittedDigest: DATA_COMMIT_HASH
+      },
     ]),
   }
   for (const [relativePath, content] of Object.entries(files)) {
@@ -67,10 +90,14 @@ async function createFixture() {
     await mkdir(path.dirname(filename), { recursive: true })
     await writeFile(filename, content, "utf8")
   }
-  return { packageDirectory, lockDirectory, files }
+  return {
+    packageDirectory,
+    lockDirectory,
+    files
+  }
 }
 
-function archiveDependencies(fixture, overrides = {}) {
+function archiveDependencies({ fixture, overrides = {} } = {}) {
   return {
     packageDirectory: fixture.packageDirectory,
     lockDirectory: fixture.lockDirectory,
@@ -83,7 +110,10 @@ function archiveDependencies(fixture, overrides = {}) {
     args: [],
     now: () => new Date(CREATED_AT),
     createArchiveId: () => ARCHIVE_ID,
-    publishArchiveFn: async ({ directory, remote }) => {
+    publishArchiveFn: async ({
+      directory,
+      remote
+    }) => {
       assert.equal(remote, ARCHIVE_REMOTE)
       const manifest = JSON.parse(await readFile(path.join(directory, "manifest.json"), "utf8"))
       assert.deepEqual(manifest.includedDirectories, ["logs", "recovery-facts"])
@@ -110,22 +140,31 @@ function archiveDependencies(fixture, overrides = {}) {
       await assert.rejects(readdir(path.join(directory, "logs/sessions/2026-11-25_live")), { code: "ENOENT" })
       await assert.rejects(readdir(path.join(directory, "logs/cumulative")), { code: "ENOENT" })
       await assert.rejects(readdir(path.join(directory, "data")), { code: "ENOENT" })
-      return { commit: REMOTE_COMMIT, fileCount: manifest.files.length + 1 }
+      return {
+        commit: REMOTE_COMMIT,
+        fileCount: manifest.files.length + 1
+      }
     },
   }
 }
 
 test("adds _debug to the existing timestamp and archive-ID directory name", () => {
   assert.equal(
-    createHarvesterArchiveDirectoryName({ createdAt: CREATED_AT, archiveId: ARCHIVE_ID }),
+    createHarvesterArchiveDirectoryName({
+      createdAt: CREATED_AT,
+      archiveId: ARCHIVE_ID
+    }),
     "2026-11-24T18-30-00Z_123e4567_debug",
   )
 })
 
 test("publishes only the selected TESTNET session and recovery facts", async (t) => {
   const fixture = await createFixture()
-  t.after(() => rm(fixture.packageDirectory, { recursive: true, force: true }))
-  const result = await runHarvesterDebugArchive(archiveDependencies(fixture))
+  t.after(() => rm(fixture.packageDirectory, {
+    recursive: true,
+    force: true
+  }))
+  const result = await runHarvesterDebugArchive(archiveDependencies({ fixture }))
   assert.equal(result.archiveName, "2026-11-24T18-30-00Z_123e4567_debug")
   assert.equal(result.remoteCommit, REMOTE_COMMIT)
   for (const [relativePath, expected] of Object.entries(fixture.files)) {
@@ -139,30 +178,39 @@ test("publishes only the selected TESTNET session and recovery facts", async (t)
 
 test("refuses to combine logs and recovery facts from different runtime sessions", async (t) => {
   const fixture = await createFixture()
-  t.after(() => rm(fixture.packageDirectory, { recursive: true, force: true }))
+  t.after(() => rm(fixture.packageDirectory, {
+    recursive: true,
+    force: true
+  }))
   const filename = path.join(fixture.packageDirectory, "recovery-facts/facts.jsonl")
   const facts = (await readFile(filename, "utf8")).trim().split("\n").map((line) => JSON.parse(line))
   facts.at(-1).runtimeSessionId = OTHER_SESSION_ID
   await writeFile(filename, jsonLines(facts), "utf8")
   await assert.rejects(
-    runHarvesterDebugArchive(archiveDependencies(fixture)),
+    runHarvesterDebugArchive(archiveDependencies({ fixture })),
     /runtime identities do not match/i,
   )
 })
 
 test("refuses to archive while a Harvester process lock exists", async (t) => {
   const fixture = await createFixture()
-  t.after(() => rm(fixture.packageDirectory, { recursive: true, force: true }))
+  t.after(() => rm(fixture.packageDirectory, {
+    recursive: true,
+    force: true
+  }))
   await writeFile(path.join(fixture.lockDirectory, ".harvester-trading-test.lock"), "active")
-  await assert.rejects(runHarvesterDebugArchive(archiveDependencies(fixture)), /process lock exists/i)
+  await assert.rejects(runHarvesterDebugArchive(archiveDependencies({ fixture })), /process lock exists/i)
   await assert.rejects(readdir(path.join(fixture.packageDirectory, "archive-output")), { code: "ENOENT" })
 })
 
 test("rejects LIVE mode before creating an archive", async (t) => {
   const fixture = await createFixture()
-  t.after(() => rm(fixture.packageDirectory, { recursive: true, force: true }))
+  t.after(() => rm(fixture.packageDirectory, {
+    recursive: true,
+    force: true
+  }))
   await assert.rejects(
-    runHarvesterDebugArchive(archiveDependencies(fixture, { TRADING_MODE: "live" })),
+    runHarvesterDebugArchive(archiveDependencies({ fixture, overrides: { TRADING_MODE: "live" } })),
     /TRADING_MODE=testnet/,
   )
   await assert.rejects(readdir(path.join(fixture.packageDirectory, "archive-output")), { code: "ENOENT" })
