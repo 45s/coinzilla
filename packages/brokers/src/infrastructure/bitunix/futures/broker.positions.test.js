@@ -214,12 +214,28 @@ function createBroker({
 
 test("Bitunix Futures position mutations are NOT_SENT until the private user-data session is reconciled", async () => {
   const operations = [
-    ["closeFuturesPosition", { positionId: "position-123" }],
-    ["closeFuturesPositionBySide", { symbol: "BTCUSDT", side: "LONG" }],
-    ["closeAllFuturesPositions", { symbol: "BTCUSDT" }],
+    {
+      method: "closeFuturesPosition",
+      input: {
+        positionId: "position-123",
+      },
+    },
+    {
+      method: "closeFuturesPositionBySide",
+      input: {
+        symbol: "BTCUSDT",
+        side: "LONG",
+      },
+    },
+    {
+      method: "closeAllFuturesPositions",
+      input: {
+        symbol: "BTCUSDT",
+      },
+    },
   ]
 
-  for (const [method, input] of operations) {
+  for (const { method, input } of operations) {
     const { broker, requests } = createBroker({
       allowLivePositionMutations: true,
       current: [currentPosition],
