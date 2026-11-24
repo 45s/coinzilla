@@ -4,7 +4,7 @@ const testFile = "apps/harvester/test/scenarios/recovery-seller/authorization-cu
 const workflowSource = "apps/harvester/src/use-cases/create-recovery-seller-accounting-workflow.js"
 const portfolioSource = "apps/harvester/src/domain/portfolio/portfolio.js"
 
-function makeBuyCase({ id, name, input, expected, testTitle }) {
+function makeBuyCase({ id, name, input, expected, testTitle, rules = [] }) {
   const title = `${id}: ${name}`
   return defineRecoverySellerScenario({
     id,
@@ -21,13 +21,7 @@ function makeBuyCase({ id, name, input, expected, testTitle }) {
       "RS_PAIR.investment",
     ],
     covers: {
-      rules: [
-        "RS_BUY_CONFIRMED_FILL_ONLY",
-        "RS_BUY_NET_BASE_AFTER_FEES",
-        "RS_BUY_ACTUAL_QUOTE_COST",
-        "RS_BUY_BUDGET_LIMIT",
-        "RS_UNKNOWN_OUTCOME_NO_RETRY",
-      ],
+      rules,
       decisions: ["RS_BUY_ELIGIBILITY"],
       states: ["ACCUMULATING"],
       transitions: [],
@@ -73,6 +67,7 @@ function makeBuyCase({ id, name, input, expected, testTitle }) {
 export const recoverySellerBuyAccountingScenarios = Object.freeze([
   makeBuyCase({
     id: "RS-002-001",
+    rules: ["RS_BUY_CONFIRMED_FILL_ONLY"],
     name: "an acknowledged BUY without a confirmed fill creates no recovery inventory",
     input: {
       fills: [],
@@ -86,6 +81,7 @@ export const recoverySellerBuyAccountingScenarios = Object.freeze([
   }),
   makeBuyCase({
     id: "RS-002-002",
+    rules: ["RS_BUY_CONFIRMED_FILL_ONLY", "RS_BUY_ACTUAL_QUOTE_COST"],
     name: "a confirmed partial BUY fill contributes only its actual base and quote execution",
     input: {
       fills: [{
@@ -106,6 +102,7 @@ export const recoverySellerBuyAccountingScenarios = Object.freeze([
   }),
   makeBuyCase({
     id: "RS-002-003",
+    rules: ["RS_BUY_CONFIRMED_FILL_ONLY", "RS_BUY_ACTUAL_QUOTE_COST"],
     name: "multiple BUY fills accumulate actual quote cost and cycle execution VWAP",
     input: {
       fills: [
@@ -133,6 +130,7 @@ export const recoverySellerBuyAccountingScenarios = Object.freeze([
   }),
   makeBuyCase({
     id: "RS-002-004",
+    rules: ["RS_BUY_CONFIRMED_FILL_ONLY", "RS_BUY_ACTUAL_QUOTE_COST"],
     name: "an identical BUY Fill replay is an exact no-op",
     input: {
       fills: [{
@@ -159,6 +157,7 @@ export const recoverySellerBuyAccountingScenarios = Object.freeze([
   }),
   makeBuyCase({
     id: "RS-002-005",
+    rules: ["RS_BUY_CONFIRMED_FILL_ONLY"],
     name: "a BUY Fill with a conflicting broker order identity fails without Portfolio mutation",
     input: {
       fills: [{
@@ -181,6 +180,7 @@ export const recoverySellerBuyAccountingScenarios = Object.freeze([
   }),
   makeBuyCase({
     id: "RS-002-006",
+    rules: ["RS_BUY_CONFIRMED_FILL_ONLY"],
     name: "an external BUY Fill without registered RS ownership is not adopted",
     input: {
       fills: [{
@@ -189,6 +189,54 @@ export const recoverySellerBuyAccountingScenarios = Object.freeze([
         quoteQuantity: "2",
       }],
       owned: false,
+    },
+    expected: {
+      appliedFillIds: 0,
+      position: null,
+      executionQuantity: null,
+      executionVwap: null,
+      results: [{
+        ok: false,
+        applied: false,
+      }],
+    },
+  }),
+  makeBuyCase({
+    id: "RS-002-007",
+    name: "BUY base, quote and valued third-asset commissions affect net inventory and actual cost",
+    rules: ["RS_BUY_NET_BASE_AFTER_FEES", "RS_BUY_ACTUAL_QUOTE_COST"],
+    input: {
+      fills: [{
+        tradeId: "rs-buy-fees-1",
+        quantity: "2.5",
+        quoteQuantity: "5",
+        baseCommission: "0.01",
+        quoteCommission: "0.005",
+        thirdAssetCommission: "0.01",
+        thirdAssetQuoteValue: "0.02",
+      }],
+    },
+    expected: {
+      appliedFillIds: 1,
+      position: {
+        quantity: "2.49",
+        spent: "5.025",
+      },
+      executionQuantity: "2.5",
+      executionVwap: "2",
+    },
+  }),
+  makeBuyCase({
+    id: "RS-002-008",
+    name: "an unvalued third-asset BUY commission fails closed before Portfolio mutation",
+    rules: ["RS_BUY_NET_BASE_AFTER_FEES", "RS_BUY_ACTUAL_QUOTE_COST"],
+    input: {
+      fills: [{
+        tradeId: "rs-buy-unvalued-fee-1",
+        quantity: "2.5",
+        quoteQuantity: "5",
+        thirdAssetCommission: "0.01",
+      }],
     },
     expected: {
       appliedFillIds: 0,
