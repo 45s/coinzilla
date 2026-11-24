@@ -2,7 +2,7 @@ import assert from "node:assert/strict"
 import test from "node:test"
 
 import { Broker } from "../../../index.js"
-import { FakePrivateWebSocketClient } from "./futures-mutation-test-helpers.js"
+import { FakePrivateWebSocketClient } from "./futures-mutation-fixtures.js"
 
 const credentials = {
   apiKey: "bitunix-futures-private-websocket-test-key",

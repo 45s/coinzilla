@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 import { Broker } from "../../../index.js"
-import { connectAndAcknowledgeUserDataReconciliation, createFakePrivateWebSocketClientFactory } from "./futures-mutation-test-helpers.js"
+import { connectAndAcknowledgeUserDataReconciliation, createFakePrivateWebSocketClientFactory } from "./futures-mutation-fixtures.js"
 
 const credentials = {
   apiKey: "test-api-key",
