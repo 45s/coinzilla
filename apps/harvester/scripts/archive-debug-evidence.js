@@ -366,77 +366,114 @@ async function publishEncryptedArchive({ encryptedFile, archiveName, temporaryRo
   return commit
 }
 
+async function buildArchiveStaging({
+  packageDirectory,
+  recoveryDirectory,
+  env,
+  temporaryRoot,
+  createdAt,
+} = {}) {
+  const staging = path.join(temporaryRoot, "evidence")
+  const tarFile = path.join(temporaryRoot, "evidence.tar.gz")
+  await mkdir(staging, {
+    recursive: true,
+    mode: 0o700,
+  })
+  const { includedSources, missingSources } = await copyArchiveSources({
+    packageDirectory,
+    recoveryDirectory,
+    staging,
+  })
+  await writeArchiveManifest({
+    staging,
+    createdAt,
+    packageDirectory,
+    env,
+    includedSources,
+    missingSources,
+  })
+  await runCommand({
+    command: "tar",
+    args: ["-czf", tarFile, "-C", staging, "."],
+  })
+  return {
+    tarFile,
+    includedSources,
+    missingSources,
+  }
+}
+
+async function encryptAndPublishArchive({
+  tarFile,
+  packageDirectory,
+  archiveName,
+  passphrase,
+  temporaryRoot,
+  includedSources,
+  missingSources,
+} = {}) {
+  const outputDirectory = path.join(packageDirectory, "archive-output", "debug")
+  const encryptedFile = path.join(outputDirectory, archiveName)
+  await mkdir(outputDirectory, {
+    recursive: true,
+    mode: 0o700,
+  })
+  const encryption = await encryptDebugBundle({
+    inputFile: tarFile,
+    outputFile: encryptedFile,
+    passphrase,
+  })
+  const commit = await publishEncryptedArchive({
+    encryptedFile,
+    archiveName,
+    temporaryRoot,
+  })
+  process.stdout.write([
+    "Encrypted Harvester debug archive published and verified.",
+    `Archive: archives/${archiveName}`,
+    `Included: ${includedSources.join(", ")}`,
+    `Missing: ${missingSources.length ? missingSources.join(", ") : "none"}`,
+    `Encryption: ${encryption.algorithm} / scrypt`,
+    `Remote commit: ${commit}`,
+    `Local encrypted copy: ${encryptedFile}`,
+  ].join("\n") + "\n")
+  return {
+    archiveName,
+    encryptedFile,
+    commit,
+    includedSources,
+    missingSources,
+  }
+}
+
 export async function runHarvesterDebugArchive({
   args = process.argv.slice(2),
   env = process.env,
   packageDirectory = PACKAGE_DIRECTORY,
 } = {}) {
   validateArchiveRequest({ args, env })
-  const logsDirectory = path.join(packageDirectory, "logs")
   const recoveryDirectory = resolveRecoveryFactsDirectory({
     packageDirectory,
     env,
   })
   const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), "harvester-debug-"))
-  const staging = path.join(temporaryRoot, "evidence")
-  const tarFile = path.join(temporaryRoot, "evidence.tar.gz")
   const createdAt = new Date().toISOString()
   const archiveName = createArchiveName({ createdAt })
-  const outputDirectory = path.join(packageDirectory, "archive-output", "debug")
-  const encryptedFile = path.join(outputDirectory, archiveName)
-
   try {
-    await mkdir(staging, {
-      recursive: true,
-      mode: 0o700,
-    })
-    const { includedSources, missingSources } = await copyArchiveSources({
+    const staging = await buildArchiveStaging({
       packageDirectory,
       recoveryDirectory,
-      staging,
-    })
-    await writeArchiveManifest({
-      staging,
-      createdAt,
-      packageDirectory,
       env,
-      includedSources,
-      missingSources,
+      temporaryRoot,
+      createdAt,
     })
-    await runCommand({
-      command: "tar",
-      args: ["-czf", tarFile, "-C", staging, "."],
-    })
-    await mkdir(outputDirectory, {
-      recursive: true,
-      mode: 0o700,
-    })
-    const encryption = await encryptDebugBundle({
-      inputFile: tarFile,
-      outputFile: encryptedFile,
-      passphrase: env.HARVESTER_ARCHIVE_PASSPHRASE,
-    })
-    const commit = await publishEncryptedArchive({
-      encryptedFile,
+    return await encryptAndPublishArchive({
+      ...staging,
+      packageDirectory,
       archiveName,
+      passphrase: env.HARVESTER_ARCHIVE_PASSPHRASE,
       temporaryRoot,
     })
-    process.stdout.write([
-      "Encrypted Harvester debug archive published and verified.",
-      `Archive: archives/${archiveName}`,
-      `Included: ${includedSources.join(", ")}`,
-      `Missing: ${missingSources.length ? missingSources.join(", ") : "none"}`,
-      `Encryption: ${encryption.algorithm} / scrypt`,
-      `Remote commit: ${commit}`,
-      `Local encrypted copy: ${encryptedFile}`,
-    ].join("\n") + "\n")
-    return {
-      archiveName,
-      encryptedFile,
-      commit,
-      includedSources,
-      missingSources,
-    }
   } finally {
     await rm(temporaryRoot, {
       recursive: true,
