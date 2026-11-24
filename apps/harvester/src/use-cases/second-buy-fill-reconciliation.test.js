@@ -5,9 +5,18 @@ import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { RecoveryLedger } from "../domain/strategies/conservative/recovery-ledger.js"
 import { updateTradingAccounting } from "./update-trading-accounting.js"
 
-const baseAsset = new Asset({ id: "doge", code: "DOGE" })
-const quoteAsset = new Asset({ id: "usdt", code: "USDT" })
-const thirdAsset = new Asset({ id: "bnb", code: "BNB" })
+const baseAsset = new Asset({
+  id: "doge",
+  code: "DOGE",
+})
+const quoteAsset = new Asset({
+  id: "usdt",
+  code: "USDT",
+})
+const thirdAsset = new Asset({
+  id: "bnb",
+  code: "BNB",
+})
 const market = new Market({
   venue: "binance",
   symbol: "DOGEUSDT",
@@ -21,9 +30,18 @@ function createBuyFill({ tradeId, price, quantity, quoteQuantity, commissions = 
     brokerOrderId: "standing-buy-order",
     market,
     side: "BUY",
-    price: new Money({ amount: price, asset: quoteAsset }),
-    quantity: new Quantity({ amount: quantity, asset: baseAsset }),
-    quoteQuantity: new Money({ amount: quoteQuantity, asset: quoteAsset }),
+    price: new Money({
+      amount: price,
+      asset: quoteAsset,
+    }),
+    quantity: new Quantity({
+      amount: quantity,
+      asset: baseAsset,
+    }),
+    quoteQuantity: new Money({
+      amount: quoteQuantity,
+      asset: quoteAsset,
+    }),
     commissions,
     commissionStatus: "COMPLETE",
   })
@@ -55,11 +73,27 @@ test("a second BUY extends the first tranche's net inventory and recovery cost w
       quantity: "100",
       quoteQuantity: "10",
       commissions: [
-        new Commission({ amount: new Money({ amount: "0.1", asset: baseAsset }) }),
-        new Commission({ amount: new Money({ amount: "0.01", asset: quoteAsset }) }),
         new Commission({
-          amount: new Money({ amount: "0.001", asset: thirdAsset }),
-          quoteValue: new Money({ amount: "0.02", asset: quoteAsset }),
+          amount: new Money({
+            amount: "0.1",
+            asset: baseAsset,
+          }),
+        }),
+        new Commission({
+          amount: new Money({
+            amount: "0.01",
+            asset: quoteAsset,
+          }),
+        }),
+        new Commission({
+          amount: new Money({
+            amount: "0.001",
+            asset: thirdAsset,
+          }),
+          quoteValue: new Money({
+            amount: "0.02",
+            asset: quoteAsset,
+          }),
         }),
       ],
     }),
@@ -73,11 +107,27 @@ test("a second BUY extends the first tranche's net inventory and recovery cost w
       quantity: "50",
       quoteQuantity: "6",
       commissions: [
-        new Commission({ amount: new Money({ amount: "0.05", asset: baseAsset }) }),
-        new Commission({ amount: new Money({ amount: "0.006", asset: quoteAsset }) }),
         new Commission({
-          amount: new Money({ amount: "0.002", asset: thirdAsset }),
-          quoteValue: new Money({ amount: "0.03", asset: quoteAsset }),
+          amount: new Money({
+            amount: "0.05",
+            asset: baseAsset,
+          }),
+        }),
+        new Commission({
+          amount: new Money({
+            amount: "0.006",
+            asset: quoteAsset,
+          }),
+        }),
+        new Commission({
+          amount: new Money({
+            amount: "0.002",
+            asset: thirdAsset,
+          }),
+          quoteValue: new Money({
+            amount: "0.03",
+            asset: quoteAsset,
+          }),
         }),
       ],
     }),
