@@ -13,6 +13,7 @@
 - [Recovery Seller policy blocker audit](RECOVERY_SELLER_POLICY_BLOCKERS.md) — source-based CG comparison, current RS gaps, owner decisions and execution gates.
 
 - [Recovery Seller Domain Specification](recovery-seller-domain-specification.md) — draft RS contract, legacy accounting and profitability invariants, and concurrent operation with CG.
+- [Recovery Seller Domain Scenario Testing Playbook](recovery-seller-scenario-testing.md) — detailed AI-agent contract for RS scenario matrices, schemas, fixtures, financial oracles, test layers, file trees, evidence, issue synchronization and implementation phases.
 - [Recovery Seller Implementation Roadmap](recovery-seller-implementation-roadmap.md) — six phases from the CG reuse audit through concurrent integration and offline lifecycle verification.
 
 Other documents may explain or verify behavior, but must link to the canonical specification rather than define competing strategy rules.
