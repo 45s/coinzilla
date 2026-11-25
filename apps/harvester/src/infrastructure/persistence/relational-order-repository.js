@@ -183,6 +183,27 @@ function assertFillOrderIdentity({ transaction, row } = {}) {
 
 function linkOrderFills({ transaction, row } = {}) {
   if (row.exchange_order_id === null) {
+    transaction.prepare(`
+      UPDATE fills
+      SET order_id = ?, strategy_id = COALESCE(strategy_id, ?),
+        position_id = COALESCE(position_id, ?), cycle_id = COALESCE(cycle_id, ?)
+      WHERE environment = ? AND provider_instance_id = ? AND provider_type = ?
+        AND account_id = ? AND market_id = ? AND client_order_id = ?
+        AND exchange_order_id IS NULL
+        AND (order_id IS NULL OR order_id = ?)
+    `).run(
+      row.id,
+      row.strategy_id,
+      row.position_id,
+      row.cycle_id,
+      row.environment,
+      row.provider_instance_id,
+      row.provider_type,
+      row.account_id,
+      row.market_id,
+      row.client_order_id,
+      row.id,
+    )
     return
   }
   assertFillOrderIdentity({
@@ -210,6 +231,26 @@ function linkOrderFills({ transaction, row } = {}) {
     row.exchange_order_id,
     row.client_order_id,
     row.id,
+  )
+  transaction.prepare(`
+    UPDATE fills
+    SET strategy_id = COALESCE(strategy_id, ?),
+      position_id = COALESCE(position_id, ?), cycle_id = COALESCE(cycle_id, ?)
+    WHERE order_id = ? AND environment = ? AND provider_instance_id = ?
+      AND provider_type = ? AND account_id = ? AND market_id = ?
+      AND exchange_order_id IS NULL
+      AND (client_order_id IS NULL OR client_order_id = ?)
+  `).run(
+    row.strategy_id,
+    row.position_id,
+    row.cycle_id,
+    row.id,
+    row.environment,
+    row.provider_instance_id,
+    row.provider_type,
+    row.account_id,
+    row.market_id,
+    row.client_order_id,
   )
 }
 
