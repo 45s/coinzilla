@@ -868,7 +868,7 @@ async function assertRegisteredReservationScenario() {
   )
 }
 
-test("RS-003-007: registered same-market and cross-market SELL reservations are accounted exactly once", async () => {
+test("RS-003-007: cross-market reservations and same-market CG/RS reservations cannot double-sell the same physical base inventory", async () => {
   await assertRegisteredReservationScenario()
 })
 
