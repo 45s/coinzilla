@@ -12,13 +12,17 @@ import {
 import { EventBus } from "@coinzilla/event-bus"
 import { HARVESTER_EVENT_NAMES } from "../../application/events/event-names.js"
 import { createOrderHistoryRecord } from "../../domain/order-history/order-history-record.js"
+import {
+  mapOrderHistoryRecordToRow,
+  ORDER_COLUMNS,
+} from "./order-row-mapping.js"
 import { closeHarvesterPersistence } from "./close-harvester-persistence.js"
 import { createFillHistoryObserver } from "./create-fill-history-observer.js"
 import { configureHarvesterLogging } from "../logging/configure-harvester-logging.js"
 import { prepareOrderHistoryPersistence } from "./prepare-order-history-persistence.js"
 import { resolveHarvesterDatabaseFilename } from "./resolve-harvester-database-filename.js"
 import { HARVESTER_RELATIONAL_MIGRATIONS } from "./relational-migrations.js"
-import { createOrderHistoryEventData } from "../../../test-support/order-history-fixtures.js"
+import { ORDER_HISTORY_MARKET, createOrderHistoryEventData } from "../../../test-support/order-history-fixtures.js"
 
 function createPersistenceTestLogger() {
   const transports = new Map()
@@ -106,9 +110,35 @@ function assertMigrationHistory(database) {
   const migrations = database.prepare(
     "SELECT version, name, checksum FROM schema_migrations ORDER BY version",
   ).all()
-  assert.equal(migrations.length, 4, "A fresh database must record schema, provenance, cursor, and runtime-error migrations.")
-  assert.deepEqual(migrations.map(({ version }) => version), [1, 2, 3, 4], "A fresh database must apply all ordered relational migrations.")
+  assert.equal(migrations.length, 5, "A fresh database must record schema, provenance, cursor, runtime-error, and exchange-identity migrations.")
+  assert.deepEqual(migrations.map(({ version }) => version), [1, 2, 3, 4, 5], "A fresh database must apply all ordered relational migrations.")
   assert.ok(migrations[0].checksum, "The migration history must record the implementation checksum.")
+}
+
+function assertOrderIdentityIndexes(database) {
+  const exchangeLookupIndex = database.prepare("PRAGMA index_list(orders)").all().find(
+    ({ name }) => name === "orders_exchange_lookup_idx",
+  )
+  assert.ok(exchangeLookupIndex, "Orders must have a provider-scoped exchange-order lookup index.")
+  assert.equal(exchangeLookupIndex.unique, 0, "The lookup index must retain its non-unique query plan.")
+  const exchangeIdentityIndex = database.prepare("PRAGMA index_list(orders)").all().find(
+    ({ name }) => name === "orders_exchange_identity_unique_idx",
+  )
+  assert.ok(exchangeIdentityIndex, "Exchange order identity must be protected by a market-scoped unique index.")
+  assert.equal(exchangeIdentityIndex.unique, 1, "One exchange order ID may identify only one row within its provider/account/market scope.")
+  const pendingClientIdentityIndex = database.prepare("PRAGMA index_list(orders)").all().find(
+    ({ name }) => name === "orders_pending_client_identity_unique_idx",
+  )
+  assert.ok(pendingClientIdentityIndex, "Pending client IDs must remain unique within their provider account.")
+  assert.equal(pendingClientIdentityIndex.unique, 1, "A provisional client identity must not be duplicated before an exchange order ID is known.")
+  const pendingIdentityColumns = database.prepare("PRAGMA index_info(orders_pending_client_identity_unique_idx)").all().map(
+    ({ name }) => name,
+  )
+  assert.deepEqual(
+    pendingIdentityColumns,
+    ["environment", "provider_instance_id", "provider_type", "account_id", "market_id", "client_order_id"],
+    "Pending client identity must include market because exchange client IDs are correlated within a market.",
+  )
 }
 
 function assertFreshRelationalSchema(database) {
@@ -145,11 +175,7 @@ function assertFreshRelationalSchema(database) {
       "ingestion_source", "last_ingestion_source",
     ],
   })
-  const exchangeLookupIndex = database.prepare("PRAGMA index_list(orders)").all().find(
-    ({ name }) => name === "orders_exchange_lookup_idx",
-  )
-  assert.ok(exchangeLookupIndex, "Orders must have a provider-scoped exchange-order lookup index.")
-  assert.equal(exchangeLookupIndex.unique, 0, "Exchange order IDs must not be assumed unique across every provider market.")
+    assertOrderIdentityIndexes(database)
   assertColumnsPresent({
     database,
     table: "runtime_errors",
@@ -164,16 +190,28 @@ function assertFreshRelationalSchema(database) {
   assertMigrationHistory(database)
 }
 
-function createLegacyRecord() {
-  return createOrderHistoryRecord({
-    order: createOrderHistoryEventData(),
+function createLegacyRecord({ clientOrderId = "harvester-BTCUSDT-001" } = {}) {
+  const record = createOrderHistoryRecord({
+    order: createOrderHistoryEventData({
+      clientOrderId,
+    }),
     sourceEvent: {
-      id: "legacy-source-event-1",
+      id: `legacy-source-event:${clientOrderId}`,
       name: HARVESTER_EVENT_NAMES.ORDER_UPDATED,
       source: "harvester",
       timestamp: "2026-11-19T12:00:00.000Z",
     },
     environment: "testnet",
+  })
+  return Object.freeze({
+    ...record,
+    id: JSON.stringify([
+      record.environment,
+      record.providerInstanceId,
+      record.providerType,
+      record.accountId,
+      record.clientOrderId,
+    ]),
   })
 }
 
@@ -458,7 +496,7 @@ async function assertBackupAndRollback({ filename, backupFilename, legacyRecord 
 
 function createInterruptedMigration() {
   return {
-    version: 5,
+    version: 6,
     name: "harvester-relational-interrupted-test",
     up(transaction) {
       transaction.exec("CREATE TABLE interrupted_probe (id TEXT PRIMARY KEY)")
@@ -469,7 +507,7 @@ function createInterruptedMigration() {
 
 function createRetryMigration() {
   return {
-    version: 5,
+    version: 6,
     name: "harvester-relational-interrupted-test",
     up(transaction) {
       transaction.exec("CREATE TABLE retry_probe (id TEXT PRIMARY KEY)")
@@ -858,7 +896,7 @@ test("links an earlier fill to its later matching order projection without inven
   })
 })
 
-test("does not infer a relational order link from an exchange order ID without a client identity", async (t) => {
+test("links a fill by exchange order ID even when its client identity is absent", async (t) => {
   const context = await createTestContext({ t })
   const legacyRecord = createLegacyRecord()
   await seedLegacyRecord({
@@ -887,13 +925,14 @@ test("does not infer a relational order link from an exchange order ID without a
     filename: context.filename,
     work: (database) => {
       const fill = database.prepare("SELECT * FROM fills").get()
-      assert.equal(fill.order_id, null, "An exchange order ID alone must not create an unverified local order relationship.")
-      assert.equal(fill.strategy_id, null, "Unverified exchange-order matching must not fabricate strategy attribution.")
+      const order = database.prepare("SELECT * FROM orders WHERE exchange_order_id = ?").get(legacyRecord.brokerOrderId)
+      assert.equal(fill.order_id, order.id, "A market-scoped exchange order ID is sufficient to establish the exact order relationship.")
+      assert.equal(fill.strategy_id, order.strategy_id, "Only the matched order's verified strategy attribution may be copied.")
     },
   })
 })
 
-test("rejects fill-to-order attribution when client and exchange order identities conflict", async (t) => {
+test("does not cross-link a reused client ID to a different exchange order", async (t) => {
   const context = await createTestContext({ t })
   const legacyRecord = createLegacyRecord()
   await seedLegacyRecord({
@@ -911,13 +950,28 @@ test("rejects fill-to-order attribution when client and exchange order identitie
     }),
   })
   const result = await persistence.fillObserver.flush()
-  assert.equal(result.ok, false, "A fill must not be attributed to an order with a different client-order identity.")
-  assert.equal(result.errors[0].code, "HARVESTER_ORDER_HISTORY_IDENTITY_CONFLICT", "Mismatched order linkage must be reported as an integrity conflict.")
+  assert.equal(result.ok, true, "A fill for a different exchange order may share a historical clientOrderId.")
+  context.eventBus.publish({
+    name: HARVESTER_EVENT_NAMES.ORDER_UPDATED,
+    source: "harvester",
+    data: createOrderHistoryEventData({
+      brokerOrderId: "different-broker-order",
+    }),
+  })
+  await context.eventBus.flush()
+  await persistence.relationalOrderObserver.flush()
   await inspectSqlite({
     filename: context.filename,
     work: (database) => {
-      const fills = database.prepare("SELECT COUNT(*) AS count FROM fills").get()
-      assert.equal(fills.count, 0, "A conflicting fill must not be persisted with incorrect order attribution.")
+      const orders = database.prepare("SELECT id, exchange_order_id FROM orders").all()
+      const fill = database.prepare("SELECT * FROM fills").get()
+      const earlierOrder = orders.find((order) => order.exchange_order_id === legacyRecord.brokerOrderId)
+      const matchingOrder = orders.find((order) => order.exchange_order_id === "different-broker-order")
+      assert.equal(orders.length, 2, "Both exchange orders must be retained despite their shared clientOrderId.")
+      assert.ok(earlierOrder)
+      assert.ok(matchingOrder)
+      assert.equal(fill.order_id, matchingOrder.id, "The fill must link to the exact exchange order ID, not the older order with the same clientOrderId.")
+      assert.notEqual(fill.order_id, earlierOrder.id)
     },
   })
 })
@@ -975,6 +1029,52 @@ test("deduplicates identical applied executions without creating duplicate commi
       const commissions = database.prepare("SELECT COUNT(*) AS count FROM fill_commissions").get()
       assert.equal(fills.count, 1, "An identical exchange execution must create exactly one fill row.")
       assert.equal(commissions.count, 1, "An identical replay must not duplicate actual commission facts.")
+    },
+  })
+})
+
+test("deduplicates numerically equivalent execution and commission decimals without rewriting stored facts", async (t) => {
+  const context = await createTestContext({ t })
+  const persistence = await preparePersistence({ context })
+  const original = createAppliedFillEvent()
+  await publishAppliedFill({
+    eventBus: context.eventBus,
+    fill: original,
+  })
+  await publishAppliedFill({
+    eventBus: context.eventBus,
+    fill: createAppliedFillEvent({
+      overrides: {
+        price: "100000.0000000100",
+        quantity: "0.1234567891230",
+        quoteQuantity: "12345.6789012300",
+        commissions: [{
+          amount: "0.0000123400000000010",
+          assetId: "bnb",
+          asset: "BNB",
+          quoteValue: {
+            amount: "0.0012345678901234560",
+            assetId: "usdt",
+            asset: "USDT",
+          },
+        }],
+      },
+    }),
+  })
+  const result = await persistence.fillObserver.flush()
+  assert.equal(result.ok, true, "Numerically equivalent execution and commission facts must make repeated fill ingestion idempotent.")
+  await inspectSqlite({
+    filename: context.filename,
+    work: (database) => {
+      const fill = database.prepare("SELECT * FROM fills").get()
+      const commission = database.prepare("SELECT * FROM fill_commissions").get()
+      assert.equal(database.prepare("SELECT COUNT(*) AS count FROM fills").get().count, 1, "Equivalent decimal replay must not create a second fill row.")
+      assert.equal(database.prepare("SELECT COUNT(*) AS count FROM fill_commissions").get().count, 1, "Equivalent commission replay must not create a second commission row.")
+      assert.equal(fill.execution_price, original.price, "The first execution-price representation must remain unchanged.")
+      assert.equal(fill.executed_base_quantity, original.quantity, "The first base-quantity representation must remain unchanged.")
+      assert.equal(fill.executed_quote_quantity, original.quoteQuantity, "The first quote-quantity representation must remain unchanged.")
+      assert.equal(commission.amount, original.commissions[0].amount, "The first commission-amount representation must remain unchanged.")
+      assert.equal(commission.quote_value_amount, original.commissions[0].quoteValue.amount, "The first commission quote-value representation must remain unchanged.")
     },
   })
 })
@@ -1407,14 +1507,45 @@ test("keeps durable history cursors isolated by provider, account, environment, 
   })
 })
 
-function createExchangeHistoryOrder({ status, executedQuantity, remainingQuantity, eventId, timestamp }) {
+function createHistoryMarket({ symbol, baseAssetCode }) {
+  return {
+    id: `binance:${symbol}`,
+    venue: "binance",
+    symbol,
+    baseAsset: {
+      id: `asset:${baseAssetCode}`,
+      code: baseAssetCode,
+    },
+    quoteAsset: {
+      id: "asset:USDT",
+      code: "USDT",
+    },
+  }
+}
+
+function createExchangeHistoryOrder({
+  status,
+  executedQuantity,
+  remainingQuantity,
+  eventId,
+  timestamp = "2026-11-20T04:00:00.000Z",
+  clientOrderId = "harvester-BTCUSDT-unfilled",
+  brokerOrderId = "broker-order-unfilled",
+  price = "65000.0000",
+  market = ORDER_HISTORY_MARKET,
+  createdAt = 100,
+}) {
   const order = createOrderHistoryEventData({
-    clientOrderId: "harvester-BTCUSDT-unfilled",
-    brokerOrderId: "broker-order-unfilled",
+    clientOrderId,
+    brokerOrderId: brokerOrderId === null ? undefined : brokerOrderId,
+    market,
+    symbol: market.symbol,
+    price,
     originalQuantity: "1.0000",
     executedQuantity,
     remainingQuantity,
     status,
+    createdAt: createdAt === null ? undefined : createdAt,
     ownership: undefined,
   })
   return createOrderHistoryRecord({
@@ -1548,7 +1679,7 @@ async function assertNoExchangeOrderLookup({ repository, lookup }) {
   assert.equal(await repository.findByExchangeOrderIdentity(lookup), null)
 }
 
-test("resolves exchange order identity only within its full provider scope and rejects ambiguity", async (t) => {
+test("resolves exchange order identity only within its full provider scope and rejects a conflicting client ID", async (t) => {
   const context = await createTestContext({ t })
   const persistence = await preparePersistence({ context })
   const firstOrder = { ...createLegacyRecord() }
@@ -1580,10 +1711,15 @@ test("resolves exchange order identity only within its full provider scope and r
     brokerOrderId: firstOrder.brokerOrderId,
     environment: firstOrder.environment,
   })
-  await persistence.orderRepository.upsertHistorical(secondOrder)
-  assert.throws(
-    () => persistence.orderRepository.findByExchangeOrderIdentity(lookup),
-    /exchangeOrderIdAmbiguous/,
+  await assert.rejects(
+    persistence.orderRepository.upsertHistorical(secondOrder),
+    /clientOrderId/,
+    "The same exchange order ID cannot be reassigned to a different client order ID.",
+  )
+  assert.equal(
+    await persistence.orderRepository.findByExchangeOrderIdentity(lookup),
+    firstOrder.clientOrderId,
+    "The existing exchange-order identity must remain unambiguous after rejecting the conflicting record.",
   )
 })
 
@@ -1626,5 +1762,551 @@ test("preserves an existing verified client-order identity when a history replay
       assert.equal(saved.ingestion_source, "live_event")
       assert.equal(saved.last_ingestion_source, "exchange_history")
     },
+  })
+})
+
+
+
+async function persistReusedClientOrderScenario({ persistence, scenario } = {}) {
+  const market = createHistoryMarket({
+    symbol: scenario.symbol,
+    baseAssetCode: scenario.symbol.replace("USDT", ""),
+  })
+  const earlier = createExchangeHistoryOrder({
+    status: "FILLED",
+    executedQuantity: "1.0000",
+    remainingQuantity: "0",
+    eventId: `exchange-history-order:${scenario.symbol}:earlier`,
+    timestamp: "2026-11-20T04:00:00.000Z",
+    clientOrderId: scenario.clientOrderId,
+    brokerOrderId: scenario.earlierBrokerOrderId,
+    price: "1.0000",
+    market,
+  })
+  const incoming = createExchangeHistoryOrder({
+    status: "PARTIALLY_FILLED",
+    executedQuantity: "0.5000",
+    remainingQuantity: "0.5000",
+    eventId: `exchange-history-order:${scenario.symbol}:incoming`,
+    timestamp: "2026-11-20T04:00:01.000Z",
+    clientOrderId: scenario.clientOrderId,
+    brokerOrderId: scenario.incomingBrokerOrderId,
+    price: "1.1000",
+    market,
+  })
+  await persistence.orderRepository.upsertHistorical(earlier)
+  await persistence.orderRepository.upsertHistorical(incoming)
+  await persistence.orderRepository.upsertHistorical(incoming)
+  const updatedPartialFill = createExchangeHistoryOrder({
+    status: "PARTIALLY_FILLED",
+    executedQuantity: "0.7500",
+    remainingQuantity: "0.2500",
+    eventId: `exchange-history-order:${scenario.symbol}:partial-update`,
+    timestamp: "2026-11-20T04:00:02.000Z",
+    clientOrderId: scenario.clientOrderId,
+    brokerOrderId: scenario.incomingBrokerOrderId,
+    price: "1.1000",
+    market,
+  })
+  await persistence.orderRepository.upsertHistorical(updatedPartialFill)
+  const conflictingSameOrder = createExchangeHistoryOrder({
+    status: "PARTIALLY_FILLED",
+    executedQuantity: "0.7500",
+    remainingQuantity: "0.2500",
+    eventId: `exchange-history-order:${scenario.symbol}:same-order-conflict`,
+    timestamp: "2026-11-20T04:00:03.000Z",
+    clientOrderId: scenario.clientOrderId,
+    brokerOrderId: scenario.incomingBrokerOrderId,
+    price: "1.2000",
+    market,
+  })
+  await assert.rejects(
+    persistence.orderRepository.upsertHistorical(conflictingSameOrder),
+    /price/,
+    "A different price for the same exchange order ID must remain an integrity failure.",
+  )
+}
+
+function assertReusedClientOrderRows({ database, scenarios } = {}) {
+  const rows = database.prepare("SELECT * FROM orders").all()
+  assert.equal(rows.length, 4, "Both exchange orders for each symbol must persist independently.")
+  for (const scenario of scenarios) {
+    const earlier = rows.find((row) => row.exchange_order_id === scenario.earlierBrokerOrderId)
+    const incoming = rows.find((row) => row.exchange_order_id === scenario.incomingBrokerOrderId)
+    assert.ok(earlier, `The earlier ${scenario.symbol} exchange order must persist independently.`)
+    assert.ok(incoming, `The incoming ${scenario.symbol} exchange order must persist independently.`)
+    assert.equal(earlier.client_order_id, scenario.clientOrderId, `The earlier ${scenario.symbol} order must retain the shared client ID as correlation data.`)
+    assert.equal(incoming.client_order_id, scenario.clientOrderId, `The incoming ${scenario.symbol} order must retain the shared client ID as correlation data.`)
+    assert.equal(earlier.limit_price, "1.0000", `The earlier ${scenario.symbol} order must preserve its own immutable price.`)
+    assert.equal(incoming.limit_price, "1.1000", `The incoming ${scenario.symbol} order must preserve its own immutable price.`)
+    assert.equal(incoming.executed_quantity, "0.7500", `The incoming ${scenario.symbol} order must retain the latest cumulative executed quantity.`)
+    assert.equal(incoming.remaining_quantity, "0.2500", `The incoming ${scenario.symbol} order must retain the latest remaining quantity.`)
+  }
+}
+
+async function persistReusedClientIdFills({ persistence } = {}) {
+  const clientOrderId = "h-BTCUSDT-reused"
+  const earlierFill = createAppliedFillEvent({
+    overrides: {
+      fillId: "binance:BTCUSDT:trade-earlier",
+      tradeId: "trade-earlier",
+      brokerOrderId: "earlier-broker-order",
+      clientOrderId,
+    },
+  })
+  const incomingFill = createAppliedFillEvent({
+    overrides: {
+      fillId: "binance:BTCUSDT:trade-incoming",
+      tradeId: "trade-incoming",
+      brokerOrderId: "incoming-broker-order",
+      clientOrderId,
+    },
+  })
+  for (const [fill, timestamp] of [
+    [earlierFill, "2026-11-20T04:00:00.000Z"],
+    [incomingFill, "2026-11-20T04:00:01.000Z"],
+  ]) {
+    await persistence.fillRepository.upsert({
+      fill,
+      sourceEvent: {
+        id: `exchange-history-fill:${fill.tradeId}`,
+        name: "execution.fill_history_reconciled",
+        source: "binance.exchange-history",
+        timestamp,
+      },
+      environment: "testnet",
+      ingestionSource: "exchange_history",
+    })
+  }
+  await persistence.orderRepository.upsertHistorical(createExchangeHistoryOrder({
+    status: "FILLED",
+    executedQuantity: "1.0000",
+    remainingQuantity: "0",
+    eventId: "exchange-history-order:earlier",
+    timestamp: "2026-11-20T04:00:00.000Z",
+    clientOrderId,
+    brokerOrderId: "earlier-broker-order",
+  }))
+  await persistence.orderRepository.upsertHistorical(createExchangeHistoryOrder({
+    status: "PARTIALLY_FILLED",
+    executedQuantity: "0.5000",
+    remainingQuantity: "0.5000",
+    eventId: "exchange-history-order:incoming",
+    timestamp: "2026-11-20T04:00:01.000Z",
+    clientOrderId,
+    brokerOrderId: "incoming-broker-order",
+  }))
+}
+
+function assertReusedClientIdFillLinks(database) {
+  const fills = database.prepare("SELECT * FROM fills ORDER BY exchange_order_id").all()
+  assert.equal(fills.length, 2, "Both executions with the reused client ID must remain separately persisted.")
+  const earlierOrder = database.prepare(
+    "SELECT id FROM orders WHERE exchange_order_id = ?",
+  ).get("earlier-broker-order")
+  const incomingOrder = database.prepare(
+    "SELECT id FROM orders WHERE exchange_order_id = ?",
+  ).get("incoming-broker-order")
+  assert.equal(fills[0].order_id, earlierOrder.id, "The earlier fill must link to the earlier exchange order.")
+  assert.equal(fills[1].order_id, incomingOrder.id, "The incoming fill must link to the incoming exchange order.")
+  assert.notEqual(fills[0].order_id, fills[1].order_id, "Reusing a client ID must never cause fills from distinct exchange orders to share one parent.")
+}
+
+function createV5MigrationFillRow({ legacyRecord } = {}) {
+  return {
+    id: "legacy-fill-v5-migration",
+    canonical_fill_id: "binance:BTCUSDT:trade-v5-migration",
+    provider_type: legacyRecord.providerType,
+    provider_instance_id: legacyRecord.providerInstanceId,
+    account_id: legacyRecord.accountId,
+    environment: legacyRecord.environment,
+    market_id: legacyRecord.market.id,
+    symbol: legacyRecord.symbol,
+    exchange_trade_id: "trade-v5-migration",
+    exchange_order_id: legacyRecord.brokerOrderId,
+    client_order_id: legacyRecord.clientOrderId,
+    order_id: legacyRecord.id,
+    strategy_id: null,
+    position_id: null,
+    cycle_id: null,
+    side: "BUY",
+    execution_price: "65000.0000",
+    executed_base_quantity: "0.0100",
+    executed_quote_quantity: "650.0000",
+    liquidity_role: "TAKER",
+    commission_status: "known",
+    exchange_executed_at: "2026-11-19T12:00:00.000Z",
+    local_observed_at: "2026-11-19T12:00:00.000Z",
+    last_observed_at: "2026-11-19T12:00:00.000Z",
+    source_kind: "live_fill_applied",
+    source_event_id: "legacy-fill-event-v5-migration",
+    last_source_event_id: "legacy-fill-event-v5-migration",
+    source_event_name: "execution.fill_applied",
+    source_event_source: "binance.user-data",
+    source_event_timestamp: "2026-11-19T12:00:00.000Z",
+    ingestion_source: "live_event",
+    last_ingestion_source: "live_event",
+  }
+}
+
+async function seedV4RelationalHistory({
+  filename,
+  legacyRecord,
+  fillRow,
+  additionalOrderRecords = [],
+} = {}) {
+  const database = createSqliteDatabase({
+    filename,
+    timeout: 5000,
+  })
+  await database.connect()
+  try {
+    await database.migrate(HARVESTER_RELATIONAL_MIGRATIONS.slice(0, 4))
+    const orderValues = [legacyRecord, ...additionalOrderRecords].map((record) => {
+      const row = mapOrderHistoryRecordToRow({
+        record,
+        sourceKind: "live_order_event",
+        sourceRecordId: record.lastSourceEventId,
+        ingestionSource: "live_event",
+      })
+      return ORDER_COLUMNS.map((column) => row[column])
+    })
+    const fillColumns = Object.keys(fillRow)
+    await database.transaction((transaction) => {
+      const insertOrder = transaction.prepare(
+        `INSERT INTO orders (${ORDER_COLUMNS.join(", ")})
+         VALUES (${ORDER_COLUMNS.map(() => "?").join(", ")})`,
+      )
+      for (const values of orderValues) {
+        insertOrder.run(...values)
+      }
+      transaction.prepare(
+        `INSERT INTO fills (${fillColumns.join(", ")})
+         VALUES (${fillColumns.map(() => "?").join(", ")})`,
+      ).run(...fillColumns.map((column) => fillRow[column]))
+      transaction.prepare(
+        `INSERT INTO fill_commissions (
+          fill_id, ordinal, amount, asset_id, asset_code,
+          quote_value_amount, quote_value_asset_id, quote_value_asset_code
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      ).run(fillRow.id, 0, "0.001", "asset:BNB", "BNB", null, null, null)
+    })
+  } finally {
+    await database.close()
+  }
+}
+
+function assertMigratedV5History({ database, legacyRecord, fillRow } = {}) {
+  const order = database.prepare("SELECT id FROM orders WHERE id = ?").get(legacyRecord.id)
+  const fill = database.prepare("SELECT order_id FROM fills WHERE id = ?").get(fillRow.id)
+  const commissionCount = database.prepare(
+    "SELECT COUNT(*) AS count FROM fill_commissions WHERE fill_id = ?",
+  ).get(fillRow.id).count
+  assert.equal(order?.id, legacyRecord.id)
+  assert.equal(fill?.order_id, legacyRecord.id)
+  assert.equal(commissionCount, 1)
+  assert.deepEqual(database.prepare("PRAGMA foreign_key_check").all(), [])
+}
+
+function assertV4HistoryBackup({ database, legacyRecord, fillRow } = {}) {
+  assert.equal(database.prepare("PRAGMA integrity_check").get().integrity_check, "ok")
+  assert.equal(database.prepare("SELECT COUNT(*) AS count FROM orders").get().count, 1)
+  assert.equal(
+    database.prepare("SELECT order_id FROM fills WHERE id = ?").get(fillRow.id).order_id,
+    legacyRecord.id,
+  )
+  assert.equal(database.prepare("SELECT COUNT(*) AS count FROM fill_commissions").get().count, 1)
+}
+
+async function persistPendingOrderAndFill({ persistence, clientOrderId } = {}) {
+  const pendingFill = createAppliedFillEvent({
+    overrides: {
+      fillId: "binance:BTCUSDT:trade-pending",
+      tradeId: "trade-pending",
+      brokerOrderId: "exchange-order-pending-1",
+      clientOrderId,
+    },
+  })
+  await persistence.fillRepository.upsert({
+    fill: pendingFill,
+    sourceEvent: {
+      id: "exchange-history-fill:pending",
+      name: "execution.fill_history_reconciled",
+      source: "binance.exchange-history",
+      timestamp: "2026-11-20T04:00:00.000Z",
+    },
+    environment: "testnet",
+    ingestionSource: "exchange_history",
+  })
+  await persistence.orderRepository.upsertHistorical(createExchangeHistoryOrder({
+    status: "OPEN",
+    executedQuantity: "0",
+    remainingQuantity: "1.0000",
+    eventId: "exchange-history-order:pending",
+    timestamp: "2026-11-20T04:00:01.000Z",
+    clientOrderId,
+    brokerOrderId: null,
+  }))
+  await persistence.orderRepository.upsertHistorical(createExchangeHistoryOrder({
+    status: "OPEN",
+    executedQuantity: "0",
+    remainingQuantity: "1.0000",
+    eventId: "exchange-history-order:acknowledged",
+    timestamp: "2026-11-20T04:00:02.000Z",
+    clientOrderId,
+    brokerOrderId: "exchange-order-pending-1",
+  }))
+  return pendingFill.tradeId
+}
+
+function assertPendingOrderPromotion({ database, clientOrderId, tradeId } = {}) {
+  const orders = database.prepare(
+    "SELECT id, exchange_order_id FROM orders WHERE client_order_id = ?",
+  ).all(clientOrderId)
+  const fill = database.prepare(
+    "SELECT order_id, exchange_order_id FROM fills WHERE exchange_trade_id = ?",
+  ).get(tradeId)
+  assert.equal(orders.length, 1, "Pending-order promotion must retain exactly one physical order row.")
+  assert.equal(orders[0].exchange_order_id, "exchange-order-pending-1", "The pending row must be promoted with the exchange-assigned order ID.")
+  assert.equal(fill.order_id, orders[0].id, "A fill observed before acknowledgement must link to the promoted order row.")
+  assert.equal(fill.exchange_order_id, "exchange-order-pending-1", "The fill must retain the exact exchange order identity used for promotion.")
+}
+
+test("persists reused Binance client IDs as separate ZRO/DOGE exchange orders without weakening same-order price checks", async (t) => {
+  const context = await createTestContext({ t })
+  const persistence = await preparePersistence({ context })
+  const scenarios = [
+    {
+      symbol: "ZROUSDT",
+      clientOrderId: "h-ZROUSDT-1",
+      earlierBrokerOrderId: "zro-prior-order",
+      incomingBrokerOrderId: "661748",
+    },
+    {
+      symbol: "DOGEUSDT",
+      clientOrderId: "h-DOGEUSDT-1",
+      earlierBrokerOrderId: "doge-prior-order",
+      incomingBrokerOrderId: "1193792",
+    },
+  ]
+  for (const scenario of scenarios) {
+    await persistReusedClientOrderScenario({
+      persistence,
+      scenario,
+    })
+  }
+  await inspectSqlite({
+    filename: context.filename,
+    work: (database) => assertReusedClientOrderRows({
+      database,
+      scenarios,
+    }),
+  })
+})
+
+test("links fills to the correct exchange order when Binance reuses a clientOrderId", async (t) => {
+  const context = await createTestContext({ t })
+  const persistence = await preparePersistence({ context })
+  await persistReusedClientIdFills({ persistence })
+  await inspectSqlite({
+    filename: context.filename,
+    work: assertReusedClientIdFillLinks,
+  })
+})
+
+test("backs up and rebuilds existing order/fill tables without breaking historical foreign keys", async (t) => {
+  const context = await createTestContext({ t })
+  const legacyRecord = createLegacyRecord()
+  const fillRow = createV5MigrationFillRow({ legacyRecord })
+  await seedV4RelationalHistory({
+    filename: context.filename,
+    legacyRecord,
+    fillRow,
+  })
+  const persistence = await preparePersistence({ context })
+  assert.ok(persistence.orderIdentityMigrationBackupFilename?.includes(".pre-relational-v5."))
+  await inspectSqlite({
+    filename: context.filename,
+    work: (database) => assertMigratedV5History({
+      database,
+      legacyRecord,
+      fillRow,
+    }),
+  })
+  await inspectSqlite({
+    filename: persistence.orderIdentityMigrationBackupFilename,
+    work: (database) => assertV4HistoryBackup({
+      database,
+      legacyRecord,
+      fillRow,
+    }),
+  })
+})
+
+test("rejects v5 migration when an existing fill points to a different exchange order", async (t) => {
+  const context = await createTestContext({ t })
+  const legacyRecord = createLegacyRecord()
+  const fillRow = createV5MigrationFillRow({ legacyRecord })
+  fillRow.exchange_order_id = "different-exchange-order"
+  await seedV4RelationalHistory({
+    filename: context.filename,
+    legacyRecord,
+    fillRow,
+  })
+  const database = createSqliteDatabase({ filename: context.filename })
+  await database.connect()
+  try {
+    await assert.rejects(
+      database.migrate(HARVESTER_RELATIONAL_MIGRATIONS),
+      (error) => error.context?.field === "orderIdentityMigrationFillLink",
+      "A valid foreign key must not hide a fill linked to the wrong exchange order.",
+    )
+    assert.equal(database.prepare("SELECT COUNT(*) AS count FROM orders").get().count, 1, "A rejected v5 migration must leave the original v4 order rows intact.")
+    assert.equal(database.prepare("SELECT COUNT(*) AS count FROM fills").get().count, 1, "A rejected v5 migration must leave the original v4 fill rows intact.")
+    assert.equal(database.prepare("SELECT order_id FROM fills WHERE id = ?").get(fillRow.id).order_id, legacyRecord.id, "A failed migration must preserve the original fill-to-order foreign-key value.")
+    assert.equal(
+      database.prepare("SELECT COUNT(*) AS count FROM schema_migrations WHERE version = 5").get().count,
+      0,
+      "A rejected identity migration must leave the database at v4.",
+    )
+    assert.equal(database.prepare("PRAGMA integrity_check").get().integrity_check, "ok", "The v4 database must remain structurally valid after the failed migration.")
+  } finally {
+    await database.close()
+  }
+})
+
+test("scopes provisional client identities by market", async (t) => {
+  const context = await createTestContext({ t })
+  const persistence = await preparePersistence({ context })
+  const sharedClientOrderId = "h-reused-across-markets"
+  for (const [symbol, baseAssetCode] of [["BTCUSDT", "BTC"], ["ETHUSDT", "ETH"]]) {
+    await persistence.orderRepository.upsertHistorical(createExchangeHistoryOrder({
+      status: "OPEN",
+      executedQuantity: "0",
+      remainingQuantity: "1.0000",
+      eventId: `exchange-history-order:${symbol}:pending`,
+      timestamp: "2026-11-20T04:00:00.000Z",
+      clientOrderId: sharedClientOrderId,
+      brokerOrderId: null,
+      market: createHistoryMarket({
+        symbol,
+        baseAssetCode,
+      }),
+    }))
+  }
+  await inspectSqlite({
+    filename: context.filename,
+    work: (database) => {
+      const rows = database.prepare(
+        "SELECT market_id, client_order_id FROM orders WHERE client_order_id = ? ORDER BY market_id",
+      ).all(sharedClientOrderId)
+      assert.equal(rows.length, 2, "A provisional client ID on different markets must remain two market-scoped pending orders.")
+      assert.deepEqual(rows.map(({ market_id }) => market_id), ["binance:BTCUSDT", "binance:ETHUSDT"], "The shared pending client ID must remain isolated into its two distinct market scopes.")
+    },
+  })
+})
+
+function assertDuplicateV4HistoryRemains(database) {
+  const versions = database.prepare(
+    "SELECT version FROM schema_migrations ORDER BY version",
+  ).all().map(({ version }) => version)
+  const orders = database.prepare(
+    "SELECT exchange_order_id FROM orders ORDER BY id",
+  ).all()
+  assert.deepEqual(versions, [1, 2, 3, 4], "A duplicate exchange identity must leave the schema migration history at v4.")
+  assert.equal(orders.length, 2, "Both conflicting v4 order rows must remain present after migration rollback.")
+  assert.equal(orders[0].exchange_order_id, orders[1].exchange_order_id, "The v4 duplicate identity evidence must remain unchanged for operator recovery.")
+  assert.deepEqual(database.prepare("PRAGMA foreign_key_check").all(), [], "The original v4 database must retain valid foreign-key relationships after migration rollback.")
+}
+
+function assertDuplicateV4HistoryBackup(database) {
+  assert.equal(database.prepare("PRAGMA integrity_check").get().integrity_check, "ok", "The retained pre-v5 backup must pass SQLite integrity validation.")
+  assert.equal(database.prepare("SELECT COUNT(*) AS count FROM orders").get().count, 2, "The pre-v5 backup must preserve both conflicting order rows without repair.")
+  assert.deepEqual(database.prepare("PRAGMA foreign_key_check").all(), [], "The retained pre-v5 backup must preserve all existing foreign-key relationships.")
+}
+
+test("fails v5 migration closed and retains backup when exchange identity is duplicated", async (t) => {
+  const context = await createTestContext({ t })
+  const legacyRecord = createLegacyRecord()
+  const duplicateRecord = createLegacyRecord({
+    clientOrderId: "legacy-duplicate-client",
+  })
+  const fillRow = createV5MigrationFillRow({ legacyRecord })
+  await seedV4RelationalHistory({
+    filename: context.filename,
+    legacyRecord,
+    fillRow,
+    additionalOrderRecords: [duplicateRecord],
+  })
+  const persistence = await preparePersistence({ context })
+  assert.equal(persistence.relationalDatabase, null, "Relational persistence must remain unavailable when the v5 migration rejects duplicate exchange identities.")
+  assert.ok(persistence.relationalError, "The failed v5 migration must remain observable as a relational preparation error.")
+  assert.ok(persistence.orderIdentityMigrationBackupFilename?.includes(".pre-relational-v5."), "The verified pre-v5 backup path must be exposed when migration fails.")
+  await inspectSqlite({
+    filename: context.filename,
+    work: assertDuplicateV4HistoryRemains,
+  })
+  await inspectSqlite({
+    filename: persistence.orderIdentityMigrationBackupFilename,
+    work: assertDuplicateV4HistoryBackup,
+  })
+})
+
+test("updates a pending order when a later snapshot omits its known creation timestamp", async (t) => {
+  const context = await createTestContext({ t })
+  const persistence = await preparePersistence({ context })
+  const clientOrderId = "h-BTCUSDT-optional-created-at"
+  const initialRecord = createExchangeHistoryOrder({
+    status: "OPEN",
+    executedQuantity: "0",
+    remainingQuantity: "1.0000",
+    eventId: "exchange-history-order:optional-created-at-pending",
+    clientOrderId,
+    brokerOrderId: null,
+    createdAt: 100,
+  })
+  await persistence.orderRepository.upsertHistorical(initialRecord)
+  const updatedRecord = createExchangeHistoryOrder({
+    status: "PARTIALLY_FILLED",
+    executedQuantity: "0.2500",
+    remainingQuantity: "0.7500",
+    eventId: "exchange-history-order:optional-created-at-update",
+    clientOrderId,
+    brokerOrderId: null,
+    createdAt: null,
+  })
+  await persistence.orderRepository.upsertHistorical(updatedRecord)
+  await inspectSqlite({
+    filename: context.filename,
+    work: (database) => {
+      const rows = database.prepare(
+        "SELECT id, exchange_order_id, status, executed_quantity, remaining_quantity, exchange_created_at FROM orders WHERE client_order_id = ?",
+      ).all(clientOrderId)
+      assert.equal(rows.length, 1, "An update without optional creation time must reconcile into the existing pending order.")
+      assert.equal(rows[0].id, initialRecord.id, "Omitting creation time must not replace the stable provisional order identity.")
+      assert.equal(rows[0].exchange_order_id, null, "A still-pending order must not acquire an exchange order ID prematurely.")
+      assert.equal(rows[0].status, "PARTIALLY_FILLED", "The pending order must accept the newer lifecycle status.")
+      assert.equal(rows[0].executed_quantity, "0.2500", "The pending order must retain the newer cumulative executed quantity.")
+      assert.equal(rows[0].remaining_quantity, "0.7500", "The pending order must retain the newer remaining quantity.")
+      assert.equal(rows[0].exchange_created_at, new Date(100).toISOString(), "An omitted creation timestamp must preserve the previously verified value.")
+    },
+  })
+})
+
+test("promotes a pending order and links its earlier exchange-identified fill", async (t) => {
+  const context = await createTestContext({ t })
+  const persistence = await preparePersistence({ context })
+  const clientOrderId = "h-BTCUSDT-pending"
+  const tradeId = await persistPendingOrderAndFill({
+    persistence,
+    clientOrderId,
+  })
+  await inspectSqlite({
+    filename: context.filename,
+    work: (database) => assertPendingOrderPromotion({
+      database,
+      clientOrderId,
+      tradeId,
+    }),
   })
 })

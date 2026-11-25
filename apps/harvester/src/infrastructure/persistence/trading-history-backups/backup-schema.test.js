@@ -39,18 +39,18 @@ test("reads and validates the current relational schema and row counts", async (
   const database = await createMigratedDatabase({
     testContext: t,
   })
-  assert.equal(readSchemaVersion(database), 4)
-  assert.equal(assertCurrentSchema(database), 4)
+  assert.equal(readSchemaVersion(database), 5)
+  assert.equal(assertCurrentSchema(database), 5)
   const result = await validateRestoredDatabase({
     database,
     manifest: {
-      schemaVersion: 4,
+      schemaVersion: 5,
     },
     environment: "testnet",
     backupFilename: "history.sqlite",
   })
   assert.equal(result.environment, "testnet")
-  assert.equal(result.schemaVersion, 4)
+  assert.equal(result.schemaVersion, 5)
   assert.deepEqual(result.rowCounts, {
     orders: 0,
     fills: 0,

@@ -42,6 +42,10 @@ Follow the canonical security requirements in [ENGINEERING_STANDARDS.md](../../E
 
 Follow the repository [modularity standard](../../docs/engineering/MODULARITY_STANDARD.md). Harvester-specific requirements: deterministic trading calculations and strategy decisions are plain pure functions; classes own state and enforce lifecycle invariants; use cases coordinate workflows through injected ports. See [Architecture](./docs/architecture.md#implementation-pattern-for-use-cases) for the established factory/composition pattern.
 
+## Order-history identity
+
+Never use clientOrderId alone as a permanent exchange-order identity. When present, use the provider's exchange order ID scoped by environment, provider instance/type, account, and market; provider order IDs may be market-local. Keep clientOrderId as a correlation and integrity-check attribute because Binance permits reuse only after the prior order is FILLED. While an order is pending, treat clientOrderId as a provisional market-scoped identity. Never merge or correlate pending orders across markets; promote only when market and creation facts agree, and fail closed on ambiguity. Link fills by the exact market-scoped exchange order ID; a reused clientOrderId must never link fills across orders. Preserve immutable price/quantity checks for the same exchange order, and never repair conflicting persisted facts silently. Compare decimal facts with the repository's exact decimal utilities, not JavaScript string equality or floating-point numbers. Equivalent decimal representations must not be treated as conflicts; preserve an existing representation when the numeric value is unchanged. A genuinely different immutable numeric value remains an integrity error.
+
 ## Application architecture
 
 Follow the authoritative [Harvester architecture](./docs/architecture.md) for use-case factories, ports, adapters, bootstrap composition, and dependency direction. Reuse existing entity and broker contracts; do not introduce parallel domain models or adapter-specific details into strategy/domain code.

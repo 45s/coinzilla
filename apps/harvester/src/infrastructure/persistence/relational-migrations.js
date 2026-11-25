@@ -286,6 +286,187 @@ function migrateHistorySyncCursors(transaction) {
   `)
 }
 
+const CREATE_ORDER_IDENTITY_MIGRATION_TABLES_SQL = `
+CREATE TABLE orders_v5 (
+    id TEXT PRIMARY KEY,
+    provider_type TEXT NOT NULL,
+    provider_instance_id TEXT NOT NULL,
+    account_id TEXT NOT NULL,
+    environment TEXT NOT NULL CHECK (environment IN ('testnet', 'live')),
+    market_id TEXT NOT NULL,
+    market_venue TEXT NOT NULL,
+    symbol TEXT NOT NULL,
+    base_asset_id TEXT NOT NULL,
+    base_asset_code TEXT NOT NULL,
+    quote_asset_id TEXT NOT NULL,
+    quote_asset_code TEXT NOT NULL,
+    exchange_order_id TEXT,
+    client_order_id TEXT NOT NULL,
+    strategy_id TEXT,
+    position_id TEXT,
+    ownership_purpose TEXT,
+    cycle_id TEXT,
+    side TEXT NOT NULL CHECK (side IN ('BUY', 'SELL')),
+    order_type TEXT NOT NULL,
+    limit_price TEXT,
+    average_execution_price TEXT,
+    original_quantity TEXT NOT NULL,
+    executed_quantity TEXT NOT NULL,
+    cumulative_quote_quantity TEXT,
+    remaining_quantity TEXT NOT NULL,
+    status TEXT NOT NULL,
+    exchange_created_at TEXT,
+    exchange_acknowledged_at TEXT,
+    exchange_updated_at TEXT,
+    exchange_completed_at TEXT,
+    exchange_transaction_at TEXT,
+    local_first_observed_at TEXT NOT NULL,
+    local_last_observed_at TEXT NOT NULL,
+    first_source_event_id TEXT NOT NULL,
+    last_source_event_id TEXT NOT NULL,
+    last_source_event_name TEXT NOT NULL,
+    last_source_event_source TEXT NOT NULL,
+    last_source_event_timestamp TEXT NOT NULL,
+    source_kind TEXT NOT NULL CHECK (source_kind IN ('legacy_harvester_orders', 'live_order_event')),
+    last_observed_source_kind TEXT NOT NULL CHECK (last_observed_source_kind IN ('legacy_harvester_orders', 'live_order_event')),
+    source_record_id TEXT,
+    migrated_at TEXT,
+    last_execution_type TEXT,
+    ingestion_source TEXT NOT NULL DEFAULT 'live_event'
+      CHECK (ingestion_source IN ('live_event', 'exchange_history', 'legacy_migration')),
+    last_ingestion_source TEXT NOT NULL DEFAULT 'live_event'
+      CHECK (last_ingestion_source IN ('live_event', 'exchange_history', 'legacy_migration'))
+  );
+
+CREATE TABLE fills_v5 (
+    id TEXT PRIMARY KEY,
+    canonical_fill_id TEXT NOT NULL,
+    provider_type TEXT NOT NULL,
+    provider_instance_id TEXT NOT NULL,
+    account_id TEXT NOT NULL,
+    environment TEXT NOT NULL CHECK (environment IN ('testnet', 'live')),
+    market_id TEXT NOT NULL,
+    symbol TEXT NOT NULL,
+    exchange_trade_id TEXT NOT NULL,
+    exchange_order_id TEXT NOT NULL,
+    client_order_id TEXT,
+    order_id TEXT REFERENCES orders_v5(id) ON DELETE RESTRICT,
+    strategy_id TEXT,
+    position_id TEXT,
+    cycle_id TEXT,
+    side TEXT NOT NULL CHECK (side IN ('BUY', 'SELL')),
+    execution_price TEXT NOT NULL,
+    executed_base_quantity TEXT NOT NULL,
+    executed_quote_quantity TEXT NOT NULL,
+    liquidity_role TEXT NOT NULL,
+    commission_status TEXT NOT NULL,
+    exchange_executed_at TEXT,
+    local_observed_at TEXT NOT NULL,
+    last_observed_at TEXT NOT NULL,
+    source_kind TEXT NOT NULL CHECK (source_kind = 'live_fill_applied'),
+    source_event_id TEXT NOT NULL,
+    last_source_event_id TEXT NOT NULL,
+    source_event_name TEXT NOT NULL,
+    source_event_source TEXT NOT NULL,
+    source_event_timestamp TEXT NOT NULL,
+    ingestion_source TEXT NOT NULL DEFAULT 'live_event'
+      CHECK (ingestion_source IN ('live_event', 'exchange_history')),
+    last_ingestion_source TEXT NOT NULL DEFAULT 'live_event'
+      CHECK (last_ingestion_source IN ('live_event', 'exchange_history')),
+    UNIQUE (provider_type, provider_instance_id, account_id, environment, market_id, exchange_trade_id)
+  );
+
+CREATE TABLE fill_commissions_v5 (
+    id INTEGER PRIMARY KEY,
+    fill_id TEXT NOT NULL REFERENCES fills_v5(id) ON DELETE CASCADE,
+    ordinal INTEGER NOT NULL CHECK (ordinal >= 0),
+    amount TEXT NOT NULL,
+    asset_id TEXT NOT NULL,
+    asset_code TEXT NOT NULL,
+    quote_value_amount TEXT,
+    quote_value_asset_id TEXT,
+    quote_value_asset_code TEXT,
+    UNIQUE (fill_id, ordinal),
+    CHECK (
+      (quote_value_amount IS NULL AND quote_value_asset_id IS NULL AND quote_value_asset_code IS NULL)
+      OR
+      (quote_value_amount IS NOT NULL AND quote_value_asset_id IS NOT NULL AND quote_value_asset_code IS NOT NULL)
+    )
+  );
+`
+
+function assertExistingFillOrderReferencesMatch(transaction) {
+  const conflict = transaction.prepare(`
+    SELECT fills.exchange_order_id, fills.provider_instance_id,
+      fills.account_id, fills.market_id
+    FROM fills
+    JOIN orders ON orders.id = fills.order_id
+    WHERE fills.environment IS NOT orders.environment
+      OR fills.provider_type IS NOT orders.provider_type
+      OR fills.provider_instance_id IS NOT orders.provider_instance_id
+      OR fills.account_id IS NOT orders.account_id
+      OR fills.market_id IS NOT orders.market_id
+      OR fills.exchange_order_id IS NOT orders.exchange_order_id
+      OR (
+        fills.client_order_id IS NOT NULL
+        AND fills.client_order_id IS NOT orders.client_order_id
+      )
+    LIMIT 1
+  `).get()
+  if (conflict !== undefined) {
+    throw new OrderHistoryIntegrityError({
+      field: "orderIdentityMigrationFillLink",
+      providerInstanceId: conflict.provider_instance_id,
+      accountId: conflict.account_id,
+      brokerOrderId: conflict.exchange_order_id,
+      marketId: conflict.market_id,
+    })
+  }
+}
+
+function migrateMarketScopedExchangeOrderIdentity(transaction) {
+  assertExistingFillOrderReferencesMatch(transaction)
+  transaction.exec(CREATE_ORDER_IDENTITY_MIGRATION_TABLES_SQL)
+  transaction.exec(`
+    INSERT INTO orders_v5 SELECT * FROM orders;
+    INSERT INTO fills_v5 SELECT * FROM fills;
+    INSERT INTO fill_commissions_v5 SELECT * FROM fill_commissions;
+
+    DROP TABLE fill_commissions;
+    DROP TABLE fills;
+    DROP TABLE orders;
+
+    ALTER TABLE orders_v5 RENAME TO orders;
+    ALTER TABLE fills_v5 RENAME TO fills;
+    ALTER TABLE fill_commissions_v5 RENAME TO fill_commissions;
+
+    CREATE INDEX orders_exchange_lookup_idx
+      ON orders(environment, provider_type, provider_instance_id, account_id, market_id, exchange_order_id);
+    CREATE UNIQUE INDEX orders_exchange_identity_unique_idx
+      ON orders(environment, provider_type, provider_instance_id, account_id, market_id, exchange_order_id)
+      WHERE exchange_order_id IS NOT NULL;
+    CREATE UNIQUE INDEX orders_pending_client_identity_unique_idx
+      ON orders(environment, provider_instance_id, provider_type, account_id, market_id, client_order_id)
+      WHERE exchange_order_id IS NULL;
+    CREATE INDEX orders_market_time_idx
+      ON orders(environment, provider_type, provider_instance_id, account_id, market_id, exchange_created_at);
+    CREATE INDEX orders_strategy_time_idx
+      ON orders(strategy_id, exchange_created_at);
+    CREATE INDEX fills_market_time_idx
+      ON fills(environment, provider_type, provider_instance_id, account_id, market_id, exchange_executed_at);
+    CREATE INDEX fills_strategy_time_idx
+      ON fills(strategy_id, exchange_executed_at);
+    CREATE INDEX fill_commissions_asset_idx
+      ON fill_commissions(asset_id, fill_id);
+  `)
+  const violations = transaction.prepare("PRAGMA foreign_key_check").all()
+  if (violations.length > 0) {
+    throw new OrderHistoryIntegrityError({
+      field: "orderIdentityMigrationForeignKeys",
+    })
+  }
+}
+
 function migrateRuntimeErrors(transaction) {
   transaction.exec(`
     CREATE TABLE runtime_errors (
@@ -340,5 +521,10 @@ export const HARVESTER_RELATIONAL_MIGRATIONS = Object.freeze([
     version: 4,
     name: "harvester-session-runtime-errors",
     up: migrateRuntimeErrors,
+  }),
+  Object.freeze({
+    version: 5,
+    name: "use_market_scoped_exchange_order_identity",
+    up: migrateMarketScopedExchangeOrderIdentity,
   }),
 ])
