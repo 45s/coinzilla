@@ -82,6 +82,7 @@ test("runner supports bounded cancellation", async () => {
   })
   await new Promise((resolve) => setImmediate(resolve))
   assert.equal(runner.cancel("run-cancel"), true)
+  await new Promise((resolve) => setImmediate(resolve))
   assert.equal(runner.getRun("run-cancel").status, SCENARIO_RUN_STATUS.CANCELLING)
   assert.equal(runner.cancel("run-cancel"), true)
   assert.equal(runner.getRun("run-cancel").status, SCENARIO_RUN_STATUS.CANCELLING)
