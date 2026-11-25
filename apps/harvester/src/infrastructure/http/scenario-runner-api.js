@@ -253,7 +253,10 @@ export async function handleScenarioRunnerRequest({
   if (!pathname.startsWith(API_PREFIX)) {
     return false
   }
-  if (rejectUntrustedOrigin({ request, response })) {
+  if (rejectUntrustedOrigin({
+    request,
+    response,
+  })) {
     return true
   }
   if (request.method === "OPTIONS") {
