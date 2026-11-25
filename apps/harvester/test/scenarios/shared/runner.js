@@ -123,7 +123,7 @@ function executeTestGroup({
   const processFailed = Boolean(execution.error) || execution.status !== 0
   const executionError = execution.error?.message ??
     (processFailed ? "Node test process exited with status " + (execution.status ?? "unknown") + "." : null)
-  const observedTapTitles = (execution.stdout ?? "").split(/\\r?\\n/)
+  const observedTapTitles = (execution.stdout ?? "").split(String.fromCharCode(10))
     .map(parseTapLine)
     .filter(Boolean)
     .map((result) => result.name)
