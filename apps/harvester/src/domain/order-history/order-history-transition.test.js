@@ -52,6 +52,49 @@ test("ignores a stale event that would regress cumulative execution", () => {
   )
 })
 
+test("accepts equivalent decimal representations without changing persisted formatting", () => {
+  const current = createOrderHistoryRecordFixture({
+    price: "65000.0000",
+    originalQuantity: "0.0100",
+  })
+  const candidate = createOrderHistoryRecordFixture({
+    id: current.id,
+    price: "65000",
+    originalQuantity: "0.01",
+    lastSourceEventId: "event-002",
+    lastSeenAt: "2026-11-19T00:00:01.000Z",
+    lastSourceEventTimestamp: "2026-11-19T00:00:01.000Z",
+  })
+
+  const merged = mergeOrderHistoryRecords({
+    current,
+    candidate,
+  })
+
+  assert.equal(merged.price, current.price)
+  assert.equal(merged.originalQuantity, current.originalQuantity)
+})
+
+test("treats decimal formatting differences in duplicate source events as identical", () => {
+  const current = createOrderHistoryRecordFixture({
+    executedQuantity: "0.5000",
+    remainingQuantity: "0.5000",
+  })
+  const candidate = createOrderHistoryRecordFixture({
+    id: current.id,
+    executedQuantity: "0.5",
+    remainingQuantity: "0.5",
+  })
+
+  const merged = mergeOrderHistoryRecords({
+    current,
+    candidate,
+  })
+
+  assert.equal(merged.executedQuantity, current.executedQuantity)
+  assert.equal(merged.remainingQuantity, current.remainingQuantity)
+})
+
 test("reports safe existing and incoming immutable values for a rejected price conflict", () => {
   const current = createOrderHistoryRecordFixture()
   const conflicting = createOrderHistoryRecordFixture({
