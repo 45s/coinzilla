@@ -87,6 +87,15 @@ test("process adapter does not claim verified OS isolation for an unattested lau
   assert.equal(adapter.osSandboxVerified, false)
 })
 
+
+test("process adapter rejects worker paths outside the allowlisted worker directory", () => {
+  assert.throws(() => createProcessScenarioAdapter({
+    strategyId: "RS",
+    workerPath: process.cwd(),
+    spawnSandboxedWorker: spawnTestWorker,
+  }), /inside the scenario worker directory/)
+})
+
 test("process adapter refuses to start without a trusted OS sandbox launcher", () => {
   assert.throws(() => createProcessScenarioAdapter({
     strategyId: "RS",
