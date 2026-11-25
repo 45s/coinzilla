@@ -88,7 +88,7 @@ Configuration loaded from a file and configuration entered in the client Playgro
 The UI action is **Copy AI Debug Package** and copies complete versioned JSON only, including original scenario, temporary overrides, validated effective configuration, executed revision, ordered events, results, trace and diagnostics. Repository access at the recorded revision is expected for deeper AI-agent debugging.
 
 ## Scenario Runner roadmap
-See [the phased implementation roadmap](docs/features/gc-strategy-lab/RUNNER_ROADMAP.md). Existing trading logic and trading services are protected: changes require explicit prior user approval.
+See [the phased implementation roadmap](docs/features/gc-strategy-lab/RUNNER_ROADMAP.md). Within the approved Scenario Runner task, trading logic and services may be refactored as required for faithful production-flow reuse on the task branch. Preserve real trading behavior and safety invariants, add regression tests, document changed paths and inspect affected consumers. This does not authorize unrelated trading changes or real exchange operations.
 
 ### Strategy Scenario Runner agent rules
 
