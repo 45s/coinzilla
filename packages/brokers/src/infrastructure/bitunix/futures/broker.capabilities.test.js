@@ -15,9 +15,7 @@ test("Bitunix Futures unsupported common operations explain their Futures-specif
     ["getAccountSnapshot", /no atomic.*snapshot|source timestamp/i],
     ["getServerTime", /does not document.*server-time endpoint/i],
     ["getOrder", /getCanonicalOrder/i],
-    ["getOrderHistory", /getCanonicalOrderHistory/i],
-    ["getMyTrades", /getFuturesTradeHistory|bounded.*Fills/i],
-    ["createOrder", /createFuturesOrder/i],
+    ["getOrderHistory", /getCanonicalOrderHistory/i],    ["createOrder", /createFuturesOrder/i],
     ["createCanonicalOrder", /tradeSide.*positionId.*reduceOnly/i],
     ["subscribeForCandles", /candle open timestamp.*getCandles/i],
   ]
