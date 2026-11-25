@@ -100,17 +100,17 @@ const SCENARIO = Object.freeze({
 
 const RUNTIME_PAIR_CONFIG = Object.freeze({
   enabled: true,
-  investment: "100",
-  orderQuantity: "5",
-  sellQuantity: "50",
+  investment: 100,
+  orderQuantity: 5,
+  sellQuantity: 50,
   minProfit: 0.01,
   priceStepPercent: 0.05,
   makerPercent: 0,
   takerPercent: 0,
   thirdAssetFeeQuoteValue: "0",
   legacyPosition: Object.freeze({
-    invested: "100",
-    quantity: "50",
+    invested: 100,
+    quantity: 50,
   }),
 })
 const RUNTIME_PAIR_CONFIGS = Object.freeze({
