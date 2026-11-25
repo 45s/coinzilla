@@ -996,7 +996,7 @@ function createRecoverySellerTransitionPlanInput({
     .find((allocation) => allocation.assetId === market.baseAsset.id)?.amount ?? "0"
   return Object.freeze({
     recoveryQuantity: recoveryPosition?.quantity ?? "0",
-    configuredLegacyQuantity: pairConfig.sellQuantity,
+    configuredLegacyQuantity: String(pairConfig.sellQuantity),
     legacyRemainingQuantity: legacyRecord.position.remainingQuantity,
     verifiedUnreservedLegacyQuantity,
     recoveryCostBasis: recoveryPosition?.spent ?? "0",
