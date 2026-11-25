@@ -152,9 +152,14 @@ function createStopLatch({
       if (persisted?.ok !== true || persisted.data?.durable !== true) {
         return persisted?.ok === false
           ? persisted
-          : toResult({ error: new Error("Recovery Seller STOP blocker was not durably acknowledged") })
+          : toResult({
+              error: new Error("Recovery Seller STOP blocker was not durably acknowledged"),
+            })
       }
-      const stopState = latchRecoverySellerStop({ state: current.stopState, decision })
+      const stopState = latchRecoverySellerStop({
+        state: current.stopState,
+        decision,
+      })
       const { blockerId } = persisted.data.record.data
       setStopSnapshot({
         stopState,
