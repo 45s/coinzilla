@@ -142,6 +142,9 @@ The catalog is a navigation and traceability layer. Domain specifications, accep
 ### Shared packages
 
 - [BRK-001 — Unknown broker mutation outcome](#brk-001--unknown-broker-mutation-outcome-is-not-treated-as-failure)
+- [BRK-002 — Bitunix Futures TP/SL history is bounded and identity-preserving](#brk-002--bitunix-futures-tpsl-history-is-bounded-and-identity-preserving)
+- [BRK-003 — Futures position closes require reconciled private user data](#brk-003--futures-position-closes-require-reconciled-private-user-data)
+- [BRK-004 — Futures REST pacing and mutation outcomes follow endpoint contracts](#brk-004--futures-rest-pacing-and-mutation-outcomes-follow-endpoint-contracts)
 - [DB-001 — Database transaction atomicity](#db-001--a-failed-database-transaction-leaves-no-partial-write)
 - [EVT-001 — Publish versus subscriber completion](#evt-001--publish-acceptance-is-distinct-from-subscriber-completion)
 - [JRN-001 — Journal durability boundary](#jrn-001--journal-flush-is-the-durability-boundary)
@@ -861,6 +864,27 @@ The package entries below make the repository-wide scope visible, but their exac
 - `Bitunix Futures closeFuturesPositionBySide resolves exactly one position side`
 - `Bitunix Futures closeAllFuturesPositions closes only the requested symbol and verifies the final scope`
 - `Bitunix Futures closeAllFuturesPositions requires explicit account-wide confirmation`
+
+### BRK-004 — Futures REST pacing and mutation outcomes follow endpoint contracts
+
+**Status:** VERIFIED on source head `d153e02d00427cdb91ccbdca3b1fab10d1781233` — the exact-head Brokers unit job passed 1,175 tests (0 failures); changed-file strict ESLint also passed.
+
+**Behavior:** The Bitunix Futures REST client serializes requests under the documented conservative default and stricter close-position endpoint limits, and it classifies state-changing HTTP failures from the HTTP status before attempting to parse an error body.
+
+**Input:** Send sequential or concurrent requests through clients using the same API key to `close_all_position` and `flash_close_position`; return non-JSON HTTP 400, 429 and 500 responses for state-changing requests.
+
+**Expected output:** The shared queue preserves at least 1,000 ms between close-all requests and 200 ms between flash-close requests while retaining the global 100 ms floor. HTTP 400/429 are definitive rejections; 500 is outcome-unknown. A successful HTTP response with malformed JSON remains outcome-unknown for a dispatched mutation. No mutation is automatically retried.
+
+**Must not happen:** Do not apply a universal 100 ms interval to slower close endpoints, classify non-JSON 400/429 as unknown merely because their bodies are not JSON, or replay a mutation after an ambiguous response. The limiter is process-local and API-key-scoped; it must not be described as a distributed UID/IP limiter.
+
+**Subcases:** Shared same-key queue; documented 1 request/second close-all limit; documented 5 requests/second flash-close limit; HTTP 400 and 429 rejection; HTTP 500 ambiguity; one dispatch per request.
+
+**Implementation:** `packages/brokers/src/infrastructure/bitunix/futures/api/rest-client.js` — shared request queue, endpoint-specific pacing and HTTP-before-body validation.
+
+**Automated tests:**
+
+- [REST pacing regressions](../../packages/brokers/src/infrastructure/bitunix/futures/api/rest-client.rate-limit.test.js) — `Bitunix Futures REST applies the documented slower limits to close-position endpoints`.
+- [REST response classification regressions](../../packages/brokers/src/infrastructure/bitunix/futures/api/rest-client.test.js) — `Bitunix Futures REST classifies non-JSON HTTP mutation failures by status before parsing the body`.
 
 ### DB-001 — A failed database transaction leaves no partial write
 
