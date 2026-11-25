@@ -8,7 +8,7 @@
 
 ## 1. Purpose
 
-Provide a strategy-independent **Scenario Runner** in Dashboard. Users configure a strategy/market, select a declared scenario and subcase, execute the actual production strategy flow in an isolated simulation runtime, inspect the actual outcome/assertions and explore the emitted execution trace as an interactive graph. **Recovery Seller (RS) is the first strategy adapter** because it is currently the only strategy with a structured scenario registry. RS is an initial example and integration target, not the runner's architectural boundary.
+Provide a strategy-independent **Scenario Runner** in Dashboard. Users configure a strategy/market, select a declared scenario and subcase, execute the actual production strategy flow in an isolated simulation runtime, inspect the actual outcome/assertions and explore the emitted execution trace as an interactive graph. **Recovery Seller (RS) is the first strategy adapter** because its production runtime evaluator, accounting workflow, action authorizer and order submitter exist on develop. The structured registry proposal in open PR #1823 is not merged into develop and is not imported as a production catalogue. RS is an initial example and integration target, not the runner's architectural boundary.
 
 The long-term runner must support every strategy family for which executable scenarios and a supported simulation contract exist: RS, Generic Conservative/Aggressive, GC Conservative/Aggressive, futures strategies, grid strategies and future strategy types. Adding a strategy means providing its scenario definitions and strategy-owned runtime/configuration adapter; it must not require adding strategy-specific branches or business rules to the runner core.
 
@@ -128,7 +128,7 @@ This illustrates separation only; it does not authorize a Dashboard-owned strate
 ### Included in the initial strategy-neutral runner capability (RS adapter first)
 
 - A dedicated Dashboard navigation entry and Lab workspace.
-- Discover available strategy adapters dynamically; initially expose RS because it has executable scenario definitions. Later strategies register without runner-core changes.
+- Discover available strategy adapters dynamically; initially expose RS because its production runtime boundary exists. Expose only individually mapped and independently verified scenarios; later strategies register without runner-core changes.
 - Select strategy, market, scenario and subcase; load strategy-owned configuration schema/defaults and allow validated user-editable simulation configuration.
 - Display scenario inputs and provenance; distinguish scenario records from live/runtime state.
 - Reconstruct scenario given inputs, when steps, then expectations and mustNot constraints as graph nodes/links, with an inspector.
@@ -305,7 +305,7 @@ Exact trace shape, public entry point, determinism, decimal representation, conf
 
 ## 12. RS adapter decisions and recorded discussion
 
-- RS is the first adapter because it has a structured scenario registry and matrix; the generic runner must consume real records rather than invented samples.
+- RS is the first adapter because its production runtime/use-case flow exists on develop. A structured scenario registry proposal exists in separate open PR #1823 but is not merged; the generic runner must consume reconciled source records rather than invented samples.
 - The graph engine should eventually accept strategy-neutral normalized scenario data with strategy-specific registry adapters, not hardcode RS.
 - Separate **scenario expectation**, **coverage status**, and **execution evidence** visually and semantically. TEST-MAPPED, PARTIAL, BLOCKED, or VERIFIED describes registry/evidence state—not the result of evaluating a trading decision.
 - Label graph modes: (1) behavior path assembled from declarative scenario steps, (2) traceability graph assembled from registry references, and (3) runtime evaluation trace only when sourced from the actual evaluator. Preserve provenance.
@@ -336,7 +336,7 @@ The runner is a reusable platform capability, not an RS feature. Strategy identi
 - A declared set of simulation inputs/events and side-effect ports.
 - Structured execution results, assertions and trace provenance.
 
-Initial adapter: Recovery Seller (RS), because its structured scenarios exist today. Future adapters may include Generic Conservative/Aggressive, GC Conservative/Aggressive, futures, grids and other strategies when their scenarios and execution contracts are ready. Unsupported strategies/scenarios are reported as unavailable/not executable with an explicit reason; the runner must not fabricate support.
+Initial adapter: Recovery Seller (RS), because its production runtime and use-case contracts exist on develop. The separate structured registry proposal is not merged. Future adapters may include Generic Conservative/Aggressive, GC Conservative/Aggressive, futures, grids and other strategies when their scenarios and execution contracts are ready. Unsupported strategies/scenarios are reported as unavailable/not executable with an explicit reason; the runner must not fabricate support.
 
 ### 13.2 Production-code reuse is a hard invariant
 
@@ -551,7 +551,7 @@ Work exclusively on the task branch/PR. No direct commits to `develop`/`main`, n
 
 ## Implementation checkpoint (2026-11-25)
 
-The first executable adapter is RS-004-011. It runs the production `calculateRecoverySellerProfitability` function in a dedicated child process, captures its inputs/output/trace and compares the output against a scenario oracle. A strategy-neutral lifecycle service, bounded in-memory history, bounded FIFO queue, REST routes, WebSocket lifecycle hints, Dashboard presentation, framework-independent trace graph and versioned debug-package scaffold are implemented. The catalogue advertises only this executable case. This is a partial implementation—not the complete Runner MVP. Full RS registry and production-flow coverage, schema-driven configuration/Playground beyond the RS-004-011 input schema, persistent history, exact original-version replay, complete debug evidence, resource/concurrency controls and end-to-end acceptance remain incomplete.
+RS-004-011 is a preliminary helper-only mapping to `calculateRecoverySellerProfitability` and is not executable. RS-004-012 adds a tested application-level deterministic ZROUSDT fixture that invokes the production runtime dispatch, accounting workflow, account-wide authorization and order-submission use case through a simulated broker. It remains PRELIMINARY/non-executable: the host registers no RS adapter because the process worker is not an OS sandbox, and the fixture is not the configured LINEA market. The default LINEA pair also lacks an explicit `thirdAssetFeeQuoteValue`; the SELL planner must not infer zero. Bounded in-memory history, REST routes, WebSocket lifecycle hints, Dashboard presentation, trace graph and debug-package scaffold exist, but persistent history, exact original-version replay, complete evidence, resource enforcement, full registry integration and end-to-end acceptance remain incomplete.
 
 ## Mandatory agent preflight and branch-only implementation
 
