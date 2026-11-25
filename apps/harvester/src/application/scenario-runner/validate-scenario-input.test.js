@@ -89,3 +89,52 @@ test("scenario input validation rejects non-object input and invalid schema defi
     errors: ["Scenario input schema is invalid."],
   })
 })
+
+
+test("scenario input validation enforces exclusive decimal lower bounds", () => {
+  const positiveSchema = Object.freeze({
+    ...schema,
+    properties: Object.freeze({
+      ...schema.properties,
+      minProfit: Object.freeze({
+        ...schema.properties.minProfit,
+        exclusiveMinimum: "0",
+      }),
+    }),
+  })
+  assert.deepEqual(validateScenarioInput({
+    schema: positiveSchema,
+    input: {
+      minProfit: "0.0001",
+      enabled: true,
+    },
+  }), {
+    valid: true,
+    errors: [],
+  })
+  assert.deepEqual(validateScenarioInput({
+    schema: positiveSchema,
+    input: {
+      minProfit: "0",
+      enabled: true,
+    },
+  }), {
+    valid: false,
+    errors: ["Input field minProfit must be greater than 0"],
+  })
+})
+
+test("scenario input schema rejects invalid exclusive decimal bounds", () => {
+  assert.equal(isValidScenarioInputSchema({
+    schema: {
+      ...schema,
+      properties: {
+        ...schema.properties,
+        minProfit: {
+          ...schema.properties.minProfit,
+          exclusiveMinimum: "not-a-decimal",
+        },
+      },
+    },
+  }), false)
+})
