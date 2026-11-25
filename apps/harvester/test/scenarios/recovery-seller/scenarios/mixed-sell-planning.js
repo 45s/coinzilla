@@ -408,7 +408,7 @@ const recoverySellerMixedSellPlanningScenariosWithoutReservations = Object.freez
   }),
   createSpotAllocationScenario({
     id: "RS-003-005",
-    name: "verified Spot availability subtracts every shared Portfolio position across markets and strategies",
+    name: "verified Spot allocation subtracts every shared Portfolio position across markets and strategies",
     input: {
       spotFreeQuantity: "5",
       spotLockedQuantity: "0.5",
