@@ -477,3 +477,7 @@ Canonical fill accounting now distinguishes RS ownership, explicit CG ownership,
 - Connected the terminal RS SELL path to complete canonical fill-history reconciliation and atomic recovery/legacy accounting. Reservation release follows successful commit only.
 - Historical checkpoint superseded by the completed RS-5 implementation and verification scope documented above. Restart/recovery and third-asset commission valuation remain explicitly deferred. The 2026-11-24 owner-approved STOP contract is investment-only; automatic clear and implicit resume remain forbidden. No exchange operations were performed.
 - Historical checkpoint superseded by the completed RS-5 implementation and verification scope documented above. Restart/recovery and third-asset commission valuation remain explicitly deferred; STOP is terminal and cannot be cleared through CC-operator. No exchange operations were performed.
+
+### Scenario-suite checkpoint — 2026-11-25
+
+RS-002-006-B now maps to an application authorizer/account-allocation regression for a registered partial RS BUY: the remaining quote commitment is reserved and an unfunded additional BUY defers. The test is added but not yet executed on the current head. RS-002-006 and RS-002 remain PARTIAL; no scenario is VERIFIED. The broader runtime/order-event lifecycle proof and exact-head CI remain outstanding.
