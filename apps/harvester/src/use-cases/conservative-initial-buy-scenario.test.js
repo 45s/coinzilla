@@ -29,10 +29,26 @@ const marketMetadata = {
   orderType: "LIMIT_MAKER",
   tradingRules: {
     constraints: [
-      { type: "PRICE_INCREMENT", status: "SUPPORTED", value: { amount: "0.001" } },
-      { type: "QUANTITY_INCREMENT", status: "SUPPORTED", value: { amount: "0.1" } },
-      { type: "MIN_QUANTITY", status: "SUPPORTED", value: { amount: "0.1" } },
-      { type: "MIN_NOTIONAL", status: "SUPPORTED", value: { amount: "5" } },
+      {
+        type: "PRICE_INCREMENT",
+        status: "SUPPORTED",
+        value: { amount: "0.001" },
+      },
+      {
+        type: "QUANTITY_INCREMENT",
+        status: "SUPPORTED",
+        value: { amount: "0.1" },
+      },
+      {
+        type: "MIN_QUANTITY",
+        status: "SUPPORTED",
+        value: { amount: "0.1" },
+      },
+      {
+        type: "MIN_NOTIONAL",
+        status: "SUPPORTED",
+        value: { amount: "5" },
+      },
     ],
   },
 }
@@ -53,10 +69,18 @@ const marketPrice = {
 
 function makeCommission({ amount, asset, quoteValue } = {}) {
   return new Commission({
-    amount: new Money({ amount, asset }),
+    amount: new Money({
+      amount,
+      asset,
+    }),
     ...(quoteValue === undefined
       ? {}
-      : { quoteValue: new Money({ amount: quoteValue, asset: quoteAsset }) }),
+      : {
+        quoteValue: new Money({
+          amount: quoteValue,
+          asset: quoteAsset,
+        }),
+      }),
   })
 }
 
@@ -66,19 +90,38 @@ function createBuyFill() {
     brokerOrderId: "initial-buy-order",
     market,
     side: "BUY",
-    price: new Money({ amount: "0.1", asset: quoteAsset }),
-    quantity: new Quantity({ amount: "100", asset: baseAsset }),
-    quoteQuantity: new Money({ amount: "10", asset: quoteAsset }),
+    price: new Money({
+      amount: "0.1",
+      asset: quoteAsset,
+    }),
+    quantity: new Quantity({
+      amount: "100",
+      asset: baseAsset,
+    }),
+    quoteQuantity: new Money({
+      amount: "10",
+      asset: quoteAsset,
+    }),
     commissions: [
-      makeCommission({ amount: "0.1", asset: baseAsset }),
-      makeCommission({ amount: "0.01", asset: quoteAsset }),
-      makeCommission({ amount: "0.001", asset: thirdAsset, quoteValue: "0.02" }),
+      makeCommission({
+        amount: "0.1",
+        asset: baseAsset,
+      }),
+      makeCommission({
+        amount: "0.01",
+        asset: quoteAsset,
+      }),
+      makeCommission({
+        amount: "0.001",
+        asset: thirdAsset,
+        quoteValue: "0.02",
+      }),
     ],
     commissionStatus: "COMPLETE",
   })
 }
 
-function evaluate({ portfolio, recoveryLedger, lastBuyPrice } = {}) {
+function evaluateConservativeScenario({ portfolio, recoveryLedger, lastBuyPrice } = {}) {
   return evaluateConservativeStrategy({
     marketPrice,
     pairConfig,
@@ -95,14 +138,19 @@ test("composes the initial BUY, canonical fill accounting and exact recovery/sta
   let portfolio = new Portfolio()
   let recoveryLedger = RecoveryLedger.empty({ market })
 
-  const initialDecision = evaluate({ portfolio, recoveryLedger })
-  assert.deepEqual(initialDecision.actions, [{
-    side: "BUY",
-    type: "LIMIT_MAKER",
-    price: "0.099",
-    quantity: "100",
-    reason: "INITIAL_BUY",
-  }], "An empty valid Conservative position must produce exactly the configured initial BUY intent.")
+  const initialDecision = evaluateConservativeScenario({
+    portfolio,
+    recoveryLedger,
+  })
+  assert.deepEqual(initialDecision.actions, [
+    {
+      side: "BUY",
+      type: "LIMIT_MAKER",
+      price: "0.099",
+      quantity: "100",
+      reason: "INITIAL_BUY",
+    },
+  ], "An empty valid Conservative position must produce exactly the configured initial BUY intent.")
 
   const fill = createBuyFill()
   const accounting = updateTradingAccounting({
@@ -112,8 +160,12 @@ test("composes the initial BUY, canonical fill accounting and exact recovery/sta
   })
   assert.equal(accounting.ok, true, "The canonical initial BUY fill must commit through the production accounting use case.")
   assert.equal(accounting.data.applied, true, "The first BUY fill must be applied exactly once.")
-  portfolio = accounting.data.portfolio
-  recoveryLedger = accounting.data.recoveryLedger
+  const {
+    portfolio: accountedPortfolio,
+    recoveryLedger: accountedRecoveryLedger,
+  } = accounting.data
+  portfolio = accountedPortfolio
+  recoveryLedger = accountedRecoveryLedger
 
   const position = portfolio.getPosition({ marketId: market.id })
   assert.equal(position.baseQuantity.amount, "99.9", "The base commission must reduce active DOGE inventory.")
@@ -121,7 +173,7 @@ test("composes the initial BUY, canonical fill accounting and exact recovery/sta
   assert.equal(recoveryLedger.buyCost, "10.03", "RecoveryLedger must mirror the full commission-adjusted BUY basis.")
   assert.equal(recoveryLedger.netSellProceeds, "0", "No SELL proceeds exist before the first recovery SELL.")
 
-  const nextDecision = evaluate({
+  const nextDecision = evaluateConservativeScenario({
     portfolio,
     recoveryLedger,
     lastBuyPrice: "0.1",
