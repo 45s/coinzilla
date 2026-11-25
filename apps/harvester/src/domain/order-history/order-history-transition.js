@@ -238,10 +238,11 @@ function isDuplicateSourceEvent({ current, candidate } = {}) {
 }
 
 function preserveCumulativeQuoteQuantity({ current, candidate, merged } = {}) {
-  if (
-    current.cumulativeQuoteQuantity === undefined ||
-    candidate.cumulativeQuoteQuantity === undefined
-  ) {
+  if (candidate.cumulativeQuoteQuantity === undefined) {
+    merged.cumulativeQuoteQuantity = current.cumulativeQuoteQuantity
+    return
+  }
+  if (current.cumulativeQuoteQuantity === undefined) {
     return
   }
   const comparison = compareDecimal({
@@ -259,6 +260,8 @@ function createMergedOrderHistoryRecord({ current, candidate } = {}) {
     ...candidate,
     brokerOrderId: candidate.brokerOrderId ?? current.brokerOrderId,
     ownership: candidate.ownership ?? current.ownership,
+    originalQuantity: candidate.originalQuantity ?? current.originalQuantity,
+    price: candidate.price ?? current.price,
     createdAt: current.createdAt ?? candidate.createdAt,
     acknowledgedAt: current.acknowledgedAt ?? candidate.acknowledgedAt,
     firstSeenAt: current.firstSeenAt,
