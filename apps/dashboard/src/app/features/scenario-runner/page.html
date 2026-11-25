@@ -31,6 +31,9 @@
       <button type="button" (click)="refresh()">Refresh</button>\n      <button type="button" (click)="execute()">Replay with recorded inputs</button>
       <button type="button" (click)="cancel()">Cancel</button>
       <button type="button" (click)="copyDebugPackage()">Copy AI debug JSON</button>
+      @if (copied()) {
+        <p role="status">Debug package copied.</p>
+      }
     }
   </div>
   @if (history().length) {
@@ -73,8 +76,8 @@
     </section>
   }
   @if (run()) {
-    <details>
-      <summary>AI Debug JSON</summary>
+    <details open>
+      <summary>AI Debug JSON (complete available run evidence)</summary>
       <pre>{{ debugText }}</pre>
     </details>
   }
