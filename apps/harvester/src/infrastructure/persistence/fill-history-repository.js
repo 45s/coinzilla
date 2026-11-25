@@ -388,26 +388,38 @@ function decimalFactsMatch({ left, right } = {}) {
   if (leftMissing || rightMissing) {
     return leftMissing && rightMissing
   }
-  return compareDecimal({ left, right }) === 0
+  return compareDecimal({
+    left,
+    right,
+  }) === 0
 }
 
 function commissionFactsMatch({ existing, candidate } = {}) {
-  return existing.length === candidate.length && existing.every((commission, index) => {
+  if (existing.length !== candidate.length) {
+    return false
+  }
+  for (let index = 0; index < existing.length; index += 1) {
+    const commission = existing[index]
     const incoming = candidate[index]
-    return commission.ordinal === incoming.ordinal &&
-      commission.asset_id === incoming.asset_id &&
-      commission.asset_code === incoming.asset_code &&
-      decimalFactsMatch({
+    if (
+      commission.ordinal !== incoming.ordinal ||
+      commission.asset_id !== incoming.asset_id ||
+      commission.asset_code !== incoming.asset_code ||
+      !decimalFactsMatch({
         left: commission.amount,
         right: incoming.amount,
-      }) &&
-      decimalFactsMatch({
+      }) ||
+      !decimalFactsMatch({
         left: commission.quote_value_amount,
         right: incoming.quote_value_amount,
-      }) &&
-      commission.quote_value_asset_id === incoming.quote_value_asset_id &&
-      commission.quote_value_asset_code === incoming.quote_value_asset_code
-  })
+      }) ||
+      commission.quote_value_asset_id !== incoming.quote_value_asset_id ||
+      commission.quote_value_asset_code !== incoming.quote_value_asset_code
+    ) {
+      return false
+    }
+  }
+  return true
 }
 
 function assertDuplicateMatches({ transaction, existing, candidate } = {}) {
