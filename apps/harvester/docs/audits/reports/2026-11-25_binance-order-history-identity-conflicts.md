@@ -44,6 +44,33 @@ The exact stack is:
 
 The immutable price assertion runs before the broker-order-ID assertion. Thus a price mismatch can mask whether the persisted row also carried a different exchange order ID.
 
+### Sanitized runtime excerpts
+
+The surrounding Harvester log records successful market-rule validation for DOGEUSDT, ADAUSDT and LINEAUSDT at 18:17:31.359Z, 18:17:31.626Z and 18:17:31.898Z. At 18:17:44.608Z it records:
+
+> ERROR — Exchange history synchronization failed; historical coverage is incomplete
+
+> provider=binance / instance=binanceTestnet / account=binance-primary / environment=testnet / symbol=ZROUSDT / brokerOrderId=661748 / clientOrderId=h-ZROUSDT-1 / failureStage=ORDER_RECORD_PERSIST / errorCode=HARVESTER_ACCOUNT_HISTORY_SYNC_FAILED
+
+The same diagnostic's failures array contains both records:
+
+- ZROUSDT: cursor 0, recordIndex 1000, lastPersistedOrderId 661725, errorCode HARVESTER_ORDER_HISTORY_IDENTITY_CONFLICT.
+- DOGEUSDT: cursor 0, recordIndex 53, lastPersistedOrderId 1193586, errorCode HARVESTER_ORDER_HISTORY_IDENTITY_CONFLICT.
+
+The nested causes for both records contain the exact message “Order-history integrity conflict: price”. The same event is present at line 24 of trace(2).log. Immediately afterward, the Harvester log records “Broker user-data delivery established” at 18:17:45.157Z and “Exchange account snapshot loaded” at 18:17:45.443Z; the history failure therefore did not stop those later startup steps, but it correctly left history coverage incomplete.
+
+The relevant nested stack frames from trace(2).log are:
+
+- assertOptionalEqualField — order-history-transition.js:39
+- assertImmutableOrderFacts — order-history-transition.js:70
+- mergeOrderHistoryRecords — order-history-transition.js:197
+- upsertOrder — relational-order-repository.js:104
+- persistCanonicalOrder — sync-orders.js
+- persistOrderPage — sync-orders.js
+- synchronizeOrders — sync-orders.js
+- synchronizeAccountHistory — sync-acc-history.js
+- synchronizeStartupExchangeHistory — start-harvester.js
+
 ### Evidence provenance and integrity
 
 | Recovered artifact | Size | SHA-256 |
