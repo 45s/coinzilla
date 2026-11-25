@@ -41,7 +41,15 @@ Planned scenario behaviors include initial BUY fill → standing BUY and recover
 - The worked sequence checks partial and cumulative SELL accounting with base-, quote- and valued third-asset commissions; exact remaining base quantity; preservation of the full BUY cost basis; cumulative net quote proceeds; outstanding recovery; realized net profit; and identical canonical Fill identity histories across both projections.
 - Additional cases assert duplicate SELL no-op behavior, changed commission facts rejected without mutation, and an unvalued third-asset SELL fee rejected without partial projection commit. The first strict-ESLint run identified one oversized test callback; it was split into focused duplicate and conflict cases without changing assertions.
 - The test is registered in `config.targetedTestFiles`. Expected-value arithmetic is explicit decimal literals, independently derived from the Fill facts; no production behavior or strategy rules change.
-- Status: implementation committed to the task branch; exact-head Harvester/Repository Quality and full required CI verification are pending. Do not count this row as COVERED until merged and exact-head CI passes.
+- Exact-head CI: all six required workflows passed on `f600079d1de03385dfd373b703cabab88c6b7c11` (Harvester Targeted Tests, Unit Tests, Test Coverage, Dependency Audit, Repository Quality and External Documentation Links). The row remains pending merge before it is counted as merged coverage.
+
+
+### 2026-11-25 — Recovery completion: validated dust retention
+
+- Added explicit successful-completion cases for all three supported exchange-constrained dust reasons: `MIN_QUANTITY`, `MIN_NOTIONAL`, and `QUANTITY_INCREMENT`.
+- Each case supplies a residual of `0.1` above `keepQuantity = 1`, proves the exact filter evidence is accepted, and asserts retained/free allocation is `1.1` (configured keep plus dust bonus), with the dust evidence preserved in the result.
+- Existing invalid-evidence cases continue to assert fail-closed behavior. No production behavior or strategy rule changed.
+- Exact-head CI for this follow-up is pending; do not count it as covered until the new head passes and the PR is merged.
 
 ## Existing behavior-to-test inventory
 
