@@ -1,11 +1,12 @@
 import { realpathSync, statSync } from "node:fs"
-import { dirname, extname, isAbsolute, relative, resolve, sep } from "node:path"
+import { extname, isAbsolute, relative, resolve as resolvePath, sep } from "node:path"
 import { fileURLToPath } from "node:url"
 
 const DEFAULT_TERMINATION_GRACE_MS = 250
 const DEFAULT_MAX_OUTPUT_BYTES = 1_048_576
 const TERMINATION_PROMISES = new WeakMap()
 const DEFAULT_WORKER_PATH = fileURLToPath(new URL("./scenario-worker.js", import.meta.url))
+const WORKER_DIRECTORY = realpathSync(fileURLToPath(new URL(".", import.meta.url)))
 const REQUIRED_SANDBOX_PROFILE = Object.freeze({
   networkAccess: "deny",
   filesystemAccess: "read-only-allowlisted-runtime",
@@ -258,6 +259,26 @@ function createExecutionPromise({
  * filesystem, network, process or memory isolation itself.
  */
 
+
+function resolveWorkerScriptPath({ workerPath }) {
+  let resolvedWorkerPath
+  try {
+    resolvedWorkerPath = realpathSync(resolvePath(workerPath))
+  } catch {
+    throw new TypeError("Process scenario worker path must resolve inside the scenario worker directory")
+  }
+  const relativeWorkerPath = relative(WORKER_DIRECTORY, resolvedWorkerPath)
+  const outsideWorkerDirectory = relativeWorkerPath === ".." ||
+    relativeWorkerPath.startsWith(`..${sep}`) ||
+    isAbsolute(relativeWorkerPath)
+  const regularJavaScriptFile = extname(resolvedWorkerPath) === ".js" &&
+    statSync(resolvedWorkerPath).isFile()
+  if (outsideWorkerDirectory || !regularJavaScriptFile) {
+    throw new TypeError("Process scenario worker path must be inside the scenario worker directory and use .js")
+  }
+  return resolvedWorkerPath
+}
+
 function validateProcessScenarioAdapterOptions({
   strategyId,
   spawnSandboxedWorker,
@@ -280,25 +301,10 @@ function validateProcessScenarioAdapterOptions({
   if (!Number.isSafeInteger(maxOutputBytes) || maxOutputBytes < 1) {
     throw new RangeError("Worker output limit must be a positive safe integer")
   }
-  let resolvedWorkerPath
-  try {
-    resolvedWorkerPath = realpathSync(resolve(workerPath))
-  } catch {
-    throw new TypeError("Process scenario worker path must resolve inside the scenario worker directory")
-  }
-  const workerDirectory = realpathSync(dirname(DEFAULT_WORKER_PATH))
-  const relativeWorkerPath = relative(workerDirectory, resolvedWorkerPath)
-  const outsideWorkerDirectory = relativeWorkerPath === ".." ||
-    relativeWorkerPath.startsWith(`..${sep}`) ||
-    isAbsolute(relativeWorkerPath)
-  if (outsideWorkerDirectory || extname(resolvedWorkerPath) !== ".js" ||
-      !statSync(resolvedWorkerPath).isFile()) {
-    throw new TypeError("Process scenario worker path must be inside the scenario worker directory and use .js")
-  }
   return {
     strategyId,
     spawnSandboxedWorker,
-    workerPath: resolvedWorkerPath,
+    workerPath: resolveWorkerScriptPath({ workerPath }),
     terminationGraceMs,
     maxOutputBytes,
   }
