@@ -224,4 +224,3 @@ Bitunix Spot exposes partial query operations and a limited, explicitly gated le
 ## Strategy-neutral production-flow Scenario Runner — issue #1836
 
 Open Draft [PR #1837](https://github.com/45s/coinzilla/pull/1837) contains the MVP implementation. It is strategy-neutral and the Dashboard business/application logic remains framework-independent; Angular is only the presentation adapter. All six required workflows passed on exact head `cdeef1ab862f08bf0ed1e724acd8f765cf21e9dd`, but the branch is 111 commits ahead / 42 behind current `develop`. The branch must be synchronized and the remaining MVP acceptance (complete replay/trace/report, configuration/market metadata, reconnect/history behavior and OS-level process isolation) must be completed before review/merge. No executable RS adapter registration, real broker/exchange operations, credentials, live account state or production persistence are authorized by this MVP.
-
