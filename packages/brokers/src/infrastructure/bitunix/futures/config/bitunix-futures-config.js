@@ -84,7 +84,7 @@ function validateSafetyOptions({ requestTimeout, allowLiveOrderMutations, allowL
 /** Validated configuration for the Bitunix USDT-margined Futures API. */
 export class BitunixFuturesConfig {
   /**
-   * @param {{apiKey: string, apiSecret: string, tradingMode: "live", baseUrl?: string, publicWebSocketUrl?: string, privateWebSocketUrl?: string, requestTimeout?: number, allowLiveOrderMutations?: boolean, allowLiveAccountMutations?: boolean}} input
+   * @param {{apiKey: string, apiSecret: string, tradingMode: "live", baseUrl?: string, publicWebSocketUrl?: string, privateWebSocketUrl?: string, requestTimeout?: number, allowLiveOrderMutations?: boolean, allowLiveAccountMutations?: boolean, allowLivePositionMutations?: boolean}} input
    */
   constructor(input = {}) {
     validateConfigurationInput({
