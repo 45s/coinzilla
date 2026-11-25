@@ -78,6 +78,26 @@ describe('framework-independent Scenario Runner application', () => {
     expect(workspace.history[0].runId).toBe('run-1');
   });
 
+  it('selects the first scenario and its defaults without framework state', async () => {
+    await application.loadWorkspace();
+
+    expect(application.selectStrategy({ strategyId: 'RS' })).toEqual({
+      scenarioId: scenario.id,
+      inputJson: JSON.stringify(scenario.defaultInput, null, 2),
+    });
+  });
+
+  it('loads selected scenario defaults from the strategy-owned catalogue', async () => {
+    await application.loadWorkspace();
+
+    expect(application.selectScenario({
+      strategyId: 'RS',
+      scenarioId: preliminaryScenario.id,
+    })).toEqual({
+      inputJson: JSON.stringify(preliminaryScenario.defaultInput, null, 2),
+    });
+  });
+
   it('fails closed for preliminary scenarios without submitting a run', async () => {
     await expect(application.submitRun({
       strategyId: 'RS',
