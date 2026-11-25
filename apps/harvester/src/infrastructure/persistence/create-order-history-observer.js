@@ -30,6 +30,7 @@ function createOrderIdentityContext(data) {
     providerInstanceId: data.providerInstanceId ?? null,
     accountId: data.accountId ?? null,
     clientOrderId: data.clientOrderId ?? null,
+    brokerOrderId: data.brokerOrderId ?? null,
   }
 }
 
@@ -65,6 +66,31 @@ function getSafeValidationField(error) {
   return field
 }
 
+function getSafeConflictDetails(error) {
+  const context = error?.context ?? {}
+  const details = {}
+  for (const key of [
+    "brokerOrderId",
+    "existingBrokerOrderId",
+    "incomingBrokerOrderId",
+    "marketId",
+    "existingValue",
+    "incomingValue",
+    "existingSource",
+    "incomingSource",
+  ]) {
+    const value = context[key]
+    if (
+      (typeof value === "string" && value.length <= 128) ||
+      (typeof value === "number" && Number.isFinite(value)) ||
+      typeof value === "boolean"
+    ) {
+      details[key] = value
+    }
+  }
+  return details
+}
+
 function createFailureDiagnostic({ error, event, stage } = {}) {
   const normalized = createObserverError({
     error,
@@ -80,6 +106,7 @@ function createFailureDiagnostic({ error, event, stage } = {}) {
     errorName: normalized.name,
     errorCode: normalized.code ?? "HARVESTER_ORDER_HISTORY_PERSISTENCE_FAILED",
     ...(field ? { field } : {}),
+    ...getSafeConflictDetails(normalized),
     ...createEventContext(event),
   }
 }

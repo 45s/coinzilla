@@ -12,13 +12,41 @@ const STATUS_PRIORITY = Object.freeze({
   FILLED: 5,
 })
 
-function integrityError({ field, current } = {}) {
-  throw new OrderHistoryIntegrityError({
+function isSafeConflictValue(value) {
+  return (
+    (typeof value === "string" && value.length <= 128) ||
+    (typeof value === "number" && Number.isFinite(value)) ||
+    typeof value === "boolean"
+  )
+}
+
+function integrityError({ field, current, candidate } = {}) {
+  const context = {
     field,
     providerInstanceId: current.providerInstanceId,
+    providerType: current.providerType,
     accountId: current.accountId,
+    environment: current.environment,
+    marketId: current.market?.id ?? candidate?.market?.id,
+    symbol: current.symbol ?? candidate?.symbol,
     clientOrderId: current.clientOrderId,
-  })
+    brokerOrderId: candidate?.brokerOrderId ?? current.brokerOrderId,
+    existingBrokerOrderId: current.brokerOrderId,
+    incomingBrokerOrderId: candidate?.brokerOrderId,
+    existingSource: current.lastSourceEventSource,
+    incomingSource: candidate?.lastSourceEventSource,
+  }
+  if (candidate !== undefined) {
+    const existingValue = current[field]
+    const incomingValue = candidate[field]
+    if (isSafeConflictValue(existingValue)) {
+      context.existingValue = existingValue
+    }
+    if (isSafeConflictValue(incomingValue)) {
+      context.incomingValue = incomingValue
+    }
+  }
+  throw new OrderHistoryIntegrityError(context)
 }
 
 function assertEqualField({ current, candidate, field } = {}) {
@@ -26,6 +54,7 @@ function assertEqualField({ current, candidate, field } = {}) {
     integrityError({
       field,
       current,
+      candidate,
     })
   }
 }
@@ -39,6 +68,7 @@ function assertOptionalEqualField({ current, candidate, field } = {}) {
     integrityError({
       field,
       current,
+      candidate,
     })
   }
 }
@@ -65,6 +95,7 @@ function assertImmutableOrderFacts({ current, candidate } = {}) {
     integrityError({
       field: "market",
       current,
+      candidate,
     })
   }
   assertOptionalEqualField({
@@ -95,6 +126,7 @@ function assertImmutableOrderFacts({ current, candidate } = {}) {
     integrityError({
       field: "ownership",
       current,
+      candidate,
     })
   }
 }
@@ -135,6 +167,7 @@ function isDuplicateSourceEvent({ current, candidate } = {}) {
     integrityError({
       field: "sourceEventId",
       current,
+      candidate,
     })
   }
   return true
