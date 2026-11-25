@@ -282,7 +282,7 @@ test("runner retains a blocked run when the bounded queue is full", async () => 
   assert.ok(runner.listRuns().some((run) => run.runId === blocked.runId),
     "A blocked submission must remain visible in bounded run history.")
 
-  await runner.close()
+  await assert.rejects(runner.close(), /cleanup could not be confirmed/)
 })
 
 test("runner rejects new submissions when bounded history is occupied by active runs", async () => {
