@@ -286,55 +286,117 @@ function migrateHistorySyncCursors(transaction) {
   `)
 }
 
-function extractCreateTableSql({ tableName, nextIndexName } = {}) {
-  const start = CREATE_RELATIONAL_TABLES_SQL.indexOf(`  CREATE TABLE ${tableName} (`)
-  const end = CREATE_RELATIONAL_TABLES_SQL.indexOf(`  CREATE INDEX ${nextIndexName}`, start)
-  if (start < 0 || end < 0) {
-    throw new Error(`Unable to rebuild the ${tableName} table for the order-identity migration.`)
-  }
-  return CREATE_RELATIONAL_TABLES_SQL.slice(start, end).trim().replace(/;$/, "")
-}
-
-function createOrderIdentityMigrationTableSql() {
-  const ordersSql = extractCreateTableSql({
-    tableName: "orders",
-    nextIndexName: "orders_exchange_lookup_idx",
-  })
-    .replace("CREATE TABLE orders (", "CREATE TABLE orders_v5 (")
-    .replace(
-      "    UNIQUE (environment, provider_instance_id, provider_type, account_id, client_order_id)\n  )",
-      `    ingestion_source TEXT NOT NULL DEFAULT 'live_event'
+const CREATE_ORDER_IDENTITY_MIGRATION_TABLES_SQL = `
+CREATE TABLE orders_v5 (
+    id TEXT PRIMARY KEY,
+    provider_type TEXT NOT NULL,
+    provider_instance_id TEXT NOT NULL,
+    account_id TEXT NOT NULL,
+    environment TEXT NOT NULL CHECK (environment IN ('testnet', 'live')),
+    market_id TEXT NOT NULL,
+    market_venue TEXT NOT NULL,
+    symbol TEXT NOT NULL,
+    base_asset_id TEXT NOT NULL,
+    base_asset_code TEXT NOT NULL,
+    quote_asset_id TEXT NOT NULL,
+    quote_asset_code TEXT NOT NULL,
+    exchange_order_id TEXT,
+    client_order_id TEXT NOT NULL,
+    strategy_id TEXT,
+    position_id TEXT,
+    ownership_purpose TEXT,
+    cycle_id TEXT,
+    side TEXT NOT NULL CHECK (side IN ('BUY', 'SELL')),
+    order_type TEXT NOT NULL,
+    limit_price TEXT,
+    average_execution_price TEXT,
+    original_quantity TEXT NOT NULL,
+    executed_quantity TEXT NOT NULL,
+    cumulative_quote_quantity TEXT,
+    remaining_quantity TEXT NOT NULL,
+    status TEXT NOT NULL,
+    exchange_created_at TEXT,
+    exchange_acknowledged_at TEXT,
+    exchange_updated_at TEXT,
+    exchange_completed_at TEXT,
+    exchange_transaction_at TEXT,
+    local_first_observed_at TEXT NOT NULL,
+    local_last_observed_at TEXT NOT NULL,
+    first_source_event_id TEXT NOT NULL,
+    last_source_event_id TEXT NOT NULL,
+    last_source_event_name TEXT NOT NULL,
+    last_source_event_source TEXT NOT NULL,
+    last_source_event_timestamp TEXT NOT NULL,
+    source_kind TEXT NOT NULL CHECK (source_kind IN ('legacy_harvester_orders', 'live_order_event')),
+    last_observed_source_kind TEXT NOT NULL CHECK (last_observed_source_kind IN ('legacy_harvester_orders', 'live_order_event')),
+    source_record_id TEXT,
+    migrated_at TEXT,
+    last_execution_type TEXT,
+    ingestion_source TEXT NOT NULL DEFAULT 'live_event'
       CHECK (ingestion_source IN ('live_event', 'exchange_history', 'legacy_migration')),
     last_ingestion_source TEXT NOT NULL DEFAULT 'live_event'
       CHECK (last_ingestion_source IN ('live_event', 'exchange_history', 'legacy_migration'))
-  )`,
-    )
-  const fillsSql = extractCreateTableSql({
-    tableName: "fills",
-    nextIndexName: "fills_market_time_idx",
-  })
-    .replace("CREATE TABLE fills (", "CREATE TABLE fills_v5 (")
-    .replace("REFERENCES orders(id)", "REFERENCES orders_v5(id)")
-    .replace(
-      "    UNIQUE (provider_type, provider_instance_id, account_id, environment, market_id, exchange_trade_id)\n  )",
-      `    ingestion_source TEXT NOT NULL DEFAULT 'live_event'
+  );
+
+CREATE TABLE fills_v5 (
+    id TEXT PRIMARY KEY,
+    canonical_fill_id TEXT NOT NULL,
+    provider_type TEXT NOT NULL,
+    provider_instance_id TEXT NOT NULL,
+    account_id TEXT NOT NULL,
+    environment TEXT NOT NULL CHECK (environment IN ('testnet', 'live')),
+    market_id TEXT NOT NULL,
+    symbol TEXT NOT NULL,
+    exchange_trade_id TEXT NOT NULL,
+    exchange_order_id TEXT NOT NULL,
+    client_order_id TEXT,
+    order_id TEXT REFERENCES orders_v5(id) ON DELETE RESTRICT,
+    strategy_id TEXT,
+    position_id TEXT,
+    cycle_id TEXT,
+    side TEXT NOT NULL CHECK (side IN ('BUY', 'SELL')),
+    execution_price TEXT NOT NULL,
+    executed_base_quantity TEXT NOT NULL,
+    executed_quote_quantity TEXT NOT NULL,
+    liquidity_role TEXT NOT NULL,
+    commission_status TEXT NOT NULL,
+    exchange_executed_at TEXT,
+    local_observed_at TEXT NOT NULL,
+    last_observed_at TEXT NOT NULL,
+    source_kind TEXT NOT NULL CHECK (source_kind = 'live_fill_applied'),
+    source_event_id TEXT NOT NULL,
+    last_source_event_id TEXT NOT NULL,
+    source_event_name TEXT NOT NULL,
+    source_event_source TEXT NOT NULL,
+    source_event_timestamp TEXT NOT NULL,
+    ingestion_source TEXT NOT NULL DEFAULT 'live_event'
       CHECK (ingestion_source IN ('live_event', 'exchange_history')),
     last_ingestion_source TEXT NOT NULL DEFAULT 'live_event'
       CHECK (last_ingestion_source IN ('live_event', 'exchange_history')),
     UNIQUE (provider_type, provider_instance_id, account_id, environment, market_id, exchange_trade_id)
-  )`,
+  );
+
+CREATE TABLE fill_commissions_v5 (
+    id INTEGER PRIMARY KEY,
+    fill_id TEXT NOT NULL REFERENCES fills_v5(id) ON DELETE CASCADE,
+    ordinal INTEGER NOT NULL CHECK (ordinal >= 0),
+    amount TEXT NOT NULL,
+    asset_id TEXT NOT NULL,
+    asset_code TEXT NOT NULL,
+    quote_value_amount TEXT,
+    quote_value_asset_id TEXT,
+    quote_value_asset_code TEXT,
+    UNIQUE (fill_id, ordinal),
+    CHECK (
+      (quote_value_amount IS NULL AND quote_value_asset_id IS NULL AND quote_value_asset_code IS NULL)
+      OR
+      (quote_value_amount IS NOT NULL AND quote_value_asset_id IS NOT NULL AND quote_value_asset_code IS NOT NULL)
     )
-  const commissionsSql = extractCreateTableSql({
-    tableName: "fill_commissions",
-    nextIndexName: "fill_commissions_asset_idx",
-  })
-    .replace("CREATE TABLE fill_commissions (", "CREATE TABLE fill_commissions_v5 (")
-    .replace("REFERENCES fills(id)", "REFERENCES fills_v5(id)")
-  return [ordersSql, fillsSql, commissionsSql].join(";\n")
-}
+  );
+`
 
 function migrateMarketScopedExchangeOrderIdentity(transaction) {
-  transaction.exec(createOrderIdentityMigrationTableSql())
+  transaction.exec(CREATE_ORDER_IDENTITY_MIGRATION_TABLES_SQL)
   transaction.exec(`
     INSERT INTO orders_v5 SELECT * FROM orders;
     INSERT INTO fills_v5 SELECT * FROM fills;
