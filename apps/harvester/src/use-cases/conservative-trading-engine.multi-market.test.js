@@ -226,6 +226,7 @@ function createHarnessEnginePorts({
   recoveryLedgersByMarket,
   metadataBySymbol,
   quoteFreeBalance,
+  baseFreeBalance,
   accountedFillIds,
   accountedFills,
   pauses,
@@ -239,7 +240,7 @@ function createHarnessEnginePorts({
     getMarketMetadata: ({ symbol }) => metadataBySymbol.get(symbol),
     getAccountSnapshot: () => ({
       getFreeBalance: ({ assetId }) => new Quantity({
-        amount: assetId === quoteAsset.id ? quoteFreeBalance : "10000",
+        amount: assetId === quoteAsset.id ? quoteFreeBalance : baseFreeBalance,
         asset: assetsById.get(assetId),
       }),
       getPortfolioBaseQuantityBaseline: () => "0",
@@ -286,6 +287,7 @@ function createHarnessEngine({
   recoveryLedgersByMarket,
   metadataBySymbol,
   quoteFreeBalance,
+  baseFreeBalance,
   accountedFillIds,
   accountedFills,
   pauses,
@@ -304,6 +306,7 @@ function createHarnessEngine({
       recoveryLedgersByMarket,
       metadataBySymbol,
       quoteFreeBalance,
+      baseFreeBalance,
       accountedFillIds,
       accountedFills,
       pauses,
@@ -332,6 +335,7 @@ async function initializeHarnessBooks({ engine, symbols = ["DOGEUSDT", "SOLUSDT"
 
 async function createHarness({
   quoteFreeBalance = "10000",
+  baseFreeBalance = "10000",
   portfolio: initialPortfolio,
   initialState,
   strategyPolicy = conservativeStrategyPolicy,
@@ -368,6 +372,7 @@ async function createHarness({
     recoveryLedgersByMarket,
     metadataBySymbol,
     quoteFreeBalance,
+    baseFreeBalance,
     accountedFillIds,
     accountedFills,
     pauses,
@@ -2347,6 +2352,62 @@ test("RS-008-018-A: RS-owned quote reservation blocks CG BUY across markets", as
   )
 })
 
+
+
+function createRecoverySellerSharedBaseReservationRegistry() {
+  const market = marketsBySymbol.get("DOGEUSDT")
+  const order = createVolatilityCancellationOrder({
+    market,
+    clientOrderId: "rs-shared-base-reservation",
+    brokerOrderId: "broker-rs-shared-base-reservation",
+    side: "SELL",
+  })
+  return new OrderRegistry({
+    orders: [order],
+    ownerships: [{
+      clientOrderId: order.clientOrderId,
+      strategyId: StrategyId.RECOVERY_SELLER,
+      positionId: "rs-shared-base-position",
+      purpose: "RECOVERY_SELL",
+    }],
+  })
+}
+
+test("RS-008-018-F: runtime CG SELL is rejected when an RS SELL reserves all shared free base", async () => {
+  const market = marketsBySymbol.get("DOGEUSDT")
+  const { portfolio, recoveryLedger } = createOperatorPauseRecoveryPosition({ market })
+  const orderRegistry = createRecoverySellerSharedBaseReservationRegistry()
+  const initialState = { orderRegistry }
+  const harness = await createHarness({
+    baseFreeBalance: "0",
+    portfolio,
+    strategyPolicy: createOperatorPauseStrategyPolicy(),
+    recoveryLedgersByMarket: new Map([[market.id, recoveryLedger]]),
+    initialState,
+  })
+
+  const result = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 2 },
+  })
+
+  assert.equal(result.ok, false,
+    "The actual Conservative runtime must reject a SELL when the RS-owned active SELL reservation exhausts shared free base.")
+  assert.match(result.errors[0].message, /available free base balance after commitments/,
+    "The rejection must identify the shared account base commitment boundary.")
+  assert.equal(harness.orders.length, 0,
+    "No additional CG SELL or BUY may be submitted after the account allocation fails closed.")
+  assert.equal(harness.engine.getOrders().length, 1,
+    "The existing RS SELL must remain the only registered order.")
+  assert.equal(initialState.orderRegistry.getOrder({
+    clientOrderId: "rs-shared-base-reservation",
+  }).status, "OPEN",
+  "The existing RS reservation must remain active and unchanged.")
+  assert.equal(initialState.orderRegistry.getOwnership({
+    clientOrderId: "rs-shared-base-reservation",
+  }).strategyId, StrategyId.RECOVERY_SELLER,
+  "The reservation must retain RS ownership; CG must not adopt it.")
+})
 
 test("RS-008-018-E: concurrent CG BUY intents serialize against a shared RS quote reservation", async () => {
   const orderRegistry = createRecoverySellerSharedQuoteReservationRegistry()
