@@ -624,7 +624,7 @@ The schema intentionally separates *business input* from *derived oracle*. Tests
 ### RS-003 — A mixed recovery/legacy SELL uses the additive legacy slice
 The accounting workflow-to-default-evaluator defect is addressed by merged [PR #1815](https://github.com/45s/coinzilla/pull/1815), merge commit `cbf07da54fd2e14fbeb3f96d4d9f8efe48d597c2`. All six workflows passed on its exact PR head `20963617c9d9d73c31b47865e0aa34c4a966cc8e`.
 
-**Status:** PARTIAL — existing planner and accounting scenarios plus merged PR #1815 prove canonical BUY-derived recovery inventory, Spot-verified additive legacy quantity, the independent ZRO proceeds oracle, smaller eligible Spot remainder, missing-custody fail-closed behavior, same-market active SELL reservation, minimum-notional rejection, no-submit boundaries, and real workflow/default-evaluator success and safety precedence. PR #1823 adds three registered DOMAIN cases RS-003-001…003 for the exact additive slice, smaller authorized legacy remainder, and recovery-only planning after legacy exhaustion. Their named tests passed on exact head `cc3693c320179a823290bef889f52f3a66068d56` before registry synchronization; the registry-integrated cases are being validated on the newer PR head. These three cases derive average cost from invested / quantity and assert exact planner outputs. They do not prove the full inventory/custody composition or the remaining RS-003 matrix. Keep the family PARTIAL.
+**Status:** PARTIAL — existing planner/accounting scenarios and merged PR #1815 prove canonical BUY-derived recovery inventory, Spot-verified additive legacy quantity, the independent ZRO proceeds oracle, smaller eligible Spot remainder, missing-custody fail-closed behavior, same-market active SELL reservation, minimum-notional rejection, no-submit boundaries, and real workflow/default-evaluator success and safety precedence. PR #1823 adds registered DOMAIN cases RS-003-001…005: additive legacy slice, smaller authorized remainder, recovery-only planner after exhaustion, below/equal/above verified Spot allocation, and shared Portfolio subtraction across markets and CG/RS positions. All eight named tests in `mixed-sell-planning.scenario.test.js` passed on exact head `d7ac4e385bc41bb0be16e3473d22861a2a983db8`; full six-workflow exact-head verification is pending. The planner oracle derives legacy average cost from invested / quantity; no average-cost config input exists. These cases do not prove cross-market order reservations, complete TradingRules boundaries, fee allocation, partial/multiple fills, durable reservation, precision failure or dust. Keep the family PARTIAL.
 
 **Behavior:** Conceptual SELL quantity is actual net recovery quantity plus the configured legacy `sellQuantity`, limited by the authorized remaining legacy amount that is verified, Spot-available and unreserved. `sellQuantity` is additive, not total quantity or a cap.
 
@@ -650,6 +650,12 @@ The accounting workflow-to-default-evaluator defect is addressed by merged [PR #
 - `recovery-seller-mixed-sell-accounting.scenario.test.js`
   - `one 401 DOGE canonical SELL Fill allocates 400 DOGE to recovery and 1 DOGE to legacy`
   - `recovery and legacy allocations must sum exactly to the canonical SELL Fill quantity`
+- `recovery-seller/mixed-sell-planning.scenario.test.js`
+  - `RS-003-001: the mixed SELL adds the authorized legacy slice to canonical recovery inventory`
+  - `RS-003-002: the mixed SELL uses only the smaller authorized legacy remainder`
+  - `RS-003-003: exhausted legacy inventory produces a recovery-only SELL plan`
+  - `RS-003-004: verified Spot availability below, equal to, and above the required legacy slice is capped exactly`
+  - `RS-003-005: verified Spot allocation subtracts every shared Portfolio position across markets and strategies`
 
 **Remaining:** cross-market/shared account reservations; full canonical inventory/custody composition for legacy exhaustion; partial and multiple fills; base/quote/mixed commission allocation; exchange tick/step/min/max boundaries beyond the existing minimum-notional case; durable reservation/commit behavior; precision failure; constrained-dust classification and exclusion.
 
