@@ -280,10 +280,12 @@ export const recoverySellerMixedSellPlanningScenarios = Object.freeze([
         ...input,
       })),
     },
-    expected: spotAllocationCases.map(({ id, expected }) => ({
-      id,
-      allocations: expected,
-    })),
+    expected: {
+      cases: spotAllocationCases.map(({ id, expected }) => ({
+        id,
+        allocations: expected,
+      })),
+    },
     subcases: spotAllocationCases.map(({ id }) => ({
       id: `RS-003-004-${id === "below" ? "A" : id === "equal" ? "B" : "C"}`,
       description: `verified Spot custody is ${id} the required legacy slice`,

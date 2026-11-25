@@ -302,12 +302,14 @@ async function assertRegisteredSpotScenario({ id }) {
       "calculate-mixed-sell-plan": calculatePlan,
       "calculate-verified-legacy-spot-allocation": ({ input }) => {
         if (Array.isArray(input.cases)) {
-          return input.cases.map(({ id: caseId, ...caseInput }) => ({
-            id: caseId,
-            allocations: calculateSpotAllocation({
-              input: caseInput,
-            }),
-          }))
+          return {
+            cases: input.cases.map(({ id: caseId, ...caseInput }) => ({
+              id: caseId,
+              allocations: calculateSpotAllocation({
+                input: caseInput,
+              }),
+            })),
+          }
         }
         return {
           allocations: calculateSpotAllocation({ input }),
