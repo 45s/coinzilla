@@ -311,7 +311,7 @@ function findOrderReference({ transaction, fill } = {}) {
       marketId: fill.market_id,
     })
   }
-  const order = matches[0]
+  const [order] = matches
   if (order !== undefined) {
     assertOrderReferenceMatches({
       order,
