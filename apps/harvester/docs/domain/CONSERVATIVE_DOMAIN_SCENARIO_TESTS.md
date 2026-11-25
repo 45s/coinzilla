@@ -121,6 +121,6 @@ pnpm --filter @coinzilla/harvester scenarios:conservative -- --status MISSING
 pnpm --filter @coinzilla/harvester scenarios:conservative -- --list
 ```
 
-Reports are generated under `reports/conservative-scenarios/`: inventory, execution results, and coverage gaps. The dedicated `Harvester Conservative scenarios` workflow uploads these reports. The suite executes existing named Node tests; it does not perform broker or exchange operations.
+Reports are generated under `reports/conservative-scenarios/`: inventory, execution results, and coverage gaps. The existing `Harvester Targeted Tests` workflow runs this suite only when Conservative scenario-related paths change and uploads these reports. The suite executes existing named Node tests; it does not perform broker or exchange operations.
 
 The initial inventory contains 18 scenarios across all 16 categories: 15 TEST-MAPPED, one PARTIAL configuration scenario, one MISSING startup-history-gate scenario (CON-PERSIST-003), and one UNSUPPORTED runtime-restoration scenario. TEST-MAPPED means only that named tests are linked; it is not equivalent to VERIFIED. Runtime restart/state restoration remains UNSUPPORTED under the active Conservative specification §7. The coverage report's unmapped-test universe is the named test set in `docs/critical-behaviors.json`, not every Harvester test file.
