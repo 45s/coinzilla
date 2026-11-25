@@ -1,6 +1,6 @@
 import nodeTest from "node:test"
 import assert from "node:assert/strict"
-import { StrategyId } from "../../domain/strategies/strategy-ids.js"
+import { StrategyId } from "../domain/strategies/strategy-ids.js"
 import { createMarketPriceErrorHandler } from "./create-market-price-error-handler.js"
 
 const test = (...args) => nodeTest(`[create-market-price-error-handler.test.js] ${args[0]}`, ...args.slice(1))

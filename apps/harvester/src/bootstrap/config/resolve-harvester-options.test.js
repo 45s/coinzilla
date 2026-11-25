@@ -469,8 +469,14 @@ test("does not assign a strategy owner when both strategies explicitly route the
     ...fixture.input,
     executionSymbols: ["BTCUSDT"],
     executionRoutes: [
-      { strategyId: "CG_coinGrabber", symbol: "BTCUSDT" },
-      { strategyId: "RS_recoverySeller", symbol: "BTCUSDT" },
+      {
+        strategyId: "CG_coinGrabber",
+        symbol: "BTCUSDT",
+      },
+      {
+        strategyId: "RS_recoverySeller",
+        symbol: "BTCUSDT",
+      },
     ],
   })
 
