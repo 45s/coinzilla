@@ -283,50 +283,14 @@ function mapFillEvent({ fill, sourceEvent, environment, ingestionSource = "live_
 }
 
 function findOrderReference({ transaction, fill } = {}) {
-  if (fill.exchange_order_id !== null) {
-    const matches = transaction.prepare(`
-      SELECT id, market_id, exchange_order_id, client_order_id, strategy_id, position_id, cycle_id
-      FROM orders
-      WHERE environment = ? AND provider_instance_id = ? AND provider_type = ?
-        AND account_id = ? AND market_id = ? AND exchange_order_id = ?
-      LIMIT 2
-    `).all(
-      fill.environment,
-      fill.provider_instance_id,
-      fill.provider_type,
-      fill.account_id,
-      fill.market_id,
-      fill.exchange_order_id,
-    )
-    if (matches.length > 1) {
-      throw new OrderHistoryIntegrityError({
-        field: "fill.exchangeOrderIdentityAmbiguous",
-        providerInstanceId: fill.provider_instance_id,
-        accountId: fill.account_id,
-        clientOrderId: fill.client_order_id,
-        brokerOrderId: fill.exchange_order_id,
-        symbol: fill.symbol,
-        marketId: fill.market_id,
-      })
-    }
-    const order = matches[0]
-    if (order !== undefined) {
-      assertOrderReferenceMatches({
-        order,
-        fill,
-      })
-    }
-    return order
-  }
-  if (fill.client_order_id === null) {
+  if (fill.exchange_order_id === null) {
     return undefined
   }
-  const pendingMatches = transaction.prepare(`
+  const matches = transaction.prepare(`
     SELECT id, market_id, exchange_order_id, client_order_id, strategy_id, position_id, cycle_id
     FROM orders
     WHERE environment = ? AND provider_instance_id = ? AND provider_type = ?
-      AND account_id = ? AND market_id = ? AND client_order_id = ?
-      AND exchange_order_id IS NULL
+      AND account_id = ? AND market_id = ? AND exchange_order_id = ?
     LIMIT 2
   `).all(
     fill.environment,
@@ -334,26 +298,27 @@ function findOrderReference({ transaction, fill } = {}) {
     fill.provider_type,
     fill.account_id,
     fill.market_id,
-    fill.client_order_id,
+    fill.exchange_order_id,
   )
-  if (pendingMatches.length > 1) {
+  if (matches.length > 1) {
     throw new OrderHistoryIntegrityError({
-      field: "fill.pendingClientOrderIdentityAmbiguous",
+      field: "fill.exchangeOrderIdentityAmbiguous",
       providerInstanceId: fill.provider_instance_id,
       accountId: fill.account_id,
       clientOrderId: fill.client_order_id,
+      brokerOrderId: fill.exchange_order_id,
       symbol: fill.symbol,
       marketId: fill.market_id,
     })
   }
-  const pendingOrder = pendingMatches[0]
-  if (pendingOrder !== undefined) {
+  const order = matches[0]
+  if (order !== undefined) {
     assertOrderReferenceMatches({
-      order: pendingOrder,
+      order,
       fill,
     })
   }
-  return pendingOrder
+  return order
 }
 
 function assertOrderReferenceMatches({ order, fill } = {}) {
