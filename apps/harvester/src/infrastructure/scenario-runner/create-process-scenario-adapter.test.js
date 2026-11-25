@@ -109,21 +109,18 @@ test("process adapter passes a restrictive sandbox profile to its trusted launch
   })
 })
 
-test("process adapter executes the production RS runtime fixture in a child worker", async () => {
+test("process adapter rejects synthetic RS runtime fixture identifiers", async () => {
   const adapter = createProcessScenarioAdapter({
     strategyId: "RS",
     spawnSandboxedWorker: spawnTestWorker,
   })
-  const result = await adapter.execute({
+  await assert.rejects(adapter.execute({
     runId: "run-worker-rs-runtime",
     scenarioId: "RS-004-012",
     input: {
       marketPrice: "12.3",
     },
-  })
-  assert.equal(result.passed, true)
-  assert.equal(result.output.action.side, "SELL")
-  assert.equal(result.output.action.quantity, "55")
+  }), /not supported/)
 })
 
 test("process adapter rejects worker output above its configured size limit", async () => {

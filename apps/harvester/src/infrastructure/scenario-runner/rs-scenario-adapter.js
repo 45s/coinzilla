@@ -122,17 +122,8 @@ const RUNTIME_PAIR_CONFIGS = Object.freeze({
   ZROUSDT: RUNTIME_PAIR_CONFIG,
 })
 
-const RUNTIME_SCENARIO = Object.freeze({
-  id: "RS-004-012",
-  name: "Production Recovery Seller SELL transition on a deterministic ZROUSDT fixture",
-  layer: "APPLICATION",
-  status: "TEST-MAPPED",
-  executionStatus: "PRELIMINARY",
-  executable: false,
-  readinessReasons: Object.freeze([
-    "The deterministic ZROUSDT fixture does not yet prove readiness for the configured LINEAUSDT market and its required fee valuation.",
-    "The process worker has no verified OS-level filesystem, network, process or resource isolation; the host therefore registers no executable RS adapter.",
-  ]),
+const RUNTIME_FIXTURE = Object.freeze({
+  name: "Production Recovery Seller SELL dispatch fixture",
   inputSchema: Object.freeze({
     type: "object",
     required: ["marketPrice"],
@@ -148,17 +139,6 @@ const RUNTIME_SCENARIO = Object.freeze({
   }),
   input: Object.freeze({
     marketPrice: "12.3",
-  }),
-  implementation: Object.freeze([
-    "apps/harvester/src/bootstrap/create-recovery-seller-runtime-dispatch.js",
-    "apps/harvester/src/use-cases/create-recovery-seller-runtime-evaluator.js",
-    "apps/harvester/src/use-cases/create-recovery-seller-accounting-workflow.js",
-    "apps/harvester/src/use-cases/create-recovery-seller-action-authorizer.js",
-    "apps/harvester/src/use-cases/create-recovery-seller-order-submitter.js",
-  ]),
-  test: Object.freeze({
-    file: "apps/harvester/src/infrastructure/scenario-runner/rs-scenario-adapter.test.js",
-    title: "RS-004-012 executes the production runtime evaluator and accounting workflow with a deterministic simulation-only broker",
   }),
 })
 
@@ -897,10 +877,10 @@ function createRuntimeScenarioTrace({ runtime, effectiveInput, output, assertion
   ]
 }
 
-async function executeRecoverySellerRuntimeScenario({ runId, input }) {
+export async function executeRecoverySellerRuntimeFixture({ runId, input }) {
   const effectiveInput = validateScenarioInput({
-    schema: RUNTIME_SCENARIO.inputSchema,
-    defaults: RUNTIME_SCENARIO.input,
+    schema: RUNTIME_FIXTURE.inputSchema,
+    defaults: RUNTIME_FIXTURE.input,
     input,
   })
   if (compareDecimal({
@@ -938,8 +918,8 @@ async function executeRecoverySellerRuntimeScenario({ runId, input }) {
   return Object.freeze({
     runId,
     strategyId: "RS",
-    scenarioId: RUNTIME_SCENARIO.id,
-    scenarioName: RUNTIME_SCENARIO.name,
+    fixtureId: "rs-runtime-sell-submission",
+    fixtureName: RUNTIME_FIXTURE.name,
     input: effectiveInput,
     output: Object.freeze(output),
     expected: Object.freeze(expected),
@@ -952,7 +932,7 @@ async function executeRecoverySellerRuntimeScenario({ runId, input }) {
 }
 
 export function getRecoverySellerRunnerCatalog() {
-  return Object.freeze([RUNTIME_SCENARIO, SCENARIO])
+  return Object.freeze([SCENARIO])
 }
 
 async function executeRecoverySellerProfitabilityScenario({ runId, input }) {
@@ -1012,12 +992,6 @@ export async function executeRecoverySellerRunnerScenario({
   scenarioId,
   input,
 } = {}) {
-  if (scenarioId === RUNTIME_SCENARIO.id) {
-    return executeRecoverySellerRuntimeScenario({
-      runId,
-      input,
-    })
-  }
   if (scenarioId === SCENARIO.id) {
     return executeRecoverySellerProfitabilityScenario({
       runId,

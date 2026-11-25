@@ -2,6 +2,7 @@ import test from "node:test"
 import assert from "node:assert/strict"
 import {
   executeRecoverySellerRunnerScenario,
+  executeRecoverySellerRuntimeFixture,
   getRecoverySellerRunnerCatalog,
 } from "./rs-scenario-adapter.js"
 
@@ -67,15 +68,15 @@ test("RS scenario adapter validates schema fields and decimal-string inputs", as
 })
 
 
-test("RS-004-012 executes the production runtime evaluator and accounting workflow with a deterministic simulation-only broker", async () => {
-  const result = await executeRecoverySellerRunnerScenario({
+test("internal RS runtime fixture exercises the production SELL dispatch with a deterministic simulation broker", async () => {
+  const result = await executeRecoverySellerRuntimeFixture({
     runId: "run-rs-runtime-1",
-    scenarioId: "RS-004-012",
     input: {
       marketPrice: "12.3",
     },
   })
 
+  assert.equal(result.fixtureId, "rs-runtime-sell-submission")
   assert.equal(result.source, "production-runtime-evaluator")
   assert.equal(result.passed, true)
   assert.equal(result.output.decision.outcome, "SUBMIT")
@@ -89,14 +90,7 @@ test("RS-004-012 executes the production runtime evaluator and accounting workfl
   assert.ok(result.trace.some((step) => step.kind === "assertion"))
 })
 
-test("RS-004-012 remains non-executable in the public catalog until process isolation is verified", () => {
-  const scenario = getRecoverySellerRunnerCatalog().find((item) => item.id === "RS-004-012")
-  assert.ok(scenario)
-  assert.equal(scenario.status, "TEST-MAPPED")
-  assert.equal(scenario.executionStatus, "PRELIMINARY")
-  assert.equal(scenario.executable, false)
-  assert.ok(scenario.readinessReasons.some((reason) => reason.includes("OS-level")))
-})
+
 
 test("public RS runner catalog contains only the real registry-backed scenario IDs", () => {
   assert.deepEqual(
