@@ -280,3 +280,31 @@ test("retains validated exchange-constrained dust as a bonus above keepQuantity"
   }
 })
 
+test("does not allocate retained or dust inventory before the recovery SELL is fully filled", () => {
+  const [inventoryDisposition] = createValidDustDispositions()
+  const result = evaluateRecoveryCompletion({
+    ...baseInput,
+    sellOrderFullyFilled: false,
+    activeQuantity: "1.1",
+    inventoryDisposition,
+  })
+
+  assert.equal(result.eligible, false, "An incomplete SELL must never complete the recovery cycle.")
+  assert.equal(result.freeQuantity, "0", "Neither keepQuantity nor dust may be allocated before terminal fill reconciliation.")
+  assert.equal(result.reason, "RECOVERY_SELL_NOT_FULLY_FILLED")
+})
+
+test("fails closed when validated dust remains but realized profit is below minProfit", () => {
+  const [inventoryDisposition] = createValidDustDispositions()
+  const result = evaluateRecoveryCompletion({
+    ...baseInput,
+    activeQuantity: "1.1",
+    netSellProceeds: "10.009",
+    inventoryDisposition,
+  })
+
+  assert.equal(result.eligible, false, "Dust cannot bypass the configured minimum net-profit requirement.")
+  assert.equal(result.pause, true, "A fully sold cycle below minProfit must pause rather than allocate inventory.")
+  assert.equal(result.freeQuantity, "0", "No retained or dust inventory may be allocated below the profit floor.")
+  assert.equal(result.reason, "RECOVERY_SELL_FAILED_MIN_PROFIT")
+})
