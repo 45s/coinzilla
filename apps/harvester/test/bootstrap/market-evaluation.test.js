@@ -441,8 +441,8 @@ test("rejects conflicting CG/RS volatility settings for the same enabled market"
 })
 
 
-function createVolatilityProtectedSubmissionGate({ marketPaused = false, protectionEnabled = true, volatilityCalls = [] } = {}) {
-  const symbol = "BTCUSDT"
+function createVolatilityProtectedSubmissionGate({ marketSymbol = "BTCUSDT", marketPaused = false, protectionEnabled = true, volatilityCalls = [] } = {}) {
+  const symbol = marketSymbol
   const state = {
     shutdownBuyGate: false,
     paused: new Set(marketPaused ? [symbol] : []),
@@ -481,11 +481,11 @@ function createVolatilityProtectedSubmissionGate({ marketPaused = false, protect
   })
 }
 
-function createSubmissionGateOrder({ side = "SELL" } = {}) {
+function createSubmissionGateOrder({ side = "SELL", marketSymbol = "BTCUSDT" } = {}) {
   return {
     market: {
-      id: "binance:spot:BTCUSDT",
-      symbol: "BTCUSDT",
+      id: `binance:spot:${marketSymbol}`,
+      symbol: marketSymbol,
     },
     side,
     type: "LIMIT",
@@ -543,4 +543,70 @@ test("RS-008-017-C: disabled volatility protection skips only volatility work an
     reason: "MARKET_PAUSED",
     details: { symbol: "BTCUSDT" },
   }, "Disabling volatility protection must not bypass an independent market pause.")
+})
+
+function createRsOnlyVolatilityConfig() {
+  return {
+    ...appConfig,
+    strategies: {
+      ...appConfig.strategies,
+      RS_recoverySeller: {
+        enabled: true,
+        pairs: {
+          ETHUSDT: {
+            enabled: true,
+            tradingEnvironment: "testnet",
+            enableVolatilityProtection: true,
+            externalOrdersPolicy: "BLOCK",
+            investment: 10,
+            orderQuantity: 1,
+            minProfit: 0.01,
+            priceStepPercent: 0.5,
+            makerPercent: 0.1,
+            takerPercent: 0.1,
+            pricePrecision: 4,
+            quantityPrecision: 4,
+            legacyPosition: {
+              invested: 10,
+              quantity: 1,
+            },
+            sellQuantity: 1,
+          },
+        },
+      },
+    },
+  }
+}
+
+test("RS-008-017-A: RS-only market receives the shared market-owned volatility submission gate", async () => {
+  const resolved = await resolveHarvesterOptions({
+    appConfig: createRsOnlyVolatilityConfig(),
+    env: binanceEnv,
+    executionSymbols: ["ETHUSDT"],
+    executionRoutes: [{
+      strategyId: "RS_recoverySeller",
+      symbol: "ETHUSDT",
+    }],
+  })
+  assert.deepEqual(resolved.conservativePairs, {}, "An RS-only route must not synthesize a CG execution market.")
+  assert.deepEqual(Object.keys(resolved.recoverySellerPairs), ["ETHUSDT"], "The RS market must remain in the enabled RS route map.")
+  assert.equal(resolved.recoverySellerPairs.ETHUSDT.enableVolatilityProtection, true, "The RS-only market must retain its explicit market protection setting.")
+
+  const gate = createVolatilityProtectedSubmissionGate({
+    marketSymbol: "ETHUSDT",
+    protectionEnabled: resolved.recoverySellerPairs.ETHUSDT.enableVolatilityProtection,
+  })
+  const decision = gate({
+    order: createSubmissionGateOrder({ side: "BUY", marketSymbol: "ETHUSDT" }),
+    purpose: "RECOVERY_BUY",
+  })
+  assert.deepEqual(decision, {
+    allowed: false,
+    reason: "VOLATILITY_PROTECTION_ACTIVE",
+    details: {
+      symbol: "ETHUSDT",
+      protectionMode: "PROTECTED",
+      volatilityRatio: "2",
+    },
+  }, "The real shared submission gate must block an RS-only BUY while market-owned protection is active.")
 })

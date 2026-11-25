@@ -182,7 +182,7 @@ Do not claim 100% correctness from line/branch coverage. Completion means every 
 - **RS-004 — PARTIAL:** independent recovery, legacy and combined profitability gates; actual commission-aware post-fill application outcomes remain incomplete.
 - **RS-005 / RS-007 — PARTIAL:** cycle/unknown-outcome state evidence exists; complete broker-call, durable reservation and application no-retry evidence remains.
 - **RS-006 — PARTIAL:** single-Fill mixed allocation and failure atomicity exist; multi-Fill REST/stream and durable transaction-barrier proof remains.
-- **RS-008 — PARTIAL:** RS-008-017-B/C/D are registered TEST-MAPPED for the same-market CG/RS volatility configuration conflict, disabled-protection behavior and recovery-SELL volatility exception with independent market-pause enforcement. RS-008-017-A/E and shared quote/base concurrency remain missing.
+- **RS-008 — PARTIAL:** RS-008-017-A/B/C/D are registered TEST-MAPPED for the same-market CG/RS volatility configuration conflict, disabled-protection behavior and recovery-SELL volatility exception with independent market-pause enforcement. RS-008-017-E and shared quote/base concurrency remain missing.
 - **RS-009 — SPECIFIED:** the owner-approved 2026-11-24 contract is resolved: STOP blocks new BUY spending only; otherwise-valid first recovery SELL and existing-order reconciliation/accounting continue under independent safety gates. Implementation gaps remain in SELL policy/runtime gates and the trusted-operator resolution facade; no automatic clear/resume is permitted.
 - **RS-010 — UNSUPPORTED/BLOCKED:** process restart/replay and third-asset fee valuation remain deferred until their authoritative contracts are approved.
 

@@ -188,7 +188,7 @@ This map is deliberately incomplete. It gives the reader a starting point across
 | --- | --- | --- | --- |
 | Harvester — shared account/order/portfolio | Account-wide commitments, canonical fill identity, exchange filters | TEST-MAPPED | [Harvester domain test inventory](../../apps/harvester/docs/domain/DOMAIN_TEST_INVENTORY.md) |
 | Harvester — Conservative (CG) | Initial BUY, recovery SELL, next-BUY gating, partial fills, residual/dust completion | TEST-MAPPED | [Conservative Domain Specification](../../apps/harvester/docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md) |
-| Harvester — Recovery Seller (RS) | Legacy authorization/custody, BUY accounting, mixed SELL, profitability, one-SELL lifecycle, STOP, concurrency | PARTIAL — RS-001/002 have registered evidence with explicit blockers; RS-003/004/005/006/007 remain partial; RS-008 PARTIAL (RS-008-017-B TEST-MAPPED; shared quote/base concurrency and RS-008-017-A/E remain); RS-009 SPECIFIED with implementation evidence MISSING; RS-010 UNSUPPORTED/BLOCKED | [RS scenario issue #1780](https://github.com/45s/coinzilla/issues/1780), [RS playbook](../../apps/harvester/docs/domain/recovery-seller-scenario-testing.md) and [RS domain specification](../../apps/harvester/docs/domain/recovery-seller-domain-specification.md) |
+| Harvester — Recovery Seller (RS) | Legacy authorization/custody, BUY accounting, mixed SELL, profitability, one-SELL lifecycle, STOP, concurrency | PARTIAL — RS-001/002 have registered evidence with explicit blockers; RS-003/004/005/006/007 remain partial; RS-008 PARTIAL (RS-008-017-B TEST-MAPPED; shared quote/base concurrency and RS-008-017-E remain); RS-009 SPECIFIED with implementation evidence MISSING; RS-010 UNSUPPORTED/BLOCKED | [RS scenario issue #1780](https://github.com/45s/coinzilla/issues/1780), [RS playbook](../../apps/harvester/docs/domain/recovery-seller-scenario-testing.md) and [RS domain specification](../../apps/harvester/docs/domain/recovery-seller-domain-specification.md) |
 | Brokers | Canonical request/response contracts, unknown mutation outcomes, provider capability boundaries | SPECIFIED / mapping incomplete | [Broker API contract](../../packages/brokers/BROKER_API.md) |
 | Entities | Exact financial values, canonical market/order/fill identity, immutable domain contracts | SPECIFIED / mapping incomplete | [Entities roadmap](../../packages/entities/ROADMAP.md) |
 | Database | CRUD conformance, transaction rollback, persistence across connections, locking | SPECIFIED / mapping incomplete | [Database CRUD decision](../../packages/db/docs/decisions/0001-provider-neutral-record-crud-api.md) |
@@ -762,7 +762,7 @@ At `20.00 USDT/ZRO`, recovery receives `20.00 USDT` (profit `+10.00`), legacy re
 
 ### RS-008 — CG and RS share account availability and market-owned volatility without sharing strategy ownership
 
-**Status:** PARTIAL — RS-008-017-B/C/D are registered and TEST-MAPPED; shared quote/base concurrency, ownership, serialization and remaining volatility subcases are MISSING.
+**Status:** PARTIAL — RS-008-017-A/B/C/D are registered and TEST-MAPPED; shared quote/base concurrency, ownership, serialization and remaining volatility subcases are MISSING.
 
 **Example:** CG and RS each request a SELL against the same market. Their strategy budgets and Positions remain separate, while the shared account allocator must ensure combined reserved base never exceeds verified available Spot. Repeat with competing BUY quote commitments and with different markets sharing the same quote asset. An RS-only market must also consume the same market-owned volatility gate as CG when protection is enabled; no RS-specific volatility engine is permitted.
 
@@ -772,7 +772,7 @@ At `20.00 USDT/ZRO`, recovery receives `20.00 USDT` (profit `+10.00`), legacy re
 
 **Implementation:** shared commitment allocator, account runtime registry, engine transition queue and strategy-owned order routing.
 
-**Tests:** [RS-008-017-B/C/D shared volatility application scenarios](../../apps/harvester/test/bootstrap/market-evaluation.test.js); registry `apps/harvester/test/scenarios/recovery-seller/scenarios/shared-market-volatility-gate.js`. B proves resolver rejection; C proves disabled volatility avoids volatility reads while other gates remain; D proves the recovery-SELL exception still respects an independent market pause. Exact-head CI is pending; do not mark VERIFIED.
+**Tests:** [RS-008-017-A/A/B/C/D shared volatility application scenarios](../../apps/harvester/test/bootstrap/market-evaluation.test.js); registry `apps/harvester/test/scenarios/recovery-seller/scenarios/shared-market-volatility-gate.js`. A proves RS-only routing consumes the shared volatility gate; B proves resolver rejection; C proves disabled protection avoids volatility reads while other gates remain; D proves the recovery-SELL exception still respects an independent market pause. Exact-head CI is pending; do not mark VERIFIED.
 
 ### RS-009 — STOP blocks additional BUY spending only
 

@@ -2,6 +2,7 @@ import { defineRecoverySellerScenario } from "../registry/define-scenario.js"
 
 const testFile = "apps/harvester/test/bootstrap/market-evaluation.test.js"
 const testTitle = "rejects conflicting CG/RS volatility settings for the same enabled market"
+const rsOnlyTestTitle = "RS-008-017-A: RS-only market receives the shared market-owned volatility submission gate"
 const disabledProtectionTestTitle = "RS-008-017-C: disabled volatility protection skips only volatility work and preserves other gates"
 const recoverySellTestTitle = "RS-008-017-D: recovery SELL bypasses volatility only and retains other submission gates"
 
@@ -13,6 +14,7 @@ export const recoverySellerSharedMarketVolatilityScenario = defineRecoverySeller
   authority: [
     "apps/harvester/docs/volatility-protection.md",
     "apps/harvester/docs/domain/recovery-seller-scenario-testing.md#rs-008--cg-rs-shared-account-resources-and-concurrency-p0",
+    "issue-1780: RS-008-017-A RS-only market shared volatility gate",
     "issue-1780: RS-008-017-B shared market volatility configuration",
     "issue-1780: RS-008-017-C disabled volatility protection",
     "issue-1780: RS-008-017-D recovery SELL volatility exception",
@@ -47,6 +49,15 @@ export const recoverySellerSharedMarketVolatilityScenario = defineRecoverySeller
     "submit, cancel or otherwise mutate any order",
   ],
   subcases: [{
+    id: "RS-008-017-A",
+    description: "an enabled RS-only market without a CG execution route receives the shared market-owned volatility submission gate",
+    status: "TEST-MAPPED",
+    test: {
+      file: testFile,
+      title: rsOnlyTestTitle,
+    },
+    evidence: null,
+  }, {
     id: "RS-008-017-B",
     description: "same-market enabled CG and RS routes with conflicting explicit volatility-protection booleans fail during configuration resolution",
     status: "TEST-MAPPED",
