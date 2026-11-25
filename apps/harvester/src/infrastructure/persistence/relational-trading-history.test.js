@@ -2115,7 +2115,7 @@ test("rejects v5 migration when an existing fill points to a different exchange 
       (error) => error.context?.field === "orderIdentityMigrationFillLink",
       "A valid foreign key must not hide a fill linked to the wrong exchange order.",
     )
-    assert.equal(database.prepare("SELECT COUNT(*) AS count FROM orders").get().count, 1)
+    assert.equal(database.prepare("SELECT COUNT(*) AS count FROM orders").get().count, 1, "A rejected v5 migration must leave the original v4 order rows intact.")
     assert.equal(database.prepare("SELECT COUNT(*) AS count FROM fills").get().count, 1, "A rejected v5 migration must leave the original v4 fill rows intact.")
     assert.equal(database.prepare("SELECT order_id FROM fills WHERE id = ?").get(fillRow.id).order_id, legacyRecord.id, "A failed migration must preserve the original fill-to-order foreign-key value.")
     assert.equal(
@@ -2123,7 +2123,7 @@ test("rejects v5 migration when an existing fill points to a different exchange 
       0,
       "A rejected identity migration must leave the database at v4.",
     )
-    assert.equal(database.prepare("PRAGMA integrity_check").get().integrity_check, "ok")
+    assert.equal(database.prepare("PRAGMA integrity_check").get().integrity_check, "ok", "The v4 database must remain structurally valid after the failed migration.")
   } finally {
     await database.close()
   }
@@ -2170,13 +2170,13 @@ function assertDuplicateV4HistoryRemains(database) {
   assert.deepEqual(versions, [1, 2, 3, 4], "A duplicate exchange identity must leave the schema migration history at v4.")
   assert.equal(orders.length, 2, "Both conflicting v4 order rows must remain present after migration rollback.")
   assert.equal(orders[0].exchange_order_id, orders[1].exchange_order_id, "The v4 duplicate identity evidence must remain unchanged for operator recovery.")
-  assert.deepEqual(database.prepare("PRAGMA foreign_key_check").all(), [])
+  assert.deepEqual(database.prepare("PRAGMA foreign_key_check").all(), [], "The original v4 database must retain valid foreign-key relationships after migration rollback.")
 }
 
 function assertDuplicateV4HistoryBackup(database) {
-  assert.equal(database.prepare("PRAGMA integrity_check").get().integrity_check, "ok")
+  assert.equal(database.prepare("PRAGMA integrity_check").get().integrity_check, "ok", "The retained pre-v5 backup must pass SQLite integrity validation.")
   assert.equal(database.prepare("SELECT COUNT(*) AS count FROM orders").get().count, 2, "The pre-v5 backup must preserve both conflicting order rows without repair.")
-  assert.deepEqual(database.prepare("PRAGMA foreign_key_check").all(), [])
+  assert.deepEqual(database.prepare("PRAGMA foreign_key_check").all(), [], "The retained pre-v5 backup must preserve all existing foreign-key relationships.")
 }
 
 test("fails v5 migration closed and retains backup when exchange identity is duplicated", async (t) => {
@@ -2195,7 +2195,7 @@ test("fails v5 migration closed and retains backup when exchange identity is dup
   const persistence = await preparePersistence({ context })
   assert.equal(persistence.relationalDatabase, null, "Relational persistence must remain unavailable when the v5 migration rejects duplicate exchange identities.")
   assert.ok(persistence.relationalError, "The failed v5 migration must remain observable as a relational preparation error.")
-  assert.ok(persistence.orderIdentityMigrationBackupFilename?.includes(".pre-relational-v5."))
+  assert.ok(persistence.orderIdentityMigrationBackupFilename?.includes(".pre-relational-v5."), "The verified pre-v5 backup path must be exposed when migration fails.")
   await inspectSqlite({
     filename: context.filename,
     work: assertDuplicateV4HistoryRemains,
