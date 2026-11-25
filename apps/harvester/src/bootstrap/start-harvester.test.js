@@ -1,6 +1,7 @@
 import nodeTest from "node:test"
 import assert from "node:assert/strict"
 import * as shared from "../../test/bootstrap/start-harvester-test-support.js"
+import { StrategyId } from "../domain/strategies/strategy-ids.js"
 
 const { Balance, CanonicalOrder, Fill, Money, Quantity, TradingRules, multiplyDecimal, waitForTestSignal, appConfig, createMarketMetadata, createOpenOrderSnapshot, createBinanceCapabilities, createBroker, createRecoverySellerStopWorkflow, recordConfigurationBaseline, recordProcessStarted, recordProcessStopped, makeVolatilityReadyBroker, binanceEnv, startHarvesterForTest, createFill } = shared
 const { mkdtemp, rm, os, path, createFileOperationalStateStore } = shared
@@ -72,6 +73,51 @@ function createRsOnlyStartupConfig({ enableVolatilityProtection = false } = {}) 
     },
   }
 }
+
+test("attributes RS-only market-price processing failures using the resolved execution route", async () => {
+  const { directory, store } = await createRsOnlyOperationalStateStore()
+  const calls = []
+  const broker = createRsOnlyStartupBroker({ calls })
+  const failure = new Error("RS market price evaluation failed")
+  const errorRecords = []
+  try {
+    const result = await startHarvesterForTest({
+      loadConfig: async () => createRsOnlyStartupConfig(),
+      env: binanceEnv,
+      brokerAdapterFactory: () => broker,
+      operationalStateStore: store,
+      executionSymbols: ["LINEAUSDT"],
+      executionRoutes: [{
+        strategyId: StrategyId.RECOVERY_SELLER,
+        symbol: "LINEAUSDT",
+      }],
+      marketDataSymbols: ["LINEAUSDT"],
+      evaluateStrategy: () => {
+        throw failure
+      },
+      evaluateRecoverySellerTransition: async () => ({
+        ok: true,
+        data: { skipped: true },
+      }),
+      logger: {
+        info() {},
+        error: (record) => errorRecords.push(record),
+      },
+    })
+
+    const diagnostic = errorRecords.find(({ message }) => message === "Market price processing failed")
+    assert.ok(diagnostic, "The shared market-price subscription must report the processing failure.")
+    assert.equal(diagnostic.strategyId, StrategyId.RECOVERY_SELLER, "Bootstrap must attribute an RS-only market failure to the resolved RS route.")
+    assert.equal(diagnostic.symbol, "LINEAUSDT", "The original RS market symbol must remain available.")
+    assert.equal(diagnostic.errors[0], failure, "The original processing error must remain intact.")
+    await result.stop()
+  } finally {
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
+  }
+})
 
 test("starts an RS-only provider account without a Conservative execution route", async () => {
   const { directory, store } = await createRsOnlyOperationalStateStore()
