@@ -55,7 +55,6 @@ root-cause classification.
 genuine conflicts, and rerun focused tests and exact-head verification. No exchange writes,
 cancellations, account mutations or Harvester restarts are authorized or required.
 
-
 ## Conservative trading correctness and exhaustive scenario coverage — issue #1763
 
 **Objective:** prove Conservative trading calculations, accounting, lifecycle transitions and safety decisions with source-mapped deterministic evidence. This complements (does not replace) focused unit tests and existing application/replay tests. The canonical [Conservative Domain Specification](./docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md) remains the sole behavior authority; the [scenario-test guide](./docs/domain/CONSERVATIVE_DOMAIN_SCENARIO_TESTS.md) defines authoring conventions; [issue #1763](https://github.com/45s/coinzilla/issues/1763) owns the exhaustive matrix and phase-by-phase evidence.
