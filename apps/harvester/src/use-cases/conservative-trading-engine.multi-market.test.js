@@ -2371,8 +2371,8 @@ test("RS-008-018-E: concurrent CG BUY intents serialize against a shared RS quot
   assert.equal(harness.orders.length, 1,
     "The shared serialized transition queue must allow only one 100 USDT CG BUY after the 100 USDT RS reservation.")
   assert.equal(results.filter((result) =>
-    result.data?.submittedOrders?.length === 1).length, 1,
-  "Exactly one market evaluation must submit its CG BUY.")
+    result.data?.waitingForAvailableQuoteBalance !== true).length, 1,
+  "Exactly one market evaluation must pass quote allocation; the other must defer.")
   assert.equal(results.filter((result) =>
     result.data?.waitingForAvailableQuoteBalance === true).length, 1,
   "The competing CG BUY must defer after the first submission consumes the remaining shared quote budget.")
