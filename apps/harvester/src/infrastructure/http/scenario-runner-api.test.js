@@ -19,10 +19,11 @@ function responseRecorder() {
   }
 }
 
-function createRequest({ method, url, body = "" }) {
+function createRequest({ method, url, body = "", headers = {} }) {
   return {
     method,
     url,
+    headers,
     async *[Symbol.asyncIterator]() {
       if (body) {
         yield Buffer.from(body)
@@ -472,4 +473,44 @@ test("host discovers strategy registrations without an RS-specific catalog branc
   const completed = await host.runner.waitForRun(accepted.runId)
   assert.equal(completed.status, "Completed")
   assert.deepEqual(completed.output, { output: { strategy: "GRID" } })
+})
+
+
+test("Scenario Runner API rejects untrusted browser origins before accepting a run", async () => {
+  let submissions = 0
+  const runner = createRunnerFake()
+  runner.submit = (input) => {
+    submissions += 1
+    return {
+      runId: "run-forbidden-origin",
+      status: "Running",
+      ...input,
+    }
+  }
+  const response = responseRecorder()
+
+  await handleScenarioRunnerRequest({
+    request: createRequest({
+      method: "POST",
+      url: "/api/v1/scenario-runner/runs",
+      body: JSON.stringify({
+        strategyId: "RS",
+        scenarioId: "RS-004-011",
+        input: {},
+      }),
+      headers: {
+        origin: "https://attacker.example",
+      },
+    }),
+    response,
+    pathname: "/api/v1/scenario-runner/runs",
+    runner,
+  })
+
+  assert.equal(response.status, 403,
+    "an untrusted browser origin must be rejected even when the API is loopback-only")
+  assert.equal(JSON.parse(response.body).error.code, "SCENARIO_RUNNER_ORIGIN_FORBIDDEN",
+    "the API must return a stable origin-policy error")
+  assert.equal(submissions, 0,
+    "a cross-origin browser request must not enqueue scenario execution")
 })
