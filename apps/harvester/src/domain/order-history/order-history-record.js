@@ -225,14 +225,27 @@ function mapSourceEvent({ sourceEvent, order } = {}) {
   }
 }
 
-/**
- * Create a collision-safe identity from the complete order ownership tuple.
- *
- * @param {{environment: string, providerInstanceId: string, providerType: string, accountId: string, clientOrderId: string}} input
- * @returns {string}
- * @throws {OrderHistoryValidationError} When any identity component is missing.
- */
-export function createOrderHistoryId(input = {}) {
+function requireOptionalIdentityString({ value, field } = {}) {
+  if (value === undefined || value === null) {
+    return null
+  }
+  return requireString({
+    value,
+    field,
+  })
+}
+
+function requireOptionalIdentityTimestamp({ value, field } = {}) {
+  if (value === undefined || value === null) {
+    return null
+  }
+  return requireTimestamp({
+    value,
+    field,
+  })
+}
+
+function normalizeOrderIdentity(input = {}) {
   const environment = requireString({
     value: input.environment,
     field: "environment",
@@ -242,28 +255,77 @@ export function createOrderHistoryId(input = {}) {
       field: "environment",
     })
   }
-  const providerInstanceId = requireString({
-    value: input.providerInstanceId,
-    field: "providerInstanceId",
+  const marketId = requireOptionalIdentityString({
+    value: input.marketId,
+    field: "marketId",
   })
-  const providerType = requireString({
-    value: input.providerType,
-    field: "providerType",
+  const brokerOrderId = requireOptionalIdentityString({
+    value: input.brokerOrderId,
+    field: "brokerOrderId",
   })
-  const accountId = requireString({
-    value: input.accountId,
-    field: "accountId",
-  })
-  const clientOrderId = requireString({
-    value: input.clientOrderId,
-    field: "clientOrderId",
-  })
-  return JSON.stringify([
+  if (brokerOrderId !== null && marketId === null) {
+    invalidField({
+      field: "marketId",
+    })
+  }
+  return {
     environment,
-    providerInstanceId,
-    providerType,
-    accountId,
-    clientOrderId,
+    providerInstanceId: requireString({
+      value: input.providerInstanceId,
+      field: "providerInstanceId",
+    }),
+    providerType: requireString({
+      value: input.providerType,
+      field: "providerType",
+    }),
+    accountId: requireString({
+      value: input.accountId,
+      field: "accountId",
+    }),
+    clientOrderId: requireString({
+      value: input.clientOrderId,
+      field: "clientOrderId",
+    }),
+    marketId,
+    brokerOrderId,
+    createdAt: requireOptionalIdentityTimestamp({
+      value: input.createdAt,
+      field: "createdAt",
+    }),
+  }
+}
+
+/**
+ * Create a stable exchange-order identity, scoped by provider account and market.
+ *
+ * marketId is required when brokerOrderId is present. Orders without an exchange ID
+ * use a provisional client identity that includes market and creation time.
+ *
+ * @param {{environment: string, providerInstanceId: string, providerType: string, accountId: string, marketId?: string, brokerOrderId?: string, clientOrderId: string, createdAt?: number}} input
+ * @returns {string}
+ * @throws {OrderHistoryValidationError} When a required identity component is missing.
+ */
+export function createOrderHistoryId(input = {}) {
+  const identity = normalizeOrderIdentity(input)
+  const scope = [
+    identity.environment,
+    identity.providerInstanceId,
+    identity.providerType,
+    identity.accountId,
+    identity.marketId,
+  ]
+  if (identity.brokerOrderId !== null) {
+    return JSON.stringify([
+      ...scope,
+      "exchange",
+      identity.brokerOrderId,
+    ])
+  }
+  return JSON.stringify([
+    ...scope,
+    "client",
+    identity.clientOrderId,
+    ...(identity.createdAt === null ? [] : [identity.createdAt]),
   ])
 }
 
@@ -397,7 +459,7 @@ function mapExecutionQuantities({ order, status, includeUnfilled = false } = {})
 }
 
 function mapOptionalOrderHistoryFields({ order, record } = {}) {
-  if (order.brokerOrderId !== undefined) {
+  if (order.brokerOrderId !== undefined && order.brokerOrderId !== null) {
     record.brokerOrderId = requireString({
       value: order.brokerOrderId,
       field: "brokerOrderId",
@@ -459,7 +521,10 @@ function createBaseOrderHistoryRecord({
       providerInstanceId,
       providerType,
       accountId,
+      marketId: market.id,
+      brokerOrderId: order.brokerOrderId,
       clientOrderId,
+      createdAt: order.createdAt,
     }),
     schemaVersion: 1,
     recordKind: "harvester.order-history",

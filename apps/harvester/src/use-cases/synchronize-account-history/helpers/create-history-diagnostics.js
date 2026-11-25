@@ -8,10 +8,24 @@ const FAILURE_STRING_FIELDS = Object.freeze([
   ["brokerOrderId", 200],
   ["clientOrderId", 200],
   ["tradeId", 200],
+  ["field", 128],
+  ["marketId", 200],
+  ["existingBrokerOrderId", 200],
+  ["incomingBrokerOrderId", 200],
+  ["existingValue", 128],
+  ["incomingValue", 128],
+  ["existingSource", 128],
+  ["incomingSource", 128],
+  ["reconciliationDecision", 32],
   ["lastPersistedOrderId", 200],
   ["lastPersistedTradeId", 200],
   ["errorName", 200],
   ["errorCode", 200],
+])
+
+const FAILURE_BOOLEAN_FIELDS = Object.freeze([
+  "recoverable",
+  "coverageIncomplete",
 ])
 
 function createSafeHistoryFailure(failure = {}) {
@@ -19,6 +33,11 @@ function createSafeHistoryFailure(failure = {}) {
   for (const [field, maximumLength] of FAILURE_STRING_FIELDS) {
     if (typeof failure[field] === "string") {
       safe[field] = failure[field].slice(0, maximumLength)
+    }
+  }
+  for (const field of FAILURE_BOOLEAN_FIELDS) {
+    if (typeof failure[field] === "boolean") {
+      safe[field] = failure[field]
     }
   }
   if (Number.isSafeInteger(failure.recordIndex) && failure.recordIndex > 0) {

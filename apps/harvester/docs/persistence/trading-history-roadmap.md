@@ -1,9 +1,9 @@
 # Harvester trading-history persistence roadmap
 
-**Status:** Active — Phases 1–3 complete; Phases 4–5 and remaining Phase 6 work planned
+**Status:** Active — Phases 1–3 complete; Phase 3a in review; Phases 4–5 and remaining Phase 6 work planned
 **Type:** Domain roadmap
 **Owner:** Harvester
-**Tracking:** [#1327 — Provider-neutral DB API and Harvester persistence integration](https://github.com/45s/coinzilla/issues/1327)
+**Tracking:** [#1327 — Provider-neutral DB API and Harvester persistence integration](https://github.com/45s/coinzilla/issues/1327); [#1849 — Binance historical order identity conflicts](https://github.com/45s/coinzilla/issues/1851)
 **Related infrastructure:** [#1486 — SQLite relational-schema infrastructure](https://github.com/45s/coinzilla/issues/1486)
 
 ## Purpose and authority
@@ -31,7 +31,7 @@ The legacy `harvester_orders` collection remains part of the compatibility/dual-
 1. **Ownership:** Harvester owns all trading-history tables, schemas, migrations, repository ports, mapping and business persistence. Do not add Harvester tables or trading concepts to `packages/db`.
 2. **Exact values:** prices, quantities, quote amounts and commissions retain exact decimal representations. Never round-trip financial values through JavaScript floating-point arithmetic.
 3. **Stable provenance:** scope every order and fill by environment, provider instance/type and account. Never merge TESTNET and LIVE or different provider instances/accounts.
-4. **Order identity:** preserve the canonical order identity `(environment, providerInstanceId, providerType, accountId, clientOrderId)`.
+4. **Order identity:** use the exchange broker order ID scoped by environment, provider instance/type, account and market whenever present. Treat clientOrderId as a correlation attribute that Binance permits reusing after the previous order is FILLED. While pending, use a provisional market-scoped identity and require the same market and creation facts on acknowledgement; do not infer cross-symbol client-ID uniqueness from undocumented behavior.
 5. **Fill identity:** use the provider's actual stable execution/trade ID within its environment, provider instance/type, account and market scope. Do not deduplicate only by order ID, timestamp, price or quantity.
 6. **No fabricated history:** never derive individual fills, prices, fees, execution times or ownership from cumulative order quantities or lifecycle snapshots. Unknown facts remain unknown.
 7. **Non-blocking persistence:** order/fill observers use bounded asynchronous work. SQLite writes must not block broker submission, user-data processing, fill application, accounting, Journal publication/flush or trading readiness. Persistence gaps remain diagnosable and must not become trading failures.
@@ -44,12 +44,12 @@ The legacy `harvester_orders` collection remains part of the compatibility/dual-
 
 | Table | Meaning | Identity / constraint |
 | --- | --- | --- |
-| `orders` | Latest canonical snapshot for one exchange order | Environment, provider instance/type, account and client order ID |
+| `orders` | Latest canonical snapshot for one exchange order | Market-scoped environment/provider/account/exchange order ID; provisional client identity only while the exchange ID is absent |
 | `fills` | One row per actual exchange execution | Environment, provider instance/type, account, market and provider trade ID |
 | `fill_commissions` | Actual commission facts associated with a fill | Fill ID and commission ordinal |
 | `history_sync_cursors` | Last fully persisted order/trade IDs for a configured market | Environment, provider instance/type, account and symbol |
 
-Financial values are stored as exact decimal text. Missing values remain SQL `NULL`; a reported zero remains distinct from unknown. A fill links to an order only through verified scoped identity. Strategy/position/cycle attribution remains nullable unless immutable ownership is established. See the [persistence README](README.md) for complete column semantics, migration behavior, indexes, provenance and rollback instructions.
+Financial values are stored as exact decimal text. Missing values remain SQL `NULL`; a reported zero remains distinct from unknown. A fill links to an order through exact market-scoped exchange order identity when available; clientOrderId is checked but never used to merge two exchange orders. Strategy/position/cycle attribution remains nullable unless immutable ownership is established. See the [persistence README](README.md) for complete column semantics, migration behavior, indexes, provenance and rollback instructions.
 
 ## Delivered phases
 
@@ -80,17 +80,27 @@ Financial values are stored as exact decimal text. Missing values remain SQL `NU
 - Advances each cursor only after every record in its page is persisted. Interrupted pages safely replay through idempotent persistence.
 - Refreshes the oldest stored non-terminal order on subsequent startups so an order that fills while Harvester is offline can still be discovered after the forward cursor advances.
 - Persists unfilled order observations as well as executions, with explicit `exchange_history` provenance. Ambiguous order/fill linkage fails closed.
-- A failed scan reports per-market partial diagnostics and remains best-effort; it does not reverse accounting or change order ownership/readiness authority. Failures include the history type/stage, original page cursor, 1-based record position, exchange order/trade identity, underlying error code, and last successfully persisted identity. The existing `runtime_errors` projection stores only allowlisted/redacted fields; the full stack/cause remains in session JSONL logs.
+- A failed scan reports per-market partial diagnostics and remains best-effort; it does not reverse accounting or change order ownership/readiness authority. Failures include the history type/stage, original page cursor, 1-based record position, exchange order/trade identity, conflicting field, bounded existing/incoming immutable values and sources, reconciliation decision, recoverability, coverage-incomplete status, underlying error code, and last successfully persisted identity. The existing `runtime_errors` projection stores only allowlisted/redacted fields; the full stack/cause remains in session JSONL logs.
 
 **Coverage limitation:** synchronization covers only configured execution markets and exchange-available history. It does not prove account-wide, delisted/unconfigured-market or exchange-retention completeness. Orders are not adopted, strategy ownership is not inferred, and process-restart restoration is not enabled.
 
 ## Planned phases
 
+### Phase 3a — Provider-correct exchange order identity
+
+**Status: In review — [#1851](https://github.com/45s/coinzilla/issues/1851) / [PR #1849](https://github.com/45s/coinzilla/pull/1849).**
+
+- Use market-scoped exchange order IDs as canonical identity; retain clientOrderId only for correlation and provisional pending records.
+- Rebuild the v4 relational tables transactionally, preserving order/fill/commission rows and foreign-key links; verify a pre-v5 backup before migration and reject any existing fill whose parent does not match its exact exchange-order identity.
+- Link fills by exact exchange order ID and market, including fills that arrive before their order record; fills without an exchange order ID fail validation rather than receiving client-only attribution. Reused client IDs cannot cross-link executions.
+- Compare decimal facts with exact decimal arithmetic: equivalent string representations are accepted without rewriting the persisted representation, while genuinely different immutable values remain fatal. Keep history coverage incomplete on any page failure.
+- Exact prior-row broker IDs and price values are not present in the recovered runtime logs or Library files. The committed fixtures use the observed ZRO/DOGE identifiers with explicitly synthetic prices; do not claim the original persisted row pair is independently proven.
+
 ### Phase 4 — Strategy-cycle attribution
 
 **Status: In progress — verified live-order ownership propagation is tracked by [#1669 / PR #1669](https://github.com/45s/coinzilla/pull/1669).**
 
-- The current slice passes immutable OrderRegistry ownership through `order.submitted`, `order.updated`, `order.cancelled`, and `order.cancel_failed`; relational fills inherit attribution only through the existing verified scoped client-order relationship.
+- The current slice passes immutable OrderRegistry ownership through `order.submitted`, `order.updated`, `order.cancelled`, and `order.cancel_failed`; relational fills inherit attribution only through the verified market-scoped exchange-order relationship, with clientOrderId checked when supplied.
 - This does not infer or backfill ownership for legacy, exchange-history-only, external, or unknown records. It does not introduce a strategy-cycle entity or lifecycle; that remains separate work.
 
 - Define a Harvester-owned strategy-cycle identity and lifecycle only when the actual domain model and event sequence support it.

@@ -31,7 +31,7 @@ function logPreparationFailure({ logger, error, relational = false } = {}) {
   }
 }
 
-function hasRelationalMigration(database) {
+function hasRelationalMigration({ database, version = 1 } = {}) {
   const exists = database.prepare(
     "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'schema_migrations'",
   ).get()
@@ -40,7 +40,7 @@ function hasRelationalMigration(database) {
   }
   return database.prepare(
     "SELECT 1 FROM schema_migrations WHERE version = ?",
-  ).get(1) !== undefined
+  ).get(version) !== undefined
 }
 
 function hashLegacyRecords(database) {
@@ -80,7 +80,7 @@ async function verifyMigrationBackup({ filename, expected } = {}) {
 }
 
 async function createVerifiedMigrationBackup({ database, filename } = {}) {
-  if (hasRelationalMigration(database)) {
+  if (hasRelationalMigration({ database })) {
     return null
   }
   const sourceSnapshot = hashLegacyRecords(database)
@@ -102,6 +102,89 @@ async function createVerifiedMigrationBackup({ database, filename } = {}) {
       destination: backupFilename,
     })
     await verifyMigrationBackup({
+      filename: backupFilename,
+      expected: sourceSnapshot,
+    })
+  }
+  return backupFilename
+}
+
+function hashRelationalHistory(database) {
+  const hash = createHash("sha256")
+  let count = 0
+  for (const table of ["orders", "fills", "fill_commissions"]) {
+    const exists = database.prepare(
+      "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+    ).get(table)
+    hash.update(table)
+    hash.update("\\0")
+    if (!exists) {
+      continue
+    }
+    const rows = database.prepare(`SELECT * FROM "${table}" ORDER BY rowid`).all()
+    count += rows.length
+    for (const row of rows) {
+      hash.update(JSON.stringify(row))
+      hash.update("\\0")
+    }
+  }
+  return {
+    count,
+    checksum: hash.digest("hex"),
+  }
+}
+
+async function verifyOrderIdentityMigrationBackup({ filename, expected } = {}) {
+  const backupDatabase = createSqliteDatabase({
+    filename,
+  })
+  await backupDatabase.connect()
+  try {
+    const integrity = backupDatabase.prepare("PRAGMA integrity_check").get()
+    if (integrity?.integrity_check !== "ok") {
+      throw new Error("Pre-order-identity SQLite backup failed its integrity check.")
+    }
+    const actual = hashRelationalHistory(backupDatabase)
+    if (actual.count !== expected.count || actual.checksum !== expected.checksum) {
+      throw new Error("Pre-order-identity SQLite backup does not contain the exact relational trading-history rows.")
+    }
+  } finally {
+    await backupDatabase.close()
+  }
+}
+
+async function createVerifiedOrderIdentityMigrationBackup({ database, filename } = {}) {
+  if (
+    !hasRelationalMigration({
+      database,
+      version: 4,
+    }) ||
+    hasRelationalMigration({
+      database,
+      version: 5,
+    })
+  ) {
+    return null
+  }
+  const sourceSnapshot = hashRelationalHistory(database)
+  if (sourceSnapshot.count === 0) {
+    return null
+  }
+  const backupFilename = `${filename}.pre-relational-v5.${sourceSnapshot.checksum}.backup`
+  try {
+    await access(backupFilename)
+    await verifyOrderIdentityMigrationBackup({
+      filename: backupFilename,
+      expected: sourceSnapshot,
+    })
+  } catch (error) {
+    if (error.code !== "ENOENT") {
+      throw error
+    }
+    await database.backup({
+      destination: backupFilename,
+    })
+    await verifyOrderIdentityMigrationBackup({
       filename: backupFilename,
       expected: sourceSnapshot,
     })
@@ -189,6 +272,63 @@ function createRuntimeErrorProjection({
   })
 }
 
+async function applyRelationalMigrations({ database, filename } = {}) {
+  const legacyMigrationBackupFilename = await createVerifiedMigrationBackup({
+    database,
+    filename,
+  })
+  await database.migrate(HARVESTER_RELATIONAL_MIGRATIONS.slice(0, 4))
+  const orderIdentityMigrationBackupFilename = await createVerifiedOrderIdentityMigrationBackup({
+    database,
+    filename,
+  })
+  try {
+    await database.migrate(HARVESTER_RELATIONAL_MIGRATIONS)
+  } catch (error) {
+    Object.assign(error, {
+      migrationBackupFilename: legacyMigrationBackupFilename ?? orderIdentityMigrationBackupFilename,
+      orderIdentityMigrationBackupFilename,
+    })
+    throw error
+  }
+  return {
+    migrationBackupFilename: legacyMigrationBackupFilename ?? orderIdentityMigrationBackupFilename,
+    orderIdentityMigrationBackupFilename,
+  }
+}
+
+function createRelationalResources({
+  database,
+  eventBus,
+  environment,
+  logger,
+  runtimeSessionId,
+  errorBuffer,
+  partialResources,
+} = {}) {
+  const repositories = createRelationalHistoryRepositories({ database })
+  const observers = createRelationalHistoryObservers({
+    eventBus,
+    orderRepository: repositories.orderRepository,
+    fillRepository: repositories.fillRepository,
+    environment,
+    logger,
+  })
+  partialResources.observers = observers
+  const runtimeErrorObserver = createRuntimeErrorProjection({
+    database,
+    runtimeSessionId,
+    errorBuffer,
+    logger,
+  })
+  partialResources.runtimeErrorObserver = runtimeErrorObserver
+  return {
+    ...repositories,
+    ...observers,
+    runtimeErrorObserver,
+  }
+}
+
 async function prepareRelationalResources({
   filename,
   eventBus,
@@ -201,44 +341,36 @@ async function prepareRelationalResources({
     filename,
     timeout: 5000,
   })
-  let runtimeErrorObserver
-  let observers
+  let resources
+  const partialResources = {}
   try {
     await relationalDatabase.connect()
-    const migrationBackupFilename = await createVerifiedMigrationBackup({
+    const migrationBackups = await applyRelationalMigrations({
       database: relationalDatabase,
       filename,
     })
-    await relationalDatabase.migrate(HARVESTER_RELATIONAL_MIGRATIONS)
-    const repositories = createRelationalHistoryRepositories({
+    resources = createRelationalResources({
       database: relationalDatabase,
-    })
-    observers = createRelationalHistoryObservers({
       eventBus,
-      orderRepository: repositories.orderRepository,
-      fillRepository: repositories.fillRepository,
       environment,
       logger,
-    })
-    const { relationalOrderObserver, fillObserver } = observers
-    runtimeErrorObserver = createRuntimeErrorProjection({
-      database: relationalDatabase,
       runtimeSessionId,
       errorBuffer,
-      logger,
+      partialResources,
     })
     return {
       relationalDatabase,
-      relationalOrderObserver,
-      fillObserver,
-      runtimeErrorObserver,
-      ...repositories,
-      migrationBackupFilename,
+      ...resources,
+      ...migrationBackups,
     }
   } catch (error) {
     await closePartialRelationalResources({
       database: relationalDatabase,
-      observers: [runtimeErrorObserver, observers?.fillObserver, observers?.relationalOrderObserver],
+      observers: [
+        partialResources.runtimeErrorObserver,
+        partialResources.observers?.fillObserver,
+        partialResources.observers?.relationalOrderObserver,
+      ],
       logger,
     })
     throw error
@@ -322,7 +454,8 @@ async function preparePersistenceWithRelationalFallback({
       orderRepository: null,
       fillRepository: null,
       historySyncCursorRepository: null,
-      migrationBackupFilename: null,
+      migrationBackupFilename: relationalError.migrationBackupFilename ?? null,
+      orderIdentityMigrationBackupFilename: relationalError.orderIdentityMigrationBackupFilename ?? null,
       relationalError,
     })
   }

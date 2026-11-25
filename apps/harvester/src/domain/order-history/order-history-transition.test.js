@@ -52,6 +52,140 @@ test("ignores a stale event that would regress cumulative execution", () => {
   )
 })
 
+test("accepts equivalent decimal representations without changing persisted formatting", () => {
+  const current = createOrderHistoryRecordFixture({
+    price: "65000.0000",
+    originalQuantity: "0.0100",
+    cumulativeQuoteQuantity: "650.0000",
+  })
+  const candidate = createOrderHistoryRecordFixture({
+    id: current.id,
+    price: "65000",
+    originalQuantity: "0.01",
+    cumulativeQuoteQuantity: "650",
+    lastSourceEventId: "event-002",
+    lastSeenAt: "2026-11-19T00:00:01.000Z",
+    lastSourceEventTimestamp: "2026-11-19T00:00:01.000Z",
+  })
+
+  const merged = mergeOrderHistoryRecords({
+    current,
+    candidate,
+  })
+
+  assert.equal(merged.price, current.price)
+  assert.equal(merged.originalQuantity, current.originalQuantity)
+  assert.equal(merged.cumulativeQuoteQuantity, current.cumulativeQuoteQuantity)
+})
+
+test("treats decimal formatting differences in duplicate source events as identical", () => {
+  const current = createOrderHistoryRecordFixture({
+    executedQuantity: "0.5000",
+    remainingQuantity: "0.5000",
+  })
+  const candidate = createOrderHistoryRecordFixture({
+    id: current.id,
+    executedQuantity: "0.5",
+    remainingQuantity: "0.5",
+  })
+
+  const merged = mergeOrderHistoryRecords({
+    current,
+    candidate,
+  })
+
+  assert.equal(merged.executedQuantity, current.executedQuantity)
+  assert.equal(merged.remainingQuantity, current.remainingQuantity)
+})
+
+test("rejects a numerically different immutable original quantity", () => {
+  const current = createOrderHistoryRecordFixture({
+    originalQuantity: "0.0100",
+  })
+  const candidate = createOrderHistoryRecordFixture({
+    id: current.id,
+    originalQuantity: "0.0200",
+    lastSourceEventId: "event-002",
+  })
+
+  assert.throws(
+    () => mergeOrderHistoryRecords({
+      current,
+      candidate,
+    }),
+    (error) => error.context.field === "originalQuantity",
+  )
+})
+
+test("rejects numerically different execution facts under a duplicate source event ID", () => {
+  const current = createOrderHistoryRecordFixture({
+    executedQuantity: "0.5000",
+    remainingQuantity: "0.5000",
+  })
+  const candidate = createOrderHistoryRecordFixture({
+    id: current.id,
+    executedQuantity: "0.6000",
+    remainingQuantity: "0.4000",
+  })
+
+  assert.throws(
+    () => mergeOrderHistoryRecords({
+      current,
+      candidate,
+    }),
+    (error) => error.context.field === "sourceEventId",
+  )
+})
+
+test("preserves known optional decimal facts when an incoming snapshot omits them", () => {
+  const current = createOrderHistoryRecordFixture({
+    price: "65000.0000",
+    cumulativeQuoteQuantity: "650.0000",
+  })
+  const candidate = createOrderHistoryRecordFixture({
+    id: current.id,
+    price: undefined,
+    cumulativeQuoteQuantity: undefined,
+    lastSourceEventId: "event-002",
+    lastSeenAt: "2026-11-19T00:00:01.000Z",
+    lastSourceEventTimestamp: "2026-11-19T00:00:01.000Z",
+  })
+
+  const merged = mergeOrderHistoryRecords({
+    current,
+    candidate,
+  })
+
+  assert.equal(merged.price, current.price)
+  assert.equal(merged.cumulativeQuoteQuantity, current.cumulativeQuoteQuantity)
+})
+
+test("reports safe existing and incoming immutable values for a rejected price conflict", () => {
+  const current = createOrderHistoryRecordFixture()
+  const conflicting = createOrderHistoryRecordFixture({
+    price: "65001.0000",
+    id: current.id,
+  })
+
+  assert.throws(
+    () => mergeOrderHistoryRecords({
+      current,
+      candidate: conflicting,
+    }),
+    (error) => {
+      assert.equal(error.context.field, "price")
+      assert.equal(error.context.existingValue, current.price)
+      assert.equal(error.context.incomingValue, conflicting.price)
+      assert.equal(error.context.existingBrokerOrderId, current.brokerOrderId)
+      assert.equal(error.context.incomingBrokerOrderId, conflicting.brokerOrderId)
+      assert.equal(error.context.reconciliationDecision, "rejected")
+      assert.equal(error.context.recoverable, false)
+      return error.code === "HARVESTER_ORDER_HISTORY_IDENTITY_CONFLICT"
+    },
+    "A genuine same-exchange-order price conflict must remain fatal and actionable.",
+  )
+})
+
 test("rejects conflicting immutable order facts under the same composite identity", () => {
   const current = createOrderHistoryRecordFixture()
   const conflicting = createOrderHistoryRecordFixture({
