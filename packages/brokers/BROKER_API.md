@@ -163,7 +163,7 @@ These methods remain present on all provider facades for existing consumers. The
 | `getAssets()` | Legacy `Coin[]` projection. Bitunix Futures reports unsupported; use `getBalances()` for exact Futures balances. |
 | `getOrder({ symbol, orderId, clientOrderId? })` | Legacy `Order` lookup. Binance accepts broker or client identity; Bitunix Spot accepts broker `orderId` only; Bitunix Futures reports unsupported because the legacy order shape cannot preserve Futures semantics. |
 | `getOrderHistory(...)` | Legacy provider history. Binance returns bounded `allOrders`; Bitunix Spot returns one symbol-scoped page; Bitunix Futures reports unsupported. Use `getCanonicalOrderHistory()` for Futures canonical order history. |
-| `getMyTrades(...)` | Legacy trade-history operation. Binance supports a bounded symbol-scoped response; Bitunix Spot and Futures report unsupported. Futures canonical bounded executions are exposed through `getFills()`; raw exchange fields remain available through `getFuturesTradeHistory()`. |
+| `getMyTrades(...)` | Legacy trade-history operation. Binance supports a bounded symbol-scoped response; Bitunix Spot remains unsupported. Bitunix Futures returns one bounded array from its documented Futures execution-history endpoint, preserving exact provider fields; fee asset remains unavailable. Use `getFills()` for canonical Fill values. |
 | `getPrice({ symbol })` | Compatibility alias for `getPrices({ symbol })` on Binance, Bitunix Spot, and Bitunix Futures. |
 | `createOrder(input)` | Legacy Spot-shaped `Order` placement facade. Binance supports it behind safety gates; Bitunix Spot implements LIMIT base `quantity` and MARKET quote `quoteQuantity` behind explicit opt-in; Bitunix Futures reports unsupported. Use `createFuturesOrder()` with explicit Futures semantics. |
 | `getSymbolFilters({ symbol })` | Raw provider metadata retained for existing infrastructure adapters. It is not a normalized `TradingRules` value and is not part of the canonical method catalog. |
@@ -292,7 +292,8 @@ The `bitunix-futures` provider is a separate USDT-margined Futures adapter track
 - `getFuturesPositions({ symbol?, positionId? })` and `getFuturesPositionHistory(...)`: current and bounded historical position projections.
 - `getFuturesPositionMode()`, `getFuturesLeverageAndMarginMode({ symbol, marginCoin: "USDT" })`, and `getFuturesTradingSettings({ symbols? })`: authenticated account-setting reads.
 - `getFuturesFundingRate({ symbol })`, `getFuturesFundingRates()`, `getFuturesFundingRateHistory(...)`, and `getFuturesPositionTiers({ symbol })`: funding and risk-tier reads.
-- `getFuturesTradeHistory(...)`: one bounded raw execution-history page preserving exact fee and realized-PnL values.
+- `getFuturesTradeHistory(...)`: one bounded raw execution-history page preserving exact fee and realized-PnL values and pagination metadata.
+- `getMyTrades({ symbol?, orderId?, positionId?, startTime?, endTime?, limit?, skip? })`: compatibility array projection over the same bounded Futures execution page; it does not claim complete account-wide history or commission denomination.
 
 ### Futures-specific mutations
 
