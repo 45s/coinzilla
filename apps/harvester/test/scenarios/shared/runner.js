@@ -36,10 +36,22 @@ export function filterScenarios({
   filters = {},
 } = {}) {
   return scenarios.filter((scenario) => (
-    matchesFilter({ candidate: scenario.id, filter: filters.id }) &&
-    matchesFilter({ candidate: scenario.category, filter: filters.category }) &&
-    matchesFilter({ candidate: scenario.priority, filter: filters.priority }) &&
-    matchesFilter({ candidate: scenario.coverageStatus, filter: filters.coverageStatus }) &&
+    matchesFilter({
+      candidate: scenario.id,
+      filter: filters.id,
+    }) &&
+    matchesFilter({
+      candidate: scenario.category,
+      filter: filters.category,
+    }) &&
+    matchesFilter({
+      candidate: scenario.priority,
+      filter: filters.priority,
+    }) &&
+    matchesFilter({
+      candidate: scenario.coverageStatus,
+      filter: filters.coverageStatus,
+    }) &&
     matchesAllScenarioTags({ scenarioTags: scenario.tags, filter: filters.tag })
   ))
 }
