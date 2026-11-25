@@ -1487,6 +1487,7 @@ function createExchangeHistoryOrder({
   brokerOrderId = "broker-order-unfilled",
   price = "65000.0000",
   market = ORDER_HISTORY_MARKET,
+  createdAt = 100,
 }) {
   const order = createOrderHistoryEventData({
     clientOrderId,
@@ -2234,6 +2235,20 @@ test("rejects pending client identity reuse across markets before exchange ackno
 
   await assert.rejects(
     persistence.orderRepository.upsertHistorical(otherMarketOrder),
+    (error) => error.context.field === "pendingClientOrderIdentityAmbiguous",
+  )
+  const differentCreatedAt = createExchangeHistoryOrder({
+    status: "OPEN",
+    executedQuantity: "0",
+    remainingQuantity: "1.0000",
+    eventId: "exchange-history-order:pending-different-created-at",
+    timestamp: "2026-11-20T04:00:02.000Z",
+    clientOrderId,
+    brokerOrderId: "exchange-order-different-created-at",
+    createdAt: 101,
+  })
+  await assert.rejects(
+    persistence.orderRepository.upsertHistorical(differentCreatedAt),
     (error) => error.context.field === "pendingClientOrderIdentityAmbiguous",
   )
   await inspectSqlite({
