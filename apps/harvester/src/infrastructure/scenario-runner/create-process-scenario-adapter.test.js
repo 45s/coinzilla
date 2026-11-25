@@ -63,3 +63,10 @@ test("process adapter waits for worker exit after receiving a result", async () 
   assert.deepEqual(result, { received: true }, "worker output must be preserved after cleanup")
   assert.ok(Date.now() - startedAt >= 400, "run completion must wait for the worker's delayed exit")
 })
+
+
+test("process adapter refuses to start without a trusted OS sandbox launcher", () => {
+  assert.throws(() => createProcessScenarioAdapter({
+    strategyId: "RS",
+  }), /trusted OS sandbox launcher/)
+})
