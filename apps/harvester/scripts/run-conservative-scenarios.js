@@ -158,13 +158,21 @@ function printUsage() {
   ].join("\n"))
 }
 
-function printBuildIdentity({ buildMetadata }) {
+export function formatBuildIdentity({
+  buildMetadata,
+  runtimeVersion = process.version,
+}) {
   const { source } = buildMetadata
-  logger.log(`[harvester-conservative-scenarios] ${buildMetadata.application}@${buildMetadata.version}`)
-  logger.log(`[harvester-conservative-scenarios] branch=${source.branch ?? "unknown"} commit=${source.commit ?? "unknown"} worktree=${source.workingTree}`)
-  logger.log(`[harvester-conservative-scenarios] runtime=${process.version} metadataSource=${source.metadataSource}`)
+  return [
+    `[harvester-conservative-scenarios] ${buildMetadata.application}@${buildMetadata.version}`,
+    `[harvester-conservative-scenarios] branch=${source.branch ?? "unknown"} commit=${source.commit ?? "unknown"} worktree=${source.workingTree}`,
+    `[harvester-conservative-scenarios] runtime=${runtimeVersion} metadataSource=${source.metadataSource}`,
+  ].join("\n")
 }
 
+function printBuildIdentity({ buildMetadata }) {
+  logger.log(formatBuildIdentity({ buildMetadata }))
+}
 function printScenarioList({ scenarios }) {
   for (const scenario of scenarios) {
     logger.log(`${scenario.id} | ${scenario.priority} | ${scenario.coverageStatus} | ${scenario.title}`)
@@ -186,16 +194,6 @@ function printRunSummary({
 }
 
 export async function runConservativeScenarioCli({ argv = process.argv.slice(2) } = {}) {
-  const options = parseScenarioCliArguments({ argv })
-  if (options.version) {
-    logger.log(`@coinzilla/harvester ${PACKAGE_JSON.version}`)
-    return 0
-  }
-  if (options.help) {
-    printUsage()
-    return 0
-  }
-
   const buildMetadata = captureBuildMetadata({
     application: "harvester-conservative-scenarios",
     version: PACKAGE_JSON.version,
@@ -203,6 +201,15 @@ export async function runConservativeScenarioCli({ argv = process.argv.slice(2) 
     env: process.env,
   })
   printBuildIdentity({ buildMetadata })
+
+  const options = parseScenarioCliArguments({ argv })
+  if (options.version) {
+    return 0
+  }
+  if (options.help) {
+    printUsage()
+    return 0
+  }
 
   const {
     scenarios,
