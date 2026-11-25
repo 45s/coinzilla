@@ -122,12 +122,11 @@ test("Bitunix Futures REST rate limiting is shared across clients using the same
 })
 
 
-test("Bitunix Futures REST applies the documented slower limits to close-position endpoints", async () => {
+function createRateLimitTestClient({ apiKey, calls }) {
   let clock = 0
-  const calls = []
   const client = new BitunixFuturesRestClient({
     config: createConfig({
-      apiKey: "bitunix-close-rate-limit-test-key",
+      apiKey,
     }),
     now: () => 1_700_000_000_000,
     rateLimitNow: () => clock,
@@ -149,35 +148,45 @@ test("Bitunix Futures REST applies the documented slower limits to close-positio
       }
     },
   })
+  return client
+}
 
-  await client.request({
-    method: "POST",
-    path: "/api/v1/futures/trade/close_all_position",
-    body: {},
-    stateChanging: true,
+test("Bitunix Futures REST applies the documented slower limits to close-position endpoints", async () => {
+  const calls = []
+  const client = createRateLimitTestClient({
+    apiKey: "bitunix-close-rate-limit-test-key",
+    calls,
   })
-  await client.request({
-    method: "POST",
-    path: "/api/v1/futures/trade/close_all_position",
-    body: {},
-    stateChanging: true,
-  })
-  await client.request({
-    method: "POST",
-    path: "/api/v1/futures/trade/flash_close_position",
-    body: {
-      positionId: "position-1",
+  const requests = [
+    {
+      path: "/api/v1/futures/trade/close_all_position",
+      body: {},
     },
-    stateChanging: true,
-  })
-  await client.request({
-    method: "POST",
-    path: "/api/v1/futures/trade/flash_close_position",
-    body: {
-      positionId: "position-2",
+    {
+      path: "/api/v1/futures/trade/close_all_position",
+      body: {},
     },
-    stateChanging: true,
-  })
+    {
+      path: "/api/v1/futures/trade/flash_close_position",
+      body: {
+        positionId: "position-1",
+      },
+    },
+    {
+      path: "/api/v1/futures/trade/flash_close_position",
+      body: {
+        positionId: "position-2",
+      },
+    },
+  ]
+
+  for (const request of requests) {
+    await client.request({
+      method: "POST",
+      ...request,
+      stateChanging: true,
+    })
+  }
 
   assert.deepEqual(calls, [
     {
