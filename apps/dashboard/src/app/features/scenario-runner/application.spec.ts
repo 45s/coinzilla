@@ -78,6 +78,26 @@ describe('framework-independent Scenario Runner application', () => {
     expect(workspace.history[0].runId).toBe('run-1');
   });
 
+  it('keeps the scenario catalogue available when run history is temporarily unavailable', async () => {
+    gateway.loadHistory = vi.fn().mockRejectedValue(new Error('History service unavailable'));
+
+    const workspace = await application.loadWorkspace();
+
+    expect(workspace.catalog[0].strategyId).toBe('RS');
+    expect(workspace.history).toEqual([]);
+    expect(workspace.historyError).toBe('History service unavailable');
+  });
+
+  it('returns authoritative run details even when history refresh fails', async () => {
+    gateway.loadHistory = vi.fn().mockRejectedValue(new Error('History service unavailable'));
+
+    const snapshot = await application.refreshRun({ runId: 'run-1' });
+
+    expect(snapshot.run.runId).toBe('run-1');
+    expect(snapshot.history).toEqual([]);
+    expect(snapshot.historyError).toBe('History service unavailable');
+  });
+
   it('selects the first scenario and its defaults without framework state', async () => {
     await application.loadWorkspace();
 
