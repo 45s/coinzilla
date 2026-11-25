@@ -2297,3 +2297,8 @@ The detailed evidence, implementation commits, CI state and remaining unknowns a
 - Strengthened the full Conservative engine lifecycle to use production `updateTradingAccounting`, covering second BUY partial/completed fills, recovery-SELL cancellation/fill reconciliation and replacement SELL submission with exact cumulative accounting assertions.
 - CI fixes: corrected the lifecycle cost-basis expectations from observed canonical fills, fixed strict ESLint formatting, and removed repeated Markdown blank lines. Exact-head verification is tracked on PR #1808.
 - Test-only and documentation changes; no production trading behavior or rules changed.
+
+
+### Exact-head CI refresh — 2026-11-25
+
+On PR #1849 head `25e8ff647d729b722367fd42bc430095f71cb71c`, Harvester Targeted Tests, Repository Quality, Unit Tests, Test Coverage and External Documentation Links passed. Dependency Audit was cancelled during a concurrent push; it is not a pass and must be rerun on a new exact head before review. The PR remains Draft/open and no production migration or exchange operation has occurred.
