@@ -1,7 +1,7 @@
 <section class="runner">
   <header>
     <h1>Strategy Scenario Runner</h1>
-    <p>Scenario definitions and helper evidence only. Production-flow execution remains disabled until a complete simulation adapter is verified.</p>
+    <p>Production-flow simulation is mapped and tested with deterministic fixtures. Public execution remains disabled pending OS-level isolation and durable replay.</p>
   </header>
   @if (error()) {
     <p class="error" role="alert">{{ error() }}</p>
@@ -23,6 +23,16 @@
     </label>
   </div>
   <p class="scenario-status">Execution status: {{ selectedScenario?.executionStatus ?? 'UNAVAILABLE' }}</p>
+  @if (selectedScenario?.readinessReasons?.length) {
+    <section class="readiness">
+      <h2>Readiness and limitations</h2>
+      <ul>
+        @for (reason of selectedScenario?.readinessReasons ?? []; track reason) {
+          <li>{{ reason }}</li>
+        }
+      </ul>
+    </section>
+  }
   <label class="input-label">Run input (JSON)
     <textarea rows="8" [disabled]="selectedScenario?.executable !== true" [value]="inputJson()" (input)="updateInput($any($event.target).value)"></textarea>
   </label>
