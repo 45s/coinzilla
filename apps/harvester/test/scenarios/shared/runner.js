@@ -26,21 +26,42 @@ export function filterScenarios({ scenarios = [], filters = {} } = {}) {
 }
 
 function escapeRegExp(value) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+  return value.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")
+}
+
+function parseTapLine(line) {
+  const match = line.trim().match(/^(ok|not ok)\\s+\\d+\\s+-\\s+(.+?)(?:\\s+#\\s*(SKIP|TODO)(?:\\s+.*)?)?$/i)
+  if (!match) {
+    return null
+  }
+
+  return {
+    outcome: match[1].toLowerCase(),
+    name: match[2].trim(),
+    directive: match[3]?.toUpperCase() ?? null,
+  }
 }
 
 export function parseTapResults({ output = "", expectedTests = [] } = {}) {
-  const lines = output.split(/\r?\n/).filter((line) => /^\s*(?:ok|not ok)\s+\d+\s+-/.test(line))
+  const tapResults = output.split(/\\r?\\n/).map(parseTapLine).filter(Boolean)
+
   return expectedTests.map((testCase) => {
-    const matchingLines = lines.filter((line) => line.includes(testCase.name))
+    const matchingResults = tapResults.filter((result) => result.name === testCase.name)
     let status = "NOT_FOUND"
-    if (matchingLines.some((line) => /^\s*not ok\s/.test(line))) {
-      status = "FAILED"
-    } else if (matchingLines.some((line) => /#\s*(?:SKIP|TODO)/i.test(line))) {
-      status = "SKIPPED"
-    } else if (matchingLines.some((line) => /^\s*ok\s/.test(line))) {
-      status = "PASSED"
+
+    if (matchingResults.length > 1) {
+      status = "AMBIGUOUS"
+    } else if (matchingResults.length === 1) {
+      const [result] = matchingResults
+      if (result.directive) {
+        status = "SKIPPED"
+      } else if (result.outcome === "not ok") {
+        status = "FAILED"
+      } else {
+        status = "PASSED"
+      }
     }
+
     return {
       ...testCase,
       status,
@@ -93,22 +114,30 @@ function executeTestGroup({
     output: execution.stdout ?? "",
     expectedTests: group.testCases,
   })
+  const processFailed = Boolean(execution.error) || execution.status !== 0
   const executionError = execution.error?.message ??
-    (execution.status === 0 ? null : `Node test process exited with status ${execution.status}.`)
+    (processFailed ? `Node test process exited with status ${execution.status ?? "unknown"}.` : null)
 
-  return parsed.map((result) => ({
-    ...result,
-    exitCode: execution.status,
-    error: result.status === "NOT_FOUND" ? executionError : null,
-    stderr: result.status === "FAILED" ? (execution.stderr ?? "").slice(0, 2000) : null,
-  }))
+  return parsed.map((result) => {
+    const status = processFailed && result.status === "PASSED"
+      ? "PROCESS_FAILED"
+      : result.status
+
+    return {
+      ...result,
+      status,
+      exitCode: execution.status,
+      error: processFailed ? executionError : null,
+      stderr: processFailed ? (execution.stderr ?? "").slice(0, 2000) : null,
+    }
+  })
 }
 
 function scenarioResult({ scenario, testResults }) {
   let status = "PASSED"
   if (testResults.length === 0) {
     status = "NOT_EXECUTABLE"
-  } else if (testResults.some((result) => result.status === "FAILED")) {
+  } else if (testResults.some((result) => ["FAILED", "PROCESS_FAILED", "AMBIGUOUS"].includes(result.status))) {
     status = "FAILED"
   } else if (testResults.some((result) => result.status === "NOT_FOUND")) {
     status = "TEST_NOT_FOUND"
