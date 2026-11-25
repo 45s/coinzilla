@@ -383,6 +383,22 @@ function createResolvedHarvesterRuntime({
   }
 }
 
+function resolveMarketPriceStrategyIds({ marketPairs, conservativePairs, recoverySellerPairs } = {}) {
+  const strategyIdsBySymbol = {}
+  for (const symbol of Object.keys(marketPairs ?? {})) {
+    const isConservativeOwner = Object.hasOwn(conservativePairs ?? {}, symbol)
+    const isRecoverySellerOwner = Object.hasOwn(recoverySellerPairs ?? {}, symbol)
+    if (isConservativeOwner === isRecoverySellerOwner) {
+      strategyIdsBySymbol[symbol] = null
+      continue
+    }
+    strategyIdsBySymbol[symbol] = isConservativeOwner
+      ? StrategyId.COIN_GRABBER
+      : StrategyId.RECOVERY_SELLER
+  }
+  return Object.freeze(strategyIdsBySymbol)
+}
+
 function createResolvedHarvesterOptions({ resolved, eventPublisher, logger, executionRoutes } = {}) {
   publishConfigurationEvidence({
     eventPublisher,
@@ -405,6 +421,11 @@ function createResolvedHarvesterOptions({ resolved, eventPublisher, logger, exec
     tradingMode: resolved.runtime.tradingMode,
     tradingEnabled: resolved.runtime.tradingEnabled && resolved.evidence.enabledSymbols.length > 0,
     executionRoutes: Object.freeze([...(executionRoutes ?? [])]),
+    marketPriceStrategyIds: resolveMarketPriceStrategyIds({
+      marketPairs: resolved.resolvedPairs.marketPairs,
+      conservativePairs: resolved.resolvedPairs.conservativePairs,
+      recoverySellerPairs: resolved.resolvedPairs.recoverySellerPairs,
+    }),
   })
 }
 

@@ -1,6 +1,8 @@
 import nodeTest from "node:test"
 import assert from "node:assert/strict"
 import * as shared from "../../test/bootstrap/start-harvester-test-support.js"
+import { StrategyId } from "../domain/strategies/strategy-ids.js"
+import { createHarvesterStartupContext } from "./start-harvester.js"
 
 const { Balance, CanonicalOrder, Fill, Money, Quantity, TradingRules, multiplyDecimal, waitForTestSignal, appConfig, createMarketMetadata, createOpenOrderSnapshot, createBinanceCapabilities, createBroker, createRecoverySellerStopWorkflow, recordConfigurationBaseline, recordProcessStarted, recordProcessStopped, makeVolatilityReadyBroker, binanceEnv, startHarvesterForTest, createFill } = shared
 const { mkdtemp, rm, os, path, createFileOperationalStateStore } = shared
@@ -72,6 +74,49 @@ function createRsOnlyStartupConfig({ enableVolatilityProtection = false } = {}) 
     },
   }
 }
+
+test("composes the default market-price error handler with resolved RS ownership", async () => {
+  const { directory, store } = await createRsOnlyOperationalStateStore()
+  const errorRecords = []
+  const failure = new Error("RS market price processing failed")
+  try {
+    const startup = await createHarvesterStartupContext({
+      options: {
+        loadConfig: async () => createRsOnlyStartupConfig(),
+        env: binanceEnv,
+        operationalStateStore: store,
+        executionSymbols: ["LINEAUSDT"],
+        executionRoutes: [{
+          strategyId: StrategyId.RECOVERY_SELLER,
+          symbol: "LINEAUSDT",
+        }],
+        eventPublisher: shared.testEventPublisher,
+        logger: {
+          info() {},
+          error: (record) => errorRecords.push(record),
+        },
+      },
+    })
+
+    startup.onMarketPriceError({
+      symbol: "LINEAUSDT",
+      errors: [failure],
+    })
+
+    assert.deepEqual(errorRecords, [{
+      message: "Market price processing failed",
+      strategyId: StrategyId.RECOVERY_SELLER,
+      symbol: "LINEAUSDT",
+      error: undefined,
+      errors: [failure],
+    }], "Bootstrap must pass resolved RS ownership into the default shared market-price error handler.")
+  } finally {
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
+  }
+})
 
 test("starts an RS-only provider account without a Conservative execution route", async () => {
   const { directory, store } = await createRsOnlyOperationalStateStore()
