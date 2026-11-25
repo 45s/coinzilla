@@ -90,3 +90,8 @@ The process adapter canonicalizes the configured worker path with filesystem rea
 
 
 The worker-path check also requires the canonical target to be a regular `.js` file; a directory with a `.js` suffix is not accepted.
+
+
+## API boundary decomposition — 2026-11-25
+
+The Scenario Runner request handler validates browser Origin before any route handling, then delegates route dispatch and request-error conversion to a separate helper. The CSRF boundary is explicit and the request entrypoint remains within the repository's strict complexity/function-size policy without weakening the origin check.

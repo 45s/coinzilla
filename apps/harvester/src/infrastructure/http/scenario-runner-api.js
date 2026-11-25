@@ -26,18 +26,11 @@ function sendJson({ response, status, body }) {
 }
 
 
-function rejectUntrustedOrigin({ request, response }) {
+function isAllowedBrowserOrigin({ request }) {
   const origin = request.headers?.origin
-  if (origin === undefined || (typeof origin === "string" && ALLOWED_BROWSER_ORIGINS.has(origin))) {
-    return false
-  }
-  sendError({
-    response,
-    status: 403,
-    code: "SCENARIO_RUNNER_ORIGIN_FORBIDDEN",
-    message: "Scenario Runner requests from this browser origin are not allowed.",
-  })
-  return true
+  return origin === undefined || (
+    typeof origin === "string" && ALLOWED_BROWSER_ORIGINS.has(origin)
+  )
 }
 
 function resolveErrorCode({ error }) {
@@ -243,6 +236,27 @@ async function handleRunRoute({ request, response, pathname, runner }) {
   return false
 }
 
+
+async function handleScenarioRunnerRoutes({ request, response, pathname, runner, catalog }) {
+  try {
+    if (handleMethod({ request, pathname, response, runner, catalog })) {
+      return true
+    }
+    if (await handleRunRoute({ request, response, pathname, runner })) {
+      return true
+    }
+    handleUnknownRoute({ response })
+  } catch (error) {
+    sendError({
+      response,
+      status: Number.isSafeInteger(error?.status) ? error.status : 400,
+      code: resolveErrorCode({ error }),
+      message: error instanceof Error ? error.message : "Scenario Runner request failed.",
+    })
+  }
+  return true
+}
+
 export async function handleScenarioRunnerRequest({
   request,
   response,
@@ -253,10 +267,13 @@ export async function handleScenarioRunnerRequest({
   if (!pathname.startsWith(API_PREFIX)) {
     return false
   }
-  if (rejectUntrustedOrigin({
-    request,
-    response,
-  })) {
+  if (!isAllowedBrowserOrigin({ request })) {
+    sendError({
+      response,
+      status: 403,
+      code: "SCENARIO_RUNNER_ORIGIN_FORBIDDEN",
+      message: "Scenario Runner requests from this browser origin are not allowed.",
+    })
     return true
   }
   if (request.method === "OPTIONS") {
@@ -272,33 +289,5 @@ export async function handleScenarioRunnerRequest({
     })
     return true
   }
-  try {
-    if (handleMethod({
-      request,
-      pathname,
-      response,
-      runner,
-      catalog,
-    })) {
-      return true
-    }
-    if (await handleRunRoute({
-      request,
-      response,
-      pathname,
-      runner,
-    })) {
-      return true
-    }
-    handleUnknownRoute({ response })
-    return true
-  } catch (error) {
-    sendError({
-      response,
-      status: Number.isSafeInteger(error?.status) ? error.status : 400,
-      code: resolveErrorCode({ error }),
-      message: error instanceof Error ? error.message : "Scenario Runner request failed.",
-    })
-    return true
-  }
+  return handleScenarioRunnerRoutes({ request, response, pathname, runner, catalog })
 }
