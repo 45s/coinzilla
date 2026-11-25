@@ -12,6 +12,10 @@ import {
 import { EventBus } from "@coinzilla/event-bus"
 import { HARVESTER_EVENT_NAMES } from "../../application/events/event-names.js"
 import { createOrderHistoryRecord } from "../../domain/order-history/order-history-record.js"
+import {
+  mapOrderHistoryRecordToRow,
+  ORDER_COLUMNS,
+} from "./order-row-mapping.js"
 import { closeHarvesterPersistence } from "./close-harvester-persistence.js"
 import { createFillHistoryObserver } from "./create-fill-history-observer.js"
 import { configureHarvesterLogging } from "../logging/configure-harvester-logging.js"
@@ -106,8 +110,8 @@ function assertMigrationHistory(database) {
   const migrations = database.prepare(
     "SELECT version, name, checksum FROM schema_migrations ORDER BY version",
   ).all()
-  assert.equal(migrations.length, 4, "A fresh database must record schema, provenance, cursor, and runtime-error migrations.")
-  assert.deepEqual(migrations.map(({ version }) => version), [1, 2, 3, 4], "A fresh database must apply all ordered relational migrations.")
+  assert.equal(migrations.length, 5, "A fresh database must record schema, provenance, cursor, runtime-error, and exchange-identity migrations.")
+  assert.deepEqual(migrations.map(({ version }) => version), [1, 2, 3, 4, 5], "A fresh database must apply all ordered relational migrations.")
   assert.ok(migrations[0].checksum, "The migration history must record the implementation checksum.")
 }
 
@@ -149,7 +153,17 @@ function assertFreshRelationalSchema(database) {
     ({ name }) => name === "orders_exchange_lookup_idx",
   )
   assert.ok(exchangeLookupIndex, "Orders must have a provider-scoped exchange-order lookup index.")
-  assert.equal(exchangeLookupIndex.unique, 0, "Exchange order IDs must not be assumed unique across every provider market.")
+  assert.equal(exchangeLookupIndex.unique, 0, "The lookup index must retain its non-unique query plan.")
+  const exchangeIdentityIndex = database.prepare("PRAGMA index_list(orders)").all().find(
+    ({ name }) => name === "orders_exchange_identity_unique_idx",
+  )
+  assert.ok(exchangeIdentityIndex, "Exchange order identity must be protected by a market-scoped unique index.")
+  assert.equal(exchangeIdentityIndex.unique, 1, "One exchange order ID may identify only one row within its provider/account/market scope.")
+  const pendingClientIdentityIndex = database.prepare("PRAGMA index_list(orders)").all().find(
+    ({ name }) => name === "orders_pending_client_identity_unique_idx",
+  )
+  assert.ok(pendingClientIdentityIndex, "Pending client IDs must remain unique within their provider account.")
+  assert.equal(pendingClientIdentityIndex.unique, 1, "A provisional client identity must not be duplicated before an exchange order ID is known.")
   assertColumnsPresent({
     database,
     table: "runtime_errors",
@@ -165,7 +179,7 @@ function assertFreshRelationalSchema(database) {
 }
 
 function createLegacyRecord() {
-  return createOrderHistoryRecord({
+  const record = createOrderHistoryRecord({
     order: createOrderHistoryEventData(),
     sourceEvent: {
       id: "legacy-source-event-1",
@@ -174,6 +188,16 @@ function createLegacyRecord() {
       timestamp: "2026-11-19T12:00:00.000Z",
     },
     environment: "testnet",
+  })
+  return Object.freeze({
+    ...record,
+    id: JSON.stringify([
+      record.environment,
+      record.providerInstanceId,
+      record.providerType,
+      record.accountId,
+      record.clientOrderId,
+    ]),
   })
 }
 
@@ -1577,7 +1601,7 @@ async function assertNoExchangeOrderLookup({ repository, lookup }) {
   assert.equal(await repository.findByExchangeOrderIdentity(lookup), null)
 }
 
-test("resolves exchange order identity only within its full provider scope and rejects ambiguity", async (t) => {
+test("resolves exchange order identity only within its full provider scope and rejects a conflicting client ID", async (t) => {
   const context = await createTestContext({ t })
   const persistence = await preparePersistence({ context })
   const firstOrder = { ...createLegacyRecord() }
@@ -1609,10 +1633,15 @@ test("resolves exchange order identity only within its full provider scope and r
     brokerOrderId: firstOrder.brokerOrderId,
     environment: firstOrder.environment,
   })
-  await persistence.orderRepository.upsertHistorical(secondOrder)
-  assert.throws(
-    () => persistence.orderRepository.findByExchangeOrderIdentity(lookup),
-    /exchangeOrderIdAmbiguous/,
+  await assert.rejects(
+    persistence.orderRepository.upsertHistorical(secondOrder),
+    /clientOrderId/,
+    "The same exchange order ID cannot be reassigned to a different client order ID.",
+  )
+  assert.equal(
+    await persistence.orderRepository.findByExchangeOrderIdentity(lookup),
+    firstOrder.clientOrderId,
+    "The existing exchange-order identity must remain unambiguous after rejecting the conflicting record.",
   )
 })
 
@@ -1682,9 +1711,9 @@ test("persists reused Binance client IDs as separate ZRO/DOGE exchange orders wi
   for (const scenario of scenarios) {
     const market = createHistoryMarket(scenario)
     const earlier = createExchangeHistoryOrder({
-      status: "PARTIALLY_FILLED",
-      executedQuantity: "0.2500",
-      remainingQuantity: "0.7500",
+      status: "FILLED",
+      executedQuantity: "1.0000",
+      remainingQuantity: "0",
       eventId: `exchange-history-order:${scenario.symbol}:earlier`,
       timestamp: "2026-11-20T04:00:00.000Z",
       clientOrderId: scenario.clientOrderId,
@@ -1706,13 +1735,27 @@ test("persists reused Binance client IDs as separate ZRO/DOGE exchange orders wi
 
     await persistence.orderRepository.upsertHistorical(earlier)
     await persistence.orderRepository.upsertHistorical(incoming)
+    await persistence.orderRepository.upsertHistorical(incoming)
+
+    const updatedPartialFill = createExchangeHistoryOrder({
+      status: "PARTIALLY_FILLED",
+      executedQuantity: "0.7500",
+      remainingQuantity: "0.2500",
+      eventId: `exchange-history-order:${scenario.symbol}:partial-update`,
+      timestamp: "2026-11-20T04:00:02.000Z",
+      clientOrderId: scenario.clientOrderId,
+      brokerOrderId: scenario.incomingBrokerOrderId,
+      price: "1.1000",
+      market,
+    })
+    await persistence.orderRepository.upsertHistorical(updatedPartialFill)
 
     const conflictingSameOrder = createExchangeHistoryOrder({
       status: "PARTIALLY_FILLED",
-      executedQuantity: "0.5000",
-      remainingQuantity: "0.5000",
+      executedQuantity: "0.7500",
+      remainingQuantity: "0.2500",
       eventId: `exchange-history-order:${scenario.symbol}:same-order-conflict`,
-      timestamp: "2026-11-20T04:00:02.000Z",
+      timestamp: "2026-11-20T04:00:03.000Z",
       clientOrderId: scenario.clientOrderId,
       brokerOrderId: scenario.incomingBrokerOrderId,
       price: "1.2000",
@@ -1751,9 +1794,9 @@ test("links fills to the correct exchange order when Binance reuses a clientOrde
   const persistence = await preparePersistence({ context })
   const clientOrderId = "h-BTCUSDT-reused"
   const earlier = createExchangeHistoryOrder({
-    status: "OPEN",
-    executedQuantity: "0",
-    remainingQuantity: "1.0000",
+    status: "FILLED",
+    executedQuantity: "1.0000",
+    remainingQuantity: "0",
     eventId: "exchange-history-order:earlier",
     timestamp: "2026-11-20T04:00:00.000Z",
     clientOrderId,
@@ -1761,9 +1804,9 @@ test("links fills to the correct exchange order when Binance reuses a clientOrde
     price: "65000.0000",
   })
   const incoming = createExchangeHistoryOrder({
-    status: "OPEN",
-    executedQuantity: "0",
-    remainingQuantity: "1.0000",
+    status: "PARTIALLY_FILLED",
+    executedQuantity: "0.5000",
+    remainingQuantity: "0.5000",
     eventId: "exchange-history-order:incoming",
     timestamp: "2026-11-20T04:00:01.000Z",
     clientOrderId,
