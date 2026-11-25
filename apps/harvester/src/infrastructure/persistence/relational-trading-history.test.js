@@ -2206,6 +2206,47 @@ test("fails v5 migration closed and retains backup when exchange identity is dup
   })
 })
 
+test("updates a pending order when a later snapshot omits its known creation timestamp", async (t) => {
+  const context = await createTestContext({ t })
+  const persistence = await preparePersistence({ context })
+  const clientOrderId = "h-BTCUSDT-optional-created-at"
+  const initialRecord = createExchangeHistoryOrder({
+    status: "OPEN",
+    executedQuantity: "0",
+    remainingQuantity: "1.0000",
+    eventId: "exchange-history-order:optional-created-at-pending",
+    clientOrderId,
+    brokerOrderId: null,
+    createdAt: 100,
+  })
+  await persistence.orderRepository.upsertHistorical(initialRecord)
+  const updatedRecord = createExchangeHistoryOrder({
+    status: "PARTIALLY_FILLED",
+    executedQuantity: "0.2500",
+    remainingQuantity: "0.7500",
+    eventId: "exchange-history-order:optional-created-at-update",
+    clientOrderId,
+    brokerOrderId: null,
+    createdAt: null,
+  })
+  await persistence.orderRepository.upsertHistorical(updatedRecord)
+  await inspectSqlite({
+    filename: context.filename,
+    work: (database) => {
+      const rows = database.prepare(
+        "SELECT id, exchange_order_id, status, executed_quantity, remaining_quantity, exchange_created_at FROM orders WHERE client_order_id = ?",
+      ).all(clientOrderId)
+      assert.equal(rows.length, 1, "An update without optional creation time must reconcile into the existing pending order.")
+      assert.equal(rows[0].id, initialRecord.id, "Omitting creation time must not replace the stable provisional order identity.")
+      assert.equal(rows[0].exchange_order_id, null, "A still-pending order must not acquire an exchange order ID prematurely.")
+      assert.equal(rows[0].status, "PARTIALLY_FILLED", "The pending order must accept the newer lifecycle status.")
+      assert.equal(rows[0].executed_quantity, "0.2500", "The pending order must retain the newer cumulative executed quantity.")
+      assert.equal(rows[0].remaining_quantity, "0.7500", "The pending order must retain the newer remaining quantity.")
+      assert.equal(rows[0].exchange_created_at, new Date(100).toISOString(), "An omitted creation timestamp must preserve the previously verified value.")
+    },
+  })
+})
+
 test("promotes a pending order and links its earlier exchange-identified fill", async (t) => {
   const context = await createTestContext({ t })
   const persistence = await preparePersistence({ context })
