@@ -155,6 +155,82 @@ test("runner retains bounded history and emits lifecycle notifications", async (
   assert.equal((await runner.waitForRun(second.runId)).status, SCENARIO_RUN_STATUS.COMPLETED)
 })
 
+test("runner retains a blocked run when the bounded queue is full", async () => {
+  const adapter = createAdapter(({ signal }) => new Promise((resolve) => {
+    const settleCancellation = () => resolve({ output: "cancelled" })
+    if (signal.aborted) {
+      settleCancellation()
+      return
+    }
+    signal.addEventListener("abort", settleCancellation, { once: true })
+  }))
+  const runner = createScenarioRunner({
+    adapters: [adapter],
+    createRunId: (() => {
+      let count = 0
+      return () => `run-queue-${++count}`
+    })(),
+    maxConcurrentRuns: 1,
+    maxQueuedRuns: 0,
+  })
+  const active = runner.submit({
+    strategyId: "example",
+    scenarioId: "active",
+  })
+  const blocked = runner.submit({
+    strategyId: "example",
+    scenarioId: "overflow",
+  })
+
+  assert.equal(active.status, SCENARIO_RUN_STATUS.RUNNING,
+    "The first run must occupy the only worker slot.")
+  assert.equal(blocked.status, SCENARIO_RUN_STATUS.BLOCKED,
+    "A submission beyond queue capacity must be explicitly blocked.")
+  assert.equal(runner.getRun(blocked.runId)?.status, SCENARIO_RUN_STATUS.BLOCKED,
+    "A blocked submission must remain retrievable by its returned run ID.")
+  assert.ok(runner.listRuns().some((run) => run.runId === blocked.runId),
+    "A blocked submission must remain visible in bounded run history.")
+
+  await runner.close()
+})
+
+test("runner rejects new submissions when bounded history is occupied by active runs", async () => {
+  const adapter = createAdapter(({ signal }) => new Promise((resolve) => {
+    const settleCancellation = () => resolve({ output: "cancelled" })
+    if (signal.aborted) {
+      settleCancellation()
+      return
+    }
+    signal.addEventListener("abort", settleCancellation, { once: true })
+  }))
+  const runner = createScenarioRunner({
+    adapters: [adapter],
+    createRunId: (() => {
+      let count = 0
+      return () => `run-history-${++count}`
+    })(),
+    maxStoredRuns: 1,
+    maxConcurrentRuns: 1,
+    maxQueuedRuns: 1,
+  })
+  const active = runner.submit({
+    strategyId: "example",
+    scenarioId: "active",
+  })
+
+  assert.throws(() => runner.submit({
+    strategyId: "example",
+    scenarioId: "overflow",
+  }), (error) => error.status === 429 && error.code === "SCENARIO_RUNNER_CAPACITY_REACHED",
+  "A full history containing only active runs must reject without returning an unpersisted run ID.")
+  assert.equal(runner.listRuns().length, 1,
+    "Rejecting at the history limit must not exceed the configured record bound.")
+  assert.equal(runner.getRun(active.runId)?.status, SCENARIO_RUN_STATUS.RUNNING,
+    "Capacity rejection must leave the existing active run unchanged.")
+
+  await runner.close()
+})
+
 test("runner queues excess runs and starts them FIFO when worker slots free", async () => {
   let releaseFirst
   let releaseSecond

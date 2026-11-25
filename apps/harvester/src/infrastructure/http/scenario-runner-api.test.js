@@ -157,6 +157,36 @@ test("Scenario Runner API rejects invalid JSON and missing run IDs", async () =>
 })
 
 
+test("Scenario Runner API preserves explicit capacity errors", async () => {
+  const runner = createRunnerFake()
+  runner.submit = () => {
+    throw Object.assign(new Error("Scenario Runner history capacity is occupied by active executions."), {
+      status: 429,
+      code: "SCENARIO_RUNNER_CAPACITY_REACHED",
+    })
+  }
+  const response = responseRecorder()
+
+  await handleScenarioRunnerRequest({
+    request: createRequest({
+      method: "POST",
+      url: "/api/v1/scenario-runner/runs",
+      body: JSON.stringify({
+        strategyId: "RS",
+        scenarioId: "scenario",
+      }),
+    }),
+    response,
+    pathname: "/api/v1/scenario-runner/runs",
+    runner,
+  })
+
+  assert.equal(response.status, 429,
+    "The API must preserve the runner's retryable capacity status.")
+  assert.equal(JSON.parse(response.body).error.code, "SCENARIO_RUNNER_CAPACITY_REACHED",
+    "The API must preserve the stable capacity error code.")
+})
+
 test("host does not expose a profitability-helper scaffold as an executable RS scenario", () => {
   const host = createScenarioRunnerHost()
   const [scenario] = host.catalog[0].scenarios
