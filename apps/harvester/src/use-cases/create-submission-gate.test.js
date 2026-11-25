@@ -146,3 +146,29 @@ test("an account safety blocker overrides every order path, including shutdown r
     blockerId: "account-blocker-1",
   })
 })
+
+
+test("blocks a BUY when a durable account-scoped safety blocker is active", () => {
+  const dependencies = createDependencies()
+  dependencies.state.shutdownBuyGate = false
+  dependencies.canTrade = () => true
+  dependencies.isStopping = () => false
+  dependencies.getAccountSafetyBlocker = () => ({
+    scope: "ACCOUNT",
+    reason: "RECOVERY_SELLER_UNEXPECTED_CONDITION",
+    blockerId: "incident-sequence-13",
+  })
+  const gate = createSubmissionGate(dependencies)
+  const result = gate({
+    order: createOrder({ side: "BUY" }),
+    purpose: "STANDING_BUY",
+  })
+
+  assert.equal(result.allowed, false)
+  assert.equal(result.reason, "ACCOUNT_SAFETY_BLOCKER_ACTIVE")
+  assert.deepEqual(result.details, {
+    symbol: "DOGEUSDT",
+    blockerReason: "RECOVERY_SELLER_UNEXPECTED_CONDITION",
+    blockerId: "incident-sequence-13",
+  })
+})
