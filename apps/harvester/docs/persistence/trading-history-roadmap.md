@@ -96,7 +96,6 @@ Financial values are stored as exact decimal text. Missing values remain SQL `NU
 - Keep genuine same-exchange-order immutable conflicts fatal and keep history coverage incomplete on any page failure.
 - Exact prior-row broker IDs and price values are not present in the recovered runtime logs or Library files. The committed fixtures use the observed ZRO/DOGE identifiers with explicitly synthetic prices; do not claim the original persisted row pair is independently proven.
 
-
 ### Phase 4 — Strategy-cycle attribution
 
 **Status: In progress — verified live-order ownership propagation is tracked by [#1669 / PR #1669](https://github.com/45s/coinzilla/pull/1669).**
