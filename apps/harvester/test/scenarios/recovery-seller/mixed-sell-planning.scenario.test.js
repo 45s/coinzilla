@@ -984,7 +984,7 @@ test("RS-003-009-A: tiny exponent-notation quantities preserve exact TradingRule
 
 
 function createScenarioTradingRules({ input, market, baseAsset }) {
-  const quoteAsset = market.quoteAsset
+  const { quoteAsset } = market
   const constraints = [
     {
       type: "PRICE_INCREMENT",
