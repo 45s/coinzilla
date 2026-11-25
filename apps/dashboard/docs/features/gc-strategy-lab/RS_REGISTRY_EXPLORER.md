@@ -144,3 +144,8 @@ A scenario that cannot invoke production behavior safely is blocked/not executab
 ## Execution ownership decision (2026-11-25)
 
 Approved: scenario execution belongs to Harvester, not the Dashboard browser. Dashboard authors inputs/configuration and renders server-produced results and trace. Harvester hosts the isolated run and strategy adapters, invoking the same production business/application functions as live runtime. The API is a transport boundary, not a second business layer. Runtime/process isolation and resource/lifecycle controls remain open for the next design decision.
+
+
+## Approved simulation isolation decision (2026-11-25)
+
+Each run is executed by a dedicated worker process managed by the Harvester runner host, separate from the live trading process. Every worker receives fresh run-local state and simulation-only adapters, has no credentials or production persistence/live-account access, and cannot fall back to real broker/exchange infrastructure. Worker timeouts, concurrency/resource limits, cleanup and fail-closed diagnostics are mandatory; exact operational values and launch mechanism are to be established during implementation audit.
