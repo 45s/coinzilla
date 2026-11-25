@@ -109,6 +109,25 @@ export function createScenarioRunnerApplication({ gateway }: {
   }
 
   return Object.freeze({
+    selectStrategy({ strategyId }: { strategyId: string }) {
+      const selectedStrategy = catalog.find((item) => item.strategyId === strategyId);
+      const selectedScenario = selectedStrategy?.scenarios[0];
+      return {
+        scenarioId: selectedScenario?.id ?? '',
+        inputJson: JSON.stringify(selectedScenario?.defaultInput ?? {}, null, 2),
+      };
+    },
+
+    selectScenario({ strategyId, scenarioId }: {
+      strategyId: string;
+      scenarioId: string;
+    }) {
+      const selectedScenario = findScenario({ catalog, strategyId, scenarioId });
+      return {
+        inputJson: JSON.stringify(selectedScenario?.defaultInput ?? {}, null, 2),
+      };
+    },
+
     async loadWorkspace() {
       const [loadedCatalog, history] = await Promise.all([
         loadCatalog(),

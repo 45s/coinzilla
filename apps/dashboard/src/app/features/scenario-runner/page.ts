@@ -121,16 +121,18 @@ export class ScenarioRunnerComponent {
 
   selectStrategy(value: string): void {
     this.strategyId.set(value);
-    const selected = this.catalog().find((item) => item.strategyId === value);
-    const firstScenario = selected?.scenarios[0];
-    this.scenarioId.set(firstScenario?.id ?? '');
-    this.inputJson.set(JSON.stringify(firstScenario?.defaultInput ?? {}, null, 2));
+    const selection = this.application.selectStrategy({ strategyId: value });
+    this.scenarioId.set(selection.scenarioId);
+    this.inputJson.set(selection.inputJson);
   }
 
   selectScenario(value: string): void {
     this.scenarioId.set(value);
-    const selectedScenario = this.scenarios.find((item) => item.id === value);
-    this.inputJson.set(JSON.stringify(selectedScenario?.defaultInput ?? {}, null, 2));
+    const selection = this.application.selectScenario({
+      strategyId: this.strategyId(),
+      scenarioId: value,
+    });
+    this.inputJson.set(selection.inputJson);
   }
 
   updateInput(value: string): void {
