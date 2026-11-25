@@ -2,6 +2,7 @@ import nodeTest from "node:test"
 import assert from "node:assert/strict"
 import * as shared from "../../test/bootstrap/start-harvester-test-support.js"
 import { StrategyId } from "../domain/strategies/strategy-ids.js"
+import { createHarvesterStartupContext } from "./start-harvester.js"
 
 const { Balance, CanonicalOrder, Fill, Money, Quantity, TradingRules, multiplyDecimal, waitForTestSignal, appConfig, createMarketMetadata, createOpenOrderSnapshot, createBinanceCapabilities, createBroker, createRecoverySellerStopWorkflow, recordConfigurationBaseline, recordProcessStarted, recordProcessStopped, makeVolatilityReadyBroker, binanceEnv, startHarvesterForTest, createFill } = shared
 const { mkdtemp, rm, os, path, createFileOperationalStateStore } = shared
@@ -74,70 +75,41 @@ function createRsOnlyStartupConfig({ enableVolatilityProtection = false } = {}) 
   }
 }
 
-test("attributes RS-only market-price processing failures using the resolved execution route", async () => {
+test("composes the default market-price error handler with resolved RS ownership", async () => {
   const { directory, store } = await createRsOnlyOperationalStateStore()
-  const calls = []
-  const broker = createRsOnlyStartupBroker({ calls })
-  let handleMarketPrice
-  broker.subscribeForPrices = async ({ symbol, onPrice }) => {
-    calls.push(`subscribe-price:${symbol}`)
-    handleMarketPrice = onPrice
-    return {
-      ok: true,
-      data: {
-        unsubscribe: async () => {},
-        stream: "price",
-      },
-    }
-  }
-  const failure = new Error("RS market price evaluation failed")
   const errorRecords = []
-  const evaluatedSymbols = []
+  const failure = new Error("RS market price processing failed")
   try {
-    const result = await startHarvesterForTest({
-      loadConfig: async () => createRsOnlyStartupConfig(),
-      env: binanceEnv,
-      brokerAdapterFactory: () => broker,
-      operationalStateStore: store,
-      executionSymbols: ["LINEAUSDT"],
-      executionRoutes: [{
-        strategyId: StrategyId.RECOVERY_SELLER,
-        symbol: "LINEAUSDT",
-      }],
-      marketDataSymbols: ["LINEAUSDT"],
-      evaluateStrategy: ({ marketPrice }) => {
-        evaluatedSymbols.push(marketPrice.symbol)
-        throw failure
+    const startup = await createHarvesterStartupContext({
+      options: {
+        loadConfig: async () => createRsOnlyStartupConfig(),
+        env: binanceEnv,
+        operationalStateStore: store,
+        executionSymbols: ["LINEAUSDT"],
+        executionRoutes: [{
+          strategyId: StrategyId.RECOVERY_SELLER,
+          symbol: "LINEAUSDT",
+        }],
+        eventPublisher: shared.testEventPublisher,
+        logger: {
+          info() {},
+          error: (record) => errorRecords.push(record),
+        },
       },
-      evaluateRecoverySellerTransition: async () => ({
-        ok: true,
-        data: { skipped: true },
-      }),
-      logger: {
-        info() {},
-        error: (record) => errorRecords.push(record),
-      },
-    })
-    assert.equal(typeof handleMarketPrice, "function", "Bootstrap must establish the shared market-price subscription.")
-    const processed = await handleMarketPrice({
-      symbol: "LINEAUSDT",
-      price: "65000",
-      timestamp: Date.now(),
     })
 
-    const diagnostic = errorRecords.find(({ message }) => message === "Market price processing failed")
-    const diagnosticContext = JSON.stringify({
-      processed,
-      userDataReady: result.userDataReady,
-      errorRecords,
-      calls,
-      evaluatedSymbols,
+    startup.onMarketPriceError({
+      symbol: "LINEAUSDT",
+      errors: [failure],
     })
-    assert.ok(diagnostic, `The shared market-price subscription must report the processing failure: ${diagnosticContext}`)
-    assert.equal(diagnostic.strategyId, StrategyId.RECOVERY_SELLER, "Bootstrap must attribute an RS-only market failure to the resolved RS route.")
-    assert.equal(diagnostic.symbol, "LINEAUSDT", "The original RS market symbol must remain available.")
-    assert.equal(diagnostic.errors[0], failure, "The original processing error must remain intact.")
-    await result.stop()
+
+    assert.deepEqual(errorRecords, [{
+      message: "Market price processing failed",
+      strategyId: StrategyId.RECOVERY_SELLER,
+      symbol: "LINEAUSDT",
+      error: undefined,
+      errors: [failure],
+    }], "Bootstrap must pass resolved RS ownership into the default shared market-price error handler.")
   } finally {
     await rm(directory, {
       recursive: true,

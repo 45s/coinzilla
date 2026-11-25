@@ -428,7 +428,7 @@ async function resolveHarvesterStartupConfiguration({ dependencies }) {
   return { resolved: providerResolved }
 }
 
-async function createHarvesterStartupContext({ options } = {}) {
+export async function createHarvesterStartupContext({ options } = {}) {
   const dependencies = resolveHarvesterStartupDependencies({ options })
   const runtimeStartedAt = dependencies.now()
   const { resolved } = await resolveHarvesterStartupConfiguration({ dependencies })
