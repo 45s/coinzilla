@@ -21,7 +21,7 @@ function addError(errors, path, message) {
 }
 
 function isRepositoryRelativePath(value) {
-  if (!isNonEmptyString(value) || value.includes("\\0") || value.startsWith("/") ||
+  if (!isNonEmptyString(value) || value.includes(String.fromCharCode(0)) || value.startsWith("/") ||
       /^[A-Za-z]:/.test(value)) {
     return false
   }
