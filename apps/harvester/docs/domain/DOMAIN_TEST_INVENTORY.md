@@ -39,7 +39,7 @@ Planned scenario behaviors include initial BUY fill → standing BUY and recover
 
 - Added `src/use-cases/conservative-sell-accounting-scenario.test.js`, composing canonical BUY and three successive SELL fills through the real Portfolio, Position, RecoveryLedger and `updateTradingAccounting` components.
 - The worked sequence checks partial and cumulative SELL accounting with base-, quote- and valued third-asset commissions; exact remaining base quantity; preservation of the full BUY cost basis; cumulative net quote proceeds; outstanding recovery; realized net profit; and identical canonical Fill identity histories across both projections.
-- Additional cases assert duplicate SELL no-op behavior, changed commission facts rejected without mutation, and an unvalued third-asset SELL fee rejected without partial projection commit.
+- Additional cases assert duplicate SELL no-op behavior, changed commission facts rejected without mutation, and an unvalued third-asset SELL fee rejected without partial projection commit. The first strict-ESLint run identified one oversized test callback; it was split into focused duplicate and conflict cases without changing assertions.
 - The test is registered in `config.targetedTestFiles`. Expected-value arithmetic is explicit decimal literals, independently derived from the Fill facts; no production behavior or strategy rules change.
 - Status: implementation committed to the task branch; exact-head Harvester/Repository Quality and full required CI verification are pending. Do not count this row as COVERED until merged and exact-head CI passes.
 

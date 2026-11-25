@@ -312,11 +312,11 @@ test("reconciles partial, multiple and final SELL fills across Position and Reco
   assertCompletedSellAccounting({ state: completed })
 })
 
-test("treats duplicate SELL fills as no-ops and rejects changed commission facts atomically", () => {
-  const state = createCompletedSellState()
-  const portfolioValue = state.portfolio.value
-  const ledgerValue = state.recoveryLedger.value
-  const finalSell = makeFill({
+function createFinalSellFill({
+  thirdAssetCommissionAmount = "0.001",
+  thirdAssetQuoteValue = "0.02",
+} = {}) {
+  return makeFill({
     tradeId: "sell-fill-3",
     side: "SELL",
     price: "0.15",
@@ -328,16 +328,22 @@ test("treats duplicate SELL fills as no-ops and rejects changed commission facts
         asset: baseAsset,
       }),
       makeCommission({
-        amount: "0.001",
+        amount: thirdAssetCommissionAmount,
         asset: thirdAsset,
-        quoteValue: "0.02",
+        quoteValue: thirdAssetQuoteValue,
       }),
     ],
   })
+}
+
+test("treats an identical repeated SELL execution as a no-op in both projections", () => {
+  const state = createCompletedSellState()
+  const portfolioValue = state.portfolio.value
+  const ledgerValue = state.recoveryLedger.value
   const duplicate = updateTradingAccounting({
     portfolio: state.portfolio,
     recoveryLedger: state.recoveryLedger,
-    fill: finalSell,
+    fill: createFinalSellFill(),
   })
 
   assert.equal(duplicate.ok, true, "An identical repeated SELL execution must be accepted as a harmless duplicate.")
@@ -350,29 +356,18 @@ test("treats duplicate SELL fills as no-ops and rejects changed commission facts
     portfolioValue,
     ledgerValue,
   })
+})
 
-  const conflictingSell = makeFill({
-    tradeId: "sell-fill-3",
-    side: "SELL",
-    price: "0.15",
-    quantity: "29.8",
-    quoteQuantity: "4.47",
-    commissions: [
-      makeCommission({
-        amount: "0.03",
-        asset: baseAsset,
-      }),
-      makeCommission({
-        amount: "0.002",
-        asset: thirdAsset,
-        quoteValue: "0.02",
-      }),
-    ],
-  })
+test("rejects changed SELL commission facts without mutating either projection", () => {
+  const state = createCompletedSellState()
+  const portfolioValue = state.portfolio.value
+  const ledgerValue = state.recoveryLedger.value
   const rejected = updateTradingAccounting({
     portfolio: state.portfolio,
     recoveryLedger: state.recoveryLedger,
-    fill: conflictingSell,
+    fill: createFinalSellFill({
+      thirdAssetCommissionAmount: "0.002",
+    }),
   })
 
   assert.equal(rejected.ok, false, "Changed commission facts under an accepted SELL identity must fail closed.")
