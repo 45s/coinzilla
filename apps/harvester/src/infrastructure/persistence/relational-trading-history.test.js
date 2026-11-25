@@ -190,11 +190,13 @@ function assertFreshRelationalSchema(database) {
   assertMigrationHistory(database)
 }
 
-function createLegacyRecord() {
+function createLegacyRecord({ clientOrderId = "harvester-BTCUSDT-001" } = {}) {
   const record = createOrderHistoryRecord({
-    order: createOrderHistoryEventData(),
+    order: createOrderHistoryEventData({
+      clientOrderId,
+    }),
     sourceEvent: {
-      id: "legacy-source-event-1",
+      id: `legacy-source-event:${clientOrderId}`,
       name: HARVESTER_EVENT_NAMES.ORDER_UPDATED,
       source: "harvester",
       timestamp: "2026-11-19T12:00:00.000Z",
@@ -1899,7 +1901,12 @@ function createV5MigrationFillRow({ legacyRecord } = {}) {
   }
 }
 
-async function seedV4RelationalHistory({ filename, legacyRecord, fillRow } = {}) {
+async function seedV4RelationalHistory({
+  filename,
+  legacyRecord,
+  fillRow,
+  additionalOrderRecords = [],
+} = {}) {
   const database = createSqliteDatabase({
     filename,
     timeout: 5000,
@@ -1907,18 +1914,24 @@ async function seedV4RelationalHistory({ filename, legacyRecord, fillRow } = {})
   await database.connect()
   try {
     await database.migrate(HARVESTER_RELATIONAL_MIGRATIONS.slice(0, 4))
-    const orderRow = mapOrderHistoryRecordToRow({
-      record: legacyRecord,
-      sourceKind: "live_order_event",
-      sourceRecordId: legacyRecord.lastSourceEventId,
-      ingestionSource: "live_event",
+    const orderValues = [legacyRecord, ...additionalOrderRecords].map((record) => {
+      const row = mapOrderHistoryRecordToRow({
+        record,
+        sourceKind: "live_order_event",
+        sourceRecordId: record.lastSourceEventId,
+        ingestionSource: "live_event",
+      })
+      return ORDER_COLUMNS.map((column) => row[column])
     })
+    const fillColumns = Object.keys(fillRow)
     await database.transaction((transaction) => {
-      transaction.prepare(
+      const insertOrder = transaction.prepare(
         `INSERT INTO orders (${ORDER_COLUMNS.join(", ")})
          VALUES (${ORDER_COLUMNS.map(() => "?").join(", ")})`,
-      ).run(...ORDER_COLUMNS.map((column) => orderRow[column]))
-      const fillColumns = Object.keys(fillRow)
+      )
+      for (const values of orderValues) {
+        insertOrder.run(...values)
+      }
       transaction.prepare(
         `INSERT INTO fills (${fillColumns.join(", ")})
          VALUES (${fillColumns.map(() => "?").join(", ")})`,
@@ -2139,6 +2152,52 @@ test("scopes provisional client identities by market", async (t) => {
       assert.equal(rows.length, 2, "A provisional client ID reused in two markets must retain two distinct pending orders.")
       assert.deepEqual(rows.map(({ market_id }) => market_id), ["binance:BTCUSDT", "binance:ETHUSDT"])
     },
+  })
+})
+
+function assertDuplicateV4HistoryRemains(database) {
+  const versions = database.prepare(
+    "SELECT version FROM schema_migrations ORDER BY version",
+  ).all().map(({ version }) => version)
+  const orders = database.prepare(
+    "SELECT exchange_order_id FROM orders ORDER BY id",
+  ).all()
+  assert.deepEqual(versions, [1, 2, 3, 4])
+  assert.equal(orders.length, 2)
+  assert.equal(orders[0].exchange_order_id, orders[1].exchange_order_id)
+  assert.deepEqual(database.prepare("PRAGMA foreign_key_check").all(), [])
+}
+
+function assertDuplicateV4HistoryBackup(database) {
+  assert.equal(database.prepare("PRAGMA integrity_check").get().integrity_check, "ok")
+  assert.equal(database.prepare("SELECT COUNT(*) AS count FROM orders").get().count, 2)
+  assert.deepEqual(database.prepare("PRAGMA foreign_key_check").all(), [])
+}
+
+test("fails v5 migration closed and retains backup when exchange identity is duplicated", async (t) => {
+  const context = await createTestContext({ t })
+  const legacyRecord = createLegacyRecord()
+  const duplicateRecord = createLegacyRecord({
+    clientOrderId: "legacy-duplicate-client",
+  })
+  const fillRow = createV5MigrationFillRow({ legacyRecord })
+  await seedV4RelationalHistory({
+    filename: context.filename,
+    legacyRecord,
+    fillRow,
+    additionalOrderRecords: [duplicateRecord],
+  })
+  const persistence = await preparePersistence({ context })
+  assert.equal(persistence.relationalDatabase, null)
+  assert.ok(persistence.relationalError)
+  assert.ok(persistence.orderIdentityMigrationBackupFilename?.includes(".pre-relational-v5."))
+  await inspectSqlite({
+    filename: context.filename,
+    work: assertDuplicateV4HistoryRemains,
+  })
+  await inspectSqlite({
+    filename: persistence.orderIdentityMigrationBackupFilename,
+    work: assertDuplicateV4HistoryBackup,
   })
 })
 
