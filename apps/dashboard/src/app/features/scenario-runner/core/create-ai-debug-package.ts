@@ -5,7 +5,7 @@ const SENSITIVE_ASSIGNMENT_PATTERN = /\b((?:x-)?(?:api[_ -]?key|access[_ -]?toke
 const AUTH_HEADER_PATTERN = /\b(authorization)\s*:\s*(?:bearer|basic)\s+[^\r\n,;]+/gi;
 const COOKIE_HEADER_PATTERN = /\b(set-cookie|cookie)\s*:\s*[^\r\n]+/gi;
 const BEARER_TOKEN_PATTERN = /\b(bearer)\s+[A-Za-z0-9._~+/-]+=*/gi;
-const PEM_PRIVATE_KEY_PATTERN = /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----[\s\S]*?-----END (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/g;
+const PEM_PRIVATE_KEY_PATTERN = /-----BEGIN (?:(?:ENCRYPTED |RSA |EC |OPENSSH )?PRIVATE KEY)-----[\s\S]*?-----END (?:(?:ENCRYPTED |RSA |EC |OPENSSH )?PRIVATE KEY)-----/g;
 const JWT_PATTERN = /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/g;
 
 function redactString(value: string): string {

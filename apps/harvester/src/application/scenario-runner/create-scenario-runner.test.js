@@ -435,6 +435,7 @@ test("run snapshots redact nested secrets while adapters receive the original in
     "output-api-key-secret",
     "output-bearer-secret",
     "output-cookie-secret",
+    "output-private-key-secret",
   ]) {
     assert.equal(serialized.includes(secret), false)
   }
