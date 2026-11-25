@@ -126,7 +126,9 @@ test("keeps TESTNET and LIVE order history in separate SQLite files", async (t) 
     "binanceTestnet",
     "binance",
     "binance-primary",
-    "harvester-BTCUSDT-001",
+    "binance:BTCUSDT",
+    "exchange",
+    "broker-order-001",
   ])
   const liveId = JSON.stringify([
     "live",
