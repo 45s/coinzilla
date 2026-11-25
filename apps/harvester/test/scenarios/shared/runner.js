@@ -1,5 +1,7 @@
 import { spawnSync as defaultSpawnSync } from "node:child_process"
 
+const REGEXP_SPECIAL_CHARS = new Set([".", "*", "+", "?", "^", "$", "(", ")", "|", "[", "]", "\\", "{", "}"])
+
 function normalizeFilterValues(value) {
   if (value === undefined || value === null || value === "") {
     return []
@@ -26,24 +28,28 @@ export function filterScenarios({ scenarios = [], filters = {} } = {}) {
 }
 
 function escapeRegExp(value) {
-  return value.replace(/[.*+?^$()|[\\]\\{}]/g, "\\$&")
+  return [...value].map((character) => (
+    REGEXP_SPECIAL_CHARS.has(character) ? "\\" + character : character
+  )).join("")
 }
 
 function parseTapLine(line) {
-  const match = line.trim().match(/^(ok|not ok)\\s+\\d+\\s+-\\s+(.+?)(?:\\s+#\\s*(SKIP|TODO)(?:\\s+.*)?)?$/i)
+  const match = line.trim().match(/^(ok|not ok)\s+\d+\s+-\s+(.*)$/i)
   if (!match) {
     return null
   }
 
+  const title = match[2]
+  const directiveMatch = title.match(/^(.*)\s+#\s*(SKIP|TODO)(?:\s+.*)?$/i)
   return {
     outcome: match[1].toLowerCase(),
-    name: match[2].trim(),
-    directive: match[3]?.toUpperCase() ?? null,
+    name: (directiveMatch ? directiveMatch[1] : title).trim(),
+    directive: directiveMatch?.[2]?.toUpperCase() ?? null,
   }
 }
 
 export function parseTapResults({ output = "", expectedTests = [] } = {}) {
-  const tapResults = output.split(/\\r?\\n/).map(parseTapLine).filter(Boolean)
+  const tapResults = output.split(/\r?\n/).map(parseTapLine).filter(Boolean)
 
   return expectedTests.map((testCase) => {
     const matchingResults = tapResults.filter((result) => result.name === testCase.name)
