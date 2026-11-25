@@ -279,6 +279,8 @@ export const authorizationCustodyScenarios = Object.freeze([
         id: "RS-001-003-I",
         description: "contradictory basis input fails closed",
         status: "BLOCKED",
+        test: null,
+        evidence: null,
         blocker: {
           reason: "The approved legacy config contract defines invested and quantity only; " +
             "it does not define a contradictory averageCost input field. The current factory " +
