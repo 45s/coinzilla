@@ -86,12 +86,9 @@ A cross-document audit found that the Dashboard agent instructions still require
 ## Current branch synchronization checkpoint — 2026-11-25
 
 - Task branch: `docs/dashboard/gc-strategy-lab-spec`.
-- Current branch head after the policy correction: `2583dbd134da8c6b241b0e88de535712efb57c97`.
-- Current `develop`: `1f55d5989e8122421f4d9e37693f68f32e0c29ed`.
-- GitHub compare reports 86 commits ahead and 42 commits behind, with merge base `24132a3f485efdc0a75c3bbcf4fd0e94778c79b9`. The branch is materially diverged; it is not current with develop. Synchronization and conflict review are required before final acceptance.
+- The task branch is synchronized with current `develop` (0 commits behind); exact head and CI evidence are maintained in [issue #1836](https://github.com/45s/coinzilla/issues/1836) and [PR #1837](https://github.com/45s/coinzilla/pull/1837).
 - PR #1837 remains Draft and unmerged. The full approved MVP is not complete; all previously listed isolation, production-flow, persistence, replay, trace/report, configuration and E2E gates remain applicable.
-- No CI success is claimed for `2583dbd` until exact-head GitHub Actions results are available.
-
+- Do not claim CI success from a superseded head; all required checks must pass on the final exact head.
 ## Strategy-neutral Harvester registration — 2026-11-25
 
 The Harvester host now accepts explicit strategy registrations and builds its catalog/execution policy from registered strategy IDs rather than a hardcoded RS-only catalog branch. The default composition still supplies the provisional RS catalogue, which remains non-executable without a verified OS sandbox and full production-flow adapter. A RED regression on test-only head `0b3a3fe9d10c844f4a7bd89fb94c66342fcdb561` reproduced the RS-only catalog; the implementation restores strategy-neutral registration without enabling any additional strategy.

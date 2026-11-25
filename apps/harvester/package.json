@@ -154,6 +154,7 @@
       "src/bootstrap/subscriptions/subscribe-to-market-data.test.js",
       "src/application/scenario-runner/create-scenario-runner.test.js",
       "src/infrastructure/scenario-runner/create-process-scenario-adapter.test.js",
+      "src/infrastructure/scenario-runner/scenario-worker-message-handler.test.js",
       "src/infrastructure/scenario-runner/rs-scenario-adapter.test.js",
       "src/infrastructure/http/scenario-runner-api.test.js"
     ]

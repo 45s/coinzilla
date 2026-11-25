@@ -92,29 +92,14 @@ The worker-path check also requires the canonical target to be a regular `.js` f
 
 The Scenario Runner request handler validates browser Origin before any route handling, then delegates route dispatch and request-error conversion to a separate helper. The CSRF boundary is explicit and the request entrypoint remains within the repository's strict complexity/function-size policy without weakening the origin check.
 
-The route-helper call sites use the repository's multiline object-property formatting policy; strict changed-file ESLint is required to remain clean.
-
 ## Registration validation decomposition — 2026-11-25
 
 Strategy and scenario registration validation is split into dedicated shape and uniqueness checks. This preserves fail-closed rejection of malformed/duplicate registry entries while keeping each function within the repository's strict complexity limit. The host snapshot immutability and adapter-capability regressions are separated into focused tests that remain within the strict test-function size limit.
-
-## Adapter-level execution gate — 2026-11-25
-
-The process adapter itself must reject execution when its launcher does not carry a verified OS-level isolation attestation. The host catalog gate is not the only protection: direct adapter invocation must also fail before spawning a worker. Process-lifecycle unit tests may simulate the launcher attestation to exercise IPC/termination behavior, but those tests do not prove OS isolation or authorize a production launcher.
 
 ## Adapter-level fail-closed enforcement — 2026-11-25
 
 The process adapter enforces its own OS-attestation gate at the start of `execute`, before spawning a child. The host catalog also checks the attestation, but callers cannot bypass the isolation requirement by invoking the adapter directly. Process-lifecycle unit tests use an explicitly named simulated launcher attestation to exercise IPC and termination contracts; this is a test double only and is not evidence that an actual OS sandbox launcher exists or that production execution is enabled.
 
+## Cooperative cancellation and cleanup confirmation
 
-## Cooperative worker cancellation — 2026-11-25
-
-Cancellation must first send a typed IPC `cancel` message to the active worker and allow its AbortSignal-aware execution to finish. If the worker does not exit within the bounded cooperative grace period, the parent escalates to SIGTERM and then SIGKILL. Failure to confirm child exit is a hard cleanup error; the run/worker slot remains retained so cancellation can be retried. A completed result is not force-cancelled after it has already been accepted.
-
-
-## Cooperative cancellation and cleanup confirmation — implementation
-
-The parent sends a typed `cancel` IPC message first and waits for the bounded cooperative grace period. The worker message handler aborts the active run's `AbortController`; strategy adapters receive that signal and must honor it. If the worker does not close, the parent escalates to SIGTERM and then SIGKILL, each with a bounded grace period. A failed kill or missing close confirmation rejects cleanup and retains the child registration so the operator can retry; it is never reported as successful cleanup. The adapter itself remains unavailable unless the OS sandbox attestation is verified.
-
-
-The parent message listener also suppresses worker result handling once the caller's AbortSignal has fired; the cancellation path owns final settlement and cleanup reporting.
+The parent sends a typed `cancel` IPC message first and waits for the bounded cooperative grace period. The worker message handler aborts the active run's `AbortController`; strategy adapters receive that signal and must honor it. If the worker does not close, the parent escalates to SIGTERM and then SIGKILL, each with a bounded grace period. A failed kill or missing close confirmation rejects cleanup and retains the child registration so the operator can retry; it is never reported as successful cleanup. The adapter itself remains unavailable unless the OS sandbox attestation is verified. Once the caller's AbortSignal has fired, the parent ignores any late worker result and lets the cancellation path own final settlement and cleanup reporting.

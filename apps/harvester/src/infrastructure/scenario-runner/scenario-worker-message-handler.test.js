@@ -8,7 +8,8 @@ test("worker handler aborts the matching active execution on cooperative cancel"
   let observedSignal
   let disconnectCount = 0
   const handleMessage = createScenarioWorkerMessageHandler({
-    dispatch: (_request, { signal }) => new Promise((resolve, reject) => {
+    dispatch: (_request, { signal }) => new Promise((...settlers) => {
+      const [, reject] = settlers
       observedSignal = signal
       signal.addEventListener("abort", () => reject(new Error("Scenario worker was cancelled")), {
         once: true,
