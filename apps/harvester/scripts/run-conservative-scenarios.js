@@ -183,10 +183,10 @@ function printRunSummary({
   suite,
   reportPaths,
 }) {
-  const counts = suite.results.reduce((summary, result) => {
-    summary[result.status] = (summary[result.status] ?? 0) + 1
-    return summary
-  }, {})
+  const counts = {}
+  for (const result of suite.results) {
+    counts[result.status] = (counts[result.status] ?? 0) + 1
+  }
   logger.log(`Scenarios selected: ${suite.selectedScenarios.length}`)
   logger.log(`Scenario execution: ${JSON.stringify(counts)}`)
   logger.log(`Named tests executed: ${suite.testResults.length}`)
