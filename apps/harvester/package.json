@@ -149,7 +149,8 @@
       "test/scenarios/recovery-seller-sell-planner.scenario.test.js",
       "src/infrastructure/http/trading-history-websocket.test.js",
       "src/infrastructure/http/trading-history-websocket-frame.test.js",
-      "test/scenarios/shared/scenario-system.test.js"
+      "test/scenarios/shared/scenario-system.test.js",
+      "test/scenarios/shared/registry-and-runner.scenario.test.js"
     ]
   },
   "scripts": {
