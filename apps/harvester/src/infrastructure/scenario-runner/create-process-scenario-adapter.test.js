@@ -60,6 +60,6 @@ test("process adapter waits for worker exit after receiving a result", async () 
     scenarioId: "scenario",
     input: null,
   })
-  assert.deepEqual(result, { received: true })
-  assert.ok(Date.now() - startedAt >= 400)
+  assert.deepEqual(result, { received: true }, "worker output must be preserved after cleanup")
+  assert.ok(Date.now() - startedAt >= 400, "run completion must wait for the worker's delayed exit")
 })

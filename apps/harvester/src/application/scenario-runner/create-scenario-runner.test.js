@@ -81,14 +81,14 @@ test("runner supports bounded cancellation", async () => {
     scenarioId: "s",
   })
   await new Promise((resolve) => setImmediate(resolve))
-  assert.equal(runner.cancel("run-cancel"), true)
+  assert.equal(runner.cancel("run-cancel"), true, "repeated cancellation must be accepted idempotently")
   await new Promise((resolve) => setImmediate(resolve))
-  assert.equal(runner.getRun("run-cancel").status, SCENARIO_RUN_STATUS.CANCELLING)
+  assert.equal(runner.getRun("run-cancel").status, SCENARIO_RUN_STATUS.CANCELLING, "run must remain non-terminal until its execution has settled")
   assert.equal(runner.cancel("run-cancel"), true)
   assert.equal(runner.getRun("run-cancel").status, SCENARIO_RUN_STATUS.CANCELLING)
   release({ output: "late" })
   const result = await runner.waitForRun("run-cancel")
-  assert.equal(result.status, SCENARIO_RUN_STATUS.CANCELLED)
+  assert.equal(result.status, SCENARIO_RUN_STATUS.CANCELLED, "forced cleanup must preserve the user-requested cancellation outcome")
 })
 
 test("runner waits for forced adapter cleanup when cancellation does not settle execution", async () => {
@@ -113,7 +113,7 @@ test("runner waits for forced adapter cleanup when cancellation does not settle 
   await new Promise((resolve) => setImmediate(resolve))
   assert.equal(runner.cancel("run-cancel-timeout"), true)
   const result = await runner.waitForRun("run-cancel-timeout")
-  assert.equal(cancellationReason, "cancelled")
+  assert.equal(cancellationReason, "cancelled", "forced cleanup must receive the cancellation reason")
   assert.equal(result.status, SCENARIO_RUN_STATUS.CANCELLED)
 })
 

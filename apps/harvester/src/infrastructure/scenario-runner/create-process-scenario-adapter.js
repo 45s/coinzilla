@@ -2,6 +2,7 @@ import { fork } from "node:child_process"
 import { fileURLToPath } from "node:url"
 
 const DEFAULT_TERMINATION_GRACE_MS = 250
+const TERMINATION_PROMISES = new WeakMap()
 
 function createWorkerEnvironment() {
   const environment = {}
@@ -18,54 +19,57 @@ function terminateChild({ child, graceMs }) {
   if (child.exitCode !== null || child.signalCode !== null) {
     return Promise.resolve()
   }
-  const timer = setTimeout(() => {
-    if (child.exitCode === null && child.signalCode === null) {
-      child.kill("SIGKILL")
-    }
-  }, graceMs)
-  timer.unref?.()
-  return new Promise((resolve) => {
+  const existingTermination = TERMINATION_PROMISES.get(child)
+  if (existingTermination) {
+    return existingTermination
+  }
+  const termination = new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      if (child.exitCode === null && child.signalCode === null) {
+        child.kill("SIGKILL")
+      }
+    }, graceMs)
+    timer.unref?.()
     function finish() {
       clearTimeout(timer)
       resolve()
     }
-    child.once("exit", finish)
+    child.once("close", finish)
     try {
       child.kill("SIGTERM")
     } catch {
       finish()
     }
   })
+  TERMINATION_PROMISES.set(child, termination)
+  return termination
 }
 
-function handleWorkerMessage({ message, runId, child, terminationGraceMs, finish }) {
+async function handleWorkerMessage({ message, runId, child, terminationGraceMs, finish }) {
+  let result
   if (!message || message.runId !== runId) {
-    finish({
+    result = {
       error: new Error("Scenario worker returned a mismatched run identity"),
-    })
-    void terminateChild({
-      child,
-      graceMs: terminationGraceMs,
-    })
-    return
-  }
-  if (message.ok === true && message.output && typeof message.output === "object") {
-    finish({ output: message.output })
+    }
+  } else if (message.ok === true && message.output && typeof message.output === "object") {
+    result = { output: message.output }
   } else {
-    finish({
+    result = {
       error: new Error(typeof message.error === "string" ? message.error : "Scenario worker failed"),
-    })
+    }
   }
-  void terminateChild({
+  await terminateChild({
     child,
     graceMs: terminationGraceMs,
   })
+  finish(result)
 }
 
 function createExecutionPromise({ child, runId, signal, children, terminationGraceMs }) {
   return new Promise((...promiseArguments) => {
     const [resolve, reject] = promiseArguments
     let settled = false
+    let messageReceived = false
     function finish({ error, output }) {
       if (settled) {
         return
@@ -88,16 +92,24 @@ function createExecutionPromise({ child, runId, signal, children, terminationGra
       }))
     }
     signal?.addEventListener("abort", onAbort, { once: true })
-    child.once("error", (error) => finish({ error }))
-    child.once("message", (message) => handleWorkerMessage({
-      message,
-      runId,
-      child,
-      terminationGraceMs,
-      finish,
-    }))
+    child.once("error", (error) => {
+      void terminateChild({
+        child,
+        graceMs: terminationGraceMs,
+      }).then(() => finish({ error }))
+    })
+    child.once("message", (message) => {
+      messageReceived = true
+      void handleWorkerMessage({
+        message,
+        runId,
+        child,
+        terminationGraceMs,
+        finish,
+      })
+    })
     child.once("exit", (...exitArguments) => {
-      if (!settled) {
+      if (!settled && !messageReceived) {
         const [code, exitSignal] = exitArguments
         finish({
           error: signal?.aborted
