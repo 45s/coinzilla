@@ -441,7 +441,7 @@ test("rejects conflicting CG/RS volatility settings for the same enabled market"
 })
 
 
-function createVolatilityProtectedRecoverySellGate({ marketPaused = false } = {}) {
+function createVolatilityProtectedSubmissionGate({ marketPaused = false, protectionEnabled = true, volatilityCalls = [] } = {}) {
   const symbol = "BTCUSDT"
   const state = {
     shutdownBuyGate: false,
@@ -464,38 +464,41 @@ function createVolatilityProtectedRecoverySellGate({ marketPaused = false } = {}
     hasBlockingOpenOrdersForSymbol: () => false,
     canTrade: () => true,
     isMarketPriceFresh: () => true,
-    getVolatilityData: () => ({
+    getVolatilityData: () => {
+      volatilityCalls.push(symbol)
+      return {
       ok: true,
       data: {
         status: { isReady: true },
         metrics: { volatilityRatio: "2" },
       },
-    }),
-    isVolatilityProtectionEnabledForSymbol: () => true,
+    }
+    },
+    isVolatilityProtectionEnabledForSymbol: () => protectionEnabled,
     isMarketBookFresh: () => true,
     isPostOnlyOrderCrossing: () => false,
     getAccountSafetyBlocker: () => null,
   })
 }
 
-function createRecoverySellGateOrder() {
+function createSubmissionGateOrder({ side = "SELL" } = {}) {
   return {
     market: {
       id: "binance:spot:BTCUSDT",
       symbol: "BTCUSDT",
     },
-    side: "SELL",
+    side,
     type: "LIMIT",
     limitPrice: { amount: "100" },
   }
 }
 
 test("RS-008-017-D: recovery SELL bypasses volatility only and retains other submission gates", () => {
-  const blockedGate = createVolatilityProtectedRecoverySellGate({
+  const blockedGate = createVolatilityProtectedSubmissionGate({
     marketPaused: true,
   })
   const blocked = blockedGate({
-    order: createRecoverySellGateOrder(),
+    order: createSubmissionGateOrder(),
     purpose: "RECOVERY_SELL",
   })
   assert.deepEqual(blocked, {
@@ -510,4 +513,34 @@ test("RS-008-017-D: recovery SELL bypasses volatility only and retains other sub
     purpose: "RECOVERY_SELL",
   })
   assert.deepEqual(eligible, { allowed: true }, "With all other gates satisfied, the recovery SELL must bypass only the active volatility blocker.")
+})
+
+
+test("RS-008-017-C: disabled volatility protection skips only volatility work and preserves other gates", () => {
+  const volatilityCalls = []
+  const gate = createVolatilityProtectedSubmissionGate({
+    protectionEnabled: false,
+    volatilityCalls,
+  })
+  const eligible = gate({
+    order: createSubmissionGateOrder({ side: "BUY" }),
+    purpose: "RECOVERY_BUY",
+  })
+  assert.deepEqual(eligible, { allowed: true }, "Disabled volatility protection must not block an otherwise-eligible RS BUY.")
+  assert.deepEqual(volatilityCalls, [], "A disabled market protection setting must not read market volatility data.")
+
+  const pausedGate = createVolatilityProtectedSubmissionGate({
+    marketPaused: true,
+    protectionEnabled: false,
+    volatilityCalls,
+  })
+  const paused = pausedGate({
+    order: createSubmissionGateOrder({ side: "BUY" }),
+    purpose: "RECOVERY_BUY",
+  })
+  assert.deepEqual(paused, {
+    allowed: false,
+    reason: "MARKET_PAUSED",
+    details: { symbol: "BTCUSDT" },
+  }, "Disabling volatility protection must not bypass an independent market pause.")
 })
