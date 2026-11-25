@@ -77,6 +77,16 @@ export const recoverySellerSharedQuoteReservationScenario = defineRecoverySeller
       evidence: null,
     },
     {
+      id: "RS-008-018-E",
+      description: "concurrent CG BUY evaluations on different markets serialize against an existing RS quote reservation so the account cannot double-spend",
+      status: "TEST-MAPPED",
+      test: {
+        file: "apps/harvester/src/use-cases/conservative-trading-engine.multi-market.test.js",
+        title: "RS-008-018-E: concurrent CG BUY intents serialize against a shared RS quote reservation",
+      },
+      evidence: null,
+    },
+    {
       id: "RS-008-018-A",
     description: "an existing RS-owned BUY commitment on DOGEUSDT leaves insufficient account quote for a new CG BUY on SOLUSDT",
     status: "TEST-MAPPED",
