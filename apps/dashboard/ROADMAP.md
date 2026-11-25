@@ -47,3 +47,6 @@ These are planning areas, not commitments to bypass backend ownership or existin
 - Keep feature modules independently testable and avoid introducing a global state framework before multiple features need shared state.
 - Keep mock/demo fixtures clearly separated from production API models.
 - Update this roadmap when the issue scope or delivered milestone changes. Do not use it as a chronological task log.
+
+
+**Approved simulation isolation:** scenario execution runs in a dedicated worker process managed by Harvester, separate from the live trading process. Each run gets fresh isolated state and simulated infrastructure only; no credentials, production persistence/live state or real broker fallback. Timeouts, resource/concurrency limits, cleanup and fail-closed behavior are required.
