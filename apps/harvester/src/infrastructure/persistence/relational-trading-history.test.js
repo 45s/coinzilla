@@ -1480,7 +1480,7 @@ function createExchangeHistoryOrder({
 }) {
   const order = createOrderHistoryEventData({
     clientOrderId,
-    brokerOrderId,
+    brokerOrderId: brokerOrderId === null ? undefined : brokerOrderId,
     market,
     symbol: market.symbol,
     price,
@@ -1825,6 +1825,7 @@ async function persistReusedClientIdFills({ persistence } = {}) {
     executedQuantity: "1.0000",
     remainingQuantity: "0",
     eventId: "exchange-history-order:earlier",
+    timestamp: "2026-11-20T04:00:00.000Z",
     clientOrderId,
     brokerOrderId: "earlier-broker-order",
   }))
@@ -1833,6 +1834,7 @@ async function persistReusedClientIdFills({ persistence } = {}) {
     executedQuantity: "0.5000",
     remainingQuantity: "0.5000",
     eventId: "exchange-history-order:incoming",
+    timestamp: "2026-11-20T04:00:01.000Z",
     clientOrderId,
     brokerOrderId: "incoming-broker-order",
   }))
