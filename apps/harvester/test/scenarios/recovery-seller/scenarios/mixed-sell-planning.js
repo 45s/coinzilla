@@ -679,8 +679,11 @@ function createConcurrentReservationScenario() {
     },
     given: {
       snapshot: {
+        portfolioBaseQuantity: "1.5",
+        legacySpotQuantity: "0.01",
         committedBaseBalance: "0.75",
         freeBaseBalance: "0.76",
+        lockedBaseBalance: "0.75",
       },
       postSnapshotOrder: {
         market: "ZROFDUSD",

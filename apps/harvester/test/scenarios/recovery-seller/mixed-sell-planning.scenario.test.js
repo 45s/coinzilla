@@ -680,10 +680,24 @@ function createConcurrentReservationScenarioContext() {
     },
   })
   const portfolio = createReservationPortfolio(markets)
+  const portfolioWithCgBase = applyPortfolioAcquisition({
+    portfolio,
+    acquisition: {
+      symbol: markets.reservationMarket.symbol,
+      quoteCode: markets.reservationMarket.quoteAsset.code,
+      tradeId: "cg-post-snapshot-inventory-buy",
+      positionId: "cg-post-snapshot-inventory-position",
+      strategy: "CG",
+      quantity: "0.5",
+      quoteQuantity: "5",
+    },
+    baseAsset: markets.baseAsset,
+    getMarket: () => markets.reservationMarket,
+  })
   const snapshotReservations = createAccountWideReservationOrders({ markets })
   const snapshot = createAccountWideReservationSnapshot({
     markets,
-    portfolio,
+    portfolio: portfolioWithCgBase,
     reservations: snapshotReservations,
     freeBaseBalance: "0.76",
   })
@@ -708,7 +722,7 @@ function createConcurrentReservationScenarioContext() {
   return {
     dependencies,
     targetMarket: markets.targetMarket,
-    portfolio,
+    portfolio: portfolioWithCgBase,
     activeOrders: [],
   }
 }
