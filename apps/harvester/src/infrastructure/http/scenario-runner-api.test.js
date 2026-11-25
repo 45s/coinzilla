@@ -425,3 +425,51 @@ test("host does not expose a profitability-helper scaffold as an executable RS s
   })
   assert.equal(run.status, "Blocked", "the runner must fail closed until a full production-flow adapter is registered")
 })
+
+
+test("host discovers strategy registrations without an RS-specific catalog branch", async () => {
+  const scenario = {
+    id: "GRID-SIM-001",
+    name: "Grid simulation",
+    layer: "application",
+    status: "TEST-MAPPED",
+    executionStatus: "EXECUTABLE",
+    executable: true,
+    inputSchema: {
+      type: "object",
+      required: [],
+      additionalProperties: false,
+      properties: {},
+    },
+    input: {},
+  }
+  const adapter = {
+    strategyId: "GRID",
+    executionMode: "simulation-only",
+    osSandboxVerified: true,
+    execute: async () => ({ output: { strategy: "GRID" } }),
+    cancel: async () => true,
+  }
+  const host = createScenarioRunnerHost({
+    adapters: [adapter],
+    strategyRegistrations: [{
+      strategyId: "GRID",
+      strategyName: "Grid Strategy",
+      scenarios: [scenario],
+    }],
+  })
+
+  assert.deepEqual(host.catalog.map((strategy) => strategy.strategyId), ["GRID"],
+    "the host catalog must be derived from strategy registrations, not hardcoded to Recovery Seller")
+  const [registeredStrategy] = host.catalog
+  assert.equal(registeredStrategy.strategyName, "Grid Strategy")
+  assert.equal(registeredStrategy.scenarios[0].executable, true)
+  const accepted = host.runner.submit({
+    strategyId: "GRID",
+    scenarioId: scenario.id,
+    input: {},
+  })
+  const completed = await host.runner.waitForRun(accepted.runId)
+  assert.equal(completed.status, "Completed")
+  assert.deepEqual(completed.output, { output: { strategy: "GRID" } })
+})
