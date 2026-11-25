@@ -136,8 +136,8 @@ function assertOrderIdentityIndexes(database) {
   )
   assert.deepEqual(
     pendingIdentityColumns,
-    ["environment", "provider_instance_id", "provider_type", "account_id", "market_id", "client_order_id"],
-    "Pending client identity must include market because client IDs are not cross-market exchange identities.",
+    ["environment", "provider_instance_id", "provider_type", "account_id", "client_order_id"],
+    "Pending client identity must be unique across markets within the provider account.",
   )
 }
 
@@ -2127,37 +2127,6 @@ test("rejects v5 migration when an existing fill points to a different exchange 
   } finally {
     await database.close()
   }
-})
-
-test("scopes provisional client identities by market", async (t) => {
-  const context = await createTestContext({ t })
-  const persistence = await preparePersistence({ context })
-  const sharedClientOrderId = "h-reused-across-markets"
-  for (const [symbol, baseAssetCode] of [["BTCUSDT", "BTC"], ["ETHUSDT", "ETH"]]) {
-    await persistence.orderRepository.upsertHistorical(createExchangeHistoryOrder({
-      status: "OPEN",
-      executedQuantity: "0",
-      remainingQuantity: "1.0000",
-      eventId: `exchange-history-order:${symbol}:pending`,
-      timestamp: "2026-11-20T04:00:00.000Z",
-      clientOrderId: sharedClientOrderId,
-      brokerOrderId: null,
-      market: createHistoryMarket({
-        symbol,
-        baseAssetCode,
-      }),
-    }))
-  }
-  await inspectSqlite({
-    filename: context.filename,
-    work: (database) => {
-      const rows = database.prepare(
-        "SELECT market_id, client_order_id FROM orders WHERE client_order_id = ? ORDER BY market_id",
-      ).all(sharedClientOrderId)
-      assert.equal(rows.length, 2, "A provisional client ID reused in two markets must retain two distinct pending orders.")
-      assert.deepEqual(rows.map(({ market_id }) => market_id), ["binance:BTCUSDT", "binance:ETHUSDT"])
-    },
-  })
 })
 
 function assertDuplicateV4HistoryRemains(database) {
