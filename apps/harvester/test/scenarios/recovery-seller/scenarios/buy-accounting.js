@@ -1240,11 +1240,10 @@ export const recoverySellerBuyAccountingScenarios = Object.freeze([
       {
         id: "RS-002-020-B",
         description: "a positive pending BUY commitment is included exactly once in cap arithmetic",
-        status: "BLOCKED",
-        test: null,
-        blocker: {
-          reason: "The pure BUY policy fail-closes a positive pending commitment without an identifiable active owned order; an active order itself suppresses another BUY. The current scenario cannot prove commitment arithmetic without asserting unsafe duplicate intent.",
-          unblockCondition: "Add an application/account-allocation scenario with authoritative owned-order and quote-commitment snapshots that proves the commitment is counted once and does not permit duplicate BUY submission.",
+        status: "TEST-MAPPED",
+        test: {
+          file: "apps/harvester/src/use-cases/create-recovery-seller-action-authorizer.test.js",
+          title: "RS-002-020-B: counts an owned pending BUY commitment exactly once at the pair investment cap",
         },
         evidence: null,
       },
