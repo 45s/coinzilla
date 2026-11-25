@@ -57,3 +57,34 @@ test("RS scenario adapter validates schema fields and decimal-string inputs", as
     /Unknown scenario input field/,
   )
 })
+
+
+test("RS-003-001 executes the production runtime evaluator and accounting workflow with a simulation-only order gateway", async () => {
+  const result = await executeRecoverySellerRunnerScenario({
+    runId: "run-rs-runtime-1",
+    scenarioId: "RS-003-001",
+    input: {
+      marketPrice: "0.02",
+    },
+  })
+
+  assert.equal(result.source, "production-runtime-evaluator")
+  assert.equal(result.passed, true)
+  assert.equal(result.output.decision.outcome, "SUBMIT")
+  assert.equal(result.output.action.side, "SELL")
+  assert.equal(result.output.action.quantity, "7010")
+  assert.equal(result.output.submitted, true)
+  assert.equal(result.output.submittedOrders.length, 1)
+  assert.equal(result.output.reservedSellCycle.clientOrderId, result.output.submittedOrders[0].clientOrderId)
+  assert.ok(result.trace.some((step) => step.source === "createRecoverySellerRuntimeDispatch"))
+  assert.ok(result.trace.some((step) => step.kind === "simulated-broker"))
+  assert.ok(result.trace.some((step) => step.kind === "assertion"))
+})
+
+test("RS-003-001 remains non-executable in the public catalog until process isolation is verified", () => {
+  const scenario = getRecoverySellerRunnerCatalog().find((item) => item.id === "RS-003-001")
+  assert.ok(scenario)
+  assert.equal(scenario.status, "TEST-MAPPED")
+  assert.equal(scenario.executionStatus, "PRELIMINARY")
+  assert.equal(scenario.executable, false)
+})
