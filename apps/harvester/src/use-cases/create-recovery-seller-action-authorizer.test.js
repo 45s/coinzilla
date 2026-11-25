@@ -249,3 +249,24 @@ test("latches STOP rather than double-selling base reserved by a same-market CG 
   assert.equal(result.ok, false, "An RS SELL that overlaps a CG-reserved base quantity must fail closed.")
   assert.equal(runtime.getLatchCount(), 1, "An attempted cross-strategy double-sell must latch durable account-wide STOP.")
 })
+
+test("RS-002-006-B: keeps the unfilled portion of a partially filled RS BUY reserved in account allocation", async () => {
+  const partiallyFilledRecoveryBuy = makeActiveOrder({
+    clientOrderId: "rs-partially-filled-buy",
+    side: "BUY",
+    remainingQuantity: "6",
+    limitPrice: "10",
+  })
+  partiallyFilledRecoveryBuy.status = "PARTIALLY_FILLED"
+  partiallyFilledRecoveryBuy.strategyId = StrategyId.RECOVERY_SELLER
+
+  const runtime = createAuthorizer({
+    quoteBalance: "100",
+    activeOrders: [partiallyFilledRecoveryBuy],
+  })
+  const result = await runtime.authorize()
+
+  assert.equal(result.ok, true, "A valid partially filled RS BUY must remain a normal account commitment.")
+  assert.equal(result.data.allowed, true, "The new action may proceed only after the remaining owned commitment is reserved.")
+  assert.equal(runtime.getLatchCount(), 0, "A valid partial-order reservation must not latch STOP.")
+})
