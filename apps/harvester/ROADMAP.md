@@ -2293,3 +2293,9 @@ The detailed evidence, implementation commits, CI state and remaining unknowns a
 - Strengthened the full Conservative engine lifecycle to use production `updateTradingAccounting`, covering second BUY partial/completed fills, recovery-SELL cancellation/fill reconciliation and replacement SELL submission with exact cumulative accounting assertions.
 - CI fixes: corrected the lifecycle cost-basis expectations from observed canonical fills, fixed strict ESLint formatting, and removed repeated Markdown blank lines. Exact-head verification is tracked on PR #1808.
 - Test-only and documentation changes; no production trading behavior or rules changed.
+
+## Conservative executable scenario tooling — issue #1797
+
+The scenario-definition and reporting workstream is tracked separately from the active domain-test implementation in [#1763](https://github.com/45s/coinzilla/issues/1763). Child issue [#1797](https://github.com/45s/coinzilla/issues/1797) owns the stable `CON-*` inventory, validated registry, mapped-test runner, JSON reports, and offline CI artifact workflow. It reuses `docs/critical-behaviors.json` and the repository scenario methodology; it does not duplicate critical-behavior ownership or change production trading behavior.
+
+The initial inventory contains 18 scenarios across 16 categories: 15 TEST-MAPPED, one PARTIAL configuration scenario, one MISSING startup-history-gate scenario (CON-PERSIST-003), and one UNSUPPORTED runtime-restoration scenario. TEST-MAPPED is a mapping state, not proof of assertion-level coverage. Runtime restoration remains unsupported by the active Conservative specification.
