@@ -36,7 +36,7 @@ Use standalone Angular components, strict TypeScript/template checking, feature-
 
 ## Required reading
 
-Before dashboard changes, read this roadmap and the applicable repository standards in the root [AGENTS.md](../../AGENTS.md). Re-run the task compliance preflight whenever the scope expands into Harvester, Brokers, DB, authentication, API contracts, CI, or another owned domain.
+Before dashboard changes, read this roadmap, root [AGENTS.md](../../AGENTS.md), every applicable nested `AGENTS.md`, and the canonical standards for each affected owner. If scope expands into Harvester, Brokers, DB, authentication, API contracts, CI, or another owned domain, inspect that domain's instructions, roadmap, implementation, consumers and tests before proceeding. Task Preflight is optional developer tooling, not a required workflow or completion gate.
 
 ## Framework-independent architecture and DDD — mandatory for all Dashboard work
 
@@ -52,6 +52,6 @@ Before dashboard changes, read this roadmap and the applicable repository standa
 
 For Strategy Scenario Runner implementation, trading logic and trading services may be refactored on its task branch as required to faithfully reuse the production flow. Preserve trading behavior and safety invariants; add regression tests, document changed paths, and verify all affected consumers. This does not authorize real trading actions.
 
-## Mandatory agent preflight
+## Mandatory instruction reading and branch safety
 
-Before any exploration or edits, AI agents MUST read repository-root `AGENTS.md` and every applicable nested `AGENTS.md`. This requirement must be present in the Issue, PR and Runner roadmap. Re-read instructions whenever scope expands. Keep all work on the task branch/PR, never push directly to `develop`/`main`, and never merge or enable auto-merge; the user reviews and merges.
+Before any exploration or edits, AI agents MUST read repository-root `AGENTS.md` and every applicable nested `AGENTS.md`. Re-read instructions whenever scope expands. Keep all work on the task branch/PR, never push directly to `develop`/`main`, and never merge or enable auto-merge; the user reviews and merges. This instruction-reading requirement is not Task Preflight and does not require a preflight command, report, attestation or issue-evidence comment.
