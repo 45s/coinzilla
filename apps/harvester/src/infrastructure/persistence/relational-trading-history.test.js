@@ -2028,7 +2028,7 @@ test("backs up and rebuilds existing order/fill tables without breaking historic
 })
 
 
-test("promotes a uniquely matched pending order without losing its earlier fill link", async (t) => {
+test("promotes a pending order and links its earlier exchange-identified fill", async (t) => {
   const context = await createTestContext({ t })
   const persistence = await preparePersistence({ context })
   const clientOrderId = "h-BTCUSDT-pending"
@@ -2036,7 +2036,7 @@ test("promotes a uniquely matched pending order without losing its earlier fill 
     overrides: {
       fillId: "binance:BTCUSDT:trade-pending",
       tradeId: "trade-pending",
-      brokerOrderId: null,
+      brokerOrderId: "exchange-order-pending-1",
       clientOrderId,
     },
   })
@@ -2086,8 +2086,8 @@ test("promotes a uniquely matched pending order without losing its earlier fill 
       ).get(pendingFill.fillId)
       assert.equal(orders.length, 1, "Pending-to-acknowledged promotion must update the existing order row.")
       assert.equal(orders[0].exchange_order_id, "exchange-order-pending-1")
-      assert.equal(fill.order_id, orders[0].id, "The fill linked while pending must retain the same order row after promotion.")
-      assert.equal(fill.exchange_order_id, null, "The migration must not fabricate an exchange order ID absent from the fill source.")
+      assert.equal(fill.order_id, orders[0].id, "The earlier fill must link to the pending order after its exchange ID is known.")
+      assert.equal(fill.exchange_order_id, "exchange-order-pending-1", "The fill's exchange order ID must remain the original exchange-supplied value.")
     },
   })
 })
