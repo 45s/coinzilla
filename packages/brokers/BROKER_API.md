@@ -322,6 +322,6 @@ Order-level TP/SL placement/modification remains unsupported because the documen
 
 ### Production status and limitations
 
-The REST client serializes dispatch conservatively and never automatically retries. State-changing requests are one-shot and explicitly marked `stateChanging: true`. Private observations are non-authoritative and non-replayable; complete account-wide fill history, atomic snapshots, gap-free recovery and process-restart recovery remain UNKNOWN. No isolated Futures TESTNET endpoint has been verified, and no LIVE mutation is permitted as an implementation test.
+The REST client serializes dispatch conservatively and never automatically retries. State-changing requests are one-shot and explicitly marked `stateChanging: true`. Private observations are non-authoritative and non-replayable; complete account-wide fill history, atomic snapshots, gap-free recovery and process-restart recovery remain UNKNOWN. Bitunix Futures is LIVE-only; Bitunix does not provide a Futures TESTNET. Automated tests remain offline, and LIVE mutations are not permitted as implementation tests.
 
 The provider remains **NOT PRODUCTION READY** and must not be routed to Harvester or production execution. The remaining blockers are external protocol guarantees and verification, not a reason to fabricate support for unsupported common-model operations. See the [maintained Futures reference audit](./docs/bitunix-futures-reference-audit.md) and [issue #1805](https://github.com/45s/coinzilla/issues/1805).
