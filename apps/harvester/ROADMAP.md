@@ -2296,4 +2296,10 @@ The detailed evidence, implementation commits, CI state and remaining unknowns a
 
 ## Strategy-neutral Scenario Runner — Issue #1836 / PR #1837
 
-The isolated simulation Runner is an active task. Its Harvester-side architecture note is [Scenario Runner architecture](docs/features/scenario-runner-architecture.md); the Dashboard owns the specification and phased plan. The initial generic lifecycle/process-adapter scaffolding has been added on the task branch, with a fail-closed unregistered worker dispatcher. RS production adapter, API/UI and acceptance are not complete. The worker is simulation-only and must never fall back to live trading or production state.
+Active and incomplete in draft [PR #1837](https://github.com/45s/coinzilla/pull/1837). The Harvester-side architecture note is [Scenario Runner architecture](docs/features/scenario-runner-architecture.md); Dashboard owns the specification and phased plan.
+
+- The generic run lifecycle, process adapter, REST routes, WebSocket notifications and preliminary Dashboard workspace exist on the task branch.
+- RS-004-011 currently has only a helper-level adapter around `calculateRecoverySellerProfitability`. It does **not** execute the full production RS strategy/use-case lifecycle and is not an executable scenario. The host catalog marks it `PRELIMINARY`, `executable: false`, and blocks run submission until a full adapter is registered.
+- Process-worker cleanup regressions require cancellation to wait for execution settlement and result handling to wait for child-process close. This does not establish a secure simulation sandbox.
+- Remaining gates: production RS flow reuse and source-mapped scenario coverage; defensible OS-level network/filesystem/process isolation with adversarial tests; shared production config/market metadata and run-local Playground overrides; complete REST/WS contracts and missed-update recovery; persistent bounded history; exact-revision replay; complete versioned debug evidence; Angular-independent application orchestration; and end-to-end acceptance.
+- No LIVE/TESTNET broker, credentials, production persistence or real trading actions are permitted. Keep the PR draft and do not mark roadmap phases complete until exact evidence and CI support it.

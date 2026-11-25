@@ -12,6 +12,8 @@ const SCENARIO = Object.freeze({
   name: "Independent recovery, legacy and combined profitability gates all pass",
   layer: "DOMAIN",
   status: "TEST-MAPPED",
+  executionStatus: "PRELIMINARY",
+  executable: false,
   inputSchema: Object.freeze({
     type: "object",
     required: [

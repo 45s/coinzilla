@@ -13,11 +13,15 @@ export interface ScenarioInputSchema {
   }>>;
 }
 
+export type ScenarioExecutionStatus = 'PRELIMINARY' | 'EXECUTABLE' | 'BLOCKED';
+
 export interface ScenarioCatalogEntry {
   readonly id: string;
   readonly name: string;
   readonly layer: string;
   readonly status: string;
+  readonly executionStatus: ScenarioExecutionStatus;
+  readonly executable: boolean;
   readonly inputSchema?: ScenarioInputSchema;
   readonly defaultInput?: unknown;
 }

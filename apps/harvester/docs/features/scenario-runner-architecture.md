@@ -38,3 +38,7 @@ The delayed-exit fixture registers its SIGTERM handler before sending the result
 The delayed-exit regression gives the adapter a 1,000 ms termination grace while the fixture exits after 500 ms, proving graceful cleanup rather than exercising the forced-kill fallback.
 
 The RS-004-011 profitability helper is preliminary scaffolding, not a completed executable strategy scenario. Until a strategy adapter invokes the actual production RS use-case flow with simulation-only ports, the host must label the catalog entry non-executable and block run submission. A helper-level unit test is not scenario-runner acceptance evidence.
+
+## RS helper scaffold is not executable
+
+The RS-004-011 adapter currently invokes only `calculateRecoverySellerProfitability`. That is useful helper-level evidence, but it is not the production RS application/use-case lifecycle and must not be represented as an executed strategy scenario. The host catalog therefore marks it `PRELIMINARY` and `executable: false`, and the runner has no RS adapter registered until the complete production-flow simulation boundary exists. A future adapter must reuse production use cases and inject simulation-only ports; it must not copy or approximate strategy behavior.

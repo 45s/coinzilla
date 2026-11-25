@@ -5,7 +5,7 @@ import {
   getRecoverySellerRunnerCatalog,
 } from "./rs-scenario-adapter.js"
 
-test("RS scenario adapter executes the production profitability function and emits trace assertions", async () => {
+test("RS profitability helper scaffold invokes the production calculation function and emits helper-level assertions", async () => {
   const result = await executeRecoverySellerRunnerScenario({
     runId: "run-rs-1",
     scenarioId: "RS-004-011",
@@ -27,11 +27,12 @@ test("RS scenario adapter blocks unsupported scenario IDs", async () => {
   )
 })
 
-test("RS adapter catalog contains only the scenario with an implemented execution adapter", () => {
-  assert.deepEqual(
-    getRecoverySellerRunnerCatalog().map((item) => item.id),
-    ["RS-004-011"],
-  )
+test("RS helper catalog labels the mapped case as preliminary and non-executable", () => {
+  const [scenario] = getRecoverySellerRunnerCatalog()
+  assert.equal(scenario.id, "RS-004-011", "the helper remains mapped to its source scenario")
+  assert.equal(scenario.status, "TEST-MAPPED", "the registry mapping status remains unchanged")
+  assert.equal(scenario.executionStatus, "PRELIMINARY", "helper-only execution must be labelled preliminary")
+  assert.equal(scenario.executable, false, "helper-only execution must not be advertised as a full scenario")
 })
 
 test("RS scenario adapter validates schema fields and decimal-string inputs", async () => {

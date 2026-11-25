@@ -1,7 +1,7 @@
 <section class="runner">
   <header>
     <h1>Strategy Scenario Runner</h1>
-    <p>Execute strategy scenarios in isolated simulation. No live orders.</p>
+    <p>Scenario definitions and helper evidence only. Production-flow execution remains disabled until a complete simulation adapter is verified.</p>
   </header>
   @if (error()) {
     <p class="error" role="alert">{{ error() }}</p>
@@ -22,16 +22,16 @@
       </select>
     </label>
   </div>
+  <p class="scenario-status">Execution status: {{ selectedScenario?.executionStatus ?? 'UNAVAILABLE' }}</p>
   <label class="input-label">Run input (JSON)
-    <textarea rows="8" [value]="inputJson()" (input)="updateInput($any($event.target).value)"></textarea>
+    <textarea rows="8" [disabled]="selectedScenario?.executable !== true" [value]="inputJson()" (input)="updateInput($any($event.target).value)"></textarea>
   </label>
   <div class="actions">
-    <button type="button" [disabled]="loading() || !scenarioId()" (click)="execute()">Run scenario</button>
+    <button type="button" [disabled]="loading() || selectedScenario?.executable !== true" (click)="execute()">Run scenario</button>
     @if (run()) {
       <button type="button" (click)="refresh()">Refresh</button>
-      <button type="button" (click)="execute()">Load recorded inputs</button>
       <button type="button" (click)="cancel()">Cancel</button>
-      <button type="button" (click)="copyDebugPackage()">Copy AI debug JSON</button>
+      <button type="button" (click)="copyDebugPackage()">Copy available debug evidence</button>
       @if (copied()) {
         <p role="status">Debug package copied.</p>
       }
@@ -78,7 +78,7 @@
   }
   @if (run()) {
     <details open>
-      <summary>AI Debug JSON (complete available run evidence)</summary>
+      <summary>Available AI debug evidence (incomplete provenance)</summary>
       <pre>{{ debugText }}</pre>
     </details>
   }

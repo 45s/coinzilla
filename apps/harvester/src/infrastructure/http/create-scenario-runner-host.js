@@ -1,5 +1,4 @@
 import { createScenarioRunner } from "../../application/scenario-runner/create-scenario-runner.js"
-import { createProcessScenarioAdapter } from "../scenario-runner/create-process-scenario-adapter.js"
 import { getRecoverySellerRunnerCatalog } from "../scenario-runner/rs-scenario-adapter.js"
 
 function publishScenarioRunUpdate({ eventBus, run }) {
@@ -22,7 +21,7 @@ function publishScenarioRunUpdate({ eventBus, run }) {
 
 export function createScenarioRunnerHost({ eventBus } = {}) {
   const runner = createScenarioRunner({
-    adapters: [createProcessScenarioAdapter({ strategyId: "RS" })],
+    adapters: [],
     timeoutMs: 30_000,
     maxStoredRuns: 100,
     onUpdate: (run) => publishScenarioRunUpdate({
@@ -39,6 +38,8 @@ export function createScenarioRunnerHost({ eventBus } = {}) {
         name: scenario.name,
         layer: scenario.layer,
         status: scenario.status,
+        executionStatus: scenario.executionStatus,
+        executable: scenario.executable,
         inputSchema: scenario.inputSchema,
         defaultInput: scenario.input,
       })),

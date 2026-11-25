@@ -149,6 +149,10 @@ export class ScenarioRunnerComponent {
 
   async execute(): Promise<void> {
     this.error.set(null);
+    if (this.selectedScenario?.executable !== true) {
+      this.error.set('This scenario is mapped to tests but has no complete production-flow simulation adapter yet.');
+      return;
+    }
     this.loading.set(true);
     try {
       const input = JSON.parse(this.inputJson());
@@ -202,7 +206,7 @@ export class ScenarioRunnerComponent {
       this.inputJson.set(JSON.stringify(run.input ?? {}, null, 2))
       await this.refresh(runId)
     } catch (error) {
-      this.error.set(error instanceof Error ? error.message : "Run replay input could not be loaded.")
+      this.error.set(error instanceof Error ? error.message : "Recorded run inputs could not be loaded.")
     }
   }
 
