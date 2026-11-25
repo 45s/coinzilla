@@ -631,7 +631,7 @@ test("RS-003-006-C: a cross-market CG reservation reduces shared base availabili
       lockedBaseBalance: "0",
       expectedRemainingBaseBalance: "0",
       expectedRemainingActiveBase: "0.5",
-      expectedFailure: "available free base balance after commitments",
+      expectedFailure: "Strategy SELL quantity exceeds available free base balance after commitments",
     },
   })
 })
