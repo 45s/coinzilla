@@ -2,7 +2,7 @@
 
 **Incident date:** 2026-11-25  
 **Runtime:** Binance TESTNET  
-**Related issue / PR:** [#1849](https://github.com/45s/coinzilla/issues/1849) / [#1849](https://github.com/45s/coinzilla/pull/1849)  
+**Related issue / PR:** [#1851](https://github.com/45s/coinzilla/issues/1851) / [#1849](https://github.com/45s/coinzilla/pull/1849)  
 **Separate incident:** LINEAUSDT Recovery Seller authorization work in #1847 / #1848 is unrelated.
 
 ## Executive finding
