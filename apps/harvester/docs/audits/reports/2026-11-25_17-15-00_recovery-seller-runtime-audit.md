@@ -43,7 +43,7 @@ Two confirmed implementation gaps require separate production fixes:
 1. **STOP contract mismatch — [#1843](https://github.com/45s/coinzilla/issues/1843).** The owner-approved contract says STOP blocks additional RS BUY spending, preserves existing-order reconciliation/accounting, and permits an otherwise-valid first recovery SELL. Current runtime STOP is mapped to `strategyStopped`, persisted as an account-scoped blocker and blocks SELL as well as BUY. An internal evidence-backed resolver exists, but the operator facade does not expose the authorized administrator action.
 2. **Terminal mixed-SELL lifecycle mismatch — [#1842](https://github.com/45s/coinzilla/issues/1842).** The application accounting workflow chooses `CLOSED` from profitability eligibility alone and does not require terminal order status `FILLED`. It also publishes a non-canonical cycle-outcome shape. A FILLED but under-target SELL becomes `UNRESOLVED` without the durable global STOP required by the specification.
 
-The maintained [runtime flow map](../domain/recovery-seller-runtime-flows.md) contains the detailed entry-point, decision, submission, accounting, lifecycle and schema diagrams.
+The maintained [runtime flow map](../../domain/recovery-seller-runtime-flows.md) contains the detailed entry-point, decision, submission, accounting, lifecycle and schema diagrams.
 
 ## Method and provenance
 
