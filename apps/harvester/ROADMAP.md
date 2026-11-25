@@ -172,7 +172,7 @@ Do not claim 100% correctness from line/branch coverage. Completion means every 
 
 **Merged scenario baseline:** [PR #1793](https://github.com/45s/coinzilla/pull/1793) is merged. Its four scenario files provide initial, deliberately PARTIAL evidence across RS-003 through RS-007; they do not complete any family.
 
-**Agent playbook:** [PR #1810](https://github.com/45s/coinzilla/pull/1810) is open for review and defines the complete scenario registry, case schemas, worked examples and seven-PR implementation sequence.
+**Agent playbook:** [PR #1810](https://github.com/45s/coinzilla/pull/1810) was closed unmerged; its proposed playbook file is not present on `develop`. The latest registry/playbook draft is in [PR #1823](https://github.com/45s/coinzilla/pull/1823), still open and materially stale (426 commits behind current develop) with Repository Quality, Unit Tests and Test Coverage failing on its exact head. Do not treat the draft as merged instructions or production capability.
 
 **Current application prerequisite complete:** [PR #1815](https://github.com/45s/coinzilla/pull/1815) fixes #1809 with a real workflow-to-default-SELL-evaluator regression. The test-first RED failure was observed on `65761e992c86e2fd59bdc0811ab8737dbf3c6a31`; all six required workflows passed on exact merged head `20963617c9d9d73c31b47865e0aa34c4a966cc8e`. The composed regression cases passed Harvester Targeted Tests on `23dbbe303221ea49820eeb9820323512b2fe38df`. The final PR head still requires exact-head CI verification.
 
@@ -254,7 +254,7 @@ Do not claim 100% correctness from line/branch coverage. Completion means every 
 - Order and fill history observers publish resource-only invalidation events only after their respective relational upserts succeed. Fill persistence invalidates both Fills and Commissions. Failed writes never produce a success notification.
 - Notifications are best-effort in-memory EventBus messages, not durable replay, exactly-once delivery or an audit log. REST list/detail resources remain authoritative; browser clients must load fresh snapshots on connection and every reconnect.
 - The transport is read-only and does not call brokers/exchanges, change trading decisions, or introduce database schema/migration changes. The Dashboard is a client and owns its reconnect and UI state.
-- Tracked by [#1643](https://github.com/45s/coinzilla/issues/1643). Do not mark complete until exact-head CI, API lifecycle/security tests, persistence ordering tests, Dashboard reconnect/resync tests and documentation checks pass and the PR is merged.
+- **Complete in merged [PR #1641](https://github.com/45s/coinzilla/pull/1641)**, merge `a86b8c95d8ec900c7053355424cbcc344b616e0a`. All seven required workflows passed on exact head `c60a850d847bba6aae1e7fdcdc2439ff4e2603eb`; issue #1643 is closed.
 
 ## Critical trading reliability initiative (#1639)
 
@@ -345,7 +345,7 @@ The temporary `harvester_processes` process-ID smoke-test row and its obsolete p
 
 1. Filtered account snapshot history only with explicit provenance and completeness semantics.
 2. Offline, idempotent historical imports from verified source evidence.
-3. **Versioned trading-history query API and Dashboard consumer — IN PROGRESS (#1635, #1634; PR #1636).** Expose existing orders, individual fills, and commission facts through Harvester-owned application queries and an authenticated in-process `/api/v1` HTTP listener. The Angular Dashboard consumes the same versioned contract for read-only Orders, Fills, and Commissions pages. Harvester owns the shared database connection and listener lifecycle; no separate API process, schema changes, sessions/errors tables, trading controls, or exchange operations.
+3. **Versioned trading-history query API and Dashboard consumer — COMPLETE (#1635, #1634; merged PR #1636).** Existing orders, individual fills and commission facts are exposed through Harvester-owned application queries and an authenticated in-process `/api/v1` HTTP listener. The Angular Dashboard consumes the same versioned contract for read-only Orders, Fills and Commissions pages. Harvester owns the shared database connection and listener lifecycle; no separate API process, schema changes, sessions/errors tables, trading controls or exchange operations. All seven required workflows passed on exact head `38e26aca14e8c146ea974dbf42fe133524ad83c6`; both issues are closed.
 
 **Explicit exclusions from #1554/#1556:** no account-wide or delisted-market history completeness claim, account snapshots as a history source, strategy-cycle lifecycle, PnL/analytics, equity/drawdown snapshots, process-restart restoration/adoption, Journal replay, new providers, `sessions`/`errors` tables, broker order-mutation behavior changes, Journal semantics changes, ADR-0001 rewrite, or exchange operations.
 
@@ -2292,7 +2292,6 @@ The detailed evidence, implementation commits, CI state and remaining unknowns a
 - CI fixes: corrected the lifecycle cost-basis expectations from observed canonical fills, fixed strict ESLint formatting, and removed repeated Markdown blank lines. Exact-head verification is tracked on PR #1808.
 - Test-only and documentation changes; no production trading behavior or rules changed.
 
-
 ## Conservative scenario registry and runner — issue #1797
 
 The strategy-neutral Conservative scenario registry/runner is in open [PR #1798](https://github.com/45s/coinzilla/pull/1798). All six required workflows passed on its current recorded head `5b18b9f55e195017e56f036fcd872c3877f8c54`, but the branch is 91 commits ahead / 53 behind current `develop`; green CI on the stale merge base is not current integration readiness. Issue #1797 remains open. Synchronize with develop, resolve conflicts and rerun exact-head CI before review/merge.
@@ -2304,6 +2303,25 @@ Open Draft [PR #1837](https://github.com/45s/coinzilla/pull/1837) is the impleme
 ## Binance reused clientOrderId — issue/PR #1849
 
 Open Draft [PR #1849](https://github.com/45s/coinzilla/pull/1849) introduces provider/account/environment/market-scoped exchange-order identity, pending client-ID correlation, fill linkage and a fail-closed version-5 SQLite migration. Current recorded head `d27831eb3e88740631bfd9d8367a79dc3ee7afc7` is 92 commits ahead / 0 behind current `develop`; Dependency Audit passes, while Harvester Targeted Tests and Repository Quality are in progress, Unit Tests and Coverage are queued, and External Documentation Links is in progress. Keep Draft until all migration/foreign-key/pending-to-acknowledged/fill-before-order cases and all six exact-head workflows pass. No production migration or exchange operations.
+
+## Open Recovery Seller runtime contract fixes — #1842, #1843, #1839
+
+These issues remain open and are not represented as completed by the scenario-test work:
+- [#1842](https://github.com/45s/coinzilla/issues/1842): terminal SELL status and profitability STOP.
+- [#1843](https://github.com/45s/coinzilla/issues/1843): owner-approved investment-only STOP contract.
+- [#1839](https://github.com/45s/coinzilla/issues/1839): attribute market-price errors to the resolved strategy owner.
+
+## Conservative scenario registry and runner — issue #1797
+
+Open [PR #1798](https://github.com/45s/coinzilla/pull/1798) contains the strategy-neutral Conservative scenario registry/runner. All six required workflows passed on recorded head `5b18b9f55e195017e56f036fcd872c3877f8c54d`, but the branch is 91 commits ahead / 53 behind current `develop`; green CI on the stale merge base is not current integration readiness. Issue #1797 remains open. Synchronize with develop, resolve conflicts and rerun exact-head CI before review/merge.
+
+## Strategy-neutral production-flow Scenario Runner — issue #1836
+
+Open Draft [PR #1837](https://github.com/45s/coinzilla/pull/1837) is the implementation branch. It remains strategy-neutral and framework-independent; the approved task permits necessary production-flow/trading-service refactoring on that branch while preserving behavior and safety invariants. Current recorded head `48c1d3eb716da3794186305b00bcf52f3e1ec954` is 110 commits ahead / 42 behind current `develop`; Dependency Audit, Unit Tests and Harvester Targeted Tests pass, while Repository Quality fails and Coverage/External Documentation Links are still running. The full MVP remains incomplete. No executable RS adapter is registered until configured-market/fee readiness and verified OS-level filesystem/network/process/resource isolation gates pass. No real broker/exchange operations, credentials, live account state or production persistence.
+
+## Binance reused clientOrderId — issue/PR #1849
+
+Open Draft [PR #1849](https://github.com/45s/coinzilla/pull/1849) introduces provider/account/environment/market-scoped exchange-order identity, pending client-ID correlation, fill linkage and a fail-closed version-5 SQLite migration. Current recorded head `d27831eb3e88740631bfd9d8367a79dc3ee7afc7` is 92 commits ahead / 0 behind current `develop`; Dependency Audit passes, while Harvester Targeted Tests and Repository Quality are in progress, Unit Tests and Coverage are queued, and External Documentation Links is in progress. Keep Draft until migration/foreign-key/pending-to-acknowledged/fill-before-order cases and all six exact-head workflows pass. No production migration or exchange operations.
 
 ## Open Recovery Seller runtime contract fixes — #1842, #1843, #1839
 
