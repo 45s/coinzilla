@@ -762,7 +762,7 @@ At `20.00 USDT/ZRO`, recovery receives `20.00 USDT` (profit `+10.00`), legacy re
 
 ### RS-008 — CG and RS share account availability and market-owned volatility without sharing strategy ownership
 
-**Status:** PARTIAL — RS-008-017-A/B/C/D/E and RS-008-018-A/B are registered and TEST-MAPPED; 018-A proves cross-market shared quote reservation and 018-B proves concurrent same-market CG/RS fills retain independent Positions in one shared Portfolio; concurrent quote/base intents, aggregate oversell and broader serialization interleavings remain MISSING.
+**Status:** PARTIAL — RS-008-017-A/B/C/D/E and RS-008-018-A/B/C/D are registered and TEST-MAPPED; 018-A proves cross-market shared quote reservation, 018-B proves concurrent same-market CG/RS fills retain independent Positions in one shared Portfolio, and 018-C/D prove summed CG/RS quote/base commitments at the pure account allocator boundary; runtime-level concurrent quote/base intents, cross-asset atomic reservation and broader serialization interleavings remain MISSING.
 
 **Example:** CG and RS each request a SELL against the same market. Their strategy budgets and Positions remain separate, while the shared account allocator must ensure combined reserved base never exceeds verified available Spot. Repeat with competing BUY quote commitments and with different markets sharing the same quote asset. An RS-only market must also consume the same market-owned volatility gate as CG when protection is enabled; no RS-specific volatility engine is permitted.
 
