@@ -807,6 +807,75 @@ const exchangeFilterScenario = defineRecoverySellerScenario({
   evidence: null,
 })
 
+
+const missingFilterScenario = defineRecoverySellerScenario({
+  id: "RS-003-011",
+  family: "RS-003",
+  name: "missing required TradingRules metadata fails closed and latches STOP",
+  priority: "P0",
+  authority: [
+    "apps/harvester/docs/domain/recovery-seller-domain-specification.md",
+    "issue-1780: RS-003 missing exchange-filter metadata",
+  ],
+  layer: "DOMAIN",
+  configFields: ["RS_PAIR.minProfit", "RS_PAIR.makerPercent", "RS_PAIR.takerPercent"],
+  covers: {
+    rules: ["RS_EXCHANGE_FILTERS", "RS_STOP_FAIL_CLOSED"],
+    decisions: ["RS_SELL_PLAN"],
+    states: ["ACCUMULATING", "STOPPED"],
+    transitions: [],
+    invariants: ["RS_NO_UNSAFE_SELL", "RS_STOP_STICKY"],
+  },
+  given: {
+    candidate: {
+      recoveryQuantity: "1",
+      recoveryCostBasis: "10",
+      minProfit: "0.01",
+    },
+    tradingRules: {
+      missingFilter: "MIN_NOTIONAL",
+      priceIncrement: "0.01",
+      quantityIncrement: "0.01",
+      minQuantity: "0.01",
+    },
+  },
+  when: [{
+    type: "evaluate-missing-required-filter",
+    inputKey: "input",
+    saveAs: "decision",
+  }],
+  then: {
+    outcome: "BLOCK",
+    stopStatus: "STOPPED",
+    orderIntent: null,
+    filterViolation: "MIN_NOTIONAL",
+  },
+  mustNot: [
+    "assume a missing required filter has a permissive or zero value",
+    "return an executable order intent without all required exchange constraints",
+    "clear the global sticky STOP automatically",
+  ],
+  subcases: [{
+    id: "RS-003-011-A",
+    description: "missing required MIN_NOTIONAL metadata blocks SELL and latches STOP",
+    status: "TEST-MAPPED",
+    test: {
+      file: "apps/harvester/test/scenarios/recovery-seller/mixed-sell-planning.scenario.test.js",
+      title: "RS-003-011-A: missing required MIN_NOTIONAL metadata blocks SELL",
+    },
+    evidence: null,
+  }],
+  implementation: [
+    "apps/harvester/src/domain/strategies/recovery-seller/evaluate-sell-decision.js",
+  ],
+  test: {
+    file: "apps/harvester/test/scenarios/recovery-seller/mixed-sell-planning.scenario.test.js",
+    title: "RS-003-011-A: missing required MIN_NOTIONAL metadata blocks SELL",
+  },
+  status: "TEST-MAPPED",
+  evidence: null,
+})
+
 export const recoverySellerMixedSellPlanningScenarios = Object.freeze([
   ...recoverySellerMixedSellPlanningScenariosWithoutReservations,
   createAccountWideReservationScenario(),
@@ -847,6 +916,7 @@ export const recoverySellerMixedSellPlanningScenarios = Object.freeze([
   }),
   createConcurrentReservationScenario(),
   exchangeFilterScenario,
+  missingFilterScenario,
   createMixedSellFillAllocationScenario(),
 
 ])
