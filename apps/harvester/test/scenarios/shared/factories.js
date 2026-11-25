@@ -1,5 +1,7 @@
+import { defineConservativeScenario } from "../conservative/registry/define-scenario.js"
+
 export function createScenarioDefinition(definition = {}) {
-  return {
+  return defineConservativeScenario({
     tags: [],
     preconditions: [],
     initialState: {},
@@ -10,5 +12,5 @@ export function createScenarioDefinition(definition = {}) {
     relatedSourceFiles: [],
     relatedExistingTests: [],
     ...definition,
-  }
+  })
 }
