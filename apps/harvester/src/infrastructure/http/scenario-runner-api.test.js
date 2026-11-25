@@ -205,6 +205,8 @@ test("host exposes an executable scenario only when its strategy adapter is regi
   }]
   const adapter = {
     strategyId: "RS",
+    executionMode: "simulation-only",
+    isolationVerified: true,
     execute: async () => ({
       trace: [{
         id: "decision",
@@ -231,11 +233,57 @@ test("host exposes an executable scenario only when its strategy adapter is regi
   assert.equal((await host.runner.waitForRun(accepted.runId)).status, "Completed")
 })
 
+
+test("host blocks live and unverified adapters even when a scenario is source-approved", () => {
+  const scenarioCatalog = [{
+    id: "RS-SIM-SECURITY",
+    name: "Simulation isolation gate",
+    layer: "application",
+    status: "TEST-MAPPED",
+    executionStatus: "EXECUTABLE",
+    executable: true,
+    inputSchema: {
+      type: "object",
+      required: [],
+      additionalProperties: false,
+      properties: {},
+    },
+    input: {},
+  }]
+  const adapterBase = {
+    strategyId: "RS",
+    execute: async () => ({ output: {} }),
+    cancel: async () => true,
+  }
+  const unsafeAdapters = [
+    { ...adapterBase, executionMode: "live", isolationVerified: true },
+    { ...adapterBase, executionMode: "simulation-only", isolationVerified: false },
+    { ...adapterBase, isolationVerified: true },
+  ]
+  for (const adapter of unsafeAdapters) {
+    const host = createScenarioRunnerHost({
+      adapters: [adapter],
+      scenarioCatalog,
+    })
+    const [scenario] = host.catalog[0].scenarios
+    assert.equal(scenario.executable, false,
+      "A live, unverified or undeclared adapter must not make a scenario executable.")
+    assert.equal(scenario.executionStatus, "BLOCKED")
+    assert.equal(host.runner.submit({
+      strategyId: "RS",
+      scenarioId: scenario.id,
+      input: {},
+    }).status, "Blocked")
+  }
+})
+
 test("host validates executable scenario input before the adapter receives it", async () => {
   let executions = 0
   const host = createScenarioRunnerHost({
     adapters: [{
       strategyId: "RS",
+      executionMode: "simulation-only",
+      isolationVerified: true,
       execute: async () => {
         executions += 1
         return { output: "must not execute" }

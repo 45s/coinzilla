@@ -77,6 +77,16 @@ test("process adapter waits for worker exit after receiving a result", async () 
   assert.ok(Date.now() - startedAt >= 400, "run completion must wait for the worker's delayed exit")
 })
 
+
+test("process adapter does not claim verified OS isolation for an unattested launcher", () => {
+  const adapter = createProcessScenarioAdapter({
+    strategyId: "RS",
+    spawnSandboxedWorker: spawnTestWorker,
+  })
+  assert.equal(adapter.executionMode, "simulation-only")
+  assert.equal(adapter.isolationVerified, false)
+})
+
 test("process adapter refuses to start without a trusted OS sandbox launcher", () => {
   assert.throws(() => createProcessScenarioAdapter({
     strategyId: "RS",
