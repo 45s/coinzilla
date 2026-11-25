@@ -18,7 +18,7 @@ import { configureHarvesterLogging } from "../logging/configure-harvester-loggin
 import { prepareOrderHistoryPersistence } from "./prepare-order-history-persistence.js"
 import { resolveHarvesterDatabaseFilename } from "./resolve-harvester-database-filename.js"
 import { HARVESTER_RELATIONAL_MIGRATIONS } from "./relational-migrations.js"
-import { createOrderHistoryEventData } from "../../../test-support/order-history-fixtures.js"
+import { ORDER_HISTORY_MARKET, createOrderHistoryEventData } from "../../../test-support/order-history-fixtures.js"
 
 function createPersistenceTestLogger() {
   const transports = new Map()
