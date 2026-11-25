@@ -284,3 +284,13 @@ The follow-up branch addresses two broker/engine contract defects. Binance `myTr
 SELL 698745 cancellation follows the Conservative BUY-filled path: cancel the old recovery SELL, reconcile its fills, and wait for a subsequent eligible market event to evaluate a replacement against the new inventory. The cancellation event ID `IR2BlFAQOVPlsCtcQqq2A5` cannot be attributed to Binance `c` or `C` without raw execution-report evidence. Mark that attribution and any actual replacement as **NOT OBSERVED**, not confirmed cancel/replace behavior.
 
 Exact accounting baseline: trade 9939 = 5 ZRO at 1.792, 8.96 USDT gross, 0.005 ZRO fee; trade 9940 = 5 ZRO at 1.789, 8.945 USDT gross, 0.005 ZRO fee. Combined net 9.990 ZRO, invested/recovery 17.905 USDT, sell proceeds 0, realized net profit -17.905 USDT. No new TESTNET operation was performed. Offline CI and the next joint controlled TESTNET session remain separate gates.
+
+## Account-scoped safety blockers and order admission
+
+An active `scope: ACCOUNT` safety blocker is a hard global admission stop. It takes precedence over Conservative, Recovery Seller, strategy-pause, volatility, and shutdown exceptions. No BUY or SELL—including a purpose-tagged shutdown Recovery Seller SELL—may reach the broker while the blocker is active.
+
+Startup readiness and the shared final submission gate both consult current blocker state. The final gate must re-check immediately before broker I/O rather than relying on readiness cached when the engine was created. A Recovery Seller STOP closes in-memory admission before awaiting durable persistence; a failed write remains fail-closed.
+
+Market-scoped blockers remain local to their symbol. The ADR-0008 Recovery Seller SELL exception is limited to the documented market-level strategy safety pause and never bypasses an account blocker.
+
+Do not confuse an account open-order audit classification of `BLOCKED` with this safety gate. ADR-0004 remains authoritative: external orders stay unowned and untouched; `IGNORE` permits scoped continuation, while `BLOCK` prevents trading only on the affected market.
