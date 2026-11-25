@@ -461,7 +461,7 @@ async function createRuntimeScenarioStopWorkflow({ operationalStateStore }) {
   return result.data
 }
 
-function createRuntimeScenarioBroker({ baseAsset, runId }) {
+function createRuntimeScenarioBroker({ market, baseAsset, quoteAsset, runId }) {
   const submittedOrders = []
   return {
     submittedOrders,
@@ -476,19 +476,25 @@ function createRuntimeScenarioBroker({ baseAsset, runId }) {
           providerInstanceId: "scenario-runner-simulation",
           providerType: "simulation",
           accountId: `scenario-${runId}`,
-          market: order.market,
+          market,
           side: order.side,
           type: order.type,
-          limitPrice: order.limitPrice,
-          originalQuantity: order.originalQuantity,
+          limitPrice: new Money({
+            amount: order.price,
+            asset: quoteAsset,
+          }),
+          originalQuantity: new Quantity({
+            amount: order.quantity,
+            asset: baseAsset,
+          }),
           executedQuantity: new Quantity({
             amount: "0",
             asset: baseAsset,
           }),
           status: "OPEN",
-          createdAt: order.createdAt,
-          acknowledgedAt: order.createdAt + 1,
-          updatedAt: order.createdAt + 1,
+          createdAt: 1,
+          acknowledgedAt: 2,
+          updatedAt: 2,
         })
         submittedOrders.push(acknowledgedOrder)
         return {
@@ -616,7 +622,9 @@ async function executeRecoverySellerRuntimeScenario({ runId, input }) {
     operationalStateStore,
   })
   const { broker, submittedOrders } = createRuntimeScenarioBroker({
+    market,
     baseAsset,
+    quoteAsset,
     runId,
   })
   const submitter = createRuntimeScenarioSubmitter({
