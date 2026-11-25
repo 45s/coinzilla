@@ -1010,7 +1010,7 @@ function createExchangeFilterScenarioDecision({ input }) {
       status: "SUPPORTED",
       value: new Money({ amount: input.tradingRules.minNotional, asset: quoteAsset }),
     },
-  ]
+  ].filter(({ type }) => type !== input.tradingRules.missingFilter)
   const marketMetadata = {
     market,
     supportedOrderTypes: ["LIMIT_MAKER", "LIMIT"],
@@ -1068,3 +1068,23 @@ test("RS-003-006: account-wide SELL reservations across markets are summed and s
   assertAccountWideReservationBoundary()
   await assertRegisteredAccountWideReservationScenario()
 })
+
+test("RS-003-011-A: missing required MIN_NOTIONAL metadata blocks SELL", async () => {
+  const scenario = recoverySellerMixedSellPlanningScenarios.find((item) => item.id === "RS-003-011")
+  assert.ok(scenario,
+    "RS-003-011 must be a declarative missing-filter business scenario.")
+  assert.ok(recoverySellerScenarioRegistry.includes(scenario),
+    "The shared RS registry must include the missing-filter scenario.")
+  const result = await runRecoverySellerDomainScenario({
+    scenario,
+    handlers: {
+      "evaluate-missing-required-filter": createExchangeFilterScenarioDecision,
+    },
+  })
+  assert.deepEqual(
+    result.results[0],
+    scenario.then,
+    "Missing required MIN_NOTIONAL metadata must block, latch STOP and return no order intent.",
+  )
+})
+
