@@ -70,6 +70,9 @@
         } @else if (activePage() === 'open-orders') {
           <span class="demo-pill persisted-pill"><span></span> LIVE READ ONLY</span>
           <span class="environment-pill">HARVESTER WS</span>
+        } @else if (activePage() === 'scenario-runner') {
+          <span class="demo-pill persisted-pill"><span></span> SIMULATION ONLY</span>
+          <span class="environment-pill">SCENARIO LAB</span>
         } @else if (activePage() === 'github-prs') {
           <span class="demo-pill persisted-pill"><span></span> PUBLIC READ ONLY</span>
           <span class="environment-pill">GITHUB API</span>
@@ -102,6 +105,8 @@
         <app-exchanges />
       } @else if (activePage() === 'open-orders') {
         <app-open-orders />
+      } @else if (activePage() === 'scenario-runner') {
+        <app-scenario-runner />
       } @else if (activePage() === 'github-prs') {
         <app-github-prs />
       } @else {
@@ -121,6 +126,8 @@
           <span>Live read-only account data · Harvester WebSocket only</span>
         } @else if (activePage() === 'open-orders') {
           <span>Live open orders · Harvester WebSocket only · No order controls</span>
+        } @else if (activePage() === 'scenario-runner') {
+          <span>Isolated simulation only · no live trading</span>
         } @else if (activePage() === 'github-prs') {
           <span>Public GitHub pull requests · Local-only labels · No GitHub mutations</span>
         } @else {

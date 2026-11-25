@@ -3,6 +3,7 @@ import { createTradingHistoryQueryRepository } from "../persistence/trading-hist
 import { createBitunixFuturesMarketDataClient } from "./bitunix-futures-market-data.js"
 import { createTradingHistoryQueries } from "../../use-cases/trading-history/queries.js"
 import { startTradingHistoryApiServer } from "./trading-history-api.js"
+import { createScenarioRunnerHost } from "./create-scenario-runner-host.js"
 
 const DEFAULT_API_HOST = "127.0.0.1"
 const DEFAULT_API_PORT = 4201
@@ -60,15 +61,59 @@ function resolveStartupConfiguration({ env, environment } = {}) {
   })
 }
 
+function validateApiDependencies({ database, eventBus, environment }) {
+  if (!database || typeof database.prepare !== "function") {
+    throw new TradingHistoryApiStartupError({
+      message: "The Harvester relational trading-history database is unavailable; the optional API cannot start.",
+      code: "HARVESTER_TRADING_HISTORY_API_DATABASE_UNAVAILABLE",
+      environment,
+    })
+  }
+  if (!eventBus || typeof eventBus.subscribe !== "function") {
+    throw new TradingHistoryApiStartupError({
+      message: "The Harvester EventBus is unavailable; the optional trading-history API cannot start.",
+      code: "HARVESTER_TRADING_HISTORY_API_EVENT_BUS_UNAVAILABLE",
+      environment,
+    })
+  }
+}
+
+function createQueryFacade({ database }) {
+  const repository = createTradingHistoryQueryRepository({ database })
+  return createTradingHistoryQueries({ repository })
+}
+
+async function openApiServer({
+  startServer,
+  configuration,
+  queries,
+  logger,
+  eventBus,
+  operator,
+  exchangeAccounts,
+  subscribeExchangeAccountUpdates,
+  marketData,
+  runnerHost,
+}) {
+  return startServer({
+    queries,
+    environment: configuration.environment,
+    host: configuration.host,
+    port: configuration.port,
+    logger,
+    eventBus,
+    ...(operator === undefined ? {} : { operator }),
+    exchangeAccounts,
+    subscribeExchangeAccountUpdates,
+    marketData,
+    scenarioRunner: runnerHost.runner,
+    scenarioRunnerCatalog: runnerHost.catalog,
+  })
+}
+
 /**
  * Start the local trading-history HTTP and WebSocket API inside the existing Harvester process.
- *
- * The API composes its query facade over Harvester's already-open relational database and
- * subscribes to persisted-history invalidation events on the existing EventBus.
- * Harvester retains ownership of the database and closes the listener before persistence.
- *
- * @param {{database: object, env?: object, environment?: string, logger?: object, eventBus: object, startServer?: Function}} input
- * @returns {Promise<Readonly<object>>} API lifecycle handle.
+ * The API owns neither Harvester's shared database nor its EventBus.
  */
 export async function startTradingHistoryApi({
   database,
@@ -86,40 +131,30 @@ export async function startTradingHistoryApi({
     env,
     environment,
   })
-  if (!database || typeof database.prepare !== "function") {
-    throw new TradingHistoryApiStartupError({
-      message: "The Harvester relational trading-history database is unavailable; the optional API cannot start.",
-      code: "HARVESTER_TRADING_HISTORY_API_DATABASE_UNAVAILABLE",
-      environment: configuration.environment,
-    })
-  }
-  if (!eventBus || typeof eventBus.subscribe !== "function") {
-    throw new TradingHistoryApiStartupError({
-      message: "The Harvester EventBus is unavailable; the optional trading-history API cannot start.",
-      code: "HARVESTER_TRADING_HISTORY_API_EVENT_BUS_UNAVAILABLE",
-      environment: configuration.environment,
-    })
-  }
-  const repository = createTradingHistoryQueryRepository({
+  validateApiDependencies({
     database,
-  })
-  const queries = createTradingHistoryQueries({
-    repository,
-  })
-  const server = await startServer({
-    queries,
+    eventBus,
     environment: configuration.environment,
-    host: configuration.host,
-    port: configuration.port,
+  })
+  const queries = createQueryFacade({ database })
+  const runnerHost = createScenarioRunnerHost({ eventBus })
+  const server = await openApiServer({
+    startServer,
+    configuration,
+    queries,
     logger,
     eventBus,
-    ...(operator === undefined ? {} : { operator }),
+    operator,
     exchangeAccounts,
     subscribeExchangeAccountUpdates,
     marketData,
+    runnerHost,
   })
   return Object.freeze({
     address: server.address,
-    close: () => server.close(),
+    close: async () => {
+      await runnerHost.runner.close()
+      await server.close()
+    },
   })
 }

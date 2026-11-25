@@ -148,7 +148,11 @@
       "test/scenarios/recovery-seller-cycle-lifecycle.scenario.test.js",
       "test/scenarios/recovery-seller-sell-planner.scenario.test.js",
       "src/infrastructure/http/trading-history-websocket.test.js",
-      "src/infrastructure/http/trading-history-websocket-frame.test.js"
+      "src/infrastructure/http/trading-history-websocket-frame.test.js",
+      "src/application/scenario-runner/create-scenario-runner.test.js",
+      "src/infrastructure/scenario-runner/create-process-scenario-adapter.test.js",
+      "src/infrastructure/scenario-runner/rs-scenario-adapter.test.js",
+      "src/infrastructure/http/scenario-runner-api.test.js"
     ]
   },
   "scripts": {
