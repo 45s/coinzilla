@@ -1004,3 +1004,5 @@ The package entries below make the repository-wide scope visible, but their exac
 ### Recovery Seller — RS-002-006-B update (2026-11-25)
 
 The RS scenario registry now maps RS-002-006-B to an application authorizer/account-allocation regression: a registered RS partial BUY with 6 remaining at price 10 retains a 60-quote commitment; a new 10-quote BUY defers when free quote is 65. The test is not yet run on the current head. RS-002-006 / RS-002 remain PARTIAL; no scenario is VERIFIED. Full order-event lifecycle proof remains outstanding.
+
+Additional RS-002-020-B mapping: an application authorizer test asserts 20 existing exposure + 60 pending owned BUY commitment + 20 new BUY equals the 100 pair cap and is accepted. Test execution is pending; RS-002-020 / RS-002 remain PARTIAL.
