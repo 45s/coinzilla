@@ -10,7 +10,10 @@ function normalizeFilterValues(value) {
   return (Array.isArray(value) ? value : [value]).map((item) => String(item).toLowerCase())
 }
 
-function matchesFilter({ candidate, filter }) {
+function matchesFilter({
+  candidate,
+  filter,
+}) {
   const values = normalizeFilterValues(filter)
   if (values.length === 0) {
     return true
@@ -18,12 +21,27 @@ function matchesFilter({ candidate, filter }) {
   return values.includes(String(candidate ?? "").toLowerCase())
 }
 
-export function filterScenarios({ scenarios = [], filters = {} } = {}) {
+export function filterScenarios({
+  scenarios = [],
+  filters = {},
+} = {}) {
   return scenarios.filter((scenario) => (
-    matchesFilter({ candidate: scenario.id, filter: filters.id }) &&
-    matchesFilter({ candidate: scenario.category, filter: filters.category }) &&
-    matchesFilter({ candidate: scenario.priority, filter: filters.priority }) &&
-    matchesFilter({ candidate: scenario.coverageStatus, filter: filters.coverageStatus }) &&
+    matchesFilter({
+      candidate: scenario.id,
+      filter: filters.id,
+    }) &&
+    matchesFilter({
+      candidate: scenario.category,
+      filter: filters.category,
+    }) &&
+    matchesFilter({
+      candidate: scenario.priority,
+      filter: filters.priority,
+    }) &&
+    matchesFilter({
+      candidate: scenario.coverageStatus,
+      filter: filters.coverageStatus,
+    }) &&
     normalizeFilterValues(filters.tag).every((tag) => scenario.tags.some((item) => String(item).toLowerCase() === tag))
   ))
 }
@@ -49,7 +67,10 @@ function parseTapLine(line) {
   }
 }
 
-export function parseTapResults({ output = "", expectedTests = [] } = {}) {
+export function parseTapResults({
+  output = "",
+  expectedTests = [],
+} = {}) {
   const tapResults = output.split(/\r?\n/).map(parseTapLine).filter(Boolean)
 
   return expectedTests.map((testCase) => {
@@ -154,7 +175,10 @@ function executeTestGroup({
   })
 }
 
-function scenarioResult({ scenario, testResults }) {
+function scenarioResult({
+  scenario,
+  testResults,
+}) {
   let status = "PASSED"
   if (testResults.length === 0) {
     status = "NOT_EXECUTABLE"
@@ -183,7 +207,10 @@ export async function runScenarioSuite({
   nodeExecutable = process.execPath,
   timeoutMs = 300000,
 } = {}) {
-  const selectedScenarios = filterScenarios({ scenarios, filters })
+  const selectedScenarios = filterScenarios({
+    scenarios,
+    filters,
+  })
   const testResultsByKey = new Map()
   const groups = groupTestsByPath({ scenarios: selectedScenarios })
 

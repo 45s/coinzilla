@@ -1,7 +1,16 @@
-import { mkdir, writeFile } from "node:fs/promises"
-import { join, resolve } from "node:path"
+import {
+  mkdir,
+  writeFile,
+} from "node:fs/promises"
+import {
+  join,
+  resolve,
+} from "node:path"
 
-function countBy({ items, field }) {
+function countBy({
+  items,
+  field,
+}) {
   return items.reduce((counts, item) => {
     const key = item[field] ?? "UNSPECIFIED"
     counts[key] = (counts[key] ?? 0) + 1
@@ -28,19 +37,37 @@ function allCriticalTests({ criticalBehaviorContract }) {
   })
 }
 
-function buildInventory({ scenarios, generatedAt }) {
+function buildInventory({
+  scenarios,
+  generatedAt,
+}) {
   return {
     schemaVersion: 1,
     generatedAt,
     totalScenarios: scenarios.length,
-    categories: countBy({ items: scenarios, field: "category" }),
-    priorities: countBy({ items: scenarios, field: "priority" }),
-    coverageStatuses: countBy({ items: scenarios, field: "coverageStatus" }),
+    categories: countBy({
+      items: scenarios,
+      field: "category",
+    }),
+    priorities: countBy({
+      items: scenarios,
+      field: "priority",
+    }),
+    coverageStatuses: countBy({
+      items: scenarios,
+      field: "coverageStatus",
+    }),
     scenarios,
   }
 }
 
-function buildResults({ scenarios, results, buildMetadata, filters, generatedAt }) {
+function buildResults({
+  scenarios,
+  results,
+  buildMetadata,
+  filters,
+  generatedAt,
+}) {
   const resultMap = new Map(results.map((result) => [result.id, result]))
   const completeResults = scenarios.map((scenario) => resultMap.get(scenario.id) ?? {
     id: scenario.id,
@@ -57,7 +84,10 @@ function buildResults({ scenarios, results, buildMetadata, filters, generatedAt 
     filters,
     totalScenarios: scenarios.length,
     selectedScenarios: results.length,
-    counts: countBy({ items: completeResults, field: "status" }),
+    counts: countBy({
+      items: completeResults,
+      field: "status",
+    }),
     results: completeResults,
   }
 }
@@ -86,9 +116,18 @@ function buildCoverage({
       criticalBehaviors: criticalBehaviorContract.behaviors.length,
       uniqueCriticalTests: criticalTests.length,
     },
-    byCategory: countBy({ items: scenarios, field: "category" }),
-    byPriority: countBy({ items: scenarios, field: "priority" }),
-    byCoverageStatus: countBy({ items: scenarios, field: "coverageStatus" }),
+    byCategory: countBy({
+      items: scenarios,
+      field: "category",
+    }),
+    byPriority: countBy({
+      items: scenarios,
+      field: "priority",
+    }),
+    byCoverageStatus: countBy({
+      items: scenarios,
+      field: "coverageStatus",
+    }),
     byExecutionStatus: countBy({
       items: scenarios.map((scenario) => ({
         status: scenarioResults.get(scenario.id)?.status ?? "NOT_SELECTED",
@@ -147,7 +186,10 @@ export function buildScenarioReports({
   }
 }
 
-export async function writeScenarioReports({ reports, outputDirectory } = {}) {
+export async function writeScenarioReports({
+  reports,
+  outputDirectory,
+} = {}) {
   await mkdir(outputDirectory, { recursive: true })
   const paths = {
     inventory: resolve(join(outputDirectory, "scenario-inventory.json")),

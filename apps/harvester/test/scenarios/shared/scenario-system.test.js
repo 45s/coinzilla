@@ -1,11 +1,18 @@
 import test from "node:test"
 import assert from "node:assert/strict"
-import { mkdtemp, readFile, rm } from "node:fs/promises"
+import {
+  mkdtemp,
+  readFile,
+  rm,
+} from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { createScenarioDefinition } from "./factories.js"
 import { loadConservativeScenarios } from "./loader.js"
-import { buildScenarioReports, writeScenarioReports } from "./reporter.js"
+import {
+  buildScenarioReports,
+  writeScenarioReports,
+} from "./reporter.js"
 import {
   filterScenarios,
   parseTapResults,
@@ -65,7 +72,11 @@ function createScenarioFixture(overrides = {}) {
 }
 
 test("loads a stable scenario inventory covering all Conservative behavior categories", () => {
-  const { scenarios, requirements, criticalBehaviorContract } = loadConservativeScenarios()
+  const {
+    scenarios,
+    requirements,
+    criticalBehaviorContract,
+  } = loadConservativeScenarios()
   const categories = new Set(scenarios.map((scenario) => scenario.category))
   const scenarioIds = scenarios.map((scenario) => scenario.id)
 
@@ -145,23 +156,38 @@ test("filters scenarios by ID, category, priority, tag, and coverage status", ()
   const statusFilters = { coverageStatus: "MISSING" }
 
   assert.deepEqual(
-    filterScenarios({ scenarios, filters: idFilters }).map(({ id }) => id),
+    filterScenarios({
+      scenarios,
+      filters: idFilters,
+    }).map(({ id }) => id),
     ["CON-TEST-001"],
   )
   assert.deepEqual(
-    filterScenarios({ scenarios, filters: categoryFilters }).map(({ id }) => id),
+    filterScenarios({
+      scenarios,
+      filters: categoryFilters,
+    }).map(({ id }) => id),
     ["CON-TEST-002"],
   )
   assert.deepEqual(
-    filterScenarios({ scenarios, filters: priorityFilters }).map(({ id }) => id),
+    filterScenarios({
+      scenarios,
+      filters: priorityFilters,
+    }).map(({ id }) => id),
     ["CON-TEST-001"],
   )
   assert.deepEqual(
-    filterScenarios({ scenarios, filters: tagFilters }).map(({ id }) => id),
+    filterScenarios({
+      scenarios,
+      filters: tagFilters,
+    }).map(({ id }) => id),
     ["CON-TEST-002"],
   )
   assert.deepEqual(
-    filterScenarios({ scenarios, filters: statusFilters }).map(({ id }) => id),
+    filterScenarios({
+      scenarios,
+      filters: statusFilters,
+    }).map(({ id }) => id),
     ["CON-TEST-002"],
   )
 })

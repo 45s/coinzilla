@@ -6,7 +6,10 @@ import {
   defineConservativeScenario,
   validateConservativeScenarioRegistry,
 } from "../conservative/registry/index.js"
-import { parseTapResults, runScenarioSuite } from "./runner.js"
+import {
+  parseTapResults,
+  runScenarioSuite,
+} from "./runner.js"
 
 const mappedTest = {
   path: "src/domain/strategies/conservative/strategy.test.js",
@@ -23,7 +26,10 @@ function createScenario(overrides = {}) {
     tags: ["buy"],
     preconditions: ["A valid market and configuration exist."],
     initialState: { position: { quantity: "0" } },
-    inputEvents: [{ type: "BUY_FILL", sequence: 1 }],
+    inputEvents: [{
+      type: "BUY_FILL",
+      sequence: 1,
+    }],
     expectedState: { position: { quantity: "1" } },
     expectedOrders: [],
     expectedAccounting: { spent: "10" },
@@ -69,7 +75,10 @@ test("validates duplicate IDs, catalog references, and repository-relative evide
   const validScenario = createScenario()
   const validInputs = {
     scenarios: [validScenario],
-    requirements: [{ id: "CON-SPEC-3.1", title: "Initial BUY" }],
+    requirements: [{
+      id: "CON-SPEC-3.1",
+      title: "Initial BUY",
+    }],
     criticalBehaviorContract: {
       behaviors: [{ id: "STRATEGY_BUY_SELL_SAFETY_GATES" }],
     },
@@ -108,7 +117,10 @@ test("validates duplicate IDs, catalog references, and repository-relative evide
 
 test("rejects malformed registry containers without throwing incidental TypeErrors", () => {
   const result = validateConservativeScenarioRegistry({
-    scenarios: [null, { id: "CON-BROKEN-001", relatedRequirements: {} }],
+    scenarios: [null, {
+      id: "CON-BROKEN-001",
+      relatedRequirements: {},
+    }],
     requirements: null,
     criticalBehaviorContract: { behaviors: null },
   })
@@ -123,8 +135,14 @@ test("matches TAP test titles exactly instead of accepting substring collisions"
   const results = parseTapResults({
     output: "TAP version 13\nok 1 - completed cycle after terminal reconciliation\n",
     expectedTests: [
-      { path: "src/example.test.js", name: "completed cycle" },
-      { path: "src/example.test.js", name: "completed cycle after terminal reconciliation" },
+      {
+        path: "src/example.test.js",
+        name: "completed cycle",
+      },
+      {
+        path: "src/example.test.js",
+        name: "completed cycle after terminal reconciliation",
+      },
     ],
   })
 
@@ -143,7 +161,10 @@ test("treats a non-zero Node test process exit as failure even when TAP contains
     coverageStatus: "TEST-MAPPED",
     tags: [],
     relatedExistingTests: [
-      { path: "src/example.test.js", name: "reports its named assertion" },
+      {
+        path: "src/example.test.js",
+        name: "reports its named assertion",
+      },
     ],
   }
 
