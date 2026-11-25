@@ -113,3 +113,6 @@ Worker dispatch and message-handler contracts use one object argument, consisten
 ## One-argument worker contracts — 2026-11-25
 
 Worker dispatch receives a single request object containing both the run request and AbortSignal. This keeps worker boundaries consistent with the repository's one-parameter function rule while preserving cancellation propagation.
+
+
+The worker message handler returns a completion promise for each message; the process event listener may ignore it, while deterministic unit tests can await dispatch, cancellation and disconnect settlement.

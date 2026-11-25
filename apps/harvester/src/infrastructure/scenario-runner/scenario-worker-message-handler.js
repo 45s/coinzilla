@@ -41,10 +41,11 @@ export function createScenarioWorkerMessageHandler({ dispatch, send, disconnect 
       if (activeExecution?.runId === message.runId) {
         activeExecution.controller.abort()
       }
-      return
+      return Promise.resolve()
     }
     if (message?.type === "execute" && !activeExecution) {
-      void execute(message)
+      return execute(message)
     }
+    return Promise.resolve()
   }
 }
