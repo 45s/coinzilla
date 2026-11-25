@@ -359,7 +359,11 @@ function validateSubmission({ submission }) {
       typeof scenarioId !== "string" || !scenarioId.trim()) {
     throw new TypeError("Scenario Runner submission requires strategy and scenario IDs")
   }
-  return { strategyId, scenarioId, input }
+  return {
+    strategyId,
+    scenarioId,
+    input,
+  }
 }
 
 function resolveExecutableAdapter({ context, strategyId, scenarioId }) {
@@ -368,7 +372,10 @@ function resolveExecutableAdapter({ context, strategyId, scenarioId }) {
     strategyId,
     scenarioId,
   }) === true
-  return { adapter, executable }
+  return {
+    adapter,
+    executable,
+  }
 }
 
 function registerUnexecutableSubmission({ context, runId, strategyId, scenarioId, adapter }) {
