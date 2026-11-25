@@ -78,6 +78,9 @@ function getSafeConflictDetails(error) {
     "incomingValue",
     "existingSource",
     "incomingSource",
+    "reconciliationDecision",
+    "recoverable",
+    "coverageIncomplete",
   ]) {
     const value = context[key]
     if (
