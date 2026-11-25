@@ -1624,7 +1624,7 @@ test("rejects startup before market subscriptions when a persisted account-scope
   const broker = createRsOnlyStartupBroker({ calls })
   try {
     const baseline = await recordConfigurationBaseline({
-      operationalStateStore: restartStore,
+      operationalStateStore: store,
       appConfig: createRsOnlyStartupConfig(),
     })
     assert.equal(baseline.ok, true, baseline.errors?.[0]?.message)
@@ -1663,7 +1663,7 @@ test("rejects startup before market subscriptions when a persisted account-scope
         loadConfig: async () => createRsOnlyStartupConfig(),
         env: binanceEnv,
         brokerAdapterFactory: () => broker,
-        operationalStateStore: store,
+        operationalStateStore: restartStore,
         executionSymbols: ["LINEAUSDT"],
         executionRoutes: [{
           strategyId: "RS_recoverySeller",
