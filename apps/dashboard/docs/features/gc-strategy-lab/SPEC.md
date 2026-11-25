@@ -546,3 +546,15 @@ Configuration source is irrelevant to the strategy. Whether values originate fro
 ### Copy AI Debug Package — JSON only
 
 Provide a **Copy AI Debug Package** action. Copy one complete, versioned JSON package containing the original scenario identity/definition, original configuration, temporary Playground overrides (if any), validated effective configuration, exact executed production revision, market metadata/precision, initial state, ordered market and simulated broker events, run identity/status, outputs, assertions, decisions, calculations, execution trace, diagnostics and provenance. Preserve exact values and units. The package must be self-contained as execution evidence, redact secrets, and never silently truncate; if clipboard limits prevent a complete copy, report failure and provide an explicit complete export/fallback. AI agents may use repository access at the recorded revision to inspect implementation/docs/tests for deeper debugging or scenario maintenance.
+
+
+## Protected trading-logic and service boundary — explicit approval mandatory
+
+AI contributors MUST NOT modify, refactor, restructure, alter or otherwise touch existing trading domain logic or trading services without explicit prior approval from the user. Protected areas include strategy rules/evaluators, trading calculations, order decisions/execution, accounting/inventory, risk controls, broker/exchange integration and other trading-runtime services. This restriction applies even to apparently minimal, behavior-preserving, test-driven or integration-required edits.
+
+Inspecting these sources to identify reusable production entry points is permitted; inspection does not grant modification authority. Build runner and simulation integration outside protected boundaries wherever feasible. If faithful production-flow reuse or simulation isolation requires changing a protected source file/service, stop, document the exact dependency and proposed minimal change, and request approval. Do not copy/approximate/reimplement strategy logic to avoid the approval gate. This is a hard gate throughout all implementation phases.
+
+
+## Implementation roadmap
+
+See [RUNNER_ROADMAP.md](RUNNER_ROADMAP.md) for phased delivery and acceptance gates.
