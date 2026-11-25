@@ -39,7 +39,7 @@ function validateCredentials({ apiKey, apiSecret, tradingMode }) {
     value: tradingMode,
     values: ["live"],
     name: "tradingMode",
-    errMsg: 'Bitunix Futures tradingMode is unsupported unless explicitly set to "live"; no Futures TESTNET endpoint is documented',
+    errMsg: 'Bitunix Futures tradingMode is unsupported unless explicitly set to "live"; Bitunix does not provide a Futures TESTNET; Futures is LIVE-only',
   })
 }
 
