@@ -92,7 +92,6 @@ Offline regression evidence:
 - `rest-client.rate-limit.test.js` — `Bitunix Futures REST applies the documented slower limits to close-position endpoints`.
 - `rest-client.test.js` — `Bitunix Futures REST classifies non-JSON HTTP mutation failures by status before parsing the body`.
 
-
 ## 3. Official Node demo findings and limitations
 
 - The private HTTP demo exposes account read, order placement, cancel orders, order history and current/historical position reads. It does not provide a complete Futures client. Its `placeOrder` helper defaults `tradeSide` to `OPEN`, `effect` to `GTC` and `reduceOnly` to `false`; Coinzilla must not copy these implicit risk-bearing defaults. Callers must supply and validate Futures semantics explicitly.
