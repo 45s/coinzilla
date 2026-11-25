@@ -476,6 +476,92 @@ test("host discovers strategy registrations without an RS-specific catalog branc
 })
 
 
+
+test("host rejects duplicate scenario IDs within a strategy registration", () => {
+  const scenario = {
+    id: "GRID-SIM-001",
+    name: "Grid simulation",
+  }
+  assert.throws(() => createScenarioRunnerHost({
+    strategyRegistrations: [{
+      strategyId: "GRID",
+      strategyName: "Grid Strategy",
+      scenarios: [scenario, scenario],
+    }],
+  }), /duplicate scenario/i)
+})
+
+test("host snapshots and freezes scenario definitions and adapter capabilities", async () => {
+  let originalExecutions = 0
+  let replacementExecutions = 0
+  const scenario = {
+    id: "GRID-SIM-002",
+    name: "Grid immutable input",
+    layer: "application",
+    status: "TEST-MAPPED",
+    executionStatus: "EXECUTABLE",
+    executable: true,
+    inputSchema: {
+      type: "object",
+      required: ["amount"],
+      additionalProperties: false,
+      properties: {
+        amount: {
+          type: "string",
+          pattern: "^[0-9]+$",
+        },
+      },
+    },
+    input: {
+      amount: "1",
+    },
+  }
+  const adapter = {
+    strategyId: "GRID",
+    executionMode: "simulation-only",
+    osSandboxVerified: true,
+    execute: async () => {
+      originalExecutions += 1
+      return { output: { source: "original" } }
+    },
+    cancel: async () => true,
+  }
+  const host = createScenarioRunnerHost({
+    adapters: [adapter],
+    strategyRegistrations: [{
+      strategyId: "GRID",
+      strategyName: "Grid Strategy",
+      scenarios: [scenario],
+    }],
+  })
+
+  scenario.inputSchema.properties.amount.type = "boolean"
+  scenario.input.amount = "999"
+  adapter.executionMode = "live"
+  adapter.osSandboxVerified = false
+  adapter.execute = async () => {
+    replacementExecutions += 1
+    return { output: { source: "replacement" } }
+  }
+
+  const [catalogScenario] = host.catalog[0].scenarios
+  assert.equal(catalogScenario.inputSchema.properties.amount.type, "string")
+  assert.equal(catalogScenario.defaultInput.amount, "1")
+  assert.equal(catalogScenario.executable, true)
+  assert.equal(Object.isFrozen(catalogScenario.inputSchema.properties.amount), true)
+  assert.equal(Object.isFrozen(catalogScenario.defaultInput), true)
+
+  const accepted = host.runner.submit({
+    strategyId: "GRID",
+    scenarioId: scenario.id,
+    input: { amount: "2" },
+  })
+  const completed = await host.runner.waitForRun(accepted.runId)
+  assert.equal(completed.status, "Completed")
+  assert.equal(originalExecutions, 1)
+  assert.equal(replacementExecutions, 0)
+})
+
 test("Scenario Runner API rejects untrusted browser origins before accepting a run", async () => {
   let submissions = 0
   const runner = createRunnerFake()
