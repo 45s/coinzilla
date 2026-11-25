@@ -13,6 +13,8 @@ function createPlan({
   const legacyAverageCost = divideDecimal({
     left: legacyInvested,
     right: originalLegacyQuantity,
+    scale: 2,
+    rounding: "toward-zero",
   })
   return calculateRecoverySellerSellPlan({
     recoveryQuantity: "1",
