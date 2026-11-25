@@ -33,7 +33,9 @@ async function executeStep({ step, index, handlers, context }) {
     step,
     index,
   })
-  const handler = handlers[step.type]
+  const handler = Object.hasOwn(handlers, step.type)
+    ? handlers[step.type]
+    : undefined
   if (typeof handler !== "function") {
     throw new Error(`Recovery Seller scenario has no handler for step type "${step.type}"`)
   }

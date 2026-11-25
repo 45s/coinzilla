@@ -188,6 +188,13 @@ apps/harvester/test/
     └── recovery-seller-sell-planner.scenario.test.js
 ~~~
 
+PR #1823 adds three nested scenario files:
+- `recovery-seller/registry-and-runner.scenario.test.js` — registry and runner contract tests.
+- `recovery-seller/authorization-custody.scenario.test.js` — RS-001 authorization/custody.
+- `recovery-seller/buy-accounting.scenario.test.js` — RS-002 BUY accounting.
+
+All three files must be listed in `apps/harvester/package.json` `config.targetedTestFiles`. A targeted-test pass is valid only when its log shows these files were executed.
+
 These files prove only the assertions documented in #1780 and the repository catalog. Their presence does not make the framework complete and does not make RS-001/002/008 covered. Do not rename or move them merely to match a proposed future tree.
 
 ### 3.3 Planned scenario framework tree
