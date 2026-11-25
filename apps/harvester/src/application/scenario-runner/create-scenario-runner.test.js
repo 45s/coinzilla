@@ -123,6 +123,39 @@ test("runner supports bounded cancellation", async () => {
   assert.equal(result.status, SCENARIO_RUN_STATUS.CANCELLED, "forced cleanup must preserve the user-requested cancellation outcome")
 })
 
+test("runner aborts an active adapter immediately when cancellation is requested", async () => {
+  let observedAbort = false
+  const adapter = createAdapter(({ signal }) => new Promise((resolve) => {
+    const settleCancellation = () => {
+      observedAbort = true
+      resolve({ output: "cancelled" })
+    }
+    if (signal.aborted) {
+      settleCancellation()
+      return
+    }
+    signal.addEventListener("abort", settleCancellation, { once: true })
+  }))
+  const runner = createScenarioRunner({
+    adapters: [adapter],
+    createRunId: () => "run-immediate-cancel",
+    timeoutMs: 100,
+  })
+  const accepted = runner.submit({
+    strategyId: "example",
+    scenarioId: "s",
+  })
+  await new Promise((resolve) => setImmediate(resolve))
+
+  assert.equal(runner.cancel(accepted.runId), true,
+    "An active run must accept a cancellation request.")
+  const result = await runner.waitForRun(accepted.runId)
+
+  assert.equal(observedAbort, true,
+    "The adapter AbortSignal must be triggered immediately, not at the execution timeout.")
+  assert.equal(result.status, SCENARIO_RUN_STATUS.CANCELLED)
+})
+
 test("runner waits for forced adapter cleanup when cancellation does not settle execution", async () => {
   let cancellationReason
   const adapter = createAdapter(
@@ -204,6 +237,7 @@ test("runner retains a blocked run when the bounded queue is full", async () => 
     })(),
     maxConcurrentRuns: 1,
     maxQueuedRuns: 0,
+    timeoutMs: 100,
   })
   const active = runner.submit({
     strategyId: "example",
@@ -244,6 +278,7 @@ test("runner rejects new submissions when bounded history is occupied by active 
     maxStoredRuns: 1,
     maxConcurrentRuns: 1,
     maxQueuedRuns: 1,
+    timeoutMs: 100,
   })
   const active = runner.submit({
     strategyId: "example",
