@@ -738,6 +738,75 @@ function createConcurrentReservationScenario() {
   return defineRecoverySellerScenario(concurrentReservationScenarioRecord)
 }
 
+
+const exchangeFilterScenario = defineRecoverySellerScenario({
+  id: "RS-003-010",
+  family: "RS-003",
+  name: "a SELL violating a supported exchange filter is blocked without quantity or price adjustment",
+  priority: "P0",
+  authority: [
+    "apps/harvester/docs/domain/recovery-seller-domain-specification.md",
+    "issue-1780: RS-003 exchange-filter fail-closed behavior",
+  ],
+  layer: "DOMAIN",
+  configFields: ["RS_PAIR.minProfit", "RS_PAIR.makerPercent", "RS_PAIR.takerPercent"],
+  covers: {
+    rules: ["RS_EXCHANGE_FILTERS", "RS_STOP_FAIL_CLOSED"],
+    decisions: ["RS_SELL_PLAN"],
+    states: ["ACCUMULATING", "STOPPED"],
+    transitions: [],
+    invariants: ["RS_NO_UNSAFE_SELL", "RS_STOP_STICKY"],
+  },
+  given: {
+    candidate: {
+      recoveryQuantity: "1",
+      recoveryCostBasis: "10",
+      minProfit: "0.01",
+    },
+    tradingRules: {
+      minNotional: "20",
+      priceIncrement: "0.01",
+      quantityIncrement: "0.01",
+      minQuantity: "0.01",
+    },
+  },
+  when: [{
+    type: "evaluate-exchange-filter-block",
+    inputKey: "input",
+    saveAs: "decision",
+  }],
+  then: {
+    outcome: "BLOCK",
+    stopStatus: "STOPPED",
+    orderIntent: null,
+    filterViolation: "MIN_NOTIONAL",
+  },
+  mustNot: [
+    "adjust or split a candidate SELL to satisfy an exchange filter",
+    "return an executable order intent after a supported filter violation",
+    "clear the global sticky STOP automatically",
+  ],
+  subcases: [{
+    id: "RS-003-010-A",
+    description: "the candidate order notional below the supported minimum blocks and latches STOP",
+    status: "TEST-MAPPED",
+    test: {
+      file: "apps/harvester/test/scenarios/recovery-seller/mixed-sell-planning.scenario.test.js",
+      title: "RS-003-010-A: a supported MIN_NOTIONAL violation blocks SELL without adjustment",
+    },
+    evidence: null,
+  }],
+  implementation: [
+    "apps/harvester/src/domain/strategies/recovery-seller/evaluate-sell-decision.js",
+  ],
+  test: {
+    file: "apps/harvester/test/scenarios/recovery-seller/mixed-sell-planning.scenario.test.js",
+    title: "RS-003-010-A: a supported MIN_NOTIONAL violation blocks SELL without adjustment",
+  },
+  status: "TEST-MAPPED",
+  evidence: null,
+})
+
 export const recoverySellerMixedSellPlanningScenarios = Object.freeze([
   ...recoverySellerMixedSellPlanningScenariosWithoutReservations,
   createAccountWideReservationScenario(),
@@ -777,6 +846,7 @@ export const recoverySellerMixedSellPlanningScenarios = Object.freeze([
     })),
   }),
   createConcurrentReservationScenario(),
+  exchangeFilterScenario,
   createMixedSellFillAllocationScenario(),
 
 ])
