@@ -127,7 +127,7 @@ Every mapper must follow the temporary payload constraint in [Journal Evidence C
 | `order.submission_requested` | client order ID, symbol, side, type, exact price/quantity, status; durably flushed before the broker placement call |
 | `order.submission_deferred` | original client order ID and order facts plus a bounded local reason; best-effort terminal evidence when a registered request is deferred before broker I/O |
 | `order.submitted` | submission facts plus broker order ID and acknowledged status; optional verified OrderRegistry strategy/Position/purpose/cycle ownership |
-| `order.updated` | canonical order facts and optional verified OrderRegistry strategy/Position/purpose/cycle ownership after an applied registry transition |
+| `order.updated` | canonical order facts, provider provenance (`providerInstanceId`, `providerType`, `accountId`) from the post-update OrderRegistry entry, and optional verified strategy/Position/purpose/cycle ownership after an applied registry transition |
 | `order.submission_failed` | client order ID, symbol, side, outcome, optional sanitized error |
 | `strategy.paused` | `symbol`, `reason`, optional sanitized `error` |
 | `order.cancel_requested` | full owned order intent, broker order ID, executed quantity, current status, cancellation reason; durably flushed before the broker cancellation call |
@@ -157,7 +157,7 @@ For `account.open_orders_captured`, `readiness: BLOCKED` with `UNOWNED_OPEN_ORDE
 
 A broker `rpcError` explicitly marked `recoveryRequired: false` and carrying no contradictory reconciliation flag is diagnostic-only and does not itself invalidate the application recovery generation. Missing or malformed recovery metadata remains fail-closed. An actual `connectionClosed` status, including code `1006`, starts recovery; that abnormal close code does not identify the underlying network cause.
 
-For `order.submitted`, `order.updated`, `order.cancelled`, and `order.cancel_failed`, the publisher adds ownership only when the exact current OrderRegistry entry matches the client-order ID, broker-order ID, and market ID. The DTO carries only registered strategy/Position/purpose and optional cycle identifiers; unowned or unmatched orders omit the ownership object.
+For `order.updated`, the DTO is built from the post-update canonical OrderRegistry entry resolved using the previously registered canonical client-order ID. Provider provenance (`providerInstanceId`, `providerType`, `accountId`) is copied from that entry, not the raw incoming broker report; missing provider identity remains invalid for history projection. For `order.submitted`, `order.updated`, `order.cancelled`, and `order.cancel_failed`, the publisher adds ownership only when the exact current OrderRegistry entry matches the client-order ID, broker-order ID, and market ID. The DTO carries only registered strategy/Position/purpose and optional cycle identifiers; unowned or unmatched orders omit the ownership object.
 
 ## Startup and capture gaps
 
@@ -426,3 +426,13 @@ An exchange-assigned broker order ID is not a globally unique Harvester identity
 All broker-ID lookups and order-update matching must include the canonical market identity. An unscoped broker-ID lookup is permitted only when it resolves to exactly one registered order; if multiple markets contain the same broker ID, the lookup fails as ambiguous rather than selecting an arbitrary order. Ownership is resolved through the canonical order and checked against its market, client ID and broker ID before attribution.
 
 Do not key persisted or in-memory cross-market order maps by `brokerOrderId` alone. Do not infer order ownership from a matching numeric broker ID in another market. Regression coverage is maintained in `order-registry.market-identity.test.js` and the Recovery Seller mixed-SELL reconciliation tests.
+
+## Account-scoped safety blocker operations
+
+An active `SAFETY_BLOCKER_RAISED` with `scope: ACCOUNT` is a global order-admission stop. Confirm its blocker ID and reason before taking operator action. Do not work around it with another market, strategy, side, purpose, or shutdown Recovery Seller SELL.
+
+The Harvester must refuse trading activation when an account blocker is already active and reject every final broker submission while it remains active. A Recovery Seller STOP closes in-memory admission before awaiting durable persistence; a failed write remains fail-closed. Resolve only through the explicit durable resolution workflow after independent order, fill, balance, Portfolio and reservation reconciliation with an identified operator/action. Never edit or delete the blocker fact manually.
+
+Market-scoped blockers apply only to their symbol. The ADR-0008 Recovery Seller SELL exception is limited to its documented market-level strategy pause and is subordinate to any account-scoped blocker.
+
+External open orders remain unowned and untouched. `externalOrdersPolicy: IGNORE` permits scoped continuation; `BLOCK` prevents trading only on the affected market. An audit `readiness: BLOCKED` classification is not itself a global safety STOP.

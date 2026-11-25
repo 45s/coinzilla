@@ -2439,6 +2439,7 @@ function createConservativeEngineSubmissionContext({ context } = {}) {
     getVolatilityData: dependencies.getVolatilityData,
     isVolatilityProtectionEnabledForSymbol: context.isVolatilityProtectionEnabledForSymbol,
     hasBlockingOpenOrdersForSymbol: context.hasBlockingOpenOrdersForSymbol,
+    getAccountSafetyBlocker: dependencies.getAccountSafetyBlocker,
     isPostOnlyOrderCrossing,
     isShutdownRecoverySubmissionAllowed: () => context.shutdownRecoverySubmission.allowed,
   })

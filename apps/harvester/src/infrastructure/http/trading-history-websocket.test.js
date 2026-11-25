@@ -237,7 +237,6 @@ test("broadcasts exchange-account invalidations from Harvester snapshot events",
   assert.deepEqual(message.accounts, [])
 })
 
-
 test("broadcasts live updates from Harvester's existing user-data subscription", async (t) => {
   const eventBus = new EventBus()
   let notify
@@ -262,8 +261,6 @@ test("broadcasts live updates from Harvester's existing user-data subscription",
   await api.close()
   assert.equal(unsubscribed, true, "Closing the API must detach the monitor listener without managing the exchange stream.")
 })
-
-
 
 function createExchangeAccount({ providerInstanceId = "binance-testnet", providerType = "binance", accountId = "primary", snapshotResult, ordersResult } = {}) {
   return {
@@ -422,3 +419,144 @@ test("broadcasts refreshed account and open-order snapshots after monitor update
   assert.equal(message.type, "exchange-accounts.updated");
   assert.equal(message.accounts[0].openOrders[0].price, "64000.00000000");
 });
+
+test("sends an account snapshot larger than 115,637 bytes without terminating the HTTP server", async (t) => {
+  const eventBus = new EventBus();
+  const balances = [...Array(1600).keys()].map((index) => ({
+    asset: {
+      code: `ASSET${String(index).padStart(4, "0")}`,
+    },
+    free: "12345678901234567890",
+    locked: "12345678901234567890",
+    total: "24691357802469135780",
+  }));
+  const api = await startApi({
+    t,
+    eventBus,
+    exchangeAccounts: [
+      createExchangeAccount({
+        snapshotResult: {
+          ok: true,
+          data: {
+            sourceTime: "2026-11-24T19:20:00.000Z",
+            balances,
+          },
+        },
+      }),
+    ],
+  });
+  const socket = new WebSocket(`ws://127.0.0.1:${api.address.port}/api/v1/trading/events`);
+  t.after(() => socket.close());
+
+  await waitForSocketOpen(socket);
+  const message = await waitForMessage(socket);
+  const payloadBytes = Buffer.byteLength(JSON.stringify(message), "utf8");
+  assert.ok(payloadBytes > 115637, "The regression fixture must exceed the 115,637-byte production failure payload.");
+  assert.equal(message.accounts[0].accountSnapshot.balances.length, balances.length, "A large account snapshot must arrive without dropping balance rows.");
+
+  const response = await fetch(`http://127.0.0.1:${api.address.port}/api/v1/trading/metadata`);
+  assert.equal(response.status, 200, "The HTTP listener must remain available after sending a large WebSocket snapshot.");
+  await response.text();
+});
+
+test("contains one client's snapshot serialization failure without interrupting an existing client", async (t) => {
+  const eventBus = new EventBus()
+  const account = createExchangeAccount()
+  let snapshotReadCount = 0
+  account.readAccountSnapshot = async () => {
+    snapshotReadCount += 1
+    if (snapshotReadCount === 2) {
+      const malformedBalance = {}
+      malformedBalance.self = malformedBalance
+      return {
+        ok: true,
+        data: {
+          sourceTime: "2026-11-24T19:20:00.000Z",
+          balances: [malformedBalance],
+        },
+      }
+    }
+    return {
+      ok: true,
+      data: {
+        sourceTime: "2026-11-24T19:21:00.000Z",
+        balances: [],
+      },
+    }
+  }
+  const api = await startApi({
+    t,
+    eventBus,
+    exchangeAccounts: [account],
+  })
+  const healthySocket = new WebSocket(`ws://127.0.0.1:${api.address.port}/api/v1/trading/events`)
+  t.after(() => healthySocket.close())
+  await waitForSocketOpen(healthySocket)
+  const initialMessage = await waitForMessage(healthySocket)
+  assert.equal(initialMessage.type, "exchange-accounts.snapshot", "The first client must receive its valid initial account snapshot.")
+
+  const failingSocket = new WebSocket(`ws://127.0.0.1:${api.address.port}/api/v1/trading/events`)
+  t.after(() => failingSocket.close())
+  const failingSocketClosed = new Promise((resolve) => {
+    failingSocket.addEventListener("close", resolve, {
+      once: true,
+    })
+  })
+  await waitForSocketOpen(failingSocket)
+  const closeEvent = await failingSocketClosed
+  assert.equal(closeEvent.code, 1011, "A client with an unserializable application snapshot must be closed with an internal-error status.")
+
+  const updateMessage = waitForMessage(healthySocket)
+  const publication = eventBus.publish({
+    name: "account.snapshot_captured",
+    source: "test",
+    data: {},
+  })
+  assert.equal(publication.ok, true, "A later account update must still be accepted after the failing client is removed.")
+  await eventBus.flush()
+  const update = await updateMessage
+  assert.equal(update.type, "exchange-accounts.updated", "An already-connected healthy client must continue receiving account updates.")
+  assert.deepEqual(update.accounts[0].accountSnapshot.balances, [], "The failing client's serialization error must not corrupt the healthy client's snapshot.")
+})
+
+test("rejects an oversized application snapshot for its client without stopping the HTTP server", async (t) => {
+  const eventBus = new EventBus()
+  const balances = [...Array(12000).keys()].map((index) => ({
+    asset: {
+      code: `OVERSIZED${String(index).padStart(5, "0")}`,
+    },
+    free: "12345678901234567890",
+    locked: "12345678901234567890",
+    total: "24691357802469135780",
+  }))
+  const api = await startApi({
+    t,
+    eventBus,
+    exchangeAccounts: [
+      createExchangeAccount({
+        snapshotResult: {
+          ok: true,
+          data: {
+            sourceTime: "2026-11-24T19:20:00.000Z",
+            balances,
+          },
+        },
+      }),
+    ],
+  })
+  const socket = new WebSocket(`ws://127.0.0.1:${api.address.port}/api/v1/trading/events`)
+  t.after(() => socket.close())
+  const closed = new Promise((resolve) => {
+    socket.addEventListener("close", resolve, {
+      once: true,
+    })
+  })
+
+  await waitForSocketOpen(socket)
+  const closeEvent = await closed
+  assert.equal(closeEvent.code, 1009, "An application message above the documented 1 MiB limit must close the client with message-too-big status.")
+
+  const response = await fetch(`http://127.0.0.1:${api.address.port}/api/v1/trading/metadata`)
+  assert.equal(response.status, 200, "Rejecting an oversized WebSocket message must not stop the shared HTTP server.")
+  await response.text()
+})

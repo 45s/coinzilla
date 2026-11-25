@@ -1,5 +1,64 @@
 # Harvester Roadmap
 
+## Trading-history WebSocket large-frame crash — issue #1826
+
+In progress in draft PR #1830: https://github.com/45s/coinzilla/pull/1830 on the existing branch `fix/harvester/1826-websocket-frame-length`. The test-first checkpoint confirmed both the 16-bit encoder overflow (198,918-byte UTF-8 snapshot) and an uncaught circular-JSON serialization failure. The implementation now uses RFC 6455 7-bit/16-bit/64-bit server framing, a 1 MiB complete-message cap, a 2 MiB per-client buffered-write cap, and client-local cleanup for serialization/encoding/write failures. Regression coverage includes 125/126, 65,535/65,536, 115,638-byte and multibyte UTF-8 frames, a large account-snapshot integration, malformed serialization isolation and oversized-message rejection. API and operator documentation record the actual limits and close codes. Exact-head required CI passed on implementation head `9c2bd95afa03a795f17ebb332724c4d97c7c7f58`: Harvester 2,728/2,728, focused regressions, workspace tests, coverage, strict/workspace lint, syntax, actionlint and dependency audit all passed; optional read-only Binance TESTNET integration was skipped. The PR remains draft because integration must follow #1828 then #1827, both now merged. No trading or exchange-write behavior is changed.
+
+## P0 Conservative recovery SELL idempotency — issue #1827
+
+**Implementation:** ready for review in [PR #1831](https://github.com/45s/coinzilla/pull/1831), branch
+`fix/harvester/1827-recovery-sell-idempotency`. The issue remains open for incident evidence and
+root-cause classification.
+
+- The final submission gate mirrors the existing Conservative active-SELL ownership predicate.
+  Any active COIN_GRABBER-owned SELL for the same market reserves its single Position, including
+  legacy orders with stale or missing Position IDs.
+- PENDING, OPEN, PARTIALLY_FILLED and UNKNOWN orders hold the reservation. The candidate is
+  excluded from its own post-registration gate recheck. FILLED, CANCELED, REJECTED and EXPIRED
+  registry transitions release it. Recovery Seller ownership is isolated.
+- TDD RED was observed on test-only head
+  `aec7ade8c57ba1c8ed66ce17855373919455b3fe`: an existing PENDING SELL did not block a second
+  recovery SELL at the final application gate. GREEN implementation and regression tests cover
+  repeated events, delayed acknowledgement, terminal transitions, market-data failures and
+  strategy-evaluation failures.
+- Harvester targeted tests, full Harvester unit tests, workspace unit tests, Repository Quality,
+  Dependency Audit and Harvester coverage floors passed on the task head at the last verification.
+  The new submission-gate module measured 90.54% lines, 92.22% branches and 100% functions.
+
+### Source trace and incident classification
+
+- Strategy evaluation already reads active COIN_GRABBER SELLs from the registry. The new final
+  gate independently enforces the same market/strategy reservation before broker I/O.
+- The pending lifecycle registers PENDING and publishes the durable intent before broker I/O.
+  The `SUBMITTED` lifecycle log is emitted before the final post-registration gate recheck and
+  before the broker call; it proves intent creation, not that the broker request was sent.
+- ACKNOWLEDGED submissions update the registry; uncertain outcomes become UNKNOWN and pause the
+  market. A definite rejection removes the pending reservation. A definite post-only rejection
+  also invalidates the market book. After a definite filter rejection, the next evaluation
+  refreshes recovery-sell market metadata when no active SELL remains and pauses if filters are
+  unavailable.
+- Market-book parsing/processing errors delete the cached book. Strategy-evaluation exceptions
+  pause the market. These failure paths are independently covered; temporal proximity does not
+  establish that they caused the incident's repeated intents.
+- The archive's recovery-facts stream contains 25 records: six BUY intents with six ACKNOWLEDGED
+  outcomes, three BUY fills, two BUY cancellation intent/outcome pairs, and no SELL submission
+  intent/outcome records. Preflight recorded 10 unowned open orders and BLOCKED readiness, then
+  raised the account-level `RECOVERY_SELLER_UNEXPECTED_CONDITION` safety blocker. This belongs
+  to Team A / #1828; this PR does not modify startup admission.
+- The exact session is present in private archive commit
+  `e965b979ad74e8d2a0caaa19071afd2bc6b38e6c`. The GitHub integration can read its manifest and
+  recovery-facts text, but cannot decode the compressed binary artifacts; unauthenticated CI
+  access returns HTTP 404. To classify each listed clientOrderId, the Journal
+  `2026-11-24_17-12-20-386708f6-29e6-46e1-87fe-3a9665e97871.jsonl.gz`, `harvester.log.gz`,
+  `terminal.log.gz` and `trace.log.gz` are required. Redact credentials if present, but preserve
+  clientOrderIds, brokerOrderIds, timestamps, statuses and error codes. Until then, do not claim
+  any incident SELL was accepted, rejected, unknown or never sent.
+
+[Issue #1828](https://github.com/45s/coinzilla/issues/1828) is an integration prerequisite. After
+#1828 merges, merge the updated `develop` into this branch without rewriting history, resolve
+genuine conflicts, and rerun focused tests and exact-head verification. No exchange writes,
+cancellations, account mutations or Harvester restarts are authorized or required.
+
 ## Conservative trading correctness and exhaustive scenario coverage — issue #1763
 
 **Objective:** prove Conservative trading calculations, accounting, lifecycle transitions and safety decisions with source-mapped deterministic evidence. This complements (does not replace) focused unit tests and existing application/replay tests. The canonical [Conservative Domain Specification](./docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md) remains the sole behavior authority; the [scenario-test guide](./docs/domain/CONSERVATIVE_DOMAIN_SCENARIO_TESTS.md) defines authoring conventions; [issue #1763](https://github.com/45s/coinzilla/issues/1763) owns the exhaustive matrix and phase-by-phase evidence.
@@ -2181,9 +2240,11 @@ The detailed evidence, implementation commits, CI state and remaining unknowns a
 ## 2026-11-23 — scope split for Conservative recovery continuation
 
 - #1362 / [PR #1761](https://github.com/45s/coinzilla/pull/1761) remain focused on deterministic Conservative recovery accounting, replay, late-fill safety and serialized shutdown behavior.
-- The 28 historical `HARVESTER_ORDER_HISTORY_RECORD_INVALID` events are separated into [issue #1789](https://github.com/45s/coinzilla/issues/1789). Their historical field, input shape, projection stage and operational impact remain unknown; no root cause is inferred from timestamp correlation.
-- The immutable archive investigation is documented in [the #1789 evidence report](docs/audits/reports/order-history-projection-failures.md). It indexes all 28 visible terminal groups and 58 logger writes represented by repeat counters, narrows the current-source error path to record mapping, and identifies the compact-console gap that hid safe validation fields/order identities. The test-first console correction and three focused regressions are implemented in draft [PR #1796](https://github.com/45s/coinzilla/pull/1796), with the logging test included in the Harvester targeted suite. The archive's only compressed session is a later, separate #1743 startup retry and contains none of the 28 errors. Historical invalid input and operational impact remain unresolved pending bounded access to the two large structured logs; the database dump remains uninspected.
-- Keep the archive immutable. The database dump has not been inspected and requires explicit owner authorization. No TESTNET/LIVE writes or account mutations are part of this work.
+- The 28 historical `HARVESTER_ORDER_HISTORY_RECORD_INVALID` events are separated into [issue #1789](https://github.com/45s/coinzilla/issues/1789). Their 2026-11-22 invalid field, input shape, projection stage and operational impact remain unknown; no root cause is inferred from timestamp correlation.
+- The immutable 2026-11-22 archive investigation remains documented in [the #1789 evidence report](docs/audits/reports/order-history-projection-failures.md). It indexes all 28 visible terminal groups and 58 logger writes represented by repeat counters. The compact-console correction is merged in [PR #1796](https://github.com/45s/coinzilla/pull/1796) as `4adde09fbbfabac10e54d689644e5c473824f65f`; it improves future diagnostics but does not identify the historical invalid inputs. The two large 2026-11-22 structured logs remain inaccessible through the current connector; the database dump remains uninspected.
+- Separate 2026-11-24 follow-up: the compressed TESTNET session was hash-verified and decompressed. It confirms three `order.updated` records for DOGE/ZRO/ADA that omit provider provenance while their accepted submission/fill facts contain it. The committed `develop@3ecc3366` source explains the loss: the registry preserves provenance, but the lifecycle mapper serializes the raw incoming order. This does not establish a shared cause for the 2026-11-22 failures. The focused code fix is implemented in draft PR #1832; it will be reviewed/integrated only after #1826 is integrated.
+- A deterministic offline regression now exercises that lifecycle path with a real `OrderRegistry` and a partial-fill update lacking adapter provenance; it checks both retained registry identity and the published `order.updated` DTO. RED was confirmed on test head `96665d9385334790be50c6ec4ad11c33b6f94bea` (18 passed, 1 expected failure: actual `undefined` vs expected `binanceTestnet`). The focused mapper correction is implemented in draft PR #1832; GREEN passed on code head `00adf1b55f3d5a879991359de95295f570e8046d` (2,722 Harvester tests; 90.59% line / 83.71% branch / 96.07% function coverage; repository quality and dependency audit passed). The external documentation-link check is pending. Review/integration remains after #1826.
+- Keep both archives immutable. No database dump was inspected and no TESTNET/LIVE writes, cancellations, restarts or account mutations were performed.
 
 ## 2026-11-23 — #1763 Phase 2 implementation checkpoint
 

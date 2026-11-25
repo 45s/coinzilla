@@ -19,6 +19,7 @@
   },
   "config": {
     "targetedTestFiles": [
+      "scripts/archive-debug-session.test.js",
       "scripts/archive-testnet-session.test.js",
       "scripts/capture-harvester-archive-process-identity.test.js",
       "scripts/reset-operational-state.test.js",
@@ -41,6 +42,7 @@
       "src/infrastructure/persistence/trading-session-repository.test.js",
       "src/infrastructure/persistence/trading-session-history-observer.test.js",
       "src/use-cases/create-market-price-transition-handler.test.js",
+      "src/use-cases/create-submission-gate.test.js",
       "src/use-cases/synchronize-account-history/sync-acc-history.test.js",
       "test/audits/2026-11-22-conservative-recovery-archive.test.js",
       "test/replays/doge-zro-conservative-replay.test.js",
@@ -144,7 +146,9 @@
       "test/scenarios/recovery-seller-profitability.scenario.test.js",
       "test/scenarios/recovery-seller-mixed-sell-accounting.scenario.test.js",
       "test/scenarios/recovery-seller-cycle-lifecycle.scenario.test.js",
-      "test/scenarios/recovery-seller-sell-planner.scenario.test.js"
+      "test/scenarios/recovery-seller-sell-planner.scenario.test.js",
+      "src/infrastructure/http/trading-history-websocket.test.js",
+      "src/infrastructure/http/trading-history-websocket-frame.test.js"
     ]
   },
   "scripts": {
@@ -174,6 +178,7 @@
     "check:critical-coverage": "node scripts/check-critical-module-coverage.js",
     "operational-state:diagnose": "node scripts/diagnose-operational-state.js",
     "operational-state:reset:dev": "node --env-file=.env.development scripts/reset-operational-state.js",
-    "archive:push": "node --env-file=.env.development scripts/archive-testnet-session.js"
+    "archive:push": "node --env-file=.env.development scripts/archive-testnet-session.js",
+    "archive:debug": "node --env-file=.env.development scripts/archive-debug-session.js"
   }
 }

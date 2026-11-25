@@ -49,7 +49,7 @@ import { createAccountRuntimeRegistry } from "../application/providers/account-r
 import { resolveBinanceProviderIdentity } from "../domain/provider-identity.js"
 import { mapUserDataReadinessChangedData } from "../application/events/user-data-readiness-event-dto.js"
 import { publishLifecycleEvent } from "../application/events/publish-lifecycle-event.js"
-import { createHarvesterCandleHistoryService, createOperationalStateCallbacks, createHarvesterTradingEngine, createHarvesterUserDataState, drainHarvesterUserDataEvents, getHarvesterOperatorRuntimeSnapshot, handleHarvesterUserDataStatus, isHarvesterMarketBookFresh, isHarvesterMarketPriceFresh, resumeHarvesterDeferredStrategyEvaluations, createHarvesterStop, assertRecoverySellerEvaluatorConfigured, assertRecoverySellerRuntimeAcceptance } from "./harvester-runtime-setup.js"
+import { createHarvesterCandleHistoryService, createOperationalStateCallbacks, createHarvesterTradingEngine, createHarvesterUserDataState, drainHarvesterUserDataEvents, getHarvesterOperatorRuntimeSnapshot, getHarvesterAccountSafetyBlocker, handleHarvesterUserDataStatus, isHarvesterMarketBookFresh, isHarvesterMarketPriceFresh, resumeHarvesterDeferredStrategyEvaluations, createHarvesterStop, assertRecoverySellerEvaluatorConfigured, assertRecoverySellerRuntimeAcceptance } from "./harvester-runtime-setup.js"
 
 // RS-4/RS-5 offline acceptance is complete. RS is enabled by default; pair-level tradingEnvironment controls eligibility.
 const RECOVERY_SELLER_RUNTIME_ACCEPTANCE_COMPLETE = true
@@ -895,6 +895,10 @@ async function startHarvesterUserDataServices({
     publishAccountSnapshot: accountSnapshots.publishAccountSnapshot,
     publishOpenOrdersSnapshot: accountSnapshots.publishOpenOrdersSnapshot,
     getAccountSnapshot: portfolio.getAccountSnapshot,
+    getAccountSafetyBlocker: () => getHarvesterAccountSafetyBlocker({
+      userDataState: resources.userDataState,
+      recoverySellerStopWorkflow: startup.recoverySellerStopWorkflow,
+    }),
     resumeDeferredStrategyEvaluations: accountSnapshots.resumeDeferredStrategyEvaluations,
   })
   resources.lastReportedUserDataReady = resources.userDataState.ready

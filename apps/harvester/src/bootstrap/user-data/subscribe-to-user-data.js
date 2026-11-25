@@ -1,3 +1,4 @@
+import { SystemCustomError } from "@coinzilla/utils"
 import { HARVESTER_EVENT_NAMES } from "../../application/events/event-names.js"
 import { publishLifecycleEvent } from "../../application/events/publish-lifecycle-event.js"
 import {
@@ -101,7 +102,24 @@ async function waitForUserDataEventQueue({ state }) {
   }
 }
 
-function assertTradingStartupSafety({ state, tradingModeLabel }) {
+class HarvesterAccountSafetyBlockerActiveError extends SystemCustomError {
+  constructor({ tradingModeLabel, blocker } = {}) {
+    super(
+      `Conservative ${tradingModeLabel} startup blocked: an account-scoped safety blocker remains active`,
+      {
+        code: "HARVESTER_ACCOUNT_SAFETY_BLOCKER_ACTIVE",
+        context: {
+          scope: "ACCOUNT",
+          reason: blocker?.reason ?? null,
+          blockerId: blocker?.blockerId ?? null,
+        },
+        retryable: false,
+      },
+    )
+  }
+}
+
+function assertTradingStartupSafety({ state, tradingModeLabel, getAccountSafetyBlocker }) {
   if (state.accountingFailed || UNSAFE_USER_DATA_STARTUP_STATUSES.has(state.status)) {
     throw new Error(
       `Conservative ${tradingModeLabel} startup blocked: user-data stream is not in a safe state`,
@@ -111,6 +129,13 @@ function assertTradingStartupSafety({ state, tradingModeLabel }) {
     throw new Error(
       `Conservative ${tradingModeLabel} startup blocked: user-data stream reconciliation is required`,
     )
+  }
+  const blocker = getAccountSafetyBlocker?.()
+  if (blocker?.scope === "ACCOUNT") {
+    throw new HarvesterAccountSafetyBlockerActiveError({
+      tradingModeLabel,
+      blocker,
+    })
   }
 }
 
@@ -169,6 +194,7 @@ export async function subscribeToUserData({
   tradingMode, tradingEnabled, enabledSymbols, trackedOrders = [],
   onEvent, onObservation, onStatus, onSubscriptionEstablished,
   publishAccountSnapshot, publishOpenOrdersSnapshot, getAccountSnapshot,
+  getAccountSafetyBlocker,
   resumeDeferredStrategyEvaluations,
 } = {}) {
   const tradingModeLabel = tradingMode === "live" ? "LIVE" : "TESTNET"
@@ -207,7 +233,8 @@ export async function subscribeToUserData({
   await publishOpenOrdersSnapshot({ phase: "PREFLIGHT" })
   await waitForUserDataEventQueue({ state })
   assertTradingStartupSafety({ state,
-tradingModeLabel })
+tradingModeLabel,
+getAccountSafetyBlocker })
   activateTradingEngine({
     state,
     logger,

@@ -142,8 +142,6 @@ The catalog is a navigation and traceability layer. Domain specifications, accep
 ### Shared packages
 
 - [BRK-001 — Unknown broker mutation outcome](#brk-001--unknown-broker-mutation-outcome-is-not-treated-as-failure)
-- [BRK-002 — Bitunix Futures TP/SL history is bounded and identity-preserving](#brk-002--bitunix-futures-tpsl-history-is-bounded-and-identity-preserving)
-- [BRK-003 — Futures position closes require reconciled private user data](#brk-003--futures-position-closes-require-reconciled-private-user-data)
 - [DB-001 — Database transaction atomicity](#db-001--a-failed-database-transaction-leaves-no-partial-write)
 - [EVT-001 — Publish versus subscriber completion](#evt-001--publish-acceptance-is-distinct-from-subscriber-completion)
 - [JRN-001 — Journal durability boundary](#jrn-001--journal-flush-is-the-durability-boundary)
@@ -1009,3 +1007,15 @@ The package entries below make the repository-wide scope visible, but their exac
 - [Recovery Seller from-scratch scenario matrix — issue #1780](https://github.com/45s/coinzilla/issues/1780)
 - [Harvester domain test inventory](../../apps/harvester/docs/domain/DOMAIN_TEST_INVENTORY.md)
 - [Harvester reliability acceptance and critical behavior inventory — issue #1639](https://github.com/45s/coinzilla/issues/1639)
+
+## HARVESTER-ACC-003 — Account-scoped safety blocker closes global admission
+
+**Given:** multiple configured markets, complete account/open-order PREFLIGHT capture, and external orders governed by ADR-0004 (`IGNORE` continues per-market; `BLOCK` blocks only its market).
+
+**When:** a durable `SAFETY_BLOCKER_RAISED` with `scope: ACCOUNT` is restored at startup or latched during runtime, then Conservative BUY/SELL, Recovery Seller BUY/SELL, and shutdown Recovery Seller SELL reach the shared submission boundary.
+
+**Then:** startup does not mark trading READY or activate market-data strategy evaluation while the account blocker is active; the final gate rejects every side/purpose across every market with `ACCOUNT_SAFETY_BLOCKER_ACTIVE`; a pending or failed STOP persistence remains fail-closed; admission reopens only after explicit durable resolution with independent evidence and operator identity. No external order is adopted, cancelled, or mutated.
+
+**Scope controls:** market-scoped blockers affect only their symbol. ADR-0008's Recovery Seller SELL exception applies only to its market-level strategy pause and is subordinate to any account-scoped blocker. An audit `readiness: BLOCKED` classification is not itself a global stop.
+
+**Coverage:** `create-recovery-seller-stop-workflow.test.js`, `create-submission-gate.test.js`, and `subscribe-to-user-data.test.js`.
