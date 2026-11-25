@@ -130,7 +130,8 @@ const RUNTIME_SCENARIO = Object.freeze({
   executionStatus: "PRELIMINARY",
   executable: false,
   readinessReasons: Object.freeze([
-    "This case executes only the profitability helper; it does not exercise entry, exit, accounting or order lifecycle.",
+    "The deterministic ZROUSDT fixture does not yet prove readiness for the configured LINEAUSDT market and its required fee valuation.",
+    "The process worker has no verified OS-level filesystem, network, process or resource isolation; the host therefore registers no executable RS adapter.",
   ]),
   inputSchema: Object.freeze({
     type: "object",
