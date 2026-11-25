@@ -1407,10 +1407,39 @@ test("keeps durable history cursors isolated by provider, account, environment, 
   })
 })
 
-function createExchangeHistoryOrder({ status, executedQuantity, remainingQuantity, eventId, timestamp }) {
+function createHistoryMarket({ symbol, baseAssetCode }) {
+  return {
+    id: `binance:${symbol}`,
+    venue: "binance",
+    symbol,
+    baseAsset: {
+      id: `asset:${baseAssetCode}`,
+      code: baseAssetCode,
+    },
+    quoteAsset: {
+      id: "asset:USDT",
+      code: "USDT",
+    },
+  }
+}
+
+function createExchangeHistoryOrder({
+  status,
+  executedQuantity,
+  remainingQuantity,
+  eventId,
+  timestamp,
+  clientOrderId = "harvester-BTCUSDT-unfilled",
+  brokerOrderId = "broker-order-unfilled",
+  price = "65000.0000",
+  market = ORDER_HISTORY_MARKET,
+}) {
   const order = createOrderHistoryEventData({
-    clientOrderId: "harvester-BTCUSDT-unfilled",
-    brokerOrderId: "broker-order-unfilled",
+    clientOrderId,
+    brokerOrderId,
+    market,
+    symbol: market.symbol,
+    price,
     originalQuantity: "1.0000",
     executedQuantity,
     remainingQuantity,
@@ -1625,6 +1654,93 @@ test("preserves an existing verified client-order identity when a history replay
       assert.equal(saved.client_order_id, liveFill.clientOrderId)
       assert.equal(saved.ingestion_source, "live_event")
       assert.equal(saved.last_ingestion_source, "exchange_history")
+    },
+  })
+})
+
+
+test("persists reused Binance client IDs as separate ZRO/DOGE exchange orders without weakening same-order price checks", async (t) => {
+  const context = await createTestContext({ t })
+  const persistence = await preparePersistence({ context })
+  const scenarios = [
+    {
+      symbol: "ZROUSDT",
+      baseAssetCode: "ZRO",
+      clientOrderId: "h-ZROUSDT-1",
+      earlierBrokerOrderId: "661725",
+      incomingBrokerOrderId: "661748",
+    },
+    {
+      symbol: "DOGEUSDT",
+      baseAssetCode: "DOGE",
+      clientOrderId: "h-DOGEUSDT-1",
+      earlierBrokerOrderId: "1193586",
+      incomingBrokerOrderId: "1193792",
+    },
+  ]
+
+  for (const scenario of scenarios) {
+    const market = createHistoryMarket(scenario)
+    const earlier = createExchangeHistoryOrder({
+      status: "PARTIALLY_FILLED",
+      executedQuantity: "0.2500",
+      remainingQuantity: "0.7500",
+      eventId: `exchange-history-order:${scenario.symbol}:earlier`,
+      timestamp: "2026-11-20T04:00:00.000Z",
+      clientOrderId: scenario.clientOrderId,
+      brokerOrderId: scenario.earlierBrokerOrderId,
+      price: "1.0000",
+      market,
+    })
+    const incoming = createExchangeHistoryOrder({
+      status: "PARTIALLY_FILLED",
+      executedQuantity: "0.5000",
+      remainingQuantity: "0.5000",
+      eventId: `exchange-history-order:${scenario.symbol}:incoming`,
+      timestamp: "2026-11-20T04:00:01.000Z",
+      clientOrderId: scenario.clientOrderId,
+      brokerOrderId: scenario.incomingBrokerOrderId,
+      price: "1.1000",
+      market,
+    })
+
+    await persistence.orderRepository.upsertHistorical(earlier)
+    await persistence.orderRepository.upsertHistorical(incoming)
+
+    const conflictingSameOrder = createExchangeHistoryOrder({
+      status: "PARTIALLY_FILLED",
+      executedQuantity: "0.5000",
+      remainingQuantity: "0.5000",
+      eventId: `exchange-history-order:${scenario.symbol}:same-order-conflict`,
+      timestamp: "2026-11-20T04:00:02.000Z",
+      clientOrderId: scenario.clientOrderId,
+      brokerOrderId: scenario.incomingBrokerOrderId,
+      price: "1.2000",
+      market,
+    })
+    await assert.rejects(
+      persistence.orderRepository.upsertHistorical(conflictingSameOrder),
+      /price/,
+      "A price conflict for the same exchange order ID must remain an integrity failure.",
+    )
+  }
+
+  await inspectSqlite({
+    filename: context.filename,
+    work: (database) => {
+      for (const scenario of scenarios) {
+        const rows = database.prepare(
+          "SELECT id, exchange_order_id, client_order_id, limit_price FROM orders WHERE symbol = ? ORDER BY exchange_order_id",
+        ).all(scenario.symbol)
+        assert.equal(rows.length, 2, `${scenario.symbol} must retain both distinct exchange orders.`)
+        assert.deepEqual(
+          rows.map((row) => row.exchange_order_id),
+          [scenario.earlierBrokerOrderId, scenario.incomingBrokerOrderId],
+        )
+        assert.equal(new Set(rows.map((row) => row.id)).size, 2)
+        assert.ok(rows.every((row) => row.client_order_id === scenario.clientOrderId))
+        assert.deepEqual(rows.map((row) => row.limit_price), ["1.0000", "1.1000"])
+      }
     },
   })
 })
