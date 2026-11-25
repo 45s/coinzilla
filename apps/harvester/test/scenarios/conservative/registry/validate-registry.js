@@ -130,6 +130,7 @@ function validateScenarioIdentity({
 function validateScenarioEvidenceCollections({
   scenario,
   path,
+  index,
   existingPaths,
   errors,
 }) {
@@ -177,7 +178,7 @@ function validateScenarioEvidenceCollections({
 
   validateTestMappings({
     scenario,
-    index: path.slice("scenarios[".length, -1),
+    index,
     existingPaths,
     errors,
   })
@@ -284,7 +285,7 @@ function validateScenarioCoverageEvidence({
   }
 
   if (scenario.coverageStatus === "VERIFIED") {
-    const verification = scenario.verification
+    const { verification } = scenario
     if (!isRecord(verification) || !/^[a-f0-9]{40}$/i.test(verification.commit ?? "") ||
         !isNonEmptyString(verification.command)) {
       addError({
@@ -331,6 +332,7 @@ function validateScenario({
   validateScenarioEvidenceCollections({
     scenario,
     path,
+    index,
     existingPaths,
     errors,
   })
