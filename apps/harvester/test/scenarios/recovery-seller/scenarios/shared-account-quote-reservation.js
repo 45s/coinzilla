@@ -87,6 +87,16 @@ export const recoverySellerSharedQuoteReservationScenario = defineRecoverySeller
       evidence: null,
     },
     {
+      id: "RS-008-018-F",
+      description: "the real Conservative engine rejects a CG SELL when an existing RS-owned SELL reservation exhausts shared free base",
+      status: "TEST-MAPPED",
+      test: {
+        file: "apps/harvester/src/use-cases/conservative-trading-engine.multi-market.test.js",
+        title: "RS-008-018-F: runtime CG SELL is rejected when an RS SELL reserves all shared free base",
+      },
+      evidence: null,
+    },
+    {
       id: "RS-008-018-A",
     description: "an existing RS-owned BUY commitment on DOGEUSDT leaves insufficient account quote for a new CG BUY on SOLUSDT",
     status: "TEST-MAPPED",
