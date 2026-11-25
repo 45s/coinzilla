@@ -39,7 +39,7 @@ export class ScenarioRunnerComponent {
   readonly error = signal<string | null>(null);
   readonly loading = signal(false);
   readonly graph = signal(createTraceGraph([]));
-  readonly copied = signal(false);\n  readonly copied = signal(false);
+  readonly copied = signal(false);
 
   constructor() {
     void this.loadCatalog();

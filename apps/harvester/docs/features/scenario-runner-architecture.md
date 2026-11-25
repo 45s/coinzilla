@@ -23,3 +23,8 @@ RS-004-011 currently executes `calculateRecoverySellerProfitability` through a d
 ## Cancellation completion invariant
 
 An active run remains in `Cancelling` until its strategy adapter's execution promise settles. The runner must not publish a terminal `Cancelled` state, release its concurrency slot, or resolve run waiters merely because the abort signal was sent. The adapter owns cooperative stop and bounded worker termination; its `cancel` operation is mandatory so timeout handling can await cleanup before recording `Timed out`. Repeated cancellation requests are idempotent.
+
+
+## Worker lifecycle regression hardening
+
+The generic runner does not publish `Cancelled` until the strategy adapter's execution promise settles after its worker has stopped. Adapter cancellation is part of the required strategy-adapter contract; timeout handling waits for adapter cleanup before recording its terminal status. Repeated cancellation requests remain idempotent.

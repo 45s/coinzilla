@@ -5,18 +5,19 @@ const Module = require("node:module")
 const forbiddenModules = new Set(["http", "https", "net", "tls", "dgram", "dns", "dns/promises"])
 const originalLoad = Module._load
 
-Module._load = function guardedLoad(request, parent, isMain) {
+Module._load = function guardedLoad(...loadArguments) {
+  const [request] = loadArguments
   const normalized = request.replace(/^node:/, "")
   if (forbiddenModules.has(normalized)) {
-    throw new Error("Scenario isolation policy blocked network module access: " + normalized)
+    throw new Error(`Scenario isolation policy blocked network module access: ${normalized}`)
   }
-  return originalLoad.call(this, request, parent, isMain)
+  return originalLoad.apply(this, loadArguments)
 }
 
 for (const networkApi of ["fetch", "WebSocket"]) {
   if (typeof globalThis[networkApi] === "function") {
     globalThis[networkApi] = () => {
-      throw new Error("Scenario isolation policy blocked " + networkApi)
+      throw new Error(`Scenario isolation policy blocked ${networkApi}`)
     }
   }
 }
@@ -29,7 +30,7 @@ for (const operation of [
 ]) {
   if (typeof filesystem[operation] === "function") {
     filesystem[operation] = () => {
-      throw new Error("Scenario isolation policy blocked filesystem mutation: " + operation)
+      throw new Error(`Scenario isolation policy blocked filesystem mutation: ${operation}`)
     }
   }
 }

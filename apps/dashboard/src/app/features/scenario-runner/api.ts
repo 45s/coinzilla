@@ -48,7 +48,11 @@ export class ScenarioRunnerApi {
     scenarioId: string;
     input: unknown;
   }): Observable<ScenarioRunnerEnvelope<unknown>> {
-    return this.http.post<ScenarioRunnerEnvelope<unknown>>(`${this.base}/runs`, {\n      strategyId: input.strategyId,\n      scenarioId: input.scenarioId,\n      input: input.input,\n    });
+    return this.http.post<ScenarioRunnerEnvelope<unknown>>(`${this.base}/runs`, {
+      strategyId: input.strategyId,
+      scenarioId: input.scenarioId,
+      input: input.input,
+    });
   }
 
   history(): Observable<ScenarioRunnerEnvelope<readonly unknown[]>> {
