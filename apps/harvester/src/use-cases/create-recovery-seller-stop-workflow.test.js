@@ -147,12 +147,20 @@ test("keeps RS STOP clear when its blocker cannot be durably persisted", async (
 
 
 test("closes account admission before awaiting durable STOP persistence", async (t) => {
-  const { operationalStateStore, workflow } = await createWorkflow(t)
+  const operationalStateStore = await createStore(t)
   const append = operationalStateStore.append.bind(operationalStateStore)
   let finishAppend
-  operationalStateStore.append = (record) => new Promise((resolve, reject) => {
-    finishAppend = () => append(record).then(resolve, reject)
+  const delayedStore = {
+    append: (record) => new Promise((resolve) => {
+      finishAppend = () => append(record).then(resolve)
+    }),
+    readAll: operationalStateStore.readAll.bind(operationalStateStore),
+  }
+  const created = await createRecoverySellerStopWorkflow({
+    operationalStateStore: delayedStore,
   })
+  assert.equal(created.ok, true, created.errors?.[0]?.message)
+  const workflow = created.data
 
   const pending = workflow.latch({
     explanation: "The RS submission outcome is not yet durable",
