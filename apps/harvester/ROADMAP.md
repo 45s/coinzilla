@@ -2,13 +2,17 @@
 
 ## Trading-history WebSocket large-frame crash — issue #1826
 
-In progress in draft PR #1830: https://github.com/45s/coinzilla/pull/1830 on the existing branch `fix/harvester/1826-websocket-frame-length`. The test-first checkpoint confirmed both the 16-bit encoder overflow (198,918-byte UTF-8 snapshot) and an uncaught circular-JSON serialization failure. The implementation now uses RFC 6455 7-bit/16-bit/64-bit server framing, a 1 MiB complete-message cap, a 2 MiB per-client buffered-write cap, and client-local cleanup for serialization/encoding/write failures. Regression coverage includes 125/126, 65,535/65,536, 115,638-byte and multibyte UTF-8 frames, a large account-snapshot integration, malformed serialization isolation and oversized-message rejection. API and operator documentation record the actual limits and close codes. Exact-head required CI passed on implementation head `9c2bd95afa03a795f17ebb332724c4d97c7c7f58`: Harvester 2,728/2,728, focused regressions, workspace tests, coverage, strict/workspace lint, syntax, actionlint and dependency audit all passed; optional read-only Binance TESTNET integration was skipped. The PR remains draft because integration must follow #1828 then #1827, both now merged. No trading or exchange-write behavior is changed.
+**Complete — merged PR [#1830](https://github.com/45s/coinzilla/pull/1830)** on 2026-11-25 (merge commit `1a91d3a5360403b22fa6c3402cb9811d36796ae8`). The test-first checkpoint confirmed the 16-bit encoder overflow (198,918-byte UTF-8 snapshot) and an uncaught circular-JSON serialization failure. The implementation uses RFC 6455 7-bit/16-bit/64-bit server framing, a 1 MiB complete-message cap, a 2 MiB per-client buffered-write cap, and client-local cleanup for serialization/encoding/write failures. Regression coverage includes 125/126, 65,535/65,536, 115,638-byte and multibyte UTF-8 frames, a large account-snapshot integration, malformed serialization isolation and oversized-message rejection. Exact-head required CI passed on PR head `0c79e83ec787351666da2c070f8e53f4466eeacf`; optional read-only Binance TESTNET integration was skipped. No trading or exchange-write behavior changed.
+
+## Account-scoped safety blocker admission — issue #1828
+
+**Implementation integrated — merged PR [#1833](https://github.com/45s/coinzilla/pull/1833)** on 2026-11-25 (merge commit `3a5d6c5aa284c5f84f8c935ce9570e626bf7dc31`). The shared final submission gate now consults dynamic account-scoped safety state; the in-memory blocker latches before durable persistence, remains fail-closed on persistence failure, deduplicates concurrent latches and takes precedence over shutdown SELL exceptions. Startup restoration remains observation-only until explicit durable resolution.
+
+Issue #1828 remains open for the broader producer/restoration/durable-resolution matrix and complete acceptance evidence. The merged change fixes the confirmed account-STOP submission bypass; it does not claim every account-blocker lifecycle case is complete.
 
 ## P0 Conservative recovery SELL idempotency — issue #1827
 
-**Implementation:** ready for review in [PR #1831](https://github.com/45s/coinzilla/pull/1831), branch
-`fix/harvester/1827-recovery-sell-idempotency`. The issue remains open for incident evidence and
-root-cause classification.
+**Implementation complete — merged PR [#1831](https://github.com/45s/coinzilla/pull/1831)** on 2026-11-25 (merge commit `c9ba1326f301ab4804b2929aff4b9d0b1f1496f1`). The issue remains open only for incident evidence, per-clientOrderId disposition and definitive root-cause classification.
 
 - The final submission gate mirrors the existing Conservative active-SELL ownership predicate.
   Any active COIN_GRABBER-owned SELL for the same market reserves its single Position, including
@@ -54,10 +58,7 @@ root-cause classification.
   clientOrderIds, brokerOrderIds, timestamps, statuses and error codes. Until then, do not claim
   any incident SELL was accepted, rejected, unknown or never sent.
 
-[Issue #1828](https://github.com/45s/coinzilla/issues/1828) is an integration prerequisite. After
-#1828 merges, merge the updated `develop` into this branch without rewriting history, resolve
-genuine conflicts, and rerun focused tests and exact-head verification. No exchange writes,
-cancellations, account mutations or Harvester restarts are authorized or required.
+[Issue #1828](https://github.com/45s/coinzilla/issues/1828) is no longer an integration prerequisite: PR #1833 merged before #1831, followed by #1830 in the required sequence. #1828 remains open for its broader producer/restoration/durable-resolution matrix. No exchange writes, cancellations, account mutations or Harvester restarts are authorized or required.
 
 ## Conservative trading correctness and exhaustive scenario coverage — issue #1763
 
