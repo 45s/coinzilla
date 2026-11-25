@@ -1,3 +1,5 @@
+import { realpathSync } from "node:fs"
+import { dirname, extname, isAbsolute, relative, resolve, sep } from "node:path"
 import { fileURLToPath } from "node:url"
 
 const DEFAULT_TERMINATION_GRACE_MS = 250
@@ -277,6 +279,27 @@ function validateProcessScenarioAdapterOptions({
   if (!Number.isSafeInteger(maxOutputBytes) || maxOutputBytes < 1) {
     throw new RangeError("Worker output limit must be a positive safe integer")
   }
+  let resolvedWorkerPath
+  try {
+    resolvedWorkerPath = realpathSync(resolve(workerPath))
+  } catch {
+    throw new TypeError("Process scenario worker path must resolve inside the scenario worker directory")
+  }
+  const workerDirectory = realpathSync(dirname(DEFAULT_WORKER_PATH))
+  const relativeWorkerPath = relative(workerDirectory, resolvedWorkerPath)
+  const outsideWorkerDirectory = relativeWorkerPath === ".." ||
+    relativeWorkerPath.startsWith(`..${sep}`) ||
+    isAbsolute(relativeWorkerPath)
+  if (outsideWorkerDirectory || extname(resolvedWorkerPath) !== ".js") {
+    throw new TypeError("Process scenario worker path must be inside the scenario worker directory and use .js")
+  }
+  return {
+    strategyId,
+    spawnSandboxedWorker,
+    workerPath: resolvedWorkerPath,
+    terminationGraceMs,
+    maxOutputBytes,
+  }
 }
 
 function createWorkerExecutor({
@@ -353,22 +376,22 @@ export function createProcessScenarioAdapter(options = {}) {
     terminationGraceMs: options.terminationGraceMs ?? DEFAULT_TERMINATION_GRACE_MS,
     maxOutputBytes: options.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES,
   }
-  validateProcessScenarioAdapterOptions(resolvedOptions)
+  const validatedOptions = validateProcessScenarioAdapterOptions(resolvedOptions)
   const children = new Map()
   return Object.freeze({
-    strategyId: resolvedOptions.strategyId,
+    strategyId: validatedOptions.strategyId,
     executionMode: "simulation-only",
     osSandboxVerified: hasVerifiedSandboxAttestation({
-      spawnSandboxedWorker: resolvedOptions.spawnSandboxedWorker,
-      maxOutputBytes: resolvedOptions.maxOutputBytes,
+      spawnSandboxedWorker: validatedOptions.spawnSandboxedWorker,
+      maxOutputBytes: validatedOptions.maxOutputBytes,
     }),
     execute: createWorkerExecutor({
-      ...resolvedOptions,
+      ...validatedOptions,
       children,
     }),
     cancel: createWorkerCanceller({
       children,
-      terminationGraceMs: resolvedOptions.terminationGraceMs,
+      terminationGraceMs: validatedOptions.terminationGraceMs,
     }),
   })
 }
