@@ -47,6 +47,26 @@ export const recoverySellerSharedQuoteReservationScenario = defineRecoverySeller
   ],
   subcases: [
     {
+      id: "RS-008-018-C",
+      description: "aggregate CG and RS quote commitments defer a further BUY that would exceed shared account free quote",
+      status: "TEST-MAPPED",
+      test: {
+        file: "apps/harvester/src/domain/orders/allocate-order-commitments.test.js",
+        title: "RS-008-018-C: aggregates CG and RS quote reservations before authorizing another BUY",
+      },
+      evidence: null,
+    },
+    {
+      id: "RS-008-018-D",
+      description: "aggregate CG and RS SELL commitments prevent overselling shared account base inventory",
+      status: "TEST-MAPPED",
+      test: {
+        file: "apps/harvester/src/domain/orders/allocate-order-commitments.test.js",
+        title: "RS-008-018-D: rejects aggregate CG and RS SELL commitments that oversell shared base inventory",
+      },
+      evidence: null,
+    },
+    {
       id: "RS-008-018-B",
       description: "concurrent same-market CG and RS BUY fills update independent strategy-owned Positions in the same account Portfolio",
       status: "TEST-MAPPED",
