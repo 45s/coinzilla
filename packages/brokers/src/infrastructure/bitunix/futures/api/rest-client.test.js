@@ -67,3 +67,52 @@ test("Bitunix Futures depth response preserves numeric JSON price and quantity t
   assert.equal(response.data.asks[0][1], "0.123456789012345678", "depth quantity tokens must not be rounded through JavaScript Number")
   assert.equal(response.data.bids[0][0], "0.1", "bid price tokens must also remain exact")
 })
+
+
+test("Bitunix Futures REST classifies non-JSON HTTP mutation failures by status before parsing the body", async () => {
+  let clock = 0
+  const statuses = [400, 429, 500]
+  let requestIndex = 0
+  const client = new BitunixFuturesRestClient({
+    config: new BitunixFuturesConfig({
+      apiKey: "bitunix-futures-http-status-test-key",
+      apiSecret: "bitunix-futures-http-status-test-secret",
+      tradingMode: "live",
+    }),
+    now: () => 1_700_000_000_000,
+    rateLimitNow: () => clock,
+    sleepFn: async (delay) => {
+      clock += delay
+    },
+    fetchFn: async () => {
+      const status = statuses[requestIndex]
+      requestIndex += 1
+      return {
+        ok: false,
+        status,
+        text: async () => "<html>gateway error</html>",
+      }
+    },
+  })
+
+  for (const status of statuses) {
+    await assert.rejects(
+      client.request({
+        method: "POST",
+        path: "/api/v1/futures/trade/place_order",
+        body: {
+          symbol: "BTCUSDT",
+        },
+        stateChanging: true,
+      }),
+      (error) => {
+        assert.equal(error.kind, "http", `HTTP ${status} must retain its HTTP failure classification`)
+        assert.equal(error.status, status, `HTTP ${status} must retain its response status`)
+        assert.equal(error.outcomeUnknown, status >= 500, `HTTP ${status} must use the documented mutation outcome classification`)
+        return true
+      },
+    )
+  }
+
+  assert.equal(requestIndex, statuses.length, "each HTTP failure must be dispatched exactly once")
+})
