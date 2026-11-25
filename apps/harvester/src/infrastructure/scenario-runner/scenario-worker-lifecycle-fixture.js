@@ -5,6 +5,7 @@ function exitAfterGracePeriod({ keepAlive }) {
 
 process.on("message", (request) => {
   const keepAlive = setInterval(() => {}, 1000)
+  process.once("SIGTERM", () => exitAfterGracePeriod({ keepAlive }))
   process.send?.({
     runId: request.runId,
     ok: true,
@@ -12,5 +13,4 @@ process.on("message", (request) => {
       received: true,
     },
   })
-  process.once("SIGTERM", () => exitAfterGracePeriod({ keepAlive }))
 })
