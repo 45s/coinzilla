@@ -115,6 +115,10 @@ function assertMigrationHistory(database) {
   assert.ok(migrations[0].checksum, "The migration history must record the implementation checksum.")
 }
 
+function assertOrderIdentityIndexes(database) {
+  assertOrderIdentityIndexes(database)
+}
+
 function assertFreshRelationalSchema(database) {
   const tables = database.prepare(
     "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name",
