@@ -154,7 +154,16 @@ async function verifyOrderIdentityMigrationBackup({ filename, expected } = {}) {
 }
 
 async function createVerifiedOrderIdentityMigrationBackup({ database, filename } = {}) {
-  if (!hasRelationalMigration({ database, version: 4 }) || hasRelationalMigration({ database, version: 5 })) {
+  if (
+    !hasRelationalMigration({
+      database,
+      version: 4,
+    }) ||
+    hasRelationalMigration({
+      database,
+      version: 5,
+    })
+  ) {
     return null
   }
   const sourceSnapshot = hashRelationalHistory(database)
@@ -263,6 +272,23 @@ function createRuntimeErrorProjection({
   })
 }
 
+async function applyRelationalMigrations({ database, filename } = {}) {
+  const legacyMigrationBackupFilename = await createVerifiedMigrationBackup({
+    database,
+    filename,
+  })
+  await database.migrate(HARVESTER_RELATIONAL_MIGRATIONS.slice(0, 4))
+  const orderIdentityMigrationBackupFilename = await createVerifiedOrderIdentityMigrationBackup({
+    database,
+    filename,
+  })
+  await database.migrate(HARVESTER_RELATIONAL_MIGRATIONS)
+  return {
+    migrationBackupFilename: legacyMigrationBackupFilename ?? orderIdentityMigrationBackupFilename,
+    orderIdentityMigrationBackupFilename,
+  }
+}
+
 async function prepareRelationalResources({
   filename,
   eventBus,
@@ -279,17 +305,10 @@ async function prepareRelationalResources({
   let observers
   try {
     await relationalDatabase.connect()
-    const legacyMigrationBackupFilename = await createVerifiedMigrationBackup({
+    const migrationBackups = await applyRelationalMigrations({
       database: relationalDatabase,
       filename,
     })
-    await relationalDatabase.migrate(HARVESTER_RELATIONAL_MIGRATIONS.slice(0, 4))
-    const orderIdentityMigrationBackupFilename = await createVerifiedOrderIdentityMigrationBackup({
-      database: relationalDatabase,
-      filename,
-    })
-    await relationalDatabase.migrate(HARVESTER_RELATIONAL_MIGRATIONS)
-    const migrationBackupFilename = legacyMigrationBackupFilename ?? orderIdentityMigrationBackupFilename
     const repositories = createRelationalHistoryRepositories({
       database: relationalDatabase,
     })
@@ -313,8 +332,7 @@ async function prepareRelationalResources({
       fillObserver,
       runtimeErrorObserver,
       ...repositories,
-      migrationBackupFilename,
-      orderIdentityMigrationBackupFilename,
+      ...migrationBackups,
     }
   } catch (error) {
     await closePartialRelationalResources({
