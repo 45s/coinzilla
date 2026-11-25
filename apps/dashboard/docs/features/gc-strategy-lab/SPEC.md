@@ -47,9 +47,18 @@ The Lab is a behavior exploration and specification-driven testing aid, not an e
 
 ## 4. UI concept
 
-![GC Strategy Lab workspace concept](images/gc-strategy-lab-workspace.png)
+Illustrative layout (decision-flow diagram concept):
 
-![Decision flow and calculation inspector concept](images/gc-strategy-lab-decision-flow.png)
+```mermaid
+flowchart TD
+ A[Scenario / simulated event] --> B[Actual GC evaluation]
+ B --> C{Decision node}
+ C -->|Branch 1| D[Calculation / validation]
+ C -->|Branch 2| E[Blocked / alternate disposition]
+ D --> F[Simulated intent or outcome]
+ E --> F
+ F --> G[Trace + calculation inspector]
+```
 
 The concept uses a workspace split into:
 
