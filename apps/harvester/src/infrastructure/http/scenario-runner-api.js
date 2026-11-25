@@ -239,10 +239,21 @@ async function handleRunRoute({ request, response, pathname, runner }) {
 
 async function handleScenarioRunnerRoutes({ request, response, pathname, runner, catalog }) {
   try {
-    if (handleMethod({ request, pathname, response, runner, catalog })) {
+    if (handleMethod({
+      request,
+      pathname,
+      response,
+      runner,
+      catalog,
+    })) {
       return true
     }
-    if (await handleRunRoute({ request, response, pathname, runner })) {
+    if (await handleRunRoute({
+      request,
+      response,
+      pathname,
+      runner,
+    })) {
       return true
     }
     handleUnknownRoute({ response })
@@ -289,5 +300,11 @@ export async function handleScenarioRunnerRequest({
     })
     return true
   }
-  return handleScenarioRunnerRoutes({ request, response, pathname, runner, catalog })
+  return handleScenarioRunnerRoutes({
+    request,
+    response,
+    pathname,
+    runner,
+    catalog,
+  })
 }
