@@ -395,6 +395,8 @@ An order intent, broker acknowledgement, requested quantity, price quote, cancel
 
 ### 4.7 Global safety and reconciliation
 
+**Account-scoped admission precedence:** an active `scope: ACCOUNT` safety blocker is a stronger shared-engine gate than market-level strategy-pause or volatility exceptions. It blocks every BUY/SELL submission across strategies, markets, sides and purposes, including the Recovery Seller recovery-SELL exception. Existing-order reconciliation and confirmed-fill accounting remain non-trading work and continue under their own safety contracts. See [TRADING_FIRST.md](../TRADING_FIRST.md) and [ADR-0008](../architecture/decisions/0008-strategy-safety-pause-cancels-owned-buys.md).
+
 The RS contract requires unexpected, missing, contradictory or unsupported conditions to fail closed. Already-submitted orders and confirmed fills still require reconciliation/accounting; STOP is not permission to abandon them.
 
 The owner resolved the STOP contract on 2026-11-24: STOP blocks additional BUY investment only; otherwise-valid recovery SELLs and reconciliation continue; an authorized administrator may clear STOP only after the cause is fixed, reconciliation/accounting evidence is complete, and the resolution fact is durable. See section 13.
@@ -713,6 +715,10 @@ The registry validator must fail when:
 - A test mapping is copied from an existing ordinary RS regression test and presented as new #1780 scenario evidence.
 
 The validator checks references and structure. It does not prove that assertions are meaningful or that a financial oracle is correct; those require review.
+
+### 6.6 Ordered runner handler contract
+
+The thin ordered step dispatcher may execute only an **own property** explicitly registered in the supplied handler map. Inherited names such as `toString` or `constructor` are not scenario operations and must fail as missing handlers. Do not let JavaScript prototype properties silently satisfy a declared step type.
 
 ## 7. Stable rule, decision, state and invariant catalogs
 
@@ -1726,6 +1732,7 @@ Required cases:
 14. The shared serialized transition queue orders CG/RS decisions, submissions and Fill transitions.
 15. Bootstrap routes RS-only and concurrent CG/RS strategies by explicit strategy ownership and environment selectors.
 16. Runtime configuration does not enable a deferred operational session or bypass per-market environment filtering.
+17. An active ACCOUNT-scope safety blocker blocks every broker submission across strategies, markets, sides and purposes, including a shutdown `RECOVERY_SELL`; market-scoped blockers retain their documented scope.
 
 Core source ownership: shared Portfolio, account snapshot/commitment allocator, Trading Engine serialization, RS/CG ownership and action authorization.
 
@@ -1736,7 +1743,7 @@ Core source ownership: shared Portfolio, account snapshot/commitment allocator, 
 Owner-approved contract, recorded in [#1780](https://github.com/45s/coinzilla/issues/1780) on 2026-11-24:
 
 1. STOP blocks every new BUY and any action that commits additional quote investment.
-2. STOP does **not** block an otherwise-valid SELL of already-owned RS inventory. The normal one-SELL-per-cycle rule, profitability, custody, account-wide reservation, exchange-filter, market-readiness and order-identity gates still apply.
+2. STOP does **not** block an otherwise-valid SELL of already-owned RS inventory. The normal one-SELL-per-cycle rule, profitability, custody, account-wide reservation, exchange-filter, market-readiness and order-identity gates still apply. This allowance does not override an active ACCOUNT-scope safety blocker, which is a global shared-engine admission stop.
 3. STOP does not create a replacement/second SELL. A cycle whose sole SELL is active or unresolved remains governed by its existing identity and terminal lifecycle contract.
 4. Existing orders continue through WAIT/RECONCILE as appropriate. Confirmed canonical fills and commissions continue to be accounted exactly once.
 5. The first STOP reason remains durable and visible. Later market events cannot clear or replace it.
@@ -1748,7 +1755,7 @@ Owner-approved contract, recorded in [#1780](https://github.com/45s/coinzilla/is
 11. STOP must not suppress terminal order history, confirmed fills, accounting updates or reservation release when authoritative terminal facts and successful accounting justify release.
 12. Process shutdown, market pause, stale market data, unresolved orders and independent safety blockers remain separate gates; this contract changes only the effect of the RS STOP latch.
 
-**Allowed while STOP is active:** existing-order WAIT/RECONCILE; exact-once confirmed-fill accounting; and a new recovery SELL only when the cycle has not already used its sole SELL lifecycle and every independent SELL gate passes.
+**Allowed while STOP is active:** existing-order WAIT/RECONCILE; exact-once confirmed-fill accounting; and a new recovery SELL only when the cycle has not already used its sole SELL lifecycle, no stronger ACCOUNT-scope blocker is active, and every independent SELL gate passes.
 
 **Forbidden while STOP is active:** new BUYs, additional investment, blind retries, duplicate/second/replacement SELLs, automatic clearing, and implicit resume.
 
@@ -1973,7 +1980,7 @@ Every family below explicitly answers the 22 contract questions required by the 
 | 2. Preconditions | One authoritative provider-account runtime; shared Portfolio/OrderRegistry/serialized transition path; both strategy configurations and account snapshot valid. |
 | 3. Configuration inputs | Independent CG and RS pair maps, strategy budgets/investment limits, pair enabled/environment selectors and supported order settings. |
 | 4. Runtime-derived inputs | Shared Portfolio; Spot/free/locked balances; EARN custody; all active orders/commitments; strategy-owned Positions; effective market volatility configuration/state; market subscriptions; account identity. |
-| 5. Domain rules | Physical account custody is represented once. Strategy Positions/ownership/budgets remain separate. Shared allocator serializes account-wide quote/base commitments. Volatility protection is market-owned and strategy-neutral; RS consumes the common gate and never owns a separate volatility engine. |
+| 5. Domain rules | Physical account custody is represented once. Strategy Positions/ownership/budgets remain separate. Shared allocator serializes account-wide quote/base commitments. Volatility protection is market-owned and strategy-neutral; RS consumes the common gate and never owns a separate volatility engine. An ACCOUNT-scope safety blocker preempts every strategy/side/purpose; market-scoped exceptions cannot bypass it. |
 | 6. Decision inputs | Each strategy's own eligibility/budget, account-wide free quote/base, and the shared market-level volatility protection decision. |
 | 7. Expected decision | SUBMIT only when strategy budget, shared allocator and market safety gates permit it; otherwise WAIT/BLOCK. An active market-volatility block applies consistently to RS and CG, subject to the approved recovery-SELL exception. |
 | 8. State before | Concurrent strategy evaluations may target same or different markets against one shared account state. |
@@ -1986,7 +1993,7 @@ Every family below explicitly answers the 22 contract questions required by the 
 | 15. Invariants | Shared custody conserved once; no double-spend/double-sell; budgets independent; ownership immutable; same-symbol market-data deduplication does not merge strategy identity. |
 | 16. Failure cases | Concurrent reservation race; missing account snapshot; conflicting order ownership; one projection fails; Spot/EARN mismatch; stale market/environment route; conflicting CG/RS volatility settings or unavailable market protection state. |
 | 17. Duplicate/replay cases | Duplicate Fill is attributed once to its owner; conflicting strategy identity is rejected; replay restoration remains deferred. |
-| 18. Required assertions | Same/different-market concurrency; quote/base before/after; active commitments; strategy-owned Positions; broker calls; no cross-budget/cross-fill attribution; RS-only market protection; shared RS/CG gate; disabled-market behavior; recovery-SELL exception. |
+| 18. Required assertions | Same/different-market concurrency; quote/base before/after; active commitments; strategy-owned Positions; broker calls; no cross-budget/cross-fill attribution; RS-only market protection; shared RS/CG gate; disabled-market behavior; recovery-SELL exception; account-blocker precedence across every order side/purpose. |
 | 19. Existing regression tests | create-recovery-seller-action-authorizer.test.js; create-recovery-seller-accounting-workflow.test.js; account-runtime-registry.test.js; order-event-workflow.test.js. Zero scenario credit. |
 | 20. Missing scenario tests | New deterministic same-market and different-market CG/RS concurrency scenarios covering quote/base contention and failure atomicity, plus RS-008-017 for the shared market-owned volatility gate. |
 | 21. Blocked decisions | No additional strategy borrowing or shared-budget policy is implied. Runtime authorization revocation/expiry remains deferred under FITDIB. |
@@ -2401,10 +2408,10 @@ This is the approved test-only implementation sequence. Deliver one focused PR p
 ### PR 6 — RS-008: CG/RS shared account concurrency
 
 - **Objective:** prove physical account resources are shared once while strategy ownership, Positions and budgets remain independent.
-- **Scope:** same/different markets; shared quote/base commitments; budget isolation; immutable order/Fill ownership; serialized decisions; market-data subscription deduplication; pause/STOP isolation; external/manual order isolation; RS compliance with the shared market-owned volatility gate.
+- **Scope:** same/different markets; shared quote/base commitments; budget isolation; immutable order/Fill ownership; serialized decisions; market-data subscription deduplication; pause/STOP isolation; external/manual order isolation; RS compliance with the shared market-owned volatility gate; account-scoped blocker precedence over all market-level exceptions.
 - **Files:** add `scenarios/shared-account-concurrency.js`, `shared-account-concurrency.scenario.test.js`; update targeted-test registration. Exercise `allocate-order-commitments.js`, `strategy-account-balance-context.js`, `strategy-order-commitments.js`, `src/bootstrap/config/resolve-harvester-options.js`, `src/bootstrap/start-harvester.js`, `src/domain/market/create-market-volatility-protection-eligibility.js`, `src/use-cases/conservative-trading-engine.js`, `src/use-cases/create-candle-history-service.js`, `src/use-cases/create-submission-gate.js`, `src/use-cases/volatility-protection-workflow.js`, the RS action authorizer/accounting workflow and actual shared market-subscription coordinator.
 - **Tests:** shared allocator DOMAIN tests and APPLICATION tests with real engine composition, two independent Positions and deterministic concurrent event ordering. Assert RS-only market gate availability, shared RS/CG protection eligibility, conflicting config rejection, disabled-market behavior, volatility-only recovery-SELL exception and owned-BUY-only cancellation (no SELL/manual cancellation) without reimplementing volatility calculations. Do not create a fake allocator or second Portfolio.
-- **Acceptance:** no double-spend/oversell/duplicate custody/cross-strategy budget borrowing; each Fill has one owner; serialized decisions are deterministic; one strategy's policy state cannot silently change another's; RS cannot bypass the shared market-volatility gate or own a duplicate volatility engine.
+- **Acceptance:** no double-spend/oversell/duplicate custody/cross-strategy budget borrowing; each Fill has one owner; serialized decisions are deterministic; one strategy's policy state cannot silently change another's; RS cannot bypass the shared market-volatility gate or own a duplicate volatility engine; an ACCOUNT-scope blocker prevents every broker submission, including shutdown recovery SELL.
 - **Dependencies:** PR 1–5 and existing shared Trading Engine, Portfolio and OrderRegistry contracts.
 - **Out of scope:** new shared infrastructure, provider migration, new strategy policies, volatility calculations/candle-history/state-machine implementation (owned by market-level tests), any RS-specific volatility engine and live exchange concurrency.
 - **Exit:** all unblocked RS-008 cases have same/different-market evidence; exact-head tests/CI pass; catalog/issue/roadmap reflect actual evidence.
@@ -2412,10 +2419,10 @@ This is the approved test-only implementation sequence. Deliver one focused PR p
 ### PR 7 — RS-009: STOP and failure atomicity
 
 - **Objective:** prove the owner-approved investment-only STOP contract end to end.
-- **Scope:** block new BUY spending; permit otherwise-valid recovery SELL only when the cycle's sole SELL lifecycle remains unused; continue existing-order reconciliation and exact-once confirmed-fill accounting; expose explicit evidence-backed administrator resolution through the trusted operator facade.
+- **Scope:** block new BUY spending; permit otherwise-valid recovery SELL only when the cycle's sole SELL lifecycle remains unused and no stronger ACCOUNT-scope blocker is active; continue existing-order reconciliation and exact-once confirmed-fill accounting; expose explicit evidence-backed administrator resolution through the trusted operator facade.
 - **Files:** add `scenarios/stop-and-failures.js`, `stop-and-failures.scenario.test.js`; update targeted-test registration. Exercise `stop-decision.js`, `lifecycle-decision.js`, `lifecycle-state.js`, `create-recovery-seller-stop-workflow.js`, `create-recovery-seller-accounting-workflow.js`, `resolve-recovery-seller-stop.js`, and `create-harvester-operator.js`.
 - **Tests:** DOMAIN policy gates and APPLICATION durable STOP/reconciliation with deterministic ports; inject malformed/conflicting evidence, persistence/projection failures, duplicate/out-of-order events and post-fill adverse outcomes. Assert no BUY submission, valid eligible SELL submission, no second/replacement SELL, first STOP evidence, reservation conservation and continued reconciliation. Prove authorized manual resolution and unauthorized rejection.
-- **Acceptance:** no additional BUY spending while STOP is active; all independent SELL gates remain intact; reconciliation and exact-once accounting continue; only an authorized administrator can clear STOP after complete evidence and durable acknowledgement; no automatic clear/resume occurs.
+- **Acceptance:** no additional BUY spending while STOP is active; all independent SELL gates remain intact; an ACCOUNT-scope blocker overrides the recovery-SELL allowance; reconciliation and exact-once accounting continue; only an authorized administrator can clear STOP after complete evidence and durable acknowledgement; no automatic clear/resume occurs.
 - **Dependencies:** owner decision recorded in [#1780](https://github.com/45s/coinzilla/issues/1780); PR 1 and relevant PR 4/5 evidence; existing durable STOP workflow.
 - **Out of scope:** restart/replay, automatic restoration, automatic STOP clearing, new retry/replacement policy, standalone final-residual liquidation, and any behavior outside the owner decision.
 - **Exit:** RS-009 leaves SPECIFIED only when the complete scenario suite and exact-head verification are recorded; it becomes VERIFIED only after merge to develop and required CI evidence.

@@ -756,6 +756,8 @@ At `20.00 USDT/ZRO`, recovery receives `20.00 USDT` (profit `+10.00`), legacy re
 
 **Required outputs:** deterministic serialized allocation; one canonical order owner; one Fill credited to exactly one Position; no strategy budget borrowing; no aggregate oversell/double-spend; shared RS/CG market-volatility eligibility, the volatility-only recovery-SELL exception, and cancellation limited to Harvester-owned BUY orders (never SELL or external/manual orders).
 
+**Global admission precedence:** an active ACCOUNT-scope safety blocker overrides market-level exceptions and blocks every broker submission, including recovery SELL. Existing-order reconciliation and confirmed-fill accounting remain non-trading work.
+
 **Implementation:** shared commitment allocator, account runtime registry, engine transition queue and strategy-owned order routing.
 
 **Tests:** RS-008-017 is reserved for the shared market-volatility gate; no new scenario evidence yet.

@@ -317,6 +317,22 @@ test("the DOMAIN runner rejects application scenarios and missing operation hand
 })
 
 
+test("the DOMAIN runner rejects inherited handler properties", async () => {
+  await assert.rejects(
+    () => runRecoverySellerDomainScenario({
+      scenario: {
+        id: "RS-TEST-INHERITED-HANDLER",
+        layer: "DOMAIN",
+        given: {},
+        when: [{ type: "toString" }],
+      },
+      handlers: {},
+    }),
+    /no handler for step type/,
+    "The dispatcher must execute only explicitly registered own handler properties.",
+  )
+})
+
 test("the shared registry includes every mapped RS-001 and RS-002 family record", () => {
   const authorizationCases = recoverySellerScenarioRegistry.filter((scenario) =>
     scenario.family === "RS-001")
