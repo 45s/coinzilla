@@ -2278,3 +2278,7 @@ The detailed evidence, implementation commits, CI state and remaining unknowns a
 - Strengthened the full Conservative engine lifecycle to use production `updateTradingAccounting`, covering second BUY partial/completed fills, recovery-SELL cancellation/fill reconciliation and replacement SELL submission with exact cumulative accounting assertions.
 - CI fixes: corrected the lifecycle cost-basis expectations from observed canonical fills, fixed strict ESLint formatting, and removed repeated Markdown blank lines. Exact-head verification is tracked on PR #1808.
 - Test-only and documentation changes; no production trading behavior or rules changed.
+
+### Recovery Seller scenario coverage checkpoint — 2026-11-25
+
+Added a deterministic authorizer-boundary test for RS-002-006-B: a partial RS BUY's remaining 60-quote commitment is preserved, causing a new 10-quote BUY to defer against 65 free quote. Scenario mapping is synchronized in the RS scenario record. Test execution and exact-head CI are pending; parent RS-002-006 remains PARTIAL and no scenario is VERIFIED.
