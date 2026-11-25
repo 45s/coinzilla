@@ -174,3 +174,10 @@ A timeout is reported distinctly as **Timed out**, not conflated with user-reque
 The exact cancellation grace-period default, timeout values, process signals, cleanup deadlines and partial-result persistence policy are operational parameters to establish during implementation/runtime audit; this decision does not invent numeric limits.
 
 The RS adapter must not implement its own worker lifecycle or cancellation policy; it supplies production-flow execution and diagnostics to the strategy-neutral host.
+
+
+## Approved result history and AI-debug export (2026-11-25)
+
+The generic runner host persists bounded server-side run history under configurable retention/size limits. It records enough simulation-only evidence to inspect and debug a run, including identity/version metadata, effective config and inputs, ordered events, lifecycle/status history, outputs, assertions, trace/steps/decisions and diagnostics. Secrets, credentials, live account data and production state are excluded. Scenario-definition storage has a separate policy.
+
+The client provides **Copy AI Debug Report** for each inspectable run. It produces a self-contained, versioned Markdown report with structured JSON sections and all available inputs, outputs, statuses/transitions, ordered events, steps, decisions, calculations, assertions, diagnostics and provenance. It identifies repository, executed production revision, strategy/adapter, scenario/scenarioId, runId and versions. It must not silently truncate; if a full clipboard copy is not possible, it offers an explicit complete export or segmented-copy fallback. Secret redaction is mandatory. Report generation is framework-independent; Angular is presentation only.
