@@ -9,7 +9,7 @@ import {
   Quantity,
   TradingRules,
 } from "@coinzilla/entities"
-import { compareDecimal } from "@coinzilla/utils"
+import { addDecimal, compareDecimal, multiplyDecimal, subtractDecimal } from "@coinzilla/utils"
 import { recoverySellerPairs } from "../../../rs-recovery-seller.js"
 import { AccountSnapshot } from "../../domain/account/account-snapshot.js"
 import { allocateOrderCommitments } from "../../domain/orders/allocate-order-commitments.js"
@@ -206,6 +206,7 @@ function createRuntimeScenarioStore() {
         records: [...records.values()],
       },
     }),
+    getRecords: () => [...records.values()],
   }
 }
 
@@ -277,12 +278,27 @@ function createRuntimeScenarioMarketMetadata({ market, baseAsset, quoteAsset }) 
   }
 }
 
-function createRuntimeScenarioAccountSnapshot({ baseAsset, quoteAsset }) {
+function createRuntimeScenarioAccountSnapshot({
+  baseAsset,
+  quoteAsset,
+  buyQuantity,
+  legacyQuantity,
+  legacyInvested,
+  buyQuoteQuantity,
+}) {
+  const totalBaseQuantity = addDecimal({
+    left: buyQuantity,
+    right: legacyQuantity,
+  })
+  const totalQuoteCashFlow = addDecimal({
+    left: legacyInvested,
+    right: buyQuoteQuantity,
+  })
   return new AccountSnapshot({
     balances: [
       new Balance({
         free: new Quantity({
-          amount: "32000",
+          amount: totalBaseQuantity,
           asset: baseAsset,
         }),
         locked: new Quantity({
@@ -304,20 +320,36 @@ function createRuntimeScenarioAccountSnapshot({ baseAsset, quoteAsset }) {
     sourceTime: 1,
     quoteCashFlowBaseline: [{
       assetId: quoteAsset.id,
-      amount: "-400",
+      amount: subtractDecimal({
+        left: "0",
+        right: totalQuoteCashFlow,
+      }),
     }],
     portfolioBaseQuantityBaseline: [{
       assetId: baseAsset.id,
-      amount: "7000",
+      amount: buyQuantity,
     }],
     additionalTrackedBaseQuantityBaseline: [{
       assetId: baseAsset.id,
-      amount: "25000",
+      amount: legacyQuantity,
     }],
   })
 }
 
-async function createRuntimeScenarioWorkflow({ market, baseAsset, quoteAsset }) {
+async function createRuntimeScenarioWorkflow({
+  market,
+  baseAsset,
+  quoteAsset,
+  pairConfig,
+}) {
+  const buyQuantity = String(pairConfig.orderQuantity)
+  const buyPrice = "0.01"
+  const buyQuoteQuantity = multiplyDecimal({
+    left: buyPrice,
+    right: buyQuantity,
+  })
+  const legacyInvested = String(pairConfig.legacyPosition.invested)
+  const legacyQuantity = String(pairConfig.legacyPosition.quantity)
   const buyOrder = new CanonicalOrder({
     clientOrderId: "rs-scenario-buy-1",
     brokerOrderId: "rs-scenario-broker-buy-1",
@@ -325,15 +357,15 @@ async function createRuntimeScenarioWorkflow({ market, baseAsset, quoteAsset }) 
     side: "BUY",
     type: "LIMIT_MAKER",
     limitPrice: new Money({
-      amount: "0.01",
+      amount: buyPrice,
       asset: quoteAsset,
     }),
     originalQuantity: new Quantity({
-      amount: "7000",
+      amount: buyQuantity,
       asset: baseAsset,
     }),
     executedQuantity: new Quantity({
-      amount: "7000",
+      amount: buyQuantity,
       asset: baseAsset,
     }),
     status: "FILLED",
@@ -361,8 +393,8 @@ async function createRuntimeScenarioWorkflow({ market, baseAsset, quoteAsset }) 
     initialLegacyPositions: [{
       market,
       position: createLegacyPosition({
-        invested: "400",
-        quantity: "25000",
+        invested: legacyInvested,
+        quantity: legacyQuantity,
       }),
       accounting: createLegacyPositionAccounting(),
     }],
@@ -375,15 +407,15 @@ async function createRuntimeScenarioWorkflow({ market, baseAsset, quoteAsset }) 
     market,
     side: "BUY",
     price: new Money({
-      amount: "0.01",
+      amount: buyPrice,
       asset: quoteAsset,
     }),
     quantity: new Quantity({
-      amount: "7000",
+      amount: buyQuantity,
       asset: baseAsset,
     }),
     quoteQuantity: new Money({
-      amount: "70",
+      amount: buyQuoteQuantity,
       asset: quoteAsset,
     }),
     commissions: [],
@@ -398,6 +430,11 @@ async function createRuntimeScenarioWorkflow({ market, baseAsset, quoteAsset }) 
   return {
     workflow,
     fill,
+    buyQuantity,
+    buyPrice,
+    buyQuoteQuantity,
+    legacyInvested,
+    legacyQuantity,
   }
 }
 
@@ -546,14 +583,21 @@ async function executeRecoverySellerRuntimeScenario({ runId, input }) {
     baseAsset,
     quoteAsset,
   })
-  const accountSnapshot = createRuntimeScenarioAccountSnapshot({
-    baseAsset,
-    quoteAsset,
-  })
-  const { workflow, fill } = await createRuntimeScenarioWorkflow({
+  const pairConfig = recoverySellerPairs.LINEAUSDT
+  const seed = await createRuntimeScenarioWorkflow({
     market,
     baseAsset,
     quoteAsset,
+    pairConfig,
+  })
+  const { workflow, fill } = seed
+  const accountSnapshot = createRuntimeScenarioAccountSnapshot({
+    baseAsset,
+    quoteAsset,
+    buyQuantity: seed.buyQuantity,
+    legacyQuantity: seed.legacyQuantity,
+    legacyInvested: seed.legacyInvested,
+    buyQuoteQuantity: seed.buyQuoteQuantity,
   })
   const operationalStateStore = createRuntimeScenarioStore()
   const stopWorkflow = await createRuntimeScenarioStopWorkflow({
@@ -632,12 +676,19 @@ async function executeRecoverySellerRuntimeScenario({ runId, input }) {
     submitted: data.submitted === true,
     submittedOrders: orders,
     reservedSellCycle,
-    simulationStoreFactCount: submittedOrders.length > 0 ? submittedOrders.length * 2 : 0,
+    simulationFacts: operationalStateStore.getRecords().map((fact) => ({
+      factId: fact.factId,
+      factType: fact.factType,
+      data: fact.data,
+    })),
   }
   const expected = {
     decisionOutcome: "SUBMIT",
     actionSide: "SELL",
-    actionQuantity: "7010",
+    actionQuantity: addDecimal({
+      left: seed.buyQuantity,
+      right: String(pairConfig.sellQuantity),
+    }),
     submittedOrderCount: 1,
     reservationMatchesSubmittedOrder: true,
   }
@@ -699,7 +750,16 @@ async function executeRecoverySellerRuntimeScenario({ runId, input }) {
       inputs: {
         symbol: "LINEAUSDT",
         marketPrice: effectiveInput.marketPrice,
-        config: recoverySellerPairs.LINEAUSDT,
+        config: pairConfig,
+        marketMetadata: {
+          source: marketMetadata.source,
+          orderType: marketMetadata.orderType,
+          tradingRules: marketMetadata.tradingRules.constraints.map((rule) => ({
+            type: rule.type,
+            status: rule.status,
+            amount: rule.value.amount,
+          })),
+        },
       },
       outputs: output.decision,
       source: "createRecoverySellerRuntimeDispatch",
