@@ -148,7 +148,8 @@
       "test/scenarios/recovery-seller-cycle-lifecycle.scenario.test.js",
       "test/scenarios/recovery-seller-sell-planner.scenario.test.js",
       "src/infrastructure/http/trading-history-websocket.test.js",
-      "src/infrastructure/http/trading-history-websocket-frame.test.js"
+      "src/infrastructure/http/trading-history-websocket-frame.test.js",
+      "test/scenarios/shared/scenario-system.test.js"
     ]
   },
   "scripts": {
@@ -179,6 +180,7 @@
     "operational-state:diagnose": "node scripts/diagnose-operational-state.js",
     "operational-state:reset:dev": "node --env-file=.env.development scripts/reset-operational-state.js",
     "archive:push": "node --env-file=.env.development scripts/archive-testnet-session.js",
-    "archive:debug": "node --env-file=.env.development scripts/archive-debug-session.js"
+    "archive:debug": "node --env-file=.env.development scripts/archive-debug-session.js",
+    "scenarios:conservative": "node scripts/run-conservative-scenarios.js"
   }
 }
