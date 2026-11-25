@@ -267,6 +267,7 @@ export const authorizationCustodyScenarios = Object.freeze([
       "replace invalid basis with current market value or wallet balance",
       "trust a caller-supplied averageCost instead of deriving it from original invested/quantity",
     ],
+    implementation: [basisSource],
     subcases: [
       ["A", "missing invested amount is rejected"],
       ["B", "zero invested amount is rejected"],
