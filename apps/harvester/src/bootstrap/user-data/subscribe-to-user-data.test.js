@@ -15,7 +15,7 @@ const createState = (overrides = {}) => ({
   ...overrides,
 })
 
-const createFixture = ({ tradingEnabled = false, tradingMode = "testnet", state = createState(), subscribe, onEvent = () => {}, onObservation = () => {}, publishAccountSnapshot, publishOpenOrdersSnapshot, logger = {} } = {}) => {
+const createFixture = ({ tradingEnabled = false, tradingMode = "testnet", state = createState(), subscribe, onEvent = () => {}, onObservation = () => {}, publishAccountSnapshot, publishOpenOrdersSnapshot, getAccountSafetyBlocker, logger = {} } = {}) => {
   const calls = []
   const events = []
   const subscription = { disconnect: async () => calls.push("disconnect") }
@@ -48,6 +48,7 @@ data: subscription }
       if (publishOpenOrdersSnapshot) {await publishOpenOrdersSnapshot(input, calls)}
     },
     getAccountSnapshot: () => ({ sourceTime: 100 }),
+    getAccountSafetyBlocker,
     resumeDeferredStrategyEvaluations: () => calls.push("resume"),
   })
   return { result,
@@ -226,4 +227,25 @@ test("passes polling observations through a separate callback without treating t
   assert.equal(fixture.state.ready, false, "An observation must not open trading readiness.")
   assert.equal(fixture.events.length, 1, "An observation must not publish a canonical broker event.")
   assert.equal(subscription, fixtureSubscription, "The subscription lifecycle handle must remain available to bootstrap.")
+})
+
+
+test("rejects trading startup while an account-scoped safety blocker is active", async () => {
+  const fixture = createFixture({
+    tradingEnabled: true,
+    getAccountSafetyBlocker: () => ({
+      scope: "ACCOUNT",
+      reason: "RECOVERY_SELLER_UNEXPECTED_CONDITION",
+      blockerId: "account-blocker-1",
+    }),
+  })
+
+  await assert.rejects(
+    fixture.result,
+    (error) => error.code === "HARVESTER_ACCOUNT_SAFETY_BLOCKER_ACTIVE" &&
+      error.context?.scope === "ACCOUNT" &&
+      error.context?.blockerId === "account-blocker-1",
+  )
+  assert.equal(fixture.state.ready, false)
+  assert.equal(fixture.calls.includes("resume"), false)
 })

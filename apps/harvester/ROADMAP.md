@@ -1,5 +1,64 @@
 # Harvester Roadmap
 
+## Trading-history WebSocket large-frame crash — issue #1826
+
+In progress in draft PR #1830: https://github.com/45s/coinzilla/pull/1830 on the existing branch `fix/harvester/1826-websocket-frame-length`. The test-first checkpoint confirmed both the 16-bit encoder overflow (198,918-byte UTF-8 snapshot) and an uncaught circular-JSON serialization failure. The implementation now uses RFC 6455 7-bit/16-bit/64-bit server framing, a 1 MiB complete-message cap, a 2 MiB per-client buffered-write cap, and client-local cleanup for serialization/encoding/write failures. Regression coverage includes 125/126, 65,535/65,536, 115,638-byte and multibyte UTF-8 frames, a large account-snapshot integration, malformed serialization isolation and oversized-message rejection. API and operator documentation record the actual limits and close codes. Exact-head required CI passed on implementation head `9c2bd95afa03a795f17ebb332724c4d97c7c7f58`: Harvester 2,728/2,728, focused regressions, workspace tests, coverage, strict/workspace lint, syntax, actionlint and dependency audit all passed; optional read-only Binance TESTNET integration was skipped. The PR remains draft because integration must follow #1828 then #1827, both now merged. No trading or exchange-write behavior is changed.
+
+## P0 Conservative recovery SELL idempotency — issue #1827
+
+**Implementation:** ready for review in [PR #1831](https://github.com/45s/coinzilla/pull/1831), branch
+`fix/harvester/1827-recovery-sell-idempotency`. The issue remains open for incident evidence and
+root-cause classification.
+
+- The final submission gate mirrors the existing Conservative active-SELL ownership predicate.
+  Any active COIN_GRABBER-owned SELL for the same market reserves its single Position, including
+  legacy orders with stale or missing Position IDs.
+- PENDING, OPEN, PARTIALLY_FILLED and UNKNOWN orders hold the reservation. The candidate is
+  excluded from its own post-registration gate recheck. FILLED, CANCELED, REJECTED and EXPIRED
+  registry transitions release it. Recovery Seller ownership is isolated.
+- TDD RED was observed on test-only head
+  `aec7ade8c57ba1c8ed66ce17855373919455b3fe`: an existing PENDING SELL did not block a second
+  recovery SELL at the final application gate. GREEN implementation and regression tests cover
+  repeated events, delayed acknowledgement, terminal transitions, market-data failures and
+  strategy-evaluation failures.
+- Harvester targeted tests, full Harvester unit tests, workspace unit tests, Repository Quality,
+  Dependency Audit and Harvester coverage floors passed on the task head at the last verification.
+  The new submission-gate module measured 90.54% lines, 92.22% branches and 100% functions.
+
+### Source trace and incident classification
+
+- Strategy evaluation already reads active COIN_GRABBER SELLs from the registry. The new final
+  gate independently enforces the same market/strategy reservation before broker I/O.
+- The pending lifecycle registers PENDING and publishes the durable intent before broker I/O.
+  The `SUBMITTED` lifecycle log is emitted before the final post-registration gate recheck and
+  before the broker call; it proves intent creation, not that the broker request was sent.
+- ACKNOWLEDGED submissions update the registry; uncertain outcomes become UNKNOWN and pause the
+  market. A definite rejection removes the pending reservation. A definite post-only rejection
+  also invalidates the market book. After a definite filter rejection, the next evaluation
+  refreshes recovery-sell market metadata when no active SELL remains and pauses if filters are
+  unavailable.
+- Market-book parsing/processing errors delete the cached book. Strategy-evaluation exceptions
+  pause the market. These failure paths are independently covered; temporal proximity does not
+  establish that they caused the incident's repeated intents.
+- The archive's recovery-facts stream contains 25 records: six BUY intents with six ACKNOWLEDGED
+  outcomes, three BUY fills, two BUY cancellation intent/outcome pairs, and no SELL submission
+  intent/outcome records. Preflight recorded 10 unowned open orders and BLOCKED readiness, then
+  raised the account-level `RECOVERY_SELLER_UNEXPECTED_CONDITION` safety blocker. This belongs
+  to Team A / #1828; this PR does not modify startup admission.
+- The exact session is present in private archive commit
+  `e965b979ad74e8d2a0caaa19071afd2bc6b38e6c`. The GitHub integration can read its manifest and
+  recovery-facts text, but cannot decode the compressed binary artifacts; unauthenticated CI
+  access returns HTTP 404. To classify each listed clientOrderId, the Journal
+  `2026-11-24_17-12-20-386708f6-29e6-46e1-87fe-3a9665e97871.jsonl.gz`, `harvester.log.gz`,
+  `terminal.log.gz` and `trace.log.gz` are required. Redact credentials if present, but preserve
+  clientOrderIds, brokerOrderIds, timestamps, statuses and error codes. Until then, do not claim
+  any incident SELL was accepted, rejected, unknown or never sent.
+
+[Issue #1828](https://github.com/45s/coinzilla/issues/1828) is an integration prerequisite. After
+#1828 merges, merge the updated `develop` into this branch without rewriting history, resolve
+genuine conflicts, and rerun focused tests and exact-head verification. No exchange writes,
+cancellations, account mutations or Harvester restarts are authorized or required.
+
 ## Conservative trading correctness and exhaustive scenario coverage — issue #1763
 
 **Objective:** prove Conservative trading calculations, accounting, lifecycle transitions and safety decisions with source-mapped deterministic evidence. This complements (does not replace) focused unit tests and existing application/replay tests. The canonical [Conservative Domain Specification](./docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md) remains the sole behavior authority; the [scenario-test guide](./docs/domain/CONSERVATIVE_DOMAIN_SCENARIO_TESTS.md) defines authoring conventions; [issue #1763](https://github.com/45s/coinzilla/issues/1763) owns the exhaustive matrix and phase-by-phase evidence.
@@ -19,20 +78,35 @@
 
 | Phase | Small PR-sized deliverable | Exit criteria |
 | --- | --- | --- |
-| 0. Documentation and gates | Completed in merged #1764; Task Preflight CI enforcement retired in merged #1769. | Docs agree; required exact-head CI remains active; no implementation-coverage claim. |
+| 0. Documentation foundation | Completed in merged #1764. Task Preflight CI enforcement was retired in merged #1769. | Documentation foundation is merged; required project CI remains active. |
 | 1. Source/evidence map | A–J source-to-test checkpoint posted to #1763; refine every PARTIAL/BLOCKED row against exact assertions and source owners. | Every rule has an owner, named evidence and honest status; audit closure is not yet claimed. |
-| 2. Test oracle audit | In progress in #1771, #1773, #1775 and #1776: exact decimal financial oracle, coherent Fill fixtures, and replay/bootstrap arithmetic. Remaining engine test-file oracle cleanup is blocked by 33 pre-existing strict-ESLint max-lines findings; see the domain test inventory. | Financial expected values are independent and exact; remaining blocked cases have an explicit reason; production behavior remains unchanged. |
+| 2. Test oracle audit | Completed in merged #1771, #1773, #1775 and #1776 plus review PR #1792: exact recovery-fee, cancellation-race, terminal-Fill, bootstrap/replay and engine-suite financial oracles; test-only helper decomposition removed the 33 pre-existing strict-lint blockers without suppressions. | Exact independent financial oracles; six applicable workflows pass on PR #1792 head `68c45654a70a1ef0e4df008350564ae1871a27d3`; no production behavior changed. |
 | 3. Core arithmetic | Recovery target, net proceeds, fee reserve, base/quote/third-asset commissions, tick/step rounding and decimal boundaries. | Normal, equality, just-below/above, invalid, tiny/large and exchange-filter cases have exact assertions. |
 | 4. BUY accounting | Initial and subsequent BUY fills, cost basis, net base, VWAP/reference, commissions, investment cap and commitments. | Canonical fills reconcile to Portfolio/Position/RecoveryLedger and BUY decisions. |
 | 5. SELL accounting | Partial/multiple/full SELL fills, proceeds, fee assets, remaining inventory, realized profit and recovery target. | Gross-to-net economics and active/retained inventory reconcile exactly. |
 | 6. Strategy decision scenarios | Initial BUY, second BUY, BUY suppression, recovery SELL planning/replacement, no-action dispositions. | Real domain composition emits exact intent fields and proves absence of unsafe/duplicate intents. |
-| 7. State-machine transitions | Cancellation-raced second BUY/recovery SELL and fresh next-cycle basis regressions are in #1773 and #1774; continue with remaining transition rows. | Every applicable legal/forbidden transition has complete-state and no-mutation proof. |
-| 8. Idempotency and event ordering | #1773 proves late duplicate BUY immutability across both accounting projections and side effects; #1774 proves prior-cycle BUY/SELL replay cannot mutate the next cycle. | Exactly-once accounting and deterministic outcomes under supported event orderings. |
+| 7. State-machine transitions | Merged #1773 proves the cancellation-raced second-BUY/recovery-SELL sequence; merged #1774 proves next-cycle basis isolation. | Both named sequences count on develop; remaining transition gaps stay explicit. |
+| 8. Idempotency and event ordering | Merged #1773 proves late duplicate BUY immutability across both accounting projections and side effects; merged #1774 proves prior-cycle BUY/SELL replay isolation. | Exactly-once accounting and deterministic outcomes for the named sequences; other event permutations remain separately scoped. |
 | 9. Failure atomicity / fail-closed | Invalid or missing evidence, unknown outcomes, persistence/projection failures, filter failures and retry boundaries. | No partial accounting commit or unsafe action; recovery requires authoritative evidence. |
 | 10. Inventory and exchange constraints | keepQuantity, retained free inventory, constrained dust, shared assets/markets, min/max/notional/tick/step. | No external inventory adoption; no sellable residual hidden as dust; market/account projections reconcile. |
 | 11. Application integration | The cancellation/fill race and replacement SELL accounting scenario is covered by the application-level regression in #1773; remaining orchestration gaps stay in the issue matrix. | Each behavior is owned by an application test with exact evidence; domain tests do not fake orchestration. |
 | 12. Replay and regression | Bootstrap and DOGE/ZRO replay fixture arithmetic/oracles are being corrected in #1776. | Replay results match live-domain accounting and preserve idempotency; no external connectivity. |
 | 13. Coverage closure | Audit every matrix row, close gaps in small PRs, update inventory and roadmap with exact-head CI. | No applicable row missing evidence; unsupported/blocked rows have reason/owner; all required checks pass. |
+
+### Phase 2 checkpoint — 2026-11-23
+
+Merged test-oracle increments (all six applicable GitHub Actions workflows passed on each exact PR head):
+
+- [#1771](https://github.com/45s/coinzilla/pull/1771), head `a347262bce8535d81caf7ce327ed69923fbddf13`: independent exact recovery-SELL fee oracle.
+- [#1773](https://github.com/45s/coinzilla/pull/1773), head `17791f6a0cd11a2089e6b5c5a7b483e7fddc9012`: cancellation-raced second-BUY/recovery-SELL accounting and duplicate immutability.
+- [#1775](https://github.com/45s/coinzilla/pull/1775), head `fb6a227c69f07e90549c56539daf9efe4ccb250f`: coherent exact terminal-Fill quote notional fixture.
+- [#1776](https://github.com/45s/coinzilla/pull/1776), head `ddd7598769f294eb418904a72fca989f9f173c8d`: exact bootstrap and replay arithmetic.
+
+A targeted source sweep also reviewed all 11 Conservative strategy unit-test files, both Portfolio test files, and 16 Conservative accounting/lifecycle use-case test files (29 test files total). No `Number`, `toFixed`, `parseFloat`, or `parseInt` financial-oracle conversions were found outside the already documented engine-suite findings and numeric broker-adapter DTO conversions.
+
+The remaining engine-suite oracle cleanup is not complete. [#1772](https://github.com/45s/coinzilla/pull/1772) was closed without merge: its test-only fixture correction was blocked by 33 existing strict changed-file ESLint violations in the 11,494-line `conservative-trading-engine.test.js`. The exact-head Repository Quality run [45150853240](https://github.com/45s/coinzilla/actions/runs/45150853240) failed at the changed-file ESLint job; the other five applicable workflows passed. The full violation list and exact affected financial assertions are recorded in the domain test inventory.
+
+**Next:** decompose the 33 overlong test/helper functions into cohesive, lint-compliant units, then correct the SELL Fill default and remaining financial comparisons. Do not suppress ESLint, weaken policy, or change production behavior. Phase 2 remains in progress until the exact financial oracles are corrected or a narrower evidence-backed disposition is agreed.
 
 ### Small-PR operating protocol
 
@@ -59,7 +133,7 @@ For each slice:
 
 Do not claim 100% correctness from line/branch coverage. Completion means every applicable canonical rule and risk row is mapped to adequate executable evidence at the correct layer; every financial invariant and lifecycle transition is protected; all known gaps are closed or explicitly blocked/unsupported; no test oracle derives expected results from the implementation under test; and required CI passes on the exact merged head. Coverage percentages remain useful diagnostics, not the acceptance definition.
 
-**Current status:** PR #1764 is merged and Task Preflight CI enforcement was retired in PR #1769. The first A–J source-to-test checkpoint is posted on #1763, but Phase 1 is still being refined; the grouped checkpoint is not the completed exhaustive audit. Test-only PRs #1771, #1773, #1774 and #1775 are ready for review with all six exact-head workflows passing. PR #1776 is updating bootstrap/replay arithmetic and remains under exact-head CI. PR #1772 was closed because changing the large engine test file exposes 33 pre-existing strict-ESLint max-lines violations; no rule was suppressed and the cleanup is recorded as BLOCKED in the inventory. No production behavior or trading rules have changed. Do not mark any audit row COVERED until evidence is merged to develop and its required CI passes.
+**Current status:** Phase 1 existing-test audit is reconciled against current `develop`. PRs #1771, #1773, #1774, #1775 and #1776 are merged. PR #1774 is merged as `281a18c057bfe576155acf49f1080c11ec2ae42d`; its next-cycle fresh-basis and stale prior-cycle replay assertions count as develop coverage. Its six GitHub Actions workflows passed on exact head `e6b4f956137dad4c2c2fdb5469d454375ce7fba9`. PR #1772 was closed because the narrow large-engine-test cleanup exposed 33 pre-existing strict-ESLint max-lines violations; remaining fixture/oracle cleanup is BLOCKED in the domain test inventory. No production behavior or trading rules changed. No confirmed production bug was found. Dedicated `scenarios/` suite work remains deferred.
 
 ## Conservative strategy safety pause cancels current-process-owned BUYs — issue #1749
 
@@ -93,6 +167,48 @@ Do not claim 100% correctness from line/branch coverage. Completion means every 
 
 - **In progress in [PR #1741](https://github.com/45s/coinzilla/pull/1741):** add `pnpm run operational-state:diagnose` to verify the existing facts/manifest streams with the production store reader, then independently report the offline recovery-projection result.
 - The command is read-only, prints a safe fact-type/candidate summary and exact source identity, and never initializes, repairs, truncates, or mutates the ledger. It does not connect to Binance or enable process-restart restoration.
+
+## Recovery Seller domain scenario coverage — issue #1780
+
+**Purpose:** independently prove RS business behavior from the approved domain contract. This is a test-evidence workstream, not a new trading-policy or runtime-activation task. Shared scenario methodology is owned by [#1779](https://github.com/45s/coinzilla/issues/1779) and merged in [PR #1795](https://github.com/45s/coinzilla/pull/1795). The repository-wide human-readable index is [SCENARIO_CATALOG.md](../../docs/testing/SCENARIO_CATALOG.md); #1780 owns the detailed RS matrix and evidence.
+
+**Merged scenario baseline:** [PR #1793](https://github.com/45s/coinzilla/pull/1793) is merged. Its four scenario files provide initial, deliberately PARTIAL evidence across RS-003 through RS-007; they do not complete any family.
+
+**Agent playbook:** [PR #1810](https://github.com/45s/coinzilla/pull/1810) is open for review and defines the complete scenario registry, case schemas, worked examples and seven-PR implementation sequence.
+
+**Current application prerequisite:** [PR #1815](https://github.com/45s/coinzilla/pull/1815) addresses #1809 with a real workflow-to-default-SELL-evaluator regression. The test-first RED failure was observed on `65761e992c86e2fd59bdc0811ab8737dbf3c6a31`; the composed regression cases passed Harvester Targeted Tests on `23dbbe303221ea49820eeb9820323512b2fe38df`. The final PR head still requires exact-head CI verification.
+
+**New files in the current slice:**
+
+- `test/scenarios/recovery-seller-sell-planner.scenario.test.js` — five application-composed planner cases for canonical BUY-derived recovery quantity, verified Spot legacy availability, the specification ZRO proceeds oracle, account SELL reservation blocking, exchange-filter STOP and no-submission behavior.
+- `test/scenarios/recovery-seller-profitability.scenario.test.js` — four named cases for both cross-subsidy directions, exact threshold equality, and recovery-only profitability.
+- `test/scenarios/recovery-seller-mixed-sell-accounting.scenario.test.js` — six named cases for a supplied canonical DOGE Fill split, exact allocation sum, domain projection commit, replay no-op, one failure-atomicity boundary, and staged duplicate/conflict handling.
+- `test/scenarios/recovery-seller-cycle-lifecycle.scenario.test.js` — two explicit cases plus three loop-generated terminal-status cases for unknown identity retention, terminal unsuccessful outcomes, and conflicting client identity rejection.
+
+**Evidence limits:** these are new domain-level scenario files, but not all are end-to-end business scenarios. RS-003's DOGE price/proceeds/commission are synthetic test fixture values; only the 400 + 1 additive quantity example is specification-illustrative. The supplied-Fill allocation test does not prove the planner derives its target from verified custody. The cycle lifecycle tests exercise pure cycle-state transitions, not broker submitter call counts, durable reservation retention, or application STOP side effects. The accounting test proves one-Fill domain projection atomicity, not multi-Fill REST/stream reconciliation or a durable database transaction barrier.
+
+**Scenario status:**
+
+- RS-001 legacy basis/Spot custody — MISSING.
+- RS-002 confirmed BUY/net-fee accounting — MISSING.
+- RS-003 additive mixed SELL allocation — PARTIAL.
+- RS-004 independent profitability — PARTIAL.
+- RS-005 one SELL lifecycle — PARTIAL.
+- RS-006 exact-once/domain projection atomicity — PARTIAL.
+- RS-007 unknown outcome/no blind retry — PARTIAL (state-level only; application no-retry not proved).
+- RS-008 CG/RS shared resources — MISSING.
+- RS-009 STOP — BLOCKED pending resolution of the domain STOP-clear helper/use-case versus terminal-STOP contract.
+- RS-010 restart/replay — UNSUPPORTED; third-asset fee valuation — BLOCKED pending approved source.
+
+**Contract discrepancies to resolve before affected scenarios are encoded:**
+
+1. STOP: specification/#1780 call STOP terminal and say no clear/reset path, but `resolveRecoverySellerStopState` and `resolveRecoverySellerStop` implement an evidence-backed operator resolution. The operator facade currently exposes read-only status only. Do not claim either an exposed operator reset or absence of an internal resolution use case.
+2. Default enabled state: current config sets `RS_RECOVERY_SELLER_CONFIG.enabled: true`, while specification §15 says keep it false by default; the specification's earlier text and implementation roadmap say enabled by default. Keep this as a documentation/owner-decision blocker; this scenario PR must not change configuration.
+3. Third-asset commission valuation: calculation examples exist, but the authoritative runtime quote valuation source remains unresolved/deferred.
+
+**RS-003 workflow-to-evaluator defect — implementation in [PR #1815](https://github.com/45s/coinzilla/pull/1815):** the accounting workflow previously emitted an accumulating cycle state without the canonical domain invariants, so the default SELL evaluator stopped before planning. The fix constructs workflow snapshots from the canonical cycle-state factory, preserves the sole SELL identity for submitted cycles, and keeps unresolved outcomes unresolved. Three new application-composed cases use the real accounting workflow and default SELL evaluator: eligible mixed SELL submission for exactly `1.01 ZRO`, missing verified Spot custody with zero submissions, and existing-order/STOP/pause/incomplete-reconciliation precedence. These cases pass the Harvester Targeted Tests on the recorded test head; the final PR head and merge are still pending.
+
+**Next P0 work:** follow PR 1 in the [RS Scenario Testing Playbook — PR #1810](https://github.com/45s/coinzilla/pull/1810): implement the scenario registry/schema/traceability and thin runner. Then continue the prescribed RS-001/002, RS-003/004, RS-005/007, RS-006, RS-008 and RS-009 slices. Remaining RS-003 gaps include cross-market reservations, legacy exhaustion, multi-fill/commission permutations and durable submission/reconciliation boundaries. No exchange operations or runtime activation are authorized by #1780.
 
 ## Recovery Seller activation — 2026-11-22
 
@@ -2124,12 +2240,56 @@ The detailed evidence, implementation commits, CI state and remaining unknowns a
 ## 2026-11-23 — scope split for Conservative recovery continuation
 
 - #1362 / [PR #1761](https://github.com/45s/coinzilla/pull/1761) remain focused on deterministic Conservative recovery accounting, replay, late-fill safety and serialized shutdown behavior.
-- The 28 historical `HARVESTER_ORDER_HISTORY_RECORD_INVALID` events are separated into [issue #1789](https://github.com/45s/coinzilla/issues/1789). Their historical field, input shape, projection stage and operational impact remain unknown; no root cause is inferred from timestamp correlation.
-- Keep the archive immutable. The database dump has not been inspected and requires explicit owner authorization. No TESTNET/LIVE writes or account mutations are part of this work.
+- The 28 historical `HARVESTER_ORDER_HISTORY_RECORD_INVALID` events are separated into [issue #1789](https://github.com/45s/coinzilla/issues/1789). Their 2026-11-22 invalid field, input shape, projection stage and operational impact remain unknown; no root cause is inferred from timestamp correlation.
+- The immutable 2026-11-22 archive investigation remains documented in [the #1789 evidence report](docs/audits/reports/order-history-projection-failures.md). It indexes all 28 visible terminal groups and 58 logger writes represented by repeat counters. The compact-console correction is merged in [PR #1796](https://github.com/45s/coinzilla/pull/1796) as `4adde09fbbfabac10e54d689644e5c473824f65f`; it improves future diagnostics but does not identify the historical invalid inputs. The two large 2026-11-22 structured logs remain inaccessible through the current connector; the database dump remains uninspected.
+- Separate 2026-11-24 follow-up: the compressed TESTNET session was hash-verified and decompressed. It confirms three `order.updated` records for DOGE/ZRO/ADA that omit provider provenance while their accepted submission/fill facts contain it. The committed `develop@3ecc3366` source explains the loss: the registry preserves provenance, but the lifecycle mapper serializes the raw incoming order. This does not establish a shared cause for the 2026-11-22 failures. The focused code fix is implemented in draft PR #1832; it will be reviewed/integrated only after #1826 is integrated.
+- A deterministic offline regression now exercises that lifecycle path with a real `OrderRegistry` and a partial-fill update lacking adapter provenance; it checks both retained registry identity and the published `order.updated` DTO. RED was confirmed on test head `96665d9385334790be50c6ec4ad11c33b6f94bea` (18 passed, 1 expected failure: actual `undefined` vs expected `binanceTestnet`). The focused mapper correction is implemented in draft PR #1832; GREEN passed on code head `00adf1b55f3d5a879991359de95295f570e8046d` (2,722 Harvester tests; 90.59% line / 83.71% branch / 96.07% function coverage; repository quality and dependency audit passed). The external documentation-link check is pending. Review/integration remains after #1826.
+- Keep both archives immutable. No database dump was inspected and no TESTNET/LIVE writes, cancellations, restarts or account mutations were performed.
 
-## Conservative executable scenario tooling — child issue #1797
+## 2026-11-23 — #1763 Phase 2 implementation checkpoint
 
-The scenario-definition and reporting workstream is tracked separately from the active domain-test implementation in [#1763](https://github.com/45s/coinzilla/issues/1763). Child issue [#1797](https://github.com/45s/coinzilla/issues/1797) owns the reusable ES-module scenario schema/loader/runner, stable `CON-*` inventory, JSON reports, and offline CI artifact workflow. It reuses `docs/critical-behaviors.json` and the shared testing methodology; it does not introduce a second critical-behavior registry or change production trading logic.
+- Replacement PR: [#1792](https://github.com/45s/coinzilla/pull/1792), branch `test/1763-conservative-test-oracle-phase2`, based on current `develop`. PR #1790 is closed as superseded because its branch was 98 commits behind and diverged.
+- Refactored the current-head overlong harness helpers and callbacks into focused test-only helpers. No production modules, strategy rules, or runtime behavior changed.
+- Added a RED regression for `makeSellFill()`: the hard-coded default produced quote notional `100` instead of the independently expected `30.8625`. Fixed the default with exact `multiplyDecimal(limitPrice, quantity)`; explicit quote quantities are preserved.
+- Replaced the three financial `Number` comparisons with `compareDecimal`. Broker DTO conversions are intentionally unchanged.
+- The first exact-head Harvester Targeted Tests run after the RED/GREEN correction passed on `4722faf3778c52da5fb4b42a4efd424754a8d33c`. That head's Repository Quality still failed: strict lint reported six remaining overlong callbacks plus formatting/no-unused findings. Those six callbacks were decomposed and formatting findings were addressed afterward.
+- Implementation head `a6a03e785c6e80bae0f0b6090c7d1bf4c2f1a14b` passed all six applicable workflows: Harvester Targeted Tests, Unit Tests, Test Coverage, Dependency Audit, Repository Quality and External Documentation Links. Repository Quality included strict changed-file ESLint, full-workspace ESLint, actionlint, JavaScript syntax and Markdown checks.
+- The only intermediate failure was repeated blank lines in the two updated Markdown files; both were corrected before the six-workflow pass. No production changes or scenario-suite work.
+- This checkpoint records the verified implementation; the final documentation-only commit is revalidated on its own exact head.
+- Remaining Phase 2 work: verify exact-head CI, fix any remaining lint/test failures, then record the final narrow/full test results. Scenario-suite phase remains out of scope.
 
-Initial implementation branch baseline: `develop` commit `05deb23a12c56ad64b231f0c59392e6d916447b1` (2026-11-23). The current inventory has 18 scenarios across 16 categories: 15 TEST-MAPPED, one configuration scenario PARTIAL, one P0 startup-history-gate scenario MISSING, and runtime state restoration UNSUPPORTED by specification §7.
+## 2026-11-23 — #1763 Phase 2 test-oracle audit completed
 
+- Phase 2 is complete in review PR [#1792](https://github.com/45s/coinzilla/pull/1792), branch `test/1763-conservative-test-oracle-phase2`, targeting `develop` at `44ed6ce4dd32437e5343c2b1c43171f290f4836e`.
+- Exact PR head `68c45654a70a1ef0e4df008350564ae1871a27d3`: all six workflows passed — Harvester Targeted Tests, Unit Tests, Test Coverage, Dependency Audit, Repository Quality and External Documentation Links.
+- The 33 pre-existing strict ESLint max-lines findings in the engine test were resolved by decomposing test-only helpers/callbacks; no rule was suppressed or weakened.
+- `makeSellFill()` now derives its default quote notional with exact decimal multiplication; explicit quote quantities remain unchanged. Three financial `Number` comparisons were replaced with exact `compareDecimal` assertions. Remaining `Number` conversions are broker DTO construction/status boundaries, not financial test oracles.
+- No production source, trading behavior, exchange state or credentials changed. No `scenarios/` suite was added.
+- PR #1792 remains open for user review; do not merge. Next work package after review is Phase 3: core recovery arithmetic.
+
+## 2026-11-23 — #1763 Phase 3 core recovery arithmetic
+
+- Started Phase 3 on the existing review branch and PR #1792; no second PR was opened.
+- Added a focused multi-fill recovery arithmetic composition test using real canonical Fill, Portfolio, RecoveryLedger, and `updateTradingAccounting` components.
+- The scenario independently verifies mixed base/quote commission effects, cumulative full BUY cost, partial SELL net proceeds, fee-adjusted sell quantity, tick-rounded recovery price, and exact net-proceeds sufficiency using BigInt cross-products.
+- Added the missing one-step residual boundary to `recovery-sell-plan.test.js`: when a 1% base-fee reserve makes a physical 0.1 residual smaller than one executable 0.1 step, no SELL is planned.
+- The first exact-head run caught a test-only BigInt scale mismatch in the independent net-proceeds comparison plus strict ESLint formatting/function-length findings. The independent amounts are now compared at the same denominator; setup and arithmetic assertions are split into focused helpers.
+- This is test-only coverage. No production behavior or trading rules changed. Corrected exact-head GitHub Actions verification is pending.
+- Exact-head lint then identified one remaining multi-property helper-call formatting violation in the accounting assertion call; it now uses one property per line. No assertion or production behavior changed.
+
+- Next: review the remaining recovery arithmetic matrix against the canonical specification, add only evidenced missing boundary cases, and keep the issue/PR/inventory synchronized.
+- Repository Quality reported repeated blank lines in this checkpoint; the extra blank lines were removed without changing document meaning.
+
+### 2026-11-24 — #1763 Phase 3 follow-up
+
+- Added confirmed-proceeds threshold boundaries: exact-target and over-target proceeds clamp required proceeds to zero; proceeds immediately below target preserve the exact positive remainder and require a tick-rounded recovery price.
+- Test-only change; exact-head CI validation pending.
+
+## 2026-11-24 — #1763 Phase 4 Conservative BUY accounting (PR #1808)
+
+- Added composed initial and multiple BUY accounting in `src/use-cases/conservative-buy-accounting-scenario.test.js`, applying canonical fills through production `updateTradingAccounting` and asserting exact Position/RecoveryLedger inventory, cost, quote cash flow, commission treatment, execution identities, duplicate behavior and failure atomicity.
+- Added `src/use-cases/second-buy-fill-reconciliation.test.js` to prove a later BUY adds net inventory and quote-valued fees to the existing Position and RecoveryLedger basis.
+- Extended Conservative investment-cap boundary coverage just above, at, and below the limit.
+- Strengthened the full Conservative engine lifecycle to use production `updateTradingAccounting`, covering second BUY partial/completed fills, recovery-SELL cancellation/fill reconciliation and replacement SELL submission with exact cumulative accounting assertions.
+- CI fixes: corrected the lifecycle cost-basis expectations from observed canonical fills, fixed strict ESLint formatting, and removed repeated Markdown blank lines. Exact-head verification is tracked on PR #1808.
+- Test-only and documentation changes; no production trading behavior or rules changed.

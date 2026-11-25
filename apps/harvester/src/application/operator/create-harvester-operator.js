@@ -1,4 +1,6 @@
 import { authorizeOperatorActor } from "./authorize-operator-actor.js"
+import { HARVESTER_EVENT_NAMES } from "../events/event-names.js"
+import { publishLifecycleEvent } from "../events/publish-lifecycle-event.js"
 import {
   createPauseAllBuys,
   createPauseBuys,
@@ -7,6 +9,73 @@ import {
 } from "../../use-cases/operator-control/buy-controls.js"
 import { createReadOperatorState } from "../../use-cases/operator-control/read-operator-state.js"
 import { createReadOperatorTradingState } from "../../use-cases/operator-control/read-operator-trading-state.js"
+
+function createObservableBuyControl({ control, eventPublisher, action, scope } = {}) {
+  return async (input = {}) => {
+    const result = await control(input)
+    if (result?.ok === true) {
+      publishLifecycleEvent({
+        eventPublisher,
+        eventName: HARVESTER_EVENT_NAMES.OPERATOR_BUY_CONTROL_COMPLETED,
+        dataResult: {
+          ok: true,
+          data: {
+            action,
+            scope,
+            requestId: input.requestId.trim(),
+            ...(scope === "MARKET" ? { symbol: input.symbol.trim() } : {}),
+          },
+        },
+      })
+    }
+    return result
+  }
+}
+
+function createOperatorBuyControls({ engine, operationalStateStore, eventPublisher } = {}) {
+  const pauseBuys = createObservableBuyControl({
+    control: createPauseBuys({
+      engine,
+      operationalStateStore,
+    }),
+    eventPublisher,
+    action: "PAUSE",
+    scope: "MARKET",
+  })
+  const resumeBuys = createObservableBuyControl({
+    control: createResumeBuys({
+      engine,
+      operationalStateStore,
+    }),
+    eventPublisher,
+    action: "RESUME",
+    scope: "MARKET",
+  })
+  const pauseAllBuys = createObservableBuyControl({
+    control: createPauseAllBuys({
+      engine,
+      operationalStateStore,
+    }),
+    eventPublisher,
+    action: "PAUSE",
+    scope: "GLOBAL",
+  })
+  const resumeAllBuys = createObservableBuyControl({
+    control: createResumeAllBuys({
+      engine,
+      operationalStateStore,
+    }),
+    eventPublisher,
+    action: "RESUME",
+    scope: "GLOBAL",
+  })
+  return {
+    pauseBuys,
+    resumeBuys,
+    pauseAllBuys,
+    resumeAllBuys,
+  }
+}
 
 function createReadRecoverySellerStopState({ recoverySellerStopWorkflow }) {
   return async ({ actor } = {}) => {
@@ -37,12 +106,14 @@ function createReadRecoverySellerStopState({ recoverySellerStopWorkflow }) {
  * @param {object} options
  * @param {object} options.engine - Conservative trading engine control boundary.
  * @param {object} options.operationalStateStore - ADR-0001 application-owned Operational State Store port.
+ * @param {object} [options.eventPublisher] - Best-effort application event publisher.
  * @param {Function} [options.getRuntimeSnapshot] - Read-only process runtime snapshot provider.
  * @returns {Readonly<object>} Explicit operator command and query methods.
  */
 export function createHarvesterOperator({
   engine,
   operationalStateStore,
+  eventPublisher,
   getRuntimeSnapshot,
   getPortfolio,
   getRecoveryLedger,
@@ -50,19 +121,23 @@ export function createHarvesterOperator({
   getOpenOrders,
   recoverySellerStopWorkflow,
 } = {}) {
-  const pauseBuys = createPauseBuys({ engine,
-    operationalStateStore })
-  const resumeBuys = createResumeBuys({ engine,
-    operationalStateStore })
+  const {
+    pauseBuys,
+    resumeBuys,
+    pauseAllBuys,
+    resumeAllBuys,
+  } = createOperatorBuyControls({
+    engine,
+    operationalStateStore,
+    eventPublisher,
+  })
   const operator = {
     pauseMarket: pauseBuys,
     resumeMarket: resumeBuys,
     pauseBuys,
     resumeBuys,
-    pauseAllBuys: createPauseAllBuys({ engine,
-      operationalStateStore }),
-    resumeAllBuys: createResumeAllBuys({ engine,
-      operationalStateStore }),
+    pauseAllBuys,
+    resumeAllBuys,
   }
   if (getRuntimeSnapshot !== undefined) {
     const readState = createReadOperatorState({ engine,

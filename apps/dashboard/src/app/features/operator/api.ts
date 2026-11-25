@@ -17,6 +17,11 @@ export interface OperatorCommand {
 export class OperatorApi {
   private readonly http = inject(HttpClient);
   private readonly baseUrl = 'http://127.0.0.1:4201/api/v1/trading/operator';
+  private readonly eventsUrl = 'ws://127.0.0.1:4201/api/v1/trading/events';
+
+  createEventSocket(): WebSocket {
+    return new WebSocket(this.eventsUrl);
+  }
 
   getStatus(): Observable<OperatorEnvelope<unknown>> {
     return this.http.get<OperatorEnvelope<unknown>>(`${this.baseUrl}/status`);

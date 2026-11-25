@@ -18,6 +18,7 @@ This file adds Dashboard-specific constraints. Repository-wide engineering, task
 - Keep the bearer token in browser `sessionStorage` only. Do not commit secrets, API credentials, production environment values, or user-specific configuration.
 - Display TESTNET/LIVE from Harvester API metadata. Do not infer trading readiness from HTTP connectivity.
 - Browser code must not access SQLite/database files, import Harvester-private modules, or call brokers/exchanges.
+- The GitHub PRs page is a public, unauthenticated, read-only GitHub REST client. It must never send credentials or mutate GitHub; Dashboard-local labels stay in browser storage and are not GitHub labels.
 
 ## Development
 

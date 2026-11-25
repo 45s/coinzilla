@@ -128,6 +128,67 @@ After `account.snapshot_captured` or `account.open_orders_captured`, connected c
 
 These are current runtime observations, not persisted history, accounting evidence, or durable replay. Messages can be missed while disconnected; the next connection's initial snapshot reconciles the current account view. No account/order mutation command is accepted over this socket.
 
+### WebSocket framing and resource limits
+
+Server-to-client messages use RFC 6455 unmasked final frames and the protocol's three payload-length forms: inline 7-bit lengths (0–125 bytes), 16-bit extended lengths (126–65,535 bytes), and 64-bit extended lengths (65,536 bytes and above). Lengths are calculated from the UTF-8 encoded payload bytes, not JavaScript string characters. Large snapshots are sent as complete messages; the server never truncates a snapshot to fit a frame header.
+
+The local API applies explicit outbound resource limits:
+
+- A serialized JSON WebSocket message may contain at most **1 MiB** of UTF-8 payload. A larger application message is rejected by closing only that client with WebSocket status **1009 (message too big)**. The server does not split, truncate, or publish a partial snapshot.
+- The per-client socket write queue is bounded at **2 MiB**. If another complete frame would exceed that queue budget, the slow client is closed with status **1013 (try again later)**.
+- A JSON serialization, frame-encoding, or synchronous socket-write failure closes only the affected client with status **1011 (internal error)**. Client cleanup removes its heartbeat and subscription membership; the HTTP listener, Harvester process, and other clients remain available.
+- Client close, heartbeat, and pong control-frame writes use the same protocol encoder and contain synchronous socket failures at the client boundary.
+
+These limits are transport safeguards, not limits on exchange account contents or trading data. If a valid snapshot exceeds the application message cap, the client must reconnect after the source payload is corrected or the documented contract is deliberately revised; the server never reports a truncated snapshot as complete.
+
+### Live Bots operator snapshots
+
+The same socket streams the authoritative runtime, configured-market, and Portfolio read models used by the Bots workspace. A new client receives a complete `bots.snapshot` message; every relevant application/runtime notification produces a newer full `bots.state.updated` message. The server subscribes before accepting upgrades. If an invalidation arrives during a read, the captured revision is sent first and the latest invalidation is coalesced into a follow-up read/update, so the initial snapshot and subsequent state change are both observable without losing the newer state.
+
+```json
+{
+  "type": "bots.snapshot",
+  "version": 1,
+  "revision": 12,
+  "observedAt": "2026-11-24T09:00:00.000Z",
+  "data": {
+    "status": {
+      "ok": true,
+      "data": {
+        "observedAt": 120000,
+        "runtimeState": "RUNNING",
+        "tradingEnabled": true,
+        "userData": { "ready": true, "status": "READY" },
+        "readiness": { "state": "READY", "blockers": [] },
+        "markets": { "configured": 0, "enabled": 0, "blocked": 0 }
+      }
+    },
+    "markets": {
+      "ok": true,
+      "data": {
+        "observedAt": 120000,
+        "tradingEnabled": true,
+        "userDataReady": true,
+        "userDataStatus": "READY",
+        "markets": []
+      }
+    },
+    "portfolio": {
+      "ok": true,
+      "data": { "observedAt": 120000, "positions": [] }
+    }
+  }
+}
+```
+
+The versioned envelope contains a monotonically increasing server-process revision and a sampling timestamp. `bots.state.updated` carries the same complete status/markets/portfolio data shape as `bots.snapshot`; it is not a partial delta. A Harvester process restart begins a new revision epoch; after the socket reconnects, the Dashboard accepts the new connection's full snapshot before comparing later revisions. The stream intentionally does not publish every market-price tick; `latestPrice` and `priceFresh` reflect the read model at the time of the latest state-triggered snapshot. Resource values are the existing application query DTOs: runtime status from `getStatus`, market readiness/control state from `getMarkets`, and Portfolio positions/recovery accounting from `getPositions`. Decimal financial values remain strings. The WebSocket adapter does not query the broker, construct an exchange connection, derive strategy registrations, or calculate financial values.
+
+If any required read fails or is malformed, the server sends `bots.snapshot.unavailable` for the initial read or `bots.state.updated.unavailable` for a follow-up update, with the same versioned envelope and an explicit per-resource `ok: false` error. A failed read is never converted into an empty market or Portfolio list. The Dashboard retains its last complete snapshot as stale (or unavailable before the first complete snapshot) and disables commands until a complete snapshot is received again.
+
+Snapshots are sampled after the explicit `harvester.operator_buy_control_completed` application event and relevant process/configuration, broker connection/subscription, user-data-readiness, market-rule, fill/accounting, recovery-cycle, and account-audit notifications. The operator event is published only after the existing BUY-control application use case succeeds. Its payload distinguishes `scope: "MARKET"` with a symbol from `scope: "GLOBAL"` without a symbol, and records `action: "PAUSE"` or `"RESUME"`. Strategy safety pauses are not operator BUY-control events and are not represented as operator commands.
+
+The socket remains read-only: no command frame is accepted. Market/global BUY controls still use the existing confirmation-gated HTTP `POST /api/v1/trading/operator/commands` endpoint. After a successful command, the application event triggers a new full snapshot. The Dashboard tracks WebSocket connection health separately from snapshot freshness, ignores duplicate/out-of-order revisions, uses bounded reconnect backoff, and receives a fresh complete snapshot on every reconnect. No REST polling or manual refresh is required for the Bots workspace.
+
 ### Persisted-history invalidations
 
 The same socket may receive resource-only `trading-history.updated` messages:
@@ -149,7 +210,7 @@ These messages are invalidation hints, not a durable event stream:
 - Clients of persisted-history resources must fetch fresh HTTP snapshots after initial WebSocket connection and every reconnect, and refresh the currently displayed resource when a matching invalidation arrives.
 - Do not use invalidation messages as accounting, audit, or exchange evidence.
 
-The Exchanges and Open Orders Dashboard pages consume full account snapshots over WebSocket only and make no HTTP requests. Other persisted-history and Operator pages retain their existing HTTP contracts. The server closes active sockets before the HTTP listener and shared database are shut down. Dashboard WebSocket clients use bounded reconnect backoff and display live, reconnecting, and offline states.
+The Exchanges and Open Orders Dashboard pages consume full account snapshots over WebSocket only and make no HTTP requests. The Bots workspace consumes versioned operator snapshots over WebSocket and sends confirmed commands over HTTP; the legacy Operator page retains its existing REST contract. The server closes active sockets before the HTTP listener and shared database are shut down. Dashboard WebSocket clients use bounded reconnect backoff and display live, reconnecting, and offline states.
 
 ## Data semantics
 
@@ -196,11 +257,11 @@ Existing orders / fills / fill_commissions tables
 
 HTTP request handling and response serialization stay in the transport adapter. Query validation and application error codes stay in the application layer. SQL and row mapping stay in Harvester infrastructure. The Harvester domain does not depend on the HTTP framework, route names, UI, or consumer identity.
 
-The HTTP and WebSocket listener runs inside the existing Harvester process and is owned by the process composition root. HTTP exposes the versioned GET resources listed above. The WebSocket adapter subscribes to persisted-history invalidations and account-monitor update notifications. It reads account snapshots only through the already-composed provider-account reader functions; it does not create schema, change trading readiness, construct brokers, or own the shared database connection.
+The HTTP and WebSocket listener runs inside the existing Harvester process and is owned by the process composition root. HTTP exposes the versioned GET resources listed above. The WebSocket adapter subscribes to persisted-history invalidations, account-monitor update notifications, and application/runtime events that invalidate the Bots operator snapshot. It reads account snapshots only through the already-composed provider-account reader functions; it does not create schema, change trading readiness, construct brokers, or own the shared database connection.
 
 ## Verification
 
-The API and WebSocket tests use temporary SQLite files, fake application dependencies, account-reader stubs, an in-memory EventBus, native WebSocket clients, and ephemeral loopback ports. Tests verify initial account snapshots, per-provider read-failure isolation, refreshed snapshots after account-monitor notifications, persisted-history invalidation ordering, and socket lifecycle. Dashboard Exchanges/Open Orders tests prove WebSocket-only snapshot consumption, filters, favourites, details, and reconnect refresh. Tests do not connect to an exchange or require credentials.
+The API and WebSocket tests use temporary SQLite files, fake application dependencies, account-reader stubs, an in-memory EventBus, native WebSocket clients, and ephemeral loopback ports. Tests verify initial account snapshots, per-provider read-failure isolation, refreshed snapshots after account-monitor notifications, versioned Bots snapshots, snapshot-read race protection, reconnect synchronization, operator BUY-control event scope, persisted-history invalidation ordering, and socket lifecycle. Dashboard Exchanges/Open Orders tests prove WebSocket-only snapshot consumption, filters, favourites, details, and reconnect refresh. Tests do not connect to an exchange or require credentials.
 
 ## Operator API
 

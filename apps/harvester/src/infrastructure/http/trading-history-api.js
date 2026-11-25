@@ -614,7 +614,7 @@ async function listenServer({ server, host, port } = {}) {
 /**
  * Start the versioned local HTTP and WebSocket adapters for trading history.
  *
- * @param {{queries: object, environment: "testnet"|"live", host?: string, port?: number, logger?: object, eventBus?: object, marketData?: object}} input
+ * @param {{queries: object, environment: "testnet"|"live", host?: string, port?: number, logger?: object, eventBus?: object, operator?: object, marketData?: object}} input
  * @returns {Promise<Readonly<{address: object, close: Function}>>} Bound server and lifecycle handle.
  */
 export async function startTradingHistoryApiServer({
@@ -649,6 +649,7 @@ export async function startTradingHistoryApiServer({
         eventBus,
         exchangeAccounts,
         subscribeExchangeAccountUpdates,
+        operator,
       })
     : null
   try {

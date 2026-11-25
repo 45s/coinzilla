@@ -1,10 +1,94 @@
 import { provideHttpClient } from '@angular/common/http';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { AppComponent, readSavedDashboardTheme } from './app';
 
+class BotsTestWebSocket extends EventTarget {
+  static instances: BotsTestWebSocket[] = [];
+
+  constructor(readonly url: string) {
+    super();
+    BotsTestWebSocket.instances.push(this);
+  }
+
+  open(): void {
+    this.dispatchEvent(new Event('open'));
+  }
+
+  sendMessage(message: unknown): void {
+    this.dispatchEvent(new MessageEvent('message', {
+      data: JSON.stringify(message),
+    }));
+  }
+
+  close(): void {
+    this.dispatchEvent(new Event('close'));
+  }
+}
+
+function createBotsSnapshot() {
+  return {
+    type: 'bots.snapshot',
+    version: 1,
+    revision: 1,
+    observedAt: '2026-11-24T09:00:00.000Z',
+    data: {
+      status: {
+        ok: true,
+        data: {
+          observedAt: 120000,
+          startedAt: 60000,
+          runtimeState: 'RUNNING',
+          broker: 'binance',
+          tradingEnabled: true,
+          tradingMode: 'testnet',
+          strategyMode: 'conservative-testnet',
+          stopping: false,
+          readiness: {
+            state: 'READY',
+            blockers: [],
+          },
+          userData: {
+            ready: true,
+            status: 'READY',
+            ageMs: 500,
+          },
+          markets: {
+            configured: 0,
+            enabled: 0,
+            blocked: 0,
+          },
+        },
+      },
+      markets: {
+        ok: true,
+        data: {
+          observedAt: 120000,
+          tradingEnabled: true,
+          userDataReady: true,
+          userDataStatus: 'READY',
+          markets: [],
+        },
+      },
+      portfolio: {
+        ok: true,
+        data: {
+          observedAt: 120000,
+          positions: [],
+        },
+      },
+    },
+  };
+}
+
 describe('AppComponent', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    BotsTestWebSocket.instances = [];
+  });
+
   it('renders the Coinzilla dashboard shell and keeps the Overview explicitly labeled as preview data', async () => {
     await TestBed.configureTestingModule({
       imports: [AppComponent],
@@ -21,6 +105,45 @@ describe('AppComponent', () => {
     expect(renderedText).toContain('MOCK DATA');
     expect(renderedText).toContain('Portfolio performance');
     expect(renderedText).toContain('fictional demo data');
+  });
+
+  it('provides a dedicated Bots workspace from the live Harvester snapshot stream', async () => {
+    vi.stubGlobal('WebSocket', BotsTestWebSocket as unknown as typeof WebSocket);
+    await TestBed.configureTestingModule({
+      imports: [AppComponent],
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    }).compileComponents();
+
+    const fixture = TestBed.createComponent(AppComponent);
+    fixture.detectChanges();
+    const botsButton = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button.nav-item'))
+      .find((button) => button.textContent?.includes('Bots')) as HTMLButtonElement | undefined;
+    expect(botsButton, 'The primary navigation must expose Bots as a separate workspace.').toBeDefined();
+    if (!botsButton) return;
+
+    botsButton.click();
+    fixture.detectChanges();
+    const socket = BotsTestWebSocket.instances.at(-1);
+    if (!socket) throw new Error('Bots workspace did not open its WebSocket connection.');
+    socket.open();
+    socket.sendMessage(createBotsSnapshot());
+    fixture.detectChanges();
+
+    const http = TestBed.inject(HttpTestingController);
+    http.expectNone('http://127.0.0.1:4201/api/v1/trading/operator/status');
+    http.expectNone('http://127.0.0.1:4201/api/v1/trading/operator/markets');
+    http.expectNone('http://127.0.0.1:4201/api/v1/trading/operator/portfolio');
+
+    const renderedText = (fixture.nativeElement as HTMLElement).textContent as string;
+    expect(renderedText, 'The Bots workspace must identify itself as a live Harvester control surface.').toContain('HARVESTER / BOT CONTROL');
+    expect(renderedText, 'The Bots workspace must summarize the active runtime strategy mode.').toContain('Strategy mode');
+    expect(renderedText, 'The Bots workspace must expose process uptime.').toContain('Running time');
+    expect(renderedText, 'The Bots workspace must expose configured market controls.').toContain('Market controls');
+    expect(renderedText, 'The Bots workspace must show the Portfolio position view.').toContain('Portfolio positions');
+
+    fixture.destroy();
+    vi.unstubAllGlobals();
+    BotsTestWebSocket.instances = [];
   });
 
   it('navigates to real-record Orders, Fills and Commissions pages', async () => {
@@ -79,6 +202,30 @@ describe('AppComponent', () => {
 
     fixture.destroy();
     vi.unstubAllGlobals();
+  });
+
+  it('navigates to the read-only GitHub PRs page and loads public GitHub data', async () => {
+    await TestBed.configureTestingModule({
+      imports: [AppComponent],
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    }).compileComponents();
+
+    const fixture = TestBed.createComponent(AppComponent);
+    fixture.detectChanges();
+    const root = fixture.nativeElement as HTMLElement;
+    const githubButton = Array.from(root.querySelectorAll('button.nav-item'))
+      .find((button) => button.textContent?.includes('GitHub PRs')) as HTMLButtonElement;
+    expect(githubButton).toBeDefined();
+    githubButton.click();
+    fixture.detectChanges();
+
+    const request = TestBed.inject(HttpTestingController)
+      .expectOne('https://api.github.com/repos/45s/coinzilla/pulls?state=open&per_page=100&page=1');
+    expect(root.textContent).toContain('GitHub PRs');
+    expect(root.textContent).toContain('PUBLIC READ ONLY');
+    request.flush([]);
+
+    fixture.destroy();
   });
 
   it('offers the existing theme plus six palettes and persists the selected theme', async () => {

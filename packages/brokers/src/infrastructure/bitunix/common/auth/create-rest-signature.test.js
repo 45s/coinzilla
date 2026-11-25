@@ -1,0 +1,53 @@
+import assert from "node:assert/strict"
+import test from "node:test"
+
+import { createRestSignature } from "./create-rest-signature.js"
+
+test("shared Bitunix REST signing preserves the documented double-SHA256 contract", () => {
+  const signature = createRestSignature({
+    nonce: "nonce",
+    timestamp: "1700000000000",
+    apiKey: "api-key",
+    secretKey: "secret",
+    queryParams: {
+      symbol: "BTCUSDT",
+      limit: 10,
+      category: "spot",
+    },
+    body: {
+      symbol: "BTCUSDT",
+      side: "BUY",
+    },
+  })
+
+  assert.equal(signature, "2e878fd5589985b8b09737935e1188276b6c910461d719e645aac480419d4fba")
+})
+
+test("Bitunix REST signatures omit nullish query values exactly as the transmitted URL does", () => {
+  const common = {
+    nonce: "nonce",
+    timestamp: "1700000000000",
+    apiKey: "api-key",
+    secretKey: "secret",
+  }
+  const signatureWithoutOptionalFilters = createRestSignature({
+    ...common,
+    queryParams: {
+      symbol: "BTCUSDT",
+    },
+  })
+  const signatureWithNullishOptionalFilters = createRestSignature({
+    ...common,
+    queryParams: {
+      symbol: "BTCUSDT",
+      cursor: undefined,
+      startTime: null,
+    },
+  })
+
+  assert.equal(
+    signatureWithNullishOptionalFilters,
+    signatureWithoutOptionalFilters,
+    "null and undefined query filters must be excluded from the signature because the REST URL omits them",
+  )
+})

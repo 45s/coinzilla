@@ -6,9 +6,11 @@ import { OperatorComponent } from './features/operator/page';
 import { MarketScreenerComponent } from './features/market-screener/page';
 import { ExchangesComponent } from './features/exchanges/page';
 import { OpenOrdersComponent } from './features/open-orders/page';
+import { BotsComponent } from './features/bots/page';
+import { GitHubPullRequestsComponent } from './features/github-prs/page';
 import type { TradingHistoryResource } from './features/trading-history/api';
 
-type DashboardPage = 'overview' | 'operator' | 'markets' | 'exchanges' | 'open-orders' | TradingHistoryResource;
+type DashboardPage = 'overview' | 'operator' | 'bots' | 'markets' | 'exchanges' | 'open-orders' | 'github-prs' | TradingHistoryResource;
 type DashboardTheme = 'current' | 'midnight' | 'light' | 'oled' | 'green' | 'arctic' | 'warm' | 'system';
 
 const THEME_STORAGE_KEY = 'coinzilla.dashboard.theme';
@@ -40,7 +42,7 @@ export function readSavedDashboardTheme(
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [OverviewComponent, TradingHistoryComponent, OperatorComponent, MarketScreenerComponent, ExchangesComponent, OpenOrdersComponent],
+  imports: [OverviewComponent, TradingHistoryComponent, OperatorComponent, BotsComponent, MarketScreenerComponent, ExchangesComponent, OpenOrdersComponent, GitHubPullRequestsComponent],
   templateUrl: './app.html',
   styleUrl: './app.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -48,6 +50,7 @@ export function readSavedDashboardTheme(
 export class AppComponent {
   readonly navigationItems = [
     { label: 'Overview', icon: '◫', page: 'overview' as const, enabled: true },
+    { label: 'Bots', icon: '◉', page: 'bots' as const, enabled: true },
     { label: 'Operator', icon: '⌘', page: 'operator' as const, enabled: true },
     { label: 'Orders', icon: '⇄', page: 'orders' as const, enabled: true },
     { label: 'Fills', icon: '⌁', page: 'fills' as const, enabled: true },
@@ -55,6 +58,7 @@ export class AppComponent {
     { label: 'Markets', icon: '⌖', page: 'markets' as const, enabled: true },
     { label: 'Exchanges', icon: '⇄', page: 'exchanges' as const, enabled: true },
     { label: 'Open Orders', icon: '↗', page: 'open-orders' as const, enabled: true },
+    { label: 'GitHub PRs', icon: '⑂', page: 'github-prs' as const, enabled: true },
     { label: 'Positions', icon: '▤', page: null, enabled: false },
     { label: 'Diagnostics', icon: '⌘', page: null, enabled: false },
   ] as const;
@@ -67,7 +71,7 @@ export class AppComponent {
   );
   readonly historyResource = computed<TradingHistoryResource>(() => {
     const page = this.activePage();
-    return page === 'overview' || page === 'operator' || page === 'markets' || page === 'exchanges' || page === 'open-orders' ? 'orders' : page;
+    return page === 'overview' || page === 'operator' || page === 'bots' || page === 'markets' || page === 'exchanges' || page === 'open-orders' || page === 'github-prs' ? 'orders' : page;
   });
 
   constructor() {
@@ -89,7 +93,6 @@ export class AppComponent {
     const selectedTheme = value as DashboardTheme;
     this.theme.set(selectedTheme);
 
-    // Apply and persist immediately; Angular effects may flush after the change event.
     if (typeof document !== 'undefined') {
       document.documentElement.dataset['theme'] = selectedTheme;
     }

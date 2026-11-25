@@ -25,6 +25,7 @@ import { createHarnessBroker } from "./conservative-trading-engine-harness.js"
 import { conservativeStrategyPolicy } from "../domain/strategies/conservative/strategy-policy.js"
 import { addDecimal, compareDecimal, multiplyDecimal, subtractDecimal } from "@coinzilla/utils"
 import { evaluateConservativeStrategy } from "../domain/strategies/conservative/strategy.js"
+import { updateTradingAccounting } from "./update-trading-accounting.js"
 
 const baseAsset = new Asset({
   id: "doge",
@@ -306,83 +307,73 @@ async function createHarness(options = {}) {
   return createHarnessFromOptions(resolvedOptions)
 }
 
+function getHarnessBrokerFailureOptions({ options } = {}) {
+  return {
+    placeOrderFailure: options.placeOrderFailure,
+    placeOrderFailureCount: options.placeOrderFailureCount,
+    placeOrderFailureAfterCount: options.placeOrderFailureAfterCount,
+    placeOrderFailureError: options.placeOrderFailureError,
+    placeOrderFailureAfterFirst: options.placeOrderFailureAfterFirst,
+    placeOrderThrow: options.placeOrderThrow,
+    cancelFailure: options.cancelFailure,
+    cancelThrow: options.cancelThrow,
+    cancelNotSent: options.cancelNotSent,
+    cancelNotSentOnSuccess: options.cancelNotSentOnSuccess,
+  }
+}
+
+function getHarnessBrokerCancellationOptions({ options } = {}) {
+  return {
+    cancelWithFill: options.cancelWithFill,
+    cancelExecutedQuantity: getHarnessCancelExecutedQuantity({
+      cancelWithFill: options.cancelWithFill,
+      cancelExecutedQuantity: options.cancelExecutedQuantity,
+    }),
+    cancelOrderStatus: options.cancelOrderStatus,
+    cancelUpdatedAt: options.cancelUpdatedAt,
+    cancelOrderGate: options.cancelOrderGate,
+    onCancelOrderStarted: options.onCancelOrderStarted,
+  }
+}
+
+function getHarnessBrokerOrderOptions({ options } = {}) {
+  return {
+    onPlaceOrder: options.onPlaceOrder,
+    placeOrderGate: options.placeOrderGate,
+    deferOrderSide: options.deferOrderSide,
+    onPlaceOrderStarted: options.onPlaceOrderStarted,
+    immediateFilledAcknowledgement: options.immediateFilledAcknowledgement,
+    getAcknowledgedFills: options.getAcknowledgedFills,
+    acknowledgedFillsGate: options.acknowledgedFillsGate,
+    getTerminalFills: options.getTerminalFills,
+  }
+}
+
+function getHarnessBrokerBalanceOptions({ options } = {}) {
+  return {
+    baseFreeBalance: options.baseFreeBalance,
+    quoteFreeBalance: options.quoteFreeBalance,
+    quoteCashFlowBaseline: options.quoteCashFlowBaseline,
+    portfolioBaseQuantityBaseline: options.portfolioBaseQuantityBaseline,
+    additionalTrackedBaseQuantityBaseline: options.additionalTrackedBaseQuantityBaseline,
+    committedQuoteBalanceBaseline: options.committedQuoteBalanceBaseline,
+    committedBaseBalanceBaseline: options.committedBaseBalanceBaseline,
+  }
+}
+
 function createHarnessBrokerState({ options } = {}) {
-  const {
-    marketMetadata: suppliedMarketMetadata,
-    getMarketMetadata: getMarketMetadataOverride,
-    getSymbolFilters: getSymbolFiltersOverride,
-    placeOrderFailure,
-    placeOrderFailureCount,
-    placeOrderFailureAfterCount,
-    placeOrderFailureError,
-    placeOrderFailureAfterFirst,
-    cancelWithFill,
-    cancelExecutedQuantity,
-    cancelOrderStatus,
-    cancelUpdatedAt,
-    cancelOrderGate,
-    onCancelOrderStarted,
-    placeOrderThrow,
-    cancelFailure,
-    cancelThrow,
-    cancelNotSent,
-    cancelNotSentOnSuccess,
-    onPlaceOrder,
-    placeOrderGate,
-    deferOrderSide,
-    onPlaceOrderStarted,
-    immediateFilledAcknowledgement,
-    getAcknowledgedFills,
-    acknowledgedFillsGate,
-    getTerminalFills,
-    baseFreeBalance,
-    quoteFreeBalance,
-    quoteCashFlowBaseline,
-    portfolioBaseQuantityBaseline,
-    additionalTrackedBaseQuantityBaseline,
-    committedQuoteBalanceBaseline,
-    committedBaseBalanceBaseline,
-  } = options
   return createHarnessBroker({
     market,
     baseAsset,
     quoteAsset,
-    getSymbolFiltersOverride,
-    getMarketMetadataOverride,
-    suppliedMarketMetadata,
+    getSymbolFiltersOverride: options.getSymbolFilters,
+    getMarketMetadataOverride: options.getMarketMetadata,
+    suppliedMarketMetadata: options.marketMetadata,
     marketMetadata,
-    placeOrderFailure,
-    placeOrderFailureCount,
-    placeOrderFailureAfterCount,
-    placeOrderFailureError,
-    placeOrderFailureAfterFirst,
-    cancelWithFill,
-    cancelExecutedQuantity: getHarnessCancelExecutedQuantity({ cancelWithFill,
-cancelExecutedQuantity }),
-    cancelOrderStatus,
-    cancelUpdatedAt,
-    cancelOrderGate,
-    onCancelOrderStarted,
-    placeOrderThrow,
-    cancelFailure,
-    cancelThrow,
-    cancelNotSent,
-    cancelNotSentOnSuccess,
-    onPlaceOrder,
-    placeOrderGate,
-    deferOrderSide,
-    onPlaceOrderStarted,
-    immediateFilledAcknowledgement,
-    getAcknowledgedFills,
-    acknowledgedFillsGate,
-    getTerminalFills,
-    baseFreeBalance,
-    quoteFreeBalance,
-    quoteCashFlowBaseline,
-    portfolioBaseQuantityBaseline,
-    additionalTrackedBaseQuantityBaseline,
-    committedQuoteBalanceBaseline,
-    committedBaseBalanceBaseline,
+    ...getHarnessBrokerFailureOptions({ options }),
+    ...getHarnessBrokerCancellationOptions({ options }),
+    ...getHarnessBrokerOrderOptions({ options }),
+    ...getHarnessBrokerBalanceOptions({ options }),
   })
 }
 
@@ -393,74 +384,66 @@ function createHarnessMutableState({ options } = {}) {
   }
 }
 
-function createHarnessEngine({ options, brokerState, state } = {}) {
-  const {
-    strategyPolicy,
-    logger,
-    hasUnownedOpenOrdersForSymbol,
-    appConfig: suppliedAppConfig,
-    isMarketPriceFresh,
-    isMarketBookFresh,
-    marketMetadata: suppliedMarketMetadata,
-    getMarketMetadata: getMarketMetadataOverride,
-    eventPublisher,
-    updateTradingAccounting: updateTradingAccountingOverride,
-    completeRecoveryCycle: completeRecoveryCycleOverride,
-    getPortfolio: getPortfolioOverride,
-    getRecoveryLedger: getRecoveryLedgerOverride,
-    getVolatilityData: getVolatilityDataOverride,
-    onOperationalStateCancellationIntent,
-    onOperationalStateCancellationOutcome,
-    onOperationalStateStrategyMarketPaused,
-    canTrade: canTradeOverride,
-    isStopping: isStoppingOverride,
-    accountingFailure,
-    accountingApplied,
-    recoveryCompletion,
-    additionalTrackedQuoteCashFlow,
-    additionalTrackedBaseQuantity,
-    initialState,
-  } = options
-  const effectiveEventPublisher = createHarnessEventPublisher({ eventPublisher })
+function createHarnessEngineCoreOptions({ options, brokerState } = {}) {
+  const effectiveEventPublisher = createHarnessEventPublisher({ eventPublisher: options.eventPublisher })
   const defaultStrategyPolicy = createHarnessStrategyPolicy({ initialPortfolio: options.initialPortfolio })
-  return makeConservativeTradingEngine({
+  return {
     broker: brokerState.broker,
-    logger,
-    strategyPolicy: strategyPolicy ?? defaultStrategyPolicy,
-    hasUnownedOpenOrdersForSymbol,
-    isMarketPriceFresh,
-    isMarketBookFresh,
-    getVolatilityData: getVolatilityDataOverride,
-    onOperationalStateCancellationIntent,
-    onOperationalStateCancellationOutcome,
-    onOperationalStateStrategyMarketPaused,
+    logger: options.logger,
+    strategyPolicy: options.strategyPolicy ?? defaultStrategyPolicy,
+    hasUnownedOpenOrdersForSymbol: options.hasUnownedOpenOrdersForSymbol,
+    isMarketPriceFresh: options.isMarketPriceFresh,
+    isMarketBookFresh: options.isMarketBookFresh,
+    getVolatilityData: options.getVolatilityData,
+    onOperationalStateCancellationIntent: options.onOperationalStateCancellationIntent,
+    onOperationalStateCancellationOutcome: options.onOperationalStateCancellationOutcome,
+    onOperationalStateStrategyMarketPaused: options.onOperationalStateStrategyMarketPaused,
     eventPublisher: effectiveEventPublisher,
-    appConfig: suppliedAppConfig ?? appConfig,
-    getAdditionalTrackedQuoteCashFlow: () => additionalTrackedQuoteCashFlow,
-    getAdditionalTrackedBaseQuantity: () => additionalTrackedBaseQuantity,
+    appConfig: options.appConfig ?? appConfig,
+    getAdditionalTrackedQuoteCashFlow: () => options.additionalTrackedQuoteCashFlow,
+    getAdditionalTrackedBaseQuantity: () => options.additionalTrackedBaseQuantity,
+  }
+}
+
+function createHarnessEngineWorkflowOptions({ options, brokerState, state } = {}) {
+  return {
     ...createHarnessEngineCallbacks({
-      getPortfolioOverride,
-      getRecoveryLedgerOverride,
-      getMarketMetadataOverride,
-      suppliedMarketMetadata,
-      marketMetadataFallback: suppliedMarketMetadata ?? marketMetadata,
+      getPortfolioOverride: options.getPortfolio,
+      getRecoveryLedgerOverride: options.getRecoveryLedger,
+      getMarketMetadataOverride: options.getMarketMetadata,
+      suppliedMarketMetadata: options.marketMetadata,
+      marketMetadataFallback: options.marketMetadata ?? marketMetadata,
       accountSnapshot: brokerState.accountSnapshot,
       state,
       pauses: brokerState.pauses,
     }),
-    updateTradingAccounting: updateTradingAccountingOverride ?? createHarnessTradingAccounting({
-      accountingFailure,
+    updateTradingAccounting: options.updateTradingAccounting ?? createHarnessTradingAccounting({
+      accountingFailure: options.accountingFailure,
       accountedFills: brokerState.accountedFills,
       accountedFillIds: brokerState.accountedFillIds,
-      accountingApplied,
+      accountingApplied: options.accountingApplied,
     }),
-    completeRecoveryCycle: completeRecoveryCycleOverride ?? createHarnessRecoveryCycleCompletion({
+    completeRecoveryCycle: options.completeRecoveryCycle ?? createHarnessRecoveryCycleCompletion({
       completedCycles: brokerState.completedCycles,
-      recoveryCompletion,
+      recoveryCompletion: options.recoveryCompletion,
     }),
-    canTrade: canTradeOverride,
-    isStopping: isStoppingOverride,
-    initialState,
+    canTrade: options.canTrade,
+    isStopping: options.isStopping,
+    initialState: options.initialState,
+  }
+}
+
+function createHarnessEngine({ options, brokerState, state } = {}) {
+  return makeConservativeTradingEngine({
+    ...createHarnessEngineCoreOptions({
+      options,
+      brokerState,
+    }),
+    ...createHarnessEngineWorkflowOptions({
+      options,
+      brokerState,
+      state,
+    }),
   })
 }
 
@@ -1075,42 +1058,8 @@ test("reconciles and pauses when a BUY fills during trailing cancellation", asyn
 })
 
 
-test("publishes actionable decisions and order submission facts around broker I/O", async () => {
-  const events = []
-  const timeline = []
-  const lifecycleLogs = []
-  const harness = await createHarness({
-    logger: {
-      info: (entry) => {
-        if (entry.orderLifecycle === true) {
-          lifecycleLogs.push(entry)
-          timeline.push(`log:${  entry.lifecycleStatus}`)
-        }
-      },
-    },
-    onPlaceOrder: () => timeline.push("broker.placeOrder"),
-    eventPublisher: { publish: (event) => {
-      events.push(event)
-      timeline.push(`event:${event.name}`)
-      if (event.name === "order.submission_requested") {
-        assert.equal(harness.engine.getOrders()[0].status, "PENDING")
-      }
-      if (event.name === "order.submitted") {
-        assert.equal(harness.engine.getOrders()[0].status, "OPEN")
-      }
-      return { ok: true }
-    } },
-  })
-  const {orders} = harness
-  await harness.engine.processMarketPrice({
-    symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1
-    },
-  })
-
+function assertPublishedOrderSubmissionLifecycle({ harness, events, timeline, lifecycleLogs } = {}) {
+  const { orders } = harness
   assert.equal(orders.length, 1)
   assert.deepEqual(timeline, [
     "event:strategy.decision",
@@ -1140,7 +1089,7 @@ test("publishes actionable decisions and order submission facts around broker I/
     reason: "INITIAL_BUY",
   }])
   assert.equal(events[1].data.status, "PENDING")
-  const {clientOrderId} = events[1].data
+  const { clientOrderId } = events[1].data
   assert.match(clientOrderId, /^h-[0-9a-f]{22}-1$/)
   assert.equal(events[2].data.status, "OPEN")
   assert.equal(events[2].data.brokerOrderId, `broker-${clientOrderId}`)
@@ -1149,6 +1098,48 @@ test("publishes actionable decisions and order submission facts around broker I/
   assert.equal(lifecycleLogs[0].brokerOrderId, undefined, "SUBMITTED must describe the durable intent before broker acknowledgement assigns an exchange order ID.")
   assert.equal(lifecycleLogs[0].clientOrderId, clientOrderId, "The pending lifecycle record must retain the client order identity.")
   assert.equal(lifecycleLogs[1].brokerOrderId, `broker-${clientOrderId}`, "ACCEPTED must carry the exchange-assigned broker order identity.")
+}
+
+test("publishes actionable decisions and order submission facts around broker I/O", async () => {
+  const events = []
+  const timeline = []
+  const lifecycleLogs = []
+  const harness = await createHarness({
+    logger: {
+      info: (entry) => {
+        if (entry.orderLifecycle === true) {
+          lifecycleLogs.push(entry)
+          timeline.push(`log:${  entry.lifecycleStatus}`)
+        }
+      },
+    },
+    onPlaceOrder: () => timeline.push("broker.placeOrder"),
+    eventPublisher: { publish: (event) => {
+      events.push(event)
+      timeline.push(`event:${event.name}`)
+      if (event.name === "order.submission_requested") {
+        assert.equal(harness.engine.getOrders()[0].status, "PENDING")
+      }
+      if (event.name === "order.submitted") {
+        assert.equal(harness.engine.getOrders()[0].status, "OPEN")
+      }
+      return { ok: true }
+    } },
+  })
+  await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: {
+      symbol: "DOGEUSDT",
+      price: "100",
+      timestamp: 1
+    },
+  })
+  assertPublishedOrderSubmissionLifecycle({
+    harness,
+    events,
+    timeline,
+    lifecycleLogs,
+  })
 })
 
 test("order intent publication failure prevents a broker order", async () => {
@@ -1439,6 +1430,62 @@ test("treats decimal-formatted zero as no execution in trailing BUY cancellation
   assert.deepEqual(harness.pauses, [])
 })
 
+function createBuyExecutionEvidence({
+  order,
+  tradeId,
+  fillQuantity = order.originalQuantity.amount,
+  fillClientOrderId,
+  executedQuantity = order.originalQuantity,
+  status,
+  executedAt,
+  updatedAt,
+  completedAt,
+} = {}) {
+  const fill = new Fill({
+    tradeId,
+    ...(fillClientOrderId ? { clientOrderId: fillClientOrderId } : {}),
+    brokerOrderId: order.brokerOrderId,
+    market,
+    side: "BUY",
+    price: order.limitPrice,
+    quantity: fillQuantity === order.originalQuantity.amount
+      ? order.originalQuantity
+      : new Quantity({
+        amount: fillQuantity,
+        asset: baseAsset,
+      }),
+    quoteQuantity: new Money({
+      amount: multiplyDecimal({
+        left: order.limitPrice.amount,
+        right: fillQuantity,
+      }),
+      asset: quoteAsset,
+    }),
+    commissions: [],
+    commissionStatus: "COMPLETE",
+    executedAt,
+  })
+  const executedOrder = new CanonicalOrder({
+    clientOrderId: order.clientOrderId,
+    brokerOrderId: order.brokerOrderId,
+    market,
+    side: "BUY",
+    type: order.type,
+    limitPrice: order.limitPrice,
+    originalQuantity: order.originalQuantity,
+    executedQuantity,
+    status,
+    createdAt: order.createdAt,
+    acknowledgedAt: order.acknowledgedAt,
+    updatedAt,
+    ...(completedAt === undefined ? {} : { completedAt }),
+  })
+  return {
+    fill,
+    executedOrder,
+  }
+}
+
 test("treats decimal-formatted zero as no execution in recovery SELL cancellation reconciliation", async () => {
   const seeded = makeSeededRecoveryState()
   const harness = await createHarness({
@@ -1457,36 +1504,11 @@ test("treats decimal-formatted zero as no execution in recovery SELL cancellatio
   })
   const sellOrder = harness.engine.getOrders().find((order) => order.side === "SELL")
   const buyOrder = harness.engine.getOrders().find((order) => order.side === "BUY")
-  const fill = new Fill({
+  const { fill, executedOrder: filledOrder } = createBuyExecutionEvidence({
+    order: buyOrder,
     tradeId: "decimal-zero-cancel-buy-fill",
-    brokerOrderId: buyOrder.brokerOrderId,
-    market,
-    side: "BUY",
-    price: buyOrder.limitPrice,
-    quantity: buyOrder.originalQuantity,
-    quoteQuantity: new Money({
-      amount: multiplyDecimal({
-        left: buyOrder.limitPrice.amount,
-        right: buyOrder.originalQuantity.amount,
-      }),
-      asset: quoteAsset,
-    }),
-    commissions: [],
-    commissionStatus: "COMPLETE",
-    executedAt: 3,
-  })
-  const filledOrder = new CanonicalOrder({
-    clientOrderId: buyOrder.clientOrderId,
-    brokerOrderId: buyOrder.brokerOrderId,
-    market,
-    side: "BUY",
-    type: buyOrder.type,
-    limitPrice: buyOrder.limitPrice,
-    originalQuantity: buyOrder.originalQuantity,
-    executedQuantity: buyOrder.originalQuantity,
     status: "FILLED",
-    createdAt: buyOrder.createdAt,
-    acknowledgedAt: buyOrder.acknowledgedAt,
+    executedAt: 3,
     updatedAt: 3,
     completedAt: 3,
   })
@@ -1516,44 +1538,17 @@ test("rejects a stream fill whose optional clientOrderId conflicts with its regi
     },
   })
   const [order] = harness.engine.getOrders()
-  const fillQuantity = "0.1"
-  const fill = new Fill({
+  const { fill, executedOrder: partialOrder } = createBuyExecutionEvidence({
+    order,
     tradeId: "wrong-client-fill",
-    clientOrderId: "h-foreign-client-order",
-    brokerOrderId: order.brokerOrderId,
-    market,
-    side: "BUY",
-    price: order.limitPrice,
-    quantity: new Quantity({
-      amount: fillQuantity,
-      asset: baseAsset
-    }),
-    quoteQuantity: new Money({
-      amount: multiplyDecimal({
-        left: order.limitPrice.amount,
-        right: fillQuantity
-      }),
-      asset: quoteAsset,
-    }),
-    commissions: [],
-    commissionStatus: "COMPLETE",
-    executedAt: 2,
-  })
-  const partialOrder = new CanonicalOrder({
-    clientOrderId: order.clientOrderId,
-    brokerOrderId: order.brokerOrderId,
-    market,
-    side: "BUY",
-    type: order.type,
-    limitPrice: order.limitPrice,
-    originalQuantity: order.originalQuantity,
+    fillQuantity: "0.1",
+    fillClientOrderId: "h-foreign-client-order",
     executedQuantity: new Quantity({
-      amount: fillQuantity,
-      asset: baseAsset
+      amount: "0.1",
+      asset: baseAsset,
     }),
     status: "PARTIALLY_FILLED",
-    createdAt: order.createdAt,
-    acknowledgedAt: order.acknowledgedAt,
+    executedAt: 2,
     updatedAt: 2,
   })
   const result = await harness.engine.processUserDataEvent({
@@ -1796,7 +1791,10 @@ function makeSellFill({
   order,
   tradeId,
   quantity = order.originalQuantity.amount,
-  quoteQuantity = "100",
+  quoteQuantity = multiplyDecimal({
+    left: order.limitPrice.amount,
+    right: quantity,
+  }),
   commissionAmount = "0"
 }) {
   return new Fill({
@@ -1823,6 +1821,25 @@ function makeSellFill({
     commissionStatus: "COMPLETE",
   })
 }
+
+test("derives default SELL Fill quote notional from exact execution price and quantity", () => {
+  const order = createRecoveryModeOrder({
+    clientOrderId: "derived-sell-notional",
+    brokerOrderId: "broker-derived-sell-notional",
+    side: "SELL",
+    price: "123.45",
+    quantity: "0.25",
+    status: "OPEN",
+  })
+  const fill = makeSellFill({
+    order,
+    tradeId: "derived-sell-notional-fill",
+    quantity: "0.25",
+  })
+
+  assert.equal(fill.quoteQuantity.amount, "30.8625",
+    "A SELL Fill without an explicit quote quantity must use exact limit price multiplied by executed quantity.")
+})
 
 function makeBuyFill({
   order,
@@ -1858,6 +1875,44 @@ function makeBuyFill({
     commissions: [],
     commissionStatus: "COMPLETE",
   })
+}
+
+async function applyCompletedBuyAndAssertDurableSellCancellation({
+  harness,
+  events,
+  sequence,
+  lifecycleStatuses,
+  buyOrder,
+  sellOrder,
+} = {}) {
+  const result = await harness.engine.processUserDataEvent({
+    event: {
+      executionType: "TRADE",
+      executedOrder: makeFilledOrder({ order: buyOrder }),
+      fill: makeBuyFill({
+        order: buyOrder,
+        tradeId: "completed-buy-fill",
+        price: "99.95",
+        quantity: "1",
+        quoteQuantity: "99.95",
+      }),
+    },
+  })
+  assert.equal(result.ok, true)
+  const cancelled = events.find((event) =>
+    event.name === "order.cancelled" && event.data.clientOrderId === sellOrder.clientOrderId)
+  assert.ok(cancelled)
+  assert.equal(cancelled.data.side, "SELL")
+  assert.equal(cancelled.data.status, "CANCELED")
+  const cancelIntentIndex = sequence.lastIndexOf("publish:cancel_requested")
+  const cancelFlushIndex = sequence.lastIndexOf("flush")
+  const brokerCancelIndex = sequence.indexOf("broker:cancel")
+  const cancelLogIndex = sequence.lastIndexOf("log:CANCEL_REQUESTED")
+  assert.ok(cancelIntentIndex >= 0)
+  assert.ok(cancelFlushIndex > cancelIntentIndex)
+  assert.ok(cancelLogIndex > cancelFlushIndex, "The terminal must log cancellation only after the durable intent barrier.")
+  assert.ok(brokerCancelIndex > cancelLogIndex, "CANCEL REQUESTED must appear before the broker cancellation call.")
+  assert.ok(lifecycleStatuses.includes("CANCELLED"), "A confirmed cancellation must produce its own terminal lifecycle record.")
 }
 
 test("durably journals recovery SELL cancellation intent before broker cancellation", async () => {
@@ -1910,34 +1965,14 @@ test("durably journals recovery SELL cancellation intent before broker cancellat
   assert.ok(buyOrder)
   assert.ok(sellOrder)
 
-  const result = await harness.engine.processUserDataEvent({
-    event: {
-      executionType: "TRADE",
-      executedOrder: makeFilledOrder({ order: buyOrder }),
-      fill: makeBuyFill({
-        order: buyOrder,
-        tradeId: "completed-buy-fill",
-        price: "99.95",
-        quantity: "1",
-        quoteQuantity: "99.95"
-      }),
-    },
+  await applyCompletedBuyAndAssertDurableSellCancellation({
+    harness,
+    events,
+    sequence,
+    lifecycleStatuses,
+    buyOrder,
+    sellOrder,
   })
-  assert.equal(result.ok, true)
-  const cancelled = events.find((event) =>
-    event.name === "order.cancelled" && event.data.clientOrderId === sellOrder.clientOrderId)
-  assert.ok(cancelled)
-  assert.equal(cancelled.data.side, "SELL")
-  assert.equal(cancelled.data.status, "CANCELED")
-  const cancelIntentIndex = sequence.lastIndexOf("publish:cancel_requested")
-  const cancelFlushIndex = sequence.lastIndexOf("flush")
-  const brokerCancelIndex = sequence.indexOf("broker:cancel")
-  const cancelLogIndex = sequence.lastIndexOf("log:CANCEL_REQUESTED")
-  assert.ok(cancelIntentIndex >= 0)
-  assert.ok(cancelFlushIndex > cancelIntentIndex)
-  assert.ok(cancelLogIndex > cancelFlushIndex, "The terminal must log cancellation only after the durable intent barrier.")
-  assert.ok(brokerCancelIndex > cancelLogIndex, "CANCEL REQUESTED must appear before the broker cancellation call.")
-  assert.ok(lifecycleStatuses.includes("CANCELLED"), "A confirmed cancellation must produce its own terminal lifecycle record.")
 })
 
 test("does not cancel a recovery SELL when its durable cancellation intent flush fails", async () => {
@@ -2326,26 +2361,13 @@ test("Fill event publication failure cannot interrupt successful accounting", as
 })
 
 
-test("publishes missing and mismatched Fill diagnostics without raw execution data", async () => {
-  const events = []
-  const { engine } = await createHarness({
-    eventPublisher: { publish: (event) => { events.push(event); return { ok: true } } },
-  })
-  await engine.processMarketPrice({
-    symbol: "DOGEUSDT",
-    priceEvent: {
-    symbol: "DOGEUSDT",
-    price: "100",
-    timestamp: 1
-  }
-  })
-  const [order] = engine.getOrders()
+async function assertMissingAndMismatchedFillDiagnostics({ engine, events, order } = {}) {
   const executedOrder = makePartiallyFilledOrder({ order })
   const missing = await engine.processUserDataEvent({
     event: {
       executedOrder,
       executionType: "TRADE",
-      rawExchangeMessage: { apiKey: "private" }
+      rawExchangeMessage: { apiKey: "private" },
     },
   })
   assert.equal(missing.ok, false)
@@ -2363,11 +2385,11 @@ test("publishes missing and mismatched Fill diagnostics without raw execution da
     price: order.limitPrice,
     quantity: new Quantity({
       amount: "0.5",
-      asset: baseAsset
+      asset: baseAsset,
     }),
     quoteQuantity: new Money({
       amount: "49.975",
-      asset: quoteAsset
+      asset: quoteAsset,
     }),
     liquidityRole: "MAKER",
     executedAt: 3,
@@ -2377,11 +2399,11 @@ test("publishes missing and mismatched Fill diagnostics without raw execution da
   const mismatch = await engine.processUserDataEvent({
     event: {
       executedOrder: makePartiallyFilledOrder({
-      order,
-      updatedAt: 3
-    }),
+        order,
+        updatedAt: 3,
+      }),
       executionType: "TRADE",
-      fill: wrongFill
+      fill: wrongFill,
     },
   })
   assert.equal(mismatch.ok, false)
@@ -2389,6 +2411,27 @@ test("publishes missing and mismatched Fill diagnostics without raw execution da
     event.name === "execution.invalid_fill" && event.data.reason === "IDENTITY_MISMATCH")
   assert.ok(mismatchEvent)
   assert.equal(mismatchEvent.data.fillBrokerOrderId, "different-broker-order")
+}
+
+test("publishes missing and mismatched Fill diagnostics without raw execution data", async () => {
+  const events = []
+  const { engine } = await createHarness({
+    eventPublisher: { publish: (event) => { events.push(event); return { ok: true } } },
+  })
+  await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: {
+    symbol: "DOGEUSDT",
+    price: "100",
+    timestamp: 1
+  }
+  })
+  const [order] = engine.getOrders()
+  await assertMissingAndMismatchedFillDiagnostics({
+    engine,
+    events,
+    order,
+  })
 })
 
 test("ignores unmatched manual order updates by default and publishes safe diagnostics", async () => {
@@ -2508,6 +2551,42 @@ test("EventBus failure cannot interrupt accounting failure pause handling", asyn
 })
 
 
+function assertMarketProfitThresholdCompletion({
+  result,
+  completedCycles,
+  completionInputs,
+  events,
+} = {}) {
+  assert.equal(result.ok, true)
+  assert.deepEqual(completedCycles, [], "The injected completion boundary owns completion in this test.")
+  assert.equal(completionInputs.length, 1)
+  assert.equal(completionInputs[0].minProfit, "0.1", "The engine must pass this market's threshold to recovery completion.")
+  const completed = events.find(({ name }) => name === "recovery.cycle_completed")
+  assert.ok(completed)
+  assert.deepEqual(completed.data, {
+    symbol: "DOGEUSDT",
+    marketId: market.id,
+    freeQuantity: "0.1",
+    keepQuantity: "0.1",
+    minProfit: "0.1",
+    realizedNetProfit: "1.5",
+  })
+}
+
+function createInjectedRecoveryCompletion({ completionInputs } = {}) {
+  return async (input) => {
+    completionInputs.push(input)
+    return {
+      ok: true,
+      data: {
+        eligible: true,
+        freeQuantity: "0.1",
+        realizedNetProfit: "1.5",
+      },
+    }
+  }
+}
+
 test("publishes the market-specific profit threshold after recovery completion succeeds", async () => {
   const events = []
   const completionInputs = []
@@ -2519,17 +2598,7 @@ test("publishes the market-specific profit threshold after recovery completion s
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
     baseFreeBalance: "1",
-    completeRecoveryCycle: async (input) => {
-      completionInputs.push(input)
-      return {
-        ok: true,
-        data: {
-        eligible: true,
-        freeQuantity: "0.1",
-        realizedNetProfit: "1.5"
-      }
-      }
-    },
+    completeRecoveryCycle: createInjectedRecoveryCompletion({ completionInputs }),
     eventPublisher: { publish: (event) => {
       events.push(event)
       if (event.name === "recovery.cycle_completed") {
@@ -2563,19 +2632,11 @@ test("publishes the market-specific profit threshold after recovery completion s
     },
   })
 
-  assert.equal(result.ok, true)
-  assert.deepEqual(completedCycles, [], "The injected completion boundary owns completion in this test.")
-  assert.equal(completionInputs.length, 1)
-  assert.equal(completionInputs[0].minProfit, "0.1", "The engine must pass this market's threshold to recovery completion.")
-  const completed = events.find(({ name }) => name === "recovery.cycle_completed")
-  assert.ok(completed)
-  assert.deepEqual(completed.data, {
-    symbol: "DOGEUSDT",
-    marketId: market.id,
-    freeQuantity: "0.1",
-    keepQuantity: "0.1",
-    minProfit: "0.1",
-    realizedNetProfit: "1.5",
+  assertMarketProfitThresholdCompletion({
+    result,
+    completedCycles,
+    completionInputs,
+    events,
   })
 })
 
@@ -2752,27 +2813,38 @@ test("ignores an out-of-order OPEN update after the BUY has already filled", asy
   assert.deepEqual(pauses, [])
 })
 
+function createHarnessFillAccounting({ getHarness } = {}) {
+  return async ({ fill }) => {
+    const harness = getHarness()
+    const portfolioUpdate = harness.getCurrentPortfolio().applyFill({
+      strategyId: StrategyId.COIN_GRABBER,
+      fill,
+    })
+    const ledgerUpdate = harness.getCurrentRecoveryLedger().applyFill({
+      strategyId: StrategyId.COIN_GRABBER,
+      fill,
+    })
+    harness.setCurrentPortfolio(portfolioUpdate.portfolio)
+    harness.setCurrentRecoveryLedger(ledgerUpdate.ledger)
+    return {
+      ok: true,
+      data: {
+        applied: true,
+        duplicate: false,
+      },
+    }
+  }
+}
+
 test("reconciles the recovery SELL after any partial BUY fill without completing the BUY lifecycle", async () => {
   const seeded = makeSeededRecoveryState()
   const harness = await createHarness({
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
     baseFreeBalance: "1",
-    updateTradingAccounting: async ({ fill }) => {
-      const portfolioUpdate = harness.getCurrentPortfolio().applyFill({ strategyId: StrategyId.COIN_GRABBER,
-fill })
-      const ledgerUpdate = harness.getCurrentRecoveryLedger().applyFill({ strategyId: StrategyId.COIN_GRABBER,
-fill })
-      harness.setCurrentPortfolio(portfolioUpdate.portfolio)
-      harness.setCurrentRecoveryLedger(ledgerUpdate.ledger)
-      return {
-        ok: true,
-        data: {
-        applied: true,
-        duplicate: false
-      }
-      }
-    },
+    updateTradingAccounting: createHarnessFillAccounting({
+      getHarness: () => harness,
+    }),
   })
   await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
@@ -3065,32 +3137,17 @@ function createZeroFeeCycleConfig({ keepQuantity }) {
 }
 
 async function updateCompleteCycleAccounting({ scenario, fill }) {
-  try {
-    const portfolioResult = scenario.currentPortfolio.applyFill({ strategyId: StrategyId.COIN_GRABBER,
-      fill,
-    })
-    const ledgerResult = scenario.currentRecoveryLedger.applyFill({ strategyId: StrategyId.COIN_GRABBER,
-      fill,
-    })
-    if (portfolioResult.applied !== ledgerResult.applied ||
-        portfolioResult.duplicate !== ledgerResult.duplicate) {
-      throw new Error("Portfolio and RecoveryLedger execution identities are inconsistent")
-    }
-    scenario.currentPortfolio = portfolioResult.portfolio
-    scenario.currentRecoveryLedger = ledgerResult.ledger
-    return {
-      ok: true,
-      data: {
-        applied: portfolioResult.applied,
-        duplicate: portfolioResult.duplicate,
-      },
-    }
-  } catch (error) {
-    return {
-      ok: false,
-      errors: [error],
-    }
+  const result = updateTradingAccounting({
+    portfolio: scenario.currentPortfolio,
+    recoveryLedger: scenario.currentRecoveryLedger,
+    fill,
+  })
+  if (!result.ok) {
+    return result
   }
+  scenario.currentPortfolio = result.data.portfolio
+  scenario.currentRecoveryLedger = result.data.recoveryLedger
+  return result
 }
 
 async function completeCycleRecovery({ scenario, marketId, keepQuantity, minProfit }) {
@@ -3287,6 +3344,23 @@ async function runFirstCycleBuy({ scenario }) {
   }
 }
 
+function assertSecondBuyAccountingState({ scenario, expectedQuantity, expectedSpent, expectedFillCount }) {
+  const position = scenario.currentPortfolio.getPosition({
+    strategyId: StrategyId.COIN_GRABBER,
+    marketId: market.id,
+  })
+  assert.equal(position.baseQuantity.amount, expectedQuantity,
+    "The real accounting workflow must reconcile BUY inventory and cancellation-race SELL fills.")
+  assert.equal(position.spent.amount, expectedSpent,
+    "The second BUY must extend the original Position cost basis without resetting it.")
+  assert.equal(scenario.currentRecoveryLedger.buyCost, expectedSpent,
+    "RecoveryLedger must mirror the complete Position BUY cost after every execution.")
+  assert.equal(scenario.currentPortfolio.appliedFillIds.length, expectedFillCount,
+    "Every distinct BUY and cancellation-race SELL execution must be committed once.")
+  assert.equal(scenario.currentRecoveryLedger.appliedFillIds.length, expectedFillCount,
+    "Portfolio and RecoveryLedger must retain the same canonical execution count.")
+}
+
 async function applySecondBuyPartialFill({ scenario, secondBuy, firstRecoverySell }) {
   const fill = makeCommissionedCycleFill({
     order: secondBuy,
@@ -3309,6 +3383,12 @@ async function applySecondBuyPartialFill({ scenario, secondBuy, firstRecoverySel
   assert.equal(result.ok, true, result.errors?.[0]?.message)
   assert.equal(result.data.waitingForFullFill, true)
   assert.equal(result.data.recoverySellReplaced, true)
+  assertSecondBuyAccountingState({
+    scenario,
+    expectedQuantity: "1.15",
+    expectedSpent: "124.925",
+    expectedFillCount: 4,
+  })
   assert.equal(
     scenario.harness.engine.getOrders().find((order) => order.clientOrderId === secondBuy.clientOrderId).status,
     "PARTIALLY_FILLED",
@@ -3343,6 +3423,12 @@ async function applySecondBuyFinalFill({ scenario, secondBuy, firstRecoverySell,
   })
   assert.equal(result.ok, true, result.errors?.[0]?.message)
   assert.equal(result.data.reevaluate, true)
+  assertSecondBuyAccountingState({
+    scenario,
+    expectedQuantity: "1.8",
+    expectedSpent: "199.85",
+    expectedFillCount: 6,
+  })
   assert.deepEqual(scenario.harness.cancellationIds, [
     firstRecoverySell.brokerOrderId,
     replacementSell.brokerOrderId,
@@ -3649,6 +3735,47 @@ test("recovery completion publisher failure cannot interrupt the committed cycle
 })
 
 
+function createOpenSellAcknowledgement({ pendingSell } = {}) {
+  return new CanonicalOrder({
+    clientOrderId: pendingSell.clientOrderId,
+    brokerOrderId: `broker-${pendingSell.clientOrderId}`,
+    market,
+    side: "SELL",
+    type: pendingSell.type,
+    limitPrice: pendingSell.limitPrice,
+    originalQuantity: pendingSell.originalQuantity,
+    executedQuantity: new Quantity({
+      amount: "0",
+      asset: baseAsset,
+    }),
+    status: "OPEN",
+    createdAt: pendingSell.createdAt,
+    acknowledgedAt: 1,
+    updatedAt: 1,
+  })
+}
+
+async function assertSerializedSellAcknowledgement({
+  engine,
+  orders,
+  cancellationIds,
+  accountedFills,
+  resolveAcknowledgement,
+  transitions,
+} = {}) {
+  assert.deepEqual(cancellationIds, [])
+  assert.equal(orders.length, 1)
+  resolveAcknowledgement()
+  const results = await Promise.all(transitions)
+  assert.deepEqual(results.map(({ ok }) => ok), [true, true, true, true])
+  const activeOrders = engine.getOrders().filter((order) =>
+    ["PENDING", "OPEN", "PARTIALLY_FILLED", "UNKNOWN"].includes(order.status))
+  assert.deepEqual(activeOrders.map(({ side }) => side).sort(), ["BUY", "SELL"])
+  assert.deepEqual(cancellationIds, [])
+  assert.deepEqual(accountedFills, [])
+  assert.deepEqual(orders.map(({ side }) => side), ["SELL", "BUY"])
+}
+
 test("serializes market and user-data transitions until a pending SELL is acknowledged", async () => {
   let resolveAcknowledgement
   const placeOrderGate = { promise: new Promise((resolve) => { resolveAcknowledgement = resolve }) }
@@ -3681,23 +3808,7 @@ test("serializes market and user-data transitions until a pending SELL is acknow
   assert.equal(pendingSell?.brokerOrderId, undefined)
   assert.equal(engine.getOrders().some((order) => order.side === "BUY"), false)
 
-  const acknowledgedSell = new CanonicalOrder({
-    clientOrderId: pendingSell.clientOrderId,
-    brokerOrderId: `broker-${pendingSell.clientOrderId}`,
-    market,
-    side: "SELL",
-    type: pendingSell.type,
-    limitPrice: pendingSell.limitPrice,
-    originalQuantity: pendingSell.originalQuantity,
-    executedQuantity: new Quantity({
-      amount: "0",
-      asset: baseAsset
-    }),
-    status: "OPEN",
-    createdAt: pendingSell.createdAt,
-    acknowledgedAt: 1,
-    updatedAt: 1,
-  })
+  const acknowledgedSell = createOpenSellAcknowledgement({ pendingSell })
   const concurrentMarketTransition = engine.processMarketPrice({
     symbol: "DOGEUSDT",
     priceEvent: {
@@ -3713,21 +3824,14 @@ test("serializes market and user-data transitions until a pending SELL is acknow
     event: { executedOrder: acknowledgedSell },
   })
 
-  assert.deepEqual(cancellationIds, [])
-  assert.equal(orders.length, 1)
-  resolveAcknowledgement()
-  const [initialResult, marketResult, userDataResult, duplicateResult] = await Promise.all([
-    initialDecision, concurrentMarketTransition, userDataTransition, duplicateOrderTransition,
-  ])
-  assert.equal(initialResult.ok, true)
-  assert.equal(marketResult.ok, true)
-  assert.equal(userDataResult.ok, true)
-  assert.equal(duplicateResult.ok, true)
-  const activeOrders = engine.getOrders().filter((order) => ["PENDING", "OPEN", "PARTIALLY_FILLED", "UNKNOWN"].includes(order.status))
-  assert.deepEqual(activeOrders.map(({ side }) => side).sort(), ["BUY", "SELL"])
-  assert.deepEqual(cancellationIds, [])
-  assert.deepEqual(accountedFills, [])
-  assert.deepEqual(orders.map(({ side }) => side), ["SELL", "BUY"])
+  await assertSerializedSellAcknowledgement({
+    engine,
+    orders,
+    cancellationIds,
+    accountedFills,
+    resolveAcknowledgement,
+    transitions: [initialDecision, concurrentMarketTransition, userDataTransition, duplicateOrderTransition],
+  })
 })
 
 
@@ -3933,6 +4037,37 @@ function createShutdownBuyRaceState({ seeded }) {
   }
 }
 
+function createShutdownBuyRaceAccounting({ scenario } = {}) {
+  return async ({ fill }) => {
+    if (scenario.appliedFillIds.has(fill.id)) {
+      return {
+        ok: true,
+        data: {
+          applied: false,
+          duplicate: true,
+        },
+      }
+    }
+    scenario.appliedFillIds.add(fill.id)
+    scenario.appliedFills.push(fill)
+    scenario.portfolioRef.current = scenario.portfolioRef.current.applyFill({
+      strategyId: StrategyId.COIN_GRABBER,
+      fill,
+    }).portfolio
+    scenario.ledgerRef.current = scenario.ledgerRef.current.applyFill({
+      strategyId: StrategyId.COIN_GRABBER,
+      fill,
+    }).ledger
+    return {
+      ok: true,
+      data: {
+        applied: true,
+        duplicate: false,
+      },
+    }
+  }
+}
+
 async function createShutdownBuyRaceHarness({ seeded, scenario }) {
   let releaseCancel
   let signalCancelStarted
@@ -3955,32 +4090,7 @@ async function createShutdownBuyRaceHarness({ seeded, scenario }) {
     isMarketPriceFresh: () => scenario.marketPriceFresh,
     getPortfolio: () => scenario.portfolioRef.current,
     getRecoveryLedger: () => scenario.ledgerRef.current,
-    updateTradingAccounting: async ({ fill }) => {
-      if (scenario.appliedFillIds.has(fill.id)) {
-        return {
-          ok: true,
-          data: {
-            applied: false,
-            duplicate: true,
-          },
-        }
-      }
-      scenario.appliedFillIds.add(fill.id)
-      scenario.appliedFills.push(fill)
-      scenario.portfolioRef.current = scenario.portfolioRef.current.applyFill({ strategyId: StrategyId.COIN_GRABBER,
-        fill,
-      }).portfolio
-      scenario.ledgerRef.current = scenario.ledgerRef.current.applyFill({ strategyId: StrategyId.COIN_GRABBER,
-        fill,
-      }).ledger
-      return {
-        ok: true,
-        data: {
-          applied: true,
-          duplicate: false,
-        },
-      }
-    },
+    updateTradingAccounting: createShutdownBuyRaceAccounting({ scenario }),
     getTerminalFills: ({ orderId }) => orderId === scenario.buyOrderRef.current?.brokerOrderId
       ? scenario.buyFills
       : [],
@@ -4142,31 +4252,63 @@ function assertReplacementMatchesStrategy({ scenario, replacementSell }) {
 }
 
 
-test("reconciles multiple BUY fills racing shutdown cancellation and replaces only the owned recovery SELL", async () => {
-  const scenario = await createShutdownBuyRaceScenario()
-  const { seeded, buyOrder } = scenario
+function createShutdownBuyRaceFills({ buyOrder } = {}) {
   const firstQuantity = "0.5"
   const secondQuantity = subtractDecimal({
     left: buyOrder.originalQuantity.amount,
     right: firstQuantity,
   })
-  const firstFill = createShutdownBuyFill({
-    order: buyOrder,
-    tradeId: "shutdown-buy-partial-fill",
-    quantity: firstQuantity,
-    quoteQuantity: multiplyDecimal({
-      left: buyOrder.limitPrice.amount,
-      right: firstQuantity,
+  return {
+    firstFill: createShutdownBuyFill({
+      order: buyOrder,
+      tradeId: "shutdown-buy-partial-fill",
+      quantity: firstQuantity,
+      quoteQuantity: multiplyDecimal({
+        left: buyOrder.limitPrice.amount,
+        right: firstQuantity,
+      }),
     }),
+    secondFill: createShutdownBuyFill({
+      order: buyOrder,
+      tradeId: "shutdown-buy-final-fill",
+      quantity: secondQuantity,
+      quoteQuantity: multiplyDecimal({
+        left: buyOrder.limitPrice.amount,
+        right: secondQuantity,
+      }),
+    }),
+  }
+}
+
+async function assertShutdownBuyRaceResults({
+  scenario,
+  buyOrder,
+  seeded,
+  cancellationResult,
+  lateFillResult,
+} = {}) {
+  await assertLateNewReportsIgnoredAfterFilled({
+    scenario,
+    buyOrder,
   })
-  const secondFill = createShutdownBuyFill({
-    order: buyOrder,
-    tradeId: "shutdown-buy-final-fill",
-    quantity: secondQuantity,
-    quoteQuantity: multiplyDecimal({
-      left: buyOrder.limitPrice.amount,
-      right: secondQuantity,
-    }),
+  assert.equal(cancellationResult.ok, true, cancellationResult.errors?.[0]?.message)
+  assert.equal(lateFillResult.ok, true, lateFillResult.errors?.[0]?.message)
+  assertShutdownBuyRaceAccounting({
+    scenario,
+    seeded,
+  })
+  const replacementSell = await assertShutdownRecoverySellReplaced({ scenario })
+  assertReplacementMatchesStrategy({
+    scenario,
+    replacementSell,
+  })
+}
+
+test("reconciles multiple BUY fills racing shutdown cancellation and replaces only the owned recovery SELL", async () => {
+  const scenario = await createShutdownBuyRaceScenario()
+  const { seeded, buyOrder } = scenario
+  const { firstFill, secondFill } = createShutdownBuyRaceFills({
+    buyOrder,
   })
   scenario.buyFills = [firstFill, secondFill]
   scenario.stopping.value = true
@@ -4176,7 +4318,7 @@ test("reconciles multiple BUY fills racing shutdown cancellation and replaces on
       executionType: "TRADE",
       executedOrder: makePartiallyFilledOrder({
         order: buyOrder,
-        executedQuantity: firstQuantity,
+        executedQuantity: "0.5",
         updatedAt: 2,
       }),
       fill: firstFill,
@@ -4202,21 +4344,12 @@ test("reconciles multiple BUY fills racing shutdown cancellation and replaces on
     lateFinalFill,
   ])
 
-  await assertLateNewReportsIgnoredAfterFilled({ scenario,
-buyOrder })
-
-  assert.equal(cancellationResult.ok, true, cancellationResult.errors?.[0]?.message)
-  assert.equal(lateFillResult.ok, true, lateFillResult.errors?.[0]?.message)
-  assertShutdownBuyRaceAccounting({
+  await assertShutdownBuyRaceResults({
     scenario,
+    buyOrder,
     seeded,
-  })
-  const replacementSell = await assertShutdownRecoverySellReplaced({
-    scenario,
-  })
-  assertReplacementMatchesStrategy({
-    scenario,
-    replacementSell,
+    cancellationResult,
+    lateFillResult,
   })
 })
 
@@ -4614,35 +4747,46 @@ function assertTerminalRecoverySellAccounting({ result, currentPortfolio, curren
   assert.equal(accountedFills[0].commissions[0].amount.amount, "0.01")
 }
 
+function createTerminalRecoverySellAccounting({ accountingState, accountedFills } = {}) {
+  return async ({ fill }) => {
+    accountingState.currentPortfolio = accountingState.currentPortfolio.applyFill({
+      strategyId: StrategyId.COIN_GRABBER,
+      fill,
+    }).portfolio
+    accountingState.currentRecoveryLedger = accountingState.currentRecoveryLedger.applyFill({
+      strategyId: StrategyId.COIN_GRABBER,
+      fill,
+    }).ledger
+    accountedFills.push(fill)
+    return {
+      ok: true,
+      data: {
+        applied: true,
+        duplicate: false,
+      },
+    }
+  }
+}
+
 async function runTerminalRecoverySellStatusScenario({ status }) {
   const seeded = makeSeededRecoveryState()
-  let currentPortfolio = seeded.portfolio
-  let currentRecoveryLedger = seeded.recoveryLedger
+  const accountingState = {
+    currentPortfolio: seeded.portfolio,
+    currentRecoveryLedger: seeded.recoveryLedger,
+  }
   const accountedFills = []
   const terminalFill = { current: undefined }
   const harness = await createHarness({
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
     baseFreeBalance: "1",
-    getPortfolio: () => currentPortfolio,
-    getRecoveryLedger: () => currentRecoveryLedger,
+    getPortfolio: () => accountingState.currentPortfolio,
+    getRecoveryLedger: () => accountingState.currentRecoveryLedger,
     getTerminalFills: ({ orderId }) => terminalFill.current?.brokerOrderId === orderId ? [terminalFill.current] : [],
-    updateTradingAccounting: async ({ fill }) => {
-      currentPortfolio = currentPortfolio.applyFill({ strategyId: StrategyId.COIN_GRABBER,
-        fill,
-      }).portfolio
-      currentRecoveryLedger = currentRecoveryLedger.applyFill({ strategyId: StrategyId.COIN_GRABBER,
-        fill,
-      }).ledger
-      accountedFills.push(fill)
-      return {
-        ok: true,
-        data: {
-          applied: true,
-          duplicate: false,
-        },
-      }
-    },
+    updateTradingAccounting: createTerminalRecoverySellAccounting({
+      accountingState,
+      accountedFills,
+    }),
   })
   await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
@@ -4676,8 +4820,8 @@ async function runTerminalRecoverySellStatusScenario({ status }) {
   })
   assertTerminalRecoverySellAccounting({
     result,
-    currentPortfolio,
-    currentRecoveryLedger,
+    currentPortfolio: accountingState.currentPortfolio,
+    currentRecoveryLedger: accountingState.currentRecoveryLedger,
     accountedFills,
     quoteQuantity,
   })
@@ -4772,78 +4916,114 @@ test("treats unclassified thrown terminal fill-history adapter errors as termina
   })
 })
 
+function createTerminalRecoverySellInvalidHistoryHarness({
+  fillHistory,
+  accountingState,
+  sellFillRef,
+  sellOrderRef,
+  seeded,
+} = {}) {
+  return createHarness({
+    initialPortfolio: seeded.portfolio,
+    initialRecoveryLedger: seeded.recoveryLedger,
+    baseFreeBalance: "1",
+    getPortfolio: () => accountingState.currentPortfolio,
+    getRecoveryLedger: () => accountingState.currentRecoveryLedger,
+    getTerminalFills: ({ orderId }) => {
+      if (sellFillRef.current?.brokerOrderId !== orderId) { return [] }
+      if (fillHistory !== "conflicting") { return [] }
+      return [sellFillRef.current, makeSellFill({
+        order: sellOrderRef.current,
+        tradeId: sellFillRef.current.tradeId,
+        quantity: "0.1",
+        quoteQuantity: "1",
+      })]
+    },
+    updateTradingAccounting: async ({ fill }) => {
+      accountingState.currentPortfolio = accountingState.currentPortfolio.applyFill({
+        strategyId: StrategyId.COIN_GRABBER,
+        fill,
+      }).portfolio
+      accountingState.currentRecoveryLedger = accountingState.currentRecoveryLedger.applyFill({
+        strategyId: StrategyId.COIN_GRABBER,
+        fill,
+      }).ledger
+      return {
+      ok: true,
+      data: {
+        applied: true,
+        duplicate: false,
+      },
+    }
+    },
+  })
+}
+
+async function runTerminalRecoverySellInvalidHistoryCase({ fillHistory } = {}) {
+  const seeded = makeSeededRecoveryState()
+  const accountingState = {
+    currentPortfolio: seeded.portfolio,
+    currentRecoveryLedger: seeded.recoveryLedger,
+  }
+  const sellFillRef = { current: undefined }
+  const sellOrderRef = { current: undefined }
+  const harness = await createTerminalRecoverySellInvalidHistoryHarness({
+    fillHistory,
+    accountingState,
+    sellFillRef,
+    sellOrderRef,
+    seeded,
+  })
+  await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: {
+      symbol: "DOGEUSDT",
+      price: "100",
+      timestamp: 1,
+    },
+  })
+  const sellOrder = harness.engine.getOrders().find((order) => order.side === "SELL")
+  sellOrderRef.current = sellOrder
+  sellFillRef.current = makeSellFill({
+    order: sellOrder,
+    tradeId: `invalid-terminal-sell-${fillHistory === "conflicting" ? "conflict" : "missing"}`,
+    quantity: "0.2",
+    quoteQuantity: "20",
+  })
+  const result = await harness.engine.processUserDataEvent({
+    event: {
+      executedOrder: makeOrderStatusUpdate({
+        order: sellOrder,
+        status: "CANCELED",
+        executedQuantity: "0.2",
+      }),
+    },
+  })
+  return {
+    result,
+    harness,
+    accountingState,
+    fillHistory,
+  }
+}
+
+function assertTerminalRecoverySellInvalidHistory({ result, harness, accountingState, fillHistory } = {}) {
+  assert.equal(result.ok, false)
+  assert.equal(harness.accountedFills.length, 0)
+  assert.equal(accountingState.currentPortfolio.positions[0].baseQuantity.amount, "1")
+  assert.equal(accountingState.currentRecoveryLedger.netSellProceeds, "0")
+  assert.equal(harness.engine.getOrders().filter((order) => order.side === "SELL").length, 1)
+  assert.ok(harness.pauses.includes(
+    fillHistory === "conflicting"
+      ? "TERMINAL_ORDER_FILL_CONFLICTING_DUPLICATE"
+      : "TERMINAL_ORDER_EXECUTED_QUANTITY_MISMATCH",
+  ))
+}
+
 test("terminal recovery SELL with incomplete or conflicting fill history cannot advance", async () => {
   for (const fillHistory of [[], "conflicting"]) {
-    const seeded = makeSeededRecoveryState()
-    let currentPortfolio = seeded.portfolio
-    let currentRecoveryLedger = seeded.recoveryLedger
-    const sellFillRef = { current: undefined }
-    const sellOrderRef = { current: undefined }
-    const harness = await createHarness({
-      initialPortfolio: seeded.portfolio,
-      initialRecoveryLedger: seeded.recoveryLedger,
-      baseFreeBalance: "1",
-      getPortfolio: () => currentPortfolio,
-      getRecoveryLedger: () => currentRecoveryLedger,
-      getTerminalFills: ({ orderId }) => {
-        if (sellFillRef.current?.brokerOrderId !== orderId) {return []}
-        return fillHistory === "conflicting" ? [sellFillRef.current, makeSellFill({
-          order: sellOrderRef.current,
-          tradeId: sellFillRef.current.tradeId,
-          quantity: "0.1",
-          quoteQuantity: "1",
-        })] : []
-      },
-      updateTradingAccounting: async ({ fill }) => {
-        currentPortfolio = currentPortfolio.applyFill({ strategyId: StrategyId.COIN_GRABBER,
-fill }).portfolio
-        currentRecoveryLedger = currentRecoveryLedger.applyFill({ strategyId: StrategyId.COIN_GRABBER,
-fill }).ledger
-        return {
-          ok: true,
-          data: {
-          applied: true,
-          duplicate: false
-        }
-        }
-      },
-    })
-    await harness.engine.processMarketPrice({
-      symbol: "DOGEUSDT",
-      priceEvent: {
-        symbol: "DOGEUSDT",
-        price: "100",
-        timestamp: 1
-      },
-    })
-    sellOrderRef.current = harness.engine.getOrders().find((order) => order.side === "SELL")
-    const sellOrder = sellOrderRef.current
-    sellFillRef.current = makeSellFill({
-      order: sellOrder,
-      tradeId: `invalid-terminal-sell-${fillHistory === "conflicting" ? "conflict" : "missing"}`,
-      quantity: "0.2",
-      quoteQuantity: "20",
-    })
-    const result = await harness.engine.processUserDataEvent({
-      event: {
-        executedOrder: makeOrderStatusUpdate({
-          order: sellOrder,
-          status: "CANCELED",
-          executedQuantity: "0.2",
-        }),
-      },
-    })
-
-    assert.equal(result.ok, false)
-    assert.equal(harness.accountedFills.length, 0)
-    assert.equal(currentPortfolio.positions[0].baseQuantity.amount, "1")
-    assert.equal(currentRecoveryLedger.netSellProceeds, "0")
-    assert.equal(harness.engine.getOrders().filter((order) => order.side === "SELL").length, 1)
-    assert.ok(harness.pauses.includes(
-      fillHistory === "conflicting"
-        ? "TERMINAL_ORDER_FILL_CONFLICTING_DUPLICATE"
-        : "TERMINAL_ORDER_EXECUTED_QUANTITY_MISMATCH",
-    ))
+    const scenario = await runTerminalRecoverySellInvalidHistoryCase({ fillHistory })
+    assertTerminalRecoverySellInvalidHistory(scenario)
   }
 })
 
@@ -4985,6 +5165,45 @@ function makeOpenOrder({
 }
 
 
+function configureMissingRestFillBroker({
+  broker,
+  buyOrder,
+  historyOrder,
+  externalOrder,
+  firstFill,
+  secondFill,
+} = {}) {
+  const calls = []
+  broker.getOpenOrders = async ({ symbol }) => {
+    calls.push(["getOpenOrders", symbol])
+    return {
+      ok: true,
+      data: [
+        externalOrder,
+        makeOpenOrder({
+          order: buyOrder,
+          executedQuantity: "0.00000000",
+        }),
+      ],
+    }
+  }
+  broker.getCanonicalOrderHistory = async ({ symbol, orderId }) => {
+    calls.push(["getCanonicalOrderHistory", symbol, orderId])
+    return {
+      ok: true,
+      data: [historyOrder],
+    }
+  }
+  broker.getFills = async ({ symbol, orderId }) => {
+    calls.push(["getFills", symbol, orderId])
+    return {
+      ok: true,
+      data: [secondFill, firstFill],
+    }
+  }
+  return calls
+}
+
 async function createMissingRestFillScenario() {
   const {
     engine,
@@ -5028,34 +5247,14 @@ async function createMissingRestFillScenario() {
     brokerOrderId: "manual-broker",
     clientOrderId: "manual-client",
   })
-  const calls = []
-  broker.getOpenOrders = async ({ symbol }) => {
-    calls.push(["getOpenOrders", symbol])
-    return {
-      ok: true,
-      data: [
-        externalOrder,
-        makeOpenOrder({
-          order: buyOrder,
-          executedQuantity: "0.00000000",
-        }),
-      ],
-    }
-  }
-  broker.getCanonicalOrderHistory = async ({ symbol, orderId }) => {
-    calls.push(["getCanonicalOrderHistory", symbol, orderId])
-    return {
-      ok: true,
-      data: [historyOrder],
-    }
-  }
-  broker.getFills = async ({ symbol, orderId }) => {
-    calls.push(["getFills", symbol, orderId])
-    return {
-      ok: true,
-      data: [secondFill, firstFill],
-    }
-  }
+  const calls = configureMissingRestFillBroker({
+    broker,
+    buyOrder,
+    historyOrder,
+    externalOrder,
+    firstFill,
+    secondFill,
+  })
   return {
     engine,
     buyOrder,
@@ -5145,6 +5344,41 @@ function assertBackfilledRestFillHistory({ engine, accountedFills, pauses, buyOr
 }
 
 
+function createBackfilledRestFillFixture({ buyOrder } = {}) {
+  const earlierFill = makeBuyFill({
+    order: buyOrder,
+    tradeId: "rest-earlier-fill",
+    price: "99.95",
+    quantity: "0.2",
+    quoteQuantity: "19.99",
+    executedAt: 10,
+  })
+  const laterStreamFill = makeBuyFill({
+    order: buyOrder,
+    tradeId: "stream-later-fill",
+    price: "99.95",
+    quantity: "0.3",
+    quoteQuantity: "29.985",
+    executedAt: 20,
+  })
+  return {
+    earlierFill,
+    laterStreamFill,
+    streamedOrder: makeOrderStatusUpdate({
+      order: buyOrder,
+      status: "PARTIALLY_FILLED",
+      executedQuantity: "0.5",
+      updatedAt: 3,
+    }),
+    historyOrder: makeOrderStatusUpdate({
+      order: buyOrder,
+      status: "PARTIALLY_FILLED",
+      executedQuantity: "0.5",
+      updatedAt: 4,
+    }),
+  }
+}
+
 test("accounts missing earlier REST fills without replaying cumulative order quantity backwards", async () => {
   const {
     engine,
@@ -5163,28 +5397,12 @@ test("accounts missing earlier REST fills without replaying cumulative order qua
     },
   })
   const buyOrder = engine.getOrders().find((order) => order.side === "BUY")
-  const earlierFill = makeBuyFill({
-    order: buyOrder,
-    tradeId: "rest-earlier-fill",
-    price: "99.95",
-    quantity: "0.2",
-    quoteQuantity: "19.99",
-    executedAt: 10,
-  })
-  const laterStreamFill = makeBuyFill({
-    order: buyOrder,
-    tradeId: "stream-later-fill",
-    price: "99.95",
-    quantity: "0.3",
-    quoteQuantity: "29.985",
-    executedAt: 20,
-  })
-  const streamedOrder = makeOrderStatusUpdate({
-    order: buyOrder,
-    status: "PARTIALLY_FILLED",
-    executedQuantity: "0.5",
-    updatedAt: 3,
-  })
+  const {
+    earlierFill,
+    laterStreamFill,
+    streamedOrder,
+    historyOrder,
+  } = createBackfilledRestFillFixture({ buyOrder })
   const streamResult = await engine.processUserDataEvent({
     event: {
       eventType: "executionReport",
@@ -5195,12 +5413,6 @@ test("accounts missing earlier REST fills without replaying cumulative order qua
   })
   assert.equal(streamResult.ok, true)
   assert.deepEqual(accountedFills.map((fill) => fill.tradeId), ["stream-later-fill"])
-  const historyOrder = makeOrderStatusUpdate({
-    order: buyOrder,
-    status: "PARTIALLY_FILLED",
-    executedQuantity: "0.5",
-    updatedAt: 4,
-  })
   configureBackfilledRestFillHistory({
     broker,
     buyOrder,
@@ -5218,6 +5430,24 @@ test("accounts missing earlier REST fills without replaying cumulative order qua
     reconciled,
   })
 })
+
+function configureIncompleteRestFillHistory({ broker, buyOrder, partialFill, historyOrder } = {}) {
+  broker.getOpenOrders = async () => ({
+    ok: true,
+    data: [makeOpenOrder({
+      order: buyOrder,
+      executedQuantity: "0.4",
+    })],
+  })
+  broker.getCanonicalOrderHistory = async () => ({
+    ok: true,
+    data: [historyOrder],
+  })
+  broker.getFills = async () => ({
+    ok: true,
+    data: [partialFill],
+  })
+}
 
 test("fails closed without applying partial REST fills when cumulative history is incomplete", async () => {
   const {
@@ -5249,20 +5479,11 @@ test("fails closed without applying partial REST fills when cumulative history i
     executedQuantity: "0.4",
     updatedAt: 3,
   })
-  broker.getOpenOrders = async () => ({
-    ok: true,
-    data: [makeOpenOrder({
-    order: buyOrder,
-    executedQuantity: "0.4"
-  })]
-  })
-  broker.getCanonicalOrderHistory = async () => ({
-    ok: true,
-    data: [historyOrder]
-  })
-  broker.getFills = async () => ({
-    ok: true,
-    data: [partialFill]
+  configureIncompleteRestFillHistory({
+    broker,
+    buyOrder,
+    partialFill,
+    historyOrder,
   })
 
   const result = await engine.reconcileOwnedOrders()
@@ -5273,6 +5494,51 @@ test("fails closed without applying partial REST fills when cumulative history i
   assert.deepEqual(engine.getPausedMarkets(), ["DOGEUSDT"])
 })
 
+
+function createConflictingRestStreamFillFixture({ buyOrder } = {}) {
+  return {
+    streamFill: makeBuyFill({
+      order: buyOrder,
+      tradeId: "stream-execution-id",
+      price: "99.95",
+      quantity: "0.2",
+      quoteQuantity: "19.99",
+      executedAt: 10,
+    }),
+    restFill: makeBuyFill({
+      order: buyOrder,
+      tradeId: "rest-conflicting-execution-id",
+      price: "99.95",
+      quantity: "0.2",
+      quoteQuantity: "19.99",
+      executedAt: 10,
+    }),
+    partialOrder: makeOrderStatusUpdate({
+      order: buyOrder,
+      status: "PARTIALLY_FILLED",
+      executedQuantity: "0.2",
+      updatedAt: 2,
+    }),
+  }
+}
+
+function configureConflictingRestStreamHistory({ broker, buyOrder, partialOrder, restFill } = {}) {
+  broker.getOpenOrders = async () => ({
+    ok: true,
+    data: [makeOpenOrder({
+      order: buyOrder,
+      executedQuantity: "0.2",
+    })],
+  })
+  broker.getCanonicalOrderHistory = async () => ({
+    ok: true,
+    data: [partialOrder],
+  })
+  broker.getFills = async () => ({
+    ok: true,
+    data: [restFill],
+  })
+}
 
 test("fails closed when REST fill IDs conflict with executions already processed from the stream", async () => {
   const {
@@ -5290,28 +5556,7 @@ test("fails closed when REST fill IDs conflict with executions already processed
     },
   })
   const buyOrder = engine.getOrders().find((order) => order.side === "BUY")
-  const streamFill = makeBuyFill({
-    order: buyOrder,
-    tradeId: "stream-execution-id",
-    price: "99.95",
-    quantity: "0.2",
-    quoteQuantity: "19.99",
-    executedAt: 10,
-  })
-  const restFillWithDifferentId = makeBuyFill({
-    order: buyOrder,
-    tradeId: "rest-conflicting-execution-id",
-    price: "99.95",
-    quantity: "0.2",
-    quoteQuantity: "19.99",
-    executedAt: 10,
-  })
-  const partialOrder = makeOrderStatusUpdate({
-    order: buyOrder,
-    status: "PARTIALLY_FILLED",
-    executedQuantity: "0.2",
-    updatedAt: 2,
-  })
+  const { streamFill, restFill, partialOrder } = createConflictingRestStreamFillFixture({ buyOrder })
   const streamResult = await engine.processUserDataEvent({
     event: {
       eventType: "executionReport",
@@ -5323,20 +5568,11 @@ test("fails closed when REST fill IDs conflict with executions already processed
   assert.equal(streamResult.ok, true)
   assert.equal(accountedFills.length, 1)
 
-  broker.getOpenOrders = async () => ({
-    ok: true,
-    data: [makeOpenOrder({
-    order: buyOrder,
-    executedQuantity: "0.2"
-  })]
-  })
-  broker.getCanonicalOrderHistory = async () => ({
-    ok: true,
-    data: [partialOrder]
-  })
-  broker.getFills = async () => ({
-    ok: true,
-    data: [restFillWithDifferentId]
+  configureConflictingRestStreamHistory({
+    broker,
+    buyOrder,
+    partialOrder,
+    restFill,
   })
 
   const result = await engine.reconcileOwnedOrders()
@@ -5385,24 +5621,7 @@ function assertStaleRestOrderHistoryRejected({ engine, accountedFills, pauses, b
 }
 
 
-test("rejects REST order history that is behind an already processed stream fill", async () => {
-  const {
-    engine,
-    broker,
-    accountedFills,
-    pauses,
-  } = await createHarness({
-    accountingApplied: true,
-  })
-  await engine.processMarketPrice({
-    symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1,
-    },
-  })
-  const buyOrder = engine.getOrders().find((order) => order.side === "BUY")
+async function processStreamFillAheadOfRestHistory({ engine, buyOrder } = {}) {
   const streamFill = makeBuyFill({
     order: buyOrder,
     tradeId: "stream-ahead-of-rest",
@@ -5425,6 +5644,31 @@ test("rejects REST order history that is behind an already processed stream fill
     },
   })
   assert.equal(streamResult.ok, true)
+  return streamFill
+}
+
+test("rejects REST order history that is behind an already processed stream fill", async () => {
+  const {
+    engine,
+    broker,
+    accountedFills,
+    pauses,
+  } = await createHarness({
+    accountingApplied: true,
+  })
+  await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: {
+      symbol: "DOGEUSDT",
+      price: "100",
+      timestamp: 1,
+    },
+  })
+  const buyOrder = engine.getOrders().find((order) => order.side === "BUY")
+  await processStreamFillAheadOfRestHistory({
+    engine,
+    buyOrder,
+  })
   const staleRestFill = makeBuyFill({
     order: buyOrder,
     tradeId: "stale-rest-history-fill",
@@ -5512,23 +5756,9 @@ test("a partial BUY fill creates active Portfolio inventory before trailing can 
   })
   const harness = await createHarness({
     strategyPolicy,
-    updateTradingAccounting: async ({ fill }) => {
-      const portfolioUpdate = harness.getCurrentPortfolio().applyFill({ strategyId: StrategyId.COIN_GRABBER,
-        fill,
-      })
-      const ledgerUpdate = harness.getCurrentRecoveryLedger().applyFill({ strategyId: StrategyId.COIN_GRABBER,
-        fill,
-      })
-      harness.setCurrentPortfolio(portfolioUpdate.portfolio)
-      harness.setCurrentRecoveryLedger(ledgerUpdate.ledger)
-      return {
-        ok: true,
-        data: {
-          applied: true,
-          duplicate: false,
-        },
-      }
-    },
+    updateTradingAccounting: createHarnessFillAccounting({
+      getHarness: () => harness,
+    }),
   })
 
   await harness.engine.processMarketPrice({
@@ -5643,23 +5873,9 @@ test("a partial recovery SELL fill leaves active Position inventory protected fr
     strategyPolicy,
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
-    updateTradingAccounting: async ({ fill }) => {
-      const portfolioUpdate = harness.getCurrentPortfolio().applyFill({ strategyId: StrategyId.COIN_GRABBER,
-        fill,
-      })
-      const ledgerUpdate = harness.getCurrentRecoveryLedger().applyFill({ strategyId: StrategyId.COIN_GRABBER,
-        fill,
-      })
-      harness.setCurrentPortfolio(portfolioUpdate.portfolio)
-      harness.setCurrentRecoveryLedger(ledgerUpdate.ledger)
-      return {
-        ok: true,
-        data: {
-          applied: true,
-          duplicate: false,
-        },
-      }
-    },
+    updateTradingAccounting: createHarnessFillAccounting({
+      getHarness: () => harness,
+    }),
   })
 
   await harness.engine.processMarketPrice({
@@ -6275,7 +6491,10 @@ test("twelve sequential immediately-filled BUYs advance from each reconciled las
   assert.ok(observedReferences.slice(1).every((price) => price !== null))
   assert.equal(new Set(harness.orders.map((order) => order.price)).size, 12)
   for (let index = 1; index < harness.orders.length; index += 1) {
-    assert.ok(Number(harness.orders[index].price) < Number(harness.orders[index - 1].price))
+    assert.ok(compareDecimal({
+      left: harness.orders[index].price,
+      right: harness.orders[index - 1].price,
+    }) < 0)
   }
   assert.equal(harness.engine.getPausedMarkets().length, 0)
 })
@@ -6424,12 +6643,18 @@ function assertResidualRecoverySellAccounting({ scenario }) {
   assert.equal(scenario.result.data.reevaluate, true)
   assert.equal(scenario.currentRecoveryLedger.outstandingRecoveryAmount, "0")
   assert.equal(scenario.currentRecoveryLedger.buyCost, "105")
-  assert.ok(Number(scenario.currentRecoveryLedger.netSellProceeds) > 105.01)
+  assert.ok(compareDecimal({
+    left: scenario.currentRecoveryLedger.netSellProceeds,
+    right: "105.01",
+  }) > 0)
   const position = scenario.currentPortfolio.getPosition({ strategyId: StrategyId.COIN_GRABBER,
     marketId: market.id,
   })
   assert.equal(position.freeBaseQuantity.amount, "0")
-  assert.ok(Number(position.baseQuantity.amount) > 0.1)
+  assert.ok(compareDecimal({
+    left: position.baseQuantity.amount,
+    right: "0.1",
+  }) > 0)
   const sellOrders = scenario.harness.engine.getOrders().filter((order) => order.side === "SELL")
   assert.equal(sellOrders.length, 1)
   assert.equal(sellOrders[0].status, "FILLED")
@@ -6591,6 +6816,24 @@ test("reconciles a FILLED acknowledgement from Binance myTrades without a client
   assert.deepEqual(pauses, [])
 })
 
+function createLateStreamBuyExecution({ tracked } = {}) {
+  const fill = makeBuyFill({
+    order: tracked,
+    tradeId: "late-stream-fill",
+    price: tracked.limitPrice.amount,
+    quantity: tracked.originalQuantity.amount,
+    quoteQuantity: multiplyDecimal({
+      left: tracked.limitPrice.amount,
+      right: tracked.originalQuantity.amount,
+    }),
+    clientOrderId: undefined,
+  })
+  return {
+    fill,
+    filledOrder: makeFilledOrder({ order: tracked }),
+  }
+}
+
 test("retains acknowledged broker identity after conflicting REST fill metadata and reconciles a later stream fill without resuming", async () => {
   const {
     engine,
@@ -6627,18 +6870,7 @@ test("retains acknowledged broker identity after conflicting REST fill metadata 
   assert.ok(tracked.brokerOrderId)
   assert.ok(pauses.includes("ACKNOWLEDGED_FILL_IDENTITY_MISMATCH"))
 
-  const fill = makeBuyFill({
-    order: tracked,
-    tradeId: "late-stream-fill",
-    price: tracked.limitPrice.amount,
-    quantity: tracked.originalQuantity.amount,
-    quoteQuantity: multiplyDecimal({
-      left: tracked.limitPrice.amount,
-      right: tracked.originalQuantity.amount,
-    }),
-    clientOrderId: undefined,
-  })
-  const filledOrder = makeFilledOrder({ order: tracked })
+  const { fill, filledOrder } = createLateStreamBuyExecution({ tracked })
   const streamed = await engine.processUserDataEvent({
     event: {
       eventType: "executionReport",
@@ -6664,6 +6896,27 @@ test("retains acknowledged broker identity after conflicting REST fill metadata 
 })
 
 
+function createAcknowledgedFillBatch({ order } = {}) {
+  return [
+    makeBuyFill({
+      order,
+      tradeId: "9939",
+      price: "99.95",
+      quantity: "0.5",
+      quoteQuantity: "49.975",
+      clientOrderId: undefined,
+    }),
+    makeBuyFill({
+      order,
+      tradeId: "9940",
+      price: "99.94",
+      quantity: "0.5",
+      quoteQuantity: "49.97",
+      clientOrderId: undefined,
+    }),
+  ]
+}
+
 test("publishes one durable fill-applied event per reconciled execution and no duplicate event", async () => {
   const events = []
   const harness = await createHarness({
@@ -6675,24 +6928,7 @@ test("publishes one durable fill-applied event per reconciled execution and no d
         return { ok: true }
       },
     },
-    getAcknowledgedFills: ({ order }) => [
-      makeBuyFill({
-        order,
-        tradeId: "9939",
-        price: "99.95",
-        quantity: "0.5",
-        quoteQuantity: "49.975",
-        clientOrderId: undefined,
-      }),
-      makeBuyFill({
-        order,
-        tradeId: "9940",
-        price: "99.94",
-        quantity: "0.5",
-        quoteQuantity: "49.97",
-        clientOrderId: undefined,
-      }),
-    ],
+    getAcknowledgedFills: ({ order }) => createAcknowledgedFillBatch({ order }),
   })
 
   const result = await harness.engine.processMarketPrice({
@@ -6920,8 +7156,8 @@ test("rejects an overcommitted batch of SELL intents before submitting any order
   assert.equal(harness.orders.length, 0)
 })
 
-test("reconciles an accepted order after its submission acknowledgement is lost", async () => {
-  const strategyPolicy = {
+function createLostAcknowledgementStrategyPolicy() {
+  return {
     evaluate: ({ lastBuyPrice }) => ({
       strategy: "TEST_POLICY",
       symbol: "DOGEUSDT",
@@ -6930,14 +7166,51 @@ test("reconciles an accepted order after its submission acknowledgement is lost"
         side: "BUY",
         type: "LIMIT_MAKER",
         price: "99.95",
-        quantity: "1"
+        quantity: "1",
       }],
     }),
     evaluateTrailingBuyRepricing: () => ({
       shouldReplace: false,
-      adjustmentThreshold: "0"
+      adjustmentThreshold: "0",
     }),
   }
+}
+
+function createLostAcknowledgementCanonicalEvidence({ pendingOrder } = {}) {
+  const acknowledgedOrder = new CanonicalOrder({
+    clientOrderId: pendingOrder.clientOrderId,
+    brokerOrderId: "broker-lost-ack",
+    market,
+    side: pendingOrder.side,
+    type: pendingOrder.type,
+    limitPrice: pendingOrder.limitPrice,
+    originalQuantity: pendingOrder.originalQuantity,
+    executedQuantity: new Quantity({
+      amount: "1",
+      asset: baseAsset,
+    }),
+    status: "FILLED",
+    createdAt: 1,
+    acknowledgedAt: 1,
+    updatedAt: 2,
+    completedAt: 2,
+  })
+  const fill = makeBuyFill({
+    order: acknowledgedOrder,
+    tradeId: "lost-ack-fill-1",
+    price: "99.95",
+    quantity: "1",
+    quoteQuantity: "99.95",
+    executedAt: 2,
+  })
+  return {
+    acknowledgedOrder,
+    fill,
+  }
+}
+
+test("reconciles an accepted order after its submission acknowledgement is lost", async () => {
+  const strategyPolicy = createLostAcknowledgementStrategyPolicy()
   const harness = await createHarness({
     strategyPolicy,
     placeOrderThrow: true,
@@ -6958,31 +7231,8 @@ test("reconciles an accepted order after its submission acknowledgement is lost"
   assert.equal(pendingOrder.status, "UNKNOWN")
   assert.equal(pendingOrder.brokerOrderId, undefined)
 
-  const acknowledgedOrder = new CanonicalOrder({
-    clientOrderId: pendingOrder.clientOrderId,
-    brokerOrderId: "broker-lost-ack",
-    market,
-    side: pendingOrder.side,
-    type: pendingOrder.type,
-    limitPrice: pendingOrder.limitPrice,
-    originalQuantity: pendingOrder.originalQuantity,
-    executedQuantity: new Quantity({
-      amount: "1",
-      asset: baseAsset
-    }),
-    status: "FILLED",
-    createdAt: 1,
-    acknowledgedAt: 1,
-    updatedAt: 2,
-    completedAt: 2,
-  })
-  const fill = makeBuyFill({
-    order: acknowledgedOrder,
-    tradeId: "lost-ack-fill-1",
-    price: "99.95",
-    quantity: "1",
-    quoteQuantity: "99.95",
-    executedAt: 2,
+  const { acknowledgedOrder, fill } = createLostAcknowledgementCanonicalEvidence({
+    pendingOrder,
   })
   harness.setCanonicalOrderLookup({ order: acknowledgedOrder })
   harness.setAcknowledgedOrder({
@@ -7484,8 +7734,8 @@ test("does not clear an independently durable strategy pause when a recovery can
 })
 
 
-test("processes recovery-time user-data cancellation facts without broker cancel or replacement calls", async () => {
-  const makeOrder = ({ status }) => new CanonicalOrder({
+function createRecoveredStreamCancellationOrder({ status } = {}) {
+  return new CanonicalOrder({
     clientOrderId: "recovered-stream-cancel",
     brokerOrderId: "broker-recovered-stream-cancel",
     market,
@@ -7493,25 +7743,29 @@ test("processes recovery-time user-data cancellation facts without broker cancel
     type: "LIMIT",
     limitPrice: new Money({
       amount: "100",
-      asset: quoteAsset
+      asset: quoteAsset,
     }),
     originalQuantity: new Quantity({
       amount: "1",
-      asset: baseAsset
+      asset: baseAsset,
     }),
     executedQuantity: new Quantity({
       amount: "0",
-      asset: baseAsset
+      asset: baseAsset,
     }),
     status,
     createdAt: 1,
     acknowledgedAt: 1,
     updatedAt: 1,
   })
+}
+
+test("processes recovery-time user-data cancellation facts without broker cancel or replacement calls", async () => {
+
   const harness = await createHarness({
     initialBook: false,
     initialState: {
-      orderRegistry: new OrderRegistry({ orders: [makeOrder({ status: "UNKNOWN" })] }),
+      orderRegistry: new OrderRegistry({ orders: [createRecoveredStreamCancellationOrder({ status: "UNKNOWN" })] }),
       pausedMarkets: new Set(["DOGEUSDT"]),
       recoveryManagedPausedMarkets: new Set(["DOGEUSDT"]),
       recoveryManagedCancellationClientOrderIds: new Set(["recovered-stream-cancel"]),
@@ -7521,7 +7775,7 @@ test("processes recovery-time user-data cancellation facts without broker cancel
 
   const result = await harness.engine.processUserDataEvent({
     recoveryMode: true,
-    event: { executedOrder: makeOrder({ status: "CANCELED" }) },
+    event: { executedOrder: createRecoveredStreamCancellationOrder({ status: "CANCELED" }) },
   })
 
   assert.equal(result.ok, true, result.errors?.[0]?.message)
@@ -7533,12 +7787,8 @@ test("processes recovery-time user-data cancellation facts without broker cancel
 })
 
 
-test("keeps a recovery pause until every same-market cancel/replace order is canonically resolved", async () => {
-  const makeOrder = ({
-    clientOrderId,
-    brokerOrderId,
-    status
-  }) => new CanonicalOrder({
+function createRecoveryPauseOrder({ clientOrderId, brokerOrderId, status } = {}) {
+  return new CanonicalOrder({
     clientOrderId,
     brokerOrderId,
     market,
@@ -7546,34 +7796,37 @@ test("keeps a recovery pause until every same-market cancel/replace order is can
     type: "LIMIT",
     limitPrice: new Money({
       amount: "100",
-      asset: quoteAsset
+      asset: quoteAsset,
     }),
     originalQuantity: new Quantity({
       amount: "1",
-      asset: baseAsset
+      asset: baseAsset,
     }),
     executedQuantity: new Quantity({
       amount: "0",
-      asset: baseAsset
+      asset: baseAsset,
     }),
     status,
     createdAt: 1,
     acknowledgedAt: 1,
     updatedAt: 1,
   })
+}
+
+test("keeps a recovery pause until every same-market cancel/replace order is canonically resolved", async () => {
   const ownedOrders = [
-    makeOrder({
+    createRecoveryPauseOrder({
       clientOrderId: "recovered-sell-one",
       brokerOrderId: "broker-sell-one",
       status: "UNKNOWN"
     }),
-    makeOrder({
+    createRecoveryPauseOrder({
       clientOrderId: "recovered-sell-two",
       brokerOrderId: "broker-sell-two",
       status: "UNKNOWN"
     }),
   ]
-  const canceledOrders = ownedOrders.map((order) => makeOrder({
+  const canceledOrders = ownedOrders.map((order) => createRecoveryPauseOrder({
     clientOrderId: order.clientOrderId,
     brokerOrderId: order.brokerOrderId,
     status: "CANCELED",
@@ -8289,10 +8542,13 @@ function createRecoveryModeOrder({ clientOrderId, brokerOrderId, side, price, qu
   })
 }
 
-function createRecoveryModeBuyFillFixture() {
-  const initialPosition = new Position({ positionId: createPositionId({ marketId: market.id,
-strategyId: StrategyId.COIN_GRABBER }),
-strategyId: StrategyId.COIN_GRABBER,
+function createRecoveryModeInitialAccountingFixture() {
+  const initialPosition = new Position({
+    positionId: createPositionId({
+      marketId: market.id,
+      strategyId: StrategyId.COIN_GRABBER,
+    }),
+    strategyId: StrategyId.COIN_GRABBER,
     market,
     baseQuantity: new Quantity({
       amount: "2",
@@ -8307,13 +8563,16 @@ strategyId: StrategyId.COIN_GRABBER,
       asset: quoteAsset,
     }),
   })
-  const initialPortfolio = new Portfolio({
-    positions: [initialPosition],
-  })
-  const initialRecoveryLedger = new RecoveryLedger({
-    market,
-    buyCost: "100",
-  })
+  return {
+    initialPortfolio: new Portfolio({ positions: [initialPosition] }),
+    initialRecoveryLedger: new RecoveryLedger({
+      market,
+      buyCost: "100",
+    }),
+  }
+}
+
+function createRecoveryModeOrderFixture() {
   const recoverySellOrder = createRecoveryModeOrder({
     clientOrderId: "recovery-sell-during-reconnect",
     brokerOrderId: "broker-recovery-sell-during-reconnect",
@@ -8330,6 +8589,13 @@ strategyId: StrategyId.COIN_GRABBER,
     quantity: "1",
     status: "OPEN",
   })
+  return {
+    recoverySellOrder,
+    standingBuyOrder,
+  }
+}
+
+function createRecoveryModeFilledBuyEvidence({ standingBuyOrder } = {}) {
   const filledStandingBuyOrder = createRecoveryModeOrder({
     clientOrderId: standingBuyOrder.clientOrderId,
     brokerOrderId: standingBuyOrder.brokerOrderId,
@@ -8359,12 +8625,21 @@ strategyId: StrategyId.COIN_GRABBER,
     commissionStatus: "COMPLETE",
   })
   return {
-    initialPortfolio,
-    initialRecoveryLedger,
-    recoverySellOrder,
-    standingBuyOrder,
     filledStandingBuyOrder,
     recoveredBuyFill,
+  }
+}
+
+function createRecoveryModeBuyFillFixture() {
+  const accounting = createRecoveryModeInitialAccountingFixture()
+  const orders = createRecoveryModeOrderFixture()
+  const evidence = createRecoveryModeFilledBuyEvidence({
+    standingBuyOrder: orders.standingBuyOrder,
+  })
+  return {
+    ...accounting,
+    ...orders,
+    ...evidence,
   }
 }
 
@@ -8410,6 +8685,34 @@ test("defers a recovered BUY fill evaluation until application recovery is ackno
 })
 
 
+function configureRestFillTimeoutRetryBroker({ broker, buyOrder, historyOrder, fill, timeout } = {}) {
+  let fillHistoryReads = 0
+  broker.getOpenOrders = async () => ({
+    ok: true,
+    data: [makeOpenOrder({
+      order: buyOrder,
+      executedQuantity: "0.2",
+    })],
+  })
+  broker.getCanonicalOrderHistory = async () => ({
+    ok: true,
+    data: [historyOrder],
+  })
+  broker.getFills = async () => {
+    fillHistoryReads += 1
+    return fillHistoryReads === 1
+      ? {
+        ok: false,
+        errors: [timeout],
+      }
+      : {
+        ok: true,
+        data: [fill],
+      }
+  }
+  return () => fillHistoryReads
+}
+
 async function createRestFillTimeoutRetryScenario() {
   const {
     engine,
@@ -8444,37 +8747,20 @@ async function createRestFillTimeoutRetryScenario() {
     name: "RpcTimeoutError",
     code: "RPC_TIMEOUT",
   })
-  let fillHistoryReads = 0
-  broker.getOpenOrders = async () => ({
-    ok: true,
-    data: [makeOpenOrder({
-      order: buyOrder,
-      executedQuantity: "0.2",
-    })],
+  const getFillHistoryReads = configureRestFillTimeoutRetryBroker({
+    broker,
+    buyOrder,
+    historyOrder,
+    fill,
+    timeout,
   })
-  broker.getCanonicalOrderHistory = async () => ({
-    ok: true,
-    data: [historyOrder],
-  })
-  broker.getFills = async () => {
-    fillHistoryReads += 1
-    return fillHistoryReads === 1
-      ? {
-        ok: false,
-        errors: [timeout],
-      }
-      : {
-        ok: true,
-        data: [fill],
-      }
-  }
   return {
     engine,
     buyOrder,
     fill,
     accountedFills,
     pauses,
-    getFillHistoryReads: () => fillHistoryReads,
+    getFillHistoryReads,
   }
 }
 
@@ -8517,6 +8803,32 @@ test("does not apply partial REST reconciliation after a fill-history timeout an
   })
 })
 
+function createMalformedRestEnvelopeOrder({ status } = {}) {
+  return new CanonicalOrder({
+    clientOrderId: "malformed-rest-envelope-owned-order",
+    brokerOrderId: "broker-malformed-rest-envelope-owned-order",
+    market,
+    side: "BUY",
+    type: "LIMIT",
+    limitPrice: new Money({
+      amount: "100",
+      asset: quoteAsset,
+    }),
+    originalQuantity: new Quantity({
+      amount: "1",
+      asset: baseAsset,
+    }),
+    executedQuantity: new Quantity({
+      amount: "0",
+      asset: baseAsset,
+    }),
+    status,
+    createdAt: 1,
+    acknowledgedAt: 1,
+    updatedAt: 1,
+  })
+}
+
 async function createMalformedRestEnvelopeFixture({
   openOrdersResult = {
     ok: true,
@@ -8528,31 +8840,8 @@ async function createMalformedRestEnvelopeFixture({
     data: []
   },
 } = {}) {
-  const makeCanonicalOrder = ({ status }) => new CanonicalOrder({
-    clientOrderId: "malformed-rest-envelope-owned-order",
-    brokerOrderId: "broker-malformed-rest-envelope-owned-order",
-    market,
-    side: "BUY",
-    type: "LIMIT",
-    limitPrice: new Money({
-      amount: "100",
-      asset: quoteAsset
-    }),
-    originalQuantity: new Quantity({
-      amount: "1",
-      asset: baseAsset
-    }),
-    executedQuantity: new Quantity({
-      amount: "0",
-      asset: baseAsset
-    }),
-    status,
-    createdAt: 1,
-    acknowledgedAt: 1,
-    updatedAt: 1,
-  })
-  const ownedOrder = makeCanonicalOrder({ status: "UNKNOWN" })
-  const canonicalHistoryOrder = makeCanonicalOrder({ status: "CANCELED" })
+  const ownedOrder = createMalformedRestEnvelopeOrder({ status: "UNKNOWN" })
+  const canonicalHistoryOrder = createMalformedRestEnvelopeOrder({ status: "CANCELED" })
   const brokerReadCounts = {
     openOrders: 0,
     canonicalOrderHistory: 0,
@@ -8590,28 +8879,11 @@ async function createMalformedRestEnvelopeFixture({
   }
 }
 
-function assertMalformedRestEnvelopeFailsClosed({
-  fixture,
-  result,
-  scenario,
-  expectedError,
-  expectedCanonicalOrderHistoryReads,
-  expectedFillHistoryReads,
-}) {
-  const {
-    harness,
-    ownedOrder,
-    brokerReadCounts
-  } = fixture
+function assertMalformedRestEnvelopeStateUnchanged({ harness, ownedOrder, result, scenario }) {
   assert.equal(
     result.ok,
     false,
     `${scenario}: malformed broker REST data must fail owned-order reconciliation rather than being accepted.`,
-  )
-  assert.match(
-    result.errors?.[0]?.message ?? "",
-    expectedError,
-    `${scenario}: the failure must identify the malformed REST snapshot stage.`,
   )
   assert.deepEqual(
     harness.accountedFills,
@@ -8623,13 +8895,15 @@ function assertMalformedRestEnvelopeFailsClosed({
     ["DOGEUSDT"],
     `${scenario}: the affected market must remain paused after malformed authoritative REST data.`,
   )
+  const reconciledOrder = harness.engine.getOrders().find((order) =>
+    order.brokerOrderId === ownedOrder.brokerOrderId)
   assert.equal(
-    harness.engine.getOrders().find((order) => order.brokerOrderId === ownedOrder.brokerOrderId).status,
+    reconciledOrder.status,
     "UNKNOWN",
     `${scenario}: malformed REST data must not advance the registered owned order from UNKNOWN.`,
   )
   assert.equal(
-    harness.engine.getOrders().find((order) => order.brokerOrderId === ownedOrder.brokerOrderId).executedQuantity.amount,
+    reconciledOrder.executedQuantity.amount,
     "0",
     `${scenario}: malformed REST data must not apply a partial or inferred executed quantity.`,
   )
@@ -8643,6 +8917,14 @@ function assertMalformedRestEnvelopeFailsClosed({
     [],
     `${scenario}: reconciliation failure must not submit a replacement or any other exchange order.`,
   )
+}
+
+function assertMalformedRestEnvelopeReadOrder({
+  brokerReadCounts,
+  scenario,
+  expectedCanonicalOrderHistoryReads,
+  expectedFillHistoryReads,
+}) {
   assert.equal(
     brokerReadCounts.openOrders,
     1,
@@ -8658,6 +8940,33 @@ function assertMalformedRestEnvelopeFailsClosed({
     expectedFillHistoryReads,
     `${scenario}: fill history must be read only after canonical order history validation.`,
   )
+}
+
+function assertMalformedRestEnvelopeFailsClosed({
+  fixture,
+  result,
+  scenario,
+  expectedError,
+  expectedCanonicalOrderHistoryReads,
+  expectedFillHistoryReads,
+}) {
+  assert.match(
+    result.errors?.[0]?.message ?? "",
+    expectedError,
+    `${scenario}: the failure must identify the malformed REST snapshot stage.`,
+  )
+  assertMalformedRestEnvelopeStateUnchanged({
+    harness: fixture.harness,
+    ownedOrder: fixture.ownedOrder,
+    result,
+    scenario,
+  })
+  assertMalformedRestEnvelopeReadOrder({
+    brokerReadCounts: fixture.brokerReadCounts,
+    scenario,
+    expectedCanonicalOrderHistoryReads,
+    expectedFillHistoryReads,
+  })
 }
 
 const createUnknownSubmissionHarness = async () => {
@@ -10266,46 +10575,55 @@ test("an unconfirmed volatility BUY cancellation stays protected without blockin
   assert.deepEqual(harness.pauses, [], "An uncertain volatility cancellation must retain the dedicated protection state, not silently become a full strategy pause.")
 })
 
-test("explicit recovery SELL intent may submit while volatility protection blocks ordinary BUYs", async () => {
-  const position = new Position({ positionId: createPositionId({ marketId: market.id,
-strategyId: StrategyId.COIN_GRABBER }),
-strategyId: StrategyId.COIN_GRABBER,
+function createVolatilityProtectedRecoveryFixture() {
+  const position = new Position({
+    positionId: createPositionId({
+      marketId: market.id,
+      strategyId: StrategyId.COIN_GRABBER,
+    }),
+    strategyId: StrategyId.COIN_GRABBER,
     market,
     baseQuantity: new Quantity({
       amount: "100",
-      asset: baseAsset
+      asset: baseAsset,
     }),
     freeBaseQuantity: new Quantity({
       amount: "0",
-      asset: baseAsset
+      asset: baseAsset,
     }),
     quoteNetCashFlow: new Money({
       amount: "-10",
-      asset: quoteAsset
+      asset: quoteAsset,
     }),
     spent: new Money({
       amount: "10",
-      asset: quoteAsset
+      asset: quoteAsset,
     }),
   })
-  const portfolio = new Portfolio({ positions: [position] })
-  const ledger = new RecoveryLedger({
-    market,
-    buyCost: "10"
-  })
-  const unavailable = {
-    ok: true,
-    data: {
-      status: {
-      isReady: false,
-      reason: "STALE_STREAM"
-    },
-      metrics: null
+  return {
+    portfolio: new Portfolio({ positions: [position] }),
+    recoveryLedger: new RecoveryLedger({
+      market,
+      buyCost: "10",
+    }),
+    unavailable: {
+      ok: true,
+      data: {
+        status: {
+          isReady: false,
+          reason: "STALE_STREAM",
+        },
+        metrics: null,
+      },
     },
   }
+}
+
+test("explicit recovery SELL intent may submit while volatility protection blocks ordinary BUYs", async () => {
+  const { portfolio, recoveryLedger, unavailable } = createVolatilityProtectedRecoveryFixture()
   const harness = await createHarness({
     initialPortfolio: portfolio,
-    initialRecoveryLedger: ledger,
+    initialRecoveryLedger: recoveryLedger,
     baseFreeBalance: "100",
     getVolatilityData: () => unavailable,
   })
@@ -10326,43 +10644,10 @@ strategyId: StrategyId.COIN_GRABBER,
 
 
 test("volatility protection rejects a SELL that lacks explicit recovery purpose", async () => {
-  const position = new Position({ positionId: createPositionId({ marketId: market.id,
-strategyId: StrategyId.COIN_GRABBER }),
-strategyId: StrategyId.COIN_GRABBER,
-    market,
-    baseQuantity: new Quantity({
-      amount: "100",
-      asset: baseAsset
-    }),
-    freeBaseQuantity: new Quantity({
-      amount: "0",
-      asset: baseAsset
-    }),
-    quoteNetCashFlow: new Money({
-      amount: "-10",
-      asset: quoteAsset
-    }),
-    spent: new Money({
-      amount: "10",
-      asset: quoteAsset
-    }),
-  })
-  const unavailable = {
-    ok: true,
-    data: {
-      status: {
-      isReady: false,
-      reason: "STALE_STREAM"
-    },
-      metrics: null
-    },
-  }
+  const { portfolio, recoveryLedger, unavailable } = createVolatilityProtectedRecoveryFixture()
   const harness = await createHarness({
-    initialPortfolio: new Portfolio({ positions: [position] }),
-    initialRecoveryLedger: new RecoveryLedger({
-      market,
-      buyCost: "10"
-    }),
+    initialPortfolio: portfolio,
+    initialRecoveryLedger: recoveryLedger,
     baseFreeBalance: "100",
     getVolatilityData: () => unavailable,
     strategyPolicy: {
@@ -10396,16 +10681,36 @@ strategyId: StrategyId.COIN_GRABBER,
 })
 
 
-test("volatility cancellation is isolated to the affected trading pair", async () => {
+function createHighVolatilitySnapshot() {
+  return {
+    ok: true,
+    data: {
+      status: {
+        isReady: true,
+        reason: null,
+        lastClosedCandleOpenTime: 60_000,
+      },
+      metrics: {
+        openTime: 60_000,
+        atr: "1",
+        natr: "2",
+        referenceNatr: "1",
+        volatilityRatio: "2",
+      },
+    },
+  }
+}
+
+function createMultiMarketVolatilityFixture() {
   const zroBaseAsset = new Asset({
     id: "asset-zro",
-    code: "ZRO"
+    code: "ZRO",
   })
   const zroMarket = new Market({
     venue: "binance",
     symbol: "ZROUSDT",
     baseAsset: zroBaseAsset,
-    quoteAsset
+    quoteAsset,
   })
   const dogeBuy = makeShutdownOrder({
     side: "BUY",
@@ -10420,38 +10725,31 @@ test("volatility cancellation is isolated to the affected trading pair", async (
     type: "LIMIT",
     limitPrice: new Money({
       amount: "1",
-      asset: quoteAsset
+      asset: quoteAsset,
     }),
     originalQuantity: new Quantity({
       amount: "1",
-      asset: zroBaseAsset
+      asset: zroBaseAsset,
     }),
     executedQuantity: new Quantity({
       amount: "0",
-      asset: zroBaseAsset
+      asset: zroBaseAsset,
     }),
     status: "OPEN",
     createdAt: 1,
     acknowledgedAt: 1,
     updatedAt: 1,
   })
-  const highVolatility = {
-    ok: true,
-    data: {
-      status: {
-        isReady: true,
-        reason: null,
-        lastClosedCandleOpenTime: 60_000
-      },
-      metrics: {
-        openTime: 60_000,
-        atr: "1",
-        natr: "2",
-        referenceNatr: "1",
-        volatilityRatio: "2"
-      },
-    },
+  const highVolatility = createHighVolatilitySnapshot()
+  return {
+    dogeBuy,
+    zroBuy,
+    highVolatility,
   }
+}
+
+test("volatility cancellation is isolated to the affected trading pair", async () => {
+  const { dogeBuy, zroBuy, highVolatility } = createMultiMarketVolatilityFixture()
   const harness = await createHarness({
     initialState: { orderRegistry: new OrderRegistry({ orders: [dogeBuy, zroBuy] }) },
     eventPublisher: { publish: () => ({ ok: true }) },
@@ -10627,6 +10925,35 @@ test("rejects a negative-zero market-book timestamp", () => {
 
 // Restored pre-refactor reconciliation and strategy-policy regressions.
 
+function configureStreamDuringRestReadBroker({
+  broker,
+  buyOrder,
+  partialOrder,
+  recoveredFill,
+  fillsGate,
+  signalFillsStarted,
+} = {}) {
+  broker.getOpenOrders = async () => ({
+    ok: true,
+    data: [makeOpenOrder({
+      order: buyOrder,
+      executedQuantity: "0",
+    })],
+  })
+  broker.getCanonicalOrderHistory = async () => ({
+    ok: true,
+    data: [partialOrder],
+  })
+  broker.getFills = async () => {
+    signalFillsStarted()
+    await fillsGate.promise
+    return {
+      ok: true,
+      data: [recoveredFill],
+    }
+  }
+}
+
 test("processes stream fills received during REST reads before applying the REST snapshot", async () => {
   let releaseFills
   let signalFillsStarted
@@ -10656,19 +10983,14 @@ test("processes stream fills received during REST reads before applying the REST
     executedQuantity: "0.2",
     updatedAt: 3,
   })
-  broker.getOpenOrders = async () => ({
-    ok: true,
-    data: [makeOpenOrder({ order: buyOrder,
-executedQuantity: "0" })],
+  configureStreamDuringRestReadBroker({
+    broker,
+    buyOrder,
+    partialOrder,
+    recoveredFill,
+    fillsGate,
+    signalFillsStarted,
   })
-  broker.getCanonicalOrderHistory = async () => ({ ok: true,
-data: [partialOrder] })
-  broker.getFills = async () => {
-    signalFillsStarted()
-    await fillsGate.promise
-    return { ok: true,
-data: [recoveredFill] }
-  }
 
   const reconciliation = engine.reconcileOwnedOrders()
   await fillsStarted
@@ -10724,6 +11046,31 @@ timestamp: 1 },
   assert.equal(orders.length, 0)
 })
 
+function assertExternalOrderLocalDeferral({ result, harness, flushCount, journalEvents } = {}) {
+  assert.equal(result.ok, true)
+  assert.deepEqual(harness.orders, [],
+    "A locally deferred submission must never call the broker placeOrder port.")
+  assert.equal(harness.engine.getOrders().length, 0,
+    "The pending registry entry must be removed once the local no-broker deferral is established.")
+  assert.equal(flushCount, 1,
+    "Only the mandatory submission-request barrier may flush; deferral evidence must not add blocking Journal I/O.")
+  assert.deepEqual(harness.engine.getRecoveryIntents().deferredEvaluations, ["DOGEUSDT"])
+  const requested = journalEvents.find((event) => event.name === "order.submission_requested")
+  assert.ok(requested,
+    "The original pending request must be durably recorded before the final submission gate is rechecked.")
+  const deferred = journalEvents.find((event) => event.name === "order.submission_deferred")
+  assert.ok(deferred,
+    "A best-effort terminal deferral event must preserve the original request outcome when Journal publication succeeds.")
+  assert.equal(deferred.data.clientOrderId, requested.data.clientOrderId,
+    "The deferral outcome must preserve the exact original client-order identity.")
+  assert.equal(deferred.data.reason, "UNOWNED_OPEN_ORDERS_PRESENT",
+    "The deferral must carry a bounded safe reason, not raw diagnostics.")
+  assert.equal(journalEvents.some((event) => event.name === "order.submitted"), false,
+    "A local deferral must not fabricate a broker acknowledgement.")
+  assert.equal(journalEvents.some((event) => event.name === "order.submission_failed"), false,
+    "A local deferral must not be misclassified as a broker rejection or ambiguous outcome.")
+}
+
 test("rechecks external-order ownership after the durable order intent and records a terminal local deferral", async () => {
   let hasExternalOrder = false
   let flushCount = 0
@@ -10756,35 +11103,16 @@ test("rechecks external-order ownership after the durable order intent and recor
     },
   })
 
-  assert.equal(result.ok, true)
-  assert.deepEqual(harness.orders, [],
-    "A locally deferred submission must never call the broker placeOrder port.")
-  assert.equal(harness.engine.getOrders().length, 0,
-    "The pending registry entry must be removed once the local no-broker deferral is established.")
-  assert.equal(flushCount, 1,
-    "Only the mandatory submission-request barrier may flush; deferral evidence must not add blocking Journal I/O.")
-  assert.deepEqual(harness.engine.getRecoveryIntents().deferredEvaluations, ["DOGEUSDT"])
-  assert.ok(journalEvents.some((event) => event.name === "order.submission_requested"),
-    "The original pending request must be durably recorded before the final submission gate is rechecked.")
-  const deferred = journalEvents.find((event) => event.name === "order.submission_deferred")
-  assert.ok(deferred, "A best-effort terminal deferral event must preserve the original request outcome when Journal publication succeeds.")
-  assert.equal(deferred.data.clientOrderId, journalEvents.find((event) =>
-    event.name === "order.submission_requested").data.clientOrderId,
-  "The deferral outcome must preserve the exact original client-order identity.")
-  assert.equal(deferred.data.reason, "UNOWNED_OPEN_ORDERS_PRESENT",
-    "The deferral must carry a bounded safe reason, not raw diagnostics.")
-  assert.equal(journalEvents.some((event) => event.name === "order.submitted"), false,
-    "A local deferral must not fabricate a broker acknowledgement.")
-  assert.equal(journalEvents.some((event) => event.name === "order.submission_failed"), false,
-    "A local deferral must not be misclassified as a broker rejection or ambiguous outcome.")
+  assertExternalOrderLocalDeferral({
+    result,
+    harness,
+    flushCount,
+    journalEvents,
+  })
 })
 
-test("keeps local deferral processing non-blocking when best-effort Journal publication fails", async () => {
-  let hasExternalOrder = false
-  let flushCount = 0
-  const journalEvents = []
-  const reportedFailures = []
-  const eventPublisher = {
+function createFailingDeferralEventPublisher({ state, journalEvents, reportedFailures } = {}) {
+  const publisher = {
     reportFailure: ({ event, error }) => {
       reportedFailures.push({
         eventName: event?.name,
@@ -10794,7 +11122,7 @@ test("keeps local deferral processing non-blocking when best-effort Journal publ
     publish: (event) => {
       if (event.name === "order.submission_deferred") {
         const error = new Error("deferral evidence publication failed")
-        eventPublisher.reportFailure({
+        publisher.reportFailure({
           event,
           error,
         })
@@ -10807,17 +11135,55 @@ test("keeps local deferral processing non-blocking when best-effort Journal publ
       return { ok: true }
     },
     flush: async () => {
-      flushCount += 1
-      hasExternalOrder = true
+      state.flushCount += 1
+      state.hasExternalOrder = true
       return {
         ok: true,
         durable: true,
       }
     },
   }
+  return publisher
+}
+
+function assertFailedDeferralPublicationRemainsNonBlocking({
+  result,
+  harness,
+  state,
+  journalEvents,
+  reportedFailures,
+} = {}) {
+  assert.equal(result.ok, true,
+    "Loss of optional terminal deferral evidence must not fail market processing after the broker call has been withheld.")
+  assert.equal(harness.orders.length, 0,
+    "A local deferral must never call the broker placement port even when its optional Journal event is lost.")
+  assert.equal(harness.engine.getOrders().length, 0,
+    "A locally unsubmitted PENDING order must be removed without waiting for optional Journal persistence.")
+  assert.equal(state.flushCount, 1,
+    "The deferral path must not add a second blocking Journal flush after the durable submission request.")
+  assert.ok(journalEvents.some((event) => event.name === "order.submission_requested"),
+    "The original order request must retain its existing durable-before-broker barrier.")
+  assert.equal(journalEvents.some((event) => event.name === "order.submission_deferred"), false,
+    "A failed best-effort publication must not be represented as persisted terminal evidence.")
+  assert.deepEqual(reportedFailures.map(({ eventName }) => eventName), ["order.submission_deferred"],
+    "A lost deferral event must remain observable as a Journal evidence gap.")
+}
+
+test("keeps local deferral processing non-blocking when best-effort Journal publication fails", async () => {
+  const state = {
+    hasExternalOrder: false,
+    flushCount: 0,
+  }
+  const journalEvents = []
+  const reportedFailures = []
+  const eventPublisher = createFailingDeferralEventPublisher({
+    state,
+    journalEvents,
+    reportedFailures,
+  })
   const harness = await createHarness({
     appConfig: withExternalOrdersPolicy("block"),
-    hasUnownedOpenOrdersForSymbol: () => hasExternalOrder,
+    hasUnownedOpenOrdersForSymbol: () => state.hasExternalOrder,
     eventPublisher,
   })
 
@@ -10830,20 +11196,13 @@ test("keeps local deferral processing non-blocking when best-effort Journal publ
     },
   })
 
-  assert.equal(result.ok, true,
-    "Loss of optional terminal deferral evidence must not fail market processing after the broker call has been withheld.")
-  assert.equal(harness.orders.length, 0,
-    "A local deferral must never call the broker placement port even when its optional Journal event is lost.")
-  assert.equal(harness.engine.getOrders().length, 0,
-    "A locally unsubmitted PENDING order must be removed without waiting for optional Journal persistence.")
-  assert.equal(flushCount, 1,
-    "The deferral path must not add a second blocking Journal flush after the durable submission request.")
-  assert.ok(journalEvents.some((event) => event.name === "order.submission_requested"),
-    "The original order request must retain its existing durable-before-broker barrier.")
-  assert.equal(journalEvents.some((event) => event.name === "order.submission_deferred"), false,
-    "A failed best-effort publication must not be represented as persisted terminal evidence.")
-  assert.deepEqual(reportedFailures.map(({ eventName }) => eventName), ["order.submission_deferred"],
-    "A lost deferral event must remain observable as a Journal evidence gap.")
+  assertFailedDeferralPublicationRemainsNonBlocking({
+    result,
+    harness,
+    state,
+    journalEvents,
+    reportedFailures,
+  })
 })
 
 
@@ -11253,24 +11612,7 @@ function createLateSellScenarioAccounting({ portfolio, recoveryLedger } = {}) {
   }
 }
 
-async function prepareLateSellShutdownScenario({ fillFraction, cancelUpdatedAt } = {}) {
-  const seeded = makeSeededRecoveryState()
-  let shutdownStarted = false
-  let cancelSellExecutedQuantity = "0"
-  const accounting = createLateSellScenarioAccounting({
-    portfolio: seeded.portfolio,
-    recoveryLedger: seeded.recoveryLedger,
-  })
-  const harness = await createHarness({
-    initialPortfolio: seeded.portfolio,
-    initialRecoveryLedger: seeded.recoveryLedger,
-    ...accounting,
-    baseFreeBalance: "1",
-    cancelExecutedQuantity: ({ order }) =>
-      order.side === "SELL" ? cancelSellExecutedQuantity : "0",
-    cancelUpdatedAt,
-    isStopping: () => shutdownStarted,
-  })
+async function establishLateSellShutdownSafety({ harness, shutdownState } = {}) {
   await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
     priceEvent: {
@@ -11279,9 +11621,8 @@ async function prepareLateSellShutdownScenario({ fillFraction, cancelUpdatedAt }
       timestamp: 1,
     },
   })
-
   harness.engine.beginShutdown()
-  shutdownStarted = true
+  shutdownState.started = true
   await harness.engine.cancelOwnedBuyOrdersForShutdown()
   assertNoShutdownSafetyPauses({ harness })
   const initialCoverage = await harness.engine.auditShutdownRecoverySellCoverage()
@@ -11295,6 +11636,30 @@ async function prepareLateSellShutdownScenario({ fillFraction, cancelUpdatedAt }
     "SAFE_TO_SHUTDOWN",
     `Initial shutdown safety blockers: ${JSON.stringify(initialSafety.data.markets[0].blockers)}. Pause callbacks: ${JSON.stringify(harness.pauses)}`,
   )
+}
+
+async function prepareLateSellShutdownScenario({ fillFraction, cancelUpdatedAt } = {}) {
+  const seeded = makeSeededRecoveryState()
+  const shutdownState = { started: false }
+  let cancelSellExecutedQuantity = "0"
+  const accounting = createLateSellScenarioAccounting({
+    portfolio: seeded.portfolio,
+    recoveryLedger: seeded.recoveryLedger,
+  })
+  const harness = await createHarness({
+    initialPortfolio: seeded.portfolio,
+    initialRecoveryLedger: seeded.recoveryLedger,
+    ...accounting,
+    baseFreeBalance: "1",
+    cancelExecutedQuantity: ({ order }) =>
+      order.side === "SELL" ? cancelSellExecutedQuantity : "0",
+    cancelUpdatedAt,
+    isStopping: () => shutdownState.started,
+  })
+  await establishLateSellShutdownSafety({
+    harness,
+    shutdownState,
+  })
 
   const sellOrder = harness.engine.getOrders().find((order) =>
     order.side === "SELL" && ["OPEN", "PARTIALLY_FILLED"].includes(order.status))

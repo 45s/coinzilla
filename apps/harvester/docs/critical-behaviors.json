@@ -5,6 +5,7 @@
     "src/domain/portfolio/",
     "src/domain/strategies/conservative/",
     "src/use-cases/conservative-trading-engine.js",
+    "src/use-cases/create-submission-gate.js",
     "src/use-cases/restore-harvester-operational-state.js",
     "src/bootstrap/account/",
     "src/bootstrap/start-harvester.js",
@@ -375,6 +376,7 @@
       "sourceModules": [
         "src/domain/strategies/conservative/strategy.js",
         "src/use-cases/conservative-trading-engine.js",
+        "src/use-cases/create-submission-gate.js",
         "src/domain/strategies/conservative/state-predicates.js"
       ],
       "integrationRequired": true,
@@ -403,12 +405,58 @@
           "path": "test/replays/doge-zro-conservative-replay.test.js",
           "name": "accounts partial recovery SELL executions and completes only after the terminal fill",
           "kind": "integration"
+        },
+        {
+          "path": "src/use-cases/create-submission-gate.test.js",
+          "name": "blocks a second Conservative recovery SELL while its Position has an active order reservation",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/create-submission-gate.test.js",
+          "name": "allows the current PENDING recovery SELL through its post-registration gate recheck",
+          "kind": "normal"
+        },
+        {
+          "path": "src/use-cases/create-submission-gate.test.js",
+          "name": "does not treat a Recovery Seller order as a Conservative Position reservation",
+          "kind": "normal"
+        },
+        {
+          "path": "src/use-cases/create-submission-gate.test.js",
+          "name": "releases the Conservative recovery SELL reservation after terminal order transitions",
+          "kind": "normal"
+        },
+        {
+          "path": "src/use-cases/create-submission-gate.test.js",
+          "name": "blocks a Conservative-owned active SELL when its persisted Position identity is stale or absent",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/conservative-submission-durability.integration.test.js",
+          "name": "does not submit repeated recovery SELL intents for one active Conservative Position",
+          "kind": "integration"
+        },
+        {
+          "path": "src/use-cases/conservative-submission-durability.integration.test.js",
+          "name": "retains a PENDING recovery SELL reservation while its broker acknowledgement is delayed",
+          "kind": "integration"
+        },
+        {
+          "path": "src/use-cases/conservative-submission-durability.integration.test.js",
+          "name": "retains an active recovery SELL across recoverable market-data failures",
+          "kind": "integration"
+        },
+        {
+          "path": "src/use-cases/conservative-submission-durability.integration.test.js",
+          "name": "keeps the active recovery SELL and pauses safely when a later strategy evaluation fails",
+          "kind": "failure"
         }
       ],
       "runtimeStatus": "active",
       "invariants": [
         "While recovery capital or an active Position exists, prohibit new/trailing BUY; recovery SELL must be submitted and reconciled first.",
-        "An unresolved order or failed recovery SELL path keeps the market paused and blocks subsequent BUY submission."
+        "An unresolved order or failed recovery SELL path keeps the market paused and blocks subsequent BUY submission.",
+        "At most one active Conservative recovery SELL may reserve a Position; PENDING, OPEN, PARTIALLY_FILLED and UNKNOWN orders hold that reservation until a canonical terminal transition."
       ]
     },
     {
@@ -526,7 +574,8 @@
       "runtimeStatus": "active",
       "invariants": [
         "Gate trading until configured-asset balances and account-wide open orders are captured and durably recorded; startup-snapshot orders are external to the current process and are never adopted.",
-        "Incomplete snapshots, ownership uncertainty, or balance/order discrepancies fail closed."
+        "Incomplete snapshots, ownership uncertainty, or balance/order discrepancies fail closed.",
+        "External open orders are unowned audit evidence and follow configured per-market policy: IGNORE permits scoped continuation; BLOCK blocks only the affected market. Audit readiness classification alone is not a global stop."
       ]
     },
     {
@@ -997,7 +1046,52 @@
         "Cancel only active BUY orders owned by the current process through the existing serialized cancellation and reconciliation transition.",
         "Reconcile cancellation-racing fills exactly once; unresolved or UNKNOWN orders keep the BUY gate active and raise a durable safety blocker.",
         "Keep Recovery Seller evaluation and only purpose-tagged RECOVERY_SELL submissions available; ordinary SELL and every BUY remain blocked.",
-        "Never cancel startup-snapshot, manual, external, or prior-process orders."
+        "Never cancel startup-snapshot, manual, external, or prior-process orders.",
+        "The RECOVERY_SELL exception applies only to this market-level strategy pause; an active ACCOUNT-scope blocker overrides it and blocks every side and purpose across all markets."
+      ]
+    },
+    {
+      "id": "ACCOUNT_SAFETY_BLOCKER_ADMISSION",
+      "title": "Account-scoped safety blockers close every strategy submission path",
+      "sourceModules": [
+        "src/use-cases/conservative-trading-engine.js",
+        "src/bootstrap/start-harvester.js"
+      ],
+      "integrationRequired": true,
+      "tests": [
+        {
+          "path": "src/use-cases/create-recovery-seller-stop-workflow.test.js",
+          "name": "closes account admission before awaiting durable STOP persistence",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/create-submission-gate.test.js",
+          "name": "blocks a BUY when a durable account-scoped safety blocker is active",
+          "kind": "normal"
+        },
+        {
+          "path": "src/use-cases/create-submission-gate.test.js",
+          "name": "an account safety blocker overrides every order path, including shutdown recovery SELL",
+          "kind": "failure"
+        },
+        {
+          "path": "src/bootstrap/user-data/subscribe-to-user-data.test.js",
+          "name": "rejects trading startup while an account-scoped safety blocker is active",
+          "kind": "failure"
+        },
+        {
+          "path": "src/bootstrap/start-harvester.test.js",
+          "name": "restores a persisted account STOP and keeps a restarted account observation-only",
+          "kind": "integration"
+        }
+      ],
+      "runtimeStatus": "active",
+      "invariants": [
+        "An active ACCOUNT blocker prevents every strategy, symbol, side and purpose from reaching broker I/O, including shutdown Recovery Seller SELL.",
+        "The final admission gate reads current blocker state on every check; a runtime STOP closes admission before its durable append is awaited and remains closed on persistence failure.",
+        "A restored account blocker prevents trading readiness/activation; explicit durable resolution is required before admission can reopen.",
+        "Market-scoped ownership and strategy pauses remain scoped to the affected symbol; ADR-0008's Recovery Seller SELL exception never bypasses an account blocker.",
+        "External open orders are never adopted or cancelled by this gate; IGNORE and BLOCK retain their ADR-0004 per-market semantics."
       ]
     }
   ],
@@ -1770,6 +1864,24 @@
       "latestObserved": {
         "lines": 89.28,
         "branches": 77.65,
+        "functions": 100
+      }
+    },
+    {
+      "path": "src/use-cases/create-submission-gate.js",
+      "baseline": {
+        "lines": 90.67,
+        "branches": 92.22,
+        "functions": 100
+      },
+      "minimum": {
+        "lines": 90,
+        "branches": 90,
+        "functions": 95
+      },
+      "latestObserved": {
+        "lines": 90.54,
+        "branches": 92.22,
         "functions": 100
       }
     }

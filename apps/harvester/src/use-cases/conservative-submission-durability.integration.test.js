@@ -1,7 +1,8 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { Asset, Market, Money, Quantity, TradingRules } from "@coinzilla/entities"
+import { Asset, Fill, Market, Money, Quantity, TradingRules } from "@coinzilla/entities"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
+import { StrategyId } from "../domain/strategies/strategy-ids.js"
 import { RecoveryLedger } from "../domain/strategies/conservative/recovery-ledger.js"
 import { conservativeStrategyPolicy } from "../domain/strategies/conservative/strategy-policy.js"
 import { makeConservativeTradingEngine } from "./conservative-trading-engine.js"
@@ -90,19 +91,29 @@ const appConfig = {
   },
 }
 
-function createBrokerState({ calls }) {
+function createBrokerState({
+  calls,
+  baseFreeBalance = "0",
+  portfolioBaseQuantityBaseline = "0",
+  placeOrderGate,
+  deferOrderSide,
+  onPlaceOrderStarted,
+}) {
   return createHarnessBroker({
     market,
     baseAsset,
     quoteAsset,
     marketMetadata,
-    baseFreeBalance: "0",
+    baseFreeBalance,
     quoteFreeBalance: "1000",
     quoteCashFlowBaseline: "0",
-    portfolioBaseQuantityBaseline: "0",
+    portfolioBaseQuantityBaseline,
     additionalTrackedBaseQuantityBaseline: "0",
     committedQuoteBalanceBaseline: "0",
     committedBaseBalanceBaseline: "0",
+    placeOrderGate,
+    deferOrderSide,
+    onPlaceOrderStarted,
     onPlaceOrder: () => calls.push("broker"),
   })
 }
@@ -120,13 +131,23 @@ function createSubmissionCallbacks({ calls, intentResult, outcomeResult }) {
   }
 }
 
-function createEngineDependencies({ broker, brokerState, calls, intentResult, outcomeResult, includeCallbacks }) {
+function createEngineDependencies({
+  broker,
+  brokerState,
+  calls,
+  intentResult,
+  outcomeResult,
+  includeCallbacks,
+  strategyPolicy = conservativeStrategyPolicy,
+  portfolio = new Portfolio(),
+  recoveryLedger = RecoveryLedger.empty({ market }),
+}) {
   const dependencies = {
     broker,
-    strategyPolicy: conservativeStrategyPolicy,
+    strategyPolicy,
     appConfig,
-    getPortfolio: () => new Portfolio(),
-    getRecoveryLedger: () => RecoveryLedger.empty({ market }),
+    getPortfolio: () => portfolio,
+    getRecoveryLedger: () => recoveryLedger,
     getMarketMetadata: () => marketMetadata,
     getAccountSnapshot: () => brokerState.accountSnapshot,
     updateTradingAccounting: async () => ({
@@ -163,8 +184,28 @@ function createEngineDependencies({ broker, brokerState, calls, intentResult, ou
   }
 }
 
-function createEngine({ calls, intentResult, outcomeResult, includeCallbacks = true }) {
-  const brokerState = createBrokerState({ calls })
+function createEngine({
+  calls,
+  intentResult,
+  outcomeResult,
+  includeCallbacks = true,
+  strategyPolicy,
+  portfolio,
+  recoveryLedger,
+  baseFreeBalance,
+  portfolioBaseQuantityBaseline,
+  placeOrderGate,
+  deferOrderSide,
+  onPlaceOrderStarted,
+}) {
+  const brokerState = createBrokerState({
+    calls,
+    baseFreeBalance,
+    portfolioBaseQuantityBaseline,
+    placeOrderGate,
+    deferOrderSide,
+    onPlaceOrderStarted,
+  })
   const broker = {
     ...brokerState.broker,
     providerInstanceId: "binanceTestnet",
@@ -184,6 +225,9 @@ function createEngine({ calls, intentResult, outcomeResult, includeCallbacks = t
       data: { durable: true },
     },
     includeCallbacks,
+    strategyPolicy,
+    portfolio,
+    recoveryLedger,
   })
   const engine = makeConservativeTradingEngine(dependencies)
   return {
@@ -192,8 +236,75 @@ function createEngine({ calls, intentResult, outcomeResult, includeCallbacks = t
   }
 }
 
-async function submitFirstMarketDecision({ engine }) {
-  await engine.processBookTicker({
+function createSeededRecoveryState() {
+  const fill = new Fill({
+    tradeId: "recovery-sell-admission-seed-buy",
+    brokerOrderId: "recovery-sell-admission-seed-buy-order",
+    market,
+    side: "BUY",
+    price: new Money({
+      amount: "100",
+      asset: quoteAsset,
+    }),
+    quantity: new Quantity({
+      amount: "1",
+      asset: baseAsset,
+    }),
+    quoteQuantity: new Money({
+      amount: "100",
+      asset: quoteAsset,
+    }),
+    commissions: [],
+    commissionStatus: "COMPLETE",
+  })
+  return {
+    portfolio: new Portfolio().applyFill({
+      fill,
+      strategyId: StrategyId.COIN_GRABBER,
+    }).portfolio,
+    recoveryLedger: RecoveryLedger.empty({ market }).applyFill({
+      fill,
+      strategyId: StrategyId.COIN_GRABBER,
+    }).ledger,
+  }
+}
+
+function createRepeatedRecoverySellPolicy() {
+  return {
+    ...conservativeStrategyPolicy,
+    evaluate: ({ marketPrice, marketMetadata: metadata }) => ({
+      strategy: "CONSERVATIVE",
+      symbol: marketPrice.symbol,
+      action: "PLACE_ORDERS",
+      actions: [{
+        side: "SELL",
+        purpose: "RECOVERY_SELL",
+        type: metadata.orderType,
+        price: "101",
+        quantity: "0.4",
+        reason: "RECOVER_INVESTED_CAPITAL_AND_MIN_PROFIT",
+      }],
+    }),
+  }
+}
+
+function createRecoverySellPolicyWithEvaluationFailure() {
+  const repeatedPolicy = createRepeatedRecoverySellPolicy()
+  let evaluationCount = 0
+  return {
+    ...repeatedPolicy,
+    evaluate: (input) => {
+      evaluationCount += 1
+      if (evaluationCount === 2) {
+        throw new Error("injected strategy evaluation failure")
+      }
+      return repeatedPolicy.evaluate(input)
+    },
+  }
+}
+
+async function publishRecoveryMarketBook({ engine }) {
+  return engine.processBookTicker({
     symbol: "DOGEUSDT",
     bookTicker: {
       symbol: "DOGEUSDT",
@@ -204,15 +315,183 @@ async function submitFirstMarketDecision({ engine }) {
       timestamp: 1,
     },
   })
-  return engine.processMarketPrice({
+}
+
+function createRecoveryPriceEvent({ price, timestamp }) {
+  return {
     symbol: "DOGEUSDT",
     priceEvent: {
       symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1,
+      price,
+      timestamp,
     },
+  }
+}
+
+function processRecoveryPriceEvent({ engine, price, timestamp }) {
+  return engine.processMarketPrice(createRecoveryPriceEvent({
+    price,
+    timestamp,
+  }))
+}
+
+async function submitFirstMarketDecision({ engine }) {
+  await publishRecoveryMarketBook({ engine })
+  return processRecoveryPriceEvent({
+    engine,
+    price: "100",
+    timestamp: 1,
   })
 }
+
+test("does not submit repeated recovery SELL intents for one active Conservative Position", async () => {
+  const calls = []
+  const seeded = createSeededRecoveryState()
+  const { engine, brokerState } = createEngine({
+    calls,
+    strategyPolicy: createRepeatedRecoverySellPolicy(),
+    portfolio: seeded.portfolio,
+    recoveryLedger: seeded.recoveryLedger,
+    baseFreeBalance: "1",
+    portfolioBaseQuantityBaseline: "1",
+  })
+  const first = await submitFirstMarketDecision({ engine })
+  assert.equal(first.ok, true, first.errors?.[0]?.message ?? "The first recovery SELL must be accepted.")
+  const repeated = await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: {
+      symbol: "DOGEUSDT",
+      price: "100.01",
+      timestamp: 2,
+    },
+  })
+  assert.equal(repeated.ok, true, repeated.errors?.[0]?.message ?? "A repeated recovery evaluation must defer safely.")
+  assert.equal(brokerState.orders.length, 1, "Repeated strategy output must not create a second broker SELL for the active Position.")
+  assert.deepEqual(calls, ["intent", "broker", "outcome"], "The duplicate must be stopped before a second durable intent or broker request.")
+  const activeRecoverySells = engine.getOrders().filter((order) =>
+    order.side === "SELL" && ["PENDING", "OPEN", "PARTIALLY_FILLED", "UNKNOWN"].includes(order.status))
+  assert.equal(activeRecoverySells.length, 1, "One Conservative Position may have at most one active recovery SELL reservation.")
+})
+
+test("retains a PENDING recovery SELL reservation while its broker acknowledgement is delayed", async () => {
+  const calls = []
+  const seeded = createSeededRecoveryState()
+  let releasePlacement = () => {}
+  let signalPlacementStarted = () => {}
+  const placementStarted = new Promise((resolve) => {
+    signalPlacementStarted = resolve
+  })
+  const placeOrderGate = {
+    promise: new Promise((resolve) => {
+      releasePlacement = resolve
+    }),
+  }
+  const { engine, brokerState } = createEngine({
+    calls,
+    strategyPolicy: createRepeatedRecoverySellPolicy(),
+    portfolio: seeded.portfolio,
+    recoveryLedger: seeded.recoveryLedger,
+    baseFreeBalance: "1",
+    portfolioBaseQuantityBaseline: "1",
+    placeOrderGate,
+    deferOrderSide: "SELL",
+    onPlaceOrderStarted: ({ order }) => {
+      signalPlacementStarted(order)
+    },
+  })
+  await publishRecoveryMarketBook({ engine })
+  const firstPromise = processRecoveryPriceEvent({
+    engine,
+    price: "100",
+    timestamp: 1,
+  })
+  const submittedIntent = await placementStarted
+  const pendingOrder = engine.getOrders().find((order) =>
+    order.clientOrderId === submittedIntent.clientOrderId)
+  assert.equal(pendingOrder.status, "PENDING", "The durable pending order must reserve the Position before broker acknowledgement.")
+  const repeatedPromise = processRecoveryPriceEvent({
+    engine,
+    price: "100.01",
+    timestamp: 2,
+  })
+  assert.equal(brokerState.orders.length, 1, "A repeated market event during delayed acknowledgement must not start a second broker request.")
+  releasePlacement()
+  const [first, repeated] = await Promise.all([firstPromise, repeatedPromise])
+  assert.equal(first.ok, true, first.errors?.[0]?.message ?? "The first delayed recovery SELL must complete.")
+  assert.equal(repeated.ok, true, repeated.errors?.[0]?.message ?? "The queued repeated evaluation must defer safely after acknowledgement.")
+  assert.equal(brokerState.orders.length, 1, "Only one broker SELL may be submitted while the Position reservation is active.")
+  assert.deepEqual(calls, ["intent", "broker", "outcome"], "The delayed acknowledgement must not produce a second durable intent or broker call.")
+})
+
+test("retains an active recovery SELL across recoverable market-data failures", async () => {
+  const calls = []
+  const seeded = createSeededRecoveryState()
+  const { engine, brokerState } = createEngine({
+    calls,
+    strategyPolicy: createRepeatedRecoverySellPolicy(),
+    portfolio: seeded.portfolio,
+    recoveryLedger: seeded.recoveryLedger,
+    baseFreeBalance: "1",
+    portfolioBaseQuantityBaseline: "1",
+  })
+  const first = await submitFirstMarketDecision({ engine })
+  assert.equal(first.ok, true, first.errors?.[0]?.message ?? "The first recovery SELL must be accepted.")
+  const bookFailure = await engine.processBookTicker({
+    symbol: "DOGEUSDT",
+    bookTicker: {
+      symbol: "DOGEUSDT",
+      bestBidPrice: "invalid",
+      bestBidQuantity: "1",
+      bestAskPrice: "1000",
+      bestAskQuantity: "1",
+      timestamp: 2,
+    },
+  })
+  assert.equal(bookFailure.ok, false, "Malformed market-book evidence must be rejected.")
+  const priceFailure = await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: {
+      symbol: "DOGEUSDT",
+      price: "invalid",
+      timestamp: 2,
+    },
+  })
+  assert.equal(priceFailure.ok, false, "Malformed market-price evidence must be rejected.")
+  const repeated = await processRecoveryPriceEvent({
+    engine,
+    price: "100.01",
+    timestamp: 3,
+  })
+  assert.equal(repeated.ok, true, "A later valid market event must safely continue with the existing SELL reservation.")
+  assert.equal(engine.getActiveOrders().filter((order) => order.side === "SELL").length, 1, "The original SELL must remain active after market-data failures.")
+  assert.equal(brokerState.orders.length, 1, "Recoverable market-data errors must not release an active SELL reservation.")
+  assert.deepEqual(calls, ["intent", "broker", "outcome"], "Market-data failures must not cause a second durable intent or broker request.")
+})
+
+test("keeps the active recovery SELL and pauses safely when a later strategy evaluation fails", async () => {
+  const calls = []
+  const seeded = createSeededRecoveryState()
+  const { engine, brokerState } = createEngine({
+    calls,
+    strategyPolicy: createRecoverySellPolicyWithEvaluationFailure(),
+    portfolio: seeded.portfolio,
+    recoveryLedger: seeded.recoveryLedger,
+    baseFreeBalance: "1",
+    portfolioBaseQuantityBaseline: "1",
+  })
+  const first = await submitFirstMarketDecision({ engine })
+  assert.equal(first.ok, true, first.errors?.[0]?.message ?? "The first recovery SELL must be accepted.")
+  const failure = await processRecoveryPriceEvent({
+    engine,
+    price: "100.01",
+    timestamp: 2,
+  })
+  assert.equal(failure.ok, false, "A failed strategy evaluation must remain an explicit failure.")
+  assert.ok(engine.getPausedMarkets().includes("DOGEUSDT"), "A strategy-evaluation failure must pause the affected market.")
+  assert.equal(engine.getActiveOrders().filter((order) => order.side === "SELL").length, 1, "The existing recovery SELL reservation must remain registered.")
+  assert.equal(brokerState.orders.length, 1, "A strategy-evaluation failure must not create a second broker SELL.")
+  assert.deepEqual(calls, ["intent", "broker", "outcome"], "A failed evaluation must not create another durable intent or broker request.")
+})
 
 test("commits the operational-state submission intent and outcome around Conservative broker placement", async () => {
   const calls = []
