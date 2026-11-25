@@ -52,7 +52,7 @@ test("process adapter waits for worker exit after receiving a result", async () 
   const adapter = createProcessScenarioAdapter({
     strategyId: "example",
     workerPath,
-    terminationGraceMs: 100,
+    terminationGraceMs: 1000,
   })
   const startedAt = Date.now()
   const result = await adapter.execute({
