@@ -60,6 +60,8 @@ Shared deterministic broker/runtime fixtures live in `test/bootstrap/start-harve
 - [Process-restart recovery contract (ADR-0001)](architecture/decisions/0001-application-owned-recovery-facts.md) — accepted target design; runtime recovery remains disabled.
 - [One-market recovery reconciliation](recovery/README.md) — Step 7 offline evidence bundle, audit-only CLI and guarded coverage confirmation.
 - [Conservative Domain Specification](domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md) — sole current authority for Conservative behavior
+- [Conservative domain scenario testing guide](domain/CONSERVATIVE_DOMAIN_SCENARIO_TESTS.md) — test-layer responsibilities, deterministic scenario conventions and complete state-machine assertions for issue #1763
+- [Domain test inventory](domain/DOMAIN_TEST_INVENTORY.md) — source-driven Conservative and Recovery Seller behavior-to-test matrix, current evidence and remaining gaps
 - [Domain glossary](domain/DOMAIN_GLOSSARY.md)
 - [Accounting invariants](domain/ACCOUNTING_INVARIANTS.md)
 - [Portfolio domain](domain/portfolio.md)
