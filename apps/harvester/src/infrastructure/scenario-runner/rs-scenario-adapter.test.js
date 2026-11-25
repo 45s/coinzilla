@@ -11,7 +11,14 @@ test("RS profitability helper scaffold invokes the production calculation functi
     scenarioId: "RS-004-011",
   })
   assert.equal(result.source, "production-domain-function")
-  assert.equal(result.passed, true, JSON.stringify({ output: result.output, assertions: result.assertions }, null, 2))
+  assert.equal(
+    result.passed,
+    true,
+    JSON.stringify({
+      output: result.output,
+      assertions: result.assertions,
+    }, null, 2)
+  )
   assert.equal(result.output.recovery.netProfit, "0.01")
   assert.equal(result.output.legacy.netProfit, "0")
   assert.equal(result.trace.length, 3)
