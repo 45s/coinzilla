@@ -76,3 +76,10 @@ Dashboard provides **Copy AI Debug Report** for an inspectable run: a self-conta
 The AI Debug Report is self-contained as complete execution evidence, not as a copy of the source repository/docs. It must stand alone without the original server run. Repository access is explicitly permitted for faster, deeper debugging: use the report's executed revision and scenario provenance to audit matching production source, architecture/specification docs, scenario definitions and mapped tests; establish why/how the scenario should behave; compare that intended behavior with captured trace/results; and cite exact source files/lines/tests. Do not confuse expected behavior with observed execution.
 
 The initial runner is unauthenticated and **strictly loopback-only for local development**. Do not expose it on LAN, public or remote interfaces. Remote/shared access is blocked until authentication and server-side authorization are designed and implemented. Actual bind enforcement and existing local API integration require implementation audit.
+
+
+## Scenario Runner — RS configuration unit and replay clarification (2026-11-25)
+
+Documentation must use actual RS config fields/values and explicit units. For LINEAUSDT TESTNET, `minProfit: 0.01` means **0.01 USDT absolute net profit (one USDT cent), not 1%**; `priceStepPercent: 0.5` is a 0.5% price-step setting. Distinguish base quantities (LINEA), quote amounts (USDT), percentages and derived values. Do not invent standalone average-entry inputs; derive legacy average cost from configured legacy basis and label it as derived. Market prices and simulated broker outcomes are ordered scenario events, sourced from existing scenario/test evidence or explicitly authored and validated—not fabricated as configuration.
+
+Determinism documentation distinguishes replay against the exact original production revision from a separate regression execution of the same captured scenario package against a newer revision. Preserve both reports/traces and identify both revisions; control or capture time, generated IDs and other nondeterministic inputs before claiming deterministic replay.
