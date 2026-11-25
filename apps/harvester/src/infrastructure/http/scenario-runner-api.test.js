@@ -1,6 +1,7 @@
 import test from "node:test"
 import assert from "node:assert/strict"
 import { handleScenarioRunnerRequest } from "./scenario-runner-api.js"
+import { createScenarioRunnerHost } from "./create-scenario-runner-host.js"
 
 function responseRecorder() {
   return {
