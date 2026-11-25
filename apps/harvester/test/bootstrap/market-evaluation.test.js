@@ -2,6 +2,8 @@ import nodeTest from "node:test"
 import assert from "node:assert/strict"
 import * as shared from "./start-harvester-test-support.js"
 import { resolveHarvesterOptions } from "../../src/bootstrap/config/resolve-harvester-options.js"
+import { recoverySellerSharedMarketVolatilityScenario } from "../scenarios/recovery-seller/scenarios/shared-market-volatility-gate.js"
+import { runRecoverySellerApplicationScenario } from "../scenarios/recovery-seller/runners/run-application-scenario.js"
 
 const { appConfig, createBroker, makeVolatilityReadyBroker, binanceEnv, startHarvesterForTest, createTwoMarketStartupConfig } = shared
 const test = (...args) => nodeTest(`[market-evaluation.test.js] ${args[0]}`, ...args.slice(1))
@@ -371,54 +373,61 @@ test("delivers market price events independently for every enabled market", asyn
 })
 
 test("rejects conflicting CG/RS volatility settings for the same enabled market", async () => {
-  const conflictingConfig = {
-    ...appConfig,
-    strategies: {
-      ...appConfig.strategies,
-      CG_coinGrabber: {
-        ...appConfig.strategies.CG_coinGrabber,
-        pairs: {
-          ...appConfig.strategies.CG_coinGrabber.pairs,
-          BTCUSDT: {
-            ...appConfig.strategies.CG_coinGrabber.pairs.BTCUSDT,
-            enableVolatilityProtection: true,
-          },
-        },
-      },
-      RS_recoverySeller: {
-        enabled: true,
-        pairs: {
-          BTCUSDT: {
-            enabled: true,
-            tradingEnvironment: "testnet",
-            enableVolatilityProtection: false,
-            legacyPosition: {
-              invested: 10,
-              quantity: 1,
-            },
-            sellQuantity: 1,
-            investment: 10,
-            orderQuantity: 1,
-            minProfit: 0.01,
-            priceStepPercent: 0.5,
-            makerPercent: 0.1,
-            takerPercent: 0.1,
-          },
-        },
-      },
-    },
-  }
-
+  const scenario = recoverySellerSharedMarketVolatilityScenario
   await assert.rejects(
-    resolveHarvesterOptions({
-      appConfig: conflictingConfig,
-      env: binanceEnv,
-      executionRoutes: [
-        { strategyId: "CG_coinGrabber", symbol: "BTCUSDT" },
-        { strategyId: "RS_recoverySeller", symbol: "BTCUSDT" },
-      ],
+    runRecoverySellerApplicationScenario({
+      scenario,
+      handlers: {
+        "resolve-shared-market-volatility-config": ({ input }) => {
+          const conflictingConfig = {
+            ...appConfig,
+            strategies: {
+              ...appConfig.strategies,
+              CG_coinGrabber: {
+                ...appConfig.strategies.CG_coinGrabber,
+                pairs: {
+                  ...appConfig.strategies.CG_coinGrabber.pairs,
+                  [input.marketSymbol]: {
+                    ...appConfig.strategies.CG_coinGrabber.pairs.BTCUSDT,
+                    enableVolatilityProtection: input.cgProtectionEnabled,
+                  },
+                },
+              },
+              RS_recoverySeller: {
+                enabled: true,
+                pairs: {
+                  [input.marketSymbol]: {
+                    enabled: true,
+                    tradingEnvironment: "testnet",
+                    enableVolatilityProtection: input.rsProtectionEnabled,
+                    legacyPosition: {
+                      invested: 10,
+                      quantity: 1,
+                    },
+                    sellQuantity: 1,
+                    investment: 10,
+                    orderQuantity: 1,
+                    minProfit: 0.01,
+                    priceStepPercent: 0.5,
+                    makerPercent: 0.1,
+                    takerPercent: 0.1,
+                  },
+                },
+              },
+            },
+          }
+          return resolveHarvesterOptions({
+            appConfig: conflictingConfig,
+            env: binanceEnv,
+            executionRoutes: [
+              { strategyId: "CG_coinGrabber", symbol: input.marketSymbol },
+              { strategyId: "RS_recoverySeller", symbol: input.marketSymbol },
+            ],
+          })
+        },
+      },
     }),
     /Market BTCUSDT has conflicting volatility protection settings for CG and RS/,
-    "Shared market volatility protection must reject conflicting enabled CG/RS policy instead of silently choosing one strategy's setting.",
+    "The registered RS-008-017-B scenario must reject conflicting explicit CG/RS market policy through the production configuration resolver.",
   )
 })
