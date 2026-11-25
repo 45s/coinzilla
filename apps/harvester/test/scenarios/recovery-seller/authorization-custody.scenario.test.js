@@ -503,7 +503,7 @@ test("RS-001-002: historical average cost remains fixed after a legacy disposal"
     "A legacy sale may reduce remaining quantity only; invested basis and original average cost must remain unchanged.")
 })
 
-test("RS-001-003: missing, zero, negative or malformed legacy basis fails closed and average cost is derived", async () => {
+test("RS-001-003: missing, zero, negative or malformed legacy basis fails closed", async () => {
   const [scenario] = authorizationCustodyScenarios.slice(2, 3)
   const result = await runDomain(scenario)
 
