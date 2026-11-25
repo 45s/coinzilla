@@ -289,6 +289,35 @@ async function applyRelationalMigrations({ database, filename } = {}) {
   }
 }
 
+function createRelationalResources({
+  database,
+  eventBus,
+  environment,
+  logger,
+  runtimeSessionId,
+  errorBuffer,
+} = {}) {
+  const repositories = createRelationalHistoryRepositories({ database })
+  const observers = createRelationalHistoryObservers({
+    eventBus,
+    orderRepository: repositories.orderRepository,
+    fillRepository: repositories.fillRepository,
+    environment,
+    logger,
+  })
+  const runtimeErrorObserver = createRuntimeErrorProjection({
+    database,
+    runtimeSessionId,
+    errorBuffer,
+    logger,
+  })
+  return {
+    ...repositories,
+    ...observers,
+    runtimeErrorObserver,
+  }
+}
+
 async function prepareRelationalResources({
   filename,
   eventBus,
@@ -301,43 +330,34 @@ async function prepareRelationalResources({
     filename,
     timeout: 5000,
   })
-  let runtimeErrorObserver
-  let observers
+  let resources
   try {
     await relationalDatabase.connect()
     const migrationBackups = await applyRelationalMigrations({
       database: relationalDatabase,
       filename,
     })
-    const repositories = createRelationalHistoryRepositories({
+    resources = createRelationalResources({
       database: relationalDatabase,
-    })
-    observers = createRelationalHistoryObservers({
       eventBus,
-      orderRepository: repositories.orderRepository,
-      fillRepository: repositories.fillRepository,
       environment,
       logger,
-    })
-    const { relationalOrderObserver, fillObserver } = observers
-    runtimeErrorObserver = createRuntimeErrorProjection({
-      database: relationalDatabase,
       runtimeSessionId,
       errorBuffer,
-      logger,
     })
     return {
       relationalDatabase,
-      relationalOrderObserver,
-      fillObserver,
-      runtimeErrorObserver,
-      ...repositories,
+      ...resources,
       ...migrationBackups,
     }
   } catch (error) {
     await closePartialRelationalResources({
       database: relationalDatabase,
-      observers: [runtimeErrorObserver, observers?.fillObserver, observers?.relationalOrderObserver],
+      observers: [
+        resources?.runtimeErrorObserver,
+        resources?.fillObserver,
+        resources?.relationalOrderObserver,
+      ],
       logger,
     })
     throw error

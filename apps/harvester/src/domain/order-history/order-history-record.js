@@ -456,7 +456,7 @@ function mapExecutionQuantities({ order, status, includeUnfilled = false } = {})
 }
 
 function mapOptionalOrderHistoryFields({ order, record } = {}) {
-  if (order.brokerOrderId !== undefined) {
+  if (order.brokerOrderId !== undefined && order.brokerOrderId !== null) {
     record.brokerOrderId = requireString({
       value: order.brokerOrderId,
       field: "brokerOrderId",

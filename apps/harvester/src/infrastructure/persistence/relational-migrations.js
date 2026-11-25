@@ -395,7 +395,37 @@ CREATE TABLE fill_commissions_v5 (
   );
 `
 
+function assertExistingFillOrderReferencesMatch(transaction) {
+  const conflict = transaction.prepare(`
+    SELECT fills.exchange_order_id, fills.provider_instance_id,
+      fills.account_id, fills.market_id
+    FROM fills
+    JOIN orders ON orders.id = fills.order_id
+    WHERE fills.environment IS NOT orders.environment
+      OR fills.provider_type IS NOT orders.provider_type
+      OR fills.provider_instance_id IS NOT orders.provider_instance_id
+      OR fills.account_id IS NOT orders.account_id
+      OR fills.market_id IS NOT orders.market_id
+      OR fills.exchange_order_id IS NOT orders.exchange_order_id
+      OR (
+        fills.client_order_id IS NOT NULL
+        AND fills.client_order_id IS NOT orders.client_order_id
+      )
+    LIMIT 1
+  `).get()
+  if (conflict !== undefined) {
+    throw new OrderHistoryIntegrityError({
+      field: "orderIdentityMigrationFillLink",
+      providerInstanceId: conflict.provider_instance_id,
+      accountId: conflict.account_id,
+      brokerOrderId: conflict.exchange_order_id,
+      marketId: conflict.market_id,
+    })
+  }
+}
+
 function migrateMarketScopedExchangeOrderIdentity(transaction) {
+  assertExistingFillOrderReferencesMatch(transaction)
   transaction.exec(CREATE_ORDER_IDENTITY_MIGRATION_TABLES_SQL)
   transaction.exec(`
     INSERT INTO orders_v5 SELECT * FROM orders;
@@ -416,7 +446,7 @@ function migrateMarketScopedExchangeOrderIdentity(transaction) {
       ON orders(environment, provider_type, provider_instance_id, account_id, market_id, exchange_order_id)
       WHERE exchange_order_id IS NOT NULL;
     CREATE UNIQUE INDEX orders_pending_client_identity_unique_idx
-      ON orders(environment, provider_instance_id, provider_type, account_id, client_order_id)
+      ON orders(environment, provider_instance_id, provider_type, account_id, market_id, client_order_id)
       WHERE exchange_order_id IS NULL;
     CREATE INDEX orders_market_time_idx
       ON orders(environment, provider_type, provider_instance_id, account_id, market_id, exchange_created_at);

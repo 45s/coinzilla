@@ -91,7 +91,7 @@ Financial values are stored as exact decimal text. Missing values remain SQL `NU
 **Status: In review — [#1849](https://github.com/45s/coinzilla/issues/1849) / [PR #1849](https://github.com/45s/coinzilla/pull/1849).**
 
 - Use market-scoped exchange order IDs as canonical identity; retain clientOrderId only for correlation and provisional pending records.
-- Rebuild the v4 relational tables transactionally, preserving order/fill/commission rows and foreign-key links; verify a pre-v5 backup before migration.
+- Rebuild the v4 relational tables transactionally, preserving order/fill/commission rows and foreign-key links; verify a pre-v5 backup before migration and reject any existing fill whose parent does not match its exact exchange-order identity.
 - Link fills by exact exchange order ID and market, including fills that arrive before their order record. Reused client IDs cannot cross-link executions.
 - Keep genuine same-exchange-order immutable conflicts fatal and keep history coverage incomplete on any page failure.
 - Exact prior-row broker IDs and price values are not present in the recovered runtime logs or Library files. The committed fixtures use the observed ZRO/DOGE identifiers with explicitly synthetic prices; do not claim the original persisted row pair is independently proven.

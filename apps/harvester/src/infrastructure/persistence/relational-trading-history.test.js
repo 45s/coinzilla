@@ -131,6 +131,14 @@ function assertOrderIdentityIndexes(database) {
   )
   assert.ok(pendingClientIdentityIndex, "Pending client IDs must remain unique within their provider account.")
   assert.equal(pendingClientIdentityIndex.unique, 1, "A provisional client identity must not be duplicated before an exchange order ID is known.")
+  const pendingIdentityColumns = database.prepare("PRAGMA index_info(orders_pending_client_identity_unique_idx)").all().map(
+    ({ name }) => name,
+  )
+  assert.deepEqual(
+    pendingIdentityColumns,
+    ["environment", "provider_instance_id", "provider_type", "account_id", "market_id", "client_order_id"],
+    "Pending client identity must include market because client IDs are not cross-market exchange identities.",
+  )
 }
 
 function assertFreshRelationalSchema(database) {
@@ -1472,7 +1480,7 @@ function createExchangeHistoryOrder({
   executedQuantity,
   remainingQuantity,
   eventId,
-  timestamp,
+  timestamp = "2026-11-20T04:00:00.000Z",
   clientOrderId = "harvester-BTCUSDT-unfilled",
   brokerOrderId = "broker-order-unfilled",
   price = "65000.0000",
@@ -2071,6 +2079,66 @@ test("backs up and rebuilds existing order/fill tables without breaking historic
       legacyRecord,
       fillRow,
     }),
+  })
+})
+
+test("rejects v5 migration when an existing fill points to a different exchange order", async (t) => {
+  const context = await createTestContext({ t })
+  const legacyRecord = createLegacyRecord()
+  const fillRow = createV5MigrationFillRow({ legacyRecord })
+  fillRow.exchange_order_id = "different-exchange-order"
+  await seedV4RelationalHistory({
+    filename: context.filename,
+    legacyRecord,
+    fillRow,
+  })
+  const database = createSqliteDatabase({ filename: context.filename })
+  await database.connect()
+  try {
+    await assert.rejects(
+      database.migrate(HARVESTER_RELATIONAL_MIGRATIONS),
+      (error) => error.context?.field === "orderIdentityMigrationFillLink",
+      "A valid foreign key must not hide a fill linked to the wrong exchange order.",
+    )
+    assert.equal(database.prepare("SELECT COUNT(*) AS count FROM orders").get().count, 1)
+    assert.equal(database.prepare("SELECT COUNT(*) AS count FROM fills").get().count, 1)
+    assert.equal(database.prepare("SELECT order_id FROM fills WHERE id = ?").get(fillRow.id).order_id, legacyRecord.id)
+    assert.equal(
+      database.prepare("SELECT COUNT(*) AS count FROM schema_migrations WHERE version = 5").get().count,
+      0,
+      "A rejected identity migration must leave the database at v4.",
+    )
+    assert.equal(database.prepare("PRAGMA integrity_check").get().integrity_check, "ok")
+  } finally {
+    await database.close()
+  }
+})
+
+test("scopes provisional client identities by market", async (t) => {
+  const context = await createTestContext({ t })
+  const persistence = await preparePersistence({ context })
+  const sharedClientOrderId = "h-reused-across-markets"
+  for (const [symbol, baseAssetCode] of [["BTCUSDT", "BTC"], ["ETHUSDT", "ETH"]]) {
+    await persistence.orderRepository.upsertHistorical(createExchangeHistoryOrder({
+      status: "OPEN",
+      executedQuantity: "0",
+      remainingQuantity: "1.0000",
+      eventId: `exchange-history-order:${symbol}:pending`,
+      timestamp: "2026-11-20T04:00:00.000Z",
+      clientOrderId: sharedClientOrderId,
+      brokerOrderId: null,
+      market: createHistoryMarket({ symbol, baseAssetCode }),
+    }))
+  }
+  await inspectSqlite({
+    filename: context.filename,
+    work: (database) => {
+      const rows = database.prepare(
+        "SELECT market_id, client_order_id FROM orders WHERE client_order_id = ? ORDER BY market_id",
+      ).all(sharedClientOrderId)
+      assert.equal(rows.length, 2, "A provisional client ID reused in two markets must retain two distinct pending orders.")
+      assert.deepEqual(rows.map(({ market_id }) => market_id), ["binance:BTCUSDT", "binance:ETHUSDT"])
+    },
   })
 })
 
