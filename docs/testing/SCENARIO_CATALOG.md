@@ -961,7 +961,6 @@ The package entries below make the repository-wide scope visible, but their exac
 - [Harvester domain test inventory](../../apps/harvester/docs/domain/DOMAIN_TEST_INVENTORY.md)
 - [Harvester reliability acceptance and critical behavior inventory — issue #1639](https://github.com/45s/coinzilla/issues/1639)
 
-
 ## HARVESTER-ACC-003 — Account-scoped safety blocker closes global admission
 
 **Given:** multiple configured markets, complete account/open-order PREFLIGHT capture, and external orders governed by ADR-0004 (`IGNORE` continues per-market; `BLOCK` blocks only its market).
