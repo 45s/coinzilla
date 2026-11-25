@@ -73,3 +73,10 @@ The host marks a scenario executable only when its source mapping and schema are
 ## Evidence redaction and cleanup failure behavior
 
 Harvester recursively redacts sensitive object keys and credential material embedded in strings before exposing run inputs, outputs or diagnostics. The raw validated input is kept in a non-enumerable internal field only until execution starts, passed to the adapter, then discarded; snapshots never expose that field. Dashboard debug-package redaction is a second defensive layer. Adapter promise rejections are converted to structured failure results. If cancellation/timeout cleanup is rejected or explicitly unconfirmed, the run remains visibly timed out/failed, its worker slot is retained, and runner shutdown rejects instead of claiming cleanup succeeded. The HTTP API server still closes in a `finally` path.
+
+
+## Strategy registration boundary — 2026-11-25
+
+The host catalog is built from explicit `strategyRegistrations` entries (`strategyId`, display name and scenario definitions) and matches each entry to exactly one strategy adapter by ID. Catalog validation, schema gating, execution authorization and run submission are strategy-neutral; the host no longer hardcodes Recovery Seller as its only strategy. The default local composition supplies the provisional RS catalogue as one registration. Additional strategy families can be registered without changing host orchestration. Duplicate strategy registrations and multiple adapters for one strategy fail configuration rather than selecting an arbitrary entry.
+
+The current worker dispatcher and RS production adapter remain strategy-specific infrastructure adapters; they are not part of the generic host or runner domain/application core. No new strategy is enabled by this registration capability, and the RS catalog remains preliminary/non-executable until the OS-level isolation and full production-flow gates are satisfied.
