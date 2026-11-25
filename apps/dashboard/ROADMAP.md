@@ -101,3 +101,8 @@ The exact-head Dashboard build exposed two integration defects in the framework-
 
 
 The Dashboard validator now consumes the dedicated browser-safe decimal subpath rather than the Node-oriented Utils root. This preserves exact comparison while avoiding bundling Node-only filesystem, child-process, event and crypto exports.
+
+
+### Dependency-boundary correction — 2026-11-25
+
+The initial attempt to reuse `@coinzilla/utils` from Dashboard was rejected by the canonical workspace dependency allowlist. Rather than broaden the approved dependency graph, the Scenario Runner now uses a narrowly scoped pure decimal-string comparator in the Dashboard core, with exact BigInt-based tests. This is framework-independent business/application logic, not Angular component logic; the UI remains a presentation adapter.

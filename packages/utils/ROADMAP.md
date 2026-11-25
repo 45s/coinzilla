@@ -180,8 +180,3 @@ The initial findings and mandatory agent workflow are in [../../docs/engineering
 ## Scope guard
 
 Do not move strategy, broker, entity, event-bus, or journal rules into this package merely to share code. A helper belongs here only when it is domain-neutral and has a real shared use case.
-
-
-## Public Node-free decimal subpath — 2026-11-25
-
-Expose the existing pure `compareDecimal` implementation through `@coinzilla/utils/decimal.js` with a narrow TypeScript declaration. This lets browser-facing application code reuse the established exact decimal comparator without importing the Node-oriented package root (which also exports filesystem, child-process, event and crypto utilities). The root public entry point and existing Node consumers remain unchanged. The subpath has a focused Node test and is used by the strategy-runner's framework-independent input validator.

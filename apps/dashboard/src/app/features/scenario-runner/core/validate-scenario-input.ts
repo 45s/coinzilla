@@ -1,4 +1,4 @@
-import { compareDecimal } from "@coinzilla/utils/decimal.js"
+import { compareDecimalStrings } from "./compare-decimal-strings"
 
 interface ScenarioInputSchema {
   readonly type: 'object';
@@ -55,7 +55,7 @@ export function validateScenarioInput({
     } else if (fieldSchema.pattern && !new RegExp(fieldSchema.pattern).test(value as string)) {
       errors.push(`Input field ${key} does not match its schema pattern`)
     } else if (fieldSchema.exclusiveMinimum !== undefined &&
-      compareDecimal({
+      compareDecimalStrings({
         left: value as string,
         right: fieldSchema.exclusiveMinimum,
       }) <= 0) {
