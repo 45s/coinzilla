@@ -2411,24 +2411,65 @@ test("RS-008-018-F: runtime CG SELL is rejected when an RS SELL reserves all sha
 
 test("RS-008-018-E: concurrent CG BUY intents serialize against a shared RS quote reservation", async () => {
   const orderRegistry = createRecoverySellerSharedQuoteReservationRegistry()
+  let brokerCalls = 0
+  let signalBrokerEntry
+  let releaseFirstBrokerCall
+  const brokerEntered = new Promise((resolve) => { signalBrokerEntry = resolve })
+  const firstBrokerCallGate = new Promise((resolve) => { releaseFirstBrokerCall = resolve })
   const harness = await createHarness({
     quoteFreeBalance: "250",
     initialState: { orderRegistry },
+    brokerOverrides: {
+      placeOrder: async ({ order }) => {
+        brokerCalls += 1
+        signalBrokerEntry()
+        await firstBrokerCallGate
+        const market = marketsBySymbol.get(order.symbol)
+        harnessOrders.push(order)
+        return {
+          ok: true,
+          data: new CanonicalOrder({
+            clientOrderId: order.clientOrderId,
+            brokerOrderId: `broker-${order.clientOrderId}`,
+            market,
+            side: order.side,
+            type: order.type,
+            limitPrice: new Money({ amount: order.price, asset: market.quoteAsset }),
+            originalQuantity: new Quantity({ amount: order.quantity, asset: market.baseAsset }),
+            executedQuantity: new Quantity({ amount: "0", asset: market.baseAsset }),
+            status: "OPEN",
+            createdAt: 1,
+            acknowledgedAt: 1,
+            updatedAt: 1,
+          }),
+        }
+      },
+    },
+  })
+  const harnessOrders = harness.orders
+
+  const first = harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 2 },
+  })
+  const second = harness.engine.processMarketPrice({
+    symbol: "SOLUSDT",
+    priceEvent: { symbol: "SOLUSDT", price: "100", timestamp: 2 },
   })
 
-  const results = await Promise.all([
-    harness.engine.processMarketPrice({
-      symbol: "DOGEUSDT",
-      priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 2 },
-    }),
-    harness.engine.processMarketPrice({
-      symbol: "SOLUSDT",
-      priceEvent: { symbol: "SOLUSDT", price: "100", timestamp: 2 },
-    }),
-  ])
+  await brokerEntered
+  assert.equal(brokerCalls, 1,
+    "Only the first transition may reach broker submission while its broker call is deliberately blocked.")
+  assert.equal(harness.engine.getOrders().length, 2,
+    "The pending CG order must already be registered alongside the existing RS reservation before broker I/O completes.")
+
+  releaseFirstBrokerCall()
+  const results = await Promise.all([first, second])
 
   assert.equal(results.every((result) => result.ok), true,
     "Both concurrent market evaluations must resolve without an allocation error.")
+  assert.equal(brokerCalls, 1,
+    "The queued second evaluation must observe the first registered BUY and defer instead of reaching the broker.")
   assert.equal(harness.orders.length, 1,
     "The shared serialized transition queue must allow only one 100 USDT CG BUY after the 100 USDT RS reservation.")
   assert.equal(results.filter((result) =>
