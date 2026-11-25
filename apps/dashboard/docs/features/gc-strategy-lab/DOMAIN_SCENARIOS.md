@@ -355,3 +355,35 @@ It investigates why/how the selected scenario should behave and compares that ex
 
 ### Then
 It inspects source code, architecture/specification docs, scenario definitions and mapped tests at the executed revision; identifies the relevant production call path and intended rules/calculations/validations/transitions; compares them with the report's actual inputs/events/trace/outputs/assertions; and cites precise source files/lines/tests. It distinguishes normative expectations from observed evidence, states revision mismatches and uncertainty, and does not require access to the original server run.
+
+
+## Future execution scenario 22 — RS configuration units are explicit and faithful
+
+**Purpose:** Prevent scenario authoring, UI labels and AI reports from changing the meaning or units of actual RS configuration.
+
+### Given
+The selected adapter is Recovery Seller, market LINEAUSDT, TESTNET, using the actual configuration in `apps/harvester/rs-recovery-seller.js`:
+- `legacyPosition.invested = 400` USDT and `legacyPosition.quantity = 25000` LINEA.
+- `sellQuantity = 10` LINEA; `investment = 100` USDT; `orderQuantity = 7000` LINEA.
+- `minProfit = 0.01` USDT, an **absolute quote-currency threshold equal to one USDT cent**, not 1%.
+- `priceStepPercent = 0.5` (0.5%); `makerPercent = 0.1`; `takerPercent = 0.1`.
+- `enableVolatilityProtection = false`; resolved market precision is price 6 and quantity 0.
+
+### When
+The user inspects or edits RS configuration, authors a scenario, reviews a calculation, or copies an AI Debug Report.
+
+### Then
+The runner shows the exact config field names and values with base/quote units; labels `minProfit` as absolute quote-currency profit (0.01 USDT = one cent) and never as a percentage; labels `priceStepPercent` as 0.5%; distinguishes configured values from derived values and runtime state; and does not invent an independent average-entry-price input. Market-price updates and simulated broker outcomes appear only as explicit ordered scenario events sourced from existing scenario/test evidence or deliberately authored inputs. They are not represented as config values.
+
+## Future execution scenario 23 — Deterministic repeat and revision comparison
+
+**Purpose:** Verify reproducibility without conflating an original-code replay with a regression run against changed production code.
+
+### Given
+A scenario package captures the actual strategy configuration, initial simulation state, ordered market events, simulated broker responses and all controlled external inputs, together with the exact production revision used.
+
+### When
+The user repeats the run or compares a fix on a newer production revision.
+
+### Then
+A repeat against the same revision and same captured inputs is checked for reproducible production decisions, calculations, intents, transitions, accounting and final state. A newer-revision comparison is a separate execution using the same captured scenario package; both revision identifiers and both results/traces are retained and compared. Time, generated identifiers and other nondeterministic inputs are controlled or captured. If a dependency remains uncontrolled, deterministic replay is not claimed and the limitation is explicit.
