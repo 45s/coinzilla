@@ -751,14 +751,15 @@ const exchangeFilterScenario = defineRecoverySellerScenario({
   layer: "DOMAIN",
   configFields: ["RS_PAIR.minProfit", "RS_PAIR.makerPercent", "RS_PAIR.takerPercent"],
   covers: {
-    rules: ["RS_EXCHANGE_FILTERS", "RS_STOP_FAIL_CLOSED"],
+    rules: [],
     decisions: ["RS_SELL_PLAN"],
-    states: ["ACCUMULATING", "STOPPED"],
+    states: ["ACCUMULATING"],
     transitions: [],
-    invariants: ["RS_NO_UNSAFE_SELL", "RS_STOP_STICKY"],
+    invariants: [],
   },
   given: {
-    candidate: {
+    input: {
+      candidate: {
       recoveryQuantity: "1",
       recoveryCostBasis: "10",
       minProfit: "0.01",
@@ -768,6 +769,7 @@ const exchangeFilterScenario = defineRecoverySellerScenario({
       priceIncrement: "0.01",
       quantityIncrement: "0.01",
       minQuantity: "0.01",
+    },
     },
   },
   when: [{
@@ -820,14 +822,15 @@ const missingFilterScenario = defineRecoverySellerScenario({
   layer: "DOMAIN",
   configFields: ["RS_PAIR.minProfit", "RS_PAIR.makerPercent", "RS_PAIR.takerPercent"],
   covers: {
-    rules: ["RS_EXCHANGE_FILTERS", "RS_STOP_FAIL_CLOSED"],
+    rules: [],
     decisions: ["RS_SELL_PLAN"],
-    states: ["ACCUMULATING", "STOPPED"],
+    states: ["ACCUMULATING"],
     transitions: [],
-    invariants: ["RS_NO_UNSAFE_SELL", "RS_STOP_STICKY"],
+    invariants: [],
   },
   given: {
-    candidate: {
+    input: {
+      candidate: {
       recoveryQuantity: "1",
       recoveryCostBasis: "10",
       minProfit: "0.01",
@@ -837,6 +840,7 @@ const missingFilterScenario = defineRecoverySellerScenario({
       priceIncrement: "0.01",
       quantityIncrement: "0.01",
       minQuantity: "0.01",
+    },
     },
   },
   when: [{
