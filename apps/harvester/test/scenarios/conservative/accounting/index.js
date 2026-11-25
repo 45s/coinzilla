@@ -17,9 +17,18 @@ export const scenarios = [
       recoveryLedger: "zero or previously confirmed cycle proceeds",
     },
     inputEvents: [
-      { type: "BUY_FILL", sequence: 1 },
-      { type: "BUY_FILL_AT_DIFFERENT_PRICE", sequence: 2 },
-      { type: "PARTIAL_SELL_FILL", sequence: 3 },
+      {
+        type: "BUY_FILL",
+        sequence: 1,
+      },
+      {
+        type: "BUY_FILL_AT_DIFFERENT_PRICE",
+        sequence: 2,
+      },
+      {
+        type: "PARTIAL_SELL_FILL",
+        sequence: 3,
+      },
     ],
     expectedState: {
       portfolio: "base quantity and quote basis reflect accepted fills",

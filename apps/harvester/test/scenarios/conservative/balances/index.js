@@ -18,9 +18,18 @@ export const scenarios = [
       portfolio: "contains strategy-owned inventory only",
     },
     inputEvents: [
-      { type: "ACCOUNT_SNAPSHOT", sequence: 1 },
-      { type: "ALLOCATE_ORDER_COMMITMENTS", sequence: 2 },
-      { type: "STARTUP_OPEN_ORDER_RECONCILIATION", sequence: 3 },
+      {
+        type: "ACCOUNT_SNAPSHOT",
+        sequence: 1,
+      },
+      {
+        type: "ALLOCATE_ORDER_COMMITMENTS",
+        sequence: 2,
+      },
+      {
+        type: "STARTUP_OPEN_ORDER_RECONCILIATION",
+        sequence: 3,
+      },
     ],
     expectedState: {
       availableBalances: "subtract all applicable reservations and commitments",

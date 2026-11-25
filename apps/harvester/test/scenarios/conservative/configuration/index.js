@@ -17,8 +17,14 @@ export const scenarios = [
       broker: "offline and not called during validation",
     },
     inputEvents: [
-      { type: "LOAD_PAIR_CONFIGURATION", sequence: 1 },
-      { type: "VALIDATE_CONSERVATIVE_CONFIGURATION", sequence: 2 },
+      {
+        type: "LOAD_PAIR_CONFIGURATION",
+        sequence: 1,
+      },
+      {
+        type: "VALIDATE_CONSERVATIVE_CONFIGURATION",
+        sequence: 2,
+      },
     ],
     expectedState: {
       invalidConfiguration: "rejected with an actionable validation error",

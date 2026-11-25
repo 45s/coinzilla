@@ -18,11 +18,26 @@ export const scenarios = [
       orderSubmission: "idle",
     },
     inputEvents: [
-      { type: "BUY_DECISION", sequence: 1 },
-      { type: "BUY_PARTIAL_FILL", sequence: 2 },
-      { type: "BUY_COMPLETE_FILL", sequence: 3 },
-      { type: "RECOVERY_SELL_SUBMISSION", sequence: 4 },
-      { type: "RECOVERY_SELL_ACKNOWLEDGED", sequence: 5 },
+      {
+        type: "BUY_DECISION",
+        sequence: 1,
+      },
+      {
+        type: "BUY_PARTIAL_FILL",
+        sequence: 2,
+      },
+      {
+        type: "BUY_COMPLETE_FILL",
+        sequence: 3,
+      },
+      {
+        type: "RECOVERY_SELL_SUBMISSION",
+        sequence: 4,
+      },
+      {
+        type: "RECOVERY_SELL_ACKNOWLEDGED",
+        sequence: 5,
+      },
     ],
     expectedState: {
       partialBuy: "updates actual quantity and quote basis without advancing the completed cycle",
@@ -30,9 +45,21 @@ export const scenarios = [
       submission: "unknown outcomes remain blocked and are not blindly retried",
     },
     expectedOrders: [
-      { side: "BUY", purpose: "STANDING_BUY", condition: "entry gates pass" },
-      { side: "SELL", purpose: "RECOVERY_SELL", condition: "created from filled inventory" },
-      { side: "BUY", purpose: "STANDING_BUY", condition: "submitted only after recovery SELL acknowledgement" },
+      {
+        side: "BUY",
+        purpose: "STANDING_BUY",
+        condition: "entry gates pass",
+      },
+      {
+        side: "SELL",
+        purpose: "RECOVERY_SELL",
+        condition: "created from filled inventory",
+      },
+      {
+        side: "BUY",
+        purpose: "STANDING_BUY",
+        condition: "submitted only after recovery SELL acknowledgement",
+      },
     ],
     expectedAccounting: {
       source: "actual canonical BUY fills and commission facts",
