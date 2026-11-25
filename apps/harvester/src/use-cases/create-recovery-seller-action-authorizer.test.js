@@ -261,12 +261,13 @@ test("RS-002-006-B: keeps the unfilled portion of a partially filled RS BUY rese
   partiallyFilledRecoveryBuy.strategyId = StrategyId.RECOVERY_SELLER
 
   const runtime = createAuthorizer({
-    quoteBalance: "100",
+    quoteBalance: "65",
     activeOrders: [partiallyFilledRecoveryBuy],
   })
   const result = await runtime.authorize()
 
   assert.equal(result.ok, true, "A valid partially filled RS BUY must remain a normal account commitment.")
-  assert.equal(result.data.allowed, true, "The new action may proceed only after the remaining owned commitment is reserved.")
+  assert.equal(result.data.skipped, true, "The new action must defer when the 60-unit unfilled RS commitment leaves only 5 quote units available.")
+  assert.equal(result.data.reason, "INSUFFICIENT_QUOTE_BALANCE", "The application allocator must report the remaining partial-order commitment as the exact deferral cause.")
   assert.equal(runtime.getLatchCount(), 0, "A valid partial-order reservation must not latch STOP.")
 })
