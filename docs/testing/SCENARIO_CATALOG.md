@@ -762,7 +762,7 @@ At `20.00 USDT/ZRO`, recovery receives `20.00 USDT` (profit `+10.00`), legacy re
 
 ### RS-008 — CG and RS share account availability and market-owned volatility without sharing strategy ownership
 
-**Status:** MISSING — no new RS scenario test accepted.
+**Status:** PARTIAL — RS-008-017-B and RS-008-017-D are registered and TEST-MAPPED; shared quote/base concurrency, ownership, serialization and remaining volatility subcases are MISSING.
 
 **Example:** CG and RS each request a SELL against the same market. Their strategy budgets and Positions remain separate, while the shared account allocator must ensure combined reserved base never exceeds verified available Spot. Repeat with competing BUY quote commitments and with different markets sharing the same quote asset. An RS-only market must also consume the same market-owned volatility gate as CG when protection is enabled; no RS-specific volatility engine is permitted.
 
@@ -772,7 +772,7 @@ At `20.00 USDT/ZRO`, recovery receives `20.00 USDT` (profit `+10.00`), legacy re
 
 **Implementation:** shared commitment allocator, account runtime registry, engine transition queue and strategy-owned order routing.
 
-**Tests:** RS-008-017 is reserved for the shared market-volatility gate; no new scenario evidence yet.
+**Tests:** [RS-008-017-B configuration conflict and RS-008-017-D recovery-SELL volatility exception](../../apps/harvester/test/bootstrap/market-evaluation.test.js); registry `apps/harvester/test/scenarios/recovery-seller/scenarios/shared-market-volatility-gate.js`. B proves resolver rejection; D proves the real submission gate preserves an independent market pause and permits the SELL when all other gates pass. Exact-head CI is pending; do not mark VERIFIED.
 
 ### RS-009 — STOP blocks additional BUY spending only
 

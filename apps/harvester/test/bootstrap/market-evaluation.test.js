@@ -2,6 +2,7 @@ import nodeTest from "node:test"
 import assert from "node:assert/strict"
 import * as shared from "./start-harvester-test-support.js"
 import { resolveHarvesterOptions } from "../../src/bootstrap/config/resolve-harvester-options.js"
+import { createSubmissionGate } from "../../src/use-cases/create-submission-gate.js"
 import { recoverySellerSharedMarketVolatilityScenario } from "../scenarios/recovery-seller/scenarios/shared-market-volatility-gate.js"
 import { runRecoverySellerApplicationScenario } from "../scenarios/recovery-seller/runners/run-application-scenario.js"
 
@@ -437,4 +438,76 @@ test("rejects conflicting CG/RS volatility settings for the same enabled market"
     /Market BTCUSDT has conflicting volatility protection settings for CG and RS/,
     "The registered RS-008-017-B scenario must reject conflicting explicit CG/RS market policy through the production configuration resolver.",
   )
+})
+
+
+function createVolatilityProtectedRecoverySellGate({ marketPaused = false } = {}) {
+  const symbol = "BTCUSDT"
+  const state = {
+    shutdownBuyGate: false,
+    paused: new Set(marketPaused ? [symbol] : []),
+    operatorPausedMarkets: new Set(),
+    volatilityProtection: new Map([[symbol, {
+      mode: "PROTECTED",
+      reason: "HIGH_VOLATILITY",
+    }]]),
+    prices: new Map([[symbol, {
+      price: "100",
+      timestamp: 1,
+    }]]),
+    books: new Map(),
+  }
+  return createSubmissionGate({
+    state,
+    isShutdownRecoverySubmissionAllowed: () => false,
+    isStopping: () => false,
+    hasBlockingOpenOrdersForSymbol: () => false,
+    canTrade: () => true,
+    isMarketPriceFresh: () => true,
+    getVolatilityData: () => ({
+      ok: true,
+      data: {
+        status: { isReady: true },
+        metrics: { volatilityRatio: "2" },
+      },
+    }),
+    isVolatilityProtectionEnabledForSymbol: () => true,
+    isMarketBookFresh: () => true,
+    isPostOnlyOrderCrossing: () => false,
+    getAccountSafetyBlocker: () => null,
+  })
+}
+
+function createRecoverySellGateOrder() {
+  return {
+    market: {
+      id: "binance:spot:BTCUSDT",
+      symbol: "BTCUSDT",
+    },
+    side: "SELL",
+    type: "LIMIT",
+    limitPrice: { amount: "100" },
+  }
+}
+
+test("RS-008-017-D: recovery SELL bypasses volatility only and retains other submission gates", () => {
+  const blockedGate = createVolatilityProtectedRecoverySellGate({
+    marketPaused: true,
+  })
+  const blocked = blockedGate({
+    order: createRecoverySellGateOrder(),
+    purpose: "RECOVERY_SELL",
+  })
+  assert.deepEqual(blocked, {
+    allowed: false,
+    reason: "MARKET_PAUSED",
+    details: { symbol: "BTCUSDT" },
+  }, "The recovery-SELL volatility exception must not bypass an independent market pause.")
+
+  const eligibleGate = createVolatilityProtectedRecoverySellGate()
+  const eligible = eligibleGate({
+    order: createRecoverySellGateOrder(),
+    purpose: "RECOVERY_SELL",
+  })
+  assert.deepEqual(eligible, { allowed: true }, "With all other gates satisfied, the recovery SELL must bypass only the active volatility blocker.")
 })

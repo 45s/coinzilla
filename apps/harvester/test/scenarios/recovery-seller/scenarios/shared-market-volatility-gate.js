@@ -2,6 +2,7 @@ import { defineRecoverySellerScenario } from "../registry/define-scenario.js"
 
 const testFile = "apps/harvester/test/bootstrap/market-evaluation.test.js"
 const testTitle = "rejects conflicting CG/RS volatility settings for the same enabled market"
+const recoverySellTestTitle = "RS-008-017-D: recovery SELL bypasses volatility only and retains other submission gates"
 
 export const recoverySellerSharedMarketVolatilityScenario = defineRecoverySellerScenario({
   id: "RS-008-017",
@@ -12,6 +13,7 @@ export const recoverySellerSharedMarketVolatilityScenario = defineRecoverySeller
     "apps/harvester/docs/volatility-protection.md",
     "apps/harvester/docs/domain/recovery-seller-scenario-testing.md#rs-008--cg-rs-shared-account-resources-and-concurrency-p0",
     "issue-1780: RS-008-017-B shared market volatility configuration",
+    "issue-1780: RS-008-017-D recovery SELL volatility exception",
   ],
   layer: "APPLICATION",
   configFields: ["RS_PAIR.enableVolatilityProtection"],
@@ -49,6 +51,15 @@ export const recoverySellerSharedMarketVolatilityScenario = defineRecoverySeller
     test: {
       file: testFile,
       title: testTitle,
+    },
+    evidence: null,
+  }, {
+    id: "RS-008-017-D",
+    description: "a recovery SELL bypasses active volatility protection only; an independent market pause still blocks it, while all other gates satisfied permit the SELL",
+    status: "TEST-MAPPED",
+    test: {
+      file: testFile,
+      title: recoverySellTestTitle,
     },
     evidence: null,
   }],
