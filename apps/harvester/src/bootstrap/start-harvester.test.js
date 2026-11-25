@@ -2,7 +2,7 @@ import nodeTest from "node:test"
 import assert from "node:assert/strict"
 import * as shared from "../../test/bootstrap/start-harvester-test-support.js"
 
-const { Balance, CanonicalOrder, Fill, Money, Quantity, TradingRules, multiplyDecimal, waitForTestSignal, appConfig, createMarketMetadata, createOpenOrderSnapshot, createBinanceCapabilities, createBroker, makeVolatilityReadyBroker, binanceEnv, startHarvesterForTest, createFill } = shared
+const { Balance, CanonicalOrder, Fill, Money, Quantity, TradingRules, multiplyDecimal, waitForTestSignal, appConfig, createMarketMetadata, createOpenOrderSnapshot, createBinanceCapabilities, createBroker, createRecoverySellerStopWorkflow, makeVolatilityReadyBroker, binanceEnv, startHarvesterForTest, createFill } = shared
 const { mkdtemp, rm, os, path, createFileOperationalStateStore } = shared
 const test = (...args) => nodeTest(`[start-harvester.test.js] ${args[0]}`, ...args.slice(1))
 
@@ -1614,5 +1614,55 @@ test("logs partial startup history diagnostics when an order cursor write fails"
     })
   } finally {
     await runtime.stop()
+  }
+})
+
+
+test("rejects startup before market subscriptions when a persisted account-scoped Recovery Seller STOP is active", async () => {
+  const { directory, store } = await createRsOnlyOperationalStateStore()
+  const calls = []
+  const broker = createRsOnlyStartupBroker({ calls })
+  try {
+    const workflowResult = await createRecoverySellerStopWorkflow({
+      operationalStateStore: store,
+    })
+    assert.equal(workflowResult.ok, true, "The startup fixture must create a Recovery Seller STOP workflow.")
+    const latched = await workflowResult.data.latch({
+      explanation: "Integration test: restore an unresolved account-scoped STOP before startup",
+    })
+    assert.equal(latched.ok, true, "The integration fixture must durably persist the account-scoped STOP.")
+
+    await assert.rejects(
+      startHarvesterForTest({
+        loadConfig: async () => createRsOnlyStartupConfig(),
+        env: binanceEnv,
+        brokerAdapterFactory: () => broker,
+        operationalStateStore: store,
+        executionSymbols: ["LINEAUSDT"],
+        executionRoutes: [{
+          strategyId: "RS_recoverySeller",
+          symbol: "LINEAUSDT",
+        }],
+        marketDataSymbols: ["LINEAUSDT"],
+        evaluateRecoverySellerTransition: async () => ({
+          ok: true,
+          data: { skipped: true },
+        }),
+        logger: {
+          info() {},
+          error() {},
+        },
+      }),
+      (error) => error.code === "HARVESTER_ACCOUNT_SAFETY_BLOCKER_ACTIVE",
+      "A restored account STOP must reject startup with the structured account-blocker error.",
+    )
+
+    assert.equal(calls.includes("subscribe:LINEAUSDT"), false, "A blocked account must not subscribe to market data.")
+    assert.equal(calls.some((call) => typeof call === "object" && call.side), false, "A blocked account must not submit an order.")
+  } finally {
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
   }
 })
