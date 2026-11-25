@@ -141,7 +141,7 @@ These are common-model limitations or external guarantee gaps, not necessarily m
 
 Official execution-history reference: https://www.bitunix.com/api-docs/futures/trade/get_history_trades.html (10 requests/second per UID; maximum 100 rows per page; skip/limit pagination).
 
-No isolated Futures TESTNET endpoint has been verified. No LIVE mutation integration test is permitted. Offline request/response tests cover the implemented operations. The active private-session readiness gate and caller REST-reconciliation acknowledgement do not establish authoritative event replay, sequence-gap detection, atomic snapshots or process-restart recovery.
+Bitunix Futures is LIVE-only; Bitunix does not provide a Futures TESTNET. Offline request/response tests cover the implemented operations. No LIVE mutation integration test is permitted. The active private-session readiness gate and caller REST-reconciliation acknowledgement do not establish authoritative event replay, sequence-gap detection, atomic snapshots or process-restart recovery.
 
 ## 5. Protocol and model invariants
 
@@ -159,7 +159,7 @@ No isolated Futures TESTNET endpoint has been verified. No LIVE mutation integra
 
 ## 6. Remaining work and acceptance boundaries
 
-1. Verify an isolated Futures TESTNET endpoint and credentials from official evidence before adding any mutation integration test. Until then, all automated tests remain offline and no LIVE mutation is permitted.
+1. Bitunix Futures has no TESTNET. Keep automated tests offline; do not run LIVE mutation integration tests. Any future LIVE operational probe requires a separately reviewed, explicitly authorized operator procedure and must not be presented as TESTNET validation.
 2. Keep private observations explicitly non-authoritative/non-replayable. Do not clear recovery-required state without a documented sequence/replay or a proven gap-free reconciliation procedure.
 3. Keep complete account-wide fill history UNKNOWN until source retention, pagination and gap-free coverage are established; preserve bounded-page semantics and UNKNOWN commission denomination.
 4. Keep account snapshot, server time, candle WebSocket and common Spot-shaped Futures order projections unsupported where the exchange contract cannot satisfy the shared model.
