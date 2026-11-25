@@ -79,6 +79,20 @@ The interface documents these Futures paths directly. The REST implementation al
 
 The JKorf request-validation suite exercises order placement/edit/cancel/cancel-all, close position, order detail/history/open orders, user trades, current/historical positions, TP/SL placement/cancel and several market/account reads. The TP/SL history request-validation line is commented out in the inspected test file. Its separate integration suite is not a substitute for Coinzilla's deterministic offline tests and must not be run against LIVE by this task.
 
+### Endpoint-specific pacing and mutation HTTP outcomes
+
+The official [close-all positions endpoint](https://www.bitunix.com/api-docs/futures/trade/close_all_position.html) documents a limit of **1 request/second per UID**. The official [flash-close endpoint](https://www.bitunix.com/api-docs/futures/trade/flash_close_position.html) documents **5 requests/second per UID**. Other implemented endpoints retain a conservative shared 100 ms floor (10 requests/second); this intentionally does not attempt to consume endpoints' higher 20 requests/second allowances.
+
+The Futures REST client now serializes requests through a process-local limiter shared by clients using the same API key, with endpoint-specific minimum intervals of 1,000 ms for `close_all_position` and 200 ms for `flash_close_position`. This does **not** coordinate distinct API keys or separate processes that share a Bitunix UID/IP; callers must not assume it is an account-wide or IP-wide distributed limiter. Multi-key/multi-process deployments still need a centralized UID/IP request scheduler before production use.
+
+HTTP status is validated before parsing the response body. This preserves the common mutation-outcome contract even when a gateway returns non-JSON content: HTTP 400/429 are definitive rejections; 408/409/5xx remain outcome-unknown; malformed successful responses after a state-changing dispatch remain outcome-unknown. The client never retries a mutation automatically.
+
+Offline regression evidence:
+
+- `rest-client.rate-limit.test.js` — `Bitunix Futures REST applies the documented slower limits to close-position endpoints`.
+- `rest-client.test.js` — `Bitunix Futures REST classifies non-JSON HTTP mutation failures by status before parsing the body`.
+
+
 ## 3. Official Node demo findings and limitations
 
 - The private HTTP demo exposes account read, order placement, cancel orders, order history and current/historical position reads. It does not provide a complete Futures client. Its `placeOrder` helper defaults `tradeSide` to `OPEN`, `effect` to `GTC` and `reduceOnly` to `false`; Coinzilla must not copy these implicit risk-bearing defaults. Callers must supply and validate Futures semantics explicitly.
@@ -134,6 +148,7 @@ No isolated Futures TESTNET endpoint has been verified. No LIVE mutation integra
 - Distinguish order state, execution/fill state, position state, fee, funding and realized/unrealized PnL. An order update is not a fill; a position delta is not an execution.
 - Preserve stable exchange `orderId`, caller `clientId`, `positionId` and execution `tradeId` separately. Do not synthesize missing client IDs or execution IDs.
 - The private stream's balance/position/order/TP-SL messages are observations. Bitunix documents no replay cursor or monotonic sequence; reconnect must set recovery required.
+- The official private-channel pages describe event-triggered pushes but do not document a subscription-acknowledgement response. Local send success plus login acknowledgement is not proof that every private channel was accepted by the exchange; this remains an explicit readiness-evidence limitation until official acknowledgement semantics are verified.
 - A consumer may call `acknowledgeUserDataReconciliation({ reconciliationCompleted: true })` only after reconciling balances, positions, pending orders and TP/SL orders from REST. This is an explicit consumer attestation required by the mutation gate; it does not prove atomic snapshots, event replay, sequence continuity or event authority.
 - The `isUserDataReady` gate requires a connected, authenticated private session and acknowledged reconciliation. Disconnect, reconnect and unsubscribe reset readiness. Every Futures order mutation and position-close operation fails closed with `NOT_SENT` while the gate is closed.
 - A dispatched mutation with lost acknowledgement, timeout, malformed response or mismatched readback is an unknown outcome unless a documented response/readback proves otherwise. Never blindly retry; reconcile by stable order/position identity.
