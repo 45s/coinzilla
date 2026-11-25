@@ -1033,7 +1033,7 @@
         },
         {
           "path": "src/bootstrap/start-harvester.test.js",
-          "name": "rejects startup before market subscriptions when a persisted account-scoped Recovery Seller STOP is active",
+          "name": "restores a persisted account STOP and keeps a restarted account observation-only",
           "kind": "integration"
         }
       ],
