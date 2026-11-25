@@ -193,6 +193,7 @@ PR #1823 adds three nested scenario files:
 - `recovery-seller/registry-and-runner.scenario.test.js` — registry and runner contract tests.
 - `recovery-seller/authorization-custody.scenario.test.js` — RS-001 authorization/custody.
 - `recovery-seller/buy-accounting.scenario.test.js` — RS-002 BUY accounting.
+- `recovery-seller/mixed-sell-planning.scenario.test.js` — RS-003-001…003 additive mixed SELL quantity planning, smaller authorized remainder and legacy exhaustion.
 
 All three files must be listed in `apps/harvester/package.json` `config.targetedTestFiles`. A targeted-test pass is valid only when its log shows these files were executed.
 
@@ -1871,8 +1872,8 @@ Every family below explicitly answers the 22 contract questions required by the 
 | 18. Required assertions | Exact plan fields, allocation split, fee reserve, net-proceeds target, filter result, no Portfolio mutation and zero broker calls for blocked cases. |
 | 19. Existing regression tests | calculate-sell-plan.test.js; legacy-spot-allocation.test.js; mixed-sell-fill-allocation.test.js; recovery-seller-sell-planner.scenario.test.js. New planner scenario evidence remains PARTIAL. |
 | 20. Missing scenario tests | Full workflow-to-default-evaluator composition, cross-market reservations, legacy exhaustion, all fee-asset boundaries and complete dust/filter subcases. |
-| 21. Blocked decisions | The #1809 production fix is in PR #1815; keep the real-workflow application subcase blocked until that PR is merged and verified. Third-asset valuation and standalone final-residual liquidation remain blocked/unsupported. |
-| 22. Acceptance criteria | All #1780 sections C/H/I planner cases have stable IDs; exact intent and no-submit assertions pass; the real workflow/default-evaluator subcase is proved by PR #1815 and may be unblocked only after merge and exact merged-head verification. |
+| 21. Blocked decisions | The #1809 production fix is merged in PR #1815 at `cbf07da54fd2e14fbeb3f96d4d9f8efe48d597c2`; all six workflows passed on its exact PR head `20963617c9d9d73c31b47865e0aa34c4a966cc8e`. The workflow-to-default-evaluator prerequisite is therefore unblocked. Third-asset valuation and standalone final-residual liquidation remain blocked/unsupported. |
+| 22. Acceptance criteria | All #1780 sections C/H/I planner cases have stable IDs; exact intent and no-submit assertions pass; the real workflow/default-evaluator prerequisite is proved by merged PR #1815 and exact merged-head checks. Remaining planner, reservation, fee, filter, dust and atomicity cases stay PARTIAL until separately mapped and verified. |
 
 #### RS-004 — Independent profitability and fee-aware SELL economics
 
@@ -2351,7 +2352,7 @@ TDD evidence:
 - GREEN: the three composed cases passed Harvester Targeted Tests on synchronized PR head `0a84a78285aa2dfb3c4f16319c765e436edea275` (11/11 tests in the scenario file). Unit Tests, Test Coverage, Repository Quality, Dependency Audit and External Documentation Links also pass on that exact head.
 - The PR is ready for owner review; do not mark the scenario family VERIFIED until the production PR is merged and exact merged-head evidence is recorded.
 
-This defect is not a reason to skip the prescribed seven-PR scenario sequence. Keep RS-003 PARTIAL until PR #1815 is merged and its exact merged-head verification is recorded; the remaining RS-003 cases stay open.
+PR #1815 is merged at `cbf07da54fd2e14fbeb3f96d4d9f8efe48d597c2`; its exact PR head `20963617c9d9d73c31b47865e0aa34c4a966cc8e` passed all six workflows. The prerequisite is unblocked, but RS-003 remains PARTIAL because the full matrix is not complete. PR #1823 now adds registered DOMAIN cases RS-003-001…003 for the additive configured legacy slice, smaller authorized remainder, and recovery-only planning after legacy exhaustion. These cases use `calculateRecoverySellerSellPlan` with independent exact-decimal expectations and derive legacy average cost from `legacyPosition.invested / legacyPosition.quantity`; they do not claim full workflow inventory/custody composition, cross-market reservations, TradingRules boundaries, fee allocation, dust or atomicity coverage.
 
 ## 14. Implementation roadmap: exact AI-agent execution sequence
 
