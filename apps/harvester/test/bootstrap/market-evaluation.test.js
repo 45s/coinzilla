@@ -597,7 +597,10 @@ test("RS-008-017-A: RS-only market receives the shared market-owned volatility s
     protectionEnabled: resolved.recoverySellerPairs.ETHUSDT.enableVolatilityProtection,
   })
   const decision = gate({
-    order: createSubmissionGateOrder({ side: "BUY", marketSymbol: "ETHUSDT" }),
+    order: createSubmissionGateOrder({
+      side: "BUY",
+      marketSymbol: "ETHUSDT",
+    }),
     purpose: "RECOVERY_BUY",
   })
   assert.deepEqual(decision, {
