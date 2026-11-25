@@ -832,6 +832,26 @@ async function assertRegisteredAccountWideReservationScenario() {
   )
 }
 
+
+test("RS-003-009: a SELL commitment created after the account snapshot is subtracted once at the exact shared-base boundary", () => {
+  const actual = evaluateConcurrentReservationScenario()
+  assert.equal(actual.atLimit.ok, true,
+    "The free base remaining after a post-snapshot account-wide SELL commitment must be executable at its exact boundary.")
+  assert.deepEqual(actual.atLimit.executableActions, [{
+    side: "SELL",
+    quantity: "0.26",
+  }])
+  assert.equal(actual.atLimit.remainingBaseBalance, "0",
+    "The exact 0.26 ZRO candidate must consume only the free base left after the 0.5 ZRO post-snapshot commitment.")
+  assert.equal(actual.atLimit.remainingActiveBase, "0.75",
+    "The cross-market commitment must reduce account availability, not RS-owned active inventory.")
+  assert.equal(actual.overLimit.ok, false,
+    "A 0.27 ZRO candidate must fail closed when only 0.26 ZRO remains after the late commitment.")
+  assert.equal(actual.overLimit.reason,
+    "Strategy SELL quantity exceeds available free base balance after commitments",
+    "The excess must be rejected by the shared account-base commitment guard.")
+})
+
 test("RS-003-006: account-wide SELL reservations across markets are summed and snapshot commitments are not double-counted", async () => {
   assertAccountWideReservationBoundary()
   await assertRegisteredAccountWideReservationScenario()
