@@ -2282,3 +2282,5 @@ The detailed evidence, implementation commits, CI state and remaining unknowns a
 ### Recovery Seller scenario coverage checkpoint — 2026-11-25
 
 Added a deterministic authorizer-boundary test for RS-002-006-B: a partial RS BUY's remaining 60-quote commitment is preserved, causing a new 10-quote BUY to defer against 65 free quote. Scenario mapping is synchronized in the RS scenario record. Test execution and exact-head CI are pending; parent RS-002-006 remains PARTIAL and no scenario is VERIFIED.
+
+Additional RS scenario mapping: RS-002-020-B now has an application authorizer test for exact pair-cap equality with an owned pending BUY commitment counted once. Test is added but not run; RS-002-020 and RS-002 remain PARTIAL.
