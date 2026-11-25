@@ -195,21 +195,10 @@ function createAssertion({ name, actual, expected }) {
 }
 
 function createRuntimeScenarioStore() {
-  const records = new Map()
+  const records = []
   return {
     append: async (fact) => {
-      const existing = records.get(fact.factId)
-      if (existing) {
-        return {
-          ok: true,
-          data: {
-            durable: true,
-            duplicate: true,
-            record: existing,
-          },
-        }
-      }
-      records.set(fact.factId, fact)
+      records.push(fact)
       return {
         ok: true,
         data: {
@@ -221,10 +210,10 @@ function createRuntimeScenarioStore() {
     readAll: async () => ({
       ok: true,
       data: {
-        records: [...records.values()],
+        records: [...records],
       },
     }),
-    getRecords: () => [...records.values()],
+    getRecords: () => [...records],
   }
 }
 
