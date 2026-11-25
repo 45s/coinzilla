@@ -36,3 +36,5 @@ The process-adapter regression uses a worker that deliberately remains alive for
 The lifecycle regression tests pin two required contracts: cancellation remains non-terminal until cleanup completes, and a worker result message cannot complete a run before the worker process exits. Both regressions were observed failing in the test-only checkpoint before the implementation changes.
 The delayed-exit fixture registers its SIGTERM handler before sending the result IPC message, making the process-shutdown regression deterministic rather than dependent on signal-registration timing.
 The delayed-exit regression gives the adapter a 1,000 ms termination grace while the fixture exits after 500 ms, proving graceful cleanup rather than exercising the forced-kill fallback.
+
+The RS-004-011 profitability helper is preliminary scaffolding, not a completed executable strategy scenario. Until a strategy adapter invokes the actual production RS use-case flow with simulation-only ports, the host must label the catalog entry non-executable and block run submission. A helper-level unit test is not scenario-runner acceptance evidence.

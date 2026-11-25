@@ -154,3 +154,17 @@ test("Scenario Runner API rejects invalid JSON and missing run IDs", async () =>
   })
   assert.equal(response.status, 404)
 })
+
+
+test("host does not expose a profitability-helper scaffold as an executable RS scenario", () => {
+  const host = createScenarioRunnerHost()
+  const scenario = host.catalog[0].scenarios[0]
+  assert.equal(scenario.executable, false, "a mapped profitability helper is not a complete production scenario")
+  assert.equal(scenario.executionStatus, "PRELIMINARY", "the catalog must identify the helper as preliminary")
+  const run = host.runner.submit({
+    strategyId: "RS",
+    scenarioId: scenario.id,
+    input: scenario.defaultInput,
+  })
+  assert.equal(run.status, "Blocked", "the runner must fail closed until a full production-flow adapter is registered")
+})
