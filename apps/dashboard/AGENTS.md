@@ -47,3 +47,8 @@ Before dashboard changes, read this roadmap and the applicable repository standa
 - Prefer domain/application modules and ports; Angular-specific wiring belongs in adapters/composition. Unit-test domain/application behavior without Angular TestBed, rendering, browser or UI-framework dependencies wherever feasible.
 - **Framework swap invariant:** replacing Angular with React, Vue, another UI framework or non-framework UI must require replacing/reworking presentation and framework adapters only. It MUST NOT require changing business/domain/application logic, scenario contracts, core tests or business behavior. Record and resolve any blocker to this invariant before implementation.
 - Explicitly review dependency direction and framework leakage, and test core independently. Enforce the boundary with architecture tests/static checks where practical.
+
+
+## Protected trading logic/services — approval gate
+
+AI contributors MUST NOT modify, refactor, restructure or otherwise alter existing trading domain logic or trading services without explicit prior user approval. Protected areas include strategy rules/evaluators, trading calculations, order decision/execution, accounting/inventory, risk controls, broker/exchange integrations and related trading runtime services. Even small or behavior-preserving changes require approval. Inspection is allowed but is not authorization to edit. If a safe production-flow integration requires such a change, stop and document the exact file/change and request approval. Do not duplicate strategy logic to bypass this gate.
