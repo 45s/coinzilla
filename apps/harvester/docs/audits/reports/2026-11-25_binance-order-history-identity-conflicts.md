@@ -85,7 +85,7 @@ The defect is not that immutable price validation is too strict. The defect is t
 - Migration v5 rebuilds orders, fills and fill_commissions transactionally, copies every row and preserves primary keys and foreign-key links. A populated v4 database receives a pre-v5 SQLite backup verified by integrity_check and SHA-256 of order/fill/commission rows. Duplicate exchange identities or foreign-key violations abort the migration; there is no automatic row repair.
 - Fills link to orders by exact provider/account/environment/market/exchange order ID. clientOrderId is validated when supplied, not used to choose among multiple orders. Fills arriving before orders remain unlinked until the matching exchange order is persisted.
 - A repeated identical order remains idempotent. Mutable execution/status fields can advance for the same exchange order. A different price for the same exchange order ID remains a fatal integrity conflict.
-- A failed page is not advanced; failed markets keep history coverage incomplete.
+- A rejected conflict reports reconciliationDecision=rejected, recoverable=false and coverageIncomplete=true. A failed page is not advanced; failed markets keep history coverage incomplete.
 
 ## TDD and regression evidence
 
@@ -96,7 +96,7 @@ The test-only RED stage reproduced:
 - Relational ZRO/DOGE persistence collision: the second distinct exchange order was rejected as an immutable price conflict.
 - Fill-before-order collision: two fills with the same client ID but different exchange order IDs could not be safely linked to their own order rows.
 
-The RED fixtures use the observed client and broker IDs. Decimal prices and quantities are synthetic and are not represented as recovered production values. GREEN tests prove that distinct exchange orders persist separately, same-order price conflicts still fail, repeated sync is idempotent, partial-fill state advances, and fills link to the exact exchange order after arriving first.
+The RED fixtures use the observed incoming client and broker IDs; prior-order broker IDs and all decimal prices/quantities are synthetic and are not represented as recovered production values. GREEN tests prove that distinct exchange orders persist separately, same-order price conflicts still fail, repeated sync is idempotent, partial-fill state advances, and fills link to the exact exchange order after arriving first.
 
 ## Safety and unresolved limitations
 
