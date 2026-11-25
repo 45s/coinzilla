@@ -38,6 +38,7 @@ test("scenario input validation reports unknown, missing and malformed fields", 
     schema,
     input: {
       minProfit: "-0.1",
+      enabled: "yes",
       unexpected: true,
     },
   })
@@ -45,8 +46,8 @@ test("scenario input validation reports unknown, missing and malformed fields", 
   assert.equal(result.valid, false)
   assert.deepEqual(result.errors, [
     "Unknown input field: unexpected",
-    "Input field enabled must be a boolean",
     "Input field minProfit does not match its schema pattern",
+    "Input field enabled must be a boolean",
   ])
 })
 

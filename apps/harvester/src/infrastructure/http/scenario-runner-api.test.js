@@ -292,6 +292,40 @@ test("host validates executable scenario input before the adapter receives it", 
     "Invalid input must be rejected before the strategy adapter is invoked.")
 })
 
+test("host blocks source-approved scenarios with invalid input schemas", () => {
+  const host = createScenarioRunnerHost({
+    adapters: [{
+      strategyId: "RS",
+      execute: async () => ({ output: "must not execute" }),
+      cancel: async () => true,
+    }],
+    scenarioCatalog: [{
+      id: "RS-SIM-BAD-SCHEMA",
+      name: "Invalid schema",
+      layer: "application",
+      status: "TEST-MAPPED",
+      executionStatus: "EXECUTABLE",
+      executable: true,
+      inputSchema: {
+        type: "object",
+        required: [],
+        additionalProperties: false,
+        properties: {
+          value: {
+            type: "string",
+            pattern: "[",
+          },
+        },
+      },
+    }],
+  })
+  const [scenario] = host.catalog[0].scenarios
+
+  assert.equal(scenario.executable, false,
+    "A source-approved mapping with an invalid schema must remain blocked.")
+  assert.equal(scenario.executionStatus, "BLOCKED")
+})
+
 test("host blocks an executable source mapping when its strategy adapter is absent", () => {
   const host = createScenarioRunnerHost({
     scenarioCatalog: [{
