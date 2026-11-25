@@ -1,6 +1,7 @@
 import nodeTest from "node:test"
 import assert from "node:assert/strict"
 import * as shared from "./start-harvester-test-support.js"
+import { resolveHarvesterOptions } from "../../src/bootstrap/config/resolve-harvester-options.js"
 
 const { appConfig, createBroker, makeVolatilityReadyBroker, binanceEnv, startHarvesterForTest, createTwoMarketStartupConfig } = shared
 const test = (...args) => nodeTest(`[market-evaluation.test.js] ${args[0]}`, ...args.slice(1))
@@ -367,4 +368,57 @@ test("delivers market price events independently for every enabled market", asyn
   } finally {
     await runtime.stop()
   }
+})
+
+test("rejects conflicting CG/RS volatility settings for the same enabled market", async () => {
+  const conflictingConfig = {
+    ...appConfig,
+    strategies: {
+      ...appConfig.strategies,
+      CG_coinGrabber: {
+        ...appConfig.strategies.CG_coinGrabber,
+        pairs: {
+          ...appConfig.strategies.CG_coinGrabber.pairs,
+          BTCUSDT: {
+            ...appConfig.strategies.CG_coinGrabber.pairs.BTCUSDT,
+            enableVolatilityProtection: true,
+          },
+        },
+      },
+      RS_recoverySeller: {
+        enabled: true,
+        pairs: {
+          BTCUSDT: {
+            enabled: true,
+            tradingEnvironment: "testnet",
+            enableVolatilityProtection: false,
+            legacyPosition: {
+              invested: 10,
+              quantity: 1,
+            },
+            sellQuantity: 1,
+            investment: 10,
+            orderQuantity: 1,
+            minProfit: 0.01,
+            priceStepPercent: 0.5,
+            makerPercent: 0.1,
+            takerPercent: 0.1,
+          },
+        },
+      },
+    },
+  }
+
+  await assert.rejects(
+    resolveHarvesterOptions({
+      appConfig: conflictingConfig,
+      env: binanceEnv,
+      executionRoutes: [
+        { strategyId: "CG_coinGrabber", symbol: "BTCUSDT" },
+        { strategyId: "RS_recoverySeller", symbol: "BTCUSDT" },
+      ],
+    }),
+    /Market BTCUSDT has conflicting volatility protection settings for CG and RS/,
+    "Shared market volatility protection must reject conflicting enabled CG/RS policy instead of silently choosing one strategy's setting.",
+  )
 })
