@@ -375,3 +375,5 @@ The scenario catalog is the single repository-wide human-readable behavior index
 ### 2026-11-25 Recovery Seller scenario checkpoint
 
 Added an application-boundary regression in `src/use-cases/create-recovery-seller-action-authorizer.test.js`: an RS-owned `PARTIALLY_FILLED` BUY with 6 remaining at price 10 reserves 60 quote; with 65 free quote, a new 10-quote RS BUY defers with `INSUFFICIENT_QUOTE_BALANCE`. Scenario subcase RS-002-006-B is TEST-MAPPED. The test has not run on this head; RS-002-006 and RS-002 remain PARTIAL, and no VERIFIED claim is made. Full order-event partial-fill and terminal-release coverage remains a separate follow-up.
+
+Additional RS checkpoint: RS-002-020-B now maps to an authorizer/account-allocation regression proving 20 existing exposure + 60 owned pending BUY commitment + 20 new BUY is accepted at exact 100 cap equality. This test is added but unrun; RS-002-020 / RS-002 remain PARTIAL.
