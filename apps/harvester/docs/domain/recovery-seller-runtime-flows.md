@@ -67,6 +67,7 @@ Primary source: [start-harvester.js](../../src/bootstrap/start-harvester.js), [c
 | RS SELL execution report / fill | Records/stages the canonical SELL fill; a terminal SELL causes complete order-fill-history reconciliation and mixed accounting | **No direct reevaluation.** The terminal event completes accounting/reconciliation, not a new RS decision. |
 | User-data event that explicitly requests reevaluation | The user-data handler calls \`tradingEngine.evaluateLatest({ symbol })\` | **Yes, if the event result sets \`reevaluate: true\`.** The RS-owned order-status path inspected here does not set it. |
 | Deferred strategy evaluation | User-data finalization resumes symbols already in the deferred-evaluation set when readiness returns | **Conditionally.** Only previously deferred symbols are resumed. |
+| Fresh market-book event | Stores the fresh book; if the symbol is already deferred and not paused, calls the latest-transition evaluator | **Conditionally.** A book update alone does not evaluate every RS market. |
 | Trailing-BUY replacement completion | After cancellation/reconciliation and readiness checks, the engine calls the latest-transition evaluator again | **Yes**, unless stopping/readiness gates prevent it. The preflight-only pass itself skips RS. |
 | Preflight-only evaluation | Validates a Conservative replacement candidate | **No.** \`createLatestTransitionEvaluator\` skips RS for \`preflightOnly\`. |
 | Shutdown-recovery-only evaluation | Runs the Conservative shutdown-recovery path | **No.** \`createLatestTransitionEvaluator\` skips RS for \`shutdownRecoveryOnly\`. |
@@ -243,7 +244,17 @@ type RecoverySellerRuntimeSnapshot = {
   planInput: RecoverySellerPlanInput;
   cumulativeNetSellProceeds: string;
   pendingBuyCommitment: string;
-  activeOrders: CanonicalOrder[];
+  activeOrders: Array<{
+    clientOrderId: string;
+    brokerOrderId?: string;
+    market: object;
+    side: "BUY" | "SELL";
+    status: string;
+    originalQuantity: object;
+    executedQuantity: object;
+    limitPrice: object;
+    ownership?: RecoverySellerOwnership;
+  }>;
   stopState: { status: "CLEAR" | "STOPPED"; decision?: object | null };
   strategyStopped: boolean;
   marketPaused: boolean;
@@ -459,7 +470,7 @@ stateDiagram-v2
     UNRESOLVED --> [*]: blocked pending approved recovery policy
 \`\`\`
 
-The domain state factory also defines `RECONCILIATION_REQUIRED` and `reconcileRecoverySellerCycleSell`; the latter preserves the terminal status, reconciliation flag and profitability result in the canonical cycle-state shape. The current application workflow does not consistently publish that shape: its active-order projection can keep an UNKNOWN SELL represented as `SELL_SUBMITTED` while returning a `RECONCILE` decision, and its terminal outcome projection stores `sellOrderClientId` / `sellOrderBrokerOrderId` / `appliedFillIds` / `eligible` rather than the canonical `sellOrderIdentity` / `terminalOrderStatus` / `terminalReconciled` / `profitabilityEligible` fields. The BUY policy validates the canonical cycle state, so this application/domain projection mismatch also needs an application-level regression and correction.
+The domain state factory also defines `RECONCILIATION_REQUIRED` and `reconcileRecoverySellerCycleSell`; the latter preserves the terminal status, reconciliation flag and profitability result in the canonical cycle-state shape. The current application workflow reconstructs an active UNKNOWN order as `SELL_SUBMITTED` while returning a `RECONCILE` decision; it does not currently publish the domain's `RECONCILIATION_REQUIRED` state for that path. The current application workflow does not consistently publish the canonical shape: its active-order projection can keep an UNKNOWN SELL represented as `SELL_SUBMITTED` while returning a `RECONCILE` decision, and its terminal outcome projection stores `sellOrderClientId` / `sellOrderBrokerOrderId` / `appliedFillIds` / `eligible` rather than the canonical `sellOrderIdentity` / `terminalOrderStatus` / `terminalReconciled` / `profitabilityEligible` fields. The BUY policy validates the canonical cycle state, so this application/domain projection mismatch also needs an application-level regression and correction.
 
 The intended contract is:
 
