@@ -451,3 +451,35 @@ Cancellation is **cooperative first, forced termination second**. The host sends
 A timeout is reported distinctly as **Timed out**, not conflated with user-requested cancellation or generic failure. A worker that cannot safely initialize or verify simulation isolation must not execute scenario actions. The host/API owns lifecycle truth; WebSocket publishes lifecycle changes, while REST status/result/diagnostics remain authoritative after disconnect or missed events. Dashboard domain/application logic consumes framework-neutral lifecycle states and must not own worker termination policy.
 
 The exact cancellation grace-period default, timeout values, process signals, cleanup deadlines and partial-result persistence policy are operational parameters to establish during implementation/runtime audit; this decision does not invent numeric limits.
+
+
+
+## Approved result persistence and AI-debug report decision (2026-11-25)
+
+### Bounded server-side run history
+
+Harvester owns persisted run history. Persist the run record needed to inspect and reproduce/debug completed or interrupted runs: run identity and lifecycle/status, strategy/adapter/scenario identity and versions, production code revision, configuration and input snapshots, ordered injected event sequence, execution outputs, assertions/expected-vs-actual comparison, structured steps/decisions/trace, diagnostics and timestamps. Persist only simulation data; never credentials, secrets, live account data or production trading state. Worker process memory/state is not persisted as production state.
+
+Retention and storage limits must be configurable and bounded (including age/count/size policy as established by operational audit). Expiry/deletion must be explicit in API/UI behavior; a result that has expired must not appear as an empty or successful run. REST exposes authoritative run details/history and WebSocket remains notification-only. Scenario-definition persistence is a separate concern from execution-result retention and must not be conflated with it.
+
+### One-click AI Debug Report
+
+Every inspectable run must offer a client-side **Copy AI Debug Report** action. It creates a self-contained, paste-ready, versioned Markdown report with structured JSON sections for exact values. The report must include all available scenario inputs, outputs, lifecycle/status history, ordered events, execution steps, decisions, calculations, validations, assertions, expected-vs-actual results, diagnostics and relevant metadata—not merely a short summary or a link to server state.
+
+The report envelope should include, where applicable:
+
+- Repository (45s/coinzilla), source branch/ref and production code commit/revision used by the run (do not label the repository's current target branch as the executed code revision unless it actually was).
+- Strategy identifier and display name (e.g. RS / Recovery Seller), adapter/version, scenario name, stable scenarioId, scenario/catalogue version and independently executable subcase identifier.
+- runId, report schema/version, runner version, run creation/start/end timestamps, duration, final status and full lifecycle/status transitions.
+- Execution mode explicitly marked simulation-only, worker/isolation outcome, timeout/cancellation/forced-termination information when relevant.
+- Exact effective configuration snapshot with defaults/overrides and provenance; initial state and every declared input with units/precision where relevant.
+- Complete ordered injected event list with sequence numbers and payloads.
+- Ordered execution steps and trace records, including step identity, triggering event, inputs, decisions/branches, calculations, validations, reason/disposition, outputs and links/provenance when supplied by the execution contract.
+- Final output/state, generated intents, simulated broker outcomes, accounting/state changes, assertions and expected-vs-actual comparison.
+- Errors, warnings, blocked reasons, worker/transport diagnostics and trace completeness indicators.
+
+Use stable field names, explicit null/unavailable/omitted semantics, deterministic ordering and enough provenance to correlate every step with its source event and production revision. Include the complete available evidence; never silently truncate a report. If size or browser clipboard constraints prevent a full copy, clearly report that and offer an explicit complete export/download or segmented-copy path rather than presenting a partial report as complete. The client should show a clear copied/failure confirmation and provide a selectable-text fallback if clipboard access is unavailable.
+
+The report must redact secrets and credentials by construction. It must not include broker/API keys, authentication tokens, private account data or other sensitive live data. Exported content is a diagnostic snapshot; it must not expose server-side secrets or permit replay against live infrastructure. The report generator and report schema belong to framework-independent application/domain contracts; Angular only invokes the use case and presents the copy/fallback affordance.
+
+The top-level Markdown document contains a short human-readable header and sections for metadata, scenario, configuration, inputs, events, lifecycle, steps, decisions, outputs, assertions and diagnostics. Exact machine-readable records are included as fenced JSON. The schema must be versioned independently of REST/WebSocket transport DTO versions.
