@@ -158,6 +158,29 @@ describe('framework-independent Scenario Runner application', () => {
     expect(snapshot.history).toHaveLength(1);
   });
 
+  it('refreshes the selected run and history for a matching WebSocket update', async () => {
+    const update = await application.refreshAfterEvent({
+      runId: 'run-1',
+      activeRunId: 'run-1',
+    });
+
+    expect(update.kind).toBe('run');
+    expect(gateway.getRun).toHaveBeenCalledWith('run-1');
+    expect(update.snapshot.run.runId).toBe('run-1');
+    expect(update.snapshot.history).toHaveLength(1);
+  });
+
+  it('refreshes history for background-run updates without replacing the selected run', async () => {
+    const update = await application.refreshAfterEvent({
+      runId: 'run-background',
+      activeRunId: 'run-selected',
+    });
+
+    expect(update.kind).toBe('history');
+    expect(gateway.getRun).not.toHaveBeenCalled();
+    expect(update.history).toHaveLength(1);
+  });
+
   it('cancels through the gateway and then reads authoritative run state', async () => {
     const snapshot = await application.cancelRun({ runId: 'run-1' });
 
