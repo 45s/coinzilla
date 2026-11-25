@@ -382,8 +382,32 @@ function readExistingCommissions({ transaction, fillId } = {}) {
   `).all(fillId)
 }
 
+function decimalFactsMatch({ left, right } = {}) {
+  const leftMissing = left === undefined || left === null
+  const rightMissing = right === undefined || right === null
+  if (leftMissing || rightMissing) {
+    return leftMissing && rightMissing
+  }
+  return compareDecimal({ left, right }) === 0
+}
+
 function commissionFactsMatch({ existing, candidate } = {}) {
-  return JSON.stringify(existing) === JSON.stringify(candidate)
+  return existing.length === candidate.length && existing.every((commission, index) => {
+    const incoming = candidate[index]
+    return commission.ordinal === incoming.ordinal &&
+      commission.asset_id === incoming.asset_id &&
+      commission.asset_code === incoming.asset_code &&
+      decimalFactsMatch({
+        left: commission.amount,
+        right: incoming.amount,
+      }) &&
+      decimalFactsMatch({
+        left: commission.quote_value_amount,
+        right: incoming.quote_value_amount,
+      }) &&
+      commission.quote_value_asset_id === incoming.quote_value_asset_id &&
+      commission.quote_value_asset_code === incoming.quote_value_asset_code
+  })
 }
 
 function assertDuplicateMatches({ transaction, existing, candidate } = {}) {
@@ -409,7 +433,17 @@ function assertDuplicateMatches({ transaction, existing, candidate } = {}) {
     existing.client_order_id === null ||
     candidate.client_order_id === null ||
     existing.client_order_id === candidate.client_order_id
-  const factsMatch = columns.every((column) => existing[column] === candidate[column]) &&
+  const decimalColumns = new Set([
+    "execution_price",
+    "executed_base_quantity",
+    "executed_quote_quantity",
+  ])
+  const factsMatch = columns.every((column) => decimalColumns.has(column)
+    ? decimalFactsMatch({
+        left: existing[column],
+        right: candidate[column],
+      })
+    : existing[column] === candidate[column]) &&
     clientOrderIdentityMatches
   const commissionsMatch = commissionFactsMatch({
     existing: readExistingCommissions({

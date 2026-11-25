@@ -83,6 +83,7 @@ A fill's `order_id` is a nullable foreign key to `orders.id`. Fill records requi
 
 - Financial values are stored as SQLite `TEXT` decimal strings. Input is validated using the canonical decimal contract; comparisons use exact decimal utilities, never JavaScript floating-point arithmetic or raw string equality.
 - `orders.original_quantity`, `executed_quantity`, `remaining_quantity`, `cumulative_quote_quantity`, and `limit_price` preserve their supplied decimal strings. Numerically equivalent representations (for example, different trailing-zero precision) are treated as equal, and an existing representation is retained to avoid formatting churn. A genuinely different numeric value remains an integrity conflict. Optional facts remain `NULL`.
+- Fill execution price/quantity/quote-quantity and commission amount/quote-valuation duplicates are compared by exact numeric value rather than raw text. Formatting-only differences are idempotent, the first stored representation is retained, and genuinely different numeric facts remain integrity conflicts.
 - `orders.average_execution_price` remains `NULL` unless the canonical order contract later supplies an actual average. It is not inferred from cumulative totals.
 - `fills.execution_price`, `executed_base_quantity`, and `executed_quote_quantity` preserve the canonical fill values exactly.
 - Each actual commission is stored with its exact amount, asset ID/code, and optional exchange-supplied quote valuation in `fill_commissions`. Binance `myTrades` provides commission amount and asset but no quote valuation; those quote-value columns remain `NULL` unless the canonical fill supplies an actual valuation. Configured fee rates and current market prices are never used to estimate missing commissions.
@@ -129,7 +130,7 @@ Phase 2 adds a separate bounded observer for `execution.fill_applied`. This even
 
 The observer enqueues work and returns immediately to EventBus delivery. A serialized queue (default maximum 1,000 pending writes) performs SQLite work separately. It does not add database I/O to broker submission, user-data processing, fill application, accounting, Journal, trading-readiness, or strategy decision paths.
 
-- An identical execution identity with identical immutable facts is idempotent. The existing row and commission facts remain; last-observation provenance may advance.
+- An identical execution identity with numerically equivalent immutable execution and commission facts is idempotent, even when decimal formatting differs. The existing row and original decimal representations remain; last-observation provenance may advance.
 - The same scoped execution identity with conflicting price, quantity, order, market, side, commission, or timestamp facts is an integrity error and is logged as a history gap.
 - Queue overflow and database failures are observable diagnostics; they never block or reverse a successful accounting result.
 - Actual exchange trade IDs remain scoped by provider type/instance, account, environment, and market.
