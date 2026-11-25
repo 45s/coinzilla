@@ -51,90 +51,107 @@ function readPendingOrdersByClientIdentity({ transaction, record } = {}) {
   )
 }
 
+function createOrderIdentityIntegrityError({ field, record } = {}) {
+  return new OrderHistoryIntegrityError({
+    field,
+    providerInstanceId: record.providerInstanceId,
+    accountId: record.accountId,
+    clientOrderId: record.clientOrderId,
+    brokerOrderId: record.brokerOrderId ?? null,
+    symbol: record.symbol,
+    marketId: record.market.id,
+  })
+}
+
+function findMatchingExchangeOrderRow({ transaction, record } = {}) {
+  const matches = readOrderByExchangeIdentity({
+    transaction,
+    record,
+  })
+  if (matches.length > 1) {
+    throw createOrderIdentityIntegrityError({
+      field: "exchangeOrderIdentityAmbiguous",
+      record,
+    })
+  }
+  const [match] = matches
+  return match
+}
+
+function findMatchingPendingOrderRow({ transaction, record } = {}) {
+  const matches = readPendingOrdersByClientIdentity({
+    transaction,
+    record,
+  })
+  if (matches.length > 1) {
+    throw createOrderIdentityIntegrityError({
+      field: "pendingClientOrderIdentityAmbiguous",
+      record,
+    })
+  }
+  const [pending] = matches
+  if (pending === undefined) {
+    return undefined
+  }
+  const incomingCreatedAt = record.createdAt == null
+    ? null
+    : new Date(record.createdAt).toISOString()
+  if (
+    pending.market_id !== record.market.id ||
+    incomingCreatedAt === null ||
+    pending.exchange_created_at === null ||
+    pending.exchange_created_at !== incomingCreatedAt
+  ) {
+    throw createOrderIdentityIntegrityError({
+      field: "pendingClientOrderIdentityAmbiguous",
+      record,
+    })
+  }
+  return pending
+}
+
+function assertOrderRowIdentity({ existing, record } = {}) {
+  if (
+    existing !== undefined &&
+    (
+      (record.brokerOrderId != null &&
+        existing.exchange_order_id !== null &&
+        existing.exchange_order_id !== record.brokerOrderId) ||
+      (record.brokerOrderId == null && existing.exchange_order_id !== null)
+    )
+  ) {
+    throw createOrderIdentityIntegrityError({
+      field: "orderIdentity",
+      record,
+    })
+  }
+}
+
 function findExistingOrderRow({ transaction, record } = {}) {
-  if (record.brokerOrderId !== undefined && record.brokerOrderId !== null) {
-    const exchangeMatches = readOrderByExchangeIdentity({
+  if (record.brokerOrderId != null) {
+    const exchangeOrder = findMatchingExchangeOrderRow({
       transaction,
       record,
     })
-    if (exchangeMatches.length > 1) {
-      throw new OrderHistoryIntegrityError({
-        field: "exchangeOrderIdentityAmbiguous",
-        providerInstanceId: record.providerInstanceId,
-        accountId: record.accountId,
-        clientOrderId: record.clientOrderId,
-        brokerOrderId: record.brokerOrderId,
-        symbol: record.symbol,
-        marketId: record.market.id,
-      })
+    if (exchangeOrder !== undefined) {
+      return exchangeOrder
     }
-    if (exchangeMatches.length === 1) {
-      return exchangeMatches[0]
-    }
-    const pendingMatches = readPendingOrdersByClientIdentity({
-      transaction,
-      record,
-    })
-    if (pendingMatches.length > 1) {
-      throw new OrderHistoryIntegrityError({
-        field: "pendingClientOrderIdentityAmbiguous",
-        providerInstanceId: record.providerInstanceId,
-        accountId: record.accountId,
-        clientOrderId: record.clientOrderId,
-        brokerOrderId: record.brokerOrderId,
-        symbol: record.symbol,
-        marketId: record.market.id,
-      })
-    }
-    if (pendingMatches.length === 1) {
-      const pending = pendingMatches[0]
-      const incomingCreatedAt = record.createdAt === undefined || record.createdAt === null
-        ? null
-        : new Date(record.createdAt).toISOString()
-      if (
-        pending.market_id !== record.market.id ||
-        incomingCreatedAt === null ||
-        pending.exchange_created_at === null ||
-        pending.exchange_created_at !== incomingCreatedAt
-      ) {
-        throw new OrderHistoryIntegrityError({
-          field: "pendingClientOrderIdentityAmbiguous",
-          providerInstanceId: record.providerInstanceId,
-          accountId: record.accountId,
-          clientOrderId: record.clientOrderId,
-          brokerOrderId: record.brokerOrderId,
-          symbol: record.symbol,
-          marketId: record.market.id,
-        })
-      }
-      return pending
-    }
+  }
+  const pendingOrder = findMatchingPendingOrderRow({
+    transaction,
+    record,
+  })
+  if (pendingOrder !== undefined) {
+    return pendingOrder
   }
   const existing = readOrder({
     transaction,
     id: record.id,
   })
-  if (
-    existing !== undefined &&
-    (
-      (record.brokerOrderId !== undefined &&
-        record.brokerOrderId !== null &&
-        existing.exchange_order_id !== null &&
-        existing.exchange_order_id !== record.brokerOrderId) ||
-      ((record.brokerOrderId === undefined || record.brokerOrderId === null) &&
-        existing.exchange_order_id !== null)
-    )
-  ) {
-    throw new OrderHistoryIntegrityError({
-      field: "orderIdentity",
-      providerInstanceId: record.providerInstanceId,
-      accountId: record.accountId,
-      clientOrderId: record.clientOrderId,
-      brokerOrderId: record.brokerOrderId ?? null,
-      symbol: record.symbol,
-      marketId: record.market.id,
-    })
-  }
+  assertOrderRowIdentity({
+    existing,
+    record,
+  })
   return existing
 }
 
