@@ -53,33 +53,117 @@ function serializedMessageBytes(message) {
   }
 }
 
-function terminateChild({ child, graceMs }) {
-  if (child.exitCode !== null || child.signalCode !== null) {
+function isChildAlive({ child }) {
+  return child.exitCode === null && child.signalCode === null
+}
+
+function createTerminationController({ child, graceMs, resolve, reject }) {
+  const timers = new Set()
+  let settled = false
+  function clearTimers() {
+    for (const timer of timers) {
+      clearTimeout(timer)
+    }
+    timers.clear()
+  }
+  function finish() {
+    if (settled) {
+      return
+    }
+    settled = true
+    clearTimers()
+    resolve()
+  }
+  function fail({ cause }) {
+    if (settled) {
+      return
+    }
+    if (!isChildAlive({ child })) {
+      finish()
+      return
+    }
+    settled = true
+    clearTimers()
+    reject(new Error("Scenario worker cleanup could not be confirmed", { cause }))
+  }
+  function schedule({ callback }) {
+    const timer = setTimeout(callback, graceMs)
+    timers.add(timer)
+  }
+  function forceKill({ signal }) {
+    if (!isChildAlive({ child })) {
+      finish()
+      return
+    }
+    try {
+      child.kill(signal)
+    } catch (cause) {
+      if (signal === "SIGTERM") {
+        forceKill({ signal: "SIGKILL" })
+        return
+      }
+      fail({ cause })
+      return
+    }
+    if (signal === "SIGTERM") {
+      schedule({
+        callback: () => forceKill({ signal: "SIGKILL" }),
+      })
+      return
+    }
+    schedule({
+      callback: () => {
+        if (isChildAlive({ child })) {
+          fail({ cause: new Error("Worker did not exit after SIGKILL") })
+        } else {
+          finish()
+        }
+      },
+    })
+  }
+  return {
+    finish,
+    fail,
+    forceKill,
+    schedule,
+  }
+}
+
+function terminateChild({ child, graceMs, cooperative = false, runId }) {
+  if (!isChildAlive({ child })) {
     return Promise.resolve()
   }
   const existingTermination = TERMINATION_PROMISES.get(child)
   if (existingTermination) {
     return existingTermination
   }
-  const termination = new Promise((resolve) => {
-    const timer = setTimeout(() => {
-      if (child.exitCode === null && child.signalCode === null) {
-        child.kill("SIGKILL")
+  const termination = new Promise((resolve, reject) => {
+    const controller = createTerminationController({
+      child,
+      graceMs,
+      resolve,
+      reject,
+    })
+    child.once("close", controller.finish)
+    if (cooperative) {
+      try {
+        child.send({
+          type: "cancel",
+          runId,
+        })
+      } catch {
+        controller.forceKill({ signal: "SIGTERM" })
+        return
       }
-    }, graceMs)
-    timer.unref?.()
-    function finish() {
-      clearTimeout(timer)
-      resolve()
+      controller.schedule({
+        callback: () => controller.forceKill({ signal: "SIGTERM" }),
+      })
+      return
     }
-    child.once("close", finish)
-    try {
-      child.kill("SIGTERM")
-    } catch {
-      finish()
-    }
+    controller.forceKill({ signal: "SIGTERM" })
   })
   TERMINATION_PROMISES.set(child, termination)
+  void termination.catch(() => TERMINATION_PROMISES.delete(child))
   return termination
 }
 
@@ -90,7 +174,11 @@ async function handleWorkerMessage({
   terminationGraceMs,
   maxOutputBytes,
   finish,
+  signal,
 }) {
+  if (signal?.aborted) {
+    return
+  }
   let result
   if (serializedMessageBytes(message) > maxOutputBytes) {
     result = {
@@ -109,21 +197,31 @@ async function handleWorkerMessage({
       error: new Error(typeof message.error === "string" ? message.error : "Scenario worker failed"),
     }
   }
-  await terminateChild({
-    child,
-    graceMs: terminationGraceMs,
-  })
+  try {
+    await terminateChild({
+      child,
+      graceMs: terminationGraceMs,
+    })
+  } catch (error) {
+    finish({
+      error,
+      preserveChild: true,
+    })
+    return
+  }
   finish(result)
 }
 
 function createExecutionState({ resolve, reject, children, runId }) {
   let settled = false
-  function finish({ error, output }) {
+  function finish({ error, output, preserveChild = false }) {
     if (settled) {
       return
     }
     settled = true
-    children.delete(runId)
+    if (!preserveChild) {
+      children.delete(runId)
+    }
     if (error) {
       reject(error)
     } else {
@@ -141,7 +239,10 @@ function registerWorkerErrorHandler({ child, terminationGraceMs, finish }) {
     void terminateChild({
       child,
       graceMs: terminationGraceMs,
-    }).then(() => finish({ error }))
+    }).then(() => finish({ error })).catch((cleanupError) => finish({
+      error: cleanupError,
+      preserveChild: true,
+    }))
   })
 }
 
@@ -152,6 +253,7 @@ function registerWorkerMessageHandler({
   maxOutputBytes,
   finish,
   setMessageReceived,
+  signal,
 }) {
   child.once("message", (message) => {
     setMessageReceived()
@@ -179,13 +281,18 @@ function registerWorkerExitHandler({ child, signal, finish, isSettled, hasMessag
   })
 }
 
-function createAbortAwareFinish({ signal, child, terminationGraceMs, finish }) {
+function createAbortAwareFinish({ signal, child, runId, terminationGraceMs, finish }) {
   function onAbort() {
     void terminateChild({
       child,
+      runId,
       graceMs: terminationGraceMs,
+      cooperative: true,
     }).then(() => finishWithCleanup({
       error: new Error("Scenario worker was cancelled"),
+    })).catch((error) => finishWithCleanup({
+      error,
+      preserveChild: true,
     }))
   }
   function finishWithCleanup(result) {
@@ -220,6 +327,7 @@ function createExecutionPromise({
     const finish = createAbortAwareFinish({
       signal,
       child,
+      runId,
       terminationGraceMs,
       finish: state.finish,
     })
@@ -235,6 +343,7 @@ function createExecutionPromise({
       terminationGraceMs,
       maxOutputBytes,
       finish,
+      signal,
       setMessageReceived: () => {
         messageReceived = true
       },
@@ -249,7 +358,7 @@ function createExecutionPromise({
   })
   return {
     promise,
-    fail: (error) => finishExecution?.({ error }),
+    fail: (error, options = {}) => finishExecution?.({ error, ...options }),
   }
 }
 
@@ -352,6 +461,7 @@ function createWorkerExecutor({
     })
     try {
       child.send({
+        type: "execute",
         runId,
         strategyId,
         scenarioId,
@@ -361,7 +471,9 @@ function createWorkerExecutor({
       void terminateChild({
         child,
         graceMs: terminationGraceMs,
-      }).then(() => execution.fail(error))
+      }).then(() => execution.fail(error)).catch((cleanupError) => execution.fail(cleanupError, {
+        preserveChild: true,
+      }))
     }
     return execution.promise
   }
@@ -375,8 +487,11 @@ function createWorkerCanceller({ children, terminationGraceMs }) {
     }
     await terminateChild({
       child,
+      runId,
       graceMs: terminationGraceMs,
+      cooperative: true,
     })
+    children.delete(runId)
     return true
   }
 }

@@ -157,13 +157,21 @@ export function getRecoverySellerRunnerCatalog() {
   return Object.freeze([SCENARIO])
 }
 
-async function executeRecoverySellerProfitabilityScenario({ runId, input }) {
+function assertScenarioNotAborted({ signal }) {
+  if (signal?.aborted) {
+    throw new Error("Scenario worker was cancelled")
+  }
+}
+
+async function executeRecoverySellerProfitabilityScenario({ runId, input, signal }) {
+  assertScenarioNotAborted({ signal })
   const effectiveInput = validateScenarioInput({
     schema: SCENARIO.inputSchema,
     defaults: SCENARIO.input,
     input,
   })
   const actual = calculateRecoverySellerProfitability(effectiveInput)
+  assertScenarioNotAborted({ signal })
   const assertions = Object.freeze([
     createAssertion({
       name: "independent profitability gates match expected outcome",
@@ -213,11 +221,14 @@ export async function executeRecoverySellerRunnerScenario({
   runId,
   scenarioId,
   input,
+  signal,
 } = {}) {
+  assertScenarioNotAborted({ signal })
   if (scenarioId === SCENARIO.id) {
     return executeRecoverySellerProfitabilityScenario({
       runId,
       input,
+      signal,
     })
   }
   throw new Error(`RS scenario "${scenarioId}" is not supported by the current isolated adapter.`)

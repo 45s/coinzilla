@@ -35,22 +35,15 @@ for (const operation of [
   }
 }
 
-process.on("message", async (request) => {
-  try {
+const { createScenarioWorkerMessageHandler } = await import("./scenario-worker-message-handler.js")
+
+const handleWorkerMessage = createScenarioWorkerMessageHandler({
+  dispatch: async (request, options) => {
     const { runScenarioWorkerRequest } = await import("./scenario-worker-dispatch.js")
-    const output = await runScenarioWorkerRequest(request)
-    process.send?.({
-      runId: request.runId,
-      ok: true,
-      output,
-    })
-  } catch (error) {
-    process.send?.({
-      runId: request?.runId,
-      ok: false,
-      error: error instanceof Error ? error.message : "Scenario worker failed",
-    })
-  } finally {
-    process.disconnect?.()
-  }
+    return runScenarioWorkerRequest(request, options)
+  },
+  send: (message) => process.send?.(message),
+  disconnect: () => process.disconnect?.(),
 })
+
+process.on("message", handleWorkerMessage)
