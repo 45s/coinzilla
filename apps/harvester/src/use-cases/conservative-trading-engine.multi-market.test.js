@@ -2201,11 +2201,17 @@ async function createVolatilityCancellationHarness({ orderRegistry, externalOrde
     symbols: ["DOGEUSDT"],
     initialState: { orderRegistry },
     brokerOverrides: {
-      getOpenOrders: async () => ({ ok: true, data: openOrders }),
+      getOpenOrders: async () => ({
+        ok: true,
+        data: openOrders,
+      }),
     },
     eventPublisher: {
       publish: () => ({ ok: true }),
-      flush: async () => ({ ok: true, durable: true }),
+      flush: async () => ({
+        ok: true,
+        durable: true,
+      }),
     },
   })
 }
@@ -2242,7 +2248,10 @@ function createVolatilityCancellationWorkflow({ engine, orderRegistry, snapshot 
     getVolatilityData: () => snapshot,
     runTransition: ({ task }) => task(),
     cancelOwnedBuyOrders: (input) => engine.cancelOwnedBuyOrdersForShutdown(input),
-    evaluateLatest: async () => ({ ok: true, data: { actions: [] } }),
+    evaluateLatest: async () => ({
+      ok: true,
+      data: { actions: [] },
+    }),
     logger: {
       system() {},
       warn() {},
