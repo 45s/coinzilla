@@ -60,10 +60,14 @@ function assertEqualField({ current, candidate, field } = {}) {
 }
 
 function assertOptionalEqualField({ current, candidate, field } = {}) {
+  const currentValue = current[field]
+  const candidateValue = candidate[field]
   if (
-    current[field] !== undefined &&
-    candidate[field] !== undefined &&
-    current[field] !== candidate[field]
+    currentValue !== undefined &&
+    currentValue !== null &&
+    candidateValue !== undefined &&
+    candidateValue !== null &&
+    currentValue !== candidateValue
   ) {
     integrityError({
       field,
