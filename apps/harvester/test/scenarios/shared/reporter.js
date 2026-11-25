@@ -103,15 +103,24 @@ function buildCoverageGaps({
   criticalTests,
 }) {
   return {
-    ...buildCoverageGaps({
-      scenarios,
-      requirements,
-      criticalBehaviorContract,
-      requirementIds,
-      behaviorIds,
-      mappedTests,
-      criticalTests,
-    }),
+    missingCriticalScenarios: scenarios.filter((scenario) => (
+      ["P0", "P1"].includes(scenario.priority) &&
+      !["VERIFIED", "UNSUPPORTED"].includes(scenario.coverageStatus)
+    )),
+    scenariosWithoutTests: scenarios.filter((scenario) => (
+      scenario.relatedExistingTests.length === 0 &&
+      scenario.coverageStatus !== "UNSUPPORTED"
+    )),
+    requirementsWithoutScenarioCoverage: requirements.filter((requirement) => (
+      !requirementIds.has(requirement.id)
+    )),
+    criticalBehaviorsWithoutScenarioCoverage: criticalBehaviorContract.behaviors.filter((behavior) => (
+      !behaviorIds.has(behavior.id)
+    )),
+    testsNotMappedToAnyScenario: criticalTests.filter((testCase) => (
+      !mappedTests.has(`${testCase.path}::${testCase.name}`)
+    )),
+    testDiscoveryScope: "Unmapped-test analysis covers named tests registered in apps/harvester/docs/critical-behaviors.json. Supplemental scenario-specific tests are linked in additional-test-mappings.js; this is not a scan of every Harvester test file.",
   }
 }
 
@@ -157,24 +166,15 @@ function buildCoverage({
       })),
       field: "status",
     }),
-    missingCriticalScenarios: scenarios.filter((scenario) => (
-      ["P0", "P1"].includes(scenario.priority) &&
-      !["VERIFIED", "UNSUPPORTED"].includes(scenario.coverageStatus)
-    )),
-    scenariosWithoutTests: scenarios.filter((scenario) => (
-      scenario.relatedExistingTests.length === 0 &&
-      scenario.coverageStatus !== "UNSUPPORTED"
-    )),
-    requirementsWithoutScenarioCoverage: requirements.filter((requirement) => (
-      !requirementIds.has(requirement.id)
-    )),
-    criticalBehaviorsWithoutScenarioCoverage: criticalBehaviorContract.behaviors.filter((behavior) => (
-      !behaviorIds.has(behavior.id)
-    )),
-    testsNotMappedToAnyScenario: criticalTests.filter((testCase) => (
-      !mappedTests.has(`${testCase.path}::${testCase.name}`)
-    )),
-    testDiscoveryScope: "Unmapped-test analysis covers named tests registered in apps/harvester/docs/critical-behaviors.json. Supplemental scenario-specific tests are linked in additional-test-mappings.js; this is not a scan of every Harvester test file.",
+    ...buildCoverageGaps({
+      scenarios,
+      requirements,
+      criticalBehaviorContract,
+      requirementIds,
+      behaviorIds,
+      mappedTests,
+      criticalTests,
+    }),
   }
 }
 
