@@ -234,3 +234,56 @@ The ordered textual execution trace and calculation inspector remain usable, and
 **Given** scenario parsing, validation, graph construction or run orchestration.
 **When** domain/application tests execute.
 **Then** they run without Angular TestBed, DOM or UI framework runtime; presentation tests cover adapter integration separately.
+
+
+## Future execution scenario 13 — Cooperative cancellation
+
+**Purpose:** Stop an active scenario run while preserving safe partial evidence where possible.
+
+### Given
+A scenario is running in its dedicated isolated worker and the host has an active run identifier.
+
+### When
+The user requests cancellation.
+
+### Then
+The host transitions the run to Cancelling, requests cooperative worker shutdown, and allows the configured grace period for safe cleanup and partial trace/diagnostic capture. The run reaches Cancelled only after worker termination is confirmed. It is never shown as Completed or Passed. Repeated cancellation requests are idempotent.
+
+## Future execution scenario 14 — Forced termination after cancellation grace period
+
+**Purpose:** Guarantee bounded shutdown when a worker ignores or cannot complete cooperative cancellation.
+
+### Given
+A run is Cancelling and its worker has not exited within the configured grace period.
+
+### When
+The grace period expires.
+
+### Then
+The host forcibly terminates the worker, finalizes the run as Cancelled (with forced-termination diagnostics), and releases process resources. Any safely captured partial trace is retained; missing trace is explicitly identified. No live infrastructure fallback is attempted.
+
+## Future execution scenario 15 — Timeout is distinct from cancellation
+
+**Purpose:** Distinguish execution deadline expiry from a user cancellation request.
+
+### Given
+A run exceeds its configured execution timeout without a user cancellation request.
+
+### When
+The host enforces the timeout and terminates the worker, cooperatively where possible and forcibly after the bounded grace period.
+
+### Then
+The authoritative terminal status is Timed out, with diagnostics and any safely available partial trace. The UI does not label it Cancelled, Failed-as-generic, Completed or Passed.
+
+## Future execution scenario 16 — Worker initialization or isolation failure
+
+**Purpose:** Prevent a worker from running when its simulation boundary cannot be established safely.
+
+### Given
+The host cannot initialize the worker or verify its simulation-only composition/isolation.
+
+### When
+The run is being started.
+
+### Then
+No scenario action executes; the run is finalized as Blocked (or an explicitly typed initialization/isolation failure mapped to Blocked) with actionable diagnostics. The host cleans up any partially created process/resources and never retries through live infrastructure.
