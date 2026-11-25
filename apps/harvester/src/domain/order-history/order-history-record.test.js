@@ -38,6 +38,20 @@ test("creates a provider-account-scoped record without losing exact decimal prec
   assert.equal(Object.hasOwn(record, "runtimeSessionId"), false, "Runtime session IDs must not become order-history data.")
 })
 
+test("requires market scope whenever an exchange order ID is available", () => {
+  assert.throws(
+    () => createOrderHistoryId({
+      environment: "testnet",
+      providerInstanceId: "binanceTestnet",
+      providerType: "binance",
+      accountId: "binance-primary",
+      clientOrderId: "h-BTCUSDT-1",
+      brokerOrderId: "exchange-order-1",
+    }),
+    /marketId/,
+  )
+})
+
 test("uses a collision-safe composite identity for provider accounts", () => {
   const first = createOrderHistoryId({
     environment: "testnet",
