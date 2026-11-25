@@ -4,6 +4,7 @@ import { Asset, Commission, Fill, Market, Money, Quantity } from "@coinzilla/ent
 import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { RecoveryLedger } from "../domain/strategies/conservative/recovery-ledger.js"
 import { updateTradingAccounting } from "./update-trading-accounting.js"
+import { evaluateRecoveryCompletion } from "../domain/strategies/conservative/recovery-completion.js"
 
 const baseAsset = new Asset({
   id: "doge",
@@ -419,4 +420,58 @@ test("rejects an unvalued third-asset SELL commission without partially committi
     portfolioValue,
     ledgerValue,
   })
+})
+
+test("completes accounting-backed recovery while retaining validated constrained dust", () => {
+  const bought = createInitialBuyState()
+  const sold = applyFill({
+    state: bought,
+    fill: makeFill({
+      tradeId: "sell-with-constrained-dust",
+      side: "SELL",
+      price: "0.1023",
+      quantity: "99.7",
+      quoteQuantity: "10.2",
+      commissions: [
+        makeCommission({
+          amount: "0.01",
+          asset: quoteAsset,
+        }),
+      ],
+    }),
+  })
+  const position = sold.portfolio.getPosition({ marketId: market.id })
+  const completion = evaluateRecoveryCompletion({
+    sellOrderFullyFilled: true,
+    spent: sold.recoveryLedger.buyCost,
+    netSellProceeds: sold.recoveryLedger.netSellProceeds,
+    activeQuantity: position.baseQuantity.amount,
+    keepQuantity: "0.1",
+    minProfit: "0.01",
+    inventoryDisposition: {
+      status: "EXCHANGE_CONSTRAINED_DUST",
+      quantity: "0.1",
+      reason: "QUANTITY_INCREMENT",
+      quantityStepSize: "0.2",
+      evaluatedQuantity: "0.1",
+    },
+  })
+
+  assert.equal(position.baseQuantity.amount, "0.2", "Confirmed SELL accounting must leave the exact residual inventory.")
+  assert.equal(sold.recoveryLedger.buyCost, "10.03", "The full BUY cost basis must reach recovery completion unchanged.")
+  assert.equal(sold.recoveryLedger.netSellProceeds, "10.19", "Completion must use confirmed net proceeds after the actual quote fee.")
+  assert.deepEqual(completion, {
+    eligible: true,
+    pause: false,
+    reason: null,
+    freeQuantity: "0.2",
+    realizedNetProfit: "0.16",
+    dust: {
+      status: "EXCHANGE_CONSTRAINED_DUST",
+      quantity: "0.1",
+      reason: "QUANTITY_INCREMENT",
+      quantityStepSize: "0.2",
+      evaluatedQuantity: "0.1",
+    },
+  }, "The cycle must retain keepQuantity plus only the exact exchange-constrained dust bonus.")
 })
