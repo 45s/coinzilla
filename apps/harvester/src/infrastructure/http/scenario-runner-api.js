@@ -253,14 +253,7 @@ export async function handleScenarioRunnerRequest({
   if (!pathname.startsWith(API_PREFIX)) {
     return false
   }
-  const origin = request.headers?.origin
-  if (origin && response.scenarioRunnerOrigin !== origin) {
-    sendError({
-      response,
-      status: 403,
-      code: "SCENARIO_RUNNER_ORIGIN_FORBIDDEN",
-      message: "Scenario Runner requests are restricted to approved local Dashboard origins.",
-    })
+  if (rejectUntrustedOrigin({ request, response })) {
     return true
   }
   if (request.method === "OPTIONS") {
