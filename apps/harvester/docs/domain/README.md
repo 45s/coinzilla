@@ -6,7 +6,7 @@
 - [Conservative Domain Specification](CONSERVATIVE_DOMAIN_SPECIFICATION.md) — **sole authoritative Conservative behavior contract**.
 - [Accounting invariants](ACCOUNTING_INVARIANTS.md) — implementation/regression verification matrix and current verification boundary.
 - [Domain test inventory](DOMAIN_TEST_INVENTORY.md) — source-driven behavior-to-test map, test-quality findings and prioritized improvements.
-- [Conservative domain scenario tests](CONSERVATIVE_DOMAIN_SCENARIO_TESTS.md) — Conservative-specific behavior examples and conceptual lifecycle model; uses the shared methodology above. Coverage status is tracked in [#1763](https://github.com/45s/coinzilla/issues/1763).
+- [Conservative domain scenario tests](CONSERVATIVE_DOMAIN_SCENARIO_TESTS.md) — Conservative-specific behavior examples, conceptual lifecycle model, and executable scenario registry/runner guidance; uses the shared methodology above. Business coverage remains tracked in [#1763](https://github.com/45s/coinzilla/issues/1763); registry and reporting tooling is tracked in [#1797](https://github.com/45s/coinzilla/issues/1797).
 - [Domain glossary](DOMAIN_GLOSSARY.md) — domain terms and ownership boundaries.
 - [Portfolio domain](portfolio.md) — Portfolio concepts, fill application and domain boundaries.
 - [Conservative behavior baseline](CONSERVATIVE_BEHAVIOR_BASELINE.md) — superseded historical pointer only; never use as current rules.
