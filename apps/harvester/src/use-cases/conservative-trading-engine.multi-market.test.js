@@ -2216,7 +2216,11 @@ test("RS-008-018-F: runtime CG SELL is rejected when an RS SELL reserves all sha
 
   const result = await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 2 },
+    priceEvent: {
+      symbol: "DOGEUSDT",
+      price: "100",
+      timestamp: 2,
+    },
   })
 
   assert.equal(result.ok, false,
@@ -2247,11 +2251,19 @@ test("RS-008-018-E: concurrent CG BUY intents serialize against a shared RS quot
   const results = await Promise.all([
     harness.engine.processMarketPrice({
       symbol: "DOGEUSDT",
-      priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 2 },
+      priceEvent: {
+      symbol: "DOGEUSDT",
+      price: "100",
+      timestamp: 2,
+    },
     }),
     harness.engine.processMarketPrice({
       symbol: "SOLUSDT",
-      priceEvent: { symbol: "SOLUSDT", price: "100", timestamp: 2 },
+      priceEvent: {
+      symbol: "SOLUSDT",
+      price: "100",
+      timestamp: 2,
+    },
     }),
   ])
 
