@@ -15,10 +15,34 @@ function spawnTestWorker({ workerPath, env, execArgv, stdio }) {
   })
 }
 
+const TEST_SANDBOX_PROFILE = Object.freeze({
+  networkAccess: "deny",
+  filesystemAccess: "read-only-allowlisted-runtime",
+  processExecution: "deny-child-processes",
+  memoryLimitBytes: 268_435_456,
+  cpuTimeLimitMs: 30_000,
+  wallTimeLimitMs: 30_000,
+})
+
+// This test double simulates the trusted launcher contract; it does not prove OS isolation.
+function createSimulatedSandboxLauncher({
+  maxOutputBytes = 1_048_576,
+  spawn = spawnTestWorker,
+} = {}) {
+  const launcher = (options) => spawn(options)
+  launcher.isolationAttestation = Object.freeze({
+    level: "os",
+    ...TEST_SANDBOX_PROFILE,
+    maxOutputBytes,
+  })
+  return launcher
+}
+
+
 test("process adapter returns a helper result from a test-only child launcher", async () => {
   const adapter = createProcessScenarioAdapter({
     strategyId: "RS",
-    spawnSandboxedWorker: spawnTestWorker,
+    spawnSandboxedWorker: createSimulatedSandboxLauncher(),
   })
   const result = await adapter.execute({
     runId: "run-worker-1",
@@ -32,7 +56,7 @@ test("process adapter returns a helper result from a test-only child launcher", 
 test("process adapter fails closed for unsupported scenario dispatch", async () => {
   const adapter = createProcessScenarioAdapter({
     strategyId: "RS",
-    spawnSandboxedWorker: spawnTestWorker,
+    spawnSandboxedWorker: createSimulatedSandboxLauncher(),
   })
   await assert.rejects(adapter.execute({
     runId: "run-worker-2",
@@ -45,7 +69,7 @@ test("process adapter terminates its worker when the run is cancelled", async ()
   const adapter = createProcessScenarioAdapter({
     strategyId: "RS",
     workerPath: defaultWorker,
-    spawnSandboxedWorker: spawnTestWorker,
+    spawnSandboxedWorker: createSimulatedSandboxLauncher(),
     terminationGraceMs: 50,
   })
   const controller = new AbortController()
@@ -64,7 +88,7 @@ test("process adapter waits for worker exit after receiving a result", async () 
   const adapter = createProcessScenarioAdapter({
     strategyId: "example",
     workerPath,
-    spawnSandboxedWorker: spawnTestWorker,
+    spawnSandboxedWorker: createSimulatedSandboxLauncher(),
     terminationGraceMs: 1000,
   })
   const startedAt = Date.now()
@@ -106,10 +130,12 @@ test("process adapter passes a restrictive sandbox profile to its trusted launch
   let receivedProfile
   const adapter = createProcessScenarioAdapter({
     strategyId: "RS",
-    spawnSandboxedWorker: (options) => {
-      receivedProfile = options.sandboxProfile
-      return spawnTestWorker(options)
-    },
+    spawnSandboxedWorker: createSimulatedSandboxLauncher({
+      spawn: (options) => {
+        receivedProfile = options.sandboxProfile
+        return spawnTestWorker(options)
+      },
+    }),
   })
   const result = await adapter.execute({
     runId: "run-worker-profile",
@@ -131,7 +157,7 @@ test("process adapter passes a restrictive sandbox profile to its trusted launch
 test("process adapter rejects synthetic RS runtime fixture identifiers", async () => {
   const adapter = createProcessScenarioAdapter({
     strategyId: "RS",
-    spawnSandboxedWorker: spawnTestWorker,
+    spawnSandboxedWorker: createSimulatedSandboxLauncher(),
   })
   await assert.rejects(adapter.execute({
     runId: "run-worker-rs-runtime",
@@ -163,7 +189,10 @@ test("process adapter rejects worker output above its configured size limit", as
   const adapter = createProcessScenarioAdapter({
     strategyId: "RS",
     maxOutputBytes: 1024,
-    spawnSandboxedWorker: () => fakeChild,
+    spawnSandboxedWorker: createSimulatedSandboxLauncher({
+      maxOutputBytes: 1024,
+      spawn: () => fakeChild,
+    }),
   })
   await assert.rejects(adapter.execute({
     runId: "run-worker-large-output",

@@ -108,3 +108,8 @@ Strategy and scenario registration validation is split into dedicated shape and 
 ## Adapter-level execution gate — 2026-11-25
 
 The process adapter itself must reject execution when its launcher does not carry a verified OS-level isolation attestation. The host catalog gate is not the only protection: direct adapter invocation must also fail before spawning a worker. Process-lifecycle unit tests may simulate the launcher attestation to exercise IPC/termination behavior, but those tests do not prove OS isolation or authorize a production launcher.
+
+
+## Adapter-level fail-closed enforcement — 2026-11-25
+
+The process adapter enforces its own OS-attestation gate at the start of `execute`, before spawning a child. The host catalog also checks the attestation, but callers cannot bypass the isolation requirement by invoking the adapter directly. Process-lifecycle unit tests use an explicitly named simulated launcher attestation to exercise IPC and termination contracts; this is a test double only and is not evidence that an actual OS sandbox launcher exists or that production execution is enabled.

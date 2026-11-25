@@ -317,8 +317,12 @@ function createWorkerExecutor({
   terminationGraceMs,
   maxOutputBytes,
   children,
+  osSandboxVerified,
 }) {
   return async function execute({ runId, scenarioId, input, signal } = {}) {
+    if (!osSandboxVerified) {
+      throw new Error("OS-level sandbox isolation has not been verified for the process scenario adapter")
+    }
     if (signal?.aborted) {
       throw new Error("Scenario worker execution was cancelled before startup")
     }
@@ -386,16 +390,18 @@ export function createProcessScenarioAdapter(options = {}) {
   }
   const validatedOptions = validateProcessScenarioAdapterOptions(resolvedOptions)
   const children = new Map()
+  const osSandboxVerified = hasVerifiedSandboxAttestation({
+    spawnSandboxedWorker: validatedOptions.spawnSandboxedWorker,
+    maxOutputBytes: validatedOptions.maxOutputBytes,
+  })
   return Object.freeze({
     strategyId: validatedOptions.strategyId,
     executionMode: "simulation-only",
-    osSandboxVerified: hasVerifiedSandboxAttestation({
-      spawnSandboxedWorker: validatedOptions.spawnSandboxedWorker,
-      maxOutputBytes: validatedOptions.maxOutputBytes,
-    }),
+    osSandboxVerified,
     execute: createWorkerExecutor({
       ...validatedOptions,
       children,
+      osSandboxVerified,
     }),
     cancel: createWorkerCanceller({
       children,
