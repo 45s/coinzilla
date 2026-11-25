@@ -16,13 +16,17 @@ function isNonEmptyString(value) {
   return typeof value === "string" && value.trim().length > 0
 }
 
-function addError(errors, path, message) {
+function addError({
+  errors,
+  path,
+  message,
+}) {
   errors.push(`${path}: ${message}`)
 }
 
 function isRepositoryRelativePath(value) {
-  if (!isNonEmptyString(value) || value.includes(String.fromCharCode(0)) || value.startsWith("/") ||
-      /^[A-Za-z]:/.test(value)) {
+  if (!isNonEmptyString(value) || value.includes(String.fromCharCode(0)) ||
+      value.startsWith("/") || /^[A-Za-z]:/.test(value)) {
     return false
   }
 
@@ -37,12 +41,20 @@ function validatePath({
   errors,
 }) {
   if (!isRepositoryRelativePath(value)) {
-    addError(errors, path, "must be a safe repository-relative path and must not escape the package")
+    addError({
+      errors,
+      path,
+      message: "must be a safe repository-relative path and must not escape the package",
+    })
     return
   }
 
   if (existingPaths && !existingPaths.has(value)) {
-    addError(errors, path, `path does not exist: "${value}"`)
+    addError({
+      errors,
+      path,
+      message: `path does not exist: "${value}"`,
+    })
   }
 }
 
@@ -52,113 +64,104 @@ function validateStringArray({
   errors,
 }) {
   if (!Array.isArray(value) || value.some((item) => !isNonEmptyString(item))) {
-    addError(errors, path, "must be an array of non-empty strings")
-    return false
-  }
-
-  return true
-}
-
-function validateTestMappings({
-  scenario,
-  index,
-  existingPaths,
-  errors,
-}) {
-  const path = `scenarios[${index}].relatedExistingTests`
-  if (!Array.isArray(scenario.relatedExistingTests)) {
-    addError(errors, path, "must be an array")
-    return
-  }
-
-  const seen = new Set()
-  for (const [testIndex, testCase] of scenario.relatedExistingTests.entries()) {
-    const testPath = `${path}[${testIndex}]`
-    if (!isRecord(testCase) || !isNonEmptyString(testCase.path) || !isNonEmptyString(testCase.name)) {
-      addError(errors, testPath, "must contain non-empty path and name fields")
-      continue
-    }
-
-    validatePath({
-      value: testCase.path,
-      path: `${testPath}.path`,
-      existingPaths,
+    addError({
       errors,
+      path,
+      message: "must be an array of non-empty strings",
     })
-    const key = `${testCase.path}::${testCase.name}`
-    if (seen.has(key)) {
-      addError(errors, testPath, "duplicates a named test mapping in this scenario")
-    }
-    seen.add(key)
   }
 }
 
-function validateScenario({
+function validateScenarioIdentity({
   scenario,
-  index,
+  path,
   ids,
-  requirementIds,
-  behaviorIds,
-  existingPaths,
   errors,
 }) {
-  const path = `scenarios[${index}]`
-  if (!isRecord(scenario)) {
-    addError(errors, path, "must be an object")
-    return
-  }
-
-  if (!/^CON-[A-Z]+-\d{3}$/.test(scenario.id ?? "")) {
-    addError(errors, `${path}.id`, "must use a stable CON-* identifier")
+  if (!/^CON-[A-Z]+-\\d{3}$/.test(scenario.id ?? "")) {
+    addError({
+      errors,
+      path: `${path}.id`,
+      message: "must use a stable CON-* identifier",
+    })
   } else if (ids.has(scenario.id)) {
-    addError(errors, `${path}.id`, `duplicates scenario ID "${scenario.id}"`)
+    addError({
+      errors,
+      path: `${path}.id`,
+      message: `duplicates scenario ID "${scenario.id}"`,
+    })
   } else {
     ids.add(scenario.id)
   }
 
   for (const field of ["title", "description"]) {
     if (!isNonEmptyString(scenario[field])) {
-      addError(errors, `${path}.${field}`, "must be a non-empty string")
+      addError({
+        errors,
+        path: `${path}.${field}`,
+        message: "must be a non-empty string",
+      })
     }
   }
+
   if (!CATEGORY_SET.has(scenario.category)) {
-    addError(errors, `${path}.category`, "is not a supported Conservative category")
+    addError({
+      errors,
+      path: `${path}.category`,
+      message: "is not a supported Conservative category",
+    })
   }
   if (!PRIORITY_SET.has(scenario.priority)) {
-    addError(errors, `${path}.priority`, "must be P0, P1, P2, or P3")
+    addError({
+      errors,
+      path: `${path}.priority`,
+      message: "must be P0, P1, P2, or P3",
+    })
   }
   if (!STATUS_SET.has(scenario.coverageStatus)) {
-    addError(errors, `${path}.coverageStatus`, "is not a supported evidence status")
+    addError({
+      errors,
+      path: `${path}.coverageStatus`,
+      message: "is not a supported evidence status",
+    })
   }
+}
 
-  for (const field of ["tags", "preconditions", "invariants", "relatedRequirements",
-    "relatedCriticalBehaviors", "relatedSourceFiles"]) {
+function validateScenarioEvidenceCollections({
+  scenario,
+  path,
+  existingPaths,
+  errors,
+}) {
+  const stringArrayFields = [
+    "tags",
+    "preconditions",
+    "invariants",
+    "relatedRequirements",
+    "relatedCriticalBehaviors",
+    "relatedSourceFiles",
+  ]
+  for (const field of stringArrayFields) {
     validateStringArray({
       value: scenario[field],
       path: `${path}.${field}`,
       errors,
     })
   }
+
   if (!Array.isArray(scenario.inputEvents)) {
-    addError(errors, `${path}.inputEvents`, "must be an array")
+    addError({
+      errors,
+      path: `${path}.inputEvents`,
+      message: "must be an array",
+    })
   }
   if (!isRecord(scenario.initialState)) {
-    addError(errors, `${path}.initialState`, "must be an object")
-  }
-
-  if (Array.isArray(scenario.relatedRequirements)) {
-    for (const requirementId of scenario.relatedRequirements) {
-      if (!requirementIds.has(requirementId)) {
-        addError(errors, `${path}.relatedRequirements`, `references unknown requirement "${requirementId}"`)
-      }
-    }
-  }
-  if (Array.isArray(scenario.relatedCriticalBehaviors)) {
-    for (const behaviorId of scenario.relatedCriticalBehaviors) {
-      if (!behaviorIds.has(behaviorId)) {
-        addError(errors, `${path}.relatedCriticalBehaviors`, `references unknown critical behavior "${behaviorId}"`)
-      }
-    }
+    addError({
+      errors,
+      path: `${path}.initialState`,
+      message: "must be an object",
+    })
   }
 
   if (Array.isArray(scenario.relatedSourceFiles)) {
@@ -174,28 +177,175 @@ function validateScenario({
 
   validateTestMappings({
     scenario,
-    index,
+    index: path.slice("scenarios[".length, -1),
     existingPaths,
     errors,
   })
+}
 
-  if (scenario.coverageStatus !== "VERIFIED" && !isNonEmptyString(scenario.coverageReason)) {
-    addError(errors, `${path}.coverageReason`, "is required until the scenario is VERIFIED")
+function validateTestMappings({
+  scenario,
+  index,
+  existingPaths,
+  errors,
+}) {
+  const path = `scenarios[${index}].relatedExistingTests`
+  if (!Array.isArray(scenario.relatedExistingTests)) {
+    addError({
+      errors,
+      path,
+      message: "must be an array",
+    })
+    return
   }
+
+  const seen = new Set()
+  for (const [testIndex, testCase] of scenario.relatedExistingTests.entries()) {
+    const testPath = `${path}[${testIndex}]`
+    if (!isRecord(testCase) || !isNonEmptyString(testCase.path) || !isNonEmptyString(testCase.name)) {
+      addError({
+        errors,
+        path: testPath,
+        message: "must contain non-empty path and name fields",
+      })
+      continue
+    }
+
+    validatePath({
+      value: testCase.path,
+      path: `${testPath}.path`,
+      existingPaths,
+      errors,
+    })
+    const key = `${testCase.path}::${testCase.name}`
+    if (seen.has(key)) {
+      addError({
+        errors,
+        path: testPath,
+        message: "duplicates a named test mapping in this scenario",
+      })
+    }
+    seen.add(key)
+  }
+}
+
+function validateScenarioReferences({
+  scenario,
+  path,
+  requirementIds,
+  behaviorIds,
+  errors,
+}) {
+  if (Array.isArray(scenario.relatedRequirements)) {
+    for (const requirementId of scenario.relatedRequirements) {
+      if (!requirementIds.has(requirementId)) {
+        addError({
+          errors,
+          path: `${path}.relatedRequirements`,
+          message: `references unknown requirement "${requirementId}"`,
+        })
+      }
+    }
+  }
+
+  if (Array.isArray(scenario.relatedCriticalBehaviors)) {
+    for (const behaviorId of scenario.relatedCriticalBehaviors) {
+      if (!behaviorIds.has(behaviorId)) {
+        addError({
+          errors,
+          path: `${path}.relatedCriticalBehaviors`,
+          message: `references unknown critical behavior "${behaviorId}"`,
+        })
+      }
+    }
+  }
+}
+
+function validateScenarioCoverageEvidence({
+  scenario,
+  path,
+  errors,
+}) {
+  if (scenario.coverageStatus !== "VERIFIED" && !isNonEmptyString(scenario.coverageReason)) {
+    addError({
+      errors,
+      path: `${path}.coverageReason`,
+      message: "is required until the scenario is VERIFIED",
+    })
+  }
+
   if (scenario.coverageStatus === "TEST-MAPPED" &&
       (!Array.isArray(scenario.relatedExistingTests) || scenario.relatedExistingTests.length === 0)) {
-    addError(errors, path, "TEST-MAPPED requires at least one named test mapping")
+    addError({
+      errors,
+      path,
+      message: "TEST-MAPPED requires at least one named test mapping",
+    })
   }
+
   if (scenario.coverageStatus === "VERIFIED") {
     const verification = scenario.verification
     if (!isRecord(verification) || !/^[a-f0-9]{40}$/i.test(verification.commit ?? "") ||
         !isNonEmptyString(verification.command)) {
-      addError(errors, `${path}.verification`, "VERIFIED requires an exact commit and test command")
+      addError({
+        errors,
+        path: `${path}.verification`,
+        message: "VERIFIED requires an exact commit and test command",
+      })
     }
     if (!Array.isArray(scenario.relatedExistingTests) || scenario.relatedExistingTests.length === 0) {
-      addError(errors, path, "VERIFIED requires named test evidence")
+      addError({
+        errors,
+        path,
+        message: "VERIFIED requires named test evidence",
+      })
     }
   }
+}
+
+function validateScenario({
+  scenario,
+  index,
+  ids,
+  requirementIds,
+  behaviorIds,
+  existingPaths,
+  errors,
+}) {
+  const path = `scenarios[${index}]`
+  if (!isRecord(scenario)) {
+    addError({
+      errors,
+      path,
+      message: "must be an object",
+    })
+    return
+  }
+
+  validateScenarioIdentity({
+    scenario,
+    path,
+    ids,
+    errors,
+  })
+  validateScenarioEvidenceCollections({
+    scenario,
+    path,
+    existingPaths,
+    errors,
+  })
+  validateScenarioReferences({
+    scenario,
+    path,
+    requirementIds,
+    behaviorIds,
+    errors,
+  })
+  validateScenarioCoverageEvidence({
+    scenario,
+    path,
+    errors,
+  })
 }
 
 export function validateConservativeScenarioRegistry({
@@ -212,14 +362,26 @@ export function validateConservativeScenarioRegistry({
     })
   }
   if (!Array.isArray(requirements)) {
-    addError(errors, "requirements", "must be an array")
+    addError({
+      errors,
+      path: "requirements",
+      message: "must be an array",
+    })
   }
   const behaviors = criticalBehaviorContract?.behaviors
   if (!Array.isArray(behaviors)) {
-    addError(errors, "criticalBehaviorContract.behaviors", "must be an array")
+    addError({
+      errors,
+      path: "criticalBehaviorContract.behaviors",
+      message: "must be an array",
+    })
   }
   if (existingPaths !== undefined && !(existingPaths instanceof Set)) {
-    addError(errors, "existingPaths", "must be a Set of repository-relative paths")
+    addError({
+      errors,
+      path: "existingPaths",
+      message: "must be a Set of repository-relative paths",
+    })
   }
 
   const requirementIds = new Set(Array.isArray(requirements)
