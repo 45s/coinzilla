@@ -68,7 +68,7 @@ Scenario execution uses explicit server-owned states: Accepted/Queued → Starti
 
 Harvester persists bounded server-side run history with configurable retention/size limits. The persisted simulation-only evidence includes run identity/status/lifecycle, strategy/scenario and code versions, effective configuration and inputs, ordered events, outputs, steps/decisions/trace, assertions and diagnostics. Scenario-definition storage is separate. Secrets, credentials, live account data and production state are excluded.
 
-Dashboard provides **Copy AI Debug Report** for an inspectable run: a self-contained, versioned Markdown report with structured JSON sections and complete available inputs, outputs, statuses, events, steps, decisions, assertions, diagnostics and provenance, suitable for pasting into an AI chat. It identifies the executed production revision (not merely the target branch), strategy/adapter, scenario/scenarioId and runId. Never silently truncate; offer a complete export or segmented-copy fallback if clipboard constraints prevent full copy. Report generation remains framework-independent; Angular is presentation only.
+Dashboard provides **Copy AI Debug Package** for an inspectable run: one self-contained, versioned JSON document with complete available inputs, outputs, statuses, events, steps, decisions, assertions, diagnostics and provenance, suitable for AI agents. It identifies the executed production revision (not merely the target branch), strategy/adapter, scenario/scenarioId and runId. Never silently truncate; offer a complete export or segmented-copy fallback if clipboard constraints prevent full copy. Report generation remains framework-independent; Angular is presentation only.
 
 
 ## Approved Scenario Runner AI-debug and access decisions — 2026-11-25
@@ -82,7 +82,16 @@ The initial runner is unauthenticated and **strictly loopback-only for local dev
 
 Documentation must use actual RS config fields/values and explicit units. For every RS market, `minProfit: 0.01` means **0.01 units of that market's quote asset as absolute net profit, never 1%**. For the LINEAUSDT TESTNET example this is 0.01 USDT (one USDT cent); `priceStepPercent: 0.5` is a 0.5% price-step setting. Distinguish base quantities (LINEA), quote amounts (USDT), percentages and derived values. Do not invent standalone average-entry inputs; derive legacy average cost from configured legacy basis and label it as derived. Market prices and simulated broker outcomes are ordered scenario events, sourced from existing scenario/test evidence or explicitly authored and validated—not fabricated as configuration.
 
-Proposed determinism behavior (pending approval) distinguishes replay against the exact original production revision from a separate regression execution of the same captured scenario package against a newer revision. Preserve both reports/traces and identify both revisions; control or capture time, generated IDs and other nondeterministic inputs before claiming deterministic replay.
+Approved replay scope is original-version replay only: execute the original scenario against its exact recorded production revision and original inputs/configuration. Newer-revision regression comparison is not currently in scope.
 
 
 **Universal RS rule:** `minProfit` is an absolute net-profit amount in the selected market's quote asset for every RS market. `0.01` always means 0.01 quote-asset units, never 1%; the LINEAUSDT/USDT-cent example above is illustrative only.
+
+
+## Approved Scenario Runner Playground decisions (2026-11-25)
+
+Original scenario replay uses the exact recorded production revision and original scenario/configuration/inputs. The Playground creates a temporary run-local copy where users can change market and strategy configuration; edits never modify or save over the original scenario.
+
+Configuration loaded from a file and configuration entered in the client Playground must pass through the same production parsing, validation, normalization and market-metadata resolution. Strategy code receives validated effective configuration and cannot distinguish its source. Invalid configuration blocks execution before strategy evaluation.
+
+The UI action is **Copy AI Debug Package** and copies complete versioned JSON only, including original scenario, temporary overrides, validated effective configuration, executed revision, ordered events, results, trace and diagnostics. Repository access at the recorded revision is expected for deeper AI-agent debugging.
