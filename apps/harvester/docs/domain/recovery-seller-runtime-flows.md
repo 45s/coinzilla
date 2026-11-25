@@ -387,9 +387,9 @@ sequenceDiagram
     alt exactly one executable action, no deferred action
         Auth-->>Submit: authorized lifecycle decision + action
         Submit->>Submit: validate side, purpose, Position and cycle ownership
+        Submit->>Store: persist durable submission intent
         alt SELL
-            Submit->>Store: persist durable submission intent
-            Submit->>Registry: durably reserve the cycle's sole SELL
+            Submit->>Registry: durably reserve the cycle's sole SELL after intent
         end
         Submit->>Registry: register pending order with RS ownership
         Submit->>Broker: submit through shared broker port
