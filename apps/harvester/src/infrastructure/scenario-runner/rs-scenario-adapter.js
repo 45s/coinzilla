@@ -162,42 +162,64 @@ const RUNTIME_SCENARIO = Object.freeze({
   }),
 })
 
-function validateScenarioInput({ schema, defaults, input }) {
-  const overrides = input ?? {}
+function validateScenarioObject({ overrides }) {
   if (!overrides || typeof overrides !== "object" || Array.isArray(overrides)) {
     throw new TypeError("Scenario input overrides must be a JSON object")
   }
-  if (schema.additionalProperties === false) {
-    for (const key of Object.keys(overrides)) {
-      if (!Object.hasOwn(schema.properties, key)) {
-        throw new TypeError(`Unknown scenario input field: ${key}`)
-      }
+}
+
+function validateScenarioAdditionalProperties({ schema, overrides }) {
+  if (schema.additionalProperties !== false) {
+    return
+  }
+  for (const key of Object.keys(overrides)) {
+    if (!Object.hasOwn(schema.properties, key)) {
+      throw new TypeError(`Unknown scenario input field: ${key}`)
     }
   }
-  const effectiveInput = {
-    ...defaults,
-    ...overrides,
-  }
+}
+
+function validateScenarioRequiredFields({ schema, effectiveInput }) {
   for (const key of schema.required) {
     if (!Object.hasOwn(effectiveInput, key)) {
       throw new TypeError(`Required scenario input field is missing: ${key}`)
     }
   }
+}
+
+function validateScenarioField({ key, fieldSchema, value }) {
+  if (typeof value !== fieldSchema.type) {
+    throw new TypeError(`Scenario input field ${key} must be a ${fieldSchema.type}`)
+  }
+  if (fieldSchema.pattern && !new RegExp(fieldSchema.pattern).test(value)) {
+    throw new TypeError(`Scenario input field ${key} must match its decimal-string schema`)
+  }
+  if (fieldSchema.exclusiveMinimum !== undefined && compareDecimal({
+    left: value,
+    right: fieldSchema.exclusiveMinimum,
+  }) <= 0) {
+    throw new RangeError(`Scenario input field ${key} must be greater than ${fieldSchema.exclusiveMinimum}`)
+  }
+}
+
+function validateScenarioInput({ schema, defaults, input }) {
+  const overrides = input ?? {}
+  validateScenarioObject({ overrides })
+  validateScenarioAdditionalProperties({ schema, overrides })
+  const effectiveInput = {
+    ...defaults,
+    ...overrides,
+  }
+  validateScenarioRequiredFields({
+    schema,
+    effectiveInput,
+  })
   for (const [key, fieldSchema] of Object.entries(schema.properties)) {
-    const value = effectiveInput[key]
-    if (typeof value !== fieldSchema.type) {
-      throw new TypeError(`Scenario input field ${key} must be a ${fieldSchema.type}`)
-    }
-    if (fieldSchema.pattern && !new RegExp(fieldSchema.pattern).test(value)) {
-      throw new TypeError(`Scenario input field ${key} must match its decimal-string schema`)
-    }
-    if (fieldSchema.exclusiveMinimum !== undefined &&
-      compareDecimal({
-        left: value,
-        right: fieldSchema.exclusiveMinimum,
-      }) <= 0) {
-      throw new RangeError(`Scenario input field ${key} must be greater than ${fieldSchema.exclusiveMinimum}`)
-    }
+    validateScenarioField({
+      key,
+      fieldSchema,
+      value: effectiveInput[key],
+    })
   }
   return Object.freeze(effectiveInput)
 }

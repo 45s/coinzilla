@@ -2303,3 +2303,8 @@ Active and incomplete in draft [PR #1837](https://github.com/45s/coinzilla/pull/
 - Process-worker cleanup regressions require cancellation to wait for execution settlement and result handling to wait for child-process close. This does not establish a secure simulation sandbox.
 - Remaining gates: production RS flow reuse and source-mapped scenario coverage; defensible OS-level network/filesystem/process isolation with adversarial tests; shared production config/market metadata and run-local Playground overrides; complete REST/WS contracts and missed-update recovery; persistent bounded history; exact-revision replay; complete versioned debug evidence; Angular-independent application orchestration; and end-to-end acceptance.
 - No LIVE/TESTNET broker, credentials, production persistence or real trading actions are permitted. Keep the PR draft and do not mark roadmap phases complete until exact evidence and CI support it.
+
+
+### Runner implementation-quality follow-up — 2026-11-25
+
+The process-worker lifecycle and RS input validator were decomposed into focused helpers to satisfy strict changed-file function-length, parameter and complexity policies without suppressions. This is a behavior-preserving refactor; cancellation/termination ordering, output limits, fail-closed sandbox requirements and exact decimal validation remain unchanged.

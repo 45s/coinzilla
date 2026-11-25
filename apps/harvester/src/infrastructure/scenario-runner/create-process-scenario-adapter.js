@@ -96,6 +96,69 @@ async function handleWorkerMessage({
   finish(result)
 }
 
+function createExecutionState({ resolve, reject, children, runId }) {
+  let settled = false
+  function finish({ error, output }) {
+    if (settled) {
+      return
+    }
+    settled = true
+    children.delete(runId)
+    if (error) {
+      reject(error)
+    } else {
+      resolve(output)
+    }
+  }
+  return {
+    finish,
+    isSettled: () => settled,
+  }
+}
+
+function registerWorkerErrorHandler({ child, terminationGraceMs, finish }) {
+  child.once("error", (error) => {
+    void terminateChild({
+      child,
+      graceMs: terminationGraceMs,
+    }).then(() => finish({ error }))
+  })
+}
+
+function registerWorkerMessageHandler({
+  child,
+  runId,
+  terminationGraceMs,
+  maxOutputBytes,
+  finish,
+  setMessageReceived,
+}) {
+  child.once("message", (message) => {
+    setMessageReceived()
+    void handleWorkerMessage({
+      message,
+      runId,
+      child,
+      terminationGraceMs,
+      maxOutputBytes,
+      finish,
+    })
+  })
+}
+
+function registerWorkerExitHandler({ child, signal, finish, isSettled, hasMessage }) {
+  child.once("exit", (...exitArguments) => {
+    if (!isSettled() && !hasMessage()) {
+      const [code, exitSignal] = exitArguments
+      finish({
+        error: signal?.aborted
+          ? new Error("Scenario worker was cancelled")
+          : new Error(`Scenario worker exited without a result (code ${code}, signal ${exitSignal})`),
+      })
+    }
+  })
+}
+
 function createExecutionPromise({
   child,
   runId,
@@ -105,24 +168,21 @@ function createExecutionPromise({
   maxOutputBytes,
 }) {
   let finishExecution
-  const promise = new Promise((resolve, reject) => {
-    let settled = false
+  const promise = new Promise((...settlers) => {
+    const [resolve, reject] = settlers
     let messageReceived = false
-    function finish({ error, output }) {
-      if (settled) {
-        return
-      }
-      settled = true
+    let onAbort
+    const state = createExecutionState({
+      resolve,
+      reject,
+      children,
+      runId,
+    })
+    function finish(result) {
       signal?.removeEventListener("abort", onAbort)
-      children.delete(runId)
-      if (error) {
-        reject(error)
-      } else {
-        resolve(output)
-      }
+      state.finish(result)
     }
-    finishExecution = finish
-    function onAbort() {
+    onAbort = () => {
       void terminateChild({
         child,
         graceMs: terminationGraceMs,
@@ -130,43 +190,37 @@ function createExecutionPromise({
         error: new Error("Scenario worker was cancelled"),
       }))
     }
+    finishExecution = finish
     signal?.addEventListener("abort", onAbort, { once: true })
     if (signal?.aborted) {
       onAbort()
     }
-    child.once("error", (error) => {
-      void terminateChild({
-        child,
-        graceMs: terminationGraceMs,
-      }).then(() => finish({ error }))
+    registerWorkerErrorHandler({
+      child,
+      terminationGraceMs,
+      finish,
     })
-    child.once("message", (message) => {
-      messageReceived = true
-      void handleWorkerMessage({
-        message,
-        runId,
-        child,
-        terminationGraceMs,
-        maxOutputBytes,
-        finish,
-      })
+    registerWorkerMessageHandler({
+      child,
+      runId,
+      terminationGraceMs,
+      maxOutputBytes,
+      finish,
+      setMessageReceived: () => {
+        messageReceived = true
+      },
     })
-    child.once("exit", (...exitArguments) => {
-      if (!settled && !messageReceived) {
-        const [code, exitSignal] = exitArguments
-        finish({
-          error: signal?.aborted
-            ? new Error("Scenario worker was cancelled")
-            : new Error(`Scenario worker exited without a result (code ${code}, signal ${exitSignal})`),
-        })
-      }
+    registerWorkerExitHandler({
+      child,
+      signal,
+      finish,
+      isSettled: state.isSettled,
+      hasMessage: () => messageReceived,
     })
   })
   return {
     promise,
-    fail: (error) => finishExecution?.({
-      error,
-    }),
+    fail: (error) => finishExecution?.({ error }),
   }
 }
 
@@ -175,13 +229,13 @@ function createExecutionPromise({
  * This module enforces lifecycle and output limits but does not create the
  * filesystem, network, process or memory isolation itself.
  */
-export function createProcessScenarioAdapter({
+function validateProcessScenarioAdapterOptions({
   strategyId,
   spawnSandboxedWorker,
-  workerPath = DEFAULT_WORKER_PATH,
-  terminationGraceMs = DEFAULT_TERMINATION_GRACE_MS,
-  maxOutputBytes = DEFAULT_MAX_OUTPUT_BYTES,
-} = {}) {
+  workerPath,
+  terminationGraceMs,
+  maxOutputBytes,
+}) {
   if (typeof strategyId !== "string" || !strategyId.trim()) {
     throw new TypeError("Process scenario adapter requires strategyId")
   }
@@ -197,9 +251,17 @@ export function createProcessScenarioAdapter({
   if (!Number.isSafeInteger(maxOutputBytes) || maxOutputBytes < 1) {
     throw new RangeError("Worker output limit must be a positive safe integer")
   }
-  const children = new Map()
+}
 
-  async function execute({ runId, scenarioId, input, signal } = {}) {
+function createWorkerExecutor({
+  strategyId,
+  spawnSandboxedWorker,
+  workerPath,
+  terminationGraceMs,
+  maxOutputBytes,
+  children,
+}) {
+  return async function execute({ runId, scenarioId, input, signal } = {}) {
     if (signal?.aborted) {
       throw new Error("Scenario worker execution was cancelled before startup")
     }
@@ -242,8 +304,10 @@ export function createProcessScenarioAdapter({
     }
     return execution.promise
   }
+}
 
-  async function cancel({ runId } = {}) {
+function createWorkerCanceller({ children, terminationGraceMs }) {
+  return async function cancel({ runId } = {}) {
     const child = children.get(runId)
     if (!child) {
       return false
@@ -254,10 +318,26 @@ export function createProcessScenarioAdapter({
     })
     return true
   }
+}
 
+export function createProcessScenarioAdapter(options = {}) {
+  const resolvedOptions = {
+    ...options,
+    workerPath: options.workerPath ?? DEFAULT_WORKER_PATH,
+    terminationGraceMs: options.terminationGraceMs ?? DEFAULT_TERMINATION_GRACE_MS,
+    maxOutputBytes: options.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES,
+  }
+  validateProcessScenarioAdapterOptions(resolvedOptions)
+  const children = new Map()
   return Object.freeze({
-    strategyId,
-    execute,
-    cancel,
+    strategyId: resolvedOptions.strategyId,
+    execute: createWorkerExecutor({
+      ...resolvedOptions,
+      children,
+    }),
+    cancel: createWorkerCanceller({
+      children,
+      terminationGraceMs: resolvedOptions.terminationGraceMs,
+    }),
   })
 }
