@@ -66,6 +66,7 @@ function createFailureSnapshot({ error, symbol, state, fallbackStage }) {
     ...(typeof state.currentClientOrderId === "string" ? {
       clientOrderId: state.currentClientOrderId,
     } : {}),
+    ...(state.currentConflictDetails ?? {}),
     ...(typeof state.currentTradeId === "string" ? {
       tradeId: state.currentTradeId,
     } : {}),
@@ -89,6 +90,7 @@ function resetCurrentMarketContext(state) {
   state.currentBrokerOrderId = null
   state.currentClientOrderId = null
   state.currentTradeId = null
+  state.currentConflictDetails = null
   state.lastPersistedOrderId = null
   state.lastPersistedTradeId = null
 }
@@ -167,6 +169,7 @@ function createInitialState() {
     currentBrokerOrderId: null,
     currentClientOrderId: null,
     currentTradeId: null,
+    currentConflictDetails: null,
     lastPersistedOrderId: null,
     lastPersistedTradeId: null,
     failures: [],

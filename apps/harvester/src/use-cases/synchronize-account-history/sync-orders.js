@@ -35,6 +35,31 @@ function validateCanonicalOrder({ order, symbol, lastOrderId, state, providerIde
   return orderId
 }
 
+function getSafeOrderConflictDetails(error) {
+  const context = error?.context ?? {}
+  const details = {}
+  for (const key of [
+    "field",
+    "marketId",
+    "existingBrokerOrderId",
+    "incomingBrokerOrderId",
+    "existingValue",
+    "incomingValue",
+    "existingSource",
+    "incomingSource",
+  ]) {
+    const value = context[key]
+    if (
+      (typeof value === "string" && value.length <= 128) ||
+      (typeof value === "number" && Number.isFinite(value)) ||
+      typeof value === "boolean"
+    ) {
+      details[key] = value
+    }
+  }
+  return Object.freeze(details)
+}
+
 async function persistCanonicalOrder({ order, repositories, providerIdentity, environment, observedAt, state }) {
   const record = mapCanonicalOrder({
     order,
@@ -45,7 +70,12 @@ async function persistCanonicalOrder({ order, repositories, providerIdentity, en
   if (record === null) {
     return
   }
-  await repositories.orderRepository.upsertHistorical(record)
+  try {
+    await repositories.orderRepository.upsertHistorical(record)
+  } catch (error) {
+    state.currentConflictDetails = getSafeOrderConflictDetails(error)
+    throw error
+  }
   state.ordersPersisted += 1
   state.lastPersistedOrderId = order.brokerOrderId
 }
