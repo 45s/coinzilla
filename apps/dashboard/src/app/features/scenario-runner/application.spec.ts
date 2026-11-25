@@ -164,7 +164,9 @@ describe('framework-independent Scenario Runner application', () => {
       activeRunId: 'run-1',
     });
 
-    expect(update.kind).toBe('run');
+    if (update.kind !== 'run') {
+      throw new Error('A matching active-run update must refresh run details.');
+    }
     expect(gateway.getRun).toHaveBeenCalledWith('run-1');
     expect(update.snapshot.run.runId).toBe('run-1');
     expect(update.snapshot.history).toHaveLength(1);
@@ -176,7 +178,9 @@ describe('framework-independent Scenario Runner application', () => {
       activeRunId: 'run-selected',
     });
 
-    expect(update.kind).toBe('history');
+    if (update.kind !== 'history') {
+      throw new Error('A background-run update must refresh history only.');
+    }
     expect(gateway.getRun).not.toHaveBeenCalled();
     expect(update.history).toHaveLength(1);
   });
