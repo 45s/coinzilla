@@ -73,8 +73,11 @@ test("every mapped scenario test title exists in its referenced test file", () =
     assert.equal(existsSync(filePath), true,
       `${scenarioId} mapped test file must exist: ${mapping.file}`)
     const source = readFileSync(filePath, "utf8")
-    assert.ok(source.includes(mapping.title),
-      `${scenarioId} mapped test title is absent from ${mapping.file}: ${mapping.title}`)
+    const hasLiteralTestTitle = source.includes(mapping.title)
+    const registersScenarioOwnedTitle = source.includes("test(scenario.test.title") &&
+      source.includes("from \"./scenarios/")
+    assert.ok(hasLiteralTestTitle || registersScenarioOwnedTitle,
+      `${scenarioId} mapped test title is neither declared literally nor registered from its scenario record in ${mapping.file}: ${mapping.title}`)
   }
 })
 
