@@ -102,7 +102,7 @@ cancellations, account mutations or Harvester restarts are authorized or require
 
 ### Phase 5 checkpoint — SELL accounting (2026-11-25)
 
-- Current slice: [PR #1840](https://github.com/45s/coinzilla/pull/1840), branch `test/1763-phase5-sell-accounting`.
+- Current slice: [PR #1844](https://github.com/45s/coinzilla/pull/1840), branch `test/1763-phase5-sell-accounting`.
 - Added a composed canonical Fill → Portfolio/Position + RecoveryLedger regression for one BUY followed by three SELL fills. The sequence independently asserts gross-to-net proceeds, base inventory debits, all supported SELL commission asset effects, retained full BUY basis, outstanding recovery and realized net profit.
 - Additional regressions cover duplicate SELL delivery, conflicting commission facts and unvalued third-asset fee failure atomicity.
 - Test is registered in the targeted Harvester regression suite. No production behavior, trading rules, broker calls, exchange operations or credentials are changed.
@@ -133,7 +133,7 @@ For each slice:
 
 Do not claim 100% correctness from line/branch coverage. Completion means every applicable canonical rule and risk row is mapped to adequate executable evidence at the correct layer; every financial invariant and lifecycle transition is protected; all known gaps are closed or explicitly blocked/unsupported; no test oracle derives expected results from the implementation under test; and required CI passes on the exact merged head. Coverage percentages remain useful diagnostics, not the acceptance definition.
 
-**Current status:** Phases 1–4 are complete on `develop`: the source/evidence audit, test-oracle integrity, core recovery arithmetic and BUY accounting increments are merged and their exact-head verification is recorded above and in #1763. Phase 5 SELL accounting is in progress in PR #1840; the new multi-fill SELL scenario is not counted as covered until exact-head CI passes and the PR is merged. The separate scenario tooling slice is tracked by child issue #1797 / PR #1798; it does not replace this business-behavior matrix. No production behavior or trading rules changed in the Phase 2–5 test-only increments.
+**Current status:** Phases 1–4 are complete on `develop`: the source/evidence audit, test-oracle integrity, core recovery arithmetic and BUY accounting increments are merged and their exact-head verification is recorded above and in #1763. Phase 5 SELL accounting is in progress in PR #1844; the new multi-fill SELL scenario is not counted as covered until exact-head CI passes and the PR is merged. The separate scenario tooling slice is tracked by child issue #1797 / PR #1798; it does not replace this business-behavior matrix. No production behavior or trading rules changed in the Phase 2–5 test-only increments.
 
 ## Conservative strategy safety pause cancels current-process-owned BUYs — issue #1749
 
