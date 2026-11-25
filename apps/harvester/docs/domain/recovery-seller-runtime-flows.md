@@ -374,10 +374,15 @@ sequenceDiagram
     Policy->>Auth: one BUY or SELL action + snapshot
     Auth->>Alloc: account balances, Portfolio, active orders, RS commitments
     Alloc-->>Auth: exactly one executable action or deferred/blocked result
-    alt allocation denied or ambiguous
+    alt exactly one executable action, no deferred action
+        Auth-->>Submit: authorized action
+    else exactly one deferred action
+        Auth-->>Policy: deferred / skipped; no broker call
+    else allocation error or ambiguous result
         Auth->>Store: latch durable RS STOP
         Auth-->>Policy: no submission
-    else allocation allowed
+    end
+    alt allocation allowed
         Auth->>Submit: authorized lifecycle decision + action
         Submit->>Submit: validate side, purpose, Position and cycle ownership
         alt SELL
@@ -470,7 +475,7 @@ stateDiagram-v2
     UNRESOLVED --> [*]: blocked pending approved recovery policy
 \`\`\`
 
-The domain state factory also defines `RECONCILIATION_REQUIRED` and `reconcileRecoverySellerCycleSell`; the latter preserves the terminal status, reconciliation flag and profitability result in the canonical cycle-state shape. The current application workflow reconstructs an active UNKNOWN order as `SELL_SUBMITTED` while returning a `RECONCILE` decision; it does not currently publish the domain's `RECONCILIATION_REQUIRED` state for that path. The current application workflow does not consistently publish the canonical shape: its active-order projection can keep an UNKNOWN SELL represented as `SELL_SUBMITTED` while returning a `RECONCILE` decision, and its terminal outcome projection stores `sellOrderClientId` / `sellOrderBrokerOrderId` / `appliedFillIds` / `eligible` rather than the canonical `sellOrderIdentity` / `terminalOrderStatus` / `terminalReconciled` / `profitabilityEligible` fields. The BUY policy validates the canonical cycle state, so this application/domain projection mismatch also needs an application-level regression and correction.
+The domain state factory also defines `RECONCILIATION_REQUIRED` and `reconcileRecoverySellerCycleSell`; the latter preserves terminal status, reconciliation state and profitability eligibility in the canonical cycle-state shape. The current application workflow reconstructs an active UNKNOWN order as `SELL_SUBMITTED` while returning a `RECONCILE` decision; it does not publish the domain's `RECONCILIATION_REQUIRED` state for that path. Its terminal outcome projection also stores `sellOrderClientId`, `sellOrderBrokerOrderId`, `appliedFillIds` and `eligible` instead of canonical `sellOrderIdentity`, `terminalOrderStatus`, `terminalReconciled` and `profitabilityEligible` fields. The BUY policy validates the canonical cycle state, so this application/domain projection mismatch needs an application-level regression and correction.
 
 The intended contract is:
 
