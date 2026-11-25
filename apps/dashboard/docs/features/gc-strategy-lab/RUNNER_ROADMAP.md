@@ -92,7 +92,6 @@ A cross-document audit found that the Dashboard agent instructions still require
 - PR #1837 remains Draft and unmerged. The full approved MVP is not complete; all previously listed isolation, production-flow, persistence, replay, trace/report, configuration and E2E gates remain applicable.
 - No CI success is claimed for `2583dbd` until exact-head GitHub Actions results are available.
 
-
 ## Strategy-neutral Harvester registration — 2026-11-25
 
 The Harvester host now accepts explicit strategy registrations and builds its catalog/execution policy from registered strategy IDs rather than a hardcoded RS-only catalog branch. The default composition still supplies the provisional RS catalogue, which remains non-executable without a verified OS sandbox and full production-flow adapter. A RED regression on test-only head `0b3a3fe9d10c844f4a7bd89fb94c66342fcdb561` reproduced the RS-only catalog; the implementation restores strategy-neutral registration without enabling any additional strategy.
