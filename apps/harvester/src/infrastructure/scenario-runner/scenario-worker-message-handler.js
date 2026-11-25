@@ -11,7 +11,8 @@ export function createScenarioWorkerMessageHandler({ dispatch, send, disconnect 
     }
     activeExecution = execution
     try {
-      const output = await dispatch(request, {
+      const output = await dispatch({
+        request,
         signal: controller.signal,
       })
       if (controller.signal.aborted) {
@@ -43,8 +44,7 @@ export function createScenarioWorkerMessageHandler({ dispatch, send, disconnect 
       return
     }
     if (message?.type === "execute" && !activeExecution) {
-      return execute(message)
+      void execute(message)
     }
-    return undefined
   }
 }

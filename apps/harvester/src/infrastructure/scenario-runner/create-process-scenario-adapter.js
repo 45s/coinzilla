@@ -57,6 +57,40 @@ function isChildAlive({ child }) {
   return child.exitCode === null && child.signalCode === null
 }
 
+function createForcedTermination({ child, finish, fail, schedule }) {
+    return function forceKill({ signal }) {
+      if (!isChildAlive({ child })) {
+        finish()
+        return
+      }
+      try {
+        child.kill(signal)
+      } catch (cause) {
+        if (signal === "SIGTERM") {
+          forceKill({ signal: "SIGKILL" })
+          return
+        }
+        fail({ cause })
+        return
+      }
+      if (signal === "SIGTERM") {
+        schedule({
+          callback: () => forceKill({ signal: "SIGKILL" }),
+        })
+        return
+      }
+      schedule({
+        callback: () => {
+          if (isChildAlive({ child })) {
+            fail({ cause: new Error("Worker did not exit after SIGKILL") })
+          } else {
+            finish()
+          }
+        },
+      })
+    }
+}
+
 function createTerminationController({ child, graceMs, resolve, reject }) {
   const timers = new Set()
   let settled = false
@@ -90,37 +124,12 @@ function createTerminationController({ child, graceMs, resolve, reject }) {
     const timer = setTimeout(callback, graceMs)
     timers.add(timer)
   }
-  function forceKill({ signal }) {
-    if (!isChildAlive({ child })) {
-      finish()
-      return
-    }
-    try {
-      child.kill(signal)
-    } catch (cause) {
-      if (signal === "SIGTERM") {
-        forceKill({ signal: "SIGKILL" })
-        return
-      }
-      fail({ cause })
-      return
-    }
-    if (signal === "SIGTERM") {
-      schedule({
-        callback: () => forceKill({ signal: "SIGKILL" }),
-      })
-      return
-    }
-    schedule({
-      callback: () => {
-        if (isChildAlive({ child })) {
-          fail({ cause: new Error("Worker did not exit after SIGKILL") })
-        } else {
-          finish()
-        }
-      },
-    })
-  }
+  const forceKill = createForcedTermination({
+    child,
+    finish,
+    fail,
+    schedule,
+  })
   return {
     finish,
     fail,
@@ -137,7 +146,8 @@ function terminateChild({ child, graceMs, cooperative = false, runId }) {
   if (existingTermination) {
     return existingTermination
   }
-  const termination = new Promise((resolve, reject) => {
+  const termination = new Promise((...settlers) => {
+    const [resolve, reject] = settlers
     const controller = createTerminationController({
       child,
       graceMs,
@@ -359,7 +369,10 @@ function createExecutionPromise({
   })
   return {
     promise,
-    fail: (error, options = {}) => finishExecution?.({ error, ...options }),
+    fail: ({ error, preserveChild = false } = {}) => finishExecution?.({
+      error,
+      preserveChild,
+    }),
   }
 }
 
@@ -472,7 +485,10 @@ function createWorkerExecutor({
       void terminateChild({
         child,
         graceMs: terminationGraceMs,
-      }).then(() => execution.fail(error)).catch((cleanupError) => execution.fail(cleanupError, {
+      }).then(() => execution.fail({
+        error,
+      })).catch((cleanupError) => execution.fail({
+        error: cleanupError,
         preserveChild: true,
       }))
     }

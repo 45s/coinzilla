@@ -1,7 +1,7 @@
 import { executeRecoverySellerRunnerScenario } from "./rs-scenario-adapter.js"
 
 /** Strategy-specific bindings live only inside the isolated worker process. */
-export async function runScenarioWorkerRequest(request, { signal } = {}) {
+export async function runScenarioWorkerRequest({ request, signal } = {}) {
   if (signal?.aborted) {
     throw new Error("Scenario worker was cancelled")
   }

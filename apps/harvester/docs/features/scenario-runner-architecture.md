@@ -103,3 +103,8 @@ The process adapter enforces its own OS-attestation gate at the start of `execut
 ## Cooperative cancellation and cleanup confirmation
 
 The parent sends a typed `cancel` IPC message first and waits for the bounded cooperative grace period. The worker message handler aborts the active run's `AbortController`; strategy adapters receive that signal and must honor it. If the worker does not close, the parent escalates to SIGTERM and then SIGKILL, each with a bounded grace period. A failed kill or missing close confirmation rejects cleanup and retains the child registration so the operator can retry; it is never reported as successful cleanup. The adapter itself remains unavailable unless the OS sandbox attestation is verified. Once the caller's AbortSignal has fired, the parent ignores any late worker result and lets the cancellation path own final settlement and cleanup reporting.
+
+
+## Strict lint boundary correction — 2026-11-25
+
+Worker dispatch and message-handler contracts use one object argument, consistent with the repository's one-parameter function policy. Termination controller orchestration and forced-kill escalation are separate helpers; cleanup behavior and escalation order are unchanged.

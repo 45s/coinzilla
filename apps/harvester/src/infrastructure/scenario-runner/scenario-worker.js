@@ -38,9 +38,12 @@ for (const operation of [
 const { createScenarioWorkerMessageHandler } = await import("./scenario-worker-message-handler.js")
 
 const handleWorkerMessage = createScenarioWorkerMessageHandler({
-  dispatch: async (request, options) => {
+  dispatch: async ({ request, signal }) => {
     const { runScenarioWorkerRequest } = await import("./scenario-worker-dispatch.js")
-    return runScenarioWorkerRequest(request, options)
+    return runScenarioWorkerRequest({
+      request,
+      signal,
+    })
   },
   send: (message) => process.send?.(message),
   disconnect: () => process.disconnect?.(),
