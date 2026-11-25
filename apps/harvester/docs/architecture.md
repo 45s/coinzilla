@@ -1028,7 +1028,6 @@ The initial SQLite files are separated by explicit validated `TRADING_MODE`: `li
 
 See the [ordinary persistence contract](./persistence/README.md) for the exact schema, lifecycle transition table, provider capabilities, path validation, failure handling, test evidence, and subsequent migration slices. The first implementation remains in progress until PR #1369 is merged and verified.
 
-
 ## Global account admission precedence
 
 The shared order-admission sequence checks active account-scoped safety blockers before shutdown, strategy-pause, volatility, or market-specific exceptions. An account blocker prevents every strategy and every order side/purpose from reaching broker I/O. A market-scoped blocker remains local to its symbol, with the ADR-0008 Recovery Seller SELL exception retained only for `STRATEGY_SAFETY_PAUSE_INCOMPLETE`.
