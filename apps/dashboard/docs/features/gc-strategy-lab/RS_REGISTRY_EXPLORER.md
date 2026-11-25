@@ -119,7 +119,7 @@ The Explorer reads records available from source rather than hardcoding the fami
 - **2026-11-25:** RS selected as first strategy because its scenario registry already exists. Scope clarified as reconstructing scenario text/registry into interactive illustrations, with specification continuing to evolve. No runtime simulation yet.
 
 
-## Framework-independent execution architecture — proposed future capability
+## Framework-independent execution architecture — required runner foundation
 
 Dashboard-wide DDD/framework-neutral rule is mandatory (see [Dashboard AGENTS.md](../../../AGENTS.md) and SPEC section 2.1). Registry adapters, parsing/validation, normalization, scenario semantics, execution orchestration, assertions and renderer-neutral graph construction live outside Angular. Components delegate and render. Core must remain reusable if UI is rewritten in React/Vue.
 
