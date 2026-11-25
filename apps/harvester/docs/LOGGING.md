@@ -340,7 +340,7 @@ guess from the symbol. This keeps unknown diagnostics free of a false CG/RS
 terminal marker. Regression tests cover both strategy IDs, missing/ambiguous
 ownership, and preservation of the existing structured error payload. A
 bootstrap integration regression also drives a failing RS-only market through
-the real subscription composition and verifies the emitted RS strategy ID, through a fresh WebSocket price callback after startup readiness opens and verifies the emitted RS strategy ID.
+the real subscription composition and verifies the emitted RS strategy ID, through a fresh WebSocket price callback after startup returns and verifies the emitted RS strategy ID plus the processing result.
 
 Strategy identity is part of the console duplicate-suppression fingerprint.
 Identical messages from different strategies therefore remain separate

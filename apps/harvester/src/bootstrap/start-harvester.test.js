@@ -119,7 +119,7 @@ test("attributes RS-only market-price processing failures using the resolved exe
       },
     })
     assert.equal(typeof handleMarketPrice, "function", "Bootstrap must establish the shared market-price subscription.")
-    await handleMarketPrice({
+    const processed = await handleMarketPrice({
       symbol: "LINEAUSDT",
       price: "65000",
       timestamp: Date.now(),
@@ -127,6 +127,8 @@ test("attributes RS-only market-price processing failures using the resolved exe
 
     const diagnostic = errorRecords.find(({ message }) => message === "Market price processing failed")
     const diagnosticContext = JSON.stringify({
+      processed,
+      userDataReady: result.userDataReady,
       errorRecords,
       calls,
       evaluatedSymbols,
