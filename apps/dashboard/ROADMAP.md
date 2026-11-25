@@ -95,3 +95,7 @@ Original scenario replay uses the exact recorded production revision and origina
 Configuration loaded from a file and configuration entered in the client Playground must pass through the same production parsing, validation, normalization and market-metadata resolution. Strategy code receives validated effective configuration and cannot distinguish its source. Invalid configuration blocks execution before strategy evaluation.
 
 The UI action is **Copy AI Debug Package** and copies complete versioned JSON only, including original scenario, temporary overrides, validated effective configuration, executed revision, ordered events, results, trace and diagnostics. Repository access at the recorded revision is expected for deeper AI-agent debugging.
+
+
+## Scenario Runner roadmap
+See [the phased implementation roadmap](docs/features/gc-strategy-lab/RUNNER_ROADMAP.md). Existing trading logic and trading services are protected: changes require explicit prior user approval.
