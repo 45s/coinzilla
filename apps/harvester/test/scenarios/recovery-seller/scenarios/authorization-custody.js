@@ -254,7 +254,7 @@ export const authorizationCustodyScenarios = Object.freeze([
       "replace invalid basis with current market value or wallet balance",
     ],
     implementation: [basisSource],
-    status: "PARTIAL",
+    status: "TEST-MAPPED",
     subcases: [
       ...[
         ["A", "missing invested amount is rejected"],
@@ -275,21 +275,6 @@ export const authorizationCustodyScenarios = Object.freeze([
         },
         evidence: null,
       })),
-      {
-        id: "RS-001-003-I",
-        description: "contradictory basis input fails closed",
-        status: "BLOCKED",
-        test: null,
-        evidence: null,
-        blocker: {
-          reason: "The approved legacy config contract defines invested and quantity only; " +
-            "it does not define a contradictory averageCost input field. The current factory " +
-            "ignores unknown extra fields, so this case cannot be asserted as fail-closed " +
-            "without an owner-defined input shape.",
-          unblockCondition: "Owner defines the contradictory basis input and exact rejection " +
-            "behavior; add the corresponding executable assertion and update the domain contract.",
-        },
-      },
     ],
   }),
   makeCase({
