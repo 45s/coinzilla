@@ -672,6 +672,62 @@ test("rejects a SELL that exceeds shared inventory after combined CG and RS rese
 })
 
 
+test("RS-008-018-C: aggregates CG and RS quote reservations before authorizing another BUY", () => {
+  const coinGrabberQuoteCommitment = "60"
+  const recoverySellerQuoteCommitment = "50"
+  const result = allocateOrderCommitments({
+    actions: [{ side: "BUY", price: "10", quantity: "5" }],
+    quoteFreeBalance: "100",
+    baseFreeBalance: "0",
+    quoteCashFlow: "0",
+    activeBaseQuantity: "0",
+    portfolioBaseBalance: "0",
+    outstandingRecoveryAmount: "0",
+    committedQuote: "0",
+    committedQuoteBalance: addDecimal({
+      left: coinGrabberQuoteCommitment,
+      right: recoverySellerQuoteCommitment,
+    }),
+    committedBase: "0",
+    committedBaseBalance: "0",
+    investmentLimit: "1000",
+  })
+
+  assert.equal(result.ok, true)
+  assert.deepEqual(result.data.executableActions, [])
+  assert.deepEqual(result.data.deferredActions, [{
+    action: { side: "BUY", price: "10", quantity: "5" },
+    reason: "INSUFFICIENT_QUOTE_BALANCE",
+  }])
+})
+
+test("RS-008-018-D: rejects aggregate CG and RS SELL commitments that oversell shared base inventory", () => {
+  const coinGrabberBaseCommitment = "4"
+  const recoverySellerBaseCommitment = "5"
+  const result = allocateOrderCommitments({
+    actions: [{ side: "SELL", quantity: "2" }],
+    quoteFreeBalance: "100",
+    baseFreeBalance: "10",
+    quoteCashFlow: "0",
+    activeBaseQuantity: "10",
+    portfolioBaseBalance: "10",
+    outstandingRecoveryAmount: "0",
+    committedQuote: "0",
+    committedBase: addDecimal({
+      left: coinGrabberBaseCommitment,
+      right: recoverySellerBaseCommitment,
+    }),
+    committedBaseBalance: addDecimal({
+      left: coinGrabberBaseCommitment,
+      right: recoverySellerBaseCommitment,
+    }),
+    investmentLimit: "1000",
+  })
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /active inventory after commitments/)
+})
+
 test("allocates a mixed recovery and legacy SELL against Portfolio plus separately tracked Spot inventory", () => {
   const result = allocateOrderCommitments({
     actions: [
