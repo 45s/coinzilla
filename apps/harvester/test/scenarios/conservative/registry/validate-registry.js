@@ -78,7 +78,7 @@ function validateScenarioIdentity({
   ids,
   errors,
 }) {
-  if (!/^CON-[A-Z]+-\\d{3}$/.test(scenario.id ?? "")) {
+  if (!/^CON-[A-Z]+-\d{3}$/.test(scenario.id ?? "")) {
     addError({
       errors,
       path: `${path}.id`,
