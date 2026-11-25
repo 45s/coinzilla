@@ -504,3 +504,34 @@ The report therefore carries enough evidence to stand alone, while repository ac
 For the current local-development use case, the runner API is **unauthenticated and loopback-only**. The host must bind only to loopback interfaces and must reject/avoid any configuration that exposes the runner on a LAN, public interface or remote host. This is a deliberate local-dev limitation, not a general production security model.
 
 Do not add dedicated runner credentials or reuse Dashboard authentication for this initial local-only mode. Before any remote, shared, hosted or otherwise non-loopback access is supported, authentication and server-side authorization must be designed and implemented for run creation, cancellation, run/history access and report retrieval. Until then, non-loopback exposure is out of scope and must fail closed. Exact bind/configuration enforcement and interaction with existing local API hosting must be verified during implementation audit.
+
+
+## RS configuration values and units — mandatory documentation rule
+
+Scenario examples and the configuration editor must use the actual strategy-owned configuration contract and preserve each field's real unit. Never invent similarly named inputs (for example, a standalone average entry price) when the production strategy derives them from configured legacy basis or runtime state. Never reinterpret a configured field as a different unit.
+
+For the current approved LINEAUSDT Recovery Seller configuration on TESTNET (source: `apps/harvester/rs-recovery-seller.js`):
+
+| Field | Configured value | Meaning / unit |
+|---|---:|---|
+| `legacyPosition.invested` | `400` | Historical legacy quote-currency basis (USDT for LINEAUSDT) |
+| `legacyPosition.quantity` | `25000` | Historical legacy base quantity (LINEA) |
+| `sellQuantity` | `10` | Configured legacy sell slice, in base-asset units (LINEA) |
+| `investment` | `100` | Configured investment amount, in quote-currency units (USDT) |
+| `orderQuantity` | `7000` | Configured order quantity, in base-asset units (LINEA) |
+| `minProfit` | `0.01` | **Absolute minimum profit in quote currency, not a percentage. For LINEAUSDT this is 0.01 USDT = one USDT cent.** |
+| `priceStepPercent` | `0.5` | Price-step percentage (0.5%), not an absolute price increment |
+| `makerPercent` / `takerPercent` | `0.1` / `0.1` | Fee percentages |
+| `enableVolatilityProtection` | `false` | Volatility protection disabled |
+
+The RS profitability implementation compares monetary net profit directly with `minProfit`; it does not interpret `0.01` as a 1% rate. Documentation, labels, validation messages, scenario fixtures and AI reports must call this an **absolute quote-currency profit threshold** and show the quote asset/unit. Do not call it “1%”. For another market, the displayed currency unit follows that market's quote asset; do not assume every strategy or market uses USDT.
+
+The configured legacy basis is not proof of current exchange custody or available inventory. Derived values such as legacy average cost must be shown as derived outputs with provenance, not invented as independent configuration fields. For this LINEAUSDT example, the configured basis implies 400 USDT / 25,000 LINEA = 0.016 USDT per LINEA; that is a derived historical average cost, not a separately configured input.
+
+Scenario market-price updates and simulated broker outcomes are separate, explicit event inputs. Their values must come from the selected scenario definition/test evidence or be deliberately authored as scenario inputs and validated against the actual production flow and market filters. Do not fabricate illustrative prices/fills and present them as repository configuration or existing scenario evidence.
+
+## Determinism design clarification — same inputs, revision-aware comparison
+
+A deterministic repeat means executing the same strategy adapter and production revision with the same effective strategy configuration, initial simulation state, ordered market/broker events and controlled external inputs, then checking whether production decisions, calculations, intents, transitions, accounting and final state reproduce. Configuration values are not replaced by invented scenario fields. Time, generated identifiers and any other nondeterministic dependency must be controlled or explicitly captured as an input; otherwise the run cannot claim deterministic replay.
+
+Keep two distinct operations: (1) reproduce the original run against its exact recorded production revision; and (2) run the same captured scenario package against a newer production revision as a regression/fix comparison. Preserve the original evidence and identify both revisions; the second operation is a new execution, not a replay of the old code.
