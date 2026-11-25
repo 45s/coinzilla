@@ -122,3 +122,8 @@ The worker spawn/profile construction is isolated from the execution lifecycle s
 
 
 The application-level unconfirmed-cleanup regression uses unique run IDs so its second submission reaches the retained-capacity gate rather than the independent duplicate-run-ID guard.
+
+
+## Retained execution capacity and cleanup retry — 2026-11-25
+
+A terminal-looking FAILED/TIMED_OUT record does not release capacity while its worker termination is unconfirmed. History pruning skips records whose execution slot remains registered. The operator cancel endpoint can retry cleanup; capacity is released only after the adapter returns an explicit `true`. Shutdown also fails closed while any worker remains unconfirmed.

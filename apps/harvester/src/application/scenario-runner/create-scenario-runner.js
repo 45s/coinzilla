@@ -146,7 +146,8 @@ function createExecutionRace({ adapter, record, controller, timeoutMs }) {
 
 function pruneHistory({ context }) {
   while (context.records.size >= context.maxStoredRuns) {
-    const oldestTerminal = [...context.records.entries()].find(([, record]) => TERMINAL.has(record.status))
+    const oldestTerminal = [...context.records.entries()].find(([runId, record]) =>
+      TERMINAL.has(record.status) && !context.executions.has(runId))
     if (!oldestTerminal) {
       return false
     }
@@ -208,26 +209,32 @@ function scheduleQueuedRuns({ context }) {
 }
 
 
-function createCleanupFailureDiagnostic({ error, cancellationRequested }) {
+function createCleanupFailureDiagnostic({ error, cancellationRequested, timedOut = false }) {
   const cleanupMessage = error instanceof Error ? error.message : "Unknown cleanup error."
-  return cancellationRequested
-    ? `Scenario cancellation was requested, but worker cleanup could not be confirmed: ${cleanupMessage}`
-    : `Scenario execution exceeded its time limit; worker cleanup could not be confirmed: ${cleanupMessage}`
+  const reason = cancellationRequested
+    ? "Scenario cancellation was requested"
+    : timedOut
+      ? "Scenario execution exceeded its time limit"
+      : "Scenario execution failed"
+  return `${reason}; worker cleanup could not be confirmed: ${cleanupMessage}`
 }
 
-function finishUnconfirmedCleanup({ context, record, error, cancellationRequested }) {
+function finishUnconfirmedCleanup({ context, record, error, cancellationRequested, timedOut = false, status }) {
   transitionRun({
     record,
-    status: cancellationRequested
-      ? SCENARIO_RUN_STATUS.FAILED
-      : SCENARIO_RUN_STATUS.TIMED_OUT,
+    status,
     now: context.now,
     onUpdate: context.onUpdate,
     diagnostic: createCleanupFailureDiagnostic({
       error,
       cancellationRequested,
+      timedOut,
     }),
   })
+  const execution = context.executions.get(record.runId)
+  if (execution) {
+    execution.cleanupUnconfirmed = true
+  }
   resolveWaiter({
     context,
     runId: record.runId,
@@ -235,6 +242,37 @@ function finishUnconfirmedCleanup({ context, record, error, cancellationRequeste
   })
   // Keep the execution slot occupied until worker termination is confirmed.
   return snapshot({ record })
+}
+
+async function retryUnconfirmedCleanup({ context, record, runId, execution }) {
+  try {
+    const cleanupConfirmed = await execution.adapter.cancel({
+      runId,
+      reason: "cleanup-retry",
+    })
+    if (cleanupConfirmed !== true) {
+      throw new Error("The adapter did not confirm worker termination.")
+    }
+  } catch (error) {
+    record.diagnostics.push(redactScenarioEvidence(
+      `Worker cleanup retry failed: ${error instanceof Error ? error.message : "Unknown cleanup error."}`,
+    ))
+    record.updatedAt = context.now()
+    notify({
+      record,
+      onUpdate: context.onUpdate,
+    })
+    return false
+  }
+  context.executions.delete(runId)
+  record.diagnostics.push("Worker cleanup was confirmed by a retry.")
+  record.updatedAt = context.now()
+  notify({
+    record,
+    onUpdate: context.onUpdate,
+  })
+  scheduleQueuedRuns({ context })
+  return true
 }
 
 async function finishTimedOutExecution({ context, record, adapter }) {
@@ -245,7 +283,7 @@ async function finishTimedOutExecution({ context, record, adapter }) {
       runId: record.runId,
       reason: cancellationRequested ? "cancelled" : "timeout",
     })
-    if (cleanupConfirmed === false) {
+    if (cleanupConfirmed !== true) {
       throw new Error("The adapter did not confirm worker termination.")
     }
   } catch (error) {
@@ -254,6 +292,10 @@ async function finishTimedOutExecution({ context, record, adapter }) {
       record,
       error,
       cancellationRequested,
+      timedOut: !cancellationRequested,
+      status: cancellationRequested
+        ? SCENARIO_RUN_STATUS.FAILED
+        : SCENARIO_RUN_STATUS.TIMED_OUT,
     })
   }
   transitionRun({
@@ -280,6 +322,14 @@ async function finishExecution({ context, record, adapter, result }) {
     if (cleanupFailure) {
       return cleanupFailure
     }
+  } else if (result.kind === "error" && result.error?.cleanupConfirmed === false) {
+    return finishUnconfirmedCleanup({
+      context,
+      record,
+      error: result.error,
+      cancellationRequested: record.status === SCENARIO_RUN_STATUS.CANCELLING,
+      status: SCENARIO_RUN_STATUS.FAILED,
+    })
   } else if (record.status === SCENARIO_RUN_STATUS.CANCELLING || result.kind === "cancelled") {
     transitionRun({
       record,
@@ -334,6 +384,7 @@ function startExecution({ context, record, adapter }) {
   delete record.executionInput
   context.executions.set(record.runId, {
     controller,
+    adapter,
   })
   transitionRun({
     record,
@@ -560,7 +611,19 @@ function cancelQueuedRun({ context, record, runId }) {
 
 function cancelRun({ context, runId }) {
   const record = context.records.get(runId)
-  if (!record || TERMINAL.has(record.status)) {
+  if (!record) {
+    return false
+  }
+  const execution = context.executions.get(runId)
+  if (TERMINAL.has(record.status)) {
+    if (execution?.cleanupUnconfirmed) {
+      return retryUnconfirmedCleanup({
+        context,
+        record,
+        runId,
+        execution,
+      })
+    }
     return false
   }
   if (record.status === SCENARIO_RUN_STATUS.QUEUED) {
@@ -629,12 +692,10 @@ async function closeRunner({ context }) {
     })
   }
   const activeRunIds = [...context.executions.keys()]
-  for (const runId of activeRunIds) {
-    cancelRun({
-      context,
-      runId,
-    })
-  }
+  await Promise.all(activeRunIds.map((runId) => cancelRun({
+    context,
+    runId,
+  })))
   await Promise.all(activeRunIds.map((runId) => waitForRun({
     context,
     runId,

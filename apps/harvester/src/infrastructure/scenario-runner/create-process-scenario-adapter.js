@@ -118,7 +118,10 @@ function createTerminationController({ child, graceMs, resolve, reject }) {
     }
     settled = true
     clearTimers()
-    reject(new Error("Scenario worker cleanup could not be confirmed", { cause }))
+    reject(Object.assign(
+      new Error("Scenario worker cleanup could not be confirmed", { cause }),
+      { cleanupConfirmed: false },
+    ))
   }
   function schedule({ callback }) {
     const timer = setTimeout(callback, graceMs)

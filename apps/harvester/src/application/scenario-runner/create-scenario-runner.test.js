@@ -372,11 +372,14 @@ test("runner queues excess runs and starts them FIFO when worker slots free", as
 
 
 test("runner retains capacity when execution cleanup is unconfirmed", async () => {
-  const adapter = createAdapter(async () => {
-    const error = new Error("worker cleanup could not be confirmed")
-    error.cleanupConfirmed = false
-    throw error
-  })
+  const adapter = {
+    ...createAdapter(async () => {
+      const error = new Error("worker cleanup could not be confirmed")
+      error.cleanupConfirmed = false
+      throw error
+    }),
+    cancel: async () => false,
+  }
   const runner = createScenarioRunner({
     adapters: [adapter],
     createRunId: (() => {
@@ -486,4 +489,46 @@ test("run diagnostics redact credential values returned by an adapter", async ()
   assert.equal(result.status, SCENARIO_RUN_STATUS.FAILED)
   assert.equal(JSON.stringify(result).includes("diagnostic-bearer-secret"), false)
   assert.equal(result.diagnostics[0].includes("[REDACTED]"), true)
+})
+
+
+test("runner releases retained capacity only after cleanup retry is confirmed", async () => {
+  let executions = 0
+  let cleanupAttempts = 0
+  const adapter = {
+    ...createAdapter(async () => {
+      executions += 1
+      if (executions === 1) {
+        const error = new Error("worker cleanup could not be confirmed")
+        error.cleanupConfirmed = false
+        throw error
+      }
+      return { output: "second run completed" }
+    }),
+    cancel: async () => {
+      cleanupAttempts += 1
+      return true
+    },
+  }
+  let runSequence = 0
+  const runner = createScenarioRunner({
+    adapters: [adapter],
+    createRunId: () => `run-cleanup-retry-${++runSequence}`,
+    maxStoredRuns: 1,
+    maxConcurrentRuns: 1,
+    maxQueuedRuns: 0,
+  })
+  const first = runner.submit({
+    strategyId: "example",
+    scenarioId: "cleanup-retry",
+  })
+  assert.equal((await runner.waitForRun(first.runId)).status, SCENARIO_RUN_STATUS.FAILED)
+  assert.equal(await runner.cancel(first.runId), true)
+  assert.equal(cleanupAttempts, 1)
+  const second = runner.submit({
+    strategyId: "example",
+    scenarioId: "after-cleanup-confirmed",
+  })
+  assert.equal((await runner.waitForRun(second.runId)).status, SCENARIO_RUN_STATUS.COMPLETED)
+  await runner.close()
 })

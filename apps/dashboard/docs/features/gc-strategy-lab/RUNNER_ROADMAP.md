@@ -92,3 +92,10 @@ A cross-document audit found that the Dashboard agent instructions still require
 ## Strategy-neutral Harvester registration — 2026-11-25
 
 The Harvester host now accepts explicit strategy registrations and builds its catalog/execution policy from registered strategy IDs rather than a hardcoded RS-only catalog branch. The default composition still supplies the provisional RS catalogue, which remains non-executable without a verified OS sandbox and full production-flow adapter. A RED regression on test-only head `0b3a3fe9d10c844f4a7bd89fb94c66342fcdb561` reproduced the RS-only catalog; the implementation restores strategy-neutral registration without enabling any additional strategy.
+
+
+### Cleanup capacity and retry — 2026-11-25
+
+- Unconfirmed worker cleanup retains both the execution slot and history record; terminal status alone does not make it prunable.
+- The cancel API awaits cleanup retry and reports acceptance only after the adapter confirms termination.
+- Capacity is released only after explicit cleanup confirmation. Shutdown remains fail-closed when cleanup cannot be confirmed.

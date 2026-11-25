@@ -165,8 +165,8 @@ function handleRunDetail({ response, runner, runId }) {
   })
 }
 
-function handleCancel({ response, runner, runId }) {
-  const accepted = runner.cancel(runId)
+async function handleCancel({ response, runner, runId }) {
+  const accepted = await runner.cancel(runId)
   sendJson({
     response,
     status: accepted ? 202 : 409,
@@ -226,7 +226,7 @@ async function handleRunRoute({ request, response, pathname, runner }) {
     return true
   }
   if (runId && request.method === "POST" && pathname.endsWith("/cancel")) {
-    handleCancel({
+    await handleCancel({
       response,
       runner,
       runId,
