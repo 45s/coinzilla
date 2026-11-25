@@ -1,3 +1,5 @@
+import { compareDecimal } from "@coinzilla/utils"
+
 interface ScenarioInputSchema {
   readonly type: 'object';
   readonly required: readonly string[];
@@ -5,6 +7,7 @@ interface ScenarioInputSchema {
   readonly properties: Readonly<Record<string, {
     readonly type: string;
     readonly pattern?: string;
+    readonly exclusiveMinimum?: string;
   }>>;
 }
 
@@ -51,6 +54,12 @@ export function validateScenarioInput({
       errors.push(`Input field ${key} must be a ${fieldSchema.type}`)
     } else if (fieldSchema.pattern && !new RegExp(fieldSchema.pattern).test(value as string)) {
       errors.push(`Input field ${key} does not match its schema pattern`)
+    } else if (fieldSchema.exclusiveMinimum !== undefined &&
+      compareDecimal({
+        left: value as string,
+        right: fieldSchema.exclusiveMinimum,
+      }) <= 0) {
+      errors.push(`Input field ${key} must be greater than ${fieldSchema.exclusiveMinimum}`)
     }
   }
   return {
