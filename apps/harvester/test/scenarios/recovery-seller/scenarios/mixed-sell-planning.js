@@ -662,7 +662,7 @@ function createConcurrentReservationScenario() {
   return defineRecoverySellerScenario({
     id: "RS-003-009",
     family: "RS-003",
-    name: "a SELL commitment created after the account snapshot reduces shared free base exactly once",
+    name: "account commitments after the snapshot and exact TradingRules quantity boundaries remain fail-closed",
     priority: "P0",
     authority: [
       "apps/harvester/docs/domain/recovery-seller-domain-specification.md#11-concurrent-strategies-and-external-orders",
@@ -701,6 +701,12 @@ function createConcurrentReservationScenario() {
     ],
     subcases: [{
       id: "RS-003-009-A",
+      description: "tiny exact decimal quantities whose serialized representation may use exponent notation obey TradingRules",
+      status: "MISSING",
+      test: null,
+      evidence: null,
+    }, {
+      id: "RS-003-009-B",
       description: "a cross-market CG SELL commitment registered after the snapshot reduces free base by its exact remaining quantity",
       status: "TEST-MAPPED",
       test: {
@@ -719,7 +725,7 @@ function createConcurrentReservationScenario() {
       file: testFile,
       title: concurrentReservationTestTitle,
     },
-    status: "TEST-MAPPED",
+    status: "PARTIAL",
     evidence: null,
   })
 }
