@@ -225,13 +225,6 @@ function mapSourceEvent({ sourceEvent, order } = {}) {
   }
 }
 
-/**
- * Create a stable exchange-order identity, scoped by its provider account and market.
- *
- * @param {{environment: string, providerInstanceId: string, providerType: string, accountId: string, marketId?: string, brokerOrderId?: string, clientOrderId: string, createdAt?: number}} input
- * @returns {string}
- * @throws {OrderHistoryValidationError} When a required identity component is missing.
- */
 function requireOptionalIdentityString({ value, field } = {}) {
   if (value === undefined || value === null) {
     return null
@@ -302,6 +295,16 @@ function normalizeOrderIdentity(input = {}) {
   }
 }
 
+/**
+ * Create a stable exchange-order identity, scoped by provider account and market.
+ *
+ * marketId is required when brokerOrderId is present. Orders without an exchange ID
+ * use a provisional client identity that includes market and creation time.
+ *
+ * @param {{environment: string, providerInstanceId: string, providerType: string, accountId: string, marketId?: string, brokerOrderId?: string, clientOrderId: string, createdAt?: number}} input
+ * @returns {string}
+ * @throws {OrderHistoryValidationError} When a required identity component is missing.
+ */
 export function createOrderHistoryId(input = {}) {
   const identity = normalizeOrderIdentity(input)
   const scope = [
