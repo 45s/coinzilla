@@ -34,7 +34,7 @@ function terminateChild({ child, graceMs }) {
       clearTimeout(timer)
       resolve()
     }
-    child.once("exit", finish)
+    child.once("close", finish)
     try {
       child.kill("SIGTERM")
     } catch {
@@ -69,6 +69,7 @@ function createExecutionPromise({ child, runId, signal, children, terminationGra
   return new Promise((...promiseArguments) => {
     const [resolve, reject] = promiseArguments
     let settled = false
+    let messageReceived = false
     function finish({ error, output }) {
       if (settled) {
         return
@@ -98,16 +99,17 @@ function createExecutionPromise({ child, runId, signal, children, terminationGra
       }).then(() => finish({ error }))
     })
     child.once("message", (message) => {
+      messageReceived = true
       void handleWorkerMessage({
-      message,
-      runId,
-      child,
-      terminationGraceMs,
-      finish,
+        message,
+        runId,
+        child,
+        terminationGraceMs,
+        finish,
       })
     })
     child.once("exit", (...exitArguments) => {
-      if (!settled) {
+      if (!settled && !messageReceived) {
         const [code, exitSignal] = exitArguments
         finish({
           error: signal?.aborted

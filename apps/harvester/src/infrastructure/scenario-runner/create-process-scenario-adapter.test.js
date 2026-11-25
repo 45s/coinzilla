@@ -45,3 +45,21 @@ test("process adapter terminates its worker when the run is cancelled", async ()
   controller.abort()
   await assert.rejects(execution, /cancelled/)
 })
+
+
+test("process adapter waits for worker exit after receiving a result", async () => {
+  const workerPath = fileURLToPath(new URL("./scenario-worker-lifecycle-fixture.js", import.meta.url))
+  const adapter = createProcessScenarioAdapter({
+    strategyId: "example",
+    workerPath,
+    terminationGraceMs: 100,
+  })
+  const startedAt = Date.now()
+  const result = await adapter.execute({
+    runId: "run-worker-cleanup",
+    scenarioId: "scenario",
+    input: null,
+  })
+  assert.deepEqual(result, { received: true })
+  assert.ok(Date.now() - startedAt >= 20)
+})
