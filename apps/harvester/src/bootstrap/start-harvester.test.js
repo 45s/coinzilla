@@ -1618,7 +1618,7 @@ test("logs partial startup history diagnostics when an order cursor write fails"
 })
 
 
-test("rejects startup before market subscriptions when a persisted account-scoped Recovery Seller STOP is active", async () => {
+test("restores a persisted account STOP and keeps a restarted account observation-only", async () => {
   const { directory, store } = await createRsOnlyOperationalStateStore()
   const calls = []
   const broker = createRsOnlyStartupBroker({ calls })
@@ -1667,33 +1667,31 @@ test("rejects startup before market subscriptions when a persisted account-scope
       "A fresh process-session workflow must restore the unresolved ACCOUNT blocker from the durable ledger.",
     )
 
-    await assert.rejects(
-      startHarvesterForTest({
-        loadConfig: async () => createRsOnlyStartupConfig(),
-        env: binanceEnv,
-        brokerAdapterFactory: () => broker,
-        operationalStateStore: restartStore,
-        executionSymbols: ["LINEAUSDT"],
-        executionRoutes: [{
-          strategyId: "RS_recoverySeller",
-          symbol: "LINEAUSDT",
-        }],
-        marketDataSymbols: ["LINEAUSDT"],
-        evaluateRecoverySellerTransition: async () => ({
-          ok: true,
-          data: { skipped: true },
-        }),
-        logger: {
-          info() {},
-          error() {},
-        },
+    const result = await startHarvesterForTest({
+      loadConfig: async () => createRsOnlyStartupConfig(),
+      env: binanceEnv,
+      brokerAdapterFactory: () => broker,
+      operationalStateStore: restartStore,
+      executionSymbols: ["LINEAUSDT"],
+      executionRoutes: [{
+        strategyId: "RS_recoverySeller",
+        symbol: "LINEAUSDT",
+      }],
+      marketDataSymbols: ["LINEAUSDT"],
+      evaluateRecoverySellerTransition: async () => ({
+        ok: true,
+        data: { skipped: true },
       }),
-      (error) => error.code === "HARVESTER_ACCOUNT_SAFETY_BLOCKER_ACTIVE",
-      "A restored account STOP must reject startup with the structured account-blocker error.",
-    )
+      logger: {
+        info() {},
+        error() {},
+      },
+    })
 
-    assert.equal(calls.includes("subscribe:LINEAUSDT"), false, "A blocked account must not subscribe to market data.")
-    assert.equal(calls.some((call) => typeof call === "object" && call.side), false, "A blocked account must not submit an order.")
+    assert.equal(result.tradingEnabled, false, "A restored account STOP must prevent trading from being re-enabled after restart.")
+    assert.equal(result.executionEnabled, false, "A restored account STOP must keep every execution route disabled.")
+    assert.equal(calls.some((call) => typeof call === "object" && call.side), false, "An observation-only restart must not submit broker orders.")
+    await result.stop()
   } finally {
     await rm(directory, {
       recursive: true,
