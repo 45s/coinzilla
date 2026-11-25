@@ -52,7 +52,10 @@ export function filterScenarios({
       candidate: scenario.coverageStatus,
       filter: filters.coverageStatus,
     }) &&
-    matchesAllScenarioTags({ scenarioTags: scenario.tags, filter: filters.tag })
+    matchesAllScenarioTags({
+      scenarioTags: scenario.tags,
+      filter: filters.tag,
+    })
   ))
 }
 
