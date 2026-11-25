@@ -2,9 +2,9 @@ import test from "node:test"
 import assert from "node:assert/strict"
 import {
   executeRecoverySellerRunnerScenario,
-  executeRecoverySellerRuntimeFixture,
   getRecoverySellerRunnerCatalog,
 } from "./rs-scenario-adapter.js"
+import { executeRecoverySellerRuntimeFixture } from "../../../test/scenarios/recovery-seller/rs-runtime-dispatch-fixture.js"
 
 test("RS profitability helper scaffold invokes the production calculation function and emits helper-level assertions", async () => {
   const result = await executeRecoverySellerRunnerScenario({
