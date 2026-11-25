@@ -94,14 +94,14 @@ test("loads a stable scenario inventory covering all Conservative behavior categ
   )
 
   const restartScenario = scenarios.find((scenario) => scenario.id === "CON-PERSIST-002")
-  assert.equal(restartScenario.coverageStatus, "UNSUPPORTED")
-  assert.match(restartScenario.coverageReason, /restart|restoration|unsupported/i)
+  assert.equal(restartScenario.coverageStatus, "UNSUPPORTED", "Runtime restoration must remain explicitly unsupported.")
+  assert.match(restartScenario.coverageReason, /restart|restoration|unsupported/i, "The unsupported status must explain its runtime restoration boundary.")
 
   const configScenario = scenarios.find((scenario) => scenario.id === "CON-CONFIG-001")
   const sellScenario = scenarios.find((scenario) => scenario.id === "CON-SELL-001")
-  assert.equal(configScenario.coverageStatus, "PARTIAL")
-  assert.ok(configScenario.relatedExistingTests.some((testCase) => testCase.path === "src/bootstrap/config/resolve-harvester-options.test.js"))
-  assert.ok(sellScenario.relatedExistingTests.some((testCase) => testCase.path === "src/domain/strategies/conservative/strategy.test.js"))
+  assert.equal(configScenario.coverageStatus, "PARTIAL", "Configuration evidence must not be promoted to VERIFIED.")
+  assert.ok(configScenario.relatedExistingTests.some((testCase) => testCase.path === "src/bootstrap/config/resolve-harvester-options.test.js"), "Configuration scenarios must link the configuration resolver tests.")
+  assert.ok(sellScenario.relatedExistingTests.some((testCase) => testCase.path === "src/domain/strategies/conservative/strategy.test.js"), "SELL scenarios must link the Conservative strategy tests.")
 })
 
 test("validates required scenario fields, stable IDs, categories, statuses, and evidence references", () => {
@@ -134,7 +134,7 @@ test("validates required scenario fields, stable IDs, categories, statuses, and 
     requirements,
     criticalBehaviorContract,
   })
-  assert.ok(invalid.errors.some((error) => /duplicate.*CON-TEST-001/i.test(error)))
+  assert.ok(invalid.errors.some((error) => /duplicate.*CON-TEST-001/i.test(error)), "Duplicate scenario IDs must be rejected.")
 })
 
 test("filters scenarios by ID, category, priority, tag, and coverage status", () => {
@@ -217,9 +217,9 @@ test("parses named TAP outcomes and reports missing mapped tests instead of fals
   }
   const results = parseTapResults(tapInput)
 
-  assert.equal(results[0].status, "PASSED")
-  assert.equal(results[1].status, "FAILED")
-  assert.equal(results[2].status, "NOT_FOUND")
+  assert.equal(results[0].status, "PASSED", "The exact mapped TAP success must be recognized.")
+  assert.equal(results[1].status, "FAILED", "A not ok TAP result must remain a failure.")
+  assert.equal(results[2].status, "NOT_FOUND", "A missing mapped test must never be treated as a pass.")
 })
 
 test("runs mapped Node tests once per file and shares evidence across scenarios", async () => {
@@ -250,15 +250,15 @@ test("runs mapped Node tests once per file and shares evidence across scenarios"
   })
 
   assert.equal(calls.length, 1, "A shared named test must execute once, not once per scenario.")
-  assert.ok(calls[0].args.includes("--test"))
-  assert.ok(calls[0].args.some((argument) => argument.includes("test-name-pattern")))
+  assert.ok(calls[0].args.includes("--test"), "Mapped execution must use Node test mode.")
+  assert.ok(calls[0].args.some((argument) => argument.includes("test-name-pattern")), "Mapped execution must restrict the run to registered test names.")
   assert.deepEqual(
     result.results.map(({ status }) => status),
     ["PASSED", "PASSED"],
   )
 })
 
-test("generates inventory, execution, and coverage JSON without manually maintained reports", async () => {
+function createScenarioReportFixture() {
   const scenario = createScenarioFixture()
   const requirements = [
     {
@@ -291,12 +291,17 @@ test("generates inventory, execution, and coverage JSON without manually maintai
       ],
     },
   ]
-  const reports = buildScenarioReports({
+
+  return buildScenarioReports({
     scenarios: [scenario],
     results,
     requirements,
     criticalBehaviorContract,
   })
+}
+
+test("generates inventory, execution, and coverage JSON without manually maintained reports", async () => {
+  const reports = createScenarioReportFixture()
   const outputDirectory = await mkdtemp(join(tmpdir(), "conservative-scenario-reports-"))
 
   try {
@@ -308,13 +313,14 @@ test("generates inventory, execution, and coverage JSON without manually maintai
     const execution = JSON.parse(await readFile(paths.results, "utf8"))
     const coverage = JSON.parse(await readFile(paths.coverage, "utf8"))
 
-    assert.equal(inventory.totalScenarios, 1)
-    assert.equal(execution.results[0].status, "PASSED")
+    assert.equal(inventory.totalScenarios, 1, "The inventory report must contain the full supplied scenario set.")
+    assert.equal(execution.results[0].status, "PASSED", "The execution report must preserve the exact scenario result.")
     assert.deepEqual(
       coverage.requirementsWithoutScenarioCoverage.map(({ id }) => id),
       ["CON-SPEC-7.1"],
+      "Coverage must identify the requirement without a linked scenario.",
     )
-    assert.ok(Array.isArray(coverage.testsNotMappedToAnyScenario))
+    assert.ok(Array.isArray(coverage.testsNotMappedToAnyScenario), "Coverage must report named critical tests not mapped to scenarios.")
   } finally {
     await rm(outputDirectory, {
       recursive: true,
