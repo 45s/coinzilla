@@ -557,6 +557,7 @@ Sources: [create-recovery-seller-runtime-evaluator.js](../../src/use-cases/creat
 | Process startup, durable STOP restore, runtime composition, legacy initialization | [start-harvester.js](../../src/bootstrap/start-harvester.js) |
 | RS dispatch factory | [create-recovery-seller-runtime-dispatch.js](../../src/bootstrap/create-recovery-seller-runtime-dispatch.js) |
 | Fresh-price acceptance and normal market trigger | [create-market-price-transition-handler.js](../../src/use-cases/create-market-price-transition-handler.js) |
+| Serialized market-book, deferred-evaluation and public engine entry points | [conservative-trading-engine.js](../../src/use-cases/conservative-trading-engine.js) |
 | Conservative-first / RS-second shared dispatch | [create-latest-transition-evaluator.js](../../src/use-cases/create-latest-transition-evaluator.js) |
 | Fresh price, pair config, metadata and runtime readiness snapshot | [create-recovery-seller-runtime-evaluator.js](../../src/use-cases/create-recovery-seller-runtime-evaluator.js) |
 | SELL-first / BUY-fallback composition | [create-recovery-seller-transition-evaluator.js](../../src/use-cases/create-recovery-seller-transition-evaluator.js) |
