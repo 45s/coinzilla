@@ -259,33 +259,40 @@ export function assertRecoverySellerEvaluatorConfigured({
   }
 }
 
+function getRecoverySellerAccountBlocker({ recoverySellerStopWorkflow } = {}) {
+  const isBlocked = recoverySellerStopWorkflow?.isAccountAdmissionBlocked?.() === true ||
+    recoverySellerStopWorkflow?.getState?.().status === "STOPPED"
+  if (!isBlocked) {
+    return null
+  }
+  return Object.freeze({
+    scope: "ACCOUNT",
+    reason: "RECOVERY_SELLER_UNEXPECTED_CONDITION",
+    blockerId: recoverySellerStopWorkflow?.getBlockerId?.() ?? null,
+  })
+}
+
+function getUserDataAccountBlocker({ userDataState = {} } = {}) {
+  const requiresSafetyHalt = userDataState.accountingFailed === true ||
+    userDataState.requiresReconciliation === true ||
+    userDataState.streamUnsafe === true ||
+    userDataState.safetyHaltRequired === true
+  if (!requiresSafetyHalt) {
+    return null
+  }
+  return Object.freeze({
+    scope: "ACCOUNT",
+    reason: "USER_DATA_RECONCILIATION_REQUIRED",
+    blockerId: null,
+  })
+}
+
 export function getHarvesterAccountSafetyBlocker({
   userDataState = {},
   recoverySellerStopWorkflow,
 } = {}) {
-  if (
-    recoverySellerStopWorkflow?.isAccountAdmissionBlocked?.() === true ||
-    recoverySellerStopWorkflow?.getState?.().status === "STOPPED"
-  ) {
-    return Object.freeze({
-      scope: "ACCOUNT",
-      reason: "RECOVERY_SELLER_UNEXPECTED_CONDITION",
-      blockerId: recoverySellerStopWorkflow?.getBlockerId?.() ?? null,
-    })
-  }
-  if (
-    userDataState.accountingFailed === true ||
-    userDataState.requiresReconciliation === true ||
-    userDataState.streamUnsafe === true ||
-    userDataState.safetyHaltRequired === true
-  ) {
-    return Object.freeze({
-      scope: "ACCOUNT",
-      reason: "USER_DATA_RECONCILIATION_REQUIRED",
-      blockerId: null,
-    })
-  }
-  return null
+  return getRecoverySellerAccountBlocker({ recoverySellerStopWorkflow }) ??
+    getUserDataAccountBlocker({ userDataState })
 }
 
 function createHarvesterTradingEngineSafetyCallbacks({
