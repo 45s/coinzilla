@@ -79,7 +79,7 @@ describe('scenario-runner framework-independent core', () => {
       'Authorization: Bearer bearer-secret-123',
       'api_key=api-key-secret-456',
       'Cookie: session=browser-session-secret; refresh_token=refresh-secret',
-      '-----BEGIN PRIVATE KEY-----\\nprivate-key-secret\\n-----END PRIVATE KEY-----',
+      '-----BEGIN ENCRYPTED PRIVATE KEY-----\\nprivate-key-secret\\n-----END ENCRYPTED PRIVATE KEY-----',
     ];
     const report = JSON.parse(createAiDebugPackage({
       run: { ...run, diagnostics: evidence },

@@ -416,6 +416,7 @@ test("run snapshots redact nested secrets while adapters receive the original in
         apiKey: "output-api-key-secret",
         authorization: "Authorization: Bearer output-bearer-secret",
         nested: ["Cookie: session=output-cookie-secret"],
+        note: "-----BEGIN ENCRYPTED PRIVATE KEY-----\\noutput-private-key-secret\\n-----END ENCRYPTED PRIVATE KEY-----",
       }
     })],
   })
@@ -452,5 +453,5 @@ test("run diagnostics redact credential values returned by an adapter", async ()
   const result = await runner.waitForRun(accepted.runId)
   assert.equal(result.status, SCENARIO_RUN_STATUS.FAILED)
   assert.equal(JSON.stringify(result).includes("diagnostic-bearer-secret"), false)
-  assert.match(result.diagnostics[0], /\\[REDACTED\\]/)
+  assert.equal(result.diagnostics[0].includes("[REDACTED]"), true)
 })
