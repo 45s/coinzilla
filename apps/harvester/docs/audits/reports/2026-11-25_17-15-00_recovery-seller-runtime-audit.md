@@ -75,8 +75,8 @@ Relevant tests inspected included the RS runtime-evaluator, transition-evaluator
 
 ### F-01 — RS STOP implementation contradicts the owner-approved investment-only contract
 
-**Status:** Confirmed implementation gap  
-**Disposition:** [#1843](https://github.com/45s/coinzilla/issues/1843)  
+**Status:** Confirmed implementation gap
+**Disposition:** [#1843](https://github.com/45s/coinzilla/issues/1843)
 **Confidence:** High
 
 The owner decision recorded on 2026-11-24 in [issue #1780](https://github.com/45s/coinzilla/issues/1780) is explicit: STOP blocks additional BUY spending only; existing-order reconciliation and confirmed-fill accounting continue; an otherwise-valid first recovery SELL may proceed under all independent gates; and an authorized administrator may resolve STOP only after the cause is fixed and authoritative reconciliation/accounting is complete and durably acknowledged. There is no automatic clear or implicit resume.
@@ -93,8 +93,8 @@ This must be fixed by separating the RS investment STOP from generic account-sco
 
 ### F-02 — terminal mixed-SELL accounting can close a non-FILLED order and omits the required adverse-result STOP
 
-**Status:** Confirmed implementation gap  
-**Disposition:** [#1842](https://github.com/45s/coinzilla/issues/1842)  
+**Status:** Confirmed implementation gap
+**Disposition:** [#1842](https://github.com/45s/coinzilla/issues/1842)
 **Confidence:** High
 
 At [`publishTerminalMixedSellAccounting`](../../../src/use-cases/create-recovery-seller-accounting-workflow.js#L436), the application publishes:
@@ -113,7 +113,7 @@ Required regressions must exercise the real accounting workflow and order-event 
 
 ### F-03 — RS order events are accounting/reconciliation entry points, not unconditional strategy reevaluation triggers
 
-**Status:** Confirmed runtime behavior; not a defect by itself  
+**Status:** Confirmed runtime behavior; not a defect by itself
 **Confidence:** High
 
 The accepted fresh market-price path calls the shared latest-transition evaluator. RS-owned BUY reports apply canonical fills and update the recovery Position/BUY VWAP. RS-owned SELL reports stage fills; terminal SELL updates fetch/reconcile complete canonical fill history and commit the mixed accounting boundary.
@@ -122,7 +122,7 @@ The RS-owned order-status handler does not set `reevaluate: true`. The user-data
 
 ### F-04 — configuration and documentation status need to be distinguished
 
-**Status:** Documentation drift  
+**Status:** Documentation drift
 **Confidence:** High
 
 The source config sets `RS_RECOVERY_SELLER_CONFIG.enabled` to `true`; the resolved market route still applies per-market `enabled` and `tradingEnvironment` filtering. The configured LINEAUSDT route is TESTNET-only. The current `develop` copy of the RS domain specification still says to keep the global flag false by default in §15, contradicting the source and earlier text in the same document. The open [PR #1823](https://github.com/45s/coinzilla/pull/1823) contains the owner-approved STOP and default-state documentation corrections, but it is unmerged at this audit snapshot.
