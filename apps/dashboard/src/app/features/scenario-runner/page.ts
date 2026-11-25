@@ -38,7 +38,7 @@ export class ScenarioRunnerComponent {
   readonly inputJson = signal('{}');
   readonly error = signal<string | null>(null);
   readonly loading = signal(false);
-  readonly graph = signal(createTraceGraph([]));
+  readonly graph = signal(createTraceGraph([]));\n  readonly copied = signal(false);
 
   constructor() {
     void this.loadCatalog();
@@ -218,7 +218,7 @@ export class ScenarioRunnerComponent {
     }
   }
 
-  copyDebugPackage(): void {
+  async copyDebugPackage(): Promise<void> {
     const current = this.run();
     if (!current) {
       return;
