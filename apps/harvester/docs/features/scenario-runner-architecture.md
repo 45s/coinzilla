@@ -87,3 +87,6 @@ The current worker dispatcher and RS production adapter remain strategy-specific
 The unauthenticated local Scenario Runner API rejects every request carrying an `Origin` header unless it exactly matches the Dashboard's two approved loopback origins (`http://127.0.0.1:4200` or `http://localhost:4200`). Origin-less local non-browser clients remain supported. This is enforced before route dispatch, including preflight and run submission; CORS response headers alone are not treated as CSRF protection.
 
 The process adapter canonicalizes the configured worker path with filesystem realpath resolution and requires it to be a regular file inside the adapter's own worker directory. This rejects traversal, directories, nonexistent paths and symlinks that resolve outside the allowlisted directory. It does not replace the required trusted OS sandbox launcher; the host continues to fail closed while OS isolation is unverified.
+
+
+The worker-path check also requires the canonical target to be a regular `.js` file; a directory with a `.js` suffix is not accepted.

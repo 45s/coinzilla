@@ -1,14 +1,11 @@
-import { realpathSync } from "node:fs"
-import { dirname, extname, isAbsolute, relative, resolve, sep } from "node:path"
 import { realpathSync, statSync } from "node:fs"
-import { isAbsolute, relative, resolve, sep } from "node:path"
+import { dirname, extname, isAbsolute, relative, resolve, sep } from "node:path"
 import { fileURLToPath } from "node:url"
 
 const DEFAULT_TERMINATION_GRACE_MS = 250
 const DEFAULT_MAX_OUTPUT_BYTES = 1_048_576
 const TERMINATION_PROMISES = new WeakMap()
 const DEFAULT_WORKER_PATH = fileURLToPath(new URL("./scenario-worker.js", import.meta.url))
-const WORKER_DIRECTORY = realpathSync(fileURLToPath(new URL(".", import.meta.url)))
 const REQUIRED_SANDBOX_PROFILE = Object.freeze({
   networkAccess: "deny",
   filesystemAccess: "read-only-allowlisted-runtime",
@@ -261,21 +258,6 @@ function createExecutionPromise({
  * filesystem, network, process or memory isolation itself.
  */
 
-function resolveWorkerPath({ workerPath }) {
-  let canonicalPath
-  try {
-    canonicalPath = realpathSync(resolve(workerPath))
-  } catch (cause) {
-    throw new TypeError("workerPath must resolve to a file inside the scenario worker directory", { cause })
-  }
-  const relativePath = relative(WORKER_DIRECTORY, canonicalPath)
-  if (!relativePath || relativePath === ".." || relativePath.startsWith(`..${sep}`) ||
-      isAbsolute(relativePath) || !statSync(canonicalPath).isFile()) {
-    throw new TypeError("workerPath must resolve to a file inside the scenario worker directory")
-  }
-  return canonicalPath
-}
-
 function validateProcessScenarioAdapterOptions({
   strategyId,
   spawnSandboxedWorker,
@@ -309,7 +291,8 @@ function validateProcessScenarioAdapterOptions({
   const outsideWorkerDirectory = relativeWorkerPath === ".." ||
     relativeWorkerPath.startsWith(`..${sep}`) ||
     isAbsolute(relativeWorkerPath)
-  if (outsideWorkerDirectory || extname(resolvedWorkerPath) !== ".js") {
+  if (outsideWorkerDirectory || extname(resolvedWorkerPath) !== ".js" ||
+      !statSync(resolvedWorkerPath).isFile()) {
     throw new TypeError("Process scenario worker path must be inside the scenario worker directory and use .js")
   }
   return {
@@ -391,9 +374,7 @@ function createWorkerCanceller({ children, terminationGraceMs }) {
 export function createProcessScenarioAdapter(options = {}) {
   const resolvedOptions = {
     ...options,
-    workerPath: resolveWorkerPath({
-      workerPath: options.workerPath ?? DEFAULT_WORKER_PATH,
-    }),
+    workerPath: options.workerPath ?? DEFAULT_WORKER_PATH,
     terminationGraceMs: options.terminationGraceMs ?? DEFAULT_TERMINATION_GRACE_MS,
     maxOutputBytes: options.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES,
   }
