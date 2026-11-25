@@ -78,13 +78,10 @@ test("attributes RS-only market-price processing failures using the resolved exe
   const { directory, store } = await createRsOnlyOperationalStateStore()
   const calls = []
   const broker = createRsOnlyStartupBroker({ calls })
+  let handleMarketPrice
   broker.subscribeForPrices = async ({ symbol, onPrice }) => {
     calls.push(`subscribe-price:${symbol}`)
-    await onPrice({
-      symbol,
-      price: "65000",
-      timestamp: Date.now(),
-    })
+    handleMarketPrice = onPrice
     return {
       ok: true,
       data: {
@@ -121,9 +118,20 @@ test("attributes RS-only market-price processing failures using the resolved exe
         error: (record) => errorRecords.push(record),
       },
     })
+    assert.equal(typeof handleMarketPrice, "function", "Bootstrap must establish the shared market-price subscription.")
+    await handleMarketPrice({
+      symbol: "LINEAUSDT",
+      price: "65000",
+      timestamp: Date.now(),
+    })
 
     const diagnostic = errorRecords.find(({ message }) => message === "Market price processing failed")
-    assert.ok(diagnostic, `The shared market-price subscription must report the processing failure: ${JSON.stringify({ errorRecords, calls, evaluatedSymbols })}`)
+    const diagnosticContext = JSON.stringify({
+      errorRecords,
+      calls,
+      evaluatedSymbols,
+    })
+    assert.ok(diagnostic, `The shared market-price subscription must report the processing failure: ${diagnosticContext}`)
     assert.equal(diagnostic.strategyId, StrategyId.RECOVERY_SELLER, "Bootstrap must attribute an RS-only market failure to the resolved RS route.")
     assert.equal(diagnostic.symbol, "LINEAUSDT", "The original RS market symbol must remain available.")
     assert.equal(diagnostic.errors[0], failure, "The original processing error must remain intact.")
