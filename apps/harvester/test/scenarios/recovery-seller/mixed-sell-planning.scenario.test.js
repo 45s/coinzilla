@@ -1,13 +1,16 @@
 import test from "node:test"
 import assert from "node:assert/strict"
 import { divideDecimal } from "@coinzilla/utils"
-import { Asset, Balance, CanonicalOrder, Fill, Market, Money, Quantity } from "@coinzilla/entities"
+import { Asset, Balance, CanonicalOrder, Fill, Market, Money, Quantity, TradingRules } from "@coinzilla/entities"
 import { AccountSnapshot } from "../../../src/domain/account/account-snapshot.js"
 import { Portfolio } from "../../../src/domain/portfolio/portfolio.js"
 import { calculateAccountSnapshotBaselines } from "../../../src/domain/account/calculate-account-snapshot-baselines.js"
 import { allocateOrderCommitments } from "../../../src/domain/orders/allocate-order-commitments.js"
 import { allocateStrategyOrderCommitments } from "../../../src/use-cases/strategy-order-commitments.js"
 import { StrategyId } from "../../../src/domain/strategies/strategy-ids.js"
+import { evaluateRecoverySellerSellDecision } from "../../../src/domain/strategies/recovery-seller/evaluate-sell-decision.js"
+import { createRecoverySellerCycleState } from "../../../src/domain/strategies/recovery-seller/cycle-state.js"
+import { createRecoverySellerStopState } from "../../../src/domain/strategies/recovery-seller/stop-decision.js"
 import { calculateVerifiedLegacySpotAllocation } from "../../../src/domain/strategies/recovery-seller/legacy-spot-allocation.js"
 import { calculateRecoverySellerSellPlan } from "../../../src/domain/strategies/recovery-seller/calculate-sell-plan.js"
 import {
@@ -975,6 +978,90 @@ test("RS-003-009-A: tiny exponent-notation quantities preserve exact TradingRule
     requiredNetQuoteProceeds: "0.01000001",
     price: "1000001",
   }, "Exponent-notation quantity, quantity step and price tick must be parsed as exact decimals without Number conversion or rounding away the minimum sell quantity.")
+})
+
+
+function createExchangeFilterScenarioDecision({ input }) {
+  const baseAsset = new Asset({ id: "binance:ZRO", code: "ZRO" })
+  const market = createSpotMarket({
+    baseAsset,
+    symbol: "ZROUSDT",
+    quoteCode: "USDT",
+  })
+  const quoteAsset = market.quoteAsset
+  const constraints = [
+    {
+      type: "PRICE_INCREMENT",
+      status: "SUPPORTED",
+      value: new Money({ amount: input.tradingRules.priceIncrement, asset: quoteAsset }),
+    },
+    {
+      type: "QUANTITY_INCREMENT",
+      status: "SUPPORTED",
+      value: new Quantity({ amount: input.tradingRules.quantityIncrement, asset: baseAsset }),
+    },
+    {
+      type: "MIN_QUANTITY",
+      status: "SUPPORTED",
+      value: new Quantity({ amount: input.tradingRules.minQuantity, asset: baseAsset }),
+    },
+    {
+      type: "MIN_NOTIONAL",
+      status: "SUPPORTED",
+      value: new Money({ amount: input.tradingRules.minNotional, asset: quoteAsset }),
+    },
+  ]
+  const marketMetadata = {
+    market,
+    supportedOrderTypes: ["LIMIT_MAKER", "LIMIT"],
+    tradingRules: new TradingRules({ market, constraints }),
+  }
+  const decision = evaluateRecoverySellerSellDecision({
+    pairConfig: { minProfit: 0.01, makerPercent: 0, takerPercent: 0.075 },
+    marketMetadata,
+    cycleState: createRecoverySellerCycleState({
+      cycleId: "rs-filter-cycle",
+      positionId: "rs-filter-position",
+    }),
+    stopState: createRecoverySellerStopState(),
+    planInput: {
+      recoveryQuantity: input.candidate.recoveryQuantity,
+      configuredLegacyQuantity: "0.01",
+      legacyRemainingQuantity: "0",
+      verifiedUnreservedLegacyQuantity: "0",
+      recoveryCostBasis: input.candidate.recoveryCostBasis,
+      legacyAverageCost: "0",
+      minProfit: input.candidate.minProfit,
+      thirdAssetFeeQuoteValue: "0",
+    },
+  })
+  return {
+    outcome: decision.decision.outcome,
+    stopStatus: decision.stopState.status,
+    orderIntent: decision.orderIntent ?? null,
+    filterViolation: decision.decision.explanation.includes("MIN_NOTIONAL")
+      ? "MIN_NOTIONAL"
+      : null,
+  }
+}
+
+test("RS-003-010-A: a supported MIN_NOTIONAL violation blocks SELL without adjustment", async () => {
+  const scenario = recoverySellerMixedSellPlanningScenarios.find((item) => item.id === "RS-003-010")
+  assert.ok(scenario,
+    "RS-003-010 must be a declarative exchange-filter business scenario.")
+  assert.ok(recoverySellerScenarioRegistry.includes(scenario),
+    "The shared RS registry must include the exchange-filter scenario.")
+  const result = await runRecoverySellerDomainScenario({
+    scenario,
+    handlers: {
+      "evaluate-exchange-filter-block": createExchangeFilterScenarioDecision,
+    },
+  })
+  assert.deepEqual(
+    result.results[0],
+    scenario.then,
+    "The real SELL policy must block below MIN_NOTIONAL, latch STOP and return no adjusted order intent.",
+  )
 })
 
 test("RS-003-006: account-wide SELL reservations across markets are summed and snapshot commitments are not double-counted", async () => {
