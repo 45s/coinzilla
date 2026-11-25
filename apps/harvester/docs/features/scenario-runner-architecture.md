@@ -42,3 +42,4 @@ The RS-004-011 profitability helper is preliminary scaffolding, not a completed 
 ## RS helper scaffold is not executable
 
 The RS-004-011 adapter currently invokes only `calculateRecoverySellerProfitability`. That is useful helper-level evidence, but it is not the production RS application/use-case lifecycle and must not be represented as an executed strategy scenario. The host catalog therefore marks it `PRELIMINARY` and `executable: false`, and the runner has no RS adapter registered until the complete production-flow simulation boundary exists. A future adapter must reuse production use cases and inject simulation-only ports; it must not copy or approximate strategy behavior.
+The host-level catalog regression ensures the preliminary helper is marked non-executable and that submissions are blocked before a full production-flow adapter is registered. This is a contract/test correction; it does not change production trading behavior.
