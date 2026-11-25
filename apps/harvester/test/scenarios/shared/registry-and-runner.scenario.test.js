@@ -69,6 +69,12 @@ test("registers all Conservative categories with stable unique immutable records
     "Every registered Conservative scenario must have a unique stable ID.")
   assert.ok(conservativeScenarioRegistry.every(Object.isFrozen),
     "Every registry record must be immutable before consumers receive it.")
+  assert.ok(conservativeScenarioRegistry.every((scenario) => (
+    scenario.expectedState && typeof scenario.expectedState === "object" &&
+    Array.isArray(scenario.expectedOrders) &&
+    scenario.expectedAccounting && typeof scenario.expectedAccounting === "object" &&
+    scenario.expectedSideEffects && typeof scenario.expectedSideEffects === "object"
+  )), "Every scenario must expose consistent expected state, orders, accounting, and side-effect fields.")
 })
 
 test("validates duplicate IDs, catalog references, and repository-relative evidence paths", () => {
