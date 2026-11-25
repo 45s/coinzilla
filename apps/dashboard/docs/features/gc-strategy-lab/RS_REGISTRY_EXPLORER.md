@@ -125,7 +125,7 @@ Dashboard-wide DDD/framework-neutral rule is mandatory (see [Dashboard AGENTS.md
 
 First execution milestone: execute one RS scenario/subcase independently. Registry loader -> parse/validate/normalize -> selection -> fresh isolated context -> supported safe action/evaluator contract -> real assertions and trace -> renderer-neutral graph model -> presentation adapter. Use declarative records and constrained typed actions; never run registry-supplied arbitrary JS. Each case reports capability and actual outcome; do not attribute suite results to individual cases.
 
-Client execution is conditional: only if a supported safe evaluator can run in-browser without private Harvester/test imports, production execution paths or live side effects. Otherwise use a safe runner adapter, potentially backend-hosted. No live broker/exchange, credentials, orders, production mutation or direct database access. Contract and isolation remain open dependencies; do not implement a duplicate strategy rules engine in Dashboard.
+Execution is Harvester-hosted: the browser submits a typed request through a framework-independent API contract; Harvester invokes production use cases inside an isolated simulation runtime. No private Harvester modules are bundled into Dashboard. No live broker/exchange, credentials, orders, production mutation or direct database access. Contract and isolation remain open dependencies; do not implement a duplicate strategy rules engine in Dashboard.
 
 Layer separation: domain (scenario/run/result semantics), application (use cases/ports), adapters (registry/evaluator/storage/graph renderer/framework), Angular presentation (thin components/composition). Framework-swap acceptance: changing Angular to React/Vue does not require changing domain/application logic, execution contracts or core tests.
 
@@ -139,3 +139,8 @@ The MVP is an executable RS vertical slice, not a read-only registry MVP. It mus
 The runner core owns strategy-neutral registration/discovery, configuration orchestration, isolated execution lifecycle, event sequencing, results/assertions, expected-vs-actual comparison, trace/graph semantics and diagnostics. Strategy adapters bind scenarios/configuration to the actual production application entry points. Angular is only a replaceable presentation adapter; DDD/framework independence applies to all core behavior.
 
 A scenario that cannot invoke production behavior safely is blocked/not executable until its boundary is solved. Never downgrade it to a simplified Dashboard evaluator. No real broker/exchange calls, credentials, live orders, production state or persistence may be reachable from a simulation run.
+
+
+## Execution ownership decision (2026-11-25)
+
+Approved: scenario execution belongs to Harvester, not the Dashboard browser. Dashboard authors inputs/configuration and renders server-produced results and trace. Harvester hosts the isolated run and strategy adapters, invoking the same production business/application functions as live runtime. The API is a transport boundary, not a second business layer. Runtime/process isolation and resource/lifecycle controls remain open for the next design decision.
