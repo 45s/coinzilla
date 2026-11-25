@@ -339,20 +339,13 @@ function createRuntimeScenarioAccountSnapshot({
   })
 }
 
-async function createRuntimeScenarioWorkflow({
+function createRuntimeScenarioBuyOrder({
   market,
   baseAsset,
   quoteAsset,
-  pairConfig,
+  buyQuantity,
+  buyPrice,
 }) {
-  const buyQuantity = String(pairConfig.orderQuantity)
-  const buyPrice = "2"
-  const buyQuoteQuantity = multiplyDecimal({
-    left: buyPrice,
-    right: buyQuantity,
-  })
-  const legacyInvested = String(pairConfig.legacyPosition.invested)
-  const legacyQuantity = String(pairConfig.legacyPosition.quantity)
   const buyOrder = new CanonicalOrder({
     clientOrderId: "rs-scenario-buy-1",
     brokerOrderId: "rs-scenario-broker-buy-1",
@@ -387,23 +380,22 @@ async function createRuntimeScenarioWorkflow({
     clientOrderId: buyOrder.clientOrderId,
     brokerOrderId: buyOrder.brokerOrderId,
   })
-  const workflow = createRecoverySellerAccountingWorkflow({
-    initialPortfolio: new Portfolio(),
-    initialOrderRegistry: new OrderRegistry({
-      orders: [buyOrder],
-      ownerships: [ownership],
-    }),
-    initialLegacyPositions: [{
-      market,
-      position: createLegacyPosition({
-        invested: legacyInvested,
-        quantity: legacyQuantity,
-      }),
-      accounting: createLegacyPositionAccounting(),
-    }],
-    createCycleId: () => "rs-scenario-cycle-2",
-  })
-  const fill = new Fill({
+  return {
+    buyOrder,
+    ownership,
+  }
+}
+
+function createRuntimeScenarioBuyFill({
+  market,
+  baseAsset,
+  quoteAsset,
+  buyOrder,
+  buyQuantity,
+  buyPrice,
+  buyQuoteQuantity,
+}) {
+  return new Fill({
     tradeId: "rs-scenario-buy-fill-1",
     brokerOrderId: buyOrder.brokerOrderId,
     clientOrderId: buyOrder.clientOrderId,
@@ -424,6 +416,54 @@ async function createRuntimeScenarioWorkflow({
     commissions: [],
     commissionStatus: "COMPLETE",
   })
+}
+
+async function createRuntimeScenarioWorkflow({
+  market,
+  baseAsset,
+  quoteAsset,
+  pairConfig,
+}) {
+  const buyQuantity = String(pairConfig.orderQuantity)
+  const buyPrice = "2"
+  const buyQuoteQuantity = multiplyDecimal({
+    left: buyPrice,
+    right: buyQuantity,
+  })
+  const legacyInvested = String(pairConfig.legacyPosition.invested)
+  const legacyQuantity = String(pairConfig.legacyPosition.quantity)
+  const { buyOrder, ownership } = createRuntimeScenarioBuyOrder({
+    market,
+    baseAsset,
+    quoteAsset,
+    buyQuantity,
+    buyPrice,
+  })
+  const workflow = createRecoverySellerAccountingWorkflow({
+    initialPortfolio: new Portfolio(),
+    initialOrderRegistry: new OrderRegistry({
+      orders: [buyOrder],
+      ownerships: [ownership],
+    }),
+    initialLegacyPositions: [{
+      market,
+      position: createLegacyPosition({
+        invested: legacyInvested,
+        quantity: legacyQuantity,
+      }),
+      accounting: createLegacyPositionAccounting(),
+    }],
+    createCycleId: () => "rs-scenario-cycle-2",
+  })
+  const fill = createRuntimeScenarioBuyFill({
+    market,
+    baseAsset,
+    quoteAsset,
+    buyOrder,
+    buyQuantity,
+    buyPrice,
+    buyQuoteQuantity,
+  })
   const applied = await workflow.applyBuyFill({
     fill,
   })
@@ -434,7 +474,6 @@ async function createRuntimeScenarioWorkflow({
     workflow,
     fill,
     buyQuantity,
-    buyPrice,
     buyQuoteQuantity,
     legacyQuantity,
   }
@@ -451,9 +490,7 @@ async function createRuntimeScenarioStopWorkflow({ operationalStateStore }) {
 }
 
 function createRuntimeScenarioBroker({ market, baseAsset, quoteAsset, runId }) {
-  const submittedOrders = []
   return {
-    submittedOrders,
     broker: {
       providerInstanceId: "scenario-runner-simulation",
       providerType: "simulation",
@@ -485,7 +522,6 @@ function createRuntimeScenarioBroker({ market, baseAsset, quoteAsset, runId }) {
           acknowledgedAt: 2,
           updatedAt: 2,
         })
-        submittedOrders.push(acknowledgedOrder)
         return {
           ok: true,
           data: acknowledgedOrder,
@@ -573,18 +609,7 @@ function toScenarioOrder({ order }) {
   }
 }
 
-async function executeRecoverySellerRuntimeScenario({ runId, input }) {
-  const effectiveInput = validateScenarioInput({
-    schema: RUNTIME_SCENARIO.inputSchema,
-    defaults: RUNTIME_SCENARIO.input,
-    input,
-  })
-  if (compareDecimal({
-    left: effectiveInput.marketPrice,
-    right: "0",
-  }) <= 0) {
-    throw new RangeError("Scenario marketPrice must be greater than zero")
-  }
+async function createRuntimeScenarioContext({ runId }) {
   const { baseAsset, quoteAsset, market } = createRuntimeScenarioMarket()
   const marketMetadata = createRuntimeScenarioMarketMetadata({
     market,
@@ -598,7 +623,6 @@ async function executeRecoverySellerRuntimeScenario({ runId, input }) {
     quoteAsset,
     pairConfig,
   })
-  const { workflow, fill } = seed
   const accountSnapshot = createRuntimeScenarioAccountSnapshot({
     baseAsset,
     quoteAsset,
@@ -610,7 +634,7 @@ async function executeRecoverySellerRuntimeScenario({ runId, input }) {
   const stopWorkflow = await createRuntimeScenarioStopWorkflow({
     operationalStateStore,
   })
-  const { broker, submittedOrders } = createRuntimeScenarioBroker({
+  const { broker } = createRuntimeScenarioBroker({
     market,
     baseAsset,
     quoteAsset,
@@ -618,24 +642,38 @@ async function executeRecoverySellerRuntimeScenario({ runId, input }) {
   })
   const submitter = createRuntimeScenarioSubmitter({
     broker,
-    workflow,
+    workflow: seed.workflow,
     stopWorkflow,
     operationalStateStore,
   })
   const authorize = createRuntimeScenarioAuthorizer({
-    workflow,
+    workflow: seed.workflow,
     stopWorkflow,
     accountSnapshot,
   })
   const dispatch = createRecoverySellerRuntimeDispatch({
-    recoverySellerWorkflow: workflow,
+    recoverySellerWorkflow: seed.workflow,
     recoverySellerStopWorkflow: stopWorkflow,
     recoverySellerPairs: RUNTIME_PAIR_CONFIGS,
     getRecoverySellerMarketMetadata: async () => marketMetadata,
     getAccountSnapshot: async () => accountSnapshot,
   })
+  return {
+    marketMetadata,
+    pairConfig,
+    seed,
+    accountSnapshot,
+    operationalStateStore,
+    stopWorkflow,
+    submitter,
+    authorize,
+    dispatch,
+  }
+}
+
+async function executeRuntimeScenarioDispatch({ runtime, effectiveInput }) {
   let submittedAction
-  const dispatchResult = await dispatch({
+  const dispatchResult = await runtime.dispatch({
     symbol: "ZROUSDT",
     state: {
       prices: new Map([["ZROUSDT", {
@@ -649,16 +687,23 @@ async function executeRecoverySellerRuntimeScenario({ runId, input }) {
     isMarketPriceFresh: () => true,
     isStopping: () => false,
     hasBlockingOpenOrdersForSymbol: () => false,
-    authorizeRecoverySellerAction: authorize,
+    authorizeRecoverySellerAction: runtime.authorize,
     submitRecoverySellerOrder: async (submission) => {
-      submittedAction = submission.action
-      return submitter(submission)
+      const { action } = submission
+      submittedAction = action
+      return runtime.submitter(submission)
     },
   })
   if (dispatchResult?.ok !== true) {
     throw dispatchResult?.errors?.[0] ?? new Error("Production Recovery Seller runtime evaluation failed")
   }
-  const data = dispatchResult.data
+  return {
+    data: dispatchResult.data,
+    submittedAction,
+  }
+}
+
+function createRuntimeScenarioOutput({ runtime, data, submittedAction }) {
   const action = submittedAction ? {
     side: submittedAction.side,
     purpose: submittedAction.purpose,
@@ -667,11 +712,11 @@ async function executeRecoverySellerRuntimeScenario({ runId, input }) {
     cycleId: submittedAction.cycleId,
     positionId: submittedAction.positionId,
   } : null
-  const orders = (data.submittedOrders ?? []).map((order) => toScenarioOrder({
+  const submittedOrders = (data.submittedOrders ?? []).map((order) => toScenarioOrder({
     order,
   }))
   const reservation = action
-    ? workflow.getReservedSellCycle({
+    ? runtime.seed.workflow.getReservedSellCycle({
         cycleId: action.cycleId,
       })
     : undefined
@@ -679,19 +724,22 @@ async function executeRecoverySellerRuntimeScenario({ runId, input }) {
     clientOrderId: reservation.clientOrderId,
     cycleId: reservation.cycleId,
   } : null
-  const output = {
+  return {
     decision: data.decision ?? null,
     action,
     submitted: data.submitted === true,
-    submittedOrders: orders,
+    submittedOrders,
     reservedSellCycle,
-    simulationFacts: operationalStateStore.getRecords().map((fact) => ({
+    simulationFacts: runtime.operationalStateStore.getRecords().map((fact) => ({
       factId: fact.factId,
       factType: fact.factType,
       data: fact.data,
     })),
   }
-  const expected = {
+}
+
+function createRuntimeScenarioExpected({ seed, pairConfig }) {
+  return {
     decisionOutcome: "SUBMIT",
     actionSide: "SELL",
     actionQuantity: addDecimal({
@@ -701,7 +749,10 @@ async function executeRecoverySellerRuntimeScenario({ runId, input }) {
     submittedOrderCount: 1,
     reservationMatchesSubmittedOrder: true,
   }
-  const assertions = [
+}
+
+function createRuntimeScenarioAssertions({ output, expected }) {
+  return [
     createAssertion({
       name: "production RS transition selects a SELL action",
       actual: output.decision?.outcome,
@@ -728,66 +779,121 @@ async function executeRecoverySellerRuntimeScenario({ runId, input }) {
       expected: true,
     }),
   ]
-  const trace = [
-    {
-      id: "input-1",
-      kind: "input",
-      label: "Simulated ZROUSDT market price",
-      inputs: effectiveInput,
-      source: "deterministic-simulation-fixture",
-    },
-    {
-      id: "fill-1",
-      kind: "accounting",
-      label: "Seed canonical recovery BUY Fill into production accounting workflow",
-      inputs: {
-        tradeId: fill.tradeId,
-        quantity: fill.quantity.amount,
-        price: fill.price.amount,
-        quoteQuantity: fill.quoteQuantity.amount,
+}
+
+function createRuntimeScenarioEvaluationTrace({ runtime, effectiveInput, output }) {
+  return {
+    id: "runtime-1",
+    kind: "production-runtime",
+    label: "Evaluate production Recovery Seller runtime transition",
+    inputs: {
+      symbol: "ZROUSDT",
+      marketPrice: effectiveInput.marketPrice,
+      config: runtime.pairConfig,
+      marketMetadata: {
+        source: runtime.marketMetadata.source,
+        orderType: runtime.marketMetadata.orderType,
+        tradingRules: runtime.marketMetadata.tradingRules.constraints.map((rule) => ({
+          type: rule.type,
+          status: rule.status,
+          amount: rule.value.amount,
+        })),
       },
-      outputs: {
-        recoveryBuyApplied: true,
-        recoveryPositionId: "rs-scenario-position-1",
-      },
-      source: "createRecoverySellerAccountingWorkflow.applyBuyFill",
     },
-    {
-      id: "runtime-1",
-      kind: "production-runtime",
-      label: "Evaluate production Recovery Seller runtime transition",
-      inputs: {
-        symbol: "ZROUSDT",
-        marketPrice: effectiveInput.marketPrice,
-        config: pairConfig,
-        marketMetadata: {
-          source: marketMetadata.source,
-          orderType: marketMetadata.orderType,
-          tradingRules: marketMetadata.tradingRules.constraints.map((rule) => ({
-            type: rule.type,
-            status: rule.status,
-            amount: rule.value.amount,
-          })),
-        },
-      },
-      outputs: output.decision,
-      source: "createRecoverySellerRuntimeDispatch",
+    outputs: output.decision,
+    source: "createRecoverySellerRuntimeDispatch",
+  }
+}
+
+function createRuntimeScenarioTrace({ runtime, effectiveInput, output, assertions }) {
+  const inputStep = {
+    id: "input-1",
+    kind: "input",
+    label: "Simulated ZROUSDT market price",
+    inputs: effectiveInput,
+    source: "deterministic-simulation-fixture",
+  }
+  const fillStep = {
+    id: "fill-1",
+    kind: "accounting",
+    label: "Seed canonical recovery BUY Fill into production accounting workflow",
+    inputs: {
+      tradeId: runtime.seed.fill.tradeId,
+      quantity: runtime.seed.fill.quantity.amount,
+      price: runtime.seed.fill.price.amount,
+      quoteQuantity: runtime.seed.fill.quoteQuantity.amount,
     },
-    {
-      id: "broker-1",
-      kind: "simulated-broker",
-      label: "Submit the production SELL intent to the run-local simulated broker",
-      inputs: output.action,
-      outputs: output.submittedOrders,
-      source: "createRecoverySellerOrderSubmitter",
+    outputs: {
+      recoveryBuyApplied: true,
+      recoveryPositionId: "rs-scenario-position-1",
     },
-    {
-      id: "assertions-1",
-      kind: "assertion",
-      label: "Compare production execution with scenario expectations",
-      outputs: assertions,
-    },
+    source: "createRecoverySellerAccountingWorkflow.applyBuyFill",
+  }
+  const brokerStep = {
+    id: "broker-1",
+    kind: "simulated-broker",
+    label: "Submit the production SELL intent to the run-local simulated broker",
+    inputs: output.action,
+    outputs: output.submittedOrders,
+    source: "createRecoverySellerOrderSubmitter",
+  }
+  const assertionStep = {
+    id: "assertions-1",
+    kind: "assertion",
+    label: "Compare production execution with scenario expectations",
+    outputs: assertions,
+  }
+  return [
+    inputStep,
+    fillStep,
+    createRuntimeScenarioEvaluationTrace({
+      runtime,
+      effectiveInput,
+      output,
+    }),
+    brokerStep,
+    assertionStep,
   ]
+}
+
+async function executeRecoverySellerRuntimeScenario({ runId, input }) {
+  const effectiveInput = validateScenarioInput({
+    schema: RUNTIME_SCENARIO.inputSchema,
+    defaults: RUNTIME_SCENARIO.input,
+    input,
+  })
+  if (compareDecimal({
+    left: effectiveInput.marketPrice,
+    right: "0",
+  }) <= 0) {
+    throw new RangeError("Scenario marketPrice must be greater than zero")
+  }
+  const runtime = await createRuntimeScenarioContext({
+    runId,
+  })
+  const execution = await executeRuntimeScenarioDispatch({
+    runtime,
+    effectiveInput,
+  })
+  const output = createRuntimeScenarioOutput({
+    runtime,
+    data: execution.data,
+    submittedAction: execution.submittedAction,
+  })
+  const expected = createRuntimeScenarioExpected({
+    seed: runtime.seed,
+    pairConfig: runtime.pairConfig,
+  })
+  const assertions = createRuntimeScenarioAssertions({
+    output,
+    expected,
+  })
+  const trace = createRuntimeScenarioTrace({
+    runtime,
+    effectiveInput,
+    output,
+    assertions,
+  })
   return Object.freeze({
     runId,
     strategyId: "RS",
@@ -808,26 +914,12 @@ export function getRecoverySellerRunnerCatalog() {
   return Object.freeze([SCENARIO, RUNTIME_SCENARIO])
 }
 
-export async function executeRecoverySellerRunnerScenario({
-  runId,
-  scenarioId,
-  input,
-} = {}) {
-  if (scenarioId === RUNTIME_SCENARIO.id) {
-    return executeRecoverySellerRuntimeScenario({
-      runId,
-      input,
-    })
-  }
-  if (scenarioId !== SCENARIO.id) {
-    throw new Error(`RS scenario "${scenarioId}" is not supported by the current isolated adapter.`)
-  }
+async function executeRecoverySellerProfitabilityScenario({ runId, input }) {
   const effectiveInput = validateScenarioInput({
     schema: SCENARIO.inputSchema,
     defaults: SCENARIO.input,
     input,
   })
-
   const actual = calculateRecoverySellerProfitability(effectiveInput)
   const assertions = Object.freeze([
     createAssertion({
@@ -861,7 +953,7 @@ export async function executeRecoverySellerRunnerScenario({
   return Object.freeze({
     runId,
     strategyId: "RS",
-    scenarioId,
+    scenarioId: SCENARIO.id,
     scenarioName: SCENARIO.name,
     input: effectiveInput,
     output: actual,
@@ -872,4 +964,24 @@ export async function executeRecoverySellerRunnerScenario({
     diagnostics: Object.freeze([]),
     source: "production-domain-function",
   })
+}
+
+export async function executeRecoverySellerRunnerScenario({
+  runId,
+  scenarioId,
+  input,
+} = {}) {
+  if (scenarioId === RUNTIME_SCENARIO.id) {
+    return executeRecoverySellerRuntimeScenario({
+      runId,
+      input,
+    })
+  }
+  if (scenarioId === SCENARIO.id) {
+    return executeRecoverySellerProfitabilityScenario({
+      runId,
+      input,
+    })
+  }
+  throw new Error(`RS scenario "${scenarioId}" is not supported by the current isolated adapter.`)
 }
