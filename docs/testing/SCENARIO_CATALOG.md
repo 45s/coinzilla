@@ -135,8 +135,8 @@ The catalog is a navigation and traceability layer. Domain specifications, accep
 - [RS-005 — One SELL lifecycle per cycle](#rs-005--a-recovery-cycle-may-submit-only-one-sell-lifecycle)
 - [RS-006 — Atomic mixed SELL accounting](#rs-006--mixed-sell-accounting-commits-both-allocations-atomically)
 - [RS-007 — Unknown outcome and no blind retry](#rs-007--unknown-submission-outcome-preserves-identity-and-forbids-blind-retry)
-- [RS-008 — CG/RS shared account availability](#rs-008--cg-and-rs-share-account-availability-without-sharing-strategy-ownership)
-- [RS-009 — Terminal STOP and continued reconciliation](#rs-009--stop-is-terminal-visible-and-does-not-suppress-reconciliation)
+- [RS-008 — CG/RS shared account availability](#rs-008--cg-and-rs-share-account-availability-and-market-owned-volatility-without-sharing-strategy-ownership)
+- [RS-009 — Investment-only STOP and continued recovery](#rs-009--stop-blocks-additional-buy-spending-only)
 - [RS-010 — Deferred restart and fee valuation](#rs-010--unsupported-restart-and-fee-valuation-capabilities-remain-blocked)
 
 ### Shared packages
@@ -188,7 +188,7 @@ This map is deliberately incomplete. It gives the reader a starting point across
 | --- | --- | --- | --- |
 | Harvester — shared account/order/portfolio | Account-wide commitments, canonical fill identity, exchange filters | TEST-MAPPED | [Harvester domain test inventory](../../apps/harvester/docs/domain/DOMAIN_TEST_INVENTORY.md) |
 | Harvester — Conservative (CG) | Initial BUY, recovery SELL, next-BUY gating, partial fills, residual/dust completion | TEST-MAPPED | [Conservative Domain Specification](../../apps/harvester/docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md) |
-| Harvester — Recovery Seller (RS) | Legacy authorization/custody, BUY accounting, mixed SELL, profitability, one-SELL lifecycle, STOP, concurrency | PARTIAL — RS-003/004/005/006/007 have limited new scenario evidence; RS-001/002/008 MISSING; RS-009 BLOCKED; RS-010 UNSUPPORTED/BLOCKED | [RS scenario issue #1780](https://github.com/45s/coinzilla/issues/1780) and [RS domain specification](../../apps/harvester/docs/domain/recovery-seller-domain-specification.md) |
+| Harvester — Recovery Seller (RS) | Legacy authorization/custody, BUY accounting, mixed SELL, profitability, one-SELL lifecycle, STOP, concurrency | PARTIAL — RS-001/002 now have new registered scenario evidence with explicit blocked subcases; RS-003/004/005/006/007 remain partial; RS-008 MISSING; RS-009 SPECIFIED with implementation evidence MISSING; RS-010 UNSUPPORTED/BLOCKED | [RS scenario issue #1780](https://github.com/45s/coinzilla/issues/1780), [RS playbook](../../apps/harvester/docs/domain/recovery-seller-scenario-testing.md) and [RS domain specification](../../apps/harvester/docs/domain/recovery-seller-domain-specification.md) |
 | Brokers | Canonical request/response contracts, unknown mutation outcomes, provider capability boundaries | SPECIFIED / mapping incomplete | [Broker API contract](../../packages/brokers/BROKER_API.md) |
 | Entities | Exact financial values, canonical market/order/fill identity, immutable domain contracts | SPECIFIED / mapping incomplete | [Entities roadmap](../../packages/entities/ROADMAP.md) |
 | Database | CRUD conformance, transaction rollback, persistence across connections, locking | SPECIFIED / mapping incomplete | [Database CRUD decision](../../packages/db/docs/decisions/0001-provider-neutral-record-crud-api.md) |
@@ -507,15 +507,7 @@ The [Conservative Domain Specification](../../apps/harvester/docs/domain/CONSERV
 
 ## Harvester — Recovery Seller (RS)
 
-**Scenario source:** [Build Recovery Seller domain scenario coverage from scratch — issue #1780](https://github.com/45s/coinzilla/issues/1780).
-
-**Important evidence rule:** Every RS row below starts at **MISSING** for the new scenario initiative. Existing RS tests continue to run as ordinary regression tests, but they receive no scenario-coverage credit. Do not map, grade, or certify those existing tests as a shortcut. New RS scenario tests must be designed from the approved domain contract and the matrix in #1780.
-
-The [Recovery Seller Domain Specification](../../apps/harvester/docs/domain/recovery-seller-domain-specification.md) and owner-approved decisions remain the behavior authority. Where the contract is draft, unresolved, or deferred, the scenario must remain blocked rather than inventing behavior.
-
-## Harvester — Recovery Seller (RS)
-
-The [Recovery Seller Domain Specification](../../apps/harvester/docs/domain/recovery-seller-domain-specification.md) is the behavior authority; [issue #1780](https://github.com/45s/coinzilla/issues/1780) owns the RS-specific scenario matrix and evidence. The shared, strategy-neutral authoring method is in [DOMAIN_SCENARIO_TESTING.md](./DOMAIN_SCENARIO_TESTING.md) and is tracked separately by [#1779](https://github.com/45s/coinzilla/issues/1779).
+The [Recovery Seller Domain Specification](../../apps/harvester/docs/domain/recovery-seller-domain-specification.md) is the behavior authority; [issue #1780](https://github.com/45s/coinzilla/issues/1780) owns the RS-specific scenario matrix and evidence. The detailed AI-agent implementation contract is the [RS Scenario Testing Playbook](../../apps/harvester/docs/domain/recovery-seller-scenario-testing.md). The shared, strategy-neutral authoring method is [DOMAIN_SCENARIO_TESTING.md](./DOMAIN_SCENARIO_TESTING.md), tracked separately by [#1779](https://github.com/45s/coinzilla/issues/1779).
 
 **Coverage rule:** this initiative starts at zero. Existing RS unit, workflow, runtime, and operator tests are ordinary regression evidence only; they do not earn scenario-matrix credit. A scenario is not COVERED merely because a related helper test exists or because a test file name sounds relevant. Domain scenarios must prove a coherent business outcome through real domain components. Application-boundary claims require application-level scenarios.
 
@@ -582,7 +574,7 @@ The schema intentionally separates *business input* from *derived oracle*. Tests
 
 ### RS-001 — Legacy basis is not proof of current Spot custody
 
-**Status:** MISSING — no new RS scenario test accepted.
+**Status:** PARTIAL — 14 stable authorization/custody scenario cases are registered and mapped to the new application/domain suite. The two freshness-sensitive cases (RS-001-010 and RS-001-014) retain explicit BLOCKED freshness subcases because the canonical account snapshot exposes no authoritative freshness marker.
 
 **Behavior:** Operator-declared original quote investment and original base quantity establish historical basis/authorization. Current sellability is a separate fact obtained from verified Spot custody, less existing reservations and other account commitments.
 
@@ -605,11 +597,11 @@ The schema intentionally separates *business input* from *derived oracle*. Tests
 
 **Implementation:** `legacy-position.js`, `legacy-spot-allocation.js`, account snapshot and shared commitment allocation.
 
-**New scenario tests:** not mapped. Existing RS tests are not credited.
+**New scenario tests:** `apps/harvester/test/scenarios/recovery-seller/authorization-custody.scenario.test.js` with `scenarios/authorization-custody.js` (RS-001-001 through RS-001-014). The consolidated [PR #1823](https://github.com/45s/coinzilla/pull/1823) includes these records and their application/domain runner integration. The family remains PARTIAL: freshness subcases RS-001-010 and RS-001-014 are BLOCKED because the account snapshot has no authoritative freshness marker. Exact-head verification is pending.
 
 ### RS-002 — Recovery BUY accounting uses confirmed net fills and actual commissions
 
-**Status:** MISSING — no new RS scenario test accepted.
+**Status:** PARTIAL — 15 of the 20 reserved RS-002 business-matrix IDs are TEST-MAPPED; RS-002-002, -006, -012, -015 and -018 are PARTIAL; no reserved parent case remains wholly BLOCKED. RS-002-017 maps acknowledgement-before-fill, fill-before-acknowledgement and immediate terminal acknowledgement through the production order-event and RS accounting workflows. Cross-cutting application case RS-002-004 also maps #1780 J.01 BUY fill ownership dispatch. The partial cases retain explicit blockers for application authorization/account snapshots, partial-order quote reservation, successful third-asset valuation, overfill/TradingRules validation, and reconciliation of an owned UNKNOWN BUY while STOP is latched. The unknown-submission case proves durable intent/outcome, owned UNKNOWN order retention, one broker call and STOP latching. Follow-up reconciliation while STOP is active remains a separate BLOCKED subcase; source audit shows the current evaluator returns BLOCK before reconciling the owned UNKNOWN order, contrary to the owner-approved investment-only STOP contract. This requires a separate production fix and is not encoded as an expected passing scenario result. This is not complete BUY lifecycle coverage.
 
 **Behavior:** Recovery inventory and cost are derived only from canonical confirmed BUY fills attributed to the current RS Position/cycle/order/market. Requested quantity and acknowledgement are not execution.
 
@@ -627,12 +619,12 @@ The schema intentionally separates *business input* from *derived oracle*. Tests
 
 **Implementation:** RS accounting workflow, Portfolio/Position and canonical Fill ownership.
 
-**New scenario tests:** not mapped. Existing RS tests are not credited.
+**New scenario tests:** `apps/harvester/test/scenarios/recovery-seller/buy-accounting.scenario.test.js` with `scenarios/buy-accounting.js` registers RS-002-001 through RS-002-021 (including explicit blocked dispositions) and cross-cutting RS-002-004. The suite maps initial BUY eligibility from an empty recovery allocation without pre-Fill inventory, RS-versus-CG ownership dispatch, full/partial/multiple fills, exact net base/quote cost/gross VWAP, base/quote/zero/multiple supported fees, third-asset fail-closed behavior, duplicate replay, changed quantity/price/commission identity conflicts, wrong strategy/Position/order/market/side, invalid quantity/commission bounds, multi-tranche legacy-basis preservation, readiness, canonical BUY intent, active-order suppression, investment-cap boundaries using existing recovery exposure; pending-commitment cap arithmetic remains BLOCKED in RS-002-020-B, acknowledgement/fill event ordering, unknown-submission durability and shared quote-budget isolation. RS-002-002-B, RS-002-006-B, RS-002-012-B, RS-002-015-C/D and RS-002-018-B remain BLOCKED with explicit unblock conditions. The consolidated [PR #1823](https://github.com/45s/coinzilla/pull/1823) contains this work; the family remains PARTIAL and exact-head verification is pending.
 
 ### RS-003 — A mixed recovery/legacy SELL uses the additive legacy slice
 The accounting workflow-to-default-evaluator defect is addressed in [PR #1815](https://github.com/45s/coinzilla/pull/1815). That PR adds composed regressions against the real accounting workflow snapshot and the real default SELL evaluator; the PR remains unmerged, so this is not yet VERIFIED evidence.
 
-**Status:** PARTIAL — the existing planner scenario verifies canonical BUY-derived recovery quantity, Spot-verified additive legacy quantity, the independent ZRO proceeds oracle, smaller eligible Spot remainder, missing-custody fail-closed behavior, a same-market active SELL reservation gate, a real TradingRules minimum-notional rejection, and no-submit boundaries. PR #1815 adds three real-workflow cases: eligible mixed SELL submission for exactly `1.01 ZRO` with cycle/Position identity preserved; missing verified Spot custody reaching the actual custody guard with zero submissions; and existing-order, STOP, market-pause and incomplete-reconciliation gates taking precedence with zero SELL submissions. The new cases passed Harvester Targeted Tests on test head `23dbbe303221ea49820eeb9820323512b2fe38df`; final PR-head verification and merge are still pending.
+**Status:** PARTIAL — the existing planner scenario verifies canonical BUY-derived recovery quantity, Spot-verified additive legacy quantity, the independent ZRO proceeds oracle, smaller eligible Spot remainder, missing-custody fail-closed behavior, a same-market active SELL reservation gate, a real TradingRules minimum-notional rejection, and no-submit boundaries. PR #1815 adds three real-workflow cases: eligible mixed SELL submission for exactly `1.01 ZRO` with cycle/Position identity preserved; missing verified Spot custody reaching the actual custody guard with zero submissions; and existing-order, STOP, market-pause and incomplete-reconciliation gates taking precedence with zero SELL submissions. The new cases passed Harvester Targeted Tests on synchronized PR head `0a84a78285aa2dfb3c4f16319c765e436edea275` (11/11 tests in the scenario file); all six workflows pass on that exact head. Keep this family PARTIAL until PR #1815 is merged.
 
 **Behavior:** Conceptual SELL quantity is actual net recovery quantity plus the configured legacy `sellQuantity`, limited by the authorized remaining legacy amount that is verified, Spot-available and unreserved. `sellQuantity` is additive, not total quantity or a cap.
 
@@ -663,7 +655,7 @@ The accounting workflow-to-default-evaluator defect is addressed in [PR #1815](h
 
 ### RS-004 — Recovery, legacy, and combined profitability gates are independent
 
-**Status:** PARTIAL — four new domain cases prove both cross-subsidy directions, exact-threshold acceptance and recovery-only eligibility. Three application-transition boundary cases now prove no submission one tick below recovery-dominant, legacy-dominant and tied recovery/legacy/combined plan prices, and submission at/above those targets. Actual fill-commission-aware profitability and post-fill application outcomes remain incomplete.
+**Status:** PARTIAL — four new domain cases prove both cross-subsidy directions, exact-threshold acceptance and recovery-only eligibility. Three application-transition boundary cases now prove no submission one tick below recovery-dominant, legacy-dominant and tied recovery/legacy/combined plan prices, and submission at/above those targets. [PR #1819](https://github.com/45s/coinzilla/pull/1819) adds registry-driven case `RS-004-011` for all three profitability gates passing at exact recovery/combined thresholds with legacy break-even; it is TEST-MAPPED on exact head `06786f5a3c01f87b5e5d30e945ec7e8662f4b75b`. All five exact-head workflows pass, but the case is not VERIFIED until owner review/merge and merged-head evidence. Actual fill-commission-aware profitability and post-fill application outcomes remain incomplete.
 
 **Specification worked example — mixed SELL planning (no fees):**
 
@@ -689,6 +681,8 @@ At `20.00 USDT/ZRO`, recovery receives `20.00 USDT` (profit `+10.00`), legacy re
 **Must not happen:** collapse three gates into one; let either allocation subsidize the other; evaluate gross rather than actual net proceeds; close an executed cycle after a failed realized gate.
 
 **New scenario tests:** `recovery-seller-profitability.scenario.test.js`
+
+- `registry-and-runner.scenario.test.js` — `RS-004-011`: registry validation and a real-domain all-gates-pass profitability case (PR #1819; TEST-MAPPED, exact-head CI passed; merge evidence pending).
 
 - `a profitable recovery allocation cannot subsidize a legacy loss`
 - `profitable legacy proceeds cannot subsidize a recovery loss`
@@ -754,32 +748,54 @@ At `20.00 USDT/ZRO`, recovery receives `20.00 USDT` (profit `+10.00`), legacy re
 
 **Remaining:** actual submitter invocation count; lookup not-found and lookup-failure; original reservation retention; STOP latch; durable intent/outcome failure; unknown BUY.
 
-### RS-008 — CG and RS share account availability without sharing strategy ownership
+### RS-008 — CG and RS share account availability and market-owned volatility without sharing strategy ownership
 
 **Status:** MISSING — no new RS scenario test accepted.
 
-**Example:** CG and RS each request a SELL against the same market. Their strategy budgets and Positions remain separate, while the shared account allocator must ensure combined reserved base never exceeds verified available Spot. Repeat with competing BUY quote commitments and with different markets sharing the same quote asset.
+**Example:** CG and RS each request a SELL against the same market. Their strategy budgets and Positions remain separate, while the shared account allocator must ensure combined reserved base never exceeds verified available Spot. Repeat with competing BUY quote commitments and with different markets sharing the same quote asset. An RS-only market must also consume the same market-owned volatility gate as CG when protection is enabled; no RS-specific volatility engine is permitted.
 
-**Required outputs:** deterministic serialized allocation; one canonical order owner; one Fill credited to exactly one Position; no strategy budget borrowing; no aggregate oversell/double-spend.
+**Required outputs:** deterministic serialized allocation; one canonical order owner; one Fill credited to exactly one Position; no strategy budget borrowing; no aggregate oversell/double-spend; shared RS/CG market-volatility eligibility, the volatility-only recovery-SELL exception, and cancellation limited to Harvester-owned BUY orders (never SELL or external/manual orders).
+
+**Global admission precedence:** an active ACCOUNT-scope safety blocker overrides market-level exceptions and blocks every broker submission, including recovery SELL. Existing-order reconciliation and confirmed-fill accounting remain non-trading work.
 
 **Implementation:** shared commitment allocator, account runtime registry, engine transition queue and strategy-owned order routing.
 
-**Tests:** not mapped.
+**Tests:** RS-008-017 is reserved for the shared market-volatility gate; no new scenario evidence yet.
 
-### RS-009 — STOP is terminal, visible, and does not suppress reconciliation
+### RS-009 — STOP blocks additional BUY spending only
 
-**Status:** BLOCKED — a contract/source discrepancy must be resolved before this row can be claimed as terminal or tested as an unconditional no-reset invariant.
+**Status:** SPECIFIED — owner decision recorded in #1780 on 2026-11-24; implementation and scenario evidence are still MISSING.
 
-**Current evidence and discrepancy:**
+**Owner-approved contract:**
 
-- The RS specification and #1780 describe STOP as terminal with no operator clear/reset/resume path; the operator facade exposes read-only STOP status.
-- `stop-decision.js` exports `resolveRecoverySellerStopState`, and `resolve-recovery-seller-stop.js` implements an evidence-backed durable `SAFETY_BLOCKER_RESOLVED` operator-action workflow.
-- `create-harvester-operator.js` currently exposes only `getRecoverySellerStopState`, not the resolution use case.
-- Therefore “no operator method is exposed” is supported, but “there is no domain/application STOP resolution capability” is not. The owner must decide whether the resolution use case is obsolete/forbidden or the terminal-STOP specification needs revision. Do not write a scenario that silently chooses.
+- STOP blocks new BUYs and any action that spends additional quote funds.
+- STOP does not block an otherwise-valid recovery SELL of already-owned inventory.
+- The one-SELL-per-cycle rule remains mandatory. STOP does not authorize a second, continuation or replacement SELL.
+- Existing orders may WAIT/RECONCILE; confirmed fills and commissions continue through exact-once accounting.
+- An authorized administrator may manually clear STOP only after the cause is fixed, authoritative order/fill/balance reconciliation is complete, Portfolio/legacy/reservation accounting is verified, and the durable resolution fact is acknowledged.
+- No automatic clear, self-resume or implicit resume is allowed.
 
-**Invariant still required:** while STOP is latched, no new BUY/SELL/retry/replacement may pass; WAIT/RECONCILE of already-submitted work remains possible; first STOP evidence is preserved.
+**Current implementation gaps found:**
 
-**Tests:** not mapped by this initiative. Existing tests receive no coverage credit.
+- The SELL policy returns the STOP decision before evaluating an otherwise-valid SELL.
+- Runtime SELL eligibility also rejects STOPPED state, and runtime snapshot construction combines durable STOP with process `strategyStopped`.
+- The transition evaluator returns early on STOPPED state instead of submitting an eligible SELL.
+- The durable resolution use case exists, but the operator facade currently exposes read-only STOP status and does not expose the administrator resolution command.
+
+**Required scenarios:**
+
+1. STOP active + eligible first recovery SELL: submit exactly one SELL; preserve the STOP latch.
+2. STOP active + BUY candidate: zero broker BUY calls and no new quote commitment.
+3. STOP active + existing active/unknown SELL: retain original identity and reservation; WAIT/RECONCILE only.
+4. Partial and terminal histories: reconcile every confirmed fill/commission exactly once; preserve the one-SELL-per-cycle rule.
+5. Duplicate, conflicting and out-of-order events: idempotent for identical facts; fail safely for conflicts.
+6. Persistence, reconciliation and accounting failures: retain STOP and unresolved reservations; never invent missing facts.
+7. Authorized administrator resolution: require cause-fixed, complete reconciliation and accounting evidence; clear only after durable acknowledgement.
+8. Unauthorized resolution: reject without changing STOP or appending a resolution fact.
+
+**Existing tests:** `stop-decision.test.js`, `resolve-recovery-seller-stop.test.js`, `create-harvester-operator.test.js`, `evaluate-sell-decision.test.js`, `create-recovery-seller-transition-evaluator.test.js`, and `create-recovery-seller-runtime-evaluator.test.js`. These are regression starting points, not complete RS-009 scenario evidence.
+
+**Restart/replay:** remains unsupported under RS-010. Do not claim STOP/cycle/reservation restoration or replay coverage.
 
 ### RS-010 — Unsupported restart and fee-valuation capabilities remain blocked
 
