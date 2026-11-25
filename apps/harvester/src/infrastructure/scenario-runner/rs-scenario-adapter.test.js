@@ -59,10 +59,10 @@ test("RS scenario adapter validates schema fields and decimal-string inputs", as
 })
 
 
-test("RS-003-001 executes the production runtime evaluator and accounting workflow with a simulation-only order gateway", async () => {
+test("RS-004-012 executes the production runtime evaluator and accounting workflow with a simulation-only order gateway", async () => {
   const result = await executeRecoverySellerRunnerScenario({
     runId: "run-rs-runtime-1",
-    scenarioId: "RS-003-001",
+    scenarioId: "RS-004-012",
     input: {
       marketPrice: "0.02",
     },
@@ -81,8 +81,8 @@ test("RS-003-001 executes the production runtime evaluator and accounting workfl
   assert.ok(result.trace.some((step) => step.kind === "assertion"))
 })
 
-test("RS-003-001 remains non-executable in the public catalog until process isolation is verified", () => {
-  const scenario = getRecoverySellerRunnerCatalog().find((item) => item.id === "RS-003-001")
+test("RS-004-012 remains non-executable in the public catalog until process isolation is verified", () => {
+  const scenario = getRecoverySellerRunnerCatalog().find((item) => item.id === "RS-004-012")
   assert.ok(scenario)
   assert.equal(scenario.status, "TEST-MAPPED")
   assert.equal(scenario.executionStatus, "PRELIMINARY")
