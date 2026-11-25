@@ -90,6 +90,7 @@
       "src/bootstrap/user-data/create-user-data-event-safety-halt.test.js",
       "src/bootstrap/shutdown/create-conservative-shutdown-participant.test.js",
       "src/use-cases/errors/strategy-safety-pause-incomplete-error.test.js",
+      "src/use-cases/conservative-sell-accounting-scenario.test.js",
       "src/use-cases/conservative-trading-engine.test.js",
       "src/use-cases/conservative-trading-engine.multi-market.test.js",
       "src/application/operator/create-harvester-operator.test.js",

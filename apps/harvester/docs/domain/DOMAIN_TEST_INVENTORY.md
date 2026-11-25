@@ -4,7 +4,7 @@ status: active
 type: testing
 owner: harvester
 created: 2026-11-10
-last_verified: 2026-11-23
+last_verified: 2026-11-25
 ---
 
 # Harvester domain logic test inventory
@@ -27,13 +27,21 @@ Phase 1 audits existing assertions only. The source-to-test matrix below records
 
 Planned scenario behaviors include initial BUY fill → standing BUY and recovery SELL; second BUY fill → recovery SELL replacement/recalculation; partial recovery SELL accounting; terminal recovery completion → next cycle; retained inventory and constrained dust; commission assets and exact-decimal/filter boundaries; and invalid, duplicate, conflicting, reordered, or incomplete evidence. This initiative adds coverage without redefining the canonical Conservative specification or authorizing exchange operations.
 
-### 2026-11-24 — Phase 4 Conservative BUY accounting evidence (PR #1808)
+### 2026-11-24 — Phase 4 Conservative BUY accounting evidence (PR #1808) — merged
 
-- `src/use-cases/conservative-buy-accounting-scenario.test.js`: composes canonical initial/multiple BUY fills through production `updateTradingAccounting`; verifies net base inventory, cumulative quote cost/cash flow, base/quote/valued third-asset and zero-fee commissions, canonical fill identity, duplicate replay, conflicting facts, foreign-market rejection, valuation failure and failure atomicity.
+- `src/use-cases/conservative-buy-accounting-scenario.test.js`: composes canonical initial/multiple BUY fills through production `updateTradingAccounting`; verifies net base inventory, cumulative quote cost/cash flow, base/quote/valued third-asset and zero-fee commission handling, canonical fill identity, duplicate replay, conflicting facts, foreign-market rejection, valuation failure and failure atomicity.
 - `src/use-cases/second-buy-fill-reconciliation.test.js`: proves a second BUY extends the first tranche's Position and RecoveryLedger cost basis rather than resetting it.
-- `src/use-cases/conservative-trading-engine.test.js`: the full lifecycle now uses production `updateTradingAccounting`; verifies exact accounting after partial and completed second BUY fills while recovery SELL cancellation/fill reconciliation and replacement occur.
+- `src/use-cases/conservative-trading-engine.test.js`: the full lifecycle uses production `updateTradingAccounting`; verifies exact accounting after partial and completed second BUY fills while recovery SELL cancellation/fill reconciliation and replacement occur.
 - `src/domain/strategies/conservative/strategy.test.js`: investment-cap equality, just-above and below-boundary behavior; recovery SELL remains eligible when the next BUY is blocked.
-- Evidence remains pending until PR #1808 is merged and exact merged-head CI is verified; do not mark the broader audit matrix COVERED solely from this PR.
+- PR #1808 merged to `develop` at `a72cfb0fb66461290a8855a6df774dcdd87b2c6e`. All 29 required exact-head checks passed on `9ac49df3f6573f84f13cb21641032db2275c008b`; optional read-only TESTNET integration was skipped.
+
+### 2026-11-25 — Phase 5 SELL accounting scenario (current PR)
+
+- Added `src/use-cases/conservative-sell-accounting-scenario.test.js`, composing canonical BUY and three successive SELL fills through the real Portfolio, Position, RecoveryLedger and `updateTradingAccounting` components.
+- The worked sequence checks partial and cumulative SELL accounting with base-, quote- and valued third-asset commissions; exact remaining base quantity; preservation of the full BUY cost basis; cumulative net quote proceeds; outstanding recovery; realized net profit; and identical canonical Fill identity histories across both projections.
+- Additional cases assert duplicate SELL no-op behavior, changed commission facts rejected without mutation, and an unvalued third-asset SELL fee rejected without partial projection commit.
+- The test is registered in `config.targetedTestFiles`. Expected-value arithmetic is explicit decimal literals, independently derived from the Fill facts; no production behavior or strategy rules change.
+- Status: implementation committed to the task branch; exact-head Harvester/Repository Quality and full required CI verification are pending. Do not count this row as COVERED until merged and exact-head CI passes.
 
 ## Existing behavior-to-test inventory
 
