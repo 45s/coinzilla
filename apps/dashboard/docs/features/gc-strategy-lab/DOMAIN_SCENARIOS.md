@@ -375,7 +375,7 @@ The user inspects or edits RS configuration, authors a scenario, reviews a calcu
 ### Then
 The runner shows the exact config field names and values with base/quote units; labels `minProfit` as absolute quote-currency profit (0.01 USDT = one cent) and never as a percentage; labels `priceStepPercent` as 0.5%; distinguishes configured values from derived values and runtime state; and does not invent an independent average-entry-price input. Market-price updates and simulated broker outcomes appear only as explicit ordered scenario events sourced from existing scenario/test evidence or deliberately authored inputs. They are not represented as config values.
 
-## Future execution scenario 23 — Deterministic repeat and revision comparison
+## Proposed future execution scenario 23 — Deterministic repeat and revision comparison (pending approval)
 
 **Purpose:** Verify reproducibility without conflating an original-code replay with a regression run against changed production code.
 
