@@ -51,6 +51,7 @@ Planned scenario behaviors include initial BUY fill → standing BUY and recover
 - Existing invalid-evidence cases continue to assert fail-closed behavior. No production behavior or strategy rule changed.
 
 - Additional completion gates prove validated dust cannot be allocated before the SELL is fully filled and cannot bypass the `minProfit` floor; incomplete SELL returns no free allocation, while a completed below-floor SELL pauses with no allocation.
+- Added an accounting-to-completion composition in `conservative-sell-accounting-scenario.test.js`: real BUY/SELL fills update Portfolio and RecoveryLedger, then the real completion policy consumes the resulting basis, proceeds and remaining inventory. It proves a validated quantity-increment dust remainder is retained as `keepQuantity + dust` (`0.2`) and net profit is reconciled (`0.16`).
 - Exact-head CI for this follow-up is pending; do not count it as covered until the new head passes and the PR is merged.
 
 ## Existing behavior-to-test inventory
