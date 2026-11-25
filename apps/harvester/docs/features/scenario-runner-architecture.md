@@ -108,3 +108,8 @@ The parent sends a typed `cancel` IPC message first and waits for the bounded co
 ## Strict lint boundary correction — 2026-11-25
 
 Worker dispatch and message-handler contracts use one object argument, consistent with the repository's one-parameter function policy. Termination controller orchestration and forced-kill escalation are separate helpers; cleanup behavior and escalation order are unchanged.
+
+
+## One-argument worker contracts — 2026-11-25
+
+Worker dispatch receives a single request object containing both the run request and AbortSignal. This keeps worker boundaries consistent with the repository's one-parameter function rule while preserving cancellation propagation.

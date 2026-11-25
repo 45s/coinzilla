@@ -58,37 +58,37 @@ function isChildAlive({ child }) {
 }
 
 function createForcedTermination({ child, finish, fail, schedule }) {
-    return function forceKill({ signal }) {
-      if (!isChildAlive({ child })) {
-        finish()
-        return
-      }
-      try {
-        child.kill(signal)
-      } catch (cause) {
-        if (signal === "SIGTERM") {
-          forceKill({ signal: "SIGKILL" })
-          return
-        }
-        fail({ cause })
-        return
-      }
-      if (signal === "SIGTERM") {
-        schedule({
-          callback: () => forceKill({ signal: "SIGKILL" }),
-        })
-        return
-      }
-      schedule({
-        callback: () => {
-          if (isChildAlive({ child })) {
-            fail({ cause: new Error("Worker did not exit after SIGKILL") })
-          } else {
-            finish()
-          }
-        },
-      })
+  return function forceKill({ signal }) {
+    if (!isChildAlive({ child })) {
+      finish()
+      return
     }
+    try {
+      child.kill(signal)
+    } catch (cause) {
+      if (signal === "SIGTERM") {
+        forceKill({ signal: "SIGKILL" })
+        return
+      }
+      fail({ cause })
+      return
+    }
+    if (signal === "SIGTERM") {
+      schedule({
+        callback: () => forceKill({ signal: "SIGKILL" }),
+      })
+      return
+    }
+    schedule({
+      callback: () => {
+        if (isChildAlive({ child })) {
+          fail({ cause: new Error("Worker did not exit after SIGKILL") })
+        } else {
+          finish()
+        }
+      },
+    })
+  }
 }
 
 function createTerminationController({ child, graceMs, resolve, reject }) {
