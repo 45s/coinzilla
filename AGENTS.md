@@ -15,6 +15,7 @@ Every AI agent and automated contributor must follow the canonical documents bel
 | Binance exchange environment selection | [ADR-0002: Explicit Binance trading environment](docs/architecture/decisions/ADR-0002-explicit-binance-trading-environment.md) |
 | Task checklists | [docs/engineering/TASK_WORKFLOWS.md](docs/engineering/TASK_WORKFLOWS.md) |
 | Human-readable behavior scenarios and test traceability | [Repository Test Scenario Catalog](docs/testing/SCENARIO_CATALOG.md) |
+| Recovery Seller scenario authoring, RS-001…RS-010 matrix and evidence | [RS Scenario Testing Playbook](apps/harvester/docs/domain/recovery-seller-scenario-testing.md) and [issue #1780](https://github.com/45s/coinzilla/issues/1780) |
 | Task standards discovery and verification | [AI Task Compliance Standard](docs/engineering/AI_TASK_COMPLIANCE_STANDARD.md) |
 | Domain/path ownership | [docs/engineering/DOMAIN_OWNERSHIP.md](docs/engineering/DOMAIN_OWNERSHIP.md) |
 | Bitunix Spot reference-driven implementation | [packages/brokers/AGENTS.md — mandatory Bitunix reference audit](packages/brokers/AGENTS.md#bitunix-spot-development--mandatory-reference-audit) |
