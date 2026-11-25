@@ -1,4 +1,4 @@
-# GC Strategy Lab
+# Strategy Scenario Explorer — RS first, GC next
 
 - Status: draft
 - Type: feature specification
@@ -8,9 +8,9 @@
 
 ## 1. Purpose
 
-Provide an interactive, simulation-only workspace in the Dashboard to explore Generic Conservative (GC / Coin Grabber) strategy decisions. Operators can configure a market and scenario state, inject events, step through actual strategy evaluation, and inspect a visual decision path, exact calculations and execution history.
+Provide an interactive, simulation-only Scenario Explorer in the Dashboard that reconstructs strategy behavior as diagrams from structured scenario records and, when available, actual structured execution traces. **Recovery Seller (RS) is the first strategy** because its scenario registry and scenario-testing matrix already exist; Generic Conservative (GC / Coin Grabber) is a later expansion. Users can inspect scenario definitions, branch paths, rule coverage and source/test traceability without real trading operations.
 
-The Lab is a behavior exploration and specification-driven testing aid, not an exchange simulator or a live trading interface.
+The Explorer is a behavior exploration, scenario visualization and traceability aid—not an exchange simulator or a live trading interface.
 
 ## 2. Ownership and boundaries
 
@@ -22,20 +22,20 @@ The Lab is a behavior exploration and specification-driven testing aid, not an e
 
 ## 3. Scope
 
-### Included in the initial capability
+### Included in the initial RS-first capability
 - A dedicated Dashboard navigation entry and Lab workspace.
-- Select/configure a supported GC market and load its strategy configuration as defaults.
-- Display clearly identified scenario overrides separately from loaded defaults.
-- Configure an initial simulation state: inventory, cost basis, market price, fees/metadata/filter inputs where permitted, and active order state.
-- Inject supported events, including fills, partial fills, price updates, active-order changes, filter changes and rejection/failure events.
-- Evaluate the real GC strategy behavior through an isolated simulation contract.
-- Visual, dynamically generated decision flow, execution trace and calculation inspector.
+- Browse Recovery Seller scenario registry first, then (future scope) select/configure GC markets and strategy defaults.
+- Display scenario inputs and provenance; distinguish scenario records from live/runtime state.
+- Reconstruct scenario given inputs, when steps, then expectations and mustNot constraints as graph nodes/links, with an inspector.
+- Visualize RS registry and matrix relationships (rule, decision, state, transition, invariant, configuration field, implementation source, mapped test/subcase and evidence/status).
+- Initially diagram scenario text/registry and traceability relationships; actual dynamic execution is a separately coordinated future capability using a simulation-safe evaluator/trace contract.
+- Dynamic interactive diagrams, traceability graph, node inspection, filtering, search, grouping and graph↔text synchronization.
 - Step forward/back through a deterministic run where the simulation contract supports replay.
 - Scenario presets, save/load and reset.
 - Simulation history for the current run and selected node/event.
 - Explicit simulation-only safety messaging and guards.
 
-### Explicitly excluded
+### Explicitly excluded from the initial RS registry visualization
 - Live order submission/cancellation, broker/exchange connections or exchange credentials.
 - Production Portfolio, Journal, Operational State Store or other persisted-data mutation.
 - Direct browser-to-exchange/API calls.
@@ -45,7 +45,7 @@ The Lab is a behavior exploration and specification-driven testing aid, not an e
 - Strategy changes, behavior overrides that are not accepted by the actual evaluator, or changing the production strategy configuration.
 - Recovery/restart persistence simulation in the first scope unless explicitly added later.
 
-## 4. UI concept
+## 4. UI concept — RS Scenario Explorer
 
 Illustrative layout (decision-flow diagram concept):
 
@@ -59,6 +59,13 @@ flowchart TD
  E --> F
  F --> G[Trace + calculation inspector]
 ```
+
+For the RS-first version, support these views/modes:
+
+- **Scenario behavior view:** Given → ordered When → Then graph, including mustNot expectations and subcases.
+- **Coverage/traceability view:** scenario → rule → decision → state/transition → invariant/config field → implementation → test/subcase → evidence. Missing links and statuses are visible, not inferred.
+- **Registry explorer:** browse/filter scenario families and IDs, status, priority, layer, names, blockers, source and test mappings.
+- **Execution view (future):** actual evaluated path, branch result and calculation trace from an approved simulation contract. Registry expectations are never presented as runtime observations.
 
 The concept uses a workspace split into:
 
@@ -93,7 +100,7 @@ The concept uses a workspace split into:
 
 Use color plus text/icon/shape, not color alone.
 
-## 5. Scenario and event model
+## 5. Scenario and event model — RS registry visualization first
 
 ### 5.1 Initial state
 
@@ -131,7 +138,7 @@ Each injected event is validated, displayed in the event log, and processed by t
 - A scenario run is reproducible from its stored input/event sequence and evaluator version/context, subject to the contract's determinism guarantees.
 - Reset clears the run's simulation state/history and returns to its scenario starting state; it does not alter real runtime state.
 
-## 7. Simulation execution and trace contract
+## 7. Scenario graph model and future simulation execution contract
 
 The future Harvester-owned contract should expose simulation-safe evaluation, structured trace data and decision/intents without live execution side effects. Candidate trace fields include:
 
@@ -191,6 +198,14 @@ Exact trace shape, public entry point, determinism, decimal representation, conf
 - UI tests for node selection/trace synchronization, inspector contents, errors, reset and save/load.
 - Security tests/architecture checks confirming the feature cannot access broker APIs, credentials, database or production mutation endpoints.
 - Full Dashboard test/coverage/build and relevant workspace checks on the implementation PR.
+
+## 12. RS-first design decisions and recorded discussion
+
+- RS-first is deliberate: RS has a structured scenario registry and matrix; visualization should use real records rather than invented samples.
+- The graph engine should eventually accept strategy-neutral normalized scenario data with strategy-specific registry adapters, not hardcode RS.
+- Separate **scenario expectation**, **coverage status**, and **execution evidence** visually and semantically. TEST-MAPPED, PARTIAL, BLOCKED, or VERIFIED describes registry/evidence state—not the result of evaluating a trading decision.
+- Label graph modes: (1) behavior path assembled from declarative scenario steps, (2) traceability graph assembled from registry references, and (3) runtime evaluation trace only when sourced from the actual evaluator. Preserve provenance.
+- User discussion: first rebuild text-format RS scenarios into interactive illustrations; continue refining the feature spec and note substantive decisions/questions in it or its companion.
 
 ## 12. Related docs
 
