@@ -333,6 +333,8 @@ original legacy average cost = legacyPosition.invested
                              / legacyPosition.quantity
 ~~~
 
+The supported legacy-basis configuration has exactly these source values: `legacyPosition.invested` (original quote investment) and `legacyPosition.quantity` (original base quantity). Average cost is a derived value, not a separately configured input: `invested / quantity`. Do not add, accept, validate, or invent an `averageCost` configuration field or a contradictory-average-cost scenario. RS-001-003 therefore covers invalid/missing invested and quantity values only; its eight A–H subcases are the complete input-validation set for this contract.
+
 Do not recompute that average after a legacy disposal. After a cycle has successfully completed, decrement remaining logical legacy quantity exactly once by the legacy base quantity actually disposed (normally one configured `sellQuantity` lot; use the smaller remaining amount only under the approved smaller-remainder rule). Do not decrement on SELL planning, order submission, partial-fill delivery, an unconfirmed terminal state, or duplicate replay. The decrement is committed only after complete terminal fill/commission reconciliation and the atomic recovery/legacy accounting transition succeeds.
 
 The configured `investment` is the recovery-tranche BUY budget. It is separate from `legacyPosition.invested`, which is the original historical quote cost used to establish legacy basis.
