@@ -19,6 +19,16 @@ function publishScenarioRunUpdate({ eventBus, run }) {
   }
 }
 
+function resolveExecutionStatus({ executable, sourceStatus }) {
+  if (executable) {
+    return "EXECUTABLE"
+  }
+  if (sourceStatus === "PRELIMINARY") {
+    return "PRELIMINARY"
+  }
+  return "BLOCKED"
+}
+
 function createCatalog({ adapters, scenarioCatalog }) {
   if (!Array.isArray(scenarioCatalog)) {
     throw new TypeError("Scenario Runner host requires a strategy scenario catalog")
@@ -38,9 +48,10 @@ function createCatalog({ adapters, scenarioCatalog }) {
           name: scenario.name,
           layer: scenario.layer,
           status: scenario.status,
-          executionStatus: executable
-            ? "EXECUTABLE"
-            : scenario.executionStatus === "PRELIMINARY" ? "PRELIMINARY" : "BLOCKED",
+          executionStatus: resolveExecutionStatus({
+            executable,
+            sourceStatus: scenario.executionStatus,
+          }),
           executable,
           inputSchema: scenario.inputSchema,
           defaultInput: scenario.input,

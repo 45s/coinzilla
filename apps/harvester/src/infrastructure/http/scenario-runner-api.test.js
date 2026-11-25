@@ -199,7 +199,13 @@ test("host exposes an executable scenario only when its strategy adapter is regi
   }]
   const adapter = {
     strategyId: "RS",
-    execute: async () => ({ trace: [{ id: "decision", kind: "decision", label: "Production decision" }] }),
+    execute: async () => ({
+      trace: [{
+        id: "decision",
+        kind: "decision",
+        label: "Production decision",
+      }],
+    }),
     cancel: async () => true,
   }
   const host = createScenarioRunnerHost({

@@ -430,15 +430,15 @@ function cancelRun({ context, runId }) {
   if (!execution) {
     return false
   }
+  if (record.status === SCENARIO_RUN_STATUS.CANCELLING) {
+    return true
+  }
   transitionRun({
     record,
     status: SCENARIO_RUN_STATUS.CANCELLING,
     now: context.now,
     onUpdate: context.onUpdate,
   })
-  if (record.status === SCENARIO_RUN_STATUS.CANCELLING) {
-    return true
-  }
   execution.controller.abort()
   return true
 }
