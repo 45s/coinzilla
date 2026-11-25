@@ -35,6 +35,8 @@ function integrityError({ field, current, candidate } = {}) {
     incomingBrokerOrderId: candidate?.brokerOrderId,
     existingSource: current.lastSourceEventSource,
     incomingSource: candidate?.lastSourceEventSource,
+    reconciliationDecision: "rejected",
+    recoverable: false,
   }
   if (candidate !== undefined) {
     const existingValue = current[field]
