@@ -51,8 +51,8 @@ flowchart TD
     I --> J["Initialize configured legacy-position basis"]
     J --> K["Create shared serialized Trading Engine"]
     K --> L["Start user-data and market-data services"]
-    L --> M["Wait for an accepted fresh market-price event"]
-    M --> N["First normal RS evaluation"]
+    L --> M["Wait for fresh price and trading readiness"]
+    M --> N["First RS evaluation: fresh-price event, or readiness resume for an already-deferred symbol"]
 ```
 
 Important startup boundaries:
