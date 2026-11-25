@@ -54,55 +54,91 @@ function appendFilter({
   filters[field] = [...(filters[field] ?? []), ...values]
 }
 
-export function parseScenarioCliArguments({ argv = [] } = {}) {
-  const filters = {}
-  let reportDirectory = DEFAULT_REPORT_DIRECTORY
-  let listOnly = false
-  let help = false
-  let version = false
-
-  for (let index = 0; index < argv.length; index += 1) {
-    const option = splitOption({ token: argv[index] })
-    if (option.name === "--help" || option.name === "-h") {
-      help = true
-    } else if (option.name === "--version" || option.name === "-v") {
-      version = true
-    } else if (option.name === "--list") {
-      listOnly = true
-    } else if (option.name === "--report-dir") {
-      const value = option.value ?? argv[index + 1]
-      if (!value) {
-        throw new Error("--report-dir requires a directory.")
-      }
-      reportDirectory = value
-      if (option.value === null) {
-        index += 1
-      }
-    } else if (FILTER_OPTIONS.has(option.name)) {
-      const value = option.value ?? argv[index + 1]
-      if (!value) {
-        throw new Error(`${option.name} requires a value.`)
-      }
-      appendFilter({
-        filters,
-        field: FILTER_OPTIONS.get(option.name),
-        value,
-      })
-      if (option.value === null) {
-        index += 1
-      }
-    } else {
-      throw new Error(`Unknown option: ${option.name}`)
-    }
+function readOptionValue({
+  option,
+  argv,
+  index,
+  description,
+}) {
+  const value = option.value ?? argv[index + 1]
+  if (!value) {
+    throw new Error(description)
   }
 
   return {
-    filters,
-    reportDirectory,
-    listOnly,
-    help,
-    version,
+    value,
+    consumesNextArgument: option.value === null,
   }
+}
+
+function applyScenarioOption({
+  option,
+  argv,
+  index,
+  state,
+}) {
+  switch (option.name) {
+    case "--help":
+    case "-h":
+      state.help = true
+      return 0
+    case "--version":
+    case "-v":
+      state.version = true
+      return 0
+    case "--list":
+      state.listOnly = true
+      return 0
+    case "--report-dir": {
+      const { value, consumesNextArgument } = readOptionValue({
+        option,
+        argv,
+        index,
+        description: "--report-dir requires a directory.",
+      })
+      state.reportDirectory = value
+      return consumesNextArgument ? 1 : 0
+    }
+    default: {
+      if (!FILTER_OPTIONS.has(option.name)) {
+        throw new Error(`Unknown option: ${option.name}`)
+      }
+      const { value, consumesNextArgument } = readOptionValue({
+        option,
+        argv,
+        index,
+        description: `${option.name} requires a value.`,
+      })
+      appendFilter({
+        filters: state.filters,
+        field: FILTER_OPTIONS.get(option.name),
+        value,
+      })
+      return consumesNextArgument ? 1 : 0
+    }
+  }
+}
+
+export function parseScenarioCliArguments({ argv = [] } = {}) {
+  const state = {
+    filters: {},
+    reportDirectory: DEFAULT_REPORT_DIRECTORY,
+    listOnly: false,
+    help: false,
+    version: false,
+  }
+
+  for (let index = 0; index < argv.length; index += 1) {
+    const option = splitOption({ token: argv[index] })
+    index += applyScenarioOption({
+      option,
+      argv,
+      index,
+      state,
+    })
+  }
+
+  return state
 }
 
 function printUsage() {
