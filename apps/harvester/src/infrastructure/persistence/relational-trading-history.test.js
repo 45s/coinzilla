@@ -2026,3 +2026,68 @@ test("backs up and rebuilds existing order/fill tables without breaking historic
     },
   })
 })
+
+
+test("promotes a uniquely matched pending order without losing its earlier fill link", async (t) => {
+  const context = await createTestContext({ t })
+  const persistence = await preparePersistence({ context })
+  const clientOrderId = "h-BTCUSDT-pending"
+  const pendingFill = createAppliedFillEvent({
+    overrides: {
+      fillId: "binance:BTCUSDT:trade-pending",
+      tradeId: "trade-pending",
+      brokerOrderId: null,
+      clientOrderId,
+    },
+  })
+
+  await persistence.fillRepository.upsert({
+    fill: pendingFill,
+    sourceEvent: {
+      id: "exchange-history-fill:pending",
+      name: "execution.fill_history_reconciled",
+      source: "binance.exchange-history",
+      timestamp: "2026-11-20T04:00:00.000Z",
+    },
+    environment: "testnet",
+    ingestionSource: "exchange_history",
+  })
+
+  const pendingOrder = createExchangeHistoryOrder({
+    status: "OPEN",
+    executedQuantity: "0",
+    remainingQuantity: "1.0000",
+    eventId: "exchange-history-order:pending",
+    timestamp: "2026-11-20T04:00:01.000Z",
+    clientOrderId,
+    brokerOrderId: null,
+  })
+  await persistence.orderRepository.upsertHistorical(pendingOrder)
+
+  const acknowledgedOrder = createExchangeHistoryOrder({
+    status: "OPEN",
+    executedQuantity: "0",
+    remainingQuantity: "1.0000",
+    eventId: "exchange-history-order:acknowledged",
+    timestamp: "2026-11-20T04:00:02.000Z",
+    clientOrderId,
+    brokerOrderId: "exchange-order-pending-1",
+  })
+  await persistence.orderRepository.upsertHistorical(acknowledgedOrder)
+
+  await inspectSqlite({
+    filename: context.filename,
+    work: (database) => {
+      const orders = database.prepare(
+        "SELECT id, exchange_order_id FROM orders WHERE client_order_id = ?",
+      ).all(clientOrderId)
+      const fill = database.prepare(
+        "SELECT order_id, exchange_order_id FROM fills WHERE id = ?",
+      ).get(pendingFill.fillId)
+      assert.equal(orders.length, 1, "Pending-to-acknowledged promotion must update the existing order row.")
+      assert.equal(orders[0].exchange_order_id, "exchange-order-pending-1")
+      assert.equal(fill.order_id, orders[0].id, "The fill linked while pending must retain the same order row after promotion.")
+      assert.equal(fill.exchange_order_id, null, "The migration must not fabricate an exchange order ID absent from the fill source.")
+    },
+  })
+})
