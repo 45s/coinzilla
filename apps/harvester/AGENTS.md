@@ -42,6 +42,10 @@ Follow the canonical security requirements in [ENGINEERING_STANDARDS.md](../../E
 
 Follow the repository [modularity standard](../../docs/engineering/MODULARITY_STANDARD.md). Harvester-specific requirements: deterministic trading calculations and strategy decisions are plain pure functions; classes own state and enforce lifecycle invariants; use cases coordinate workflows through injected ports. See [Architecture](./docs/architecture.md#implementation-pattern-for-use-cases) for the established factory/composition pattern.
 
+## Order-history identity
+
+Never use clientOrderId alone as a permanent exchange-order identity. When present, use the provider's exchange order ID scoped by environment, provider instance/type, account, and market; provider order IDs may be market-local. Keep clientOrderId as a correlation and integrity-check attribute because providers such as Binance permit reuse after terminal orders. If the exchange ID is absent, treat client identity as provisional, correlate only when the pending record is unique and creation facts agree, and fail closed on ambiguity. Link fills by the exact market-scoped exchange order ID; a reused clientOrderId must never link fills across orders. Preserve immutable price/quantity checks for the same exchange order, and never repair conflicting persisted facts silently.
+
 ## Application architecture
 
 Follow the authoritative [Harvester architecture](./docs/architecture.md) for use-case factories, ports, adapters, bootstrap composition, and dependency direction. Reuse existing entity and broker contracts; do not introduce parallel domain models or adapter-specific details into strategy/domain code.
