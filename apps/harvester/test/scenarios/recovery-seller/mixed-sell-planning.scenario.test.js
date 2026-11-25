@@ -475,7 +475,7 @@ function createReservationAccountSnapshot({
     sourceTime: 1,
     portfolioBaseQuantityBaseline: baselines.data.portfolioBaseQuantityBaseline,
     additionalTrackedBaseQuantityBaseline: baselines.data.additionalTrackedBaseQuantityBaseline,
-    committedBaseBalanceBaseline: baselines.data.committedBaseBalance,
+    committedBaseBalanceBaseline: baselines.data.committedBaseBalanceBaseline,
   })
   return {
     accountSnapshot,
