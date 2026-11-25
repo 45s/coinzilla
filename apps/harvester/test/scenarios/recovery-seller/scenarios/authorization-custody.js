@@ -147,29 +147,118 @@ export const authorizationCustodyScenarios = Object.freeze([
     name: "missing, zero, negative or malformed legacy basis fails closed and average cost is derived",
     input: {
       cases: [
-        { id: "missing-invested", input: { quantity: "10" } },
-        { id: "zero-invested", input: { invested: "0", quantity: "10" } },
-        { id: "negative-invested", input: { invested: "-1", quantity: "10" } },
-        { id: "malformed-invested", input: { invested: "invalid", quantity: "10" } },
-        { id: "missing-quantity", input: { invested: "50" } },
-        { id: "zero-quantity", input: { invested: "50", quantity: "0" } },
-        { id: "negative-quantity", input: { invested: "50", quantity: "-10" } },
-        { id: "malformed-quantity", input: { invested: "50", quantity: "invalid" } },
-        { id: "contradictory-average-cost", input: { invested: "50", quantity: "10", averageCost: "999" } },
+        {
+          id: "missing-invested",
+          input: {
+            quantity: "10",
+          },
+        },
+        {
+          id: "zero-invested",
+          input: {
+            invested: "0",
+            quantity: "10",
+          },
+        },
+        {
+          id: "negative-invested",
+          input: {
+            invested: "-1",
+            quantity: "10",
+          },
+        },
+        {
+          id: "malformed-invested",
+          input: {
+            invested: "invalid",
+            quantity: "10",
+          },
+        },
+        {
+          id: "missing-quantity",
+          input: {
+            invested: "50",
+          },
+        },
+        {
+          id: "zero-quantity",
+          input: {
+            invested: "50",
+            quantity: "0",
+          },
+        },
+        {
+          id: "negative-quantity",
+          input: {
+            invested: "50",
+            quantity: "-10",
+          },
+        },
+        {
+          id: "malformed-quantity",
+          input: {
+            invested: "50",
+            quantity: "invalid",
+          },
+        },
+        {
+          id: "contradictory-average-cost",
+          input: {
+            invested: "50",
+            quantity: "10",
+            averageCost: "999",
+          },
+        },
       ],
     },
     step: "create-legacy-position",
     expected: {
       cases: [
-        { id: "missing-invested", errorName: "TypeError", averageCost: null },
-        { id: "zero-invested", errorName: "RangeError", averageCost: null },
-        { id: "negative-invested", errorName: "RangeError", averageCost: null },
-        { id: "malformed-invested", errorName: "TypeError", averageCost: null },
-        { id: "missing-quantity", errorName: "TypeError", averageCost: null },
-        { id: "zero-quantity", errorName: "RangeError", averageCost: null },
-        { id: "negative-quantity", errorName: "RangeError", averageCost: null },
-        { id: "malformed-quantity", errorName: "TypeError", averageCost: null },
-        { id: "contradictory-average-cost", errorName: null, averageCost: "5" },
+        {
+          id: "missing-invested",
+          errorName: "TypeError",
+          averageCost: null,
+        },
+        {
+          id: "zero-invested",
+          errorName: "RangeError",
+          averageCost: null,
+        },
+        {
+          id: "negative-invested",
+          errorName: "RangeError",
+          averageCost: null,
+        },
+        {
+          id: "malformed-invested",
+          errorName: "TypeError",
+          averageCost: null,
+        },
+        {
+          id: "missing-quantity",
+          errorName: "TypeError",
+          averageCost: null,
+        },
+        {
+          id: "zero-quantity",
+          errorName: "RangeError",
+          averageCost: null,
+        },
+        {
+          id: "negative-quantity",
+          errorName: "RangeError",
+          averageCost: null,
+        },
+        {
+          id: "malformed-quantity",
+          errorName: "TypeError",
+          averageCost: null,
+        },
+        {
+          id: "contradictory-average-cost",
+          errorName: null,
+          averageCost: "5",
+        },
       ],
     },
     mustNot: [
@@ -179,16 +268,25 @@ export const authorizationCustodyScenarios = Object.freeze([
       "trust a caller-supplied averageCost instead of deriving it from original invested/quantity",
     ],
     subcases: [
-      { id: "RS-001-003-A", description: "missing invested amount is rejected", status: "TEST-MAPPED", test: { file: testFile, title: "RS-001-003: missing, zero, negative or malformed legacy basis fails closed and average cost is derived" }, evidence: null },
-      { id: "RS-001-003-B", description: "zero invested amount is rejected", status: "TEST-MAPPED", test: { file: testFile, title: "RS-001-003: missing, zero, negative or malformed legacy basis fails closed and average cost is derived" }, evidence: null },
-      { id: "RS-001-003-C", description: "negative invested amount is rejected", status: "TEST-MAPPED", test: { file: testFile, title: "RS-001-003: missing, zero, negative or malformed legacy basis fails closed and average cost is derived" }, evidence: null },
-      { id: "RS-001-003-D", description: "malformed invested amount is rejected", status: "TEST-MAPPED", test: { file: testFile, title: "RS-001-003: missing, zero, negative or malformed legacy basis fails closed and average cost is derived" }, evidence: null },
-      { id: "RS-001-003-E", description: "missing original quantity is rejected", status: "TEST-MAPPED", test: { file: testFile, title: "RS-001-003: missing, zero, negative or malformed legacy basis fails closed and average cost is derived" }, evidence: null },
-      { id: "RS-001-003-F", description: "zero original quantity is rejected", status: "TEST-MAPPED", test: { file: testFile, title: "RS-001-003: missing, zero, negative or malformed legacy basis fails closed and average cost is derived" }, evidence: null },
-      { id: "RS-001-003-G", description: "negative original quantity is rejected", status: "TEST-MAPPED", test: { file: testFile, title: "RS-001-003: missing, zero, negative or malformed legacy basis fails closed and average cost is derived" }, evidence: null },
-      { id: "RS-001-003-H", description: "malformed original quantity is rejected", status: "TEST-MAPPED", test: { file: testFile, title: "RS-001-003: missing, zero, negative or malformed legacy basis fails closed and average cost is derived" }, evidence: null },
-      { id: "RS-001-003-I", description: "a contradictory supplied averageCost cannot override the derived basis", status: "TEST-MAPPED", test: { file: testFile, title: "RS-001-003: missing, zero, negative or malformed legacy basis fails closed and average cost is derived" }, evidence: null },
-    ],
+      ["A", "missing invested amount is rejected"],
+      ["B", "zero invested amount is rejected"],
+      ["C", "negative invested amount is rejected"],
+      ["D", "malformed invested amount is rejected"],
+      ["E", "missing original quantity is rejected"],
+      ["F", "zero original quantity is rejected"],
+      ["G", "negative original quantity is rejected"],
+      ["H", "malformed original quantity is rejected"],
+      ["I", "a contradictory supplied averageCost cannot override the derived basis"],
+    ].map(([suffix, description]) => ({
+      id: `RS-001-003-${suffix}`,
+      description,
+      status: "TEST-MAPPED",
+      test: {
+        file: testFile,
+        title: "RS-001-003: missing, zero, negative or malformed legacy basis fails closed and average cost is derived",
+      },
+      evidence: null,
+    })),
   }),
   makeCase({
     id: "RS-001-004",
