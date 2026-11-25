@@ -633,7 +633,6 @@ function cancelRun({ context, runId }) {
       runId,
     })
   }
-  const execution = context.executions.get(runId)
   if (!execution) {
     return false
   }
