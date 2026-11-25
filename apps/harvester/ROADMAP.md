@@ -2301,3 +2301,9 @@ The detailed evidence, implementation commits, CI state and remaining unknowns a
 - Current `develop` already contains `recovery-completion.dust.test.js`, including successful reason-specific dust cases and incomplete-SELL / below-minProfit gates. The PR does not duplicate those policy tests; it adds the accounting-to-completion composition.
 - Original SELL accounting head `f600079d1de03385dfd373b703cabab88c6b7c11` passed all six required workflows. The branch was synchronized to current `develop` with a non-force merge commit. Synchronized head `2c91dbb530f8993833b8980b3710e82ea9abc403` passed all six required workflows: Harvester Targeted Tests, Unit Tests, Test Coverage, Dependency Audit, Repository Quality and External Documentation Links. A final documentation-only checkpoint is being recorded; it will receive its own exact-head verification.
 - Test/documentation only. No production trading behavior or exchange state changed. PR #1844 remains open for owner review and must not be merged by automation.
+
+## 2026-11-25 — #1763 Phase 6 initial strategy scenario
+
+- Added `src/use-cases/conservative-initial-buy-scenario.test.js`, composing the real initial BUY policy, canonical BUY Fill, production `updateTradingAccounting`, Portfolio/Position, RecoveryLedger and real Conservative evaluator.
+- The scenario verifies exact initial BUY intent, commission-adjusted active inventory (`99.9` DOGE) and cost basis (`10.03` USDT), then exact ordered recovery SELL (`99.8` at `0.101`, required net `10.04`) and next standing BUY (`100` at `0.099`) intents.
+- Existing `strategy.test.js` covered policy decisions from separately applied accounting projections; this scenario closes the Fill-to-accounting-to-policy composition gap. Test-only; no production behavior or strategy rules changed. Exact-head CI pending.

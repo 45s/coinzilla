@@ -45,6 +45,14 @@ Planned scenario behaviors include initial BUY fill → standing BUY and recover
 - The original SELL accounting head `f600079d1de03385dfd373b703cabab88c6b7c11` passed all six required workflows. The branch was refreshed against current `develop` with a non-force merge commit. The synchronized head `2c91dbb530f8993833b8980b3710e82ea9abc403` then passed all six required workflows: Harvester Targeted Tests, Unit Tests, Test Coverage, Dependency Audit, Repository Quality and External Documentation Links. Do not count this row as merged coverage until PR #1844 is merged and exact merged-head evidence is recorded.
 - Test and documentation only. No production trading behavior, strategy rules, broker adapters, runtime configuration, or exchange state changed.
 
+
+### 2026-11-25 — Phase 6 initial Conservative strategy scenario
+
+- `src/use-cases/conservative-initial-buy-scenario.test.js` composes the real initial BUY policy, canonical BUY Fill, production `updateTradingAccounting`, Portfolio/Position, RecoveryLedger and the real Conservative strategy evaluator.
+- It asserts the exact initial BUY intent; applies a 100 DOGE BUY with base, quote and valued third-asset commissions; verifies net active inventory `99.9` and complete cost basis `10.03`; then proves the real strategy emits the recovery SELL first (`99.8` DOGE at `0.101`, required net proceeds `10.04`) followed by the next standing BUY (`100` DOGE at `0.099`).
+- This fills the missing full composition: the existing strategy unit test asserted intents from separately applied projections, while the new scenario proves canonical Fill → production accounting → real policy → exact ordered intents. No production behavior changed.
+- Exact-head CI for this Phase 6 addition is pending.
+
 ## Existing behavior-to-test inventory
 
 | Area | Existing test files | Behaviors already protected |
