@@ -211,7 +211,25 @@ function createExternalBuyOrder({ clientOrderId }) {
 }
 
 const domainHandlers = {
-  "create-legacy-position": ({ input }) => createLegacyPosition(input),
+  "create-legacy-position": ({ input }) => {
+    if (!Array.isArray(input.cases)) {
+      return createLegacyPosition(input)
+    }
+    return input.cases.map((scenarioCase) => {
+      try {
+        createLegacyPosition(scenarioCase.input)
+        return {
+          id: scenarioCase.id,
+          errorName: null,
+        }
+      } catch (error) {
+        return {
+          id: scenarioCase.id,
+          errorName: error.name,
+        }
+      }
+    })
+  },
   "record-legacy-sale": ({ input }) => {
     const position = createLegacyPosition({
       invested: input.invested,
@@ -481,12 +499,12 @@ test("RS-001-002: historical average cost remains fixed after a legacy disposal"
     "A legacy sale may reduce remaining quantity only; invested basis and original average cost must remain unchanged.")
 })
 
-test("RS-001-003: missing zero negative malformed or contradictory legacy basis fails closed", async () => {
-  await assert.rejects(
-    () => runDomain(authorizationCustodyScenarios[2]),
-    (error) => error instanceof RangeError,
-    "A zero invested basis must be rejected rather than normalized or inferred.",
-  )
+test("RS-001-003: missing zero negative or malformed legacy basis fails closed", async () => {
+  const scenario = authorizationCustodyScenarios[2]
+  const result = await runDomain(scenario)
+
+  assert.deepEqual(result.results[0], scenario.then,
+    "Every invalid invested/quantity input must fail with its exact validation error instead of being normalized or inferred.")
 })
 
 test("RS-001-004: operator-declared legacy basis does not create synthetic Portfolio fills", async () => {
