@@ -433,3 +433,12 @@ A pull request's GitHub lifecycle state and its draft/ready-for-review state are
 - A PR being open/ready for review is not the same as being merged. Follow the separate merge gates and ownership rules in this workflow; never merge solely because the PR is open.
 
 This rule applies to every AI agent, coding assistant, human contributor and automation. **Normal open PR is the default; Draft is reserved for genuine WIP.**
+
+
+## No fabricated or routine execution blockers — mandatory
+
+Agents must not stop implementation, ask the user to perform routine engineering work, or present speculative/fabricated blockers. Lack of a local checkout, shell, Node/pnpm installation, locally runnable tests, or similar routine execution tooling is **not** a task blocker: use supported GitHub repository/Git-data operations and GitHub Actions to continue. The agent owns finding and using the supported execution path and must keep implementing independently.
+
+Before reporting a blocker, establish it with concrete evidence from an attempted relevant operation. A genuine blocker is narrowly defined as an actual denied/missing permission, inaccessible required repository/source/API, a conflicting mandatory requirement, or an acceptance/safety condition that cannot be resolved within authorized scope. Describe the exact operation, observed failure/evidence, and impact; never inflate uncertainty, unverified risk, or convenience limitations into a blocker. Do not ask the user to code, run routine commands, troubleshoot agent tooling, or make decisions already approved.
+
+If one operation is genuinely unavailable, continue every other independent safe task. Use alternative supported remote operations, commits, tests and Actions where possible. Report only the evidenced residual blocker and verification truthfully; never falsely claim execution or green CI. This rule does not authorize bypassing safety, required checks, branch protection or approval boundaries.
