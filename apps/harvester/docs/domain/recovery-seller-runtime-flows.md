@@ -375,15 +375,7 @@ sequenceDiagram
     Auth->>Alloc: account balances, Portfolio, active orders, RS commitments
     Alloc-->>Auth: exactly one executable action or deferred/blocked result
     alt exactly one executable action, no deferred action
-        Auth-->>Submit: authorized action
-    else exactly one deferred action
-        Auth-->>Policy: deferred / skipped; no broker call
-    else allocation error or ambiguous result
-        Auth->>Store: latch durable RS STOP
-        Auth-->>Policy: no submission
-    end
-    alt allocation allowed
-        Auth->>Submit: authorized lifecycle decision + action
+        Auth-->>Submit: authorized lifecycle decision + action
         Submit->>Submit: validate side, purpose, Position and cycle ownership
         alt SELL
             Submit->>Store: persist durable submission intent
@@ -397,6 +389,11 @@ sequenceDiagram
         else unknown / deferred / unsafe failure
             Submit->>Store: latch durable STOP with original order identity
         end
+    else exactly one deferred action
+        Auth-->>Policy: deferred / skipped; no broker call
+    else allocation error or ambiguous result
+        Auth->>Store: latch durable RS STOP
+        Auth-->>Policy: no submission
     end
 \`\`\`
 
@@ -465,7 +462,7 @@ stateDiagram-v2
     [*] --> ACCUMULATING
     ACCUMULATING --> ACCUMULATING: sequential BUY tranche after prior BUY is terminal and reconciled
     ACCUMULATING --> SELL_SUBMITTED: reserve the sole SELL before broker I/O
-    SELL_SUBMITTED --> SELL_SUBMITTED: OPEN / PARTIALLY_FILLED; keep same order identity
+    SELL_SUBMITTED --> SELL_SUBMITTED: OPEN / PARTIALLY_FILLED; same order identity
     SELL_SUBMITTED --> RECONCILIATION_REQUIRED: unknown submission or acknowledgement
     RECONCILIATION_REQUIRED --> RECONCILIATION_REQUIRED: reconcile original clientOrderId; no blind retry
     SELL_SUBMITTED --> CLOSED: FILLED + complete reconciliation + every profitability gate passes
