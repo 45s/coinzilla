@@ -104,6 +104,8 @@ test("the shared RS registry includes the first eight RS-003 planning, custody, 
     "RS-003-007",
     "RS-003-008",
     "RS-003-009",
+    "RS-003-010",
+    "RS-003-011",
   ], "The RS registry must expose each mapped RS-003 planning, custody, reservation and Fill allocation scenario exactly once.")
 })
 
