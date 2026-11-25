@@ -379,7 +379,10 @@ test("runner retains capacity when execution cleanup is unconfirmed", async () =
   })
   const runner = createScenarioRunner({
     adapters: [adapter],
-    createRunId: () => "run-unconfirmed-cleanup",
+    createRunId: (() => {
+      let sequence = 0
+      return () => `run-unconfirmed-cleanup-${++sequence}`
+    })(),
     maxStoredRuns: 1,
     maxConcurrentRuns: 1,
     maxQueuedRuns: 0,

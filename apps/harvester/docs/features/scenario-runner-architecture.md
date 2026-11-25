@@ -119,3 +119,6 @@ The worker message handler returns a completion promise for each message; the pr
 
 
 The worker spawn/profile construction is isolated from the execution lifecycle so the executor remains within the strict function-size policy; the verified attestation gate remains mandatory before this helper is called.
+
+
+The application-level unconfirmed-cleanup regression uses unique run IDs so its second submission reaches the retained-capacity gate rather than the independent duplicate-run-ID guard.
