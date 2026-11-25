@@ -271,3 +271,38 @@ test("RS-002-006-B: keeps the unfilled portion of a partially filled RS BUY rese
   assert.equal(result.data.reason, "INSUFFICIENT_QUOTE_BALANCE", "The application allocator must report the remaining partial-order commitment as the exact deferral cause.")
   assert.equal(runtime.getLatchCount(), 0, "A valid partial-order reservation must not latch STOP.")
 })
+
+test("RS-002-020-B: counts an owned pending BUY commitment exactly once at the pair investment cap", async () => {
+  const pendingRecoveryBuy = makeActiveOrder({
+    clientOrderId: "rs-pending-buy-at-cap",
+    side: "BUY",
+    remainingQuantity: "6",
+    limitPrice: "10",
+  })
+  pendingRecoveryBuy.status = "PARTIALLY_FILLED"
+  pendingRecoveryBuy.strategyId = StrategyId.RECOVERY_SELLER
+
+  const runtime = createAuthorizer({
+    quoteBalance: "1000",
+    activeOrders: [pendingRecoveryBuy],
+    actionOverride: {
+      side: "BUY",
+      quantity: "2",
+      price: "10",
+      positionId: "rs-position-1",
+    },
+    snapshotOverride: {
+      planInput: {
+        recoveryQuantity: "0",
+        verifiedUnreservedLegacyQuantity: "0",
+        recoveryCostBasis: "20",
+      },
+      cumulativeNetSellProceeds: "0",
+    },
+  })
+  const result = await runtime.authorize()
+
+  assert.equal(result.ok, true, "An owned pending RS commitment must be a valid account allocation input.")
+  assert.equal(result.data.allowed, true, "20 spent + 60 pending commitment + 20 new action must be accepted at exact 100 investment equality, proving the pending commitment is counted once.")
+  assert.equal(runtime.getLatchCount(), 0, "Exact cap equality must not latch STOP.")
+})
