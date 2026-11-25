@@ -53,16 +53,23 @@ test("the RS scenario registry contains unique, traceable records with existing 
 })
 
 test("every mapped scenario test title exists in its referenced test file", () => {
-  const mappings = recoverySellerScenarioRegistry.flatMap((scenario) => [
-    {
-      scenarioId: scenario.id,
-      mapping: scenario.test,
-    },
-    ...(scenario.subcases ?? []).map((subcase) => ({
-      scenarioId: subcase.id,
-      mapping: subcase.test,
-    })),
-  ]).filter(({ mapping }) => mapping)
+  const mappings = []
+  for (const scenario of recoverySellerScenarioRegistry) {
+    if (scenario.test) {
+      mappings.push({
+        scenarioId: scenario.id,
+        mapping: scenario.test,
+      })
+    }
+    for (const subcase of scenario.subcases ?? []) {
+      if (subcase.test) {
+        mappings.push({
+          scenarioId: subcase.id,
+          mapping: subcase.test,
+        })
+      }
+    }
+  }
 
   for (const { scenarioId, mapping } of mappings) {
     assert.equal(typeof mapping.file, "string",
