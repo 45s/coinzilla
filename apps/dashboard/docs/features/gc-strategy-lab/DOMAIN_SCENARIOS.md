@@ -328,3 +328,30 @@ The user requests **Copy AI Debug Report**.
 
 ### Then
 The client clearly reports that a complete copy was not made and offers a complete export/download or segmented-copy path. It never silently truncates and labels a partial report complete. If clipboard permission is unavailable, a selectable-text fallback is provided.
+
+
+## Future execution scenario 20 — Local-only runner access boundary
+
+**Purpose:** Keep the initial unauthenticated runner safe for the explicitly local-development use case.
+
+### Given
+The Scenario Runner API is started for local development without authentication.
+
+### When
+The host initializes its network listener or receives a request through a non-loopback interface.
+
+### Then
+The listener is bound exclusively to loopback addresses and non-loopback exposure is rejected/disabled. The runner is not reachable over LAN, public or remote interfaces. No runner credentials or reused Dashboard identity are required for this local-only mode. Enabling remote/shared access remains blocked until authentication and server-side authorization for run creation, cancellation, history/details and report retrieval are designed and implemented.
+
+## Future execution scenario 21 — Repository-assisted AI debugging
+
+**Purpose:** Explain a run against the actual implementation and its documented intent without depending on the original run server.
+
+### Given
+An AI receives a self-contained AI Debug Report with execution evidence and repository/revision provenance.
+
+### When
+It investigates why/how the selected scenario should behave and compares that expectation with the captured run.
+
+### Then
+It inspects source code, architecture/specification docs, scenario definitions and mapped tests at the executed revision; identifies the relevant production call path and intended rules/calculations/validations/transitions; compares them with the report's actual inputs/events/trace/outputs/assertions; and cites precise source files/lines/tests. It distinguishes normative expectations from observed evidence, states revision mismatches and uncertainty, and does not require access to the original server run.
