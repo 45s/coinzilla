@@ -80,3 +80,7 @@ Follow the repository-wide [Structured Error Handling Standard](../../docs/engin
 - Add regression tests proving error identity/code/details and that the relevant diagnostic hook receives the failure context. Keep safety gates intact; diagnostics are not a reason to bypass validation.
 
 For any change to a behavior listed in [critical-behaviors.json](./docs/critical-behaviors.json), update its authoritative invariants, owning source modules, named normal/failure tests, required integration evidence, runtime limitation, and measured coverage entry. Run `pnpm --filter @coinzilla/harvester run check:reliability`. The required Test Coverage workflow also enforces per-module floors after the full package coverage run; never lower a floor to hide a regression—remeasure the baseline and document the reason first.
+
+## Scenario Runner task preflight and approved refactoring scope
+
+For Scenario Runner tasks, before any exploration or edit, read the repository-root `AGENTS.md` and every applicable nested `AGENTS.md`, including this file. The task issue, PR and Runner roadmap repeat this requirement. Trading logic/services may be refactored as necessary on the task branch to reuse production flows faithfully; preserve real trading behavior and safety, add regression tests, and document affected consumers. Stay exclusively on the task branch/PR; never commit directly to `develop`/`main` or merge/auto-merge.

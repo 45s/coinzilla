@@ -2293,3 +2293,7 @@ The detailed evidence, implementation commits, CI state and remaining unknowns a
 - Strengthened the full Conservative engine lifecycle to use production `updateTradingAccounting`, covering second BUY partial/completed fills, recovery-SELL cancellation/fill reconciliation and replacement SELL submission with exact cumulative accounting assertions.
 - CI fixes: corrected the lifecycle cost-basis expectations from observed canonical fills, fixed strict ESLint formatting, and removed repeated Markdown blank lines. Exact-head verification is tracked on PR #1808.
 - Test-only and documentation changes; no production trading behavior or rules changed.
+
+## Strategy-neutral Scenario Runner — Issue #1836 / PR #1837
+
+The isolated simulation Runner is an active task. Its Harvester-side architecture note is [Scenario Runner architecture](docs/features/scenario-runner-architecture.md); the Dashboard owns the specification and phased plan. The initial generic lifecycle/process-adapter scaffolding has been added on the task branch, with a fail-closed unregistered worker dispatcher. RS production adapter, API/UI and acceptance are not complete. The worker is simulation-only and must never fall back to live trading or production state.
