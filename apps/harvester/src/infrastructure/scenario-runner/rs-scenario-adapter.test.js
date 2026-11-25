@@ -68,6 +68,7 @@ test("RS-004-012 executes the production runtime evaluator and accounting workfl
     },
   })
 
+  process.stdout.write(`RS_RUNTIME_DEBUG ${JSON.stringify({ output: result.output, assertions: result.assertions })}\n`)
   assert.equal(result.source, "production-runtime-evaluator")
   assert.equal(result.passed, true)
   assert.equal(result.output.decision.outcome, "SUBMIT")
