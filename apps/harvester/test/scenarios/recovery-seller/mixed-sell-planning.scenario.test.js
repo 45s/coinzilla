@@ -86,7 +86,7 @@ test("RS-003-003: exhausted legacy inventory produces a recovery-only SELL plan"
   await assertRegisteredScenario({ id: "RS-003-003" })
 })
 
-test("the shared RS registry includes the first seven RS-003 planning, custody and reservation scenarios", () => {
+test("the shared RS registry includes the first eight RS-003 planning, custody, reservation and Fill-allocation scenarios", () => {
   const actualIds = recoverySellerScenarioRegistry
     .filter((scenario) => scenario.family === "RS-003")
     .map((scenario) => scenario.id)
@@ -100,6 +100,7 @@ test("the shared RS registry includes the first seven RS-003 planning, custody a
     "RS-003-006",
     "RS-003-007",
     "RS-003-008",
+    "RS-003-009",
   ], "The RS registry must expose each mapped RS-003 planning, custody, reservation and Fill allocation scenario exactly once.")
 })
 
@@ -586,10 +587,10 @@ function createAccountWideReservationOrders({ markets }) {
   ]
 }
 
-function createAccountWideReservationSnapshot({ markets, portfolio, reservations }) {
+function createAccountWideReservationSnapshot({ markets, portfolio, reservations, freeBaseBalance = "0.26" }) {
   const balance = new Balance({
     free: new Quantity({
-      amount: "0.26",
+      amount: freeBaseBalance,
       asset: markets.baseAsset,
     }),
     locked: new Quantity({
@@ -668,6 +669,63 @@ function createAccountWideReservationScenarioContext() {
     targetMarket: markets.targetMarket,
     portfolio,
     activeOrders: [],
+  }
+}
+
+
+function createConcurrentReservationScenarioContext() {
+  const markets = createReservationMarkets({
+    input: {
+      reservationMarketSymbol: "ZROFDUSD",
+    },
+  })
+  const portfolio = createReservationPortfolio(markets)
+  const snapshotReservations = createAccountWideReservationOrders({ markets })
+  const snapshot = createAccountWideReservationSnapshot({
+    markets,
+    portfolio,
+    reservations: snapshotReservations,
+    freeBaseBalance: "0.76",
+  })
+  const lateReservation = createSellReservationOrder({
+    market: markets.reservationMarket,
+    orderId: "cg-post-snapshot-zro-sell",
+    originalQuantity: "0.5",
+    executedQuantity: "0",
+  })
+  const activeOrders = [...snapshotReservations, lateReservation]
+  const dependencies = {
+    strategyId: StrategyId.RECOVERY_SELLER,
+    state: {
+      registry: {
+        getActiveOrders: () => activeOrders,
+      },
+    },
+    getAccountSnapshot: () => snapshot.accountSnapshot,
+    getAdditionalTrackedBaseQuantity: () => snapshot.trackedLegacy,
+    allocateOrderCommitments,
+  }
+  return {
+    dependencies,
+    targetMarket: markets.targetMarket,
+    portfolio,
+    activeOrders: [],
+  }
+}
+
+function evaluateConcurrentReservationScenario() {
+  const context = createConcurrentReservationScenarioContext()
+  const atLimit = allocateReservationScenario({
+    context,
+    quantity: "0.26",
+  })
+  const overLimit = allocateReservationScenario({
+    context,
+    quantity: "0.27",
+  })
+  return {
+    atLimit: summarizeReservationResult({ result: atLimit }),
+    overLimit: summarizeReservationResult({ result: overLimit }),
   }
 }
 
@@ -850,6 +908,26 @@ test("RS-003-009: a SELL commitment created after the account snapshot is subtra
   assert.equal(actual.overLimit.reason,
     "Strategy SELL quantity exceeds available free base balance after commitments",
     "The excess must be rejected by the shared account-base commitment guard.")
+})
+
+
+test("RS-003-009: registered post-snapshot SELL reservation reduces shared base availability exactly once", async () => {
+  const scenario = recoverySellerMixedSellPlanningScenarios.find((item) => item.id === "RS-003-009")
+  assert.ok(scenario,
+    "RS-003-009 must exist as a declarative post-snapshot account commitment scenario.")
+  assert.ok(recoverySellerScenarioRegistry.includes(scenario),
+    "The shared RS registry must include RS-003-009.")
+  const result = await runRecoverySellerDomainScenario({
+    scenario,
+    handlers: {
+      "calculate-post-snapshot-sell-reservation": () => evaluateConcurrentReservationScenario(),
+    },
+  })
+  assert.deepEqual(
+    result.results[0],
+    scenario.then,
+    "The production account allocator must subtract the active reservation delta created after the snapshot exactly once.",
+  )
 })
 
 test("RS-003-006: account-wide SELL reservations across markets are summed and snapshot commitments are not double-counted", async () => {
