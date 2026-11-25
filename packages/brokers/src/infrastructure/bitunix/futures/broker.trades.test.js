@@ -169,7 +169,7 @@ test("Bitunix Futures getMyTrades returns the bounded Futures execution rows thr
     executedAt: 1_700_000_000_123,
     liquidityRole: "MAKER",
   }])
-  const request = requests[0]
+  const [request] = requests
   assert.equal(new URL(request.url).pathname, "/api/v1/futures/trade/get_history_trades")
   assert.equal(new URL(request.url).searchParams.get("positionId"), "position-123")
   assert.equal(new URL(request.url).searchParams.get("limit"), "25")
