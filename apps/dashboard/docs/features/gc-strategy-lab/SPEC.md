@@ -138,7 +138,7 @@ This illustrates separation only; it does not authorize a Dashboard-owned strate
 - Simulation history for the current run and selected node/event.
 - Explicit simulation-only safety messaging and guards.
 
-### Explicitly excluded from the initial RS registry visualization
+### Explicitly excluded from the simulation runner
 - Live order submission/cancellation, broker/exchange connections or exchange credentials.
 - Production Portfolio, Journal, Operational State Store or other persisted-data mutation.
 - Direct browser-to-exchange/API calls.
@@ -168,7 +168,7 @@ For the RS-first version, support these views/modes:
 - **Scenario behavior view:** Given → ordered When → Then graph, including mustNot expectations and subcases.
 - **Coverage/traceability view:** scenario → rule → decision → state/transition → invariant/config field → implementation → test/subcase → evidence. Missing links and statuses are visible, not inferred.
 - **Registry explorer:** browse/filter scenario families and IDs, status, priority, layer, names, blockers, source and test mappings.
-- **Execution view (future):** actual evaluated path, branch result and calculation trace from an approved simulation contract. Registry expectations are never presented as runtime observations.
+- **Execution view:** actual evaluated path, branch result and calculation trace emitted by production execution under simulation adapters. Registry expectations are never presented as runtime observations.
 
 The concept uses a workspace split into:
 
@@ -203,7 +203,7 @@ The concept uses a workspace split into:
 
 Use color plus text/icon/shape, not color alone.
 
-## 5. Scenario and event model — RS registry visualization first
+## 5. Scenario and event model — strategy-neutral runner, RS adapter first
 
 ### 5.1 Initial state
 
@@ -243,7 +243,7 @@ Each injected event is validated, displayed in the event log, and processed by t
 
 ## 7. Production execution reuse and simulation boundary
 
-The future Harvester-owned contract should expose simulation-safe evaluation, structured trace data and decision/intents without live execution side effects. Candidate trace fields include:
+The strategy-owned simulation boundary must expose execution of production use cases, structured trace data and decisions/intents without live execution side effects. Candidate trace fields include:
 
 - Step identity/order and type.
 - Inputs and input provenance.
@@ -302,9 +302,9 @@ Exact trace shape, public entry point, determinism, decimal representation, conf
 - Security tests/architecture checks confirming the feature cannot access broker APIs, credentials, database or production mutation endpoints.
 - Full Dashboard test/coverage/build and relevant workspace checks on the implementation PR.
 
-## 12. RS-first design decisions and recorded discussion
+## 12. RS adapter decisions and recorded discussion
 
-- RS-first is deliberate: RS has a structured scenario registry and matrix; visualization should use real records rather than invented samples.
+- RS is the first adapter because it has a structured scenario registry and matrix; the generic runner must consume real records rather than invented samples.
 - The graph engine should eventually accept strategy-neutral normalized scenario data with strategy-specific registry adapters, not hardcode RS.
 - Separate **scenario expectation**, **coverage status**, and **execution evidence** visually and semantically. TEST-MAPPED, PARTIAL, BLOCKED, or VERIFIED describes registry/evidence state—not the result of evaluating a trading decision.
 - Label graph modes: (1) behavior path assembled from declarative scenario steps, (2) traceability graph assembled from registry references, and (3) runtime evaluation trace only when sourced from the actual evaluator. Preserve provenance.
