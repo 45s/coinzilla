@@ -387,3 +387,30 @@ The user repeats the run or compares a fix on a newer production revision.
 
 ### Then
 A repeat against the same revision and same captured inputs is checked for reproducible production decisions, calculations, intents, transitions, accounting and final state. A newer-revision comparison is a separate execution using the same captured scenario package; both revision identifiers and both results/traces are retained and compared. Time, generated identifiers and other nondeterministic inputs are controlled or captured. If a dependency remains uncontrolled, deterministic replay is not claimed and the limitation is explicit.
+
+
+## Approved scenario workflows — original replay and temporary Playground
+
+### Scenario 24 — Replay the original scenario revision
+
+**Given** a scenario has a recorded production revision and original configuration/inputs.
+
+**When** the user selects original replay.
+
+**Then** the runner executes that original scenario package against the exact recorded production revision. It does not silently use the current revision or altered Playground values.
+
+### Scenario 25 — Temporarily change Playground configuration
+
+**Given** the user opens a scenario configured for DOGEUSDT with investment 400 and fee settings 0.1%/0.1%.
+
+**When** the user changes the Playground market to ZROUSDT and investment to 100.
+
+**Then** the changes apply only to the current Playground run; the original scenario remains unchanged and no modified scenario is saved. The modified configuration follows the same production parsing, validation, normalization and market-metadata resolution path as file-loaded configuration. The strategy receives validated effective configuration without knowing its source. Invalid input blocks execution; valid input uses the same production strategy implementation.
+
+### Scenario 26 — Copy complete JSON package for AI agents
+
+**Given** an original replay or Playground run is inspectable.
+
+**When** the user selects **Copy AI Debug Package**.
+
+**Then** the client copies one complete, versioned JSON package containing scenario identity/definition, original configuration, temporary overrides, validated effective configuration, exact executed revision, market metadata, initial state, ordered events, run status, outputs, assertions, trace, diagnostics and provenance. Secrets are excluded/redacted. If the full package cannot be copied, the UI reports that no complete copy was made and offers a complete export/fallback; it never silently truncates.
