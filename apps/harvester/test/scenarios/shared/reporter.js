@@ -11,11 +11,12 @@ function countBy({
   items,
   field,
 }) {
-  return items.reduce((counts, item) => {
+  const counts = {}
+  for (const item of items) {
     const key = item[field] ?? "UNSPECIFIED"
     counts[key] = (counts[key] ?? 0) + 1
-    return counts
-  }, {})
+  }
+  return counts
 }
 
 function uniqueTests({ tests }) {
