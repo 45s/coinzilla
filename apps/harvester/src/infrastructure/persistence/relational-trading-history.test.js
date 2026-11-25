@@ -116,7 +116,21 @@ function assertMigrationHistory(database) {
 }
 
 function assertOrderIdentityIndexes(database) {
-  assertOrderIdentityIndexes(database)
+  const exchangeLookupIndex = database.prepare("PRAGMA index_list(orders)").all().find(
+    ({ name }) => name === "orders_exchange_lookup_idx",
+  )
+  assert.ok(exchangeLookupIndex, "Orders must have a provider-scoped exchange-order lookup index.")
+  assert.equal(exchangeLookupIndex.unique, 0, "The lookup index must retain its non-unique query plan.")
+  const exchangeIdentityIndex = database.prepare("PRAGMA index_list(orders)").all().find(
+    ({ name }) => name === "orders_exchange_identity_unique_idx",
+  )
+  assert.ok(exchangeIdentityIndex, "Exchange order identity must be protected by a market-scoped unique index.")
+  assert.equal(exchangeIdentityIndex.unique, 1, "One exchange order ID may identify only one row within its provider/account/market scope.")
+  const pendingClientIdentityIndex = database.prepare("PRAGMA index_list(orders)").all().find(
+    ({ name }) => name === "orders_pending_client_identity_unique_idx",
+  )
+  assert.ok(pendingClientIdentityIndex, "Pending client IDs must remain unique within their provider account.")
+  assert.equal(pendingClientIdentityIndex.unique, 1, "A provisional client identity must not be duplicated before an exchange order ID is known.")
 }
 
 function assertFreshRelationalSchema(database) {
@@ -153,21 +167,7 @@ function assertFreshRelationalSchema(database) {
       "ingestion_source", "last_ingestion_source",
     ],
   })
-  const exchangeLookupIndex = database.prepare("PRAGMA index_list(orders)").all().find(
-    ({ name }) => name === "orders_exchange_lookup_idx",
-  )
-  assert.ok(exchangeLookupIndex, "Orders must have a provider-scoped exchange-order lookup index.")
-  assert.equal(exchangeLookupIndex.unique, 0, "The lookup index must retain its non-unique query plan.")
-  const exchangeIdentityIndex = database.prepare("PRAGMA index_list(orders)").all().find(
-    ({ name }) => name === "orders_exchange_identity_unique_idx",
-  )
-  assert.ok(exchangeIdentityIndex, "Exchange order identity must be protected by a market-scoped unique index.")
-  assert.equal(exchangeIdentityIndex.unique, 1, "One exchange order ID may identify only one row within its provider/account/market scope.")
-  const pendingClientIdentityIndex = database.prepare("PRAGMA index_list(orders)").all().find(
-    ({ name }) => name === "orders_pending_client_identity_unique_idx",
-  )
-  assert.ok(pendingClientIdentityIndex, "Pending client IDs must remain unique within their provider account.")
-  assert.equal(pendingClientIdentityIndex.unique, 1, "A provisional client identity must not be duplicated before an exchange order ID is known.")
+    assertOrderIdentityIndexes(database)
   assertColumnsPresent({
     database,
     table: "runtime_errors",
