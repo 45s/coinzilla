@@ -30,7 +30,12 @@ function isRepositoryRelativePath(value) {
   return segments.every((segment) => segment.length > 0 && segment !== "." && segment !== "..")
 }
 
-function validatePath({ value, path, existingPaths, errors }) {
+function validatePath({
+  value,
+  path,
+  existingPaths,
+  errors,
+}) {
   if (!isRepositoryRelativePath(value)) {
     addError(errors, path, "must be a safe repository-relative path and must not escape the package")
     return
@@ -41,7 +46,11 @@ function validatePath({ value, path, existingPaths, errors }) {
   }
 }
 
-function validateStringArray({ value, path, errors }) {
+function validateStringArray({
+  value,
+  path,
+  errors,
+}) {
   if (!Array.isArray(value) || value.some((item) => !isNonEmptyString(item))) {
     addError(errors, path, "must be an array of non-empty strings")
     return false
@@ -50,7 +59,12 @@ function validateStringArray({ value, path, errors }) {
   return true
 }
 
-function validateTestMappings({ scenario, index, existingPaths, errors }) {
+function validateTestMappings({
+  scenario,
+  index,
+  existingPaths,
+  errors,
+}) {
   const path = `scenarios[${index}].relatedExistingTests`
   if (!Array.isArray(scenario.relatedExistingTests)) {
     addError(errors, path, "must be an array")
@@ -79,7 +93,15 @@ function validateTestMappings({ scenario, index, existingPaths, errors }) {
   }
 }
 
-function validateScenario({ scenario, index, ids, requirementIds, behaviorIds, existingPaths, errors }) {
+function validateScenario({
+  scenario,
+  index,
+  ids,
+  requirementIds,
+  behaviorIds,
+  existingPaths,
+  errors,
+}) {
   const path = `scenarios[${index}]`
   if (!isRecord(scenario)) {
     addError(errors, path, "must be an object")
@@ -150,7 +172,12 @@ function validateScenario({ scenario, index, ids, requirementIds, behaviorIds, e
     }
   }
 
-  validateTestMappings({ scenario, index, existingPaths, errors })
+  validateTestMappings({
+    scenario,
+    index,
+    existingPaths,
+    errors,
+  })
 
   if (scenario.coverageStatus !== "VERIFIED" && !isNonEmptyString(scenario.coverageReason)) {
     addError(errors, `${path}.coverageReason`, "is required until the scenario is VERIFIED")
@@ -179,7 +206,10 @@ export function validateConservativeScenarioRegistry({
 } = {}) {
   const errors = []
   if (!Array.isArray(scenarios)) {
-    return Object.freeze({ valid: false, errors: Object.freeze(["scenarios: must be an array"]) })
+    return Object.freeze({
+      valid: false,
+      errors: Object.freeze(["scenarios: must be an array"]),
+    })
   }
   if (!Array.isArray(requirements)) {
     addError(errors, "requirements", "must be an array")

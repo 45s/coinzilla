@@ -4,9 +4,18 @@ import { resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import { captureBuildMetadata } from "@coinzilla/utils"
 import { getScenarioRunFailures } from "../test/scenarios/shared/assertions.js"
-import { loadConservativeScenarios, PACKAGE_ROOT } from "../test/scenarios/shared/loader.js"
-import { buildScenarioReports, writeScenarioReports } from "../test/scenarios/shared/reporter.js"
-import { filterScenarios, runScenarioSuite } from "../test/scenarios/shared/runner.js"
+import {
+  loadConservativeScenarios,
+  PACKAGE_ROOT,
+} from "../test/scenarios/shared/loader.js"
+import {
+  buildScenarioReports,
+  writeScenarioReports,
+} from "../test/scenarios/shared/reporter.js"
+import {
+  filterScenarios,
+  runScenarioSuite,
+} from "../test/scenarios/shared/runner.js"
 
 const logger = new Console({
   stdout: process.stdout,
@@ -36,7 +45,11 @@ function splitOption({ token }) {
   }
 }
 
-function appendFilter({ filters, field, value }) {
+function appendFilter({
+  filters,
+  field,
+  value,
+}) {
   const values = value.split(",").map((item) => item.trim()).filter(Boolean)
   filters[field] = [...(filters[field] ?? []), ...values]
 }
@@ -122,7 +135,10 @@ function printScenarioList({ scenarios }) {
   }
 }
 
-function printRunSummary({ suite, reportPaths }) {
+function printRunSummary({
+  suite,
+  reportPaths,
+}) {
   const counts = suite.results.reduce((summary, result) => {
     summary[result.status] = (summary[result.status] ?? 0) + 1
     return summary
@@ -152,7 +168,11 @@ export async function runConservativeScenarioCli({ argv = process.argv.slice(2) 
   })
   printBuildIdentity({ buildMetadata })
 
-  const { scenarios, requirements, criticalBehaviorContract } = loadConservativeScenarios()
+  const {
+    scenarios,
+    requirements,
+    criticalBehaviorContract,
+  } = loadConservativeScenarios()
   const selectedScenarios = filterScenarios({
     scenarios,
     filters: options.filters,

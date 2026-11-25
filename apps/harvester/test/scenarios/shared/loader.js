@@ -1,4 +1,7 @@
-import { existsSync, readFileSync } from "node:fs"
+import {
+  existsSync,
+  readFileSync,
+} from "node:fs"
 import { resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import { ADDITIONAL_TEST_MAPPINGS } from "./additional-test-mappings.js"
@@ -32,7 +35,10 @@ function isRepositoryRelativePath(value) {
   return value.split(/[\\/]/).every((segment) => segment !== "" && segment !== "." && segment !== "..")
 }
 
-function resolveScenarioEvidence({ scenario, behaviorMap }) {
+function resolveScenarioEvidence({
+  scenario,
+  behaviorMap,
+}) {
   const relatedBehaviors = scenario.relatedCriticalBehaviors.map((id) => {
     const behavior = behaviorMap.get(id)
     if (!behavior) {
