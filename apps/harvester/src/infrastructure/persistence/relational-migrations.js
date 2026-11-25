@@ -349,23 +349,23 @@ function migrateMarketScopedExchangeOrderIdentity(transaction) {
     ALTER TABLE fill_commissions_v5 RENAME TO fill_commissions;
 
     CREATE INDEX orders_exchange_lookup_idx
-      ON orders(environment, provider_instance_id, provider_type, account_id, market_id, exchange_order_id);
+      ON orders(environment, provider_type, provider_instance_id, account_id, market_id, exchange_order_id);
     CREATE UNIQUE INDEX orders_exchange_identity_unique_idx
-      ON orders(environment, provider_instance_id, provider_type, account_id, market_id, exchange_order_id)
+      ON orders(environment, provider_type, provider_instance_id, account_id, market_id, exchange_order_id)
       WHERE exchange_order_id IS NOT NULL;
     CREATE UNIQUE INDEX orders_pending_client_identity_unique_idx
       ON orders(environment, provider_instance_id, provider_type, account_id, client_order_id)
       WHERE exchange_order_id IS NULL;
     CREATE INDEX orders_market_time_idx
-      ON orders(environment, provider_instance_id, provider_type, account_id, market_id, exchange_created_at);
+      ON orders(environment, provider_type, provider_instance_id, account_id, market_id, exchange_created_at);
     CREATE INDEX orders_strategy_time_idx
       ON orders(strategy_id, exchange_created_at);
     CREATE INDEX fills_market_time_idx
-      ON fills(environment, provider_instance_id, provider_type, account_id, market_id, exchange_executed_at);
+      ON fills(environment, provider_type, provider_instance_id, account_id, market_id, exchange_executed_at);
     CREATE INDEX fills_strategy_time_idx
       ON fills(strategy_id, exchange_executed_at);
     CREATE INDEX fill_commissions_asset_idx
-      ON fill_commissions(asset_id, asset_code);
+      ON fill_commissions(asset_id, fill_id);
   `)
   const violations = transaction.prepare("PRAGMA foreign_key_check").all()
   if (violations.length > 0) {
