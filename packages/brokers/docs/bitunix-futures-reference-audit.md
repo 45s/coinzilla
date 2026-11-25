@@ -132,11 +132,14 @@ These are common-model limitations or external guarantee gaps, not necessarily m
 | `getOpenOrders()` | `GET /api/v1/futures/trade/get_pending_orders` exists. | Common legacy `Order[]` remains unsupported; use provider-specific `getFuturesPendingOrders()` to preserve Futures semantics and exact decimals. |
 | `getAccountSnapshot()` | Account, position, order and TP/SL REST/private channels exist. | Unsupported: no shared source timestamp or atomic snapshot version. |
 | `getServerTime()` | No verified Futures server-time endpoint was found in the inspected official references. | Unsupported; do not synthesize server time from local time or unrelated gateway timestamps. |
-| Legacy `getOrder()`, `getOrderHistory()`, `getMyTrades()` | Futures canonical order/history and trade-history endpoints exist. | Legacy Spot-shaped projections remain unsupported where they lose exact decimals, Futures identity or position semantics. |
+| Legacy `getOrder()` / `getOrderHistory()` | Futures order-detail and history endpoints exist. | Unsupported: the legacy Spot-shaped `Order` projection cannot preserve the required Futures position/trade-side semantics; use canonical/provider-specific order reads. |
+| Legacy `getMyTrades()` | `GET /api/v1/futures/trade/get_history_trades` returns bounded execution rows with trade/order IDs, exact quantity/price/fee/PnL and skip/limit pagination. | Supported as a bounded array projection over `getFuturesTradeHistory()`. Fee asset is absent and account-wide completeness is not claimed; use `getFills()` for canonical Fill values. |
 | `getFills()` | Trade history supplies stable `tradeId`/`orderId`, exact `qty`/`price`, fee and realized PnL. | Supported for one bounded page. Quote notional uses exact decimal multiplication; fee asset is absent, so commission denomination is UNKNOWN. Complete account-wide history/retention is not claimed. |
 | `createOrder()` / `createCanonicalOrder()` | Futures place-order endpoint includes `tradeSide`, `positionId`, `reduceOnly`, `clientId` and `effect`. | Common Spot-shaped methods remain unsupported. Use explicit `createFuturesOrder()`. |
 | Candle WebSocket | Public kline channel exists. | Unsupported through the common Candle contract because the payload lacks the documented candle-open timestamp. |
 | Account-wide recovery | Private channels and independent REST reads exist. | UNKNOWN: no event replay cursor, monotonic sequence or proven gap-free account reconciliation. |
+
+Official execution-history reference: https://www.bitunix.com/api-docs/futures/trade/get_history_trades.html (10 requests/second per UID; maximum 100 rows per page; skip/limit pagination).
 
 No isolated Futures TESTNET endpoint has been verified. No LIVE mutation integration test is permitted. Offline request/response tests cover the implemented operations. The active private-session readiness gate and caller REST-reconciliation acknowledgement do not establish authoritative event replay, sequence-gap detection, atomic snapshots or process-restart recovery.
 
