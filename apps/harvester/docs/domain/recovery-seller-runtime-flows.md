@@ -10,8 +10,10 @@ source_commit: ebeaf346fbaa44ae75ba6fd9256bfdd1ba01d765
 
 # Recovery Seller Runtime Flows
 
-**Document type:** maintained implementation map  
-**Owner issue:** [#1841](https://github.com/45s/coinzilla/issues/1841)  
+**Document type:** maintained implementation map
+
+**Owner issue:** [#1841](https://github.com/45s/coinzilla/issues/1841)
+
 **Normative domain contract:** [Recovery Seller Domain Specification](./recovery-seller-domain-specification.md)
 
 > This document answers **where RS starts, what invokes it, what it reads, and what it does next**. It is a source-navigation map, not a second policy authority. The diagrams describe the inspected implementation and explicitly flag places where it does not yet satisfy the owner-approved contract. Do not infer exchange authorization from runtime acceptance or these diagrams.
@@ -470,7 +472,7 @@ stateDiagram-v2
     [*] --> ACCUMULATING
     ACCUMULATING --> ACCUMULATING: sequential BUY tranche after prior BUY is terminal and reconciled
     ACCUMULATING --> SELL_SUBMITTED: reserve the sole SELL before broker I/O
-    SELL_SUBMITTED --> SELL_SUBMITTED: OPEN / PARTIALLY_FILLED; same order identity
+    SELL_SUBMITTED --> SELL_SUBMITTED: OPEN / PARTIALLY_FILLED, same order identity
     SELL_SUBMITTED --> RECONCILIATION_REQUIRED: unknown submission or acknowledgement
     RECONCILIATION_REQUIRED --> RECONCILIATION_REQUIRED: reconcile original clientOrderId; no blind retry
     SELL_SUBMITTED --> CLOSED: FILLED + complete reconciliation + every profitability gate passes
