@@ -189,6 +189,7 @@ apps/harvester/test/
 ~~~
 
 PR #1823 adds three nested scenario files:
+
 - `recovery-seller/registry-and-runner.scenario.test.js` — registry and runner contract tests.
 - `recovery-seller/authorization-custody.scenario.test.js` — RS-001 authorization/custody.
 - `recovery-seller/buy-accounting.scenario.test.js` — RS-002 BUY accounting.
