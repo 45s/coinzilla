@@ -7,11 +7,11 @@
 
 ## Executive finding
 
-The confirmed source-level defect is that Harvester treated clientOrderId as the permanent identity of an exchange order. The canonical identity and the relational orders table uniqueness constraint both used environment, provider instance/type, account and clientOrderId, while the exchange broker order ID was only a lookup attribute.
+The source inspection confirms two independent defects at the persistence boundary. First, Harvester treated clientOrderId as the permanent identity of an exchange order. The canonical identity and relational orders uniqueness constraint used environment, provider instance/type, account and clientOrderId, while the exchange broker order ID was only a lookup attribute. Second, immutable decimal facts such as price were compared as raw strings even though the decimal parser preserves the exchange's original formatting. Numerically equal values such as `65000.0` and `65000.0000` could therefore be rejected as different.
 
 Binance Spot documents newClientOrderId as unique among open orders and explicitly permits reuse when the previous order is filled. The order endpoints also require symbol alongside orderId. Consequently, clientOrderId is not a permanent identity and an exchange order ID must be scoped by market.
 
-The recovered logs prove that both ZROUSDT and DOGEUSDT failed at the same persistence boundary with the same error field and show the incoming broker/client IDs. They do not contain the pre-existing SQLite row, its broker order ID, or either conflicting price. Therefore the source-level identity defect is confirmed and the reused-client-ID explanation is strongly consistent with both incidents, but the exact original old-row/new-row pairing and actual price values for each symbol are not independently proven. The regression fixtures deliberately use synthetic prices.
+The recovered logs prove that both ZROUSDT and DOGEUSDT failed at the same persistence boundary with the same error field and show the incoming broker/client IDs. They do not contain the pre-existing SQLite row, its broker order ID, or either conflicting price. Therefore both source-level defects are confirmed, but the logs cannot distinguish whether either symbol's specific conflict was a genuine different price routed to the same client-based row, or an equivalent price serialized with different decimal formatting. The exact original old-row/new-row pairing and actual price values for each symbol are not independently proven. The regression fixtures deliberately use synthetic prior IDs and prices.
 
 Exchange contract: [Binance Spot REST trading endpoints](https://developers.binance.com/docs/binance-spot-api-docs/rest-api/trading-endpoints).
 
@@ -98,10 +98,10 @@ At develop commit 1f55d5989e8122421f4d9e37693f68f32e0c29ed:
 2. The relational orders table enforced permanent uniqueness on the same client-order tuple.
 3. upsertOrder read and merged by that client-based primary ID.
 4. mergeOrderHistoryRecords correctly treated price as immutable and rejected a changed price.
-5. fill-history-repository resolved order references by the client-based order ID. Order-side fill linking also matched by clientOrderId and treated a different exchange order ID as an identity conflict.
+5. Decimal parsing validated values but preserved their source strings. assertOptionalEqualField compared price with JavaScript string equality, so trailing-zero/notation differences were treated as immutable price changes. fill-history-repository also resolved order references by the client-based order ID.
 6. Startup pagination already tracked exchange order IDs, and fill history already carried broker order IDs. The stable exchange identity was available but was not used consistently at the persistence boundary.
 
-The defect is not that immutable price validation is too strict. The defect is that two different exchange orders can be routed to the same persisted identity before that validation runs.
+The immutable price guard is still necessary. Two different exchange orders can be routed to the same client-based row before validation, and raw string comparison can reject numerically equal decimal values. The implementation fixes both mechanisms without accepting a genuinely different price.
 
 ## Corrected behavior
 
@@ -111,7 +111,7 @@ The defect is not that immutable price validation is too strict. The defect is t
 - The relational migration removes permanent clientOrderId uniqueness, adds a unique market-scoped exchange-order index and a partial unique index for pending client identities.
 - Migration v5 rebuilds orders, fills and fill_commissions transactionally, copies every row and preserves primary keys and foreign-key links. A populated v4 database receives a pre-v5 SQLite backup verified by integrity_check and SHA-256 of order/fill/commission rows. Duplicate exchange identities or foreign-key violations abort the migration; there is no automatic row repair.
 - Fills link to orders by exact provider/account/environment/market/exchange order ID. clientOrderId is validated when supplied, not used to choose among multiple orders. Fills arriving before orders remain unlinked until the matching exchange order is persisted.
-- A repeated identical order remains idempotent. Mutable execution/status fields can advance for the same exchange order. A different price for the same exchange order ID remains a fatal integrity conflict.
+- Decimal facts are compared with exact decimal arithmetic, not floating-point conversion or raw string equality. Numerically equivalent representations are accepted and the already-persisted representation is retained to avoid formatting churn. Genuinely different prices or original quantities remain fatal immutable-data conflicts. Duplicate execution snapshots compare executed and remaining quantities numerically; mutable execution/status fields can advance for the same exchange order.
 - A rejected conflict reports reconciliationDecision=rejected, recoverable=false and coverageIncomplete=true. A failed page is not advanced; failed markets keep history coverage incomplete.
 
 ## TDD and regression evidence
@@ -122,8 +122,9 @@ The test-only RED stage reproduced:
 - Pending-to-ack identity collision: client-only and exchange-identified order forms collided.
 - Relational ZRO/DOGE persistence collision: the second distinct exchange order was rejected as an immutable price conflict.
 - Fill-before-order collision: two fills with the same client ID but different exchange order IDs could not be safely linked to their own order rows.
+- Decimal representation collision: equivalent price/original-quantity strings and duplicate execution snapshots with different trailing-zero formatting were rejected despite exact numeric equality.
 
-The RED fixtures use the observed incoming client and broker IDs; prior-order broker IDs and all decimal prices/quantities are synthetic and are not represented as recovered production values. GREEN tests prove that distinct exchange orders persist separately, same-order price conflicts still fail, repeated sync is idempotent, partial-fill state advances, and fills link to the exact exchange order after arriving first.
+The RED fixtures use the observed incoming client and broker IDs; prior-order broker IDs and all decimal prices/quantities are synthetic and are not represented as recovered production values. GREEN tests prove that distinct exchange orders persist separately, equivalent decimal representations remain idempotent without rewriting stored formatting, genuinely different same-order prices still fail, repeated sync is idempotent, partial-fill state advances, and fills link to the exact exchange order after arriving first.
 
 ## Safety and unresolved limitations
 
