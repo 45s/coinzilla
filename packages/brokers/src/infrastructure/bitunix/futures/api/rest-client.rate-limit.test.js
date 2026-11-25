@@ -120,3 +120,81 @@ test("Bitunix Futures REST rate limiting is shared across clients using the same
 
   assert.deepEqual(calls, [0, 100])
 })
+
+
+test("Bitunix Futures REST applies the documented slower limits to close-position endpoints", async () => {
+  let clock = 0
+  const calls = []
+  const client = new BitunixFuturesRestClient({
+    config: createConfig({
+      apiKey: "bitunix-close-rate-limit-test-key",
+    }),
+    now: () => 1_700_000_000_000,
+    rateLimitNow: () => clock,
+    sleepFn: async (delay) => {
+      clock += delay
+    },
+    fetchFn: async (url) => {
+      calls.push({
+        path: new URL(url).pathname,
+        time: clock,
+      })
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          code: 0,
+          data: {},
+        }),
+      }
+    },
+  })
+
+  await client.request({
+    method: "POST",
+    path: "/api/v1/futures/trade/close_all_position",
+    body: {},
+    stateChanging: true,
+  })
+  await client.request({
+    method: "POST",
+    path: "/api/v1/futures/trade/close_all_position",
+    body: {},
+    stateChanging: true,
+  })
+  await client.request({
+    method: "POST",
+    path: "/api/v1/futures/trade/flash_close_position",
+    body: {
+      positionId: "position-1",
+    },
+    stateChanging: true,
+  })
+  await client.request({
+    method: "POST",
+    path: "/api/v1/futures/trade/flash_close_position",
+    body: {
+      positionId: "position-2",
+    },
+    stateChanging: true,
+  })
+
+  assert.deepEqual(calls, [
+    {
+      path: "/api/v1/futures/trade/close_all_position",
+      time: 0,
+    },
+    {
+      path: "/api/v1/futures/trade/close_all_position",
+      time: 1_000,
+    },
+    {
+      path: "/api/v1/futures/trade/flash_close_position",
+      time: 1_100,
+    },
+    {
+      path: "/api/v1/futures/trade/flash_close_position",
+      time: 1_300,
+    },
+  ], "close-all and flash-close requests must respect their documented per-UID rates while preserving the global queue")
+})
