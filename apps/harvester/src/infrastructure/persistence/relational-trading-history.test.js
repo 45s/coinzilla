@@ -882,7 +882,7 @@ test("links an earlier fill to its later matching order projection without inven
   })
 })
 
-test("does not infer a relational order link from an exchange order ID without a client identity", async (t) => {
+test("links a fill by exchange order ID even when its client identity is absent", async (t) => {
   const context = await createTestContext({ t })
   const legacyRecord = createLegacyRecord()
   await seedLegacyRecord({
@@ -911,13 +911,14 @@ test("does not infer a relational order link from an exchange order ID without a
     filename: context.filename,
     work: (database) => {
       const fill = database.prepare("SELECT * FROM fills").get()
-      assert.equal(fill.order_id, null, "An exchange order ID alone must not create an unverified local order relationship.")
-      assert.equal(fill.strategy_id, null, "Unverified exchange-order matching must not fabricate strategy attribution.")
+      const order = database.prepare("SELECT * FROM orders WHERE exchange_order_id = ?").get(legacyRecord.brokerOrderId)
+      assert.equal(fill.order_id, order.id, "A market-scoped exchange order ID is sufficient to establish the exact order relationship.")
+      assert.equal(fill.strategy_id, order.strategy_id, "Only the matched order's verified strategy attribution may be copied.")
     },
   })
 })
 
-test("rejects fill-to-order attribution when client and exchange order identities conflict", async (t) => {
+test("does not cross-link a reused client ID to a different exchange order", async (t) => {
   const context = await createTestContext({ t })
   const legacyRecord = createLegacyRecord()
   await seedLegacyRecord({
@@ -935,13 +936,28 @@ test("rejects fill-to-order attribution when client and exchange order identitie
     }),
   })
   const result = await persistence.fillObserver.flush()
-  assert.equal(result.ok, false, "A fill must not be attributed to an order with a different client-order identity.")
-  assert.equal(result.errors[0].code, "HARVESTER_ORDER_HISTORY_IDENTITY_CONFLICT", "Mismatched order linkage must be reported as an integrity conflict.")
+  assert.equal(result.ok, true, "A fill for a different exchange order may share a historical clientOrderId.")
+  context.eventBus.publish({
+    name: HARVESTER_EVENT_NAMES.ORDER_UPDATED,
+    source: "harvester",
+    data: createOrderHistoryEventData({
+      brokerOrderId: "different-broker-order",
+    }),
+  })
+  await context.eventBus.flush()
+  await persistence.relationalOrderObserver.flush()
   await inspectSqlite({
     filename: context.filename,
     work: (database) => {
-      const fills = database.prepare("SELECT COUNT(*) AS count FROM fills").get()
-      assert.equal(fills.count, 0, "A conflicting fill must not be persisted with incorrect order attribution.")
+      const orders = database.prepare("SELECT id, exchange_order_id FROM orders").all()
+      const fill = database.prepare("SELECT * FROM fills").get()
+      const earlierOrder = orders.find((order) => order.exchange_order_id === legacyRecord.brokerOrderId)
+      const matchingOrder = orders.find((order) => order.exchange_order_id === "different-broker-order")
+      assert.equal(orders.length, 2, "Both exchange orders must be retained despite their shared clientOrderId.")
+      assert.ok(earlierOrder)
+      assert.ok(matchingOrder)
+      assert.equal(fill.order_id, matchingOrder.id, "The fill must link to the exact exchange order ID, not the older order with the same clientOrderId.")
+      assert.notEqual(fill.order_id, earlierOrder.id)
     },
   })
 })
