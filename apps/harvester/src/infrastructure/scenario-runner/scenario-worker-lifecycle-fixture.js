@@ -1,6 +1,6 @@
 function exitAfterGracePeriod({ keepAlive }) {
   clearInterval(keepAlive)
-  setTimeout(() => process.exit(0), 30)
+  setTimeout(() => process.exit(0), 500)
 }
 
 process.on("message", (request) => {

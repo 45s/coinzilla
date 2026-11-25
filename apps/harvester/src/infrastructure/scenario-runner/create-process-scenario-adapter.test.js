@@ -61,5 +61,5 @@ test("process adapter waits for worker exit after receiving a result", async () 
     input: null,
   })
   assert.deepEqual(result, { received: true })
-  assert.ok(Date.now() - startedAt >= 20)
+  assert.ok(Date.now() - startedAt >= 400)
 })

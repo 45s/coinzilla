@@ -32,3 +32,5 @@ When a cancellation request remains active until the execution deadline, the hos
 A worker result message is not itself proof that the child process has exited. The process adapter waits for child termination before resolving execution, and termination is shared/idempotent across abort, timeout and result handling so the host cannot release a worker slot while a child is still alive.
 
 The process-adapter regression uses a worker that deliberately remains alive for a short period after sending its result. The adapter must not resolve the run until the child emits `close`; a result IPC message alone is insufficient.
+
+The lifecycle regression tests now pin two required contracts: cancellation must remain non-terminal until cleanup completes, and a worker result message must not complete a run before the worker process exits. This test-only checkpoint is expected to expose the current lifecycle defects before their fixes.
