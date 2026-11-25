@@ -1624,7 +1624,7 @@ test("rejects startup before market subscriptions when a persisted account-scope
   const broker = createRsOnlyStartupBroker({ calls })
   try {
     const baseline = await recordConfigurationBaseline({
-      operationalStateStore: store,
+      operationalStateStore: restartStore,
       appConfig: createRsOnlyStartupConfig(),
     })
     assert.equal(baseline.ok, true, baseline.errors?.[0]?.message)
@@ -1651,6 +1651,12 @@ test("rejects startup before market subscriptions when a persisted account-scope
       clean: true,
     })
     assert.equal(stopped.ok, true, stopped.errors?.[0]?.message)
+    const restartStore = createFileOperationalStateStore({
+      directory,
+      runtimeSessionId: "rs-only-startup-next-session",
+    })
+    const restartInitialized = await restartStore.initialize()
+    assert.equal(restartInitialized.ok, true, "The simulated restart must open the same ledger under a new process session.")
 
     await assert.rejects(
       startHarvesterForTest({
