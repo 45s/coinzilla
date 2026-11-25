@@ -70,6 +70,7 @@ function createBroker({
   dispatchError,
   quotePrecision = 8,
   eventPositionId = "position-1",
+  isUserDataReady = true,
 } = {}) {
   const requests = []
   const privateWebSocketClient = new EventEmitter()
@@ -90,7 +91,7 @@ function createBroker({
     eventPositionId,
   })
   const broker = {
-    isUserDataReady: true,
+    isUserDataReady,
     privateWebSocketClient,
     privateEventTimeoutMs: 30,
     getFuturesPositions: async ({ symbol, positionId } = {}) => ({
@@ -295,4 +296,66 @@ test("Bitunix Futures position TP/SL rejects trigger prices above symbol precisi
   assert.equal(result.ok, false)
   assert.equal(result.mutationOutcome, "NOT_SENT")
   assert.equal(requests.length, 0)
+})
+
+
+test("Bitunix Futures TP/SL mutations are NOT_SENT until private user data is reconciled", async () => {
+  const operations = [
+    {
+      name: "position TP/SL placement",
+      execute: (broker) => placeFuturesPositionTpSlOrder({
+        broker,
+        input: {
+          symbol: "BTCUSDT",
+          positionId: "position-1",
+          tpPrice: "70000",
+          tpStopType: "MARK_PRICE",
+        },
+      }),
+    },
+    {
+      name: "position TP/SL modification",
+      execute: (broker) => modifyFuturesPositionTpSlOrder({
+        broker,
+        input: {
+          symbol: "BTCUSDT",
+          positionId: "position-1",
+          slPrice: "65000",
+          slStopType: "MARK_PRICE",
+        },
+      }),
+    },
+    {
+      name: "position TP/SL cancellation",
+      execute: (broker) => cancelFuturesPositionTpSlOrder({
+        broker,
+        input: {
+          symbol: "BTCUSDT",
+          positionId: "position-1",
+          orderId: "tpsl-1",
+        },
+      }),
+    },
+    {
+      name: "order-level TP/SL cancellation",
+      execute: (broker) => cancelFuturesTpSlOrder({
+        broker,
+        input: {
+          symbol: "BTCUSDT",
+          orderId: "tpsl-1",
+        },
+      }),
+    },
+  ]
+
+  for (const operation of operations) {
+    const { broker, requests } = createBroker({
+      isUserDataReady: false,
+    })
+    const result = await operation.execute(broker)
+
+    assert.equal(result.ok, false, `${operation.name} must fail closed without reconciled private user data`)
+    assert.equal(result.mutationOutcome, "NOT_SENT", `${operation.name} must report that no mutation was dispatched`)
+    assert.equal(requests.length, 0, `${operation.name} must not send a REST mutation before reconciliation`)
+  }
 })
