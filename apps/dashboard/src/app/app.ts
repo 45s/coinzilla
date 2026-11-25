@@ -9,8 +9,9 @@ import { OpenOrdersComponent } from './features/open-orders/page';
 import { BotsComponent } from './features/bots/page';
 import { GitHubPullRequestsComponent } from './features/github-prs/page';
 import type { TradingHistoryResource } from './features/trading-history/api';
+import { ScenarioRunnerComponent } from './features/scenario-runner/page';
 
-type DashboardPage = 'overview' | 'operator' | 'bots' | 'markets' | 'exchanges' | 'open-orders' | 'github-prs' | TradingHistoryResource;
+type DashboardPage = 'overview' | 'operator' | 'bots' | 'markets' | 'exchanges' | 'open-orders' | 'github-prs' | 'scenario-runner' | TradingHistoryResource;
 type DashboardTheme = 'current' | 'midnight' | 'light' | 'oled' | 'green' | 'arctic' | 'warm' | 'system';
 
 const THEME_STORAGE_KEY = 'coinzilla.dashboard.theme';
@@ -42,7 +43,7 @@ export function readSavedDashboardTheme(
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [OverviewComponent, TradingHistoryComponent, OperatorComponent, BotsComponent, MarketScreenerComponent, ExchangesComponent, OpenOrdersComponent, GitHubPullRequestsComponent],
+  imports: [OverviewComponent, TradingHistoryComponent, OperatorComponent, BotsComponent, MarketScreenerComponent, ExchangesComponent, OpenOrdersComponent, GitHubPullRequestsComponent, ScenarioRunnerComponent],
   templateUrl: './app.html',
   styleUrl: './app.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -59,6 +60,7 @@ export class AppComponent {
     { label: 'Exchanges', icon: '⇄', page: 'exchanges' as const, enabled: true },
     { label: 'Open Orders', icon: '↗', page: 'open-orders' as const, enabled: true },
     { label: 'GitHub PRs', icon: '⑂', page: 'github-prs' as const, enabled: true },
+    { label: 'Scenario Runner', icon: '▶', page: 'scenario-runner' as const, enabled: true },
     { label: 'Positions', icon: '▤', page: null, enabled: false },
     { label: 'Diagnostics', icon: '⌘', page: null, enabled: false },
   ] as const;
@@ -71,7 +73,7 @@ export class AppComponent {
   );
   readonly historyResource = computed<TradingHistoryResource>(() => {
     const page = this.activePage();
-    return page === 'overview' || page === 'operator' || page === 'bots' || page === 'markets' || page === 'exchanges' || page === 'open-orders' || page === 'github-prs' ? 'orders' : page;
+    return page === 'overview' || page === 'operator' || page === 'bots' || page === 'markets' || page === 'exchanges' || page === 'open-orders' || page === 'github-prs' || page === 'scenario-runner' ? 'orders' : page;
   });
 
   constructor() {
