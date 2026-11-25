@@ -25,7 +25,12 @@ function saveStepOutput({ step, index, result, context }) {
   if (typeof step.saveAs !== "string" || step.saveAs.trim().length === 0) {
     throw new TypeError(`Recovery Seller scenario step ${index} saveAs must be non-empty`)
   }
-  context[step.saveAs] = result
+  Object.defineProperty(context, step.saveAs, {
+    configurable: true,
+    enumerable: true,
+    value: result,
+    writable: true,
+  })
 }
 
 async function executeStep({ step, index, handlers, context }) {
