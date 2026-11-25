@@ -202,6 +202,43 @@ test("process adapter rejects worker output above its configured size limit", as
 })
 
 
+
+test("process adapter fails closed when worker termination cannot be confirmed", async () => {
+  let killCalls = 0
+  const fakeChild = new EventEmitter()
+  fakeChild.exitCode = null
+  fakeChild.signalCode = null
+  fakeChild.send = () => {
+    queueMicrotask(() => fakeChild.emit("message", {
+      runId: "run-worker-cleanup-failure",
+      ok: true,
+      output: { received: true },
+    }))
+  }
+  fakeChild.kill = () => {
+    killCalls += 1
+    throw new Error("permission denied")
+  }
+  const adapter = createProcessScenarioAdapter({
+    strategyId: "RS",
+    terminationGraceMs: 5,
+    spawnSandboxedWorker: createSimulatedSandboxLauncher({
+      spawn: () => fakeChild,
+    }),
+  })
+
+  await assert.rejects(adapter.execute({
+    runId: "run-worker-cleanup-failure",
+    scenarioId: "RS-004-011",
+    input: null,
+  }), /cleanup could not be confirmed/)
+  assert.equal(killCalls, 2)
+  await assert.rejects(adapter.cancel({
+    runId: "run-worker-cleanup-failure",
+  }), /cleanup could not be confirmed/)
+  assert.equal(killCalls, 4, "unconfirmed workers must remain registered for cleanup retries")
+})
+
 test("process adapter refuses direct execution without verified OS sandbox attestation", async () => {
   let spawnCalls = 0
   const spawnUnverifiedWorker = (...argumentsList) => {
