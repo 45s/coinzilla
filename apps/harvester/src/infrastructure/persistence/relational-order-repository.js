@@ -308,7 +308,8 @@ function findByExchangeOrderIdentity({
       accountId: identity.accountId,
     })
   }
-  return matches[0]?.client_order_id ?? null
+  const [match] = matches
+  return match?.client_order_id ?? null
 }
 
 function getOldestPendingOrderId({ database, providerIdentity, environment, symbol } = {}) {
