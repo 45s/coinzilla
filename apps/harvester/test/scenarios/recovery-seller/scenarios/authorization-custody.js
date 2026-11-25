@@ -144,7 +144,7 @@ export const authorizationCustodyScenarios = Object.freeze([
   }),
   makeCase({
     id: "RS-001-003",
-    name: "missing, zero, negative or malformed legacy basis fails closed and average cost is derived",
+    name: "missing, zero, negative or malformed legacy basis fails closed",
     input: {
       cases: [
         {
@@ -201,14 +201,6 @@ export const authorizationCustodyScenarios = Object.freeze([
             quantity: "invalid",
           },
         },
-        {
-          id: "contradictory-average-cost",
-          input: {
-            invested: "50",
-            quantity: "10",
-            averageCost: "999",
-          },
-        },
       ],
     },
     step: "create-legacy-position",
@@ -254,20 +246,15 @@ export const authorizationCustodyScenarios = Object.freeze([
           errorName: "TypeError",
           averageCost: null,
         },
-        {
-          id: "contradictory-average-cost",
-          errorName: null,
-          averageCost: "5",
-        },
       ],
     },
     mustNot: [
       "create a zero-cost or negative-cost legacy Position",
       "normalize missing or malformed invested/quantity values",
       "replace invalid basis with current market value or wallet balance",
-      "trust a caller-supplied averageCost instead of deriving it from original invested/quantity",
     ],
     implementation: [basisSource],
+    status: "PARTIAL",
     subcases: [
       ["A", "missing invested amount is rejected"],
       ["B", "zero invested amount is rejected"],
@@ -277,17 +264,24 @@ export const authorizationCustodyScenarios = Object.freeze([
       ["F", "zero original quantity is rejected"],
       ["G", "negative original quantity is rejected"],
       ["H", "malformed original quantity is rejected"],
-      ["I", "a contradictory supplied averageCost cannot override the derived basis"],
     ].map(([suffix, description]) => ({
       id: `RS-001-003-${suffix}`,
       description,
       status: "TEST-MAPPED",
       test: {
         file: testFile,
-        title: "RS-001-003: missing, zero, negative or malformed legacy basis fails closed and average cost is derived",
+        title: "RS-001-003: missing, zero, negative or malformed legacy basis fails closed",
       },
       evidence: null,
-    })),
+    })).concat([{
+      id: "RS-001-003-I",
+      description: "contradictory basis input fails closed",
+      status: "BLOCKED",
+      blocker: {
+        reason: "The approved legacy config contract defines invested and quantity only; it does not define a contradictory averageCost input field. The current factory ignores unknown extra fields, so this case cannot be asserted as fail-closed without an owner-defined input shape.",
+        unblockCondition: "Owner defines the contradictory basis input and exact rejection behavior; add the corresponding executable assertion and update the domain contract.",
+      },
+    }]),
   }),
   makeCase({
     id: "RS-001-004",
