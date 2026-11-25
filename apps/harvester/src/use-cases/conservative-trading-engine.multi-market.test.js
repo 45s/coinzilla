@@ -226,6 +226,7 @@ function createHarnessEnginePorts({
   recoveryLedgersByMarket,
   metadataBySymbol,
   quoteFreeBalance,
+  baseFreeBalance,
   accountedFillIds,
   accountedFills,
   pauses,
@@ -239,7 +240,7 @@ function createHarnessEnginePorts({
     getMarketMetadata: ({ symbol }) => metadataBySymbol.get(symbol),
     getAccountSnapshot: () => ({
       getFreeBalance: ({ assetId }) => new Quantity({
-        amount: assetId === quoteAsset.id ? quoteFreeBalance : "10000",
+        amount: assetId === quoteAsset.id ? quoteFreeBalance : baseFreeBalance,
         asset: assetsById.get(assetId),
       }),
       getPortfolioBaseQuantityBaseline: () => "0",
@@ -304,6 +305,7 @@ function createHarnessEngine({
       recoveryLedgersByMarket,
       metadataBySymbol,
       quoteFreeBalance,
+      baseFreeBalance,
       accountedFillIds,
       accountedFills,
       pauses,
@@ -332,6 +334,7 @@ async function initializeHarnessBooks({ engine, symbols = ["DOGEUSDT", "SOLUSDT"
 
 async function createHarness({
   quoteFreeBalance = "10000",
+  baseFreeBalance = "10000",
   portfolio: initialPortfolio,
   initialState,
   strategyPolicy = conservativeStrategyPolicy,
@@ -368,6 +371,7 @@ async function createHarness({
     recoveryLedgersByMarket,
     metadataBySymbol,
     quoteFreeBalance,
+    baseFreeBalance,
     accountedFillIds,
     accountedFills,
     pauses,
