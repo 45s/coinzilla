@@ -133,7 +133,7 @@ const FUTURES_CAPABILITIES = [
     type: "READ_TRADE_HISTORY",
     status: "SUPPORTED",
     method: "getFuturesTradeHistory",
-    guarantee: "Returns one validated, symbol/order/position-filterable Futures execution-history page with stable tradeId/orderId and exact quantity, price, fee and realized-PnL strings.",
+    guarantee: "Returns one validated, symbol/order/position-filterable Futures execution-history page with stable tradeId/orderId and exact quantity, price, fee and realized-PnL strings; the same bounded rows are exposed through the common getMyTrades() array method.",
     limitation: "The raw Futures extension retains exact fee and realized-PnL fields; fee asset/semantics and complete gap-free history are not established.",
   },
   {
