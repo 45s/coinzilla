@@ -676,7 +676,11 @@ test("RS-008-018-C: aggregates CG and RS quote reservations before authorizing a
   const coinGrabberQuoteCommitment = "60"
   const recoverySellerQuoteCommitment = "50"
   const result = allocateOrderCommitments({
-    actions: [{ side: "BUY", price: "10", quantity: "5" }],
+    actions: [{
+      side: "BUY",
+      price: "10",
+      quantity: "5",
+    }],
     quoteFreeBalance: "100",
     baseFreeBalance: "0",
     quoteCashFlow: "0",
@@ -696,7 +700,11 @@ test("RS-008-018-C: aggregates CG and RS quote reservations before authorizing a
   assert.equal(result.ok, true)
   assert.deepEqual(result.data.executableActions, [])
   assert.deepEqual(result.data.deferredActions, [{
-    action: { side: "BUY", price: "10", quantity: "5" },
+    action: {
+      side: "BUY",
+      price: "10",
+      quantity: "5",
+    },
     reason: "INSUFFICIENT_QUOTE_BALANCE",
   }])
 })
@@ -705,7 +713,10 @@ test("RS-008-018-D: rejects aggregate CG and RS SELL commitments that oversell s
   const coinGrabberBaseCommitment = "4"
   const recoverySellerBaseCommitment = "5"
   const result = allocateOrderCommitments({
-    actions: [{ side: "SELL", quantity: "2" }],
+    actions: [{
+      side: "SELL",
+      quantity: "2",
+    }],
     quoteFreeBalance: "100",
     baseFreeBalance: "10",
     quoteCashFlow: "0",
