@@ -5,6 +5,7 @@ This index lists durable feature behavior contracts owned by the Dashboard appli
 ## Features
 
 - [GitHub PR Dashboard](github-pr-dashboard/SPEC.md) — read-only overview of open `45s/coinzilla` pull requests, current head-commit timestamps and Dashboard-local work labels. [Domain scenarios](github-pr-dashboard/DOMAIN_SCENARIOS.md) and [schemas](github-pr-dashboard/schemas/).
+- [GC Strategy Lab](gc-strategy-lab/SPEC.md) — simulation-only GC strategy exploration, dynamic decision-flow visualization, event injection, trace and calculation inspection. [Domain scenarios](gc-strategy-lab/DOMAIN_SCENARIOS.md).
 
 ## Creating a feature specification
 
