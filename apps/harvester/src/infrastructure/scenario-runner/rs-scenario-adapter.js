@@ -926,7 +926,7 @@ async function executeRecoverySellerRuntimeScenario({ runId, input }) {
 }
 
 export function getRecoverySellerRunnerCatalog() {
-  return Object.freeze([SCENARIO, RUNTIME_SCENARIO])
+  return Object.freeze([RUNTIME_SCENARIO, SCENARIO])
 }
 
 async function executeRecoverySellerProfitabilityScenario({ runId, input }) {
