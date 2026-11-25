@@ -59,16 +59,15 @@ test("RS scenario adapter validates schema fields and decimal-string inputs", as
 })
 
 
-test("RS-004-012 executes the production runtime evaluator and accounting workflow with a simulation-only order gateway", async () => {
+test("RS-004-012 executes the production runtime evaluator and accounting workflow with a deterministic simulation-only broker", async () => {
   const result = await executeRecoverySellerRunnerScenario({
     runId: "run-rs-runtime-1",
     scenarioId: "RS-004-012",
     input: {
-      marketPrice: "0.02",
+      marketPrice: "12.3",
     },
   })
 
-  process.stdout.write(`RS_RUNTIME_DEBUG ${JSON.stringify({ output: result.output, assertions: result.assertions })}\n`)
   assert.equal(result.source, "production-runtime-evaluator")
   assert.equal(result.passed, true)
   assert.equal(result.output.decision.outcome, "SUBMIT")
