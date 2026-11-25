@@ -560,5 +560,122 @@ export const recoverySellerMixedSellPlanningScenarios = Object.freeze([
       },
       evidence: null,
     })),
-  }),
+  }),,
+  createMixedSellFillAllocationScenario(),
+
 ])
+
+const mixedSellFillTestFile = "apps/harvester/test/scenarios/recovery-seller/mixed-sell-fill-allocation.scenario.test.js"
+const mixedSellFillTestTitle = "RS-003-008: one canonical SELL Fill is split exactly between recovery and legacy with quantity conservation"
+const mixedSellFillInput = {
+  baseAssetId: "doge-asset",
+  baseAssetCode: "DOGE",
+  quoteAssetId: "usdt-asset",
+  quoteAssetCode: "USDT",
+  venue: "binance",
+  marketSymbol: "DOGEUSDT",
+  clientOrderId: "rs-doge-mixed-sell-001",
+  brokerOrderId: "binance-order-001",
+  positionId: "rs-doge-position-001",
+  cycleId: "rs-doge-cycle-001",
+  tradeId: "trade-001",
+  fillQuantity: "401",
+  recoveryQuantity: "400",
+  legacyQuantity: "1",
+  price: "10",
+  quoteProceeds: "4010",
+  quoteCommission: "4.01",
+}
+const mixedSellFillExpected = {
+  fillIdentityPreserved: true,
+  orderOwnership: {
+    strategyId: "RS_recoverySeller",
+    positionId: "rs-doge-position-001",
+    purpose: "RECOVERY_SELL",
+    cycleId: "rs-doge-cycle-001",
+  },
+  recovery: {
+    grossBaseQuantity: "400",
+    baseDebit: "400",
+    quoteProceeds: "4000",
+    commissions: [{
+      assetId: "usdt-asset",
+      assetCode: "USDT",
+      amount: "4",
+    }],
+  },
+  legacy: {
+    grossBaseQuantity: "1",
+    baseDebit: "1",
+    quoteProceeds: "10",
+    commissions: [{
+      assetId: "usdt-asset",
+      assetCode: "USDT",
+      amount: "0.01",
+    }],
+  },
+  baseQuantityConserved: true,
+  quoteProceedsConserved: true,
+  quoteCommissionConserved: true,
+}
+const mixedSellFillSubcases = [{
+  id: "RS-003-008-A",
+  description: "split one 401-unit canonical SELL Fill into exact 400-unit recovery and 1-unit legacy allocations and conserve gross base, quote proceeds and quote commission",
+  status: "TEST-MAPPED",
+  test: {
+    file: mixedSellFillTestFile,
+    title: mixedSellFillTestTitle,
+  },
+  evidence: null,
+}]
+const mixedSellFillImplementation = [
+  "apps/harvester/src/domain/strategies/recovery-seller/mixed-sell-fill-allocation.js",
+  "apps/harvester/src/domain/fills/validate-fill-commissions.js",
+  "apps/harvester/src/domain/orders/order-registry.js",
+]
+
+function createMixedSellFillAllocationScenario() {
+  return defineRecoverySellerScenario({
+    id: "RS-003-008",
+    family: "RS-003",
+    name: "one canonical SELL Fill is split exactly between recovery and legacy with quantity conservation",
+    priority: "P0",
+    authority: [
+      "apps/harvester/docs/domain/recovery-seller-domain-specification.md",
+      "issue-1780: RS-003 exact recovery/legacy allocation split and quantity conservation",
+    ],
+    layer: "DOMAIN",
+    configFields: ["RS_PAIR.sellQuantity", "RS_PAIR.legacyPosition.quantity"],
+    covers: {
+      rules: ["RS_SELL_VERIFIED_UNRESERVED_QUANTITY", "RS_CUSTODY_CONSERVATION"],
+      decisions: ["RS_SELL_PLAN", "RS_ACCOUNT_ALLOCATION"],
+      states: [],
+      transitions: [],
+      invariants: ["RS_QUANTITY_CONSERVATION", "RS_CUSTODY_CONSERVATION"],
+    },
+    given: {
+      input: mixedSellFillInput,
+    },
+    when: [{
+      type: "allocate-mixed-sell-fill",
+      inputKey: "input",
+      saveAs: "allocation",
+    }],
+    then: mixedSellFillExpected,
+    mustNot: [
+      "change the original canonical Fill identity or quantity",
+      "attribute recovery quantity to the legacy projection or legacy quantity to the recovery Position",
+      "lose quote proceeds or commission during the ownership split",
+      "infer recovery/legacy ownership from market symbol or mutable strategy state",
+    ],
+    subcases: mixedSellFillSubcases,
+    implementation: mixedSellFillImplementation,
+    test: {
+      file: mixedSellFillTestFile,
+      title: mixedSellFillTestTitle,
+    },
+    status: "TEST-MAPPED",
+    evidence: null,
+  })
+}
+
