@@ -212,10 +212,13 @@ type RecoverySellerCycleState = {
     | "RECONCILIATION_REQUIRED"
     | "CLOSED"
     | "UNRESOLVED";
-  sellOrderIdentity?: {
+  sellOrderIdentity: {
     clientOrderId: string;
     brokerOrderId?: string;
-  };
+  } | null;
+  terminalOrderStatus: "FILLED" | "CANCELED" | "REJECTED" | "EXPIRED" | null;
+  terminalReconciled: boolean;
+  profitabilityEligible: boolean | null;
 };
 
 type RecoverySellerPositionSnapshot = {
@@ -455,6 +458,8 @@ stateDiagram-v2
     CLOSED --> [*]
     UNRESOLVED --> [*]: blocked pending approved recovery policy
 \`\`\`
+
+The domain state factory also defines `RECONCILIATION_REQUIRED` and `reconcileRecoverySellerCycleSell`; the latter preserves the terminal status, reconciliation flag and profitability result in the canonical cycle-state shape. The current application workflow does not consistently publish that shape: its active-order projection can keep an UNKNOWN SELL represented as `SELL_SUBMITTED` while returning a `RECONCILE` decision, and its terminal outcome projection stores `sellOrderClientId` / `sellOrderBrokerOrderId` / `appliedFillIds` / `eligible` rather than the canonical `sellOrderIdentity` / `terminalOrderStatus` / `terminalReconciled` / `profitabilityEligible` fields. The BUY policy validates the canonical cycle state, so this application/domain projection mismatch also needs an application-level regression and correction.
 
 The intended contract is:
 
