@@ -337,7 +337,8 @@ RS-owned markets. Market-data subscriptions remain strategy-neutral. If a
 market has no unique resolved execution owner, the error retains its message,
 symbol and error payload but omits `strategyId`; it must not default to CG or
 guess from the symbol. This keeps unknown diagnostics free of a false CG/RS
-terminal marker.
+terminal marker. Regression tests cover both strategy IDs, missing/ambiguous
+ownership, and preservation of the existing structured error payload.
 
 Strategy identity is part of the console duplicate-suppression fingerprint.
 Identical messages from different strategies therefore remain separate
