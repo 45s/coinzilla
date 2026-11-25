@@ -434,7 +434,6 @@ A pull request's GitHub lifecycle state and its draft/ready-for-review state are
 
 This rule applies to every AI agent, coding assistant, human contributor and automation. **Normal open PR is the default; Draft is reserved for genuine WIP.**
 
-
 ## No fabricated or routine execution blockers — mandatory
 
 Agents must not stop implementation, ask the user to perform routine engineering work, or present speculative/fabricated blockers. Lack of a local checkout, shell, Node/pnpm installation, locally runnable tests, or similar routine execution tooling is **not** a task blocker: use supported GitHub repository/Git-data operations and GitHub Actions to continue. The agent owns finding and using the supported execution path and must keep implementing independently.
