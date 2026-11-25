@@ -47,6 +47,8 @@ function getSafeOrderConflictDetails(error) {
     "incomingValue",
     "existingSource",
     "incomingSource",
+    "reconciliationDecision",
+    "recoverable",
   ]) {
     const value = context[key]
     if (
@@ -56,6 +58,9 @@ function getSafeOrderConflictDetails(error) {
     ) {
       details[key] = value
     }
+  }
+  if (error?.code === "HARVESTER_ORDER_HISTORY_IDENTITY_CONFLICT") {
+    details.coverageIncomplete = true
   }
   return Object.freeze(details)
 }
