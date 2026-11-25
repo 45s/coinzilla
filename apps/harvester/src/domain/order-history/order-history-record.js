@@ -232,7 +232,27 @@ function mapSourceEvent({ sourceEvent, order } = {}) {
  * @returns {string}
  * @throws {OrderHistoryValidationError} When a required identity component is missing.
  */
-export function createOrderHistoryId(input = {}) {
+function requireOptionalIdentityString({ value, field } = {}) {
+  if (value === undefined || value === null) {
+    return null
+  }
+  return requireString({
+    value,
+    field,
+  })
+}
+
+function requireOptionalIdentityTimestamp({ value, field } = {}) {
+  if (value === undefined || value === null) {
+    return null
+  }
+  return requireTimestamp({
+    value,
+    field,
+  })
+}
+
+function normalizeOrderIdentity(input = {}) {
   const environment = requireString({
     value: input.environment,
     field: "environment",
@@ -242,64 +262,67 @@ export function createOrderHistoryId(input = {}) {
       field: "environment",
     })
   }
-  const providerInstanceId = requireString({
-    value: input.providerInstanceId,
-    field: "providerInstanceId",
+  const marketId = requireOptionalIdentityString({
+    value: input.marketId,
+    field: "marketId",
   })
-  const providerType = requireString({
-    value: input.providerType,
-    field: "providerType",
+  const brokerOrderId = requireOptionalIdentityString({
+    value: input.brokerOrderId,
+    field: "brokerOrderId",
   })
-  const accountId = requireString({
-    value: input.accountId,
-    field: "accountId",
-  })
-  const clientOrderId = requireString({
-    value: input.clientOrderId,
-    field: "clientOrderId",
-  })
-  const marketId = input.marketId === undefined || input.marketId === null
-    ? null
-    : requireString({
-        value: input.marketId,
-        field: "marketId",
-      })
-  const brokerOrderId = input.brokerOrderId === undefined || input.brokerOrderId === null
-    ? null
-    : requireString({
-        value: input.brokerOrderId,
-        field: "brokerOrderId",
-      })
-  const createdAt = input.createdAt === undefined || input.createdAt === null
-    ? null
-    : requireTimestamp({
-        value: input.createdAt,
-        field: "createdAt",
-      })
   if (brokerOrderId !== null && marketId === null) {
     invalidField({
       field: "marketId",
     })
   }
-  const scope = [
+  return {
     environment,
-    providerInstanceId,
-    providerType,
-    accountId,
+    providerInstanceId: requireString({
+      value: input.providerInstanceId,
+      field: "providerInstanceId",
+    }),
+    providerType: requireString({
+      value: input.providerType,
+      field: "providerType",
+    }),
+    accountId: requireString({
+      value: input.accountId,
+      field: "accountId",
+    }),
+    clientOrderId: requireString({
+      value: input.clientOrderId,
+      field: "clientOrderId",
+    }),
     marketId,
+    brokerOrderId,
+    createdAt: requireOptionalIdentityTimestamp({
+      value: input.createdAt,
+      field: "createdAt",
+    }),
+  }
+}
+
+export function createOrderHistoryId(input = {}) {
+  const identity = normalizeOrderIdentity(input)
+  const scope = [
+    identity.environment,
+    identity.providerInstanceId,
+    identity.providerType,
+    identity.accountId,
+    identity.marketId,
   ]
-  if (brokerOrderId !== null) {
+  if (identity.brokerOrderId !== null) {
     return JSON.stringify([
       ...scope,
       "exchange",
-      brokerOrderId,
+      identity.brokerOrderId,
     ])
   }
   return JSON.stringify([
     ...scope,
     "client",
-    clientOrderId,
-    ...(createdAt === null ? [] : [createdAt]),
+    identity.clientOrderId,
+    ...(identity.createdAt === null ? [] : [identity.createdAt]),
   ])
 }
 
