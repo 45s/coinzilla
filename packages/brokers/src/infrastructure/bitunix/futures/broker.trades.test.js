@@ -139,6 +139,43 @@ test("Bitunix Futures trade history requires a bounded filter and validates pagi
 })
 
 
+
+test("Bitunix Futures getMyTrades returns the bounded Futures execution rows through the legacy array contract", async () => {
+  const { broker, requests } = createBroker()
+  const result = await broker.getMyTrades({
+    symbol: "BTCUSDT",
+    positionId: "position-123",
+    limit: 25,
+    skip: 50,
+  })
+
+  assert.equal(result.ok, true)
+  assert.deepEqual(result.data, [{
+    tradeId: "trade-123",
+    orderId: "order-456",
+    clientId: "client-789",
+    symbol: "BTCUSDT",
+    quantity: "0.125000000000000001",
+    price: "65000.123456789012345",
+    side: "BUY",
+    orderType: "LIMIT",
+    positionMode: "HEDGE",
+    marginMode: "ISOLATION",
+    leverage: 10,
+    effect: "GTC",
+    reduceOnly: false,
+    fee: "0.000125",
+    realizedPNL: "-0.25",
+    executedAt: 1_700_000_000_123,
+    liquidityRole: "MAKER",
+  }])
+  const request = requests[0]
+  assert.equal(new URL(request.url).pathname, "/api/v1/futures/trade/get_history_trades")
+  assert.equal(new URL(request.url).searchParams.get("positionId"), "position-123")
+  assert.equal(new URL(request.url).searchParams.get("limit"), "25")
+  assert.equal(new URL(request.url).searchParams.get("skip"), "50")
+})
+
 test("Bitunix Futures getFills maps stable trade IDs into exact canonical Fill values", async () => {
   const { broker, requests } = createBroker()
   const result = await broker.getFills({
