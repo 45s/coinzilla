@@ -126,7 +126,7 @@ function preserveEquivalentDecimalRepresentation({ current, candidate, merged, f
   }
 }
 
-function assertImmutableOrderFacts({ current, candidate } = {}) {
+function assertOrderIdentityFields({ current, candidate } = {}) {
   for (const field of [
     "environment",
     "providerInstanceId",
@@ -143,11 +143,6 @@ function assertImmutableOrderFacts({ current, candidate } = {}) {
       field,
     })
   }
-  assertEqualDecimalField({
-    current,
-    candidate,
-    field: "originalQuantity",
-  })
   if (JSON.stringify(current.market) !== JSON.stringify(candidate.market)) {
     integrityError({
       field: "market",
@@ -155,26 +150,29 @@ function assertImmutableOrderFacts({ current, candidate } = {}) {
       candidate,
     })
   }
+}
+
+function assertImmutableOrderFinancialFacts({ current, candidate } = {}) {
+  assertEqualDecimalField({
+    current,
+    candidate,
+    field: "originalQuantity",
+  })
   assertOptionalEqualDecimalField({
     current,
     candidate,
     field: "price",
   })
-  assertOptionalEqualField({
-    current,
-    candidate,
-    field: "brokerOrderId",
-  })
-  assertOptionalEqualField({
-    current,
-    candidate,
-    field: "createdAt",
-  })
-  assertOptionalEqualField({
-    current,
-    candidate,
-    field: "acknowledgedAt",
-  })
+}
+
+function assertOptionalOrderFacts({ current, candidate } = {}) {
+  for (const field of ["brokerOrderId", "createdAt", "acknowledgedAt"]) {
+    assertOptionalEqualField({
+      current,
+      candidate,
+      field,
+    })
+  }
   if (
     current.ownership !== undefined &&
     candidate.ownership !== undefined &&
@@ -186,6 +184,21 @@ function assertImmutableOrderFacts({ current, candidate } = {}) {
       candidate,
     })
   }
+}
+
+function assertImmutableOrderFacts({ current, candidate } = {}) {
+  assertOrderIdentityFields({
+    current,
+    candidate,
+  })
+  assertImmutableOrderFinancialFacts({
+    current,
+    candidate,
+  })
+  assertOptionalOrderFacts({
+    current,
+    candidate,
+  })
 }
 
 function isStaleOrderHistoryUpdate({ current, candidate } = {}) {
