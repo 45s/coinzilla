@@ -402,3 +402,55 @@ test("runner fails closed and retains worker capacity when timeout cleanup canno
     "the runner must not reuse a worker slot when process cleanup was not confirmed")
   await runner.close()
 })
+
+test("run snapshots redact nested secrets while adapters receive the original input", async () => {
+  const input = {
+    apiKey: "input-api-key-secret",
+    nested: ["Authorization: Bearer input-bearer-secret"],
+  }
+  let receivedInput
+  const runner = createScenarioRunner({
+    adapters: [createAdapter(async ({ input: executionInput }) => {
+      receivedInput = executionInput
+      return {
+        apiKey: "output-api-key-secret",
+        authorization: "Authorization: Bearer output-bearer-secret",
+        nested: ["Cookie: session=output-cookie-secret"],
+      }
+    })],
+  })
+  const accepted = runner.submit({
+    strategyId: "example",
+    scenarioId: "redaction",
+    input,
+  })
+  assert.equal(accepted.input.apiKey, "[REDACTED]")
+  const result = await runner.waitForRun(accepted.runId)
+  assert.deepEqual(receivedInput, input)
+  const serialized = JSON.stringify(result)
+  for (const secret of [
+    "input-api-key-secret",
+    "input-bearer-secret",
+    "output-api-key-secret",
+    "output-bearer-secret",
+    "output-cookie-secret",
+  ]) {
+    assert.equal(serialized.includes(secret), false)
+  }
+})
+
+test("run diagnostics redact credential values returned by an adapter", async () => {
+  const runner = createScenarioRunner({
+    adapters: [createAdapter(async () => {
+      throw new Error("Authorization: Bearer diagnostic-bearer-secret")
+    })],
+  })
+  const accepted = runner.submit({
+    strategyId: "example",
+    scenarioId: "diagnostic-redaction",
+  })
+  const result = await runner.waitForRun(accepted.runId)
+  assert.equal(result.status, SCENARIO_RUN_STATUS.FAILED)
+  assert.equal(JSON.stringify(result).includes("diagnostic-bearer-secret"), false)
+  assert.match(result.diagnostics[0], /\\[REDACTED\\]/)
+})
