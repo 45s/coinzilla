@@ -93,6 +93,28 @@ function buildResults({
   }
 }
 
+function buildCoverageGaps({
+  scenarios,
+  requirements,
+  criticalBehaviorContract,
+  requirementIds,
+  behaviorIds,
+  mappedTests,
+  criticalTests,
+}) {
+  return {
+    ...buildCoverageGaps({
+      scenarios,
+      requirements,
+      criticalBehaviorContract,
+      requirementIds,
+      behaviorIds,
+      mappedTests,
+      criticalTests,
+    }),
+  }
+}
+
 function buildCoverage({
   scenarios,
   requirements,
