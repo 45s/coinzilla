@@ -14,6 +14,7 @@ import {
   TradingRules,
 } from "@coinzilla/entities"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
+import { OrderRegistry } from "../domain/orders/order-registry.js"
 import { RecoveryLedger } from "../domain/strategies/conservative/recovery-ledger.js"
 import { makeConservativeTradingEngine } from "./conservative-trading-engine.js"
 import { conservativeStrategyPolicy } from "../domain/strategies/conservative/strategy-policy.js"
@@ -2102,4 +2103,174 @@ test("submits a valid recovery SELL when refreshed exchange filters remain valid
     harness.orders.some((order) => order.side === "SELL"),
     "A recovery SELL satisfying refreshed exchange filters must be submitted",
   )
+})
+
+
+function createVolatilityCancellationOrder({ market, clientOrderId, brokerOrderId, side } = {}) {
+  return new CanonicalOrder({
+    clientOrderId,
+    brokerOrderId,
+    market,
+    side,
+    type: "LIMIT",
+    limitPrice: new Money({
+      amount: "100",
+      asset: market.quoteAsset,
+    }),
+    originalQuantity: new Quantity({
+      amount: "1",
+      asset: market.baseAsset,
+    }),
+    executedQuantity: new Quantity({
+      amount: "0",
+      asset: market.baseAsset,
+    }),
+    status: "OPEN",
+    createdAt: 1,
+    acknowledgedAt: 1,
+    updatedAt: 1,
+  })
+}
+
+function createRecoverySellerSharedQuoteReservationRegistry() {
+  const market = marketsBySymbol.get("DOGEUSDT")
+  const order = createVolatilityCancellationOrder({
+    market,
+    clientOrderId: "rs-shared-quote-reservation",
+    brokerOrderId: "broker-rs-shared-quote-reservation",
+    side: "BUY",
+  })
+  return new OrderRegistry({
+    orders: [order],
+    ownerships: [{
+      clientOrderId: order.clientOrderId,
+      strategyId: StrategyId.RECOVERY_SELLER,
+      positionId: "rs-shared-quote-position",
+      purpose: "RECOVERY_BUY",
+    }],
+  })
+}
+
+test("RS-008-018-A: RS-owned quote reservation blocks CG BUY across markets", async () => {
+  const orderRegistry = createRecoverySellerSharedQuoteReservationRegistry()
+  const harness = await createHarness({
+    quoteFreeBalance: "150",
+    initialState: { orderRegistry },
+  })
+  const result = await harness.engine.processMarketPrice({
+    symbol: "SOLUSDT",
+    priceEvent: {
+      symbol: "SOLUSDT",
+      price: "100",
+      timestamp: 2,
+    },
+  })
+
+  assert.equal(result.ok, true,
+    "The CG market evaluation must complete with a deterministic quote-reservation deferral.")
+  assert.equal(result.data.waitingForAvailableQuoteBalance, true,
+    "The RS-owned DOGE BUY must reserve account quote before CG evaluates SOL.")
+  assert.equal(result.data.deferredActions[0].reason, "INSUFFICIENT_QUOTE_BALANCE",
+    "CG must defer rather than spend quote already committed to RS.")
+  assert.equal(harness.orders.length, 0,
+    "No CG BUY may be submitted while the RS commitment leaves insufficient free quote.")
+  assert.equal(
+    orderRegistry.getOwnership({ clientOrderId: "rs-shared-quote-reservation" }).strategyId,
+    StrategyId.RECOVERY_SELLER,
+    "The account-wide reservation must retain RS order ownership without transferring it to CG.",
+  )
+})
+
+function createRecoverySellerSharedBaseReservationRegistry() {
+  const market = marketsBySymbol.get("DOGEUSDT")
+  const order = createVolatilityCancellationOrder({
+    market,
+    clientOrderId: "rs-shared-base-reservation",
+    brokerOrderId: "broker-rs-shared-base-reservation",
+    side: "SELL",
+  })
+  return new OrderRegistry({
+    orders: [order],
+    ownerships: [{
+      clientOrderId: order.clientOrderId,
+      strategyId: StrategyId.RECOVERY_SELLER,
+      positionId: "rs-shared-base-position",
+      purpose: "RECOVERY_SELL",
+    }],
+  })
+}
+
+test("RS-008-018-F: runtime CG SELL is rejected when an RS SELL reserves all shared free base", async () => {
+  const market = marketsBySymbol.get("DOGEUSDT")
+  const { portfolio, recoveryLedger } = createOperatorPauseRecoveryPosition({ market })
+  const orderRegistry = createRecoverySellerSharedBaseReservationRegistry()
+  const initialState = { orderRegistry }
+  const harness = await createHarness({
+    baseFreeBalance: "0",
+    portfolio,
+    strategyPolicy: createOperatorPauseStrategyPolicy(),
+    recoveryLedgersByMarket: new Map([[market.id, recoveryLedger]]),
+    initialState,
+  })
+
+  const result = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 2 },
+  })
+
+  assert.equal(result.ok, false,
+    "The actual Conservative runtime must reject a SELL when the RS-owned active SELL reservation exhausts shared free base.")
+  assert.match(result.errors[0].message, /available free base balance after commitments/,
+    "The rejection must identify the shared account base commitment boundary.")
+  assert.equal(harness.orders.length, 0,
+    "No additional CG SELL or BUY may be submitted after the account allocation fails closed.")
+  assert.equal(harness.engine.getOrders().length, 1,
+    "The existing RS SELL must remain the only registered order.")
+  assert.equal(initialState.orderRegistry.getOrder({
+    clientOrderId: "rs-shared-base-reservation",
+  }).status, "OPEN",
+  "The existing RS reservation must remain active and unchanged.")
+  assert.equal(initialState.orderRegistry.getOwnership({
+    clientOrderId: "rs-shared-base-reservation",
+  }).strategyId, StrategyId.RECOVERY_SELLER,
+  "The reservation must retain RS ownership; CG must not adopt it.")
+})
+
+test("RS-008-018-E: concurrent CG BUY intents serialize against a shared RS quote reservation", async () => {
+  const orderRegistry = createRecoverySellerSharedQuoteReservationRegistry()
+  const harness = await createHarness({
+    quoteFreeBalance: "250",
+    initialState: { orderRegistry },
+  })
+
+  const results = await Promise.all([
+    harness.engine.processMarketPrice({
+      symbol: "DOGEUSDT",
+      priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 2 },
+    }),
+    harness.engine.processMarketPrice({
+      symbol: "SOLUSDT",
+      priceEvent: { symbol: "SOLUSDT", price: "100", timestamp: 2 },
+    }),
+  ])
+
+  assert.equal(results.every((result) => result.ok), true,
+    "Both concurrent market evaluations must resolve without an allocation error.")
+  assert.equal(harness.orders.length, 1,
+    "The shared serialized transition queue must allow only one 100 USDT CG BUY after the 100 USDT RS reservation.")
+  assert.equal(results.filter((result) =>
+    result.data?.waitingForAvailableQuoteBalance !== true).length, 1,
+  "Exactly one market evaluation must pass quote allocation; the other must defer.")
+  assert.equal(results.filter((result) =>
+    result.data?.waitingForAvailableQuoteBalance === true).length, 1,
+  "The competing CG BUY must defer after the first submission consumes the remaining shared quote budget.")
+  const registeredOrders = harness.engine.getOrders()
+  assert.equal(registeredOrders.length, 2,
+    "The account registry must retain the original RS commitment and the one newly submitted CG order.")
+  assert.equal(registeredOrders.filter((order) =>
+    order.clientOrderId === "rs-shared-quote-reservation").length, 1,
+  "The original RS order identity must remain registered exactly once.")
+  assert.equal(registeredOrders.filter((order) =>
+    order.side === "BUY" && order.clientOrderId !== "rs-shared-quote-reservation").length, 1,
+  "Only one additional CG BUY may be registered across both markets.")
 })
