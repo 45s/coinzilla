@@ -2293,3 +2293,16 @@ The detailed evidence, implementation commits, CI state and remaining unknowns a
 - Strengthened the full Conservative engine lifecycle to use production `updateTradingAccounting`, covering second BUY partial/completed fills, recovery-SELL cancellation/fill reconciliation and replacement SELL submission with exact cumulative accounting assertions.
 - CI fixes: corrected the lifecycle cost-basis expectations from observed canonical fills, fixed strict ESLint formatting, and removed repeated Markdown blank lines. Exact-head verification is tracked on PR #1808.
 - Test-only and documentation changes; no production trading behavior or rules changed.
+
+## 2026-11-25 — #1763 Phase 5 Conservative SELL accounting
+
+- PR #1844 adds `src/use-cases/conservative-sell-accounting-scenario.test.js`: canonical BUY plus three SELL fills applied through production `updateTradingAccounting`, real Portfolio/Position and RecoveryLedger, explicit commission-aware decimal oracles, duplicate/conflict/valuation-failure atomicity.
+- The composed completion case feeds the exact post-fill projections into the real recovery-completion policy and proves remaining inventory, full BUY cost basis, actual net proceeds, realized profit, and configured keep quantity plus validated dust allocation.
+- Current `develop` already contains `recovery-completion.dust.test.js`; the PR does not duplicate its pure-policy cases. Synchronized head `2c91dbb530f8993833b8980b3710e82ea9abc403` passed all six required workflows.
+- Test/documentation only; no production behavior or exchange state changed. PR #1844 remains open for owner review.
+
+## 2026-11-25 — #1763 Phase 6 initial strategy scenario
+
+- Added `src/use-cases/conservative-initial-buy-scenario.test.js`, composing initial BUY policy, canonical BUY Fill, production accounting, Portfolio/Position, RecoveryLedger and the real Conservative evaluator.
+- Verifies exact initial BUY intent, commission-adjusted active inventory (`99.9` DOGE) and cost basis (`10.03` USDT), then exact ordered recovery SELL (`99.8` at `0.101`, required net `10.04`) and next standing BUY (`100` at `0.099`).
+- Existing strategy unit tests cover policy decisions from separately applied projections; this scenario closes the Fill-to-accounting-to-policy composition gap. Test-only; no production behavior or strategy rules changed. Exact-head CI pending.

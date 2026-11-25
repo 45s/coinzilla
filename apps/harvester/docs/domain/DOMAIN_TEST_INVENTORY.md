@@ -33,7 +33,23 @@ Planned scenario behaviors include initial BUY fill → standing BUY and recover
 - `src/use-cases/second-buy-fill-reconciliation.test.js`: proves a second BUY extends the first tranche's Position and RecoveryLedger cost basis rather than resetting it.
 - `src/use-cases/conservative-trading-engine.test.js`: the full lifecycle now uses production `updateTradingAccounting`; verifies exact accounting after partial and completed second BUY fills while recovery SELL cancellation/fill reconciliation and replacement occur.
 - `src/domain/strategies/conservative/strategy.test.js`: investment-cap equality, just-above and below-boundary behavior; recovery SELL remains eligible when the next BUY is blocked.
-- Evidence remains pending until PR #1808 is merged and exact merged-head CI is verified; do not mark the broader audit matrix COVERED solely from this PR.
+- PR #1808 merged to `develop` at `a72cfb0fb66461290a8855a6df774dcdd87b2c6e`; all 29 required exact-head checks passed on `9ac49df3f6573f84f13cb21641032db2275c008b`. The broader audit matrix remains separate from this implementation slice.
+
+### 2026-11-25 — Phase 5 Conservative SELL accounting scenario (PR #1844)
+
+- `src/use-cases/conservative-sell-accounting-scenario.test.js` composes one canonical BUY and three successive canonical SELL fills through production `updateTradingAccounting`, Portfolio/Position and RecoveryLedger.
+- The worked financial oracle proves base inventory debits including actual base-asset SELL commissions; quote proceeds after actual quote and valued third-asset fees; preservation of the full BUY cost basis; cumulative net proceeds; outstanding recovery; realized net profit; and identical canonical Fill identity histories in both projections.
+- Additional cases prove duplicate SELL no-op behavior, conflicting commission facts rejected without mutation, and an unvalued third-asset SELL commission rejected atomically.
+- The final composition applies canonical BUY/SELL fills through the real accounting use case and passes the resulting projections into the real recovery-completion policy. It verifies exact remaining inventory, full BUY basis, net proceeds after actual commission, realized profit, and retention of configured keep quantity plus validated exchange-constrained dust.
+- Current `develop` already contains `recovery-completion.dust.test.js`, including successful reason-specific dust cases and incomplete-SELL / below-minProfit gates. This PR adds the accounting-to-completion composition without duplicating that suite.
+- Synchronized head `2c91dbb530f8993833b8980b3710e82ea9abc403` passed all six required workflows. PR #1844 remains open and unmerged; this row is not COVERED until merged.
+
+### 2026-11-25 — Phase 6 initial Conservative strategy scenario
+
+- `src/use-cases/conservative-initial-buy-scenario.test.js` composes the real initial BUY policy, canonical BUY Fill, production `updateTradingAccounting`, Portfolio/Position, RecoveryLedger and real Conservative evaluator.
+- It asserts the exact initial BUY intent; applies a 100 DOGE BUY with base, quote and valued third-asset commissions; verifies net active inventory `99.9` and complete cost basis `10.03`; then proves the real strategy emits the recovery SELL first (`99.8` DOGE at `0.101`, required net proceeds `10.04`) followed by the next standing BUY (`100` DOGE at `0.099`).
+- Existing `strategy.test.js` asserted intents from separately applied projections; this scenario proves canonical Fill → production accounting → real policy → exact ordered intents.
+- Exact-head CI for the current Phase 6 addition is pending. No production behavior or strategy rules changed.
 
 ## Existing behavior-to-test inventory
 
