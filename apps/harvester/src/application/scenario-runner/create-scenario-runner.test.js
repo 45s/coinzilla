@@ -369,3 +369,36 @@ test("runner queues excess runs and starts them FIFO when worker slots free", as
   releaseThird({ ok: true })
   assert.equal((await thirdCompletion).status, SCENARIO_RUN_STATUS.COMPLETED)
 })
+
+test("runner fails closed and retains worker capacity when timeout cleanup cannot be confirmed", async () => {
+  const adapter = createAdapter(() => new Promise(() => {}))
+  const runner = createScenarioRunner({
+    adapters: [{
+      ...adapter,
+      cancel: async () => {
+        throw new Error("sandbox cleanup failed")
+      },
+    }],
+    createRunId: (() => {
+      let count = 0
+      return () => `run-cleanup-${++count}`
+    })(),
+    timeoutMs: 5,
+    maxConcurrentRuns: 1,
+    maxQueuedRuns: 1,
+  })
+  const first = runner.submit({
+    strategyId: "example",
+    scenarioId: "timeout-cleanup",
+  })
+  const result = await runner.waitForRun(first.runId)
+  assert.equal(result.status, SCENARIO_RUN_STATUS.FAILED)
+  assert.match(result.diagnostics[0], /sandbox cleanup failed/)
+  const second = runner.submit({
+    strategyId: "example",
+    scenarioId: "must-remain-queued",
+  })
+  assert.equal(second.status, SCENARIO_RUN_STATUS.QUEUED,
+    "the runner must not reuse a worker slot when process cleanup was not confirmed")
+  await runner.close()
+})
