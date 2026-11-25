@@ -2293,3 +2293,10 @@ The detailed evidence, implementation commits, CI state and remaining unknowns a
 - Strengthened the full Conservative engine lifecycle to use production `updateTradingAccounting`, covering second BUY partial/completed fills, recovery-SELL cancellation/fill reconciliation and replacement SELL submission with exact cumulative accounting assertions.
 - CI fixes: corrected the lifecycle cost-basis expectations from observed canonical fills, fixed strict ESLint formatting, and removed repeated Markdown blank lines. Exact-head verification is tracked on PR #1808.
 - Test-only and documentation changes; no production trading behavior or rules changed.
+
+## 2026-11-25 — Conservative recovery completion dust evidence
+
+- PR #1844 (`test/1763-phase5-sell-accounting`) now has all six required workflows passing on exact head `f600079d1de03385dfd373b703cabab88c6b7c11`; the PR remains open and unmerged for owner review.
+- Follow-up coverage on the same review branch adds successful completion assertions for each supported exchange-constrained dust reason: `MIN_QUANTITY`, `MIN_NOTIONAL`, and `QUANTITY_INCREMENT`.
+- Each valid case proves that `keepQuantity = 1` plus an exactly evidenced `0.1` dust remainder yields `freeQuantity = 1.1`, while preserving the exact dust disposition in the result. Existing malformed-dust cases continue to fail closed.
+- Test and documentation only. No production trading behavior, exchange state, runtime configuration, or strategy rules changed. The new follow-up head must receive its own exact-head CI pass before it is considered covered.
