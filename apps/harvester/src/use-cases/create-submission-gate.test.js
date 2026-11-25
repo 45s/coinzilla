@@ -122,3 +122,29 @@ test("blocks an ordinary SELL while Conservative shutdown permits recovery SELL 
   assert.equal(result.allowed, false, "Expected result.allowed to equal false in \"blocks an ordinary SELL while Conservative shutdown permits recovery SELL only\".")
   assert.equal(result.reason, "CONSERVATIVE_SHUTDOWN_RECOVERY_SELL_ONLY", "Expected result.reason to equal \"CONSERVATIVE_SHUTDOWN_RECOVERY_SELL_ONLY\" in \"blocks an ordinary SELL while Conservative shutdown permits recovery SELL only\".")
 })
+
+
+test("blocks a BUY when a durable account-scoped safety blocker is active", () => {
+  const dependencies = createDependencies()
+  dependencies.state.shutdownBuyGate = false
+  dependencies.canTrade = () => true
+  dependencies.isStopping = () => false
+  dependencies.getAccountSafetyBlocker = () => ({
+    scope: "ACCOUNT",
+    reason: "RECOVERY_SELLER_UNEXPECTED_CONDITION",
+    blockerId: "incident-sequence-13",
+  })
+  const gate = createSubmissionGate(dependencies)
+  const result = gate({
+    order: createOrder({ side: "BUY" }),
+    purpose: "STANDING_BUY",
+  })
+
+  assert.equal(result.allowed, false)
+  assert.equal(result.reason, "ACCOUNT_SAFETY_BLOCKER_ACTIVE")
+  assert.deepEqual(result.details, {
+    symbol: "DOGEUSDT",
+    blockerReason: "RECOVERY_SELLER_UNEXPECTED_CONDITION",
+    blockerId: "incident-sequence-13",
+  })
+})
