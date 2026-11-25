@@ -1,18 +1,8 @@
 import { JsonPipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
-import { firstValueFrom } from 'rxjs';
-import { ScenarioRunnerApi, type ScenarioCatalogItem } from './api';
-import { createTraceGraph } from './core/create-trace-graph';
-import { createAiDebugPackage } from './core/create-ai-debug-package';
-import { validateScenarioInput } from './core/validate-scenario-input';
-import type { ScenarioRunRecord, ScenarioTraceStep } from './core/run-contract';
-
-interface RunOutputEvidence {
-  readonly trace?: readonly ScenarioTraceStep[];
-  readonly expected?: unknown;
-  readonly assertions?: unknown;
-  readonly source?: unknown;
-}
+import { ScenarioRunnerApi } from './api';
+import { createScenarioRunnerApplication, type ScenarioCatalogItem, type ScenarioRunSnapshot } from './application';
+import type { ScenarioGraphModel, ScenarioRunRecord, ScenarioTraceStep } from './core/run-contract';
 
 @Component({
   selector: 'app-scenario-runner',
@@ -24,6 +14,7 @@ interface RunOutputEvidence {
 })
 export class ScenarioRunnerComponent {
   private readonly api = inject(ScenarioRunnerApi);
+  private readonly application = createScenarioRunnerApplication({ gateway: this.api });
   private socket?: WebSocket;
   private reconnectTimer?: ReturnType<typeof setTimeout>;
   private reconnectDelayMs = 1000;
@@ -38,7 +29,7 @@ export class ScenarioRunnerComponent {
   readonly inputJson = signal('{}');
   readonly error = signal<string | null>(null);
   readonly loading = signal(false);
-  readonly graph = signal(createTraceGraph([]));
+  readonly graph = signal<ScenarioGraphModel>({ nodes: [], edges: [] });
   readonly copied = signal(false);
 
   constructor() {
@@ -91,7 +82,7 @@ export class ScenarioRunnerComponent {
       return;
     }
     const delay = this.reconnectDelayMs;
-    this.reconnectDelayMs = Math.min(this.reconnectDelayMs * 2, 30_000)
+    this.reconnectDelayMs = Math.min(this.reconnectDelayMs * 2, 30_000);
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = undefined;
       this.connectEventSocket();
@@ -106,13 +97,13 @@ export class ScenarioRunnerComponent {
     this.loading.set(true);
     this.error.set(null);
     try {
-      const result = await firstValueFrom(this.api.catalog());
-      this.catalog.set(result.data);
-      const selected = result.data.find((item) => item.strategyId === this.strategyId());
+      const workspace = await this.application.loadWorkspace();
+      this.catalog.set(workspace.catalog);
+      this.history.set(workspace.history);
+      const selected = workspace.catalog.find((item) => item.strategyId === this.strategyId());
       const firstScenario = selected?.scenarios[0];
       this.scenarioId.set(firstScenario?.id ?? '');
       this.inputJson.set(JSON.stringify(firstScenario?.defaultInput ?? {}, null, 2));
-      await this.refreshHistory();
     } catch (error) {
       this.error.set(error instanceof Error ? error.message : 'Scenario catalog unavailable.');
     } finally {
@@ -122,8 +113,7 @@ export class ScenarioRunnerComponent {
 
   async refreshHistory(): Promise<void> {
     try {
-      const result = await firstValueFrom(this.api.history());
-      this.history.set(result.data as readonly ScenarioRunRecord[]);
+      this.history.set(await this.application.loadHistory());
     } catch (error) {
       this.error.set(error instanceof Error ? error.message : 'Run history unavailable.');
     }
@@ -149,29 +139,14 @@ export class ScenarioRunnerComponent {
 
   async execute(): Promise<void> {
     this.error.set(null);
-    if (this.selectedScenario?.executable !== true) {
-      this.error.set('This scenario is mapped to tests but has no complete production-flow simulation adapter yet.');
-      return;
-    }
     this.loading.set(true);
     try {
-      const input = JSON.parse(this.inputJson());
-      const schema = this.selectedScenario?.inputSchema;
-      if (schema) {
-        const validation = validateScenarioInput({ schema, input });
-        if (!validation.valid) {
-          this.error.set(validation.errors.join('\n'));
-          return;
-        }
-      }
-      const accepted = await firstValueFrom(this.api.submit({
+      const snapshot = await this.application.submitRun({
         strategyId: this.strategyId(),
         scenarioId: this.scenarioId(),
-        input,
-      }))
-      const acceptedRun = accepted.data as ScenarioRunRecord;
-      this.run.set(acceptedRun);
-      await this.refresh(acceptedRun.runId);
+        inputJson: this.inputJson(),
+      });
+      this.applyRunSnapshot(snapshot);
     } catch (error) {
       this.error.set(error instanceof Error ? error.message : 'Scenario execution failed.');
     } finally {
@@ -184,14 +159,7 @@ export class ScenarioRunnerComponent {
       return;
     }
     try {
-      const result = await firstValueFrom(this.api.getRun(runId));
-      const run = result.data as ScenarioRunRecord;
-      const output = run.output as RunOutputEvidence | null;
-      const trace = output?.trace ?? [];
-      this.run.set(run);
-      this.trace.set(trace);
-      this.graph.set(createTraceGraph(trace));
-      await this.refreshHistory();
+      this.applyRunSnapshot(await this.application.refreshRun({ runId }));
     } catch (error) {
       this.error.set(error instanceof Error ? error.message : 'Run status refresh failed.');
     }
@@ -199,14 +167,13 @@ export class ScenarioRunnerComponent {
 
   async selectHistory(runId: string): Promise<void> {
     try {
-      const result = await firstValueFrom(this.api.getRun(runId))
-      const run = result.data as ScenarioRunRecord
-      this.strategyId.set(run.strategyId)
-      this.scenarioId.set(run.scenarioId)
-      this.inputJson.set(JSON.stringify(run.input ?? {}, null, 2))
-      await this.refresh(runId)
+      const snapshot = await this.application.loadHistoryRun({ runId });
+      this.strategyId.set(snapshot.run.strategyId);
+      this.scenarioId.set(snapshot.run.scenarioId);
+      this.inputJson.set(snapshot.inputJson);
+      this.applyRunSnapshot(snapshot);
     } catch (error) {
-      this.error.set(error instanceof Error ? error.message : "Recorded run inputs could not be loaded.")
+      this.error.set(error instanceof Error ? error.message : 'Recorded run inputs could not be loaded.');
     }
   }
 
@@ -216,8 +183,7 @@ export class ScenarioRunnerComponent {
       return;
     }
     try {
-      await firstValueFrom(this.api.cancel(runId));
-      await this.refresh(runId);
+      this.applyRunSnapshot(await this.application.cancelRun({ runId }));
     } catch (error) {
       this.error.set(error instanceof Error ? error.message : 'Cancellation failed.');
     }
@@ -230,19 +196,23 @@ export class ScenarioRunnerComponent {
     }
     this.copied.set(false);
     try {
-      const output = current.output as RunOutputEvidence | null;
-      const packageText = createAiDebugPackage({
+      const packageText = this.application.createDebugPackage({
         run: current,
         trace: this.trace(),
-        expected: output?.expected,
-        assertionResults: output?.assertions,
-        metadata: { executionSource: output?.source, codeRevision: 'unavailable', scenarioSchema: this.selectedScenario?.inputSchema },
+        scenario: this.selectedScenario,
       });
       await navigator.clipboard.writeText(packageText);
       this.copied.set(true);
     } catch (error) {
       this.error.set(error instanceof Error ? error.message : 'Debug package could not be generated.');
     }
+  }
+
+  private applyRunSnapshot(snapshot: ScenarioRunSnapshot): void {
+    this.run.set(snapshot.run);
+    this.trace.set(snapshot.trace);
+    this.graph.set(snapshot.graph);
+    this.history.set(snapshot.history);
   }
 
   get strategy(): ScenarioCatalogItem | undefined {
@@ -253,24 +223,16 @@ export class ScenarioRunnerComponent {
     return this.scenarios.find((item) => item.id === this.scenarioId());
   }
 
-
   get scenarios(): ScenarioCatalogItem['scenarios'] {
     return this.strategy?.scenarios ?? [];
   }
 
   get debugText(): string {
     const current = this.run();
-    const output = current?.output as RunOutputEvidence | null;
-    return current ? createAiDebugPackage({
+    return current ? this.application.createDebugPackage({
       run: current,
       trace: this.trace(),
-      expected: output?.expected,
-      assertionResults: output?.assertions,
-      metadata: {
-        executionSource: output?.source,
-        codeRevision: 'unavailable',
-        scenarioSchema: this.selectedScenario?.inputSchema,
-      },
+      scenario: this.selectedScenario,
     }) : '';
   }
 }

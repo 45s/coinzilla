@@ -61,7 +61,7 @@ Read repository-root `AGENTS.md` and every applicable nested `AGENTS.md` before 
 - [x] Preliminary RS-004-011 profitability-helper scaffold invokes production `calculateRecoverySellerProfitability` for helper-level tests; it is explicitly non-executable in the host and is not scenario-runner acceptance evidence.
 - [ ] Full RS adapter invokes the actual production strategy/use-case lifecycle with simulation-only ports; only source-mapped scenarios proven to execute that flow may be advertised as executable.
 - [x] Local REST run/catalog/history/status/cancel routes and WebSocket lifecycle hints.
-- [x] Framework-independent Dashboard graph/debug-package core and Runner presentation workspace.
+- [x] Framework-independent Dashboard application orchestration for catalog/history, executable-scenario gating, JSON/schema validation, submit/refresh/cancel/history retrieval, trace graph and debug-package preparation; Angular is limited to presentation state and transport adaptation.
 - [ ] Full RS registry integration and scenario coverage beyond RS-004-011; config schema pipeline/Playground/replay; persistent history; complete report provenance/completeness; resource/concurrency limits; end-to-end isolation and CI acceptance remain incomplete.
 
 ## Execution-first/no-fake-blocker commitment

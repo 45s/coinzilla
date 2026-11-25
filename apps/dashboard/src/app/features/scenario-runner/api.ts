@@ -1,74 +1,45 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import type { Observable } from 'rxjs';
-
-export interface ScenarioInputSchema {
-  readonly type: 'object';
-  readonly required: readonly string[];
-  readonly additionalProperties: boolean;
-  readonly properties: Readonly<Record<string, {
-    readonly type: string;
-    readonly pattern?: string;
-    readonly description?: string;
-  }>>;
-}
-
-export type ScenarioExecutionStatus = 'PRELIMINARY' | 'EXECUTABLE' | 'BLOCKED';
-
-export interface ScenarioCatalogEntry {
-  readonly id: string;
-  readonly name: string;
-  readonly layer: string;
-  readonly status: string;
-  readonly executionStatus: ScenarioExecutionStatus;
-  readonly executable: boolean;
-  readonly inputSchema?: ScenarioInputSchema;
-  readonly defaultInput?: unknown;
-}
-
-export interface ScenarioCatalogItem {
-  readonly strategyId: string;
-  readonly strategyName: string;
-  readonly scenarios: readonly ScenarioCatalogEntry[];
-}
-
-export interface ScenarioRunnerEnvelope<T> {
-  readonly ok: true;
-  readonly data: T;
-}
+import { firstValueFrom } from 'rxjs';
+import type {
+  ScenarioCatalogItem,
+  ScenarioRunnerGateway,
+} from './application';
+import type { ScenarioRunRecord } from './core/run-contract';
 
 @Injectable({ providedIn: 'root' })
-export class ScenarioRunnerApi {
+export class ScenarioRunnerApi implements ScenarioRunnerGateway {
   private readonly http = inject(HttpClient);
   private readonly base = 'http://127.0.0.1:4201/api/v1/scenario-runner';
   private readonly wsUrl = 'ws://127.0.0.1:4201/api/v1/trading/events';
 
-  catalog(): Observable<ScenarioRunnerEnvelope<readonly ScenarioCatalogItem[]>> {
-    return this.http.get<ScenarioRunnerEnvelope<readonly ScenarioCatalogItem[]>>(`${this.base}/catalog`);
+  async loadCatalog(): Promise<readonly ScenarioCatalogItem[]> {
+    const response = await firstValueFrom(this.http.get<{ data: readonly ScenarioCatalogItem[] }>(`${this.base}/catalog`));
+    return response.data;
   }
 
-  submit(input: {
+  async submit(input: {
     strategyId: string;
     scenarioId: string;
     input: unknown;
-  }): Observable<ScenarioRunnerEnvelope<unknown>> {
-    return this.http.post<ScenarioRunnerEnvelope<unknown>>(`${this.base}/runs`, {
-      strategyId: input.strategyId,
-      scenarioId: input.scenarioId,
-      input: input.input,
-    });
+  }): Promise<ScenarioRunRecord> {
+    const response = await firstValueFrom(this.http.post<{ data: ScenarioRunRecord }>(`${this.base}/runs`, input));
+    return response.data;
   }
 
-  history(): Observable<ScenarioRunnerEnvelope<readonly unknown[]>> {
-    return this.http.get<ScenarioRunnerEnvelope<readonly unknown[]>>(`${this.base}/runs`);
+  async loadHistory(): Promise<readonly ScenarioRunRecord[]> {
+    const response = await firstValueFrom(this.http.get<{ data: readonly ScenarioRunRecord[] }>(`${this.base}/runs`));
+    return response.data;
   }
 
-  getRun(runId: string): Observable<ScenarioRunnerEnvelope<unknown>> {
-    return this.http.get<ScenarioRunnerEnvelope<unknown>>(`${this.base}/runs/${encodeURIComponent(runId)}`);
+  async getRun(runId: string): Promise<ScenarioRunRecord> {
+    const response = await firstValueFrom(this.http.get<{ data: ScenarioRunRecord }>(`${this.base}/runs/${encodeURIComponent(runId)}`));
+    return response.data;
   }
 
-  cancel(runId: string): Observable<ScenarioRunnerEnvelope<unknown>> {
-    return this.http.post<ScenarioRunnerEnvelope<unknown>>(`${this.base}/runs/${encodeURIComponent(runId)}/cancel`, {});
+  async cancel(runId: string): Promise<unknown> {
+    const response = await firstValueFrom(this.http.post<{ data: unknown }>(`${this.base}/runs/${encodeURIComponent(runId)}/cancel`, {}));
+    return response.data;
   }
 
   createEventSocket(): WebSocket {
