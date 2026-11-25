@@ -140,8 +140,8 @@ function createMixedSellAllocationFixture({ input }) {
 
 function evaluateMixedSellFillAllocation({ input }) {
   const { fill, allocation } = createMixedSellAllocationFixture({ input })
-  const recoveryCommission = allocation.recovery.commissions[0]
-  const legacyCommission = allocation.legacy.commissions[0]
+  const [recoveryCommission] = allocation.recovery.commissions
+  const [legacyCommission] = allocation.legacy.commissions
   return {
     fillIdentityPreserved: allocation.fillId === fill.id,
     orderOwnership: {
