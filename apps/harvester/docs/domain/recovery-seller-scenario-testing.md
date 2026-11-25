@@ -2780,3 +2780,7 @@ This section is a dated baseline, not a permanent status source. #1780 is the li
 - Issue #1783 remains the repository-wide catalog tracker; it should point to this playbook but continue to own cross-domain catalog work.
 
 **Baseline warning:** re-fetch current branch, PRs, issues, source files and CI before using any of these statuses in a future task. Do not assume this dated baseline remains current.
+
+### 2026-11-25 — RS-002-006-B application-boundary mapping
+
+Added a deterministic offline authorizer/account-allocation regression for a canonical RS-owned `PARTIALLY_FILLED` BUY with 6 units remaining at 10 quote each. With 65 free quote units, a new 10-unit BUY must defer with `INSUFFICIENT_QUOTE_BALANCE`; without the remaining 60-unit commitment it would be fundable. Scenario subcase RS-002-006-B is now TEST-MAPPED to `apps/harvester/src/use-cases/create-recovery-seller-action-authorizer.test.js` (exact test title recorded in the scenario record). The parent RS-002-006 and RS-002 family remain PARTIAL. This test has not yet been run; no scenario is VERIFIED and no evidence SHA is recorded. This application authorizer test proves reservation-aware allocation from an already registered partial order; it does not claim to exercise the full user-data/order-event partial-fill path.
