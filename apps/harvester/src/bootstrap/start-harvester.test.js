@@ -1618,55 +1618,64 @@ test("logs partial startup history diagnostics when an order cursor write fails"
 })
 
 
+async function createPersistedAccountStopForRestart({ directory, store } = {}) {
+  const config = createRsOnlyStartupConfig()
+  const baseline = await recordConfigurationBaseline({
+    operationalStateStore: store,
+    appConfig: config,
+  })
+  assert.equal(baseline.ok, true, baseline.errors?.[0]?.message)
+  const processStarted = await recordProcessStarted({
+    operationalStateStore: store,
+    configurationFingerprint: baseline.data.fingerprint,
+    strategyName: baseline.data.strategyName,
+    markets: baseline.data.markets,
+    tradingEnabled: true,
+  })
+  assert.equal(processStarted.ok, true, processStarted.errors?.[0]?.message)
+
+  const workflowResult = await createRecoverySellerStopWorkflow({
+    operationalStateStore: store,
+  })
+  assert.equal(workflowResult.ok, true, "The startup fixture must create a Recovery Seller STOP workflow.")
+  const latched = await workflowResult.data.latch({
+    explanation: "Integration test: restore an unresolved account-scoped STOP before startup",
+  })
+  assert.equal(latched.ok, true, "The integration fixture must durably persist the account-scoped STOP.")
+  const stopped = await recordProcessStopped({
+    operationalStateStore: store,
+    reason: "TEST_CLEAN_STOP_WITH_ACCOUNT_BLOCKER",
+    clean: true,
+  })
+  assert.equal(stopped.ok, true, stopped.errors?.[0]?.message)
+
+  const restartStore = createFileOperationalStateStore({
+    directory,
+    runtimeSessionId: "rs-only-startup-next-session",
+  })
+  const restartRead = await restartStore.readAll()
+  assert.equal(restartRead.ok, true, "The simulated restart must verify the same ledger under a new process session.")
+  const restoredWorkflow = await createRecoverySellerStopWorkflow({
+    operationalStateStore: restartStore,
+  })
+  assert.equal(restoredWorkflow.ok, true, restoredWorkflow.errors?.[0]?.message)
+  assert.equal(
+    restoredWorkflow.data.isAccountAdmissionBlocked(),
+    true,
+    "A fresh process-session workflow must restore the unresolved ACCOUNT blocker from the durable ledger.",
+  )
+  return restartStore
+}
+
 test("restores a persisted account STOP and keeps a restarted account observation-only", async () => {
   const { directory, store } = await createRsOnlyOperationalStateStore()
   const calls = []
   const broker = createRsOnlyStartupBroker({ calls })
   try {
-    const baseline = await recordConfigurationBaseline({
-      operationalStateStore: store,
-      appConfig: createRsOnlyStartupConfig(),
-    })
-    assert.equal(baseline.ok, true, baseline.errors?.[0]?.message)
-    const processStarted = await recordProcessStarted({
-      operationalStateStore: store,
-      configurationFingerprint: baseline.data.fingerprint,
-      strategyName: baseline.data.strategyName,
-      markets: baseline.data.markets,
-      tradingEnabled: true,
-    })
-    assert.equal(processStarted.ok, true, processStarted.errors?.[0]?.message)
-
-    const workflowResult = await createRecoverySellerStopWorkflow({
-      operationalStateStore: store,
-    })
-    assert.equal(workflowResult.ok, true, "The startup fixture must create a Recovery Seller STOP workflow.")
-    const latched = await workflowResult.data.latch({
-      explanation: "Integration test: restore an unresolved account-scoped STOP before startup",
-    })
-    assert.equal(latched.ok, true, "The integration fixture must durably persist the account-scoped STOP.")
-    const stopped = await recordProcessStopped({
-      operationalStateStore: store,
-      reason: "TEST_CLEAN_STOP_WITH_ACCOUNT_BLOCKER",
-      clean: true,
-    })
-    assert.equal(stopped.ok, true, stopped.errors?.[0]?.message)
-    const restartStore = createFileOperationalStateStore({
+    const restartStore = await createPersistedAccountStopForRestart({
       directory,
-      runtimeSessionId: "rs-only-startup-next-session",
+      store,
     })
-    const restartRead = await restartStore.readAll()
-    assert.equal(restartRead.ok, true, "The simulated restart must verify the same ledger under a new process session.")
-    const restoredWorkflow = await createRecoverySellerStopWorkflow({
-      operationalStateStore: restartStore,
-    })
-    assert.equal(restoredWorkflow.ok, true, restoredWorkflow.errors?.[0]?.message)
-    assert.equal(
-      restoredWorkflow.data.isAccountAdmissionBlocked(),
-      true,
-      "A fresh process-session workflow must restore the unresolved ACCOUNT blocker from the durable ledger.",
-    )
-
     const result = await startHarvesterForTest({
       loadConfig: async () => createRsOnlyStartupConfig(),
       env: binanceEnv,
