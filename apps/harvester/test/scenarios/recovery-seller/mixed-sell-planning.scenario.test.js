@@ -944,6 +944,39 @@ test("RS-003-009: registered post-snapshot SELL reservation reduces shared base 
   )
 })
 
+
+test("RS-003-009-A: tiny exponent-notation quantities preserve exact TradingRules quantity and price increments", () => {
+  const plan = calculatePlan({
+    input: {
+      recoveryQuantity: "1e-8",
+      configuredLegacyQuantity: "1e-8",
+      legacyRemainingQuantity: "0",
+      verifiedUnreservedLegacyQuantity: "0",
+      recoveryCostBasis: "1e-8",
+      legacyInvested: "2e-8",
+      originalLegacyQuantity: "1e-8",
+      minProfit: "1e-2",
+      quoteFeeRate: "0",
+      baseFeeRate: "0",
+      thirdAssetFeeQuoteValue: "0",
+      priceTickSize: "1e-8",
+      quantityStepSize: "1e-8",
+    },
+  })
+  assert.deepEqual(selectPlan(plan), {
+    recoveryQuantity: "1e-8",
+    legacyQuantity: "0",
+    quantity: "0.00000001",
+    recoverySellQuantity: "0.00000001",
+    legacySellQuantity: "0",
+    recoveryRequiredNetQuoteProceeds: "0.01000001",
+    legacyRequiredNetQuoteProceeds: "0",
+    combinedRequiredNetQuoteProceeds: "0.01000001",
+    requiredNetQuoteProceeds: "0.01000001",
+    price: "1000001",
+  }, "Exponent-notation quantity, quantity step and price tick must be parsed as exact decimals without Number conversion or rounding away the minimum sell quantity.")
+})
+
 test("RS-003-006: account-wide SELL reservations across markets are summed and snapshot commitments are not double-counted", async () => {
   assertAccountWideReservationBoundary()
   await assertRegisteredAccountWideReservationScenario()
