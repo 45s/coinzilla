@@ -18,10 +18,22 @@ export const scenarios = [
       eventStream: "may contain duplicate or reordered delivery",
     },
     inputEvents: [
-      { type: "PARTIAL_FILL", sequence: 1 },
-      { type: "DUPLICATE_FILL", sequence: 2 },
-      { type: "CONFLICTING_FILL_IDENTITY", sequence: 3 },
-      { type: "STALE_ORDER_UPDATE", sequence: 4 },
+      {
+        type: "PARTIAL_FILL",
+        sequence: 1,
+      },
+      {
+        type: "DUPLICATE_FILL",
+        sequence: 2,
+      },
+      {
+        type: "CONFLICTING_FILL_IDENTITY",
+        sequence: 3,
+      },
+      {
+        type: "STALE_ORDER_UPDATE",
+        sequence: 4,
+      },
     ],
     expectedState: {
       acceptedFillSet: "each execution identity is applied at most once",

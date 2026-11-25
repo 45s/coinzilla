@@ -17,9 +17,18 @@ export const scenarios = [
       recoveryPosition: "may have secured required net proceeds with a residual balance",
     },
     inputEvents: [
-      { type: "MARKET_PRICE_CHANGE", sequence: 1 },
-      { type: "STALE_MARKET_SNAPSHOT", sequence: 2 },
-      { type: "RECOVERY_SELL_REEVALUATION", sequence: 3 },
+      {
+        type: "MARKET_PRICE_CHANGE",
+        sequence: 1,
+      },
+      {
+        type: "STALE_MARKET_SNAPSHOT",
+        sequence: 2,
+      },
+      {
+        type: "RECOVERY_SELL_REEVALUATION",
+        sequence: 3,
+      },
     ],
     expectedState: {
       staleSnapshot: "does not authorize a new order",

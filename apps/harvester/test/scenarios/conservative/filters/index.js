@@ -17,9 +17,18 @@ export const scenarios = [
       recoveryPosition: "may contain a residual near exchange minimums",
     },
     inputEvents: [
-      { type: "REFRESH_MARKET_FILTERS", sequence: 1 },
-      { type: "CALCULATE_RECOVERY_SELL", sequence: 2 },
-      { type: "FILTER_BOUNDARY_CHECK", sequence: 3 },
+      {
+        type: "REFRESH_MARKET_FILTERS",
+        sequence: 1,
+      },
+      {
+        type: "CALCULATE_RECOVERY_SELL",
+        sequence: 2,
+      },
+      {
+        type: "FILTER_BOUNDARY_CHECK",
+        sequence: 3,
+      },
     ],
     expectedState: {
       quantity: "rounded down to valid step size",
@@ -29,7 +38,11 @@ export const scenarios = [
       refreshPolicy: "refreshes stale/missing filters before recovery evaluation, skips refresh while a recovery SELL is active, and forces a fresh preflight before trailing BUY replacement",
     },
     expectedOrders: [
-      { side: "SELL", purpose: "RECOVERY_SELL", condition: "all current exchange filters pass" },
+      {
+        side: "SELL",
+        purpose: "RECOVERY_SELL",
+        condition: "all current exchange filters pass",
+      },
     ],
     expectedSideEffects: {
       staleFilterSubmission: false,

@@ -17,9 +17,18 @@ export const scenarios = [
       runtimeRestoration: "disabled by the active Conservative contract",
     },
     inputEvents: [
-      { type: "PERSIST_SUBMISSION_INTENT", sequence: 1 },
-      { type: "PERSIST_SUBMISSION_OUTCOME", sequence: 2 },
-      { type: "REPLAY_OFFLINE_CRASH_MATRIX", sequence: 3 },
+      {
+        type: "PERSIST_SUBMISSION_INTENT",
+        sequence: 1,
+      },
+      {
+        type: "PERSIST_SUBMISSION_OUTCOME",
+        sequence: 2,
+      },
+      {
+        type: "REPLAY_OFFLINE_CRASH_MATRIX",
+        sequence: 3,
+      },
     ],
     expectedState: {
       durableFacts: "idempotent and validated",
@@ -56,7 +65,10 @@ export const scenarios = [
       persistedState: "may contain operational facts but is not a supported runtime restoration source",
     },
     inputEvents: [
-      { type: "PROCESS_RESTART_REQUEST", sequence: 1 },
+      {
+        type: "PROCESS_RESTART_REQUEST",
+        sequence: 1,
+      },
     ],
     expectedState: {
       runtimeRestoration: "UNSUPPORTED: no Portfolio, RecoveryLedger, OrderRegistry, or active-order reconstruction/resumption is performed",
@@ -92,10 +104,22 @@ export const scenarios = [
       stickySafetyBlockers: "may contain account-level recovery STOP state",
     },
     inputEvents: [
-      { type: "STARTUP_WITH_UNCLEAN_PRIOR_SESSION", sequence: 1 },
-      { type: "STARTUP_WITH_TRADING_ENABLED_PRIOR_SESSION", sequence: 2 },
-      { type: "STARTUP_WITH_OBSERVATION_ONLY_PRIOR_SESSION", sequence: 3 },
-      { type: "STARTUP_WITH_SINGLE_RECOVERY_SELLER_STOP_LATCH", sequence: 4 },
+      {
+        type: "STARTUP_WITH_UNCLEAN_PRIOR_SESSION",
+        sequence: 1,
+      },
+      {
+        type: "STARTUP_WITH_TRADING_ENABLED_PRIOR_SESSION",
+        sequence: 2,
+      },
+      {
+        type: "STARTUP_WITH_OBSERVATION_ONLY_PRIOR_SESSION",
+        sequence: 3,
+      },
+      {
+        type: "STARTUP_WITH_SINGLE_RECOVERY_SELLER_STOP_LATCH",
+        sequence: 4,
+      },
     ],
     expectedState: {
       priorProcessHistory: "any prior PROCESS_STARTED record forces resolved.tradingEnabled=false",
