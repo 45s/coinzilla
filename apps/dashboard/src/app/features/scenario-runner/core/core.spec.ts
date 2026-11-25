@@ -36,6 +36,40 @@ describe('scenario-runner framework-independent core', () => {
     expect(report.traceCompleteness).toBe('completeness-unverified');
   });
 
+  it('redacts private keys, cookies, session identifiers and signatures recursively', () => {
+    const sensitiveEvidence = {
+      privateKey: 'private-key-value',
+      sessionCookie: 'session-cookie-value',
+      nested: {
+        signature: 'signature-value',
+        accessToken: 'access-token-value',
+      },
+    };
+    const report = JSON.parse(createAiDebugPackage({
+      run: { ...run, output: sensitiveEvidence },
+      trace: [{
+        id: 'sensitive-step',
+        kind: 'step',
+        label: 'Sensitive evidence',
+        outputs: sensitiveEvidence,
+      }],
+      metadata: { sessionId: 'session-id-value' },
+    }));
+
+    expect(report.run.output).toEqual({
+      privateKey: '[REDACTED]',
+      sessionCookie: '[REDACTED]',
+      nested: {
+        signature: '[REDACTED]',
+        accessToken: '[REDACTED]',
+      },
+    });
+    expect(report.trace[0].outputs.nested.accessToken).toBe('[REDACTED]');
+    expect(report.metadata.sessionId).toBe('[REDACTED]');
+    expect(sensitiveEvidence.privateKey).toBe('private-key-value');
+    expect(sensitiveEvidence.nested.signature).toBe('signature-value');
+  });
+
   it('requires run record and ordered trace', () => {
     expect(() => createAiDebugPackage({ run: null as never, trace: [] })).toThrow(/required/);
   });
