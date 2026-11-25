@@ -1018,6 +1018,11 @@
         },
         {
           "path": "src/use-cases/create-submission-gate.test.js",
+          "name": "blocks a BUY when a durable account-scoped safety blocker is active",
+          "kind": "normal"
+        },
+        {
+          "path": "src/use-cases/create-submission-gate.test.js",
           "name": "an account safety blocker overrides every order path, including shutdown recovery SELL",
           "kind": "failure"
         },
@@ -1025,6 +1030,11 @@
           "path": "src/bootstrap/user-data/subscribe-to-user-data.test.js",
           "name": "rejects trading startup while an account-scoped safety blocker is active",
           "kind": "failure"
+        },
+        {
+          "path": "src/bootstrap/start-harvester.test.js",
+          "name": "rejects startup before market subscriptions when a persisted account-scoped Recovery Seller STOP is active",
+          "kind": "integration"
         }
       ],
       "runtimeStatus": "active",
