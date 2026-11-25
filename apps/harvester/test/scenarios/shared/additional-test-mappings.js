@@ -10,7 +10,7 @@ export const ADDITIONAL_TEST_MAPPINGS = Object.freeze({
     },
     {
       path: "src/domain/strategies/conservative/strategy.test.js",
-      name: "respects exact investment-cap equality and blocks the next BUY immediately below it",
+      name: "respects investment-cap equality and both sides of the BUY eligibility boundary",
     },
     {
       path: "src/domain/strategies/conservative/strategy.test.js",
@@ -80,7 +80,7 @@ export const ADDITIONAL_TEST_MAPPINGS = Object.freeze({
     },
     {
       path: "src/domain/strategies/conservative/strategy.test.js",
-      name: "respects exact investment-cap equality and blocks the next BUY immediately below it",
+      name: "respects investment-cap equality and both sides of the BUY eligibility boundary",
     },
   ],
   "CON-SELL-001": [
