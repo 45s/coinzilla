@@ -79,37 +79,56 @@ function cloneAndFreeze(value) {
   return deepFreeze(structuredClone(value))
 }
 
+function validateScenarioRegistration({ scenario, strategyId, scenarioIds }) {
+  if (
+    typeof scenario?.id !== "string" ||
+    !scenario.id.trim() ||
+    typeof scenario.name !== "string" ||
+    !scenario.name.trim() ||
+    (scenario.readinessReasons !== undefined && !Array.isArray(scenario.readinessReasons))
+  ) {
+    throw new TypeError(`Invalid Scenario Runner scenario registration for ${strategyId}`)
+  }
+  if (scenarioIds.has(scenario.id)) {
+    throw new TypeError(`Duplicate Scenario Runner scenario registration: ${strategyId}/${scenario.id}`)
+  }
+  scenarioIds.add(scenario.id)
+}
+
+function validateStrategyRegistration({ registration, registeredIds }) {
+  if (
+    typeof registration?.strategyId !== "string" ||
+    !registration.strategyId.trim() ||
+    typeof registration.strategyName !== "string" ||
+    !registration.strategyName.trim() ||
+    !Array.isArray(registration.scenarios)
+  ) {
+    throw new TypeError("Each strategy registration requires an ID, name and scenario list")
+  }
+  if (registeredIds.has(registration.strategyId)) {
+    throw new TypeError(`Duplicate Scenario Runner strategy registration: ${registration.strategyId}`)
+  }
+  registeredIds.add(registration.strategyId)
+  const scenarioIds = new Set()
+  for (const scenario of registration.scenarios) {
+    validateScenarioRegistration({
+      scenario,
+      strategyId: registration.strategyId,
+      scenarioIds,
+    })
+  }
+}
+
 function validateStrategyRegistrations({ strategyRegistrations }) {
   if (!Array.isArray(strategyRegistrations)) {
     throw new TypeError("Scenario Runner host requires strategy registrations")
   }
   const registeredIds = new Set()
   for (const registration of strategyRegistrations) {
-    if (typeof registration?.strategyId !== "string" || !registration.strategyId.trim() ||
-        typeof registration.strategyName !== "string" || !registration.strategyName.trim() ||
-        !Array.isArray(registration.scenarios)) {
-      throw new TypeError("Each strategy registration requires an ID, name and scenario list")
-    }
-    if (registeredIds.has(registration.strategyId)) {
-      throw new TypeError(`Duplicate Scenario Runner strategy registration: ${registration.strategyId}`)
-    }
-    registeredIds.add(registration.strategyId)
-    const scenarioIds = new Set()
-    for (const scenario of registration.scenarios) {
-      if (
-        typeof scenario?.id !== "string" ||
-        !scenario.id.trim() ||
-        typeof scenario.name !== "string" ||
-        !scenario.name.trim() ||
-        (scenario.readinessReasons !== undefined && !Array.isArray(scenario.readinessReasons))
-      ) {
-        throw new TypeError(`Invalid Scenario Runner scenario registration for ${registration.strategyId}`)
-      }
-      if (scenarioIds.has(scenario.id)) {
-        throw new TypeError(`Duplicate Scenario Runner scenario registration: ${registration.strategyId}/${scenario.id}`)
-      }
-      scenarioIds.add(scenario.id)
-    }
+    validateStrategyRegistration({
+      registration,
+      registeredIds,
+    })
   }
 }
 

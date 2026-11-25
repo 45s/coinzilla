@@ -491,9 +491,7 @@ test("host rejects duplicate scenario IDs within a strategy registration", () =>
   }), /duplicate scenario/i)
 })
 
-test("host snapshots and freezes scenario definitions and adapter capabilities", async () => {
-  let originalExecutions = 0
-  let replacementExecutions = 0
+test("host snapshots and freezes scenario definitions", () => {
   const scenario = {
     id: "GRID-SIM-002",
     name: "Grid immutable input",
@@ -505,17 +503,30 @@ test("host snapshots and freezes scenario definitions and adapter capabilities",
       type: "object",
       required: ["amount"],
       additionalProperties: false,
-      properties: {
-        amount: {
-          type: "string",
-          pattern: "^[0-9]+$",
-        },
-      },
+      properties: { amount: { type: "string", pattern: "^[0-9]+$" } },
     },
-    input: {
-      amount: "1",
-    },
+    input: { amount: "1" },
   }
+  const host = createScenarioRunnerHost({
+    strategyRegistrations: [{
+      strategyId: "GRID",
+      strategyName: "Grid Strategy",
+      scenarios: [scenario],
+    }],
+  })
+
+  scenario.inputSchema.properties.amount.type = "boolean"
+  scenario.input.amount = "999"
+  const [catalogScenario] = host.catalog[0].scenarios
+  assert.equal(catalogScenario.inputSchema.properties.amount.type, "string")
+  assert.equal(catalogScenario.defaultInput.amount, "1")
+  assert.equal(Object.isFrozen(catalogScenario.inputSchema.properties.amount), true)
+  assert.equal(Object.isFrozen(catalogScenario.defaultInput), true)
+})
+
+test("host snapshots adapter capabilities and execute function", async () => {
+  let originalExecutions = 0
+  let replacementExecutions = 0
   const adapter = {
     strategyId: "GRID",
     executionMode: "simulation-only",
@@ -531,30 +542,34 @@ test("host snapshots and freezes scenario definitions and adapter capabilities",
     strategyRegistrations: [{
       strategyId: "GRID",
       strategyName: "Grid Strategy",
-      scenarios: [scenario],
+      scenarios: [{
+        id: "GRID-SIM-003",
+        name: "Grid adapter snapshot",
+        layer: "application",
+        status: "TEST-MAPPED",
+        executionStatus: "EXECUTABLE",
+        executable: true,
+        inputSchema: {
+          type: "object",
+          required: [],
+          additionalProperties: false,
+          properties: {},
+        },
+        input: {},
+      }],
     }],
   })
 
-  scenario.inputSchema.properties.amount.type = "boolean"
-  scenario.input.amount = "999"
   adapter.executionMode = "live"
   adapter.osSandboxVerified = false
   adapter.execute = async () => {
     replacementExecutions += 1
     return { output: { source: "replacement" } }
   }
-
-  const [catalogScenario] = host.catalog[0].scenarios
-  assert.equal(catalogScenario.inputSchema.properties.amount.type, "string")
-  assert.equal(catalogScenario.defaultInput.amount, "1")
-  assert.equal(catalogScenario.executable, true)
-  assert.equal(Object.isFrozen(catalogScenario.inputSchema.properties.amount), true)
-  assert.equal(Object.isFrozen(catalogScenario.defaultInput), true)
-
   const accepted = host.runner.submit({
     strategyId: "GRID",
-    scenarioId: scenario.id,
-    input: { amount: "2" },
+    scenarioId: "GRID-SIM-003",
+    input: {},
   })
   const completed = await host.runner.waitForRun(accepted.runId)
   assert.equal(completed.status, "Completed")

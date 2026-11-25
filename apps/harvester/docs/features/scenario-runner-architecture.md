@@ -98,3 +98,8 @@ The Scenario Runner request handler validates browser Origin before any route ha
 
 
 The route-helper call sites use the repository's multiline object-property formatting policy; strict changed-file ESLint is required to remain clean.
+
+
+## Registration validation decomposition — 2026-11-25
+
+Strategy and scenario registration validation is split into dedicated shape and uniqueness checks. This preserves fail-closed rejection of malformed/duplicate registry entries while keeping each function within the repository's strict complexity limit. The host snapshot immutability and adapter-capability regressions are separated into focused tests that remain within the strict test-function size limit.
