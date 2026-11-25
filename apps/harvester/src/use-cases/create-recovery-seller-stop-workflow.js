@@ -118,6 +118,47 @@ async function persistRecoverySellerBlocker({
   })
 }
 
+async function persistStopLatch({
+  operationalStateStore,
+  explanation,
+  orderIdentity,
+  current,
+  setStopSnapshot,
+} = {}) {
+  const decision = createRecoverySellerStopDecision({ explanation })
+  const normalizedIdentity = normalizeOrderIdentity({ orderIdentity })
+  const persisted = await persistRecoverySellerBlocker({
+    operationalStateStore,
+    explanation,
+    orderIdentity: normalizedIdentity,
+  })
+  if (persisted?.ok !== true || persisted.data?.durable !== true) {
+    return persisted?.ok === false
+      ? persisted
+      : toResult({
+          error: new Error("Recovery Seller STOP blocker was not durably acknowledged"),
+        })
+  }
+  const stopState = latchRecoverySellerStop({
+    state: current.stopState,
+    decision,
+  })
+  const { blockerId } = persisted.data.record.data
+  setStopSnapshot({
+    stopState,
+    blockerId,
+  })
+  return toResult({
+    data: {
+      durable: true,
+      duplicate: persisted.data.duplicate === true,
+      stopState,
+      blockerId,
+      record: persisted.data.record,
+    },
+  })
+}
+
 function createStopLatch({
   operationalStateStore,
   getStopSnapshot,
@@ -141,40 +182,13 @@ function createStopLatch({
       return pendingLatch
     }
     setAccountAdmissionBlocked(true)
-    pendingLatch = (async () => {
-      const decision = createRecoverySellerStopDecision({ explanation })
-      const normalizedIdentity = normalizeOrderIdentity({ orderIdentity })
-      const persisted = await persistRecoverySellerBlocker({
-        operationalStateStore,
-        explanation,
-        orderIdentity: normalizedIdentity,
-      })
-      if (persisted?.ok !== true || persisted.data?.durable !== true) {
-        return persisted?.ok === false
-          ? persisted
-          : toResult({
-              error: new Error("Recovery Seller STOP blocker was not durably acknowledged"),
-            })
-      }
-      const stopState = latchRecoverySellerStop({
-        state: current.stopState,
-        decision,
-      })
-      const { blockerId } = persisted.data.record.data
-      setStopSnapshot({
-        stopState,
-        blockerId,
-      })
-      return toResult({
-        data: {
-          durable: true,
-          duplicate: persisted.data.duplicate === true,
-          stopState,
-          blockerId,
-          record: persisted.data.record,
-        },
-      })
-    })()
+    pendingLatch = persistStopLatch({
+      operationalStateStore,
+      explanation,
+      orderIdentity,
+      current,
+      setStopSnapshot,
+    })
     try {
       return await pendingLatch
     } finally {
