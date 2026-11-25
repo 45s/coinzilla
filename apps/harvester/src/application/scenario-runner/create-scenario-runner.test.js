@@ -370,6 +370,34 @@ test("runner queues excess runs and starts them FIFO when worker slots free", as
   assert.equal((await thirdCompletion).status, SCENARIO_RUN_STATUS.COMPLETED)
 })
 
+
+test("runner retains capacity when execution cleanup is unconfirmed", async () => {
+  const adapter = createAdapter(async () => {
+    const error = new Error("worker cleanup could not be confirmed")
+    error.cleanupConfirmed = false
+    throw error
+  })
+  const runner = createScenarioRunner({
+    adapters: [adapter],
+    createRunId: () => "run-unconfirmed-cleanup",
+    maxStoredRuns: 1,
+    maxConcurrentRuns: 1,
+    maxQueuedRuns: 0,
+  })
+  const first = runner.submit({
+    strategyId: "example",
+    scenarioId: "execution-cleanup",
+  })
+  const result = await runner.waitForRun(first.runId)
+  assert.equal(result.status, SCENARIO_RUN_STATUS.FAILED)
+  assert.match(result.diagnostics[0], /worker cleanup could not be confirmed/)
+  assert.throws(() => runner.submit({
+    strategyId: "example",
+    scenarioId: "must-not-prune-active-cleanup",
+  }), /capacity/)
+  await assert.rejects(runner.close(), /cleanup could not be confirmed/)
+})
+
 test("runner fails closed and retains worker capacity when timeout cleanup cannot be confirmed", async () => {
   const adapter = createAdapter(() => new Promise(() => {}))
   const runner = createScenarioRunner({
