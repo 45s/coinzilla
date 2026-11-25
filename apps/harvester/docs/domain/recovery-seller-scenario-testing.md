@@ -188,14 +188,15 @@ apps/harvester/test/
     └── recovery-seller-sell-planner.scenario.test.js
 ~~~
 
-PR #1823 adds four nested scenario files:
+PR #1823 adds five nested scenario files:
 
 - `recovery-seller/registry-and-runner.scenario.test.js` — registry and runner contract tests.
 - `recovery-seller/authorization-custody.scenario.test.js` — RS-001 authorization/custody.
 - `recovery-seller/buy-accounting.scenario.test.js` — RS-002 BUY accounting.
 - `recovery-seller/mixed-sell-planning.scenario.test.js` — RS-003-001…007 additive SELL planning, smaller authorized remainder, legacy exhaustion, Spot availability boundaries, shared Portfolio custody aggregation, account-wide reservations and same-/cross-market reservations.
+- `recovery-seller/mixed-sell-fill-allocation.scenario.test.js` — RS-003-008 exact canonical SELL Fill recovery/legacy split and base, quote-proceeds and quote-commission conservation.
 
-All four files must be listed in `apps/harvester/package.json` `config.targetedTestFiles`. A targeted-test pass is valid only when its log shows these files were executed.
+All five files must be listed in `apps/harvester/package.json` `config.targetedTestFiles`. A targeted-test pass is valid only when its log shows these files were executed.
 
 These files prove only the assertions documented in #1780 and the repository catalog. Their presence does not make the framework complete and does not make RS-001/002/008 covered. Do not rename or move them merely to match a proposed future tree.
 
@@ -2352,7 +2353,7 @@ TDD evidence:
 - GREEN: the three composed workflow cases in merged PR #1815 passed Harvester Targeted Tests and all six workflows on exact PR head `20963617c9d9d73c31b47865e0aa34c4a966cc8e`.
 - PR #1815 is merged. PR #1823 remains open for owner review; do not mark RS-003 VERIFIED until every approved RS-003 requirement is covered, merged and verified on the exact merged head.
 
-PR #1815 is merged at `cbf07da54fd2e14fbeb3f96d4d9f8efe48d597c2`; its exact PR head `20963617c9d9d73c31b47865e0aa34c4a966cc8e` passed all six workflows. The prerequisite is unblocked, but RS-003 remains PARTIAL because the full matrix is not complete. PR #1823 now adds registered DOMAIN cases RS-003-001…007, matching approved playbook §11.1 cases 1–7: additive configured legacy slice, smaller authorized remainder, recovery-only planning after legacy exhaustion, below/equal/above verified Spot quantity boundaries, shared Portfolio subtraction across markets/CG+RS positions, account-wide existing SELL reservations with snapshot baseline, and same-market RS/CG plus cross-market CG reservations. RS-003-001…003 call `calculateRecoverySellerSellPlan`; RS-003-004/005 call `calculateVerifiedLegacySpotAllocation`; RS-003-006 composes multiple CanonicalOrders, `calculateAccountSnapshotBaselines`, `allocateStrategyOrderCommitments` and `allocateOrderCommitments`; RS-003-007 verifies same-/cross-market ownership and reservation behavior. The planner cases derive legacy average cost from `legacyPosition.invested / legacyPosition.quantity`; no separate average-cost configuration input exists. These cases do not claim reservation races, full TradingRules boundaries, fee allocation, multi-Fill atomicity, durable reservation or dust coverage.
+PR #1815 is merged at `cbf07da54fd2e14fbeb3f96d4d9f8efe48d597c2`; its exact PR head `20963617c9d9d73c31b47865e0aa34c4a966cc8e` passed all six workflows. The prerequisite is unblocked, but RS-003 remains PARTIAL because the full matrix is not complete. PR #1823 now adds registered DOMAIN cases RS-003-001…008, matching approved playbook §11.1 cases 1–8: additive configured legacy slice, smaller authorized remainder, recovery-only planning after legacy exhaustion, below/equal/above verified Spot quantity boundaries, shared Portfolio subtraction across markets/CG+RS positions, account-wide existing SELL reservations with snapshot baseline, same-market RS/CG plus cross-market CG reservations, and exact recovery/legacy allocation of one canonical SELL Fill. RS-003-001…003 call `calculateRecoverySellerSellPlan`; RS-003-004/005 call `calculateVerifiedLegacySpotAllocation`; RS-003-006 composes multiple CanonicalOrders, `calculateAccountSnapshotBaselines`, `allocateStrategyOrderCommitments` and `allocateOrderCommitments`; RS-003-007 verifies same-/cross-market ownership and reservation behavior; RS-003-008 calls `createMixedSellFillAllocation` and asserts exact 400+1 gross base, quote proceeds and quote commission conservation. The planner cases derive legacy average cost from `legacyPosition.invested / legacyPosition.quantity`; no separate average-cost configuration input exists. The DOGE/USDT amounts are illustrative fixture values, not pair defaults or fee policy. These cases do not claim reservation races, full TradingRules boundaries, other commission assets, multi-Fill atomicity, durable reservation or dust coverage.
 
 ## 14. Implementation roadmap: exact AI-agent execution sequence
 
