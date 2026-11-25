@@ -21,28 +21,26 @@ function matchesFilter({
   return values.includes(String(candidate ?? "").toLowerCase())
 }
 
+function matchesAllScenarioTags({
+  scenarioTags,
+  filter,
+}) {
+  const requiredTags = normalizeFilterValues(filter)
+  return requiredTags.every((requiredTag) => scenarioTags.some((scenarioTag) => (
+    String(scenarioTag).toLowerCase() === requiredTag
+  )))
+}
+
 export function filterScenarios({
   scenarios = [],
   filters = {},
 } = {}) {
   return scenarios.filter((scenario) => (
-    matchesFilter({
-      candidate: scenario.id,
-      filter: filters.id,
-    }) &&
-    matchesFilter({
-      candidate: scenario.category,
-      filter: filters.category,
-    }) &&
-    matchesFilter({
-      candidate: scenario.priority,
-      filter: filters.priority,
-    }) &&
-    matchesFilter({
-      candidate: scenario.coverageStatus,
-      filter: filters.coverageStatus,
-    }) &&
-    normalizeFilterValues(filters.tag).every((tag) => scenario.tags.some((item) => String(item).toLowerCase() === tag))
+    matchesFilter({ candidate: scenario.id, filter: filters.id }) &&
+    matchesFilter({ candidate: scenario.category, filter: filters.category }) &&
+    matchesFilter({ candidate: scenario.priority, filter: filters.priority }) &&
+    matchesFilter({ candidate: scenario.coverageStatus, filter: filters.coverageStatus }) &&
+    matchesAllScenarioTags({ scenarioTags: scenario.tags, filter: filters.tag })
   ))
 }
 
@@ -74,7 +72,7 @@ export function parseTapResults({
   const tapResults = output.split(/\r?\n/).map(parseTapLine).filter(Boolean)
 
   return expectedTests.map((testCase) => {
-    const filenamePrefix = "[" + basename(testCase.path) + "] "
+    "const filenamePrefix = `[${basename(testCase.path)}] `
     const matchingResults = tapResults.filter((result) => {
       const testName = result.name.startsWith(filenamePrefix)
         ? result.name.slice(filenamePrefix.length)
@@ -104,7 +102,7 @@ export function parseTapResults({
 }
 
 function testKey(testCase) {
-  return testCase.path + "::" + testCase.name
+  return `${testCase.path}::${testCase.name}`
 }
 
 function groupTestsByPath({ scenarios }) {
@@ -130,11 +128,11 @@ function executeTestGroup({
   nodeExecutable,
   timeoutMs,
 }) {
-  const pattern = "(?:" + group.testCases.map(({ name }) => escapeRegExp(name)).join("|") + ")"
+  const pattern = `(?:${group.testCases.map(({ name }) => escapeRegExp(name)).join("|")})`
   const args = [
     "--test",
     "--test-reporter=tap",
-    "--test-name-pattern=" + pattern,
+    `--test-name-pattern=${pattern}`,
     group.path,
   ]
   const execution = spawnSync(nodeExecutable, args, {
@@ -150,7 +148,7 @@ function executeTestGroup({
   })
   const processFailed = Boolean(execution.error) || execution.status !== 0
   const executionError = execution.error?.message ??
-    (processFailed ? "Node test process exited with status " + (execution.status ?? "unknown") + "." : null)
+    (processFailed ? `Node test process exited with status ${execution.status ?? "unknown"}.` : null)
   const observedTapTitles = (execution.stdout ?? "").split(String.fromCharCode(10))
     .map(parseTapLine)
     .filter(Boolean)
@@ -158,18 +156,25 @@ function executeTestGroup({
     .slice(0, 20)
   const missingTestError = observedTapTitles.length === 0
     ? "Node test process emitted no parseable TAP result titles."
-    : "No exact TAP title match. Observed titles: " + observedTapTitles.join(" | ")
+    : `No exact TAP title match. Observed titles: ${observedTapTitles.join(" | ")}`
 
   return parsed.map((result) => {
     const status = processFailed && result.status === "PASSED"
       ? "PROCESS_FAILED"
       : result.status
 
+    let error = null
+    if (result.status === "NOT_FOUND") {
+      error = executionError ?? missingTestError
+    } else if (processFailed) {
+      error = executionError
+    }
+
     return {
       ...result,
       status,
       exitCode: execution.status,
-      error: result.status === "NOT_FOUND" ? (executionError ?? missingTestError) : (processFailed ? executionError : null),
+      error,
       stderr: processFailed ? (execution.stderr ?? "").slice(0, 2000) : null,
     }
   })
