@@ -199,10 +199,36 @@ async function finishExecution({ context, record, adapter, result }) {
   if (result.kind === "timeout") {
     const cancellationRequested = record.status === SCENARIO_RUN_STATUS.CANCELLING
     context.executions.get(record.runId)?.controller.abort()
-    await adapter.cancel({
-      runId: record.runId,
-      reason: cancellationRequested ? "cancelled" : "timeout",
-    })
+    try {
+      const cleanupConfirmed = await adapter.cancel({
+        runId: record.runId,
+        reason: cancellationRequested ? "cancelled" : "timeout",
+      })
+      if (cleanupConfirmed === false) {
+        throw new Error("The adapter did not confirm worker termination.")
+      }
+    } catch (error) {
+      const cleanupMessage = error instanceof Error ? error.message : "Unknown cleanup error."
+      transitionRun({
+        record,
+        status: cancellationRequested
+          ? SCENARIO_RUN_STATUS.FAILED
+          : SCENARIO_RUN_STATUS.TIMED_OUT,
+        now: context.now,
+        onUpdate: context.onUpdate,
+        diagnostic: cancellationRequested
+          ? `Scenario cancellation was requested, but worker cleanup could not be confirmed: ${cleanupMessage}`
+          : `Scenario execution exceeded its time limit; worker cleanup could not be confirmed: ${cleanupMessage}`,
+      })
+      resolveWaiter({
+        context,
+        runId: record.runId,
+        record,
+      })
+      // Keep the execution slot occupied: a worker that did not confirm termination
+      // must never be replaced by another run.
+      return snapshot({ record })
+    }
     transitionRun({
       record,
       status: cancellationRequested

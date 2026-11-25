@@ -392,7 +392,7 @@ test("runner fails closed and retains worker capacity when timeout cleanup canno
     scenarioId: "timeout-cleanup",
   })
   const result = await runner.waitForRun(first.runId)
-  assert.equal(result.status, SCENARIO_RUN_STATUS.FAILED)
+  assert.equal(result.status, SCENARIO_RUN_STATUS.TIMED_OUT)
   assert.match(result.diagnostics[0], /sandbox cleanup failed/)
   const second = runner.submit({
     strategyId: "example",
