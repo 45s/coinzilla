@@ -100,10 +100,9 @@ export class ScenarioRunnerComponent {
       const workspace = await this.application.loadWorkspace();
       this.catalog.set(workspace.catalog);
       this.history.set(workspace.history);
-      const selected = workspace.catalog.find((item) => item.strategyId === this.strategyId());
-      const firstScenario = selected?.scenarios[0];
-      this.scenarioId.set(firstScenario?.id ?? '');
-      this.inputJson.set(JSON.stringify(firstScenario?.defaultInput ?? {}, null, 2));
+      const selection = this.application.selectStrategy({ strategyId: this.strategyId() });
+      this.scenarioId.set(selection.scenarioId);
+      this.inputJson.set(selection.inputJson);
     } catch (error) {
       this.error.set(error instanceof Error ? error.message : 'Scenario catalog unavailable.');
     } finally {
