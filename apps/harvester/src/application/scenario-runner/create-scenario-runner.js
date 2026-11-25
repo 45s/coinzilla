@@ -626,7 +626,7 @@ async function closeRunner({ context }) {
   }).catch(() => null)))
   const unresolvedRunIds = [...context.executions.keys()]
   if (unresolvedRunIds.length > 0) {
-    throw new Error(`Scenario Runner shutdown could not confirm worker cleanup for run(s): ${unresolvedRunIds.join(", ")}`)
+    throw new Error(`Scenario Runner shutdown failed because worker cleanup could not be confirmed for run(s): ${unresolvedRunIds.join(", ")}`)
   }
 }
 

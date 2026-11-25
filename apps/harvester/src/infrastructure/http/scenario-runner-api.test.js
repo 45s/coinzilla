@@ -280,6 +280,9 @@ test("host blocks live and unverified adapters even when a scenario is source-ap
     assert.equal(scenario.executable, false,
       "A live, unverified or undeclared adapter must not make a scenario executable.")
     assert.equal(scenario.executionStatus, "BLOCKED")
+    if (adapter.osSandboxVerified === false) {
+      assert.ok(scenario.readinessReasons.some((reason) => reason.includes("OS-level sandbox")))
+    }
     assert.equal(host.runner.submit({
       strategyId: "RS",
       scenarioId: scenario.id,

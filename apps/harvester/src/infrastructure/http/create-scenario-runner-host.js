@@ -23,6 +23,7 @@ function publishScenarioRunUpdate({ eventBus, run }) {
   }
 }
 
+
 function resolveExecutionStatus({ executable, sourceStatus }) {
   if (executable) {
     return "EXECUTABLE"
@@ -33,26 +34,58 @@ function resolveExecutionStatus({ executable, sourceStatus }) {
   return "BLOCKED"
 }
 
+function resolveAdapterReadiness({ adapter }) {
+  if (!adapter) {
+    return {
+      executable: false,
+      reason: "No Recovery Seller execution adapter is registered.",
+    }
+  }
+  if (adapter.executionMode !== "simulation-only") {
+    return {
+      executable: false,
+      reason: "The registered adapter is not explicitly simulation-only.",
+    }
+  }
+  if (adapter.osSandboxVerified !== true) {
+    return {
+      executable: false,
+      reason: "OS-level sandbox isolation has not been verified for the registered adapter.",
+    }
+  }
+  return {
+    executable: true,
+    reason: null,
+  }
+}
+
 function createCatalog({ adapters, scenarioCatalog }) {
   if (!Array.isArray(scenarioCatalog)) {
     throw new TypeError("Scenario Runner host requires a strategy scenario catalog")
   }
-  const registeredStrategyIds = new Set(adapters
-    .filter((adapter) => adapter?.executionMode === "simulation-only" && adapter?.osSandboxVerified === true)
-    .map((adapter) => adapter.strategyId))
+  const recoverySellerAdapter = adapters.find((adapter) => adapter?.strategyId === "RS")
+  const adapterReadiness = resolveAdapterReadiness({
+    adapter: recoverySellerAdapter,
+  })
   return Object.freeze([
     {
       strategyId: "RS",
       strategyName: "Recovery Seller",
       scenarios: Object.freeze(scenarioCatalog.map((scenario) => {
-        const adapterRegistered = registeredStrategyIds.has("RS")
         const schemaValid = isValidScenarioInputSchema({
           schema: scenario.inputSchema,
         })
         const executable = scenario.executable === true &&
           scenario.executionStatus === "EXECUTABLE" &&
           schemaValid &&
-          adapterRegistered
+          adapterReadiness.executable
+        const readinessReasons = [...(scenario.readinessReasons ?? [])]
+        if (adapterReadiness.reason) {
+          readinessReasons.push(adapterReadiness.reason)
+        }
+        if (!schemaValid) {
+          readinessReasons.push("Scenario input schema is invalid.")
+        }
         return Object.freeze({
           id: scenario.id,
           name: scenario.name,
@@ -65,7 +98,7 @@ function createCatalog({ adapters, scenarioCatalog }) {
           executable,
           inputSchema: scenario.inputSchema,
           defaultInput: scenario.input,
-          readinessReasons: Object.freeze([...(scenario.readinessReasons ?? [])]),
+          readinessReasons: Object.freeze(readinessReasons),
         })
       })),
     },
