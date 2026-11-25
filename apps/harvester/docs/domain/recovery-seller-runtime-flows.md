@@ -484,6 +484,8 @@ stateDiagram-v2
 
 The domain state factory also defines `RECONCILIATION_REQUIRED` and `reconcileRecoverySellerCycleSell`; the latter preserves terminal status, reconciliation state and profitability eligibility in the canonical cycle-state shape. The current application workflow reconstructs an active UNKNOWN order as `SELL_SUBMITTED` while returning a `RECONCILE` decision; it does not publish the domain's `RECONCILIATION_REQUIRED` state for that path. Its terminal outcome projection also stores `sellOrderClientId`, `sellOrderBrokerOrderId`, `appliedFillIds` and `eligible` instead of canonical `sellOrderIdentity`, `terminalOrderStatus`, `terminalReconciled` and `profitabilityEligible` fields. The BUY policy validates the canonical cycle state, so this application/domain projection mismatch needs an application-level regression and correction.
 
+The state diagram is per-cycle: `CLOSED` ends that cycle. A later recovery cycle is a new instance with a distinct `cycleId`; it is not a transition back to `ACCUMULATING` inside the closed cycle.
+
 The intended contract is:
 
 | Terminal condition | Required cycle result | New SELL / BUY cycle |
