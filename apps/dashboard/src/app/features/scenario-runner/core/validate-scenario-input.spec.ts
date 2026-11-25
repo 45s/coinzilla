@@ -47,4 +47,28 @@ describe('validateScenarioInput', () => {
       errors: ['Scenario input must be a JSON object.'],
     });
   });
+
+  it('enforces exclusive decimal lower bounds without floating-point conversion', () => {
+    const positiveSchema = {
+      ...schema,
+      properties: {
+        minProfit: {
+          ...schema.properties.minProfit,
+          exclusiveMinimum: '0',
+        },
+      },
+    }
+    expect(validateScenarioInput({
+      schema: positiveSchema,
+      input: { minProfit: '0.0000000000000000001' },
+    })).toEqual({ valid: true, errors: [] })
+    expect(validateScenarioInput({
+      schema: positiveSchema,
+      input: { minProfit: '0' },
+    })).toEqual({
+      valid: false,
+      errors: ['Input field minProfit must be greater than 0'],
+    })
+  });
+
 });
