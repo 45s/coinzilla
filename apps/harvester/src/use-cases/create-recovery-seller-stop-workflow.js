@@ -137,7 +137,9 @@ function createStopLatch({
         },
       })
     }
-    if (pendingLatch) return pendingLatch
+    if (pendingLatch) {
+      return pendingLatch
+    }
     setAccountAdmissionBlocked(true)
     pendingLatch = (async () => {
       const decision = createRecoverySellerStopDecision({ explanation })
@@ -154,7 +156,10 @@ function createStopLatch({
       }
       const stopState = latchRecoverySellerStop({ state: current.stopState, decision })
       const { blockerId } = persisted.data.record.data
-      setStopSnapshot({ stopState, blockerId })
+      setStopSnapshot({
+        stopState,
+        blockerId,
+      })
       return toResult({
         data: {
           durable: true,
@@ -165,7 +170,11 @@ function createStopLatch({
         },
       })
     })()
-    try { return await pendingLatch } finally { pendingLatch = null }
+    try {
+      return await pendingLatch
+    } finally {
+      pendingLatch = null
+    }
   }
 }
 
