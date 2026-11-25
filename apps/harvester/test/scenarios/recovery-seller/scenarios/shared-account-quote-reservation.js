@@ -1,0 +1,68 @@
+import { defineRecoverySellerScenario } from "../registry/define-scenario.js"
+
+const testFile = "apps/harvester/src/use-cases/conservative-trading-engine.multi-market.test.js"
+const testTitle = "RS-008-018-A: RS-owned quote reservation blocks CG BUY across markets"
+
+export const recoverySellerSharedQuoteReservationScenario = defineRecoverySellerScenario({
+  id: "RS-008-018",
+  family: "RS-008",
+  name: "an RS-owned BUY commitment reduces shared account quote available to CG on another market",
+  priority: "P0",
+  authority: [
+    "apps/harvester/docs/domain/recovery-seller-scenario-testing.md#rs-008--cg-rs-shared-account-resources-and-concurrency-p0",
+    "issue-1780: RS-008 shared quote availability across CG/RS concurrent intents",
+  ],
+  layer: "APPLICATION",
+  configFields: [],
+  covers: {
+    rules: [],
+    decisions: [],
+    states: [],
+    transitions: [],
+    invariants: [],
+  },
+  given: {
+    input: {
+      quoteFreeBalance: "150",
+      rsMarketSymbol: "DOGEUSDT",
+      rsBuyQuoteCommitment: "100",
+      cgMarketSymbol: "SOLUSDT",
+      cgBuyQuoteRequirement: "100",
+    },
+  },
+  when: [{
+    type: "evaluate-cg-buy-with-rs-quote-commitment",
+    inputKey: "input",
+  }],
+  then: {
+    waitingForAvailableQuoteBalance: true,
+    deferredReason: "INSUFFICIENT_QUOTE_BALANCE",
+    submittedCgBuyOrders: 0,
+  },
+  mustNot: [
+    "double-spend quote reserved by the RS-owned BUY",
+    "transfer the RS order ownership or Position attribution to CG",
+    "submit a CG BUY when the account-wide free quote is insufficient",
+    "connect to a broker or exchange",
+  ],
+  subcases: [{
+    id: "RS-008-018-A",
+    description: "an existing RS-owned BUY commitment on DOGEUSDT leaves insufficient account quote for a new CG BUY on SOLUSDT",
+    status: "TEST-MAPPED",
+    test: {
+      file: testFile,
+      title: testTitle,
+    },
+    evidence: null,
+  }],
+  implementation: [
+    "apps/harvester/src/use-cases/conservative-trading-engine.js",
+    "apps/harvester/src/domain/orders/order-registry.js",
+  ],
+  test: {
+    file: testFile,
+    title: testTitle,
+  },
+  status: "TEST-MAPPED",
+  evidence: null,
+})

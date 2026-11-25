@@ -2300,3 +2300,49 @@ test("RS-008-017-E: volatility cancellation cancels CG/RS owned BUYs but never S
   const sell = harness.engine.getOrders().find((order) => order.clientOrderId === "owned-cg-sell")
   assert.equal(sell.status, "OPEN", "The registered SELL must remain active after the protection transition.")
 })
+
+
+function createRecoverySellerSharedQuoteReservationRegistry() {
+  const market = marketsBySymbol.get("DOGEUSDT")
+  const order = createVolatilityCancellationOrder({
+    market,
+    clientOrderId: "rs-shared-quote-reservation",
+    brokerOrderId: "broker-rs-shared-quote-reservation",
+    side: "BUY",
+  })
+  return new OrderRegistry({
+    orders: [order],
+    ownerships: [{
+      clientOrderId: order.clientOrderId,
+      strategyId: StrategyId.RECOVERY_SELLER,
+      positionId: "rs-shared-quote-position",
+      purpose: "RECOVERY_BUY",
+    }],
+  })
+}
+
+test("RS-008-018-A: RS-owned quote reservation blocks CG BUY across markets", async () => {
+  const orderRegistry = createRecoverySellerSharedQuoteReservationRegistry()
+  const harness = await createHarness({
+    quoteFreeBalance: "150",
+    initialState: { orderRegistry },
+  })
+  const result = await harness.engine.processMarketPrice({
+    symbol: "SOLUSDT",
+    priceEvent: {
+      symbol: "SOLUSDT",
+      price: "100",
+      timestamp: 2,
+    },
+  })
+
+  assert.equal(result.ok, true, "The CG market evaluation must complete with a deterministic quote-reservation deferral.")
+  assert.equal(result.data.waitingForAvailableQuoteBalance, true, "The RS-owned DOGE BUY must reserve account quote before CG evaluates SOL.")
+  assert.equal(result.data.deferredActions[0].reason, "INSUFFICIENT_QUOTE_BALANCE", "CG must defer rather than spend quote already committed to RS.")
+  assert.equal(harness.orders.length, 0, "No CG BUY may be submitted while the RS commitment leaves insufficient free quote.")
+  assert.equal(
+    orderRegistry.getOwnership({ clientOrderId: "rs-shared-quote-reservation" }).strategyId,
+    StrategyId.RECOVERY_SELLER,
+    "The account-wide reservation must retain RS order ownership without transferring it to CG.",
+  )
+})

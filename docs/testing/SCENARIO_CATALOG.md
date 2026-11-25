@@ -762,7 +762,7 @@ At `20.00 USDT/ZRO`, recovery receives `20.00 USDT` (profit `+10.00`), legacy re
 
 ### RS-008 — CG and RS share account availability and market-owned volatility without sharing strategy ownership
 
-**Status:** PARTIAL — RS-008-017-A/B/C/D/E are registered and TEST-MAPPED; shared quote/base concurrency, ownership, serialization and remaining volatility subcases are MISSING.
+**Status:** PARTIAL — RS-008-017-A/B/C/D/E are registered and TEST-MAPPED; RS-008-018-A shared quote reservation is TEST-MAPPED; same-market independent Positions, concurrent quote/base intents, aggregate oversell and serialization remain MISSING.
 
 **Example:** CG and RS each request a SELL against the same market. Their strategy budgets and Positions remain separate, while the shared account allocator must ensure combined reserved base never exceeds verified available Spot. Repeat with competing BUY quote commitments and with different markets sharing the same quote asset. An RS-only market must also consume the same market-owned volatility gate as CG when protection is enabled; no RS-specific volatility engine is permitted.
 
@@ -772,7 +772,7 @@ At `20.00 USDT/ZRO`, recovery receives `20.00 USDT` (profit `+10.00`), legacy re
 
 **Implementation:** shared commitment allocator, account runtime registry, engine transition queue and strategy-owned order routing.
 
-**Tests:** [RS-008-017-A/A/B/C/D/E shared volatility application scenarios](../../apps/harvester/test/bootstrap/market-evaluation.test.js); registry `apps/harvester/test/scenarios/recovery-seller/scenarios/shared-market-volatility-gate.js`. A proves RS-only routing consumes the shared volatility gate; B proves resolver rejection; C proves disabled protection avoids volatility reads while other gates remain; D proves the recovery-SELL exception still respects an independent market pause; E proves cancellation includes CG/RS owned BUYs and excludes SELL/external orders. Exact-head CI is pending; do not mark VERIFIED.
+**Tests:** [RS-008-017-A/RS-008-017-A/B/C/D/E shared volatility scenarios; RS-008-018-A shared quote reservation](../../apps/harvester/test/bootstrap/market-evaluation.test.js); registry `apps/harvester/test/scenarios/recovery-seller/scenarios/shared-market-volatility-gate.js`. A proves RS-only routing consumes the shared volatility gate; B proves resolver rejection; C proves disabled protection avoids volatility reads while other gates remain; D proves the recovery-SELL exception still respects an independent market pause; E proves cancellation includes CG/RS owned BUYs and excludes SELL/external orders; RS-008-018-A proves an RS quote commitment blocks CG spending across markets. Exact-head CI is pending; do not mark VERIFIED.
 
 ### RS-009 — STOP blocks additional BUY spending only
 
