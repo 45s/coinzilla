@@ -16,6 +16,9 @@ function createErrorContext({
   incomingValue,
   existingSource,
   incomingSource,
+  reconciliationDecision,
+  recoverable,
+  coverageIncomplete,
 } = {}) {
   const context = {
     field,
@@ -33,6 +36,7 @@ function createErrorContext({
     incomingBrokerOrderId,
     existingSource,
     incomingSource,
+    reconciliationDecision,
   })) {
     if (typeof value === "string" && value.length <= 128) {
       context[key] = value
@@ -41,6 +45,8 @@ function createErrorContext({
   for (const [key, value] of Object.entries({
     existingValue,
     incomingValue,
+    recoverable,
+    coverageIncomplete,
   })) {
     if (
       (typeof value === "string" && value.length <= 128) ||
@@ -95,6 +101,9 @@ export class OrderHistoryIntegrityError extends SystemCustomError {
     incomingValue,
     existingSource,
     incomingSource,
+    reconciliationDecision = "rejected",
+    recoverable = false,
+    coverageIncomplete,
   } = {}) {
     super(`Order-history integrity conflict: ${field}`, {
       code: "HARVESTER_ORDER_HISTORY_IDENTITY_CONFLICT",
@@ -114,6 +123,9 @@ export class OrderHistoryIntegrityError extends SystemCustomError {
         incomingValue,
         existingSource,
         incomingSource,
+        reconciliationDecision,
+        recoverable,
+        coverageIncomplete,
       }),
       ...(cause === undefined ? {} : { cause }),
       retryable: false,
