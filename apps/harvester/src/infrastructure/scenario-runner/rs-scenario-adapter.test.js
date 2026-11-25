@@ -35,13 +35,15 @@ test("RS scenario adapter blocks unsupported scenario IDs", async () => {
   )
 })
 
-test("RS helper catalog labels the mapped case as preliminary and non-executable", () => {
+test("RS helper catalog labels the unmerged registry candidate as preliminary and non-executable", () => {
   const scenario = getRecoverySellerRunnerCatalog().find((item) => item.id === "RS-004-011")
   assert.ok(scenario, "the helper scenario must remain present in the catalog")
   assert.equal(scenario.id, "RS-004-011", "the helper remains mapped to its source scenario")
-  assert.equal(scenario.status, "TEST-MAPPED", "the registry mapping status remains unchanged")
+  assert.equal(scenario.status, "PRELIMINARY", "the registry proposal is not merged into develop")
   assert.equal(scenario.executionStatus, "PRELIMINARY", "helper-only execution must be labelled preliminary")
   assert.equal(scenario.executable, false, "helper-only execution must not be advertised as a full scenario")
+  assert.ok(scenario.readinessReasons.some((reason) => reason.includes("unmerged PR #1823")))
+  assert.ok(scenario.readinessReasons.some((reason) => reason.includes("full Recovery Seller strategy lifecycle")))
 })
 
 test("RS scenario adapter validates schema fields and decimal-string inputs", async () => {
@@ -92,7 +94,7 @@ test("internal RS runtime fixture exercises the production SELL dispatch with a 
 
 
 
-test("public RS runner catalog contains only the real registry-backed scenario IDs", () => {
+test("public RS runner catalog excludes internal runtime fixtures and exposes only the provisional RS candidate", () => {
   assert.deepEqual(
     getRecoverySellerRunnerCatalog().map((scenario) => scenario.id),
     ["RS-004-011"],
