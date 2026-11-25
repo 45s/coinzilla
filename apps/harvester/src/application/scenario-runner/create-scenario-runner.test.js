@@ -90,6 +90,32 @@ test("runner supports bounded cancellation", async () => {
   assert.equal(result.status, SCENARIO_RUN_STATUS.CANCELLED)
 })
 
+test("runner waits for forced adapter cleanup when cancellation does not settle execution", async () => {
+  let cancellationReason
+  const adapter = createAdapter(
+    () => new Promise(() => {}),
+  )
+  const runner = createScenarioRunner({
+    adapters: [{
+      ...adapter,
+      cancel: async ({ reason }) => {
+        cancellationReason = reason
+      },
+    }],
+    createRunId: () => "run-cancel-timeout",
+    timeoutMs: 5,
+  })
+  runner.submit({
+    strategyId: "example",
+    scenarioId: "s",
+  })
+  await new Promise((resolve) => setImmediate(resolve))
+  assert.equal(runner.cancel("run-cancel-timeout"), true)
+  const result = await runner.waitForRun("run-cancel-timeout")
+  assert.equal(cancellationReason, "cancelled")
+  assert.equal(result.status, SCENARIO_RUN_STATUS.CANCELLED)
+})
+
 test("runner times out a run and reports a distinct terminal status", async () => {
   const runner = createScenarioRunner({
     adapters: [createAdapter(() => new Promise(() => {}))],

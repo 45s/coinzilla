@@ -196,25 +196,30 @@ function scheduleQueuedRuns({ context }) {
 }
 
 async function finishExecution({ context, record, adapter, result }) {
-  if (record.status === SCENARIO_RUN_STATUS.CANCELLING || result.kind === "cancelled") {
+  if (result.kind === "timeout") {
+    const cancellationRequested = record.status === SCENARIO_RUN_STATUS.CANCELLING
+    context.executions.get(record.runId)?.controller.abort()
+    await adapter.cancel({
+      runId: record.runId,
+      reason: cancellationRequested ? "cancelled" : "timeout",
+    })
+    transitionRun({
+      record,
+      status: cancellationRequested
+        ? SCENARIO_RUN_STATUS.CANCELLED
+        : SCENARIO_RUN_STATUS.TIMED_OUT,
+      now: context.now,
+      onUpdate: context.onUpdate,
+      ...(cancellationRequested ? {} : {
+        diagnostic: "Scenario execution exceeded its time limit.",
+      }),
+    })
+  } else if (record.status === SCENARIO_RUN_STATUS.CANCELLING || result.kind === "cancelled") {
     transitionRun({
       record,
       status: SCENARIO_RUN_STATUS.CANCELLED,
       now: context.now,
       onUpdate: context.onUpdate,
-    })
-  } else if (result.kind === "timeout") {
-    context.executions.get(record.runId)?.controller.abort()
-    await adapter.cancel?.({
-      runId: record.runId,
-      reason: "timeout",
-    })
-    transitionRun({
-      record,
-      status: SCENARIO_RUN_STATUS.TIMED_OUT,
-      now: context.now,
-      onUpdate: context.onUpdate,
-      diagnostic: "Scenario execution exceeded its time limit.",
     })
   } else if (result.kind === "error") {
     transitionRun({
