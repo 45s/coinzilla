@@ -119,18 +119,18 @@ The user steps forward or selects an earlier step.
 ### Then
 The trace and graph highlight the selected point in history, the inspector displays the associated details, and no new event or evaluation is generated merely by navigating.
 
-## Future execution scenario 10 — Save and reload a scenario
+## Future execution scenario 10 — Reload original scenario after Playground edits
 
-**Purpose:** Reuse reproducible scenario inputs.
+**Purpose:** Ensure temporary Playground changes never alter the original scenario.
 
 ### Given
-A user has configured a scenario and event sequence.
+The user has changed market/configuration inputs in the Playground.
 
 ### When
-The user saves, reloads and runs it.
+The user reloads or resets the selected scenario.
 
 ### Then
-The stored simulation inputs/events are restored and validated against the storage format version. Invalid or incompatible saved scenarios fail visibly and do not corrupt other saved scenarios. Persistence medium and exact compatibility policy remain open.
+The original scenario definition and original configuration/inputs are restored. Playground overrides are discarded and are not saved as a modified or new scenario.
 
 ## Future execution scenario 11 — Simulation isolation
 
@@ -140,7 +140,7 @@ The stored simulation inputs/events are restored and validated against the stora
 The Lab is open and a scenario is configured.
 
 ### When
-The user runs, steps, injects events, resets or saves the scenario.
+The user runs, steps, injects events or resets the scenario.
 
 ### Then
 Only simulation-owned state changes. No exchange API, broker, live order, database or production Harvester state is accessed or mutated. Tests verify this boundary.
