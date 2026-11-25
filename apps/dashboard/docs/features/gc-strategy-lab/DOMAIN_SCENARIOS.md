@@ -216,3 +216,21 @@ The ordered textual execution trace and calculation inspector remain usable, and
 **When** Explorer loads.
 
 **Then** it shows an explicit unavailable/schema error and does not silently substitute fixtures, omit records, or import private Harvester test modules into the browser.
+
+
+## Framework-independence architecture scenarios
+
+### Architecture 01 — Switch UI framework without changing business logic
+**Given** Explorer domain/application core, scenario contracts, runner and graph model are framework-neutral.
+**When** Angular presentation is replaced with React, Vue or another framework.
+**Then** only presentation and framework adapter/composition modules require replacement; domain/application behavior, contracts and core tests remain unchanged.
+
+### Architecture 02 — UI component delegates scenario execution
+**Given** a user selects a scenario/subcase and requests execution.
+**When** the presentation component dispatches the action.
+**Then** it delegates to a framework-neutral use case; it contains no business rule, parser, assertion engine, action interpreter, runner or graph semantics.
+
+### Architecture 03 — Core tests without UI framework
+**Given** scenario parsing, validation, graph construction or run orchestration.
+**When** domain/application tests execute.
+**Then** they run without Angular TestBed, DOM or UI framework runtime; presentation tests cover adapter integration separately.
