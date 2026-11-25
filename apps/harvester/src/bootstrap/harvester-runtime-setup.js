@@ -259,13 +259,54 @@ export function assertRecoverySellerEvaluatorConfigured({
   }
 }
 
+function getRecoverySellerAccountBlocker({ recoverySellerStopWorkflow } = {}) {
+  const isBlocked = recoverySellerStopWorkflow?.isAccountAdmissionBlocked?.() === true ||
+    recoverySellerStopWorkflow?.getState?.().status === "STOPPED"
+  if (!isBlocked) {
+    return null
+  }
+  return Object.freeze({
+    scope: "ACCOUNT",
+    reason: "RECOVERY_SELLER_UNEXPECTED_CONDITION",
+    blockerId: recoverySellerStopWorkflow?.getBlockerId?.() ?? null,
+  })
+}
+
+function getUserDataAccountBlocker({ userDataState = {} } = {}) {
+  const requiresSafetyHalt = userDataState.accountingFailed === true ||
+    userDataState.requiresReconciliation === true ||
+    userDataState.streamUnsafe === true ||
+    userDataState.safetyHaltRequired === true
+  if (!requiresSafetyHalt) {
+    return null
+  }
+  return Object.freeze({
+    scope: "ACCOUNT",
+    reason: "USER_DATA_RECONCILIATION_REQUIRED",
+    blockerId: null,
+  })
+}
+
+export function getHarvesterAccountSafetyBlocker({
+  userDataState = {},
+  recoverySellerStopWorkflow,
+} = {}) {
+  return getRecoverySellerAccountBlocker({ recoverySellerStopWorkflow }) ??
+    getUserDataAccountBlocker({ userDataState })
+}
+
 function createHarvesterTradingEngineSafetyCallbacks({
   userDataState,
   accountSnapshotManagerRef,
+  recoverySellerStopWorkflow,
   logger,
 }) {
   return {
     canTrade: () => userDataState.ready,
+    getAccountSafetyBlocker: () => getHarvesterAccountSafetyBlocker({
+      userDataState,
+      recoverySellerStopWorkflow,
+    }),
     hasUnownedOpenOrdersForSymbol: accountSnapshotManagerRef.current.hasUnownedOpenOrdersForSymbol,
     onUnownedExternalOrderObserved: ({ order } = {}) => {
       const manager = accountSnapshotManagerRef.current
@@ -335,6 +376,7 @@ function createHarvesterTradingEngineOptions(options = {}) {
     ...createHarvesterTradingEngineSafetyCallbacks({
       userDataState: options.userDataState,
       accountSnapshotManagerRef: options.accountSnapshotManagerRef,
+      recoverySellerStopWorkflow: options.recoverySellerStopWorkflow,
       logger: options.logger,
     }),
     ...createHarvesterTradingEngineOperationalCallbacks(options),

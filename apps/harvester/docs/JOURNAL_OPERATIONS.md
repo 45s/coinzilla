@@ -426,3 +426,13 @@ An exchange-assigned broker order ID is not a globally unique Harvester identity
 All broker-ID lookups and order-update matching must include the canonical market identity. An unscoped broker-ID lookup is permitted only when it resolves to exactly one registered order; if multiple markets contain the same broker ID, the lookup fails as ambiguous rather than selecting an arbitrary order. Ownership is resolved through the canonical order and checked against its market, client ID and broker ID before attribution.
 
 Do not key persisted or in-memory cross-market order maps by `brokerOrderId` alone. Do not infer order ownership from a matching numeric broker ID in another market. Regression coverage is maintained in `order-registry.market-identity.test.js` and the Recovery Seller mixed-SELL reconciliation tests.
+
+## Account-scoped safety blocker operations
+
+An active `SAFETY_BLOCKER_RAISED` with `scope: ACCOUNT` is a global order-admission stop. Confirm its blocker ID and reason before taking operator action. Do not work around it with another market, strategy, side, purpose, or shutdown Recovery Seller SELL.
+
+The Harvester must refuse trading activation when an account blocker is already active and reject every final broker submission while it remains active. A Recovery Seller STOP closes in-memory admission before awaiting durable persistence; a failed write remains fail-closed. Resolve only through the explicit durable resolution workflow after independent order, fill, balance, Portfolio and reservation reconciliation with an identified operator/action. Never edit or delete the blocker fact manually.
+
+Market-scoped blockers apply only to their symbol. The ADR-0008 Recovery Seller SELL exception is limited to its documented market-level strategy pause and is subordinate to any account-scoped blocker.
+
+External open orders remain unowned and untouched. `externalOrdersPolicy: IGNORE` permits scoped continuation; `BLOCK` prevents trading only on the affected market. An audit `readiness: BLOCKED` classification is not itself a global safety STOP.
