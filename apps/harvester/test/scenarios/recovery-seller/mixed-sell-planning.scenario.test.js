@@ -690,8 +690,8 @@ function createConcurrentReservationScenarioContext() {
   const lateReservation = createSellReservationOrder({
     market: markets.reservationMarket,
     orderId: "cg-post-snapshot-zro-sell",
-    originalQuantity: "0.5",
-    executedQuantity: "0",
+    originalQuantity: "1",
+    executedQuantity: "0.5",
   })
   const activeOrders = [...snapshotReservations, lateReservation]
   const dependencies = {
