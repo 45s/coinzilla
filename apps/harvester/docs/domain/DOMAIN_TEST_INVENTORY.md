@@ -33,7 +33,17 @@ Planned scenario behaviors include initial BUY fill → standing BUY and recover
 - `src/use-cases/second-buy-fill-reconciliation.test.js`: proves a second BUY extends the first tranche's Position and RecoveryLedger cost basis rather than resetting it.
 - `src/use-cases/conservative-trading-engine.test.js`: the full lifecycle now uses production `updateTradingAccounting`; verifies exact accounting after partial and completed second BUY fills while recovery SELL cancellation/fill reconciliation and replacement occur.
 - `src/domain/strategies/conservative/strategy.test.js`: investment-cap equality, just-above and below-boundary behavior; recovery SELL remains eligible when the next BUY is blocked.
-- Evidence remains pending until PR #1808 is merged and exact merged-head CI is verified; do not mark the broader audit matrix COVERED solely from this PR.
+- PR #1808 merged to `develop` at `a72cfb0fb66461290a8855a6df774dcdd87b2c6e`; all 29 required exact-head checks passed on `9ac49df3f6573f84f13cb21641032db2275c008b`. The broader audit matrix remains separate from this one implementation slice.
+
+### 2026-11-25 — Phase 5 Conservative SELL accounting scenario (PR #1844)
+
+- `src/use-cases/conservative-sell-accounting-scenario.test.js` composes one canonical BUY and three successive canonical SELL fills through production `updateTradingAccounting`, Portfolio/Position and RecoveryLedger.
+- The worked financial oracle proves base inventory debits including actual base-asset SELL commissions; quote proceeds after actual quote and valued third-asset fees; preservation of the full BUY cost basis; cumulative net proceeds; outstanding recovery; realized net profit; and identical canonical Fill identity histories in both projections.
+- Additional cases prove duplicate SELL no-op behavior, conflicting commission facts rejected without mutation, and an unvalued third-asset SELL commission rejected atomically.
+- The final composition applies canonical BUY/SELL fills through the real accounting use case and passes the resulting projections into the real recovery-completion policy. It verifies exact remaining inventory, full BUY basis, net proceeds after actual commission, realized profit, and retention of configured keep quantity plus validated exchange-constrained dust.
+- The existing `recovery-completion.dust.test.js` on current `develop` already covers all supported dust reasons and the incomplete-SELL / below-minProfit gates. This PR adds the accounting-to-completion composition; it does not duplicate that existing pure-policy suite.
+- The original SELL accounting head `f600079d1de03385dfd373b703cabab88c6b7c11` passed all six required workflows. The task branch was subsequently refreshed against current `develop` with a non-force merge commit; exact-head verification of the synchronized PR is pending. Do not count this row as merged coverage until PR #1844 is merged and exact merged-head evidence is recorded.
+- Test and documentation only. No production trading behavior, strategy rules, broker adapters, runtime configuration, or exchange state changed.
 
 ## Existing behavior-to-test inventory
 

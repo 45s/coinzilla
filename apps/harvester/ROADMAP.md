@@ -2293,3 +2293,12 @@ The detailed evidence, implementation commits, CI state and remaining unknowns a
 - Strengthened the full Conservative engine lifecycle to use production `updateTradingAccounting`, covering second BUY partial/completed fills, recovery-SELL cancellation/fill reconciliation and replacement SELL submission with exact cumulative accounting assertions.
 - CI fixes: corrected the lifecycle cost-basis expectations from observed canonical fills, fixed strict ESLint formatting, and removed repeated Markdown blank lines. Exact-head verification is tracked on PR #1808.
 - Test-only and documentation changes; no production trading behavior or rules changed.
+
+
+## 2026-11-25 — #1763 Phase 5 Conservative SELL accounting
+
+- PR [#1844](https://github.com/45s/coinzilla/pull/1844) adds `src/use-cases/conservative-sell-accounting-scenario.test.js`: canonical BUY plus three SELL fills applied through production `updateTradingAccounting`, real Portfolio/Position and RecoveryLedger, explicit commission-aware decimal oracles, duplicate/conflict/valuation-failure atomicity.
+- The composed completion case feeds the exact post-fill projections into the real recovery-completion policy and proves the remaining inventory, full BUY cost basis, actual net proceeds, realized profit, and configured keep quantity plus validated dust allocation.
+- Current `develop` already contains `recovery-completion.dust.test.js`, including successful reason-specific dust cases and incomplete-SELL / below-minProfit gates. The PR does not duplicate those policy tests; it adds the accounting-to-completion composition.
+- Original SELL accounting head `f600079d1de03385dfd373b703cabab88c6b7c11` passed all six required workflows. The PR branch has now been synchronized to current `develop` with a non-force merge commit; the synchronized head requires its own exact-head CI verification.
+- Test/documentation only. No production trading behavior or exchange state changed. PR #1844 remains open for owner review and must not be merged by automation.
