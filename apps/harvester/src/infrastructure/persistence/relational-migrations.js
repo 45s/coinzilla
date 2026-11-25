@@ -317,11 +317,11 @@ function createOrderIdentityMigrationTableSql() {
     .replace("REFERENCES orders(id)", "REFERENCES orders_v5(id)")
     .replace(
       "    UNIQUE (provider_type, provider_instance_id, account_id, environment, market_id, exchange_trade_id)\n  )",
-      `    UNIQUE (provider_type, provider_instance_id, account_id, environment, market_id, exchange_trade_id),
-    ingestion_source TEXT NOT NULL DEFAULT 'live_event'
+      `    ingestion_source TEXT NOT NULL DEFAULT 'live_event'
       CHECK (ingestion_source IN ('live_event', 'exchange_history')),
     last_ingestion_source TEXT NOT NULL DEFAULT 'live_event'
-      CHECK (last_ingestion_source IN ('live_event', 'exchange_history'))
+      CHECK (last_ingestion_source IN ('live_event', 'exchange_history')),
+    UNIQUE (provider_type, provider_instance_id, account_id, environment, market_id, exchange_trade_id)
   )`,
     )
   const commissionsSql = extractCreateTableSql({
