@@ -369,7 +369,7 @@ function createSellReservationOrder({ market, orderId }) {
   })
 }
 
-function createReservationScenarioContext({ input }) {
+function createReservationMarkets({ input }) {
   const baseAsset = new Asset({
     id: "binance:ZRO",
     code: "ZRO",
@@ -396,7 +396,16 @@ function createReservationScenarioContext({ input }) {
       baseAsset,
       quoteAsset: otherQuoteAsset,
     })
-  const portfolio = applyPortfolioAcquisition({
+  return {
+    baseAsset,
+    quoteAsset,
+    targetMarket,
+    reservationMarket,
+  }
+}
+
+function createReservationPortfolio({ baseAsset, targetMarket }) {
+  return applyPortfolioAcquisition({
     portfolio: new Portfolio(),
     acquisition: {
       symbol: targetMarket.symbol,
@@ -410,10 +419,16 @@ function createReservationScenarioContext({ input }) {
     baseAsset,
     getMarket: () => targetMarket,
   })
-  const reservation = createSellReservationOrder({
-    market: reservationMarket,
-    orderId: input.reservationId,
-  })
+}
+
+function createReservationAccountSnapshot({
+  input,
+  baseAsset,
+  quoteAsset,
+  targetMarket,
+  portfolio,
+  reservation,
+}) {
   const balance = new Balance({
     free: new Quantity({
       amount: input.freeBaseBalance,
@@ -461,6 +476,25 @@ function createReservationScenarioContext({ input }) {
     additionalTrackedBaseQuantityBaseline: baselines.data.additionalTrackedBaseQuantityBaseline,
     committedBaseBalanceBaseline: baselines.data.committedBaseBalance,
   })
+  return {
+    accountSnapshot,
+    trackedLegacy,
+  }
+}
+
+function createReservationScenarioContext({ input }) {
+  const markets = createReservationMarkets({ input })
+  const portfolio = createReservationPortfolio(markets)
+  const reservation = createSellReservationOrder({
+    market: markets.reservationMarket,
+    orderId: input.reservationId,
+  })
+  const snapshot = createReservationAccountSnapshot({
+    input,
+    ...markets,
+    portfolio,
+    reservation,
+  })
   const dependencies = {
     strategyId: StrategyId.RECOVERY_SELLER,
     state: {
@@ -468,17 +502,17 @@ function createReservationScenarioContext({ input }) {
         getActiveOrders: () => [reservation],
       },
     },
-    getAccountSnapshot: () => accountSnapshot,
-    getAdditionalTrackedBaseQuantity: () => trackedLegacy,
+    getAccountSnapshot: () => snapshot.accountSnapshot,
+    getAdditionalTrackedBaseQuantity: () => snapshot.trackedLegacy,
     allocateOrderCommitments,
   }
   const activeOrders = input.reservationOwner === "RS" &&
-    reservationMarket.id === targetMarket.id
+    markets.reservationMarket.id === markets.targetMarket.id
     ? [reservation]
     : []
   return {
     dependencies,
-    targetMarket,
+    targetMarket: markets.targetMarket,
     portfolio,
     activeOrders,
   }
