@@ -616,12 +616,11 @@ async function createRuntimeScenarioContext({ runId }) {
     baseAsset,
     quoteAsset,
   })
-  const pairConfig = RUNTIME_PAIR_CONFIG
   const seed = await createRuntimeScenarioWorkflow({
     market,
     baseAsset,
     quoteAsset,
-    pairConfig,
+    pairConfig: RUNTIME_PAIR_CONFIG,
   })
   const accountSnapshot = createRuntimeScenarioAccountSnapshot({
     baseAsset,
@@ -660,7 +659,7 @@ async function createRuntimeScenarioContext({ runId }) {
   })
   return {
     marketMetadata,
-    pairConfig,
+    pairConfig: RUNTIME_PAIR_CONFIG,
     seed,
     accountSnapshot,
     operationalStateStore,
