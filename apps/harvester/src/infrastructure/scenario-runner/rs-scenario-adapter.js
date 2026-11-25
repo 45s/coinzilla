@@ -10,7 +10,6 @@ import {
   TradingRules,
 } from "@coinzilla/entities"
 import { addDecimal, compareDecimal, multiplyDecimal, subtractDecimal } from "@coinzilla/utils"
-import { recoverySellerPairs } from "../../../rs-recovery-seller.js"
 import { AccountSnapshot } from "../../domain/account/account-snapshot.js"
 import { allocateOrderCommitments } from "../../domain/orders/allocate-order-commitments.js"
 import { createOrderOwnership } from "../../domain/orders/order-ownership.js"
@@ -99,6 +98,25 @@ const SCENARIO = Object.freeze({
   }),
 })
 
+const RUNTIME_PAIR_CONFIG = Object.freeze({
+  enabled: true,
+  investment: "100",
+  orderQuantity: "5",
+  sellQuantity: "50",
+  minProfit: 0.01,
+  priceStepPercent: 0.05,
+  makerPercent: 0,
+  takerPercent: 0,
+  thirdAssetFeeQuoteValue: "0",
+  legacyPosition: Object.freeze({
+    invested: "100",
+    quantity: "50",
+  }),
+})
+const RUNTIME_PAIR_CONFIGS = Object.freeze({
+  ZROUSDT: RUNTIME_PAIR_CONFIG,
+})
+
 const RUNTIME_SCENARIO = Object.freeze({
   id: "RS-004-012",
   name: "Production Recovery Seller SELL transition reserves and submits a mixed recovery/legacy order",
@@ -114,12 +132,12 @@ const RUNTIME_SCENARIO = Object.freeze({
       marketPrice: Object.freeze({
         type: "string",
         pattern: "^(?:0|[1-9][0-9]*)(?:[.][0-9]+)?$",
-        description: "Positive simulated LINEA/USDT market price in USDT.",
+        description: "Positive simulated ZRO/USDT market price in USDT.",
       }),
     }),
   }),
   input: Object.freeze({
-    marketPrice: "0.02",
+    marketPrice: "12.3",
   }),
   implementation: Object.freeze([
     "apps/harvester/src/bootstrap/create-recovery-seller-runtime-dispatch.js",
@@ -212,8 +230,8 @@ function createRuntimeScenarioStore() {
 
 function createRuntimeScenarioMarket() {
   const baseAsset = new Asset({
-    id: "binance:LINEA",
-    code: "LINEA",
+    id: "binance:ZRO",
+    code: "ZRO",
   })
   const quoteAsset = new Asset({
     id: "binance:USDT",
@@ -221,7 +239,7 @@ function createRuntimeScenarioMarket() {
   })
   const market = new Market({
     venue: "binance",
-    symbol: "LINEAUSDT",
+    symbol: "ZROUSDT",
     baseAsset,
     quoteAsset,
   })
@@ -253,7 +271,7 @@ function createRuntimeScenarioMarketMetadata({ market, baseAsset, quoteAsset }) 
           type: "QUANTITY_INCREMENT",
           status: "SUPPORTED",
           value: new Quantity({
-            amount: "1",
+            amount: "0.01",
             asset: baseAsset,
           }),
         },
@@ -261,7 +279,7 @@ function createRuntimeScenarioMarketMetadata({ market, baseAsset, quoteAsset }) 
           type: "MIN_QUANTITY",
           status: "SUPPORTED",
           value: new Quantity({
-            amount: "1",
+            amount: "0.01",
             asset: baseAsset,
           }),
         },
@@ -340,7 +358,7 @@ async function createRuntimeScenarioWorkflow({
   pairConfig,
 }) {
   const buyQuantity = String(pairConfig.orderQuantity)
-  const buyPrice = "0.01"
+  const buyPrice = "2"
   const buyQuoteQuantity = multiplyDecimal({
     left: buyPrice,
     right: buyQuantity,
@@ -538,7 +556,7 @@ function createRuntimeScenarioAuthorizer({ workflow, stopWorkflow, accountSnapsh
   }
   return createRecoverySellerActionAuthorizer({
     state,
-    recoverySellerPairs,
+    recoverySellerPairs: RUNTIME_PAIR_CONFIGS,
     recoverySellerStopWorkflow: stopWorkflow,
     getPortfolio: () => workflow.getPortfolio(),
     getAccountSnapshot: () => accountSnapshot,
@@ -580,7 +598,7 @@ async function executeRecoverySellerRuntimeScenario({ runId, input }) {
     baseAsset,
     quoteAsset,
   })
-  const pairConfig = recoverySellerPairs.LINEAUSDT
+  const pairConfig = RUNTIME_PAIR_CONFIG
   const seed = await createRuntimeScenarioWorkflow({
     market,
     baseAsset,
@@ -593,7 +611,6 @@ async function executeRecoverySellerRuntimeScenario({ runId, input }) {
     quoteAsset,
     buyQuantity: seed.buyQuantity,
     legacyQuantity: seed.legacyQuantity,
-    legacyInvested: seed.legacyInvested,
     buyQuoteQuantity: seed.buyQuoteQuantity,
   })
   const operationalStateStore = createRuntimeScenarioStore()
@@ -618,16 +635,16 @@ async function executeRecoverySellerRuntimeScenario({ runId, input }) {
   const dispatch = createRecoverySellerRuntimeDispatch({
     recoverySellerWorkflow: workflow,
     recoverySellerStopWorkflow: stopWorkflow,
-    recoverySellerPairs,
+    recoverySellerPairs: RUNTIME_PAIR_CONFIGS,
     getRecoverySellerMarketMetadata: async () => marketMetadata,
     getAccountSnapshot: async () => accountSnapshot,
   })
   let submittedAction
   const dispatchResult = await dispatch({
-    symbol: "LINEAUSDT",
+    symbol: "ZROUSDT",
     state: {
-      prices: new Map([["LINEAUSDT", {
-        symbol: "LINEAUSDT",
+      prices: new Map([["ZROUSDT", {
+        symbol: "ZROUSDT",
         price: effectiveInput.marketPrice,
       }]]),
       paused: new Set(),
@@ -720,7 +737,7 @@ async function executeRecoverySellerRuntimeScenario({ runId, input }) {
     {
       id: "input-1",
       kind: "input",
-      label: "Simulated LINEAUSDT market price",
+      label: "Simulated ZROUSDT market price",
       inputs: effectiveInput,
       source: "deterministic-simulation-fixture",
     },
@@ -745,7 +762,7 @@ async function executeRecoverySellerRuntimeScenario({ runId, input }) {
       kind: "production-runtime",
       label: "Evaluate production Recovery Seller runtime transition",
       inputs: {
-        symbol: "LINEAUSDT",
+        symbol: "ZROUSDT",
         marketPrice: effectiveInput.marketPrice,
         config: pairConfig,
         marketMetadata: {
