@@ -315,7 +315,7 @@ function registerUnsupportedRun({ context, runId, strategyId, scenarioId }) {
   return snapshot({ record })
 }
 
-function enqueueRun({ context, record, runId, strategyId, scenarioId }) {
+function enqueueRun({ context, record, runId }) {
   if (context.queue.length >= context.maxQueuedRuns) {
     transitionRun({
       record,
@@ -376,8 +376,6 @@ function submitRun({ context, submission }) {
       context,
       record,
       runId,
-      strategyId,
-      scenarioId,
     })
   }
   return startExecution({

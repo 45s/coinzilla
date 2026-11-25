@@ -21,6 +21,13 @@ function sendJson({ response, status, body }) {
   response.end(JSON.stringify(body))
 }
 
+function resolveErrorCode({ error }) {
+  if (typeof error?.code === "string" && error.code.trim()) {
+    return error.code
+  }
+  return "SCENARIO_RUNNER_REQUEST_INVALID"
+}
+
 function sendError({ response, status, code, message }) {
   sendJson({
     response,
@@ -264,9 +271,7 @@ export async function handleScenarioRunnerRequest({
     sendError({
       response,
       status: Number.isSafeInteger(error?.status) ? error.status : 400,
-      code: typeof error?.code === "string" && error.code.trim()
-        ? error.code
-        : "SCENARIO_RUNNER_REQUEST_INVALID",
+      code: resolveErrorCode({ error }),
       message: error instanceof Error ? error.message : "Scenario Runner request failed.",
     })
     return true
