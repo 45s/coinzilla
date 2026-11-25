@@ -10,6 +10,7 @@ export interface ScenarioInputSchema {
   readonly properties: Readonly<Record<string, {
     readonly type: string;
     readonly pattern?: string;
+    readonly exclusiveMinimum?: string;
     readonly description?: string;
   }>>;
 }
@@ -23,6 +24,7 @@ export interface ScenarioCatalogEntry {
   readonly executable: boolean;
   readonly inputSchema?: ScenarioInputSchema;
   readonly defaultInput?: unknown;
+  readonly readinessReasons?: readonly string[];
 }
 
 export interface ScenarioCatalogItem {
