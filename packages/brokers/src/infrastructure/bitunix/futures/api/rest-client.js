@@ -468,11 +468,11 @@ export class BitunixFuturesRestClient {
         }),
       }),
     })
-    const payload = await readResponsePayload({
+    validateHttpResponse({
       response,
       request,
     })
-    validateHttpResponse({
+    const payload = await readResponsePayload({
       response,
       request,
     })
