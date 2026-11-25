@@ -772,7 +772,7 @@ At `20.00 USDT/ZRO`, recovery receives `20.00 USDT` (profit `+10.00`), legacy re
 
 **Implementation:** shared commitment allocator, account runtime registry, engine transition queue and strategy-owned order routing.
 
-**Tests:** [RS-008-017-B configuration conflict and RS-008-017-D recovery-SELL volatility exception](../../apps/harvester/test/bootstrap/market-evaluation.test.js); registry `apps/harvester/test/scenarios/recovery-seller/scenarios/shared-market-volatility-gate.js`. B proves resolver rejection; C proves disabled volatility avoids volatility reads while other gates remain; D proves the recovery-SELL exception still respects an independent market pause. Exact-head CI is pending; do not mark VERIFIED.
+**Tests:** [RS-008-017-B/C/D shared volatility application scenarios](../../apps/harvester/test/bootstrap/market-evaluation.test.js); registry `apps/harvester/test/scenarios/recovery-seller/scenarios/shared-market-volatility-gate.js`. B proves resolver rejection; C proves disabled volatility avoids volatility reads while other gates remain; D proves the recovery-SELL exception still respects an independent market pause. Exact-head CI is pending; do not mark VERIFIED.
 
 ### RS-009 — STOP blocks additional BUY spending only
 

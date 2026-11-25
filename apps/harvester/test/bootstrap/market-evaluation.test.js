@@ -467,12 +467,12 @@ function createVolatilityProtectedSubmissionGate({ marketPaused = false, protect
     getVolatilityData: () => {
       volatilityCalls.push(symbol)
       return {
-      ok: true,
-      data: {
-        status: { isReady: true },
-        metrics: { volatilityRatio: "2" },
-      },
-    }
+        ok: true,
+        data: {
+          status: { isReady: true },
+          metrics: { volatilityRatio: "2" },
+        },
+      }
     },
     isVolatilityProtectionEnabledForSymbol: () => protectionEnabled,
     isMarketBookFresh: () => true,
@@ -507,9 +507,9 @@ test("RS-008-017-D: recovery SELL bypasses volatility only and retains other sub
     details: { symbol: "BTCUSDT" },
   }, "The recovery-SELL volatility exception must not bypass an independent market pause.")
 
-  const eligibleGate = createVolatilityProtectedRecoverySellGate()
+  const eligibleGate = createVolatilityProtectedSubmissionGate()
   const eligible = eligibleGate({
-    order: createRecoverySellGateOrder(),
+    order: createSubmissionGateOrder(),
     purpose: "RECOVERY_SELL",
   })
   assert.deepEqual(eligible, { allowed: true }, "With all other gates satisfied, the recovery SELL must bypass only the active volatility blocker.")
