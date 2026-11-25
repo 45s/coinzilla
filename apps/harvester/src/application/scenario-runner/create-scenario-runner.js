@@ -1,3 +1,4 @@
+import { redactScenarioEvidence } from "./redact-scenario-evidence.js"
 import {
   SCENARIO_RUN_STATUS,
   TERMINAL_SCENARIO_RUN_STATUSES,
@@ -50,7 +51,7 @@ function transitionRun({ record, status, now, diagnostic, onUpdate }) {
     at: timestamp,
   })
   if (diagnostic) {
-    record.diagnostics.push(diagnostic)
+    record.diagnostics.push(redactScenarioEvidence(diagnostic))
   }
   if (status === SCENARIO_RUN_STATUS.RUNNING) {
     record.startedAt = timestamp
@@ -78,7 +79,7 @@ function createBlockedRecord({ runId, strategyId, scenarioId, diagnostic, now })
     completedAt: timestamp,
     input: null,
     output: null,
-    diagnostics: [diagnostic],
+    diagnostics: [redactScenarioEvidence(diagnostic)],
     transitions: [{
       status: SCENARIO_RUN_STATUS.BLOCKED,
       at: timestamp,
@@ -88,7 +89,7 @@ function createBlockedRecord({ runId, strategyId, scenarioId, diagnostic, now })
 
 function createRecord({ runId, strategyId, scenarioId, input, now }) {
   const timestamp = now()
-  return {
+  const record = {
     runId,
     strategyId,
     scenarioId,
@@ -97,7 +98,7 @@ function createRecord({ runId, strategyId, scenarioId, input, now }) {
     updatedAt: timestamp,
     startedAt: null,
     completedAt: null,
-    input: input === null ? null : structuredClone(input),
+    input: redactScenarioEvidence(input),
     output: null,
     diagnostics: [],
     transitions: [{
@@ -105,14 +106,21 @@ function createRecord({ runId, strategyId, scenarioId, input, now }) {
       at: timestamp,
     }],
   }
+  Object.defineProperty(record, "executionInput", {
+    value: input === null ? null : structuredClone(input),
+    configurable: true,
+    writable: true,
+  })
+  return record
 }
 
 function createExecutionRace({ adapter, record, controller, timeoutMs }) {
   let timer
+  const executionInput = structuredClone(record.executionInput ?? record.input)
   const execution = Promise.resolve().then(() => adapter.execute({
     runId: record.runId,
     scenarioId: record.scenarioId,
-    input: structuredClone(record.input),
+    input: executionInput,
     signal: controller.signal,
   }))
   const timeout = new Promise((resolve) => {
@@ -173,6 +181,7 @@ function scheduleQueuedRuns({ context }) {
     }
     const adapter = context.adapters.get(record.strategyId)
     if (!adapter) {
+      delete record.executionInput
       transitionRun({
         record,
         status: SCENARIO_RUN_STATUS.BLOCKED,
@@ -292,7 +301,7 @@ async function finishExecution({ context, record, adapter, result }) {
       diagnostic: "Strategy adapter returned an invalid result object.",
     })
   } else {
-    record.output = structuredClone(result.output)
+    record.output = redactScenarioEvidence(result.output)
     transitionRun({
       record,
       status: SCENARIO_RUN_STATUS.COMPLETED,
@@ -319,6 +328,7 @@ function startExecution({ context, record, adapter }) {
     controller,
     timeoutMs: context.timeoutMs,
   })
+  delete record.executionInput
   context.executions.set(record.runId, {
     controller,
   })
@@ -388,6 +398,7 @@ function registerUnsupportedRun({
 
 function enqueueRun({ context, record, runId }) {
   if (context.queue.length >= context.maxQueuedRuns) {
+    delete record.executionInput
     transitionRun({
       record,
       status: SCENARIO_RUN_STATUS.BLOCKED,
@@ -529,6 +540,7 @@ function submitRun({ context, submission }) {
 
 function cancelQueuedRun({ context, record, runId }) {
   context.queue = context.queue.filter((queuedId) => queuedId !== runId)
+  delete record.executionInput
   transitionRun({
     record,
     status: SCENARIO_RUN_STATUS.CANCELLED,
