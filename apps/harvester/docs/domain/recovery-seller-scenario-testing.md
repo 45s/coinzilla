@@ -188,14 +188,14 @@ apps/harvester/test/
     └── recovery-seller-sell-planner.scenario.test.js
 ~~~
 
-PR #1823 adds three nested scenario files:
+PR #1823 adds four nested scenario files:
 
 - `recovery-seller/registry-and-runner.scenario.test.js` — registry and runner contract tests.
 - `recovery-seller/authorization-custody.scenario.test.js` — RS-001 authorization/custody.
 - `recovery-seller/buy-accounting.scenario.test.js` — RS-002 BUY accounting.
-- `recovery-seller/mixed-sell-planning.scenario.test.js` — RS-003-001…005 additive SELL planning, smaller authorized remainder, legacy exhaustion, Spot availability boundaries and shared Portfolio custody aggregation.
+- `recovery-seller/mixed-sell-planning.scenario.test.js` — RS-003-001…006 additive SELL planning, smaller authorized remainder, legacy exhaustion, Spot availability boundaries, shared Portfolio custody aggregation and account-wide reservations.
 
-All three files must be listed in `apps/harvester/package.json` `config.targetedTestFiles`. A targeted-test pass is valid only when its log shows these files were executed.
+All four files must be listed in `apps/harvester/package.json` `config.targetedTestFiles`. A targeted-test pass is valid only when its log shows these files were executed.
 
 These files prove only the assertions documented in #1780 and the repository catalog. Their presence does not make the framework complete and does not make RS-001/002/008 covered. Do not rename or move them merely to match a proposed future tree.
 
@@ -1871,7 +1871,7 @@ Every family below explicitly answers the 22 contract questions required by the 
 | 17. Duplicate/replay cases | Repeated evaluation cannot create another SELL; duplicate planner invocation is side-effect-free; stale prior-cycle facts cannot change a new cycle. |
 | 18. Required assertions | Exact plan fields, allocation split, fee reserve, net-proceeds target, filter result, no Portfolio mutation and zero broker calls for blocked cases. |
 | 19. Existing regression tests | calculate-sell-plan.test.js; legacy-spot-allocation.test.js; mixed-sell-fill-allocation.test.js; recovery-seller-sell-planner.scenario.test.js. New scenario evidence is registered in `test/scenarios/recovery-seller/mixed-sell-planning.scenario.test.js` and remains PARTIAL. |
-| 20. Missing scenario tests | Cross-market/shared account reservations, full workflow/custody composition for legacy exhaustion, partial/multiple fills, fee-asset boundaries, TradingRules tick/step/min/max boundaries, durable reservation and complete dust/filter subcases. |
+| 20. Missing scenario tests | Concurrent reservation changes between snapshot and allocation, full workflow/custody composition for legacy exhaustion, partial/multiple fills, fee-asset boundaries, TradingRules tick/step/min/max boundaries, durable reservation and complete dust/filter subcases. |
 | 21. Blocked decisions | The #1809 production fix is merged in PR #1815 at `cbf07da54fd2e14fbeb3f96d4d9f8efe48d597c2`; all six workflows passed on its exact PR head `20963617c9d9d73c31b47865e0aa34c4a966cc8e`. The workflow-to-default-evaluator prerequisite is therefore unblocked. Third-asset valuation and standalone final-residual liquidation remain blocked/unsupported. |
 | 22. Acceptance criteria | All #1780 sections C/H/I planner cases have stable IDs; exact intent and no-submit assertions pass; the real workflow/default-evaluator prerequisite is proved by merged PR #1815 and exact merged-head checks. Remaining planner, reservation, fee, filter, dust and atomicity cases stay PARTIAL until separately mapped and verified. |
 
@@ -2352,7 +2352,7 @@ TDD evidence:
 - GREEN: the three composed cases passed Harvester Targeted Tests on synchronized PR head `0a84a78285aa2dfb3c4f16319c765e436edea275` (11/11 tests in the scenario file). Unit Tests, Test Coverage, Repository Quality, Dependency Audit and External Documentation Links also pass on that exact head.
 - The PR is ready for owner review; do not mark the scenario family VERIFIED until the production PR is merged and exact merged-head evidence is recorded.
 
-PR #1815 is merged at `cbf07da54fd2e14fbeb3f96d4d9f8efe48d597c2`; its exact PR head `20963617c9d9d73c31b47865e0aa34c4a966cc8e` passed all six workflows. The prerequisite is unblocked, but RS-003 remains PARTIAL because the full matrix is not complete. PR #1823 now adds registered DOMAIN cases RS-003-001…005: additive configured legacy slice, smaller authorized remainder, recovery-only planning after legacy exhaustion, below/equal/above verified Spot quantity boundaries, and shared Portfolio subtraction across markets and CG/RS strategy positions. RS-003-001…003 call `calculateRecoverySellerSellPlan`; RS-003-004/005 call `calculateVerifiedLegacySpotAllocation` with real canonical Portfolio/Fill/Balance/Market/Asset values. The planner cases derive legacy average cost from `legacyPosition.invested / legacyPosition.quantity`; no separate average-cost configuration input exists. These cases do not claim cross-market order-reservation handling, full TradingRules boundaries, fee allocation, multi-Fill atomicity, durable reservation or dust coverage.
+PR #1815 is merged at `cbf07da54fd2e14fbeb3f96d4d9f8efe48d597c2`; its exact PR head `20963617c9d9d73c31b47865e0aa34c4a966cc8e` passed all six workflows. The prerequisite is unblocked, but RS-003 remains PARTIAL because the full matrix is not complete. PR #1823 now adds registered DOMAIN cases RS-003-001…006: additive configured legacy slice, smaller authorized remainder, recovery-only planning after legacy exhaustion, below/equal/above verified Spot quantity boundaries, shared Portfolio subtraction across markets/CG+RS positions, and same-market/cross-market active SELL reservations. RS-003-001…003 call `calculateRecoverySellerSellPlan`; RS-003-004/005 call `calculateVerifiedLegacySpotAllocation`; RS-003-006 composes `calculateAccountSnapshotBaselines`, `allocateStrategyOrderCommitments` and `allocateOrderCommitments` with real CanonicalOrder/AccountSnapshot values. The planner cases derive legacy average cost from `legacyPosition.invested / legacyPosition.quantity`; no separate average-cost configuration input exists. These cases do not claim concurrent reservation races, full TradingRules boundaries, fee allocation, multi-Fill atomicity, durable reservation or dust coverage.
 
 ## 14. Implementation roadmap: exact AI-agent execution sequence
 
