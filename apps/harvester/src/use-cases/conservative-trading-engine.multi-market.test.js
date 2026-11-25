@@ -2346,3 +2346,43 @@ test("RS-008-018-A: RS-owned quote reservation blocks CG BUY across markets", as
     "The account-wide reservation must retain RS order ownership without transferring it to CG.",
   )
 })
+
+
+test("RS-008-018-E: concurrent CG BUY intents serialize against a shared RS quote reservation", async () => {
+  const orderRegistry = createRecoverySellerSharedQuoteReservationRegistry()
+  const harness = await createHarness({
+    quoteFreeBalance: "250",
+    initialState: { orderRegistry },
+  })
+
+  const results = await Promise.all([
+    harness.engine.processMarketPrice({
+      symbol: "DOGEUSDT",
+      priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 2 },
+    }),
+    harness.engine.processMarketPrice({
+      symbol: "SOLUSDT",
+      priceEvent: { symbol: "SOLUSDT", price: "100", timestamp: 2 },
+    }),
+  ])
+
+  assert.equal(results.every((result) => result.ok), true,
+    "Both concurrent market evaluations must resolve without an allocation error.")
+  assert.equal(harness.orders.length, 1,
+    "The shared serialized transition queue must allow only one 100 USDT CG BUY after the 100 USDT RS reservation.")
+  assert.equal(results.filter((result) =>
+    result.data?.submittedOrders?.length === 1).length, 1,
+  "Exactly one market evaluation must submit its CG BUY.")
+  assert.equal(results.filter((result) =>
+    result.data?.waitingForAvailableQuoteBalance === true).length, 1,
+  "The competing CG BUY must defer after the first submission consumes the remaining shared quote budget.")
+  const registeredOrders = harness.engine.getOrders()
+  assert.equal(registeredOrders.length, 2,
+    "The account registry must retain the original RS commitment and the one newly submitted CG order.")
+  assert.equal(registeredOrders.filter((order) =>
+    order.clientOrderId === "rs-shared-quote-reservation").length, 1,
+  "The original RS order identity must remain registered exactly once.")
+  assert.equal(registeredOrders.filter((order) =>
+    order.side === "BUY" && order.clientOrderId !== "rs-shared-quote-reservation").length, 1,
+  "Only one additional CG BUY may be registered across both markets.")
+})
