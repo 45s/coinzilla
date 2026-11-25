@@ -8,7 +8,7 @@
 - Branch: `develop`
 - Baseline commit: `ebeaf346fbaa44ae75ba6fd9256bfdd1ba01d765`
 - Issue: [#1841](https://github.com/45s/coinzilla/issues/1841)
-- Runtime diagrams and schemas: [Recovery Seller Runtime Flows](../../../domain/recovery-seller-runtime-flows.md)
+- Runtime diagrams and schemas: [Recovery Seller Runtime Flows](../../domain/recovery-seller-runtime-flows.md)
 - Owner-approved STOP decision: [#1780](https://github.com/45s/coinzilla/issues/1780)
 
 ## Scope
