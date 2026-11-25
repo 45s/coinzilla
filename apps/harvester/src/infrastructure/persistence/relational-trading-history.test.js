@@ -136,8 +136,8 @@ function assertOrderIdentityIndexes(database) {
   )
   assert.deepEqual(
     pendingIdentityColumns,
-    ["environment", "provider_instance_id", "provider_type", "account_id", "client_order_id"],
-    "Pending client identity must be unique across markets within the provider account.",
+    ["environment", "provider_instance_id", "provider_type", "account_id", "market_id", "client_order_id"],
+    "Pending client identity must include market because exchange client IDs are correlated within a market.",
   )
 }
 
@@ -2129,6 +2129,37 @@ test("rejects v5 migration when an existing fill points to a different exchange 
   }
 })
 
+test("scopes provisional client identities by market", async (t) => {
+  const context = await createTestContext({ t })
+  const persistence = await preparePersistence({ context })
+  const sharedClientOrderId = "h-reused-across-markets"
+  for (const [symbol, baseAssetCode] of [["BTCUSDT", "BTC"], ["ETHUSDT", "ETH"]]) {
+    await persistence.orderRepository.upsertHistorical(createExchangeHistoryOrder({
+      status: "OPEN",
+      executedQuantity: "0",
+      remainingQuantity: "1.0000",
+      eventId: `exchange-history-order:${symbol}:pending`,
+      timestamp: "2026-11-20T04:00:00.000Z",
+      clientOrderId: sharedClientOrderId,
+      brokerOrderId: null,
+      market: createHistoryMarket({
+        symbol,
+        baseAssetCode,
+      }),
+    }))
+  }
+  await inspectSqlite({
+    filename: context.filename,
+    work: (database) => {
+      const rows = database.prepare(
+        "SELECT market_id, client_order_id FROM orders WHERE client_order_id = ? ORDER BY market_id",
+      ).all(sharedClientOrderId)
+      assert.equal(rows.length, 2, "A provisional client ID on different markets must remain two market-scoped pending orders.")
+      assert.deepEqual(rows.map(({ market_id }) => market_id), ["binance:BTCUSDT", "binance:ETHUSDT"])
+    },
+  })
+})
+
 function assertDuplicateV4HistoryRemains(database) {
   const versions = database.prepare(
     "SELECT version FROM schema_migrations ORDER BY version",
@@ -2172,60 +2203,6 @@ test("fails v5 migration closed and retains backup when exchange identity is dup
   await inspectSqlite({
     filename: persistence.orderIdentityMigrationBackupFilename,
     work: assertDuplicateV4HistoryBackup,
-  })
-})
-
-test("rejects pending client identity reuse across markets before exchange acknowledgement", async (t) => {
-  const context = await createTestContext({ t })
-  const persistence = await preparePersistence({ context })
-  const clientOrderId = "h-reused-pending-client"
-  const pendingOrder = createExchangeHistoryOrder({
-    status: "OPEN",
-    executedQuantity: "0",
-    remainingQuantity: "1.0000",
-    eventId: "exchange-history-order:pending-btc",
-    timestamp: "2026-11-20T04:00:01.000Z",
-    clientOrderId,
-    brokerOrderId: null,
-  })
-  await persistence.orderRepository.upsertHistorical(pendingOrder)
-  const otherMarketOrder = createExchangeHistoryOrder({
-    status: "OPEN",
-    executedQuantity: "0",
-    remainingQuantity: "1.0000",
-    eventId: "exchange-history-order:pending-eth",
-    timestamp: "2026-11-20T04:00:01.000Z",
-    clientOrderId,
-    brokerOrderId: null,
-    market: createHistoryMarket({
-      symbol: "ETHUSDT",
-      baseAssetCode: "ETH",
-    }),
-  })
-
-  await assert.rejects(
-    persistence.orderRepository.upsertHistorical(otherMarketOrder),
-    (error) => error.context.field === "pendingClientOrderIdentityAmbiguous",
-  )
-  const differentCreatedAt = createExchangeHistoryOrder({
-    status: "OPEN",
-    executedQuantity: "0",
-    remainingQuantity: "1.0000",
-    eventId: "exchange-history-order:pending-different-created-at",
-    timestamp: "2026-11-20T04:00:02.000Z",
-    clientOrderId,
-    brokerOrderId: "exchange-order-different-created-at",
-    createdAt: 101,
-  })
-  await assert.rejects(
-    persistence.orderRepository.upsertHistorical(differentCreatedAt),
-    (error) => error.context.field === "pendingClientOrderIdentityAmbiguous",
-  )
-  await inspectSqlite({
-    filename: context.filename,
-    work: (database) => {
-      assert.equal(database.prepare("SELECT COUNT(*) AS count FROM orders").get().count, 1)
-    },
   })
 })
 
