@@ -35,7 +35,8 @@ test("RS scenario adapter blocks unsupported scenario IDs", async () => {
 })
 
 test("RS helper catalog labels the mapped case as preliminary and non-executable", () => {
-  const [scenario] = getRecoverySellerRunnerCatalog()
+  const scenario = getRecoverySellerRunnerCatalog().find((item) => item.id === "RS-004-011")
+  assert.ok(scenario, "the helper scenario must remain present in the catalog")
   assert.equal(scenario.id, "RS-004-011", "the helper remains mapped to its source scenario")
   assert.equal(scenario.status, "TEST-MAPPED", "the registry mapping status remains unchanged")
   assert.equal(scenario.executionStatus, "PRELIMINARY", "helper-only execution must be labelled preliminary")
