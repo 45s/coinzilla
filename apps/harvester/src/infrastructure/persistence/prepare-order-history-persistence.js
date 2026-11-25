@@ -31,7 +31,7 @@ function logPreparationFailure({ logger, error, relational = false } = {}) {
   }
 }
 
-function hasRelationalMigration(database) {
+function hasRelationalMigration(database, version = 1) {
   const exists = database.prepare(
     "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'schema_migrations'",
   ).get()
@@ -40,7 +40,7 @@ function hasRelationalMigration(database) {
   }
   return database.prepare(
     "SELECT 1 FROM schema_migrations WHERE version = ?",
-  ).get(1) !== undefined
+  ).get(version) !== undefined
 }
 
 function hashLegacyRecords(database) {
@@ -102,6 +102,80 @@ async function createVerifiedMigrationBackup({ database, filename } = {}) {
       destination: backupFilename,
     })
     await verifyMigrationBackup({
+      filename: backupFilename,
+      expected: sourceSnapshot,
+    })
+  }
+  return backupFilename
+}
+
+function hashRelationalHistory(database) {
+  const hash = createHash("sha256")
+  let count = 0
+  for (const table of ["orders", "fills", "fill_commissions"]) {
+    const exists = database.prepare(
+      "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+    ).get(table)
+    hash.update(table)
+    hash.update("\\0")
+    if (!exists) {
+      continue
+    }
+    const rows = database.prepare(`SELECT * FROM "${table}" ORDER BY rowid`).all()
+    count += rows.length
+    for (const row of rows) {
+      hash.update(JSON.stringify(row))
+      hash.update("\\0")
+    }
+  }
+  return {
+    count,
+    checksum: hash.digest("hex"),
+  }
+}
+
+async function verifyOrderIdentityMigrationBackup({ filename, expected } = {}) {
+  const backupDatabase = createSqliteDatabase({
+    filename,
+  })
+  await backupDatabase.connect()
+  try {
+    const integrity = backupDatabase.prepare("PRAGMA integrity_check").get()
+    if (integrity?.integrity_check !== "ok") {
+      throw new Error("Pre-order-identity SQLite backup failed its integrity check.")
+    }
+    const actual = hashRelationalHistory(backupDatabase)
+    if (actual.count !== expected.count || actual.checksum !== expected.checksum) {
+      throw new Error("Pre-order-identity SQLite backup does not contain the exact relational trading-history rows.")
+    }
+  } finally {
+    await backupDatabase.close()
+  }
+}
+
+async function createVerifiedOrderIdentityMigrationBackup({ database, filename } = {}) {
+  if (!hasRelationalMigration(database, 4) || hasRelationalMigration(database, 5)) {
+    return null
+  }
+  const sourceSnapshot = hashRelationalHistory(database)
+  if (sourceSnapshot.count === 0) {
+    return null
+  }
+  const backupFilename = `${filename}.pre-relational-v5.${sourceSnapshot.checksum}.backup`
+  try {
+    await access(backupFilename)
+    await verifyOrderIdentityMigrationBackup({
+      filename: backupFilename,
+      expected: sourceSnapshot,
+    })
+  } catch (error) {
+    if (error.code !== "ENOENT") {
+      throw error
+    }
+    await database.backup({
+      destination: backupFilename,
+    })
+    await verifyOrderIdentityMigrationBackup({
       filename: backupFilename,
       expected: sourceSnapshot,
     })
@@ -205,11 +279,17 @@ async function prepareRelationalResources({
   let observers
   try {
     await relationalDatabase.connect()
-    const migrationBackupFilename = await createVerifiedMigrationBackup({
+    const legacyMigrationBackupFilename = await createVerifiedMigrationBackup({
+      database: relationalDatabase,
+      filename,
+    })
+    await relationalDatabase.migrate(HARVESTER_RELATIONAL_MIGRATIONS.slice(0, 4))
+    const orderIdentityMigrationBackupFilename = await createVerifiedOrderIdentityMigrationBackup({
       database: relationalDatabase,
       filename,
     })
     await relationalDatabase.migrate(HARVESTER_RELATIONAL_MIGRATIONS)
+    const migrationBackupFilename = orderIdentityMigrationBackupFilename ?? legacyMigrationBackupFilename
     const repositories = createRelationalHistoryRepositories({
       database: relationalDatabase,
     })
