@@ -428,3 +428,9 @@ Each scenario run executes in a **dedicated worker process**, managed by the Har
 - A worker crash, timeout, unsupported production boundary or isolation failure yields an explicit failed/blocked diagnostic; it must never retry through live infrastructure.
 
 This process boundary is a safety and fault-containment requirement, not permission to duplicate production business logic. The worker must load/invoke the same production use cases and domain functions as live runtime with only the approved infrastructure ports replaced.
+
+## Approved transport decision — REST API + WebSocket (2026-11-25)
+
+The Dashboard-to-Harvester Scenario Runner transport is **REST API + WebSocket**. REST is the command/query interface for submitting a scenario run, retrieving run status/results and diagnostics, requesting cancellation, and inspecting run details/history where supported. WebSocket carries server-pushed run lifecycle/progress and execution updates, including terminal completion/failure notifications. The asynchronous run-job contract remains transport-independent: Dashboard receives a run identifier and lifecycle state, then observes updates and retrieves authoritative results from Harvester.
+
+The transport is an adapter, not a business layer. Domain/application contracts and use cases must not depend on HTTP, WebSocket APIs, Angular, RxJS or browser APIs. Keep request/event DTOs typed and versionable; define reconnect/resubscription and missed-update recovery so REST status/result retrieval remains authoritative if a WebSocket connection drops. Do not introduce GraphQL, gRPC or a message broker for the initial implementation without a demonstrated requirement.
