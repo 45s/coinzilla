@@ -45,8 +45,19 @@ export const recoverySellerSharedQuoteReservationScenario = defineRecoverySeller
     "submit a CG BUY when the account-wide free quote is insufficient",
     "connect to a broker or exchange",
   ],
-  subcases: [{
-    id: "RS-008-018-A",
+  subcases: [
+    {
+      id: "RS-008-018-B",
+      description: "concurrent same-market CG and RS BUY fills update independent strategy-owned Positions in the same account Portfolio",
+      status: "TEST-MAPPED",
+      test: {
+        file: "apps/harvester/src/use-cases/create-recovery-seller-accounting-workflow.test.js",
+        title: "RS-008-018-B: concurrent same-market CG and RS fills retain independent Positions",
+      },
+      evidence: null,
+    },
+    {
+      id: "RS-008-018-A",
     description: "an existing RS-owned BUY commitment on DOGEUSDT leaves insufficient account quote for a new CG BUY on SOLUSDT",
     status: "TEST-MAPPED",
     test: {
