@@ -39,6 +39,38 @@ test("runner blocks unknown strategies before executing", async () => {
   assert.match(result.diagnostics[0], /adapter/)
 })
 
+test("runner blocks scenarios rejected by the host policy even when a strategy adapter exists", async () => {
+  let executions = 0
+  const runner = createScenarioRunner({
+    adapters: [createAdapter(async () => {
+      executions += 1
+      return { output: "executed" }
+    })],
+    canExecuteScenario: ({ scenarioId }) => scenarioId === "allowed",
+    createRunId: (() => {
+      let count = 0
+      return () => `run-policy-${++count}`
+    })(),
+  })
+  const blocked = runner.submit({
+    strategyId: "example",
+    scenarioId: "preliminary",
+  })
+
+  assert.equal(blocked.status, SCENARIO_RUN_STATUS.BLOCKED,
+    "A registered strategy adapter must not bypass scenario-level executability policy.")
+  assert.equal(runner.getRun(blocked.runId)?.status, SCENARIO_RUN_STATUS.BLOCKED,
+    "Policy-blocked submissions must remain queryable.")
+  assert.equal(executions, 0, "The adapter must not run for a policy-blocked scenario.")
+
+  const accepted = runner.submit({
+    strategyId: "example",
+    scenarioId: "allowed",
+  })
+  assert.equal((await runner.waitForRun(accepted.runId)).status, SCENARIO_RUN_STATUS.COMPLETED)
+  assert.equal(executions, 1, "An explicitly executable scenario may use its registered adapter.")
+})
+
 test("runner rejects duplicate run IDs", () => {
   const runner = createScenarioRunner({
     adapters: [createAdapter()],

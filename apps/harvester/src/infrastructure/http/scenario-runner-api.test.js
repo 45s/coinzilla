@@ -187,6 +187,63 @@ test("Scenario Runner API preserves explicit capacity errors", async () => {
     "The API must preserve the stable capacity error code.")
 })
 
+test("host exposes an executable scenario only when its strategy adapter is registered", async () => {
+  const scenarioCatalog = [{
+    id: "RS-SIM-001",
+    name: "Simulation-only production flow",
+    layer: "application",
+    status: "TEST-MAPPED",
+    executionStatus: "EXECUTABLE",
+    executable: true,
+    input: {},
+  }]
+  const adapter = {
+    strategyId: "RS",
+    execute: async () => ({ trace: [{ id: "decision", kind: "decision", label: "Production decision" }] }),
+    cancel: async () => true,
+  }
+  const host = createScenarioRunnerHost({
+    adapters: [adapter],
+    scenarioCatalog,
+  })
+  const [scenario] = host.catalog[0].scenarios
+
+  assert.equal(scenario.executable, true,
+    "The catalog must expose a source-approved scenario when its strategy adapter is registered.")
+  assert.equal(scenario.executionStatus, "EXECUTABLE")
+  const accepted = host.runner.submit({
+    strategyId: "RS",
+    scenarioId: scenario.id,
+    input: {},
+  })
+  assert.equal((await host.runner.waitForRun(accepted.runId)).status, "Completed")
+})
+
+test("host blocks an executable source mapping when its strategy adapter is absent", () => {
+  const host = createScenarioRunnerHost({
+    scenarioCatalog: [{
+      id: "RS-SIM-002",
+      name: "Adapter missing",
+      layer: "application",
+      status: "TEST-MAPPED",
+      executionStatus: "EXECUTABLE",
+      executable: true,
+      input: {},
+    }],
+  })
+  const [scenario] = host.catalog[0].scenarios
+
+  assert.equal(scenario.executable, false,
+    "A source mapping cannot be advertised executable without a registered adapter.")
+  assert.equal(scenario.executionStatus, "BLOCKED")
+  const run = host.runner.submit({
+    strategyId: "RS",
+    scenarioId: scenario.id,
+    input: {},
+  })
+  assert.equal(run.status, "Blocked")
+})
+
 test("host does not expose a profitability-helper scaffold as an executable RS scenario", () => {
   const host = createScenarioRunnerHost()
   const [scenario] = host.catalog[0].scenarios
