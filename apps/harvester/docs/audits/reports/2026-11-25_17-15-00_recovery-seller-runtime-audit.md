@@ -55,6 +55,7 @@ Primary evidence:
 - [create-recovery-seller-runtime-dispatch.js](../../../src/bootstrap/create-recovery-seller-runtime-dispatch.js) — evaluator, authorizer and submitter composition.
 - [create-latest-transition-evaluator.js](../../../src/use-cases/create-latest-transition-evaluator.js#L370) — Conservative-first / RS-second dispatch and preflight/shutdown exclusions.
 - [create-market-price-transition-handler.js](../../../src/use-cases/create-market-price-transition-handler.js) — fresh market-price entry.
+- [conservative-trading-engine.js](../../../src/use-cases/conservative-trading-engine.js#L1117) — fresh market-book update only resumes an already-deferred symbol; the shared engine also owns the serialized `evaluateLatest` entry.
 - [create-user-data-event-transition.js](../../../src/use-cases/create-user-data-event-transition.js#L788) — RS-owned order-status handling; [same file](../../../src/use-cases/create-user-data-event-transition.js#L976) — user-data transition.
 - [create-user-data-event-handler.js](../../../src/bootstrap/user-data/create-user-data-event-handler.js) — conditional `reevaluate` and deferred-evaluation resumption.
 - [create-recovery-seller-runtime-evaluator.js](../../../src/use-cases/create-recovery-seller-runtime-evaluator.js#L37) — runtime snapshot and readiness facts.
