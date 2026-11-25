@@ -1,6 +1,6 @@
 import type { ScenarioRunRecord, ScenarioTraceStep } from './run-contract';
 
-const SECRET_KEY_PATTERN = /api.?key|secret|password|token|credential|authorization/i;
+const SECRET_KEY_PATTERN = /api.?key|access.?key|private.?key|secret|password|passphrase|token|credential|authorization|bearer|cookie|session|jwt|signature/i;
 
 function redact(value: unknown): unknown {
   if (Array.isArray(value)) {
