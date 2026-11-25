@@ -427,7 +427,6 @@ All broker-ID lookups and order-update matching must include the canonical marke
 
 Do not key persisted or in-memory cross-market order maps by `brokerOrderId` alone. Do not infer order ownership from a matching numeric broker ID in another market. Regression coverage is maintained in `order-registry.market-identity.test.js` and the Recovery Seller mixed-SELL reconciliation tests.
 
-
 ## Account-scoped safety blocker operations
 
 An active `SAFETY_BLOCKER_RAISED` with `scope: ACCOUNT` is a global order-admission stop. Confirm its blocker ID and reason before taking operator action. Do not work around it with another market, strategy, side, purpose, or shutdown Recovery Seller SELL.
