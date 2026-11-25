@@ -94,4 +94,5 @@ test("RS-004-012 remains non-executable in the public catalog until process isol
   assert.equal(scenario.status, "TEST-MAPPED")
   assert.equal(scenario.executionStatus, "PRELIMINARY")
   assert.equal(scenario.executable, false)
+  assert.ok(scenario.readinessReasons.some((reason) => reason.includes("OS-level")))
 })
