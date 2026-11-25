@@ -127,6 +127,30 @@ function validateScenarioIdentity({
   }
 }
 
+function validateExpectedResults({
+  scenario,
+  path,
+  errors,
+}) {
+  const objectFields = ["expectedState", "expectedAccounting", "expectedSideEffects"]
+  for (const field of objectFields) {
+    if (!isRecord(scenario[field])) {
+      addError({
+        errors,
+        path: `${path}.${field}`,
+        message: "must be an object",
+      })
+    }
+  }
+  if (!Array.isArray(scenario.expectedOrders)) {
+    addError({
+      errors,
+      path: `${path}.expectedOrders`,
+      message: "must be an array",
+    })
+  }
+}
+
 function validateScenarioEvidenceCollections({
   scenario,
   path,
@@ -164,6 +188,11 @@ function validateScenarioEvidenceCollections({
       message: "must be an object",
     })
   }
+  validateExpectedResults({
+    scenario,
+    path,
+    errors,
+  })
 
   if (Array.isArray(scenario.relatedSourceFiles)) {
     for (const [sourceIndex, sourcePath] of scenario.relatedSourceFiles.entries()) {
