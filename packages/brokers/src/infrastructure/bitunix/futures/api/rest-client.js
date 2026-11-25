@@ -4,6 +4,10 @@ import { createRestSignature } from "../../common/auth/create-rest-signature.js"
 import { quoteDepthLevelNumbers } from "./quote-depth-level-numbers.js"
 
 const MIN_REQUEST_INTERVAL_MS = 100
+const MIN_REQUEST_INTERVAL_MS_BY_PATH = Object.freeze({
+  "/api/v1/futures/trade/close_all_position": 1_000,
+  "/api/v1/futures/trade/flash_close_position": 200,
+})
 const RATE_LIMITERS = new Map()
 
 const ERROR_CODES = Object.freeze({
@@ -338,6 +342,7 @@ function getSharedRateLimiter({ apiKey, rateLimitNow, sleepFn }) {
   }
   const limiter = {
     nextRequestAt: 0,
+    nextRequestAtByPath: new Map(),
     rateLimitNow,
     requestQueue: Promise.resolve(),
     sleepFn,
@@ -398,7 +403,7 @@ export class BitunixFuturesRestClient {
     })
   }
 
-  async #dispatchAtRateLimit({ dispatch }) {
+  async #dispatchAtRateLimit({ dispatch, path }) {
     ensure.function({
       value: dispatch,
       name: "dispatch",
@@ -409,7 +414,9 @@ export class BitunixFuturesRestClient {
       if (!Number.isSafeInteger(now) || now < 0) {
         throw new TypeError("Bitunix Futures rate-limit clock must return a non-negative safe integer")
       }
-      const delay = Math.max(0, limiter.nextRequestAt - now)
+      const nextPathRequestAt = limiter.nextRequestAtByPath.get(path) ?? 0
+      const nextRequestAt = Math.max(limiter.nextRequestAt, nextPathRequestAt)
+      const delay = Math.max(0, nextRequestAt - now)
       if (delay > 0) {
         await limiter.sleepFn(delay)
       }
@@ -418,6 +425,11 @@ export class BitunixFuturesRestClient {
         throw new TypeError("Bitunix Futures rate-limit clock must return a non-negative safe integer")
       }
       limiter.nextRequestAt = Math.max(dispatchedAt, limiter.nextRequestAt) + MIN_REQUEST_INTERVAL_MS
+      const pathInterval = MIN_REQUEST_INTERVAL_MS_BY_PATH[path] ?? MIN_REQUEST_INTERVAL_MS
+      limiter.nextRequestAtByPath.set(
+        path,
+        Math.max(dispatchedAt, nextPathRequestAt) + pathInterval,
+      )
       return {
         result: dispatch(),
       }
@@ -445,6 +457,7 @@ export class BitunixFuturesRestClient {
       request,
     })
     const response = await this.#dispatchAtRateLimit({
+      path: request.path,
       dispatch: () => sendRestRequest({
         client: this,
         request,
