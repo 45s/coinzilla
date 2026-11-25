@@ -1,8 +1,16 @@
-# Recovery Seller Runtime Flows and Source Audit
+---
+title: Recovery Seller Runtime Flows
+status: active
+type: architecture
+owner: harvester
+created: 2026-11-25
+last_verified: 2026-11-25
+source_commit: ebeaf346fbaa44ae75ba6fd9256bfdd1ba01d765
+---
 
-**Document type:** maintained implementation map and source-audit snapshot  
-**Last verified:** 2026-11-25  
-**Source baseline:** `develop` at `ebeaf346fbaa44ae75ba6fd9256bfdd1ba01d765`  
+# Recovery Seller Runtime Flows
+
+**Document type:** maintained implementation map  
 **Owner issue:** [#1841](https://github.com/45s/coinzilla/issues/1841)  
 **Normative domain contract:** [Recovery Seller Domain Specification](./recovery-seller-domain-specification.md)
 
@@ -500,7 +508,7 @@ Tracked in [#1842](https://github.com/45s/coinzilla/issues/1842). Do not treat t
 
 ## 10. STOP: approved contract versus current implementation
 
-The owner-approved decision is recorded in the 2026-11-24 discussion on [RS issue #1780](https://github.com/45s/coinzilla/issues/1780). The contract is an **investment-spend gate**, not a blanket ban on recovering already-owned inventory:
+The owner-approved decision is recorded in the 2026-11-24 discussion on [RS issue #1780](https://github.com/45s/coinzilla/issues/1780). The contract is an **investment-spend gate**, not a blanket ban on recovering already-owned inventory. The owner-approved issue decision governs this exception; the canonical domain specification must remain synchronized with it:
 
 - STOP blocks additional RS BUY spending.
 - Existing-order WAIT/RECONCILE and confirmed-fill accounting continue.
@@ -536,7 +544,7 @@ The inspected implementation still behaves more restrictively than that approved
 
 Do **not** weaken the generic account-scoped safety blocker to implement the RS exception. RS STOP needs a separate strategy-purpose-aware admission path; unrelated account blockers must continue to block all order sides and all strategies.
 
-Tracked in [#1843](https://github.com/45s/coinzilla/issues/1843). The current develop specification still contains older STOP wording; the owner-approved text is present in the working changes for [PR #1823](https://github.com/45s/coinzilla/pull/1823), which is open and unmerged at this audit snapshot.
+Tracked in [#1843](https://github.com/45s/coinzilla/issues/1843).
 
 Sources: [create-recovery-seller-runtime-evaluator.js](../../src/use-cases/create-recovery-seller-runtime-evaluator.js), [create-recovery-seller-transition-evaluator.js](../../src/use-cases/create-recovery-seller-transition-evaluator.js), [create-recovery-seller-stop-workflow.js](../../src/use-cases/create-recovery-seller-stop-workflow.js), [stop-decision.js](../../src/domain/strategies/recovery-seller/stop-decision.js), [resolve-recovery-seller-stop.js](../../src/use-cases/resolve-recovery-seller-stop.js), [create-submission-gate.js](../../src/use-cases/create-submission-gate.js).
 
@@ -564,36 +572,19 @@ Sources: [create-recovery-seller-runtime-evaluator.js](../../src/use-cases/creat
 | Global RS enabled flag | [rs-recovery-seller.js](../../config/strategies/rs-recovery-seller.js) |
 | Per-market RS route map | [rs-recovery-seller.js](../../rs-recovery-seller.js) |
 
-## 12. Audit conclusions and evidence limits
+## 12. Current implementation gaps and deferred boundaries
 
-### Confirmed
+### Implementation gaps
 
-- RS is composed into the shared serialized Trading Engine; it is not a standalone timer-driven loop.
-- The normal decision trigger is an accepted fresh market-price event.
-- RS-owned fill/order events update accounting and reconcile terminal orders; they do not directly request a new RS decision in the inspected handler.
-- The shared evaluator runs Conservative first and RS second, with explicit preflight and shutdown exclusions.
-- BUY and SELL intents carry RS strategy, Position, cycle and purpose ownership.
-- The account-wide allocator is the quote/base commitment boundary.
-- SELL planning uses actual recovery Position quantity plus only verified unreserved legacy Spot quantity.
-- SELL fills are reconciled as a complete terminal mixed-SELL accounting boundary.
-- The terminal cycle-close and STOP divergences described above are present in the inspected source.
+- [#1842](https://github.com/45s/coinzilla/issues/1842) — require terminal `FILLED` status and a canonical terminal-cycle projection before closure; latch STOP for a FILLED under-target SELL.
+- [#1843](https://github.com/45s/coinzilla/issues/1843) — implement the owner-approved investment-only STOP contract, preserve existing-order reconciliation and expose authorized administrator resolution.
+- [#1780](https://github.com/45s/coinzilla/issues/1780) remains the separate from-scratch RS scenario-coverage initiative. Do not treat existing unit/workflow tests or unmerged scenario mappings as complete scenario evidence.
 
-### Follow-up implementation issues
-
-- [#1842](https://github.com/45s/coinzilla/issues/1842) — require terminal FILLED status for cycle closure and latch STOP for FILLED under-target SELL outcomes.
-- [#1843](https://github.com/45s/coinzilla/issues/1843) — implement owner-approved investment-only STOP behavior and authorized operator resolution.
-- [#1780](https://github.com/45s/coinzilla/issues/1780) remains the separate from-scratch RS scenario-coverage initiative. Its consolidated [PR #1823](https://github.com/45s/coinzilla/pull/1823) is open/unmerged at this snapshot; branch-only scenario mappings are not merged or VERIFIED evidence.
-- The former workflow-to-default-SELL-evaluator defect [#1809](https://github.com/45s/coinzilla/issues/1809) was fixed by merged [PR #1815](https://github.com/45s/coinzilla/pull/1815); #1809 was closed after confirming all six applicable workflows passed on the exact PR head.
-
-### Explicitly deferred / not proven here
+### Deferred boundaries
 
 - Process restart/replay of RS cycle state and accounting.
 - An authoritative execution-time quote valuation source for third-asset commissions.
 - Full end-to-end scenario coverage for every RS-001…RS-010 boundary.
 - Any TESTNET or LIVE exchange session, broker write, order submission or exchange-state mutation.
 
-### Audit method and limits
-
-This was a source trace of the startup composition, shared evaluator, market-price handler, user-data/order-event path, RS policy, shared allocator, submitter, accounting workflow, STOP workflow and the relevant existing workflow tests. The exact source baseline is recorded at the top of this document.
-
-This documentation task did not modify production source or tests, did not run a broker, and did not perform exchange operations. Existing tests were inspected as evidence of covered branches; no claim is made that the complete RS scenario matrix is verified. Run the repository's Markdown/style/anchor checks for this documentation change. Production behavior fixes belong in #1842 and #1843 and must use RED → GREEN tests.
+For the dated source-audit evidence, exact baseline, inspected tests, findings and verification boundary, see the [Recovery Seller runtime audit report](../audits/reports/2026-11-25_17-15-00_recovery-seller-runtime-audit.md).
