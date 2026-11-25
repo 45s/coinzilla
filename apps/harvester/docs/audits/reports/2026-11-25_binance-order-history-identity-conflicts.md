@@ -122,9 +122,7 @@ The test-only RED stage reproduced:
 - Pending-to-ack identity collision: client-only and exchange-identified order forms collided.
 - Relational ZRO/DOGE persistence collision: the second distinct exchange order was rejected as an immutable price conflict.
 - Fill-before-order collision: two fills with the same client ID but different exchange order IDs could not be safely linked to their own order rows.
-- Decimal representation collision: equivalent price/original-quantity strings and duplicate execution snapshots with different trailing-zero formatting were rejected despite exact numeric equality.
-
-The RED fixtures use the observed incoming client and broker IDs; prior-order broker IDs and all decimal prices/quantities are synthetic and are not represented as recovered production values. GREEN tests prove that distinct exchange orders persist separately, equivalent decimal representations remain idempotent without rewriting stored formatting, genuinely different same-order prices still fail, repeated sync is idempotent, partial-fill state advances, and fills link to the exact exchange order after arriving first.
+The RED fixtures use the observed incoming client and broker IDs; prior-order broker IDs and all decimal prices/quantities are synthetic and are not represented as recovered production values. After the initial identity RED checkpoint, source inspection also found raw-string decimal comparisons. Additional regression tests now cover equivalent price/original-quantity strings, duplicate execution snapshots with different trailing-zero formatting, omitted optional facts, and genuine numeric conflicts; these supplemental decimal tests were added with the decimal fix rather than being part of the initial RED checkpoint. GREEN tests prove that distinct exchange orders persist separately, equivalent decimal representations remain idempotent without rewriting stored formatting, genuinely different same-order prices still fail, repeated sync is idempotent, partial-fill state advances, and fills link to the exact exchange order after arriving first.
 
 ## Safety and unresolved limitations
 
