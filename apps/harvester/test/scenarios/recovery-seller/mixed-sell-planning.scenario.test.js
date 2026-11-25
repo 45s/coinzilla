@@ -1014,7 +1014,7 @@ function createScenarioTradingRules({ input, market, baseAsset }) {
       type: "MIN_NOTIONAL",
       status: "SUPPORTED",
       value: new Money({
-        amount: input.tradingRules.minNotional,
+        amount: input.tradingRules.minNotional ?? "20",
         asset: quoteAsset,
       }),
     },
