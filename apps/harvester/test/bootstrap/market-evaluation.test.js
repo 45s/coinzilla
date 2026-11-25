@@ -420,8 +420,14 @@ test("rejects conflicting CG/RS volatility settings for the same enabled market"
             appConfig: conflictingConfig,
             env: binanceEnv,
             executionRoutes: [
-              { strategyId: "CG_coinGrabber", symbol: input.marketSymbol },
-              { strategyId: "RS_recoverySeller", symbol: input.marketSymbol },
+              {
+                strategyId: "CG_coinGrabber",
+                symbol: input.marketSymbol,
+              },
+              {
+                strategyId: "RS_recoverySeller",
+                symbol: input.marketSymbol,
+              },
             ],
           })
         },
