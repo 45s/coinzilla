@@ -52,6 +52,32 @@ test("ignores a stale event that would regress cumulative execution", () => {
   )
 })
 
+test("reports safe existing and incoming immutable values for a rejected price conflict", () => {
+  const current = createOrderHistoryRecordFixture()
+  const conflicting = createOrderHistoryRecordFixture({
+    price: "65001.0000",
+    id: current.id,
+  })
+
+  assert.throws(
+    () => mergeOrderHistoryRecords({
+      current,
+      candidate: conflicting,
+    }),
+    (error) => {
+      assert.equal(error.context.field, "price")
+      assert.equal(error.context.existingValue, current.price)
+      assert.equal(error.context.incomingValue, conflicting.price)
+      assert.equal(error.context.existingBrokerOrderId, current.brokerOrderId)
+      assert.equal(error.context.incomingBrokerOrderId, conflicting.brokerOrderId)
+      assert.equal(error.context.reconciliationDecision, "rejected")
+      assert.equal(error.context.recoverable, false)
+      return error.code === "HARVESTER_ORDER_HISTORY_IDENTITY_CONFLICT"
+    },
+    "A genuine same-exchange-order price conflict must remain fatal and actionable.",
+  )
+})
+
 test("rejects conflicting immutable order facts under the same composite identity", () => {
   const current = createOrderHistoryRecordFixture()
   const conflicting = createOrderHistoryRecordFixture({
