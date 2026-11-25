@@ -2140,7 +2140,10 @@ test("scopes provisional client identities by market", async (t) => {
       timestamp: "2026-11-20T04:00:00.000Z",
       clientOrderId: sharedClientOrderId,
       brokerOrderId: null,
-      market: createHistoryMarket({ symbol, baseAssetCode }),
+      market: createHistoryMarket({
+        symbol,
+        baseAssetCode,
+      }),
     }))
   }
   await inspectSqlite({

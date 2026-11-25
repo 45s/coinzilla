@@ -304,6 +304,7 @@ function createRelationalResources({
   logger,
   runtimeSessionId,
   errorBuffer,
+  partialResources,
 } = {}) {
   const repositories = createRelationalHistoryRepositories({ database })
   const observers = createRelationalHistoryObservers({
@@ -313,12 +314,14 @@ function createRelationalResources({
     environment,
     logger,
   })
+  partialResources.observers = observers
   const runtimeErrorObserver = createRuntimeErrorProjection({
     database,
     runtimeSessionId,
     errorBuffer,
     logger,
   })
+  partialResources.runtimeErrorObserver = runtimeErrorObserver
   return {
     ...repositories,
     ...observers,
@@ -339,6 +342,7 @@ async function prepareRelationalResources({
     timeout: 5000,
   })
   let resources
+  const partialResources = {}
   try {
     await relationalDatabase.connect()
     const migrationBackups = await applyRelationalMigrations({
@@ -352,6 +356,7 @@ async function prepareRelationalResources({
       logger,
       runtimeSessionId,
       errorBuffer,
+      partialResources,
     })
     return {
       relationalDatabase,
@@ -362,9 +367,9 @@ async function prepareRelationalResources({
     await closePartialRelationalResources({
       database: relationalDatabase,
       observers: [
-        resources?.runtimeErrorObserver,
-        resources?.fillObserver,
-        resources?.relationalOrderObserver,
+        partialResources.runtimeErrorObserver,
+        partialResources.observers?.fillObserver,
+        partialResources.observers?.relationalOrderObserver,
       ],
       logger,
     })
