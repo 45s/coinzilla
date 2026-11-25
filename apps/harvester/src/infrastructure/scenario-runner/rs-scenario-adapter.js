@@ -119,7 +119,7 @@ const RUNTIME_PAIR_CONFIGS = Object.freeze({
 
 const RUNTIME_SCENARIO = Object.freeze({
   id: "RS-004-012",
-  name: "Production Recovery Seller SELL transition reserves and submits a mixed recovery/legacy order",
+  name: "Production Recovery Seller SELL transition on a deterministic ZROUSDT fixture",
   layer: "APPLICATION",
   status: "TEST-MAPPED",
   executionStatus: "PRELIMINARY",
@@ -263,7 +263,7 @@ function createRuntimeScenarioMarketMetadata({ market, baseAsset, quoteAsset }) 
           type: "PRICE_INCREMENT",
           status: "SUPPORTED",
           value: new Money({
-            amount: "0.000001",
+            amount: "0.001",
             asset: quoteAsset,
           }),
         },
@@ -301,7 +301,6 @@ function createRuntimeScenarioAccountSnapshot({
   quoteAsset,
   buyQuantity,
   legacyQuantity,
-  legacyInvested,
   buyQuoteQuantity,
 }) {
   const totalBaseQuantity = addDecimal({
@@ -448,7 +447,6 @@ async function createRuntimeScenarioWorkflow({
     buyQuantity,
     buyPrice,
     buyQuoteQuantity,
-    legacyInvested,
     legacyQuantity,
   }
 }
