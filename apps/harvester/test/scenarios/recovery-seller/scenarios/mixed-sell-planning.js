@@ -703,9 +703,12 @@ const concurrentReservationScenarioRecord = {
   ],
   subcases: [{
     id: "RS-003-009-A",
-    description: "tiny exact decimal quantities whose serialized representation may use exponent notation obey TradingRules",
-    status: "MISSING",
-    test: null,
+    description: "tiny exact decimal quantities represented in exponent notation retain exact quantity-step alignment and profitability price rounding",
+    status: "TEST-MAPPED",
+    test: {
+      file: testFile,
+      title: "RS-003-009-A: tiny exponent-notation quantities preserve exact TradingRules quantity and price increments",
+    },
     evidence: null,
   }, {
     id: "RS-003-009-B",
@@ -727,7 +730,7 @@ const concurrentReservationScenarioRecord = {
     file: testFile,
     title: concurrentReservationTestTitle,
   },
-  status: "PARTIAL",
+  status: "TEST-MAPPED",
   evidence: null,
 }
 
