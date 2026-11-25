@@ -18,9 +18,18 @@ export const scenarios = [
       processLock: "held by the current process",
     },
     inputEvents: [
-      { type: "SAFETY_PAUSE", sequence: 1 },
-      { type: "SHUTDOWN_REQUEST", sequence: 2 },
-      { type: "ORDER_RECONCILIATION", sequence: 3 },
+      {
+        type: "SAFETY_PAUSE",
+        sequence: 1,
+      },
+      {
+        type: "SHUTDOWN_REQUEST",
+        sequence: 2,
+      },
+      {
+        type: "ORDER_RECONCILIATION",
+        sequence: 3,
+      },
     ],
     expectedState: {
       newBuy: "blocked while safety pause is active",

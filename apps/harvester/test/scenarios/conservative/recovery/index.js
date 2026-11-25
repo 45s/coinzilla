@@ -18,12 +18,30 @@ export const scenarios = [
       recoverySell: "acknowledged and open",
     },
     inputEvents: [
-      { type: "SECOND_BUY_FILL", sequence: 1 },
-      { type: "CANCEL_RECOVERY_SELL", sequence: 2 },
-      { type: "RECONCILE_CANCEL_RACE_FILLS", sequence: 3 },
-      { type: "RECALCULATE_RECOVERY_SELL", sequence: 4 },
-      { type: "RECOVERY_SELL_COMPLETE", sequence: 5 },
-      { type: "NEXT_CYCLE_BUY", sequence: 6 },
+      {
+        type: "SECOND_BUY_FILL",
+        sequence: 1,
+      },
+      {
+        type: "CANCEL_RECOVERY_SELL",
+        sequence: 2,
+      },
+      {
+        type: "RECONCILE_CANCEL_RACE_FILLS",
+        sequence: 3,
+      },
+      {
+        type: "RECALCULATE_RECOVERY_SELL",
+        sequence: 4,
+      },
+      {
+        type: "RECOVERY_SELL_COMPLETE",
+        sequence: 5,
+      },
+      {
+        type: "NEXT_CYCLE_BUY",
+        sequence: 6,
+      },
     ],
     expectedState: {
       cancellation: "old recovery SELL is terminal and all raced fills are reconciled before replacement",
@@ -32,8 +50,16 @@ export const scenarios = [
       nextCycle: "new recovery basis contains only the new cycle's fills",
     },
     expectedOrders: [
-      { side: "SELL", purpose: "RECOVERY_SELL", condition: "replacement is calculated after reconciliation" },
-      { side: "BUY", purpose: "STANDING_BUY", condition: "only after recovery SELL acknowledgement" },
+      {
+        side: "SELL",
+        purpose: "RECOVERY_SELL",
+        condition: "replacement is calculated after reconciliation",
+      },
+      {
+        side: "BUY",
+        purpose: "STANDING_BUY",
+        condition: "only after recovery SELL acknowledgement",
+      },
     ],
     expectedAccounting: {
       portfolio: "base quantity, quote cost, and actual commissions reconcile with canonical fills",

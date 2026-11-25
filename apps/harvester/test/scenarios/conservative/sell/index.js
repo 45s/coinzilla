@@ -19,10 +19,22 @@ export const scenarios = [
       activeRecoverySell: "absent or terminal",
     },
     inputEvents: [
-      { type: "RECOVERY_SELL_PLAN", sequence: 1 },
-      { type: "FRESH_ORDER_BOOK_SNAPSHOT", sequence: 2 },
-      { type: "SELL_PARTIAL_FILL", sequence: 2 },
-      { type: "SELL_TERMINAL_UPDATE", sequence: 3 },
+      {
+        type: "RECOVERY_SELL_PLAN",
+        sequence: 1,
+      },
+      {
+        type: "FRESH_ORDER_BOOK_SNAPSHOT",
+        sequence: 2,
+      },
+      {
+        type: "SELL_PARTIAL_FILL",
+        sequence: 2,
+      },
+      {
+        type: "SELL_TERMINAL_UPDATE",
+        sequence: 3,
+      },
     ],
     expectedState: {
       retainedInventory: "keepQuantity remains reserved",
@@ -31,8 +43,15 @@ export const scenarios = [
       residual: "positive sellable residual is not suppressed merely because outstandingRecoveryAmount is zero; when recovery proceeds are secured, sell-through uses the current market reference",
     },
     expectedOrders: [
-      { side: "SELL", purpose: "RECOVERY_SELL", type: "POST_ONLY_LIMIT" },
-      { quantity: "rounded down to step size", price: "rounded up to tick size" },
+      {
+        side: "SELL",
+        purpose: "RECOVERY_SELL",
+        type: "POST_ONLY_LIMIT",
+      },
+      {
+        quantity: "rounded down to step size",
+        price: "rounded up to tick size",
+      },
     ],
     expectedAccounting: {
       requiredNetProceeds: "covers authoritative recovery basis plus minProfit",

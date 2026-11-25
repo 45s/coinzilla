@@ -18,10 +18,22 @@ export const scenarios = [
       userData: "connected or disconnected",
     },
     inputEvents: [
-      { type: "STARTUP_PREFLIGHT", sequence: 1 },
-      { type: "USER_DATA_DISCONNECT", sequence: 2 },
-      { type: "RECONNECT_AND_DRAIN_EVENTS", sequence: 3 },
-      { type: "CLOSING_ACCOUNT_AUDIT", sequence: 4 },
+      {
+        type: "STARTUP_PREFLIGHT",
+        sequence: 1,
+      },
+      {
+        type: "USER_DATA_DISCONNECT",
+        sequence: 2,
+      },
+      {
+        type: "RECONNECT_AND_DRAIN_EVENTS",
+        sequence: 3,
+      },
+      {
+        type: "CLOSING_ACCOUNT_AUDIT",
+        sequence: 4,
+      },
     ],
     expectedState: {
       readiness: "trading is gated until account and event evidence is authoritative",
