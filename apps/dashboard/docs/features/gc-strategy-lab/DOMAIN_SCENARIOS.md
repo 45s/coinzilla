@@ -311,10 +311,10 @@ The run's metadata, inputs, ordered events, outputs, lifecycle, trace/steps/deci
 An inspectable run has persisted or currently available execution evidence.
 
 ### When
-The user selects **Copy AI Debug Report**.
+The user selects **Copy AI Debug Package**.
 
 ### Then
-The client copies a versioned, paste-ready Markdown report containing repository and executed-code revision, strategy/adapter, scenario/scenarioId/subcase, runId, versions, timestamps, final status and lifecycle transitions; effective configuration and provenance; all initial inputs; ordered event sequence; all available steps, decisions, calculations, validations and trace; outputs/final state; assertions and expected-vs-actual comparison; and diagnostics. Exact values are retained in structured JSON sections. Secrets and credentials are redacted/excluded. The report is self-contained and does not require access to the original server run.
+The client copies one complete, versioned JSON package containing repository and executed-code revision, strategy/adapter, scenario/scenarioId/subcase, runId, versions, timestamps, final status and lifecycle transitions; original configuration and temporary Playground overrides; validated effective configuration; all initial inputs; ordered event sequence; available steps, decisions, calculations, validations and trace; outputs/final state; assertions and expected-vs-actual comparison; and diagnostics. Secrets and credentials are redacted/excluded. The package is self-contained and does not require access to the original server run.
 
 ## Future execution scenario 19 — Report exceeds clipboard capacity
 
@@ -324,7 +324,7 @@ The client copies a versioned, paste-ready Markdown report containing repository
 A run's complete diagnostic report is too large for the available clipboard path or client constraints.
 
 ### When
-The user requests **Copy AI Debug Report**.
+The user requests **Copy AI Debug Package**.
 
 ### Then
 The client clearly reports that a complete copy was not made and offers a complete export/download or segmented-copy path. It never silently truncates and labels a partial report complete. If clipboard permission is unavailable, a selectable-text fallback is provided.
@@ -375,18 +375,18 @@ The user inspects or edits RS configuration, authors a scenario, reviews a calcu
 ### Then
 The runner shows the exact config field names and values with base/quote units; labels `minProfit` as an absolute threshold in the selected market's quote asset (0.01 means 0.01 quote-asset units for every RS market; for this example, 0.01 USDT = one USDT cent) and never as a percentage; labels `priceStepPercent` as 0.5%; distinguishes configured values from derived values and runtime state; and does not invent an independent average-entry-price input. Market-price updates and simulated broker outcomes appear only as explicit ordered scenario events sourced from existing scenario/test evidence or deliberately authored inputs. They are not represented as config values.
 
-## Proposed future execution scenario 23 — Deterministic repeat and revision comparison (pending approval)
+## Approved execution scenario 23 — Original-version replay
 
-**Purpose:** Verify reproducibility without conflating an original-code replay with a regression run against changed production code.
+**Purpose:** Let the user inspect the behavior of the exact original scenario version.
 
 ### Given
-A scenario package captures the actual strategy configuration, initial simulation state, ordered market events, simulated broker responses and all controlled external inputs, together with the exact production revision used.
+A scenario records its production code revision and original configuration/inputs.
 
 ### When
-The user repeats the run or compares a fix on a newer production revision.
+The user selects original replay.
 
 ### Then
-A repeat against the same revision and same captured inputs is checked for reproducible production decisions, calculations, intents, transitions, accounting and final state. A newer-revision comparison is a separate execution using the same captured scenario package; both revision identifiers and both results/traces are retained and compared. Time, generated identifiers and other nondeterministic inputs are controlled or captured. If a dependency remains uncontrolled, deterministic replay is not claimed and the limitation is explicit.
+The runner executes the original package against that exact production revision. It does not silently substitute current code or Playground overrides. Newer-revision regression comparison is not part of the approved scope.
 
 
 ## Approved scenario workflows — original replay and temporary Playground
