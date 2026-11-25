@@ -18,16 +18,30 @@ export const scenarios = [
       marketData: "fresh",
     },
     inputEvents: [
-      { type: "MARKET_SNAPSHOT", sequence: 1 },
-      { type: "STRATEGY_EVALUATION", sequence: 2 },
+      {
+        type: "MARKET_SNAPSHOT",
+        sequence: 1,
+      },
+      {
+        type: "STRATEGY_EVALUATION",
+        sequence: 2,
+      },
     ],
     expectedState: {
       strategy: "returns a domain decision without mutating authoritative accounting state",
       portfolio: "unchanged by evaluation alone",
     },
     expectedOrders: [
-      { side: "BUY", purpose: "STANDING_BUY", condition: "all entry and account gates pass" },
-      { side: "SELL", purpose: "RECOVERY_SELL", condition: "a recovery position has executable sellable inventory" },
+      {
+        side: "BUY",
+        purpose: "STANDING_BUY",
+        condition: "all entry and account gates pass",
+      },
+      {
+        side: "SELL",
+        purpose: "RECOVERY_SELL",
+        condition: "a recovery position has executable sellable inventory",
+      },
     ],
     expectedSideEffects: {
       duplicateOrForbiddenIntent: false,

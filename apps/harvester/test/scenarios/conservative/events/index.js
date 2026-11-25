@@ -17,10 +17,22 @@ export const scenarios = [
       eventDelivery: "may be duplicated, delayed, reordered, or conflicting",
     },
     inputEvents: [
-      { type: "DUPLICATE_FILL_EVENT", sequence: 1 },
-      { type: "STALE_ORDER_UPDATE", sequence: 2 },
-      { type: "CONFLICTING_EXECUTION_EVIDENCE", sequence: 3 },
-      { type: "REST_STREAM_OVERLAP", sequence: 4 },
+      {
+        type: "DUPLICATE_FILL_EVENT",
+        sequence: 1,
+      },
+      {
+        type: "STALE_ORDER_UPDATE",
+        sequence: 2,
+      },
+      {
+        type: "CONFLICTING_EXECUTION_EVIDENCE",
+        sequence: 3,
+      },
+      {
+        type: "REST_STREAM_OVERLAP",
+        sequence: 4,
+      },
     ],
     expectedState: {
       acceptedFills: "each canonical execution is applied once",

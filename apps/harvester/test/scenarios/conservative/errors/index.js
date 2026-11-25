@@ -17,9 +17,18 @@ export const scenarios = [
       brokerOutcome: "may be rejected, delayed, unknown, or partially observed",
     },
     inputEvents: [
-      { type: "SUBMISSION_TIMEOUT", sequence: 1 },
-      { type: "CANCELLATION_TIMEOUT", sequence: 2 },
-      { type: "BROKER_HISTORY_INCOMPLETE", sequence: 3 },
+      {
+        type: "SUBMISSION_TIMEOUT",
+        sequence: 1,
+      },
+      {
+        type: "CANCELLATION_TIMEOUT",
+        sequence: 2,
+      },
+      {
+        type: "BROKER_HISTORY_INCOMPLETE",
+        sequence: 3,
+      },
     ],
     expectedState: {
       unknownOutcome: "retained as unknown and blocked pending authoritative reconciliation",

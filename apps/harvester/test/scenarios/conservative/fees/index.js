@@ -17,10 +17,22 @@ export const scenarios = [
       assets: "base, quote, and optional third commission asset are explicit",
     },
     inputEvents: [
-      { type: "BUY_FILL_WITH_BASE_COMMISSION", sequence: 1 },
-      { type: "BUY_FILL_WITH_QUOTE_COMMISSION", sequence: 2 },
-      { type: "SELL_FILL_WITH_THIRD_ASSET_COMMISSION", sequence: 3 },
-      { type: "THIRD_ASSET_VALUATION_MISSING", sequence: 4 },
+      {
+        type: "BUY_FILL_WITH_BASE_COMMISSION",
+        sequence: 1,
+      },
+      {
+        type: "BUY_FILL_WITH_QUOTE_COMMISSION",
+        sequence: 2,
+      },
+      {
+        type: "SELL_FILL_WITH_THIRD_ASSET_COMMISSION",
+        sequence: 3,
+      },
+      {
+        type: "THIRD_ASSET_VALUATION_MISSING",
+        sequence: 4,
+      },
     ],
     expectedState: {
       baseCommission: "reduces net acquired base or increases net base disposed as appropriate",
