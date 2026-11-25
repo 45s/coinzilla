@@ -134,7 +134,7 @@ This illustrates separation only; it does not authorize a Dashboard-owned strate
 - Execute the actual production strategy flow in an isolated simulation runtime and visualize actual emitted trace/results. Registry expectation and test-evidence views remain separately labelled.
 - Dynamic interactive diagrams, traceability graph, node inspection, filtering, search, grouping and graph↔text synchronization.
 - Step forward/back through a deterministic run where the simulation contract supports replay.
-- Scenario presets, save/load and reset.
+- Scenario presets, temporary Playground overrides and reset.
 - Simulation history for the current run and selected node/event.
 - Explicit simulation-only safety messaging and guards.
 
@@ -233,13 +233,12 @@ The Lab should offer typed event actions, not free-form edits to hidden runtime 
 
 Each injected event is validated, displayed in the event log, and processed by the simulation runner. The available event catalog must be based on the supported simulation contract; unsupported events are not fabricated.
 
-## 6. Scenario presets and persistence
+## 6. Scenario presets and temporary Playground state
 
 - Provide starter presets for representative success, existing-order, dust/minimum-filter, filter-unavailable, price-boundary, rejection and partial-fill cases as supported by the evaluator.
-- The selected scenario definition remains unchanged. Playground edits are temporary to the current working run and are never written back to the original scenario or persisted as a modified scenario.
-- Saved scenarios contain simulation inputs/events only, never secrets or broker credentials.
-- A scenario run is reproducible from its stored input/event sequence and evaluator version/context, subject to the contract's determinism guarantees.
-- Reset clears the run's simulation state/history and returns to its scenario starting state; it does not alter real runtime state.
+- The selected scenario definition is the immutable starting point. Playground configuration/input edits exist only in the current run-local working copy; there is no save-over or save-as-new action for Playground changes.
+- Reloading the scenario restores its original configuration and inputs. Run-result history is persisted separately under the approved bounded retention policy; it does not persist modified scenario definitions.
+- Reset clears the run's simulation state/history and returns to the selected scenario's original starting state; it does not alter real runtime state.
 
 ## 7. Production execution reuse and simulation boundary
 
@@ -276,7 +275,7 @@ Exact trace shape, public entry point, determinism, decimal representation, conf
 - [ ] Decision diagram is generated from structured actual evaluator trace.
 - [ ] Selecting a diagram node/trace step synchronizes the calculation inspector.
 - [ ] Calculations, filters, reason/disposition and generated intents are inspectable without UI-derived strategy rules.
-- [ ] Presets and scenario save/load support are documented and implemented per agreed persistence contract.
+- [ ] Presets and temporary Playground overrides are available; original scenario definitions remain unchanged.
 - [ ] Failure, invalid input, unavailable metadata, blocked/dust outcomes and partial runs are explicit.
 - [ ] No live orders, exchange access or production state mutations are possible from the Lab.
 - [ ] Deterministic tests verify event sequence, trace/graph mapping and safety isolation.
@@ -289,16 +288,15 @@ Exact trace shape, public entry point, determinism, decimal representation, conf
 3. Can each evaluation be deterministic/replayable, and what evaluator/configuration version metadata is required?
 4. Which inputs and event types are supported initially, and which remain deferred?
 5. How should exchange metadata/filter snapshots be supplied: operator fixture, verified fixture set or simulation adapter?
-6. What scenario persistence is preferred: browser storage, import/export files, or a backend-owned safe scenario store?
-7. How should graph layout and trace navigation handle very large/branching scenarios?
-8. Should the initial feature simulate only Conservative GC, or allow other strategies later through an explicit capability registry?
+6. How should graph layout and trace navigation handle very large/branching scenarios?
+7. Should the initial feature simulate only Conservative GC, or allow other strategies later through an explicit capability registry?
 
 ## 11. Verification expectations
 
 - Unit tests for scenario/event validation, run state, replay and graph mapping.
 - Contract tests for the Harvester simulation boundary and its non-execution guarantee.
 - Scenario tests covering success, active order, no sellable quantity/dust, filters unavailable, price/filter boundary, invalid event, rejection, partial fills and replay.
-- UI tests for node selection/trace synchronization, inspector contents, errors, reset and save/load.
+- UI tests for node selection/trace synchronization, inspector contents, errors, reset and temporary-override isolation.
 - Security tests/architecture checks confirming the feature cannot access broker APIs, credentials, database or production mutation endpoints.
 - Full Dashboard test/coverage/build and relevant workspace checks on the implementation PR.
 
