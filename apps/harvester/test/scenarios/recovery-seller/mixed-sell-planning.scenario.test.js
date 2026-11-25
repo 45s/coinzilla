@@ -86,7 +86,7 @@ test("RS-003-003: exhausted legacy inventory produces a recovery-only SELL plan"
   await assertRegisteredScenario({ id: "RS-003-003" })
 })
 
-test("the shared RS registry includes the first five mixed SELL planning and custody scenarios", () => {
+test("the shared RS registry includes the first seven RS-003 planning, custody and reservation scenarios", () => {
   const actualIds = recoverySellerScenarioRegistry
     .filter((scenario) => scenario.family === "RS-003")
     .map((scenario) => scenario.id)
@@ -98,6 +98,7 @@ test("the shared RS registry includes the first five mixed SELL planning and cus
     "RS-003-004",
     "RS-003-005",
     "RS-003-006",
+    "RS-003-007",
   ], "The RS registry must expose each mapped RS-003 planning, custody and reservation scenario exactly once.")
 })
 
@@ -612,7 +613,7 @@ function createAccountWideReservationSnapshot({ markets, portfolio, reservations
     activeOrders: reservations,
     additionalTrackedBaseQuantity: trackedLegacy,
   })
-  return new AccountSnapshot({
+  const accountSnapshot = new AccountSnapshot({
     balances: [
       balance,
       new Balance({
@@ -631,6 +632,10 @@ function createAccountWideReservationSnapshot({ markets, portfolio, reservations
     additionalTrackedBaseQuantityBaseline: baselines.data.additionalTrackedBaseQuantityBaseline,
     committedBaseBalanceBaseline: baselines.data.committedBaseBalanceBaseline,
   })
+  return {
+    accountSnapshot,
+    trackedLegacy,
+  }
 }
 
 function createAccountWideReservationScenarioContext() {
@@ -641,15 +646,11 @@ function createAccountWideReservationScenarioContext() {
   })
   const portfolio = createReservationPortfolio(markets)
   const reservations = createAccountWideReservationOrders({ markets })
-  const accountSnapshot = createAccountWideReservationSnapshot({
+  const snapshot = createAccountWideReservationSnapshot({
     markets,
     portfolio,
     reservations,
   })
-  const trackedLegacy = [{
-    assetId: markets.baseAsset.id,
-    amount: "0.01",
-  }]
   const dependencies = {
     strategyId: StrategyId.RECOVERY_SELLER,
     state: {
@@ -657,8 +658,8 @@ function createAccountWideReservationScenarioContext() {
         getActiveOrders: () => reservations,
       },
     },
-    getAccountSnapshot: () => accountSnapshot,
-    getAdditionalTrackedBaseQuantity: () => trackedLegacy,
+    getAccountSnapshot: () => snapshot.accountSnapshot,
+    getAdditionalTrackedBaseQuantity: () => snapshot.trackedLegacy,
     allocateOrderCommitments,
   }
   return {
