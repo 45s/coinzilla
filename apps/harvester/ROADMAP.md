@@ -2297,3 +2297,11 @@ The detailed evidence, implementation commits, CI state and remaining unknowns a
 - Strengthened the full Conservative engine lifecycle to use production `updateTradingAccounting`, covering second BUY partial/completed fills, recovery-SELL cancellation/fill reconciliation and replacement SELL submission with exact cumulative accounting assertions.
 - CI fixes: corrected the lifecycle cost-basis expectations from observed canonical fills, fixed strict ESLint formatting, and removed repeated Markdown blank lines. Exact-head verification is tracked on PR #1808.
 - Test-only and documentation changes; no production trading behavior or rules changed.
+
+## 2026-11-25 — Binance historical order identity conflict (#1851)
+
+- The ZROUSDT and DOGEUSDT startup history scans failed at order persistence because Binance reused clientOrderId values across distinct exchange orders. The sanitized production evidence and its explicit unknowns are preserved in [the incident report](docs/audits/reports/2026-11-25_binance-order-history-identity-conflicts.md).
+- The focused correction is in [PR #1849](https://github.com/45s/coinzilla/pull/1849): exchange-backed identity is scoped by environment, provider, account, market and exchange order ID; pending client identity remains provisional and market-scoped; fills link only by exact exchange order identity; equivalent decimal representations no longer trigger false immutable conflicts.
+- Migration v5 transactionally rebuilds the relational order/fill tables, verifies and retains a pre-v5 backup, preserves row IDs and valid foreign-key relationships, and fails closed on duplicate exchange identities or mismatched existing fill links. Conflict diagnostics retain reconciliation decision, recoverability and incomplete-coverage signals.
+- The persistence contract and audit report are updated. No TESTNET/LIVE writes, production restarts, account mutations or historical-row repairs were performed.
+- Issue #1851 remains open only for the unavailable original SQLite rows and exact conflicting price pair; regression fixture prices and prior-order IDs are explicitly synthetic, not recovered production facts. Do not infer the per-symbol old-row/new-row pairing.
