@@ -558,7 +558,7 @@ test("scenario output names cannot mutate the execution context prototype", asyn
     "Saving a named scenario output must not replace the context object's prototype.")
   assert.equal(Object.hasOwn(result.context, "__proto__"), true,
     "Every explicitly saved output name must remain an own context property, including __proto__.")
-  assert.deepEqual(result.context["__proto__"], savedRecord,
+  assert.deepEqual(Object.getOwnPropertyDescriptor(result.context, "__proto__").value, savedRecord,
     "A saved output with a special object-property name must preserve its exact value.")
   assert.deepEqual(result.results, [savedRecord, savedRecord],
     "Subsequent scenario steps must be able to read the saved special-name output without losing it.")
