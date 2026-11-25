@@ -1483,6 +1483,14 @@ async function assertConcurrentStrategyAccounting({ recoveryMarket, conservative
   "The CG fill must update only its owned Position with its exact base quantity.")
 }
 
+test("RS-008-018-B: concurrent same-market CG and RS fills retain independent Positions", async () => {
+  await assertConcurrentStrategyAccounting({
+    recoveryMarket: market,
+    conservativeMarket: market,
+    scenario: "RS-008-018-B",
+  })
+})
+
 test("accounts concurrent CG and RS fills on the same market without cross-attribution", async () => {
   await assertConcurrentStrategyAccounting({
     recoveryMarket: market,
