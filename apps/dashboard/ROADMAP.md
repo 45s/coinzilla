@@ -27,6 +27,10 @@
 - [x] Generate and commit the pnpm lockfile after local dependency installation.
 - [x] Verify the Angular production build and tests through GitHub Actions on the exact task PR head.
 
+## Mandatory Dashboard architecture
+
+All Dashboard feature work must follow DDD/clean architecture and keep business/domain/application logic independent of Angular or any UI framework. Framework replacement must require changes to presentation/adapters only, never business logic. See [Dashboard AGENTS.md](AGENTS.md).
+
 ## Future capability areas
 
 These are planning areas, not commitments to bypass backend ownership or existing trading safety requirements:
