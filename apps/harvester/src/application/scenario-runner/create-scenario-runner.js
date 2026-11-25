@@ -353,45 +353,41 @@ function enqueueRun({ context, record, runId }) {
   return snapshot({ record })
 }
 
-function submitRun({ context, submission }) {
+function validateSubmission({ submission }) {
   const { strategyId, scenarioId, input = null } = submission ?? {}
   if (typeof strategyId !== "string" || !strategyId.trim() ||
       typeof scenarioId !== "string" || !scenarioId.trim()) {
     throw new TypeError("Scenario Runner submission requires strategy and scenario IDs")
   }
-  const runId = context.createRunId()
-  if (context.records.has(runId)) {
-    throw new Error("Scenario Runner duplicate run ID")
-  }
+  return { strategyId, scenarioId, input }
+}
+
+function resolveExecutableAdapter({ context, strategyId, scenarioId }) {
   const adapter = context.adapters.get(strategyId)
-  const scenarioExecutable = context.canExecuteScenario({
+  const executable = context.canExecuteScenario({
     strategyId,
     scenarioId,
   }) === true
-  if (!adapter || !scenarioExecutable) {
-    if (!pruneHistory({ context })) {
-      throw createCapacityError()
-    }
-    return registerUnsupportedRun({
-      context,
-      runId,
-      strategyId,
-      scenarioId,
-      ...(adapter ? {
-        diagnostic: "The registered strategy adapter cannot execute this scenario because it is not marked executable.",
-      } : {}),
-    })
+  return { adapter, executable }
+}
+
+function registerUnexecutableSubmission({ context, runId, strategyId, scenarioId, adapter }) {
+  if (!pruneHistory({ context })) {
+    throw createCapacityError()
   }
-  const validation = context.validateScenarioInput({
+  const diagnostic = adapter
+    ? "The registered strategy adapter cannot execute this scenario because it is not marked executable."
+    : undefined
+  return registerUnsupportedRun({
+    context,
+    runId,
     strategyId,
     scenarioId,
-    input,
+    ...(diagnostic ? { diagnostic } : {}),
   })
-  if (validation?.valid !== true) {
-    throw createInputValidationError({
-      errors: Array.isArray(validation?.errors) ? validation.errors : [],
-    })
-  }
+}
+
+function createAcceptedRun({ context, runId, strategyId, scenarioId, input }) {
   if (!pruneHistory({ context })) {
     throw createCapacityError()
   }
@@ -407,14 +403,62 @@ function submitRun({ context, submission }) {
     record,
     onUpdate: context.onUpdate,
   })
+  return record
+}
+
+function scheduleAcceptedRun({ context, record, adapter }) {
   if (context.executions.size >= context.maxConcurrentRuns) {
     return enqueueRun({
       context,
       record,
-      runId,
+      runId: record.runId,
     })
   }
   return startExecution({
+    context,
+    record,
+    adapter,
+  })
+}
+
+function submitRun({ context, submission }) {
+  const { strategyId, scenarioId, input } = validateSubmission({ submission })
+  const runId = context.createRunId()
+  if (context.records.has(runId)) {
+    throw new Error("Scenario Runner duplicate run ID")
+  }
+  const { adapter, executable } = resolveExecutableAdapter({
+    context,
+    strategyId,
+    scenarioId,
+  })
+  if (!adapter || !executable) {
+    return registerUnexecutableSubmission({
+      context,
+      runId,
+      strategyId,
+      scenarioId,
+      adapter,
+    })
+  }
+  const validation = context.validateScenarioInput({
+    strategyId,
+    scenarioId,
+    input,
+  })
+  if (validation?.valid !== true) {
+    throw createInputValidationError({
+      errors: Array.isArray(validation?.errors) ? validation.errors : [],
+    })
+  }
+  const record = createAcceptedRun({
+    context,
+    runId,
+    strategyId,
+    scenarioId,
+    input,
+  })
+  return scheduleAcceptedRun({
     context,
     record,
     adapter,
@@ -557,18 +601,18 @@ function createAdapterMap({ adapters }) {
   return adapterMap
 }
 
-export function createScenarioRunner({
-  adapters = [],
-  createRunId = () => crypto.randomUUID(),
-  now = () => new Date().toISOString(),
-  timeoutMs = 30_000,
-  maxStoredRuns = 100,
-  maxConcurrentRuns = 2,
-  maxQueuedRuns = 10,
-  canExecuteScenario = () => true,
-  validateScenarioInput = () => ({ valid: true, errors: [] }),
+function createRunnerContext({
+  adapters,
+  createRunId,
+  now,
+  timeoutMs,
+  maxStoredRuns,
+  maxConcurrentRuns,
+  maxQueuedRuns,
+  canExecuteScenario,
+  validateScenarioInput,
   onUpdate,
-} = {}) {
+}) {
   validateRunnerConfiguration({
     adapters,
     canExecuteScenario,
@@ -578,9 +622,8 @@ export function createScenarioRunner({
     maxQueuedRuns,
     timeoutMs,
   })
-  const adapterMap = createAdapterMap({ adapters })
-  const context = {
-    adapters: adapterMap,
+  return {
+    adapters: createAdapterMap({ adapters }),
     canExecuteScenario,
     validateScenarioInput,
     records: new Map(),
@@ -595,6 +638,35 @@ export function createScenarioRunner({
     maxQueuedRuns,
     onUpdate,
   }
+}
+
+export function createScenarioRunner({
+  adapters = [],
+  createRunId = () => crypto.randomUUID(),
+  now = () => new Date().toISOString(),
+  timeoutMs = 30_000,
+  maxStoredRuns = 100,
+  maxConcurrentRuns = 2,
+  maxQueuedRuns = 10,
+  canExecuteScenario = () => true,
+  validateScenarioInput = () => ({
+    valid: true,
+    errors: [],
+  }),
+  onUpdate,
+} = {}) {
+  const context = createRunnerContext({
+    adapters,
+    createRunId,
+    now,
+    timeoutMs,
+    maxStoredRuns,
+    maxConcurrentRuns,
+    maxQueuedRuns,
+    canExecuteScenario,
+    validateScenarioInput,
+    onUpdate,
+  })
   return Object.freeze({
     submit: (submission) => submitRun({
       context,
