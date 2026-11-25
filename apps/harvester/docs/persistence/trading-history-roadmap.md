@@ -3,7 +3,7 @@
 **Status:** Active — Phases 1–3 complete; Phase 3a in review; Phases 4–5 and remaining Phase 6 work planned
 **Type:** Domain roadmap
 **Owner:** Harvester
-**Tracking:** [#1327 — Provider-neutral DB API and Harvester persistence integration](https://github.com/45s/coinzilla/issues/1327); [#1849 — Binance historical order identity conflicts](https://github.com/45s/coinzilla/issues/1849)
+**Tracking:** [#1327 — Provider-neutral DB API and Harvester persistence integration](https://github.com/45s/coinzilla/issues/1327); [#1849 — Binance historical order identity conflicts](https://github.com/45s/coinzilla/issues/1851)
 **Related infrastructure:** [#1486 — SQLite relational-schema infrastructure](https://github.com/45s/coinzilla/issues/1486)
 
 ## Purpose and authority
@@ -88,7 +88,7 @@ Financial values are stored as exact decimal text. Missing values remain SQL `NU
 
 ### Phase 3a — Provider-correct exchange order identity
 
-**Status: In review — [#1849](https://github.com/45s/coinzilla/issues/1849) / [PR #1849](https://github.com/45s/coinzilla/pull/1849).**
+**Status: In review — [#1851](https://github.com/45s/coinzilla/issues/1851) / [PR #1849](https://github.com/45s/coinzilla/pull/1849).**
 
 - Use market-scoped exchange order IDs as canonical identity; retain clientOrderId only for correlation and provisional pending records.
 - Rebuild the v4 relational tables transactionally, preserving order/fill/commission rows and foreign-key links; verify a pre-v5 backup before migration and reject any existing fill whose parent does not match its exact exchange-order identity.
