@@ -63,6 +63,7 @@ function createCatalog({ adapters, scenarioCatalog }) {
           executable,
           inputSchema: scenario.inputSchema,
           defaultInput: scenario.input,
+          readinessReasons: Object.freeze([...(scenario.readinessReasons ?? [])]),
         })
       })),
     },
