@@ -1833,3 +1833,137 @@ test("links fills to the correct exchange order when Binance reuses a clientOrde
     },
   })
 })
+
+
+test("backs up and rebuilds existing order/fill tables without breaking historical foreign keys", async (t) => {
+  const context = await createTestContext({ t })
+  const database = createSqliteDatabase({
+    filename: context.filename,
+    timeout: 5000,
+  })
+  await database.connect()
+  const legacyRecord = createLegacyRecord()
+  const orderRow = mapOrderHistoryRecordToRow({
+    record: legacyRecord,
+    sourceKind: "live_order_event",
+    sourceRecordId: legacyRecord.lastSourceEventId,
+    ingestionSource: "live_event",
+  })
+  const fillRow = {
+    id: "legacy-fill-v5-migration",
+    canonical_fill_id: "binance:BTCUSDT:trade-v5-migration",
+    provider_type: legacyRecord.providerType,
+    provider_instance_id: legacyRecord.providerInstanceId,
+    account_id: legacyRecord.accountId,
+    environment: legacyRecord.environment,
+    market_id: legacyRecord.market.id,
+    symbol: legacyRecord.symbol,
+    exchange_trade_id: "trade-v5-migration",
+    exchange_order_id: legacyRecord.brokerOrderId,
+    client_order_id: legacyRecord.clientOrderId,
+    order_id: legacyRecord.id,
+    strategy_id: null,
+    position_id: null,
+    cycle_id: null,
+    side: "BUY",
+    execution_price: "65000.0000",
+    executed_base_quantity: "0.0100",
+    executed_quote_quantity: "650.0000",
+    liquidity_role: "TAKER",
+    commission_status: "known",
+    exchange_executed_at: "2026-11-19T12:00:00.000Z",
+    local_observed_at: "2026-11-19T12:00:00.000Z",
+    last_observed_at: "2026-11-19T12:00:00.000Z",
+    source_kind: "live_fill_applied",
+    source_event_id: "legacy-fill-event-v5-migration",
+    last_source_event_id: "legacy-fill-event-v5-migration",
+    source_event_name: "execution.fill_applied",
+    source_event_source: "binance.user-data",
+    source_event_timestamp: "2026-11-19T12:00:00.000Z",
+    ingestion_source: "live_event",
+    last_ingestion_source: "live_event",
+  }
+
+  try {
+    await database.migrate(HARVESTER_RELATIONAL_MIGRATIONS.slice(0, 4))
+    await database.transaction((transaction) => {
+      transaction.prepare(
+        `INSERT INTO orders (${ORDER_COLUMNS.join(", ")})
+         VALUES (${ORDER_COLUMNS.map(() => "?").join(", ")})`,
+      ).run(...ORDER_COLUMNS.map((column) => orderRow[column]))
+      const fillColumns = Object.keys(fillRow)
+      transaction.prepare(
+        `INSERT INTO fills (${fillColumns.join(", ")})
+         VALUES (${fillColumns.map(() => "?").join(", ")})`,
+      ).run(...fillColumns.map((column) => fillRow[column]))
+      transaction.prepare(
+        `INSERT INTO fill_commissions (
+          fill_id, ordinal, amount, asset_id, asset_code,
+          quote_value_amount, quote_value_asset_id, quote_value_asset_code
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      ).run(
+        fillRow.id,
+        0,
+        "0.001",
+        "asset:BNB",
+        "BNB",
+        null,
+        null,
+        null,
+      )
+    })
+  } finally {
+    await database.close()
+  }
+
+  const persistence = await preparePersistence({ context })
+  assert.ok(
+    persistence.migrationBackupFilename?.includes(".pre-relational-v5."),
+    "A populated v4 relational database must have a verified pre-v5 backup.",
+  )
+
+  await inspectSqlite({
+    filename: context.filename,
+    work: (migratedDatabase) => {
+      const migratedOrder = migratedDatabase.prepare(
+        "SELECT id FROM orders WHERE id = ?",
+      ).get(legacyRecord.id)
+      const migratedFill = migratedDatabase.prepare(
+        "SELECT order_id FROM fills WHERE id = ?",
+      ).get(fillRow.id)
+      const commissionCount = migratedDatabase.prepare(
+        "SELECT COUNT(*) AS count FROM fill_commissions WHERE fill_id = ?",
+      ).get(fillRow.id).count
+      assert.equal(migratedOrder?.id, legacyRecord.id)
+      assert.equal(migratedFill?.order_id, legacyRecord.id)
+      assert.equal(commissionCount, 1)
+      assert.deepEqual(
+        migratedDatabase.prepare("PRAGMA foreign_key_check").all(),
+        [],
+        "The table rebuild must preserve all order/fill/commission foreign-key relationships.",
+      )
+    },
+  })
+
+  await inspectSqlite({
+    filename: persistence.migrationBackupFilename,
+    work: (backupDatabase) => {
+      assert.equal(
+        backupDatabase.prepare("PRAGMA integrity_check").get().integrity_check,
+        "ok",
+      )
+      assert.equal(
+        backupDatabase.prepare("SELECT COUNT(*) AS count FROM orders").get().count,
+        1,
+      )
+      assert.equal(
+        backupDatabase.prepare("SELECT order_id FROM fills WHERE id = ?").get(fillRow.id).order_id,
+        legacyRecord.id,
+      )
+      assert.equal(
+        backupDatabase.prepare("SELECT COUNT(*) AS count FROM fill_commissions").get().count,
+        1,
+      )
+    },
+  })
+})
