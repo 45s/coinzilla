@@ -14,6 +14,23 @@ const REQUIRED_SANDBOX_PROFILE = Object.freeze({
   maxOutputBytes: DEFAULT_MAX_OUTPUT_BYTES,
 })
 
+
+/**
+ * A launcher may attach this attestation only after applying and verifying
+ * the required OS-level profile. Node module guards do not satisfy this contract.
+ */
+function hasVerifiedSandboxAttestation({ spawnSandboxedWorker, maxOutputBytes }) {
+  const attestation = spawnSandboxedWorker.isolationAttestation
+  if (!attestation || attestation.level !== "os") {
+    return false
+  }
+  const expectedProfile = {
+    ...REQUIRED_SANDBOX_PROFILE,
+    maxOutputBytes,
+  }
+  return Object.entries(expectedProfile).every(([key, value]) => attestation[key] === value)
+}
+
 function createWorkerEnvironment() {
   const environment = {}
   for (const key of ["PATH", "Path", "SYSTEMROOT", "SystemRoot", "WINDIR", "windir"]) {
@@ -340,6 +357,11 @@ export function createProcessScenarioAdapter(options = {}) {
   const children = new Map()
   return Object.freeze({
     strategyId: resolvedOptions.strategyId,
+    executionMode: "simulation-only",
+    osSandboxVerified: hasVerifiedSandboxAttestation({
+      spawnSandboxedWorker: resolvedOptions.spawnSandboxedWorker,
+      maxOutputBytes: resolvedOptions.maxOutputBytes,
+    }),
     execute: createWorkerExecutor({
       ...resolvedOptions,
       children,

@@ -84,7 +84,7 @@ test("process adapter does not claim verified OS isolation for an unattested lau
     spawnSandboxedWorker: spawnTestWorker,
   })
   assert.equal(adapter.executionMode, "simulation-only")
-  assert.equal(adapter.isolationVerified, false)
+  assert.equal(adapter.osSandboxVerified, false)
 })
 
 test("process adapter refuses to start without a trusted OS sandbox launcher", () => {

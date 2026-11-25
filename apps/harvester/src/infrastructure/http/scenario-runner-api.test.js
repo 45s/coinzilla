@@ -206,7 +206,7 @@ test("host exposes an executable scenario only when its strategy adapter is regi
   const adapter = {
     strategyId: "RS",
     executionMode: "simulation-only",
-    isolationVerified: true,
+    osSandboxVerified: true,
     execute: async () => ({
       trace: [{
         id: "decision",
@@ -256,9 +256,20 @@ test("host blocks live and unverified adapters even when a scenario is source-ap
     cancel: async () => true,
   }
   const unsafeAdapters = [
-    { ...adapterBase, executionMode: "live", isolationVerified: true },
-    { ...adapterBase, executionMode: "simulation-only", isolationVerified: false },
-    { ...adapterBase, isolationVerified: true },
+    {
+      ...adapterBase,
+      executionMode: "live",
+      osSandboxVerified: true,
+    },
+    {
+      ...adapterBase,
+      executionMode: "simulation-only",
+      osSandboxVerified: false,
+    },
+    {
+      ...adapterBase,
+      osSandboxVerified: true,
+    },
   ]
   for (const adapter of unsafeAdapters) {
     const host = createScenarioRunnerHost({
@@ -283,7 +294,7 @@ test("host validates executable scenario input before the adapter receives it", 
     adapters: [{
       strategyId: "RS",
       executionMode: "simulation-only",
-      isolationVerified: true,
+      osSandboxVerified: true,
       execute: async () => {
         executions += 1
         return { output: "must not execute" }

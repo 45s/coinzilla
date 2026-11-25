@@ -153,8 +153,11 @@ export async function startTradingHistoryApi({
   return Object.freeze({
     address: server.address,
     close: async () => {
-      await runnerHost.runner.close()
-      await server.close()
+      try {
+        await runnerHost.runner.close()
+      } finally {
+        await server.close()
+      }
     },
   })
 }

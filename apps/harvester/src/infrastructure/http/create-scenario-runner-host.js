@@ -37,7 +37,9 @@ function createCatalog({ adapters, scenarioCatalog }) {
   if (!Array.isArray(scenarioCatalog)) {
     throw new TypeError("Scenario Runner host requires a strategy scenario catalog")
   }
-  const registeredStrategyIds = new Set(adapters.map((adapter) => adapter?.strategyId))
+  const registeredStrategyIds = new Set(adapters
+    .filter((adapter) => adapter?.executionMode === "simulation-only" && adapter?.osSandboxVerified === true)
+    .map((adapter) => adapter.strategyId))
   return Object.freeze([
     {
       strategyId: "RS",
