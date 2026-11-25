@@ -345,7 +345,7 @@ test("RS-003-005: verified Spot allocation subtracts every shared Portfolio posi
 })
 
 
-function createSellReservationOrder({ market, orderId }) {
+function createSellReservationOrder({ market, orderId, originalQuantity = "1", executedQuantity = "0.5" }) {
   return new CanonicalOrder({
     clientOrderId: orderId,
     brokerOrderId: `broker-${orderId}`,
@@ -357,11 +357,11 @@ function createSellReservationOrder({ market, orderId }) {
       asset: market.quoteAsset,
     }),
     originalQuantity: new Quantity({
-      amount: "1",
+      amount: originalQuantity,
       asset: market.baseAsset,
     }),
     executedQuantity: new Quantity({
-      amount: "0.5",
+      amount: executedQuantity,
       asset: market.baseAsset,
     }),
     status: "PARTIALLY_FILLED",
@@ -557,6 +557,134 @@ function summarizeReservationResult({ result }) {
   }
 }
 
+function createAccountWideReservationOrders({ markets }) {
+  const btcAsset = new Asset({
+    id: "binance:BTC",
+    code: "BTC",
+  })
+  const btcMarket = new Market({
+    venue: "binance",
+    symbol: "ZROBTC",
+    baseAsset: markets.baseAsset,
+    quoteAsset: btcAsset,
+  })
+  return [
+    createSellReservationOrder({
+      market: markets.reservationMarket,
+      orderId: "cg-existing-zro-fdusd",
+      originalQuantity: "1",
+      executedQuantity: "0.5",
+    }),
+    createSellReservationOrder({
+      market: btcMarket,
+      orderId: "rs-existing-zro-btc",
+      originalQuantity: "0.5",
+      executedQuantity: "0.25",
+    }),
+  ]
+}
+
+function createAccountWideReservationSnapshot({ markets, portfolio, reservations }) {
+  const balance = new Balance({
+    free: new Quantity({
+      amount: "0.26",
+      asset: markets.baseAsset,
+    }),
+    locked: new Quantity({
+      amount: "0.75",
+      asset: markets.baseAsset,
+    }),
+  })
+  const trackedLegacy = calculateVerifiedLegacySpotAllocation({
+    balances: [balance],
+    portfolio,
+    legacyPositions: [{
+      market: markets.targetMarket,
+      originalQuantity: "0.01",
+      remainingQuantity: "0.01",
+    }],
+  }).map(({ assetId, amount }) => ({
+    assetId,
+    amount,
+  }))
+  const baselines = calculateAccountSnapshotBaselines({
+    portfolio,
+    activeOrders: reservations,
+    additionalTrackedBaseQuantity: trackedLegacy,
+  })
+  return new AccountSnapshot({
+    balances: [
+      balance,
+      new Balance({
+        free: new Quantity({
+          amount: "1000",
+          asset: markets.quoteAsset,
+        }),
+        locked: new Quantity({
+          amount: "0",
+          asset: markets.quoteAsset,
+        }),
+      }),
+    ],
+    sourceTime: 1,
+    portfolioBaseQuantityBaseline: baselines.data.portfolioBaseQuantityBaseline,
+    additionalTrackedBaseQuantityBaseline: baselines.data.additionalTrackedBaseQuantityBaseline,
+    committedBaseBalanceBaseline: baselines.data.committedBaseBalanceBaseline,
+  })
+}
+
+function createAccountWideReservationScenarioContext() {
+  const markets = createReservationMarkets({
+    input: {
+      reservationMarketSymbol: "ZROFDUSD",
+    },
+  })
+  const portfolio = createReservationPortfolio(markets)
+  const reservations = createAccountWideReservationOrders({ markets })
+  const accountSnapshot = createAccountWideReservationSnapshot({
+    markets,
+    portfolio,
+    reservations,
+  })
+  const trackedLegacy = [{
+    assetId: markets.baseAsset.id,
+    amount: "0.01",
+  }]
+  const dependencies = {
+    strategyId: StrategyId.RECOVERY_SELLER,
+    state: {
+      registry: {
+        getActiveOrders: () => reservations,
+      },
+    },
+    getAccountSnapshot: () => accountSnapshot,
+    getAdditionalTrackedBaseQuantity: () => trackedLegacy,
+    allocateOrderCommitments,
+  }
+  return {
+    dependencies,
+    targetMarket: markets.targetMarket,
+    portfolio,
+    activeOrders: [],
+  }
+}
+
+function evaluateAccountWideReservationScenario() {
+  const context = createAccountWideReservationScenarioContext()
+  const atLimit = allocateReservationScenario({
+    context,
+    quantity: "0.26",
+  })
+  const overLimit = allocateReservationScenario({
+    context,
+    quantity: "0.27",
+  })
+  return {
+    atLimit: summarizeReservationResult({ result: atLimit }),
+    overLimit: summarizeReservationResult({ result: overLimit }),
+  }
+}
+
 function evaluateReservationScenario({ input }) {
   const context = createReservationScenarioContext({ input })
   const atLimit = allocateReservationScenario({
@@ -588,7 +716,7 @@ function assertReservationBoundary({ input }) {
   assert.equal(actual.overLimit.reason, input.expectedFailure)
 }
 
-test("RS-003-006-A: a same-market RS reservation reduces owned active SELL inventory exactly once", () => {
+test("RS-003-007-A: a same-market RS reservation reduces owned active SELL inventory exactly once", () => {
   assertReservationBoundary({
     input: {
       reservationId: "rs-same-market-sell",
@@ -604,7 +732,7 @@ test("RS-003-006-A: a same-market RS reservation reduces owned active SELL inven
   })
 })
 
-test("RS-003-006-B: a same-market CG reservation reduces shared account base availability", () => {
+test("RS-003-007-B: a same-market CG reservation reduces shared account base availability", () => {
   assertReservationBoundary({
     input: {
       reservationId: "cg-same-market-sell",
@@ -620,7 +748,7 @@ test("RS-003-006-B: a same-market CG reservation reduces shared account base ava
   })
 })
 
-test("RS-003-006-C: a cross-market CG reservation reduces shared base availability after the account snapshot", () => {
+test("RS-003-007-C: a cross-market CG reservation reduces shared base availability after the account snapshot", () => {
   assertReservationBoundary({
     input: {
       reservationId: "cg-cross-market-sell",
@@ -637,16 +765,16 @@ test("RS-003-006-C: a cross-market CG reservation reduces shared base availabili
 })
 
 async function assertRegisteredReservationScenario() {
-  const scenario = recoverySellerMixedSellPlanningScenarios.find((item) => item.id === "RS-003-006")
+  const scenario = recoverySellerMixedSellPlanningScenarios.find((item) => item.id === "RS-003-007")
   assert.ok(scenario,
-    "RS-003-006 must exist as a declarative account-wide reservation scenario.")
+    "RS-003-007 must exist as a declarative same-/cross-market reservation scenario.")
   assert.ok(recoverySellerScenarioRegistry.includes(scenario),
-    "The shared RS registry must include RS-003-006.")
+    "The shared RS registry must include RS-003-007.")
 
   const result = await runRecoverySellerDomainScenario({
     scenario,
     handlers: {
-      "calculate-account-wide-sell-reservation": ({ input }) => ({
+      "calculate-same-cross-market-sell-reservation": ({ input }) => ({
         cases: input.cases.map(({ id, ...caseInput }) => ({
           id,
           ...evaluateReservationScenario({ input: caseInput }),
@@ -661,6 +789,48 @@ async function assertRegisteredReservationScenario() {
   )
 }
 
-test("RS-003-006: registered same-market and cross-market SELL reservations are accounted exactly once", async () => {
+test("RS-003-007: registered same-market and cross-market SELL reservations are accounted exactly once", async () => {
   await assertRegisteredReservationScenario()
+})
+
+function assertAccountWideReservationBoundary() {
+  const actual = evaluateAccountWideReservationScenario()
+  assert.equal(actual.atLimit.ok, true,
+    "The account-wide remaining base quantity must be executable at its exact boundary.")
+  assert.deepEqual(actual.atLimit.executableActions, [{
+    side: "SELL",
+    quantity: "0.26",
+  }])
+  assert.equal(actual.atLimit.remainingBaseBalance, "0")
+  assert.equal(actual.atLimit.remainingActiveBase, "0.75")
+  assert.equal(actual.overLimit.ok, false,
+    "A SELL above the sum of shared account commitments must fail closed.")
+  assert.equal(
+    actual.overLimit.reason,
+    "Strategy SELL quantity exceeds available free base balance after commitments",
+  )
+}
+
+async function assertRegisteredAccountWideReservationScenario() {
+  const scenario = recoverySellerMixedSellPlanningScenarios.find((item) => item.id === "RS-003-006")
+  assert.ok(scenario,
+    "RS-003-006 must exist as a declarative account-wide reservation scenario.")
+  assert.ok(recoverySellerScenarioRegistry.includes(scenario),
+    "The shared RS registry must include RS-003-006.")
+  const result = await runRecoverySellerDomainScenario({
+    scenario,
+    handlers: {
+      "calculate-account-wide-sell-reservation": () => evaluateAccountWideReservationScenario(),
+    },
+  })
+  assert.deepEqual(
+    result.results[0],
+    scenario.then,
+    "The real account-wide commitment allocator must subtract the existing shared base commitments exactly once.",
+  )
+}
+
+test("RS-003-006: account-wide SELL reservations across markets are summed and snapshot commitments are not double-counted", async () => {
+  assertAccountWideReservationBoundary()
+  await assertRegisteredAccountWideReservationScenario()
 })
