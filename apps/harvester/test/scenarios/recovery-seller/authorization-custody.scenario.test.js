@@ -217,20 +217,20 @@ const domainHandlers = {
     }
     return {
       cases: input.cases.map((scenarioCase) => {
-      try {
-        const position = createLegacyPosition(scenarioCase.input)
-        return {
-          id: scenarioCase.id,
-          errorName: null,
-          averageCost: position.averageCost,
+        try {
+          const position = createLegacyPosition(scenarioCase.input)
+          return {
+            id: scenarioCase.id,
+            errorName: null,
+            averageCost: position.averageCost,
+          }
+        } catch (error) {
+          return {
+            id: scenarioCase.id,
+            errorName: error.name,
+            averageCost: null,
+          }
         }
-      } catch (error) {
-        return {
-          id: scenarioCase.id,
-          errorName: error.name,
-          averageCost: null,
-        }
-      }
       }),
     }
   },
