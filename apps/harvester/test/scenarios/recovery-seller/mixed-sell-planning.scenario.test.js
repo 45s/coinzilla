@@ -97,7 +97,8 @@ test("the shared RS registry includes the first five mixed SELL planning and cus
     "RS-003-003",
     "RS-003-004",
     "RS-003-005",
-  ], "The RS registry must expose each mapped RS-003 planning and custody scenario exactly once.")
+    "RS-003-006",
+  ], "The RS registry must expose each mapped RS-003 planning, custody and reservation scenario exactly once.")
 })
 
 
@@ -541,28 +542,50 @@ function allocateReservationScenario({ context, quantity }) {
   })
 }
 
-function assertReservationBoundary({ input }) {
+function summarizeReservationResult({ result }) {
+  if (!result.ok) {
+    return {
+      ok: false,
+      reason: result.errors[0].message,
+    }
+  }
+  return {
+    ok: true,
+    executableActions: result.data.allocation.executableActions,
+    remainingBaseBalance: result.data.allocation.remainingBaseBalance,
+    remainingActiveBase: result.data.allocation.remainingActiveBase,
+  }
+}
+
+function evaluateReservationScenario({ input }) {
   const context = createReservationScenarioContext({ input })
   const atLimit = allocateReservationScenario({
     context,
     quantity: "0.51",
   })
-  assert.equal(atLimit.ok, true,
-    "The exact base quantity remaining after the existing reservation must remain executable.")
-  assert.deepEqual(atLimit.data.allocation.executableActions, [{
-    side: "SELL",
-    quantity: "0.51",
-  }])
-  assert.equal(atLimit.data.allocation.remainingBaseBalance, input.expectedRemainingBaseBalance)
-  assert.equal(atLimit.data.allocation.remainingActiveBase, input.expectedRemainingActiveBase)
-
   const overLimit = allocateReservationScenario({
     context,
     quantity: "0.52",
   })
-  assert.equal(overLimit.ok, false,
+  return {
+    atLimit: summarizeReservationResult({ result: atLimit }),
+    overLimit: summarizeReservationResult({ result: overLimit }),
+  }
+}
+
+function assertReservationBoundary({ input }) {
+  const actual = evaluateReservationScenario({ input })
+  assert.equal(actual.atLimit.ok, true,
+    "The exact base quantity remaining after the existing reservation must remain executable.")
+  assert.deepEqual(actual.atLimit.executableActions, [{
+    side: "SELL",
+    quantity: "0.51",
+  }])
+  assert.equal(actual.atLimit.remainingBaseBalance, input.expectedRemainingBaseBalance)
+  assert.equal(actual.atLimit.remainingActiveBase, input.expectedRemainingActiveBase)
+  assert.equal(actual.overLimit.ok, false,
     "An additional SELL above the reservation-adjusted shared/owned quantity must fail closed.")
-  assert.match(overLimit.errors[0].message, new RegExp(input.expectedFailure))
+  assert.equal(actual.overLimit.reason, input.expectedFailure)
 }
 
 test("RS-003-006-A: a same-market RS reservation reduces owned active SELL inventory exactly once", () => {
@@ -611,4 +634,33 @@ test("RS-003-006-C: a cross-market CG reservation reduces shared base availabili
       expectedFailure: "available free base balance after commitments",
     },
   })
+})
+
+async function assertRegisteredReservationScenario() {
+  const scenario = recoverySellerMixedSellPlanningScenarios.find((item) => item.id === "RS-003-006")
+  assert.ok(scenario,
+    "RS-003-006 must exist as a declarative account-wide reservation scenario.")
+  assert.ok(recoverySellerScenarioRegistry.includes(scenario),
+    "The shared RS registry must include RS-003-006.")
+
+  const result = await runRecoverySellerDomainScenario({
+    scenario,
+    handlers: {
+      "calculate-account-wide-sell-reservation": ({ input }) => ({
+        cases: input.cases.map(({ id, ...caseInput }) => ({
+          id,
+          ...evaluateReservationScenario({ input: caseInput }),
+        })),
+      }),
+    },
+  })
+  assert.deepEqual(
+    result.results[0],
+    scenario.then,
+    "The real strategy/account commitment allocator must match the same-market and cross-market reservation oracle.",
+  )
+}
+
+test("RS-003-006: registered same-market and cross-market SELL reservations are accounted exactly once", async () => {
+  await assertRegisteredReservationScenario()
 })

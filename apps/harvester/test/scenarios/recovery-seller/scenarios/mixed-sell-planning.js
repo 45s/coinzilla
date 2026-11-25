@@ -260,7 +260,7 @@ const spotAllocationCases = [
 
 const spotBoundaryTitle = "RS-003-004: verified Spot availability below, equal to, and above the required legacy slice is capped exactly"
 
-export const recoverySellerMixedSellPlanningScenarios = Object.freeze([
+const recoverySellerMixedSellPlanningScenariosWithoutReservations = Object.freeze([
   ...recoverySellerSellPlanScenarios,
   createSpotAllocationScenario({
     id: "RS-003-004",
@@ -345,5 +345,139 @@ export const recoverySellerMixedSellPlanningScenarios = Object.freeze([
       },
       evidence: null,
     }],
+  }),
+])
+
+function createReservationScenario({ id, name, input, expected, subcases }) {
+  const title = `${id}: ${name}`
+  return defineRecoverySellerScenario({
+    id,
+    family: "RS-003",
+    name,
+    priority: "P0",
+    authority: [
+      "apps/harvester/docs/domain/recovery-seller-domain-specification.md#4-recovery-and-legacy-inventory",
+      "issue-1780: RS-003 account-wide SELL reservations and shared base commitments",
+    ],
+    layer: "DOMAIN",
+    configFields: ["RS_PAIR.sellQuantity", "RS_PAIR.legacyPosition.quantity"],
+    covers: {
+      rules: ["RS_ACCOUNT_BASE_RESERVATION", "RS_SELL_VERIFIED_UNRESERVED_QUANTITY"],
+      decisions: ["RS_ACCOUNT_ALLOCATION"],
+      states: [],
+      transitions: [],
+      invariants: ["RS_RESERVATION_CONSERVATION", "RS_CUSTODY_CONSERVATION"],
+    },
+    given: { input },
+    when: [{
+      type: "calculate-account-wide-sell-reservation",
+      inputKey: "input",
+      saveAs: "allocation",
+    }],
+    then: expected,
+    mustNot: [
+      "subtract a reservation already reflected in the AccountSnapshot more than once",
+      "ignore a SELL reservation because it belongs to another market or strategy",
+      "allow a new SELL to consume base quantity already reserved by an existing order",
+      "treat account-wide Portfolio quantity as Recovery Seller-owned active inventory",
+    ],
+    subcases,
+    implementation: [
+      "apps/harvester/src/use-cases/strategy-order-commitments.js",
+      "apps/harvester/src/domain/orders/allocate-order-commitments.js",
+      "apps/harvester/src/domain/account/calculate-account-snapshot-baselines.js",
+      "apps/harvester/src/domain/account/account-snapshot.js",
+    ],
+    test: {
+      file: testFile,
+      title,
+    },
+    status: "TEST-MAPPED",
+    evidence: null,
+  })
+}
+
+const reservationCases = [
+  {
+    id: "same-market-rs",
+    reservationId: "rs-same-market-sell",
+    reservationMarketSymbol: "ZROUSDT",
+    reservationOwner: "RS",
+    snapshotIncludesReservation: true,
+    freeBaseBalance: "2",
+    lockedBaseBalance: "0.5",
+    expectedRemainingBaseBalance: "1.49",
+    expectedRemainingActiveBase: "0",
+    expectedFailure: "Strategy SELL quantity exceeds Harvester-owned active inventory after commitments",
+  },
+  {
+    id: "same-market-cg",
+    reservationId: "cg-same-market-sell",
+    reservationMarketSymbol: "ZROUSDT",
+    reservationOwner: "CG",
+    snapshotIncludesReservation: true,
+    freeBaseBalance: "0.51",
+    lockedBaseBalance: "0.5",
+    expectedRemainingBaseBalance: "0",
+    expectedRemainingActiveBase: "0.5",
+    expectedFailure: "Strategy SELL quantity exceeds available free base balance after commitments",
+  },
+  {
+    id: "cross-market-cg",
+    reservationId: "cg-cross-market-sell",
+    reservationMarketSymbol: "ZROFDUSD",
+    reservationOwner: "CG",
+    snapshotIncludesReservation: false,
+    freeBaseBalance: "1.01",
+    lockedBaseBalance: "0",
+    expectedRemainingBaseBalance: "0",
+    expectedRemainingActiveBase: "0.5",
+    expectedFailure: "Strategy SELL quantity exceeds available free base balance after commitments",
+  },
+]
+
+const reservationTestFile = "apps/harvester/test/scenarios/recovery-seller/mixed-sell-planning.scenario.test.js"
+const reservationTestTitles = {
+  "same-market-rs": "RS-003-006-A: a same-market RS reservation reduces owned active SELL inventory exactly once",
+  "same-market-cg": "RS-003-006-B: a same-market CG reservation reduces shared account base availability",
+  "cross-market-cg": "RS-003-006-C: a cross-market CG reservation reduces shared base availability after the account snapshot",
+}
+
+export const recoverySellerMixedSellPlanningScenarios = Object.freeze([
+  ...recoverySellerMixedSellPlanningScenarios,
+  createReservationScenario({
+    id: "RS-003-006",
+    name: "same-market and cross-market SELL reservations are accounted exactly once against shared base inventory",
+    input: {
+      cases: reservationCases,
+    },
+    expected: {
+      cases: reservationCases.map(({ id, expectedRemainingBaseBalance, expectedRemainingActiveBase, expectedFailure }) => ({
+        id,
+        atLimit: {
+          ok: true,
+          executableActions: [{
+            side: "SELL",
+            quantity: "0.51",
+          }],
+          remainingBaseBalance: expectedRemainingBaseBalance,
+          remainingActiveBase: expectedRemainingActiveBase,
+        },
+        overLimit: {
+          ok: false,
+          reason: expectedFailure,
+        },
+      })),
+    },
+    subcases: reservationCases.map(({ id }) => ({
+      id: `RS-003-006-${id === "same-market-rs" ? "A" : id === "same-market-cg" ? "B" : "C"}`,
+      description: id,
+      status: "TEST-MAPPED",
+      test: {
+        file: reservationTestFile,
+        title: reservationTestTitles[id],
+      },
+      evidence: null,
+    })),
   }),
 ])
