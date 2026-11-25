@@ -303,7 +303,7 @@ function createOrderIdentityMigrationTableSql() {
     .replace("CREATE TABLE orders (", "CREATE TABLE orders_v5 (")
     .replace(
       "    UNIQUE (environment, provider_instance_id, provider_type, account_id, client_order_id)\n  )",
-      `    ingestion_source TEXT NOT NULL DEFAULT 'live_event'
+      `,\n    ingestion_source TEXT NOT NULL DEFAULT 'live_event'
       CHECK (ingestion_source IN ('live_event', 'exchange_history', 'legacy_migration')),
     last_ingestion_source TEXT NOT NULL DEFAULT 'live_event'
       CHECK (last_ingestion_source IN ('live_event', 'exchange_history', 'legacy_migration'))
@@ -317,7 +317,7 @@ function createOrderIdentityMigrationTableSql() {
     .replace("REFERENCES orders(id)", "REFERENCES orders_v5(id)")
     .replace(
       "    UNIQUE (provider_type, provider_instance_id, account_id, environment, market_id, exchange_trade_id)\n  )",
-      `    UNIQUE (provider_type, provider_instance_id, account_id, environment, market_id, exchange_trade_id),
+      `,\n    UNIQUE (provider_type, provider_instance_id, account_id, environment, market_id, exchange_trade_id),
     ingestion_source TEXT NOT NULL DEFAULT 'live_event'
       CHECK (ingestion_source IN ('live_event', 'exchange_history')),
     last_ingestion_source TEXT NOT NULL DEFAULT 'live_event'
