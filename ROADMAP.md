@@ -227,3 +227,5 @@ Bitunix Spot exposes partial query operations and a limited, explicitly gated le
 ### Recovery Seller scenario checkpoint — 2026-11-25
 
 RS-002-006-B now has an application authorizer/account-allocation test mapping for the remaining commitment of a partially filled RS BUY. The regression is added but has not been run on the current branch head. RS-002-006 and RS-002 remain PARTIAL; no scenario is VERIFIED. Keep the broader order-event lifecycle and exact-head CI as open evidence requirements.
+
+Additional RS-002-020-B application scenario mapping proves exact pair-cap equality with the pending owned BUY commitment counted once. The test is not run yet; RS-002-020 and RS-002 remain PARTIAL.
