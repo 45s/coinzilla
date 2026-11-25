@@ -2294,7 +2294,6 @@ The detailed evidence, implementation commits, CI state and remaining unknowns a
 - CI fixes: corrected the lifecycle cost-basis expectations from observed canonical fills, fixed strict ESLint formatting, and removed repeated Markdown blank lines. Exact-head verification is tracked on PR #1808.
 - Test-only and documentation changes; no production trading behavior or rules changed.
 
-
 ## 2026-11-25 — #1763 Phase 5 Conservative SELL accounting
 
 - PR [#1844](https://github.com/45s/coinzilla/pull/1844) adds `src/use-cases/conservative-sell-accounting-scenario.test.js`: canonical BUY plus three SELL fills applied through production `updateTradingAccounting`, real Portfolio/Position and RecoveryLedger, explicit commission-aware decimal oracles, duplicate/conflict/valuation-failure atomicity.
