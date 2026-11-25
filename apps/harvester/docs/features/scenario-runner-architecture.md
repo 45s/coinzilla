@@ -105,3 +105,8 @@ The process adapter itself must reject execution when its launcher does not carr
 ## Adapter-level fail-closed enforcement — 2026-11-25
 
 The process adapter enforces its own OS-attestation gate at the start of `execute`, before spawning a child. The host catalog also checks the attestation, but callers cannot bypass the isolation requirement by invoking the adapter directly. Process-lifecycle unit tests use an explicitly named simulated launcher attestation to exercise IPC and termination contracts; this is a test double only and is not evidence that an actual OS sandbox launcher exists or that production execution is enabled.
+
+
+## Cooperative worker cancellation — 2026-11-25
+
+Cancellation must first send a typed IPC `cancel` message to the active worker and allow its AbortSignal-aware execution to finish. If the worker does not exit within the bounded cooperative grace period, the parent escalates to SIGTERM and then SIGKILL. Failure to confirm child exit is a hard cleanup error; the run/worker slot remains retained so cancellation can be retried. A completed result is not force-cancelled after it has already been accepted.

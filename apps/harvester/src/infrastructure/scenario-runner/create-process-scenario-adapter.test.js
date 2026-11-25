@@ -258,3 +258,46 @@ test("process adapter refuses direct execution without verified OS sandbox attes
   }), /OS-level sandbox isolation has not been verified/)
   assert.equal(spawnCalls, 0, "an unverified launcher must not spawn a worker")
 })
+
+
+test("process adapter requests cooperative cancellation before forced termination", async () => {
+  const messages = []
+  const killSignals = []
+  const child = new EventEmitter()
+  child.exitCode = null
+  child.signalCode = null
+  child.connected = true
+  child.send = (message) => {
+    messages.push(message)
+    if (message.type === "cancel") {
+      child.exitCode = 0
+      queueMicrotask(() => child.emit("close"))
+    }
+    return true
+  }
+  child.kill = (signal) => {
+    killSignals.push(signal)
+    child.exitCode = 0
+    queueMicrotask(() => child.emit("close"))
+    return true
+  }
+  const adapter = createProcessScenarioAdapter({
+    strategyId: "RS",
+    terminationGraceMs: 20,
+    spawnSandboxedWorker: createSimulatedSandboxLauncher({
+      spawn: () => child,
+    }),
+  })
+  const controller = new AbortController()
+  const execution = adapter.execute({
+    runId: "run-cooperative-cancel",
+    scenarioId: "RS-004-011",
+    input: null,
+    signal: controller.signal,
+  })
+
+  controller.abort()
+  await assert.rejects(execution, /cancelled/)
+  assert.deepEqual(messages.map((message) => message.type), ["execute", "cancel"])
+  assert.deepEqual(killSignals, [], "a cooperative worker exit must not be force-killed")
+})
