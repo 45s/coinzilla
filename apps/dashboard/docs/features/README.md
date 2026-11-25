@@ -2,6 +2,10 @@
 
 This index lists durable feature behavior contracts owned by the Dashboard application. The repository-wide authoring and AI-agent usage rules are defined in the [Feature Specification Standard](../../../../docs/FEATURE_SPECIFICATION_STANDARD.md).
 
+## Architecture rule
+
+Dashboard feature business logic and domain/application modules MUST be framework-independent. DDD/clean architecture is mandatory; UI frameworks are presentation adapters only. See [Dashboard AGENTS.md](../AGENTS.md) for the enforceable rule.
+
 ## Features
 
 - [GitHub PR Dashboard](github-pr-dashboard/SPEC.md) — read-only overview of open `45s/coinzilla` pull requests, current head-commit timestamps and Dashboard-local work labels. [Domain scenarios](github-pr-dashboard/DOMAIN_SCENARIOS.md) and [schemas](github-pr-dashboard/schemas/).
