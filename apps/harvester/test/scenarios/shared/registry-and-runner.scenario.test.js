@@ -161,3 +161,16 @@ test("treats a non-zero Node test process exit as failure even when TAP contains
   assert.equal(result.testResults[0].status, "PROCESS_FAILED",
     "A process-level failure must override an isolated TAP ok line.")
 })
+
+test("removes only the exact source-file prefix added by the Node TAP reporter", () => {
+  const results = parseTapResults({
+    output: "TAP version 13\nok 1 - [strategy.test.js] plans the recovery SELL from actual inventory\n",
+    expectedTests: [{
+      path: "src/domain/strategies/conservative/strategy.test.js",
+      name: "plans the recovery SELL from actual inventory",
+    }],
+  })
+
+  assert.equal(results[0].status, "PASSED",
+    "The reporter's exact filename prefix must not turn an existing mapped test into TEST_NOT_FOUND.")
+})
