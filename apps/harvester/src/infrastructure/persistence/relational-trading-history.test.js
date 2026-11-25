@@ -1787,14 +1787,14 @@ function assertReusedClientOrderRows({ database, scenarios } = {}) {
   for (const scenario of scenarios) {
     const earlier = rows.find((row) => row.exchange_order_id === scenario.earlierBrokerOrderId)
     const incoming = rows.find((row) => row.exchange_order_id === scenario.incomingBrokerOrderId)
-    assert.ok(earlier)
-    assert.ok(incoming)
-    assert.equal(earlier.client_order_id, scenario.clientOrderId)
-    assert.equal(incoming.client_order_id, scenario.clientOrderId)
-    assert.equal(earlier.limit_price, "1.0000")
-    assert.equal(incoming.limit_price, "1.1000")
-    assert.equal(incoming.executed_quantity, "0.7500")
-    assert.equal(incoming.remaining_quantity, "0.2500")
+    assert.ok(earlier, `The earlier ${scenario.symbol} exchange order must persist independently.`)
+    assert.ok(incoming, `The incoming ${scenario.symbol} exchange order must persist independently.`)
+    assert.equal(earlier.client_order_id, scenario.clientOrderId, `The earlier ${scenario.symbol} order must retain the shared client ID as correlation data.`)
+    assert.equal(incoming.client_order_id, scenario.clientOrderId, `The incoming ${scenario.symbol} order must retain the shared client ID as correlation data.`)
+    assert.equal(earlier.limit_price, "1.0000", `The earlier ${scenario.symbol} order must preserve its own immutable price.`)
+    assert.equal(incoming.limit_price, "1.1000", `The incoming ${scenario.symbol} order must preserve its own immutable price.`)
+    assert.equal(incoming.executed_quantity, "0.7500", `The incoming ${scenario.symbol} order must retain the latest cumulative executed quantity.`)
+    assert.equal(incoming.remaining_quantity, "0.2500", `The incoming ${scenario.symbol} order must retain the latest remaining quantity.`)
   }
 }
 
@@ -1854,16 +1854,16 @@ async function persistReusedClientIdFills({ persistence } = {}) {
 
 function assertReusedClientIdFillLinks(database) {
   const fills = database.prepare("SELECT * FROM fills ORDER BY exchange_order_id").all()
-  assert.equal(fills.length, 2)
+  assert.equal(fills.length, 2, "Both executions with the reused client ID must remain separately persisted.")
   const earlierOrder = database.prepare(
     "SELECT id FROM orders WHERE exchange_order_id = ?",
   ).get("earlier-broker-order")
   const incomingOrder = database.prepare(
     "SELECT id FROM orders WHERE exchange_order_id = ?",
   ).get("incoming-broker-order")
-  assert.equal(fills[0].order_id, earlierOrder.id)
-  assert.equal(fills[1].order_id, incomingOrder.id)
-  assert.notEqual(fills[0].order_id, fills[1].order_id)
+  assert.equal(fills[0].order_id, earlierOrder.id, "The earlier fill must link to the earlier exchange order.")
+  assert.equal(fills[1].order_id, incomingOrder.id, "The incoming fill must link to the incoming exchange order.")
+  assert.notEqual(fills[0].order_id, fills[1].order_id, "Reusing a client ID must never cause fills from distinct exchange orders to share one parent.")
 }
 
 function createV5MigrationFillRow({ legacyRecord } = {}) {
@@ -2020,10 +2020,10 @@ function assertPendingOrderPromotion({ database, clientOrderId, tradeId } = {}) 
   const fill = database.prepare(
     "SELECT order_id, exchange_order_id FROM fills WHERE exchange_trade_id = ?",
   ).get(tradeId)
-  assert.equal(orders.length, 1)
-  assert.equal(orders[0].exchange_order_id, "exchange-order-pending-1")
-  assert.equal(fill.order_id, orders[0].id)
-  assert.equal(fill.exchange_order_id, "exchange-order-pending-1")
+  assert.equal(orders.length, 1, "Pending-order promotion must retain exactly one physical order row.")
+  assert.equal(orders[0].exchange_order_id, "exchange-order-pending-1", "The pending row must be promoted with the exchange-assigned order ID.")
+  assert.equal(fill.order_id, orders[0].id, "A fill observed before acknowledgement must link to the promoted order row.")
+  assert.equal(fill.exchange_order_id, "exchange-order-pending-1", "The fill must retain the exact exchange order identity used for promotion.")
 }
 
 test("persists reused Binance client IDs as separate ZRO/DOGE exchange orders without weakening same-order price checks", async (t) => {
@@ -2116,8 +2116,8 @@ test("rejects v5 migration when an existing fill points to a different exchange 
       "A valid foreign key must not hide a fill linked to the wrong exchange order.",
     )
     assert.equal(database.prepare("SELECT COUNT(*) AS count FROM orders").get().count, 1)
-    assert.equal(database.prepare("SELECT COUNT(*) AS count FROM fills").get().count, 1)
-    assert.equal(database.prepare("SELECT order_id FROM fills WHERE id = ?").get(fillRow.id).order_id, legacyRecord.id)
+    assert.equal(database.prepare("SELECT COUNT(*) AS count FROM fills").get().count, 1, "A rejected v5 migration must leave the original v4 fill rows intact.")
+    assert.equal(database.prepare("SELECT order_id FROM fills WHERE id = ?").get(fillRow.id).order_id, legacyRecord.id, "A failed migration must preserve the original fill-to-order foreign-key value.")
     assert.equal(
       database.prepare("SELECT COUNT(*) AS count FROM schema_migrations WHERE version = 5").get().count,
       0,
@@ -2155,7 +2155,7 @@ test("scopes provisional client identities by market", async (t) => {
         "SELECT market_id, client_order_id FROM orders WHERE client_order_id = ? ORDER BY market_id",
       ).all(sharedClientOrderId)
       assert.equal(rows.length, 2, "A provisional client ID on different markets must remain two market-scoped pending orders.")
-      assert.deepEqual(rows.map(({ market_id }) => market_id), ["binance:BTCUSDT", "binance:ETHUSDT"])
+      assert.deepEqual(rows.map(({ market_id }) => market_id), ["binance:BTCUSDT", "binance:ETHUSDT"], "The shared pending client ID must remain isolated into its two distinct market scopes.")
     },
   })
 })
@@ -2167,15 +2167,15 @@ function assertDuplicateV4HistoryRemains(database) {
   const orders = database.prepare(
     "SELECT exchange_order_id FROM orders ORDER BY id",
   ).all()
-  assert.deepEqual(versions, [1, 2, 3, 4])
-  assert.equal(orders.length, 2)
-  assert.equal(orders[0].exchange_order_id, orders[1].exchange_order_id)
+  assert.deepEqual(versions, [1, 2, 3, 4], "A duplicate exchange identity must leave the schema migration history at v4.")
+  assert.equal(orders.length, 2, "Both conflicting v4 order rows must remain present after migration rollback.")
+  assert.equal(orders[0].exchange_order_id, orders[1].exchange_order_id, "The v4 duplicate identity evidence must remain unchanged for operator recovery.")
   assert.deepEqual(database.prepare("PRAGMA foreign_key_check").all(), [])
 }
 
 function assertDuplicateV4HistoryBackup(database) {
   assert.equal(database.prepare("PRAGMA integrity_check").get().integrity_check, "ok")
-  assert.equal(database.prepare("SELECT COUNT(*) AS count FROM orders").get().count, 2)
+  assert.equal(database.prepare("SELECT COUNT(*) AS count FROM orders").get().count, 2, "The pre-v5 backup must preserve both conflicting order rows without repair.")
   assert.deepEqual(database.prepare("PRAGMA foreign_key_check").all(), [])
 }
 
@@ -2193,8 +2193,8 @@ test("fails v5 migration closed and retains backup when exchange identity is dup
     additionalOrderRecords: [duplicateRecord],
   })
   const persistence = await preparePersistence({ context })
-  assert.equal(persistence.relationalDatabase, null)
-  assert.ok(persistence.relationalError)
+  assert.equal(persistence.relationalDatabase, null, "Relational persistence must remain unavailable when the v5 migration rejects duplicate exchange identities.")
+  assert.ok(persistence.relationalError, "The failed v5 migration must remain observable as a relational preparation error.")
   assert.ok(persistence.orderIdentityMigrationBackupFilename?.includes(".pre-relational-v5."))
   await inspectSqlite({
     filename: context.filename,
