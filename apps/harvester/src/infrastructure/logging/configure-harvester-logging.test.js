@@ -578,7 +578,7 @@ async function assertHarvesterLogSessionHistory({ directory, sessionIdentities }
   const debugPath = path.join(directory, "cumulative", "harvester.log")
   const tracePath = path.join(directory, "cumulative", "trace.log")
   const readEntries = async (filePath) => (await readFile(filePath, "utf8"))
-    .trim().split("\\n").map((line) => JSON.parse(line))
+    .trim().split("\n").map((line) => JSON.parse(line))
   const debugEntries = await readEntries(debugPath)
   const traceEntries = await readEntries(tracePath)
   const expectedMessages = ["session diagnostic 1", "session diagnostic 2"]
@@ -587,8 +587,8 @@ async function assertHarvesterLogSessionHistory({ directory, sessionIdentities }
 
   for (const processIdentity of sessionIdentities) {
     const sessionPaths = createHarvesterLogSessionPaths({ directory, ...processIdentity })
-    const debugLines = (await readFile(sessionPaths.debug, "utf8")).trim().split("\\n")
-    const traceLines = (await readFile(sessionPaths.trace, "utf8")).trim().split("\\n")
+    const debugLines = (await readFile(sessionPaths.debug, "utf8")).trim().split("\n")
+    const traceLines = (await readFile(sessionPaths.trace, "utf8")).trim().split("\n")
     assert.equal(debugLines.length, 1)
     assert.equal(traceLines.length, 1)
   }
@@ -720,14 +720,14 @@ function writeStrategyOrderLifecycleFacts(transport) {
 }
 
 function assertStrategyOrderLifecycleLines(written) {
-  const lines = written.trimEnd().split("\\n")
+  const lines = written.trimEnd().split("\n")
   assert.equal(lines.length, 2)
   assert.ok(lines.every((line) => line.length < 130))
   assert.equal(
     lines[0],
     "19:14:52 🟡 CG SUBMITTED #pending ZROUSDT SELL 4.98 @ 1.393 h-325e71ba16494aeb875e6e-3",
   )
-  assert.doesNotMatch(lines[0], /\\\\| Client:|Client order ID:/)
+  assert.doesNotMatch(lines[0], /\\| Client:|Client order ID:/)
   assert.equal(
     lines[1],
     "19:14:53 🔴 RS CANCELLED #1341115 ADAUSDT SELL 49.90 @ 0.15410 | Executed: 20 | Cancelled: 29.90",
