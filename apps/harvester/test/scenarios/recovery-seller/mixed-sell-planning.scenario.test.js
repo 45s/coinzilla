@@ -599,7 +599,7 @@ test("RS-003-006-A: a same-market RS reservation reduces owned active SELL inven
       lockedBaseBalance: "0.5",
       expectedRemainingBaseBalance: "1.49",
       expectedRemainingActiveBase: "0",
-      expectedFailure: "Harvester-owned active inventory after commitments",
+      expectedFailure: "Strategy SELL quantity exceeds Harvester-owned active inventory after commitments",
     },
   })
 })
@@ -615,7 +615,7 @@ test("RS-003-006-B: a same-market CG reservation reduces shared account base ava
       lockedBaseBalance: "0.5",
       expectedRemainingBaseBalance: "0",
       expectedRemainingActiveBase: "0.5",
-      expectedFailure: "available free base balance after commitments",
+      expectedFailure: "Strategy SELL quantity exceeds available free base balance after commitments",
     },
   })
 })
