@@ -22,6 +22,7 @@
       </select>
     </label>
   </div>
+  <p class="scenario-status">Source mapping: {{ selectedScenario?.status ?? 'UNAVAILABLE' }}</p>
   <p class="scenario-status">Execution status: {{ selectedScenario?.executionStatus ?? 'UNAVAILABLE' }}</p>
   @if (selectedScenario?.readinessReasons?.length) {
     <section class="readiness">
