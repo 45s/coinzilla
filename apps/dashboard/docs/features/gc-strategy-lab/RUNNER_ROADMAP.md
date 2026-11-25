@@ -76,3 +76,17 @@ The Harvester lifecycle now keeps a run in `Cancelling` until the adapter execut
 ## Dashboard integration corrections
 
 The current Dashboard integration is a local-development client for the Harvester REST/WS adapter. The history action loads a prior run's recorded inputs; it is not original-revision replay. The debug JSON display is a selectable-text fallback, and clipboard success is shown only after the clipboard promise resolves. Recursive redaction currently covers API/access/private keys, secrets, passwords/passphrases, tokens, credentials, authorization/bearer values, cookies, sessions, JWTs and signatures; this does not establish complete package provenance or replace a full security review. The implementation remains incomplete until persistent bounded history, exact-revision replay, complete provenance/evidence, and the remaining MVP acceptance gates are implemented and verified.
+
+
+## Workflow-policy correction — 2026-11-25
+
+A cross-document audit found that the Dashboard agent instructions still required a Task Preflight run when scope crossed into another domain, contradicting the root policy and the merged Task Preflight retirement. The nested instruction now requires reading the affected domain's instructions, roadmap, source, consumers and tests; Task Preflight remains optional and is not a gate. The same correction removes an obsolete approval requirement: the approved Scenario Runner task explicitly permits necessary trading-service/domain refactoring on its task branch, with behavior preservation, regression tests and no real exchange operations. This does not authorize unrelated trading changes.
+
+## Current branch synchronization checkpoint — 2026-11-25
+
+- Task branch: `docs/dashboard/gc-strategy-lab-spec`.
+- Current branch head after the policy correction: `2583dbd134da8c6b241b0e88de535712efb57c97`.
+- Current `develop`: `1f55d5989e8122421f4d9e37693f68f32e0c29ed`.
+- GitHub compare reports 86 commits ahead and 42 commits behind, with merge base `24132a3f485efdc0a75c3bbcf4fd0e94778c79b9`. The branch is materially diverged; it is not current with develop. Synchronization and conflict review are required before final acceptance.
+- PR #1837 remains Draft and unmerged. The full approved MVP is not complete; all previously listed isolation, production-flow, persistence, replay, trace/report, configuration and E2E gates remain applicable.
+- No CI success is claimed for `2583dbd` until exact-head GitHub Actions results are available.
