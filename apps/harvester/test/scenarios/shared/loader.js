@@ -15,7 +15,7 @@ import {
 export const PACKAGE_ROOT = fileURLToPath(new URL("../../../", import.meta.url))
 const CRITICAL_BEHAVIOR_PATH = resolve(PACKAGE_ROOT, "docs/critical-behaviors.json")
 
-function uniqueBy(items, keyOf) {
+function uniqueBy({ items, keyOf }) {
   const seen = new Set()
   return items.filter((item) => {
     const key = keyOf(item)
@@ -46,21 +46,21 @@ function resolveScenarioEvidence({
     }
     return behavior
   })
-  const relatedSourceFiles = uniqueBy(
-    [
+  const relatedSourceFiles = uniqueBy({
+    items: [
       ...scenario.relatedSourceFiles,
       ...relatedBehaviors.flatMap((behavior) => behavior.sourceModules ?? []),
     ],
-    (path) => path,
-  )
-  const relatedExistingTests = uniqueBy(
-    [
+    keyOf: (sourcePath) => sourcePath,
+  })
+  const relatedExistingTests = uniqueBy({
+    items: [
       ...scenario.relatedExistingTests,
       ...(ADDITIONAL_TEST_MAPPINGS[scenario.id] ?? []),
       ...relatedBehaviors.flatMap((behavior) => behavior.tests ?? []),
     ],
-    (testCase) => `${testCase.path}::${testCase.name}`,
-  )
+    keyOf: (testCase) => `${testCase.path}::${testCase.name}`,
+  })
 
   return defineConservativeScenario({
     ...scenario,
