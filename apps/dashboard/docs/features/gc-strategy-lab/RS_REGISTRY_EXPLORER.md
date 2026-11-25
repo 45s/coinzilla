@@ -1,11 +1,11 @@
-# RS Registry Explorer — first strategy adapter
+# RS scenario catalogue — first strategy adapter
 
 - Status: draft design companion to [Scenario Explorer SPEC](SPEC.md)
 - Initial source: [RS scenario-testing PR #1823](https://github.com/45s/coinzilla/pull/1823), its registry and issue [#1780](https://github.com/45s/coinzilla/issues/1780)
 - Strategy scope: Recovery Seller (RS) first; GC later
 
 ## Goal
-Turn the existing structured RS scenario records into interactive, navigable diagrams. The first milestone is a **registry reader/visualizer**, not a simulator. Read scenario definitions and build interactive graphs from their relationships rather than manually drawing one diagram per case.
+Provide the initial strategy-owned scenario catalogue adapter for the strategy-neutral Scenario Runner. RS is first because its structured scenario records already exist. These records are inputs to an executable runner, not the product's final read-only destination. The generic runner owns discovery, configuration orchestration, isolated execution lifecycle, result comparison and graph presentation; the RS adapter supplies RS scenarios and binds them to actual RS production use cases.
 
 ## Source model and fields
 PR #1823 registry records contain these relevant fields (exact schema remains owned by the registry):
@@ -87,12 +87,12 @@ Based on its description and records at PR head (not a fresh checkout audit):
 
 The Explorer reads records available from source rather than hardcoding the family count/list. Registry schema changes are handled explicitly; incompatible input fails visibly.
 
-## Proposed implementation phases
-1. **RS Registry read-only explorer:** registry source adapter, normalization, browse/filter, family overview, Given/When/Then diagram, mustNot/subcase nodes, inspector and source/test navigation. No execution.
-2. **Traceability graph:** cross-case relationships for rules/decisions/states/transitions/invariants/config/source/test/evidence; missing mappings and blockers surfaced.
-3. **Scenario comparison:** compare selected cases/subcases; highlight input, steps, expectations, mustNot, coverage, statuses and blocker differences without issuing correctness verdicts.
-4. **Execution/trace simulator design:** after review, define Harvester-owned simulation contract. Actual evaluator traces remain distinct from declarative expectations.
-5. **GC adapter:** reuse neutral graph model once GC scenario source and simulation boundary are separately scoped.
+## Implementation phases
+1. **Runner foundation:** strategy-neutral registration/capability contracts, scenario catalogue port, schema-driven configuration model, isolated run lifecycle, result/trace contracts and framework-independent application core.
+2. **RS executable vertical slice:** RS catalogue adapter, actual production-use-case integration, editable strategy/market configuration, isolated state and simulated broker/market adapters, real assertions and trace.
+3. **Runner visualization and diagnostics:** renderer-neutral execution graph, synchronized trace/list/inspector, expected-vs-actual comparison, failure diagnostics and accessible text fallback.
+4. **Hardening and conformance:** production-code parity tests, no-live-side-effect tests, deterministic repeat/reset, malformed scenario/config/event tests, and a second-strategy adapter conformance fixture.
+5. **Additional strategies:** implement strategy-owned adapters as executable scenario catalogues and production-safe runtime contracts become available; runner core remains unchanged.
 
 ## Design questions
 1. Registry source: bundled read-only JSON export or supported API? Initial implementation must not import private Harvester test modules into the Dashboard browser bundle.
@@ -128,3 +128,14 @@ First execution milestone: execute one RS scenario/subcase independently. Regist
 Client execution is conditional: only if a supported safe evaluator can run in-browser without private Harvester/test imports, production execution paths or live side effects. Otherwise use a safe runner adapter, potentially backend-hosted. No live broker/exchange, credentials, orders, production mutation or direct database access. Contract and isolation remain open dependencies; do not implement a duplicate strategy rules engine in Dashboard.
 
 Layer separation: domain (scenario/run/result semantics), application (use cases/ports), adapters (registry/evaluator/storage/graph renderer/framework), Angular presentation (thin components/composition). Framework-swap acceptance: changing Angular to React/Vue does not require changing domain/application logic, execution contracts or core tests.
+
+
+## Approved strategy-neutral runner direction (2026-11-25)
+
+RS is only the first adapter, not the runner's scope. The same runner must eventually support every strategy with properly defined executable scenarios: RS, Generic Conservative/Aggressive, GC Conservative/Aggressive, futures strategies, grids and future families. Strategy-specific configuration fields/defaults and supported events come from the selected strategy adapter, never generic runner conditionals.
+
+The MVP is an executable RS vertical slice, not a read-only registry MVP. It must invoke the exact production functions/use cases used by normal runtime. Simulation replaces infrastructure side effects only (broker/order gateway, market/event source, isolated state/persistence and controlled clock as needed). It must not fork or duplicate strategy decisions, calculations, validation, accounting or lifecycle behavior.
+
+The runner core owns strategy-neutral registration/discovery, configuration orchestration, isolated execution lifecycle, event sequencing, results/assertions, expected-vs-actual comparison, trace/graph semantics and diagnostics. Strategy adapters bind scenarios/configuration to the actual production application entry points. Angular is only a replaceable presentation adapter; DDD/framework independence applies to all core behavior.
+
+A scenario that cannot invoke production behavior safely is blocked/not executable until its boundary is solved. Never downgrade it to a simplified Dashboard evaluator. No real broker/exchange calls, credentials, live orders, production state or persistence may be reachable from a simulation run.
