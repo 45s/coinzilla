@@ -1,3 +1,5 @@
+import { compareDecimal } from "@coinzilla/utils"
+
 function isRecord(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value)
 }
@@ -18,6 +20,12 @@ export function isValidScenarioInputSchema({ schema } = {}) {
   }
   return Object.values(schema.properties).every((field) => {
     if (!isRecord(field) || !["string", "number", "boolean"].includes(field.type)) {
+      return false
+    }
+    if (field.exclusiveMinimum !== undefined &&
+      (field.type !== "string" ||
+        typeof field.exclusiveMinimum !== "string" ||
+        !/^-?(?:0|[1-9][0-9]*)(?:[.][0-9]+)?$/.test(field.exclusiveMinimum))) {
       return false
     }
     if (field.pattern === undefined) {
@@ -71,6 +79,12 @@ export function validateScenarioInput({ schema, input } = {}) {
       errors.push(`Input field ${key} must be a ${field.type}`)
     } else if (field.pattern && !new RegExp(field.pattern).test(value)) {
       errors.push(`Input field ${key} does not match its schema pattern`)
+    } else if (field.exclusiveMinimum !== undefined &&
+      compareDecimal({
+        left: value,
+        right: field.exclusiveMinimum,
+      }) <= 0) {
+      errors.push(`Input field ${key} must be greater than ${field.exclusiveMinimum}`)
     }
   }
   return {
