@@ -50,3 +50,9 @@ These are planning areas, not commitments to bypass backend ownership or existin
 
 
 **Approved simulation isolation:** scenario execution runs in a dedicated worker process managed by Harvester, separate from the live trading process. Each run gets fresh isolated state and simulated infrastructure only; no credentials, production persistence/live state or real broker fallback. Timeouts, resource/concurrency limits, cleanup and fail-closed behavior are required.
+
+## Approved transport decision — REST API + WebSocket (2026-11-25)
+
+The Dashboard-to-Harvester Scenario Runner transport is **REST API + WebSocket**. REST is the command/query interface for submitting a scenario run, retrieving run status/results and diagnostics, requesting cancellation, and inspecting run details/history where supported. WebSocket carries server-pushed run lifecycle/progress and execution updates, including terminal completion/failure notifications. The asynchronous run-job contract remains transport-independent: Dashboard receives a run identifier and lifecycle state, then observes updates and retrieves authoritative results from Harvester.
+
+The transport is an adapter, not a business layer. Domain/application contracts and use cases must not depend on HTTP, WebSocket APIs, Angular, RxJS or browser APIs. Keep request/event DTOs typed and versionable; define reconnect/resubscription and missed-update recovery so REST status/result retrieval remains authoritative if a WebSocket connection drops. Do not introduce GraphQL, gRPC or a message broker for the initial implementation without a demonstrated requirement.
