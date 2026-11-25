@@ -99,3 +99,8 @@ The UI action is **Copy AI Debug Package** and copies complete versioned JSON on
 
 ## Scenario Runner roadmap
 See [the phased implementation roadmap](docs/features/gc-strategy-lab/RUNNER_ROADMAP.md). Existing trading logic and trading services are protected: changes require explicit prior user approval.
+
+
+### Scenario Runner agent execution rules
+
+Before any work, read repository-root `AGENTS.md` and all applicable nested `AGENTS.md` files. This is explicitly mandatory in Issue #1836, PR #1837 and the Runner roadmap. Trading logic/services may be refactored on the dedicated task branch as required for faithful production-flow reuse, with regression coverage and behavior/safety preservation. Never work directly on `develop`/`main`, merge, or enable auto-merge.
