@@ -658,79 +658,81 @@ const concurrentReservationExpected = {
     reason: "Strategy SELL quantity exceeds available free base balance after commitments",
   },
 }
-function createConcurrentReservationScenario() {
-  return defineRecoverySellerScenario({
-    id: "RS-003-009",
-    family: "RS-003",
-    name: "account commitments after the snapshot and exact TradingRules quantity boundaries remain fail-closed",
-    priority: "P0",
-    authority: [
-      "apps/harvester/docs/domain/recovery-seller-domain-specification.md#11-concurrent-strategies-and-external-orders",
-      "issue-1780: RS-003 concurrent account commitment change between snapshot and allocation",
-    ],
-    layer: "DOMAIN",
-    configFields: ["RS_PAIR.sellQuantity", "RS_PAIR.legacyPosition.quantity"],
-    covers: {
-      rules: ["RS_ACCOUNT_BASE_RESERVATION", "RS_SELL_VERIFIED_UNRESERVED_QUANTITY"],
-      decisions: ["RS_ACCOUNT_ALLOCATION"],
-      states: [],
-      transitions: [],
-      invariants: ["RS_RESERVATION_CONSERVATION", "RS_CUSTODY_CONSERVATION"],
+const concurrentReservationScenarioRecord = {
+  id: "RS-003-009",
+  family: "RS-003",
+  name: "account commitments after the snapshot and exact TradingRules quantity boundaries remain fail-closed",
+  priority: "P0",
+  authority: [
+    "apps/harvester/docs/domain/recovery-seller-domain-specification.md#11-concurrent-strategies-and-external-orders",
+    "issue-1780: RS-003 concurrent account commitment change between snapshot and allocation",
+  ],
+  layer: "DOMAIN",
+  configFields: ["RS_PAIR.sellQuantity", "RS_PAIR.legacyPosition.quantity"],
+  covers: {
+    rules: ["RS_ACCOUNT_BASE_RESERVATION", "RS_SELL_VERIFIED_UNRESERVED_QUANTITY"],
+    decisions: ["RS_ACCOUNT_ALLOCATION"],
+    states: [],
+    transitions: [],
+    invariants: ["RS_RESERVATION_CONSERVATION", "RS_CUSTODY_CONSERVATION"],
+  },
+  given: {
+    snapshot: {
+      portfolioBaseQuantity: "1.5",
+      legacySpotQuantity: "0.01",
+      committedBaseBalance: "0.75",
+      freeBaseBalance: "0.76",
+      lockedBaseBalance: "0.75",
     },
-    given: {
-      snapshot: {
-        portfolioBaseQuantity: "1.5",
-        legacySpotQuantity: "0.01",
-        committedBaseBalance: "0.75",
-        freeBaseBalance: "0.76",
-        lockedBaseBalance: "0.75",
-      },
-      postSnapshotOrder: {
-        market: "ZROFDUSD",
-        strategy: "CG",
-        remainingBaseQuantity: "0.5",
-      },
+    postSnapshotOrder: {
+      market: "ZROFDUSD",
+      strategy: "CG",
+      remainingBaseQuantity: "0.5",
     },
-    when: [{
-      type: "calculate-post-snapshot-sell-reservation",
-      saveAs: "allocation",
-    }],
-    then: concurrentReservationExpected,
-    mustNot: [
-      "ignore a same-base SELL order registered after the account snapshot",
-      "subtract snapshot-resident commitments a second time",
-      "attribute the cross-market CG commitment to RS-owned active inventory",
-      "allow a SELL above the free base remaining after the post-snapshot commitment",
-    ],
-    subcases: [{
-      id: "RS-003-009-A",
-      description: "tiny exact decimal quantities whose serialized representation may use exponent notation obey TradingRules",
-      status: "MISSING",
-      test: null,
-      evidence: null,
-    }, {
-      id: "RS-003-009-B",
-      description: "a cross-market CG SELL commitment registered after the snapshot reduces free base by its exact remaining quantity",
-      status: "TEST-MAPPED",
-      test: {
-        file: testFile,
-        title: concurrentReservationTestTitle,
-      },
-      evidence: null,
-    }],
-    implementation: [
-      "apps/harvester/src/use-cases/strategy-order-commitments.js",
-      "apps/harvester/src/domain/orders/allocate-order-commitments.js",
-      "apps/harvester/src/domain/account/calculate-account-snapshot-baselines.js",
-      "apps/harvester/src/domain/account/account-snapshot.js",
-    ],
+  },
+  when: [{
+    type: "calculate-post-snapshot-sell-reservation",
+    saveAs: "allocation",
+  }],
+  then: concurrentReservationExpected,
+  mustNot: [
+    "ignore a same-base SELL order registered after the account snapshot",
+    "subtract snapshot-resident commitments a second time",
+    "attribute the cross-market CG commitment to RS-owned active inventory",
+    "allow a SELL above the free base remaining after the post-snapshot commitment",
+  ],
+  subcases: [{
+    id: "RS-003-009-A",
+    description: "tiny exact decimal quantities whose serialized representation may use exponent notation obey TradingRules",
+    status: "MISSING",
+    test: null,
+    evidence: null,
+  }, {
+    id: "RS-003-009-B",
+    description: "a cross-market CG SELL commitment registered after the snapshot reduces free base by its exact remaining quantity",
+    status: "TEST-MAPPED",
     test: {
       file: testFile,
       title: concurrentReservationTestTitle,
     },
-    status: "PARTIAL",
     evidence: null,
-  })
+  }],
+  implementation: [
+    "apps/harvester/src/use-cases/strategy-order-commitments.js",
+    "apps/harvester/src/domain/orders/allocate-order-commitments.js",
+    "apps/harvester/src/domain/account/calculate-account-snapshot-baselines.js",
+    "apps/harvester/src/domain/account/account-snapshot.js",
+  ],
+  test: {
+    file: testFile,
+    title: concurrentReservationTestTitle,
+  },
+  status: "PARTIAL",
+  evidence: null,
+}
+
+function createConcurrentReservationScenario() {
+  return defineRecoverySellerScenario(concurrentReservationScenarioRecord)
 }
 
 export const recoverySellerMixedSellPlanningScenarios = Object.freeze([
