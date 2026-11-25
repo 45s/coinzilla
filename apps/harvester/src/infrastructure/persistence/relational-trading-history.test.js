@@ -1744,3 +1744,92 @@ test("persists reused Binance client IDs as separate ZRO/DOGE exchange orders wi
     },
   })
 })
+
+
+test("links fills to the correct exchange order when Binance reuses a clientOrderId", async (t) => {
+  const context = await createTestContext({ t })
+  const persistence = await preparePersistence({ context })
+  const clientOrderId = "h-BTCUSDT-reused"
+  const earlier = createExchangeHistoryOrder({
+    status: "OPEN",
+    executedQuantity: "0",
+    remainingQuantity: "1.0000",
+    eventId: "exchange-history-order:earlier",
+    timestamp: "2026-11-20T04:00:00.000Z",
+    clientOrderId,
+    brokerOrderId: "exchange-order-1001",
+    price: "65000.0000",
+  })
+  const incoming = createExchangeHistoryOrder({
+    status: "OPEN",
+    executedQuantity: "0",
+    remainingQuantity: "1.0000",
+    eventId: "exchange-history-order:incoming",
+    timestamp: "2026-11-20T04:00:01.000Z",
+    clientOrderId,
+    brokerOrderId: "exchange-order-1002",
+    price: "65100.0000",
+  })
+  const earlierFill = createAppliedFillEvent({
+    overrides: {
+      fillId: "binance:BTCUSDT:trade-1001",
+      tradeId: "trade-1001",
+      brokerOrderId: earlier.brokerOrderId,
+      clientOrderId,
+    },
+  })
+  const incomingFill = createAppliedFillEvent({
+    overrides: {
+      fillId: "binance:BTCUSDT:trade-1002",
+      tradeId: "trade-1002",
+      brokerOrderId: incoming.brokerOrderId,
+      clientOrderId,
+    },
+  })
+
+  await persistence.fillRepository.upsert({
+    fill: earlierFill,
+    sourceEvent: {
+      id: "exchange-history-fill:1001",
+      name: "execution.fill_history_reconciled",
+      source: "binance.exchange-history",
+      timestamp: "2026-11-20T04:00:02.000Z",
+    },
+    environment: "testnet",
+    ingestionSource: "exchange_history",
+  })
+  await persistence.fillRepository.upsert({
+    fill: incomingFill,
+    sourceEvent: {
+      id: "exchange-history-fill:1002",
+      name: "execution.fill_history_reconciled",
+      source: "binance.exchange-history",
+      timestamp: "2026-11-20T04:00:03.000Z",
+    },
+    environment: "testnet",
+    ingestionSource: "exchange_history",
+  })
+
+  await persistence.orderRepository.upsertHistorical(earlier)
+  await persistence.orderRepository.upsertHistorical(incoming)
+
+  await inspectSqlite({
+    filename: context.filename,
+    work: (database) => {
+      const orders = database.prepare(
+        "SELECT id, exchange_order_id FROM orders WHERE client_order_id = ? ORDER BY exchange_order_id",
+      ).all(clientOrderId)
+      const fills = database.prepare(
+        "SELECT exchange_order_id, order_id FROM fills WHERE client_order_id = ? ORDER BY exchange_order_id",
+      ).all(clientOrderId)
+      const orderIds = new Map(orders.map((order) => [order.exchange_order_id, order.id]))
+      assert.equal(orders.length, 2)
+      assert.equal(fills.length, 2)
+      assert.deepEqual(
+        fills.map((fill) => fill.order_id),
+        fills.map((fill) => orderIds.get(fill.exchange_order_id)),
+        "Each fill must link only to its exchange order, never another order sharing the clientOrderId.",
+      )
+    },
+  })
+})
