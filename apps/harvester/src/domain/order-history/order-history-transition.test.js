@@ -95,6 +95,45 @@ test("treats decimal formatting differences in duplicate source events as identi
   assert.equal(merged.remainingQuantity, current.remainingQuantity)
 })
 
+test("rejects a numerically different immutable original quantity", () => {
+  const current = createOrderHistoryRecordFixture({
+    originalQuantity: "0.0100",
+  })
+  const candidate = createOrderHistoryRecordFixture({
+    id: current.id,
+    originalQuantity: "0.0200",
+    lastSourceEventId: "event-002",
+  })
+
+  assert.throws(
+    () => mergeOrderHistoryRecords({
+      current,
+      candidate,
+    }),
+    (error) => error.context.field === "originalQuantity",
+  )
+})
+
+test("rejects numerically different execution facts under a duplicate source event ID", () => {
+  const current = createOrderHistoryRecordFixture({
+    executedQuantity: "0.5000",
+    remainingQuantity: "0.5000",
+  })
+  const candidate = createOrderHistoryRecordFixture({
+    id: current.id,
+    executedQuantity: "0.6000",
+    remainingQuantity: "0.4000",
+  })
+
+  assert.throws(
+    () => mergeOrderHistoryRecords({
+      current,
+      candidate,
+    }),
+    (error) => error.context.field === "sourceEventId",
+  )
+})
+
 test("reports safe existing and incoming immutable values for a rejected price conflict", () => {
   const current = createOrderHistoryRecordFixture()
   const conflicting = createOrderHistoryRecordFixture({
