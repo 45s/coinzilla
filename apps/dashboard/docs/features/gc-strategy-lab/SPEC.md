@@ -519,12 +519,12 @@ For the current approved LINEAUSDT Recovery Seller configuration on TESTNET (sou
 | `sellQuantity` | `10` | Configured legacy sell slice, in base-asset units (LINEA) |
 | `investment` | `100` | Configured investment amount, in quote-currency units (USDT) |
 | `orderQuantity` | `7000` | Configured order quantity, in base-asset units (LINEA) |
-| `minProfit` | `0.01` | **Absolute minimum profit in quote currency, not a percentage. For LINEAUSDT this is 0.01 USDT = one USDT cent.** |
+| `minProfit` | `0.01` | **Absolute minimum profit in the market's quote asset, not a percentage. This unit rule applies to every RS market. For LINEAUSDT this example is 0.01 USDT = one USDT cent.** |
 | `priceStepPercent` | `0.5` | Price-step percentage (0.5%), not an absolute price increment |
 | `makerPercent` / `takerPercent` | `0.1` / `0.1` | Fee percentages |
 | `enableVolatilityProtection` | `false` | Volatility protection disabled |
 
-The RS profitability implementation compares monetary net profit directly with `minProfit`; it does not interpret `0.01` as a 1% rate. Documentation, labels, validation messages, scenario fixtures and AI reports must call this an **absolute quote-currency profit threshold** and show the quote asset/unit. Do not call it “1%”. For another market, the displayed currency unit follows that market's quote asset; do not assume every strategy or market uses USDT.
+The RS profitability implementation compares monetary net profit directly with `minProfit`; it does not interpret `0.01` as a 1% rate. This is the universal RS field contract for **every market**: `minProfit` is an absolute amount in that market's quote asset. Thus a configured `0.01` means 0.01 quote-asset units regardless of symbol (for example, 0.01 USDT on LINEAUSDT or 0.01 FDUSD on a *FDUSD-quoted* market). It never means 1%, and the threshold is not converted into a percentage. Documentation, labels, validation messages, scenario fixtures and AI reports must preserve this semantic and display the actual market quote asset. The LINEAUSDT values in the table are one concrete configuration example, not a restriction of the rule to LINEA.
 
 The configured legacy basis is not proof of current exchange custody or available inventory. Derived values such as legacy average cost must be shown as derived outputs with provenance, not invented as independent configuration fields. For this LINEAUSDT example, the configured basis implies 400 USDT / 25,000 LINEA = 0.016 USDT per LINEA; that is a derived historical average cost, not a separately configured input.
 
