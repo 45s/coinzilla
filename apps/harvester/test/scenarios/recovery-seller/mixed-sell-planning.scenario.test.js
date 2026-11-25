@@ -110,6 +110,51 @@ function createSpotMarket({ baseAsset, symbol, quoteCode }) {
   })
 }
 
+function applyPortfolioAcquisition({ portfolio, acquisition, baseAsset, getMarket }) {
+  const market = getMarket(acquisition)
+  const fill = new Fill({
+    tradeId: acquisition.tradeId,
+    brokerOrderId: `broker-${acquisition.tradeId}`,
+    market,
+    side: "BUY",
+    price: new Money({
+      amount: "10",
+      asset: market.quoteAsset,
+    }),
+    quantity: new Quantity({
+      amount: acquisition.quantity,
+      asset: baseAsset,
+    }),
+    quoteQuantity: new Money({
+      amount: acquisition.quoteQuantity,
+      asset: market.quoteAsset,
+    }),
+    commissions: [],
+    commissionStatus: "COMPLETE",
+  })
+  const { portfolio: nextPortfolio } = portfolio.applyFill({
+    fill,
+    positionId: acquisition.positionId,
+    strategyId: acquisition.strategy === "CG"
+      ? StrategyId.COIN_GRABBER
+      : StrategyId.RECOVERY_SELLER,
+  })
+  return nextPortfolio
+}
+
+function createSpotBalance({ input, baseAsset }) {
+  return new Balance({
+    free: new Quantity({
+      amount: input.spotFreeQuantity,
+      asset: baseAsset,
+    }),
+    locked: new Quantity({
+      amount: input.spotLockedQuantity ?? "0",
+      asset: baseAsset,
+    }),
+  })
+}
+
 function calculateSpotAllocation({ input }) {
   const baseAsset = new Asset({
     id: "binance:ZRO",
@@ -126,59 +171,22 @@ function calculateSpotAllocation({ input }) {
     }
     return marketBySymbol.get(symbol)
   }
-
-  let portfolio = new Portfolio()
-  for (const acquisition of input.acquisitions) {
-    const market = getMarket(acquisition)
-    const fill = new Fill({
-      tradeId: acquisition.tradeId,
-      brokerOrderId: `broker-${acquisition.tradeId}`,
-      market,
-      side: "BUY",
-      price: new Money({
-        amount: "10",
-        asset: market.quoteAsset,
-      }),
-      quantity: new Quantity({
-        amount: acquisition.quantity,
-        asset: baseAsset,
-      }),
-      quoteQuantity: new Money({
-        amount: acquisition.quoteQuantity,
-        asset: market.quoteAsset,
-      }),
-      commissions: [],
-      commissionStatus: "COMPLETE",
-    })
-    const applied = portfolio.applyFill({
-      fill,
-      positionId: acquisition.positionId,
-      strategyId: acquisition.strategy === "CG"
-        ? StrategyId.COIN_GRABBER
-        : StrategyId.RECOVERY_SELLER,
-    })
-    portfolio = applied.portfolio
-  }
-
+  const portfolio = input.acquisitions.reduce((current, acquisition) =>
+    applyPortfolioAcquisition({
+      portfolio: current,
+      acquisition,
+      baseAsset,
+      getMarket,
+    }), new Portfolio())
+  const legacyPositions = input.legacyPositions.map((legacyPosition) => ({
+    market: getMarket(legacyPosition),
+    originalQuantity: legacyPosition.originalQuantity,
+    remainingQuantity: legacyPosition.remainingQuantity,
+  }))
   const allocations = calculateVerifiedLegacySpotAllocation({
-    balances: [
-      new Balance({
-        free: new Quantity({
-          amount: input.spotFreeQuantity,
-          asset: baseAsset,
-        }),
-        locked: new Quantity({
-          amount: input.spotLockedQuantity ?? "0",
-          asset: baseAsset,
-        }),
-      }),
-    ],
+    balances: [createSpotBalance({ input, baseAsset })],
     portfolio,
-    legacyPositions: input.legacyPositions.map((legacyPosition) => ({
-      market: getMarket(legacyPosition),
-      originalQuantity: legacyPosition.originalQuantity,
-      remainingQuantity: legacyPosition.remainingQuantity,
-    })),
+    legacyPositions,
   })
   return allocations.map(({ assetId, amount }) => ({
     assetId,
