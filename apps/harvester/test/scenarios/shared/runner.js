@@ -123,6 +123,14 @@ function executeTestGroup({
   const processFailed = Boolean(execution.error) || execution.status !== 0
   const executionError = execution.error?.message ??
     (processFailed ? "Node test process exited with status " + (execution.status ?? "unknown") + "." : null)
+  const observedTapTitles = (execution.stdout ?? "").split(/\\r?\\n/)
+    .map(parseTapLine)
+    .filter(Boolean)
+    .map((result) => result.name)
+    .slice(0, 20)
+  const missingTestError = observedTapTitles.length === 0
+    ? "Node test process emitted no parseable TAP result titles."
+    : "No exact TAP title match. Observed titles: " + observedTapTitles.join(" | ")
 
   return parsed.map((result) => {
     const status = processFailed && result.status === "PASSED"
@@ -133,7 +141,7 @@ function executeTestGroup({
       ...result,
       status,
       exitCode: execution.status,
-      error: processFailed ? executionError : null,
+      error: result.status === "NOT_FOUND" ? (executionError ?? missingTestError) : (processFailed ? executionError : null),
       stderr: processFailed ? (execution.stderr ?? "").slice(0, 2000) : null,
     }
   })
