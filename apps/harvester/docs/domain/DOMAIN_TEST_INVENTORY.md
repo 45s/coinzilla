@@ -369,3 +369,16 @@ The separate initiative adds four package-level scenario files; it does not repl
 The scenario catalog is the single repository-wide human-readable behavior index. Issue #1780 owns the detailed RS matrix and exact-head evidence. No RS row is COVERED until its complete requirement is proved by new scenario evidence, merged to `develop`, and required CI is verified on the exact merged head.
 
 **Open contract discrepancies:** (1) STOP is described as terminal/no-reset, but a pure state resolver and durable resolution use case exist even though the operator facade exposes read-only status only; (2) the config currently sets `enabled: true`, while specification §15 says false by default; (3) third-asset fee quote valuation has no approved authoritative runtime source. Keep affected rows BLOCKED rather than inferring a resolution.
+
+## Executable Conservative scenario system — issue #1797
+
+The scenario-definition and reporting workstream is tracked in [#1797](https://github.com/45s/coinzilla/issues/1797), under parent audit [#1763](https://github.com/45s/coinzilla/issues/1763).
+
+- Definitions: `test/scenarios/conservative/` (18 stable `CON-*` scenarios across 16 categories).
+- Shared tooling: `test/scenarios/shared/` (schema, loader, mapped-test runner, assertions and reporter).
+- Critical behavior ownership: `docs/critical-behaviors.json` (reused, not duplicated).
+- Runner: `pnpm --filter @coinzilla/harvester scenarios:conservative`.
+- Reports: `reports/conservative-scenarios/` (inventory, results and coverage JSON).
+- CI: the dedicated Conservative scenario workflow uploads the generated reports.
+
+The initial inventory has 15 TEST-MAPPED, one PARTIAL, one MISSING (CON-PERSIST-003) and one UNSUPPORTED (runtime restoration) scenario. TEST-MAPPED and PARTIAL are not VERIFIED. Unmapped-test reporting is scoped to the named test set in the critical behavior registry, not every Harvester test file.
