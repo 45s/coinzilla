@@ -2,7 +2,7 @@ import nodeTest from "node:test"
 import assert from "node:assert/strict"
 import * as shared from "../../test/bootstrap/start-harvester-test-support.js"
 
-const { Balance, CanonicalOrder, Fill, Money, Quantity, TradingRules, multiplyDecimal, waitForTestSignal, appConfig, createMarketMetadata, createOpenOrderSnapshot, createBinanceCapabilities, createBroker, createRecoverySellerStopWorkflow, recordConfigurationBaseline, recordProcessStarted, makeVolatilityReadyBroker, binanceEnv, startHarvesterForTest, createFill } = shared
+const { Balance, CanonicalOrder, Fill, Money, Quantity, TradingRules, multiplyDecimal, waitForTestSignal, appConfig, createMarketMetadata, createOpenOrderSnapshot, createBinanceCapabilities, createBroker, createRecoverySellerStopWorkflow, recordConfigurationBaseline, recordProcessStarted, recordProcessStopped, makeVolatilityReadyBroker, binanceEnv, startHarvesterForTest, createFill } = shared
 const { mkdtemp, rm, os, path, createFileOperationalStateStore } = shared
 const test = (...args) => nodeTest(`[start-harvester.test.js] ${args[0]}`, ...args.slice(1))
 
@@ -1645,6 +1645,12 @@ test("rejects startup before market subscriptions when a persisted account-scope
       explanation: "Integration test: restore an unresolved account-scoped STOP before startup",
     })
     assert.equal(latched.ok, true, "The integration fixture must durably persist the account-scoped STOP.")
+    const stopped = await recordProcessStopped({
+      operationalStateStore: store,
+      reason: "TEST_CLEAN_STOP_WITH_ACCOUNT_BLOCKER",
+      clean: true,
+    })
+    assert.equal(stopped.ok, true, stopped.errors?.[0]?.message)
 
     await assert.rejects(
       startHarvesterForTest({
