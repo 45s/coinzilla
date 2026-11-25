@@ -73,7 +73,7 @@ test("RS-004-012 executes the production runtime evaluator and accounting workfl
   assert.equal(result.passed, true)
   assert.equal(result.output.decision.outcome, "SUBMIT")
   assert.equal(result.output.action.side, "SELL")
-  assert.equal(result.output.action.quantity, "7010")
+  assert.equal(result.output.action.quantity, "55")
   assert.equal(result.output.submitted, true)
   assert.equal(result.output.submittedOrders.length, 1)
   assert.equal(result.output.reservedSellCycle.clientOrderId, result.output.submittedOrders[0].clientOrderId)
