@@ -134,6 +134,11 @@ Do not claim 100% correctness from line/branch coverage. Completion means every 
 
 **Current status:** Phase 1 existing-test audit is reconciled against current `develop`. PRs #1771, #1773, #1774, #1775 and #1776 are merged. PR #1774 is merged as `281a18c057bfe576155acf49f1080c11ec2ae42d`; its next-cycle fresh-basis and stale prior-cycle replay assertions count as develop coverage. Its six GitHub Actions workflows passed on exact head `e6b4f956137dad4c2c2fdb5469d454375ce7fba9`. PR #1772 was closed because the narrow large-engine-test cleanup exposed 33 pre-existing strict-ESLint max-lines violations; remaining fixture/oracle cleanup is BLOCKED in the domain test inventory. No production behavior or trading rules changed. No confirmed production bug was found. Dedicated `scenarios/` suite work remains deferred.
 
+
+### Phase 5–6 checkpoint — 2026-11-25
+
+[PR #1844](https://github.com/45s/coinzilla/pull/1844) adds the composed Conservative SELL-accounting scenario and initial BUY/SELL strategy-evaluation composition. Its exact head `4dd62b42a4a147dd173db3bc7f3155615dba1dca` is 23 commits ahead / 0 behind current `develop`; all six required workflows passed: Repository Quality, Harvester Targeted Tests, Unit Tests, Test Coverage, Dependency Audit and External Documentation Links. PR #1844 remains open for owner review and is not merged. Issue #1763 remains open for later state-machine, event-ordering/idempotency, fail-closed, inventory/market-constraint, application-integration, replay and final source-to-test closure phases. Do not mark the initiative complete based on Phase 5/6.
+
 ## Conservative strategy safety pause cancels current-process-owned BUYs — issue #1749
 
 - In progress in [PR #1755](https://github.com/45s/coinzilla/pull/1755) on a fresh branch based on current `develop`.
