@@ -117,3 +117,14 @@ The Explorer reads records available from source rather than hardcoding the fami
 
 ## Discussion log
 - **2026-11-25:** RS selected as first strategy because its scenario registry already exists. Scope clarified as reconstructing scenario text/registry into interactive illustrations, with specification continuing to evolve. No runtime simulation yet.
+
+
+## Framework-independent execution architecture — proposed future capability
+
+Dashboard-wide DDD/framework-neutral rule is mandatory (see [Dashboard AGENTS.md](../../../AGENTS.md) and SPEC section 2.1). Registry adapters, parsing/validation, normalization, scenario semantics, execution orchestration, assertions and renderer-neutral graph construction live outside Angular. Components delegate and render. Core must remain reusable if UI is rewritten in React/Vue.
+
+First execution milestone: execute one RS scenario/subcase independently. Registry loader -> parse/validate/normalize -> selection -> fresh isolated context -> supported safe action/evaluator contract -> real assertions and trace -> renderer-neutral graph model -> presentation adapter. Use declarative records and constrained typed actions; never run registry-supplied arbitrary JS. Each case reports capability and actual outcome; do not attribute suite results to individual cases.
+
+Client execution is conditional: only if a supported safe evaluator can run in-browser without private Harvester/test imports, production execution paths or live side effects. Otherwise use a safe runner adapter, potentially backend-hosted. No live broker/exchange, credentials, orders, production mutation or direct database access. Contract and isolation remain open dependencies; do not implement a duplicate strategy rules engine in Dashboard.
+
+Layer separation: domain (scenario/run/result semantics), application (use cases/ports), adapters (registry/evaluator/storage/graph renderer/framework), Angular presentation (thin components/composition). Framework-swap acceptance: changing Angular to React/Vue does not require changing domain/application logic, execution contracts or core tests.
