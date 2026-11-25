@@ -42,7 +42,7 @@ const futuresBroker = new Broker({
 - `provider` is required and must be exactly `"binance"`, `"bitunix"`, or `"bitunix-futures"`; missing and unknown providers fail during construction.
 - `apiKey`, `apiSecret`, and `tradingMode` are common top-level options. The selected provider validates credentials and its supported environment.
 - Binance requires explicit `tradingMode: "testnet" | "live"`; `NODE_ENV` never selects exchange endpoints.
-- Bitunix Spot and Bitunix USDT Futures require explicit `tradingMode: "live"`. No isolated TESTNET endpoint is documented for either product; the constructor does not silently infer LIVE.
+- Bitunix Spot and Bitunix USDT Futures require explicit `tradingMode: "live"`. Bitunix does not provide a TESTNET for either product; both are LIVE-only and the constructor does not silently infer LIVE.
 - Bitunix Futures uses the separate `bitunix-futures` provider ID and a Futures-specific configuration. LIVE order and account-setting mutations are disabled by default; `providerOptions.allowLiveOrderMutations` and `providerOptions.allowLiveAccountMutations` are explicit opt-ins, not readiness approvals.
 - Provider-specific configuration is namespaced under `providerOptions`. For example, use `providerOptions: { baseUrl, requestTimeout }` for Bitunix or `providerOptions: { websocketApiUrl, websocketStreamsUrl }` for Binance. Provider options cannot override common credentials, logger, or environment selection.
 - The optional common `logger` is passed to the selected adapter. Unknown top-level options fail fast rather than being silently ignored.
