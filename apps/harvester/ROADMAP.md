@@ -102,7 +102,7 @@ cancellations, account mutations or Harvester restarts are authorized or require
 
 ### Phase 5 checkpoint — SELL accounting (2026-11-25)
 
-- Current slice: [PR #1844](https://github.com/45s/coinzilla/pull/1840), branch `test/1763-phase5-sell-accounting`.
+- Current slice: [PR #1844](https://github.com/45s/coinzilla/pull/1844), branch `test/1763-phase5-sell-accounting`.
 - Added a composed canonical Fill → Portfolio/Position + RecoveryLedger regression for one BUY followed by three SELL fills. The sequence independently asserts gross-to-net proceeds, base inventory debits, all supported SELL commission asset effects, retained full BUY basis, outstanding recovery and realized net profit.
 - Additional regressions cover duplicate SELL delivery, conflicting commission facts and unvalued third-asset fee failure atomicity.
 - Test is registered in the targeted Harvester regression suite. No production behavior, trading rules, broker calls, exchange operations or credentials are changed.
