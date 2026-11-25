@@ -42,6 +42,11 @@ const SCENARIO = Object.freeze({
   status: "TEST-MAPPED",
   executionStatus: "PRELIMINARY",
   executable: false,
+  readinessReasons: Object.freeze([
+    "This scenario exercises the production RS runtime with a deterministic ZROUSDT fixture, not the configured LINEAUSDT market.",
+    "The fixture explicitly supplies thirdAssetFeeQuoteValue = 0; the default LINEAUSDT configuration omits this value and must not inherit zero implicitly.",
+    "The process worker has no verified OS-level filesystem, network, process or resource isolation; the host therefore registers no executable RS adapter.",
+  ]),
   inputSchema: Object.freeze({
     type: "object",
     required: [
@@ -132,6 +137,7 @@ const RUNTIME_SCENARIO = Object.freeze({
       marketPrice: Object.freeze({
         type: "string",
         pattern: "^(?:0|[1-9][0-9]*)(?:[.][0-9]+)?$",
+        exclusiveMinimum: "0",
         description: "Positive simulated ZRO/USDT market price in USDT.",
       }),
     }),
@@ -148,7 +154,7 @@ const RUNTIME_SCENARIO = Object.freeze({
   ]),
   test: Object.freeze({
     file: "apps/harvester/src/infrastructure/scenario-runner/rs-scenario-adapter.test.js",
-    title: "RS-004-012 executes the production runtime evaluator and accounting workflow with a simulation-only order gateway",
+    title: "RS-004-012 executes the production runtime evaluator and accounting workflow with a deterministic simulation-only broker",
   }),
 })
 
@@ -180,6 +186,13 @@ function validateScenarioInput({ schema, defaults, input }) {
     }
     if (fieldSchema.pattern && !new RegExp(fieldSchema.pattern).test(value)) {
       throw new TypeError(`Scenario input field ${key} must match its decimal-string schema`)
+    }
+    if (fieldSchema.exclusiveMinimum !== undefined &&
+      compareDecimal({
+        left: value,
+        right: fieldSchema.exclusiveMinimum,
+      }) <= 0) {
+      throw new RangeError(`Scenario input field ${key} must be greater than ${fieldSchema.exclusiveMinimum}`)
     }
   }
   return Object.freeze(effectiveInput)
