@@ -287,6 +287,7 @@ function createHarnessEngine({
   recoveryLedgersByMarket,
   metadataBySymbol,
   quoteFreeBalance,
+  baseFreeBalance,
   accountedFillIds,
   accountedFills,
   pauses,
