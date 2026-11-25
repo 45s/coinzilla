@@ -557,7 +557,11 @@ force: true });
 
 async function writeHarvesterLogSession({ directory, processIdentity, index }) {
   const logger = createLogger()
-  const logging = await configureHarvesterLogging({ logger, directory, processIdentity })
+  const logging = await configureHarvesterLogging({
+    logger,
+    directory,
+    processIdentity,
+  })
   const debugEntry = {
     timestamp: processIdentity.startedAt,
     level: "debug",
@@ -586,7 +590,10 @@ async function assertHarvesterLogSessionHistory({ directory, sessionIdentities }
   assert.deepEqual(traceEntries.map(({ data }) => data.message), expectedMessages)
 
   for (const processIdentity of sessionIdentities) {
-    const sessionPaths = createHarvesterLogSessionPaths({ directory, ...processIdentity })
+    const sessionPaths = createHarvesterLogSessionPaths({
+      directory,
+      ...processIdentity,
+    })
     const debugLines = (await readFile(sessionPaths.debug, "utf8")).trim().split("\n")
     const traceLines = (await readFile(sessionPaths.trace, "utf8")).trim().split("\n")
     assert.equal(debugLines.length, 1)
@@ -597,16 +604,32 @@ async function assertHarvesterLogSessionHistory({ directory, sessionIdentities }
 test("appends cumulative files while isolating and flushing consecutive process sessions", async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-log-restarts-"))
   const sessionIdentities = [
-    { startedAt: "2026-11-09T12:00:00.000Z", runtimeSessionId: "first-run" },
-    { startedAt: "2026-11-09T12:01:00.000Z", runtimeSessionId: "second-run" },
+    {
+      startedAt: "2026-11-09T12:00:00.000Z",
+      runtimeSessionId: "first-run",
+    },
+    {
+      startedAt: "2026-11-09T12:01:00.000Z",
+      runtimeSessionId: "second-run",
+    },
   ]
   try {
     for (const [index, processIdentity] of sessionIdentities.entries()) {
-      await writeHarvesterLogSession({ directory, processIdentity, index })
+      await writeHarvesterLogSession({
+        directory,
+        processIdentity,
+        index,
+      })
     }
-    await assertHarvesterLogSessionHistory({ directory, sessionIdentities })
+    await assertHarvesterLogSessionHistory({
+      directory,
+      sessionIdentities,
+    })
   } finally {
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
   }
 })
 
@@ -738,7 +761,10 @@ test("keeps strategy-owned order facts on compact single-space lifecycle lines",
   const output = new PassThrough()
   let written = ""
   output.on("data", (chunk) => { written += chunk.toString() })
-  const transport = createHarvesterConsoleTransport({ output, color: false })
+  const transport = createHarvesterConsoleTransport({
+    output,
+    color: false,
+  })
   writeStrategyOrderLifecycleFacts(transport)
   assertStrategyOrderLifecycleLines(written)
   output.destroy()
