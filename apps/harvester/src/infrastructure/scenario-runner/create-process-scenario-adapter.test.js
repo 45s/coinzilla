@@ -171,3 +171,24 @@ test("process adapter rejects worker output above its configured size limit", as
     input: null,
   }), /maximum output size/)
 })
+
+
+test("process adapter refuses direct execution without verified OS sandbox attestation", async () => {
+  let spawnCalls = 0
+  const spawnUnverifiedWorker = (...argumentsList) => {
+    spawnCalls += 1
+    return spawnTestWorker(...argumentsList)
+  }
+  const adapter = createProcessScenarioAdapter({
+    strategyId: "RS",
+    spawnSandboxedWorker: spawnUnverifiedWorker,
+  })
+
+  assert.equal(adapter.osSandboxVerified, false)
+  await assert.rejects(adapter.execute({
+    runId: "run-worker-unverified",
+    scenarioId: "RS-004-011",
+    input: null,
+  }), /OS-level sandbox isolation has not been verified/)
+  assert.equal(spawnCalls, 0, "an unverified launcher must not spawn a worker")
+})

@@ -503,9 +503,16 @@ test("host snapshots and freezes scenario definitions", () => {
       type: "object",
       required: ["amount"],
       additionalProperties: false,
-      properties: { amount: { type: "string", pattern: "^[0-9]+$" } },
+      properties: {
+        amount: {
+          type: "string",
+          pattern: "^[0-9]+$",
+        },
+      },
     },
-    input: { amount: "1" },
+    input: {
+      amount: "1",
+    },
   }
   const host = createScenarioRunnerHost({
     strategyRegistrations: [{

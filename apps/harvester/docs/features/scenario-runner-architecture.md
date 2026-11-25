@@ -103,3 +103,8 @@ The route-helper call sites use the repository's multiline object-property forma
 ## Registration validation decomposition — 2026-11-25
 
 Strategy and scenario registration validation is split into dedicated shape and uniqueness checks. This preserves fail-closed rejection of malformed/duplicate registry entries while keeping each function within the repository's strict complexity limit. The host snapshot immutability and adapter-capability regressions are separated into focused tests that remain within the strict test-function size limit.
+
+
+## Adapter-level execution gate — 2026-11-25
+
+The process adapter itself must reject execution when its launcher does not carry a verified OS-level isolation attestation. The host catalog gate is not the only protection: direct adapter invocation must also fail before spawning a worker. Process-lifecycle unit tests may simulate the launcher attestation to exercise IPC/termination behavior, but those tests do not prove OS isolation or authorize a production launcher.
