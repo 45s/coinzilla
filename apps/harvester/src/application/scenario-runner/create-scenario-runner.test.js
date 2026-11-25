@@ -282,7 +282,7 @@ test("runner retains a blocked run when the bounded queue is full", async () => 
   assert.ok(runner.listRuns().some((run) => run.runId === blocked.runId),
     "A blocked submission must remain visible in bounded run history.")
 
-  await assert.rejects(runner.close(), /cleanup could not be confirmed/)
+  await runner.close()
 })
 
 test("runner rejects new submissions when bounded history is occupied by active runs", async () => {
@@ -400,7 +400,7 @@ test("runner fails closed and retains worker capacity when timeout cleanup canno
   })
   assert.equal(second.status, SCENARIO_RUN_STATUS.QUEUED,
     "the runner must not reuse a worker slot when process cleanup was not confirmed")
-  await runner.close()
+  await assert.rejects(runner.close(), /cleanup could not be confirmed/)
 })
 
 test("run snapshots redact nested secrets while adapters receive the original input", async () => {
