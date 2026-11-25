@@ -5,7 +5,7 @@
 - Strategy scope: Recovery Seller (RS) first; GC later
 
 ## Goal
-Provide the initial strategy-owned scenario catalogue adapter for the strategy-neutral Scenario Runner. RS is first because its production runtime evaluator, accounting workflow, action authorizer and order submitter exist on develop. The structured RS registry proposal in open PR #1823 is not merged into develop; its test-only records are not a production catalogue and must not be imported directly. This branch adds one source-mapped application-level fixture (RS-004-012) that invokes the production flow but remains non-executable until OS isolation is verified. The generic runner owns discovery, configuration orchestration, isolated execution lifecycle, result comparison and graph presentation; the RS adapter supplies RS scenarios and binds them to actual RS production use cases.
+Provide the initial strategy-owned scenario catalogue adapter for the strategy-neutral Scenario Runner. RS is the first integration target because its production runtime evaluator, accounting workflow, action authorizer and order submitter exist on develop. The structured RS registry proposal in open PR #1823 is not merged into develop; its records are not an authoritative production catalogue and must not be imported directly. The current public catalogue exposes only RS-004-011 as a provisional PRELIMINARY candidate, and its adapter invokes only the pure profitability helper. A separate deterministic SELL dispatch fixture lives under Harvester test support; it has no scenario ID, is not RS-004-012, and is not exposed in the public catalogue. No RS scenario is executable through the host. The generic runner owns discovery, configuration orchestration, isolated execution lifecycle, result comparison and graph presentation; the RS adapter supplies source-backed scenarios only when their registry and execution contracts are available.
 
 ## Source model and fields
 PR #1823 registry records contain these relevant fields (exact schema remains owned by the registry):
@@ -87,8 +87,8 @@ Based on its description and records at PR head (not a fresh checkout audit):
 
 - RS-001 authorization/custody: 14 records, including freshness-related blocked subcases.
 - RS-002 BUY accounting: 21 records (20 reserved IDs plus cross-cutting RS-002-004), with mapped/partial cases and blockers.
-- RS-004-011 profitability helper (PRELIMINARY; non-executable).
-- RS-004-012 production runtime SELL transition on deterministic ZROUSDT fixture (TEST-MAPPED; PRELIMINARY/non-executable pending OS isolation).
+- RS-004-011 profitability helper candidate (PRELIMINARY; provisional until open PR #1823 is merged and the source registry is integrated).
+- The deterministic production SELL dispatch fixture is internal test support with a fixture ID, not a registry scenario or public RS-004-012 record.
 - Catalogs for rules, decisions, states, transitions, invariants and configuration fields; DOMAIN/APPLICATION runner and test mappings.
 
 The Explorer reads records available from source rather than hardcoding the family count/list. Registry schema changes are handled explicitly; incompatible input fails visibly.
@@ -126,7 +126,7 @@ The Explorer reads records available from source rather than hardcoding the fami
 
 ## Discussion log
 
-- **2026-11-25:** RS selected as first strategy because its production runtime/use-case flow exists on develop. A structured registry proposal remains in separate open PR #1823 and is not part of develop. RS-004-011 is helper-only; RS-004-012 now tests the production runtime flow with a deterministic simulation fixture, but no scenario is executable in the host because OS isolation is not verified.
+- **2026-11-25 audit:** PR #1823 remains open/unmerged, so its 44 scenario records and test mappings are not available in `develop`. RS-004-011 is a provisional helper-only candidate, marked PRELIMINARY and non-executable. The production SELL dispatch integration fixture is test-only and is not a registry scenario. The host requires a simulation-only adapter with verified OS sandbox attestation; no production launcher currently provides that attestation, so no RS scenario is executable.
 
 ## Framework-independent execution architecture — required runner foundation
 

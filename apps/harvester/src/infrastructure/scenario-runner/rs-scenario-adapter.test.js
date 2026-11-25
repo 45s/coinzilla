@@ -92,8 +92,6 @@ test("internal RS runtime fixture exercises the production SELL dispatch with a 
   assert.ok(result.trace.some((step) => step.kind === "assertion"))
 })
 
-
-
 test("public RS runner catalog excludes internal runtime fixtures and exposes only the provisional RS candidate", () => {
   assert.deepEqual(
     getRecoverySellerRunnerCatalog().map((scenario) => scenario.id),

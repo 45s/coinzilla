@@ -1,4 +1,5 @@
 import { validateScenarioInput } from "../../../src/infrastructure/scenario-runner/rs-scenario-adapter.js"
+
 import { isDeepStrictEqual } from "node:util"
 import {
   Asset,
@@ -28,7 +29,6 @@ import { createRecoverySellerOrderSubmitter } from "../../../src/use-cases/creat
 import { createRecoverySellerStopWorkflow } from "../../../src/use-cases/create-recovery-seller-stop-workflow.js"
 import { recordOrderSubmissionIntent } from "../../../src/use-cases/record-order-submission-intent.js"
 import { recordOrderSubmissionOutcome } from "../../../src/use-cases/record-order-submission-outcome.js"
-import { calculateRecoverySellerProfitability } from "../../../src/domain/strategies/recovery-seller/calculate-profitability.js"
 const RUNTIME_PAIR_CONFIG = Object.freeze({
   enabled: true,
   investment: 100,
