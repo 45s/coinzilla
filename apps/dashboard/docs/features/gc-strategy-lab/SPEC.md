@@ -558,3 +558,12 @@ Inspecting these sources to identify reusable production entry points is permitt
 ## Implementation roadmap
 
 See [RUNNER_ROADMAP.md](RUNNER_ROADMAP.md) for phased delivery and acceptance gates.
+
+
+## Protected trading logic/services — approval gate
+
+AI contributors MUST NOT modify, refactor, restructure or otherwise alter existing trading domain logic or trading services without explicit prior user approval. Protected areas include strategy rules/evaluators, trading calculations, order decision/execution, accounting/inventory, risk controls, broker/exchange integrations and related trading runtime services. Even small or behavior-preserving changes require approval. Inspection is allowed but is not authorization to edit. If a safe production-flow integration requires such a change, stop and document the exact file/change and request approval. Do not duplicate strategy logic to bypass this gate.
+
+
+## Implementation roadmap
+See [RUNNER_ROADMAP.md](RUNNER_ROADMAP.md) for the phased plan and gates.
