@@ -2665,10 +2665,13 @@ export class BitunixFuturesBroker {
     })
   }
 
-  async getMyTrades() {
-    return unsupportedResult({
-      operation: "getMyTrades",
-      reason: "The legacy common getMyTrades() projection cannot preserve the Futures fee-asset limitation and provider-specific execution fields; use getFills() for canonical bounded fills or getFuturesTradeHistory() for exact Futures rows.",
+  async getMyTrades(input = {}) {
+    const history = await this.getFuturesTradeHistory(input)
+    if (!history.ok) {
+      return history
+    }
+    return toResult({
+      data: history.data.trades,
     })
   }
 
