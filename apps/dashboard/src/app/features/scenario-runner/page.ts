@@ -100,6 +100,7 @@ export class ScenarioRunnerComponent {
       const workspace = await this.application.loadWorkspace();
       this.catalog.set(workspace.catalog);
       this.history.set(workspace.history);
+      this.error.set(workspace.historyError);
       const selection = this.application.selectStrategy({ strategyId: this.strategyId() });
       this.scenarioId.set(selection.scenarioId);
       this.inputJson.set(selection.inputJson);
@@ -214,6 +215,7 @@ export class ScenarioRunnerComponent {
     this.trace.set(snapshot.trace);
     this.graph.set(snapshot.graph);
     this.history.set(snapshot.history);
+    this.error.set(snapshot.historyError);
   }
 
   get strategy(): ScenarioCatalogItem | undefined {

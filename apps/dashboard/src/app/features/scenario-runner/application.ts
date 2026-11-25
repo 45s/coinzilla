@@ -48,6 +48,7 @@ export interface ScenarioRunSnapshot {
   readonly trace: readonly ScenarioTraceStep[];
   readonly graph: ScenarioGraphModel;
   readonly history: readonly ScenarioRunRecord[];
+  readonly historyError: string | null;
 }
 
 export interface ScenarioHistorySnapshot extends ScenarioRunSnapshot {
@@ -66,9 +67,10 @@ function extractRunTrace({ run }: { run: ScenarioRunRecord }): readonly Scenario
   return output?.trace ?? [];
 }
 
-function createRunSnapshot({ run, history }: {
+function createRunSnapshot({ run, history, historyError }: {
   run: ScenarioRunRecord;
   history: readonly ScenarioRunRecord[];
+  historyError: string | null;
 }): ScenarioRunSnapshot {
   const trace = extractRunTrace({ run });
   return {
@@ -76,6 +78,7 @@ function createRunSnapshot({ run, history }: {
     trace,
     graph: createTraceGraph(trace),
     history,
+    historyError,
   };
 }
 
@@ -93,6 +96,7 @@ export function createScenarioRunnerApplication({ gateway }: {
 }) {
   let catalog: readonly ScenarioCatalogItem[] = [];
   let catalogLoaded = false;
+  let historyCache: readonly ScenarioRunRecord[] = [];
 
   async function loadCatalog(): Promise<readonly ScenarioCatalogItem[]> {
     catalog = await gateway.loadCatalog();
@@ -100,12 +104,32 @@ export function createScenarioRunnerApplication({ gateway }: {
     return catalog;
   }
 
+  async function loadHistory(): Promise<readonly ScenarioRunRecord[]> {
+    historyCache = await gateway.loadHistory();
+    return historyCache;
+  }
+
+  async function loadHistorySafely(): Promise<{
+    history: readonly ScenarioRunRecord[];
+    historyError: string | null;
+  }> {
+    try {
+      return {
+        history: await loadHistory(),
+        historyError: null,
+      };
+    } catch (error) {
+      return {
+        history: historyCache,
+        historyError: error instanceof Error ? error.message : 'Run history unavailable.',
+      };
+    }
+  }
+
   async function refreshRun({ runId }: { runId: string }): Promise<ScenarioRunSnapshot> {
-    const [run, history] = await Promise.all([
-      gateway.getRun(runId),
-      gateway.loadHistory(),
-    ]);
-    return createRunSnapshot({ run, history });
+    const run = await gateway.getRun(runId);
+    const history = await loadHistorySafely();
+    return createRunSnapshot({ run, ...history });
   }
 
   return Object.freeze({
@@ -129,15 +153,13 @@ export function createScenarioRunnerApplication({ gateway }: {
     },
 
     async loadWorkspace() {
-      const [loadedCatalog, history] = await Promise.all([
-        loadCatalog(),
-        gateway.loadHistory(),
-      ]);
-      return { catalog: loadedCatalog, history };
+      const loadedCatalog = await loadCatalog();
+      const history = await loadHistorySafely();
+      return { catalog: loadedCatalog, ...history };
     },
 
     async loadHistory() {
-      return gateway.loadHistory();
+      return loadHistory();
     },
 
     async submitRun({ strategyId, scenarioId, inputJson }: {

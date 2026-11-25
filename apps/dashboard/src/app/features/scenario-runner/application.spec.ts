@@ -88,13 +88,14 @@ describe('framework-independent Scenario Runner application', () => {
     expect(workspace.historyError).toBe('History service unavailable');
   });
 
-  it('returns authoritative run details even when history refresh fails', async () => {
+  it('returns authoritative run details and cached history when a refresh fails', async () => {
+    await application.loadWorkspace();
     gateway.loadHistory = vi.fn().mockRejectedValue(new Error('History service unavailable'));
 
     const snapshot = await application.refreshRun({ runId: 'run-1' });
 
     expect(snapshot.run.runId).toBe('run-1');
-    expect(snapshot.history).toEqual([]);
+    expect(snapshot.history).toEqual([run()]);
     expect(snapshot.historyError).toBe('History service unavailable');
   });
 
