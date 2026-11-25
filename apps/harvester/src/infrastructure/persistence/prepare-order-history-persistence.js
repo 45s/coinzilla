@@ -289,7 +289,7 @@ async function prepareRelationalResources({
       filename,
     })
     await relationalDatabase.migrate(HARVESTER_RELATIONAL_MIGRATIONS)
-    const migrationBackupFilename = orderIdentityMigrationBackupFilename ?? legacyMigrationBackupFilename
+    const migrationBackupFilename = legacyMigrationBackupFilename ?? orderIdentityMigrationBackupFilename
     const repositories = createRelationalHistoryRepositories({
       database: relationalDatabase,
     })
@@ -314,6 +314,7 @@ async function prepareRelationalResources({
       runtimeErrorObserver,
       ...repositories,
       migrationBackupFilename,
+      orderIdentityMigrationBackupFilename,
     }
   } catch (error) {
     await closePartialRelationalResources({
@@ -403,6 +404,7 @@ async function preparePersistenceWithRelationalFallback({
       fillRepository: null,
       historySyncCursorRepository: null,
       migrationBackupFilename: null,
+      orderIdentityMigrationBackupFilename: null,
       relationalError,
     })
   }
