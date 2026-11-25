@@ -73,4 +73,34 @@ describe('scenario-runner framework-independent core', () => {
   it('requires run record and ordered trace', () => {
     expect(() => createAiDebugPackage({ run: null as never, trace: [] })).toThrow(/required/);
   });
+
+  it('redacts credential material embedded in diagnostic strings and nested arrays', () => {
+    const evidence = [
+      'Authorization: Bearer bearer-secret-123',
+      'api_key=api-key-secret-456',
+      'Cookie: session=browser-session-secret; refresh_token=refresh-secret',
+      '-----BEGIN PRIVATE KEY-----\\nprivate-key-secret\\n-----END PRIVATE KEY-----',
+    ];
+    const report = JSON.parse(createAiDebugPackage({
+      run: { ...run, diagnostics: evidence },
+      trace: [{
+        id: 'credential-evidence',
+        kind: 'diagnostic',
+        label: 'Credential-bearing diagnostics',
+        outputs: { nested: [evidence] },
+      }],
+    }));
+    const serialized = JSON.stringify(report);
+    for (const secret of [
+      'bearer-secret-123',
+      'api-key-secret-456',
+      'browser-session-secret',
+      'refresh-secret',
+      'private-key-secret',
+    ]) {
+      expect(serialized).not.toContain(secret);
+    }
+    expect(serialized).toContain('[REDACTED]');
+  });
+
 });
