@@ -36,7 +36,7 @@ Use standalone Angular components, strict TypeScript/template checking, feature-
 
 ## Required reading
 
-Before dashboard changes, read this roadmap and the applicable repository standards in the root [AGENTS.md](../../AGENTS.md). Re-run the task compliance preflight whenever the scope expands into Harvester, Brokers, DB, authentication, API contracts, CI, or another owned domain.
+Before dashboard changes, read this roadmap and the applicable repository standards in the root [AGENTS.md](../../AGENTS.md). Read the relevant nested ownership instructions before entering Harvester, Brokers, DB, authentication, API contracts, CI, or another owned domain.
 
 ## Framework-independent architecture and DDD — mandatory for all Dashboard work
 
@@ -49,6 +49,10 @@ Before dashboard changes, read this roadmap and the applicable repository standa
 - Explicitly review dependency direction and framework leakage, and test core independently. Enforce the boundary with architecture tests/static checks where practical.
 
 
-## Protected trading logic/services — approval gate
+## Trading logic/services refactoring for approved Scenario Runner work
 
-AI contributors MUST NOT modify, refactor, restructure or otherwise alter existing trading domain logic or trading services without explicit prior user approval. Protected areas include strategy rules/evaluators, trading calculations, order decision/execution, accounting/inventory, risk controls, broker/exchange integrations and related trading runtime services. Even small or behavior-preserving changes require approval. Inspection is allowed but is not authorization to edit. If a safe production-flow integration requires such a change, stop and document the exact file/change and request approval. Do not duplicate strategy logic to bypass this gate.
+For Scenario Runner tasks, trading logic and services may be refactored as required to reuse the exact production path faithfully. Preserve real-trading behavior and safety; add regression tests, document affected behavior and keep simulation side effects isolated. This permission applies only to the task scope and does not authorize real trading actions.
+
+## Mandatory agent preflight — before any work
+
+Every AI agent MUST read repository-root `AGENTS.md` and all applicable nested `AGENTS.md` files before exploring or editing code. Issue, PR and roadmap instructions must repeat this requirement. Follow the workflow and re-read affected instructions when scope expands.
