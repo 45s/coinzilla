@@ -226,11 +226,11 @@ function mapSourceEvent({ sourceEvent, order } = {}) {
 }
 
 /**
- * Create a collision-safe identity from the complete order ownership tuple.
+ * Create a stable exchange-order identity, scoped by its provider account and market.
  *
- * @param {{environment: string, providerInstanceId: string, providerType: string, accountId: string, clientOrderId: string}} input
+ * @param {{environment: string, providerInstanceId: string, providerType: string, accountId: string, marketId?: string, brokerOrderId?: string, clientOrderId: string, createdAt?: number}} input
  * @returns {string}
- * @throws {OrderHistoryValidationError} When any identity component is missing.
+ * @throws {OrderHistoryValidationError} When a required identity component is missing.
  */
 export function createOrderHistoryId(input = {}) {
   const environment = requireString({
@@ -258,12 +258,43 @@ export function createOrderHistoryId(input = {}) {
     value: input.clientOrderId,
     field: "clientOrderId",
   })
-  return JSON.stringify([
+  const marketId = input.marketId === undefined || input.marketId === null
+    ? null
+    : requireString({
+        value: input.marketId,
+        field: "marketId",
+      })
+  const brokerOrderId = input.brokerOrderId === undefined || input.brokerOrderId === null
+    ? null
+    : requireString({
+        value: input.brokerOrderId,
+        field: "brokerOrderId",
+      })
+  const createdAt = input.createdAt === undefined || input.createdAt === null
+    ? null
+    : requireTimestamp({
+        value: input.createdAt,
+        field: "createdAt",
+      })
+  const scope = [
     environment,
     providerInstanceId,
     providerType,
     accountId,
+    marketId,
+  ]
+  if (brokerOrderId !== null) {
+    return JSON.stringify([
+      ...scope,
+      "exchange",
+      brokerOrderId,
+    ])
+  }
+  return JSON.stringify([
+    ...scope,
+    "client",
     clientOrderId,
+    ...(createdAt === null ? [] : [createdAt]),
   ])
 }
 
@@ -459,7 +490,10 @@ function createBaseOrderHistoryRecord({
       providerInstanceId,
       providerType,
       accountId,
+      marketId: market.id,
+      brokerOrderId: order.brokerOrderId,
       clientOrderId,
+      createdAt: order.createdAt,
     }),
     schemaVersion: 1,
     recordKind: "harvester.order-history",

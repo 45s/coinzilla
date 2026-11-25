@@ -1,4 +1,7 @@
-import { createOrderHistoryRecord } from "../../domain/order-history/order-history-record.js"
+import {
+  createOrderHistoryId,
+  createOrderHistoryRecord,
+} from "../../domain/order-history/order-history-record.js"
 
 export const ORDER_COLUMNS = Object.freeze([
   "id",
@@ -143,7 +146,26 @@ function normalizeOrderHistoryRecord({ record, includeUnfilled = true } = {}) {
     environment: record.environment,
     includeUnfilled,
   })
-  if (normalized === null || normalized.id !== record.id) {
+  if (normalized === null) {
+    throw new TypeError("Legacy order-history record identity or executed quantity is incompatible.")
+  }
+  const legacyId = JSON.stringify([
+    record.environment,
+    record.providerInstanceId,
+    record.providerType,
+    record.accountId,
+    record.clientOrderId,
+  ])
+  const provisionalId = createOrderHistoryId({
+    environment: record.environment,
+    providerInstanceId: record.providerInstanceId,
+    providerType: record.providerType,
+    accountId: record.accountId,
+    marketId: record.market.id,
+    clientOrderId: record.clientOrderId,
+    createdAt: record.createdAt,
+  })
+  if (![normalized.id, provisionalId, legacyId].includes(record.id)) {
     throw new TypeError("Legacy order-history record identity or executed quantity is incompatible.")
   }
   const firstSeenAt = requireIsoTimestamp({
@@ -159,6 +181,7 @@ function normalizeOrderHistoryRecord({ record, includeUnfilled = true } = {}) {
   }
   return Object.freeze({
     ...normalized,
+    id: record.id,
     firstSeenAt,
     lastSeenAt,
     firstSourceEventId: requireString({
