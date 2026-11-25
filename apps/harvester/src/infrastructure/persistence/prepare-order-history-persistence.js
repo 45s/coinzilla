@@ -282,7 +282,15 @@ async function applyRelationalMigrations({ database, filename } = {}) {
     database,
     filename,
   })
-  await database.migrate(HARVESTER_RELATIONAL_MIGRATIONS)
+  try {
+    await database.migrate(HARVESTER_RELATIONAL_MIGRATIONS)
+  } catch (error) {
+    Object.assign(error, {
+      migrationBackupFilename: legacyMigrationBackupFilename ?? orderIdentityMigrationBackupFilename,
+      orderIdentityMigrationBackupFilename,
+    })
+    throw error
+  }
   return {
     migrationBackupFilename: legacyMigrationBackupFilename ?? orderIdentityMigrationBackupFilename,
     orderIdentityMigrationBackupFilename,
@@ -441,8 +449,8 @@ async function preparePersistenceWithRelationalFallback({
       orderRepository: null,
       fillRepository: null,
       historySyncCursorRepository: null,
-      migrationBackupFilename: null,
-      orderIdentityMigrationBackupFilename: null,
+      migrationBackupFilename: relationalError.migrationBackupFilename ?? null,
+      orderIdentityMigrationBackupFilename: relationalError.orderIdentityMigrationBackupFilename ?? null,
       relationalError,
     })
   }
