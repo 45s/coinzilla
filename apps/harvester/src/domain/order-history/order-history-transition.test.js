@@ -56,11 +56,13 @@ test("accepts equivalent decimal representations without changing persisted form
   const current = createOrderHistoryRecordFixture({
     price: "65000.0000",
     originalQuantity: "0.0100",
+    cumulativeQuoteQuantity: "650.0000",
   })
   const candidate = createOrderHistoryRecordFixture({
     id: current.id,
     price: "65000",
     originalQuantity: "0.01",
+    cumulativeQuoteQuantity: "650",
     lastSourceEventId: "event-002",
     lastSeenAt: "2026-11-19T00:00:01.000Z",
     lastSourceEventTimestamp: "2026-11-19T00:00:01.000Z",
@@ -73,6 +75,7 @@ test("accepts equivalent decimal representations without changing persisted form
 
   assert.equal(merged.price, current.price)
   assert.equal(merged.originalQuantity, current.originalQuantity)
+  assert.equal(merged.cumulativeQuoteQuantity, current.cumulativeQuoteQuantity)
 })
 
 test("treats decimal formatting differences in duplicate source events as identical", () => {
