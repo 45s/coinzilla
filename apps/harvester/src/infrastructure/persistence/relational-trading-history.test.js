@@ -2204,6 +2204,46 @@ test("fails v5 migration closed and retains backup when exchange identity is dup
   })
 })
 
+test("rejects pending client identity reuse across markets before exchange acknowledgement", async (t) => {
+  const context = await createTestContext({ t })
+  const persistence = await preparePersistence({ context })
+  const clientOrderId = "h-reused-pending-client"
+  const pendingOrder = createExchangeHistoryOrder({
+    status: "OPEN",
+    executedQuantity: "0",
+    remainingQuantity: "1.0000",
+    eventId: "exchange-history-order:pending-btc",
+    timestamp: "2026-11-20T04:00:01.000Z",
+    clientOrderId,
+    brokerOrderId: null,
+  })
+  await persistence.orderRepository.upsertHistorical(pendingOrder)
+  const otherMarketOrder = createExchangeHistoryOrder({
+    status: "OPEN",
+    executedQuantity: "0",
+    remainingQuantity: "1.0000",
+    eventId: "exchange-history-order:pending-eth",
+    timestamp: "2026-11-20T04:00:01.000Z",
+    clientOrderId,
+    brokerOrderId: null,
+    market: createHistoryMarket({
+      symbol: "ETHUSDT",
+      baseAssetCode: "ETH",
+    }),
+  })
+
+  await assert.rejects(
+    persistence.orderRepository.upsertHistorical(otherMarketOrder),
+    (error) => error.context.field === "pendingClientOrderIdentityAmbiguous",
+  )
+  await inspectSqlite({
+    filename: context.filename,
+    work: (database) => {
+      assert.equal(database.prepare("SELECT COUNT(*) AS count FROM orders").get().count, 1)
+    },
+  })
+})
+
 test("promotes a pending order and links its earlier exchange-identified fill", async (t) => {
   const context = await createTestContext({ t })
   const persistence = await preparePersistence({ context })
