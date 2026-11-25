@@ -62,3 +62,8 @@ Read repository-root `AGENTS.md` and every applicable nested `AGENTS.md` before 
 - [x] Local REST run/catalog/history/status/cancel routes and WebSocket lifecycle hints.
 - [x] Framework-independent Dashboard graph/debug-package core and Runner presentation workspace.
 - [ ] Full RS registry integration and scenario coverage beyond RS-004-011; config schema pipeline/Playground/replay; persistent history; complete report provenance/completeness; resource/concurrency limits; end-to-end isolation and CI acceptance remain incomplete.
+
+
+## Execution-first/no-fake-blocker commitment
+
+Implementation agents must complete all approved phases autonomously. No routine local environment/tooling absence may be reported as a blocker or used to stop work; use remote GitHub operations and Actions where supported. Blockers must be genuine, evidenced and narrowly described. Continue independent work, never ask the user to perform coding or routine verification, and never claim unverified results. This is a durable workflow requirement, not a reason to weaken safety or CI.
