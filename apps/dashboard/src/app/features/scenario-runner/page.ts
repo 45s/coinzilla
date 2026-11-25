@@ -62,8 +62,8 @@ export class ScenarioRunnerComponent {
             data?: { runId?: string };
           };
           const runId = event.data?.runId;
-          if (event.type === 'scenario-runner.update' && runId && runId === this.run()?.runId) {
-            void this.refresh(runId);
+          if (event.type === 'scenario-runner.update' && runId) {
+            void this.refreshAfterEvent(runId);
           }
         } catch {
           // REST remains authoritative; ignore unrelated stream data.
@@ -86,10 +86,7 @@ export class ScenarioRunnerComponent {
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = undefined;
       this.connectEventSocket();
-      const current = this.run();
-      if (current) {
-        void this.refresh(current.runId);
-      }
+      void this.refreshAfterEvent(this.run()?.runId);
     }, delay);
   }
 
@@ -153,6 +150,22 @@ export class ScenarioRunnerComponent {
       this.error.set(error instanceof Error ? error.message : 'Scenario execution failed.');
     } finally {
       this.loading.set(false);
+    }
+  }
+
+  private async refreshAfterEvent(runId?: string): Promise<void> {
+    try {
+      const update = await this.application.refreshAfterEvent({
+        runId,
+        activeRunId: this.run()?.runId,
+      });
+      if (update.kind === 'run') {
+        this.applyRunSnapshot(update.snapshot);
+        return;
+      }
+      this.history.set(update.history);
+    } catch (error) {
+      this.error.set(error instanceof Error ? error.message : 'Missed run updates could not be recovered.');
     }
   }
 

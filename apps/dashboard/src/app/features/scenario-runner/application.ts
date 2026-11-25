@@ -162,6 +162,22 @@ export function createScenarioRunnerApplication({ gateway }: {
       return loadHistory();
     },
 
+    async refreshAfterEvent({ runId, activeRunId }: {
+      runId?: string;
+      activeRunId?: string;
+    }) {
+      if (runId && runId === activeRunId) {
+        return {
+          kind: 'run' as const,
+          snapshot: await refreshRun({ runId }),
+        };
+      }
+      return {
+        kind: 'history' as const,
+        history: await loadHistory(),
+      };
+    },
+
     async submitRun({ strategyId, scenarioId, inputJson }: {
       strategyId: string;
       scenarioId: string;

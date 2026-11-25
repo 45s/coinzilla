@@ -47,7 +47,7 @@ Security/resource/redaction/retention/race audit. Add GC Conservative/Aggressive
 - Isolation verified; worker cannot reach live trading infrastructure.
 - Existing RS scenarios run and produce real assertions/results/trace.
 - Temporary inputs pass production validation and cannot alter source scenario.
-- REST/WS lifecycle, cancel/timeout, bounded history and complete debug JSON tested.
+- REST/WS lifecycle, cancel/timeout, bounded history and complete debug JSON tested. Current WebSocket updates refresh the selected run or background-run history, and reconnect performs REST recovery; cursor-based event replay and end-to-end outage/race acceptance remain open.
 - Docs/issue/PR accurately reflect implementation and verified evidence.
 
 ## Agent preflight and branch safety (mandatory)
