@@ -93,3 +93,8 @@ See [the phased implementation roadmap](docs/features/gc-strategy-lab/RUNNER_ROA
 ### Strategy Scenario Runner agent rules
 
 Before exploration or edits, agents MUST read root `AGENTS.md` and all applicable nested `AGENTS.md`. This requirement is stated in Issue #1836, PR #1837 and the Runner roadmap. Trading logic/services may be refactored as needed to faithfully reuse production flows; preserve trading safety and behavior, add regression tests, and stay exclusively on the task branch/PR. Never commit directly to `develop`/`main` or merge/auto-merge.
+
+
+### Scenario Runner CI correction — 2026-11-25
+
+The exact-head Dashboard build exposed two integration defects in the framework-independent input validator: the Dashboard workspace did not declare its direct `@coinzilla/utils` dependency, and a local TypeScript cast omitted the optional `exclusiveMinimum` schema field used by decimal validation. The package dependency, lockfile importer and precise field type are now aligned. Validation remains in the core/application layer and Angular remains a presentation adapter. Exact-head build/test/coverage reruns are required before claiming the correction is green.

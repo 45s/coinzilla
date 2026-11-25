@@ -44,7 +44,7 @@ export function validateScenarioInput({
       errors.push(`Missing required input field: ${key}`)
     }
   }
-  const fields = schema.properties as Record<string, { type: string; pattern?: string }>
+  const fields = schema.properties as Record<string, { type: string; pattern?: string; exclusiveMinimum?: string }>
   for (const [key, fieldSchema] of Object.entries(fields)) {
     if (!Object.hasOwn(inputRecord, key)) {
       continue
