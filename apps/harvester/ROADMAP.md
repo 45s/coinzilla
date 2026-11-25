@@ -2298,35 +2298,16 @@ The strategy-neutral Conservative scenario registry/runner is in open [PR #1798]
 
 ## Strategy-neutral production-flow Scenario Runner — issue #1836
 
-Open Draft [PR #1837](https://github.com/45s/coinzilla/pull/1837) is the implementation branch. It must remain strategy-neutral and framework-independent, and the approved task allows necessary production-flow/trading-service refactoring on that branch while preserving behavior and safety invariants. Current recorded head `48c1d3eb716da3794186305b00bcf52f3e1ec954` is 110 commits ahead / 42 behind current `develop`; Harvester Targeted Tests and Unit Tests pass, Dependency Audit passes, while Repository Quality fails; Coverage and External Documentation Links are still running. The full MVP remains incomplete, and the runner registers no executable RS adapter until the configured-market/fee fixture and verified OS-level filesystem/network/process/resource isolation gates pass. No real broker/exchange operations, credentials, live account state or production persistence.
+Open Draft [PR #1837](https://github.com/45s/coinzilla/pull/1837) is the implementation branch. It must remain strategy-neutral and framework-independent, and the approved task allows necessary production-flow/trading-service refactoring on that branch while preserving behavior and safety invariants. Current recorded head `cdeef1ab862f08bf0ed1e724acd8f765cf21e9dd` is 111 commits ahead / 42 behind current `develop`. All six required workflows passed on this exact head: Repository Quality, Harvester Targeted Tests, Unit Tests, Test Coverage, Dependency Audit and External Documentation Links. The full MVP remains incomplete, and the runner registers no executable RS adapter until the configured-market/fee fixture and verified OS-level filesystem/network/process/resource isolation gates pass. No real broker/exchange operations, credentials, live account state or production persistence.
 
 ## Binance reused clientOrderId — issue/PR #1849
 
-Open Draft [PR #1849](https://github.com/45s/coinzilla/pull/1849) implements [incident #1851](https://github.com/45s/coinzilla/issues/1851): the 2026-11-25 ZROUSDT/DOGEUSDT historical-sync identity conflict caused by reusable clientOrderId values and exact decimal representation handling. It introduces provider/account/environment/market-scoped exchange-order identity, pending client-ID correlation, fill linkage and a fail-closed version-5 SQLite migration. Current recorded head `d27831eb3e88740631bfd9d8367a79dc3ee7afc7` is 92 commits ahead / 0 behind current `develop`; Dependency Audit passes, while Harvester Targeted Tests and Repository Quality are in progress, Unit Tests and Coverage are queued, and External Documentation Links is in progress. Keep Draft until all migration/foreign-key/pending-to-acknowledged/fill-before-order cases and all six exact-head workflows pass. No production migration or exchange operations.
+Open Draft [PR #1849](https://github.com/45s/coinzilla/pull/1849) implements [incident #1851](https://github.com/45s/coinzilla/issues/1851): the 2026-11-25 ZROUSDT/DOGEUSDT historical-sync identity conflict caused by reusable clientOrderId values and exact decimal representation handling. It introduces provider/account/environment/market-scoped exchange-order identity, pending client-ID correlation, fill linkage and a fail-closed version-5 SQLite migration. Current recorded head `1e9426c0c92cc2471eb2e42f15a5584240289f6a` is 101 commits ahead / 0 behind current `develop`. Dependency Audit has passed; Harvester Targeted Tests, Repository Quality and External Documentation Links are running, while Unit Tests and Test Coverage are queued. This is a fresh exact-head rerun after a prior Dependency Audit cancellation. Keep Draft until all migration/foreign-key/pending-to-acknowledged/fill-before-order cases and all six exact-head workflows pass. No production migration or exchange operations.
 
 ## Open Recovery Seller runtime contract fixes — #1842, #1843, #1839
 
 These issues remain open and are not represented as completed by the scenario-test work:
+
 - [#1842](https://github.com/45s/coinzilla/issues/1842): terminal SELL status and profitability STOP.
 - [#1843](https://github.com/45s/coinzilla/issues/1843): owner-approved investment-only STOP contract.
 - [#1839](https://github.com/45s/coinzilla/issues/1839): attribute market-price errors to the resolved strategy owner.
-
-## Conservative scenario registry and runner — issue #1797
-
-Open [PR #1798](https://github.com/45s/coinzilla/pull/1798) contains the strategy-neutral Conservative scenario registry/runner. All six required workflows passed on recorded head `5b18b9f55e195017e56f036fcd872c3877f8c54d`, but the branch is 91 commits ahead / 53 behind current `develop`; green CI on the stale merge base is not current integration readiness. Issue #1797 remains open. Synchronize with develop, resolve conflicts and rerun exact-head CI before review/merge.
-
-## Strategy-neutral production-flow Scenario Runner — issue #1836
-
-Open Draft [PR #1837](https://github.com/45s/coinzilla/pull/1837) is the implementation branch. It remains strategy-neutral and framework-independent; the approved task permits necessary production-flow/trading-service refactoring on that branch while preserving behavior and safety invariants. Current recorded head `48c1d3eb716da3794186305b00bcf52f3e1ec954` is 110 commits ahead / 42 behind current `develop`; Dependency Audit, Unit Tests and Harvester Targeted Tests pass, while Repository Quality fails and Coverage/External Documentation Links are still running. The full MVP remains incomplete. No executable RS adapter is registered until configured-market/fee readiness and verified OS-level filesystem/network/process/resource isolation gates pass. No real broker/exchange operations, credentials, live account state or production persistence.
-
-## Binance reused clientOrderId — issue/PR #1849
-
-Open Draft [PR #1849](https://github.com/45s/coinzilla/pull/1849) introduces provider/account/environment/market-scoped exchange-order identity, pending client-ID correlation, fill linkage and a fail-closed version-5 SQLite migration. Current recorded head `d27831eb3e88740631bfd9d8367a79dc3ee7afc7` is 92 commits ahead / 0 behind current `develop`; Dependency Audit passes, while Harvester Targeted Tests and Repository Quality are in progress, Unit Tests and Coverage are queued, and External Documentation Links is in progress. Keep Draft until migration/foreign-key/pending-to-acknowledged/fill-before-order cases and all six exact-head workflows pass. No production migration or exchange operations.
-
-## Open Recovery Seller runtime contract fixes — #1842, #1843, #1839
-
-These issues remain open and are not represented as completed by the scenario-test work:
-- [#1842](https://github.com/45s/coinzilla/issues/1842): terminal SELL status and profitability STOP.
-- [#1843](https://github.com/45s/coinzilla/issues/1843): owner-approved investment-only STOP contract.
-- [#1839](https://github.com/45s/coinzilla/issues/1839): attribute market-price errors to the resolved strategy owner.
-
