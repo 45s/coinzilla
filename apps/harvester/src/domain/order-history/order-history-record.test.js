@@ -88,3 +88,67 @@ test("rejects incomplete provider identity instead of merging unrelated accounts
     "A filled order without complete provider/account provenance must be rejected.",
   )
 })
+
+
+test("distinguishes Binance historical orders when a terminal client order ID is reused", () => {
+  const sharedIdentity = {
+    environment: "testnet",
+    providerInstanceId: "binanceTestnet",
+    providerType: "binance",
+    accountId: "binance-primary",
+  }
+  const cases = [
+    {
+      symbol: "ZROUSDT",
+      clientOrderId: "h-ZROUSDT-1",
+      earlierBrokerOrderId: "661725",
+      incomingBrokerOrderId: "661748",
+    },
+    {
+      symbol: "DOGEUSDT",
+      clientOrderId: "h-DOGEUSDT-1",
+      earlierBrokerOrderId: "1193586",
+      incomingBrokerOrderId: "1193792",
+    },
+  ]
+
+  for (const scenario of cases) {
+    const earlierOrderId = createOrderHistoryId({
+      ...sharedIdentity,
+      clientOrderId: scenario.clientOrderId,
+      brokerOrderId: scenario.earlierBrokerOrderId,
+    })
+    const incomingOrderId = createOrderHistoryId({
+      ...sharedIdentity,
+      clientOrderId: scenario.clientOrderId,
+      brokerOrderId: scenario.incomingBrokerOrderId,
+    })
+
+    assert.notEqual(
+      incomingOrderId,
+      earlierOrderId,
+      `Distinct ${scenario.symbol} exchange orders must not collide merely because Binance reused their clientOrderId.`,
+    )
+  }
+})
+
+test("keeps a pending order identity stable until an exchange order ID is assigned", () => {
+  const identity = {
+    environment: "testnet",
+    providerInstanceId: "binanceTestnet",
+    providerType: "binance",
+    accountId: "binance-primary",
+    clientOrderId: "h-ZROUSDT-1",
+  }
+  const pendingOrderId = createOrderHistoryId(identity)
+  const acknowledgedOrderId = createOrderHistoryId({
+    ...identity,
+    brokerOrderId: "661748",
+  })
+
+  assert.notEqual(
+    acknowledgedOrderId,
+    pendingOrderId,
+    "An acknowledged exchange order must acquire an identity distinct from the client-ID-only pending placeholder.",
+  )
+})
