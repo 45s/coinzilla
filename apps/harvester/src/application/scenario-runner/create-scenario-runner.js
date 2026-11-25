@@ -289,6 +289,16 @@ function startExecution({ context, record, adapter }) {
   return snapshot({ record })
 }
 
+function createInputValidationError({ errors }) {
+  const message = errors.length > 0
+    ? errors.join("\n")
+    : "Scenario input does not satisfy the registered schema."
+  return Object.assign(new Error(message), {
+    status: 400,
+    code: "SCENARIO_RUNNER_INPUT_INVALID",
+  })
+}
+
 function createCapacityError() {
   return Object.assign(
     new Error("Scenario Runner history capacity is occupied by active executions."),
@@ -353,15 +363,15 @@ function submitRun({ context, submission }) {
   if (context.records.has(runId)) {
     throw new Error("Scenario Runner duplicate run ID")
   }
-  if (!pruneHistory({ context })) {
-    throw createCapacityError()
-  }
   const adapter = context.adapters.get(strategyId)
   const scenarioExecutable = context.canExecuteScenario({
     strategyId,
     scenarioId,
   }) === true
   if (!adapter || !scenarioExecutable) {
+    if (!pruneHistory({ context })) {
+      throw createCapacityError()
+    }
     return registerUnsupportedRun({
       context,
       runId,
@@ -371,6 +381,19 @@ function submitRun({ context, submission }) {
         diagnostic: "The registered strategy adapter cannot execute this scenario because it is not marked executable.",
       } : {}),
     })
+  }
+  const validation = context.validateScenarioInput({
+    strategyId,
+    scenarioId,
+    input,
+  })
+  if (validation?.valid !== true) {
+    throw createInputValidationError({
+      errors: Array.isArray(validation?.errors) ? validation.errors : [],
+    })
+  }
+  if (!pruneHistory({ context })) {
+    throw createCapacityError()
   }
   const record = createRecord({
     runId,
@@ -497,7 +520,7 @@ async function closeRunner({ context }) {
   }).catch(() => null)))
 }
 
-function validateRunnerConfiguration({ adapters, canExecuteScenario, maxStoredRuns, maxConcurrentRuns, maxQueuedRuns, timeoutMs }) {
+function validateRunnerConfiguration({ adapters, canExecuteScenario, validateScenarioInput, maxStoredRuns, maxConcurrentRuns, maxQueuedRuns, timeoutMs }) {
   if (!Array.isArray(adapters) || adapters.some((adapter) =>
     !adapter || typeof adapter.strategyId !== "string" ||
     typeof adapter.execute !== "function" || typeof adapter.cancel !== "function")) {
@@ -505,6 +528,9 @@ function validateRunnerConfiguration({ adapters, canExecuteScenario, maxStoredRu
   }
   if (typeof canExecuteScenario !== "function") {
     throw new TypeError("Scenario Runner requires a scenario executability policy")
+  }
+  if (typeof validateScenarioInput !== "function") {
+    throw new TypeError("Scenario Runner requires a scenario input validation policy")
   }
   if (!Number.isSafeInteger(maxConcurrentRuns) || maxConcurrentRuns < 1) {
     throw new RangeError("Scenario Runner concurrency limit must be a positive integer")
@@ -540,11 +566,13 @@ export function createScenarioRunner({
   maxConcurrentRuns = 2,
   maxQueuedRuns = 10,
   canExecuteScenario = () => true,
+  validateScenarioInput = () => ({ valid: true, errors: [] }),
   onUpdate,
 } = {}) {
   validateRunnerConfiguration({
     adapters,
     canExecuteScenario,
+    validateScenarioInput,
     maxStoredRuns,
     maxConcurrentRuns,
     maxQueuedRuns,
@@ -554,6 +582,7 @@ export function createScenarioRunner({
   const context = {
     adapters: adapterMap,
     canExecuteScenario,
+    validateScenarioInput,
     records: new Map(),
     executions: new Map(),
     queue: [],

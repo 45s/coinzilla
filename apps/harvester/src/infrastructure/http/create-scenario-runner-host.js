@@ -1,4 +1,8 @@
 import { createScenarioRunner } from "../../application/scenario-runner/create-scenario-runner.js"
+import {
+  isValidScenarioInputSchema,
+  validateScenarioInput,
+} from "../../application/scenario-runner/validate-scenario-input.js"
 import { getRecoverySellerRunnerCatalog } from "../scenario-runner/rs-scenario-adapter.js"
 
 function publishScenarioRunUpdate({ eventBus, run }) {
@@ -40,8 +44,12 @@ function createCatalog({ adapters, scenarioCatalog }) {
       strategyName: "Recovery Seller",
       scenarios: Object.freeze(scenarioCatalog.map((scenario) => {
         const adapterRegistered = registeredStrategyIds.has("RS")
+        const schemaValid = isValidScenarioInputSchema({
+          schema: scenario.inputSchema,
+        })
         const executable = scenario.executable === true &&
           scenario.executionStatus === "EXECUTABLE" &&
+          schemaValid &&
           adapterRegistered
         return Object.freeze({
           id: scenario.id,
@@ -79,6 +87,20 @@ export function createScenarioRunnerHost({
       strategy.strategyId === strategyId &&
       strategy.scenarios.some((scenario) =>
         scenario.id === scenarioId && scenario.executable === true)),
+    validateScenarioInput: ({ strategyId, scenarioId, input }) => {
+      const strategy = catalog.find((item) => item.strategyId === strategyId)
+      const scenario = strategy?.scenarios.find((item) => item.id === scenarioId)
+      if (!scenario?.inputSchema) {
+        return {
+          valid: false,
+          errors: ["Scenario input schema is unavailable."],
+        }
+      }
+      return validateScenarioInput({
+        schema: scenario.inputSchema,
+        input,
+      })
+    },
     timeoutMs: 30_000,
     maxStoredRuns: 100,
     onUpdate: (run) => publishScenarioRunUpdate({
