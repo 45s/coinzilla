@@ -20,6 +20,104 @@ The Explorer is a behavior exploration, scenario visualization and traceability 
 - A future supported simulation interface must be coordinated with Harvester. The Dashboard must not import private Harvester modules, copy strategy rules, connect to exchanges, submit/cancel orders, or read persistence directly.
 - Simulation output is a simulated strategy decision/intent only. It must not be presented as an acknowledged exchange order.
 
+
+## 2.1 Mandatory framework-independent DDD architecture
+
+This feature MUST comply with the Dashboard-wide framework-independence rule in [Dashboard AGENTS.md](../../../AGENTS.md): **business logic cannot depend on Angular or any UI framework**. DDD/clean architecture is mandatory for every Dashboard task.
+
+For this Lab:
+- Registry discovery/fetch contracts, parsing, schema validation, normalization, scenario selection semantics, run lifecycle, action interpretation, assertion evaluation, trace/result handling, graph-model construction and relationship derivation belong in framework-independent TypeScript core modules.
+- The domain/application core must not import Angular, component/directive/template types, Angular DI, signals, RxJS, browser APIs, DOM or rendering libraries. Define ports and use adapters outside the core for transport/storage/browser concerns.
+- Angular components are thin presentation adapters: bind state, dispatch actions to application use cases and render view models. No scenario business rules, parsing/validation, execution logic or graph semantics in components.
+- The runner must be independently testable without Angular TestBed or a browser. Angular UI tests test presentation/adapters, not serve as the sole verification of domain logic.
+- Graph renderer/layout technology is an adapter. Graph semantics and renderer-neutral graph models are produced by core logic so Angular/React/Vue replacement does not alter scenario logic.
+- **Framework swap acceptance:** replacing Angular presentation must not require modifying scenario core, domain/application logic or their tests/contracts.
+
+### Proposed framework-neutral module layers (illustrative)
+
+```text
+strategy-scenario-explorer/
+  domain/               # Scenario concepts, run/result, validation rules
+  application/           # use cases, orchestration, ports, runner contract
+  adapters/
+    registry-source/     # registry export/API adapter
+    execution/           # safe evaluator adapter
+    graph-renderer/      # replaceable renderer adapter
+    storage/              # optional persistence adapter
+  presentation-angular/   # Angular-only composition, components, view models
+```
+
+Names/layout are illustrative; responsibility and dependency direction are mandatory. Domain/application core owns behavior and contracts; adapters implement ports; UI framework code depends inward, never the reverse.
+
+## 2.2 Proposed client-side MVP execution flow
+
+The first executable milestone is to run individual RS scenario/subcases independently—not run the entire suite as one inseparable operation. This is future execution capability; the registry-only visualization milestone remains read-only.
+
+```ts
+// Pseudocode: framework-neutral core, not Angular component code
+const registry = await registrySource.load();       // source port/adapter
+const scenarios = normalizeAndValidate(registry);   // pure core
+const selected = selectScenario(scenarios, scenarioId, subcaseId);
+const isolatedRun = runFactory.create(selected);     // isolated context
+const result = await scenarioRunner.execute(isolatedRun);
+const graph = graphBuilder.fromScenarioAndResult(selected, result);
+viewAdapter.present({ graph, result });             // presentation adapter
+```
+
+Registry loading may use a versioned JSON/export or supported API, not private Harvester test imports in the Dashboard bundle. Validation and normalization belong in framework-independent modules. Unsupported/malformed definitions are explicit errors, never silently omitted or replaced by fixtures.
+
+The runner interprets a constrained, typed action catalog; scenario data is declarative and MUST NOT contain arbitrary executable JavaScript. Each scenario/subcase receives fresh isolated run state. Execution and assertion behavior must come from a supported safe contract—not copied/reimplemented strategy rules in Dashboard. If a case is not independently executable, show explicit not-executable/blocked status; do not attribute a whole-suite result to a single case.
+
+Illustrative contracts (proposed shapes, not verified schemas):
+
+```ts
+interface ScenarioExecutionRequest {
+  scenarioId: string;
+  subcaseId: string;
+  input: ScenarioInput;
+}
+interface ScenarioExecutionResult {
+  status: 'passed' | 'failed' | 'blocked' | 'not-executable';
+  assertions: AssertionResult[];
+  trace: TraceStep[];
+  diagnostics: Diagnostic[];
+}
+```
+
+The engine returns actual assertion results, ordered trace and diagnostics. Registry expected values are not results. Graph runtime evidence is sourced only from execution results; declarative Given/When/Then and registry/test mapping views remain separately labelled.
+
+### Client execution cycle (MVP proposal)
+1. Load a supported registry source through an adapter.
+2. Validate export/schema/version and normalize records in the framework-neutral core.
+3. Discover/select scenario and subcase; indicate independent-execution capability.
+4. Create isolated context from explicit inputs; no shared mutable run state.
+5. Execute constrained action sequence through the supported safe contract.
+6. Capture real assertion results, ordered trace, status and diagnostics.
+7. Build renderer-neutral graph from source and actual results; retain provenance.
+8. Render through presentation/graph adapters and synchronize graph, list, inspector and trace.
+9. Reset/close discards run-local state; optional persistence is a replaceable adapter.
+
+No live broker/exchange access, credentials, order submission/cancellation, production mutation or direct DB access. Client-side execution is appropriate only if the supported evaluator safely operates in-browser without private/production execution paths; otherwise use an isolated runner adapter (potentially backend-hosted) and do not claim client-side execution. This remains an architecture decision pending source audit.
+
+### Illustrative runner pseudocode
+
+```ts
+// Framework-neutral application module; exact implementation follows contract audit
+async function executeScenario(request, ports): Promise<ScenarioExecutionResult> {
+  const scenario = ports.registry.getValidated(request.scenarioId);
+  const subcase = selectSubcase(scenario, request.subcaseId);
+  const context = ports.runContext.createIsolated(subcase.inputs);
+  const trace = [];
+  for (const action of subcase.actions) {
+    trace.push(await ports.safeEvaluator.execute(action, context));
+  }
+  const assertions = ports.assertions.evaluate(subcase.expectations, context);
+  return assembleExecutionResult({ assertions, trace, diagnostics: context.diagnostics });
+}
+```
+
+This illustrates separation only; it does not authorize a Dashboard-owned strategy evaluator. The safeEvaluator port must invoke an approved contract. Core remains independent of Angular and graph rendering.
+
 ## 3. Scope
 
 ### Included in the initial RS-first capability
