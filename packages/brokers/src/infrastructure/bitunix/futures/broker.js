@@ -316,7 +316,7 @@ function createCapabilities({ config }) {
       selector: "tradingMode",
       selectedMode: config.tradingMode,
       supportedModes: ["live"],
-      notes: "The official Futures REST and WebSocket endpoints are LIVE. No Futures TESTNET endpoint is documented. Mutations are disabled by default.",
+      notes: "The official Futures REST and WebSocket endpoints are LIVE. Bitunix does not provide a Futures TESTNET; this provider is LIVE-only. Mutations are disabled by default.",
     },
     capabilities: FUTURES_CAPABILITIES,
   })
