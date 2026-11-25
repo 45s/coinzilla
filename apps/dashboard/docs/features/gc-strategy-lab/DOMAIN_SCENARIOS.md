@@ -365,7 +365,7 @@ It inspects source code, architecture/specification docs, scenario definitions a
 The selected adapter is Recovery Seller, market LINEAUSDT, TESTNET, using the actual configuration in `apps/harvester/rs-recovery-seller.js`:
 - `legacyPosition.invested = 400` USDT and `legacyPosition.quantity = 25000` LINEA.
 - `sellQuantity = 10` LINEA; `investment = 100` USDT; `orderQuantity = 7000` LINEA.
-- `minProfit = 0.01` USDT, an **absolute quote-currency threshold equal to one USDT cent**, not 1%.
+- `minProfit = 0.01` is an **absolute quote-asset threshold, never a percentage**. In this LINEAUSDT example it is 0.01 USDT (one USDT cent); the same field semantics apply to every RS market, with the quote asset changing by market.
 - `priceStepPercent = 0.5` (0.5%); `makerPercent = 0.1`; `takerPercent = 0.1`.
 - `enableVolatilityProtection = false`; resolved market precision is price 6 and quantity 0.
 
@@ -373,7 +373,7 @@ The selected adapter is Recovery Seller, market LINEAUSDT, TESTNET, using the ac
 The user inspects or edits RS configuration, authors a scenario, reviews a calculation, or copies an AI Debug Report.
 
 ### Then
-The runner shows the exact config field names and values with base/quote units; labels `minProfit` as absolute quote-currency profit (0.01 USDT = one cent) and never as a percentage; labels `priceStepPercent` as 0.5%; distinguishes configured values from derived values and runtime state; and does not invent an independent average-entry-price input. Market-price updates and simulated broker outcomes appear only as explicit ordered scenario events sourced from existing scenario/test evidence or deliberately authored inputs. They are not represented as config values.
+The runner shows the exact config field names and values with base/quote units; labels `minProfit` as an absolute threshold in the selected market's quote asset (0.01 means 0.01 quote-asset units for every RS market; for this example, 0.01 USDT = one USDT cent) and never as a percentage; labels `priceStepPercent` as 0.5%; distinguishes configured values from derived values and runtime state; and does not invent an independent average-entry-price input. Market-price updates and simulated broker outcomes appear only as explicit ordered scenario events sourced from existing scenario/test evidence or deliberately authored inputs. They are not represented as config values.
 
 ## Proposed future execution scenario 23 — Deterministic repeat and revision comparison (pending approval)
 
