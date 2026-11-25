@@ -7,6 +7,7 @@ function createAdapter(execute = async () => ({ output: "result" })) {
   return Object.freeze({
     strategyId: "example",
     execute,
+    cancel: async () => true,
   })
 }
 
@@ -81,6 +82,9 @@ test("runner supports bounded cancellation", async () => {
   })
   await new Promise((resolve) => setImmediate(resolve))
   assert.equal(runner.cancel("run-cancel"), true)
+  assert.equal(runner.getRun("run-cancel").status, SCENARIO_RUN_STATUS.CANCELLING)
+  assert.equal(runner.cancel("run-cancel"), true)
+  assert.equal(runner.getRun("run-cancel").status, SCENARIO_RUN_STATUS.CANCELLING)
   release({ output: "late" })
   const result = await runner.waitForRun("run-cancel")
   assert.equal(result.status, SCENARIO_RUN_STATUS.CANCELLED)
