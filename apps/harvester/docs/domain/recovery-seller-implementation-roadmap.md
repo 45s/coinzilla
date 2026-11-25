@@ -481,3 +481,5 @@ Canonical fill accounting now distinguishes RS ownership, explicit CG ownership,
 ### Scenario-suite checkpoint — 2026-11-25
 
 RS-002-006-B now maps to an application authorizer/account-allocation regression for a registered partial RS BUY: the remaining quote commitment is reserved and an unfunded additional BUY defers. The test is added but not yet executed on the current head. RS-002-006 and RS-002 remain PARTIAL; no scenario is VERIFIED. The broader runtime/order-event lifecycle proof and exact-head CI remain outstanding.
+
+Additional scenario increment: RS-002-020-B maps to an application allocation test proving an owned 60-quote pending BUY commitment is counted once at exact pair-cap equality (20 existing + 60 pending + 20 new = 100). Test execution remains pending; RS-002-020 and RS-002 remain PARTIAL.
