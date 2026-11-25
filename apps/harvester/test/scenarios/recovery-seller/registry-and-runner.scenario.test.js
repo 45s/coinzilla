@@ -339,10 +339,16 @@ test("the shared registry includes every mapped RS-001 and RS-002 family record"
   const buyCases = recoverySellerScenarioRegistry.filter((scenario) =>
     scenario.family === "RS-002")
 
-  assert.equal(authorizationCases.length, 14,
-    "The shared registry must expose all fourteen RS-001 authorization and custody scenario records.")
-  assert.equal(buyCases.length, 21,
-    "The shared registry must expose every RS-002 BUY accounting scenario ID, including explicit blocked dispositions.")
+  assert.deepEqual(
+    authorizationCases.map((scenario) => scenario.id).sort(),
+    Array.from({ length: 14 }, (_, index) => `RS-001-${String(index + 1).padStart(3, "0")}`),
+    "The RS-001 registry must contain every consecutive authorization/custody ID without gaps or substitutions.",
+  )
+  assert.deepEqual(
+    buyCases.map((scenario) => scenario.id).sort(),
+    Array.from({ length: 21 }, (_, index) => `RS-002-${String(index + 1).padStart(3, "0")}`),
+    "The RS-002 registry must contain all twenty reserved business IDs and the cross-cutting J.01 ID without gaps or substitutions.",
+  )
 })
 
 test("scenario records are deeply immutable and reject non-record inputs", () => {
