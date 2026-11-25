@@ -270,7 +270,7 @@ const spotAllocationCases = [
 const spotBoundaryTitle = "RS-003-004: verified Spot availability below, equal to, and above the required legacy slice is capped exactly"
 
 export const recoverySellerMixedSellPlanningScenarios = Object.freeze([
-  ...recoverySellerMixedSellPlanningScenarios,
+  ...recoverySellerSellPlanScenarios,
   createSpotAllocationScenario({
     id: "RS-003-004",
     name: "verified Spot availability below, equal to, and above the required legacy slice is capped exactly",
