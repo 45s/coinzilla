@@ -414,3 +414,17 @@ Dashboard is a client of a versioned, framework-independent execution contract. 
 Harvester owns strategy discovery/adapters, production-use-case invocation, isolated simulation composition, simulated infrastructure, event processing, assertion/result capture and production-emitted trace. The browser must not bundle/import private Harvester runtime modules. The client must never directly access broker/exchange interfaces, credentials, persistence or production state.
 
 The execution API/contract is a transport boundary only; it must not move business rules into Dashboard or cause Harvester strategy logic to depend on Angular. Simulation must fail closed when a production path cannot be safely isolated. This decision selects the Harvester-hosted execution boundary over browser execution or a Dashboard-owned evaluator; exact process/runtime isolation, lifecycle and resource limits remain to be decided.
+
+
+## Approved simulation isolation decision (2026-11-25)
+
+Each scenario run executes in a **dedicated worker process**, managed by the Harvester-side runner host and separate from the live trading process. Do not execute scenarios inside the live trading process, even in a separate object/container.
+
+- The host receives and validates a run request, starts/manages the worker, and returns the run result.
+- Every run receives fresh isolated state and simulation-only infrastructure adapters.
+- The worker receives no broker credentials and has no access to production persistence, live account state, or real broker/exchange interfaces.
+- The worker composition root must inject simulated broker/order and controlled market/event adapters; no real-infrastructure fallback is permitted.
+- Worker execution is bounded by explicit timeout, concurrency/resource limits and deterministic cleanup. Exact values and process-launch mechanism are implementation decisions to verify against repository/runtime constraints.
+- A worker crash, timeout, unsupported production boundary or isolation failure yields an explicit failed/blocked diagnostic; it must never retry through live infrastructure.
+
+This process boundary is a safety and fault-containment requirement, not permission to duplicate production business logic. The worker must load/invoke the same production use cases and domain functions as live runtime with only the approved infrastructure ports replaced.
