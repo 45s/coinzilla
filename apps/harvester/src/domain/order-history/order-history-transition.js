@@ -79,6 +79,53 @@ function assertOptionalEqualField({ current, candidate, field } = {}) {
   }
 }
 
+function assertOptionalEqualDecimalField({ current, candidate, field } = {}) {
+  const currentValue = current[field]
+  const candidateValue = candidate[field]
+  if (
+    currentValue !== undefined &&
+    currentValue !== null &&
+    candidateValue !== undefined &&
+    candidateValue !== null &&
+    compareDecimal({
+      left: currentValue,
+      right: candidateValue,
+    }) !== 0
+  ) {
+    integrityError({
+      field,
+      current,
+      candidate,
+    })
+  }
+}
+
+function assertEqualDecimalField({ current, candidate, field } = {}) {
+  if (compareDecimal({
+    left: current[field],
+    right: candidate[field],
+  }) !== 0) {
+    integrityError({
+      field,
+      current,
+      candidate,
+    })
+  }
+}
+
+function preserveEquivalentDecimalRepresentation({ current, candidate, merged, field } = {}) {
+  if (
+    current[field] !== undefined &&
+    candidate[field] !== undefined &&
+    compareDecimal({
+      left: current[field],
+      right: candidate[field],
+    }) === 0
+  ) {
+    merged[field] = current[field]
+  }
+}
+
 function assertImmutableOrderFacts({ current, candidate } = {}) {
   for (const field of [
     "environment",
@@ -89,7 +136,6 @@ function assertImmutableOrderFacts({ current, candidate } = {}) {
     "symbol",
     "side",
     "type",
-    "originalQuantity",
   ]) {
     assertEqualField({
       current,
@@ -97,6 +143,11 @@ function assertImmutableOrderFacts({ current, candidate } = {}) {
       field,
     })
   }
+  assertEqualDecimalField({
+    current,
+    candidate,
+    field: "originalQuantity",
+  })
   if (JSON.stringify(current.market) !== JSON.stringify(candidate.market)) {
     integrityError({
       field: "market",
@@ -104,7 +155,7 @@ function assertImmutableOrderFacts({ current, candidate } = {}) {
       candidate,
     })
   }
-  assertOptionalEqualField({
+  assertOptionalEqualDecimalField({
     current,
     candidate,
     field: "price",
@@ -167,7 +218,14 @@ function isDuplicateSourceEvent({ current, candidate } = {}) {
     return false
   }
   if (
-    current.executedQuantity !== candidate.executedQuantity ||
+    compareDecimal({
+      left: current.executedQuantity,
+      right: candidate.executedQuantity,
+    }) !== 0 ||
+    compareDecimal({
+      left: current.remainingQuantity,
+      right: candidate.remainingQuantity,
+    }) !== 0 ||
     current.status !== candidate.status
   ) {
     integrityError({
@@ -190,7 +248,7 @@ function preserveCumulativeQuoteQuantity({ current, candidate, merged } = {}) {
     left: candidate.cumulativeQuoteQuantity,
     right: current.cumulativeQuoteQuantity,
   })
-  if (comparison < 0) {
+  if (comparison <= 0) {
     merged.cumulativeQuoteQuantity = current.cumulativeQuoteQuantity
   }
 }
@@ -208,6 +266,19 @@ function createMergedOrderHistoryRecord({ current, candidate } = {}) {
     lastSeenAt: candidate.lastSeenAt > current.lastSeenAt
       ? candidate.lastSeenAt
       : current.lastSeenAt,
+  }
+  for (const field of [
+    "originalQuantity",
+    "price",
+    "executedQuantity",
+    "remainingQuantity",
+  ]) {
+    preserveEquivalentDecimalRepresentation({
+      current,
+      candidate,
+      merged,
+      field,
+    })
   }
   preserveCumulativeQuoteQuantity({
     current,
