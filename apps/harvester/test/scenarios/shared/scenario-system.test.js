@@ -161,6 +161,7 @@ test("filters scenarios by ID, category, priority, tag, and coverage status", ()
       filters: idFilters,
     }).map(({ id }) => id),
     ["CON-TEST-001"],
+    "The ID filter must select only the requested stable scenario ID.",
   )
   assert.deepEqual(
     filterScenarios({
@@ -168,6 +169,7 @@ test("filters scenarios by ID, category, priority, tag, and coverage status", ()
       filters: categoryFilters,
     }).map(({ id }) => id),
     ["CON-TEST-002"],
+    "The category filter must select only scenarios in the requested category.",
   )
   assert.deepEqual(
     filterScenarios({
@@ -175,6 +177,7 @@ test("filters scenarios by ID, category, priority, tag, and coverage status", ()
       filters: priorityFilters,
     }).map(({ id }) => id),
     ["CON-TEST-001"],
+    "The priority filter must select only scenarios at the requested priority.",
   )
   assert.deepEqual(
     filterScenarios({
@@ -182,6 +185,7 @@ test("filters scenarios by ID, category, priority, tag, and coverage status", ()
       filters: tagFilters,
     }).map(({ id }) => id),
     ["CON-TEST-002"],
+    "The tag filter must select scenarios carrying the requested tag.",
   )
   assert.deepEqual(
     filterScenarios({
@@ -189,6 +193,7 @@ test("filters scenarios by ID, category, priority, tag, and coverage status", ()
       filters: statusFilters,
     }).map(({ id }) => id),
     ["CON-TEST-002"],
+    "The coverage filter must select only scenarios with the requested evidence status.",
   )
 })
 
@@ -255,6 +260,7 @@ test("runs mapped Node tests once per file and shares evidence across scenarios"
   assert.deepEqual(
     result.results.map(({ status }) => status),
     ["PASSED", "PASSED"],
+    "Every scenario sharing the same successful named test must receive the mapped passing result.",
   )
 })
 
