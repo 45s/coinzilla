@@ -215,7 +215,8 @@ const domainHandlers = {
     if (!Array.isArray(input.cases)) {
       return createLegacyPosition(input)
     }
-    return input.cases.map((scenarioCase) => {
+    return {
+      cases: input.cases.map((scenarioCase) => {
       try {
         const position = createLegacyPosition(scenarioCase.input)
         return {
@@ -230,7 +231,8 @@ const domainHandlers = {
           averageCost: null,
         }
       }
-    })
+      }),
+    }
   },
   "record-legacy-sale": ({ input }) => {
     const position = createLegacyPosition({
