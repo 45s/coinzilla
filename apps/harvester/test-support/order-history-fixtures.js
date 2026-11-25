@@ -94,12 +94,36 @@ function createOrderHistoryFixtureId({ explicitId, environment, order } = {}) {
   if (explicitId !== undefined) {
     return explicitId
   }
-  return JSON.stringify([
+  const providerInstanceId = order.providerInstanceId ?? DEFAULT_ORDER_HISTORY_RECORD.providerInstanceId
+  const providerType = order.providerType ?? DEFAULT_ORDER_HISTORY_RECORD.providerType
+  const accountId = order.accountId ?? DEFAULT_ORDER_HISTORY_RECORD.accountId
+  const clientOrderId = order.clientOrderId ?? DEFAULT_ORDER_HISTORY_RECORD.clientOrderId
+  const market = order.market ?? DEFAULT_ORDER_HISTORY_RECORD.market
+  const brokerOrderId = Object.hasOwn(order, "brokerOrderId")
+    ? order.brokerOrderId
+    : DEFAULT_ORDER_HISTORY_RECORD.brokerOrderId
+  const createdAt = Object.hasOwn(order, "createdAt")
+    ? order.createdAt
+    : DEFAULT_ORDER_HISTORY_RECORD.createdAt
+  const scope = [
     environment,
-    order.providerInstanceId ?? DEFAULT_ORDER_HISTORY_RECORD.providerInstanceId,
-    order.providerType ?? DEFAULT_ORDER_HISTORY_RECORD.providerType,
-    order.accountId ?? DEFAULT_ORDER_HISTORY_RECORD.accountId,
-    order.clientOrderId ?? DEFAULT_ORDER_HISTORY_RECORD.clientOrderId,
+    providerInstanceId,
+    providerType,
+    accountId,
+    market.id,
+  ]
+  if (brokerOrderId !== undefined && brokerOrderId !== null) {
+    return JSON.stringify([
+      ...scope,
+      "exchange",
+      brokerOrderId,
+    ])
+  }
+  return JSON.stringify([
+    ...scope,
+    "client",
+    clientOrderId,
+    ...(createdAt === undefined || createdAt === null ? [] : [createdAt]),
   ])
 }
 
