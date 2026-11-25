@@ -123,19 +123,22 @@ function createExecutionRace({ adapter, record, controller, timeoutMs }) {
     input: executionInput,
     signal: controller.signal,
   }))
+  const executionResult = execution.then(
+    (output) => ({
+      kind: "output",
+      output,
+    }),
+    (error) => ({
+      kind: "error",
+      error,
+    }),
+  )
   const timeout = new Promise((resolve) => {
     timer = setTimeout(() => resolve({ kind: "timeout" }), timeoutMs)
   })
   return {
     promise: Promise.race([
-      execution.then((output) => ({
-        kind: "output",
-        output,
-      })),
-      execution.catch((error) => ({
-        kind: "error",
-        error,
-      })),
+      executionResult,
       timeout,
     ]).finally(() => clearTimeout(timer)),
   }
