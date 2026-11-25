@@ -49,6 +49,8 @@ Planned scenario behaviors include initial BUY fill → standing BUY and recover
 - Added explicit successful-completion cases for all three supported exchange-constrained dust reasons: `MIN_QUANTITY`, `MIN_NOTIONAL`, and `QUANTITY_INCREMENT`.
 - Each case supplies a residual of `0.1` above `keepQuantity = 1`, proves the exact filter evidence is accepted, and asserts retained/free allocation is `1.1` (configured keep plus dust bonus), with the dust evidence preserved in the result.
 - Existing invalid-evidence cases continue to assert fail-closed behavior. No production behavior or strategy rule changed.
+
+- Additional completion gates prove validated dust cannot be allocated before the SELL is fully filled and cannot bypass the `minProfit` floor; incomplete SELL returns no free allocation, while a completed below-floor SELL pauses with no allocation.
 - Exact-head CI for this follow-up is pending; do not count it as covered until the new head passes and the PR is merged.
 
 ## Existing behavior-to-test inventory
