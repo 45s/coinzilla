@@ -1,4 +1,5 @@
 import { spawnSync as defaultSpawnSync } from "node:child_process"
+import { basename } from "node:path"
 
 const REGEXP_SPECIAL_CHARS = new Set([".", "*", "+", "?", "^", "$", "(", ")", "|", "[", "]", "\\", "{", "}"])
 
@@ -52,7 +53,13 @@ export function parseTapResults({ output = "", expectedTests = [] } = {}) {
   const tapResults = output.split(/\r?\n/).map(parseTapLine).filter(Boolean)
 
   return expectedTests.map((testCase) => {
-    const matchingResults = tapResults.filter((result) => result.name === testCase.name)
+    const filenamePrefix = "[" + basename(testCase.path) + "] "
+    const matchingResults = tapResults.filter((result) => {
+      const testName = result.name.startsWith(filenamePrefix)
+        ? result.name.slice(filenamePrefix.length)
+        : result.name
+      return testName === testCase.name
+    })
     let status = "NOT_FOUND"
 
     if (matchingResults.length > 1) {
