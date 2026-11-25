@@ -1657,6 +1657,15 @@ test("rejects startup before market subscriptions when a persisted account-scope
     })
     const restartRead = await restartStore.readAll()
     assert.equal(restartRead.ok, true, "The simulated restart must verify the same ledger under a new process session.")
+    const restoredWorkflow = await createRecoverySellerStopWorkflow({
+      operationalStateStore: restartStore,
+    })
+    assert.equal(restoredWorkflow.ok, true, restoredWorkflow.errors?.[0]?.message)
+    assert.equal(
+      restoredWorkflow.data.isAccountAdmissionBlocked(),
+      true,
+      "A fresh process-session workflow must restore the unresolved ACCOUNT blocker from the durable ledger.",
+    )
 
     await assert.rejects(
       startHarvesterForTest({
