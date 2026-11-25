@@ -5,7 +5,7 @@ import {
   conservativeScenarioRegistry,
   defineConservativeScenario,
   validateConservativeScenarioRegistry,
-} from "./registry/index.js"
+} from "../conservative/registry/index.js"
 
 const mappedTest = {
   path: "src/domain/strategies/conservative/strategy.test.js",
