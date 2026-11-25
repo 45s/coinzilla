@@ -1840,7 +1840,7 @@ async function persistReusedClientIdFills({ persistence } = {}) {
   }))
 }
 
-function assertReusedClientIdFillLinks({ database } = {}) {
+function assertReusedClientIdFillLinks(database) {
   const fills = database.prepare("SELECT * FROM fills ORDER BY exchange_order_id").all()
   assert.equal(fills.length, 2)
   const earlierOrder = database.prepare(
@@ -1987,16 +1987,16 @@ async function persistPendingOrderAndFill({ persistence, clientOrderId } = {}) {
     clientOrderId,
     brokerOrderId: "exchange-order-pending-1",
   }))
-  return pendingFill.fillId
+  return pendingFill.tradeId
 }
 
-function assertPendingOrderPromotion({ database, clientOrderId, fillId } = {}) {
+function assertPendingOrderPromotion({ database, clientOrderId, tradeId } = {}) {
   const orders = database.prepare(
     "SELECT id, exchange_order_id FROM orders WHERE client_order_id = ?",
   ).all(clientOrderId)
   const fill = database.prepare(
-    "SELECT order_id, exchange_order_id FROM fills WHERE id = ?",
-  ).get(fillId)
+    "SELECT order_id, exchange_order_id FROM fills WHERE exchange_trade_id = ?",
+  ).get(tradeId)
   assert.equal(orders.length, 1)
   assert.equal(orders[0].exchange_order_id, "exchange-order-pending-1")
   assert.equal(fill.order_id, orders[0].id)
@@ -2078,7 +2078,7 @@ test("promotes a pending order and links its earlier exchange-identified fill", 
   const context = await createTestContext({ t })
   const persistence = await preparePersistence({ context })
   const clientOrderId = "h-BTCUSDT-pending"
-  const fillId = await persistPendingOrderAndFill({
+  const tradeId = await persistPendingOrderAndFill({
     persistence,
     clientOrderId,
   })
@@ -2087,7 +2087,7 @@ test("promotes a pending order and links its earlier exchange-identified fill", 
     work: (database) => assertPendingOrderPromotion({
       database,
       clientOrderId,
-      fillId,
+      tradeId,
     }),
   })
 })
