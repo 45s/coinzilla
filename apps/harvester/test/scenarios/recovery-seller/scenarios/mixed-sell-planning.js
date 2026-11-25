@@ -164,27 +164,15 @@ function createSpotAllocationScenario({
     family: "RS-003",
     name,
     priority: "P0",
-    authority: [
-      "apps/harvester/docs/domain/recovery-seller-domain-specification.md#4-recovery-and-legacy-inventory",
-      "issue-1780: RS-003 verified Spot custody and shared Portfolio allocation",
-    ],
+    authority: ["apps/harvester/docs/domain/recovery-seller-domain-specification.md#4-recovery-and-legacy-inventory", "issue-1780: RS-003 verified Spot custody and shared Portfolio allocation"],
     layer: "DOMAIN",
-    configFields: [
-      "RS_PAIR.sellQuantity",
-      "RS_PAIR.legacyPosition.quantity",
-    ],
+    configFields: ["RS_PAIR.sellQuantity", "RS_PAIR.legacyPosition.quantity"],
     covers: {
-      rules: [
-        "RS_SELL_VERIFIED_UNRESERVED_QUANTITY",
-        "RS_CUSTODY_CONSERVATION",
-      ],
+      rules: ["RS_SELL_VERIFIED_UNRESERVED_QUANTITY", "RS_CUSTODY_CONSERVATION"],
       decisions: ["RS_ACCOUNT_ALLOCATION"],
       states: [],
       transitions: [],
-      invariants: [
-        "RS_CUSTODY_CONSERVATION",
-        "RS_QUANTITY_CONSERVATION",
-      ],
+      invariants: ["RS_CUSTODY_CONSERVATION", "RS_QUANTITY_CONSERVATION"],
     },
     given: { input },
     when: [{
@@ -234,6 +222,7 @@ const spotAllocationBaseInput = Object.freeze({
 const spotAllocationCases = [
   {
     id: "below",
+    suffix: "A",
     input: {
       ...spotAllocationBaseInput,
       spotFreeQuantity: "1.005",
@@ -245,6 +234,7 @@ const spotAllocationCases = [
   },
   {
     id: "equal",
+    suffix: "B",
     input: {
       ...spotAllocationBaseInput,
       spotFreeQuantity: "1.01",
@@ -256,6 +246,7 @@ const spotAllocationCases = [
   },
   {
     id: "above",
+    suffix: "C",
     input: {
       ...spotAllocationBaseInput,
       spotFreeQuantity: "1.02",
@@ -286,8 +277,8 @@ export const recoverySellerMixedSellPlanningScenarios = Object.freeze([
         allocations: expected,
       })),
     },
-    subcases: spotAllocationCases.map(({ id }) => ({
-      id: `RS-003-004-${id === "below" ? "A" : id === "equal" ? "B" : "C"}`,
+    subcases: spotAllocationCases.map(({ id, suffix }) => ({
+      id: `RS-003-004-${suffix}`,
       description: `verified Spot custody is ${id} the required legacy slice`,
       status: "TEST-MAPPED",
       test: {

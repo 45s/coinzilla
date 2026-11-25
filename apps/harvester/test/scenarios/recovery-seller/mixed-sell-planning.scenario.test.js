@@ -171,20 +171,27 @@ function calculateSpotAllocation({ input }) {
     }
     return marketBySymbol.get(symbol)
   }
-  const portfolio = input.acquisitions.reduce((current, acquisition) =>
-    applyPortfolioAcquisition({
-      portfolio: current,
+  let portfolio = new Portfolio()
+  for (const acquisition of input.acquisitions) {
+    portfolio = applyPortfolioAcquisition({
+      portfolio,
       acquisition,
       baseAsset,
       getMarket,
-    }), new Portfolio())
+    })
+  }
   const legacyPositions = input.legacyPositions.map((legacyPosition) => ({
     market: getMarket(legacyPosition),
     originalQuantity: legacyPosition.originalQuantity,
     remainingQuantity: legacyPosition.remainingQuantity,
   }))
   const allocations = calculateVerifiedLegacySpotAllocation({
-    balances: [createSpotBalance({ input, baseAsset })],
+    balances: [
+      createSpotBalance({
+        input,
+        baseAsset,
+      }),
+    ],
     portfolio,
     legacyPositions,
   })
