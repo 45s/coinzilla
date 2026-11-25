@@ -6,6 +6,7 @@ import {
   defineConservativeScenario,
   validateConservativeScenarioRegistry,
 } from "../conservative/registry/index.js"
+import { parseTapResults, runScenarioSuite } from "./runner.js"
 
 const mappedTest = {
   path: "src/domain/strategies/conservative/strategy.test.js",
@@ -116,4 +117,47 @@ test("rejects malformed registry containers without throwing incidental TypeErro
     "Malformed registry inputs must return validation errors rather than crash the loader.")
   assert.ok(result.errors.length > 0,
     "Malformed registry inputs must provide actionable validation diagnostics.")
+})
+
+test("matches TAP test titles exactly instead of accepting substring collisions", () => {
+  const results = parseTapResults({
+    output: "TAP version 13\nok 1 - completed cycle after terminal reconciliation\n",
+    expectedTests: [
+      { path: "src/example.test.js", name: "completed cycle" },
+      { path: "src/example.test.js", name: "completed cycle after terminal reconciliation" },
+    ],
+  })
+
+  assert.equal(results[0].status, "NOT_FOUND",
+    "A longer TAP title must not falsely satisfy a shorter mapped test title.")
+  assert.equal(results[1].status, "PASSED",
+    "The exact mapped TAP title must be recognized as passed.")
+})
+
+test("treats a non-zero Node test process exit as failure even when TAP contains an ok line", async () => {
+  const scenario = {
+    id: "CON-TEST-EXIT-001",
+    title: "Process exit integrity",
+    category: "buy-lifecycle",
+    priority: "P0",
+    coverageStatus: "TEST-MAPPED",
+    tags: [],
+    relatedExistingTests: [
+      { path: "src/example.test.js", name: "reports its named assertion" },
+    ],
+  }
+
+  const result = await runScenarioSuite({
+    scenarios: [scenario],
+    spawnSync: () => ({
+      status: 1,
+      stdout: "TAP version 13\nok 1 - reports its named assertion\n",
+      stderr: "The process failed after the TAP result.",
+    }),
+  })
+
+  assert.equal(result.results[0].status, "FAILED",
+    "A failed test process must never produce a passing scenario report.")
+  assert.equal(result.testResults[0].status, "PROCESS_FAILED",
+    "A process-level failure must override an isolated TAP ok line.")
 })
