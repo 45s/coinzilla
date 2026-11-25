@@ -61,3 +61,11 @@ The transport is an adapter, not a business layer. Domain/application contracts 
 ## Approved Scenario Runner lifecycle decision — 2026-11-25
 
 Scenario execution uses explicit server-owned states: Accepted/Queued → Starting → Running, with Cancelling as a non-terminal shutdown state and terminal outcomes Completed, Failed, Cancelled, Timed out or Blocked. Cancellation is cooperative first, followed by forced worker termination after a configurable grace period. Repeated cancellation is idempotent; a cancelled run is never reported as passed/completed. Timeouts remain distinct from user cancellation. Preserve partial trace/diagnostics when safely available, fail closed if worker initialization/isolation cannot be verified, and release resources on every terminal path. WebSocket publishes state changes; REST remains authoritative after reconnect. Numeric timeouts/grace periods and OS-level termination/cleanup details require implementation audit.
+
+
+
+## Approved Scenario Runner result retention and AI-debug report — 2026-11-25
+
+Harvester persists bounded server-side run history with configurable retention/size limits. The persisted simulation-only evidence includes run identity/status/lifecycle, strategy/scenario and code versions, effective configuration and inputs, ordered events, outputs, steps/decisions/trace, assertions and diagnostics. Scenario-definition storage is separate. Secrets, credentials, live account data and production state are excluded.
+
+Dashboard provides **Copy AI Debug Report** for an inspectable run: a self-contained, versioned Markdown report with structured JSON sections and complete available inputs, outputs, statuses, events, steps, decisions, assertions, diagnostics and provenance, suitable for pasting into an AI chat. It identifies the executed production revision (not merely the target branch), strategy/adapter, scenario/scenarioId and runId. Never silently truncate; offer a complete export or segmented-copy fallback if clipboard constraints prevent full copy. Report generation remains framework-independent; Angular is presentation only.
