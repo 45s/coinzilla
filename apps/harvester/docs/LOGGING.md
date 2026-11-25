@@ -327,10 +327,17 @@ Market-volatility protection diagnostics are market/component-owned rather than 
 
 The Conservative engine and CG Portfolio/RecoveryLedger workflow receive
 strategy-scoped adapters around the shared `@coinzilla/utils` logger. They add
-the immutable CG strategy ID to every structured diagnostic emitted by those
-strategy-owned workflows, including market-price processing failures, without
-mutating caller data or changing the shared logger. Other strategy workflows
-must use the same adapter with their own canonical `StrategyId`.
+the immutable CG strategy ID to diagnostics emitted by those CG-owned workflows,
+without mutating caller data or changing the shared logger.
+
+Market-price processing failures are reported at the shared bootstrap boundary.
+Their `strategyId` is resolved from the selected execution route for that
+market: `CG_coinGrabber` for CG-owned markets and `RS_recoverySeller` for
+RS-owned markets. Market-data subscriptions remain strategy-neutral. If a
+market has no unique resolved execution owner, the error retains its message,
+symbol and error payload but omits `strategyId`; it must not default to CG or
+guess from the symbol. This keeps unknown diagnostics free of a false CG/RS
+terminal marker.
 
 Strategy identity is part of the console duplicate-suppression fingerprint.
 Identical messages from different strategies therefore remain separate

@@ -148,7 +148,8 @@
       "test/scenarios/recovery-seller-cycle-lifecycle.scenario.test.js",
       "test/scenarios/recovery-seller-sell-planner.scenario.test.js",
       "src/infrastructure/http/trading-history-websocket.test.js",
-      "src/infrastructure/http/trading-history-websocket-frame.test.js"
+      "src/infrastructure/http/trading-history-websocket-frame.test.js",
+      "src/bootstrap/create-market-price-error-handler.test.js"
     ]
   },
   "scripts": {
