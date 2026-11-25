@@ -115,3 +115,6 @@ Cancellation must first send a typed IPC `cancel` message to the active worker a
 ## Cooperative cancellation and cleanup confirmation — implementation
 
 The parent sends a typed `cancel` IPC message first and waits for the bounded cooperative grace period. The worker message handler aborts the active run's `AbortController`; strategy adapters receive that signal and must honor it. If the worker does not close, the parent escalates to SIGTERM and then SIGKILL, each with a bounded grace period. A failed kill or missing close confirmation rejects cleanup and retains the child registration so the operator can retry; it is never reported as successful cleanup. The adapter itself remains unavailable unless the OS sandbox attestation is verified.
+
+
+The parent message listener also suppresses worker result handling once the caller's AbortSignal has fired; the cancellation path owns final settlement and cleanup reporting.

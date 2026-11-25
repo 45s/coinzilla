@@ -264,6 +264,7 @@ function registerWorkerMessageHandler({
       terminationGraceMs,
       maxOutputBytes,
       finish,
+      signal,
     })
   })
 }
