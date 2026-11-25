@@ -65,3 +65,6 @@ The process adapter separates promise settlement, abort-aware cleanup, worker er
 
 
 The follow-up strict-lint correction extracts schema-input error collection into independent pure helpers. It preserves the accepted input contract and error messages; no scenario execution or trading behavior changes.
+
+
+The strict changed-file follow-up also formats multi-field helper arguments explicitly and uses named worker-abort/cleanup functions. These changes are lint-only; validation and cancellation semantics are unchanged.

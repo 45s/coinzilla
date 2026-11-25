@@ -160,17 +160,17 @@ function registerWorkerExitHandler({ child, signal, finish, isSettled, hasMessag
 }
 
 function createAbortAwareFinish({ signal, child, terminationGraceMs, finish }) {
-  function finishWithCleanup(result) {
-    signal?.removeEventListener("abort", onAbort)
-    finish(result)
-  }
-  const onAbort = () => {
+  function onAbort() {
     void terminateChild({
       child,
       graceMs: terminationGraceMs,
     }).then(() => finishWithCleanup({
       error: new Error("Scenario worker was cancelled"),
     }))
+  }
+  function finishWithCleanup(result) {
+    signal?.removeEventListener("abort", onAbort)
+    finish(result)
   }
   signal?.addEventListener("abort", onAbort, { once: true })
   if (signal?.aborted) {

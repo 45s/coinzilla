@@ -93,8 +93,16 @@ export function validateScenarioInput({ schema, input } = {}) {
     }
   }
   const errors = []
-  appendUnknownInputErrors({ schema, input, errors })
-  appendMissingRequiredErrors({ schema, input, errors })
+  appendUnknownInputErrors({
+    schema,
+    input,
+    errors,
+  })
+  appendMissingRequiredErrors({
+    schema,
+    input,
+    errors,
+  })
   for (const [key, field] of Object.entries(schema.properties)) {
     if (Object.hasOwn(input, key)) {
       appendFieldValidationError({
