@@ -8,6 +8,16 @@ owner: brokers
 
 This roadmap tracks work owned by `@coinzilla/brokers`. Historical entries may retain consumer-integration context for provenance, but application ports, adapters, routing, and runtime composition remain owned by each consuming application.
 
+## Bitunix USDT Futures provider — #1805
+
+**Status: IN PROGRESS — NOT PRODUCTION READY** — [issue #1805](https://github.com/45s/coinzilla/issues/1805) / [Draft PR #1806](https://github.com/45s/coinzilla/pull/1806). Implemented: separate Futures provider/config/signing; exact USDT balances; public contract catalog, ticker/mark price, depth and closed REST candles; current/historical positions; position/leverage/margin/trading-setting reads; funding rates and position tiers; canonical order detail/history, bounded canonical fills and the legacy `getMyTrades()` bounded array projection; provider-specific pending orders and TP/SL reads/history; public trade/book-ticker streams and authenticated private observations; gated MARKET/LIMIT create, LIMIT modify, single/cancel-all, position close/close-all, position-level TP/SL place/modify/cancel, and leverage/margin-mode/position-mode mutations. Order and position mutations require explicit opt-in plus authenticated private-session readiness after caller REST reconciliation; account-setting writes have separate opt-in and exposure/order/TP-SL preflight with REST readback. Position-close readiness was tightened so opt-in alone cannot dispatch a close before reconciliation. Remaining limitations: Bitunix Futures is LIVE-only (no TESTNET); private observations have no replay cursor/sequence or authoritative snapshot guarantee; complete account-wide fill history and fee denomination remain unknown; account snapshot/server time and candle WS are unsupported; order-level TP/SL place/modify and isolated-position-margin adjustment remain unsupported for documented safety/protocol reasons. Keep the provider out of production execution and Harvester routing. The detailed operation matrix and remaining acceptance boundaries are maintained in [BROKER_API.md](./BROKER_API.md#bitunix-usdt-futures-provider--implementation-status), the [Futures reference audit](./docs/bitunix-futures-reference-audit.md), and issue #1805.
+
+### 2026-11-25 audit corrections
+
+- REST pacing now retains a process-local 100 ms shared floor and applies the official slower limits: 1,000 ms for `close_all_position` (1 request/second per UID) and 200 ms for `flash_close_position` (5 requests/second per UID). The limiter is shared across clients using the same API key, not across different keys/processes for one UID/IP; a centralized UID/IP scheduler remains a production prerequisite for multi-key deployments.
+- HTTP status is checked before body parsing, preserving definitive 400/429 rejections and ambiguous 408/409/5xx outcomes even when gateways return non-JSON bodies. No mutation retries were added.
+- Offline REST regression coverage verifies both contracts. Private-channel subscription acknowledgement remains undocumented by Bitunix; local subscription-send success does not prove exchange-side acceptance. This and missing replay/sequence guarantees remain blockers; Bitunix Futures has no TESTNET, so automated validation stays offline and LIVE mutations are not used as tests.
+
 ## Bitunix Spot one-at-a-time LIVE order probe matrix — #1690
 
 **Status: IN PROGRESS** — [issue #1690](https://github.com/45s/coinzilla/issues/1690). Add a human-operated, one-probe-per-invocation mode to the unified Bitunix CLI. The reviewed first pass covers HYPEUSDT LIMIT BUY/SELL quantities 1/2 and MARKET BUY/SELL quote quantities 1/2. Every invocation re-reads market metadata, balances and open orders; shows the exact common Broker input and wire body; requires fresh interactive confirmation; writes a unique exclusive marker; and captures the place-order request/response locally with restrictive permissions. The existing #1608 fixed HYPEUSDT order and marker remain untouched. The command uses the common `Broker.createOrder()` path, publishes only the existing sanitized diagnostic result, and never loops, retries, cancels or performs another mutation. A confirmed or unknown result requires manual review. This is a human-only LIVE investigation, not a test or production-readiness milestone; issue #1185 remains unchanged.
@@ -1595,3 +1605,33 @@ See [the private polling contract](./docs/BITUNIX_SPOT_POLLING.md) and [the Bitu
 - The operator probe prints placement confirmation separately from reconciliation health and persists reconciliation metadata in its private one-shot marker. A confirmed placement must never be retried because a later read failed.
 - Tests cover verified/unavailable reconciliation metadata, the exact signed order-detail query, and persistence of confirmed placement evidence when readback fails.
 - No live exchange mutation is part of CI. The existing HYPE order's later cancellation and independent status verification are documented under [PR #1727](https://github.com/45s/coinzilla/pull/1727).
+
+## 2026-11-24 — Bitunix Futures lifecycle implementation continuation (#1805)
+
+**Status: in progress; PR #1806 remains Draft and the provider is not production-ready.** Current verified head: `5999b5caea110f90942ff2e2977686374ca7fccf`.
+
+### Implemented on the PR branch
+
+- Separate USDT Futures provider, signing, request pacing and exact-decimal REST projections.
+- Canonical order detail/history and bounded canonical `getFills()`; execution quote notional uses exact decimal multiplication and fee asset remains explicitly unknown.
+- Current/historical positions, USDT balances, market catalog/ticker/depth/REST candles, funding rates/history, position tiers and authenticated trading-settings reads.
+- Provider-specific pending orders and pending/historical TP/SL reads.
+- Public trade/book-ticker and authenticated private balance/position/order/TP-SL observations, with login acknowledgement, cleanup, heartbeat and bounded reconnect/resubscribe. Events remain non-authoritative and non-replayable.
+- `createFuturesOrder()`, LIMIT-only `modifyFuturesOrder()`, `cancelOrder()` and `cancelAllOpenOrders()` are implemented behind explicit live-mutation opt-in, an active authenticated private session, and explicit caller acknowledgement after REST reconciliation. Reconnect/unsubscribe resets readiness. Dispatched mutations are never blindly retried.
+- TDD RED → GREEN evidence covers bounded canonical fills, mismatched create/modify readback, missing LIMIT price, and mutation attempts without a reconciled private session.
+
+### Exact-head verification
+
+Commit `5999b5caea110f90942ff2e2977686374ca7fccf` passed all six required workflows: Unit Tests, Test Coverage, Repository Quality, External Documentation Links, Dependency Audit and Harvester Targeted Tests. No LIVE Futures mutation or production API call was performed.
+
+### Remaining before production use
+
+- [ ] Correlate private order/TP-SL events with mutation outcomes; preserve unknown outcomes when event/readback evidence is incomplete.
+- [ ] Complete attached TP/SL modification and separate order-level/position-level TP/SL place, modify and cancel mutations.
+- [ ] Implement close-position and close-all with explicit scope, one-shot dispatch and verified position postconditions.
+- [ ] Implement account-setting and isolated-position-margin mutations behind account-specific opt-in and safe preconditions.
+- [ ] Establish authoritative account snapshot/recovery guarantees; the current user-data acknowledgement is consumer attestation only and does not provide event replay or sequence guarantees.
+- [x] Confirmed Bitunix Futures is LIVE-only; no Futures TESTNET is available. Keep automated tests offline and prohibit LIVE mutation tests.
+- [ ] Keep unsupported common Spot-shaped methods explicit; do not fabricate a Futures-to-Spot mapping.
+
+The provider remains excluded from production execution and Harvester routing until these items are resolved and reviewed. See [the maintained reference audit](./docs/bitunix-futures-reference-audit.md) and [issue #1805](https://github.com/45s/coinzilla/issues/1805).

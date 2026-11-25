@@ -41,7 +41,7 @@ test("Broker rejects a missing or unsupported provider before constructing an ex
     () => new Broker(credentials),
     {
       name: "TypeError",
-      message: /provider must be either "binance" or "bitunix"/,
+      message: /provider must be one of "binance", "bitunix", or "bitunix-futures"/g,
     },
     "a missing provider must fail with an actionable configuration error",
   )
@@ -52,7 +52,7 @@ test("Broker rejects a missing or unsupported provider before constructing an ex
     }),
     {
       name: "TypeError",
-      message: /provider must be either "binance" or "bitunix"/,
+      message: /provider must be one of "binance", "bitunix", or "bitunix-futures"/,
     },
     "an unsupported provider must fail instead of silently selecting an exchange",
   )

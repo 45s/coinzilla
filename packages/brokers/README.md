@@ -32,7 +32,8 @@ The `@coinzilla/brokers` entry point exports:
 - `Broker` — exchange-neutral constructor selecting the existing Binance or Bitunix Spot implementation.
 - `BinanceWebSocketBroker` — the concrete Binance WebSocket API/Streams broker.
 - `BinanceWebSocketConfig` — validated Binance broker configuration.
-- `BitunixSpotBroker` and `BitunixSpotConfig` — the partial Bitunix Spot REST broker implementation and its validated configuration.
+- `BitunixSpotBroker` and `BitunixSpotConfig` — the Bitunix Spot REST broker implementation and its validated configuration.
+- `BitunixFuturesBroker` and `BitunixFuturesConfig` — the separate Bitunix USDT-margined Futures provider and its validated LIVE-only configuration. Single-order `cancelOrder()` and symbol-scoped/account-wide `cancelAllOpenOrders()` are available only behind `providerOptions.allowLiveOrderMutations: true` and explicit preflight/final-state checks; order creation, modification, position close, TP/SL and account-setting mutations remain disabled by default. Bitunix does not provide a Futures TESTNET; automated tests remain offline and LIVE mutations are never used as tests.
 - `BitunixSpotWebSocketClient` and `BitunixWebSocketError` — a separately managed, authenticated Spot WebSocket request/response RPC client; it does not add subscriptions or order mutations.
 - Bitunix polling reconciliation remains a private infrastructure helper, but the public `subscribeForUserData()` method exposes its explicitly scoped snapshots through `onObservation` and the `OBSERVE_USER_DATA` capability. This is not a native user-data stream, canonical fill feed, authoritative account snapshot, or Harvester provider. See [the polling boundary](./docs/BITUNIX_SPOT_POLLING.md).
 - `normalizeBinanceId` — exact non-negative Binance identifier normalization, exported for package consumers that need the same identifier contract.
@@ -64,9 +65,20 @@ const spotBroker = new Broker({
     requestTimeout: 10_000,
   },
 })
+
+const futuresBroker = new Broker({
+  provider: "bitunix-futures",
+  apiKey,
+  apiSecret,
+  tradingMode: "live",
+  providerOptions: {
+    allowLiveOrderMutations: false,
+    allowLiveAccountMutations: false,
+  },
+})
 ```
 
-The provider must be exactly `"binance"` or `"bitunix"`. Environment selection is explicit: Binance requires `tradingMode: "testnet" | "live"`; Bitunix Spot currently requires `tradingMode: "live"` because no Spot TESTNET endpoint is documented. Provider-specific options (such as `baseUrl`, `websocketApiUrl`, `requestTimeout`, or injected dependencies) belong inside `providerOptions`. Common credentials, environment selection, and the optional logger cannot be overridden there.
+The provider must be exactly `"binance"`, `"bitunix"`, or `"bitunix-futures"`. Environment selection is explicit: Binance requires `tradingMode: "testnet" | "live"`; Bitunix Spot and Bitunix USDT Futures currently require `tradingMode: "live"` because Bitunix Spot and Futures are LIVE-only; Bitunix does not provide a Futures TESTNET. Provider-specific options (such as `baseUrl`, `websocketApiUrl`, `requestTimeout`, or injected dependencies) belong inside `providerOptions`. Common credentials, environment selection, and the optional logger cannot be overridden there.
 
 The constructor returns the existing concrete provider instance, preserving its behavior and concrete `instanceof` checks. Both instances also satisfy `instanceof Broker` through the shared structural contract. Existing direct constructors remain supported. The factory selects an adapter only; application-specific account/market routing remains with the consuming application.
 
@@ -541,3 +553,60 @@ For state-changing Bitunix REST calls, an HTTP-success response with an unusable
 ### Bitunix Spot deposit and withdrawal diagnostics
 
 When credentials are configured, the read-only diagnostic runner also exercises `getDeposits({ limit: 1 })` and `getWithdrawalHistory({ limit: 1 })` through the public Broker facade. These are single bounded page probes only; they do not establish complete history. Reports retain structural schema observations and never persist deposit amounts, withdrawal amounts, addresses, transaction hashes, or record values. Public-only mode skips both private reads.
+
+## Bitunix USDT Futures
+
+The `bitunix-futures` provider is a separate USDT-margined Futures adapter. Do not infer Futures order, position or TP/SL behavior from Bitunix Spot.
+
+**Status: broad provider-specific read and mutation functionality implemented; NOT PRODUCTION READY.** See the [Futures reference audit](./docs/bitunix-futures-reference-audit.md), [Broker API status matrix](./BROKER_API.md#bitunix-usdt-futures-provider--implementation-status), and [tracking issue #1805](https://github.com/45s/coinzilla/issues/1805).
+
+### Implemented reads
+
+- Contract catalog, ticker/mark price, REST depth and closed REST candles.
+- Exact USDT balance projection; current and historical positions.
+- Position mode, leverage/margin mode and authenticated trading-settings reads.
+- Current/batch/historical funding rates and position tiers.
+- Canonical order detail/history and bounded canonical `getFills()`; raw Futures trade history preserves fee and realized-PnL fields.
+- Provider-specific pending orders, pending TP/SL groups and historical TP/SL pages.
+- Public trade/book-ticker subscriptions and authenticated private balance/position/order/TP-SL observations.
+
+Canonical fills are limited to one bounded page per call. Quote notional uses exact decimal arithmetic; commission denomination remains UNKNOWN because the exchange response omits fee asset. No complete account-wide execution-history guarantee is claimed.
+
+### Implemented mutations
+
+- `createFuturesOrder()`: explicit MARKET/LIMIT Futures order semantics, caller client identity, exact market-filter checks and attached TP/SL creation fields.
+- `modifyFuturesOrder()`: identified pending LIMIT order modification with exact quantity and price.
+- `cancelOrder()` and `cancelAllOpenOrders()`: one-shot cancellation, matching private CLOSE events and REST readback.
+- `closeFuturesPosition()`, `closeFuturesPositionBySide()` and `closeAllFuturesPositions()`: exact position preflight, explicit account-wide confirmation, one-shot dispatch and REST post-readback.
+- `placeFuturesPositionTpSlOrder()` and `modifyFuturesPositionTpSlOrder()`: position-level TP/SL operations confirmed by matching private CREATE/UPDATE events.
+- `cancelFuturesPositionTpSlOrder()` and `cancelFuturesTpSlOrder()`: cancellation outcome is derived from the matching private CLOSE status.
+- `setFuturesLeverage()`, `setFuturesMarginMode()` and `setFuturesPositionMode()`: explicit account-mutation opt-in, no-exposure preflight and REST configuration readback.
+
+Order-level TP/SL placement/modification remains unsupported because the documented child-order API does not establish a reduce-only/close-position guarantee. `adjustFuturesPositionMargin()` remains unsupported because no documented endpoint was found.
+
+### Mutation safety and recovery
+
+All LIVE mutation flags default to false:
+
+- `providerOptions.allowLiveOrderMutations`
+- `providerOptions.allowLivePositionMutations`
+- `providerOptions.allowLiveAccountMutations`
+
+Order and position mutations require an authenticated private user-data session and caller-acknowledged REST reconciliation. Consumers must reconcile balances, positions, pending orders and TP/SL orders before calling:
+
+```js
+await broker.acknowledgeUserDataReconciliation({
+  reconciliationCompleted: true,
+})
+```
+
+The acknowledgement is a consumer attestation only. Private observations are not authoritative or replayable; the protocol has no documented monotonic event sequence or replay cursor. Disconnect, reconnect and unsubscribe reset readiness. State-changing requests are one-shot, marked `stateChanging: true`, and never automatically retried. Lost acknowledgements, missing/mismatched private events and uncertain readback remain UNKNOWN.
+
+### Remaining blockers
+
+- Bitunix Futures has no TESTNET. Automated verification remains offline; LIVE mutation tests are prohibited.
+- Private events remain non-authoritative and non-replayable; no gap-free session or process-restart recovery guarantee exists.
+- Account snapshots, server time, complete account-wide fill history and common Spot-shaped Futures order projections remain unsupported/unknown where the documented contract cannot satisfy the common API.
+- Order-level TP/SL place/modify and isolated-position-margin adjustment remain unsupported for the documented reasons above.
+
+No LIVE Futures mutation was performed by implementation work or ordinary CI. Keep this provider out of production execution and Harvester routing until external recovery guarantees and final acceptance are complete; no TESTNET prerequisite exists for this LIVE-only provider.

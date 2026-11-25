@@ -26,15 +26,27 @@ const spotBroker = new Broker({
   apiSecret,
   tradingMode: "live",
 })
+
+const futuresBroker = new Broker({
+  provider: "bitunix-futures",
+  apiKey,
+  apiSecret,
+  tradingMode: "live",
+  providerOptions: {
+    allowLiveOrderMutations: false,
+    allowLiveAccountMutations: false,
+  },
+})
 ```
 
-- `provider` is required and must be exactly `"binance"` or `"bitunix"`; missing and unknown providers fail during construction.
+- `provider` is required and must be exactly `"binance"`, `"bitunix"`, or `"bitunix-futures"`; missing and unknown providers fail during construction.
 - `apiKey`, `apiSecret`, and `tradingMode` are common top-level options. The selected provider validates credentials and its supported environment.
 - Binance requires explicit `tradingMode: "testnet" | "live"`; `NODE_ENV` never selects exchange endpoints.
-- Bitunix Spot requires explicit `tradingMode: "live"`. No Spot TESTNET endpoint is documented; the constructor does not silently infer LIVE.
+- Bitunix Spot and Bitunix USDT Futures require explicit `tradingMode: "live"`. Bitunix does not provide a TESTNET for either product; both are LIVE-only and the constructor does not silently infer LIVE.
+- Bitunix Futures uses the separate `bitunix-futures` provider ID and a Futures-specific configuration. LIVE order and account-setting mutations are disabled by default; `providerOptions.allowLiveOrderMutations` and `providerOptions.allowLiveAccountMutations` are explicit opt-ins, not readiness approvals.
 - Provider-specific configuration is namespaced under `providerOptions`. For example, use `providerOptions: { baseUrl, requestTimeout }` for Bitunix or `providerOptions: { websocketApiUrl, websocketStreamsUrl }` for Binance. Provider options cannot override common credentials, logger, or environment selection.
 - The optional common `logger` is passed to the selected adapter. Unknown top-level options fail fast rather than being silently ignored.
-- The constructor returns the selected existing concrete provider instance and validates it against `assertBrokerContract`. Existing `BinanceWebSocketBroker` and `BitunixSpotBroker` constructors remain supported. Concrete provider `instanceof` checks remain valid; both providers also satisfy `instanceof Broker` via the structural contract.
+- The constructor returns the selected concrete provider instance and validates it against `assertBrokerContract`. Existing `BinanceWebSocketBroker` and `BitunixSpotBroker` constructors remain supported; `BitunixFuturesBroker` is a separate Futures implementation. Concrete provider `instanceof` checks remain valid; both providers also satisfy `instanceof Broker` via the structural contract.
 - `Broker` is a constructor convenience, not an application provider registry or market-routing policy. Consuming applications retain ownership of account/market routing and composition.
 
 ## 1. Ownership and capability-model decision
@@ -119,41 +131,41 @@ The public exports `BROKER_METHODS`, `BROKER_COMPATIBILITY_METHODS`, `BROKER_MUT
 
 ### Common operations
 
-All methods below are present on both provider facades. An unsupported implementation returns a failed `toResult` result containing a `BrokerUnsupportedOperationError`; it must not silently no-op, return `undefined`, fabricate data, or disguise unsupported behavior as an empty successful collection.
+All methods below are present on the Binance Spot, Bitunix Spot and Bitunix Futures facades. An unsupported implementation returns a failed `toResult` result containing a `BrokerUnsupportedOperationError`; it must not silently no-op, return `undefined`, fabricate data, or disguise unsupported behavior as an empty successful collection.
 
-| Method | Binance Spot | Bitunix Spot | Contract notes |
-|---|---|---|---|
-| `connect()` / `disconnect()` | Supported | Supported | Idempotent lifecycle hooks; provider resource behavior differs. |
-| `getBalances()` | Supported | Supported | Canonical `Balance[]`; exact decimal values. |
-| `getAccountSnapshot()` | Supported | Unsupported | Bitunix does not provide the source timestamp/version required for an authoritative snapshot. |
-| `getServerTime()` | Supported | Unsupported | Binance returns validated server time in Unix epoch milliseconds. |
-| `getExchangeMarkets()` | Supported | Supported | Normalized `Market[]`. |
-| `getOpenOrders({ symbol? })` | Supported | Supported | Current open orders. Bitunix accepts a symbol for one market; omitting it aggregates reads across the current active Spot market catalog. The aggregation is bounded and returns partial data with per-symbol errors, but it does not prove complete or atomic account-wide coverage. |
-| `getCanonicalOrder()` | Supported | Unsupported | Bitunix Spot does not expose the client order identity required by `CanonicalOrder`. |
-| `getCanonicalOrderHistory({ symbol, orderId?, startTime?, endTime?, limit?, includeFollowingOrders? })` | Supported | Unsupported | One bounded canonical Binance query. With `orderId`, the default is exact-order lookup; opt into inclusive lower-bound pagination with `includeFollowingOrders: true`. The caller owns pagination and coverage. |
-| `getFills()` | Supported | Unsupported | Canonical `Fill[]`; Bitunix matching details do not prove stable execution identity or fill completeness. |
-| `getPrices({ symbol })` | Supported | Supported | One-shot ticker result; not a subscription. |
-| `getCandles({ symbol, interval, ... })` | Supported | Unsupported | Bitunix Spot kline data omits volume required by the canonical OHLCV contract. |
-| `createCanonicalOrder(input)` | Supported behind readiness/permission gates | Unsupported | Bitunix mutation blockers in #1185 remain in force. |
-| `cancelOrder({ symbol, orderId })` | Supported behind readiness/permission gates | Implemented behind explicit `allowLiveOrderMutations` opt-in | Requires symbol and exchange order ID; verifies final order detail; unknown outcomes require reconciliation. |
-| `cancelAllOpenOrders({ symbol })` | Supported behind readiness/permission gates | Implemented behind explicit opt-in; symbol-scoped | Cancels only rows returned by the current-order query; completeness is not proven, so this is not account-wide or exhaustive. |
-| `subscribeForPrices(...)` | Supported | Unsupported | Successful result supplies a cleanup handle. |
-| `subscribeForCandles(...)` | Supported | Unsupported | Successful result supplies a cleanup handle. |
-| `subscribeForBookTicker(...)` | Supported | Unsupported | Successful result supplies a cleanup handle. |
-| `subscribeForUserData({ symbols?, trackedOrders?, onEvent, onObservation, onStatus })` | Supported | Supported for polling observations | Binance emits native authoritative events through `onEvent`; Bitunix emits non-authoritative polling snapshots through `onObservation`. The delivery mode is explicit in the returned subscription metadata. |
+| Method | Binance Spot | Bitunix Spot | Bitunix Futures | Contract notes |
+|---|---|---|---|---|
+| `connect()` / `disconnect()` | Supported | Supported | Supported | Idempotent lifecycle hooks; provider resource behavior differs. |
+| `getBalances()` | Supported | Supported | Supported | Canonical `Balance[]`; Futures projects exact USDT free/locked values and excludes promotional bonus. |
+| `getAccountSnapshot()` | Supported | Unsupported | Unsupported | Bitunix Futures has no documented source timestamp/version for an authoritative account snapshot. |
+| `getServerTime()` | Supported | Unsupported | Unsupported | Binance returns validated server time in Unix epoch milliseconds; no verified Bitunix Futures server-time endpoint. |
+| `getExchangeMarkets()` | Supported | Supported | Supported | Normalized `Market[]`; Futures returns OPEN/API-enabled contracts. |
+| `getOpenOrders({ symbol? })` | Supported | Supported | Unsupported | Futures pending rows remain available through `getFuturesPendingOrders()`; the common legacy projection does not preserve Futures semantics/completeness. |
+| `getCanonicalOrder()` | Supported | Unsupported | Supported | Futures verifies exchange order ID/client ID and symbol identity; missing exchange client ID fails closed. |
+| `getCanonicalOrderHistory({ symbol, orderId?, startTime?, endTime?, limit?, includeFollowingOrders? })` | Supported | Unsupported | Supported | One bounded symbol-scoped page; caller owns pagination and retention coverage. |
+| `getFills()` | Supported | Unsupported | Supported (bounded page) | Futures uses stable trade/order IDs and exact decimal quote notional; fee asset is unknown and complete account-wide history is not claimed. |
+| `getPrices({ symbol })` | Supported | Supported | Supported | One-shot ticker result; not a subscription. |
+| `getCandles({ symbol, interval, ... })` | Supported | Unsupported | Supported | Futures closed REST klines preserve exact OHLCV; Futures candle WebSocket subscription remains unsupported. |
+| `createCanonicalOrder(input)` | Supported behind readiness/permission gates | Unsupported | Unsupported | Spot-shaped common input cannot express Futures `tradeSide`, `positionId`, `reduceOnly` and hedge-mode selection. Use `createFuturesOrder()`. |
+| `cancelOrder({ symbol, orderId })` | Supported behind readiness/permission gates | Implemented behind explicit opt-in | Supported behind opt-in and private-session readiness | Futures requires `allowLiveOrderMutations: true`, active authenticated private user data, and caller-acknowledged REST reconciliation; one-shot dispatch and readback, no blind retry. |
+| `cancelAllOpenOrders({ symbol? })` | Supported behind readiness/permission gates | Implemented behind explicit opt-in; symbol-scoped | Supported behind opt-in and private-session readiness | Futures supports symbol-scoped or account-wide one-shot cancellation, preflight and final pending-order readback; callers must enforce single-writer ownership. |
+| `subscribeForPrices(...)` | Supported | Unsupported | Supported | Futures public trade channel; exact decimal price/quantity, exchange trade timestamp, no stable trade ID. |
+| `subscribeForCandles(...)` | Supported | Unsupported | Unsupported | Futures public kline payload lacks the documented candle open timestamp required by the common Candle contract. |
+| `subscribeForBookTicker(...)` | Supported | Unsupported | Supported | Futures one-level depth channel; exact best bid/ask, local receipt time and no source sequence. |
+| `subscribeForUserData({ symbols?, trackedOrders?, onEvent, onObservation, onStatus })` | Supported | Supported for polling observations | Supported for native raw observations | Binance emits native events through `onEvent`; Spot emits non-authoritative polling observations; Futures emits native private observations but no replay/sequence guarantee. Futures mutations additionally require explicit external reconciliation acknowledgement. |
 
 ### Compatibility methods
 
-These methods remain present on both facades for existing consumers. They are not aliases for canonical methods unless explicitly stated.
+These methods remain present on all provider facades for existing consumers. They are not aliases for canonical methods unless explicitly stated.
 
 | Method | Compatibility behavior |
 |---|---|
-| `getAssets()` | Legacy `Coin[]` projection. Use `getBalances()` for exact decimal balances. |
-| `getOrder({ symbol, orderId, clientOrderId? })` | Legacy `Order` lookup. Binance accepts broker or client identity; Bitunix accepts broker `orderId` only and returns an explicit unsupported error for `clientOrderId`. |
-| `getOrderHistory(...)` | Legacy provider history. Binance returns its bounded `allOrders` response; Bitunix returns one symbol-scoped page. Pagination and legacy row shape are not interchangeable. Use `getCanonicalOrderHistory()` when canonical order history is required. |
-| `getMyTrades(...)` | Legacy trade-history operation. Binance supports a bounded symbol-scoped response; Bitunix explicitly reports unsupported. It is not equivalent to canonical `getFills()`. |
-| `getPrice({ symbol })` | Compatibility alias for `getPrices({ symbol })` on both providers. |
-| `createOrder(input)` | Legacy `Order` placement facade. Binance supports it behind the same safety gates; Bitunix implements LIMIT with base `quantity` and MARKET with quote `quoteQuantity` behind explicit opt-in. Caller-supplied client IDs remain unsupported; canonical placement remains unsupported. |
+| `getAssets()` | Legacy `Coin[]` projection. Bitunix Futures reports unsupported; use `getBalances()` for exact Futures balances. |
+| `getOrder({ symbol, orderId, clientOrderId? })` | Legacy `Order` lookup. Binance accepts broker or client identity; Bitunix Spot accepts broker `orderId` only; Bitunix Futures reports unsupported because the legacy order shape cannot preserve Futures semantics. |
+| `getOrderHistory(...)` | Legacy provider history. Binance returns bounded `allOrders`; Bitunix Spot returns one symbol-scoped page; Bitunix Futures reports unsupported. Use `getCanonicalOrderHistory()` for Futures canonical order history. |
+| `getMyTrades(...)` | Legacy trade-history operation. Binance supports a bounded symbol-scoped response; Bitunix Spot remains unsupported. Bitunix Futures returns one bounded array from its documented Futures execution-history endpoint, preserving exact provider fields; fee asset remains unavailable. Use `getFills()` for canonical Fill values. |
+| `getPrice({ symbol })` | Compatibility alias for `getPrices({ symbol })` on Binance, Bitunix Spot, and Bitunix Futures. |
+| `createOrder(input)` | Legacy Spot-shaped `Order` placement facade. Binance supports it behind safety gates; Bitunix Spot implements LIMIT base `quantity` and MARKET quote `quoteQuantity` behind explicit opt-in; Bitunix Futures reports unsupported. Use `createFuturesOrder()` with explicit Futures semantics. |
 | `getSymbolFilters({ symbol })` | Raw provider metadata retained for existing infrastructure adapters. It is not a normalized `TradingRules` value and is not part of the canonical method catalog. |
 
 ### Canonical Binance order-history query semantics
@@ -244,3 +256,72 @@ A successful observation subscription is therefore not evidence that native user
 Binance declares `SUBSCRIBE_USER_DATA: SUPPORTED` and `OBSERVE_USER_DATA: UNSUPPORTED`: its authenticated native WebSocket events use `onEvent`, not a polling observation channel. Bitunix declares the inverse delivery capabilities and remains non-authoritative.
 
 The Binance subscription result retains the live `subscriptionId` getter and recovery acknowledgement controls from `UserDataSession`. Delivery metadata is attached without spreading/snapshotting the handle, so reconnects continue to expose the current remote subscription ID.
+
+## Bitunix USDT Futures provider — implementation status
+
+The `bitunix-futures` provider is a separate USDT-margined Futures adapter tracked by [issue #1805](https://github.com/45s/coinzilla/issues/1805) and [Draft PR #1806](https://github.com/45s/coinzilla/pull/1806). This status describes implemented functionality and explicit limitations; it is not a production-readiness declaration.
+
+### Common Broker methods
+
+| Method | Status | Evidence / limitation |
+|---|---|---|
+| `connect()` / `disconnect()` | Supported | Lifecycle cleanup for public/private WebSocket clients and listeners. |
+| `getBalances()` | Supported | Exact USDT free/locked projection; promotional bonus excluded. |
+| `getAccountSnapshot()` | Unsupported | Independent account, position, order and TP/SL reads have no shared source timestamp/version. |
+| `getServerTime()` | Unsupported | No verified Futures server-time endpoint. |
+| `getExchangeMarkets()` | Supported | Returns OPEN and API-enabled Futures contracts. |
+| `getOpenOrders()` | Unsupported | Use `getFuturesPendingOrders()`; the common legacy `Order[]` cannot preserve Futures semantics/completeness. |
+| `getCanonicalOrder()` | Supported | Detail lookup by exchange order ID or caller client ID; identity and symbol correlation enforced. |
+| `getCanonicalOrderHistory()` | Supported | One bounded symbol-scoped page; caller owns pagination and retention coverage. |
+| `getFills()` | Supported (bounded page) | Stable trade/order identity and exact quote notional; commission denomination is UNKNOWN because fee asset is absent. Complete account-wide history is not claimed. |
+| `getPrices()` | Supported | One-shot ticker with exact last and mark prices. |
+| `getCandles()` | Supported | Closed REST klines with exact decimals and documented interval-based close-time derivation. |
+| `createCanonicalOrder()` | Unsupported | Spot-shaped input cannot express Futures `tradeSide`, `positionId`, `reduceOnly` and hedge-mode semantics. |
+| `cancelOrder({ symbol, orderId })` | Supported behind gates | Explicit live opt-in, authenticated/reconciled private session, exact pending-order preflight, one-shot dispatch, matching CLOSE event and canonical readback. |
+| `cancelAllOpenOrders({ symbol? })` | Supported behind gates | One-shot symbol/account scope, preflight, matching CLOSE events and final pending-order readback; caller must enforce single-writer ownership. |
+| `subscribeForPrices()` | Supported | Public trade channel; exact price/quantity and exchange trade timestamp; no stable trade ID. |
+| `subscribeForCandles()` | Unsupported | Public kline payload lacks the documented candle-open timestamp required by the common contract. |
+| `subscribeForBookTicker()` | Supported | One-level depth channel; exact best bid/ask, local receipt timestamp and no source sequence. |
+| `subscribeForUserData()` | Supported (raw observations) | Native balance/position/order/TP-SL observations; no replay cursor, sequence or authoritative snapshot guarantee. |
+
+### Futures-specific reads
+
+- `getFuturesPendingOrders({ symbol?, orderId?, clientOrderId?, status?, startTime?, endTime?, limit?, skip? })`: one bounded pending-order page with exact decimals and Futures identity.
+- `getFuturesPendingTpSlOrders({ symbol?, positionId?, limit?, skip? })`: pending position TP/SL groups; exact trigger/quantity values, one bounded page.
+- `getFuturesTpSlOrderHistory({ symbol?, side?, positionMode?, startTime?, endTime?, limit?, skip? })`: bounded historical TP/SL page with exchange total and identity-preserving fields.
+- `getFuturesPositions({ symbol?, positionId? })` and `getFuturesPositionHistory(...)`: current and bounded historical position projections.
+- `getFuturesPositionMode()`, `getFuturesLeverageAndMarginMode({ symbol, marginCoin: "USDT" })`, and `getFuturesTradingSettings({ symbols? })`: authenticated account-setting reads.
+- `getFuturesFundingRate({ symbol })`, `getFuturesFundingRates()`, `getFuturesFundingRateHistory(...)`, and `getFuturesPositionTiers({ symbol })`: funding and risk-tier reads.
+- `getFuturesTradeHistory(...)`: one bounded raw execution-history page preserving exact fee and realized-PnL values and pagination metadata.
+- `getMyTrades({ symbol?, orderId?, positionId?, startTime?, endTime?, limit?, skip? })`: compatibility array projection over the same bounded Futures execution page; it does not claim complete account-wide history or commission denomination.
+
+### Futures-specific mutations
+
+All mutation flags default to false. These provider-specific operations do not change the exchange-neutral Broker order model.
+
+| Operation | Status and safety contract |
+|---|---|
+| `createFuturesOrder()` | MARKET/LIMIT placement with explicit Futures semantics, caller `clientId`, exact market-filter validation, private-session readiness and `allowLiveOrderMutations: true`. Placement is one-shot; mismatched or uncertain readback remains UNKNOWN. |
+| `modifyFuturesOrder()` | Identified pending LIMIT orders only; exact quantity and price; requires order-mutation opt-in/readiness, matching UPDATE event and final readback. |
+| `cancelOrder()` / `cancelAllOpenOrders()` | Require order-mutation opt-in/readiness; one-shot dispatch, matching CLOSE events and REST reconciliation. Never blindly retry. |
+| `closeFuturesPosition()`, `closeFuturesPositionBySide()`, `closeAllFuturesPositions()` | Require `allowLivePositionMutations: true` **and** an authenticated private session acknowledged after REST reconciliation. Exact position preflight, explicit account-wide confirmation, one-shot close and REST post-readback. |
+| `placeFuturesPositionTpSlOrder()` / `modifyFuturesPositionTpSlOrder()` | Position-level TP/SL only; exact open position and trigger validation; require matching private CREATE/UPDATE NEW event. |
+| `cancelFuturesPositionTpSlOrder()` / `cancelFuturesTpSlOrder()` | Exact symbol/order identity and matching private CLOSE event. Only CANCELED confirms user cancellation; SYSTEM_CANCELED, FAILED and FILLED remain distinct outcomes. A triggered child-order fill remains UNKNOWN. |
+| `setFuturesLeverage()`, `setFuturesMarginMode()`, `setFuturesPositionMode()` | Require `allowLiveAccountMutations: true`; reject unsafe exposure/pending-order/TP-SL preconditions; verify configuration through REST readback. Lost acknowledgements remain OUTCOME_UNKNOWN even if readback shows the requested setting. |
+| `adjustFuturesPositionMargin()` | Unsupported: no documented isolated-position-margin endpoint was found; do not emulate it with leverage or margin-mode changes. |
+
+Order-level TP/SL placement/modification remains unsupported because the documented child-order surface does not establish the required reduce-only/close-position guarantee. Attached TP/SL parameters on `createFuturesOrder()` and position-level TP/SL operations are separate, explicitly scoped capabilities.
+
+### WebSocket lifecycle and recovery
+
+- Public `trade` and `depth_book1` subscriptions share the public connection and return cleanup handles.
+- Private `balance`, `position`, `order` and `tpsl` subscriptions wait for login acknowledgement and emit raw observations through `onObservation`.
+- The client validates official channels, enforces documented outbound message/channel limits, sends heartbeat pings, detects missed pong, and uses bounded reconnect/resubscribe.
+- Every new private session starts with recovery required. Consumers must reconcile balances, positions, pending orders and TP/SL orders, then call `acknowledgeUserDataReconciliation({ reconciliationCompleted: true })`.
+- The acknowledgement is a consumer attestation, not proof of atomicity, event authority, sequence continuity or replay. Disconnect, reconnect and unsubscribe reset readiness.
+
+### Production status and limitations
+
+The REST client serializes dispatch conservatively and never automatically retries. State-changing requests are one-shot and explicitly marked `stateChanging: true`. Private observations are non-authoritative and non-replayable; complete account-wide fill history, atomic snapshots, gap-free recovery and process-restart recovery remain UNKNOWN. Bitunix Futures is LIVE-only; Bitunix does not provide a Futures TESTNET. Automated tests remain offline, and LIVE mutations are not permitted as implementation tests.
+
+The provider remains **NOT PRODUCTION READY** and must not be routed to Harvester or production execution. The remaining blockers are external protocol guarantees and verification, not a reason to fabricate support for unsupported common-model operations. See the [maintained Futures reference audit](./docs/bitunix-futures-reference-audit.md) and [issue #1805](https://github.com/45s/coinzilla/issues/1805).

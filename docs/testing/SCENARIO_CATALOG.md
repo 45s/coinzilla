@@ -142,6 +142,9 @@ The catalog is a navigation and traceability layer. Domain specifications, accep
 ### Shared packages
 
 - [BRK-001 — Unknown broker mutation outcome](#brk-001--unknown-broker-mutation-outcome-is-not-treated-as-failure)
+- [BRK-002 — Bitunix Futures TP/SL history is bounded and identity-preserving](#brk-002--bitunix-futures-tpsl-history-is-bounded-and-identity-preserving)
+- [BRK-003 — Futures position closes require reconciled private user data](#brk-003--futures-position-closes-require-reconciled-private-user-data)
+- [BRK-004 — Futures REST pacing and mutation outcomes follow endpoint contracts](#brk-004--futures-rest-pacing-and-mutation-outcomes-follow-endpoint-contracts)
 - [DB-001 — Database transaction atomicity](#db-001--a-failed-database-transaction-leaves-no-partial-write)
 - [EVT-001 — Publish versus subscriber completion](#evt-001--publish-acceptance-is-distinct-from-subscriber-completion)
 - [JRN-001 — Journal durability boundary](#jrn-001--journal-flush-is-the-durability-boundary)
@@ -814,6 +817,74 @@ The package entries below make the repository-wide scope visible, but their exac
 **Implementation:** `packages/brokers/src/` provider mutation and canonical order lookup boundaries.
 
 **Automated tests:** Exact files and named cases not yet mapped. Start from [Broker API contract](../../packages/brokers/BROKER_API.md) and [Brokers package README](../../packages/brokers/README.md).
+
+### BRK-002 — Bitunix Futures TP/SL history is bounded and identity-preserving
+
+**Status:** VERIFIED on `a80dcaeebb7a9b0bd6378834271f01f0b34559d6` — the exact-head Brokers unit suite passed.
+
+**Behavior:** The Bitunix USDT Futures provider reads historical TP/SL order groups through the dedicated history endpoint and returns one caller-bounded page without presenting it as complete account history.
+
+**Input:** `getFuturesTpSlOrderHistory()` accepts optional symbol, side, position-mode and time-range filters plus `limit` and `skip`. The exchange defines side/positionMode as signed int32 fields and limits each page to 100 rows.
+
+**Expected output:** The result exposes `orders`, exchange `total`, `skip` and `limit`. TP/SL identity, position identity, exact decimal trigger/quantity values, status, creation time and trigger time are preserved. Returned rows must match the requested symbol when one is supplied.
+
+**Must not happen:** Do not coerce exchange decimal strings to JavaScript numbers; treat TP/SL history as ordinary canonical orders; return rows for a different requested symbol; or claim that one page proves complete history/retention coverage.
+
+**Subcases:** Valid filters and bounded pagination; maximum page size; oversized page rejection before dispatch; signed-int32 range validation; response symbol mismatch; exact TP/SL prices and exchange lifecycle timestamps.
+
+**Implementation:** `packages/brokers/src/infrastructure/bitunix/futures/broker.js` — `getFuturesTpSlOrderHistory()`, query validation and symbol correlation; `adapters/adapt-futures-pending-tpsl-orders.js` preserves the exchange TP/SL group fields.
+
+**Automated tests:** `packages/brokers/src/infrastructure/bitunix/futures/broker.tpsl.test.js`:
+
+- `Bitunix Futures TP/SL history reads preserve exchange history fields and pagination`
+- `Bitunix Futures TP/SL history rejects an oversized page before dispatch`
+- `Bitunix Futures TP/SL history rejects rows for a different requested symbol`
+- `Bitunix Futures TP/SL history rejects values outside the documented int32 query range`
+
+### BRK-003 — Futures position closes require reconciled private user data
+
+**Status:** VERIFIED — the regression was observed RED on test-only commit `b410108338eefba65d70e8a9393140e53ed247e0`, then GREEN on PR #1806 head `0b131add3aa31ff5f0171710fb7b254dc6cdf592`. The Brokers unit-test job passed all 1,172 tests (0 failures), including the readiness regression and pending TP/SL account-setting preflight test.
+
+**Behavior:** Explicit `allowLivePositionMutations: true` is not sufficient to close a Futures position. The consumer must first establish an authenticated private user-data session, reconcile balances, positions, pending orders and TP/SL orders through REST, and acknowledge that reconciliation.
+
+**Input:** Call `closeFuturesPosition()`, `closeFuturesPositionBySide()` or `closeAllFuturesPositions()` while the position-mutation opt-in is enabled but the private session is absent, disconnected, unauthenticated or still recovery-required.
+
+**Expected output:** Every operation returns `mutationOutcome: "NOT_SENT"` and `positionOutcome: "NOT_SENT"`; no position preflight or state-changing POST is dispatched. Once the session is authenticated and reconciliation is acknowledged, the existing explicit-scope close workflow may perform its one-shot request and REST post-readback.
+
+**Must not happen:** Do not close a position merely because the position-mutation opt-in is enabled. Do not treat reconnect as reconciliation, silently restore readiness, or retry a dispatched close after an unknown outcome.
+
+**Subcases:** Single position close; symbol/side resolution; symbol-scoped close-all; account-wide close with explicit confirmation; missing session; authenticated but unreconciled session; disconnected session; successful reconciled readiness.
+
+**Implementation:** `packages/brokers/src/infrastructure/bitunix/futures/broker.js` — `closeFuturesPosition()`, `closeFuturesPositionBySide()`, `closeAllFuturesPositions()`, `isUserDataReady` and `positionMutationNotReadyResult()`.
+
+**Automated tests:** `packages/brokers/src/infrastructure/bitunix/futures/broker.positions.test.js`:
+
+- `Bitunix Futures position mutations are NOT_SENT until the private user-data session is reconciled`
+- `Bitunix Futures closeFuturesPosition closes one exact position and verifies REST readback`
+- `Bitunix Futures closeFuturesPositionBySide resolves exactly one position side`
+- `Bitunix Futures closeAllFuturesPositions closes only the requested symbol and verifies the final scope`
+- `Bitunix Futures closeAllFuturesPositions requires explicit account-wide confirmation`
+
+### BRK-004 — Futures REST pacing and mutation outcomes follow endpoint contracts
+
+**Status:** VERIFIED on source head `d153e02d00427cdb91ccbdca3b1fab10d1781233` — the exact-head Brokers unit job passed 1,175 tests (0 failures); changed-file strict ESLint also passed.
+
+**Behavior:** The Bitunix Futures REST client serializes requests under the documented conservative default and stricter close-position endpoint limits, and it classifies state-changing HTTP failures from the HTTP status before attempting to parse an error body.
+
+**Input:** Send sequential or concurrent requests through clients using the same API key to `close_all_position` and `flash_close_position`; return non-JSON HTTP 400, 429 and 500 responses for state-changing requests.
+
+**Expected output:** The shared queue preserves at least 1,000 ms between close-all requests and 200 ms between flash-close requests while retaining the global 100 ms floor. HTTP 400/429 are definitive rejections; 500 is outcome-unknown. A successful HTTP response with malformed JSON remains outcome-unknown for a dispatched mutation. No mutation is automatically retried.
+
+**Must not happen:** Do not apply a universal 100 ms interval to slower close endpoints, classify non-JSON 400/429 as unknown merely because their bodies are not JSON, or replay a mutation after an ambiguous response. The limiter is process-local and API-key-scoped; it must not be described as a distributed UID/IP limiter.
+
+**Subcases:** Shared same-key queue; documented 1 request/second close-all limit; documented 5 requests/second flash-close limit; HTTP 400 and 429 rejection; HTTP 500 ambiguity; one dispatch per request.
+
+**Implementation:** `packages/brokers/src/infrastructure/bitunix/futures/api/rest-client.js` — shared request queue, endpoint-specific pacing and HTTP-before-body validation.
+
+**Automated tests:**
+
+- [REST pacing regressions](../../packages/brokers/src/infrastructure/bitunix/futures/api/rest-client.rate-limit.test.js) — `Bitunix Futures REST applies the documented slower limits to close-position endpoints`.
+- [REST response classification regressions](../../packages/brokers/src/infrastructure/bitunix/futures/api/rest-client.test.js) — `Bitunix Futures REST classifies non-JSON HTTP mutation failures by status before parsing the body`.
 
 ### DB-001 — A failed database transaction leaves no partial write
 

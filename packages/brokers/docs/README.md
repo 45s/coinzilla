@@ -2,6 +2,10 @@
 
 This folder contains maintained engineering references for the Brokers package.
 
+## Bitunix Futures
+
+- [Bitunix Futures external reference audit](./bitunix-futures-reference-audit.md) — official USDT Futures REST/WebSocket protocol, reference-source comparison, discrepancies and implementation blockers.
+
 ## Bitunix Spot
 
 - [Mandatory Bitunix development and operator workflow](./BITUNIX_WORKFLOW.md) — required development process, LIVE investigation boundary and safety invariants.
