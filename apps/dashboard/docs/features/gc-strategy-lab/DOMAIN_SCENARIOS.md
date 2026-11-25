@@ -287,3 +287,44 @@ The run is being started.
 
 ### Then
 No scenario action executes; the run is finalized as Blocked (or an explicitly typed initialization/isolation failure mapped to Blocked) with actionable diagnostics. The host cleans up any partially created process/resources and never retries through live infrastructure.
+
+
+
+## Future execution scenario 17 — Bounded run history and retention
+
+**Purpose:** Keep useful run evidence available without unbounded storage growth.
+
+### Given
+A scenario run has reached a terminal state and its simulation-only result bundle is eligible for persistence.
+
+### When
+The host stores the run and retention policy later expires it.
+
+### Then
+The run's metadata, inputs, ordered events, outputs, lifecycle, trace/steps/decisions, assertions and diagnostics are persisted within configured limits. Expiry is explicit in history/API behavior and is never presented as an empty or successful result. Credentials, secrets, live account data and production state are never persisted. Scenario-definition storage follows a separate policy.
+
+## Future execution scenario 18 — Copy a complete AI Debug Report
+
+**Purpose:** Let an operator share a complete, self-contained run snapshot in an AI chat for debugging and clarification.
+
+### Given
+An inspectable run has persisted or currently available execution evidence.
+
+### When
+The user selects **Copy AI Debug Report**.
+
+### Then
+The client copies a versioned, paste-ready Markdown report containing repository and executed-code revision, strategy/adapter, scenario/scenarioId/subcase, runId, versions, timestamps, final status and lifecycle transitions; effective configuration and provenance; all initial inputs; ordered event sequence; all available steps, decisions, calculations, validations and trace; outputs/final state; assertions and expected-vs-actual comparison; and diagnostics. Exact values are retained in structured JSON sections. Secrets and credentials are redacted/excluded. The report is self-contained and does not require access to the original server run.
+
+## Future execution scenario 19 — Report exceeds clipboard capacity
+
+**Purpose:** Prevent an incomplete diagnostic report from being mistaken for a complete one.
+
+### Given
+A run's complete diagnostic report is too large for the available clipboard path or client constraints.
+
+### When
+The user requests **Copy AI Debug Report**.
+
+### Then
+The client clearly reports that a complete copy was not made and offers a complete export/download or segmented-copy path. It never silently truncates and labels a partial report complete. If clipboard permission is unavailable, a selectable-text fallback is provided.
