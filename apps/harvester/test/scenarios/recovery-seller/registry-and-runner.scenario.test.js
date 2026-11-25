@@ -525,3 +525,41 @@ test("RS-004-011: recovery, legacy and combined profitability gates all pass ind
   assert.deepEqual(profitability, scenario.then,
     "The real RS profitability policy must match the independently authored exact-decimal oracle for recovery, legacy and combined gates.")
 })
+
+
+test("scenario output names cannot mutate the execution context prototype", async () => {
+  const savedRecord = {
+    ownership: "RS",
+  }
+  const result = await runRecoverySellerDomainScenario({
+    scenario: {
+      id: "RS-TEST-PROTOTYPE-SAFE",
+      layer: "DOMAIN",
+      given: {},
+      when: [
+        {
+          type: "create-record",
+          input: savedRecord,
+          saveAs: "__proto__",
+        },
+        {
+          type: "read-record",
+          inputKey: "__proto__",
+        },
+      ],
+    },
+    handlers: {
+      "create-record": ({ input }) => input,
+      "read-record": ({ input }) => input,
+    },
+  })
+
+  assert.equal(Object.getPrototypeOf(result.context), Object.prototype,
+    "Saving a named scenario output must not replace the context object's prototype.")
+  assert.equal(Object.hasOwn(result.context, "__proto__"), true,
+    "Every explicitly saved output name must remain an own context property, including __proto__.")
+  assert.deepEqual(result.context["__proto__"], savedRecord,
+    "A saved output with a special object-property name must preserve its exact value.")
+  assert.deepEqual(result.results, [savedRecord, savedRecord],
+    "Subsequent scenario steps must be able to read the saved special-name output without losing it.")
+})
