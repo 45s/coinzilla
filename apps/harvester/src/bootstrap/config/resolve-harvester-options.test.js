@@ -102,6 +102,10 @@ test("selects CG and RS markets independently while preserving strategy-owned pa
   assert.deepEqual(result.marketSymbols, ["BTCUSDT", "ETHUSDT"])
   assert.deepEqual(result.executionSymbols, ["BTCUSDT", "ETHUSDT"])
   assert.deepEqual(result.executionRoutes, executionRoutes)
+  assert.deepEqual(result.marketPriceStrategyIds, {
+    BTCUSDT: "CG_coinGrabber",
+    ETHUSDT: "RS_recoverySeller",
+  }, "Resolved market-price diagnostics must retain the explicit execution owner for each market.")
 })
 
 test("rejects conflicting volatility settings for a market routed to CG and RS", async () => {
@@ -204,6 +208,9 @@ test("resolves an RS-only provider account without creating a Conservative execu
   assert.deepEqual(Object.keys(result.pairs), ["ETHUSDT"], "The provider market map must contain the RS market without adding it to CG.")
   assert.deepEqual(result.executionSymbols, ["ETHUSDT"], "The RS route must remain executable on the selected provider.")
   assert.equal(result.tradingEnabled, true, "An enabled RS route must not be disabled merely because this account has no CG route.")
+  assert.deepEqual(result.marketPriceStrategyIds, {
+    ETHUSDT: "RS_recoverySeller",
+  }, "RS-only market-price diagnostics must use the RS execution route.")
 })
 
 test("rejects duplicate Conservative strategy routes before selecting runtime pairs", async () => {
@@ -438,4 +445,52 @@ test("resolves RS-only provider routes when Conservative has no configured marke
   assert.deepEqual(result.recoverySellerPairs, { ETHUSDT: Object.fromEntries(Object.entries(recoverySellerPair()).filter(([key]) => key !== "tradingEnvironment")) })
   assert.deepEqual(result.pairs, result.recoverySellerPairs)
   assert.equal(result.tradingEnabled, true)
+})
+
+
+test("does not assign a strategy owner when both strategies explicitly route the same market", async () => {
+  const cfg = {
+    ...config(),
+    strategies: {
+      ...config().strategies,
+      RS_recoverySeller: {
+        enabled: true,
+        pairs: {
+          BTCUSDT: recoverySellerPair(),
+        },
+      },
+    },
+  }
+  const fixture = createFixture({
+    cfg,
+    env: { TRADING_MODE: TRADING_ENVIRONMENTS.TESTNET },
+  })
+  const result = await resolveHarvesterOptions({
+    ...fixture.input,
+    executionSymbols: ["BTCUSDT"],
+    executionRoutes: [
+      {
+        strategyId: "CG_coinGrabber",
+        symbol: "BTCUSDT",
+      },
+      {
+        strategyId: "RS_recoverySeller",
+        symbol: "BTCUSDT",
+      },
+    ],
+  })
+
+  assert.deepEqual(result.marketPriceStrategyIds, {
+    BTCUSDT: null,
+  }, "A market with multiple execution owners must remain unattributed rather than choosing CG or RS.")
+})
+
+test("retains CG ownership for the legacy single-strategy route", async () => {
+  const result = await resolveHarvesterOptions(createFixture({
+    env: { TRADING_MODE: TRADING_ENVIRONMENTS.TESTNET },
+  }).input)
+
+  assert.deepEqual(result.marketPriceStrategyIds, {
+    BTCUSDT: "CG_coinGrabber",
+  }, "The existing CG-only startup path must keep its canonical strategy attribution.")
 })

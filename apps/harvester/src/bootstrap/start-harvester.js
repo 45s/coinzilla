@@ -2,6 +2,7 @@ import { isMarketDataFresh } from "../domain/market/is-market-data-fresh.js"
 import { defaultLogger, toResult } from "@coinzilla/utils"
 import { StrategyId } from "../domain/strategies/strategy-ids.js"
 import { createStrategyLogger } from "../application/logging/create-strategy-logger.js"
+import { createMarketPriceErrorHandler } from "./create-market-price-error-handler.js"
 import { makeConservativeTradingEngine } from "../use-cases/conservative-trading-engine.js"
 import { createCandleHistoryService } from "../use-cases/create-candle-history-service.js"
 import { conservativeStrategyPolicy } from "../domain/strategies/conservative/strategy-policy.js"
@@ -289,20 +290,6 @@ function createHarvesterOperationalStateCallbacks({ operationalStateStore } = {}
   })
 }
 
-function createCoinGrabberMarketPriceErrorHandler({ logger } = {}) {
-  return ({ symbol,
-  error,
-  errors }) => {
-    logger.error?.({
-      message: "Market price processing failed",
-      strategyId: StrategyId.COIN_GRABBER,
-      symbol,
-      error,
-      errors,
-    })
-  }
-}
-
 async function resolveStartupOptionsForProcessRecovery({ resolved,
   operationalStateStore,
   logger,
@@ -408,7 +395,7 @@ function resolveHarvesterStartupDependencies({ options = {} } = {}) {
     brokerAdapterFactory: options.brokerAdapterFactory ?? createBinanceBrokerAdapter,
     evaluateStrategy: options.evaluateStrategy ?? conservativeStrategyPolicy.evaluate,
     logger,
-    onMarketPriceError: options.onMarketPriceError ?? createCoinGrabberMarketPriceErrorHandler({ logger }),
+    onMarketPriceError: options.onMarketPriceError,
     onUserDataEvent: options.onUserDataEvent ?? (async () => {}),
     onUserDataStatus: options.onUserDataStatus ?? (() => {}),
     now: options.now ?? Date.now,
@@ -441,7 +428,7 @@ async function resolveHarvesterStartupConfiguration({ dependencies }) {
   return { resolved: providerResolved }
 }
 
-async function createHarvesterStartupContext({ options } = {}) {
+export async function createHarvesterStartupContext({ options } = {}) {
   const dependencies = resolveHarvesterStartupDependencies({ options })
   const runtimeStartedAt = dependencies.now()
   const { resolved } = await resolveHarvesterStartupConfiguration({ dependencies })
@@ -478,7 +465,10 @@ async function createHarvesterStartupContext({ options } = {}) {
     evaluateStrategy: dependencies.evaluateStrategy,
     logger: dependencies.logger,
     eventPublisher: dependencies.eventPublisher,
-    onMarketPriceError: dependencies.onMarketPriceError,
+    onMarketPriceError: dependencies.onMarketPriceError ?? createMarketPriceErrorHandler({
+      logger: dependencies.logger,
+      strategyIdsBySymbol: resolved.marketPriceStrategyIds,
+    }),
     onUserDataEvent: dependencies.onUserDataEvent,
     onUserDataStatus: dependencies.onUserDataStatus,
     now: dependencies.now,
