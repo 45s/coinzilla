@@ -129,6 +129,9 @@ const RUNTIME_SCENARIO = Object.freeze({
   status: "TEST-MAPPED",
   executionStatus: "PRELIMINARY",
   executable: false,
+  readinessReasons: Object.freeze([
+    "This case executes only the profitability helper; it does not exercise entry, exit, accounting or order lifecycle.",
+  ]),
   inputSchema: Object.freeze({
     type: "object",
     required: ["marketPrice"],
