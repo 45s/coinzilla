@@ -137,6 +137,29 @@ test("rejects numerically different execution facts under a duplicate source eve
   )
 })
 
+test("preserves known optional decimal facts when an incoming snapshot omits them", () => {
+  const current = createOrderHistoryRecordFixture({
+    price: "65000.0000",
+    cumulativeQuoteQuantity: "650.0000",
+  })
+  const candidate = createOrderHistoryRecordFixture({
+    id: current.id,
+    price: undefined,
+    cumulativeQuoteQuantity: undefined,
+    lastSourceEventId: "event-002",
+    lastSeenAt: "2026-11-19T00:00:01.000Z",
+    lastSourceEventTimestamp: "2026-11-19T00:00:01.000Z",
+  })
+
+  const merged = mergeOrderHistoryRecords({
+    current,
+    candidate,
+  })
+
+  assert.equal(merged.price, current.price)
+  assert.equal(merged.cumulativeQuoteQuantity, current.cumulativeQuoteQuantity)
+})
+
 test("reports safe existing and incoming immutable values for a rejected price conflict", () => {
   const current = createOrderHistoryRecordFixture()
   const conflicting = createOrderHistoryRecordFixture({
