@@ -256,32 +256,39 @@ export const authorizationCustodyScenarios = Object.freeze([
     implementation: [basisSource],
     status: "PARTIAL",
     subcases: [
-      ["A", "missing invested amount is rejected"],
-      ["B", "zero invested amount is rejected"],
-      ["C", "negative invested amount is rejected"],
-      ["D", "malformed invested amount is rejected"],
-      ["E", "missing original quantity is rejected"],
-      ["F", "zero original quantity is rejected"],
-      ["G", "negative original quantity is rejected"],
-      ["H", "malformed original quantity is rejected"],
-    ].map(([suffix, description]) => ({
-      id: `RS-001-003-${suffix}`,
-      description,
-      status: "TEST-MAPPED",
-      test: {
-        file: testFile,
-        title: "RS-001-003: missing, zero, negative or malformed legacy basis fails closed",
+      ...[
+        ["A", "missing invested amount is rejected"],
+        ["B", "zero invested amount is rejected"],
+        ["C", "negative invested amount is rejected"],
+        ["D", "malformed invested amount is rejected"],
+        ["E", "missing original quantity is rejected"],
+        ["F", "zero original quantity is rejected"],
+        ["G", "negative original quantity is rejected"],
+        ["H", "malformed original quantity is rejected"],
+      ].map(([suffix, description]) => ({
+        id: `RS-001-003-${suffix}`,
+        description,
+        status: "TEST-MAPPED",
+        test: {
+          file: testFile,
+          title: "RS-001-003: missing, zero, negative or malformed legacy basis fails closed",
+        },
+        evidence: null,
+      })),
+      {
+        id: "RS-001-003-I",
+        description: "contradictory basis input fails closed",
+        status: "BLOCKED",
+        blocker: {
+          reason: "The approved legacy config contract defines invested and quantity only; " +
+            "it does not define a contradictory averageCost input field. The current factory " +
+            "ignores unknown extra fields, so this case cannot be asserted as fail-closed " +
+            "without an owner-defined input shape.",
+          unblockCondition: "Owner defines the contradictory basis input and exact rejection " +
+            "behavior; add the corresponding executable assertion and update the domain contract.",
+        },
       },
-      evidence: null,
-    })).concat([{
-      id: "RS-001-003-I",
-      description: "contradictory basis input fails closed",
-      status: "BLOCKED",
-      blocker: {
-        reason: "The approved legacy config contract defines invested and quantity only; it does not define a contradictory averageCost input field. The current factory ignores unknown extra fields, so this case cannot be asserted as fail-closed without an owner-defined input shape.",
-        unblockCondition: "Owner defines the contradictory basis input and exact rejection behavior; add the corresponding executable assertion and update the domain contract.",
-      },
-    }]),
+    ],
   }),
   makeCase({
     id: "RS-001-004",
