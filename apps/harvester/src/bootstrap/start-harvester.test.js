@@ -2,7 +2,7 @@ import nodeTest from "node:test"
 import assert from "node:assert/strict"
 import * as shared from "../../test/bootstrap/start-harvester-test-support.js"
 
-const { Balance, CanonicalOrder, Fill, Money, Quantity, TradingRules, multiplyDecimal, waitForTestSignal, appConfig, createMarketMetadata, createOpenOrderSnapshot, createBinanceCapabilities, createBroker, createRecoverySellerStopWorkflow, makeVolatilityReadyBroker, binanceEnv, startHarvesterForTest, createFill } = shared
+const { Balance, CanonicalOrder, Fill, Money, Quantity, TradingRules, multiplyDecimal, waitForTestSignal, appConfig, createMarketMetadata, createOpenOrderSnapshot, createBinanceCapabilities, createBroker, createRecoverySellerStopWorkflow, recordConfigurationBaseline, recordProcessStarted, makeVolatilityReadyBroker, binanceEnv, startHarvesterForTest, createFill } = shared
 const { mkdtemp, rm, os, path, createFileOperationalStateStore } = shared
 const test = (...args) => nodeTest(`[start-harvester.test.js] ${args[0]}`, ...args.slice(1))
 
@@ -1623,6 +1623,20 @@ test("rejects startup before market subscriptions when a persisted account-scope
   const calls = []
   const broker = createRsOnlyStartupBroker({ calls })
   try {
+    const baseline = await recordConfigurationBaseline({
+      operationalStateStore: store,
+      appConfig: createRsOnlyStartupConfig(),
+    })
+    assert.equal(baseline.ok, true, baseline.errors?.[0]?.message)
+    const processStarted = await recordProcessStarted({
+      operationalStateStore: store,
+      configurationFingerprint: baseline.data.fingerprint,
+      strategyName: baseline.data.strategyName,
+      markets: baseline.data.markets,
+      tradingEnabled: true,
+    })
+    assert.equal(processStarted.ok, true, processStarted.errors?.[0]?.message)
+
     const workflowResult = await createRecoverySellerStopWorkflow({
       operationalStateStore: store,
     })
