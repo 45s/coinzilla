@@ -59,6 +59,26 @@ function resolveAdapterReadiness({ adapter }) {
   }
 }
 
+function deepFreeze(value) {
+  const visited = new WeakSet()
+  function freeze(item) {
+    if (!item || typeof item !== "object" || visited.has(item)) {
+      return item
+    }
+    visited.add(item)
+    Object.freeze(item)
+    for (const child of Object.values(item)) {
+      freeze(child)
+    }
+    return item
+  }
+  return freeze(value)
+}
+
+function cloneAndFreeze(value) {
+  return deepFreeze(structuredClone(value))
+}
+
 function validateStrategyRegistrations({ strategyRegistrations }) {
   if (!Array.isArray(strategyRegistrations)) {
     throw new TypeError("Scenario Runner host requires strategy registrations")
@@ -74,6 +94,22 @@ function validateStrategyRegistrations({ strategyRegistrations }) {
       throw new TypeError(`Duplicate Scenario Runner strategy registration: ${registration.strategyId}`)
     }
     registeredIds.add(registration.strategyId)
+    const scenarioIds = new Set()
+    for (const scenario of registration.scenarios) {
+      if (
+        typeof scenario?.id !== "string" ||
+        !scenario.id.trim() ||
+        typeof scenario.name !== "string" ||
+        !scenario.name.trim() ||
+        (scenario.readinessReasons !== undefined && !Array.isArray(scenario.readinessReasons))
+      ) {
+        throw new TypeError(`Invalid Scenario Runner scenario registration for ${registration.strategyId}`)
+      }
+      if (scenarioIds.has(scenario.id)) {
+        throw new TypeError(`Duplicate Scenario Runner scenario registration: ${registration.strategyId}/${scenario.id}`)
+      }
+      scenarioIds.add(scenario.id)
+    }
   }
 }
 
@@ -89,8 +125,10 @@ function createStrategyCatalogEntry({ registration, adapters }) {
     strategyId: registration.strategyId,
     strategyName: registration.strategyName,
     scenarios: Object.freeze(registration.scenarios.map((scenario) => {
+      const inputSchema = cloneAndFreeze(scenario.inputSchema)
+      const defaultInput = scenario.input === undefined ? undefined : cloneAndFreeze(scenario.input)
       const schemaValid = isValidScenarioInputSchema({
-        schema: scenario.inputSchema,
+        schema: inputSchema,
       })
       const executable = scenario.executable === true &&
         scenario.executionStatus === "EXECUTABLE" &&
@@ -113,8 +151,8 @@ function createStrategyCatalogEntry({ registration, adapters }) {
           sourceStatus: scenario.executionStatus,
         }),
         executable,
-        inputSchema: scenario.inputSchema,
-        defaultInput: scenario.input,
+        inputSchema,
+        defaultInput,
         readinessReasons: Object.freeze(readinessReasons),
       })
     })),
@@ -155,16 +193,18 @@ export function createScenarioRunnerHost({
   if (!Array.isArray(adapters)) {
     throw new TypeError("Scenario Runner host adapters must be an array")
   }
+  const registeredAdapters = Object.freeze(adapters.map((adapter) =>
+    Object.freeze({ ...adapter })))
   const resolvedRegistrations = resolveStrategyRegistrations({
     strategyRegistrations,
     scenarioCatalog,
   })
   const catalog = createCatalog({
-    adapters,
+    adapters: registeredAdapters,
     strategyRegistrations: resolvedRegistrations,
   })
   const runner = createScenarioRunner({
-    adapters,
+    adapters: registeredAdapters,
     canExecuteScenario: ({ strategyId, scenarioId }) => catalog.some((strategy) =>
       strategy.strategyId === strategyId &&
       strategy.scenarios.some((scenario) =>
