@@ -1,0 +1,85 @@
+<section class="runner">
+  <header>
+    <h1>Strategy Scenario Runner</h1>
+    <p>Scenario definitions and helper evidence only. Production-flow execution remains disabled until a complete simulation adapter is verified.</p>
+  </header>
+  @if (error()) {
+    <p class="error" role="alert">{{ error() }}</p>
+  }
+  <div class="controls">
+    <label>Strategy
+      <select [value]="strategyId()" (change)="selectStrategy($any($event.target).value)">
+        @for (item of catalog(); track item.strategyId) {
+          <option [value]="item.strategyId">{{ item.strategyName }}</option>
+        }
+      </select>
+    </label>
+    <label>Scenario
+      <select [value]="scenarioId()" (change)="selectScenario($any($event.target).value)">
+        @for (item of scenarios; track item.id) {
+          <option [value]="item.id">{{ item.id }} · {{ item.name }}</option>
+        }
+      </select>
+    </label>
+  </div>
+  <p class="scenario-status">Execution status: {{ selectedScenario?.executionStatus ?? 'UNAVAILABLE' }}</p>
+  <label class="input-label">Run input (JSON)
+    <textarea rows="8" [disabled]="selectedScenario?.executable !== true" [value]="inputJson()" (input)="updateInput($any($event.target).value)"></textarea>
+  </label>
+  <div class="actions">
+    <button type="button" [disabled]="loading() || selectedScenario?.executable !== true" (click)="execute()">Run scenario</button>
+    @if (run()) {
+      <button type="button" (click)="refresh()">Refresh</button>
+      <button type="button" (click)="cancel()">Cancel</button>
+      <button type="button" (click)="copyDebugPackage()">Copy available debug evidence</button>
+      @if (copied()) {
+        <p role="status">Debug package copied.</p>
+      }
+    }
+  </div>
+  @if (history().length) {
+    <section class="history">
+      <h2>Recent runs</h2>
+      @for (item of history(); track item.runId) {
+        <button type="button" (click)="selectHistory(item.runId)">
+          <span>{{ item.strategyId }} · {{ item.scenarioId }}</span>
+          <strong>{{ item.status }}</strong>
+          <small>{{ item.runId }}</small>
+        </button>
+      }
+    </section>
+  }
+  @if (run()) {
+    <section class="run-summary">
+      <h2>Run {{ run()?.runId }}</h2>
+      <p>Status: <strong>{{ run()?.status }}</strong></p>
+      <pre>{{ run()?.diagnostics | json }}</pre>
+    </section>
+  }
+  @if (graph().nodes.length) {
+    <section>
+      <h2>Execution trace</h2>
+      <div class="trace-graph">
+        @for (node of graph().nodes; track node.id; let i = $index) {
+          <article class="trace-node">
+            <small>{{ node.kind }}</small>
+            <strong>{{ node.label }}</strong>
+            <details>
+              <summary>Inspect</summary>
+              <pre>{{ node.step | json }}</pre>
+            </details>
+          </article>
+          @if (i < graph().nodes.length - 1) {
+            <span class="trace-edge" aria-hidden="true">↓</span>
+          }
+        }
+      </div>
+    </section>
+  }
+  @if (run()) {
+    <details open>
+      <summary>Available AI debug evidence (incomplete provenance)</summary>
+      <pre>{{ debugText }}</pre>
+    </details>
+  }
+</section>

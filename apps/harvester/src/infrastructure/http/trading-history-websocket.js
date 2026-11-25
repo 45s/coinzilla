@@ -15,6 +15,7 @@ const ALLOWED_BROWSER_ORIGINS = new Set([
   "http://localhost:4200",
 ])
 const HISTORY_UPDATED_EVENT = "trading-history.updated"
+const SCENARIO_RUN_UPDATED_EVENT = "scenario-run.updated"
 const ACCOUNT_UPDATE_EVENTS = Object.freeze([
   HARVESTER_EVENT_NAMES.ACCOUNT_SNAPSHOT_CAPTURED,
   HARVESTER_EVENT_NAMES.ACCOUNT_OPEN_ORDERS_CAPTURED,
@@ -802,11 +803,42 @@ function subscribeToBotsUpdates({ eventBus, requestSnapshot } = {}) {
   return subscriptions
 }
 
-function subscribeToWebSocketUpdates({ eventBus, clients, exchangeAccounts, subscribeExchangeAccountUpdates, operator } = {}) {
+function subscribeToScenarioRunnerUpdates({ eventBus, clients } = {}) {
+  if (!eventBus || typeof eventBus.subscribe !== "function") {
+    return null
+  }
+  const result = eventBus.subscribe({
+    name: SCENARIO_RUN_UPDATED_EVENT,
+    handler: (event) => {
+      for (const client of clients) {
+        sendJson({
+          client,
+          message: {
+            type: "scenario-runner.update",
+            data: event.data,
+          },
+        })
+      }
+    },
+  })
+  if (result?.ok !== true || typeof result.subscription?.unsubscribe !== "function") {
+    throw new TypeError("Scenario Runner WebSocket subscription could not be established.")
+  }
+  return result.subscription
+}
+
+function subscribeToWebSocketUpdates({
+  eventBus,
+  clients,
+  exchangeAccounts,
+  subscribeExchangeAccountUpdates,
+  operator,
+} = {}) {
   const historySubscription = subscribeToHistoryUpdates({
     eventBus,
     clients,
   })
+  let scenarioRunnerSubscription
   const botsCoordinator = operator
     ? createBotsSnapshotCoordinator({
       operator,
@@ -816,6 +848,10 @@ function subscribeToWebSocketUpdates({ eventBus, clients, exchangeAccounts, subs
   let botsSubscriptions = []
   let accountSubscriptions
   try {
+    scenarioRunnerSubscription = subscribeToScenarioRunnerUpdates({
+      eventBus,
+      clients,
+    })
     if (botsCoordinator) {
       botsSubscriptions = subscribeToBotsUpdates({
         eventBus,
@@ -830,13 +866,16 @@ function subscribeToWebSocketUpdates({ eventBus, clients, exchangeAccounts, subs
     })
   } catch (error) {
     historySubscription.unsubscribe()
+    scenarioRunnerSubscription?.unsubscribe()
     for (const botsSubscription of botsSubscriptions) {
       botsSubscription.unsubscribe()
     }
+    accountSubscriptions?.unsubscribe()
     throw error
   }
   return {
     historySubscription,
+    scenarioRunnerSubscription,
     botsCoordinator,
     botsSubscriptions,
     accountSubscriptions,
@@ -884,6 +923,7 @@ export function attachTradingHistoryWebSocket({ server, eventBus, exchangeAccoun
     close: async () => {
       server.off("upgrade", onUpgrade)
       subscriptions.historySubscription.unsubscribe()
+      subscriptions.scenarioRunnerSubscription?.unsubscribe()
       for (const botsSubscription of subscriptions.botsSubscriptions) {
         botsSubscription.unsubscribe()
       }

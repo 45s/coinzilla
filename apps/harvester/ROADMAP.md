@@ -2293,3 +2293,13 @@ The detailed evidence, implementation commits, CI state and remaining unknowns a
 - Strengthened the full Conservative engine lifecycle to use production `updateTradingAccounting`, covering second BUY partial/completed fills, recovery-SELL cancellation/fill reconciliation and replacement SELL submission with exact cumulative accounting assertions.
 - CI fixes: corrected the lifecycle cost-basis expectations from observed canonical fills, fixed strict ESLint formatting, and removed repeated Markdown blank lines. Exact-head verification is tracked on PR #1808.
 - Test-only and documentation changes; no production trading behavior or rules changed.
+
+## Strategy-neutral Scenario Runner — Issue #1836 / PR #1837
+
+Active and incomplete in draft [PR #1837](https://github.com/45s/coinzilla/pull/1837). The Harvester-side architecture note is [Scenario Runner architecture](docs/features/scenario-runner-architecture.md); Dashboard owns the specification and phased plan.
+
+- The generic run lifecycle, process adapter, REST routes, WebSocket notifications and preliminary Dashboard workspace exist on the task branch.
+- RS-004-011 currently has only a helper-level adapter around `calculateRecoverySellerProfitability`. It does **not** execute the full production RS strategy/use-case lifecycle and is not an executable scenario. The host derives `executable` only when both the strategy-owned scenario mapping is source-approved and a matching strategy adapter is registered; the runner independently blocks unknown, preliminary and unmapped scenario IDs. The current helper remains `PRELIMINARY` / `executable: false` and no RS adapter is registered.
+- Process-worker cleanup regressions require cancellation to wait for execution settlement and result handling to wait for child-process close. This does not establish a secure simulation sandbox.
+- Remaining gates: production RS flow reuse and source-mapped scenario coverage; defensible OS-level network/filesystem/process isolation with adversarial tests; shared production config/market metadata and run-local Playground overrides; complete REST/WS contracts and missed-update recovery; persistent bounded history; exact-revision replay; complete versioned debug evidence; Angular-independent application orchestration; and end-to-end acceptance.
+- No LIVE/TESTNET broker, credentials, production persistence or real trading actions are permitted. Keep the PR draft and do not mark roadmap phases complete until exact evidence and CI support it.

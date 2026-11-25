@@ -37,3 +37,21 @@ Use standalone Angular components, strict TypeScript/template checking, feature-
 ## Required reading
 
 Before dashboard changes, read this roadmap and the applicable repository standards in the root [AGENTS.md](../../AGENTS.md). Re-run the task compliance preflight whenever the scope expands into Harvester, Brokers, DB, authentication, API contracts, CI, or another owned domain.
+
+## Framework-independent architecture and DDD — mandatory for all Dashboard work
+
+- **UI-framework independence is a mandatory architectural rule.** Business logic, domain rules, use cases, application orchestration, validation, calculations, state transitions, scenario execution, graph/scenario transformation and business-facing contracts MUST NOT depend on Angular or any UI framework. This applies to every Dashboard task.
+- Apply DDD and clean architecture for every task: isolate domain concepts/rules; use application/use-case orchestration; define ports/contracts at boundaries; implement framework, transport, persistence and UI adapters outside the domain/application core. Follow canonical repository standards.
+- Angular components/directives/templates MUST be presentation adapters: render state, capture interaction and delegate. No business rules, scenario parsing/normalization, graph semantics, validation, calculations, runner logic, business state transitions, or workflow orchestration in components, templates or framework-bound stores/services.
+- Keep business logic in plain TypeScript modules/classes/functions with no Angular imports, DI decorators, signals, RxJS framework bindings, DOM APIs or component types in domain/application core. Angular may adapt UI state/events at the boundary; core contracts remain framework-neutral.
+- Prefer domain/application modules and ports; Angular-specific wiring belongs in adapters/composition. Unit-test domain/application behavior without Angular TestBed, rendering, browser or UI-framework dependencies wherever feasible.
+- **Framework swap invariant:** replacing Angular with React, Vue, another UI framework or non-framework UI must require replacing/reworking presentation and framework adapters only. It MUST NOT require changing business/domain/application logic, scenario contracts, core tests or business behavior. Record and resolve any blocker to this invariant before implementation.
+- Explicitly review dependency direction and framework leakage, and test core independently. Enforce the boundary with architecture tests/static checks where practical.
+
+## Scenario Runner approved trading-service refactoring
+
+For Strategy Scenario Runner implementation, trading logic and trading services may be refactored on its task branch as required to faithfully reuse the production flow. Preserve trading behavior and safety invariants; add regression tests, document changed paths, and verify all affected consumers. This does not authorize real trading actions.
+
+## Mandatory agent preflight
+
+Before any exploration or edits, AI agents MUST read repository-root `AGENTS.md` and every applicable nested `AGENTS.md`. This requirement must be present in the Issue, PR and Runner roadmap. Re-read instructions whenever scope expands. Keep all work on the task branch/PR, never push directly to `develop`/`main`, and never merge or enable auto-merge; the user reviews and merges.
