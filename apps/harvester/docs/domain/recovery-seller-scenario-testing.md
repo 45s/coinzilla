@@ -193,7 +193,7 @@ PR #1823 adds five nested scenario files:
 - `recovery-seller/registry-and-runner.scenario.test.js` — registry and runner contract tests.
 - `recovery-seller/authorization-custody.scenario.test.js` — RS-001 authorization/custody.
 - `recovery-seller/buy-accounting.scenario.test.js` — RS-002 BUY accounting.
-- `recovery-seller/mixed-sell-planning.scenario.test.js` — RS-003-001…007 additive SELL planning, smaller authorized remainder, legacy exhaustion, Spot availability boundaries, shared Portfolio custody aggregation, account-wide reservations and same-/cross-market reservations.
+- `recovery-seller/mixed-sell-planning.scenario.test.js` — RS-003-001…008 planner/custody/reservation and Fill-allocation cases, plus RS-003-009-B for a post-snapshot CG SELL commitment; RS-003-009-A (tiny exact-decimal TradingRules boundary) remains MISSING.
 - `recovery-seller/mixed-sell-fill-allocation.scenario.test.js` — RS-003-008 exact canonical SELL Fill recovery/legacy split and base, quote-proceeds and quote-commission conservation.
 
 All five files must be listed in `apps/harvester/package.json` `config.targetedTestFiles`. A targeted-test pass is valid only when its log shows these files were executed.
@@ -1595,6 +1595,8 @@ Required cases:
 7. Cross-market reservations and same-market CG/RS reservations cannot double-sell the same physical base inventory.
 8. Exact recovery/legacy allocation split and quantity conservation.
 9. Real TradingRules filters, including quantity/notional and tick/step boundaries; include tiny exact decimal quantities whose serialized representation may use exponent notation as subcase `RS-003-009-A`.
+
+   **Current crosswalk:** `RS-003-009-A` remains MISSING for the tiny exponent-notation TradingRules boundary. `RS-003-009-B` is TEST-MAPPED for a cross-market CG SELL commitment registered after the account snapshot; the scenario record is PARTIAL until both subcases are complete.
 10. Any candidate SELL violating a supported price/quantity increment, min/max price, min/max quantity or min/max notional filter latches global sticky STOP; no automatic adjustment, split, retry or dust reinterpretation.
 11. Missing required filter metadata fails closed/STOPs under the approved market contract.
 12. After a successfully completed cycle is fully reconciled and all applicable profitability gates pass, a residual unsellable solely because of current quantity/notional filters is retained as bonus dust; record exact residual and limiting filter.
