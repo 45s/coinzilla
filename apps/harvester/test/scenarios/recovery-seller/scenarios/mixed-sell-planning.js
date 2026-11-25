@@ -523,48 +523,6 @@ function createAccountWideReservationScenario() {
   })
 }
 
-export const recoverySellerMixedSellPlanningScenarios = Object.freeze([
-  ...recoverySellerMixedSellPlanningScenariosWithoutReservations,
-  createAccountWideReservationScenario(),
-  createReservationScenario({
-    id: "RS-003-007",
-    name: "cross-market reservations and same-market CG/RS reservations cannot double-sell the same physical base inventory",
-    input: {
-      cases: reservationCases,
-    },
-    expected: {
-      cases: reservationCases.map(({ id, expectedRemainingBaseBalance, expectedRemainingActiveBase, expectedFailure }) => ({
-        id,
-        atLimit: {
-          ok: true,
-          executableActions: [{
-            side: "SELL",
-            quantity: "0.51",
-          }],
-          remainingBaseBalance: expectedRemainingBaseBalance,
-          remainingActiveBase: expectedRemainingActiveBase,
-        },
-        overLimit: {
-          ok: false,
-          reason: expectedFailure,
-        },
-      })),
-    },
-    subcases: reservationCases.map(({ id, subcaseId }) => ({
-      id: `RS-003-007-${subcaseId}`,
-      description: id,
-      status: "TEST-MAPPED",
-      test: {
-        file: reservationTestFile,
-        title: reservationTestTitles[id],
-      },
-      evidence: null,
-    })),
-  }),,
-  createMixedSellFillAllocationScenario(),
-
-])
-
 const mixedSellFillTestFile = "apps/harvester/test/scenarios/recovery-seller/mixed-sell-fill-allocation.scenario.test.js"
 const mixedSellFillTestTitle = "RS-003-008: one canonical SELL Fill is split exactly between recovery and legacy with quantity conservation"
 const mixedSellFillInput = {
@@ -678,4 +636,47 @@ function createMixedSellFillAllocationScenario() {
     evidence: null,
   })
 }
+
+
+export const recoverySellerMixedSellPlanningScenarios = Object.freeze([
+  ...recoverySellerMixedSellPlanningScenariosWithoutReservations,
+  createAccountWideReservationScenario(),
+  createReservationScenario({
+    id: "RS-003-007",
+    name: "cross-market reservations and same-market CG/RS reservations cannot double-sell the same physical base inventory",
+    input: {
+      cases: reservationCases,
+    },
+    expected: {
+      cases: reservationCases.map(({ id, expectedRemainingBaseBalance, expectedRemainingActiveBase, expectedFailure }) => ({
+        id,
+        atLimit: {
+          ok: true,
+          executableActions: [{
+            side: "SELL",
+            quantity: "0.51",
+          }],
+          remainingBaseBalance: expectedRemainingBaseBalance,
+          remainingActiveBase: expectedRemainingActiveBase,
+        },
+        overLimit: {
+          ok: false,
+          reason: expectedFailure,
+        },
+      })),
+    },
+    subcases: reservationCases.map(({ id, subcaseId }) => ({
+      id: `RS-003-007-${subcaseId}`,
+      description: id,
+      status: "TEST-MAPPED",
+      test: {
+        file: reservationTestFile,
+        title: reservationTestTitles[id],
+      },
+      evidence: null,
+    })),
+  }),
+  createMixedSellFillAllocationScenario(),
+
+])
 
