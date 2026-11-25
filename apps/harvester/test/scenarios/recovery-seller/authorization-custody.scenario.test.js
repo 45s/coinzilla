@@ -504,7 +504,7 @@ test("RS-001-002: historical average cost remains fixed after a legacy disposal"
 })
 
 test("RS-001-003: missing, zero, negative or malformed legacy basis fails closed and average cost is derived", async () => {
-  const scenario = authorizationCustodyScenarios[2]
+  const [scenario] = authorizationCustodyScenarios.slice(2, 3)
   const result = await runDomain(scenario)
 
   assert.deepEqual(result.results[0], scenario.then,
