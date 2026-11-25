@@ -299,12 +299,18 @@ function createCapacityError() {
   )
 }
 
-function registerUnsupportedRun({ context, runId, strategyId, scenarioId }) {
+function registerUnsupportedRun({
+  context,
+  runId,
+  strategyId,
+  scenarioId,
+  diagnostic = "No registered strategy adapter is available for this run.",
+}) {
   const record = createBlockedRecord({
     runId,
     strategyId,
     scenarioId,
-    diagnostic: "No registered strategy adapter is available for this run.",
+    diagnostic,
     now: context.now,
   })
   context.records.set(runId, record)
@@ -351,12 +357,19 @@ function submitRun({ context, submission }) {
     throw createCapacityError()
   }
   const adapter = context.adapters.get(strategyId)
-  if (!adapter) {
+  const scenarioExecutable = context.canExecuteScenario({
+    strategyId,
+    scenarioId,
+  }) === true
+  if (!adapter || !scenarioExecutable) {
     return registerUnsupportedRun({
       context,
       runId,
       strategyId,
       scenarioId,
+      ...(adapter ? {
+        diagnostic: "The registered strategy adapter cannot execute this scenario because it is not marked executable.",
+      } : {}),
     })
   }
   const record = createRecord({
@@ -484,11 +497,14 @@ async function closeRunner({ context }) {
   }).catch(() => null)))
 }
 
-function validateRunnerConfiguration({ adapters, maxStoredRuns, maxConcurrentRuns, maxQueuedRuns, timeoutMs }) {
+function validateRunnerConfiguration({ adapters, canExecuteScenario, maxStoredRuns, maxConcurrentRuns, maxQueuedRuns, timeoutMs }) {
   if (!Array.isArray(adapters) || adapters.some((adapter) =>
     !adapter || typeof adapter.strategyId !== "string" ||
     typeof adapter.execute !== "function" || typeof adapter.cancel !== "function")) {
     throw new TypeError("Scenario Runner requires valid strategy adapters")
+  }
+  if (typeof canExecuteScenario !== "function") {
+    throw new TypeError("Scenario Runner requires a scenario executability policy")
   }
   if (!Number.isSafeInteger(maxConcurrentRuns) || maxConcurrentRuns < 1) {
     throw new RangeError("Scenario Runner concurrency limit must be a positive integer")
@@ -523,10 +539,12 @@ export function createScenarioRunner({
   maxStoredRuns = 100,
   maxConcurrentRuns = 2,
   maxQueuedRuns = 10,
+  canExecuteScenario = () => true,
   onUpdate,
 } = {}) {
   validateRunnerConfiguration({
     adapters,
+    canExecuteScenario,
     maxStoredRuns,
     maxConcurrentRuns,
     maxQueuedRuns,
@@ -535,6 +553,7 @@ export function createScenarioRunner({
   const adapterMap = createAdapterMap({ adapters })
   const context = {
     adapters: adapterMap,
+    canExecuteScenario,
     records: new Map(),
     executions: new Map(),
     queue: [],

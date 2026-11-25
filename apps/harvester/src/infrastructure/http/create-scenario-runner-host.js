@@ -19,9 +19,55 @@ function publishScenarioRunUpdate({ eventBus, run }) {
   }
 }
 
-export function createScenarioRunnerHost({ eventBus } = {}) {
+function createCatalog({ adapters, scenarioCatalog }) {
+  if (!Array.isArray(scenarioCatalog)) {
+    throw new TypeError("Scenario Runner host requires a strategy scenario catalog")
+  }
+  const registeredStrategyIds = new Set(adapters.map((adapter) => adapter?.strategyId))
+  return Object.freeze([
+    {
+      strategyId: "RS",
+      strategyName: "Recovery Seller",
+      scenarios: Object.freeze(scenarioCatalog.map((scenario) => {
+        const adapterRegistered = registeredStrategyIds.has("RS")
+        const executable = scenario.executable === true &&
+          scenario.executionStatus === "EXECUTABLE" &&
+          adapterRegistered
+        return Object.freeze({
+          id: scenario.id,
+          name: scenario.name,
+          layer: scenario.layer,
+          status: scenario.status,
+          executionStatus: executable
+            ? "EXECUTABLE"
+            : scenario.executionStatus === "PRELIMINARY" ? "PRELIMINARY" : "BLOCKED",
+          executable,
+          inputSchema: scenario.inputSchema,
+          defaultInput: scenario.input,
+        })
+      })),
+    },
+  ])
+}
+
+export function createScenarioRunnerHost({
+  eventBus,
+  adapters = [],
+  scenarioCatalog = getRecoverySellerRunnerCatalog(),
+} = {}) {
+  if (!Array.isArray(adapters)) {
+    throw new TypeError("Scenario Runner host adapters must be an array")
+  }
+  const catalog = createCatalog({
+    adapters,
+    scenarioCatalog,
+  })
   const runner = createScenarioRunner({
-    adapters: [],
+    adapters,
+    canExecuteScenario: ({ strategyId, scenarioId }) => catalog.some((strategy) =>
+      strategy.strategyId === strategyId &&
+      strategy.scenarios.some((scenario) =>
+        scenario.id === scenarioId && scenario.executable === true)),
     timeoutMs: 30_000,
     maxStoredRuns: 100,
     onUpdate: (run) => publishScenarioRunUpdate({
@@ -29,23 +75,6 @@ export function createScenarioRunnerHost({ eventBus } = {}) {
       run,
     }),
   })
-  const catalog = [
-    {
-      strategyId: "RS",
-      strategyName: "Recovery Seller",
-      scenarios: getRecoverySellerRunnerCatalog().map((scenario) => ({
-        id: scenario.id,
-        name: scenario.name,
-        layer: scenario.layer,
-        status: scenario.status,
-        executionStatus: scenario.executionStatus,
-        executable: scenario.executable,
-        inputSchema: scenario.inputSchema,
-        defaultInput: scenario.input,
-      })),
-
-    },
-  ]
   return Object.freeze({
     runner,
     catalog,
