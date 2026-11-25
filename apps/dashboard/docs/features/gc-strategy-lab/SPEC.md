@@ -403,3 +403,14 @@ The MVP is complete only when one real RS scenario/subcase can be configured and
 - [ ] Framework-independent DDD core and architecture enforcement; Angular remains presentation-only.
 - [ ] A second-strategy contract/adapter conformance fixture demonstrates extensibility without runner-core strategy changes (does not require implementing that strategy's business logic in this MVP).
 
+
+
+## Approved execution ownership decision (2026-11-25)
+
+**Harvester owns Scenario Runner execution; Dashboard owns the client experience.** The runner executes in an isolated Harvester-side application/runtime boundary and reuses Harvester's actual production domain and application use cases. It does not execute inside the browser and does not share the live trading process's mutable runtime state.
+
+Dashboard is a client of a versioned, framework-independent execution contract. It owns strategy/scenario selection, configuration editing UX, simulation input/event authoring, execution requests, and presentation of returned results, assertions, diagnostics, trace and renderer-neutral graph data. Angular components remain thin presentation adapters; replacing Angular with React/Vue must not change scenario semantics, orchestration, contracts or core tests.
+
+Harvester owns strategy discovery/adapters, production-use-case invocation, isolated simulation composition, simulated infrastructure, event processing, assertion/result capture and production-emitted trace. The browser must not bundle/import private Harvester runtime modules. The client must never directly access broker/exchange interfaces, credentials, persistence or production state.
+
+The execution API/contract is a transport boundary only; it must not move business rules into Dashboard or cause Harvester strategy logic to depend on Angular. Simulation must fail closed when a production path cannot be safely isolated. This decision selects the Harvester-hosted execution boundary over browser execution or a Dashboard-owned evaluator; exact process/runtime isolation, lifecycle and resource limits remain to be decided.
