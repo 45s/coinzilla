@@ -31,7 +31,7 @@ function logPreparationFailure({ logger, error, relational = false } = {}) {
   }
 }
 
-function hasRelationalMigration(database, version = 1) {
+function hasRelationalMigration({ database, version = 1 } = {}) {
   const exists = database.prepare(
     "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'schema_migrations'",
   ).get()
@@ -80,7 +80,7 @@ async function verifyMigrationBackup({ filename, expected } = {}) {
 }
 
 async function createVerifiedMigrationBackup({ database, filename } = {}) {
-  if (hasRelationalMigration(database)) {
+  if (hasRelationalMigration({ database })) {
     return null
   }
   const sourceSnapshot = hashLegacyRecords(database)
@@ -154,7 +154,7 @@ async function verifyOrderIdentityMigrationBackup({ filename, expected } = {}) {
 }
 
 async function createVerifiedOrderIdentityMigrationBackup({ database, filename } = {}) {
-  if (!hasRelationalMigration(database, 4) || hasRelationalMigration(database, 5)) {
+  if (!hasRelationalMigration({ database, version: 4 }) || hasRelationalMigration({ database, version: 5 })) {
     return null
   }
   const sourceSnapshot = hashRelationalHistory(database)
