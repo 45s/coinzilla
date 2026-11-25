@@ -379,6 +379,6 @@ The scenario-definition and reporting workstream is tracked in [#1797](https://g
 - Critical behavior ownership: `docs/critical-behaviors.json` (reused, not duplicated).
 - Runner: `pnpm --filter @coinzilla/harvester scenarios:conservative`.
 - Reports: `reports/conservative-scenarios/` (inventory, results and coverage JSON).
-- CI: the dedicated Conservative scenario workflow uploads the generated reports.
+- CI: the existing Harvester Targeted Tests workflow conditionally runs the scenario suite when related paths change and uploads the generated reports.
 
 The initial inventory has 15 TEST-MAPPED, one PARTIAL, one MISSING (CON-PERSIST-003) and one UNSUPPORTED (runtime restoration) scenario. TEST-MAPPED and PARTIAL are not VERIFIED. Unmapped-test reporting is scoped to the named test set in the critical behavior registry, not every Harvester test file.
