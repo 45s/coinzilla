@@ -150,12 +150,12 @@ test("renders Portfolio Stats as a concise readable summary instead of JSON", ()
   const line = written.trim()
   assert.match(
     line,
-    /^12:00:00 🪙 CG PORTFOLIO/,
+    /^12:00:00 🟡 CG PORTFOLIO/,
     "Console timestamps must use the same compact 24-hour local-time format as order lifecycle records.",
   )
   assert.match(
     line,
-    /🪙 CG PORTFOLIO DOGEUSDT: amount: 3\.4 \| earned: 3\.4 \| spent: 0 \| net: 0\.020$/,
+    /🟡 CG PORTFOLIO DOGEUSDT: amount: 3\.4 \| earned: 3\.4 \| spent: 0 \| net: 0\.020$/,
     "The operator console must show total coins, retained coins earned from completed cycles, current-cycle spent value, and cumulative net quote cash flow.",
   )
   assert.doesNotMatch(
@@ -753,7 +753,7 @@ test("keeps strategy-owned order facts on compact single-space lifecycle lines",
   )
   assert.equal(
     lines[0],
-    "19:14:52 🪙 CG SUBMITTED #pending ZROUSDT SELL 4.98 @ 1.393 h-325e71ba16494aeb875e6e-3",
+    "19:14:52 🟡 CG SUBMITTED #pending ZROUSDT SELL 4.98 @ 1.393 h-325e71ba16494aeb875e6e-3",
     "A pending submission must use single-space columns and append its raw client order ID on the same line without a verbose label.",
   )
   assert.doesNotMatch(
@@ -799,7 +799,7 @@ test("prints strategy markers with one separator and omits the decorative SYS ma
 
   assert.match(
     written,
-    /🪙 CG Market price evaluated/,
+    /🟡 CG Market price evaluated/,
     "Strategy-owned records must show the icon and strategy label separated by exactly one space.",
   )
   assert.match(
@@ -840,7 +840,7 @@ test("does not suppress identical messages from different strategies", () => {
     })
   }
   assert.equal((written.match(/Strategy transition evaluated/g) ?? []).length, 2)
-  assert.match(written, /🪙 CG Strategy transition evaluated/)
+  assert.match(written, /🟡 CG Strategy transition evaluated/)
   assert.match(written, /🔴 RS Strategy transition evaluated/)
   output.destroy()
 })
@@ -906,7 +906,7 @@ test("renders recovery SELL cancellation requests in the requested compact conso
 
   assert.equal(
     written.trim(),
-    "04:30:15 🪙 CG recovery SELL cancellation requested: DOGEUSDT, reason BUY_FILLED_RECALCULATE_RECOVERY_SELL",
+    "04:30:15 🟡 CG recovery SELL cancellation requested: DOGEUSDT, reason BUY_FILLED_RECALCULATE_RECOVERY_SELL",
     "the recovery SELL cancellation console line must match the requested concise operator format",
   )
   output.destroy()
