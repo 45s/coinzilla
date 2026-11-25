@@ -983,43 +983,84 @@ test("RS-003-009-A: tiny exponent-notation quantities preserve exact TradingRule
 })
 
 
-function createExchangeFilterScenarioDecision({ input }) {
-  const baseAsset = new Asset({ id: "binance:ZRO", code: "ZRO" })
-  const market = createSpotMarket({
-    baseAsset,
-    symbol: "ZROUSDT",
-    quoteCode: "USDT",
-  })
+function createScenarioTradingRules({ input, market, baseAsset }) {
   const quoteAsset = market.quoteAsset
   const constraints = [
     {
       type: "PRICE_INCREMENT",
       status: "SUPPORTED",
-      value: new Money({ amount: input.tradingRules.priceIncrement, asset: quoteAsset }),
+      value: new Money({
+        amount: input.tradingRules.priceIncrement,
+        asset: quoteAsset,
+      }),
     },
     {
       type: "QUANTITY_INCREMENT",
       status: "SUPPORTED",
-      value: new Quantity({ amount: input.tradingRules.quantityIncrement, asset: baseAsset }),
+      value: new Quantity({
+        amount: input.tradingRules.quantityIncrement,
+        asset: baseAsset,
+      }),
     },
     {
       type: "MIN_QUANTITY",
       status: "SUPPORTED",
-      value: new Quantity({ amount: input.tradingRules.minQuantity, asset: baseAsset }),
+      value: new Quantity({
+        amount: input.tradingRules.minQuantity,
+        asset: baseAsset,
+      }),
     },
     {
       type: "MIN_NOTIONAL",
       status: "SUPPORTED",
-      value: new Money({ amount: input.tradingRules.minNotional, asset: quoteAsset }),
+      value: new Money({
+        amount: input.tradingRules.minNotional,
+        asset: quoteAsset,
+      }),
     },
   ].filter(({ type }) => type !== input.tradingRules.missingFilter)
-  const marketMetadata = {
+  return {
     market,
     supportedOrderTypes: ["LIMIT_MAKER", "LIMIT"],
-    tradingRules: new TradingRules({ market, constraints }),
+    tradingRules: new TradingRules({
+      market,
+      constraints,
+    }),
   }
+}
+
+function summarizeExchangeFilterDecision({ decision }) {
+  return {
+    outcome: decision.decision.outcome,
+    stopStatus: decision.stopState.status,
+    orderIntent: decision.orderIntent ?? null,
+    filterViolation: decision.decision.explanation.includes("MIN_NOTIONAL")
+      ? "MIN_NOTIONAL"
+      : null,
+  }
+}
+
+function createExchangeFilterScenarioDecision({ input }) {
+  const baseAsset = new Asset({
+    id: "binance:ZRO",
+    code: "ZRO",
+  })
+  const market = createSpotMarket({
+    baseAsset,
+    symbol: "ZROUSDT",
+    quoteCode: "USDT",
+  })
+  const marketMetadata = createScenarioTradingRules({
+    input,
+    market,
+    baseAsset,
+  })
   const decision = evaluateRecoverySellerSellDecision({
-    pairConfig: { minProfit: 0.01, makerPercent: 0, takerPercent: 0.075 },
+    pairConfig: {
+      minProfit: 0.01,
+      makerPercent: 0,
+      takerPercent: 0.075,
+    },
     marketMetadata,
     cycleState: createRecoverySellerCycleState({
       cycleId: "rs-filter-cycle",
@@ -1037,14 +1078,9 @@ function createExchangeFilterScenarioDecision({ input }) {
       thirdAssetFeeQuoteValue: "0",
     },
   })
-  return {
-    outcome: decision.decision.outcome,
-    stopStatus: decision.stopState.status,
-    orderIntent: decision.orderIntent ?? null,
-    filterViolation: decision.decision.explanation.includes("MIN_NOTIONAL")
-      ? "MIN_NOTIONAL"
-      : null,
-  }
+  return summarizeExchangeFilterDecision({
+    decision,
+  })
 }
 
 test("RS-003-010-A: a supported MIN_NOTIONAL violation blocks SELL without adjustment", async () => {
