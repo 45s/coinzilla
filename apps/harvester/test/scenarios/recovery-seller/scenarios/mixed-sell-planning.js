@@ -116,47 +116,7 @@ function createMixedSellFillAllocationScenario() {
 }
 
 
-export const recoverySellerMixedSellPlanningScenarios = Object.freeze([
-  ...recoverySellerMixedSellPlanningScenariosWithoutReservations,
-  createAccountWideReservationScenario(),
-  createReservationScenario({
-    id: "RS-003-007",
-    name: "cross-market reservations and same-market CG/RS reservations cannot double-sell the same physical base inventory",
-    input: {
-      cases: reservationCases,
-    },
-    expected: {
-      cases: reservationCases.map(({ id, expectedRemainingBaseBalance, expectedRemainingActiveBase, expectedFailure }) => ({
-        id,
-        atLimit: {
-          ok: true,
-          executableActions: [{
-            side: "SELL",
-            quantity: "0.51",
-          }],
-          remainingBaseBalance: expectedRemainingBaseBalance,
-          remainingActiveBase: expectedRemainingActiveBase,
-        },
-        overLimit: {
-          ok: false,
-          reason: expectedFailure,
-        },
-      })),
-    },
-    subcases: reservationCases.map(({ id, subcaseId }) => ({
-      id: `RS-003-007-${subcaseId}`,
-      description: id,
-      status: "TEST-MAPPED",
-      test: {
-        file: reservationTestFile,
-        title: reservationTestTitles[id],
-      },
-      evidence: null,
-    })),
-  }),
-  createMixedSellFillAllocationScenario(),
 
-])
 
 
 const implementation = [
@@ -681,3 +641,44 @@ function createAccountWideReservationScenario() {
   })
 }
 
+export const recoverySellerMixedSellPlanningScenarios = Object.freeze([
+  ...recoverySellerMixedSellPlanningScenariosWithoutReservations,
+  createAccountWideReservationScenario(),
+  createReservationScenario({
+    id: "RS-003-007",
+    name: "cross-market reservations and same-market CG/RS reservations cannot double-sell the same physical base inventory",
+    input: {
+      cases: reservationCases,
+    },
+    expected: {
+      cases: reservationCases.map(({ id, expectedRemainingBaseBalance, expectedRemainingActiveBase, expectedFailure }) => ({
+        id,
+        atLimit: {
+          ok: true,
+          executableActions: [{
+            side: "SELL",
+            quantity: "0.51",
+          }],
+          remainingBaseBalance: expectedRemainingBaseBalance,
+          remainingActiveBase: expectedRemainingActiveBase,
+        },
+        overLimit: {
+          ok: false,
+          reason: expectedFailure,
+        },
+      })),
+    },
+    subcases: reservationCases.map(({ id, subcaseId }) => ({
+      id: `RS-003-007-${subcaseId}`,
+      description: id,
+      status: "TEST-MAPPED",
+      test: {
+        file: reservationTestFile,
+        title: reservationTestTitles[id],
+      },
+      evidence: null,
+    })),
+  }),
+  createMixedSellFillAllocationScenario(),
+
+])
