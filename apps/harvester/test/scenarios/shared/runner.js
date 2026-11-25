@@ -26,7 +26,7 @@ export function filterScenarios({ scenarios = [], filters = {} } = {}) {
 }
 
 function escapeRegExp(value) {
-  return value.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")
+  return value.replace(/[.*+?^$()|[\\]\\{}]/g, "\\$&")
 }
 
 function parseTapLine(line) {
@@ -70,7 +70,7 @@ export function parseTapResults({ output = "", expectedTests = [] } = {}) {
 }
 
 function testKey(testCase) {
-  return `${testCase.path}::${testCase.name}`
+  return testCase.path + "::" + testCase.name
 }
 
 function groupTestsByPath({ scenarios }) {
@@ -96,11 +96,11 @@ function executeTestGroup({
   nodeExecutable,
   timeoutMs,
 }) {
-  const pattern = `(?:${group.testCases.map(({ name }) => escapeRegExp(name)).join("|")})`
+  const pattern = "(?:" + group.testCases.map(({ name }) => escapeRegExp(name)).join("|") + ")"
   const args = [
     "--test",
     "--test-reporter=tap",
-    `--test-name-pattern=${pattern}`,
+    "--test-name-pattern=" + pattern,
     group.path,
   ]
   const execution = spawnSync(nodeExecutable, args, {
@@ -116,7 +116,7 @@ function executeTestGroup({
   })
   const processFailed = Boolean(execution.error) || execution.status !== 0
   const executionError = execution.error?.message ??
-    (processFailed ? `Node test process exited with status ${execution.status ?? "unknown"}.` : null)
+    (processFailed ? "Node test process exited with status " + (execution.status ?? "unknown") + "." : null)
 
   return parsed.map((result) => {
     const status = processFailed && result.status === "PASSED"
