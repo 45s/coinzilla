@@ -325,7 +325,7 @@ function getOldestPendingOrderId({ database, providerIdentity, environment, symb
       throw new TypeError(`Pending-order lookup ${field} must be a non-empty string`)
     }
   }
-  const { exchange_order_id: exchangeOrderId } = database.prepare(`
+  const pendingOrder = database.prepare(`
     SELECT exchange_order_id FROM orders
     WHERE provider_type = ? AND provider_instance_id = ? AND account_id = ?
       AND environment = ? AND symbol = ? AND exchange_order_id IS NOT NULL
@@ -339,7 +339,7 @@ function getOldestPendingOrderId({ database, providerIdentity, environment, symb
     identity.environment,
     identity.symbol,
   )
-  return exchangeOrderId ?? null
+  return pendingOrder?.exchange_order_id ?? null
 }
 
 function normalizeOrderWriteError({ error, record } = {}) {
