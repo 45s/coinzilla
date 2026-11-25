@@ -72,3 +72,8 @@ Implementation agents must complete all approved phases autonomously. No routine
 ## 2026-11-25 — Runner lifecycle and CI corrections
 
 The Harvester lifecycle now keeps a run in `Cancelling` until the adapter execution settles, rather than treating delivery of an abort signal as proof that its worker has exited. Adapter cancellation is required by the runner contract. The Dashboard API and component source also require real line breaks in object literals and declarations; escaped source-text sequences are not valid TypeScript syntax.
+
+
+## Dashboard integration corrections
+
+The current Dashboard integration is a local-development client for the Harvester REST/WS adapter. The history action loads a prior run's recorded inputs; it is not original-revision replay. The debug JSON display is a selectable-text fallback, and clipboard success is shown only after the clipboard promise resolves. The implementation remains incomplete until persistent bounded history, exact-revision replay, complete provenance/evidence, and the remaining MVP acceptance gates are implemented and verified.

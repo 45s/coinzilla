@@ -224,6 +224,7 @@ export class ScenarioRunnerComponent {
     if (!current) {
       return;
     }
+    this.copied.set(false);
     try {
       const output = current.output as RunOutputEvidence | null;
       const packageText = createAiDebugPackage({
@@ -233,9 +234,8 @@ export class ScenarioRunnerComponent {
         assertionResults: output?.assertions,
         metadata: { executionSource: output?.source, codeRevision: 'unavailable', scenarioSchema: this.selectedScenario?.inputSchema },
       });
-      void navigator.clipboard.writeText(packageText).catch(() => {
-        this.error.set('Clipboard unavailable; select and copy the debug JSON shown below.');
-      });
+      await navigator.clipboard.writeText(packageText);
+      this.copied.set(true);
     } catch (error) {
       this.error.set(error instanceof Error ? error.message : 'Debug package could not be generated.');
     }

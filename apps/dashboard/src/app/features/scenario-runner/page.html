@@ -28,7 +28,8 @@
   <div class="actions">
     <button type="button" [disabled]="loading() || !scenarioId()" (click)="execute()">Run scenario</button>
     @if (run()) {
-      <button type="button" (click)="refresh()">Refresh</button>\n      <button type="button" (click)="execute()">Replay with recorded inputs</button>
+      <button type="button" (click)="refresh()">Refresh</button>
+      <button type="button" (click)="execute()">Load recorded inputs</button>
       <button type="button" (click)="cancel()">Cancel</button>
       <button type="button" (click)="copyDebugPackage()">Copy AI debug JSON</button>
       @if (copied()) {
