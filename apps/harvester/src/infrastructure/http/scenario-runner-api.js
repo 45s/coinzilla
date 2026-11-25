@@ -1,5 +1,9 @@
 const API_PREFIX = "/api/v1/scenario-runner"
 const MAX_REQUEST_BYTES = 64 * 1024
+const ALLOWED_BROWSER_ORIGINS = new Set([
+  "http://127.0.0.1:4200",
+  "http://localhost:4200",
+])
 
 function sendJson({ response, status, body }) {
   if (response.destroyed || response.writableEnded) {
@@ -19,6 +23,21 @@ function sendJson({ response, status, body }) {
     "X-Content-Type-Options": "nosniff",
   })
   response.end(JSON.stringify(body))
+}
+
+
+function rejectUntrustedOrigin({ request, response }) {
+  const origin = request.headers?.origin
+  if (origin === undefined || (typeof origin === "string" && ALLOWED_BROWSER_ORIGINS.has(origin))) {
+    return false
+  }
+  sendError({
+    response,
+    status: 403,
+    code: "SCENARIO_RUNNER_ORIGIN_FORBIDDEN",
+    message: "Scenario Runner requests from this browser origin are not allowed.",
+  })
+  return true
 }
 
 function resolveErrorCode({ error }) {
