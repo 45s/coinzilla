@@ -1,8 +1,18 @@
-import { fork } from "node:child_process"
 import { fileURLToPath } from "node:url"
 
 const DEFAULT_TERMINATION_GRACE_MS = 250
+const DEFAULT_MAX_OUTPUT_BYTES = 1_048_576
 const TERMINATION_PROMISES = new WeakMap()
+const DEFAULT_WORKER_PATH = fileURLToPath(new URL("./scenario-worker.js", import.meta.url))
+const REQUIRED_SANDBOX_PROFILE = Object.freeze({
+  networkAccess: "deny",
+  filesystemAccess: "read-only-allowlisted-runtime",
+  processExecution: "deny-child-processes",
+  memoryLimitBytes: 268_435_456,
+  cpuTimeLimitMs: 30_000,
+  wallTimeLimitMs: 30_000,
+  maxOutputBytes: DEFAULT_MAX_OUTPUT_BYTES,
+})
 
 function createWorkerEnvironment() {
   const environment = {}
@@ -13,6 +23,14 @@ function createWorkerEnvironment() {
   }
   environment.SCENARIO_RUN_WORKER = "1"
   return environment
+}
+
+function serializedMessageBytes(message) {
+  try {
+    return Buffer.byteLength(JSON.stringify(message) ?? "", "utf8")
+  } catch {
+    return Number.POSITIVE_INFINITY
+  }
 }
 
 function terminateChild({ child, graceMs }) {
@@ -45,14 +63,27 @@ function terminateChild({ child, graceMs }) {
   return termination
 }
 
-async function handleWorkerMessage({ message, runId, child, terminationGraceMs, finish }) {
+async function handleWorkerMessage({
+  message,
+  runId,
+  child,
+  terminationGraceMs,
+  maxOutputBytes,
+  finish,
+}) {
   let result
-  if (!message || message.runId !== runId) {
+  if (serializedMessageBytes(message) > maxOutputBytes) {
+    result = {
+      error: new Error("Scenario worker result exceeded the maximum output size"),
+    }
+  } else if (!message || message.runId !== runId) {
     result = {
       error: new Error("Scenario worker returned a mismatched run identity"),
     }
   } else if (message.ok === true && message.output && typeof message.output === "object") {
-    result = { output: message.output }
+    result = {
+      output: message.output,
+    }
   } else {
     result = {
       error: new Error(typeof message.error === "string" ? message.error : "Scenario worker failed"),
@@ -65,9 +96,16 @@ async function handleWorkerMessage({ message, runId, child, terminationGraceMs, 
   finish(result)
 }
 
-function createExecutionPromise({ child, runId, signal, children, terminationGraceMs }) {
-  return new Promise((...promiseArguments) => {
-    const [resolve, reject] = promiseArguments
+function createExecutionPromise({
+  child,
+  runId,
+  signal,
+  children,
+  terminationGraceMs,
+  maxOutputBytes,
+}) {
+  let finishExecution
+  const promise = new Promise((resolve, reject) => {
     let settled = false
     let messageReceived = false
     function finish({ error, output }) {
@@ -83,6 +121,7 @@ function createExecutionPromise({ child, runId, signal, children, terminationGra
         resolve(output)
       }
     }
+    finishExecution = finish
     function onAbort() {
       void terminateChild({
         child,
@@ -92,6 +131,9 @@ function createExecutionPromise({ child, runId, signal, children, terminationGra
       }))
     }
     signal?.addEventListener("abort", onAbort, { once: true })
+    if (signal?.aborted) {
+      onAbort()
+    }
     child.once("error", (error) => {
       void terminateChild({
         child,
@@ -105,6 +147,7 @@ function createExecutionPromise({ child, runId, signal, children, terminationGra
         runId,
         child,
         terminationGraceMs,
+        maxOutputBytes,
         finish,
       })
     })
@@ -119,19 +162,31 @@ function createExecutionPromise({ child, runId, signal, children, terminationGra
       }
     })
   })
+  return {
+    promise,
+    fail: (error) => finishExecution?.({
+      error,
+    }),
+  }
 }
 
 /**
- * Compose a process-isolated adapter. Workers receive the run request over IPC
- * and a minimal environment rather than inheriting Harvester credentials.
+ * Orchestrate a worker that must be launched by a trusted OS-level sandbox.
+ * This module enforces lifecycle and output limits but does not create the
+ * filesystem, network, process or memory isolation itself.
  */
 export function createProcessScenarioAdapter({
   strategyId,
-  workerPath = fileURLToPath(new URL("./scenario-worker.js", import.meta.url)),
+  spawnSandboxedWorker,
+  workerPath = DEFAULT_WORKER_PATH,
   terminationGraceMs = DEFAULT_TERMINATION_GRACE_MS,
+  maxOutputBytes = DEFAULT_MAX_OUTPUT_BYTES,
 } = {}) {
   if (typeof strategyId !== "string" || !strategyId.trim()) {
     throw new TypeError("Process scenario adapter requires strategyId")
+  }
+  if (typeof spawnSandboxedWorker !== "function") {
+    throw new TypeError("Process scenario adapter requires a trusted OS sandbox launcher")
   }
   if (typeof workerPath !== "string" || !workerPath.trim()) {
     throw new TypeError("Process scenario adapter requires workerPath")
@@ -139,17 +194,26 @@ export function createProcessScenarioAdapter({
   if (!Number.isSafeInteger(terminationGraceMs) || terminationGraceMs < 0) {
     throw new RangeError("Worker termination grace must be a non-negative integer")
   }
+  if (!Number.isSafeInteger(maxOutputBytes) || maxOutputBytes < 1) {
+    throw new RangeError("Worker output limit must be a positive safe integer")
+  }
   const children = new Map()
 
   async function execute({ runId, scenarioId, input, signal } = {}) {
     if (signal?.aborted) {
       throw new Error("Scenario worker execution was cancelled before startup")
     }
-    const child = fork(workerPath, [], {
+    const child = spawnSandboxedWorker({
+      workerPath,
       env: createWorkerEnvironment(),
       execArgv: [],
       stdio: ["ignore", "ignore", "ignore", "ipc"],
+      sandboxProfile: REQUIRED_SANDBOX_PROFILE,
     })
+    if (!child || typeof child.send !== "function" ||
+      typeof child.once !== "function" || typeof child.kill !== "function") {
+      throw new TypeError("OS sandbox launcher must return a ChildProcess-compatible worker")
+    }
     children.set(runId, child)
     const execution = createExecutionPromise({
       child,
@@ -157,14 +221,22 @@ export function createProcessScenarioAdapter({
       signal,
       children,
       terminationGraceMs,
+      maxOutputBytes,
     })
-    child.send({
-      runId,
-      strategyId,
-      scenarioId,
-      input,
-    })
-    return execution
+    try {
+      child.send({
+        runId,
+        strategyId,
+        scenarioId,
+        input,
+      })
+    } catch (error) {
+      void terminateChild({
+        child,
+        graceMs: terminationGraceMs,
+      }).then(() => execution.fail(error))
+    }
+    return execution.promise
   }
 
   async function cancel({ runId } = {}) {
