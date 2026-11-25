@@ -447,8 +447,45 @@ const reservationTestTitles = {
 }
 
 
+const accountWideReservationTitle = "RS-003-006: account-wide SELL reservations across markets are summed and snapshot commitments are not double-counted"
+const accountWideReservationExpected = {
+  atLimit: {
+    ok: true,
+    executableActions: [{
+      side: "SELL",
+      quantity: "0.26",
+    }],
+    remainingBaseBalance: "0",
+    remainingActiveBase: "0.75",
+  },
+  overLimit: {
+    ok: false,
+    reason: "Strategy SELL quantity exceeds available free base balance after commitments",
+  },
+}
+const accountWideReservationSubcases = [{
+  id: "RS-003-006-A",
+  description: "sum remaining SELL quantities from all active orders across two other markets and preserve the snapshot baseline exactly once",
+  status: "TEST-MAPPED",
+  test: {
+    file: testFile,
+    title: accountWideReservationTitle,
+  },
+  evidence: null,
+}]
+const accountWideReservationMustNot = [
+  "subtract a reservation already reflected in the AccountSnapshot more than once",
+  "ignore active SELL commitments from another market or strategy sharing the same base asset",
+  "allow a new SELL to consume base quantity already reserved by existing orders",
+]
+const accountWideReservationImplementation = [
+  "apps/harvester/src/use-cases/strategy-order-commitments.js",
+  "apps/harvester/src/domain/orders/allocate-order-commitments.js",
+  "apps/harvester/src/domain/account/calculate-account-snapshot-baselines.js",
+  "apps/harvester/src/domain/account/account-snapshot.js",
+]
+
 function createAccountWideReservationScenario() {
-  const title = "RS-003-006: account-wide SELL reservations across markets are summed and snapshot commitments are not double-counted"
   return defineRecoverySellerScenario({
     id: "RS-003-006",
     family: "RS-003",
@@ -473,45 +510,13 @@ function createAccountWideReservationScenario() {
       inputKey: "input",
       saveAs: "allocation",
     }],
-    then: {
-      atLimit: {
-        ok: true,
-        executableActions: [{
-          side: "SELL",
-          quantity: "0.26",
-        }],
-        remainingBaseBalance: "0",
-        remainingActiveBase: "0.75",
-      },
-      overLimit: {
-        ok: false,
-        reason: "Strategy SELL quantity exceeds available free base balance after commitments",
-      },
-    },
-    mustNot: [
-      "subtract a reservation already reflected in the AccountSnapshot more than once",
-      "ignore active SELL commitments from another market or strategy sharing the same base asset",
-      "allow a new SELL to consume base quantity already reserved by existing orders",
-    ],
-    subcases: [{
-      id: "RS-003-006-A",
-      description: "sum remaining SELL quantities from all active orders across two other markets and preserve the snapshot baseline exactly once",
-      status: "TEST-MAPPED",
-      test: {
-        file: testFile,
-        title,
-      },
-      evidence: null,
-    }],
-    implementation: [
-      "apps/harvester/src/use-cases/strategy-order-commitments.js",
-      "apps/harvester/src/domain/orders/allocate-order-commitments.js",
-      "apps/harvester/src/domain/account/calculate-account-snapshot-baselines.js",
-      "apps/harvester/src/domain/account/account-snapshot.js",
-    ],
+    then: accountWideReservationExpected,
+    mustNot: accountWideReservationMustNot,
+    subcases: accountWideReservationSubcases,
+    implementation: accountWideReservationImplementation,
     test: {
       file: testFile,
-      title,
+      title: accountWideReservationTitle,
     },
     status: "TEST-MAPPED",
     evidence: null,
