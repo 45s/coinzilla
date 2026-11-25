@@ -349,12 +349,18 @@ test("the shared registry includes every mapped RS-001 and RS-002 family record"
 
   assert.deepEqual(
     authorizationCases.map((scenario) => scenario.id).sort(),
-    expectedScenarioIds({\n      family: "RS-001",\n      count: 14,\n    }),
+    expectedScenarioIds({
+      family: "RS-001",
+      count: 14,
+    }),
     "The RS-001 registry must contain every consecutive authorization/custody ID without gaps or substitutions.",
   )
   assert.deepEqual(
     buyCases.map((scenario) => scenario.id).sort(),
-    expectedScenarioIds({\n      family: "RS-002",\n      count: 21,\n    }),
+    expectedScenarioIds({
+      family: "RS-002",
+      count: 21,
+    }),
     "The RS-002 registry must contain all twenty reserved business IDs and the cross-cutting J.01 ID without gaps or substitutions.",
   )
 })
