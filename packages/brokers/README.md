@@ -604,9 +604,9 @@ The acknowledgement is a consumer attestation only. Private observations are not
 
 ### Remaining blockers
 
-- No verified isolated Bitunix Futures TESTNET endpoint or credentials; therefore no mutation integration test may be run. Never test mutations against LIVE.
+- Bitunix Futures has no TESTNET. Automated verification remains offline; LIVE mutation tests are prohibited.
 - Private events remain non-authoritative and non-replayable; no gap-free session or process-restart recovery guarantee exists.
 - Account snapshots, server time, complete account-wide fill history and common Spot-shaped Futures order projections remain unsupported/unknown where the documented contract cannot satisfy the common API.
 - Order-level TP/SL place/modify and isolated-position-margin adjustment remain unsupported for the documented reasons above.
 
-No LIVE Futures mutation was performed by implementation work or ordinary CI. Keep this provider out of production execution and Harvester routing until external guarantees, safe TESTNET verification and final acceptance are complete.
+No LIVE Futures mutation was performed by implementation work or ordinary CI. Keep this provider out of production execution and Harvester routing until external recovery guarantees and final acceptance are complete; no TESTNET prerequisite exists for this LIVE-only provider.
