@@ -433,6 +433,20 @@ function validateProcessScenarioAdapterOptions({
   }
 }
 
+function spawnScenarioWorker({ spawnSandboxedWorker, workerPath, maxOutputBytes }) {
+  const sandboxProfile = Object.freeze({
+    ...REQUIRED_SANDBOX_PROFILE,
+    maxOutputBytes,
+  })
+  return spawnSandboxedWorker({
+    workerPath,
+    env: createWorkerEnvironment(),
+    execArgv: [],
+    stdio: ["ignore", "ignore", "ignore", "ipc"],
+    sandboxProfile,
+  })
+}
+
 function createWorkerExecutor({
   strategyId,
   spawnSandboxedWorker,
@@ -449,16 +463,10 @@ function createWorkerExecutor({
     if (signal?.aborted) {
       throw new Error("Scenario worker execution was cancelled before startup")
     }
-    const sandboxProfile = Object.freeze({
-      ...REQUIRED_SANDBOX_PROFILE,
-      maxOutputBytes,
-    })
-    const child = spawnSandboxedWorker({
+    const child = spawnScenarioWorker({
+      spawnSandboxedWorker,
       workerPath,
-      env: createWorkerEnvironment(),
-      execArgv: [],
-      stdio: ["ignore", "ignore", "ignore", "ipc"],
-      sandboxProfile,
+      maxOutputBytes,
     })
     if (!child || typeof child.send !== "function" ||
       typeof child.once !== "function" || typeof child.kill !== "function") {
