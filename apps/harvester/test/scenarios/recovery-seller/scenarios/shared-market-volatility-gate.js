@@ -5,6 +5,7 @@ const testTitle = "rejects conflicting CG/RS volatility settings for the same en
 const rsOnlyTestTitle = "RS-008-017-A: RS-only market receives the shared market-owned volatility submission gate"
 const disabledProtectionTestTitle = "RS-008-017-C: disabled volatility protection skips only volatility work and preserves other gates"
 const recoverySellTestTitle = "RS-008-017-D: recovery SELL bypasses volatility only and retains other submission gates"
+const cancellationTestTitle = "RS-008-017-E: volatility cancellation cancels CG/RS owned BUYs but never SELL or external orders"
 
 export const recoverySellerSharedMarketVolatilityScenario = defineRecoverySellerScenario({
   id: "RS-008-017",
@@ -18,6 +19,7 @@ export const recoverySellerSharedMarketVolatilityScenario = defineRecoverySeller
     "issue-1780: RS-008-017-B shared market volatility configuration",
     "issue-1780: RS-008-017-C disabled volatility protection",
     "issue-1780: RS-008-017-D recovery SELL volatility exception",
+    "issue-1780: RS-008-017-E owned-BUY-only volatility cancellation",
   ],
   layer: "APPLICATION",
   configFields: ["RS_PAIR.enableVolatilityProtection"],
@@ -49,6 +51,15 @@ export const recoverySellerSharedMarketVolatilityScenario = defineRecoverySeller
     "submit, cancel or otherwise mutate any order",
   ],
   subcases: [{
+    id: "RS-008-017-E",
+    description: "market-owned volatility cancellation includes current-process CG and RS BUY orders but excludes registered SELL orders and external/manual orders outside the OrderRegistry",
+    status: "TEST-MAPPED",
+    test: {
+      file: "apps/harvester/src/use-cases/conservative-trading-engine.multi-market.test.js",
+      title: cancellationTestTitle,
+    },
+    evidence: null,
+  }, {
     id: "RS-008-017-A",
     description: "an enabled RS-only market without a CG execution route receives the shared market-owned volatility submission gate",
     status: "TEST-MAPPED",

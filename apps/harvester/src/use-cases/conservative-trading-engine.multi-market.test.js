@@ -14,6 +14,8 @@ import {
   TradingRules,
 } from "@coinzilla/entities"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
+import { OrderRegistry } from "../domain/orders/order-registry.js"
+import { makeVolatilityProtectionWorkflow } from "./volatility-protection-workflow.js"
 import { RecoveryLedger } from "../domain/strategies/conservative/recovery-ledger.js"
 import { makeConservativeTradingEngine } from "./conservative-trading-engine.js"
 import { conservativeStrategyPolicy } from "../domain/strategies/conservative/strategy-policy.js"
@@ -2102,4 +2104,156 @@ test("submits a valid recovery SELL when refreshed exchange filters remain valid
     harness.orders.some((order) => order.side === "SELL"),
     "A recovery SELL satisfying refreshed exchange filters must be submitted",
   )
+})
+
+
+function createVolatilityCancellationOrder({ market, clientOrderId, brokerOrderId, side } = {}) {
+  return new CanonicalOrder({
+    clientOrderId,
+    brokerOrderId,
+    market,
+    side,
+    type: "LIMIT",
+    limitPrice: new Money({
+      amount: "100",
+      asset: market.quoteAsset,
+    }),
+    originalQuantity: new Quantity({
+      amount: "1",
+      asset: market.baseAsset,
+    }),
+    executedQuantity: new Quantity({
+      amount: "0",
+      asset: market.baseAsset,
+    }),
+    status: "OPEN",
+    createdAt: 1,
+    acknowledgedAt: 1,
+    updatedAt: 1,
+  })
+}
+
+function createVolatilityCancellationOrderRegistry() {
+  const market = marketsBySymbol.get("DOGEUSDT")
+  const orders = [
+    createVolatilityCancellationOrder({
+      market,
+      clientOrderId: "owned-cg-buy",
+      brokerOrderId: "broker-owned-cg-buy",
+      side: "BUY",
+    }),
+    createVolatilityCancellationOrder({
+      market,
+      clientOrderId: "owned-rs-buy",
+      brokerOrderId: "broker-owned-rs-buy",
+      side: "BUY",
+    }),
+    createVolatilityCancellationOrder({
+      market,
+      clientOrderId: "owned-cg-sell",
+      brokerOrderId: "broker-owned-cg-sell",
+      side: "SELL",
+    }),
+  ]
+  return new OrderRegistry({
+    orders,
+    ownerships: [
+      {
+        clientOrderId: "owned-cg-buy",
+        strategyId: StrategyId.COIN_GRABBER,
+        positionId: "cg-position",
+        purpose: "INITIAL_BUY",
+      },
+      {
+        clientOrderId: "owned-rs-buy",
+        strategyId: StrategyId.RECOVERY_SELLER,
+        positionId: "rs-position",
+        purpose: "RECOVERY_BUY",
+      },
+      {
+        clientOrderId: "owned-cg-sell",
+        strategyId: StrategyId.COIN_GRABBER,
+        positionId: "cg-position",
+        purpose: "RECOVERY_SELL",
+      },
+    ],
+  })
+}
+
+async function createVolatilityCancellationHarness({ orderRegistry } = {}) {
+  return createHarness({
+    symbols: ["DOGEUSDT"],
+    initialState: { orderRegistry },
+    eventPublisher: {
+      publish: () => ({ ok: true }),
+      flush: async () => ({ ok: true, durable: true }),
+    },
+  })
+}
+
+test("RS-008-017-E: volatility cancellation cancels CG/RS owned BUYs but never SELL or external orders", async () => {
+  const orderRegistry = createVolatilityCancellationOrderRegistry()
+  const harness = await createVolatilityCancellationHarness({ orderRegistry })
+  const externalManualBrokerOrderId = "broker-external-manual"
+  const snapshot = {
+    ok: true,
+    data: {
+      status: {
+        isReady: true,
+        isFresh: true,
+        observedAt: 10_000,
+        lastClosedCandleOpenTime: 9_000,
+      },
+      metrics: {
+        openTime: 9_000,
+        volatilityRatio: "2",
+      },
+    },
+  }
+  const state = {
+    registry: orderRegistry,
+    volatilityProtection: new Map(),
+    volatilitySnapshotSignatureBySymbol: new Map(),
+    volatilityCancellationAttemptBySymbol: new Map(),
+  }
+  const workflow = makeVolatilityProtectionWorkflow({
+    state,
+    isStopping: () => false,
+    isVolatilityProtectionEnabledForSymbol: () => true,
+    getVolatilityData: () => snapshot,
+    runTransition: ({ task }) => task(),
+    cancelOwnedBuyOrders: (input) => harness.engine.cancelOwnedBuyOrdersForShutdown(input),
+    evaluateLatest: async () => ({ ok: true, data: { actions: [] } }),
+    logger: {
+      system() {},
+      warn() {},
+    },
+    transitionVolatilityProtection: ({ state: current }) => ({
+      state: {
+        ...current,
+        mode: "PROTECTED",
+        reason: "HIGH_VOLATILITY",
+        volatilityRatio: "2",
+        stableCandleCount: 0,
+      },
+      changed: true,
+      recovered: false,
+      warning: false,
+    }),
+  })
+
+  const result = await workflow.processVolatilitySnapshot({
+    symbol: "DOGEUSDT",
+    snapshot,
+  })
+  assert.equal(result.ok, true, "The market protection workflow must complete the owned-BUY cancellation.")
+  assert.deepEqual(
+    harness.cancelledOrderIds.sort(),
+    ["broker-owned-cg-buy", "broker-owned-rs-buy"],
+    "The shared cancellation workflow must cancel both strategy-owned BUYs and no other registered order.",
+  )
+  assert.equal(harness.cancelledOrderIds.includes("broker-owned-cg-sell"), false, "A registered SELL must never be canceled by volatility protection.")
+  assert.equal(harness.cancelledOrderIds.includes(externalManualBrokerOrderId), false, "An external/manual order outside the current OrderRegistry must never be canceled.")
+  const sell = harness.engine.getOrders().find((order) => order.clientOrderId === "owned-cg-sell")
+  assert.equal(sell.status, "OPEN", "The registered SELL must remain active after the protection transition.")
 })
