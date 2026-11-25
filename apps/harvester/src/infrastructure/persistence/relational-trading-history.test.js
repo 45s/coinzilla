@@ -1033,6 +1033,52 @@ test("deduplicates identical applied executions without creating duplicate commi
   })
 })
 
+test("deduplicates numerically equivalent execution and commission decimals without rewriting stored facts", async (t) => {
+  const context = await createTestContext({ t })
+  const persistence = await preparePersistence({ context })
+  const original = createAppliedFillEvent()
+  await publishAppliedFill({
+    eventBus: context.eventBus,
+    fill: original,
+  })
+  await publishAppliedFill({
+    eventBus: context.eventBus,
+    fill: createAppliedFillEvent({
+      overrides: {
+        price: "100000.0000000100",
+        quantity: "0.1234567891230",
+        quoteQuantity: "12345.6789012300",
+        commissions: [{
+          amount: "0.0000123400000000010",
+          assetId: "bnb",
+          asset: "BNB",
+          quoteValue: {
+            amount: "0.0012345678901234560",
+            assetId: "usdt",
+            asset: "USDT",
+          },
+        }],
+      },
+    }),
+  })
+  const result = await persistence.fillObserver.flush()
+  assert.equal(result.ok, true, "Numerically equivalent execution and commission facts must make repeated fill ingestion idempotent.")
+  await inspectSqlite({
+    filename: context.filename,
+    work: (database) => {
+      const fill = database.prepare("SELECT * FROM fills").get()
+      const commission = database.prepare("SELECT * FROM fill_commissions").get()
+      assert.equal(database.prepare("SELECT COUNT(*) AS count FROM fills").get().count, 1, "Equivalent decimal replay must not create a second fill row.")
+      assert.equal(database.prepare("SELECT COUNT(*) AS count FROM fill_commissions").get().count, 1, "Equivalent commission replay must not create a second commission row.")
+      assert.equal(fill.execution_price, original.price, "The first execution-price representation must remain unchanged.")
+      assert.equal(fill.executed_base_quantity, original.quantity, "The first base-quantity representation must remain unchanged.")
+      assert.equal(fill.executed_quote_quantity, original.quoteQuantity, "The first quote-quantity representation must remain unchanged.")
+      assert.equal(commission.amount, original.commissions[0].amount, "The first commission-amount representation must remain unchanged.")
+      assert.equal(commission.quote_value_amount, original.commissions[0].quoteValue.amount, "The first commission quote-value representation must remain unchanged.")
+    },
+  })
+})
+
 test("scopes identical trade IDs by provider, provider instance, account, and market", async (t) => {
   const context = await createTestContext({ t })
   const persistence = await preparePersistence({ context })
