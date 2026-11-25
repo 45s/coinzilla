@@ -24,6 +24,18 @@ The Explorer adapts these records into a presentation-neutral graph model; it mu
 ### 1. Scenario path diagram
 Render each record as Given → ordered When step(s) → Then, with separate inspectable Must-not constraints and subcase nodes. A step is a distinct node. Only branch when source data explicitly represents branching; sequential steps must not be turned into invented decision forks.
 
+Illustrative rendering for a record (not a verified RS case's exact steps):
+
+```mermaid
+flowchart TD
+ G[Given: scenario input] --> W1[When: step 1]
+ W1 --> W2[When: step 2]
+ W2 --> T[Then: expected result]
+ T --> N[Must-not constraints]
+ T --> SC[Subcases and test evidence]
+```
+
+
 ### 2. Coverage/relationship graph
 Render linked entities from registry metadata:
 - Scenario and subcase.
