@@ -25,6 +25,14 @@ const existingPaths = new Set(
     existsSync(resolve(packageRoot, path.replace("apps/harvester/", "")))),
 )
 
+function expectedScenarioIds({ family, count }) {
+  const ids = []
+  for (let index = 1; index <= count; index += 1) {
+    ids.push(`${family}-${String(index).padStart(3, "0")}`)
+  }
+  return ids
+}
+
 function cloneScenario(overrides = {}) {
   return {
     ...recoverySellerScenarioRegistry[0],
@@ -341,12 +349,12 @@ test("the shared registry includes every mapped RS-001 and RS-002 family record"
 
   assert.deepEqual(
     authorizationCases.map((scenario) => scenario.id).sort(),
-    Array.from({ length: 14 }, (_, index) => `RS-001-${String(index + 1).padStart(3, "0")}`),
+    expectedScenarioIds({ family: "RS-001", count: 14 }),
     "The RS-001 registry must contain every consecutive authorization/custody ID without gaps or substitutions.",
   )
   assert.deepEqual(
     buyCases.map((scenario) => scenario.id).sort(),
-    Array.from({ length: 21 }, (_, index) => `RS-002-${String(index + 1).padStart(3, "0")}`),
+    expectedScenarioIds({ family: "RS-002", count: 21 }),
     "The RS-002 registry must contain all twenty reserved business IDs and the cross-cutting J.01 ID without gaps or substitutions.",
   )
 })
