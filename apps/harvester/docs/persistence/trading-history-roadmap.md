@@ -80,7 +80,7 @@ Financial values are stored as exact decimal text. Missing values remain SQL `NU
 - Advances each cursor only after every record in its page is persisted. Interrupted pages safely replay through idempotent persistence.
 - Refreshes the oldest stored non-terminal order on subsequent startups so an order that fills while Harvester is offline can still be discovered after the forward cursor advances.
 - Persists unfilled order observations as well as executions, with explicit `exchange_history` provenance. Ambiguous order/fill linkage fails closed.
-- A failed scan reports per-market partial diagnostics and remains best-effort; it does not reverse accounting or change order ownership/readiness authority. Failures include the history type/stage, original page cursor, 1-based record position, exchange order/trade identity, conflicting field, bounded existing/incoming immutable values and sources, rejected/accepted reconciliation decision, recoverability, coverage-incomplete status, underlying error code, and last successfully persisted identity. The existing `runtime_errors` projection stores only allowlisted/redacted fields; the full stack/cause remains in session JSONL logs.
+- A failed scan reports per-market partial diagnostics and remains best-effort; it does not reverse accounting or change order ownership/readiness authority. Failures include the history type/stage, original page cursor, 1-based record position, exchange order/trade identity, conflicting field, bounded existing/incoming immutable values and sources, reconciliation decision, recoverability, coverage-incomplete status, underlying error code, and last successfully persisted identity. The existing `runtime_errors` projection stores only allowlisted/redacted fields; the full stack/cause remains in session JSONL logs.
 
 **Coverage limitation:** synchronization covers only configured execution markets and exchange-available history. It does not prove account-wide, delisted/unconfigured-market or exchange-retention completeness. Orders are not adopted, strategy ownership is not inferred, and process-restart restoration is not enabled.
 
@@ -92,8 +92,8 @@ Financial values are stored as exact decimal text. Missing values remain SQL `NU
 
 - Use market-scoped exchange order IDs as canonical identity; retain clientOrderId only for correlation and provisional pending records.
 - Rebuild the v4 relational tables transactionally, preserving order/fill/commission rows and foreign-key links; verify a pre-v5 backup before migration and reject any existing fill whose parent does not match its exact exchange-order identity.
-- Link fills by exact exchange order ID and market, including fills that arrive before their order record. Reused client IDs cannot cross-link executions.
-- Keep genuine same-exchange-order immutable conflicts fatal and keep history coverage incomplete on any page failure.
+- Link fills by exact exchange order ID and market, including fills that arrive before their order record; fills without an exchange order ID fail validation rather than receiving client-only attribution. Reused client IDs cannot cross-link executions.
+- Compare decimal facts with exact decimal arithmetic: equivalent string representations are accepted without rewriting the persisted representation, while genuinely different immutable values remain fatal. Keep history coverage incomplete on any page failure.
 - Exact prior-row broker IDs and price values are not present in the recovered runtime logs or Library files. The committed fixtures use the observed ZRO/DOGE identifiers with explicitly synthetic prices; do not claim the original persisted row pair is independently proven.
 
 ### Phase 4 — Strategy-cycle attribution
