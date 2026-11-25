@@ -97,3 +97,11 @@ test("RS-004-012 remains non-executable in the public catalog until process isol
   assert.equal(scenario.executable, false)
   assert.ok(scenario.readinessReasons.some((reason) => reason.includes("OS-level")))
 })
+
+test("public RS runner catalog contains only the real registry-backed scenario IDs", () => {
+  assert.deepEqual(
+    getRecoverySellerRunnerCatalog().map((scenario) => scenario.id),
+    ["RS-004-011"],
+    "the synthetic runtime fixture must not be advertised as a registered RS scenario",
+  )
+})
