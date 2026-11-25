@@ -79,7 +79,7 @@ const commonInput = Object.freeze({
   priceTickSize: "0.01",
 })
 
-export const recoverySellerMixedSellPlanningScenarios = Object.freeze([
+const recoverySellerSellPlanScenarios = Object.freeze([
   createSellPlanScenario({
     id: "RS-003-001",
     name: "the mixed SELL adds the authorized legacy slice to canonical recovery inventory",
@@ -148,5 +148,211 @@ export const recoverySellerMixedSellPlanningScenarios = Object.freeze([
       price: "10.01",
     },
     rules: ["RS_LEGACY_EXHAUSTION", "RS_SELL_ADDITIVE_LEGACY_SLICE"],
+  }),
+])
+
+function createSpotAllocationScenario({
+  id,
+  name,
+  input,
+  expected,
+  subcases,
+}) {
+  const title = `${id}: ${name}`
+  return defineRecoverySellerScenario({
+    id,
+    family: "RS-003",
+    name,
+    priority: "P0",
+    authority: [
+      "apps/harvester/docs/domain/recovery-seller-domain-specification.md#4-recovery-and-legacy-inventory",
+      "issue-1780: RS-003 verified Spot custody and shared Portfolio allocation",
+    ],
+    layer: "DOMAIN",
+    configFields: [
+      "RS_PAIR.sellQuantity",
+      "RS_PAIR.legacyPosition.quantity",
+    ],
+    covers: {
+      rules: [
+        "RS_SELL_VERIFIED_UNRESERVED_QUANTITY",
+        "RS_CUSTODY_CONSERVATION",
+      ],
+      decisions: ["RS_ACCOUNT_ALLOCATION"],
+      states: [],
+      transitions: [],
+      invariants: [
+        "RS_CUSTODY_CONSERVATION",
+        "RS_QUANTITY_CONSERVATION",
+      ],
+    },
+    given: { input },
+    when: [{
+      type: "calculate-verified-legacy-spot-allocation",
+      inputKey: "input",
+      saveAs: "allocations",
+    }],
+    then: expected,
+    mustNot: [
+      "treat the wallet balance as RS-owned legacy inventory without operator authorization",
+      "count a Portfolio Position as additional legacy Spot inventory",
+      "ignore a Position because it belongs to another strategy or market sharing the same base asset",
+      "allocate more than the remaining operator-authorized legacy quantity",
+      "use floating-point arithmetic for base-asset quantity aggregation",
+    ],
+    subcases,
+    implementation: [
+      "apps/harvester/src/domain/strategies/recovery-seller/legacy-spot-allocation.js",
+    ],
+    test: {
+      file: testFile,
+      title,
+    },
+    status: "TEST-MAPPED",
+    evidence: null,
+  })
+}
+
+const spotAllocationBaseInput = Object.freeze({
+  acquisitions: [{
+    symbol: "ZROUSDT",
+    quoteCode: "USDT",
+    tradeId: "rs-spot-boundary-recovery-buy",
+    positionId: "rs-spot-boundary-recovery-position",
+    strategy: "RS",
+    quantity: "1",
+    quoteQuantity: "10",
+  }],
+  legacyPositions: [{
+    symbol: "ZROUSDT",
+    quoteCode: "USDT",
+    originalQuantity: "0.01",
+    remainingQuantity: "0.01",
+  }],
+})
+
+const spotAllocationCases = [
+  {
+    id: "below",
+    input: {
+      ...spotAllocationBaseInput,
+      spotFreeQuantity: "1.005",
+    },
+    expected: [{
+      assetId: "binance:ZRO",
+      amount: "0.005",
+    }],
+  },
+  {
+    id: "equal",
+    input: {
+      ...spotAllocationBaseInput,
+      spotFreeQuantity: "1.01",
+    },
+    expected: [{
+      assetId: "binance:ZRO",
+      amount: "0.01",
+    }],
+  },
+  {
+    id: "above",
+    input: {
+      ...spotAllocationBaseInput,
+      spotFreeQuantity: "1.02",
+    },
+    expected: [{
+      assetId: "binance:ZRO",
+      amount: "0.01",
+    }],
+  },
+]
+
+const spotBoundaryTitle = "RS-003-004: verified Spot availability below, equal to, and above the required legacy slice is capped exactly"
+
+export const recoverySellerMixedSellPlanningScenarios = Object.freeze([
+  ...recoverySellerMixedSellPlanningScenarios,
+  createSpotAllocationScenario({
+    id: "RS-003-004",
+    name: "verified Spot availability below, equal to, and above the required legacy slice is capped exactly",
+    input: {
+      cases: spotAllocationCases.map(({ id, input }) => ({
+        id,
+        ...input,
+      })),
+    },
+    expected: {
+      cases: spotAllocationCases.map(({ id, expected }) => ({
+        id,
+        allocations: expected,
+      })),
+    },
+    subcases: spotAllocationCases.map(({ id }) => ({
+      id: `RS-003-004-${id === "below" ? "A" : id === "equal" ? "B" : "C"}`,
+      description: `verified Spot custody is ${id} the required legacy slice`,
+      status: "TEST-MAPPED",
+      test: {
+        file: testFile,
+        title: spotBoundaryTitle,
+      },
+      evidence: null,
+    })),
+  }),
+  createSpotAllocationScenario({
+    id: "RS-003-005",
+    name: "verified Spot availability subtracts every shared Portfolio position across markets and strategies",
+    input: {
+      spotFreeQuantity: "5",
+      spotLockedQuantity: "0.5",
+      acquisitions: [
+        {
+          symbol: "ZROUSDT",
+          quoteCode: "USDT",
+          tradeId: "cg-zro-usdt",
+          positionId: "cg-zro-usdt-position",
+          strategy: "CG",
+          quantity: "2",
+          quoteQuantity: "20",
+        },
+        {
+          symbol: "ZROFDUSD",
+          quoteCode: "FDUSD",
+          tradeId: "rs-zro-fdusd",
+          positionId: "rs-zro-fdusd-position",
+          strategy: "RS",
+          quantity: "3",
+          quoteQuantity: "30",
+        },
+      ],
+      legacyPositions: [
+        {
+          symbol: "ZROUSDT",
+          quoteCode: "USDT",
+          originalQuantity: "40",
+          remainingQuantity: "40",
+        },
+        {
+          symbol: "ZROFDUSD",
+          quoteCode: "FDUSD",
+          originalQuantity: "10",
+          remainingQuantity: "10",
+        },
+      ],
+    },
+    expected: {
+      allocations: [{
+        assetId: "binance:ZRO",
+        amount: "0.5",
+      }],
+    },
+    subcases: [{
+      id: "RS-003-005-A",
+      description: "aggregate all CG and RS Portfolio base quantities across markets before legacy Spot allocation",
+      status: "TEST-MAPPED",
+      test: {
+        file: testFile,
+        title: "RS-003-005: verified Spot allocation subtracts every shared Portfolio position across markets and strategies",
+      },
+      evidence: null,
+    }],
   }),
 ])

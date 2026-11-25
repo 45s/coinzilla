@@ -82,7 +82,7 @@ test("RS-003-003: exhausted legacy inventory produces a recovery-only SELL plan"
   await assertRegisteredScenario({ id: "RS-003-003" })
 })
 
-test("the shared RS registry includes the first three additive mixed SELL scenarios", () => {
+test("the shared RS registry includes the first five mixed SELL planning and custody scenarios", () => {
   const actualIds = recoverySellerScenarioRegistry
     .filter((scenario) => scenario.family === "RS-003")
     .map((scenario) => scenario.id)
@@ -91,7 +91,9 @@ test("the shared RS registry includes the first three additive mixed SELL scenar
     "RS-003-001",
     "RS-003-002",
     "RS-003-003",
-  ], "The RS registry must expose each mapped RS-003 planning scenario exactly once.")
+    "RS-003-004",
+    "RS-003-005",
+  ], "The RS registry must expose each mapped RS-003 planning and custody scenario exactly once.")
 })
 
 
@@ -277,4 +279,45 @@ test("verified Spot allocation subtracts every shared Portfolio position across 
     assetId: "binance:ZRO",
     amount: "0.5",
   }], "The 5.5 ZRO Spot total must subtract all five ZRO in CG and RS Portfolio positions across both markets, then cap the remaining 0.5 ZRO by the 50 ZRO authorized legacy remainder.")
+})
+
+async function assertRegisteredSpotScenario({ id }) {
+  const scenario = recoverySellerMixedSellPlanningScenarios.find((item) => item.id === id)
+  assert.ok(scenario,
+    `The business matrix scenario ${id} must exist as a declarative RS-003 registry record.`)
+  assert.ok(recoverySellerScenarioRegistry.includes(scenario),
+    `The shared RS registry must include ${id} so schema validation and reporting cannot omit it.`)
+
+  const result = await runRecoverySellerDomainScenario({
+    scenario,
+    handlers: {
+      "calculate-mixed-sell-plan": calculatePlan,
+      "calculate-verified-legacy-spot-allocation": ({ input }) => {
+        if (Array.isArray(input.cases)) {
+          return input.cases.map(({ id: caseId, ...caseInput }) => ({
+            id: caseId,
+            allocations: calculateSpotAllocation({
+              input: caseInput,
+            }),
+          }))
+        }
+        return {
+          allocations: calculateSpotAllocation({ input }),
+        }
+      },
+    },
+  })
+  assert.deepEqual(
+    result.results[0],
+    scenario.then,
+    `The real shared Portfolio/Spot allocation output for ${id} must match the independently specified custody oracle.`,
+  )
+}
+
+test("RS-003-004: verified Spot availability below, equal to, and above the required legacy slice is capped exactly", async () => {
+  await assertRegisteredSpotScenario({ id: "RS-003-004" })
+})
+
+test("RS-003-005: verified Spot allocation subtracts every shared Portfolio position across markets and strategies", async () => {
+  await assertRegisteredSpotScenario({ id: "RS-003-005" })
 })
