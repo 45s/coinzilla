@@ -97,11 +97,17 @@ function findMatchingPendingOrderRow({ transaction, record } = {}) {
   const incomingCreatedAt = record.createdAt === undefined || record.createdAt === null
     ? null
     : new Date(record.createdAt).toISOString()
+  const existingCreatedAt = pending.exchange_created_at
+  const isPromotion = record.brokerOrderId !== undefined && record.brokerOrderId !== null
+  const creationTimestampConflict = incomingCreatedAt !== null &&
+    existingCreatedAt !== null &&
+    existingCreatedAt !== incomingCreatedAt
+  const promotionTimestampMissing = isPromotion &&
+    (incomingCreatedAt === null || existingCreatedAt === null)
   if (
     pending.market_id !== record.market.id ||
-    incomingCreatedAt === null ||
-    pending.exchange_created_at === null ||
-    pending.exchange_created_at !== incomingCreatedAt
+    creationTimestampConflict ||
+    promotionTimestampMissing
   ) {
     throw createOrderIdentityIntegrityError({
       field: "pendingClientOrderIdentityAmbiguous",
