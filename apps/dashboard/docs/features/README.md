@@ -9,7 +9,7 @@ Dashboard feature business logic and domain/application modules MUST be framewor
 ## Features
 
 - [GitHub PR Dashboard](github-pr-dashboard/SPEC.md) — read-only overview of open `45s/coinzilla` pull requests, current head-commit timestamps and Dashboard-local work labels. [Domain scenarios](github-pr-dashboard/DOMAIN_SCENARIOS.md) and [schemas](github-pr-dashboard/schemas/).
-- [GC Strategy Lab](gc-strategy-lab/SPEC.md) — interactive strategy scenario visualization, beginning with Recovery Seller's registry (scenario diagrams and coverage/traceability graph); execution simulation is a later, separate capability. [RS explorer design](gc-strategy-lab/RS_REGISTRY_EXPLORER.md). [Domain scenarios](gc-strategy-lab/DOMAIN_SCENARIOS.md).
+- [GC Strategy Lab](gc-strategy-lab/SPEC.md) — strategy-neutral production-flow Scenario Runner, beginning with Recovery Seller; includes original-version replay, temporary validated Playground overrides and AI-agent JSON debug packages. [RS explorer design](gc-strategy-lab/RS_REGISTRY_EXPLORER.md). [Domain scenarios](gc-strategy-lab/DOMAIN_SCENARIOS.md).
 
 ## Creating a feature specification
 
