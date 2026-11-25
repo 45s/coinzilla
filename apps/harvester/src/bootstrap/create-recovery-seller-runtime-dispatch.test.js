@@ -176,16 +176,31 @@ test("routes eligible RS actions through the engine-owned submitter with immutab
       data: { submitted: true },
     }),
   })
+  let authorizationInput
+  let authorizationSnapshot
+  let authorizedAction
   const result = await runtime.dispatch({
-    authorizeRecoverySellerAction: async () => ({
-      ok: true,
-      data: { allowed: true },
-    }),
+    authorizeRecoverySellerAction: async ({ action, snapshot, input }) => {
+      authorizedAction = action
+      authorizationSnapshot = snapshot
+      authorizationInput = input
+      return {
+        ok: true,
+        data: { allowed: true },
+      }
+    },
   })
   const submission = runtime.getSubmissionInput()
 
   assert.equal(result.ok, true, "The shared order submitter result must be preserved.")
   assert.equal(result.data.submitted, true, "The RS action must reach the engine-owned submitter.")
+  assert.equal(authorizationInput.symbol, symbol, "Authorization must retain the symbol from the current transition.")
+  assert.equal(authorizationInput.marketPrice, marketPrice, "Authorization must receive the enriched current market price.")
+  assert.equal(authorizationInput.marketMetadata, marketMetadata, "Authorization must receive canonical market metadata.")
+  assert.equal(authorizationInput.pairConfig, pairConfig, "Authorization must receive the configured RS pair.")
+  assert.equal(authorizationSnapshot.planInput.recoveryQuantity, "0", "Authorization must receive the snapshot that produced the action.")
+  assert.equal(authorizedAction.strategyId, StrategyId.RECOVERY_SELLER, "Authorization must receive the RS-owned action.")
+  assert.equal(runtime.getLatchCount(), 0, "A successful authorization must not latch durable STOP.")
   assert.equal(submission.action.strategyId, StrategyId.RECOVERY_SELLER, "The submitted action must retain RS ownership.")
   assert.equal(submission.action.cycleId, "rs-cycle-1", "The submitted action must retain its cycle identity.")
 })
