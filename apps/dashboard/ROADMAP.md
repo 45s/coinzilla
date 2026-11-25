@@ -80,6 +80,9 @@ The initial runner is unauthenticated and **strictly loopback-only for local dev
 
 ## Scenario Runner — RS configuration unit and replay clarification (2026-11-25)
 
-Documentation must use actual RS config fields/values and explicit units. For LINEAUSDT TESTNET, `minProfit: 0.01` means **0.01 USDT absolute net profit (one USDT cent), not 1%**; `priceStepPercent: 0.5` is a 0.5% price-step setting. Distinguish base quantities (LINEA), quote amounts (USDT), percentages and derived values. Do not invent standalone average-entry inputs; derive legacy average cost from configured legacy basis and label it as derived. Market prices and simulated broker outcomes are ordered scenario events, sourced from existing scenario/test evidence or explicitly authored and validated—not fabricated as configuration.
+Documentation must use actual RS config fields/values and explicit units. For every RS market, `minProfit: 0.01` means **0.01 units of that market's quote asset as absolute net profit, never 1%**. For the LINEAUSDT TESTNET example this is 0.01 USDT (one USDT cent); `priceStepPercent: 0.5` is a 0.5% price-step setting. Distinguish base quantities (LINEA), quote amounts (USDT), percentages and derived values. Do not invent standalone average-entry inputs; derive legacy average cost from configured legacy basis and label it as derived. Market prices and simulated broker outcomes are ordered scenario events, sourced from existing scenario/test evidence or explicitly authored and validated—not fabricated as configuration.
 
 Proposed determinism behavior (pending approval) distinguishes replay against the exact original production revision from a separate regression execution of the same captured scenario package against a newer revision. Preserve both reports/traces and identify both revisions; control or capture time, generated IDs and other nondeterministic inputs before claiming deterministic replay.
+
+
+**Universal RS rule:** `minProfit` is an absolute net-profit amount in the selected market's quote asset for every RS market. `0.01` always means 0.01 quote-asset units, never 1%; the LINEAUSDT/USDT-cent example above is illustrative only.
