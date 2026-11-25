@@ -483,3 +483,24 @@ Use stable field names, explicit null/unavailable/omitted semantics, determinist
 The report must redact secrets and credentials by construction. It must not include broker/API keys, authentication tokens, private account data or other sensitive live data. Exported content is a diagnostic snapshot; it must not expose server-side secrets or permit replay against live infrastructure. The report generator and report schema belong to framework-independent application/domain contracts; Angular only invokes the use case and presents the copy/fallback affordance.
 
 The top-level Markdown document contains a short human-readable header and sections for metadata, scenario, configuration, inputs, events, lifecycle, steps, decisions, outputs, assertions and diagnostics. Exact machine-readable records are included as fenced JSON. The schema must be versioned independently of REST/WebSocket transport DTO versions.
+
+
+## Approved AI-debug workflow clarification — repository-assisted audit (2026-11-25)
+
+The AI Debug Report is self-contained as **execution evidence**: it must contain the complete available run inputs, outputs, lifecycle, events, trace, decisions, assertions, diagnostics and provenance, so understanding what happened never depends on retrieving the original run or server-side record. Self-contained does **not** mean duplicating the repository's source code or all documentation into every report.
+
+Repository access is explicitly permitted and expected to accelerate deeper debugging. Given a report, the AI-assisted investigation should:
+
+1. Identify the exact executed production commit/revision, strategy adapter, scenario/scenarioId/subcase and relevant versions from the report.
+2. Inspect the repository source code, architecture/specification docs, scenario definitions and mapped tests at the matching revision (and compare later revisions only when useful and clearly labelled).
+3. Establish from those sources why and how the scenario is supposed to behave, including the production call path, rules, calculations, validations, state transitions and intended outcomes.
+4. Audit the captured execution evidence against that documented/implemented behavior, distinguish expected behavior from defects or missing evidence, and cite precise source files/lines/tests in its explanation.
+5. State uncertainty or source/report revision mismatches explicitly; never invent missing run evidence or treat scenario expectations as observed runtime results.
+
+The report therefore carries enough evidence to stand alone, while repository access supplies the authoritative implementation and design context for explaining *why/how* the observed behavior should occur. This workflow must not require the original server run to remain available.
+
+## Approved Scenario Runner access boundary — local development (2026-11-25)
+
+For the current local-development use case, the runner API is **unauthenticated and loopback-only**. The host must bind only to loopback interfaces and must reject/avoid any configuration that exposes the runner on a LAN, public interface or remote host. This is a deliberate local-dev limitation, not a general production security model.
+
+Do not add dedicated runner credentials or reuse Dashboard authentication for this initial local-only mode. Before any remote, shared, hosted or otherwise non-loopback access is supported, authentication and server-side authorization must be designed and implemented for run creation, cancellation, run/history access and report retrieval. Until then, non-loopback exposure is out of scope and must fail closed. Exact bind/configuration enforcement and interaction with existing local API hosting must be verified during implementation audit.
