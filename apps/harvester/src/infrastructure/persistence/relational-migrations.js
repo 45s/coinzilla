@@ -286,6 +286,95 @@ function migrateHistorySyncCursors(transaction) {
   `)
 }
 
+function extractCreateTableSql({ tableName, nextIndexName } = {}) {
+  const start = CREATE_RELATIONAL_TABLES_SQL.indexOf(`  CREATE TABLE ${tableName} (`)
+  const end = CREATE_RELATIONAL_TABLES_SQL.indexOf(`  CREATE INDEX ${nextIndexName}`, start)
+  if (start < 0 || end < 0) {
+    throw new Error(`Unable to rebuild the ${tableName} table for the order-identity migration.`)
+  }
+  return CREATE_RELATIONAL_TABLES_SQL.slice(start, end).trim().replace(/;$/, "")
+}
+
+function createOrderIdentityMigrationTableSql() {
+  const ordersSql = extractCreateTableSql({
+    tableName: "orders",
+    nextIndexName: "orders_exchange_lookup_idx",
+  })
+    .replace("CREATE TABLE orders (", "CREATE TABLE orders_v5 (")
+    .replace(
+      "    UNIQUE (environment, provider_instance_id, provider_type, account_id, client_order_id)\n  )",
+      `    ingestion_source TEXT NOT NULL DEFAULT 'live_event'
+      CHECK (ingestion_source IN ('live_event', 'exchange_history', 'legacy_migration')),
+    last_ingestion_source TEXT NOT NULL DEFAULT 'live_event'
+      CHECK (last_ingestion_source IN ('live_event', 'exchange_history', 'legacy_migration'))
+  )`,
+    )
+  const fillsSql = extractCreateTableSql({
+    tableName: "fills",
+    nextIndexName: "fills_market_time_idx",
+  })
+    .replace("CREATE TABLE fills (", "CREATE TABLE fills_v5 (")
+    .replace("REFERENCES orders(id)", "REFERENCES orders_v5(id)")
+    .replace(
+      "    UNIQUE (provider_type, provider_instance_id, account_id, environment, market_id, exchange_trade_id)\n  )",
+      `    UNIQUE (provider_type, provider_instance_id, account_id, environment, market_id, exchange_trade_id),
+    ingestion_source TEXT NOT NULL DEFAULT 'live_event'
+      CHECK (ingestion_source IN ('live_event', 'exchange_history')),
+    last_ingestion_source TEXT NOT NULL DEFAULT 'live_event'
+      CHECK (last_ingestion_source IN ('live_event', 'exchange_history'))
+  )`,
+    )
+  const commissionsSql = extractCreateTableSql({
+    tableName: "fill_commissions",
+    nextIndexName: "fill_commissions_asset_idx",
+  })
+    .replace("CREATE TABLE fill_commissions (", "CREATE TABLE fill_commissions_v5 (")
+    .replace("REFERENCES fills(id)", "REFERENCES fills_v5(id)")
+  return [ordersSql, fillsSql, commissionsSql].join(";\n")
+}
+
+function migrateMarketScopedExchangeOrderIdentity(transaction) {
+  transaction.exec(createOrderIdentityMigrationTableSql())
+  transaction.exec(`
+    INSERT INTO orders_v5 SELECT * FROM orders;
+    INSERT INTO fills_v5 SELECT * FROM fills;
+    INSERT INTO fill_commissions_v5 SELECT * FROM fill_commissions;
+
+    DROP TABLE fill_commissions;
+    DROP TABLE fills;
+    DROP TABLE orders;
+
+    ALTER TABLE orders_v5 RENAME TO orders;
+    ALTER TABLE fills_v5 RENAME TO fills;
+    ALTER TABLE fill_commissions_v5 RENAME TO fill_commissions;
+
+    CREATE INDEX orders_exchange_lookup_idx
+      ON orders(environment, provider_instance_id, provider_type, account_id, market_id, exchange_order_id);
+    CREATE UNIQUE INDEX orders_exchange_identity_unique_idx
+      ON orders(environment, provider_instance_id, provider_type, account_id, market_id, exchange_order_id)
+      WHERE exchange_order_id IS NOT NULL;
+    CREATE UNIQUE INDEX orders_pending_client_identity_unique_idx
+      ON orders(environment, provider_instance_id, provider_type, account_id, client_order_id)
+      WHERE exchange_order_id IS NULL;
+    CREATE INDEX orders_market_time_idx
+      ON orders(environment, provider_instance_id, provider_type, account_id, market_id, exchange_created_at);
+    CREATE INDEX orders_strategy_time_idx
+      ON orders(strategy_id, exchange_created_at);
+    CREATE INDEX fills_market_time_idx
+      ON fills(environment, provider_instance_id, provider_type, account_id, market_id, exchange_executed_at);
+    CREATE INDEX fills_strategy_time_idx
+      ON fills(strategy_id, exchange_executed_at);
+    CREATE INDEX fill_commissions_asset_idx
+      ON fill_commissions(asset_id, asset_code);
+  `)
+  const violations = transaction.prepare("PRAGMA foreign_key_check").all()
+  if (violations.length > 0) {
+    throw new OrderHistoryIntegrityError({
+      field: "orderIdentityMigrationForeignKeys",
+    })
+  }
+}
+
 function migrateRuntimeErrors(transaction) {
   transaction.exec(`
     CREATE TABLE runtime_errors (
@@ -340,5 +429,10 @@ export const HARVESTER_RELATIONAL_MIGRATIONS = Object.freeze([
     version: 4,
     name: "harvester-session-runtime-errors",
     up: migrateRuntimeErrors,
+  }),
+  Object.freeze({
+    version: 5,
+    name: "use_market_scoped_exchange_order_identity",
+    up: migrateMarketScopedExchangeOrderIdentity,
   }),
 ])
