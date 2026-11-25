@@ -195,6 +195,12 @@ test("host exposes an executable scenario only when its strategy adapter is regi
     status: "TEST-MAPPED",
     executionStatus: "EXECUTABLE",
     executable: true,
+    inputSchema: {
+      type: "object",
+      required: [],
+      additionalProperties: false,
+      properties: {},
+    },
     input: {},
   }]
   const adapter = {
@@ -223,6 +229,67 @@ test("host exposes an executable scenario only when its strategy adapter is regi
     input: {},
   })
   assert.equal((await host.runner.waitForRun(accepted.runId)).status, "Completed")
+})
+
+test("host validates executable scenario input before the adapter receives it", async () => {
+  let executions = 0
+  const host = createScenarioRunnerHost({
+    adapters: [{
+      strategyId: "RS",
+      execute: async () => {
+        executions += 1
+        return { output: "must not execute" }
+      },
+      cancel: async () => true,
+    }],
+    scenarioCatalog: [{
+      id: "RS-SIM-INPUT",
+      name: "Validated simulation input",
+      layer: "application",
+      status: "TEST-MAPPED",
+      executionStatus: "EXECUTABLE",
+      executable: true,
+      inputSchema: {
+        type: "object",
+        required: ["minProfit"],
+        additionalProperties: false,
+        properties: {
+          minProfit: {
+            type: "string",
+            pattern: "^[0-9]+(?:[.][0-9]+)?$",
+          },
+        },
+      },
+      input: {
+        minProfit: "0.01",
+      },
+    }],
+  })
+  const response = responseRecorder()
+
+  await handleScenarioRunnerRequest({
+    request: createRequest({
+      method: "POST",
+      url: "/api/v1/scenario-runner/runs",
+      body: JSON.stringify({
+        strategyId: "RS",
+        scenarioId: "RS-SIM-INPUT",
+        input: {
+          minProfit: "-1",
+          extra: true,
+        },
+      }),
+    }),
+    response,
+    pathname: "/api/v1/scenario-runner/runs",
+    runner: host.runner,
+  })
+
+  assert.equal(response.status, 400,
+    "The API must reject invalid input using the server-owned scenario schema.")
+  assert.equal(JSON.parse(response.body).error.code, "SCENARIO_RUNNER_INPUT_INVALID")
+  assert.equal(executions, 0,
+    "Invalid input must be rejected before the strategy adapter is invoked.")
 })
 
 test("host blocks an executable source mapping when its strategy adapter is absent", () => {

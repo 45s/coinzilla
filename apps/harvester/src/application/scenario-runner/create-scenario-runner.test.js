@@ -71,6 +71,31 @@ test("runner blocks scenarios rejected by the host policy even when a strategy a
   assert.equal(executions, 1, "An explicitly executable scenario may use its registered adapter.")
 })
 
+test("runner rejects invalid scenario input before invoking an executable adapter", () => {
+  let executions = 0
+  const runner = createScenarioRunner({
+    adapters: [createAdapter(async () => {
+      executions += 1
+      return { output: "must not execute" }
+    })],
+    canExecuteScenario: () => true,
+    validateScenarioInput: () => ({
+      valid: false,
+      errors: ["Input field minProfit does not match its schema pattern"],
+    }),
+  })
+
+  assert.throws(() => runner.submit({
+    strategyId: "example",
+    scenarioId: "invalid-input",
+    input: {
+      minProfit: "-1",
+    },
+  }), (error) => error.status === 400 && error.code === "SCENARIO_RUNNER_INPUT_INVALID",
+  "Invalid inputs must be rejected as a client error before execution.")
+  assert.equal(executions, 0, "The adapter must not receive invalid scenario input.")
+})
+
 test("runner rejects duplicate run IDs", () => {
   const runner = createScenarioRunner({
     adapters: [createAdapter()],
