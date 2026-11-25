@@ -1499,7 +1499,7 @@ function createExchangeHistoryOrder({
     executedQuantity,
     remainingQuantity,
     status,
-    createdAt,
+    createdAt: createdAt === null ? undefined : createdAt,
     ownership: undefined,
   })
   return createOrderHistoryRecord({
