@@ -104,3 +104,23 @@ Required adversarial variants include:
 - persistence or projection failure between staged state changes;
 - completion attempt below profit threshold, with sellable active residual, with invalid dust evidence, or with incomplete terminal evidence;
 - replay of a completed event and stale events from the previous cycle.
+
+## Executable Conservative scenario inventory
+
+The executable definitions live under `test/scenarios/conservative/` and use stable `CON-*` IDs. Shared tooling lives under `test/scenarios/shared/`; it resolves scenario evidence against the existing `docs/critical-behaviors.json` contract and supplemental named test mappings. That critical-behavior file remains authoritative for ownership and named evidence; this suite does not create a parallel registry.
+
+Run the mapped offline suite and generate its three JSON reports:
+
+```bash
+pnpm --filter @coinzilla/harvester scenarios:conservative
+pnpm --filter @coinzilla/harvester scenarios:conservative -- --id CON-BUY-001
+pnpm --filter @coinzilla/harvester scenarios:conservative -- --category recovery-lifecycle
+pnpm --filter @coinzilla/harvester scenarios:conservative -- --priority P0
+pnpm --filter @coinzilla/harvester scenarios:conservative -- --tag fees
+pnpm --filter @coinzilla/harvester scenarios:conservative -- --status MISSING
+pnpm --filter @coinzilla/harvester scenarios:conservative -- --list
+```
+
+Reports are generated under `reports/conservative-scenarios/`: inventory, execution results, and coverage gaps. The dedicated `Harvester Conservative scenarios` workflow uploads these reports. The suite executes existing named Node tests; it does not perform broker or exchange operations.
+
+The initial inventory contains 18 scenarios across all 16 categories: 15 TEST-MAPPED, one PARTIAL configuration scenario, one MISSING startup-history-gate scenario (CON-PERSIST-003), and one UNSUPPORTED runtime-restoration scenario. TEST-MAPPED means only that named tests are linked; it is not equivalent to VERIFIED. Runtime restart/state restoration remains UNSUPPORTED under the active Conservative specification §7. The coverage report's unmapped-test universe is the named test set in `docs/critical-behaviors.json`, not every Harvester test file.
