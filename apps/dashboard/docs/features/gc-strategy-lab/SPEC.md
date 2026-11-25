@@ -236,7 +236,7 @@ Each injected event is validated, displayed in the event log, and processed by t
 ## 6. Scenario presets and persistence
 
 - Provide starter presets for representative success, existing-order, dust/minimum-filter, filter-unavailable, price-boundary, rejection and partial-fill cases as supported by the evaluator.
-- Users can save and reload named scenarios in Lab-local storage or a later approved persistence mechanism. Storage format, versioning, size limits and import/export are open design decisions.
+- The selected scenario definition remains unchanged. Playground edits are temporary to the current working run and are never written back to the original scenario or persisted as a modified scenario.
 - Saved scenarios contain simulation inputs/events only, never secrets or broker credentials.
 - A scenario run is reproducible from its stored input/event sequence and evaluator version/context, subject to the contract's determinism guarantees.
 - Reset clears the run's simulation state/history and returns to its scenario starting state; it does not alter real runtime state.
@@ -464,7 +464,7 @@ Retention and storage limits must be configurable and bounded (including age/cou
 
 ### One-click AI Debug Report
 
-Every inspectable run must offer a client-side **Copy AI Debug Report** action. It creates a self-contained, paste-ready, versioned Markdown report with structured JSON sections for exact values. The report must include all available scenario inputs, outputs, lifecycle/status history, ordered events, execution steps, decisions, calculations, validations, assertions, expected-vs-actual results, diagnostics and relevant metadata—not merely a short summary or a link to server state.
+Every inspectable run must offer a client-side **Copy AI Debug Package** action. It copies one self-contained, versioned JSON document (not Markdown) for AI agents. The report must include all available scenario inputs, outputs, lifecycle/status history, ordered events, execution steps, decisions, calculations, validations, assertions, expected-vs-actual results, diagnostics and relevant metadata—not merely a short summary or a link to server state.
 
 The report envelope should include, where applicable:
 
@@ -482,7 +482,7 @@ Use stable field names, explicit null/unavailable/omitted semantics, determinist
 
 The report must redact secrets and credentials by construction. It must not include broker/API keys, authentication tokens, private account data or other sensitive live data. Exported content is a diagnostic snapshot; it must not expose server-side secrets or permit replay against live infrastructure. The report generator and report schema belong to framework-independent application/domain contracts; Angular only invokes the use case and presents the copy/fallback affordance.
 
-The top-level Markdown document contains a short human-readable header and sections for metadata, scenario, configuration, inputs, events, lifecycle, steps, decisions, outputs, assertions and diagnostics. Exact machine-readable records are included as fenced JSON. The schema must be versioned independently of REST/WebSocket transport DTO versions.
+The JSON package contains metadata, original scenario definition, temporary Playground overrides, validated effective configuration, initial state, ordered events, lifecycle, steps, decisions, outputs, assertions, diagnostics and provenance. Its schema is versioned independently of REST/WebSocket transport DTO versions.
 
 
 ## Approved AI-debug workflow clarification — repository-assisted audit (2026-11-25)
@@ -530,8 +530,21 @@ The configured legacy basis is not proof of current exchange custody or availabl
 
 Scenario market-price updates and simulated broker outcomes are separate, explicit event inputs. Their values must come from the selected scenario definition/test evidence or be deliberately authored as scenario inputs and validated against the actual production flow and market filters. Do not fabricate illustrative prices/fills and present them as repository configuration or existing scenario evidence.
 
-## Proposed determinism behavior — awaiting user approval
 
-The following is a proposal, not an approved decision. A deterministic repeat would mean executing the same strategy adapter and production revision with the same effective strategy configuration, initial simulation state, ordered market/broker events and controlled external inputs, then checking whether production decisions, calculations, intents, transitions, accounting and final state reproduce. Configuration values are not replaced by invented scenario fields. Time, generated identifiers and any other nondeterministic dependency must be controlled or explicitly captured as an input; otherwise the run cannot claim deterministic replay.
 
-Keep two distinct operations: (1) reproduce the original run against its exact recorded production revision; and (2) run the same captured scenario package against a newer production revision as a regression/fix comparison. Preserve the original evidence and identify both revisions; the second operation is a new execution, not a replay of the old code.
+
+## Approved original replay and Playground decisions (2026-11-25)
+
+### Original scenario replay
+
+Replay the selected scenario against the exact production code revision and original scenario/configuration/input package recorded for it. This mode exists to let the user inspect and verify the original behavior. Do not silently substitute current code or configuration. A newer-revision regression comparison is not part of this approved scope.
+
+### Temporary Playground
+
+The user may temporarily override the selected scenario's configuration and inputs to explore how the strategy behaves under different valid settings. Example: start from a DOGEUSDT scenario configured with investment 400 and fee settings 0.1%/0.1%, then temporarily select ZROUSDT and investment 100 while retaining or editing other actual strategy-owned fields. This is a run-local copy; the original scenario remains unchanged and Playground edits are not saved back or persisted as a new scenario.
+
+Configuration source is irrelevant to the strategy. Whether values originate from a configuration file or the client Playground, they pass through the same production configuration parsing, validation, normalization and market-metadata resolution pipeline. The strategy receives only the validated effective configuration and must not branch based on its source. Invalid configuration is rejected before execution; valid configuration invokes the same production business/use-case implementation. No Playground-specific validator or strategy implementation is allowed.
+
+### Copy AI Debug Package — JSON only
+
+Provide a **Copy AI Debug Package** action. Copy one complete, versioned JSON package containing the original scenario identity/definition, original configuration, temporary Playground overrides (if any), validated effective configuration, exact executed production revision, market metadata/precision, initial state, ordered market and simulated broker events, run identity/status, outputs, assertions, decisions, calculations, execution trace, diagnostics and provenance. Preserve exact values and units. The package must be self-contained as execution evidence, redact secrets, and never silently truncate; if clipboard limits prevent a complete copy, report failure and provide an explicit complete export/fallback. AI agents may use repository access at the recorded revision to inspect implementation/docs/tests for deeper debugging or scenario maintenance.
