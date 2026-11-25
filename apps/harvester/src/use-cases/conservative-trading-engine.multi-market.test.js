@@ -2461,36 +2461,3 @@ test("RS-008-017-E: volatility cancellation cancels CG/RS owned BUYs but never S
   const sell = harness.engine.getOrders().find((order) => order.clientOrderId === "owned-cg-sell")
   assert.equal(sell.status, "OPEN", "The registered SELL must remain active after the protection transition.")
 })
-
-
-test("RS-008-017-E: volatility cancellation cancels CG/RS owned BUYs but never SELL or external orders", async () => {
-  const orderRegistry = createVolatilityCancellationOrderRegistry()
-  const externalOrder = createExternalManualVolatilityOrder()
-  const harness = await createVolatilityCancellationHarness({
-    orderRegistry,
-    externalOrder,
-  })
-  const snapshot = createHighVolatilitySnapshot()
-  const workflow = createVolatilityCancellationWorkflow({
-    engine: harness.engine,
-    orderRegistry,
-    snapshot,
-  })
-  const result = await workflow.processVolatilitySnapshot({
-    symbol: "DOGEUSDT",
-    snapshot,
-  })
-
-  assert.equal(result.ok, true, "The market protection workflow must complete the owned-BUY cancellation.")
-  assert.deepEqual(
-    harness.cancelledOrderIds.sort(),
-    ["broker-owned-cg-buy", "broker-owned-rs-buy"],
-    "The shared cancellation workflow must cancel both strategy-owned BUYs and no other registered order.",
-  )
-  assert.equal(harness.cancelledOrderIds.includes("broker-owned-cg-sell"), false, "A registered SELL must never be canceled by volatility protection.")
-  assert.equal(harness.cancelledOrderIds.includes(externalOrder.id), false, "An external/manual order in the broker snapshot but outside the OrderRegistry must never be canceled.")
-  const sell = harness.engine.getOrders().find((order) => order.clientOrderId === "owned-cg-sell")
-  assert.equal(sell.status, "OPEN", "The registered SELL must remain active after the protection transition.")
-})
-
-
