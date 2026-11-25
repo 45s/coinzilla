@@ -290,10 +290,7 @@ function createRuntimeScenarioAccountSnapshot({
     left: buyQuantity,
     right: legacyQuantity,
   })
-  const totalQuoteCashFlow = addDecimal({
-    left: legacyInvested,
-    right: buyQuoteQuantity,
-  })
+  const totalQuoteCashFlow = buyQuoteQuantity
   return new AccountSnapshot({
     balances: [
       new Balance({
