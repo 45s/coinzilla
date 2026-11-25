@@ -1,4 +1,4 @@
-import { compareDecimal } from "@coinzilla/utils"
+import { compareDecimal } from "@coinzilla/utils/decimal.js"
 
 interface ScenarioInputSchema {
   readonly type: 'object';

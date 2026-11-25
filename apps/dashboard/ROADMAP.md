@@ -98,3 +98,6 @@ Before exploration or edits, agents MUST read root `AGENTS.md` and all applicabl
 ### Scenario Runner CI correction — 2026-11-25
 
 The exact-head Dashboard build exposed two integration defects in the framework-independent input validator: the Dashboard workspace did not declare its direct `@coinzilla/utils` dependency, and a local TypeScript cast omitted the optional `exclusiveMinimum` schema field used by decimal validation. The package dependency, lockfile importer and precise field type are now aligned. Validation remains in the core/application layer and Angular remains a presentation adapter. Exact-head build/test/coverage reruns are required before claiming the correction is green.
+
+
+The Dashboard validator now consumes the dedicated browser-safe decimal subpath rather than the Node-oriented Utils root. This preserves exact comparison while avoiding bundling Node-only filesystem, child-process, event and crypto exports.
