@@ -210,53 +210,93 @@ function getMarketBookSubmissionBlocker({
   return null
 }
 
+function getAccountSafetySubmissionBlocker({ dependencies, symbol } = {}) {
+  const blocker = dependencies.getAccountSafetyBlocker?.()
+  if (blocker?.scope !== "ACCOUNT") {
+    return null
+  }
+  return defer({
+    symbol,
+    reason: "ACCOUNT_SAFETY_BLOCKER_ACTIVE",
+    details: {
+      blockerReason: blocker.reason ?? null,
+      blockerId: blocker.blockerId ?? null,
+    },
+  })
+}
+
+function isShutdownRecoverySubmission({ dependencies, order, purpose } = {}) {
+  return dependencies.isShutdownRecoverySubmissionAllowed() &&
+    dependencies.isStopping?.() === true &&
+    order.side === "SELL" &&
+    purpose === "RECOVERY_SELL"
+}
+
+function getShutdownSubmissionBlocker({ dependencies, order, symbol, shutdownRecoverySubmission } = {}) {
+  if (dependencies.state.shutdownBuyGate !== true) {
+    return null
+  }
+  if (order.side === "BUY") {
+    return defer({
+      symbol,
+      reason: "CONSERVATIVE_SHUTDOWN_BUY_GATE_ACTIVE",
+    })
+  }
+  if (!shutdownRecoverySubmission) {
+    return defer({
+      symbol,
+      reason: "CONSERVATIVE_SHUTDOWN_RECOVERY_SELL_ONLY",
+    })
+  }
+  return null
+}
+
+function createSubmissionContext({ dependencies, order, purpose, symbol, shutdownRecoverySubmission } = {}) {
+  return {
+    symbol,
+    order,
+    purpose,
+    shutdownRecoverySubmission,
+    marketPrice: dependencies.state.prices.get(symbol),
+    state: dependencies.state,
+    hasBlockingOpenOrdersForSymbol: dependencies.hasBlockingOpenOrdersForSymbol,
+    canTrade: dependencies.canTrade,
+    isMarketPriceFresh: dependencies.isMarketPriceFresh,
+    getVolatilityData: dependencies.getVolatilityData,
+    isVolatilityProtectionEnabledForSymbol: dependencies.isVolatilityProtectionEnabledForSymbol,
+    isMarketBookFresh: dependencies.isMarketBookFresh,
+    isPostOnlyOrderCrossing: dependencies.isPostOnlyOrderCrossing,
+  }
+}
+
 export function createSubmissionGate(dependencies = {}) {
   return ({ order, purpose } = {}) => {
     const { symbol } = order.market
-    const accountSafetyBlocker = dependencies.getAccountSafetyBlocker?.()
-    if (accountSafetyBlocker?.scope === "ACCOUNT") {
-      return defer({
-        symbol,
-        reason: "ACCOUNT_SAFETY_BLOCKER_ACTIVE",
-        details: {
-          blockerReason: accountSafetyBlocker.reason ?? null,
-          blockerId: accountSafetyBlocker.blockerId ?? null,
-        },
-      })
+    const accountBlocker = getAccountSafetySubmissionBlocker({ dependencies, symbol })
+    if (accountBlocker) {
+      return accountBlocker
     }
-    const shutdownRecoverySubmission = dependencies.isShutdownRecoverySubmissionAllowed() &&
-      dependencies.isStopping?.() === true &&
-      order.side === "SELL" &&
-      purpose === "RECOVERY_SELL"
-    if (dependencies.state.shutdownBuyGate === true) {
-      if (order.side === "BUY") {
-        return defer({
-          symbol,
-          reason: "CONSERVATIVE_SHUTDOWN_BUY_GATE_ACTIVE",
-        })
-      }
-      if (!shutdownRecoverySubmission) {
-        return defer({
-          symbol,
-          reason: "CONSERVATIVE_SHUTDOWN_RECOVERY_SELL_ONLY",
-        })
-      }
-    }
-    const context = {
-      symbol,
+    const shutdownRecoverySubmission = isShutdownRecoverySubmission({
+      dependencies,
       order,
       purpose,
+    })
+    const shutdownBlocker = getShutdownSubmissionBlocker({
+      dependencies,
+      order,
+      symbol,
       shutdownRecoverySubmission,
-      marketPrice: dependencies.state.prices.get(symbol),
-      state: dependencies.state,
-      hasBlockingOpenOrdersForSymbol: dependencies.hasBlockingOpenOrdersForSymbol,
-      canTrade: dependencies.canTrade,
-      isMarketPriceFresh: dependencies.isMarketPriceFresh,
-      getVolatilityData: dependencies.getVolatilityData,
-      isVolatilityProtectionEnabledForSymbol: dependencies.isVolatilityProtectionEnabledForSymbol,
-      isMarketBookFresh: dependencies.isMarketBookFresh,
-      isPostOnlyOrderCrossing: dependencies.isPostOnlyOrderCrossing,
+    })
+    if (shutdownBlocker) {
+      return shutdownBlocker
     }
+    const context = createSubmissionContext({
+      dependencies,
+      order,
+      purpose,
+      symbol,
+      shutdownRecoverySubmission,
+    })
     return getSubmissionStateBlocker(context) ??
       getVolatilitySubmissionBlocker(context) ??
       getMarketBookSubmissionBlocker(context) ??
