@@ -400,6 +400,7 @@ function createReservationScenario({ id, name, input, expected, subcases }) {
 const reservationCases = [
   {
     id: "same-market-rs",
+    subcaseId: "A",
     reservationId: "rs-same-market-sell",
     reservationMarketSymbol: "ZROUSDT",
     reservationOwner: "RS",
@@ -412,6 +413,7 @@ const reservationCases = [
   },
   {
     id: "same-market-cg",
+    subcaseId: "B",
     reservationId: "cg-same-market-sell",
     reservationMarketSymbol: "ZROUSDT",
     reservationOwner: "CG",
@@ -424,6 +426,7 @@ const reservationCases = [
   },
   {
     id: "cross-market-cg",
+    subcaseId: "C",
     reservationId: "cg-cross-market-sell",
     reservationMarketSymbol: "ZROFDUSD",
     reservationOwner: "CG",
@@ -444,7 +447,7 @@ const reservationTestTitles = {
 }
 
 export const recoverySellerMixedSellPlanningScenarios = Object.freeze([
-  ...recoverySellerMixedSellPlanningScenarios,
+  ...recoverySellerMixedSellPlanningScenariosWithoutReservations,
   createReservationScenario({
     id: "RS-003-006",
     name: "same-market and cross-market SELL reservations are accounted exactly once against shared base inventory",
@@ -469,8 +472,8 @@ export const recoverySellerMixedSellPlanningScenarios = Object.freeze([
         },
       })),
     },
-    subcases: reservationCases.map(({ id }) => ({
-      id: `RS-003-006-${id === "same-market-rs" ? "A" : id === "same-market-cg" ? "B" : "C"}`,
+    subcases: reservationCases.map(({ id, subcaseId }) => ({
+      id: `RS-003-006-${subcaseId}`,
       description: id,
       status: "TEST-MAPPED",
       test: {
