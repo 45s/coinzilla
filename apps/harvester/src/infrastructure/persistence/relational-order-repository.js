@@ -93,7 +93,7 @@ function findMatchingPendingOrderRow({ transaction, record } = {}) {
   if (pending === undefined) {
     return undefined
   }
-  const incomingCreatedAt = record.createdAt == null
+  const incomingCreatedAt = record.createdAt === undefined || record.createdAt === null
     ? null
     : new Date(record.createdAt).toISOString()
   if (
@@ -114,10 +114,10 @@ function assertOrderRowIdentity({ existing, record } = {}) {
   if (
     existing !== undefined &&
     (
-      (record.brokerOrderId != null &&
+      (record.brokerOrderId !== undefined && record.brokerOrderId !== null &&
         existing.exchange_order_id !== null &&
         existing.exchange_order_id !== record.brokerOrderId) ||
-      (record.brokerOrderId == null && existing.exchange_order_id !== null)
+      ((record.brokerOrderId === undefined || record.brokerOrderId === null) && existing.exchange_order_id !== null)
     )
   ) {
     throw createOrderIdentityIntegrityError({
@@ -128,7 +128,7 @@ function assertOrderRowIdentity({ existing, record } = {}) {
 }
 
 function findExistingOrderRow({ transaction, record } = {}) {
-  if (record.brokerOrderId != null) {
+  if (record.brokerOrderId !== undefined && record.brokerOrderId !== null) {
     const exchangeOrder = findMatchingExchangeOrderRow({
       transaction,
       record,
