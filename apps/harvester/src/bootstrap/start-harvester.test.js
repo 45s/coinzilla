@@ -1655,8 +1655,8 @@ test("rejects startup before market subscriptions when a persisted account-scope
       directory,
       runtimeSessionId: "rs-only-startup-next-session",
     })
-    const restartInitialized = await restartStore.initialize()
-    assert.equal(restartInitialized.ok, true, "The simulated restart must open the same ledger under a new process session.")
+    const restartRead = await restartStore.readAll()
+    assert.equal(restartRead.ok, true, "The simulated restart must verify the same ledger under a new process session.")
 
     await assert.rejects(
       startHarvesterForTest({
