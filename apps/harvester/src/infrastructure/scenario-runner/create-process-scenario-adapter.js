@@ -159,6 +159,27 @@ function registerWorkerExitHandler({ child, signal, finish, isSettled, hasMessag
   })
 }
 
+function createAbortAwareFinish({ signal, child, terminationGraceMs, finish }) {
+  let onAbort
+  function finishWithCleanup(result) {
+    signal?.removeEventListener("abort", onAbort)
+    finish(result)
+  }
+  onAbort = () => {
+    void terminateChild({
+      child,
+      graceMs: terminationGraceMs,
+    }).then(() => finishWithCleanup({
+      error: new Error("Scenario worker was cancelled"),
+    }))
+  }
+  signal?.addEventListener("abort", onAbort, { once: true })
+  if (signal?.aborted) {
+    onAbort()
+  }
+  return finishWithCleanup
+}
+
 function createExecutionPromise({
   child,
   runId,
@@ -171,30 +192,19 @@ function createExecutionPromise({
   const promise = new Promise((...settlers) => {
     const [resolve, reject] = settlers
     let messageReceived = false
-    let onAbort
     const state = createExecutionState({
       resolve,
       reject,
       children,
       runId,
     })
-    function finish(result) {
-      signal?.removeEventListener("abort", onAbort)
-      state.finish(result)
-    }
-    onAbort = () => {
-      void terminateChild({
-        child,
-        graceMs: terminationGraceMs,
-      }).then(() => finish({
-        error: new Error("Scenario worker was cancelled"),
-      }))
-    }
+    const finish = createAbortAwareFinish({
+      signal,
+      child,
+      terminationGraceMs,
+      finish: state.finish,
+    })
     finishExecution = finish
-    signal?.addEventListener("abort", onAbort, { once: true })
-    if (signal?.aborted) {
-      onAbort()
-    }
     registerWorkerErrorHandler({
       child,
       terminationGraceMs,
