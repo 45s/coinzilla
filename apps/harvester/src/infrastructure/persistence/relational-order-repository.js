@@ -16,6 +16,128 @@ function readOrder({ transaction, id } = {}) {
   return transaction.prepare("SELECT * FROM orders WHERE id = ?").get(id)
 }
 
+function readOrderByExchangeIdentity({ transaction, record } = {}) {
+  if (record.brokerOrderId === undefined || record.brokerOrderId === null) {
+    return []
+  }
+  return transaction.prepare(`
+    SELECT * FROM orders
+    WHERE environment = ? AND provider_instance_id = ? AND provider_type = ?
+      AND account_id = ? AND market_id = ? AND exchange_order_id = ?
+    LIMIT 2
+  `).all(
+    record.environment,
+    record.providerInstanceId,
+    record.providerType,
+    record.accountId,
+    record.market.id,
+    record.brokerOrderId,
+  )
+}
+
+function readPendingOrdersByClientIdentity({ transaction, record } = {}) {
+  return transaction.prepare(`
+    SELECT * FROM orders
+    WHERE environment = ? AND provider_instance_id = ? AND provider_type = ?
+      AND account_id = ? AND market_id = ? AND client_order_id = ?
+      AND exchange_order_id IS NULL
+    LIMIT 2
+  `).all(
+    record.environment,
+    record.providerInstanceId,
+    record.providerType,
+    record.accountId,
+    record.market.id,
+    record.clientOrderId,
+  )
+}
+
+function findExistingOrderRow({ transaction, record } = {}) {
+  if (record.brokerOrderId !== undefined && record.brokerOrderId !== null) {
+    const exchangeMatches = readOrderByExchangeIdentity({
+      transaction,
+      record,
+    })
+    if (exchangeMatches.length > 1) {
+      throw new OrderHistoryIntegrityError({
+        field: "exchangeOrderIdentityAmbiguous",
+        providerInstanceId: record.providerInstanceId,
+        accountId: record.accountId,
+        clientOrderId: record.clientOrderId,
+        brokerOrderId: record.brokerOrderId,
+        symbol: record.symbol,
+        marketId: record.market.id,
+      })
+    }
+    if (exchangeMatches.length === 1) {
+      return exchangeMatches[0]
+    }
+    const pendingMatches = readPendingOrdersByClientIdentity({
+      transaction,
+      record,
+    })
+    if (pendingMatches.length > 1) {
+      throw new OrderHistoryIntegrityError({
+        field: "pendingClientOrderIdentityAmbiguous",
+        providerInstanceId: record.providerInstanceId,
+        accountId: record.accountId,
+        clientOrderId: record.clientOrderId,
+        brokerOrderId: record.brokerOrderId,
+        symbol: record.symbol,
+        marketId: record.market.id,
+      })
+    }
+    if (pendingMatches.length === 1) {
+      const pending = pendingMatches[0]
+      const incomingCreatedAt = record.createdAt === undefined || record.createdAt === null
+        ? null
+        : new Date(record.createdAt).toISOString()
+      if (
+        incomingCreatedAt === null ||
+        pending.exchange_created_at === null ||
+        pending.exchange_created_at !== incomingCreatedAt
+      ) {
+        throw new OrderHistoryIntegrityError({
+          field: "pendingClientOrderIdentityAmbiguous",
+          providerInstanceId: record.providerInstanceId,
+          accountId: record.accountId,
+          clientOrderId: record.clientOrderId,
+          brokerOrderId: record.brokerOrderId,
+          symbol: record.symbol,
+          marketId: record.market.id,
+        })
+      }
+      return pending
+    }
+  }
+  const existing = readOrder({
+    transaction,
+    id: record.id,
+  })
+  if (
+    existing !== undefined &&
+    (
+      (record.brokerOrderId !== undefined &&
+        record.brokerOrderId !== null &&
+        existing.exchange_order_id !== null &&
+        existing.exchange_order_id !== record.brokerOrderId) ||
+      ((record.brokerOrderId === undefined || record.brokerOrderId === null) &&
+        existing.exchange_order_id !== null)
+    )
+  ) {
+    throw new OrderHistoryIntegrityError({
+      field: "orderIdentity",
+      providerInstanceId: record.providerInstanceId,
+      accountId: record.accountId,
+      clientOrderId: record.clientOrderId,
+      brokerOrderId: record.brokerOrderId ?? null,
+      symbol: record.symbol,
+      marketId: record.market.id,
+    })
+  }
+  return existing
+}
+
 function writeOrder({ transaction, row, existing } = {}) {
   if (existing === undefined) {
     transaction.prepare(INSERT_SQL).run(...ORDER_COLUMNS.map((column) => row[column]))
@@ -34,27 +156,27 @@ function assertFillOrderIdentity({ transaction, row } = {}) {
   const conflict = transaction.prepare(`
     SELECT id FROM fills
     WHERE environment = ? AND provider_instance_id = ? AND provider_type = ?
-      AND account_id = ? AND client_order_id = ?
-      AND (
-        market_id <> ? OR
-        (exchange_order_id IS NOT NULL AND exchange_order_id <> ?)
-      )
+      AND account_id = ? AND market_id = ? AND exchange_order_id = ?
+      AND client_order_id IS NOT NULL AND client_order_id <> ?
     LIMIT 1
   `).get(
     row.environment,
     row.provider_instance_id,
     row.provider_type,
     row.account_id,
-    row.client_order_id,
     row.market_id,
     row.exchange_order_id,
+    row.client_order_id,
   )
   if (conflict) {
     throw new OrderHistoryIntegrityError({
-      field: "fill.exchangeOrderId",
+      field: "fill.clientOrderId",
       providerInstanceId: row.provider_instance_id,
       accountId: row.account_id,
       clientOrderId: row.client_order_id,
+      brokerOrderId: row.exchange_order_id,
+      symbol: row.symbol,
+      marketId: row.market_id,
     })
   }
 }
@@ -72,8 +194,8 @@ function linkOrderFills({ transaction, row } = {}) {
     SET order_id = ?, strategy_id = COALESCE(strategy_id, ?),
       position_id = COALESCE(position_id, ?), cycle_id = COALESCE(cycle_id, ?)
     WHERE environment = ? AND provider_instance_id = ? AND provider_type = ?
-      AND account_id = ? AND market_id = ? AND client_order_id = ?
-      AND (exchange_order_id = ? OR exchange_order_id IS NULL)
+      AND account_id = ? AND market_id = ? AND exchange_order_id = ?
+      AND (client_order_id IS NULL OR client_order_id = ?)
       AND (order_id IS NULL OR order_id = ?)
   `).run(
     row.id,
@@ -85,25 +207,31 @@ function linkOrderFills({ transaction, row } = {}) {
     row.provider_type,
     row.account_id,
     row.market_id,
-    row.client_order_id,
     row.exchange_order_id,
+    row.client_order_id,
     row.id,
   )
 }
 
 function upsertOrder({ transaction, record, ingestionSource = "live_event" } = {}) {
-  const existingRow = readOrder({
+  const existingRow = findExistingOrderRow({
     transaction,
-    id: record.id,
+    record,
   })
   const current = existingRow === undefined
     ? null
     : mapOrderRowToRecord(existingRow)
+  const candidate = existingRow !== undefined && record.id !== existingRow.id
+    ? Object.freeze({
+        ...record,
+        id: existingRow.id,
+      })
+    : record
   const merged = current === null
-    ? record
+    ? candidate
     : mergeOrderHistoryRecords({
         current,
-        candidate: record,
+        candidate,
       })
   const row = mapOrderHistoryRecordToRow({
     record: merged,
@@ -208,6 +336,9 @@ function normalizeOrderWriteError({ error, record } = {}) {
       providerInstanceId: record.providerInstanceId,
       accountId: record.accountId,
       clientOrderId: record.clientOrderId,
+      brokerOrderId: record.brokerOrderId ?? null,
+      symbol: record.symbol,
+      marketId: record.market.id,
     },
   })
 }
