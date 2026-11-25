@@ -37,3 +37,13 @@ Use standalone Angular components, strict TypeScript/template checking, feature-
 ## Required reading
 
 Before dashboard changes, read this roadmap and the applicable repository standards in the root [AGENTS.md](../../AGENTS.md). Re-run the task compliance preflight whenever the scope expands into Harvester, Brokers, DB, authentication, API contracts, CI, or another owned domain.
+
+## Framework-independent architecture and DDD — mandatory for all Dashboard work
+
+- **UI-framework independence is a mandatory architectural rule.** Business logic, domain rules, use cases, application orchestration, validation, calculations, state transitions, scenario execution, graph/scenario transformation and business-facing contracts MUST NOT depend on Angular or any UI framework. This applies to every Dashboard task.
+- Apply DDD and clean architecture for every task: isolate domain concepts/rules; use application/use-case orchestration; define ports/contracts at boundaries; implement framework, transport, persistence and UI adapters outside the domain/application core. Follow canonical repository standards.
+- Angular components/directives/templates MUST be presentation adapters: render state, capture interaction and delegate. No business rules, scenario parsing/normalization, graph semantics, validation, calculations, runner logic, business state transitions, or workflow orchestration in components, templates or framework-bound stores/services.
+- Keep business logic in plain TypeScript modules/classes/functions with no Angular imports, DI decorators, signals, RxJS framework bindings, DOM APIs or component types in domain/application core. Angular may adapt UI state/events at the boundary; core contracts remain framework-neutral.
+- Prefer domain/application modules and ports; Angular-specific wiring belongs in adapters/composition. Unit-test domain/application behavior without Angular TestBed, rendering, browser or UI-framework dependencies wherever feasible.
+- **Framework swap invariant:** replacing Angular with React, Vue, another UI framework or non-framework UI must require replacing/reworking presentation and framework adapters only. It MUST NOT require changing business/domain/application logic, scenario contracts, core tests or business behavior. Record and resolve any blocker to this invariant before implementation.
+- Explicitly review dependency direction and framework leakage, and test core independently. Enforce the boundary with architecture tests/static checks where practical.
