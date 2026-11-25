@@ -62,3 +62,6 @@ The host exposes a scenario as executable only when its source mapping, matching
 ## Worker lifecycle implementation-quality follow-up
 
 The process adapter separates promise settlement, abort-aware cleanup, worker error/message/exit listeners and process orchestration into small single-purpose helpers. The refactor preserves the existing contract: cancellation and result handling await worker termination, a result IPC message alone does not release the worker slot, and the host continues to require a trusted sandbox launcher. Scenario input validation is split into shape, additional-property, required-field and field-value checks; it remains framework-independent and uses exact decimal comparison.
+
+
+The follow-up strict-lint correction extracts schema-input error collection into independent pure helpers. It preserves the accepted input contract and error messages; no scenario execution or trading behavior changes.

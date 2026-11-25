@@ -205,7 +205,10 @@ function validateScenarioField({ key, fieldSchema, value }) {
 function validateScenarioInput({ schema, defaults, input }) {
   const overrides = input ?? {}
   validateScenarioObject({ overrides })
-  validateScenarioAdditionalProperties({ schema, overrides })
+  validateScenarioAdditionalProperties({
+    schema,
+    overrides,
+  })
   const effectiveInput = {
     ...defaults,
     ...overrides,

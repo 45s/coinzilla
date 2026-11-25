@@ -160,12 +160,11 @@ function registerWorkerExitHandler({ child, signal, finish, isSettled, hasMessag
 }
 
 function createAbortAwareFinish({ signal, child, terminationGraceMs, finish }) {
-  let onAbort
   function finishWithCleanup(result) {
     signal?.removeEventListener("abort", onAbort)
     finish(result)
   }
-  onAbort = () => {
+  const onAbort = () => {
     void terminateChild({
       child,
       graceMs: terminationGraceMs,

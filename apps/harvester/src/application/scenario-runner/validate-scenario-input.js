@@ -43,6 +43,42 @@ export function isValidScenarioInputSchema({ schema } = {}) {
   })
 }
 
+function appendUnknownInputErrors({ schema, input, errors }) {
+  if (schema.additionalProperties !== false) {
+    return
+  }
+  for (const key of Object.keys(input)) {
+    if (!Object.hasOwn(schema.properties, key)) {
+      errors.push(`Unknown input field: ${key}`)
+    }
+  }
+}
+
+function appendMissingRequiredErrors({ schema, input, errors }) {
+  for (const key of schema.required) {
+    if (!Object.hasOwn(input, key)) {
+      errors.push(`Missing required input field: ${key}`)
+    }
+  }
+}
+
+function appendFieldValidationError({ key, field, value, errors }) {
+  if (typeof value !== field.type) {
+    errors.push(`Input field ${key} must be a ${field.type}`)
+    return
+  }
+  if (field.pattern && !new RegExp(field.pattern).test(value)) {
+    errors.push(`Input field ${key} does not match its schema pattern`)
+    return
+  }
+  if (field.exclusiveMinimum !== undefined && compareDecimal({
+    left: value,
+    right: field.exclusiveMinimum,
+  }) <= 0) {
+    errors.push(`Input field ${key} must be greater than ${field.exclusiveMinimum}`)
+  }
+}
+
 export function validateScenarioInput({ schema, input } = {}) {
   if (!isValidScenarioInputSchema({ schema })) {
     return {
@@ -56,35 +92,17 @@ export function validateScenarioInput({ schema, input } = {}) {
       errors: ["Scenario input must be a JSON object."],
     }
   }
-
   const errors = []
-  if (schema.additionalProperties === false) {
-    for (const key of Object.keys(input)) {
-      if (!Object.hasOwn(schema.properties, key)) {
-        errors.push(`Unknown input field: ${key}`)
-      }
-    }
-  }
-  for (const key of schema.required) {
-    if (!Object.hasOwn(input, key)) {
-      errors.push(`Missing required input field: ${key}`)
-    }
-  }
+  appendUnknownInputErrors({ schema, input, errors })
+  appendMissingRequiredErrors({ schema, input, errors })
   for (const [key, field] of Object.entries(schema.properties)) {
-    if (!Object.hasOwn(input, key)) {
-      continue
-    }
-    const value = input[key]
-    if (typeof value !== field.type) {
-      errors.push(`Input field ${key} must be a ${field.type}`)
-    } else if (field.pattern && !new RegExp(field.pattern).test(value)) {
-      errors.push(`Input field ${key} does not match its schema pattern`)
-    } else if (field.exclusiveMinimum !== undefined &&
-      compareDecimal({
-        left: value,
-        right: field.exclusiveMinimum,
-      }) <= 0) {
-      errors.push(`Input field ${key} must be greater than ${field.exclusiveMinimum}`)
+    if (Object.hasOwn(input, key)) {
+      appendFieldValidationError({
+        key,
+        field,
+        value: input[key],
+        errors,
+      })
     }
   }
   return {
