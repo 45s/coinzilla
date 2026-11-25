@@ -1,8 +1,11 @@
 import test from "node:test"
 import assert from "node:assert/strict"
 import { divideDecimal } from "@coinzilla/utils"
-import { Asset, Balance, Fill, Market, Money, Quantity } from "@coinzilla/entities"
+import { AccountSnapshot, Asset, Balance, CanonicalOrder, Fill, Market, Money, Quantity } from "@coinzilla/entities"
 import { Portfolio } from "../../../src/domain/portfolio/portfolio.js"
+import { calculateAccountSnapshotBaselines } from "../../../src/domain/account/calculate-account-snapshot-baselines.js"
+import { allocateOrderCommitments } from "../../../src/domain/orders/allocate-order-commitments.js"
+import { allocateStrategyOrderCommitments } from "../../../src/use-cases/strategy-order-commitments.js"
 import { StrategyId } from "../../../src/domain/strategies/strategy-ids.js"
 import { calculateVerifiedLegacySpotAllocation } from "../../../src/domain/strategies/recovery-seller/legacy-spot-allocation.js"
 import { calculateRecoverySellerSellPlan } from "../../../src/domain/strategies/recovery-seller/calculate-sell-plan.js"
@@ -337,4 +340,240 @@ test("RS-003-004: verified Spot availability below, equal to, and above the requ
 
 test("RS-003-005: verified Spot allocation subtracts every shared Portfolio position across markets and strategies", async () => {
   await assertRegisteredSpotScenario({ id: "RS-003-005" })
+})
+
+
+function createSellReservationOrder({ market, orderId }) {
+  return new CanonicalOrder({
+    clientOrderId: orderId,
+    brokerOrderId: `broker-${orderId}`,
+    market,
+    side: "SELL",
+    type: "LIMIT",
+    limitPrice: new Money({
+      amount: "10",
+      asset: market.quoteAsset,
+    }),
+    originalQuantity: new Quantity({
+      amount: "1",
+      asset: market.baseAsset,
+    }),
+    executedQuantity: new Quantity({
+      amount: "0.5",
+      asset: market.baseAsset,
+    }),
+    status: "PARTIALLY_FILLED",
+    createdAt: 1,
+    acknowledgedAt: 1,
+    updatedAt: 2,
+  })
+}
+
+function createReservationScenarioContext({ input }) {
+  const baseAsset = new Asset({
+    id: "binance:ZRO",
+    code: "ZRO",
+  })
+  const quoteAsset = new Asset({
+    id: "binance:USDT",
+    code: "USDT",
+  })
+  const otherQuoteAsset = new Asset({
+    id: "binance:FDUSD",
+    code: "FDUSD",
+  })
+  const targetMarket = new Market({
+    venue: "binance",
+    symbol: "ZROUSDT",
+    baseAsset,
+    quoteAsset,
+  })
+  const reservationMarket = input.reservationMarketSymbol === targetMarket.symbol
+    ? targetMarket
+    : new Market({
+      venue: "binance",
+      symbol: "ZROFDUSD",
+      baseAsset,
+      quoteAsset: otherQuoteAsset,
+    })
+  const portfolio = applyPortfolioAcquisition({
+    portfolio: new Portfolio(),
+    acquisition: {
+      symbol: targetMarket.symbol,
+      quoteCode: "USDT",
+      tradeId: "rs-reservation-recovery-buy",
+      positionId: "rs-reservation-recovery-position",
+      strategy: "RS",
+      quantity: "1",
+      quoteQuantity: "10",
+    },
+    baseAsset,
+    getMarket: () => targetMarket,
+  })
+  const reservation = createSellReservationOrder({
+    market: reservationMarket,
+    orderId: input.reservationId,
+  })
+  const balance = new Balance({
+    free: new Quantity({
+      amount: input.freeBaseBalance,
+      asset: baseAsset,
+    }),
+    locked: new Quantity({
+      amount: input.lockedBaseBalance,
+      asset: baseAsset,
+    }),
+  })
+  const trackedLegacy = calculateVerifiedLegacySpotAllocation({
+    balances: [balance],
+    portfolio,
+    legacyPositions: [{
+      market: targetMarket,
+      originalQuantity: "0.01",
+      remainingQuantity: "0.01",
+    }],
+  }).map(({ assetId, amount }) => ({
+    assetId,
+    amount,
+  }))
+  const snapshotOrders = input.snapshotIncludesReservation ? [reservation] : []
+  const baselines = calculateAccountSnapshotBaselines({
+    portfolio,
+    activeOrders: snapshotOrders,
+    additionalTrackedBaseQuantity: trackedLegacy,
+  })
+  const accountSnapshot = new AccountSnapshot({
+    balances: [
+      balance,
+      new Balance({
+        free: new Quantity({
+          amount: "1000",
+          asset: quoteAsset,
+        }),
+        locked: new Quantity({
+          amount: "0",
+          asset: quoteAsset,
+        }),
+      }),
+    ],
+    sourceTime: 1,
+    portfolioBaseQuantityBaseline: baselines.data.portfolioBaseQuantityBaseline,
+    additionalTrackedBaseQuantityBaseline: baselines.data.additionalTrackedBaseQuantityBaseline,
+    committedBaseBalanceBaseline: baselines.data.committedBaseBalance,
+  })
+  const dependencies = {
+    strategyId: StrategyId.RECOVERY_SELLER,
+    state: {
+      registry: {
+        getActiveOrders: () => [reservation],
+      },
+    },
+    getAccountSnapshot: () => accountSnapshot,
+    getAdditionalTrackedBaseQuantity: () => trackedLegacy,
+    allocateOrderCommitments,
+  }
+  const activeOrders = input.reservationOwner === "RS" &&
+    reservationMarket.id === targetMarket.id
+    ? [reservation]
+    : []
+  return {
+    dependencies,
+    targetMarket,
+    portfolio,
+    activeOrders,
+  }
+}
+
+function allocateReservationScenario({ context, quantity }) {
+  return allocateStrategyOrderCommitments({
+    dependencies: context.dependencies,
+    strategyId: StrategyId.RECOVERY_SELLER,
+    symbol: context.targetMarket.symbol,
+    metadata: {
+      market: context.targetMarket,
+    },
+    portfolio: context.portfolio,
+    activeOrders: context.activeOrders,
+    pairConfig: {
+      investment: 1000,
+    },
+    activeBaseQuantity: "1.01",
+    outstandingRecoveryAmount: "0",
+    actions: [{
+      side: "SELL",
+      quantity,
+    }],
+  })
+}
+
+function assertReservationBoundary({ input }) {
+  const context = createReservationScenarioContext({ input })
+  const atLimit = allocateReservationScenario({
+    context,
+    quantity: "0.51",
+  })
+  assert.equal(atLimit.ok, true,
+    "The exact base quantity remaining after the existing reservation must remain executable.")
+  assert.deepEqual(atLimit.data.allocation.executableActions, [{
+    side: "SELL",
+    quantity: "0.51",
+  }])
+  assert.equal(atLimit.data.allocation.remainingBaseBalance, input.expectedRemainingBaseBalance)
+  assert.equal(atLimit.data.allocation.remainingActiveBase, input.expectedRemainingActiveBase)
+
+  const overLimit = allocateReservationScenario({
+    context,
+    quantity: "0.52",
+  })
+  assert.equal(overLimit.ok, false,
+    "An additional SELL above the reservation-adjusted shared/owned quantity must fail closed.")
+  assert.match(overLimit.errors[0].message, new RegExp(input.expectedFailure))
+}
+
+test("RS-003-006-A: a same-market RS reservation reduces owned active SELL inventory exactly once", () => {
+  assertReservationBoundary({
+    input: {
+      reservationId: "rs-same-market-sell",
+      reservationMarketSymbol: "ZROUSDT",
+      reservationOwner: "RS",
+      snapshotIncludesReservation: true,
+      freeBaseBalance: "2",
+      lockedBaseBalance: "0.5",
+      expectedRemainingBaseBalance: "1.49",
+      expectedRemainingActiveBase: "0",
+      expectedFailure: "Harvester-owned active inventory after commitments",
+    },
+  })
+})
+
+test("RS-003-006-B: a same-market CG reservation reduces shared account base availability", () => {
+  assertReservationBoundary({
+    input: {
+      reservationId: "cg-same-market-sell",
+      reservationMarketSymbol: "ZROUSDT",
+      reservationOwner: "CG",
+      snapshotIncludesReservation: true,
+      freeBaseBalance: "0.51",
+      lockedBaseBalance: "0.5",
+      expectedRemainingBaseBalance: "0",
+      expectedRemainingActiveBase: "0.5",
+      expectedFailure: "available free base balance after commitments",
+    },
+  })
+})
+
+test("RS-003-006-C: a cross-market CG reservation reduces shared base availability after the account snapshot", () => {
+  assertReservationBoundary({
+    input: {
+      reservationId: "cg-cross-market-sell",
+      reservationMarketSymbol: "ZROFDUSD",
+      reservationOwner: "CG",
+      snapshotIncludesReservation: false,
+      freeBaseBalance: "1.01",
+      lockedBaseBalance: "0",
+      expectedRemainingBaseBalance: "0",
+      expectedRemainingActiveBase: "0.5",
+      expectedFailure: "available free base balance after commitments",
+    },
+  })
 })
