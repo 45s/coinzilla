@@ -407,6 +407,59 @@ test("applies partial BUY fills without advancing strategy evaluation", async ()
   assert.deepEqual(calls.cancellations, [], "A partial fill without an active recovery SELL must not cancel orders.")
 })
 
+test("publishes registered provider provenance when an incoming order update omits it", async () => {
+  const registeredOrder = makeOrder({
+    status: "OPEN",
+    executedQuantity: "0",
+  })
+  const incomingOrder = makeOrder({
+    status: "PARTIALLY_FILLED",
+    executedQuantity: "0.5",
+    includeProviderProvenance: false,
+  })
+  const registry = new OrderRegistry({
+    orders: [registeredOrder],
+  })
+  const {
+    workflow,
+    state,
+    calls,
+  } = makeWorkflow({ registry })
+
+  const result = await workflow.processUserDataEventTransition({
+    event: {
+      eventType: "executionReport",
+      executionType: "TRADE",
+      executedOrder: incomingOrder,
+      fill: makeFill(),
+    },
+  })
+
+  assert.equal(result.ok, true, "A valid registered order update must be applied.")
+  assert.equal(
+    state.registry.getOrder({ clientOrderId: registeredOrder.clientOrderId }).providerInstanceId,
+    "binanceTestnet",
+    "The order registry must preserve the provider identity from the accepted order.",
+  )
+  const updatedEvent = calls.published.find((event) => event.name === "order.updated")
+  assert.ok(updatedEvent, "An applied order update must publish its lifecycle event.")
+  assert.equal(
+    updatedEvent.data.providerInstanceId,
+    "binanceTestnet",
+    "The published order.updated event must retain the accepted provider instance identity.",
+  )
+  assert.equal(
+    updatedEvent.data.providerType,
+    "binance",
+    "The published order.updated event must retain the provider type.",
+  )
+  assert.equal(
+    updatedEvent.data.accountId,
+    "binance-primary",
+    "The published order.updated event must retain the account identity.",
+  )
+})
+
 test("rejects a streamed fill whose broker identity conflicts with the registered order", async () => {
   const order = makeOrder()
   const fill = makeFill({ brokerOrderId: "different-broker-order" })
