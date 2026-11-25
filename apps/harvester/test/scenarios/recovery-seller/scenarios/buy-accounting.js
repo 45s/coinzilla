@@ -412,11 +412,10 @@ export const recoverySellerBuyAccountingScenarios = Object.freeze([
       {
         id: "RS-002-006-B",
         description: "the unfilled portion of an OPEN or PARTIALLY_FILLED BUY remains reserved in the shared account allocator",
-        status: "BLOCKED",
-        test: null,
-        blocker: {
-          reason: "The accounting workflow scenario applies canonical fills but does not compose the order-event workflow and shared quote allocator that own pending BUY commitments.",
-          unblockCondition: "Add an APPLICATION scenario that applies a partial order update through the production order-event workflow, reads the shared account allocation, and proves the exact remaining quote commitment is retained until the approved terminal boundary.",
+        status: "TEST-MAPPED",
+        test: {
+          file: "apps/harvester/src/use-cases/create-recovery-seller-action-authorizer.test.js",
+          title: "RS-002-006-B: keeps the unfilled portion of a partially filled RS BUY reserved in account allocation",
         },
         evidence: null,
       },
