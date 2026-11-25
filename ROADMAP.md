@@ -4,8 +4,8 @@
 
 **Goal:** prioritize demonstrated correctness, unattended-operation safety, operational confidence and maintainability. A task is complete only when its owning roadmap records the merged implementation and required verification.
 
-**Last reviewed:** 2026-11-23
-**Latest `develop` head inspected for this roadmap update:** `44ed6ce4dd32437e5343c2b1c43171f290f4836e` (2026-11-23). The latest recursive inventory baseline remains `0f827ba7551be61a1be58f8dced191fb0a090870`: 1,298 tracked files, including 179 Markdown/MDX files and 1,091 `.js` files (540 `.test.js` files); 579 JavaScript files are under Harvester (268 tests). The S-7 naming/tree baseline and later S-8 additions are recorded in [the engineering standards matrix](docs/engineering/ENGINEERING_STANDARDS_MATRIX.md).
+**Last reviewed:** 2026-11-25
+**Latest `develop` head inspected for this roadmap update:** `1f55d5989e8122421f4d9e37693f68f32e0c29ed` (2026-11-25). The latest recursive inventory baseline remains `0f827ba7551be61a1be58f8dced191fb0a090870`: 1,298 tracked files, including 179 Markdown/MDX files and 1,091 `.js` files (540 `.test.js` files); 579 JavaScript files are under Harvester (268 tests). The S-7 naming/tree baseline and later S-8 additions are recorded in [the engineering standards matrix](docs/engineering/ENGINEERING_STANDARDS_MATRIX.md).
 
 ## Repository engineering standards initiative — [#1568](https://github.com/45s/coinzilla/issues/1568)
 
@@ -25,13 +25,13 @@
 
 - **COMPLETE — shared strategy-neutral methodology.** The canonical guide at [`docs/testing/DOMAIN_SCENARIO_TESTING.md`](docs/testing/DOMAIN_SCENARIO_TESTING.md) merged in [PR #1795](https://github.com/45s/coinzilla/pull/1795). It owns reusable scenario design, test-layer boundaries, lifecycle/accounting proof, fixtures, adversarial coverage, evidence status and adoption guidance. Strategy-specific specifications and scenario matrices remain owned by their respective domains; the repository-wide [scenario catalog](docs/testing/SCENARIO_CATALOG.md) is the shared navigation/evidence index.
 - The initial extraction preserves Conservative business examples and its conceptual lifecycle model in the Harvester-owned [Conservative scenario supplement](apps/harvester/docs/domain/CONSERVATIVE_DOMAIN_SCENARIO_TESTS.md). Recovery Seller adopts the shared method through [#1780](https://github.com/45s/coinzilla/issues/1780). [PR #1793](https://github.com/45s/coinzilla/pull/1793) is merged and provides the initial four-file scenario suite; RS-003 through RS-007 remain PARTIAL because the suite does not cover every application, exchange, accounting and persistence boundary.
-- **RS agent playbook:** [PR #1810](https://github.com/45s/coinzilla/pull/1810) is open for review and defines the full RS-001…RS-010 case matrix, schemas, worked scenarios and seven-PR implementation sequence.
-- **RS-003 workflow integration prerequisite:** production defect #1809 has a test-first fix in [PR #1815](https://github.com/45s/coinzilla/pull/1815). The real accounting workflow snapshot now feeds the default SELL evaluator with canonical cycle state; exact mixed-SELL, missing-custody and safety-gate regressions are in the PR. Final exact-head verification and owner merge remain pending.
-- The shared methodology and scenario-playbook work does not authorize exchange operations or runtime activation. PR #1815 is a separate narrow application bug fix; it performs no broker network calls or exchange-state changes.
+- **RS agent playbook:** [PR #1810](https://github.com/45s/coinzilla/pull/1810) was closed unmerged on 2026-11-24; its proposed playbook file is not present on `develop`. The latest full playbook/registry draft is carried in [PR #1823](https://github.com/45s/coinzilla/pull/1823), which remains Draft/open and is materially stale (426 commits behind current develop) with Repository Quality, Unit Tests and Test Coverage failing on its exact head. Do not treat the draft as merged guidance or executable production capability.
+- **RS-003 workflow integration:** production defect #1809 is fixed in merged [PR #1815](https://github.com/45s/coinzilla/pull/1815), merge `cbf07da54fd2e14fbeb3f96d4d9f8efe48d597c2`. The real accounting workflow snapshot feeds the default SELL evaluator with canonical cycle state. All six required workflows passed on exact head `20963617c9d9d73c31b47865e0aa34c4a966cc8e`.
+- The shared methodology and scenario-playbook work does not authorize exchange operations or runtime activation. PR #1815 was a separate narrow application bug fix; it performs no broker network calls or exchange-state changes.
 
 ## Executable CLI source identity — [#1631](https://github.com/45s/coinzilla/issues/1631)
 
-- **IN PROGRESS** — [PR #1632](https://github.com/45s/coinzilla/pull/1632) establishes the canonical requirement that maintained user-invoked CLI entrypoints display their package/script version, full source commit, worktree state and runtime before work, with a side-effect-free version command. The Bitunix healthcheck is the first migrated entrypoint. The full repository CLI inventory and remaining migrations stay tracked in #1631.
+- **PARTIAL — issue #1631 remains OPEN.** Merged [PR #1632](https://github.com/45s/coinzilla/pull/1632) establishes the canonical requirement and migrates the Bitunix healthcheck as the first entrypoint. It does not complete the repository-wide executable CLI inventory or remaining entrypoint migrations. The issue was reopened on 2026-11-25 after a premature closure; continue the inventory and migrations before marking this initiative complete.
 
 ## Multi-provider Harvester execution and market-data routing — #1339
 
