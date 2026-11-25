@@ -40,3 +40,7 @@ These are planning areas, not commitments to bypass backend ownership or existin
 - Keep feature modules independently testable and avoid introducing a global state framework before multiple features need shared state.
 - Keep mock/demo fixtures clearly separated from production API models.
 - Update this roadmap when the issue scope or delivered milestone changes. Do not use it as a chronological task log.
+
+## Strategy-neutral Scenario Runner — issue #1836
+
+Open Draft [PR #1837](https://github.com/45s/coinzilla/pull/1837) delivers the Dashboard presentation slice for the strategy-neutral production-flow Scenario Runner. Keep all scenario validation, orchestration, run contracts, traces and debug-package construction in framework-independent core/application modules; Angular components remain adapters only. All six required workflows passed on exact head `cdeef1ab862f08bf0ed1e724acd8f765cf21e9dd`, but the branch is 111 commits ahead / 42 behind current `develop` and must be synchronized. The MVP is not complete: replay/trace/export evidence, configuration/market metadata, reconnect/history behavior and verified OS-level process isolation remain acceptance gates. Do not register the RS adapter as executable or enable exchange/production access before those gates pass.
