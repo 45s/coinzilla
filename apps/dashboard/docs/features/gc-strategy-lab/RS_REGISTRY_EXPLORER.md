@@ -180,7 +180,7 @@ The RS adapter must not implement its own worker lifecycle or cancellation polic
 
 The generic runner host persists bounded server-side run history under configurable retention/size limits. It records enough simulation-only evidence to inspect and debug a run, including identity/version metadata, effective config and inputs, ordered events, lifecycle/status history, outputs, assertions, trace/steps/decisions and diagnostics. Secrets, credentials, live account data and production state are excluded. Scenario-definition storage has a separate policy.
 
-The client provides **Copy AI Debug Report** for each inspectable run. It produces a self-contained, versioned Markdown report with structured JSON sections and all available inputs, outputs, statuses/transitions, ordered events, steps, decisions, calculations, assertions, diagnostics and provenance. It identifies repository, executed production revision, strategy/adapter, scenario/scenarioId, runId and versions. It must not silently truncate; if a full clipboard copy is not possible, it offers an explicit complete export or segmented-copy fallback. Secret redaction is mandatory. Report generation is framework-independent; Angular is presentation only.
+The client provides **Copy AI Debug Package** for each inspectable run. It copies one self-contained, versioned JSON document with all available inputs, outputs, statuses/transitions, ordered events, steps, decisions, calculations, assertions, diagnostics and provenance. It identifies repository, executed production revision, strategy/adapter, scenario/scenarioId, runId and versions. It must not silently truncate; if a full clipboard copy is not possible, it offers an explicit complete export or segmented-copy fallback. Secret redaction is mandatory. Report generation is framework-independent; Angular is presentation only.
 
 
 ## Approved AI-debug workflow and local access decisions (2026-11-25)
@@ -198,7 +198,15 @@ Do not invent standalone inputs such as `averageEntryPrice` when production deri
 
 Market prices and simulated BUY/SELL broker outcomes belong to the scenario's ordered event/input sequence, not the RS configuration. Use values from an existing scenario/test fixture or explicitly authored and validated scenario inputs. Do not present invented prices or fills as existing project evidence. Every displayed monetary value must include its quote asset; every quantity must include its base asset; percent fields and absolute quote-currency amounts must be visually and semantically distinct.
 
-Proposed, pending user approval: deterministic repeat/replay would preserve the effective config, initial state, ordered events, simulated broker responses, controlled time/IDs and executed production revision. A fix comparison runs the same captured scenario package against a newer revision as a separate execution and compares the traces/results; it must not overwrite the original run evidence.
+
 
 
 **Universal RS `minProfit` semantics:** for every market, `minProfit` is an absolute net-profit threshold denominated in that market's quote asset. A value of `0.01` means 0.01 quote-asset units (for example, 0.01 USDT for a USDT-quoted market), never 1%. LINEAUSDT above is only the concrete config example; it does not narrow this rule to LINEA.
+
+
+## Approved original replay, temporary Playground and JSON AI package (2026-11-25)
+
+- **Original replay:** run the scenario with its exact recorded production revision and original inputs/configuration. Do not silently substitute current code. Newer-revision comparison is not in the approved scope.
+- **Playground:** allow temporary configuration/input overrides on a run-local copy. Example: change a DOGEUSDT scenario's market to ZROUSDT and investment from 400 to 100. The original registry scenario remains untouched; Playground edits are not saved back or persisted as a new scenario.
+- **One validation path:** file-loaded and Playground-provided configuration use the same production parsing, validation, normalization and market-metadata resolution. The strategy receives validated effective configuration and does not know or care about its source. Invalid input is rejected before execution.
+- **Copy AI Debug Package:** copy complete versioned JSON only, including original scenario, temporary overrides, validated effective configuration, executed revision, metadata, ordered events, trace, outputs, assertions and diagnostics. Redact secrets; never silently truncate. Repository access at the recorded revision is expected for deeper agent debugging.
