@@ -276,6 +276,11 @@ export function createOrderHistoryId(input = {}) {
         value: input.createdAt,
         field: "createdAt",
       })
+  if (brokerOrderId !== null && marketId === null) {
+    invalidField({
+      field: "marketId",
+    })
+  }
   const scope = [
     environment,
     providerInstanceId,

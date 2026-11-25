@@ -39,7 +39,7 @@ function readPendingOrdersByClientIdentity({ transaction, record } = {}) {
   return transaction.prepare(`
     SELECT * FROM orders
     WHERE environment = ? AND provider_instance_id = ? AND provider_type = ?
-      AND account_id = ? AND market_id = ? AND client_order_id = ?
+      AND account_id = ? AND client_order_id = ?
       AND exchange_order_id IS NULL
     LIMIT 2
   `).all(
@@ -47,7 +47,6 @@ function readPendingOrdersByClientIdentity({ transaction, record } = {}) {
     record.providerInstanceId,
     record.providerType,
     record.accountId,
-    record.market.id,
     record.clientOrderId,
   )
 }
@@ -93,6 +92,7 @@ function findExistingOrderRow({ transaction, record } = {}) {
         ? null
         : new Date(record.createdAt).toISOString()
       if (
+        pending.market_id !== record.market.id ||
         incomingCreatedAt === null ||
         pending.exchange_created_at === null ||
         pending.exchange_created_at !== incomingCreatedAt
