@@ -1,6 +1,6 @@
 import test from "node:test"
 import assert from "node:assert/strict"
-import { existsSync } from "node:fs"
+import { existsSync, readFileSync } from "node:fs"
 import { resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import { calculateRecoverySellerProfitability } from "../../../src/domain/strategies/recovery-seller/calculate-profitability.js"
@@ -50,6 +50,32 @@ test("the RS scenario registry contains unique, traceable records with existing 
     `The initial RS registry must be structurally valid; errors: ${result.errors.join("; ")}`)
   assert.deepEqual(result.errors, [],
     "A valid initial registry must not report schema, identity, reference or path errors.")
+})
+
+test("every mapped scenario test title exists in its referenced test file", () => {
+  const mappings = recoverySellerScenarioRegistry.flatMap((scenario) => [
+    {
+      scenarioId: scenario.id,
+      mapping: scenario.test,
+    },
+    ...(scenario.subcases ?? []).map((subcase) => ({
+      scenarioId: subcase.id,
+      mapping: subcase.test,
+    })),
+  ]).filter(({ mapping }) => mapping)
+
+  for (const { scenarioId, mapping } of mappings) {
+    assert.equal(typeof mapping.file, "string",
+      `${scenarioId} must reference a concrete test file.`)
+    assert.equal(typeof mapping.title, "string",
+      `${scenarioId} must reference an exact named test title.`)
+    const filePath = resolve(packageRoot, mapping.file.replace("apps/harvester/", ""))
+    assert.equal(existsSync(filePath), true,
+      `${scenarioId} mapped test file must exist: ${mapping.file}`)
+    const source = readFileSync(filePath, "utf8")
+    assert.ok(source.includes(mapping.title),
+      `${scenarioId} mapped test title is absent from ${mapping.file}: ${mapping.title}`)
+  }
 })
 
 test("the RS registry rejects duplicate stable scenario IDs", () => {
