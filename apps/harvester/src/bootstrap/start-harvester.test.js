@@ -78,12 +78,24 @@ test("attributes RS-only market-price processing failures using the resolved exe
   const { directory, store } = await createRsOnlyOperationalStateStore()
   const calls = []
   const broker = createRsOnlyStartupBroker({ calls })
-  broker.getPrices = async ({ symbol }) => ({
-    ok: true,
-    data: { symbol, price: "65000" },
-  })
+  broker.subscribeForPrices = async ({ symbol, onPrice }) => {
+    calls.push(`subscribe-price:${symbol}`)
+    await onPrice({
+      symbol,
+      price: "65000",
+      timestamp: Date.now(),
+    })
+    return {
+      ok: true,
+      data: {
+        unsubscribe: async () => {},
+        stream: "price",
+      },
+    }
+  }
   const failure = new Error("RS market price evaluation failed")
   const errorRecords = []
+  const evaluatedSymbols = []
   try {
     const result = await startHarvesterForTest({
       loadConfig: async () => createRsOnlyStartupConfig(),
@@ -96,7 +108,8 @@ test("attributes RS-only market-price processing failures using the resolved exe
         symbol: "LINEAUSDT",
       }],
       marketDataSymbols: ["LINEAUSDT"],
-      evaluateStrategy: () => {
+      evaluateStrategy: ({ marketPrice }) => {
+        evaluatedSymbols.push(marketPrice.symbol)
         throw failure
       },
       evaluateRecoverySellerTransition: async () => ({
@@ -110,7 +123,7 @@ test("attributes RS-only market-price processing failures using the resolved exe
     })
 
     const diagnostic = errorRecords.find(({ message }) => message === "Market price processing failed")
-    assert.ok(diagnostic, `The shared market-price subscription must report the processing failure: ${JSON.stringify(errorRecords)}`)
+    assert.ok(diagnostic, `The shared market-price subscription must report the processing failure: ${JSON.stringify({ errorRecords, calls, evaluatedSymbols })}`)
     assert.equal(diagnostic.strategyId, StrategyId.RECOVERY_SELLER, "Bootstrap must attribute an RS-only market failure to the resolved RS route.")
     assert.equal(diagnostic.symbol, "LINEAUSDT", "The original RS market symbol must remain available.")
     assert.equal(diagnostic.errors[0], failure, "The original processing error must remain intact.")
