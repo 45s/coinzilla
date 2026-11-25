@@ -217,15 +217,17 @@ const domainHandlers = {
     }
     return input.cases.map((scenarioCase) => {
       try {
-        createLegacyPosition(scenarioCase.input)
+        const position = createLegacyPosition(scenarioCase.input)
         return {
           id: scenarioCase.id,
           errorName: null,
+          averageCost: position.averageCost,
         }
       } catch (error) {
         return {
           id: scenarioCase.id,
           errorName: error.name,
+          averageCost: null,
         }
       }
     })
@@ -499,7 +501,7 @@ test("RS-001-002: historical average cost remains fixed after a legacy disposal"
     "A legacy sale may reduce remaining quantity only; invested basis and original average cost must remain unchanged.")
 })
 
-test("RS-001-003: missing zero negative or malformed legacy basis fails closed", async () => {
+test("RS-001-003: missing, zero, negative or malformed legacy basis fails closed and average cost is derived", async () => {
   const scenario = authorizationCustodyScenarios[2]
   const result = await runDomain(scenario)
 
