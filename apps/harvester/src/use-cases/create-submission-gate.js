@@ -272,7 +272,10 @@ function createSubmissionContext({ dependencies, order, purpose, symbol, shutdow
 export function createSubmissionGate(dependencies = {}) {
   return ({ order, purpose } = {}) => {
     const { symbol } = order.market
-    const accountBlocker = getAccountSafetySubmissionBlocker({ dependencies, symbol })
+    const accountBlocker = getAccountSafetySubmissionBlocker({
+      dependencies,
+      symbol,
+    })
     if (accountBlocker) {
       return accountBlocker
     }
