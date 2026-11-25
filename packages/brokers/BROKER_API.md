@@ -259,7 +259,7 @@ The Binance subscription result retains the live `subscriptionId` getter and rec
 
 ## Bitunix USDT Futures provider — implementation status
 
-The `bitunix-futures` provider is a separate USDT-margined Futures adapter tracked by [issue #1805](https://github.com/45s/coinzilla/issues/1805) and [Draft PR #1806](https://github.com/45s/coinzilla/pull/1806). This status describes implemented functionality and explicit limitations; it is not a production-readiness declaration.
+The `bitunix-futures` provider is a separate USDT-margined Futures adapter implemented in [PR #1806](https://github.com/45s/coinzilla/pull/1806), merged into `develop` as [`d6e98251363f8713ed1231a2eb4ac548c270eae8`](https://github.com/45s/coinzilla/commit/d6e98251363f8713ed1231a2eb4ac548c270eae8); implementation tracking [issue #1805](https://github.com/45s/coinzilla/issues/1805) is complete. This status describes implemented functionality and explicit limitations; it is not a production-readiness declaration. This status describes implemented functionality and explicit limitations; it is not a production-readiness declaration.
 
 ### Common Broker methods
 

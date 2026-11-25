@@ -1,7 +1,7 @@
 # Bitunix USDT Futures — external reference audit
 
 **Status:** living engineering reference
-**Tracking:** [issue #1805](https://github.com/45s/coinzilla/issues/1805) · [PR #1806](https://github.com/45s/coinzilla/pull/1806)
+**Implementation:** COMPLETE — [PR #1806](https://github.com/45s/coinzilla/pull/1806) merged into `develop` as [`d6e98251363f8713ed1231a2eb4ac548c270eae8`](https://github.com/45s/coinzilla/commit/d6e98251363f8713ed1231a2eb4ac548c270eae8); [issue #1805](https://github.com/45s/coinzilla/issues/1805) closed. **Readiness:** NOT PRODUCTION READY; see the explicit limitations and gates below.
 **Scope:** Bitunix USDT-margined Futures REST, account/trading settings, orders/positions/TP-SL, market data, and WebSocket channels.
 **Authority:** Current official Bitunix Futures API documentation is authoritative. Third-party SDKs and official demos are corroborating implementation evidence, not protocol authority.
 
