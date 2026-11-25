@@ -46,7 +46,7 @@ export function filterScenarios({
 
 function escapeRegExp(value) {
   return [...value].map((character) => (
-    REGEXP_SPECIAL_CHARS.has(character) ? "\\" + character : character
+    REGEXP_SPECIAL_CHARS.has(character) ? character.padStart(2, String.fromCharCode(92)) : character
   )).join("")
 }
 
@@ -56,10 +56,10 @@ function parseTapLine(line) {
     return null
   }
 
-  const title = match[2]
+  const [, outcome, title] = match
   const directiveMatch = title.match(/^(.*)\s+#\s*(SKIP|TODO)(?:\s+.*)?$/i)
   return {
-    outcome: match[1].toLowerCase(),
+    outcome: outcome.toLowerCase(),
     name: (directiveMatch ? directiveMatch[1] : title).trim(),
     directive: directiveMatch?.[2]?.toUpperCase() ?? null,
   }
@@ -72,7 +72,7 @@ export function parseTapResults({
   const tapResults = output.split(/\r?\n/).map(parseTapLine).filter(Boolean)
 
   return expectedTests.map((testCase) => {
-    "const filenamePrefix = `[${basename(testCase.path)}] `
+    const filenamePrefix = `[${basename(testCase.path)}] `
     const matchingResults = tapResults.filter((result) => {
       const testName = result.name.startsWith(filenamePrefix)
         ? result.name.slice(filenamePrefix.length)
