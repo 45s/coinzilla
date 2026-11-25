@@ -203,12 +203,16 @@ export function createProcessScenarioAdapter({
     if (signal?.aborted) {
       throw new Error("Scenario worker execution was cancelled before startup")
     }
+    const sandboxProfile = Object.freeze({
+      ...REQUIRED_SANDBOX_PROFILE,
+      maxOutputBytes,
+    })
     const child = spawnSandboxedWorker({
       workerPath,
       env: createWorkerEnvironment(),
       execArgv: [],
       stdio: ["ignore", "ignore", "ignore", "ipc"],
-      sandboxProfile: REQUIRED_SANDBOX_PROFILE,
+      sandboxProfile,
     })
     if (!child || typeof child.send !== "function" ||
       typeof child.once !== "function" || typeof child.kill !== "function") {
