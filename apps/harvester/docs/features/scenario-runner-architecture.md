@@ -17,7 +17,7 @@ The Runner is strategy-neutral application orchestration. Strategy adapters bind
 
 ## Current implementation checkpoint
 
-RS-004-011 currently executes `calculateRecoverySellerProfitability` through a dedicated child process with no live broker fallback. The host provides REST catalog/run/status/history/cancel and WebSocket lifecycle hints. Dashboard includes a presentation workspace, renderer-neutral trace graph core and versioned AI Debug JSON scaffold. Only this one scenario is advertised/executable; the worker dispatch fails closed for other scenarios and strategies. Full RS registry coverage, schema-driven config editor beyond the initial JSON schema, durable history, version-pinned replay, report completeness, concurrency/resource controls and E2E verification remain open.
+RS-004-011 currently executes `calculateRecoverySellerProfitability` through a dedicated child process with no live broker fallback. The host provides REST catalog/run/status/history/cancel and WebSocket lifecycle hints. Dashboard includes a presentation workspace, renderer-neutral trace graph core and versioned AI Debug JSON scaffold. **No RS scenario is currently executable:** RS-004-011 is a preliminary helper mapping marked `PRELIMINARY` / `executable: false`, and the host registers no RS adapter. Full RS production-flow coverage, schema-driven config editor beyond the initial JSON schema, durable history, version-pinned replay, report completeness, concurrency/resource controls and E2E verification remain open.
 
 ## Cancellation completion invariant
 
@@ -43,3 +43,9 @@ The RS-004-011 profitability helper is preliminary scaffolding, not a completed 
 
 The RS-004-011 adapter currently invokes only `calculateRecoverySellerProfitability`. That is useful helper-level evidence, but it is not the production RS application/use-case lifecycle and must not be represented as an executed strategy scenario. The host catalog therefore marks it `PRELIMINARY` and `executable: false`, and the runner has no RS adapter registered until the complete production-flow simulation boundary exists. A future adapter must reuse production use cases and inject simulation-only ports; it must not copy or approximate strategy behavior.
 The host-level catalog regression ensures the preliminary helper is marked non-executable and that submissions are blocked before a full production-flow adapter is registered. This is a contract/test correction; it does not change production trading behavior.
+
+## Capacity and bounded-history behavior
+
+A submission rejected because the run queue is full is retained as a terminal `Blocked` run record. Its returned run ID remains queryable through run detail and history, so the API never returns an apparently accepted identity that immediately resolves to 404.
+
+When the bounded history is full and every retained record is still active, the runner rejects the new submission with HTTP `429` / `SCENARIO_RUNNER_CAPACITY_REACHED`. It does not manufacture an unpersisted run record or exceed the configured history bound. The caller can retry after an active execution reaches a terminal state.

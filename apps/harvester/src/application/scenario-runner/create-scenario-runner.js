@@ -289,16 +289,14 @@ function startExecution({ context, record, adapter }) {
   return snapshot({ record })
 }
 
-function blockSubmission({ context, runId, strategyId, scenarioId, diagnostic }) {
-  return snapshot({
-    record: createBlockedRecord({
-      runId,
-      strategyId,
-      scenarioId,
-      diagnostic,
-      now: context.now,
-    }),
-  })
+function createCapacityError() {
+  return Object.assign(
+    new Error("Scenario Runner history capacity is occupied by active executions."),
+    {
+      status: 429,
+      code: "SCENARIO_RUNNER_CAPACITY_REACHED",
+    },
+  )
 }
 
 function registerUnsupportedRun({ context, runId, strategyId, scenarioId }) {
@@ -319,14 +317,14 @@ function registerUnsupportedRun({ context, runId, strategyId, scenarioId }) {
 
 function enqueueRun({ context, record, runId, strategyId, scenarioId }) {
   if (context.queue.length >= context.maxQueuedRuns) {
-    context.records.delete(runId)
-    return blockSubmission({
-      context,
-      runId,
-      strategyId,
-      scenarioId,
+    transitionRun({
+      record,
+      status: SCENARIO_RUN_STATUS.BLOCKED,
+      now: context.now,
+      onUpdate: context.onUpdate,
       diagnostic: "Scenario queue capacity is full. Retry after an execution completes.",
     })
+    return snapshot({ record })
   }
   context.queue.push(runId)
   context.waiters.set(runId, createWaiter())
@@ -350,13 +348,7 @@ function submitRun({ context, submission }) {
     throw new Error("Scenario Runner duplicate run ID")
   }
   if (!pruneHistory({ context })) {
-    return blockSubmission({
-      context,
-      runId,
-      strategyId,
-      scenarioId,
-      diagnostic: "Run history capacity is occupied by active executions.",
-    })
+    throw createCapacityError()
   }
   const adapter = context.adapters.get(strategyId)
   if (!adapter) {
