@@ -232,3 +232,51 @@ test("fails closed when exchange-constrained dust evidence contains non-positive
     )
   }
 })
+
+function createValidDustDispositions() {
+  return [
+    {
+      status: "EXCHANGE_CONSTRAINED_DUST",
+      quantity: "0.1",
+      reason: "MIN_QUANTITY",
+      minimumQuantity: "0.2",
+      evaluatedQuantity: "0.1",
+    },
+    {
+      status: "EXCHANGE_CONSTRAINED_DUST",
+      quantity: "0.1",
+      reason: "MIN_NOTIONAL",
+      minimumQuantity: "0.05",
+      minimumNotional: "10",
+      evaluatedQuantity: "0.1",
+      evaluatedNotional: "1",
+    },
+    {
+      status: "EXCHANGE_CONSTRAINED_DUST",
+      quantity: "0.1",
+      reason: "QUANTITY_INCREMENT",
+      quantityStepSize: "0.2",
+      evaluatedQuantity: "0.1",
+    },
+  ]
+}
+
+test("retains validated exchange-constrained dust as a bonus above keepQuantity", () => {
+  for (const inventoryDisposition of createValidDustDispositions()) {
+    const result = evaluateRecoveryCompletion({
+      ...baseInput,
+      activeQuantity: "1.1",
+      inventoryDisposition,
+    })
+
+    assert.deepEqual(result, {
+      eligible: true,
+      pause: false,
+      reason: null,
+      freeQuantity: "1.1",
+      realizedNetProfit: "0.01",
+      dust: inventoryDisposition,
+    }, `Valid ${inventoryDisposition.reason} evidence must retain keepQuantity plus the exact dust remainder.`)
+  }
+})
+
