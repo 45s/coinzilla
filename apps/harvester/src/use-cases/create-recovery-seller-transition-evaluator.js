@@ -231,8 +231,7 @@ async function evaluateRecoverySellerSellTransition({
     snapshot,
     input,
   })
-  if (sellDecision.stopState?.status === "STOPPED" ||
-      sellDecision.decision?.outcome !== "SUBMIT") {
+  if (sellDecision.decision?.outcome !== "SUBMIT") {
     return sellDecision
   }
   const action = createSellAction({
