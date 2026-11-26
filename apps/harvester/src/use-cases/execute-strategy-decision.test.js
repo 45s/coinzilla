@@ -1358,14 +1358,23 @@ test("persists the registered CG strategy purpose for an ordinary Conservative B
       }
     },
     onDurableSubmissionOutcome: async ({ purpose, ownership }) => {
-      durableFacts.push({ purpose, ownership })
-      return { ok: true, data: { durable: true } }
+      durableFacts.push({
+        purpose,
+        ownership,
+      })
+      return {
+        ok: true,
+        data: { durable: true },
+      }
     },
     onAcknowledgedOrder: async () => {},
     onSubmissionFailure: async () => assert.fail("unexpected failure while persisting a Conservative BUY"),
   })
 
-  const result = await execute({ decision, marketMetadata })
+  const result = await execute({
+    decision,
+    marketMetadata,
+  })
 
   assert.equal(result.ok, true, "A normal Conservative BUY must retain its registered CG ownership through durable submission.")
   assert.deepEqual(
