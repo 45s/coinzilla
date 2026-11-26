@@ -31,7 +31,7 @@ test("host executes the registered production RS runtime scenario in a child pro
     item.id === "RS-RUNTIME-SELL-SUBMISSION-001")
   const scenario = {
     ...registeredScenario,
-    status: "TEST_ONLY",
+    status: "IMPLEMENTED",
     executionStatus: "EXECUTABLE",
     executable: true,
     readinessReasons: [],
@@ -57,7 +57,7 @@ test("host executes the registered production RS runtime scenario in a child pro
     })
     const result = await host.runner.waitForRun(accepted.runId)
 
-    assert.equal(result.status, "Completed")
+    assert.equal(result.status, "Completed", result.diagnostics?.join("; "))
     assert.equal(result.output.source, "production-runtime-evaluator")
     assert.equal(result.output.fixtureId, "rs-runtime-sell-submission")
     assert.equal(result.output.passed, true)

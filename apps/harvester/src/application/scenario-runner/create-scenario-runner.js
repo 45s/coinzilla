@@ -20,6 +20,7 @@ function normalizeReplayProvenance({ replayProvenance, sourceRevision }) {
   const missing = new Set(replayProvenance?.missing ?? [])
   const requiredHashes = [
     ["sourceCommitSha", /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/i],
+    ["checkedOutCommitSha", /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/i],
     ["sourceTreeSha", /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/i],
     ["dependencyLockSha256", /^[a-f0-9]{64}$/i],
     ["buildArtifactSha256", /^[a-f0-9]{64}$/i],
@@ -44,6 +45,7 @@ function normalizeReplayProvenance({ replayProvenance, sourceRevision }) {
     missing: [...missing],
     identity: {
       sourceCommitSha: identity.sourceCommitSha ?? null,
+      checkedOutCommitSha: identity.checkedOutCommitSha ?? null,
       sourceTreeSha: identity.sourceTreeSha ?? null,
       dependencyLockSha256: identity.dependencyLockSha256 ?? null,
       buildArtifactSha256: identity.buildArtifactSha256 ?? null,

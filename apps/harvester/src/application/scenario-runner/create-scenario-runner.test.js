@@ -603,6 +603,7 @@ function createCompleteReplayProvenance() {
     missing: [],
     identity: {
       sourceCommitSha: "a".repeat(40),
+      checkedOutCommitSha: "a".repeat(40),
       sourceTreeSha: "b".repeat(40),
       dependencyLockSha256: "c".repeat(64),
       buildArtifactSha256: "d".repeat(64),

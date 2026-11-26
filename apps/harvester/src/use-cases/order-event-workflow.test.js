@@ -1022,7 +1022,7 @@ test("routes terminal RS SELL fill history through mixed accounting without Cons
     terminalFills: [fill],
     reconcileRecoverySellerMixedSell: async (input) => {
       mixedSellReconciliations.push(input)
-      return toResult({ data: { reconciled: true } })
+      return toResult({ data: { reconciled: true, profitability: { eligible: true } } })
     },
   })
 

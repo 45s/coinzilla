@@ -44,7 +44,8 @@ function createScenarioReplayProvenance({ sourceRevision, strategyRegistrations,
   } else if (repositoryHead && expectedRevision.toLowerCase() !== repositoryHead.toLowerCase()) {
     missing.push("supplied source revision does not match the checked-out commit")
   }
-  identity.sourceCommitSha = repositoryHead ?? expectedRevision ?? null
+  identity.sourceCommitSha = expectedRevision ?? null
+  identity.checkedOutCommitSha = repositoryHead ?? null
   try {
     identity.dependencyLockSha256 = createHash("sha256")
       .update(readFileSync(resolve(REPOSITORY_ROOT, "pnpm-lock.yaml")))
