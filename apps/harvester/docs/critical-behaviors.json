@@ -1154,6 +1154,11 @@
           "path": "src/use-cases/create-submission-gate.test.js",
           "name": "market-scoped strategy safety pause blocks only its symbol and preserves the recovery SELL exception",
           "kind": "normal"
+        },
+        {
+          "path": "src/use-cases/create-recovery-seller-stop-workflow.test.js",
+          "name": "does not restore Recovery Seller STOP from a user-data blocker with the same reason",
+          "kind": "failure"
         }
       ],
       "runtimeStatus": "active",
@@ -1373,6 +1378,16 @@
           "path": "src/use-cases/create-recovery-seller-stop-workflow.test.js",
           "name": "clears RS STOP only after explicit operator evidence is durably recorded",
           "kind": "normal"
+        },
+        {
+          "path": "src/infrastructure/operational-state/project-harvester-operational-state.test.js",
+          "name": "classifies Recovery Seller STOP by producer rather than a colliding reason string",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/record-safety-control-facts.test.js",
+          "name": "requires structured user-data action metadata even when its reason matches Recovery Seller STOP",
+          "kind": "normal"
         }
       ],
       "runtimeStatus": "offline-only",
@@ -1384,7 +1399,8 @@
         "Authenticate the operator against the executing OS account and persist operator ID, authentication method, action ID, reason, exact target blocker set, and evidence digest in every OPERATOR_ACTION fact.",
         "Allow retries only for the exact same operator/action/reason/blocker-set/evidence tuple; resume partial multi-blocker appends and verify exact per-blocker durable readback.",
         "User-data ACCOUNT blockers cannot be resolved by generic reconciliation or legacy operator-action facts; the verified projector enforces structured operator metadata against the original raised producer.",
-        "Recovery Seller STOP uses the RECOVERY_SELLER_STOP_WORKFLOW producer and remains exclusively owned by its dedicated operator-action resolver."
+        "Recovery Seller STOP uses the RECOVERY_SELLER_STOP_WORKFLOW producer and remains exclusively owned by its dedicated operator-action resolver.",
+        "Classify Recovery Seller STOP only by its dedicated producer provenance; a colliding reason string from user-data events must remain under the user-data account-resolution contract."
       ]
     }
   ],
