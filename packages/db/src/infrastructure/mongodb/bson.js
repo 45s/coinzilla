@@ -10,6 +10,9 @@ export class BsonBinary {
     if (!Buffer.isBuffer(bytes) || ![0, 4].includes(subtype)) {
       throw new TypeError("BSON binary requires a Buffer and an unsigned byte subtype")
     }
+    if (subtype === 4 && bytes.length !== 16) {
+      throw new TypeError("BSON UUID binary subtype 4 must contain exactly 16 bytes")
+    }
     this.bytes = Buffer.from(bytes)
     this.subtype = subtype
     Object.freeze(this)
@@ -258,6 +261,9 @@ function readDocument(buffer, state, asArray = false, depth = 0) {
       }
       arrayValues.push(value)
     } else {
+      if (Object.hasOwn(document, key)) {
+        throw new TypeError("BSON document contains a duplicate key")
+      }
       Object.defineProperty(document, key, {
         value,
         enumerable: true,
