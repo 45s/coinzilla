@@ -367,6 +367,50 @@ test("provider CRUD operations are tracked so close waits before releasing the p
 })
 
 
+
+test("provider-neutral transaction callbacks receive the CRUD transaction facade", async () => {
+  const record = { id: "person-1", name: "Ada" };
+  const transaction = {
+    create: () => record,
+    readOne: () => record,
+    readMany: () => [record],
+    update: () => record,
+    delete: () => true,
+  };
+  const provider = {
+    capabilities: {
+      transactions: {
+        callbackMode: "asynchronous",
+        nestedTransactions: false,
+        multiDocument: true,
+      },
+      queries: {
+        equalityFilters: true,
+        sorting: true,
+        pagination: true,
+      },
+      storage: { modes: ["server"] },
+    },
+    connect() {},
+    close() {},
+    withTransaction: (work) => work(transaction),
+    withReadTransaction: (work) => work(transaction),
+    execute: ({ operation, input }) => transaction[operation](input),
+  };
+  const database = createDatabase({ provider });
+  await database.connect();
+
+  try {
+    const result = await database.transaction((context) => context.readOne({
+      collection: "people",
+      id: "person-1",
+    }));
+    assert.deepEqual(result, record);
+  } finally {
+    await database.close();
+  }
+});
+
 test("legacy lifecycle adapters do not expose the provider-only execution port", () => {
   const { adapter } = createAdapter()
   const database = createDatabase({ adapter })
