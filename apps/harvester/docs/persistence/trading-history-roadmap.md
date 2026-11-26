@@ -3,7 +3,7 @@
 **Status:** Active — Phases 1–3a implementation complete; Phase 4 in progress; Phase 5 and remaining Phase 6 work planned
 **Type:** Domain roadmap
 **Owner:** Harvester
-**Tracking:** [#1327 — Provider-neutral DB API and Harvester persistence integration](https://github.com/45s/coinzilla/issues/1327); [#1849 — Binance historical order identity conflicts](https://github.com/45s/coinzilla/issues/1851)
+**Tracking:** [#1327 — Provider-neutral DB API and Harvester persistence integration](https://github.com/45s/coinzilla/issues/1327); [#1851 — Binance historical order identity conflicts](https://github.com/45s/coinzilla/issues/1851)
 **Related infrastructure:** [#1486 — SQLite relational-schema infrastructure](https://github.com/45s/coinzilla/issues/1486)
 
 ## Purpose and authority
