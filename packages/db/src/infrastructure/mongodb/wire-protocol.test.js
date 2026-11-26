@@ -134,6 +134,24 @@ test("OP_MSG requires the body before document sequences and rejects duplicate s
   )
 })
 
+test("OP_MSG sequence identifiers cannot mutate the sequence map prototype", () => {
+  const message = encodeOpMsg({
+    requestId: 2,
+    responseTo: 1,
+    body: { ok: 1 },
+    sequences: [{
+      identifier: "__proto__",
+      documents: [{ value: "safe" }],
+    }],
+  })
+
+  const decoded = decodeOpMsg(message)
+
+  assert.equal(Object.getPrototypeOf(decoded.sequences), null)
+  assert.equal(Object.hasOwn(decoded.sequences, "__proto__"), true)
+  assert.deepEqual(decoded.sequences.__proto__, [{ value: "safe" }])
+})
+
 test("OP_MSG rejects malformed sequence lengths and invalid request options", () => {
   const withSequence = encodeOpMsg({
     requestId: 1,
