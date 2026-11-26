@@ -200,6 +200,7 @@ function createParticipantTimeoutPromise({
   setTimeoutFn,
   now,
   startedAt,
+  timeoutState,
 } = {}) {
   let timeoutHandle
   const promise = new Promise((resolve) => {
@@ -210,6 +211,7 @@ function createParticipantTimeoutPromise({
         now,
         startedAt,
       })
+      timeoutState.error = reason
       participantController.abort(reason)
       resolve({
         status: "timed_out",
@@ -223,11 +225,12 @@ function createParticipantTimeoutPromise({
   }
 }
 
-function createParticipantAbortPromise({ signal, participantController } = {}) {
+function createParticipantAbortPromise({ signal, participantController, abortState } = {}) {
   let removeAbortListener = () => {}
   const promise = new Promise((resolve) => {
     const onAbort = () => {
       const reason = signal?.reason ?? new Error("Strategy shutdown safety was aborted")
+      abortState.reason = reason
       participantController.abort(reason)
       resolve({
         status: "aborted",
@@ -269,6 +272,8 @@ async function waitForParticipantWithDeadline({
   }
   const startedAt = now()
   const participantController = new AbortController()
+  const timeoutState = { error: null }
+  const abortState = { reason: null }
   const timeout = createParticipantTimeoutPromise({
     participant,
     participantController,
@@ -276,10 +281,12 @@ async function waitForParticipantWithDeadline({
     setTimeoutFn,
     now,
     startedAt,
+    timeoutState,
   })
   const abort = createParticipantAbortPromise({
     signal,
     participantController,
+    abortState,
   })
   let safetyProofAttempts = 0
   try {
@@ -296,6 +303,12 @@ async function waitForParticipantWithDeadline({
         timeout.promise,
         abort.promise,
       ])
+      if (timeoutState.error) {
+        throw timeoutState.error
+      }
+      if (abortState.reason) {
+        throw abortState.reason
+      }
       if (outcome.status !== "fulfilled") {
         throw outcome.reason
       }
