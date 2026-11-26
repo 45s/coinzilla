@@ -282,6 +282,7 @@ function registerWorkerMessageHandler({
     }
     if (message?.type === "started" && readyReceived && !startedReceived && message.runId === runId) {
       startedReceived = true
+      // Bootstrap readiness is not execution; only this acknowledgement advances lifecycle.
       onStarted()
       return
     }
