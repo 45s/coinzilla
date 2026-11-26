@@ -4,7 +4,7 @@ import { mkdtemp, rm } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import test from "node:test"
-import { Asset, CanonicalOrder, Fill, Market, Money, Quantity } from "@coinzilla/entities"
+import { Asset, CanonicalOrder, Commission, Fill, Market, Money, Quantity } from "@coinzilla/entities"
 import { createPositionId } from "../../src/domain/portfolio/position.js"
 import { Portfolio } from "../../src/domain/portfolio/portfolio.js"
 import { RecoveryLedger } from "../../src/domain/strategies/conservative/recovery-ledger.js"
@@ -16,6 +16,8 @@ import { recordProcessStarted } from "../../src/use-cases/record-process-started
 import { recordOrderSubmissionIntent } from "../../src/use-cases/record-order-submission-intent.js"
 import { recordOrderSubmissionOutcome } from "../../src/use-cases/record-order-submission-outcome.js"
 import { recordExecutionFill } from "../../src/use-cases/record-execution-fill.js"
+import { recordOrderCancellationIntent } from "../../src/use-cases/record-order-cancellation-intent.js"
+import { recordOrderCancellationOutcome } from "../../src/use-cases/record-order-cancellation-outcome.js"
 import { recordRecoveryCycleCompleted } from "../../src/use-cases/record-recovery-cycle-completed.js"
 import { recordRecoveryCycleNotCompleted } from "../../src/use-cases/record-recovery-cycle-not-completed.js"
 import { recordSafetyBlockerRaised, recordStrategyMarketControl } from "../../src/use-cases/record-safety-control-facts.js"
@@ -25,6 +27,8 @@ const baseAsset = new Asset({ id: "asset:BTC",
 code: "BTC" })
 const quoteAsset = new Asset({ id: "asset:USDT",
 code: "USDT" })
+const feeAsset = new Asset({ id: "asset:BNB",
+code: "BNB" })
 const market = new Market({ venue: "binance",
 symbol: "BTCUSDT",
 baseAsset,
@@ -67,7 +71,26 @@ appConfig })
     tradingEnabled: true,
   })
   assert.equal(started.ok, true, started.errors?.map(({ message }) => message).join("; "))
+  return baseline.data
 }
+
+async function recordRestartProcessStart({ directory, runtimeSessionId, baseline }) {
+  const operationalStateStore = createStore(directory, runtimeSessionId)
+  const initialized = await operationalStateStore.initializeIfEmpty()
+  assert.equal(initialized.ok, true, initialized.errors?.map(({ message }) => message).join("; "))
+  assert.equal(initialized.data.ready, true)
+  assert.equal(initialized.data.initialized, false, "A restart must verify the existing ledger, never create a new genesis.")
+  const started = await recordProcessStarted({
+    operationalStateStore,
+    configurationFingerprint: baseline.fingerprint,
+    strategyName: baseline.strategyName,
+    markets: baseline.markets,
+    tradingEnabled: false,
+  })
+  assert.equal(started.ok, true, started.errors?.map(({ message }) => message).join("; "))
+  return operationalStateStore
+}
+
 const readCandidate = (...candidateArguments) => {
   const [directory, runtimeSessionId] = candidateArguments;
   return restoreHarvesterOperationalState({
@@ -115,7 +138,7 @@ const acknowledge = ({ clientOrderId, side, quantity, price }) =>
     status: "FILLED",
     executedQuantity: quantity,
   })
-const makeFill = ({ tradeId, clientOrderId, brokerOrderId, side, quantity, quoteQuantity, price }) =>
+const makeFill = ({ tradeId, clientOrderId, brokerOrderId, side, quantity, quoteQuantity, price, commissions = [] }) =>
   new Fill({
     tradeId,
     clientOrderId,
@@ -134,7 +157,7 @@ asset: quoteAsset }),
     liquidityRole: "MAKER",
     executedAt: 1_700_000_000_010,
     commissionStatus: "COMPLETE",
-    commissions: [],
+    commissions,
   })
 const persistOrder = async ({
   store,
@@ -188,7 +211,7 @@ async function recordCrashBoundaryIntentAndAcknowledgement({ directory, store })
   const pending = makeOrder({
     clientOrderId: "crash-matrix-buy-1",
     side: "BUY",
-    quantity: "0.02",
+    quantity: "0.05",
     price: "100",
   })
   const intent = await recordOrderSubmissionIntent({ operationalStateStore: store,
@@ -206,7 +229,7 @@ async function recordCrashBoundaryIntentAndAcknowledgement({ directory, store })
     clientOrderId: pending.clientOrderId,
     brokerOrderId: "broker-crash-matrix-buy-1",
     side: "BUY",
-    quantity: "0.02",
+    quantity: "0.05",
     price: "100",
     status: "OPEN",
     executedQuantity: "0",
@@ -227,39 +250,340 @@ async function recordCrashBoundaryIntentAndAcknowledgement({ directory, store })
     acknowledged }
 }
 
+function createThirdAssetCommissionFill({
+  tradeId,
+  clientOrderId,
+  brokerOrderId,
+  quantity,
+  quoteQuantity,
+  quoteValue,
+}) {
+  return makeFill({
+    tradeId,
+    clientOrderId,
+    brokerOrderId,
+    side: "BUY",
+    quantity,
+    quoteQuantity,
+    price: "100",
+    commissions: [
+      new Commission({
+        amount: new Money({
+          amount: "0.001",
+          asset: feeAsset,
+        }),
+        quoteValue: new Money({
+          amount: quoteValue,
+          asset: quoteAsset,
+        }),
+      }),
+    ],
+  })
+}
+
+function createExpectedAccountingProjection({ fills }) {
+  let portfolio = new Portfolio()
+  let recoveryLedger = RecoveryLedger.empty({ market })
+  for (const fill of fills) {
+    const { portfolio: updatedPortfolio } = portfolio.applyFill({
+      fill,
+      strategyId: StrategyId.COIN_GRABBER,
+    })
+    portfolio = updatedPortfolio
+    const { ledger: updatedRecoveryLedger } = recoveryLedger.applyFill({
+      fill,
+      strategyId: StrategyId.COIN_GRABBER,
+    })
+    recoveryLedger = updatedRecoveryLedger
+  }
+  return {
+    portfolio,
+    recoveryLedger,
+  }
+}
+
+function assertCandidateAccountingParity({
+  candidate,
+  fills,
+  baseQuantity,
+  spent,
+}) {
+  const expected = createExpectedAccountingProjection({ fills })
+  assert.deepEqual(candidate.data.portfolio, expected.portfolio)
+  assert.deepEqual(candidate.data.recoveryLedgers.get(market.id), expected.recoveryLedger)
+  const position = candidate.data.portfolio.getPosition({ marketId: market.id })
+  assert.equal(position.baseQuantity.amount, baseQuantity)
+  assert.equal(position.spent.amount, spent)
+  assert.equal(candidate.data.recoveryLedgers.get(market.id).appliedFillIds.length, fills.length)
+}
+
 async function verifyCrashBoundaryFill({ directory, store, pending, acknowledged }) {
-  const fill = makeFill({
+  const fill = createThirdAssetCommissionFill({
     tradeId: "crash-matrix-buy-trade-1",
     clientOrderId: pending.clientOrderId,
     brokerOrderId: acknowledged.brokerOrderId,
+    quantity: "0.02",
+    quoteQuantity: "2",
+    quoteValue: "0.02",
+  })
+  await applyFill({
+    store,
+    fill,
+  })
+  const duplicate = await recordExecutionFill({
+    operationalStateStore: store,
+    fill,
+  })
+  assert.equal(duplicate.ok, true, duplicate.errors?.map(({ message }) => message).join("; "))
+  assert.equal(duplicate.data.durable, true)
+  assert.equal(duplicate.data.duplicate, true, "A duplicate delivery must resolve to the original durable fill fact.")
+  const afterFill = await readCandidate(directory, "crash-reader-after-partial-fill")
+  assert.equal(afterFill.ok, true, afterFill.errors?.map(({ message }) => message).join("; "))
+  const filledOrder = afterFill.data.orderRegistry.getOrder({ clientOrderId: pending.clientOrderId })
+  assert.equal(filledOrder.status, "UNKNOWN", "A durable partial fill does not prove current exchange order status.")
+  assert.equal(filledOrder.originalQuantity.amount, "0.05")
+  assert.equal(filledOrder.executedQuantity.amount, "0.02")
+  assertCandidateAccountingParity({
+    candidate: afterFill,
+    fills: [fill],
+    baseQuantity: "0.02",
+    spent: "2.02",
+  })
+  assert.equal(afterFill.data.requiresExchangeReconciliation, true)
+  assert.equal(afterFill.data.restorationEnabled, false)
+  const repeated = await readCandidate(directory, "crash-reader-after-duplicate-fill")
+  assert.equal(repeated.ok, true, repeated.errors?.map(({ message }) => message).join("; "))
+  assertCandidateAccountingParity({
+    candidate: repeated,
+    fills: [fill],
+    baseQuantity: "0.02",
+    spent: "2.02",
+  })
+  return { fill }
+}
+
+async function recordFinalFillAfterRestart({ directory, store, pending, acknowledged, partialFill }) {
+  const finalFill = createThirdAssetCommissionFill({
+    tradeId: "crash-matrix-buy-trade-2",
+    clientOrderId: pending.clientOrderId,
+    brokerOrderId: acknowledged.brokerOrderId,
+    quantity: "0.03",
+    quoteQuantity: "3",
+    quoteValue: "0.03",
+  })
+  await applyFill({
+    store,
+    fill: finalFill,
+  })
+  const duplicate = await recordExecutionFill({
+    operationalStateStore: store,
+    fill: finalFill,
+  })
+  assert.equal(duplicate.ok, true, duplicate.errors?.map(({ message }) => message).join("; "))
+  assert.equal(duplicate.data.duplicate, true)
+  const fills = [partialFill, finalFill]
+  const candidate = await readCandidate(directory, "crash-reader-after-final-fill")
+  assert.equal(candidate.ok, true, candidate.errors?.map(({ message }) => message).join("; "))
+  const order = candidate.data.orderRegistry.getOrder({ clientOrderId: pending.clientOrderId })
+  assert.equal(order.status, "UNKNOWN")
+  assert.equal(order.executedQuantity.amount, "0.05")
+  assertCandidateAccountingParity({
+    candidate,
+    fills,
+    baseQuantity: "0.05",
+    spent: "5.05",
+  })
+  assert.equal(candidate.data.requiresExchangeReconciliation, true)
+  assert.equal(candidate.data.restorationEnabled, false)
+  return {
+    finalFill,
+    fills,
+  }
+}
+
+test("reopens the real append-only ledger across partial/final fills, duplicate delivery, and two unclean process restarts", async (t) => {
+  const directory = await createDirectory(t)
+  const store = createStore(directory)
+  const baseline = await initializeProcess(store)
+  const { pending, acknowledged } = await recordCrashBoundaryIntentAndAcknowledgement({
+    directory,
+    store,
+  })
+  const { fill: partialFill } = await verifyCrashBoundaryFill({
+    directory,
+    store,
+    pending,
+    acknowledged,
+  })
+  const secondRestartStore = await recordRestartProcessStart({
+    directory,
+    runtimeSessionId: "crash-matrix-process-2",
+    baseline,
+  })
+  const { fills } = await recordFinalFillAfterRestart({
+    directory,
+    store: secondRestartStore,
+    pending,
+    acknowledged,
+    partialFill,
+  })
+  const thirdRestartStore = await recordRestartProcessStart({
+    directory,
+    runtimeSessionId: "crash-matrix-process-3",
+    baseline,
+  })
+  const recovered = await readCandidate(directory, "crash-reader-after-two-restarts")
+  assert.equal(recovered.ok, true, recovered.errors?.map(({ message }) => message).join("; "))
+  assert.equal(recovered.data.requiresExchangeReconciliation, true)
+  assert.equal(recovered.data.restorationEnabled, false)
+  const recoveredOrder = recovered.data.orderRegistry.getOrder({ clientOrderId: pending.clientOrderId })
+  assert.equal(recoveredOrder.status, "UNKNOWN")
+  assert.equal(recoveredOrder.executedQuantity.amount, "0.05")
+  assertCandidateAccountingParity({
+    candidate: recovered,
+    fills,
+    baseQuantity: "0.05",
+    spent: "5.05",
+  })
+  const history = await thirdRestartStore.readAll()
+  assert.equal(history.ok, true)
+  const processStarts = history.data.records
+    .filter((record) => record.factType === "PROCESS_STARTED")
+    .map((record) => [record.runtimeSessionId, record.data.tradingEnabled])
+  assert.deepEqual(processStarts, [
+    ["crash-matrix-process-1", true],
+    ["crash-matrix-process-2", false],
+    ["crash-matrix-process-3", false],
+  ])
+  assert.equal(
+    history.data.records.filter((record) => record.factType === "PROCESS_STOPPED").length,
+    0,
+    "Unclean process sessions must remain visible; offline projection must not invent clean STOPPED facts.",
+  )
+})
+
+async function persistOpenOwnedOrder({ store, clientOrderId, quantity }) {
+  const purpose = "CONSERVATIVE_BUY"
+  const ownership = {
+    strategyId: StrategyId.COIN_GRABBER,
+    positionId: createPositionId({
+      marketId: market.id,
+      strategyId: StrategyId.COIN_GRABBER,
+    }),
+    purpose,
+  }
+  const pending = makeOrder({
+    clientOrderId,
+    side: "BUY",
+    quantity,
+    price: "100",
+  })
+  const intent = await recordOrderSubmissionIntent({
+    operationalStateStore: store,
+    order: pending,
+    purpose,
+    ownership,
+  })
+  assert.equal(intent.ok, true, intent.errors?.map(({ message }) => message).join("; "))
+  const acknowledged = makeOrder({
+    clientOrderId,
+    brokerOrderId: `broker-${clientOrderId}`,
+    side: "BUY",
+    quantity,
+    price: "100",
+    status: "OPEN",
+  })
+  const outcome = await recordOrderSubmissionOutcome({
+    operationalStateStore: store,
+    order: acknowledged,
+    outcome: "ACKNOWLEDGED",
+    purpose,
+    ownership,
+  })
+  assert.equal(outcome.ok, true, outcome.errors?.map(({ message }) => message).join("; "))
+  return acknowledged
+}
+
+async function recordCancellationFillRace({ store }) {
+  const order = await persistOpenOwnedOrder({
+    store,
+    clientOrderId: "crash-matrix-cancel-race-buy",
+    quantity: "0.05",
+  })
+  const cancellationIntent = await recordOrderCancellationIntent({
+    operationalStateStore: store,
+    order,
+    reason: "SHUTDOWN_BUY_CANCEL",
+  })
+  assert.equal(cancellationIntent.ok, true, cancellationIntent.errors?.map(({ message }) => message).join("; "))
+  const fill = makeFill({
+    tradeId: "crash-matrix-cancel-race-fill",
+    clientOrderId: order.clientOrderId,
+    brokerOrderId: order.brokerOrderId,
     side: "BUY",
     quantity: "0.02",
     quoteQuantity: "2",
     price: "100",
   })
-  await applyFill({ store,
-    fill })
-  const afterFill = await readCandidate(directory, "crash-reader-after-fill")
-  assert.equal(afterFill.ok, true, afterFill.errors?.map(({ message }) => message).join("; "))
-  const filledOrder = afterFill.data.orderRegistry.getOrder({ clientOrderId: pending.clientOrderId })
-  assert.equal(filledOrder.status, "UNKNOWN", "A durable fill does not prove current exchange order status.")
-  assert.equal(filledOrder.executedQuantity.amount, "0.02", "The exact executed quantity must survive the fill crash boundary.")
-  assert.equal(afterFill.data.portfolio.getPosition({ marketId: market.id }).baseQuantity.amount, "0.02", "The candidate Portfolio must restore the exact filled base quantity.")
-  assert.equal(afterFill.data.portfolio.getPosition({ marketId: market.id }).spent.amount, "2", "The candidate Portfolio must restore the exact quote cost.")
-  assert.equal(afterFill.data.recoveryLedgers.get(market.id).buyCost, "2", "The RecoveryLedger must restore the exact BUY cost.")
-  assert.equal(afterFill.data.requiresExchangeReconciliation, true, "The filled offline candidate must still require exchange reconciliation.")
+  await applyFill({
+    store,
+    fill,
+  })
+  const cancellationOutcome = await recordOrderCancellationOutcome({
+    operationalStateStore: store,
+    order,
+    reason: "SHUTDOWN_BUY_CANCEL",
+    outcome: "OUTCOME_UNKNOWN",
+  })
+  assert.equal(cancellationOutcome.ok, true, cancellationOutcome.errors?.map(({ message }) => message).join("; "))
+  return {
+    order,
+    fill,
+  }
 }
 
-test("reopens the real append-only ledger after intent, acknowledgement, and fill crash boundaries", async (t) => {
+test("replays a fill that races an uncertain cancellation without losing execution evidence", async (t) => {
   const directory = await createDirectory(t)
   const store = createStore(directory)
-  await initializeProcess(store)
-  const { pending, acknowledged } = await recordCrashBoundaryIntentAndAcknowledgement({ directory,
-    store })
-  await verifyCrashBoundaryFill({ directory,
-    store,
-    pending,
-    acknowledged })
+  const baseline = await initializeProcess(store)
+  const { order, fill } = await recordCancellationFillRace({ store })
+  const restartedStore = await recordRestartProcessStart({
+    directory,
+    runtimeSessionId: "cancel-race-process-2",
+    baseline,
+  })
+  const candidate = await readCandidate(directory, "cancel-race-reader-after-restart")
+  assert.equal(candidate.ok, true, candidate.errors?.map(({ message }) => message).join("; "))
+  const recoveredOrder = candidate.data.orderRegistry.getOrder({ clientOrderId: order.clientOrderId })
+  assert.equal(recoveredOrder.status, "UNKNOWN")
+  assert.equal(recoveredOrder.brokerOrderId, order.brokerOrderId)
+  assert.equal(recoveredOrder.originalQuantity.amount, "0.05")
+  assert.equal(recoveredOrder.executedQuantity.amount, "0.02")
+  assertCandidateAccountingParity({
+    candidate,
+    fills: [fill],
+    baseQuantity: "0.02",
+    spent: "2",
+  })
+  assert.equal(candidate.data.orderCancellationOutcomes.length, 1)
+  assert.equal(candidate.data.orderCancellationOutcomes[0].outcome, "OUTCOME_UNKNOWN")
+  assert.equal(candidate.data.requiresExchangeReconciliation, true)
+  assert.equal(candidate.data.restorationEnabled, false)
+  const history = await restartedStore.readAll()
+  assert.equal(history.ok, true)
+  const raceFacts = history.data.records
+    .filter((record) => [
+      "ORDER_CANCELLATION_INTENT",
+      "EXECUTION_FILL_APPLIED",
+      "ORDER_CANCELLATION_OUTCOME",
+    ].includes(record.factType))
+    .map((record) => record.factType)
+  assert.deepEqual(raceFacts, [
+    "ORDER_CANCELLATION_INTENT",
+    "EXECUTION_FILL_APPLIED",
+    "ORDER_CANCELLATION_OUTCOME",
+  ])
+  assert.equal(history.data.records.filter((record) => record.factType === "PROCESS_STOPPED").length, 0)
 })
 
 async function createRecoveryCycleOrdersAndFills({
