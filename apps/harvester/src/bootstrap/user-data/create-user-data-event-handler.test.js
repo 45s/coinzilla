@@ -367,8 +367,10 @@ retryable: false },
     engine,
     onSafetyBlockerRaised: async (blocker) => {
       blockers.push(blocker)
-      return { ok: true,
-data: { durable: true } }
+      return {
+        ok: true,
+        data: { durable: true },
+      }
     },
   })
   handler({
