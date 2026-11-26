@@ -236,7 +236,14 @@ function createMongoRecordOperations({ command, databaseName }) {
         $db: databaseName,
       },
     })
-    const document = response.cursor?.firstBatch?.[0]
+    if (!Array.isArray(response.cursor?.firstBatch)) {
+      throw new DatabaseProviderError({
+        operation: "readOne",
+        collection,
+        cause: new Error("MongoDB find response omitted cursor.firstBatch"),
+      })
+    }
+    const document = response.cursor.firstBatch[0]
     return document ? readStoredDocument(document) : null
   }
 
