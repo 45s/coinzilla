@@ -7,7 +7,6 @@ import test from "node:test"
 
 import {
   DatabaseConflictError,
-  DatabaseProviderError,
   DatabaseTransactionUnsupportedError,
 } from "../src/index.js"
 
