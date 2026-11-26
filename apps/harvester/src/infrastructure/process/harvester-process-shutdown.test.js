@@ -285,11 +285,20 @@ test("marks shutdown incomplete when the event bus rejects its final flush", asy
   process.exitCode = 0
   const handler = createRuntimeShutdownHandler({
     runtime: {
-      stop: async () => ({ ok: true, status: "STOPPED" }),
+      stop: async () => ({
+        ok: true,
+        status: "STOPPED",
+      }),
     },
     logger: {
       system: (message) => calls.push(message),
-      error: ({ message, errors }) => calls.push({ message, errors }),
+      error: ({
+        message,
+        errors,
+      }) => calls.push({
+        message,
+        errors,
+      }),
     },
     eventPublisher: {
       publish: () => ({ ok: true }),
