@@ -181,14 +181,23 @@ test("process adapter rejects worker output above its configured size limit", as
   const fakeChild = new EventEmitter()
   fakeChild.exitCode = null
   fakeChild.signalCode = null
-  fakeChild.send = () => {
-    queueMicrotask(() => fakeChild.emit("message", {
-      runId: "run-worker-large-output",
-      ok: true,
-      output: {
-        payload: "x".repeat(2048),
-      },
-    }))
+  fakeChild.send = (message) => {
+    if (message.type === "execute") {
+      queueMicrotask(() => {
+        fakeChild.emit("message", {
+          type: "started",
+          runId: "run-worker-large-output",
+        })
+        fakeChild.emit("message", {
+          runId: "run-worker-large-output",
+          ok: true,
+          output: {
+            payload: "x".repeat(2048),
+          },
+        })
+      })
+    }
+    return true
   }
   fakeChild.kill = () => {
     fakeChild.exitCode = 0
@@ -220,12 +229,21 @@ test("process adapter fails closed when worker termination cannot be confirmed",
   const fakeChild = new EventEmitter()
   fakeChild.exitCode = null
   fakeChild.signalCode = null
-  fakeChild.send = () => {
-    queueMicrotask(() => fakeChild.emit("message", {
-      runId: "run-worker-cleanup-failure",
-      ok: true,
-      output: { received: true },
-    }))
+  fakeChild.send = (message) => {
+    if (message.type === "execute") {
+      queueMicrotask(() => {
+        fakeChild.emit("message", {
+          type: "started",
+          runId: "run-worker-cleanup-failure",
+        })
+        fakeChild.emit("message", {
+          runId: "run-worker-cleanup-failure",
+          ok: true,
+          output: { received: true },
+        })
+      })
+    }
+    return true
   }
   fakeChild.kill = () => {
     killCalls += 1
@@ -284,6 +302,12 @@ test("process adapter requests cooperative cancellation before forced terminatio
   child.connected = true
   child.send = (message) => {
     messages.push(message)
+    if (message.type === "execute") {
+      queueMicrotask(() => child.emit("message", {
+        type: "started",
+        runId: "run-cooperative-cancel",
+      }))
+    }
     if (message.type === "cancel") {
       child.exitCode = 0
       queueMicrotask(() => child.emit("close"))
