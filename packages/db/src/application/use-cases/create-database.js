@@ -124,10 +124,7 @@ function createProviderNeutralFacade({ database, provider }) {
   const capabilities = createCapabilitiesSnapshot(provider.capabilities)
 
   function runOperation({ operation, input }) {
-    if (database.state !== "connected") {
-      throw new Error("Database must be connected to execute operations")
-    }
-    return provider.execute({ operation, input })
+    return database.execute({ operation, input })
   }
 
   return Object.freeze({
