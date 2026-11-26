@@ -298,7 +298,7 @@ test("keeps Recovery Seller STOP exclusive to its dedicated legacy operator acti
   assert.deepEqual(legacyUnattributed.data.stickySafetyBlockers, [])
 })
 
-test("classifies Recovery Seller STOP by producer rather than a colliding reason string", () => {
+test("rejects structured user-data resolution when the Recovery Seller STOP reason has conflicting provenance", () => {
   const userDataBlocker = {
     blockerId,
     producer: "USER_DATA_EVENT_HANDLER",
@@ -307,34 +307,29 @@ test("classifies Recovery Seller STOP by producer rather than a colliding reason
     reason: "RECOVERY_SELLER_UNEXPECTED_CONDITION",
     evidenceDigest: blockerDigest,
   }
-  const legacyResolution = {
+  const structuredResolution = {
     blockerId,
-    resolvedBy: "operator:legacy-operator:legacy-action-001",
+    resolvedBy: "operator:operator-7:reason-collision-001",
     resolution: "OPERATOR_ACTION",
     evidenceDigest: "c".repeat(64),
-  }
-  const structuredResolution = {
-    ...legacyResolution,
     operatorId: "operator-7",
     operatorAuthMethod: "OS_ACCOUNT",
-    actionId: "legacy-action-001",
+    actionId: "reason-collision-001",
     resolutionReason: "Reviewed the user-data blocker evidence and confirmed its cause is fixed.",
     actionBlockerIds: [blockerId],
   }
-  const recordsFor = (resolution) => [
-    record(0, "LEDGER_INITIALIZED", { schemaVersion: 1 }, "durable-facts:genesis"),
-    baseline(),
-    started(),
-    ...preflightFacts(),
-    record(5, "SAFETY_BLOCKER_RAISED", userDataBlocker, `safety-blocker-raised:${blockerId}`),
-    record(6, "SAFETY_BLOCKER_RESOLVED", resolution, `safety-blocker-resolved:${blockerId}`),
-  ]
+  const result = projectHarvesterOperationalState({
+    records: [
+      record(0, "LEDGER_INITIALIZED", { schemaVersion: 1 }, "durable-facts:genesis"),
+      baseline(),
+      started(),
+      ...preflightFacts(),
+      record(5, "SAFETY_BLOCKER_RAISED", userDataBlocker, `safety-blocker-raised:${blockerId}`),
+      record(6, "SAFETY_BLOCKER_RESOLVED", structuredResolution, `safety-blocker-resolved:${blockerId}`),
+    ],
+  })
 
-  const legacy = projectHarvesterOperationalState({ records: recordsFor(legacyResolution) })
-  const structured = projectHarvesterOperationalState({ records: recordsFor(structuredResolution) })
-
-  assert.equal(legacy.ok, false, "A user-data ACCOUNT blocker must not accept legacy Recovery Seller-style resolution")
-  assert.equal(structured.ok, true, "A user-data ACCOUNT blocker with structured operator evidence must remain resolvable")
+  assert.equal(result.ok, false, "A reserved Recovery Seller reason with user-data provenance must remain blocking")
 })
 
 test("keeps Recovery Seller STOP reason with user-data provenance unresolved", () => {
