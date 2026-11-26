@@ -1,6 +1,6 @@
 # Harvester Journal integration
 
-**Owner:** Harvester  
+**Owner:** Harvester
 **Scope:** Event publication and optional Journal composition in `apps/harvester/`
 
 ## Current position
