@@ -1941,6 +1941,7 @@ test("restores a persisted account STOP and keeps a restarted account observatio
   const { directory, store } = await createRsOnlyOperationalStateStore()
   const calls = []
   const broker = createRsOnlyStartupBroker({ calls })
+  let strategyEvaluationCount = 0
   try {
     const restartStore = await createPersistedAccountStopForRestart({
       directory,
@@ -1952,15 +1953,20 @@ test("restores a persisted account STOP and keeps a restarted account observatio
       brokerAdapterFactory: () => broker,
       operationalStateStore: restartStore,
       executionSymbols: ["LINEAUSDT"],
-      executionRoutes: [{
-        strategyId: "RS_recoverySeller",
-        symbol: "LINEAUSDT",
-      }],
+      executionRoutes: [
+        {
+          strategyId: "RS_recoverySeller",
+          symbol: "LINEAUSDT",
+        },
+      ],
       marketDataSymbols: ["LINEAUSDT"],
-      evaluateRecoverySellerTransition: async () => ({
-        ok: true,
-        data: { skipped: true },
-      }),
+      evaluateRecoverySellerTransition: async () => {
+        strategyEvaluationCount += 1
+        return {
+          ok: true,
+          data: { skipped: true },
+        }
+      },
       logger: {
         info() {},
         error() {},
@@ -1969,6 +1975,15 @@ test("restores a persisted account STOP and keeps a restarted account observatio
 
     assert.equal(result.tradingEnabled, false, "A restored account STOP must prevent trading from being re-enabled after restart.")
     assert.equal(result.executionEnabled, false, "A restored account STOP must keep every execution route disabled.")
+    await result.processMarketPrice({
+      symbol: "LINEAUSDT",
+      priceEvent: {
+        symbol: "LINEAUSDT",
+        price: "100",
+        timestamp: 2,
+      },
+    })
+    assert.equal(strategyEvaluationCount, 0, "A restored account STOP must prevent market-data strategy evaluation.")
     assert.equal(calls.some((call) => typeof call === "object" && call.side), false, "An observation-only restart must not submit broker orders.")
     await result.stop()
   } finally {
