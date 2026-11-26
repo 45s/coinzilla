@@ -12,6 +12,64 @@ The accepted architecture is recorded in [ADR-0001](./docs/decisions/0001-provid
 
 `@coinzilla/db` provides a provider-neutral record CRUD and transaction API. Node.js built-in `node:sqlite` is the first concrete provider. The package owns generic persistence infrastructure contracts only; application domains own their business entities, schemas and repository interfaces.
 
+## Dependency-free MongoDB provider — approved initiative #1865
+
+**Status: Approved; implementation not started.** Tracking issue [#1865](https://github.com/45s/coinzilla/issues/1865). Architecture assessment and initial scope are recorded here and in the [assessment PR](https://github.com/45s/coinzilla/pull/).
+
+### Audit conclusion
+
+The current provider-neutral architecture is a suitable foundation. The public `createDatabase({ provider })` facade, asynchronous provider transaction contract, immutable capability declarations, and reusable provider-conformance suite allow MongoDB to be added as an infrastructure adapter without redesigning consumer-facing CRUD.
+
+Relevant existing contracts and implementation:
+
+- `src/application/ports/database-provider.js` — provider contract and capability types.
+- `src/domain/contracts/record.js` — JSON-safe record validation and portable query normalization.
+- `src/domain/entities/database.js` — lifecycle, active-transaction tracking and close-time draining.
+- `src/infrastructure/sqlite/provider.js` — existing provider behavior and error mapping.
+- `test-support/provider-conformance.js` — shared provider contract suite.
+- [ADR-0001](./docs/decisions/0001-provider-neutral-record-crud-api.md) — accepted provider-neutral architecture.
+
+MongoDB is a network database, unlike built-in `node:sqlite`. Without an external driver, a MongoDB provider must own a deliberately limited client implementation: TCP/TLS transport, wire-protocol framing and request correlation, BSON encoding/decoding, handshake/authentication, CRUD command mapping, session/transaction behavior where supported, connection lifecycle and provider-error normalization.
+
+### Dependency and implementation constraints
+
+- Node.js built-ins only. Do not add a MongoDB driver, BSON package, ORM, query builder, or other external runtime dependency.
+- Keep MongoDB-specific code under `src/infrastructure/mongodb/`; do not leak BSON values, MongoDB documents/commands, sessions, sockets, or native errors through public APIs.
+- Implement only the protocol surface required by the existing database contract. Do not recreate the full official MongoDB driver.
+- Preserve record validation, collection/id isolation, duplicate-to-`DatabaseConflictError` mapping, shallow updates, missing-record results, exact scalar equality, portable sorting/pagination, lifecycle and transaction behavior.
+- Declare actual query, transaction, topology and storage capabilities. Unsupported guarantees must fail explicitly rather than be silently emulated.
+- MongoDB multi-document transactions require a replica set or sharded cluster. A standalone server must not be advertised as providing equivalent transaction guarantees. Commit uncertainty must never be reported as a confirmed rollback.
+- Keep application schemas, repositories, business entities, trading/Harvester concepts and consumer integrations outside this package.
+
+### Initial effort estimate
+
+**Approximately 3–5 weeks for one experienced Node.js developer** for a production-oriented, deliberately limited implementation, including protocol/BSON work, authentication, CRUD, transactions, reliability, conformance and documentation. This is a planning estimate, not a delivery commitment; refine it when supported server versions, topology, authentication, TLS and protocol scope are finalized.
+
+### Proposed implementation phases
+
+1. **Protocol and scope:** select supported MongoDB server versions, wire protocol messages, BSON subset, handshake/authentication mechanisms, TLS/configuration requirements, timeouts, message-size limits and explicit exclusions.
+2. **BSON codec:** implement the minimum correct BSON types needed by the public JSON record contract; cover nested objects/arrays, strings, booleans, null, numeric values and any required date/ObjectId representation. Reject unsupported values safely.
+3. **Transport and wire protocol:** TCP/TLS lifecycle, message framing, request IDs, response correlation, concurrent requests, bounded buffers, malformed frames, timeouts, socket failures and shutdown.
+4. **Handshake and authentication:** negotiate supported wire versions and implement the selected SCRAM flow using `node:crypto`; fail closed on unsupported mechanisms and invalid server responses.
+5. **CRUD/query adapter:** map existing CRUD and query semantics to MongoDB commands, including collection isolation, duplicate handling, equality, portable sorting/pagination and shallow updates.
+6. **Sessions and transactions:** support transactions only on eligible replica-set/sharded deployments; correctly handle commit uncertainty and retry rules. Explicitly reject unsupported topologies.
+7. **Conformance and reliability:** run the shared provider-conformance suite against an isolated real MongoDB server in an opt-in/controlled CI integration environment. Keep default tests offline and deterministic; use fake transport and protocol fixtures for codec, framing, command mapping, malformed responses, authentication and failure paths.
+8. **Documentation and release readiness:** document provider composition, configuration, supported server/topology/authentication matrix, capabilities, limitations, operational requirements, test setup and proof that no external runtime dependency was added.
+
+### Acceptance gates
+
+- Public composition uses the existing provider-neutral facade; no consumer-side provider branching.
+- No external runtime dependency is added for MongoDB, BSON, transport, authentication or ORM functionality.
+- Supported server versions, topology, wire protocol, authentication and BSON subset are explicit and tested.
+- Codec/protocol tests cover malformed and adversarial input, resource limits, timeouts and transport failures.
+- CRUD/query semantics pass the shared conformance suite for every declared capability.
+- Transaction guarantees distinguish standalone from replica-set/sharded deployments; unknown commit outcomes remain explicitly unknown.
+- Connection concurrency, reconnect, close/drain and error normalization are covered.
+- Existing SQLite behavior and public APIs remain compatible.
+- Package/workspace checks and required CI pass on the exact final PR head.
+
+Default unit tests remain offline, deterministic and credential-free. Real MongoDB integration/conformance must be explicitly opt-in or use a controlled CI service; it must not silently depend on a developer's local server or credentials.
+
 ## Application-owned relational schema infrastructure — #1486
 
 **Status: Done.** [PR #1489](https://github.com/45s/coinzilla/pull/1489) merged into `develop` on 2026-11-19 as `ee38250521d6386ce53b080b4fb6414812cf9e91`. All required checks passed on the exact final PR head before merge.
@@ -191,9 +249,9 @@ Application domains own their business entities, schemas, repository interfaces,
    - Applications decide schedules, retention/rotation, encryption, off-site storage, deployment paths, version compatibility, permissions, restore drills, and operational runbooks. Do not move those policies into this package.
 
 3. **Additional providers**
-   - Reassess PostgreSQL or MongoDB only when measured deployment topology, concurrent writers, availability, dataset size or query requirements justify them.
-   - A new adapter must pass the provider conformance suite and declare any capability differences.
-   - Do not claim portability for guarantees a provider cannot provide.
+   - The dependency-free MongoDB provider is now an approved, tracked initiative under [issue #1865](https://github.com/45s/coinzilla/issues/1865); see the scope, phases and acceptance gates above.
+   - PostgreSQL remains deferred until measured deployment topology, concurrent writers, availability, dataset size or query requirements justify it.
+   - Every new adapter must pass the provider-conformance suite and declare actual capability differences. Do not claim portability for guarantees a provider cannot provide.
 
 ## Completion policy
 
