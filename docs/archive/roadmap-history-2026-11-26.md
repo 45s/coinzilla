@@ -1008,7 +1008,7 @@ owner: entities
 **Owner:** `packages/entities/`
 **Purpose:** maintain small, exchange-neutral domain contracts shared by applications and adapters.
 
-Read [the entity agent instructions](./AGENTS.md) and [the domain ownership guide](../../docs/engineering/DOMAIN_OWNERSHIP.md).
+Read [the entity agent instructions](./AGENTS.md) and [the domain ownership guide](../engineering/DOMAIN_OWNERSHIP.md).
 
 ### Completed maintenance — ESLint compliance
 
