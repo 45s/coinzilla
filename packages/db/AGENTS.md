@@ -20,9 +20,12 @@ The package domain may model only generic database infrastructure concepts: reco
 - Keep dependency direction infrastructure → application → domain (dependencies point inward); do not add folders or wrappers that do not own meaningful policy.
 - Domain owns provider-independent record/query contracts, database error classification, lifecycle invariants, migration identity, and pure query/record validation.
 - Application owns provider-neutral CRUD orchestration and provider composition.
-- Infrastructure owns concrete provider adapters and provider-specific maintenance primitives. Keep `node:sqlite`, SQL, prepared statements, driver objects, provider-native errors, and SQLite backup/restore implementation under `src/infrastructure/sqlite/`.
+- Infrastructure owns concrete provider adapters and provider-specific maintenance primitives. Keep `node:sqlite`, SQL, prepared statements, driver objects, provider-native errors, and SQLite backup/restore implementation under `src/infrastructure/sqlite/`. Keep BSON, MongoDB wire messages, sockets, TLS, SCRAM, sessions, cursors and MongoDB-native errors under `src/infrastructure/mongodb/`; none may leak into domain or application contracts.
 - Keep SQLite backup/restore APIs provider-specific; do not add them to the common CRUD facade without a concrete cross-provider capability contract. Backup schedules, retention, encryption, remote storage, deployment paths, and operational runbooks remain application-owned.
 - Use Node.js built-in `node:sqlite`; do not add a third-party SQLite driver or ORM.
+- The MongoDB adapter must use Node.js built-in modules only. Do not add a MongoDB driver, BSON package, protocol dependency or copied third-party driver implementation.
+- MongoDB support is a bounded adapter, not a recreation of the official driver. Document exact wire-version, topology, authentication, BSON and transaction limits; reject unsupported URI options and protocol features explicitly.
+- Provider ports distinguish one atomic `execute({ operation, input })`, the read boundary `withReadTransaction(work)`, and explicit multi-operation `withTransaction(work)`. Declare `transactions.multiDocument` as `true`, `false` or `"topology-dependent"`; never claim standalone MongoDB multi-document transactions.
 - Generic CRUD is an approved package responsibility. Define behavior once in provider-neutral contracts and require every provider to satisfy the same applicable conformance tests.
 - Keep the public record API simple. Do not create an ORM, chainable query builder, schema generator, or application-specific repository abstraction.
 - The initial record model is a JSON object with a non-empty string `id`, stored in a named collection. Query filters are exact equality on top-level scalar fields; sorting and pagination use the documented portable contract.
@@ -37,7 +40,7 @@ The package domain may model only generic database infrastructure concepts: reco
 - SQLite operations are synchronous. Transaction callbacks and migration functions must be synchronous; reject async callbacks rather than silently committing before awaited work.
 - Keep each migration immutable after application. Add a new version instead of editing migration history.
 - Fail explicitly on migration-history mismatch and transaction rollback failure.
-- Keep tests deterministic and offline. Use real in-memory SQLite and isolated temporary file databases; no network or credentials.
+- Keep default tests deterministic and offline. Use real in-memory SQLite, isolated temporary file databases and deterministic fake MongoDB transports. Real MongoDB integration/conformance tests are opt-in through `MONGODB_URI`, use isolated test databases and must clean them up.
 - Apply strict RED → GREEN → REFACTOR to every behavior change.
 
 ## Workflow and verification
