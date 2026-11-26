@@ -178,3 +178,10 @@ The Dashboard exposes the replay command only for terminal, previously executed 
 
 
 When `COINZILLA_SOURCE_REVISION` is absent, Harvester attempts to resolve `HEAD` from the repository's own Git metadata and accepts it only when the worktree is clean. If Git metadata is unavailable, the checkout is dirty, or the supplied build SHA is malformed, the revision is unknown and replay remains blocked. This prevents a dirty local working tree from being misrepresented as the code identified by its HEAD commit.
+
+
+## Worker-level isolation acceptance slice
+
+The worker now installs explicit Node API guards before loading strategy adapters. CommonJS and synchronous ESM resolution hooks deny child-process, worker-thread, inspector, VM and network modules; global network entry points are blocked; filesystem mutation methods (including `fs/promises` and writable file handles) are blocked; and the launcher passes only an allowlisted environment rather than inheriting Harvester credentials. The process-adapter acceptance test exercises these controls in a real child worker and verifies that a secret environment variable is not inherited and no write is performed.
+
+This is **Node/application-level defense in depth**, not an OS security boundary. It does not prove that arbitrary native code, runtime escapes, direct syscalls, filesystem reads, or all network paths are contained. The worker remains non-executable unless the trusted launcher independently supplies the required OS-level attestation. Production OS sandboxing and adversarial host-boundary tests remain required.
