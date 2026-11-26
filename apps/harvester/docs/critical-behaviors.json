@@ -1,6 +1,8 @@
 {
   "schemaVersion": 1,
   "criticalPathPrefixes": [
+    "scripts/recovery-account-blockers-context.js",
+    "scripts/recovery-account-blockers.js",
     "src/bootstrap/account/",
     "src/bootstrap/shutdown/",
     "src/bootstrap/start-harvester.js",
@@ -1167,6 +1169,8 @@
       "id": "ACCOUNT_SAFETY_BLOCKER_RESOLUTION",
       "title": "User-data ACCOUNT blocker provenance and fail-closed operator resolution",
       "sourceModules": [
+        "scripts/recovery-account-blockers-context.js",
+        "scripts/recovery-account-blockers.js",
         "src/infrastructure/operational-state/helpers/validate-operational-state-lifecycle-facts.js",
         "src/infrastructure/operational-state/project-harvester.js",
         "src/use-cases/record-safety-control-facts.js",
@@ -1208,6 +1212,31 @@
         {
           "path": "src/use-cases/resolve-user-data-account-blockers.test.js",
           "name": "allows durable blocker resolution after a clean process stop",
+          "kind": "normal"
+        },
+        {
+          "path": "scripts/recovery-account-blockers.test.js",
+          "name": "parses explicit offline account blocker resolution confirmation",
+          "kind": "normal"
+        },
+        {
+          "path": "scripts/recovery-account-blockers.test.js",
+          "name": "audits every configured market before recording account blocker resolution",
+          "kind": "normal"
+        },
+        {
+          "path": "scripts/recovery-account-blockers.test.js",
+          "name": "fails closed if any configured market is not fully reconciled",
+          "kind": "failure"
+        },
+        {
+          "path": "scripts/recovery-account-blockers.test.js",
+          "name": "requires clean process stop before offline resolution",
+          "kind": "failure"
+        },
+        {
+          "path": "scripts/recovery-account-blockers.test.js",
+          "name": "durably resolves after clean stop and leaves readiness blocked for restart",
           "kind": "normal"
         }
       ],
