@@ -201,7 +201,7 @@ test("requires structured operator action before resolving user-data ACCOUNT blo
     evidenceDigest: "a".repeat(64),
   })
   assert.equal(raised.ok, true)
-  const blockerId = raised.data.record.data.blockerId
+  const { blockerId } = raised.data.record.data
   const reconciliation = await recordSafetyBlockerResolved({
     operationalStateStore,
     blockerId,
