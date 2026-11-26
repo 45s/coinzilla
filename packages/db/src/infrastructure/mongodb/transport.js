@@ -41,7 +41,7 @@ tls: Boolean(tlsOptions) })
 port })
 }
 
-function createRequestError(message, cause, outcomeUnknown = false) {
+function createRequestError({ message, cause, outcomeUnknown = false }) {
   const error = new Error(message, { cause })
   error.outcomeUnknown = outcomeUnknown
   return error
@@ -88,7 +88,7 @@ socketTimeoutMS })
   let receiveBuffer = Buffer.alloc(0)
   let nextRequestId = 1
 
-  function settleRequest(requestId, error, response) {
+  function settleRequest({ requestId, error, response }) {
     const entry = pending.get(requestId)
     if (!entry) {
       return
@@ -104,11 +104,11 @@ socketTimeoutMS })
 
   function rejectPending(error) {
     for (const [requestId, entry] of pending) {
-      settleRequest(requestId, createRequestError(
-        error.message,
-        error.cause ?? error,
-        entry.sent && !entry.transaction && isWriteOperation(entry.operation),
-      ))
+      settleRequest({ requestId, error: createRequestError({
+        message: error.message,
+        cause: error.cause ?? error,
+        outcomeUnknown: entry.sent && !entry.transaction && isWriteOperation(entry.operation),
+      }) })
     }
   }
 
@@ -120,9 +120,9 @@ socketTimeoutMS })
     clearTimeout(connectTimer)
     connectTimer = null
     state = "closed"
-    rejectPending(createRequestError("MongoDB connection closed before command completed", error))
+    rejectPending(createRequestError({ message: "MongoDB connection closed before command completed", cause: error }))
     if (wasConnecting && connectReject) {
-      connectReject(createRequestError("MongoDB connection failed", error))
+      connectReject(createRequestError({ message: "MongoDB connection failed", cause: error }))
     }
     connectResolve = null
     connectReject = null
@@ -145,17 +145,16 @@ socketTimeoutMS })
       return
     }
     if ((response.flags & MORE_TO_COME) !== 0) {
-      settleRequest(
-        response.responseTo,
-        createRequestError(
-          "MongoDB exhaust/streaming responses are not supported",
-          undefined,
-          entry.sent && !entry.transaction && isWriteOperation(entry.operation),
-        ),
-      )
+      settleRequest({
+        requestId: response.responseTo,
+        error: createRequestError({
+          message: "MongoDB exhaust/streaming responses are not supported",
+          outcomeUnknown: entry.sent && !entry.transaction && isWriteOperation(entry.operation),
+        }),
+      })
       return
     }
-    settleRequest(response.responseTo, null, response.body)
+    settleRequest({ requestId: response.responseTo, response: response.body })
   }
 
   function handleData(chunk) {
@@ -271,11 +270,10 @@ socketTimeoutMS })
     transaction = false,
   } = {}) {
     if (state !== "connected" || !socket) {
-      return Promise.reject(createRequestError(
-        "MongoDB transport is not connected",
-        undefined,
-        false,
-      ))
+      return Promise.reject(createRequestError({
+        message: "MongoDB transport is not connected",
+        outcomeUnknown: false,
+      }))
     }
     if (typeof transaction !== "boolean") {
       const error = new TypeError("MongoDB transaction command flag must be a boolean")
@@ -314,14 +312,13 @@ socketTimeoutMS })
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         const entry = pending.get(requestId)
-        settleRequest(
+        settleRequest({
           requestId,
-          createRequestError(
-            `MongoDB command ${requestId} timed out after ${timeoutMS}ms`,
-            undefined,
-            Boolean(entry?.sent && !entry.transaction && isWriteOperation(entry.operation)),
-          ),
-        )
+          error: createRequestError({
+            message: `MongoDB command ${requestId} timed out after ${timeoutMS}ms`,
+            outcomeUnknown: Boolean(entry?.sent && !entry.transaction && isWriteOperation(entry.operation)),
+          }),
+        })
       }, timeoutMS)
       const entry = { resolve,
 reject,
@@ -334,14 +331,14 @@ sent: false }
         entry.sent = true
         socket.write(frame, (error) => {
           if (error) {
-            failConnection(createRequestError("MongoDB socket write failed", error))
+            failConnection(createRequestError({ message: "MongoDB socket write failed", cause: error }))
             socket?.destroy()
           }
         })
       } catch (error) {
         // A synchronous write throw means the frame was not accepted by the socket.
         entry.sent = false
-        failConnection(createRequestError("MongoDB socket write failed", error))
+        failConnection(createRequestError({ message: "MongoDB socket write failed", cause: error }))
         socket?.destroy()
       }
     })
