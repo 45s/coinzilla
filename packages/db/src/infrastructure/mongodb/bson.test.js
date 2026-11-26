@@ -90,6 +90,21 @@ test("BSON rejects malformed Unicode rather than silently replacing record text"
   )
 })
 
+
+test("BSON rejects documents deeper than the supported nesting limit", () => {
+  const document = {}
+  let current = document
+  for (let index = 0; index < 101; index += 1) {
+    current.child = {}
+    current = current.child
+  }
+
+  assert.throws(
+    () => encodeBsonDocument(document),
+    /nesting depth/i,
+  )
+})
+
 test("BSON decoder rejects truncated documents and inconsistent declared lengths", () => {
   const encoded = encodeBsonDocument({ value: "valid" })
 
