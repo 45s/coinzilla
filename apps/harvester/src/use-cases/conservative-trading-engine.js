@@ -1471,7 +1471,8 @@ error })
       logger,
       order,
       ownership: state.registry.getOwnership({ clientOrderId: order.clientOrderId }),
-      status: "SUBMITTED",
+      status: "PENDING",
+      detail: "Local PENDING registration; durable intent and broker placement are not yet confirmed",
     })
     return { ownership }
   }

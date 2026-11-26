@@ -701,9 +701,15 @@ strategyId: StrategyId.COIN_GRABBER,
   assert.equal(result.data.submittedOrders[0].side, "BUY")
 })
 
-test("durably journals the submission intent before calling the broker", async () => {
+test("durably journals the submission intent before broker placement and labels local registration PENDING", async () => {
   const sequence = []
+  const lifecycleLogs = []
   const harness = await createHarness({
+    logger: {
+      info: (entry) => {
+        if (entry?.orderLifecycle === true) lifecycleLogs.push(entry)
+      },
+    },
     eventPublisher: {
       publish: (event) => {
         sequence.push(`publish:${event.name}`)
@@ -733,6 +739,11 @@ test("durably journals the submission intent before calling the broker", async (
   assert.ok(sequence.indexOf("publish:order.submission_requested") >= 0)
   assert.ok(sequence.indexOf("flush") > sequence.indexOf("publish:order.submission_requested"))
   assert.ok(sequence.indexOf("broker:place") > sequence.indexOf("flush"))
+  const pendingLifecycle = lifecycleLogs.find((entry) => entry.orderStatus === "PENDING")
+  assert.ok(pendingLifecycle, "The local registry event must be visible as PENDING before broker placement.")
+  assert.equal(pendingLifecycle.lifecycleStatus, "PENDING", "A local PENDING record must not be mislabeled as SUBMITTED.")
+  assert.match(pendingLifecycle.detail, /durable intent and broker placement are not yet confirmed/)
+  assert.equal(lifecycleLogs.some((entry) => entry.lifecycleStatus === "SUBMITTED" && entry.orderStatus === "PENDING"), false)
 })
 
 test("does not submit an order when its durable intent flush fails", async () => {
