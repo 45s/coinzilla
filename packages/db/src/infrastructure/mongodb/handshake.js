@@ -231,7 +231,6 @@ export async function performMongoHandshake({
     || minWireVersion < 0
     || maxWireVersion < 0
     || maxWireVersion < MIN_SUPPORTED_WIRE_VERSION
-    || maxWireVersion > MAX_SUPPORTED_WIRE_VERSION
     || minWireVersion > MAX_SUPPORTED_WIRE_VERSION
     || maxWireVersion < minWireVersion) {
     throw new Error(
