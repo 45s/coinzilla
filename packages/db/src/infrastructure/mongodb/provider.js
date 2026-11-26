@@ -348,6 +348,21 @@ function createProviderState(options) {
     handshake: null,
     connectPromise: null,
     nextTransactionNumber: 0n,
+    activeOperations: new Set(),
+    closePromise: null,
+  }
+}
+
+async function runTrackedOperation(state, work) {
+  if (state.lifecycle !== "connected") {
+    throw new Error("MongoDB provider must be connected before starting work")
+  }
+  const operation = Promise.resolve().then(work)
+  state.activeOperations.add(operation)
+  try {
+    return await operation
+  } finally {
+    state.activeOperations.delete(operation)
   }
 }
 
@@ -489,38 +504,45 @@ export function createMongoProvider(options = {}) {
       state.lifecycle = "closed"
       return
     }
-    state.lifecycle = "closing"
-    try {
-      await state.transport?.close()
-      state.transport = null
-      state.handshake = null
-      state.lifecycle = "closed"
-    } catch (error) {
-      throw new DatabaseProviderError({
-        operation: "close",
-        cause: error,
-      })
+    if (state.lifecycle === "closing" && state.closePromise) {
+      return state.closePromise
     }
+    state.lifecycle = "closing"
+    state.closePromise = (async () => {
+      await Promise.allSettled([...state.activeOperations])
+      try {
+        await state.transport?.close()
+        state.transport = null
+        state.handshake = null
+        state.lifecycle = "closed"
+      } catch (error) {
+        state.closePromise = null
+        throw new DatabaseProviderError({
+          operation: "close",
+          cause: error,
+        })
+      }
+    })()
+    return state.closePromise
   }
 
   async function execute({ operation, input }) {
-    if (state.lifecycle !== "connected" || !state.transport) {
-      throw new Error("MongoDB provider must be connected before executing CRUD operations")
-    }
-    if (!CRUD_OPERATIONS.includes(operation)) {
-      throw new TypeError(`Unsupported MongoDB CRUD operation: ${operation}`)
-    }
-    const operations = createMongoRecordOperations({
-      command: (commandInput) => state.transport.command(commandInput),
-      databaseName: state.options.databaseName,
+    return runTrackedOperation(state, async () => {
+      if (!CRUD_OPERATIONS.includes(operation)) {
+        throw new TypeError(`Unsupported MongoDB CRUD operation: ${operation}`)
+      }
+      const operations = createMongoRecordOperations({
+        command: (commandInput) => state.transport.command(commandInput),
+        databaseName: state.options.databaseName,
+      })
+      return operations[operation](input)
     })
-    return operations[operation](input)
   }
 
   return Object.freeze({
     connect,
     close,
-    withTransaction: runTransaction,
+    withTransaction: (work) => runTrackedOperation(state, () => runTransaction(work)),
     execute,
     capabilities: MONGO_CAPABILITIES,
   })
