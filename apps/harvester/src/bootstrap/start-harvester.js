@@ -119,8 +119,8 @@ async function readVerifiedOperationalStateHistory({ operationalStateStore } = {
   }
 }
 
-function getLatestResolvedUserDataAccountBlockerIndex(records) {
-  const accountBlockerIds = new Set(records
+function getUserDataAccountBlockerIds(records) {
+  return new Set(records
     .filter((record) =>
       record.factType === "SAFETY_BLOCKER_RAISED" &&
       record.data?.scope === "ACCOUNT" &&
@@ -128,17 +128,24 @@ function getLatestResolvedUserDataAccountBlockerIndex(records) {
       record.data?.reason !== "RECOVERY_SELLER_UNEXPECTED_CONDITION"
     )
     .map((record) => record.data.blockerId))
+}
+
+function isStructuredUserDataAccountResolution({ record, accountBlockerIds }) {
+  const { data } = record
+  return record.factType === "SAFETY_BLOCKER_RESOLVED" &&
+    accountBlockerIds.has(data?.blockerId) &&
+    data?.resolution === "OPERATOR_ACTION" &&
+    data?.operatorAuthMethod === "OS_ACCOUNT" &&
+    typeof data?.operatorId === "string" &&
+    typeof data?.actionId === "string" &&
+    data?.actionBlockerIds?.includes(data.blockerId)
+}
+
+function getLatestResolvedUserDataAccountBlockerIndex(records) {
+  const accountBlockerIds = getUserDataAccountBlockerIds(records)
   let latestResolutionIndex = -1
   for (const [index, record] of records.entries()) {
-    const { data } = record
-    const structuredResolution = record.factType === "SAFETY_BLOCKER_RESOLVED" &&
-      accountBlockerIds.has(data?.blockerId) &&
-      data?.resolution === "OPERATOR_ACTION" &&
-      data?.operatorAuthMethod === "OS_ACCOUNT" &&
-      typeof data?.operatorId === "string" &&
-      typeof data?.actionId === "string" &&
-      data?.actionBlockerIds?.includes(data.blockerId)
-    if (structuredResolution) {
+    if (isStructuredUserDataAccountResolution({ record, accountBlockerIds })) {
       latestResolutionIndex = index
     }
   }
@@ -167,7 +174,10 @@ function hasCleanAccountRecoveryPreflight({ records, resolutionIndex } = {}) {
 
 function requiresAccountRecoverySnapshot(records) {
   const resolutionIndex = getLatestResolvedUserDataAccountBlockerIndex(records)
-  return resolutionIndex >= 0 && !hasCleanAccountRecoveryPreflight({ records, resolutionIndex })
+  return resolutionIndex >= 0 && !hasCleanAccountRecoveryPreflight({
+    records,
+    resolutionIndex,
+  })
 }
 
 function assertOperationalStateCanStart({
