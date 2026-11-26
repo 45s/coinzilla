@@ -20,12 +20,12 @@ The Runner is strategy-neutral application orchestration. Strategy adapters bind
 **Current state — 2026-11-26; this checkpoint supersedes older status notes below.**
 
 - `RS-004-011` remains a preliminary helper-only mapping. PR #1852 remains a test-coverage registry, not the production registry.
-- The production RS registry is in `src/infrastructure/scenario-runner/rs-scenario-adapter.js` and exposes three PARTIAL runtime scenarios: authorized SELL submission, rejected SELL with the production STOP workflow, and profitable partial CANCELED SELL reconciliation through the production accounting workflow.
+- The production RS registry is in `src/infrastructure/scenario-runner/rs-scenario-adapter.js` and exposes three PARTIAL runtime scenarios: authorized SELL submission, rejected SELL with the production STOP workflow, and profitable partial CANCELED SELL reconciliation through the production order-event and accounting workflows.
 - These scenarios reuse production runtime evaluation, authorization, order submission, STOP workflow and accounting. They use a run-local simulated broker and in-memory operational store; they do not prove durable production state and remain non-executable.
 - The trading-history API registers an explicit unavailable RS adapter. It exposes the registry but blocks execution until a trusted OS-level sandbox launcher is supplied. A simulated test attestation is not an OS sandbox.
 - Exact replay now checks declared and checked-out commit identity, clean source tree, dependency lock, scenario registry, original input digest and runtime identity. A trusted build-artifact attestation is unavailable, so exact replay is refused with explicit missing-provenance diagnostics.
 - Terminal accounting now publishes the canonical cycle state. Profitable partial CANCELED/EXPIRED SELL outcomes remain `UNRESOLVED`; an under-target FILLED SELL latches the durable account-wide STOP in the order-event workflow. Canonical orders prohibit non-zero execution on REJECTED orders; zero-fill REJECTED accounting remains fail-closed.
-- Remaining: production user-data event composition, runtime under-target FILLED STOP and general infrastructure-failure scenarios, durable operational-state integration, and a real platform-specific OS sandbox launcher. The worker acceptance test verifies the production worker protocol only, using a test-only simulated attestation.
+- Remaining: full user-data event transition dispatch, a runtime under-target FILLED STOP scenario, general infrastructure-failure scenarios, durable operational-state integration, and a real platform-specific OS sandbox launcher. The worker acceptance test verifies the production worker protocol only, using a test-only simulated attestation.
 
 ## Cancellation completion invariant
 
