@@ -64,98 +64,114 @@ function encodeInt64(value) {
   return result
 }
 
-function encodeElement({ value, ancestors, depth }) {
+function encodeNumber(value) {
+  if (!Number.isFinite(value)) {
+    throw new TypeError("BSON numbers must be finite")
+  }
+  if (Number.isSafeInteger(value) && value >= INT32_MIN && value <= INT32_MAX) {
+    const bytes = Buffer.allocUnsafe(4)
+    bytes.writeInt32LE(value)
+    return { type: 0x10, bytes }
+  }
+  if (Number.isSafeInteger(value)) {
+    return { type: 0x12, bytes: encodeInt64(value) }
+  }
+  const bytes = Buffer.allocUnsafe(8)
+  bytes.writeDoubleLE(value)
+  return { type: 0x01, bytes }
+}
+
+function encodeBinary(value) {
+  const binary = value instanceof BsonBinary ? value : new BsonBinary({ bytes: value })
+  const bytes = Buffer.allocUnsafe(5 + binary.bytes.length)
+  bytes.writeInt32LE(binary.bytes.length, 0)
+  bytes[4] = binary.subtype
+  binary.bytes.copy(bytes, 5)
+  return { type: 0x05, bytes }
+}
+
+function encodeDate(value) {
+  const timestamp = value.getTime()
+  if (!Number.isFinite(timestamp)) {
+    throw new TypeError("BSON dates must be valid")
+  }
+  return { type: 0x09, bytes: encodeInt64(timestamp) }
+}
+
+function encodePrimitive(value) {
   if (value === null) {
-    return { type: 0x0A,
-bytes: Buffer.alloc(0) }
+    return { type: 0x0A, bytes: Buffer.alloc(0) }
   }
   if (typeof value === "string") {
-    return { type: 0x02,
-bytes: encodeString(value) }
+    return { type: 0x02, bytes: encodeString(value) }
   }
   if (typeof value === "boolean") {
-    return { type: 0x08,
-bytes: Buffer.from([Number(value)]) }
+    return { type: 0x08, bytes: Buffer.from([Number(value)]) }
   }
   if (typeof value === "number") {
-    if (!Number.isFinite(value)) {
-      throw new TypeError("BSON numbers must be finite")
-    }
-    if (Number.isSafeInteger(value) && value >= INT32_MIN && value <= INT32_MAX) {
-      const bytes = Buffer.allocUnsafe(4)
-      bytes.writeInt32LE(value)
-      return { type: 0x10,
-bytes }
-    }
-    if (Number.isSafeInteger(value)) {
-      return { type: 0x12,
-bytes: encodeInt64(value) }
-    }
-    const bytes = Buffer.allocUnsafe(8)
-    bytes.writeDoubleLE(value)
-    return { type: 0x01,
-bytes }
+    return encodeNumber(value)
   }
   if (typeof value === "bigint") {
-    return { type: 0x12,
-bytes: encodeInt64(value) }
+    return { type: 0x12, bytes: encodeInt64(value) }
   }
   if (Buffer.isBuffer(value) || value instanceof BsonBinary) {
-    const binary = value instanceof BsonBinary ? value : new BsonBinary({ bytes: value })
-    const bytes = Buffer.allocUnsafe(5 + binary.bytes.length)
-    bytes.writeInt32LE(binary.bytes.length, 0)
-    bytes[4] = binary.subtype
-    binary.bytes.copy(bytes, 5)
-    return { type: 0x05,
-bytes }
+    return encodeBinary(value)
   }
   if (value instanceof Date) {
-    const timestamp = value.getTime()
-    if (!Number.isFinite(timestamp)) {
-      throw new TypeError("BSON dates must be valid")
-    }
-    return { type: 0x09,
-bytes: encodeInt64(timestamp) }
+    return encodeDate(value)
   }
-  if (Array.isArray(value)) {
-    if (ancestors.has(value)) {
-      throw new TypeError("BSON documents must not contain circular references")
-    }
-    ancestors.add(value)
-    const entries = []
-    for (let index = 0; index < value.length; index += 1) {
-      if (!Object.hasOwn(value, index)) {
-        throw new TypeError("BSON arrays must not be sparse")
-      }
-      entries.push([String(index), value[index]])
-    }
-    const bytes = encodeDocumentEntries({ entries,
-ancestors,
-depth: depth + 1 })
-    ancestors.delete(value)
-    return { type: 0x04,
-bytes }
-  }
-  assertDocument({ value,
-ancestors })
-  ancestors.add(value)
+  return null
+}
+
+function collectDocumentEntries({ document }) {
   const entries = []
-  for (const key of Reflect.ownKeys(value)) {
+  for (const key of Reflect.ownKeys(document)) {
     if (typeof key !== "string") {
       throw new TypeError("BSON document keys must be strings")
     }
-    const descriptor = Object.getOwnPropertyDescriptor(value, key)
+    const descriptor = Object.getOwnPropertyDescriptor(document, key)
     if (!descriptor.enumerable || !Object.hasOwn(descriptor, "value")) {
       throw new TypeError("BSON documents must contain enumerable data properties")
     }
     entries.push([key, descriptor.value])
   }
-  const bytes = encodeDocumentEntries({ entries,
-ancestors,
-depth: depth + 1 })
+  return entries
+}
+
+function encodeArrayElement({ value, ancestors, depth }) {
+  if (ancestors.has(value)) {
+    throw new TypeError("BSON documents must not contain circular references")
+  }
+  ancestors.add(value)
+  const entries = []
+  for (let index = 0; index < value.length; index += 1) {
+    if (!Object.hasOwn(value, index)) {
+      throw new TypeError("BSON arrays must not be sparse")
+    }
+    entries.push([String(index), value[index]])
+  }
+  const bytes = encodeDocumentEntries({ entries, ancestors, depth: depth + 1 })
   ancestors.delete(value)
-  return { type: 0x03,
-bytes }
+  return { type: 0x04, bytes }
+}
+
+function encodeObjectElement({ value, ancestors, depth }) {
+  assertDocument({ value, ancestors })
+  ancestors.add(value)
+  const entries = collectDocumentEntries({ document: value })
+  const bytes = encodeDocumentEntries({ entries, ancestors, depth: depth + 1 })
+  ancestors.delete(value)
+  return { type: 0x03, bytes }
+}
+
+function encodeElement({ value, ancestors, depth }) {
+  const primitive = encodePrimitive(value)
+  if (primitive !== null) {
+    return primitive
+  }
+  return Array.isArray(value)
+    ? encodeArrayElement({ value, ancestors, depth })
+    : encodeObjectElement({ value, ancestors, depth })
 }
 
 function encodeDocumentEntries({ entries, ancestors, depth = 0 }) {
@@ -193,23 +209,10 @@ depth })
  */
 export function encodeBsonDocument(document) {
   const ancestors = new Set()
-  assertDocument({ value: document,
-ancestors })
+  assertDocument({ value: document, ancestors })
   ancestors.add(document)
-  const entries = []
-  for (const key of Reflect.ownKeys(document)) {
-    if (typeof key !== "string") {
-      throw new TypeError("BSON document keys must be strings")
-    }
-    const descriptor = Object.getOwnPropertyDescriptor(document, key)
-    if (!descriptor.enumerable || !Object.hasOwn(descriptor, "value")) {
-      throw new TypeError("BSON documents must contain enumerable data properties")
-    }
-    entries.push([key, descriptor.value])
-  }
-  const result = encodeDocumentEntries({ entries,
-ancestors,
-depth: 0 })
+  const entries = collectDocumentEntries({ document })
+  const result = encodeDocumentEntries({ entries, ancestors, depth: 0 })
   ancestors.delete(document)
   return result
 }
