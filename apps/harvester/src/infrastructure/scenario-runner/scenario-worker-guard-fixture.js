@@ -8,6 +8,10 @@ process.on("message", async (message) => {
   if (message?.type !== "execute") {
     return
   }
+  process.send?.({
+    type: "started",
+    runId: message.runId,
+  })
   let esmImportBlocked = false
   try {
     await import("node:child_process")
