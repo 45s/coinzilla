@@ -861,8 +861,10 @@ async function assertWorkflowStopAllowsSell({ snapshot, marketMetadata }) {
     "An otherwise-eligible first recovery SELL must still be submitted while STOP is latched.")
   assert.equal(snapshot.buyAdmissionBlocked, true,
     "The STOP must keep BUY admission blocked while allowing the eligible SELL.")
-  assert.equal(submittedSide, "SELL")
-  assert.equal(snapshot.stopState.status, "STOPPED")
+  assert.equal(submittedSide, "SELL",
+    "The account STOP gate must still submit only the eligible recovery SELL.")
+  assert.equal(snapshot.stopState.status, "STOPPED",
+    "The successful SELL submission must not clear or downgrade the latched account STOP.")
 }
 
 test("real workflow snapshots preserve non-STOP SELL gates and allow eligible SELL under STOP", async () => {
