@@ -579,6 +579,7 @@ function prepareTerminalMixedSellTransition({
     ownership,
     terminalRegisteredOrder,
     canonicalFills,
+    canonicalFillAllocations,
     result,
   })
   if (duplicateResult) {
