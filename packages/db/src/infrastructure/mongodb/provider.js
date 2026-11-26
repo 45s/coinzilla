@@ -304,16 +304,40 @@ function createTransactionRunner({ state, randomBytes }) {
       command,
       databaseName: state.options.databaseName,
     })
+    const pendingOperations = new Set()
+    let firstOperationError = null
+    const transactionOperations = Object.fromEntries(CRUD_OPERATIONS.map((operation) => [
+      operation,
+      (input) => {
+        const pending = operations[operation](input)
+        pendingOperations.add(pending)
+        pending.then(
+          () => pendingOperations.delete(pending),
+          (error) => {
+            pendingOperations.delete(pending)
+            firstOperationError ??= error
+          },
+        )
+        return pending
+      },
+    ]))
+    transactionOperations.drain = async () => {
+      while (pendingOperations.size > 0) {
+        await Promise.allSettled([...pendingOperations])
+      }
+      if (firstOperationError) throw firstOperationError
+      await command.drain()
+    }
     let callbackResult
     const transaction = transactionScope.run(session, async () => {
-      callbackResult = work(operations)
+      callbackResult = work(transactionOperations)
       return callbackResult
     })
 
     let result
     try {
       result = await transaction
-      await command.drain()
+      await transactionOperations.drain()
       if (session.started
         && !(callbackResult !== null
           && (typeof callbackResult === "object" || typeof callbackResult === "function")
@@ -322,7 +346,7 @@ function createTransactionRunner({ state, randomBytes }) {
       }
     } catch (error) {
       try {
-        await command.drain()
+        await transactionOperations.drain()
       } catch (drainError) {
         if (error !== drainError && error?.cause !== drainError) {
           error = new AggregateError(
