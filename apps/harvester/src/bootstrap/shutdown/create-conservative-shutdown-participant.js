@@ -115,8 +115,8 @@ function updateStageDiagnostics({
 
 async function runStage({ stage, operation, signal, symbol = "*", stageDiagnostics } = {}) {
   updateStageDiagnostics({ stageDiagnostics, symbol, stage, status: "STARTED" })
-  throwIfShutdownAborted(signal)
   try {
+    throwIfShutdownAborted(signal)
     const result = await operation()
     throwIfShutdownAborted(signal)
     if (result?.ok === true) {
@@ -158,8 +158,8 @@ async function drainUserData(drainUserDataEvents, signal, {
 } = {}) {
   const stage = "USER_DATA_DRAIN"
   updateStageDiagnostics({ stageDiagnostics, symbol, stage, status: "STARTED" })
-  throwIfShutdownAborted(signal)
   try {
+    throwIfShutdownAborted(signal)
     const result = await drainUserDataEvents()
     throwIfShutdownAborted(signal)
     if (result?.ok === false) {
@@ -206,8 +206,8 @@ async function flushJournal(eventPublisher, signal, {
 } = {}) {
   const stage = "JOURNAL_FLUSH"
   updateStageDiagnostics({ stageDiagnostics, symbol, stage, status: "STARTED" })
-  throwIfShutdownAborted(signal)
   try {
+    throwIfShutdownAborted(signal)
     if (typeof eventPublisher?.flush !== "function") {
       const error = new Error("JOURNAL_FLUSH_UNAVAILABLE")
       updateStageDiagnostics({ stageDiagnostics, symbol, stage, status: "FAILED", error })
@@ -433,6 +433,8 @@ async function reconcileRecoverySells({
     reconciliationBlockers,
     drainUserDataEvents,
     signal,
+    symbol,
+    stageDiagnostics,
   })
 
   if (blockers.length > 0) {
@@ -461,7 +463,6 @@ async function reconcileRecoverySells({
 async function auditRecoverySellCoverage({ engine, symbol, blockers, signal, stageDiagnostics } = {}) {
   const stage = "RECOVERY_SELL_COVERAGE"
   updateStageDiagnostics({ stageDiagnostics, symbol, stage, status: "STARTED" })
-  throwIfShutdownAborted(signal)
   const unavailable = {
     ok: false,
     data: {
@@ -470,10 +471,18 @@ async function auditRecoverySellCoverage({ engine, symbol, blockers, signal, sta
     },
   }
   if (blockers.length > 0) {
+    updateStageDiagnostics({
+      stageDiagnostics,
+      symbol,
+      stage,
+      status: "BLOCKED",
+      error: new Error("Prior reconciliation blockers prevent recovery SELL coverage verification"),
+    })
     return unavailable
   }
 
   try {
+    throwIfShutdownAborted(signal)
     const result = await engine.auditShutdownRecoverySellCoverage({ symbols: [symbol] })
     throwIfShutdownAborted(signal)
     if (result?.ok === true && result.data?.covered === true) {
@@ -529,7 +538,12 @@ async function assessMarketSafety({
 } = {}) {
   const stage = "SHUTDOWN_SAFETY_AUDIT"
   updateStageDiagnostics({ stageDiagnostics, symbol, stage, status: "STARTED" })
-  throwIfShutdownAborted(signal)
+  try {
+    throwIfShutdownAborted(signal)
+  } catch (error) {
+    updateStageDiagnostics({ stageDiagnostics, symbol, stage, status: "ABORTED", error })
+    throw error
+  }
   blockers.push(...getExternalBlockers({ getShutdownBlockers,
     symbol }))
 

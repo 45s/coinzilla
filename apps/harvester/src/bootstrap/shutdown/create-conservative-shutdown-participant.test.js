@@ -902,16 +902,34 @@ test("does not advance to BUY cancellation or recovery proof after a participant
     calls.push(`reconcile-finish:${symbol}`)
     return { ok: true }
   }
+  engine.getOrders = () => [{
+    market: { symbol: "DOGEUSDT" },
+    clientOrderId: "h-0123456789abcdef012345-18",
+    brokerOrderId: null,
+    side: "SELL",
+    status: "PENDING",
+    remainingQuantity: { amount: "398" },
+  }]
   const participant = createParticipant({ engine, calls })
   const controller = new AbortController()
 
   participant.beginShutdown()
   const safety = participant.waitUntilSafe({ signal: controller.signal })
   await reconciliationStarted
+  const pendingSnapshot = participant.getSafetySnapshot().markets.find(({ symbol }) => symbol === "DOGEUSDT")
+  assert.equal(pendingSnapshot.currentOperation, "OWNED_ORDER_RECONCILIATION", "The timeout snapshot must identify the exact pending stage.")
+  assert.equal(pendingSnapshot.lastSuccessfulStep, "USER_DATA_DRAIN", "The timeout snapshot must identify the last completed safety step.")
+  assert.equal(pendingSnapshot.pendingOrders[0].clientOrderId, "h-0123456789abcdef012345-18", "The timeout snapshot must identify the exact pending client order.")
+  assert.equal(pendingSnapshot.pendingOrders[0].remainingQuantity, "398")
+  assert.deepEqual(pendingSnapshot.missingEvidence, ["SHUTDOWN_SAFETY_NOT_PROVEN"])
+
   controller.abort(new Error("participant deadline elapsed"))
   releaseReconciliation()
 
   await assert.rejects(safety, /participant deadline elapsed/)
+  const abortedSnapshot = participant.getSafetySnapshot().markets.find(({ symbol }) => symbol === "DOGEUSDT")
+  assert.equal(abortedSnapshot.operationStatus, "ABORTED")
+  assert.equal(abortedSnapshot.nestedError.message, "participant deadline elapsed")
   assert.equal(calls.some((call) => call.startsWith("reconcile-finish:")), true, "The in-flight read may settle after abort, but its result must not advance the safety proof.")
   assert.equal(calls.some((call) => call.startsWith("cancel:DOGEUSDT") || call.startsWith("cancel:SOLUSDT")), false, "No later per-market BUY cancellation stage may start after abort.")
   assert.equal(calls.some((call) => call.startsWith("recovery:")), false, "No recovery SELL planning or coverage stage may start after abort.")
