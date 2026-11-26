@@ -76,7 +76,7 @@ test("MongoDB URI parser validates credential pairs, host lists, and unsupported
   )
   assert.throws(
     () => parseMongoConnectionString("mongodb://localhost/app?tls=true&ssl=false"),
-    /both tls and ssl/,
+    /cannot specify both tls and ssl/,
   )
   assert.throws(
     () => parseMongoConnectionString("mongodb://localhost/app?loadBalanced=true"),
@@ -92,7 +92,7 @@ test("MongoDB URI parser validates credential pairs, host lists, and unsupported
   )
   assert.throws(
     () => parseMongoConnectionString("mongodb://localhost/app?directConnection=maybe"),
-    /directConnection must be a boolean/,
+    /directConnection must be true or false/,
   )
 })
 
@@ -364,7 +364,7 @@ test("MongoDB handshake rejects load-balanced servers even without a URI flag", 
 test("MongoDB URI parser rejects conflicting TLS aliases and empty read preference", () => {
   assert.throws(
     () => parseMongoConnectionString("mongodb://localhost/app?tls=true&ssl=false"),
-    /use tls or ssl, not both/i,
+    /cannot specify both tls and ssl/i,
   )
   assert.throws(
     () => parseMongoConnectionString("mongodb://localhost/app?readPreference="),

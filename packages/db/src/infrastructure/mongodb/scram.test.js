@@ -333,7 +333,7 @@ test("SCRAM validates response shape and bounds server continuation rounds", asy
           ok: 1,
           conversationId: 1,
           done: false,
-          payload: Buffer.from(`r=${Buffer.from("nonce").toString("base64")}servernonce,s=c2FsdA==,i=4096`),
+          payload: Buffer.from(`r=${Buffer.alloc(24, 1).toString("base64")}servernonce,s=c2FsdA==,i=4096`),
         }
       }
       rounds += 1
