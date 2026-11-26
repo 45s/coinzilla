@@ -404,10 +404,31 @@ function createTransactionRunner({ state, randomBytes }) {
     }
 
     if (session.started) {
-      await commitMongoTransaction({
-        transport: state.transport,
-        session,
-      })
+      try {
+        await commitMongoTransaction({
+          transport: state.transport,
+          session,
+        })
+      } catch (error) {
+        if (error instanceof DatabaseTransactionOutcomeUnknownError) {
+          throw error
+        }
+        try {
+          await abortMongoTransaction({
+            transport: state.transport,
+            session,
+          })
+        } catch (abortError) {
+          if (abortError?.code !== 251 && abortError?.codeName !== "NoSuchTransaction") {
+            throw new AggregateError(
+              [error, abortError],
+              "MongoDB commit failed and abort also failed",
+              { cause: error },
+            )
+          }
+        }
+        throw error
+      }
     }
     return result
   }
