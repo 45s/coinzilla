@@ -122,6 +122,9 @@ test("does not clear STOP when the Operational State Store cannot durably record
             factType: "SAFETY_BLOCKER_RAISED",
             data: {
               blockerId: fixture.blockerId,
+              scope: "MARKET",
+              symbol: "ZROUSDT",
+              reason: "RECOVERY_SELLER_UNEXPECTED_CONDITION",
               evidenceDigest: "a".repeat(64),
             },
           }],
