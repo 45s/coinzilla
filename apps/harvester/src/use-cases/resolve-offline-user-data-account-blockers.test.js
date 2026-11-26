@@ -334,7 +334,10 @@ test("requires clean process stop before offline resolution", async () => {
     causeFixed: true,
     resolveBlockers: async () => {
       resolutionCalled = true
-      return { ok: true, data: {} }
+      return {
+        ok: true,
+        data: {},
+      }
     },
   })
 
