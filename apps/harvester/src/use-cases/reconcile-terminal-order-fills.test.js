@@ -163,7 +163,11 @@ executedQuantity: "0" }) })
 
 test("rejects a terminal order without a broker order ID before reading fill history", async () => {
   const { workflow, calls } = makeWorkflow()
-  const order = { ...makeOrder(), brokerOrderId: undefined }
+  const order = {
+    status: "FILLED",
+    brokerOrderId: undefined,
+    market: { symbol: "DOGEUSDT" },
+  }
 
   const result = await workflow({ order })
 
@@ -178,7 +182,11 @@ test("rejects a terminal order without a broker order ID before reading fill his
 
 test("rejects a terminal order with a whitespace broker order ID before reading fill history", async () => {
   const { workflow, calls } = makeWorkflow()
-  const order = { ...makeOrder(), brokerOrderId: "   " }
+  const order = {
+    status: "FILLED",
+    brokerOrderId: "   ",
+    market: { symbol: "DOGEUSDT" },
+  }
 
   const result = await workflow({ order })
 
