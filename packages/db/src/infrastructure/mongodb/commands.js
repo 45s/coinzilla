@@ -155,7 +155,7 @@ async function runMongoCommand({ command, body, sequences, operation, collection
   }
 }
 
-function encodeCollectionName(collection, databaseName) {
+function encodeCollectionName({ collection, databaseName }) {
   const encoded = MONGO_COLLECTION_PREFIX + Buffer.from(collection, "utf8").toString("base64url")
   if (Buffer.byteLength(`${databaseName}.${encoded}`, "utf8") > 255) {
     throw new TypeError("MongoDB collection namespace exceeds the supported namespace length")
@@ -277,7 +277,7 @@ function createMongoRecordOperations({ command, databaseName }) {
   async function create({ collection, record }) {
     validateCollectionName(collection)
     const snapshot = JSON.parse(serializeRecord(record))
-    const mongoCollection = encodeCollectionName(collection, databaseName)
+    const mongoCollection = encodeCollectionName({ collection, databaseName })
     await runMongoCommand({
       command,
       operation: "create",
@@ -298,7 +298,7 @@ function createMongoRecordOperations({ command, databaseName }) {
   async function readOne({ collection, id }) {
     validateCollectionName(collection)
     validateRecordIdentifier(id)
-    const mongoCollection = encodeCollectionName(collection, databaseName)
+    const mongoCollection = encodeCollectionName({ collection, databaseName })
     const response = await runMongoCommand({
       command,
       operation: "readOne",
@@ -377,7 +377,7 @@ collection }) : null
   async function readMany({ collection, query }) {
     validateCollectionName(collection)
     const normalizedQuery = normalizeReadQuery(query)
-    const mongoCollection = encodeCollectionName(collection, databaseName)
+    const mongoCollection = encodeCollectionName({ collection, databaseName })
     const pipeline = [
       { $match: createFilter(normalizedQuery.filter) },
       ...createSortStages(normalizedQuery.sort),
@@ -512,7 +512,7 @@ data: 1 } })
       return readOne({ collection,
 id })
     }
-    const mongoCollection = encodeCollectionName(collection, databaseName)
+    const mongoCollection = encodeCollectionName({ collection, databaseName })
     const set = {}
     for (const [field, value] of Object.entries(snapshot)) {
       const encodedKey = encodeUserKey(field)
@@ -544,7 +544,7 @@ data: 1 },
   async function deleteRecord({ collection, id }) {
     validateCollectionName(collection)
     validateRecordIdentifier(id)
-    const mongoCollection = encodeCollectionName(collection, databaseName)
+    const mongoCollection = encodeCollectionName({ collection, databaseName })
     const response = await runMongoCommand({
       command,
       operation: "delete",
