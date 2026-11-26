@@ -12,7 +12,6 @@
  * @property {() => Promise<void>|void} connect
  * @property {() => Promise<void>|void} close
  * @property {(work: (transaction: unknown) => unknown) => Promise<unknown>|unknown} withTransaction
- * @property {(input: {operation: "create"|"readOne"|"readMany"|"update"|"delete", input: object}) => unknown|Promise<unknown>} execute
  * @property {(work: (transaction: unknown) => unknown) => Promise<unknown>|unknown} [withReadTransaction]
  *
  * @typedef {object} DatabaseCapabilities
