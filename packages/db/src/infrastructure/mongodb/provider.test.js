@@ -210,6 +210,49 @@ test("MongoDB sharded transactions forward the latest recovery token on commit",
   }
 })
 
+test("MongoDB sharded commit retries with the latest recovery token", async () => {
+  const recoveryTokens = [
+    { shard: "shard-1", generation: 1 },
+    { shard: "shard-2", generation: 2 },
+    { shard: "shard-3", generation: 3 },
+  ]
+  let commitAttempts = 0
+  const { provider, calls } = createProviderHarness({
+    topology: "sharded",
+    transactionSupported: true,
+    commandHandler: async (body) => {
+      if (body.insert) return { ok: 1, n: 1, recoveryToken: recoveryTokens[0] }
+      if (body.commitTransaction === 1) {
+        commitAttempts += 1
+        if (commitAttempts === 1) {
+          return {
+            ok: 1,
+            writeConcernError: { code: 64, errmsg: "write concern timed out" },
+            recoveryToken: recoveryTokens[1],
+          }
+        }
+        return { ok: 1, recoveryToken: recoveryTokens[2] }
+      }
+      return { ok: 1 }
+    },
+  })
+  const database = createDatabase({ provider })
+  await database.connect()
+
+  try {
+    await database.transaction((transaction) => transaction.create({
+      collection: "people",
+      record: { id: "sharded-commit-retry" },
+    }))
+    const commits = calls.filter((body) => body.commitTransaction === 1)
+    assert.equal(commits.length, 2)
+    assert.deepEqual(commits[0].recoveryToken, recoveryTokens[0])
+    assert.deepEqual(commits[1].recoveryToken, recoveryTokens[1])
+  } finally {
+    await database.close()
+  }
+})
+
 test("MongoDB sharded transaction abort forwards the latest recovery token", async () => {
   const recoveryToken = { shard: "shard-1", generation: 3 }
   const callbackError = new Error("abort requested")
