@@ -65,7 +65,6 @@ function requiresStickySafetyBlocker({ failure, event, onSafetyBlockerRaised }) 
 
 function createStickySafetyBlockerRequest({ failure, event, identity, eventSymbol }) {
   return {
-    producer: "USER_DATA_EVENT_HANDLER",
     scope: eventSymbol ? "MARKET" : "ACCOUNT",
     symbol: eventSymbol ?? null,
     reason: failure.stage,
