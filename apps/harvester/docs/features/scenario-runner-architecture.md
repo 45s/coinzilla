@@ -235,6 +235,14 @@ is released. Broker, fill-history, STOP persistence and clock inputs remain run-
 simulation boundaries; this does not establish live exchange integration or OS-level
 process isolation.
 
+The runtime fixture is no longer bound to a hard-coded strategy configuration or market
+rules. Its validated scalar inputs are resolved through the production
+`resolveHarvesterOptions` pipeline with a TESTNET-only execution route. Scenario-supplied
+market increments and minimums are materialized as canonical `TradingRules`; the default
+ZROUSDT values are only the catalog's deterministic example. A regression runs the same
+production dispatch with ADAUSDT and overridden strategy/market values to prove that
+symbol, configuration and market metadata are carried through the runtime.
+
 A zero-fill terminal `REJECTED` SELL is also reconciled as `UNRESOLVED`: the
 terminal order and cycle boundary are committed, the reservation is released,
 and no Portfolio/legacy fill mutation or cycle completion is claimed. Duplicate
