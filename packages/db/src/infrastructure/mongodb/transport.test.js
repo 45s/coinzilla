@@ -54,24 +54,52 @@ function createFakeTransport({ respond, timeoutMS = 100 } = {}) {
   }
 }
 
+function handleLocalMongoConnection({ socket }) {
+  let buffer = Buffer.alloc(0)
+  socket.on("data", (chunk) => {
+    buffer = Buffer.concat([buffer, chunk])
+    if (buffer.length < 4) {
+      return
+    }
+    const messageLength = buffer.readInt32LE(0)
+    if (buffer.length < messageLength) {
+      return
+    }
+    const request = decodeOpMsg(buffer.subarray(0, messageLength))
+    buffer = buffer.subarray(messageLength)
+    socket.end(encodeOpMsg({
+      requestId: 91,
+      responseTo: request.requestId,
+      body: { ok: 1 },
+    }))
+  })
+}
+
+async function assertTransportOutcome({ operation, body, transaction = false, expectedOutcome, rejectWrite = false }) {
+  const fake = createFakeTransport()
+  await fake.transport.connect()
+  if (rejectWrite) {
+    fake.socket.write = () => {
+      throw new Error("commit rejected before send")
+    }
+  }
+  await assert.rejects(
+    fake.transport.command({
+      body,
+      operation,
+      transaction,
+      timeoutMS: 5,
+    }),
+    (error) => error.outcomeUnknown === expectedOutcome,
+  )
+  await fake.transport.close()
+}
+
 test("MongoDB transport opens a real TCP socket without a custom socket factory", { timeout: 5000 }, async () => {
   let serverSocket
   const server = net.createServer((socket) => {
     serverSocket = socket
-    let buffer = Buffer.alloc(0)
-    socket.on("data", (chunk) => {
-      buffer = Buffer.concat([buffer, chunk])
-      if (buffer.length < 4) {return}
-      const messageLength = buffer.readInt32LE(0)
-      if (buffer.length < messageLength) {return}
-      const request = decodeOpMsg(buffer.subarray(0, messageLength))
-      buffer = buffer.subarray(messageLength)
-      socket.end(encodeOpMsg({
-        requestId: 91,
-        responseTo: request.requestId,
-        body: { ok: 1 },
-      }))
-    })
+    handleLocalMongoConnection({ socket })
   })
   await new Promise((...handlers) => {
     const [resolve, reject] = handlers
@@ -277,7 +305,7 @@ test("MongoDB transport fails closed when socket writes fail", async () => {
   await transport.connect()
   const { socket } = fake
   socket.write = (...argumentsList) => {
-    const [_frame, callback] = argumentsList
+    const callback = argumentsList[1]
     callback(new Error("write failed"))
     return false
   }
@@ -358,83 +386,39 @@ test("MongoDB transport handles socket end and idempotent close", async () => {
 
 
 test("MongoDB transport marks interrupted non-transactional writes as outcome-unknown only", async () => {
-  const write = createFakeTransport()
-  await write.transport.connect()
-  await assert.rejects(
-    write.transport.command({
-      body: { insert: "records" },
-      operation: "create",
-      timeoutMS: 5,
-    }),
-    (error) => error.outcomeUnknown === true,
-  )
-  await write.transport.close()
-
-  const read = createFakeTransport()
-  await read.transport.connect()
-  await assert.rejects(
-    read.transport.command({
-      body: { find: "records" },
-      operation: "readMany",
-      timeoutMS: 5,
-    }),
-    (error) => error.outcomeUnknown === false,
-  )
-  await read.transport.close()
-
-  const transactionWrite = createFakeTransport()
-  await transactionWrite.transport.connect()
-  await assert.rejects(
-    transactionWrite.transport.command({
-      body: { insert: "records" },
-      operation: "create",
-      transaction: true,
-      timeoutMS: 5,
-    }),
-    (error) => error.outcomeUnknown === false,
-  )
-  await transactionWrite.transport.close()
-
-  const commit = createFakeTransport()
-  await commit.transport.connect()
-  await assert.rejects(
-    commit.transport.command({
-      body: { commitTransaction: 1 },
-      operation: "commit",
-      timeoutMS: 5,
-    }),
-    (error) => error.outcomeUnknown === true,
-  )
-  await commit.transport.close()
-
-  const unsentCommit = createFakeTransport()
-  await unsentCommit.transport.connect()
-  unsentCommit.socket.write = () => {
-    throw new Error("commit rejected before send")
-  }
-  await assert.rejects(
-    unsentCommit.transport.command({
-      body: { commitTransaction: 1 },
-      operation: "commit",
-      timeoutMS: 5,
-    }),
-    (error) => error.outcomeUnknown === false,
-  )
-  await unsentCommit.transport.close()
-
-  const abort = createFakeTransport()
-  await abort.transport.connect()
-  await assert.rejects(
-    abort.transport.command({
-      body: { abortTransaction: 1 },
-      operation: "abort",
-      timeoutMS: 5,
-    }),
-    (error) => error.outcomeUnknown === true,
-  )
-  await abort.transport.close()
-
-})
+  await assertTransportOutcome({
+    operation: "create",
+    body: { insert: "records" },
+    expectedOutcome: true,
+  })
+  await assertTransportOutcome({
+    operation: "readMany",
+    body: { find: "records" },
+    expectedOutcome: false,
+  })
+  await assertTransportOutcome({
+    operation: "create",
+    body: { insert: "records" },
+    transaction: true,
+    expectedOutcome: false,
+  })
+  await assertTransportOutcome({
+    operation: "commit",
+    body: { commitTransaction: 1 },
+    expectedOutcome: true,
+  })
+  await assertTransportOutcome({
+    operation: "commit",
+    body: { commitTransaction: 1 },
+    expectedOutcome: false,
+    rejectWrite: true,
+  })
+  await assertTransportOutcome({
+    operation: "abort",
+    body: { abortTransaction: 1 },
+    expectedOutcome: true,
+  })
+}
 
 test("MongoDB transport rejects timed-out requests and releases their correlation entries", async () => {
   const { transport } = createFakeTransport({ timeoutMS: 10 })
