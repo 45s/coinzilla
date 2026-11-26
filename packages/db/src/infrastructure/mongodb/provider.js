@@ -462,119 +462,161 @@ async function abortMongoTransaction({ transport, session }) {
   }
 }
 
-function createTransactionRunner({ state, randomBytes }) {
-  const transactionScope = new AsyncLocalStorage()
+function assertTransactionCanStart({ state, transactionScope, work }) {
+  if (typeof work !== "function") {
+    throw new TypeError("A MongoDB transaction callback is required")
+  }
+  if (transactionScope.getStore()) {
+    throw new DatabaseTransactionUnsupportedError({ capability: "nestedTransactions" })
+  }
+  if (state.lifecycle !== "connected") {
+    throw new Error("MongoDB provider must be connected before starting a transaction")
+  }
+  if (!state.handshake?.transactionSupported) {
+    throw new DatabaseTransactionUnsupportedError()
+  }
+}
 
-  return async function withTransaction(work) {
-    if (typeof work !== "function") {
-      throw new TypeError("A MongoDB transaction callback is required")
+function createTrackedTransactionOperations({ operations, command }) {
+  const pendingOperations = new Set()
+  let firstOperationError = null
+  const tracked = Object.fromEntries(CRUD_OPERATIONS.map((operation) => [
+    operation,
+    (input) => {
+      const pending = operations[operation](input)
+      pendingOperations.add(pending)
+      pending.then(
+        () => pendingOperations.delete(pending),
+        (error) => {
+          pendingOperations.delete(pending)
+          firstOperationError ??= error
+        },
+      )
+      return pending
+    },
+  ]))
+  tracked.drain = async () => {
+    while (pendingOperations.size > 0) {
+      await Promise.allSettled([...pendingOperations])
     }
-    if (transactionScope.getStore()) {
-      throw new DatabaseTransactionUnsupportedError({ capability: "nestedTransactions" })
+    if (firstOperationError) {
+      throw firstOperationError
     }
-    if (state.lifecycle !== "connected") {
-      throw new Error("MongoDB provider must be connected before starting a transaction")
-    }
-    if (!state.handshake?.transactionSupported) {
-      throw new DatabaseTransactionUnsupportedError()
-    }
+    await command.drain()
+  }
+  return tracked
+}
 
-    const session = createSession({ state,
-randomBytes })
-    const command = createTransactionCommand({
-      transport: state.transport,
-      session,
-    })
-    const operations = createMongoRecordOperations({
-      command,
-      databaseName: state.options.databaseName,
-    })
-    const pendingOperations = new Set()
-    let firstOperationError = null
-    const transactionOperations = Object.fromEntries(CRUD_OPERATIONS.map((operation) => [
-      operation,
-      (input) => {
-        const pending = operations[operation](input)
-        pendingOperations.add(pending)
-        pending.then(
-          () => pendingOperations.delete(pending),
-          (error) => {
-            pendingOperations.delete(pending)
-            firstOperationError ??= error
-          },
-        )
-        return pending
-      },
-    ]))
-    transactionOperations.drain = async () => {
-      while (pendingOperations.size > 0) {
-        await Promise.allSettled([...pendingOperations])
-      }
-      if (firstOperationError) {throw firstOperationError}
-      await command.drain()
+function isPromiseLike({ value }) {
+  return value !== null
+    && (typeof value === "object" || typeof value === "function")
+    && typeof value.then === "function"
+}
+
+async function handleTransactionCallbackFailure({
+  error,
+  transactionOperations,
+  command,
+  session,
+  state,
+}) {
+  let transactionError = error
+  try {
+    await transactionOperations.drain()
+  } catch (drainError) {
+    if (transactionError !== drainError && transactionError?.cause !== drainError) {
+      transactionError = new AggregateError(
+        [transactionError, drainError],
+        "MongoDB transaction callback and pending command both failed",
+        { cause: transactionError },
+      )
     }
-    let callbackResult
-    const transaction = transactionScope.run(session, async () => {
+  }
+  if (transactionError === command.failure()) {
+    transactionError = transactionError?.code === 11000 || transactionError?.code === 11001
+      ? new DatabaseConflictError({ cause: transactionError })
+      : new DatabaseProviderError({ operation: "transaction", cause: transactionError })
+  }
+  if (session.started) {
+    await abortMongoTransaction({ transport: state.transport, session })
+  }
+  throw transactionError
+}
+
+async function runTransactionCallback({
+  transactionScope,
+  session,
+  work,
+  transactionOperations,
+  command,
+  state,
+}) {
+  let callbackResult
+  try {
+    const result = await transactionScope.run(session, () => {
       callbackResult = work(transactionOperations)
       return callbackResult
     })
-
-    let result
-    try {
-      result = await transaction
-      await transactionOperations.drain()
-      if (session.started
-        && !(callbackResult !== null
-          && (typeof callbackResult === "object" || typeof callbackResult === "function")
-          && typeof callbackResult.then === "function")) {
-        throw new TypeError("MongoDB transaction callbacks must await asynchronous CRUD operations")
-      }
-    } catch (error) {
-      let transactionError = error
-      try {
-        await transactionOperations.drain()
-      } catch (drainError) {
-        if (transactionError !== drainError && transactionError?.cause !== drainError) {
-          transactionError = new AggregateError(
-            [transactionError, drainError],
-            "MongoDB transaction callback and pending command both failed",
-            { cause: transactionError },
-          )
-        }
-      }
-      if (transactionError === command.failure()) {
-        transactionError = transactionError?.code === 11000 || transactionError?.code === 11001
-          ? new DatabaseConflictError({ cause: transactionError })
-          : new DatabaseProviderError({ operation: "transaction", cause: transactionError })
-      }
-      if (session.started) {
-        await abortMongoTransaction({
-          transport: state.transport,
-          session,
-        })
-      }
-      throw transactionError
-    }
-
-    if (session.started) {
-      try {
-        await commitMongoTransaction({
-          transport: state.transport,
-          session,
-        })
-      } catch (error) {
-        if (error instanceof DatabaseTransactionOutcomeUnknownError) {
-          throw error
-        }
-        await abortMongoTransaction({
-          transport: state.transport,
-          session,
-        })
-        throw error
-      }
+    await transactionOperations.drain()
+    if (session.started && !isPromiseLike({ value: callbackResult })) {
+      throw new TypeError("MongoDB transaction callbacks must await asynchronous CRUD operations")
     }
     return result
+  } catch (error) {
+    await handleTransactionCallbackFailure({
+      error,
+      transactionOperations,
+      command,
+      session,
+      state,
+    })
   }
+}
+
+async function commitStartedTransaction({ session, state }) {
+  if (!session.started) {
+    return
+  }
+  try {
+    await commitMongoTransaction({ transport: state.transport, session })
+  } catch (error) {
+    if (error instanceof DatabaseTransactionOutcomeUnknownError) {
+      throw error
+    }
+    await abortMongoTransaction({ transport: state.transport, session })
+    throw error
+  }
+}
+
+async function runMongoTransaction({ state, randomBytes, transactionScope, work }) {
+  assertTransactionCanStart({ state, transactionScope, work })
+  const session = createSession({ state, randomBytes })
+  const command = createTransactionCommand({ transport: state.transport, session })
+  const operations = createMongoRecordOperations({
+    command,
+    databaseName: state.options.databaseName,
+  })
+  const transactionOperations = createTrackedTransactionOperations({ operations, command })
+  const result = await runTransactionCallback({
+    transactionScope,
+    session,
+    work,
+    transactionOperations,
+    command,
+    state,
+  })
+  await commitStartedTransaction({ session, state })
+  return result
+}
+
+function createTransactionRunner({ state, randomBytes }) {
+  const transactionScope = new AsyncLocalStorage()
+  return (work) => runMongoTransaction({
+    state,
+    randomBytes,
+    transactionScope,
+    work,
+  })
 }
 
 function createProviderState(options) {
