@@ -1041,6 +1041,70 @@ test("routes terminal RS SELL fill history through mixed accounting without Cons
   assert.deepEqual(calls.sellFills, [fill], "The terminal canonical fill must be staged exactly once.")
 })
 
+test("durably latches global RS STOP after a reconciled FILLED SELL misses profitability", async () => {
+  const terminalOrder = makeOrder({
+    side: "SELL",
+    status: "FILLED",
+    quantity: "1",
+    executedQuantity: "1",
+    clientOrderId: "h-dogeusdt-rs-sell-under-target-1",
+  })
+  const fill = makeFill({
+    side: "SELL",
+    quantity: "1",
+    quoteQuantity: "1",
+    clientOrderId: terminalOrder.clientOrderId,
+    brokerOrderId: terminalOrder.brokerOrderId,
+  })
+  const registry = createLifecycleRegistry({
+    currentOrder: terminalOrder,
+    ownership: {
+      clientOrderId: terminalOrder.clientOrderId,
+      strategyId: StrategyId.RECOVERY_SELLER,
+      positionId: "doge-recovery-seller-position",
+      purpose: "RECOVERY_SELL",
+      cycleId: "doge-recovery-seller-cycle-under-target-1",
+    },
+  })
+  const { workflow, calls } = makeWorkflow({
+    registry,
+    terminalFills: [fill],
+    reconcileRecoverySellerMixedSell: async () => toResult({
+      data: {
+        profitability: {
+          eligible: false,
+        },
+      },
+    }),
+    latchRecoverySellerStop: async (input) => {
+      calls.recoverySellerStops.push(input)
+      return toResult({
+        data: {
+          durable: true,
+        },
+      })
+    },
+  })
+
+  const result = await workflow.processUserDataEventTransition({
+    event: {
+      eventType: "executionReport",
+      executedOrder: terminalOrder,
+    },
+  })
+
+  assert.equal(result.ok, false,
+    "A FILLED under-target SELL must not be reported as a successful terminal strategy transition.")
+  assert.equal(calls.recoverySellerStops.length, 1,
+    "The adverse realized-profit result must durably latch account-wide STOP.")
+  assert.equal(calls.recoverySellerStops[0].order, terminalOrder,
+    "The STOP evidence must identify the exact canonical terminal SELL.")
+  assert.equal(calls.recoverySellerStops[0].reason, "RS_TERMINAL_SELL_PROFITABILITY_STOP",
+    "The durable STOP must use the stable under-target terminal reason.")
+  assert.equal(calls.pauses[0].reason, "RS_TERMINAL_SELL_PROFITABILITY_STOP",
+    "The affected market must also pause when the global STOP is latched.")
+})
+
 test("latches the durable global RS STOP when terminal mixed-SELL reconciliation is unavailable", async () => {
   const terminalOrder = makeOrder({
     side: "SELL",

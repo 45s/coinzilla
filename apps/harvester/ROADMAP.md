@@ -1,5 +1,9 @@
 # Harvester Roadmap
 
+## Recovery Seller terminal SELL lifecycle — issue #1842
+
+The current production-flow audit found that terminal mixed-SELL accounting still publishes a profitability-only `CLOSED` outcome and does not durably latch global STOP after a reconciled FILLED SELL misses its approved profit threshold. Regression coverage for terminal status, canonical cycle-state fields and under-target STOP is being added in [PR #1837](https://github.com/45s/coinzilla/pull/1837). Until the implementation and focused regressions are verified, do not register or enable a production RS scenario adapter. Non-FILLED terminal SELLs must remain `UNRESOLVED`; only a fully reconciled profitable `FILLED` SELL may close a cycle.
+
 ## Relational trading-history startup failure — issue #1854
 
 In progress in [PR #1855](https://github.com/45s/coinzilla/pull/1855), branch
