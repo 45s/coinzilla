@@ -126,6 +126,7 @@ function createShutdown(input = {}) {
     userDataSubscription,
     logger,
     getTradingEngine,
+    strategyShutdownCoordinator,
   } = {
     ...createShutdownDefaults(),
     ...input,
