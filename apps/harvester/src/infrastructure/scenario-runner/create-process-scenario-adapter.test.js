@@ -347,3 +347,49 @@ test("process adapter does not dispatch work when cancellation races worker crea
   assert.deepEqual(messages.map((message) => message.type), ["cancel"],
     "A cancellation observed during worker creation must not be followed by an execute message.")
 })
+
+
+test("process worker rejects dangerous Node APIs and does not inherit Harvester secrets", async () => {
+  const workerPath = fileURLToPath(new URL("./scenario-worker-guard-fixture.js", import.meta.url))
+  const { mkdtempSync, rmSync, existsSync } = await import("node:fs")
+  const { tmpdir } = await import("node:os")
+  const { join } = await import("node:path")
+  const directory = mkdtempSync(join(tmpdir(), "coinzilla-scenario-guard-"))
+  const writePath = join(directory, "worker-write-attempt.txt")
+  const secretName = "COINZILLA_SCENARIO_TEST_SECRET"
+  const previousSecret = process.env[secretName]
+  process.env[secretName] = "must-not-cross-worker-boundary"
+
+  try {
+    const adapter = createProcessScenarioAdapter({
+      strategyId: "example",
+      workerPath,
+      spawnSandboxedWorker: createSimulatedSandboxLauncher(),
+    })
+    const result = await adapter.execute({
+      runId: "run-worker-guard-acceptance",
+      scenarioId: "worker-guard-acceptance",
+      input: { writePath },
+    })
+
+    assert.deepEqual(result.blockedModules, [
+      "node:child_process",
+      "node:worker_threads",
+      "node:http2",
+      "node:net",
+    ], "the worker must reject process creation, extra threads and network modules")
+    assert.equal(result.fetchBlocked, true, "the worker must reject the global fetch API")
+    assert.equal(result.syncWriteBlocked, true, "the worker must reject synchronous filesystem writes")
+    assert.equal(result.promiseWriteBlocked, true, "the worker must reject promise-based filesystem writes")
+    assert.equal(result.writeOpenBlocked, true, "the worker must reject writable file handles")
+    assert.equal(result.secretInherited, false, "Harvester secrets must not be inherited by the worker")
+    assert.equal(existsSync(writePath), false, "the worker must not create a file through guarded filesystem APIs")
+  } finally {
+    if (previousSecret === undefined) {
+      delete process.env[secretName]
+    } else {
+      process.env[secretName] = previousSecret
+    }
+    rmSync(directory, { recursive: true, force: true })
+  }
+})
