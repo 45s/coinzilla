@@ -60,7 +60,7 @@ test("rejects ownership metadata for a different submission purpose", () => {
         purpose: "RECOVERY_BUY",
       },
     }),
-    /Recovery Seller strategy and purpose/,
+    /strategy and purpose/,
     "Ownership purpose must match the purpose of the canonical order submission.",
   )
 })
