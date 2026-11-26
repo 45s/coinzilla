@@ -151,33 +151,12 @@ function encodeCollectionName(collection, databaseName) {
   return encoded
 }
 
-function createSortMetadataValue(value) {
-  let rank
-  if (value === null) {
-    rank = 0
-  } else if (value === false) {
-    rank = 1
-  } else if (value === true) {
-    rank = 2
-  } else if (typeof value === "number") {
-    rank = 3
-  } else if (typeof value === "string") {
-    rank = 4
-  } else {
-    rank = 5
-  }
-  return { rank }
-}
+
 
 function createStoredDocument(record) {
-  const sortData = {}
-  for (const [field, value] of Object.entries(record)) {
-    sortData[encodeUserKey(field)] = createSortMetadataValue(value)
-  }
   return {
     _id: record.id,
     data: encodeUserValue(record),
-    sortData,
   }
 }
 
@@ -231,9 +210,20 @@ function createSortStages(sort) {
     const { field, direction } = sort[index]
     const typeKey = `__coinzillaSortType${index}`
     const valueKey = `__coinzillaSortValue${index}`
-    const metadataPath = `$sortData.${encodeUserKey(field)}`
-    additions[typeKey] = { $ifNull: [`${metadataPath}.rank`, 0] }
-    additions[valueKey] = { $ifNull: [`$data.${encodeUserKey(field)}`, null] }
+    const fieldPath = `$data.${encodeUserKey(field)}`
+    const typeExpression = { $type: fieldPath }
+    additions[typeKey] = {
+      $switch: {
+        branches: [
+          { case: { $in: [typeExpression, ["missing", "null"]] }, then: 0 },
+          { case: { $eq: [typeExpression, "bool"] }, then: 1 },
+          { case: { $in: [typeExpression, ["int", "long", "double", "decimal"]] }, then: 2 },
+          { case: { $eq: [typeExpression, "string"] }, then: 3 },
+        ],
+        default: 4,
+      },
+    }
+    additions[valueKey] = { $ifNull: [fieldPath, null] }
     const sortDirection = direction === "asc" ? 1 : -1
     ordering[typeKey] = sortDirection
     ordering[valueKey] = sortDirection
@@ -500,7 +490,6 @@ function createMongoRecordOperations({ command, databaseName }) {
     for (const [field, value] of Object.entries(snapshot)) {
       const encodedKey = encodeUserKey(field)
       set[`data.${encodedKey}`] = encodeUserValue(value)
-      set[`sortData.${encodedKey}`] = createSortMetadataValue(value)
     }
     const response = await runMongoCommand({
       command,
