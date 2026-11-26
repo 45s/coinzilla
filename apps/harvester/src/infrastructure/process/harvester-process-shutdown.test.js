@@ -79,7 +79,8 @@ function startShutdownChild({ directory, source } = {}) {
   child.stderr.on("data", (chunk) => {
     stderr += chunk
   })
-  const closed = new Promise((resolve, reject) => {
+  const closed = new Promise((...callbacks) => {
+    const [resolve, reject] = callbacks
     child.once("error", reject)
     child.once("close", (...exit) => resolve({
       code: exit[0],
@@ -89,7 +90,10 @@ function startShutdownChild({ directory, source } = {}) {
   return {
     child,
     closed,
-    getOutput: () => ({ stdout, stderr }),
+    getOutput: () => ({
+      stdout,
+      stderr,
+    }),
   }
 }
 
