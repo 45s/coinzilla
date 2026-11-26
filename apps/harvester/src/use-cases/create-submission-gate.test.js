@@ -292,10 +292,22 @@ test("an account safety blocker overrides every order path, including shutdown r
   })
   const gate = createSubmissionGate(dependencies)
   const cases = [
-    { side: "BUY", purpose: "STANDING_BUY" },
-    { side: "BUY", purpose: "RECOVERY_SELL" },
-    { side: "SELL", purpose: "STANDING_BUY" },
-    { side: "SELL", purpose: "RECOVERY_SELL" },
+    {
+      side: "BUY",
+      purpose: "STANDING_BUY",
+    },
+    {
+      side: "BUY",
+      purpose: "RECOVERY_SELL",
+    },
+    {
+      side: "SELL",
+      purpose: "STANDING_BUY",
+    },
+    {
+      side: "SELL",
+      purpose: "RECOVERY_SELL",
+    },
   ]
 
   for (const { side, purpose } of cases) {
@@ -313,7 +325,6 @@ test("an account safety blocker overrides every order path, including shutdown r
     })
   }
 })
-
 
 test("blocks a BUY when a durable account-scoped safety blocker is active", () => {
   const dependencies = createDependencies()

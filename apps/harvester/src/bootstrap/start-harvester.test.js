@@ -1863,7 +1863,7 @@ async function assertStartupRejectedBeforeBroker({ scenario, store } = {}) {
   }
 }
 
-test("rejects an unprojectable account-blocker ledger before broker connection for every recovery configuration", async (t) => {
+test("rejects an unprojectable account-blocker ledger before broker connection for every recovery configuration", async () => {
   const scenarios = [
     {
       name: "Conservative-only with recovery disabled",
@@ -1877,10 +1877,12 @@ test("rejects an unprojectable account-blocker ledger before broker connection f
       createBroker: (calls) => createRsOnlyStartupBroker({ calls }),
       startupOptions: {
         executionSymbols: ["LINEAUSDT"],
-        executionRoutes: [{
-          strategyId: "RS_recoverySeller",
-          symbol: "LINEAUSDT",
-        }],
+        executionRoutes: [
+          {
+            strategyId: "RS_recoverySeller",
+            symbol: "LINEAUSDT",
+          },
+        ],
         marketDataSymbols: ["LINEAUSDT"],
         evaluateRecoverySellerTransition: async () => ({
           ok: true,
@@ -1892,15 +1894,16 @@ test("rejects an unprojectable account-blocker ledger before broker connection f
   ]
 
   for (const scenario of scenarios) {
-    await t.test(scenario.name, async (subtest) => {
-      const { directory, store } = await createRsOnlyOperationalStateStore()
-      subtest.after(() => rm(directory, {
-        recursive: true,
-        force: true,
-      }))
+    const { directory, store } = await createRsOnlyOperationalStateStore()
+    try {
       await seedAccountBlocker({ store })
       await assertStartupRejectedBeforeBroker({ scenario, store })
-    })
+    } finally {
+      await rm(directory, {
+        recursive: true,
+        force: true,
+      })
+    }
   }
 })
 
