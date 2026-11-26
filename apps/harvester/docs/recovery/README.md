@@ -175,7 +175,7 @@ OPERATIONAL_STATE_DIRECTORY=/absolute/path/to/existing/operational-state \\
     --cause-fixed
 ```
 
-The command requires an existing, durable Operational State Store and the `runtimeSessionId` of the latest process session. The latest matching `PROCESS_STOPPED` fact must be clean; a later unclean stop invalidates an earlier clean-stop fact. The operator action ID is checked against durable prior resolution facts and cannot be reused. It derives the configured market universe from that session's durable configuration baseline; the evidence bundle cannot narrow the market list. It refuses legacy/unknown-producer ACCOUNT blockers and Recovery Seller STOP.
+The command requires an existing, durable Operational State Store and the `runtimeSessionId` of the latest process session. The latest matching `PROCESS_STOPPED` fact must be clean; a later unclean stop invalidates an earlier clean-stop fact. The operator action ID is checked against durable prior resolution facts and cannot be reused. If a multi-blocker append partially commits before a failure, start a new recovery attempt with a new action ID; the already-resolved blocker remains durably resolved and the remaining blockers must be audited again. It derives the configured market universe from that session's durable configuration baseline; the evidence bundle cannot narrow the market list. It refuses legacy/unknown-producer ACCOUNT blockers and Recovery Seller STOP.
 
 The account-wide evidence bundle reuses the one-market contract above, with these root fields:
 
