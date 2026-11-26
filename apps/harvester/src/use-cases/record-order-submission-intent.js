@@ -44,7 +44,7 @@ function validateSubmissionIntent({ operationalStateStore, order, purpose, owner
     throw new TypeError("Order-submission intent must identify a PENDING order without broker acknowledgement")
   }
   if (!SUPPORTED_PURPOSES.has(purpose)) {
-    throw new TypeError("Order-submission intent purpose must be null, RECOVERY_BUY, or RECOVERY_SELL")
+    throw new TypeError("Order-submission intent purpose must be null or a supported CG/RS strategy purpose")
   }
   const normalizedOwnership = validateRecoverySellerSubmissionOwnership({
     order,
@@ -75,7 +75,7 @@ function validateSubmissionIntent({ operationalStateStore, order, purpose, owner
  * @param {object} options.operationalStateStore - Initialized ADR-0001 Operational State Store append capability.
  * @param {CanonicalOrder} options.order - Validated PENDING canonical order.
  * @param {string|null} options.purpose - Explicit application strategy purpose.
- * @param {object} [options.ownership] - Exact Recovery Seller strategy, Position, and cycle ownership.
+ * @param {object} [options.ownership] - Exact originating strategy and Position ownership; RS also requires a cycle.
  * @returns {Promise<object>} Durable append result; success requires durable === true.
  */
 export async function recordOrderSubmissionIntent(options = {}) {

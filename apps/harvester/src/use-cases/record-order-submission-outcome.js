@@ -3,7 +3,7 @@ import { toResult } from "@coinzilla/utils"
 import { validateRecoverySellerSubmissionOwnership } from "../domain/orders/recovery-seller-submission-ownership.js"
 
 const OUTCOMES = new Set(["ACKNOWLEDGED", "REJECTED", "REJECTED_OR_UNKNOWN", "UNKNOWN"])
-const SUPPORTED_PURPOSES = new Set([null, "RECOVERY_BUY", "RECOVERY_SELL"])
+const SUPPORTED_PURPOSES = new Set([null, "CONSERVATIVE_BUY", "CONSERVATIVE_SELL", "RECOVERY_BUY", "RECOVERY_SELL"])
 
 function validateSubmissionStoreAndOrder({
     operationalStateStore,
@@ -22,7 +22,7 @@ function validateSubmissionStoreAndOrder({
     throw new TypeError("recordOrderSubmissionOutcome requires a supported submission outcome")
   }
   if (!SUPPORTED_PURPOSES.has(purpose)) {
-    throw new TypeError("Order-submission outcome purpose must be null, RECOVERY_BUY, or RECOVERY_SELL")
+    throw new TypeError("Order-submission outcome purpose must be null or a supported CG/RS strategy purpose")
   }
   return validateRecoverySellerSubmissionOwnership({
     order,

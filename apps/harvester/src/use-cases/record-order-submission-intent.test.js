@@ -263,3 +263,27 @@ test("persists Conservative recovery SELL ownership through the strict operation
   assert.equal(sellResult.data.record.data.positionId, ownership.positionId)
   assert.equal(Object.hasOwn(sellResult.data.record.data, "cycleId"), false, "A CG recovery SELL must not acquire an RS cycle identity.")
 })
+
+
+test("persists a Conservative BUY with CG Position ownership and its explicit durable purpose", async (t) => {
+  const operationalStateStore = await createStore(t)
+  const ownership = {
+    strategyId: StrategyId.COIN_GRABBER,
+    positionId: "position:cg:dogeusdt",
+    purpose: "CONSERVATIVE_BUY",
+  }
+
+  const result = await recordOrderSubmissionIntent({
+    operationalStateStore,
+    order,
+    purpose: "CONSERVATIVE_BUY",
+    ownership,
+  })
+
+  assert.equal(result.ok, true, result.errors?.map(({ message }) => message).join("; "))
+  assert.equal(result.data.durable, true)
+  assert.equal(result.data.record.data.purpose, "CONSERVATIVE_BUY")
+  assert.equal(result.data.record.data.strategyId, StrategyId.COIN_GRABBER)
+  assert.equal(result.data.record.data.positionId, ownership.positionId)
+  assert.equal(Object.hasOwn(result.data.record.data, "cycleId"), false)
+})
