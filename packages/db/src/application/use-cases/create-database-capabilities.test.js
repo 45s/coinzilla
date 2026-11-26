@@ -455,7 +455,7 @@ test("provider composition rejects missing and array capability declarations", (
 })
 
 
-test("provider composition does not require a separate read-transaction hook", async () => {
+test("provider composition requires a read transaction boundary", () => {
   const provider = createProvider({
     capabilities: {
       transactions: {
@@ -474,18 +474,9 @@ test("provider composition does not require a separate read-transaction hook", a
     },
   })
   delete provider.withReadTransaction
-  const database = createDatabase({ provider })
-  await database.connect()
 
-  try {
-    assert.deepEqual(
-      await database.create({
-        collection: "people",
-        record: { id: "without-read-hook" },
-      }),
-      { id: "without-read-hook" },
-    )
-  } finally {
-    await database.close()
-  }
+  assert.throws(
+    () => createDatabase({ provider }),
+    /withReadTransaction/,
+  )
 })
