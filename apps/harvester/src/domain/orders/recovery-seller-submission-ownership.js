@@ -43,7 +43,10 @@ function normalizeSubmissionOwnership({ order, purpose, ownership } = {}) {
   if (ownership.purpose !== purpose) {
     throw new TypeError("Submission ownership strategy and purpose must match the canonical intent")
   }
-  validateOrderIdentity({ order, ownership })
+  validateOrderIdentity({
+    order,
+    ownership,
+  })
 
   const positionId = requireIdentifier({
     value: ownership.positionId,
