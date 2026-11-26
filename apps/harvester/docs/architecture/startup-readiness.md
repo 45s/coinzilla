@@ -67,11 +67,9 @@ Health, trading enablement, operator authorization and restart-recovery permissi
 
 Default tests remain offline, deterministic and credential-free. Test-first RED/GREEN evidence and exact-head GitHub Actions results are recorded in the task PR. No TESTNET or LIVE account operation is part of this issue.
 
-
 ## Test-first implementation checkpoints
 
 The first regression slice specifies the source-backed report contract, the authorized operator read-model exposure, and deferred opening of the existing user-data trading gate. The RED checkpoint is expected until the report builder and deferred activation integration are implemented. No new mutable readiness state or exchange operation is introduced by the tests.
-
 
 ## Implementation checkpoint — immutable report builder
 
@@ -79,11 +77,9 @@ The first production slice now contains the pure readiness projection used by bo
 
 Startup wiring and the operator projection remain in progress. Required checks with missing evidence fail closed at their declared runtime or market scope. External-order-only account audit classifications remain warnings; the existing per-symbol policy and engine blocker determine market impact.
 
-
 ## Implementation checkpoint — authorized operator read model
 
 The existing authorized status and market queries now consume the same immutable readiness report used by startup. The report is exposed as readinessReport; per-market readiness and blockers are projected from that report rather than recomputed independently. Existing operator authorization remains the gate for reading it.
-
 
 ## Implementation checkpoint — startup boundary and market evidence
 
@@ -91,106 +87,83 @@ Startup now retains the existing user-data readiness flag as the only global tra
 
 Accepted WebSocket price/book events are distinguished from subscription acknowledgements; initial price seeds are reported separately. The engine operator snapshot now exposes book freshness and the existing LIMIT_MAKER book blocker. The account snapshot manager exposes safe audit summaries only; no order identifiers, balances or account IDs are included in diagnostics. Restoration remains disabled, and prior-process evidence keeps the runtime observation-only.
 
-
 ## Implementation checkpoint — engine book evidence and operator projection
 
 The engine's existing operator market snapshot now includes order type, whether a book is required, book timestamp/freshness and the existing book blocker. The authorized status and market queries consume the immutable readiness report and expose the same per-market readiness/blocker projection; they no longer calculate a separate readiness interpretation.
-
 
 ## Test coverage checkpoint
 
 The configured Harvester regression matrix now includes the immutable report, authorized operator read-model and deferred user-data activation suites. Existing account-snapshot, market-subscription, engine and startup suites also cover durable audit summaries, first accepted market-data events, book freshness and startup gate ordering. No LIVE or TESTNET account is used by these tests.
 
-
 ## Implementation checkpoint — source-backed readiness inputs
 
 The startup composition now derives market route expectations from the configured per-symbol market-data provider identity (no fallback to the execution broker identity), checks the actual application-owned `BROKER_PORT_METHODS` contract, and includes the existing account-scoped safety-blocker projection. Price/book evidence carries the source-owned 5-second threshold; candle freshness is supplied by the candle-history service rather than duplicated in the report.
-
 
 ## Deferred user-data readiness
 
 The existing `userDataState.ready` remains the only global trading gate. While the startup report is pending, the user-data status observer is prevented from reopening that gate on an early `connected` status. The explicit post-report activation continuation revalidates the existing reconciliation/account safety conditions, clears the temporary lifecycle deferral flag, and opens the same gate. This prevents asynchronous status callbacks from bypassing the startup boundary without adding a second readiness authority.
 
-
 ## Source-owned freshness thresholds and account safety
 
 The readiness projection now reports the market-data service's 5-second price/book threshold and the candle-history service's own 65-second threshold. Account-scoped safety blockers are global blockers; a non-account-scoped blocker is surfaced as a warning and remains enforced by its owning market/runtime scope. The report includes each check's source of truth, expected condition, observed timestamp, severity and evidence state.
-
 
 ## Diagnostic record contract
 
 Each report check now carries a stable code, source-of-truth description, expected condition, observed timestamp and evidence, severity, evidence state, diagnosis, possible causes where supported, recovery outcome where available, impact and operator action. The report remains a projection: it does not persist a second readiness state or perform financial operations.
 
-
 ## Operator read-model boundary
 
 The startup boundary requires the full source-backed evidence set. A later operator query does not pretend that startup-only evidence (process continuity, PREFLIGHT durability, first-event provenance, or broker capability inspection) was rechecked if the source snapshot does not include it; those checks are explicitly `NOT_APPLICABLE` with their source limitation. Live engine blockers and the existing user-data readiness flag remain authoritative for current market/account admission.
-
 
 ## Operator read-model evidence
 
 The report distinguishes the full startup boundary from later operator reads. Startup-only checks remain blocking when their required inputs are missing during startup. Outside startup, unavailable startup-only provenance is reported as `NOT_APPLICABLE`, while the existing user-data gate and engine-provided market blockers remain authoritative for live trading admission.
 
-
 ## Structured startup diagnostics
 
 Startup readiness blocks now use a Harvester-owned `SystemCustomError` with a stable code and flat, sanitized context. User-data unsafe and reconciliation failures also retain stable codes. The terminal logger emits the check's expected condition, observed evidence, source, severity, possible causes, recovery outcome and operator action without exposing credentials or account identifiers.
-
 
 ## Verification correction
 
 The user-data startup assertions now distinguish the stable structured error codes for unsafe initial events and unsafe deferred activation. A status-handler callback cannot reopen the existing readiness gate while the startup audit is pending.
 
-
 The redaction test deliberately supplies a private account identifier and verifies that the projected report never serializes it. Provider identity comparisons still use the full source identity internally; only diagnostic output is sanitized.
-
 
 ## Startup failure preservation
 
 Market-data and candle-history startup failures trigger a best-effort readiness report, but a secondary diagnostic failure is logged separately and never replaces the original startup exception. The original broker, market-data or candle-history failure remains the error rethrown to the existing lifecycle owner.
 
-
 ## User-data startup decomposition
 
 The user-data startup sequence is split into explicit read-only PREFLIGHT, trading PREFLIGHT, and deferred activation steps. The subscription owner remains unchanged, and the existing account snapshot, open-order audit, queue drain, safety assertion and user-data readiness gate retain their original order.
-
 
 ## Authoritative user-data recovery
 
 The recovery-generation transition now clears `streamUnsafe` and `requiresReconciliation` only for a matching, acknowledged authoritative `reconciled` subscription generation. A transport-level `recovered` event, stale generation, accounting failure or retryable recovery failure cannot clear the application reconciliation gate.
 
-
 Market-price subscription setup now delegates the per-symbol intake reset to a small helper. The subscription lifecycle remains responsible for installing the handler, awaiting the broker acknowledgement and registering the subscription; readiness still requires an actual accepted price event or initial seed.
-
 
 ## Engine market projection decomposition
 
 The operator market projection now separates market-data facts, pause/ownership facts, volatility facts and output shaping. The existing engine-owned blocker codes remain the source of truth for live market admission; the readiness report only projects them and adds startup-boundary diagnostics when those inputs are available.
 
-
 ## Operator read-query composition
 
 The operator read use case now isolates runtime snapshot retrieval, engine market snapshot retrieval and readiness projection evaluation. Each boundary preserves its original structured error/cause; the public status and markets queries remain read-only and use the same existing engine snapshots.
 
-
 The startup diagnostic fallback logger now uses the existing logger interface and sanitizes error codes before writing them. The original startup exception remains the one propagated to lifecycle cleanup.
-
 
 ## Candle-history execution boundaries
 
 Historical retrieval, historical validation, buffered-event replay, live open-candle handling, live closed-candle handling and bounded gap backfill are separate functions. The service still owns its 65-second live-candle freshness threshold and remains the authority for volatility-history readiness.
 
-
 ## Broker connection evidence
 
 Broker connection diagnostics measure the existing `connectBroker` handshake using the injected startup clock and preserve a sanitized failure code if connection fails. The capability check distinguishes the structural `BROKER_PORT_METHODS` contract from additional exchange capability requirements explicitly configured through the existing provider connection path; no unconfigured exchange permission is claimed.
 
-
 Broker connection is measured around the existing `connectBroker` call. A failed handshake is reported through the integrated startup audit before the original connection error is rethrown; candle-history service construction is separately diagnosed and does not rewrite a successful broker connection as failed.
 
-
 The connection check reports the measured handshake duration and any provider-supplied timeout/error code; it does not claim an application-level timeout where the existing BrokerPort connection contract does not define one.
-
 
 ## Final implementation contract
 
