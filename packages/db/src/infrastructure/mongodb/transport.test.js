@@ -129,6 +129,7 @@ test("MongoDB transport enforces the connection timeout and destroys stalled soc
 
 test("MongoDB transport preserves socket errors and rejects every outstanding request", async () => {
   const fake = createFakeTransport()
+  const { transport } = fake
   await transport.connect()
   const { socket } = fake
   const first = transport.command({ body: { ping: 1 } })
@@ -157,6 +158,7 @@ test("MongoDB transport validates commands, options, pending limits, and socket 
   )
 
   const fake = createFakeTransport()
+  const { transport } = fake
   await assert.rejects(
     transport.command({ body: { ping: 1 } }),
     /not connected/,
@@ -211,6 +213,7 @@ test("MongoDB transport rejects unsupported streaming responses", async () => {
 
 test("MongoDB transport fails closed when socket writes fail", async () => {
   const fake = createFakeTransport()
+  const { transport } = fake
   await transport.connect()
   const { socket } = fake
   socket.write = (_frame, callback) => {
@@ -278,6 +281,7 @@ test("MongoDB TLS transport waits for secureConnect rather than plain connect", 
 
 test("MongoDB transport handles socket end and idempotent close", async () => {
   const fake = createFakeTransport()
+  const { transport } = fake
   await transport.connect()
   const { socket } = fake
   const pending = transport.command({ body: { ping: 1 } })
@@ -344,6 +348,7 @@ test("MongoDB transport rejects timed-out requests and releases their correlatio
 
 test("MongoDB transport rejects malformed frames and all pending operations", async () => {
   const fake = createFakeTransport()
+  const { transport } = fake
   await transport.connect()
   const { socket } = fake
   const pending = transport.command({ body: { ping: 1 } })
@@ -355,6 +360,7 @@ test("MongoDB transport rejects malformed frames and all pending operations", as
 
 test("MongoDB transport close rejects outstanding commands and destroys the socket", async () => {
   const fake = createFakeTransport()
+  const { transport } = fake
   await transport.connect()
   const { socket } = fake
   const pending = transport.command({ body: { ping: 1 } })
@@ -390,6 +396,7 @@ test("MongoDB transport close rejects an in-progress connection attempt", async 
 
 test("MongoDB transport enforces the queued write-buffer bound before writing", async () => {
   const fake = createFakeTransport()
+  const { transport } = fake
   await transport.connect()
   const { socket } = fake
   socket.writableLength = 64 * 1024 * 1024 - 1
