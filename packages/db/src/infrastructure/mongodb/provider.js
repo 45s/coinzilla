@@ -414,7 +414,7 @@ body })
       ambiguous = true
       lastError = result.error
     } catch (error) {
-      if (error instanceof DatabaseProviderError) {
+      if (!ambiguous && error instanceof DatabaseProviderError) {
         throw error
       }
       if (!ambiguous && error?.outcomeUnknown === false) {
