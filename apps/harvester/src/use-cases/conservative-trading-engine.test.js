@@ -11869,15 +11869,27 @@ test("pauses a market after durable submission-intent failure so repeated ticks 
   const harness = await createHarness({
     onOperationalStateSubmissionIntent: async () => {
       intentCalls += 1
-      return { ok: false, errors: [intentFailure] }
+      return {
+        ok: false,
+        errors: [intentFailure],
+      }
     },
-    onOperationalStateSubmissionOutcome: async () => ({ ok: true, data: { durable: true } }),
+    onOperationalStateSubmissionOutcome: async () => ({
+      ok: true,
+      data: {
+        durable: true,
+      },
+    }),
     onPlaceOrderStarted: () => { brokerCalls += 1 },
   })
 
   const first = await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+    priceEvent: {
+      symbol: "DOGEUSDT",
+      price: "100",
+      timestamp: 1,
+    },
   })
 
   assert.equal(first.ok, false, "A rejected durable intent must fail the strategy decision.")
@@ -11887,7 +11899,11 @@ test("pauses a market after durable submission-intent failure so repeated ticks 
 
   const second = await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: { symbol: "DOGEUSDT", price: "100.01", timestamp: 2 },
+    priceEvent: {
+      symbol: "DOGEUSDT",
+      price: "100.01",
+      timestamp: 2,
+    },
   })
 
   assert.equal(second.ok, true, "A later market tick must be safely deferred by the latched market pause.")

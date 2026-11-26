@@ -507,7 +507,12 @@ async function preparePendingSubmission({ context, candidate } = {}) {
       })
     }
   }
-  return toResult({ data: { ready: true, candidate: submissionCandidate } })
+  return toResult({
+    data: {
+      ready: true,
+      candidate: submissionCandidate,
+    },
+  })
 }
 
 function classifyBrokerSubmissionFailure({ pendingOrder, brokerResult } = {}) {

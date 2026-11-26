@@ -733,7 +733,10 @@ test("does not submit a sibling BUY when the recovery SELL intent is not durable
       accountId: "binance-primary",
       placeOrder: async ({ order }) => {
         brokerCalls += 1
-        return { ok: true, data: makeAcknowledgement(order) }
+        return {
+          ok: true,
+          data: makeAcknowledgement(order),
+        }
       },
     },
     onPendingOrder: async ({ purpose }) => ({
@@ -742,8 +745,16 @@ test("does not submit a sibling BUY when the recovery SELL intent is not durable
     onDurableSubmissionIntent: async ({ order }) => {
       calls.push(`intent:${order.side}`)
       return order.side === "SELL"
-        ? { ok: false, errors: [failure] }
-        : { ok: true, data: { durable: true } }
+        ? {
+          ok: false,
+          errors: [failure],
+        }
+        : {
+          ok: true,
+          data: {
+            durable: true,
+          },
+        }
     },
     onDurableSubmissionOutcome: async () => {
       assert.fail("A rejected intent must not produce a durable submission outcome")
@@ -1294,8 +1305,16 @@ test("persists the registered CG strategy purpose for an ordinary Conservative B
     },
     onPendingOrder: async () => ({ ownership: conservativeOwnership }),
     onDurableSubmissionIntent: async ({ purpose, ownership }) => {
-      durableFacts.push({ purpose, ownership })
-      return { ok: true, data: { durable: true } }
+      durableFacts.push({
+        purpose,
+        ownership,
+      })
+      return {
+        ok: true,
+        data: {
+          durable: true,
+        },
+      }
     },
     onDurableSubmissionOutcome: async ({ purpose, ownership }) => {
       durableFacts.push({ purpose, ownership })
@@ -1311,8 +1330,14 @@ test("persists the registered CG strategy purpose for an ordinary Conservative B
   assert.deepEqual(
     durableFacts,
     [
-      { purpose: "CONSERVATIVE_BUY", ownership: conservativeOwnership },
-      { purpose: "CONSERVATIVE_BUY", ownership: conservativeOwnership },
+      {
+        purpose: "CONSERVATIVE_BUY",
+        ownership: conservativeOwnership,
+      },
+      {
+        purpose: "CONSERVATIVE_BUY",
+        ownership: conservativeOwnership,
+      },
     ],
     "Durable intent and outcome must store the same CG purpose and Position attribution.",
   )
