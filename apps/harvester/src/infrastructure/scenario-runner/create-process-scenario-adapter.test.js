@@ -430,7 +430,10 @@ test("process worker rejects dangerous Node APIs and does not inherit Harvester 
     } else {
       process.env[secretName] = previousSecret
     }
-    rmSync(directory, { recursive: true, force: true })
+    rmSync(directory, {
+      recursive: true,
+      force: true,
+    })
   }
 })
 
@@ -456,6 +459,13 @@ test("process adapter waits for an explicit worker-ready handshake before dispat
     }),
   })
   let started = false
+  const expectedExecuteMessage = {
+    type: "execute",
+    runId: "run-worker-ready",
+    strategyId: "example",
+    scenarioId: "scenario",
+    input: null,
+  }
   const execution = adapter.execute({
     runId: "run-worker-ready",
     scenarioId: "scenario",
@@ -473,15 +483,13 @@ test("process adapter waits for an explicit worker-ready handshake before dispat
   child.emit("message", { type: "ready" })
   assert.equal(started, false,
     "Worker bootstrap readiness alone must not mark production execution as Running.")
-  assert.deepEqual(messages, [{
-    type: "execute",
-    runId: "run-worker-ready",
-    strategyId: "example",
-    scenarioId: "scenario",
-    input: null,
-  }], "The parent must dispatch once after bootstrap readiness without marking the run Running yet.")
+  assert.deepEqual(messages, [expectedExecuteMessage],
+    "The parent must dispatch once after bootstrap readiness without marking the run Running yet.")
 
-  child.emit("message", { type: "started", runId: "run-worker-ready" })
+  child.emit("message", {
+    type: "started",
+    runId: "run-worker-ready",
+  })
   child.emit("message", {
     runId: "run-worker-ready",
     ok: true,
@@ -491,13 +499,8 @@ test("process adapter waits for an explicit worker-ready handshake before dispat
 
   assert.equal(started, true,
     "The process adapter must signal Running only after the worker confirms execution has started.")
-  assert.deepEqual(messages, [{
-    type: "execute",
-    runId: "run-worker-ready",
-    strategyId: "example",
-    scenarioId: "scenario",
-    input: null,
-  }], "The parent must dispatch exactly once and only after readiness is confirmed.")
+  assert.deepEqual(messages, [expectedExecuteMessage],
+    "The parent must dispatch exactly once and only after readiness is confirmed.")
   assert.deepEqual(result, { ready: true },
     "The adapter must return the result produced after the readiness handshake.")
 })
