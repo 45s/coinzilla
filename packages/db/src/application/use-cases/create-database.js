@@ -1,4 +1,5 @@
 import { createDatabaseEntity } from "../../domain/entities/database.js"
+import { DatabaseTransactionUnsupportedError } from "../../domain/errors/database-errors.js"
 
 const REQUIRED_PROVIDER_METHODS = Object.freeze([
   "connect",
@@ -123,6 +124,9 @@ function createProviderNeutralFacade({ database, provider }) {
   const capabilities = createCapabilitiesSnapshot(provider.capabilities)
 
   function runOperation({ operation, input }) {
+    if (database.state !== "connected") {
+      throw new Error("Database must be connected to execute operations")
+    }
     if (typeof provider.execute === "function") {
       return provider.execute({ operation, input })
     }
@@ -144,7 +148,7 @@ function createProviderNeutralFacade({ database, provider }) {
         throw new TypeError("A transaction callback is required")
       }
       if (!capabilities.transactions.multiDocument) {
-        throw new Error("Provider multi-document transactions are not supported")
+        throw new DatabaseTransactionUnsupportedError()
       }
       return database.transaction((transaction) => {
         if (capabilities.transactions.callbackMode === "synchronous" && isAsyncFunction(work)) {
