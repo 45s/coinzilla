@@ -8,7 +8,7 @@ const INT64_MAX = (2n ** 63n) - 1n
 export class BsonBinary {
   constructor(bytes, subtype = 0) {
     if (!Buffer.isBuffer(bytes) || ![0, 4].includes(subtype)) {
-      throw new TypeError("BSON binary requires a Buffer and an unsigned byte subtype")
+      throw new TypeError("BSON binary requires a Buffer and supported generic (0) or UUID (4) subtype")
     }
     if (subtype === 4 && bytes.length !== 16) {
       throw new TypeError("BSON UUID binary subtype 4 must contain exactly 16 bytes")
