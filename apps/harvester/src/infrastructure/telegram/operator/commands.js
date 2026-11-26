@@ -79,15 +79,15 @@ function parseAccountBlockerResolutionCommand({ command, argumentsList } = {}) {
     return undefined
   }
   if (argumentsList.length !== 1 || argumentsList[0] !== "cause-fixed") {
-    return {
+    return Object.freeze({
       type: "INVALID",
       command: "RESOLVEACCOUNTBLOCKERS",
-    }
+    })
   }
-  return {
+  return Object.freeze({
     type: TELEGRAM_OPERATOR_ACTIONS.RESOLVE_ACCOUNT_BLOCKERS,
     causeFixed: true,
-  }
+  })
 }
 
 function parseMarketPauseCommand({ command, argumentsList } = {}) {
@@ -108,6 +108,9 @@ function parseMarketPauseCommand({ command, argumentsList } = {}) {
 
 export function getInvalidCommandUsage(command) {
   const normalizedCommand = String(command ?? "command").toLowerCase()
+  if (normalizedCommand === "resolveaccountblockers" || normalizedCommand === "resolve_account_blockers") {
+    return "Usage: /resolveaccountblockers cause-fixed — confirm the underlying account cause is fixed; trading remains blocked until controlled restart."
+  }
   if (["PAUSEBUYS", "RESUMEBUYS", TELEGRAM_OPERATOR_ACTIONS.PAUSE, TELEGRAM_OPERATOR_ACTIONS.RESUME].includes(command)) {
     return `Usage: /${normalizedCommand} <SYMBOL>. Use /help for commands.`
   }
@@ -153,6 +156,9 @@ export function parseTelegramOperatorCommand(...args) {
     command,
     argumentsList,
   }) ?? parseEmergencyBuyCommand({
+    command,
+    argumentsList,
+  }) ?? parseAccountBlockerResolutionCommand({
     command,
     argumentsList,
   }) ?? parseMarketPauseCommand({
