@@ -14,7 +14,7 @@ The accepted architecture is recorded in [ADR-0001](./docs/decisions/0001-provid
 
 ## Dependency-free MongoDB provider — approved initiative #1865
 
-**Status: Approved; implementation not started.** Tracking issue [#1865](https://github.com/45s/coinzilla/issues/1865). Architecture assessment and initial scope are recorded here and in the [assessment PR](https://github.com/45s/coinzilla/pull/).
+**Status: Approved; implementation not started.** Tracking issue [#1865](https://github.com/45s/coinzilla/issues/1865). Architecture assessment and initial scope are recorded here and in the [assessment PR #1866](https://github.com/45s/coinzilla/pull/1866).
 
 ### Audit conclusion
 
