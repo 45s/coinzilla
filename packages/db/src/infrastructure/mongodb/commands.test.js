@@ -37,7 +37,7 @@ test("MongoDB create isolates collection records and returns the provider-neutra
     await operations.create({ collection: "people", record }),
     record,
   )
-  assert.equal(stub.calls[0].insert, "people")
+  assert.match(stub.calls[0].insert, /^coinzilla_/)
   assert.equal(stub.calls[0].documents[0]._id, "person-1")
   assert.notDeepEqual(stub.calls[0].documents[0].data, record)
   assert.equal(stub.calls[0].$db, "app")
