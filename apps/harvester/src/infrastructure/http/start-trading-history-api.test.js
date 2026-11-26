@@ -57,6 +57,22 @@ test("starts the local API without requiring bearer-token configuration", async 
   assert.equal(serverInput.host, "127.0.0.1", "The unauthenticated local API must bind only to loopback.")
   assert.equal(serverInput.port, 4201, "The API must use its documented default local port.")
   assert.equal(serverInput.eventBus, eventBus, "The WebSocket endpoint must share Harvester's EventBus.")
+  const rsRegistration = serverInput.scenarioRunnerCatalog.find((strategy) => strategy.strategyId === "RS")
+  assert.ok(rsRegistration, "The real API composition must register the production Recovery Seller scenario catalogue.")
+  const runtimeScenario = rsRegistration.scenarios.find((scenario) =>
+    scenario.id === "RS-RUNTIME-SELL-SUBMISSION-001")
+  assert.equal(runtimeScenario.executable, false,
+    "The incomplete runtime scenario must remain non-executable in production.")
+  assert.equal(runtimeScenario.executionStatus, "PRELIMINARY")
+  assert.ok(runtimeScenario.readinessReasons.some((reason) => /sandbox/i.test(reason)),
+    "The production catalogue must expose the missing OS-sandbox boundary.")
+  const blockedRun = serverInput.scenarioRunner.submit({
+    strategyId: "RS",
+    scenarioId: runtimeScenario.id,
+    input: runtimeScenario.defaultInput,
+  })
+  assert.equal(blockedRun.status, "Blocked",
+    "The production API must fail closed instead of falling back to an unsandboxed worker.")
   await service.close()
   assert.equal(serverCloseCalls, 1, "The optional API lifecycle must close its listener.")
   assert.equal(database.closeCalls, 0, "The API must not close Harvester's shared database.")
