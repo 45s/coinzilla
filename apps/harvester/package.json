@@ -154,9 +154,12 @@
       "src/bootstrap/subscriptions/subscribe-to-market-data.test.js",
       "src/use-cases/conservative-initial-buy-scenario.test.js",
       "src/use-cases/conservative-sell-accounting-scenario.test.js",
-      "test/scenarios/shared/scenario-system.test.js",
-      "test/scenarios/shared/registry-and-runner.scenario.test.js",
-      "scripts/run-conservative-scenarios.test.js"
+      "test/scenarios/recovery-seller/registry-and-runner.scenario.test.js",
+      "test/scenarios/recovery-seller/authorization-custody.scenario.test.js",
+      "test/scenarios/recovery-seller/buy-accounting.scenario.test.js",
+      "test/scenarios/recovery-seller/mixed-sell-planning.scenario.test.js",
+      "test/scenarios/recovery-seller/mixed-sell-fill-allocation.scenario.test.js",
+      "src/use-cases/create-recovery-seller-action-authorizer.test.js"
     ]
   },
   "scripts": {

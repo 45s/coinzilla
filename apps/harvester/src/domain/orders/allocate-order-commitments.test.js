@@ -800,3 +800,73 @@ test("rejects a mixed SELL when verified free Spot custody is smaller than track
   assert.equal(result.ok, false, "Configured or tracked legacy quantity cannot override insufficient exchange-reported free Spot base.")
   assert.match(result.errors[0].message, /available free base balance after commitments/)
 })
+
+
+test("RS-008-018-C: aggregates CG and RS quote reservations before authorizing another BUY", () => {
+  const coinGrabberQuoteCommitment = "60"
+  const recoverySellerQuoteCommitment = "50"
+  const result = allocateOrderCommitments({
+    actions: [{
+      side: "BUY",
+      price: "10",
+      quantity: "5",
+    }],
+    quoteFreeBalance: "100",
+    baseFreeBalance: "0",
+    quoteCashFlow: "0",
+    activeBaseQuantity: "0",
+    portfolioBaseBalance: "0",
+    outstandingRecoveryAmount: "0",
+    committedQuote: "0",
+    committedQuoteBalance: addDecimal({
+      left: coinGrabberQuoteCommitment,
+      right: recoverySellerQuoteCommitment,
+    }),
+    committedBase: "0",
+    committedBaseBalance: "0",
+    investmentLimit: "1000",
+  })
+
+  assert.equal(result.ok, true,
+    "Aggregate quote reservations must be a valid allocation input.")
+  assert.deepEqual(result.data.executableActions, [],
+    "The allocator must not authorize a BUY beyond shared free quote.")
+  assert.deepEqual(result.data.deferredActions, [{
+    action: {
+      side: "BUY",
+      price: "10",
+      quantity: "5",
+    },
+    reason: "INSUFFICIENT_QUOTE_BALANCE",
+  }], "The BUY must be deferred after summing CG and RS quote commitments.")
+})
+
+test("RS-008-018-D: rejects aggregate CG and RS SELL commitments that oversell shared base inventory", () => {
+  const coinGrabberBaseCommitment = "4"
+  const recoverySellerBaseCommitment = "5"
+  const totalCommittedBase = addDecimal({
+    left: coinGrabberBaseCommitment,
+    right: recoverySellerBaseCommitment,
+  })
+  const result = allocateOrderCommitments({
+    actions: [{
+      side: "SELL",
+      quantity: "2",
+    }],
+    quoteFreeBalance: "100",
+    baseFreeBalance: "10",
+    quoteCashFlow: "0",
+    activeBaseQuantity: "10",
+    portfolioBaseBalance: "10",
+    outstandingRecoveryAmount: "0",
+    committedQuote: "0",
+    committedBase: totalCommittedBase,
+    committedBaseBalance: totalCommittedBase,
+    investmentLimit: "1000",
+  })
+
+  assert.equal(result.ok, false,
+    "Aggregate CG and RS SELL reservations must prevent overselling shared base.")
+  assert.match(result.errors[0].message, /active inventory after commitments/,
+    "The rejection must identify the shared active-inventory commitment boundary.")
+})
