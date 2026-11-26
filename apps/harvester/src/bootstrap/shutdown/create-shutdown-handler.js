@@ -218,77 +218,93 @@ function getPhaseErrorStatus(error) {
   return "FAILED"
 }
 
-function createRunPhase({
+function assertNoPendingPhaseOperation({ pendingPhaseOperations, phase, now, logPhase } = {}) {
+  const existing = pendingPhaseOperations.get(phase)
+  if (!existing) {
+    return
+  }
+  const error = createPendingPhaseError({ phase, pending: existing, now })
+  logPhase({
+    phase,
+    status: "PENDING",
+    durationMs: error.elapsedMs,
+    failureReason: error.code,
+  })
+  throw error
+}
+
+function logPhaseOperationFailure({ error, phase, startedAt, now, logPhase } = {}) {
+  logPhase({
+    phase,
+    status: getPhaseErrorStatus(error),
+    durationMs: Math.max(0, now() - startedAt),
+    failureReason: getSafeFailureReason(error),
+  })
+}
+
+async function runPhase({
   pendingPhaseOperations,
   phaseTimeoutMs,
   now,
   setTimeoutFn,
   clearTimeoutFn,
   logPhase,
+  phase,
+  operation,
+  isFailure = isPhaseFailureResult,
+  timeoutMs = phaseTimeoutMs,
 } = {}) {
-  return async function runPhase({
+  assertNoPendingPhaseOperation({ pendingPhaseOperations, phase, now, logPhase })
+  const startedAt = now()
+  const controller = new AbortController()
+  const timeout = createPhaseTimeout({
     phase,
-    operation,
-    isFailure = isPhaseFailureResult,
-    timeoutMs = phaseTimeoutMs,
-  } = {}) {
-    const existing = pendingPhaseOperations.get(phase)
-    if (existing) {
-      const error = createPendingPhaseError({ phase, pending: existing, now })
-      logPhase({
-        phase,
-        status: "PENDING",
-        durationMs: error.elapsedMs,
-        failureReason: error.code,
-      })
-      throw error
-    }
-    const startedAt = now()
-    const controller = new AbortController()
-    const timeout = createPhaseTimeout({
+    timeoutMs,
+    startedAt,
+    controller,
+    now,
+    setTimeoutFn,
+  })
+  const operationPromise = createPhaseOperationPromise({ operation, controller })
+  trackPendingPhaseOperation({
+    pendingPhaseOperations,
+    phase,
+    operationPromise,
+    startedAt,
+    timeoutMs,
+  })
+  logPhase({
+    phase,
+    status: "STARTED",
+  })
+  try {
+    const outcome = timeout.promise
+      ? await Promise.race([operationPromise, timeout.promise])
+      : await operationPromise
+    return resolvePhaseOutcome({
+      outcome,
+      timeoutError: timeout.getError(),
+      isFailure,
       phase,
-      timeoutMs,
       startedAt,
-      controller,
       now,
-      setTimeoutFn,
+      logPhase,
     })
-    const operationPromise = createPhaseOperationPromise({ operation, controller })
-    trackPendingPhaseOperation({
-      pendingPhaseOperations,
-      phase,
-      operationPromise,
-      startedAt,
-      timeoutMs,
-    })
-    logPhase({ phase, status: "STARTED" })
-    try {
-      const outcome = timeout.promise
-        ? await Promise.race([operationPromise, timeout.promise])
-        : await operationPromise
-      return resolvePhaseOutcome({
-        outcome,
-        timeoutError: timeout.getError(),
-        isFailure,
-        phase,
-        startedAt,
-        now,
-        logPhase,
-      })
-    } catch (error) {
-      logPhase({
-        phase,
-        status: getPhaseErrorStatus(error),
-        durationMs: Math.max(0, now() - startedAt),
-        failureReason: getSafeFailureReason(error),
-      })
-      throw error
-    } finally {
-      if (timeout.timeoutHandle !== undefined) {
-        clearTimeoutFn(timeout.timeoutHandle)
-      }
+  } catch (error) {
+    logPhaseOperationFailure({ error, phase, startedAt, now, logPhase })
+    throw error
+  } finally {
+    if (timeout.timeoutHandle !== undefined) {
+      clearTimeoutFn(timeout.timeoutHandle)
     }
   }
+}
+
+function createRunPhase(dependencies = {}) {
+  return (options = {}) => runPhase({
+    ...dependencies,
+    ...options,
+  })
 }
 
 function createPhaseRunner({

@@ -938,6 +938,26 @@ field: "brokerOrderId" })
   order.requiresExchangeReconciliation = true
 }
 
+function assertAppliedFillProvenanceMatchesOrder({ fill, order } = {}) {
+  if (fill.providerInstanceId === undefined && fill.strategyId === undefined) {
+    return
+  }
+  const fields = [
+    ...(fill.providerInstanceId === undefined
+      ? []
+      : ["providerInstanceId", "providerType", "accountId"]),
+    ...(fill.strategyId === undefined
+      ? []
+      : ["purpose", "strategyId", "positionId", "cycleId"]),
+  ]
+  assertJournalOrderFieldsMatch({
+    data: fill,
+    order,
+    fields,
+    message: "Applied fill provenance conflicts with its journaled order",
+  })
+}
+
 function resolveFillOrder({ fill, state }) {
   const clientOrderId = fill.clientOrderId ?? state.clientIdByBrokerId.get(fill.brokerOrderId)
   if (!clientOrderId) {
@@ -948,22 +968,7 @@ function resolveFillOrder({ fill, state }) {
     clientOrderId,
     eventName: EVENT.FILL_APPLIED,
   })
-  if (fill.providerInstanceId !== undefined || fill.strategyId !== undefined) {
-    const fields = [
-      ...(fill.providerInstanceId === undefined
-        ? []
-        : ["providerInstanceId", "providerType", "accountId"]),
-      ...(fill.strategyId === undefined
-        ? []
-        : ["purpose", "strategyId", "positionId", "cycleId"]),
-    ]
-    assertJournalOrderFieldsMatch({
-      data: fill,
-      order,
-      fields,
-      message: "Applied fill provenance conflicts with its journaled order",
-    })
-  }
+  assertAppliedFillProvenanceMatchesOrder({ fill, order })
   if (order.submissionOutcome === "REJECTED") {
     throw new Error(`Applied fill references a definitively rejected submission: ${fill.fillId}`)
   }

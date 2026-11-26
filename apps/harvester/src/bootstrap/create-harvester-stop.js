@@ -178,6 +178,43 @@ function assertNoPendingProcessStop({ pendingProcessStopOperation, now } = {}) {
   })
 }
 
+async function awaitDurableProcessStop({
+  operationPromise,
+  timeout,
+  userDataState,
+  logShutdownPhase,
+  startedAt,
+  clearTimeoutFn,
+} = {}) {
+  try {
+    const outcome = await Promise.race([operationPromise, timeout.promise])
+    if (timeout.state.error) {
+      throw timeout.state.error
+    }
+    if (outcome.status !== "fulfilled") {
+      throw outcome.reason
+    }
+    assertDurableProcessStop(outcome.value)
+    logShutdownPhase({
+      phase: "PROCESS_STOP_DURABILITY",
+      status: "COMPLETED",
+      startedAt,
+    })
+  } catch (error) {
+    logDurableProcessStopFailure({
+      error,
+      userDataState,
+      logShutdownPhase,
+      startedAt,
+    })
+    throw error
+  } finally {
+    if (timeout.state.handle !== undefined) {
+      clearTimeoutFn(timeout.state.handle)
+    }
+  }
+}
+
 async function recordDurableProcessStop({
   operationalStateStore,
   recordProcessStopped,
@@ -212,33 +249,14 @@ async function recordDurableProcessStop({
     startedAt,
     controller,
   })
-  try {
-    const outcome = await Promise.race([operationPromise, timeout.promise])
-    if (timeout.state.error) {
-      throw timeout.state.error
-    }
-    if (outcome.status !== "fulfilled") {
-      throw outcome.reason
-    }
-    assertDurableProcessStop(outcome.value)
-    logShutdownPhase({
-      phase: "PROCESS_STOP_DURABILITY",
-      status: "COMPLETED",
-      startedAt,
-    })
-  } catch (error) {
-    logDurableProcessStopFailure({
-      error,
-      userDataState,
-      logShutdownPhase,
-      startedAt,
-    })
-    throw error
-  } finally {
-    if (timeout.state.handle !== undefined) {
-      clearTimeoutFn(timeout.state.handle)
-    }
-  }
+  await awaitDurableProcessStop({
+    operationPromise,
+    timeout,
+    userDataState,
+    logShutdownPhase,
+    startedAt,
+    clearTimeoutFn,
+  })
 }
 
 function createBeforeSharedServicesStop({ operatorControlLifecycle, logShutdownPhase } = {}) {
