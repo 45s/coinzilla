@@ -139,6 +139,8 @@ const invalidCapabilities = [
     },
   ]
 
+function emptyTransactionCallback() {}
+
 test("provider composition requires complete standard capability declarations", () => {
   for (const capabilities of invalidCapabilities) {
     assert.throws(
@@ -311,7 +313,7 @@ id: "outside" })
 record: { id: "inside" } })
       database.readOne({ collection: "people",
 id: "inside" })
-      nestedTransaction = database.transaction(() => {})
+      nestedTransaction = database.transaction(emptyTransactionCallback)
       assertDatabaseCloseBlocked({ database })
     })
     await assert.rejects(nestedTransaction, /Nested transactions are not supported/)
