@@ -2384,3 +2384,13 @@ The initial inventory contains 18 scenarios across 16 categories: 15 TEST-MAPPED
 - A refactor had removed `createScenarioRunner` option defaults and caused broad runner/host/API regressions. The public factory's defaults were restored.
 - The merged PR #1852 registry remains test-only and is not a production runtime catalogue.
 - Full RS adapter work remains gated by the independent terminal-SELL/STOP accounting defect in [issue #1842](https://github.com/45s/coinzilla/issues/1842), plus the trusted OS-level launcher. Keep all public RS scenarios non-executable.
+
+
+### Final PR #1837 audit checkpoint — 2026-11-26
+
+- Exact branch head: `ddbedd291ddf1b6ebcc7f1933688113e9450277c`; base `develop` at `ef5f5e25b0994f244eb6b29b62f5d48235df4544`; 253 commits ahead / 0 behind. PR #1837 remains Draft and unmerged.
+- The process adapter now waits for `ready` before dispatch and `started` before publishing `Running`. Node-internal IPC resolution is permitted without allowing direct worker-application imports of forbidden modules.
+- A test-only host-to-process acceptance test is configured in `apps/harvester/package.json`. It runs the ZRO runtime-dispatch fixture with a run-local simulated broker through a dedicated child process. Its test attestation is simulated; this is not OS isolation or the full production RS adapter.
+- The Harvester targeted suite passed on the earlier code checkpoint before the host-level acceptance test was added. The new acceptance test and all final workflows are queued/in progress on a code-identical head; no final-head green claim is made.
+- Full production RS adapter composition remains blocked by the independent terminal-SELL/STOP accounting defect in [issue #1842](https://github.com/45s/coinzilla) and by the absence of a trusted OS-level sandbox launcher. Public RS scenarios remain non-executable.
+- In-memory run history is accepted for the MVP; durable persistence is deferred and is not a blocker.
