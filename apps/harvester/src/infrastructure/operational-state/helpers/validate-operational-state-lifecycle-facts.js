@@ -260,7 +260,10 @@ export function validateSafetyBlockerResolvedFact({ factType, canonicalData, fac
   if (Object.keys(canonicalData).some((key) => !SAFETY_BLOCKER_RESOLVED_FIELDS.has(key))) {
     throw new TypeError("Safety-blocker resolution contains unsupported fields")
   }
-  validateResolvedBlockerIdentity({ canonicalData, factId })
+  validateResolvedBlockerIdentity({
+    canonicalData,
+    factId,
+  })
   validateResolvedBlockerActor(canonicalData)
   validateResolvedBlockerType(canonicalData)
   validateResolvedBlockerEvidence(canonicalData)
