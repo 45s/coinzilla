@@ -1,13 +1,9 @@
 import test from "node:test"
 import assert from "node:assert/strict"
 import { fork } from "node:child_process"
-import { fileURLToPath } from "node:url"
 import { createScenarioRunnerHost } from "./create-scenario-runner-host.js"
 import { createProcessScenarioAdapter } from "../scenario-runner/create-process-scenario-adapter.js"
-const TEST_WORKER_PATH = fileURLToPath(new URL(
-  "../scenario-runner/scenario-worker-runtime-acceptance-fixture.js",
-  import.meta.url,
-))
+import { getRecoverySellerRunnerCatalog } from "../scenario-runner/rs-scenario-adapter.js"
 
 function createTestSandboxLauncher() {
   // Test-only attestation exercises the host gate; it does not apply an OS sandbox.
@@ -30,39 +26,16 @@ function createTestSandboxLauncher() {
   return launcher
 }
 
-test("host executes the test-only RS runtime fixture in a child process with a simulated broker", async () => {
-  const scenario = {
-    id: "RS-TEST-ONLY-RUNTIME-DISPATCH",
-    name: "Test-only production runtime dispatch through simulated infrastructure",
-    layer: "APPLICATION",
-    status: "TEST_ONLY",
-    executionStatus: "EXECUTABLE",
-    executable: true,
-    readinessReasons: [],
-    inputSchema: {
-      type: "object",
-      required: ["marketPrice"],
-      additionalProperties: false,
-      properties: {
-        marketPrice: {
-          type: "string",
-          pattern: "^(?:0|[1-9][0-9]*)(?:[.][0-9]+)?$",
-        },
-      },
-    },
-    input: {
-      marketPrice: "12.3",
-    },
-  }
+test("host executes the registered production RS runtime scenario in a child process with simulation-only ports", async () => {
+  const scenario = getRecoverySellerRunnerCatalog().find((item) =>
+    item.id === "RS-RUNTIME-SELL-SUBMISSION-001")
   const adapter = createProcessScenarioAdapter({
     strategyId: "RS",
-    workerPath: TEST_WORKER_PATH,
     spawnSandboxedWorker: createTestSandboxLauncher(),
   })
   const updates = []
   const host = createScenarioRunnerHost({
     adapters: [adapter],
-    scenarioCatalog: [scenario],
     eventBus: {
       publish: (event) => updates.push(event),
     },

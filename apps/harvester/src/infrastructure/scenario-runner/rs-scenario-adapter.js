@@ -1,6 +1,10 @@
 import { isDeepStrictEqual } from "node:util"
 import { compareDecimal } from "@coinzilla/utils"
 import { calculateRecoverySellerProfitability } from "../../domain/strategies/recovery-seller/calculate-profitability.js"
+import {
+  executeRecoverySellerRuntimeScenario,
+  RECOVERY_SELLER_RUNTIME_SCENARIO,
+} from "./rs-runtime-scenario.js"
 
 const DECIMAL_STRING_SCHEMA = Object.freeze({
   type: "string",
@@ -154,7 +158,7 @@ function createAssertion({ name, actual, expected }) {
 
 
 export function getRecoverySellerRunnerCatalog() {
-  return Object.freeze([SCENARIO])
+  return Object.freeze([SCENARIO, RECOVERY_SELLER_RUNTIME_SCENARIO])
 }
 
 function assertScenarioNotAborted({ signal }) {
@@ -230,6 +234,9 @@ export async function executeRecoverySellerRunnerScenario({
       input,
       signal,
     })
+  }
+  if (scenarioId === RECOVERY_SELLER_RUNTIME_SCENARIO.id) {
+    return executeRecoverySellerRuntimeScenario({ runId, input, signal })
   }
   throw new Error(`RS scenario "${scenarioId}" is not supported by the current isolated adapter.`)
 }

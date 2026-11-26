@@ -202,3 +202,20 @@ cover these cases; focused test execution is still pending.
 
 This correction does not complete the production scenario adapter or establish OS-level
 worker isolation. Those remain separate fail-closed gates.
+
+
+## Production Recovery Seller scenario registry — 2026-11-26
+
+The RS worker adapter and host catalogue now share the production adapter module's
+scenario definitions. The registry includes a preliminary helper-only profitability
+mapping and an application-level runtime scenario that invokes
+`createRecoverySellerRuntimeDispatch`, production accounting, authorization, STOP
+workflow and order submission through run-local simulated infrastructure. The runtime
+scenario is discoverable and schema-validated by the host; execution still requires a
+trusted OS sandbox attestation. The process acceptance test now launches the normal
+production worker bootstrap and production scenario registration. Its test launcher
+uses a simulated attestation and therefore does not establish OS containment.
+
+The runtime scenario currently proves the authorized SELL-submission success path only.
+Rejection, partial-fill/terminal reconciliation, injected infrastructure failures and
+safety-stop cases remain unregistered and must not be inferred from the success case.

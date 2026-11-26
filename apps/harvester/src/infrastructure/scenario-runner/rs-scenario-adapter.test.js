@@ -4,7 +4,7 @@ import {
   executeRecoverySellerRunnerScenario,
   getRecoverySellerRunnerCatalog,
 } from "./rs-scenario-adapter.js"
-import { executeRecoverySellerRuntimeFixture } from "../../../test/scenarios/recovery-seller/rs-runtime-dispatch-fixture.js"
+import { executeRecoverySellerRuntimeScenario } from "./rs-runtime-scenario.js"
 
 test("RS profitability helper scaffold invokes the production calculation function and emits helper-level assertions", async () => {
   const result = await executeRecoverySellerRunnerScenario({
@@ -71,7 +71,7 @@ test("RS scenario adapter validates schema fields and decimal-string inputs", as
 
 
 test("internal RS runtime fixture exercises the production SELL dispatch with a deterministic simulation broker", async () => {
-  const result = await executeRecoverySellerRuntimeFixture({
+  const result = await executeRecoverySellerRuntimeScenario({
     runId: "run-rs-runtime-1",
     input: {
       marketPrice: "12.3",
@@ -92,10 +92,13 @@ test("internal RS runtime fixture exercises the production SELL dispatch with a 
   assert.ok(result.trace.some((step) => step.kind === "assertion"))
 })
 
-test("public RS runner catalog excludes internal runtime fixtures and exposes only the provisional RS candidate", () => {
-  assert.deepEqual(
-    getRecoverySellerRunnerCatalog().map((scenario) => scenario.id),
-    ["RS-004-011"],
-    "the synthetic runtime fixture must not be advertised as a registered RS scenario",
-  )
+test("production RS registry exposes the runtime scenario and keeps the helper-only mapping preliminary", () => {
+  const catalog = getRecoverySellerRunnerCatalog()
+  assert.deepEqual(catalog.map((scenario) => scenario.id), ["RS-004-011", "RS-RUNTIME-SELL-SUBMISSION-001"])
+  const runtimeScenario = catalog.find((scenario) => scenario.id === "RS-RUNTIME-SELL-SUBMISSION-001")
+  assert.equal(runtimeScenario.executable, true)
+  assert.equal(runtimeScenario.executionStatus, "EXECUTABLE")
+  assert.equal(runtimeScenario.layer, "APPLICATION")
+  assert.equal(catalog[0].executable, false)
+  assert.equal(catalog[0].executionStatus, "PRELIMINARY")
 })
