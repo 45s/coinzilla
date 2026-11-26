@@ -43,6 +43,7 @@ export interface ScenarioRunnerGateway {
   }): Promise<ScenarioRunRecord>;
   getRun(runId: string): Promise<ScenarioRunRecord>;
   cancel(runId: string): Promise<unknown>;
+  replay(runId: string): Promise<ScenarioRunRecord>;
 }
 
 export interface ScenarioRunSnapshot {
@@ -220,6 +221,11 @@ export function createScenarioRunnerApplication({ gateway }: {
       return refreshRun({ runId });
     },
 
+    async replayRun({ runId }: { runId: string }) {
+      const replay = await gateway.replay(runId);
+      return refreshRun({ runId: replay.runId });
+    },
+
     async loadHistoryRun({ runId }: { runId: string }): Promise<ScenarioHistorySnapshot> {
       const snapshot = await refreshRun({ runId });
       return {
@@ -242,7 +248,7 @@ export function createScenarioRunnerApplication({ gateway }: {
         assertionResults: output?.assertions,
         metadata: {
           executionSource: output?.source,
-          codeRevision: 'unavailable',
+          codeRevision: run.sourceRevision ?? 'unavailable',
           scenarioSchema: scenario?.inputSchema,
           scenarioCatalogSnapshotProvenance: scenario
             ? 'current-catalog-at-export-time-not-verified-as-run-time'

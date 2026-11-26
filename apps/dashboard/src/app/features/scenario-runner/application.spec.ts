@@ -56,6 +56,7 @@ function createGateway() {
     submit: vi.fn().mockResolvedValue(run({ status: 'Accepted', output: null })),
     getRun: vi.fn().mockResolvedValue(run()),
     cancel: vi.fn().mockResolvedValue(undefined),
+    replay: vi.fn().mockResolvedValue(run({ runId: 'run-2', replayOfRunId: 'run-1' })),
   };
   return gateway;
 }

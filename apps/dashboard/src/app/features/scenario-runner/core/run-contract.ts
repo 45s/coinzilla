@@ -6,6 +6,8 @@ export interface ScenarioRunRecord {
   readonly runId: string;
   readonly strategyId: string;
   readonly scenarioId: string;
+  readonly sourceRevision?: string | null;
+  readonly replayOfRunId?: string | null;
   readonly status: ScenarioRunStatus;
   readonly createdAt: string;
   readonly updatedAt: string;

@@ -1,7 +1,7 @@
 <section class="runner">
   <header>
     <h1>Strategy Scenario Runner</h1>
-    <p>Current RS mapping covers one preliminary profitability helper only. Full production-flow execution remains unavailable; all scenarios stay blocked pending complete strategy integration, verified OS isolation and durable replay.</p>
+    <p>Scenario execution is simulation-only. Exact replay requires a known matching source revision; run history is currently in-memory. Production OS sandbox verification remains a separate safety gate.</p>
   </header>
   @if (error()) {
     <p class="error" role="alert">{{ error() }}</p>
@@ -42,6 +42,9 @@
     @if (run()) {
       <button type="button" (click)="refresh()">Refresh</button>
       <button type="button" (click)="cancel()">Cancel</button>
+      @if (canReplay) {
+        <button type="button" [disabled]="loading()" (click)="replay()">Replay exact revision</button>
+      }
       <button type="button" (click)="copyDebugPackage()">Copy available debug evidence</button>
       @if (copied()) {
         <p role="status">Debug package copied.</p>
@@ -64,6 +67,10 @@
     <section class="run-summary">
       <h2>Run {{ run()?.runId }}</h2>
       <p>Status: <strong>{{ run()?.status }}</strong></p>
+      <p>Source revision: <code>{{ run()?.sourceRevision ?? 'unknown' }}</code></p>
+      @if (run()?.replayOfRunId) {
+        <p>Replay of: <code>{{ run()?.replayOfRunId }}</code></p>
+      }
       <pre>{{ run()?.diagnostics | json }}</pre>
     </section>
   }

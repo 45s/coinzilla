@@ -204,6 +204,26 @@ export class ScenarioRunnerComponent {
     }
   }
 
+  async replay(): Promise<void> {
+    const runId = this.run()?.runId;
+    if (!runId || !this.canReplay) {
+      return;
+    }
+    this.loading.set(true);
+    this.error.set(null);
+    try {
+      this.applyRunSnapshot(await this.application.replayRun({ runId }));
+    } catch (error) {
+      this.error.set(error instanceof Error ? error.message : 'Exact-revision replay failed.');
+    } finally {
+      this.loading.set(false);
+    }
+  }
+
+  get canReplay(): boolean {
+    return ['Completed', 'Failed', 'Cancelled', 'Timed out'].includes(this.run()?.status ?? '');
+  }
+
   async copyDebugPackage(): Promise<void> {
     const current = this.run();
     if (!current) {

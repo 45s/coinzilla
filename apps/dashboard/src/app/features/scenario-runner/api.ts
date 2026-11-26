@@ -47,6 +47,11 @@ export class ScenarioRunnerApi implements ScenarioRunnerGateway {
     return response.data;
   }
 
+  async replay(runId: string): Promise<ScenarioRunRecord> {
+    const response = await firstValueFrom(this.http.post<ScenarioRunnerEnvelope<ScenarioRunRecord>>(`${this.base}/runs/${encodeURIComponent(runId)}/replay`, {}));
+    return response.data;
+  }
+
   createEventSocket(): WebSocket {
     return new WebSocket(this.wsUrl);
   }
