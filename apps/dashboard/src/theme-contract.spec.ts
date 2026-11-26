@@ -1,8 +1,7 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
-import rawDashboardStyles from './styles.css?raw';
-
-const dashboardStyles = String((rawDashboardStyles as unknown as { default?: string }).default ?? rawDashboardStyles);
+const dashboardStyles = readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
 
 describe('dashboard theme surface contract', () => {
   it('maps feature surface aliases to the active palette tokens', () => {
