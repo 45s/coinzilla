@@ -637,7 +637,7 @@ html[data-theme="staradmin"] .pair-symbol {
 
 html[data-theme="staradmin"] .eyebrow,
 html[data-theme="staradmin"] .market-label-editor summary {
-  color: #e9864b;
+  color: #b85e2c;
 }
 
 html[data-theme="staradmin"] input:not([type="checkbox"]):not([type="color"]),
@@ -678,7 +678,7 @@ html[data-theme="staradmin"] .chart-line,
 html[data-theme="staradmin"] .chart-point,
 html[data-theme="staradmin"] .metric-change.positive {
   stroke: #34b1aa;
-  color: #218f89;
+  color: #18746f;
 }
 
 html[data-theme="staradmin"] .chart-point {
@@ -698,7 +698,7 @@ html[data-theme="staradmin"] .pnl-value,
 html[data-theme="staradmin"] .pnl-change,
 html[data-theme="staradmin"] .side-pill,
 html[data-theme="staradmin"] .side-tag {
-  color: #218f89;
+  color: #18746f;
 }
 
 html[data-theme="staradmin"] .favorite-row {
@@ -745,7 +745,7 @@ html[data-theme="staradmin"] .notice.warning,
 html[data-theme="staradmin"] .market-status.blocked,
 html[data-theme="staradmin"] .market-readiness.blocked,
 html[data-theme="staradmin"] .connection-indicator.reconnecting {
-  color: #9a7600;
+  color: #806100;
 }
 
 html[data-theme="staradmin"] .metric-change.positive,
@@ -755,7 +755,7 @@ html[data-theme="staradmin"] .connection-indicator.live,
 html[data-theme="staradmin"] .market-status.ready,
 html[data-theme="staradmin"] .market-readiness,
 html[data-theme="staradmin"] .state-pill.state-good {
-  color: #218f89;
+  color: #18746f;
 }
 
 html[data-theme="staradmin"] .snapshot-meta,
