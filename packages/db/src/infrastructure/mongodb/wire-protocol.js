@@ -48,7 +48,7 @@ label: "responseTo" })
     throw new TypeError("MongoDB OP_MSG contains unsupported flag bits")
   }
   if (!Array.isArray(sequences)) {
-    throw new TypeError("MongoDB OP_MSG sequence documents must be an array")
+    throw new TypeError("MongoDB OP_MSG sequences must be an array of sequence documents")
   }
   const bodySection = Buffer.concat([
     Buffer.from([0]),
