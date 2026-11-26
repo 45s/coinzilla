@@ -220,6 +220,9 @@ export async function performMongoHandshake({
     body: helloCommand,
   })
   assertCommandSucceeded(hello, "hello")
+  if (hello.serviceId !== undefined) {
+    throw new Error("MongoDB load-balanced topology is not supported")
+  }
 
   const minWireVersion = Number(hello.minWireVersion ?? 0)
   const maxWireVersion = Number(hello.maxWireVersion ?? 0)
