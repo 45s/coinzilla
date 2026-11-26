@@ -128,7 +128,7 @@ SQLite and MongoDB support exact equality filters, sorting and pagination. More 
 
 ### Transactions
 
-A transaction callback receives the same provider-neutral CRUD operations:
+A transaction callback receives the same provider-neutral CRUD operations. This first example uses SQLite's synchronous callback mode:
 
 ```js
 await database.transaction((transaction) => {
@@ -171,7 +171,7 @@ await database.transaction(async (transaction) => {
 ```
 
 
-For example, a Promise-returning callback is rejected and its deferred write does not escape the rollback:
+For SQLite, a Promise-returning callback is rejected and its deferred write does not escape the rollback:
 
 ```js
 await assert.rejects(
