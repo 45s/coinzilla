@@ -385,3 +385,13 @@ The separate initiative adds four package-level scenario files; it does not repl
 The scenario catalog is the single repository-wide human-readable behavior index. Issue #1780 owns the detailed RS matrix and exact-head evidence. No RS row is COVERED until its complete requirement is proved by new scenario evidence, merged to `develop`, and required CI is verified on the exact merged head.
 
 **Open contract discrepancies:** (1) STOP is described as terminal/no-reset, but a pure state resolver and durable resolution use case exist even though the operator facade exposes read-only status only; (2) the config currently sets `enabled: true`, while specification §15 says false by default; (3) third-asset fee quote valuation has no approved authoritative runtime source. Keep affected rows BLOCKED rather than inferring a resolution.
+
+
+### 2026-11-26 — RS-002 pending BUY commitment scenario mappings
+
+The from-scratch RS scenario registry now maps two application authorizer cases to newly added named tests in `src/use-cases/create-recovery-seller-action-authorizer.test.js`:
+
+- **RS-002-006-B — TEST-MAPPED:** `RS-002-006-B: keeps the unfilled portion of a partially filled RS BUY reserved in account allocation`. A PARTIALLY_FILLED BUY with 6 units remaining at price 10 reserves 60 quote; with 65 quote free, a new BUY defers with `INSUFFICIENT_QUOTE_BALANCE` and does not latch STOP.
+- **RS-002-020-B — TEST-MAPPED:** `RS-002-020-B: counts an owned pending BUY commitment exactly once at the pair investment cap`. Existing recovery exposure 20 + owned pending commitment 60 + proposed BUY 20 is accepted at exact 100 cap equality.
+
+Both named tests are included in `config.targetedTestFiles`. They passed Harvester Targeted Tests and Harvester Unit Tests on exact code head `a3aec5c456f88fa85126fef6a3086c52f2ffff17`. They prove these specific account-allocation boundaries only; they do not establish the full order-event partial-fill lifecycle, all account-snapshot authorization boundaries, or complete RS-002 coverage. RS-002-006 and RS-002 remain PARTIAL; no scenario is promoted to VERIFIED solely by test mapping.
