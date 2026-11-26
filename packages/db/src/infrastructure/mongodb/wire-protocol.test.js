@@ -161,7 +161,7 @@ test("OP_MSG rejects malformed sequence lengths and invalid request options", ()
     () => encodeOpMsg({
       requestId: 1,
       body: { ping: 1 },
-      sequences: [{ identifier: "bad\\u0000name", documents: [] }],
+      sequences: [{ identifier: "bad\u0000name", documents: [] }],
     }),
     /identifier/,
   )
