@@ -793,6 +793,11 @@
           "path": "src/bootstrap/shutdown/create-conservative-shutdown-participant.test.js",
           "name": "waits for the serialized engine shutdown barrier before cancelling owned BUYs",
           "kind": "failure"
+        },
+        {
+          "path": "src/bootstrap/shutdown/create-strategy-shutdown-coordinator.test.js",
+          "name": "does not overlap a retry with a timed-out participant operation that ignores abort",
+          "kind": "failure"
         }
       ],
       "runtimeStatus": "active",

@@ -208,6 +208,70 @@ test("returns a participant-specific timeout blocker and aborts its safety signa
   assert.equal(coordinator.isSafeToShutdown(), false, "A timed-out participant must never be considered safe.")
 })
 
+test("does not overlap a retry with a timed-out participant operation that ignores abort", async () => {
+  let releaseFirstWait
+  let waitCount = 0
+  let activeWaitCount = 0
+  let maximumConcurrentWaits = 0
+  let safe = false
+  const participant = {
+    strategyId: "CONSERVATIVE",
+    beginShutdown() {},
+    waitUntilSafe: () => {
+      waitCount += 1
+      activeWaitCount += 1
+      maximumConcurrentWaits = Math.max(maximumConcurrentWaits, activeWaitCount)
+      if (waitCount === 1) {
+        return new Promise((resolve) => {
+          releaseFirstWait = () => {
+            activeWaitCount -= 1
+            safe = true
+            resolve({ ok: true })
+          }
+        })
+      }
+      activeWaitCount -= 1
+      safe = true
+      return Promise.resolve({ ok: true })
+    },
+    isSafeToShutdown: () => safe,
+    getSafetySnapshot: () => ({
+      markets: [{
+        symbol: "DOGEUSDT",
+        blockers: safe ? [] : ["ORDER_RECONCILIATION_PENDING"],
+      }],
+    }),
+  }
+  const coordinator = createStrategyShutdownCoordinator({
+    timeoutMs: 25,
+    setTimeoutFn: (callback) => {
+      callback()
+      return "fake-deadline"
+    },
+    clearTimeoutFn: () => {},
+    participants: [participant],
+  })
+
+  await assert.rejects(
+    coordinator.waitUntilSafe(),
+    /STRATEGY_SHUTDOWN_SAFETY_UNPROVEN/,
+    "The first uncooperative participant operation must time out without proving shutdown safety.",
+  )
+  assert.equal(waitCount, 1, "The initial shutdown attempt must start exactly one participant operation.")
+  try {
+    await assert.rejects(
+      coordinator.waitUntilSafe(),
+      (error) => error.code === "STRATEGY_SHUTDOWN_PARTICIPANT_STILL_RUNNING",
+      "A retry must fail closed while the timed-out participant operation is still pending.",
+    )
+  } finally {
+    releaseFirstWait?.()
+  }
+  assert.equal(waitCount, 1, "A timed-out participant operation must not overlap with a second safety attempt.")
+  assert.equal(maximumConcurrentWaits, 1, "The coordinator must preserve single-flight participant safety evaluation.")
+  assert.equal(coordinator.isSafeToShutdown(), true, "A completed participant operation may be re-evaluated on a later attempt.")
+})
+ 
 test("rejects an invalid participant deadline instead of silently disabling bounded shutdown", () => {
   assert.throws(
     () => createStrategyShutdownCoordinator({ timeoutMs: 0 }),
