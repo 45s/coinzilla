@@ -278,7 +278,11 @@ test("does not overlap a retry with a timed-out participant operation that ignor
   }
   assert.equal(waitCount, 1, "A timed-out participant operation must not overlap with a second safety attempt.")
   assert.equal(maximumConcurrentWaits, 1, "The coordinator must preserve single-flight participant safety evaluation.")
+  await Promise.resolve()
   assert.equal(coordinator.isSafeToShutdown(), true, "A completed participant operation may be re-evaluated on a later attempt.")
+  const retry = await coordinator.waitUntilSafe()
+  assert.equal(retry.ok, true)
+  assert.equal(waitCount, 2)
 })
  
 test("rejects an invalid participant deadline instead of silently disabling bounded shutdown", () => {
