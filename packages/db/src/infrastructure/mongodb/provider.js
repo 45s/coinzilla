@@ -531,6 +531,36 @@ export function createMongoProvider(options = {}) {
     return state.closePromise
   }
 
+  async function withReadTransaction(work) {
+    if (typeof work !== "function") {
+      throw new TypeError("A MongoDB read transaction callback is required")
+    }
+    return runTrackedOperation(state, async () => {
+      const operations = createMongoRecordOperations({
+        command: (commandInput) => state.transport.command(commandInput),
+        databaseName: state.options.databaseName,
+      })
+      let operationCount = 0
+      const readContext = Object.freeze({
+        readOne(input) {
+          operationCount += 1
+          if (operationCount > 1) {
+            throw new Error("MongoDB read transaction supports one provider-neutral read operation")
+          }
+          return operations.readOne(input)
+        },
+        readMany(input) {
+          operationCount += 1
+          if (operationCount > 1) {
+            throw new Error("MongoDB read transaction supports one provider-neutral read operation")
+          }
+          return operations.readMany(input)
+        },
+      })
+      return work(readContext)
+    })
+  }
+
   async function execute({ operation, input }) {
     return runTrackedOperation(state, async () => {
       if (!CRUD_OPERATIONS.includes(operation)) {
@@ -548,6 +578,7 @@ export function createMongoProvider(options = {}) {
     connect,
     close,
     withTransaction: (work) => runTrackedOperation(state, () => runTransaction(work)),
+    withReadTransaction,
     execute,
     capabilities: MONGO_CAPABILITIES,
   })
