@@ -27,8 +27,15 @@ function createTestSandboxLauncher() {
 }
 
 test("host executes the registered production RS runtime scenario in a child process with simulation-only ports", async () => {
-  const scenario = getRecoverySellerRunnerCatalog().find((item) =>
+  const registeredScenario = getRecoverySellerRunnerCatalog().find((item) =>
     item.id === "RS-RUNTIME-SELL-SUBMISSION-001")
+  const scenario = {
+    ...registeredScenario,
+    status: "TEST_ONLY",
+    executionStatus: "EXECUTABLE",
+    executable: true,
+    readinessReasons: [],
+  }
   const adapter = createProcessScenarioAdapter({
     strategyId: "RS",
     spawnSandboxedWorker: createTestSandboxLauncher(),
@@ -36,6 +43,7 @@ test("host executes the registered production RS runtime scenario in a child pro
   const updates = []
   const host = createScenarioRunnerHost({
     adapters: [adapter],
+    scenarioCatalog: [scenario],
     eventBus: {
       publish: (event) => updates.push(event),
     },

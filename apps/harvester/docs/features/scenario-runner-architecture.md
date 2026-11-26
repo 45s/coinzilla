@@ -208,13 +208,15 @@ worker isolation. Those remain separate fail-closed gates.
 
 The RS worker adapter and host catalogue now share the production adapter module's
 scenario definitions. The registry includes a preliminary helper-only profitability
-mapping and an application-level runtime scenario that invokes
+mapping and a PARTIAL application-level runtime scenario that invokes
 `createRecoverySellerRuntimeDispatch`, production accounting, authorization, STOP
 workflow and order submission through run-local simulated infrastructure. The runtime
-scenario is discoverable and schema-validated by the host; execution still requires a
-trusted OS sandbox attestation. The process acceptance test now launches the normal
-production worker bootstrap and production scenario registration. Its test launcher
-uses a simulated attestation and therefore does not establish OS containment.
+scenario is discoverable and schema-validated but remains non-executable because user-data
+event handling, partial-fill/terminal reconciliation, rejection/failure outcomes and
+adverse-profitability STOP scenarios are not yet composed. The process acceptance test
+uses a test-only registration override and simulated launcher attestation to exercise
+the production worker/bootstrap path; it does not establish production readiness or OS
+containment.
 
 The runtime scenario currently proves the authorized SELL-submission success path only.
 Rejection, partial-fill/terminal reconciliation, injected infrastructure failures and

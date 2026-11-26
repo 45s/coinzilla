@@ -90,10 +90,14 @@ export const RECOVERY_SELLER_RUNTIME_SCENARIO = Object.freeze({
   id: "RS-RUNTIME-SELL-SUBMISSION-001",
   name: "Production Recovery Seller runtime submits one authorized recovery SELL",
   layer: "APPLICATION",
-  status: "IMPLEMENTED",
-  executionStatus: "EXECUTABLE",
-  executable: true,
-  readinessReasons: Object.freeze([]),
+  status: "PARTIAL",
+  executionStatus: "PRELIMINARY",
+  executable: false,
+  readinessReasons: Object.freeze([
+    "This registered scenario proves the production BUY-seed → runtime evaluation → authorization → SELL-submission success path only.",
+    "Production user-data event handling, partial-fill staging, terminal reconciliation, rejection/failure outcomes and adverse-profitability STOP scenarios are not yet composed into this adapter.",
+    "No trusted OS-level sandbox launcher is available; the host must continue to fail closed.",
+  ]),
   inputSchema: RUNTIME_FIXTURE.inputSchema,
   input: RUNTIME_FIXTURE.input,
 })
