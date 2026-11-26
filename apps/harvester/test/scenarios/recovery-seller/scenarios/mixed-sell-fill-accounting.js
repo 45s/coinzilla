@@ -279,4 +279,122 @@ export const recoverySellerMixedSellFillAccountingScenarios = Object.freeze([
     status: "TEST-MAPPED",
     evidence: null,
   }),
+
+  defineRecoverySellerScenario({
+    id: "RS-006-014",
+    family: "RS-006",
+    name: "identical canonical SELL Fill deliveries from independent sources are staged once",
+    priority: "P0",
+    authority: [
+      "apps/harvester/docs/domain/recovery-seller-scenario-testing.md#rs-006--exact-once-mixed-sell-accounting-and-atomicity-p0",
+      "issue-1780: RS-006 REST/stream duplicate Fill identity",
+    ],
+    layer: "DOMAIN",
+    configFields: [],
+    covers: {
+      rules: ["RS_CANONICAL_FILL_EXACT_ONCE"],
+      decisions: [],
+      states: [],
+      transitions: [],
+      invariants: ["RS_EXACT_ONCE"],
+    },
+    given: {
+      sourceDeliveries: ["REST", "USER_DATA_STREAM"],
+      canonicalFillTradeId: "rs-multi-fill-sell-trade-1",
+      identicalExecutionFacts: true,
+    },
+    when: [{
+      type: "stage-the-same-canonical-sell-fill-from-both-sources",
+    }],
+    then: {
+      applied: false,
+      duplicate: true,
+      stagedFillCount: 1,
+      stagedQuantity: "2.5",
+    },
+    mustNot: [
+      "stage the same canonical exchange Fill twice",
+      "increase cumulative executed quantity from duplicate source delivery",
+      "create a second recovery/legacy allocation for one exchange Fill",
+    ],
+    subcases: [{
+      id: "RS-006-014-A",
+      description: "identical canonical Fill delivery from REST and user-data stream is an exact staging no-op",
+      status: "TEST-MAPPED",
+      test: {
+        file: testFile,
+        title: "RS-006-014-A: identical canonical SELL Fill replay from REST and stream stages once",
+      },
+      evidence: null,
+    }],
+    implementation: [
+      "apps/harvester/src/domain/strategies/recovery-seller/mixed-sell-fill-allocation.js",
+      "apps/harvester/src/domain/strategies/recovery-seller/mixed-sell-fill-reconciliation.js",
+    ],
+    test: {
+      file: testFile,
+      title: "RS-006-014-A: identical canonical SELL Fill replay from REST and stream stages once",
+    },
+    status: "PARTIAL",
+    evidence: null,
+  }),
+  defineRecoverySellerScenario({
+    id: "RS-006-015",
+    family: "RS-006",
+    name: "conflicting canonical SELL Fill facts from independent sources are rejected without changing staged accounting",
+    priority: "P0",
+    authority: [
+      "apps/harvester/docs/domain/recovery-seller-scenario-testing.md#rs-006--exact-once-mixed-sell-accounting-and-atomicity-p0",
+      "issue-1780: RS-006 conflicting REST/stream Fill facts",
+    ],
+    layer: "DOMAIN",
+    configFields: [],
+    covers: {
+      rules: ["RS_CANONICAL_FILL_EXACT_ONCE"],
+      decisions: [],
+      states: [],
+      transitions: [],
+      invariants: ["RS_CONFLICT_REJECTION", "RS_EXACT_ONCE"],
+    },
+    given: {
+      acceptedFillTradeId: "rs-multi-fill-sell-trade-1",
+      acceptedQuantity: "2.5",
+      conflictingReplayQuantity: "2.49",
+      sourceDeliveries: ["REST", "USER_DATA_STREAM"],
+    },
+    when: [{
+      type: "stage-a-conflicting-sell-fill-with-the-same-canonical-identity",
+    }],
+    then: {
+      rejected: true,
+      errorCode: "RS_MIXED_SELL_RECONCILIATION_ALLOCATION_CONFLICT",
+      stagedFillCountUnchanged: true,
+      stagedQuantityUnchanged: "2.5",
+    },
+    mustNot: [
+      "replace accepted exchange execution facts with conflicting source data",
+      "silently choose one of two conflicting execution payloads",
+      "mutate the accepted staged Fill set after conflict detection",
+    ],
+    subcases: [{
+      id: "RS-006-015-A",
+      description: "same canonical Fill identity with a different execution quantity is rejected as a conflict",
+      status: "TEST-MAPPED",
+      test: {
+        file: testFile,
+        title: "RS-006-015-A: conflicting canonical SELL Fill replay is rejected without changing staged history",
+      },
+      evidence: null,
+    }],
+    implementation: [
+      "apps/harvester/src/domain/strategies/recovery-seller/mixed-sell-fill-allocation.js",
+      "apps/harvester/src/domain/strategies/recovery-seller/mixed-sell-fill-reconciliation.js",
+    ],
+    test: {
+      file: testFile,
+      title: "RS-006-015-A: conflicting canonical SELL Fill replay is rejected without changing staged history",
+    },
+    status: "PARTIAL",
+    evidence: null,
+  }),
 ])

@@ -710,3 +710,85 @@ test("RS-006-018-A: confirmed mixed SELL fills are committed even when realized 
   assert.equal(fixture.durableCommitCount(), 1,
     "The actual terminal Fill boundary must be durably recorded once despite the profitability miss.")
 })
+
+
+test("RS-006-014-A: identical canonical SELL Fill replay from REST and stream stages once", () => {
+  const fixture = createMultiFillAccountingScenarioFixture({
+    stageCount: 1,
+  })
+  const originalReconciliation = fixture.reconciliation
+  const duplicate = stageMixedSellFillAllocation({
+    reconciliation: originalReconciliation,
+    allocation: fixture.canonicalFillAllocations[0],
+  })
+
+  assert.equal(duplicate.applied, false,
+    "The second delivery of the same canonical Fill must not stage another execution.")
+  assert.equal(duplicate.duplicate, true,
+    "An identical REST/stream Fill delivery must be classified as an exact duplicate.")
+  assert.strictEqual(duplicate.reconciliation, originalReconciliation,
+    "Duplicate delivery must preserve the immutable staging snapshot.")
+  assert.equal(duplicate.reconciliation.stagedFillCount, 1,
+    "The canonical Fill must be represented once in the staged history.")
+  assert.equal(duplicate.reconciliation.stagedQuantity, "2.5",
+    "Duplicate delivery must not inflate the staged base quantity.")
+})
+
+test("RS-006-015-A: conflicting canonical SELL Fill replay is rejected without changing staged history", () => {
+  const fixture = createMultiFillAccountingScenarioFixture({
+    stageCount: 1,
+  })
+  const originalReconciliation = fixture.reconciliation
+  const originalFill = fixture.canonicalFills[0]
+  const conflictingFill = new Fill({
+    tradeId: originalFill.tradeId,
+    brokerOrderId: originalFill.brokerOrderId,
+    clientOrderId: originalFill.clientOrderId,
+    market: originalFill.market,
+    side: "SELL",
+    price: new Money({
+      amount: "2.1",
+      asset: originalFill.market.quoteAsset,
+    }),
+    quantity: new Quantity({
+      amount: "2.49",
+      asset: originalFill.market.baseAsset,
+    }),
+    quoteQuantity: new Money({
+      amount: "5.229",
+      asset: originalFill.market.quoteAsset,
+    }),
+    commissions: [new Commission({
+      amount: new Money({
+        amount: "0.001",
+        asset: originalFill.market.quoteAsset,
+      }),
+    })],
+    commissionStatus: "COMPLETE",
+    executedAt: 12,
+  })
+  const conflictingAllocation = createMixedSellFillAllocation({
+    fill: conflictingFill,
+    orderRegistry: new OrderRegistry({
+      orders: [fixture.terminalSellOrder],
+      ownerships: [fixture.ownership],
+    }),
+    recoveryQuantity: "2.49",
+    legacyQuantity: "0",
+  })
+
+  assert.throws(
+    () => stageMixedSellFillAllocation({
+      reconciliation: originalReconciliation,
+      allocation: conflictingAllocation,
+    }),
+    (error) => error.code === "RS_MIXED_SELL_RECONCILIATION_ALLOCATION_CONFLICT",
+    "A repeated Fill identity with different execution facts must fail closed as a conflict.",
+  )
+  assert.strictEqual(fixture.reconciliation, originalReconciliation,
+    "Conflicting replay must not replace the immutable reconciliation snapshot.")
+  assert.equal(fixture.reconciliation.stagedFillCount, 1,
+    "Conflicting replay must not alter the already accepted staged Fill set.")
+  assert.equal(fixture.reconciliation.stagedQuantity, "2.5",
+    "Conflicting replay must not change the accepted staged quantity.")
+})
