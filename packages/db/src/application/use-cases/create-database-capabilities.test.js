@@ -6,6 +6,9 @@ import { createDatabase } from "../../index.js"
 function createProvider({ capabilities }) {
   return {
     capabilities,
+    execute({ operation, input }) {
+      return operation === "create" ? input.record : null
+    },
     connect() {},
     close() {},
     withTransaction(work) {
@@ -35,6 +38,7 @@ const invalidCapabilities = [
       transactions: {
         callbackMode: "sometimes",
         nestedTransactions: false,
+      multiDocument: true,
       },
       queries: {
         equalityFilters: true,
@@ -62,6 +66,7 @@ const invalidCapabilities = [
       transactions: {
         callbackMode: "synchronous",
         nestedTransactions: true,
+      multiDocument: true,
       },
       queries: {
         equalityFilters: true,
@@ -76,6 +81,7 @@ const invalidCapabilities = [
       transactions: {
         callbackMode: "synchronous",
         nestedTransactions: false,
+      multiDocument: true,
       },
       queries: {
         equalityFilters: true,
@@ -90,6 +96,7 @@ const invalidCapabilities = [
       transactions: {
         callbackMode: "synchronous",
         nestedTransactions: false,
+      multiDocument: true,
       },
       queries: {
         equalityFilters: true,
@@ -104,6 +111,7 @@ const invalidCapabilities = [
       transactions: {
         callbackMode: "synchronous",
         nestedTransactions: false,
+      multiDocument: true,
       },
       queries: {
         equalityFilters: true,
@@ -135,6 +143,7 @@ test("provider capability declarations support the documented storage modes", ()
     transactions: {
       callbackMode: "synchronous",
       nestedTransactions: false,
+      multiDocument: true,
     },
     queries: {
       equalityFilters: true,
@@ -172,6 +181,7 @@ test("provider composition requires a read transaction operation", () => {
       transactions: {
         callbackMode: "synchronous",
         nestedTransactions: false,
+      multiDocument: true,
       },
       queries: {
         equalityFilters: true,
@@ -200,6 +210,7 @@ test("provider composition rejects non-JSON capability declarations with their o
     transactions: {
       callbackMode: "synchronous",
       nestedTransactions: false,
+      multiDocument: true,
     },
     queries: {
       equalityFilters: true,
@@ -229,6 +240,7 @@ test("provider transaction facades reject incomplete transaction contexts", asyn
       transactions: {
         callbackMode: "synchronous",
         nestedTransactions: false,
+      multiDocument: true,
       },
       queries: {
         equalityFilters: true,
@@ -257,19 +269,68 @@ test("provider transaction facades reject incomplete transaction contexts", asyn
       /must implement:.*readOne/,
       "An explicit transaction must reject a provider context missing any required CRUD operation",
     )
-    await assert.rejects(
-      database.create({
+    assert.deepEqual(
+      await database.create({
         collection: "people",
         record: { id: "incomplete-context-1" },
       }),
-      /must implement:.*readOne/,
-      "A standalone CRUD operation must reject an incomplete provider transaction context",
+      { id: "incomplete-context-1" },
+      "A standalone CRUD operation must use the single-operation provider port",
     )
   } finally {
     await database.close()
   }
 })
 
+
+
+test("providers can reject multi-document transactions while retaining single-operation execution", async () => {
+  const calls = []
+  const capabilities = {
+    transactions: {
+      callbackMode: "asynchronous",
+      nestedTransactions: false,
+      multiDocument: false,
+    },
+    queries: {
+      equalityFilters: true,
+      sorting: true,
+      pagination: true,
+    },
+    storage: {
+      modes: ["server"],
+    },
+  }
+  const provider = createProvider({ capabilities })
+  provider.execute = ({ operation, input }) => {
+    calls.push(operation)
+    return operation === "create" ? input.record : null
+  }
+  let callbackInvoked = false
+  const database = createDatabase({ provider })
+  await database.connect()
+
+  try {
+    await assert.rejects(
+      database.transaction(() => {
+        callbackInvoked = true
+      }),
+      /multi-document transactions are not supported/i,
+    )
+    assert.equal(callbackInvoked, false)
+    assert.deepEqual(
+      await database.create({
+        collection: "people",
+        record: { id: "standalone-record" },
+      }),
+      { id: "standalone-record" },
+    )
+    assert.deepEqual(calls, ["create"])
+    assert.equal(database.capabilities.transactions.multiDocument, false)
+  } finally {
+    await database.close()
+  }
+})
 
 test("provider composition rejects missing and array capability declarations", () => {
   for (const capabilities of [null, [], "not-an-object"]) {
