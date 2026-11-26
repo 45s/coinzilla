@@ -1,4 +1,4 @@
-const MAX_PARTICIPANT_SAFETY_REPROOFS = 3
+const MAX_PARTICIPANT_SAFETY_PROOF_ATTEMPTS = 2
 
 function createStrategyBlocker({ participant, error, reason, status } = {}) {
   let safetySnapshot
@@ -136,7 +136,7 @@ async function waitForParticipantWithDeadline({
 
   let timeoutHandle
   let resolveAbort
-  let reproofCount = 0
+  let safetyProofAttempts = 0
   const timeoutResult = new Promise((resolve) => {
     timeoutHandle = setTimeoutFn(() => {
       const error = Object.assign(
@@ -146,7 +146,7 @@ async function waitForParticipantWithDeadline({
           strategyId: participant.strategyId,
           operation: "waitUntilSafe",
           timeoutMs,
-          reproofCount,
+          safetyProofAttempts,
         },
       )
       participantController.abort(error)
@@ -182,25 +182,25 @@ async function waitForParticipantWithDeadline({
       outcome = { status: "rejected", reason: error }
       break
     }
+    safetyProofAttempts += 1
     if (participantIsSafe) {
       break
     }
-    if (reproofCount >= MAX_PARTICIPANT_SAFETY_REPROOFS) {
+    if (safetyProofAttempts >= MAX_PARTICIPANT_SAFETY_PROOF_ATTEMPTS) {
       outcome = {
         status: "rejected",
         reason: Object.assign(
-          new Error("Strategy safety marker remained invalid after bounded reproof attempts"),
+          new Error("Strategy safety marker remained invalid after the bounded safety proof attempts"),
           {
-            code: "STRATEGY_SAFETY_MARKER_INVALIDATED",
+            code: `SHUTDOWN_SAFETY_REEVALUATION_LIMIT_EXCEEDED:${safetyProofAttempts}`,
             strategyId: participant.strategyId,
             operation: "waitUntilSafe",
-            reproofCount,
+            safetyProofAttempts,
           },
         ),
       }
       break
     }
-    reproofCount += 1
   }
   clearTimeoutFn(timeoutHandle)
   signal?.removeEventListener("abort", forwardAbort)
