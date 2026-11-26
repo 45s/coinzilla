@@ -117,6 +117,7 @@ async function recordDurableProcessStop({
   })
   const controller = new AbortController()
   let timeoutHandle
+  let timeoutError
   const operationPromise = Promise.resolve()
     .then(() => recordProcessStopped({
       operationalStateStore,
@@ -150,6 +151,7 @@ async function recordDurableProcessStop({
           startedAt,
           now: () => performance.now(),
         })
+        timeoutError = error
         controller.abort(error)
         resolve({
           status: "timed_out",
@@ -160,6 +162,9 @@ async function recordDurableProcessStop({
   })
   try {
     const outcome = await Promise.race([operationPromise, timeoutPromise])
+    if (timeoutError) {
+      throw timeoutError
+    }
     if (outcome.status === "timed_out" || outcome.status === "rejected") {
       throw outcome.reason
     }

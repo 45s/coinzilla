@@ -149,6 +149,7 @@ function createPhaseRunner({
     const startedAt = now()
     const controller = new AbortController()
     let timeoutHandle
+    let timeoutError
     const timeoutPromise = timeoutMs === null
       ? null
       : new Promise((resolve) => {
@@ -161,6 +162,7 @@ function createPhaseRunner({
               timeoutMs,
               elapsedMs: Math.max(0, now() - startedAt),
             })
+            timeoutError = error
             controller.abort(error)
             resolve({
               status: "timed_out",
@@ -193,6 +195,9 @@ function createPhaseRunner({
       const outcome = timeoutPromise
         ? await Promise.race([operationPromise, timeoutPromise])
         : await operationPromise
+      if (timeoutError) {
+        throw timeoutError
+      }
       if (outcome.status === "timed_out") {
         throw outcome.error
       }
