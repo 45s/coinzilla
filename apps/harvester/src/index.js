@@ -146,18 +146,27 @@ async function releaseProcessLock({
   processLock,
   allowProcessLockRelease,
   journalClosed,
+  eventBusClosed,
   tradingHistoryApiClosed,
+  databaseClosed,
 } = {}) {
   if (!processLock) {
     return []
   }
 
-  if (!allowProcessLockRelease || !journalClosed || !tradingHistoryApiClosed) {
-    let reason = "Harvester trading process lock retained because trading-history API shutdown was not confirmed"
+  if (!allowProcessLockRelease || !journalClosed || !eventBusClosed ||
+      !tradingHistoryApiClosed || !databaseClosed) {
+    let reason = "Harvester trading process lock retained because cleanup was not confirmed"
     if (!allowProcessLockRelease) {
       reason = "Harvester trading process lock retained because runtime shutdown was not confirmed"
     } else if (!journalClosed) {
       reason = "Harvester trading process lock retained because Journal shutdown was not confirmed"
+    } else if (!eventBusClosed) {
+      reason = "Harvester trading process lock retained because EventBus shutdown was not confirmed"
+    } else if (!tradingHistoryApiClosed) {
+      reason = "Harvester trading process lock retained because trading-history API shutdown was not confirmed"
+    } else if (!databaseClosed) {
+      reason = "Harvester trading process lock retained because persistence shutdown was not confirmed"
     }
     return [new Error(reason)]
   }
@@ -220,6 +229,7 @@ async function closeObservability({
   orderHistoryPersistence,
   tradingHistoryApi,
   allowProcessLockRelease = true,
+  deferProcessLockRelease = false,
   logger,
 } = {}) {
   const journalResult = await closeJournalService({ journalService })
@@ -239,12 +249,16 @@ async function closeObservability({
         relationalDatabase: orderHistoryPersistence?.relationalDatabase,
         logger,
       })
-  const processLockErrors = await releaseProcessLock({
-    processLock,
-    allowProcessLockRelease,
-    journalClosed: journalResult.journalClosed,
-    tradingHistoryApiClosed: tradingHistoryApiErrors.length === 0,
-  })
+  const processLockErrors = deferProcessLockRelease
+    ? []
+    : await releaseProcessLock({
+        processLock,
+        allowProcessLockRelease,
+        journalClosed: journalResult.journalClosed,
+        eventBusClosed: eventBusErrors.length === 0,
+        tradingHistoryApiClosed: tradingHistoryApiErrors.length === 0,
+        databaseClosed: databaseErrors.length === 0,
+      })
   const errors = [
     ...journalResult.errors,
     ...eventBusErrors,
