@@ -75,6 +75,21 @@ test("BSON rejects unsupported values, invalid document keys, and cyclic documen
   }
 })
 
+
+test("BSON rejects malformed Unicode rather than silently replacing record text", () => {
+  assert.throws(
+    () => encodeBsonDocument({ value: "\\ud800" }),
+    TypeError,
+  )
+
+  const encoded = encodeBsonDocument({ value: "valid" })
+  encoded[15] = 0xff
+  assert.throws(
+    () => decodeBsonDocument(encoded),
+    TypeError,
+  )
+})
+
 test("BSON decoder rejects truncated documents and inconsistent declared lengths", () => {
   const encoded = encodeBsonDocument({ value: "valid" })
 
