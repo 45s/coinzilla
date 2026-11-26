@@ -3,6 +3,7 @@ import test from "node:test"
 
 import {
   createDatabase,
+  DatabaseProviderError,
   DatabaseTransactionOutcomeUnknownError,
   DatabaseTransactionUnsupportedError,
 } from "../../index.js"
@@ -176,7 +177,7 @@ test("MongoDB provider reports an ambiguous commit outcome instead of claiming r
     transactionSupported: true,
     commandHandler: async (body) => {
       if (body.commitTransaction === 1) {
-        throw new Error("connection lost after commit was sent")
+        throw Object.assign(new Error("connection lost after commit was sent"), { outcomeUnknown: true })
       }
       return { ok: 1, n: 1 }
     },
@@ -194,6 +195,37 @@ test("MongoDB provider reports an ambiguous commit outcome instead of claiming r
         && error.code === "DB_TRANSACTION_OUTCOME_UNKNOWN",
     )
     assert.equal(calls.filter((body) => body.commitTransaction === 1).length, 3)
+  } finally {
+    await database.close()
+  }
+})
+
+test("MongoDB does not report a definitely-unsent commit as outcome-unknown", async () => {
+  const { provider, calls } = createProviderHarness({
+    topology: "replicaSet",
+    transactionSupported: true,
+    commandHandler: async (body) => {
+      if (body.commitTransaction === 1) {
+        throw Object.assign(new Error("commit rejected before send"), {
+          outcomeUnknown: false,
+        })
+      }
+      return { ok: 1, n: 1 }
+    },
+  })
+  const database = createDatabase({ provider })
+  await database.connect()
+
+  try {
+    await assert.rejects(
+      database.transaction((transaction) => transaction.create({
+        collection: "people",
+        record: { id: "unsent-commit" },
+      })),
+      (error) => error instanceof DatabaseProviderError
+        && !(error instanceof DatabaseTransactionOutcomeUnknownError),
+    )
+    assert.equal(calls.filter((body) => body.commitTransaction === 1).length, 1)
   } finally {
     await database.close()
   }
@@ -689,7 +721,7 @@ test("MongoDB preserves an ambiguous commit outcome after a lost reply and a lat
     commandHandler: async (body) => {
       if (body.commitTransaction) {
         commitAttempts += 1
-        if (commitAttempts === 1) throw new Error("reply lost after commit request")
+        if (commitAttempts === 1) throw Object.assign(new Error("reply lost after commit request"), { outcomeUnknown: true })
         return { ok: 0, code: 251, errmsg: "NoSuchTransaction" }
       }
       return { ok: 1, n: 1 }

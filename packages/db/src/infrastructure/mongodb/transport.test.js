@@ -331,6 +331,34 @@ test("MongoDB transport marks interrupted non-transactional writes as outcome-un
     (error) => error.outcomeUnknown === false,
   )
   await transactionWrite.transport.close()
+
+  const commit = createFakeTransport()
+  await commit.transport.connect()
+  await assert.rejects(
+    commit.transport.command({
+      body: { commitTransaction: 1 },
+      operation: "commit",
+      timeoutMS: 5,
+    }),
+    (error) => error.outcomeUnknown === true,
+  )
+  await commit.transport.close()
+
+  const unsentCommit = createFakeTransport()
+  await unsentCommit.transport.connect()
+  unsentCommit.socket.write = () => {
+    throw new Error("commit rejected before send")
+  }
+  await assert.rejects(
+    unsentCommit.transport.command({
+      body: { commitTransaction: 1 },
+      operation: "commit",
+      timeoutMS: 5,
+    }),
+    (error) => error.outcomeUnknown === false,
+  )
+  await unsentCommit.transport.close()
+
 })
 
 test("MongoDB transport rejects timed-out requests and releases their correlation entries", async () => {
