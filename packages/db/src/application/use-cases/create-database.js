@@ -8,6 +8,7 @@ const REQUIRED_PROVIDER_METHODS = Object.freeze([
 const REQUIRED_DATABASE_PROVIDER_METHODS = Object.freeze([
   ...REQUIRED_PROVIDER_METHODS,
   "withReadTransaction",
+  "execute",
 ])
 const CRUD_METHODS = Object.freeze([
   "create",
@@ -42,12 +43,13 @@ function validateTransactionCapabilities({ transactions }) {
     transactions?.callbackMode,
   )
   const hasNestedTransactionDeclaration = typeof transactions?.nestedTransactions === "boolean"
+  const hasMultiDocumentDeclaration = typeof transactions?.multiDocument === "boolean"
 
   const hasCompatibleNesting = transactions?.callbackMode !== "synchronous"
     || transactions?.nestedTransactions !== true
 
-  if (!transactions || typeof transactions !== "object" || !hasValidCallbackMode || !hasNestedTransactionDeclaration || !hasCompatibleNesting) {
-    throw new TypeError("Provider transaction capabilities must declare a compatible callbackMode and nestedTransactions")
+  if (!transactions || typeof transactions !== "object" || !hasValidCallbackMode || !hasNestedTransactionDeclaration || !hasMultiDocumentDeclaration || !hasCompatibleNesting) {
+    throw new TypeError("Provider transaction capabilities must declare callbackMode, nestedTransactions and multiDocument")
   }
 }
 
@@ -121,6 +123,9 @@ function createProviderNeutralFacade({ database, provider }) {
   const capabilities = createCapabilitiesSnapshot(provider.capabilities)
 
   function runOperation({ operation, input }) {
+    if (typeof provider.execute === "function") {
+      return provider.execute({ operation, input })
+    }
     const runTransaction = READ_ONLY_OPERATIONS.has(operation)
       ? database.readTransaction
       : database.transaction
@@ -137,6 +142,9 @@ function createProviderNeutralFacade({ database, provider }) {
     transaction(work) {
       if (typeof work !== "function") {
         throw new TypeError("A transaction callback is required")
+      }
+      if (!capabilities.transactions.multiDocument) {
+        throw new Error("Provider multi-document transactions are not supported")
       }
       return database.transaction((transaction) => {
         if (capabilities.transactions.callbackMode === "synchronous" && isAsyncFunction(work)) {
