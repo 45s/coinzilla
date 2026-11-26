@@ -270,8 +270,9 @@ async function stopRuntimeAndRecordProcessStop({
     stopStateEstablishedLogged: true,
     beforeSharedServicesStop,
   })
-  if (runtimeResult?.ok === false) {
-    throw runtimeResult.errors?.[0] ?? new Error("Runtime shutdown did not prove strategy safety")
+  if (runtimeResult?.ok !== true || runtimeResult.status !== "STOPPED") {
+    userDataState.status = "SHUTDOWN_INCOMPLETE"
+    throw runtimeResult?.errors?.[0] ?? new Error("Runtime shutdown did not return an explicit STOPPED confirmation")
   }
   if (!operationalStateStore) {
     return
@@ -339,6 +340,10 @@ async function executeShutdown({
     status: "COMPLETED",
     startedAt: shutdownRequestedAt,
   })
+  return {
+    ok: true,
+    status: "STOPPED",
+  }
 }
 
 export function createHarvesterStop(dependencies = {}) {
