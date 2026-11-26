@@ -4,6 +4,8 @@ const HEADER_SIZE = 16
 const OP_MSG = 2013
 const MAX_WIRE_MESSAGE_SIZE = 48 * 1024 * 1024
 const CHECKSUM_PRESENT = 1
+const MORE_TO_COME = 2
+const SUPPORTED_FLAGS = MORE_TO_COME
 
 function validateMessageIdentifier(value, label) {
   if (!Number.isInteger(value) || value < 0 || value > 0x7fffffff) {
@@ -37,8 +39,8 @@ function encodeDocumentSequence({ identifier, documents }) {
 export function encodeOpMsg({ requestId, responseTo = 0, flags = 0, body, sequences = [] }) {
   validateMessageIdentifier(requestId, "requestId")
   validateMessageIdentifier(responseTo, "responseTo")
-  if (!Number.isInteger(flags) || flags < 0 || flags > 0xffffffff) {
-    throw new TypeError("MongoDB OP_MSG flags must be an unsigned 32-bit integer")
+  if (!Number.isInteger(flags) || flags < 0 || flags > 0xffffffff || (flags & ~SUPPORTED_FLAGS) !== 0) {
+    throw new TypeError("MongoDB OP_MSG contains unsupported flag bits")
   }
   if (!Array.isArray(sequences)) {
     throw new TypeError("MongoDB OP_MSG sequences must be an array")
@@ -84,6 +86,9 @@ function readSequence(buffer, state) {
   const documents = []
   state.offset = nameEnd + 1
   while (state.offset < end) {
+    if (state.offset + 4 > end) {
+      throw new TypeError("Truncated BSON document in MongoDB sequence")
+    }
     const documentLength = buffer.readInt32LE(state.offset)
     if (documentLength < 5 || state.offset + documentLength > end) {
       throw new TypeError("Invalid BSON document in MongoDB sequence")
@@ -117,6 +122,9 @@ export function decodeOpMsg(message) {
   if ((flags & CHECKSUM_PRESENT) !== 0) {
     throw new TypeError("MongoDB OP_MSG checksums are not supported")
   }
+  if ((flags & ~SUPPORTED_FLAGS) !== 0) {
+    throw new TypeError("MongoDB OP_MSG contains unsupported flag bits")
+  }
   const state = { offset: 20, end: message.length }
   let body
   const sequences = {}
@@ -141,6 +149,9 @@ export function decodeOpMsg(message) {
       continue
     }
     if (kind === 1) {
+      if (body === undefined) {
+        throw new TypeError("MongoDB OP_MSG body section must precede document sequences")
+      }
       const sequence = readSequence(message, state)
       if (Object.hasOwn(sequences, sequence.identifier)) {
         throw new TypeError("MongoDB OP_MSG contains a duplicate sequence identifier")
