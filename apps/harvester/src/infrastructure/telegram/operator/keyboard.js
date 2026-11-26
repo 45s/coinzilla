@@ -93,6 +93,7 @@ export function helpText() {
     "/resumeallbuys — remove the global emergency BUY pause",
     "/pausebuys SYMBOL — compatibility alias for /pause SYMBOL",
     "/resumebuys SYMBOL — compatibility alias for /resume SYMBOL",
+    "/resolveaccountblockers cause-fixed — reconcile account-wide state and record durable resolution; trading stays blocked",
     "/help — show this help",
     "",
     "Inline pause/resume buttons always require confirmation. Text control commands are explicit requests.",
@@ -101,6 +102,7 @@ export function helpText() {
     "If owned-BUY cancellation is unresolved, the BUY gate stays active; inspect /orders and Harvester diagnostics.",
     "Inline Pause/Resume buttons require confirmation; slash commands execute after private-chat authorization.",
     "BUY pause state lasts only for this process and is not restored after restart.",
+    "Account blocker resolution requires cause-fixed confirmation, all-market account/order/fill reconciliation and durable readback. It never reopens trading; controlled restart and a fresh account snapshot are required.",
   ].join("\n")
 }
 
