@@ -318,3 +318,48 @@ test("re-runs participant safety when a late fill invalidates a previously compl
   assert.equal(waitCalls, 2, "The coordinator must re-run reconciliation after the safety marker is invalidated.")
   assert.equal(safe, true)
 })
+
+
+test("bounds repeated successful safety proofs when the marker remains invalidated", async () => {
+  let timeoutCallback
+  let waitCalls = 0
+  const coordinator = createStrategyShutdownCoordinator({
+    timeoutMs: 1000,
+    setTimeoutFn: (callback) => {
+      timeoutCallback = callback
+      return "fake-deadline"
+    },
+    clearTimeoutFn: () => {},
+    participants: [{
+      strategyId: "CONSERVATIVE",
+      beginShutdown() {},
+      waitUntilSafe: async () => {
+        waitCalls += 1
+        if (waitCalls === 3) {
+          timeoutCallback()
+        }
+        return { ok: true }
+      },
+      isSafeToShutdown: () => false,
+      getSafetySnapshot: () => ({
+        markets: [{
+          symbol: "DOGEUSDT",
+          blockers: ["LATE_ORDER_EXECUTION_EVIDENCE"],
+        }],
+      }),
+    }],
+  })
+
+  await assert.rejects(
+    coordinator.waitUntilSafe(),
+    (error) => {
+      assert.equal(error.code, "STRATEGY_SHUTDOWN_SAFETY_UNPROVEN", "Repeated invalidation must fail the shared safety barrier.")
+      const blocker = error.shutdownDiagnostics.strategyBlockers[0]
+      assert.equal(blocker.reason, "STRATEGY_SHUTDOWN_REEVALUATION_LIMIT_EXCEEDED:2", "The blocker must expose the bounded reproof limit.")
+      assert.equal(blocker.status, "BLOCKED", "Exhausting the reproof limit must remain an explicit unsafe outcome.")
+      return true
+    },
+    "A participant that repeatedly returns without a safe marker must not loop until an arbitrary external timeout.",
+  )
+  assert.equal(waitCalls, 2, "The coordinator must allow only two complete safety proofs before failing closed.")
+})

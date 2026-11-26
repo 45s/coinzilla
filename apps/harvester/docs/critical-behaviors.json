@@ -798,6 +798,11 @@
           "path": "src/bootstrap/shutdown/create-strategy-shutdown-coordinator.test.js",
           "name": "does not overlap a retry with a timed-out participant operation that ignores abort",
           "kind": "failure"
+        },
+        {
+          "path": "src/bootstrap/shutdown/create-strategy-shutdown-coordinator.test.js",
+          "name": "bounds repeated successful safety proofs when the marker remains invalidated",
+          "kind": "failure"
         }
       ],
       "runtimeStatus": "active",
