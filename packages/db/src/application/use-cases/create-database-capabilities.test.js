@@ -360,7 +360,7 @@ test("provider composition accepts topology-dependent transaction guarantees", a
     )
     assert.equal(
       await database.transaction(() => "delegated"),
-      undefined,
+      "delegated",
     )
   } finally {
     await database.close()
