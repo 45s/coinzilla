@@ -1424,6 +1424,46 @@
           "path": "src/use-cases/resolve-offline-user-data-account-blockers.test.js",
           "name": "requires the production offline market audit adapter to be injected",
           "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/reconcile-terminal-order-fills.test.js",
+          "name": "pauses when broker fill history omits an explicit success flag",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/reconcile-terminal-order-fills.test.js",
+          "name": "pauses when broker fill history contains malformed execution records",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/reconcile-terminal-order-fills.test.js",
+          "name": "rejects a stream fill that does not belong to the terminal canonical order",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/reconcile-terminal-order-fills.test.js",
+          "name": "rejects conflicting duplicate stream facts for the same fill ID",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/reconcile-terminal-order-fills.test.js",
+          "name": "rejects mismatched REST fill identity when no canonical stream fill exists",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/reconcile-terminal-order-fills.test.js",
+          "name": "rejects conflicting duplicate REST fill facts for the same fill ID",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/reconcile-terminal-order-fills.test.js",
+          "name": "rejects FILLED status when executed quantity is less than original quantity",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/reconcile-terminal-order-fills.test.js",
+          "name": "propagates a failed terminal-order reconciliation acknowledgement",
+          "kind": "failure"
         }
       ],
       "runtimeStatus": "offline-only",
