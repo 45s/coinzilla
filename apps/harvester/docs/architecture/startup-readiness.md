@@ -89,3 +89,8 @@ The existing authorized status and market queries now consume the same immutable
 Startup now retains the existing user-data readiness flag as the only global trading gate. The PREFLIGHT snapshot and queued-event drain complete first; the gate is then deliberately left closed while market price, order-book and candle services initialize. One immutable report is logged from those live snapshots before the existing gate is opened. The activation continuation revalidates user-data safety immediately before setting the existing ready flag and resuming deferred evaluations.
 
 Accepted WebSocket price/book events are distinguished from subscription acknowledgements; initial price seeds are reported separately. The engine operator snapshot now exposes book freshness and the existing LIMIT_MAKER book blocker. The account snapshot manager exposes safe audit summaries only; no order identifiers, balances or account IDs are included in diagnostics. Restoration remains disabled, and prior-process evidence keeps the runtime observation-only.
+
+
+## Implementation checkpoint — engine book evidence and operator projection
+
+The engine's existing operator market snapshot now includes order type, whether a book is required, book timestamp/freshness and the existing book blocker. The authorized status and market queries consume the immutable readiness report and expose the same per-market readiness/blocker projection; they no longer calculate a separate readiness interpretation.

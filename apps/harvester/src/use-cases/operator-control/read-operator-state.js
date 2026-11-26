@@ -1,5 +1,6 @@
 import { toResult } from "@coinzilla/utils"
 import { authorizeOperatorActor } from "../../application/operator/authorize-operator-actor.js"
+import { createHarvesterReadinessReport } from "../../application/operator/create-harvester-readiness-report.js"
 import { OperatorQueryError } from "./errors/operator-query-error.js"
 
 function hasValidRuntimeMetadata({
@@ -44,6 +45,9 @@ function validateRuntimeSnapshot({ snapshot, operation }) {
     tradingMode: snapshot.tradingMode ?? "unknown",
     strategyMode: snapshot.strategyMode ?? "unknown",
     stopping: snapshot.stopping === true,
+    startupComplete: snapshot.startupComplete === true,
+    startupBoundary: snapshot.startupBoundary === true,
+    readinessInputs: snapshot.readinessInputs ?? {},
     userData: Object.freeze({
       ready: snapshot.userData.ready,
       status: snapshot.userData.status ?? "UNKNOWN",
@@ -53,7 +57,8 @@ function validateRuntimeSnapshot({ snapshot, operation }) {
   })
 }
 
-function createMarketReadModels({ markets, runtime }) {
+function createMarketReadModels({ markets, readinessReport }) {
+  const readinessBySymbol = new Map(readinessReport.markets.map((market) => [market.symbol, market]))
   return Object.freeze(markets.map((market) => {
     if (!market || typeof market.symbol !== "string" || typeof market.enabled !== "boolean" ||
         !Array.isArray(market.blockers)) {
@@ -68,19 +73,9 @@ function createMarketReadModels({ markets, runtime }) {
         },
       })
     }
-    const blockers = [...market.blockers]
-    if (market.enabled && runtime.tradingEnabled && runtime.userData.ready !== true &&
-        !blockers.includes("USER_DATA_NOT_READY")) {
-      blockers.push("USER_DATA_NOT_READY")
-    }
-    let readiness = "READY"
-    if (!market.enabled) {
-      readiness = "DISABLED"
-    } else if (!runtime.tradingEnabled) {
-      readiness = "OBSERVATION_ONLY"
-    } else if (blockers.length > 0) {
-      readiness = "BLOCKED"
-    }
+    const readinessSnapshot = readinessBySymbol.get(market.symbol)
+    const blockers = readinessSnapshot?.blockers ?? [...market.blockers]
+    const readiness = readinessSnapshot?.readiness ?? "BLOCKED"
     const volatilityProtection = market.volatilityProtection
       ? Object.freeze({ ...market.volatilityProtection })
       : null
@@ -142,11 +137,30 @@ async function readOperatorSnapshot({ engine, getRuntimeSnapshot, actor, operati
         context: { operation },
       })
     }
+    let readinessReport
+    try {
+      readinessReport = createHarvesterReadinessReport({
+        runtime,
+        markets: sourceMarkets,
+        readinessInputs: runtime.readinessInputs,
+        observedAt: runtime.observedAt,
+      })
+    } catch (cause) {
+      throw new OperatorQueryError({
+        message: "Harvester startup readiness report could not be evaluated",
+        code: "HARVESTER_OPERATOR_READINESS_REPORT_FAILED",
+        cause,
+        context: { operation },
+      })
+    }
     return toResult({
       data: Object.freeze({
         runtime,
-        markets: createMarketReadModels({ markets: sourceMarkets, 
-          runtime }),
+        readinessReport,
+        markets: createMarketReadModels({
+          markets: sourceMarkets,
+          readinessReport,
+        }),
       }),
     })
   } catch (error) {
@@ -164,23 +178,14 @@ async function readOperatorSnapshot({ engine, getRuntimeSnapshot, actor, operati
   }
 }
 
-function createOperatorStatus({ runtime, markets }) {
-  const blockers = []
-  if (runtime.runtimeState !== "RUNNING") {
-    blockers.push("RUNTIME_NOT_RUNNING")
-  }
-  if (runtime.tradingEnabled && runtime.userData.ready !== true) {
-    blockers.push(runtime.userData.status || "USER_DATA_NOT_READY")
-  }
-  if (runtime.stopping) {
-    blockers.push("RUNTIME_STOPPING")
-  }
-  let state = "READY"
-  if (!runtime.tradingEnabled) {
-    state = "TRADING_DISABLED"
-  } else if (blockers.length > 0) {
-    state = "BLOCKED"
-  }
+function createOperatorStatus({ runtime, markets, readinessReport }) {
+  const state = readinessReport.status === "HEALTHY"
+    ? "READY"
+    : readinessReport.status === "OBSERVATION_ONLY"
+      ? "TRADING_DISABLED"
+      : readinessReport.status === "DEGRADED"
+        ? "DEGRADED"
+        : "BLOCKED"
   return toResult({
     data: Object.freeze({
       observedAt: runtime.observedAt,
@@ -192,24 +197,30 @@ function createOperatorStatus({ runtime, markets }) {
       strategyMode: runtime.strategyMode,
       stopping: runtime.stopping,
       userData: runtime.userData,
-      readiness: Object.freeze({ state, 
-        blockers: Object.freeze(blockers) }),
+      readiness: Object.freeze({
+        state,
+        blockers: readinessReport.blockers,
+        warnings: readinessReport.warnings,
+      }),
+      readinessReport,
       markets: Object.freeze({
         configured: markets.length,
         enabled: markets.filter(({ enabled }) => enabled).length,
-        blocked: markets.filter(({ readiness }) => readiness === "BLOCKED").length,
+        blocked: readinessReport.summary.blockedMarkets,
+        ready: readinessReport.summary.readyMarkets,
       }),
     }),
   })
 }
 
-function createOperatorMarkets({ runtime, markets }) {
+function createOperatorMarkets({ runtime, markets, readinessReport }) {
   return toResult({
     data: Object.freeze({
       observedAt: runtime.observedAt,
       tradingEnabled: runtime.tradingEnabled,
       userDataReady: runtime.userData.ready,
       userDataStatus: runtime.userData.status,
+      readinessReport,
       markets,
     }),
   })
