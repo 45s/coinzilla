@@ -94,7 +94,7 @@ function assertProviderOptions(options) {
   if (!Number.isInteger(options.port) || options.port < 1 || options.port > 65535) {
     throw new TypeError("MongoDB provider port must be between 1 and 65535")
   }
-  if (typeof options.databaseName !== "string" || options.databaseName.trim() === "") {
+  if (typeof options.databaseName !== "string" || options.databaseName.trim() === "" || !options.databaseName.isWellFormed()) {
     throw new TypeError("MongoDB provider databaseName must be a non-empty string")
   }
   if (/[\\/\\\\."$*<>:|?]/u.test(options.databaseName) || options.databaseName.includes("\0")) {
@@ -103,7 +103,9 @@ function assertProviderOptions(options) {
   if (Buffer.byteLength(options.databaseName, "utf8") > 63) {
     throw new TypeError("MongoDB provider databaseName must not exceed the portable 63-byte limit")
   }
-  if (options.username !== undefined && (typeof options.username !== "string" || options.username.length === 0)) {
+  if (options.username !== undefined && (typeof options.username !== "string"
+    || options.username.length === 0
+    || !/^[\\x20-\\x7e]+$/.test(options.username))) {
     throw new TypeError("MongoDB provider username must be a non-empty string")
   }
   if (options.username !== undefined && typeof options.password !== "string") {
@@ -125,7 +127,8 @@ function assertProviderOptions(options) {
     throw new TypeError("MongoDB provider authSource must be a non-empty string")
   }
   if (options.authSource !== undefined
-    && (/[\\/\\\\."$*<>:|?]/u.test(options.authSource)
+    && (!options.authSource.isWellFormed()
+      || /[\\/\\\\."$*<>:|?]/u.test(options.authSource)
       || options.authSource.includes("\0")
       || Buffer.byteLength(options.authSource, "utf8") > 63)) {
     throw new TypeError("MongoDB provider authSource must be a valid database name of at most 63 bytes")
@@ -143,6 +146,15 @@ function assertProviderOptions(options) {
   }
   if (options.tlsOptions !== null && (typeof options.tlsOptions !== "object" || Array.isArray(options.tlsOptions))) {
     throw new TypeError("MongoDB provider TLS options must be an object or disabled")
+  }
+  for (const [name, value] of Object.entries({
+    transportFactory: options.transportFactory,
+    handshake: options.handshake,
+    randomBytes: options.randomBytes,
+  })) {
+    if (value !== undefined && typeof value !== "function") {
+      throw new TypeError(`MongoDB provider ${name} must be a function`)
+    }
   }
 }
 
