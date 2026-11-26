@@ -1126,12 +1126,15 @@ function createRuntimeScenarioTerminalSellResult({
   result,
   eventResult,
   stagedSellFills,
+  pauses,
 }) {
   return {
     orderStatus: terminalOrder.status,
     executedQuantity: terminalOrder.executedQuantity.amount,
     profitabilityEligible: result.data.profitability?.eligible === true,
     eventWorkflowFailedClosed: eventResult?.ok === false,
+    marketPaused: pauses.some((pause) => pause.symbol === runtime.market.symbol),
+    pauseReasons: pauses.map((pause) => pause.reason),
     stopFactAppended: runtime.operationalStateStore.getRecords().some((fact) =>
       fact.factType === "SAFETY_BLOCKER_RAISED" && fact.data?.scope === "ACCOUNT"),
     eventFillStaged: stagedSellFills.length === 1,
@@ -1388,6 +1391,7 @@ async function reconcileRuntimeScenarioTerminalSell({
     result: terminalAccountingResult,
     eventResult,
     stagedSellFills,
+    pauses,
   })
 }
 
@@ -1501,6 +1505,7 @@ function createRuntimeScenarioExpected({ seed, pairConfig, scenarioId }) {
       reservationReleased: true,
       stopFactAppended: true,
       eventWorkflowFailedClosed: true,
+      marketPaused: true,
     }
   }
   if (scenarioId === "RS-RUNTIME-SELL-PARTIAL-CANCEL-001") {
@@ -1519,6 +1524,7 @@ function createRuntimeScenarioExpected({ seed, pairConfig, scenarioId }) {
       reservationReleased: true,
       stopFactAppended: true,
       eventWorkflowFailedClosed: true,
+      marketPaused: true,
     }
   }
   return {
@@ -1599,6 +1605,11 @@ function createPartialSellSafetyAssertions({ output, expected }) {
       name: "production STOP workflow durably appends an account blocker",
       actual: output.terminalSell?.stopFactAppended,
       expected: expected.stopFactAppended,
+    }),
+    createAssertion({
+      name: "production order-event workflow pauses the affected market after terminal SELL STOP",
+      actual: output.terminalSell?.marketPaused,
+      expected: expected.marketPaused,
     }),
     createAssertion({
       name: "terminal SELL releases the terminal order reservation after fill reconciliation",

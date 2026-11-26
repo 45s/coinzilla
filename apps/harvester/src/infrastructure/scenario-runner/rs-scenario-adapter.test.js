@@ -225,6 +225,10 @@ test("production RS accounting durably stops after a fully FILLED SELL misses th
     "The complete terminal SELL fill must be staged exactly once.")
   assert.equal(result.output.terminalSell.eventWorkflowFailedClosed, true,
     "The terminal event must fail closed after the adverse profitability outcome.")
+  assert.equal(result.output.terminalSell.marketPaused, true,
+    "The affected market must be paused after the terminal profitability STOP.")
+  assert.ok(result.output.terminalSell.pauseReasons.includes("RS_TERMINAL_SELL_PROFITABILITY_STOP"),
+    "The production event workflow must use the canonical under-target FILLED SELL STOP reason.")
   assert.equal(result.output.terminalSell.stopFactAppended, true,
     "The adverse FILLED SELL must durably append the account-wide STOP fact.")
   assert.equal(result.output.reservedSellCycle, null,
