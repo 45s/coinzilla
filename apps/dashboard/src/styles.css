@@ -197,7 +197,7 @@ html[data-theme="system"] {
 }
 
 /* Feature styles use these semantic aliases across every selectable palette. */
-html[data-theme]:not([data-theme="current"]) {
+html[data-theme]:not([data-theme="current"]):not([data-theme="staradmin"]) {
   --surface: var(--surface-bg);
   --surface-raised: var(--raised-bg);
   --border: var(--line);
