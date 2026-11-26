@@ -188,7 +188,7 @@ body: { ping: 1 } }),
     () => encodeOpMsg({ requestId: 1,
 body: { ping: 1 },
 sequences: {} }),
-    /sequence documents must be an array/,
+    /sequences must be an array/,
   )
   assert.throws(
     () => encodeOpMsg({
@@ -218,7 +218,7 @@ test("MongoDB OP_MSG encoder rejects invalid sequences and configured size limit
       body: { ping: 1 },
       sequences: "not-an-array",
     }),
-    /sequence documents must be an array/,
+    /sequences must be an array/,
   )
   assert.throws(
     () => encodeOpMsg({
