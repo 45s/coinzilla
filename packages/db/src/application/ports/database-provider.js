@@ -22,6 +22,7 @@
  * @typedef {DatabaseAdapter & {
  *   capabilities: DatabaseCapabilities,
  *   withTransaction: (work: (transaction: DatabaseTransaction) => unknown) => Promise<unknown>|unknown,
+ *   withReadTransaction: (work: (transaction: DatabaseTransaction) => unknown) => Promise<unknown>|unknown,
  *   execute: (input: {operation: string, input: object}) => unknown|Promise<unknown>
  * }} DatabaseProvider
  */
