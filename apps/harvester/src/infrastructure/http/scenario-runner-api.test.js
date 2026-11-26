@@ -691,3 +691,62 @@ test("Scenario Runner API identifies malformed runner submissions as client erro
     "A malformed strategy/scenario submission must remain a client error.")
   assert.equal(JSON.parse(response.body).error.code, "SCENARIO_RUNNER_SUBMISSION_INVALID")
 })
+
+
+test("Scenario Runner API exposes original-revision replay as a run command", async () => {
+  const runner = createRunnerFake()
+  let replayedRunId
+  runner.replay = (runId) => {
+    replayedRunId = runId
+    return {
+      runId: "run-2",
+      replayOfRunId: runId,
+      status: "Starting",
+      sourceRevision: "a".repeat(40),
+    }
+  }
+  const response = responseRecorder()
+
+  await handleScenarioRunnerRequest({
+    request: createRequest({
+      method: "POST",
+      url: "/api/v1/scenario-runner/runs/run-1/replay",
+    }),
+    response,
+    pathname: "/api/v1/scenario-runner/runs/run-1/replay",
+    runner,
+  })
+
+  assert.equal(response.status, 202,
+    "The API must accept a replay when the runner starts a same-revision execution.")
+  assert.equal(replayedRunId, "run-1",
+    "The API must pass the original run identity to the runner replay use case.")
+  assert.equal(JSON.parse(response.body).data.replayOfRunId, "run-1",
+    "The response must identify the original run so clients can navigate replay provenance.")
+})
+
+test("Scenario Runner API reports an exact-revision replay block as a conflict", async () => {
+  const runner = createRunnerFake()
+  runner.replay = (runId) => ({
+    runId: "run-replay-blocked",
+    replayOfRunId: runId,
+    status: "Blocked",
+    diagnostics: ["Exact replay is blocked because the source revision is unknown."],
+  })
+  const response = responseRecorder()
+
+  await handleScenarioRunnerRequest({
+    request: createRequest({
+      method: "POST",
+      url: "/api/v1/scenario-runner/runs/run-1/replay",
+    }),
+    response,
+    pathname: "/api/v1/scenario-runner/runs/run-1/replay",
+    runner,
+  })
+
+  assert.equal(response.status, 409,
+    "A replay that cannot prove exact source identity must be a conflict, not an accepted execution.")
+  assert.equal(JSON.parse(response.body).data.status, "Blocked",
+    "The API must return the authoritative blocked replay record and diagnostic.")
+})
