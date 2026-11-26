@@ -102,6 +102,9 @@ function assertProviderOptions(options) {
   if (options.username !== undefined && typeof options.password !== "string") {
     throw new TypeError("MongoDB provider password must be a string when username is configured")
   }
+  if (typeof options.directConnection !== "boolean") {
+    throw new TypeError("MongoDB provider directConnection must be a boolean")
+  }
 }
 
 function createTransactionCommand({ transport, session }) {
