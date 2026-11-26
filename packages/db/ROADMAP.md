@@ -26,19 +26,22 @@ The infrastructure adapter uses Node.js built-ins only and includes native BSON 
 
 **Supported topology envelope:** single-seed `mongodb://` standalone and replica-set deployments. Replica-set multi-document transactions are verified. Sharded/mongos deployments, SRV, multi-seed discovery, pooling, topology monitoring/failover, retryable writes, compression, change streams, GridFS, client-side encryption and legacy wire opcodes are not supported guarantees. Supported wire-version overlap is 13–25. SCRAM usernames and SHA-256 passwords are restricted to printable ASCII because full SASLprep is not implemented. The public record contract is JSON-oriented, not arbitrary BSON. Client session pooling and explicit `endSessions` cleanup remain deferred.
 
-**Latest exact-head verification on `25dffc84f6438347c4c77df7411d6d924ced392b` (2026-11-26):**
+**Latest exact-head verification on `04d1aecf7244be1e4f618a58485ede3567bb95a1` (2026-11-26):**
 
-- DB unit suite: 400 tests, 379 passed, 0 failed, 21 skipped. Line coverage 98.68%, branch coverage 96.76%, function coverage 100%.
-- Full workspace Unit Tests workflow: passed, including `@coinzilla/db` and existing providers/packages.
-- Test Coverage workflow: passed for all packages and workspace coverage.
-- Repository Quality: passed, including zero-warning workspace ESLint, strict changed-file ESLint, JavaScript syntax, actionlint and maintained-Markdown checks.
-- Dependency Audit, External Documentation Links and Harvester Targeted Tests: passed.
-- Real MongoDB 8.0 authenticated standalone (SCRAM): 20 integration tests, 13 passed, 0 failed, 7 skipped because standalone does not support multi-document transactions.
-- Real MongoDB 8.0 replica set: 20 integration tests, 15 passed, 0 failed, 5 skipped. Atomic transaction rollback and commit passed. Concurrent CRUD request correlation passed on both topologies.
-- The standalone server exposed a real delete-command wire-format defect: collation was incorrectly placed at command level. The implementation and regression test were corrected before both real-server jobs passed.
-- The feature branch was synchronized with `develop` by a normal merge commit and was 0 commits behind at verification.
+- DB unit suite: **402 tests, 381 passed, 0 failed, 21 skipped**.
+- DB coverage: **98.74% lines, 96.82% branches, 100% functions**; package coverage thresholds passed.
+- Full workspace Unit Tests and Test Coverage workflows passed.
+- Repository Quality passed, including zero-warning workspace ESLint, strict changed-file ESLint, JavaScript syntax and actionlint.
+- Dependency Audit, External Documentation Links and Harvester Targeted Tests passed.
+- MongoDB provider integration passed against MongoDB 8.0 in both CI topologies.
+- Authenticated standalone (SCRAM): **20 integration tests, 13 passed, 0 failed, 7 skipped** because standalone does not support multi-document transactions.
+- Replica set: **20 integration tests, 15 passed, 0 failed, 5 skipped**. Atomic transaction rollback/commit and concurrent CRUD request correlation passed.
+- A test-first transport correction now accepts a TCP data chunk containing multiple individually valid OP_MSG frames whose aggregate exceeds 48 MiB. Each individual frame remains bounded by the 48 MiB protocol limit. The regression was observed failing on the test-only commit before the transport fix.
+- A test-first topology correction now rejects mongos/sharded servers during handshake. Transaction capability is explicitly limited to replica sets; standalone reports no multi-document transaction support. The mongos regression was observed failing before the handshake guard.
+- README, MongoDB support guide and this roadmap describe the same topology boundary. The isolated sharded recovery-token code is experimental and unreachable through the supported handshake.
+- Branch comparison reports **0 commits behind `develop`**. PR #1868 remains open, non-draft and unmerged for owner review.
 
-**Explicitly unverified follow-ups:** live TLS certificate integration and remote server-process interruption. Sharded/mongos topology is explicitly rejected during handshake rather than treated as an unverified supported mode. Deterministic transport tests cover partial frames, concurrent request correlation, pending-request rejection and interrupted writes. These follow-ups are not represented as supported guarantees. No test assertions or coverage thresholds were weakened.
+**Explicitly unverified follow-ups:** live TLS certificate integration and remote server-process interruption. SRV/multi-seed discovery, connection pooling/topology monitoring, retryable writes, compression, arbitrary BSON APIs and sharded/mongos deployments remain intentionally outside the supported contract. Deterministic transport tests cover partial frames, coalesced frames, concurrent request correlation, pending-request rejection and interrupted writes. No test assertions or coverage thresholds were weakened.
 
 See [MongoDB support and limitations](./docs/mongodb.md) for the operational configuration, tested behavior and limitations.
 ## Active maintenance
