@@ -557,7 +557,6 @@ RS-004-011 is a provisional PRELIMINARY candidate based on open PR #1823 and inv
 
 Before any work, read root `AGENTS.md` and all applicable nested `AGENTS.md` files. This requirement is repeated in Issue #1836, PR #1837 and the Runner roadmap. Trading logic/services may be refactored as necessary on the task branch to achieve faithful production-flow reuse, with regression tests and safety preservation. Never commit directly to `develop`/`main` or merge/auto-merge the PR.
 
-
 ## Verified implementation boundary — 2026-11-26
 
 The current branch is scaffolding, not the executable RS MVP described above. Its only public RS catalogue entry is the preliminary RS-004-011 profitability-helper projection; it invokes one pure production calculation and does not run the Recovery Seller runtime lifecycle. The production host registers no executable adapter, and the process adapter remains fail-closed without a real trusted OS sandbox launcher. Worker runtime guards are defense-in-depth, not an OS security boundary. Run history is in-memory and is lost on Harvester restart. The current debug JSON records only available evidence, marks trace completeness and worker isolation unverified, and cannot claim exact executed-code provenance. These limitations must remain visible in the UI and PR until the corresponding acceptance gates are implemented and proven.
