@@ -378,6 +378,7 @@ test("process worker rejects dangerous Node APIs and does not inherit Harvester 
       "node:http2",
       "node:net",
     ], "the worker must reject process creation, extra threads and network modules")
+    assert.equal(result.esmImportBlocked, true, "the worker must reject ESM imports of forbidden built-ins")
     assert.equal(result.fetchBlocked, true, "the worker must reject the global fetch API")
     assert.equal(result.syncWriteBlocked, true, "the worker must reject synchronous filesystem writes")
     assert.equal(result.promiseWriteBlocked, true, "the worker must reject promise-based filesystem writes")

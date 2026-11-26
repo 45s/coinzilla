@@ -8,6 +8,12 @@ process.on("message", async (message) => {
   if (message?.type !== "execute") {
     return
   }
+  let esmImportBlocked = false
+  try {
+    await import("node:child_process")
+  } catch {
+    esmImportBlocked = true
+  }
   const blockedModules = []
   for (const moduleName of [
     "node:child_process",
@@ -51,6 +57,7 @@ process.on("message", async (message) => {
     ok: true,
     output: {
       blockedModules,
+      esmImportBlocked,
       fetchBlocked,
       syncWriteBlocked,
       promiseWriteBlocked,
