@@ -147,4 +147,14 @@ clean: true,
 factId: "process-stopped:session-1",
 runtimeSessionId: "session-1",
   }))
+  assert.throws(() => validateProcessStoppedFact({
+    factType: "PROCESS_STOPPED",
+    canonicalData: {
+      reason: "NORMAL_SHUTDOWN",
+      clean: true,
+      unexpected: true,
+    },
+    factId: "process-stopped:session-1",
+    runtimeSessionId: "session-1",
+  }), /unsupported fields/)
 })
