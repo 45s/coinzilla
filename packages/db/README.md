@@ -217,7 +217,7 @@ Read `database.capabilities` to inspect the provider-neutral capability declarat
 
 A provider passed to `createDatabase({ provider })` implements `execute({ operation, input })` for atomic mutations, `withReadTransaction(work)` for provider-neutral reads, and `withTransaction(work)` for explicit multi-operation transactions. The facade routes `readOne`/`readMany` through the read-only boundary and mutations through single-operation execution. SQLite uses `BEGIN IMMEDIATE` for mutations and `BEGIN DEFERRED` for reads, allowing WAL readers to continue while another connection holds a write reservation. MongoDB's read boundary accepts one read operation and rejects mutations. The legacy `adapter` lifecycle/SQL API remains compatible with adapters that only implement `withTransaction`.
 
-A synchronous provider cannot declare `nestedTransactions: true`; the provider-neutral facade requires asynchronous callbacks to invoke nested transactions safely. The capability validator rejects that incompatible declaration at composition time.
+`nestedTransactions: true` is valid only when the provider uses asynchronous callbacks and `multiDocument` is either `true` or `"topology-dependent"`. A synchronous provider or a provider declaring `multiDocument: false` cannot declare nested transaction support; the capability validator rejects either contradiction at composition time.
 
 A future provider must declare its own actual guarantees. The package will not silently emulate unsupported transaction, query, or durability guarantees.
 
