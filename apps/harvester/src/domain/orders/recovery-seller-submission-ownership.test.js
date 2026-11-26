@@ -164,3 +164,37 @@ test("rejects an RS owner using a Conservative-only purpose", () => {
     "A valid RS cycle must not be accepted as a Conservative BUY.",
   )
 })
+
+
+test("rejects optional order IDs that conflict with the canonical order", () => {
+  const order = {
+    side: "SELL",
+    clientOrderId: "canonical-client-id",
+    brokerOrderId: "canonical-broker-id",
+  }
+
+  assert.throws(
+    () => validateStrategySubmissionOwnership({
+      order,
+      purpose: "RECOVERY_SELL",
+      ownership: {
+        ...recoverySellerOwnership,
+        clientOrderId: "different-client-id",
+      },
+    }),
+    /clientOrderId must match/,
+    "Ownership must not attach a different client order ID to the canonical order.",
+  )
+  assert.throws(
+    () => validateStrategySubmissionOwnership({
+      order,
+      purpose: "RECOVERY_SELL",
+      ownership: {
+        ...recoverySellerOwnership,
+        brokerOrderId: "different-broker-id",
+      },
+    }),
+    /brokerOrderId must match/,
+    "Ownership must not attach a different broker order ID to the canonical order.",
+  )
+})
