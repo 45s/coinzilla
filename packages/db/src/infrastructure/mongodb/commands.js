@@ -334,12 +334,12 @@ function createMongoRecordOperations({ command, databaseName }) {
             cause: new Error("MongoDB getMore response omitted cursor.nextBatch"),
           })
         }
+        cursorId = next.cursor.id
         records.push(...next.cursor.nextBatch.map((document) => decodeStoredRecord({
           document,
           operation: "readMany",
           collection,
         })))
-        cursorId = next.cursor.id
       }
       return records
     } catch (error) {
