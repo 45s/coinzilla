@@ -750,23 +750,10 @@ test("the real accounting workflow snapshot still fails closed when verified leg
 })
 
 function createWorkflowGateScenarios({ baseScenario, existingOrderScenario }) {
-  const stoppedState = latchRecoverySellerStop({
-    state: createRecoverySellerStopState(),
-    decision: createRecoverySellerStopDecision({
-      explanation: "Owner STOP must prevent new SELL submissions.",
-    }),
-  })
   return [
     {
       name: "existing account order",
       snapshot: existingOrderScenario.snapshot,
-    },
-    {
-      name: "STOP",
-      snapshot: Object.freeze({
-        ...baseScenario.snapshot,
-        stopState: stoppedState,
-      }),
     },
     {
       name: "market pause",
@@ -783,6 +770,21 @@ function createWorkflowGateScenarios({ baseScenario, existingOrderScenario }) {
       }),
     },
   ]
+}
+
+function createWorkflowStopSnapshot({ baseScenario }) {
+  const stoppedState = latchRecoverySellerStop({
+    state: createRecoverySellerStopState(),
+    decision: createRecoverySellerStopDecision({
+      explanation: "STOP blocks additional BUY spending only.",
+    }),
+  })
+  return Object.freeze({
+    ...baseScenario.snapshot,
+    stopState: stoppedState,
+    strategyStopped: false,
+    buyAdmissionBlocked: true,
+  })
 }
 
 async function assertWorkflowGateBlocksSell({ name, snapshot, marketMetadata }) {
@@ -822,7 +824,89 @@ async function assertWorkflowGateBlocksSell({ name, snapshot, marketMetadata }) 
     `The ${name} gate must take precedence over a profitable SELL plan.`)
 }
 
-test("real workflow snapshots preserve existing-order, STOP, pause and reconciliation gates before SELL submission", async () => {
+async function assertWorkflowStopBlocksBuy({ snapshot, marketMetadata }) {
+  let submissions = 0
+  let buyPolicyInput
+  const evaluate = createRecoverySellerTransitionEvaluator({
+    getSnapshot: async () => snapshot,
+    submitOrder: async () => {
+      submissions += 1
+      return {
+        ok: true,
+        data: {
+          submitted: true,
+        },
+      }
+    },
+    evaluateBuyDecision: (input) => {
+      buyPolicyInput = input
+      return {
+        decision: {
+          outcome: input.strategyStopped ? "BLOCK" : "SUBMIT",
+          reasonCode: "SCENARIO_STOP_BUY_GATE",
+          explanation: "STOP blocks additional BUY spending only.",
+        },
+      }
+    },
+  })
+  const result = await evaluate({
+    symbol,
+    marketPrice: {
+      symbol,
+      price: "9",
+    },
+    marketMetadata,
+    pairConfig,
+  })
+
+  assert.equal(snapshot.strategyStopped, false,
+    "A strategy STOP must not be represented as process shutdown.")
+  assert.equal(snapshot.buyAdmissionBlocked, true,
+    "The STOP snapshot must carry the BUY-only admission gate.")
+  assert.equal(buyPolicyInput.strategyStopped, true,
+    "The transition evaluator must apply the admission gate to the BUY policy.")
+  assert.equal(submissions, 0,
+    "An active STOP must result in zero new BUY submission attempts.")
+  assert.equal(result.decision.outcome, "BLOCK")
+}
+
+async function assertWorkflowStopAllowsSell({ snapshot, marketMetadata }) {
+  let submissions = 0
+  const evaluate = createRecoverySellerTransitionEvaluator({
+    getSnapshot: async () => snapshot,
+    submitOrder: async () => {
+      submissions += 1
+      return {
+        ok: true,
+        data: {
+          submitted: true,
+        },
+      }
+    },
+    evaluateBuyDecision: () => ({
+      decision: {
+        outcome: "BLOCK",
+        reasonCode: "SCENARIO_STOP_BUY_GATE",
+        explanation: "STOP blocks additional BUY spending only.",
+      },
+    }),
+  })
+  const result = await evaluate({
+    symbol,
+    marketPrice: {
+      symbol,
+      price: "25",
+    },
+    marketMetadata,
+    pairConfig,
+  })
+
+  assert.equal(submissions, 1,
+    "An otherwise-eligible first recovery SELL must still be submitted while STOP is latched.")
+  assert.equal(result.decision.outcome, "SUBMIT")
+}
+
+test("real workflow snapshots preserve non-STOP SELL gates and enforce BUY-only STOP admission", async () => {
   const baseScenario = await createPlannerScenario()
   const existingOrderScenario = await createPlannerScenario({
     includeExternalSellReservation: true,
@@ -838,4 +922,14 @@ test("real workflow snapshots preserve existing-order, STOP, pause and reconcili
       marketMetadata: baseScenario.marketMetadata,
     })
   }
+
+  const stoppedSnapshot = createWorkflowStopSnapshot({ baseScenario })
+  await assertWorkflowStopBlocksBuy({
+    snapshot: stoppedSnapshot,
+    marketMetadata: baseScenario.marketMetadata,
+  })
+  await assertWorkflowStopAllowsSell({
+    snapshot: stoppedSnapshot,
+    marketMetadata: baseScenario.marketMetadata,
+  })
 })
