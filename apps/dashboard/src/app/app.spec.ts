@@ -167,6 +167,11 @@ describe('AppComponent', () => {
     expect(fixture.nativeElement.textContent).toContain('Connecting to Harvester');
     expect(fixture.nativeElement.textContent).toContain('Orders');
 
+    const historyButton = Array.from(root.querySelectorAll('button.section-nav-item'))
+      .find((button) => button.textContent?.includes('History')) as HTMLButtonElement;
+    historyButton.click();
+    fixture.detectChanges();
+
     const fillsButton = Array.from(root.querySelectorAll('button.context-subnav-item'))
       .find((button) => button.textContent?.includes('Fills')) as HTMLButtonElement;
     fillsButton.click();
@@ -197,6 +202,10 @@ describe('AppComponent', () => {
     const brokersButton = Array.from(root.querySelectorAll('button.nav-item'))
       .find((button) => button.textContent?.includes('Brokers')) as HTMLButtonElement;
     brokersButton.click();
+    fixture.detectChanges();
+    const ordersTab = Array.from(root.querySelectorAll('button.section-nav-item'))
+      .find((button) => button.textContent?.includes('Orders')) as HTMLButtonElement;
+    ordersTab.click();
     fixture.detectChanges();
     const openOrdersButton = Array.from(root.querySelectorAll('button.context-subnav-item'))
       .find((button) => button.textContent?.includes('Open Orders')) as HTMLButtonElement;
