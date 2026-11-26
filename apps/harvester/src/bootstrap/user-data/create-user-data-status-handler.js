@@ -5,6 +5,25 @@ import {
   mapBrokerStatusChangedData,
 } from "../../application/events/lifecycle-event-dtos.js"
 
+const INVALIDATING_USER_DATA_STATUSES = new Set([
+  "connectionClosed",
+  "recovering",
+  "recoveryFailed",
+  "terminated",
+  "rpcError",
+  "executionNormalizationFailed",
+])
+
+const UNSAFE_CONNECTION_STATUSES = new Set([
+  "connectionClosed",
+  "recovering",
+  "recovered",
+  "recoveryFailed",
+  "terminated",
+  "rpcError",
+  "executionNormalizationFailed",
+])
+
 function logSystem({ logger, ...data }) {
   if (typeof logger?.system === "function") {
     logger.system(data)
@@ -73,7 +92,10 @@ function isRestoredSubscription({ state, status }) {
     status.subscriptionId === state.recoverySubscriptionId &&
     status.recoveryGeneration === state.recoveryBrokerGeneration &&
     Number.isSafeInteger(state.recoveryBrokerGeneration) &&
-    state.lastAcknowledgedRecoveryGeneration === state.recoveryGeneration
+    state.lastAcknowledgedRecoveryGeneration === state.recoveryGeneration &&
+    !state.accountingFailed &&
+    (!state.retryableRecoveryFailure ||
+      state.retryableRecoveryFailure.generation !== state.recoveryGeneration)
 }
 
 function getRestoredTransition({ status }) {
@@ -307,44 +329,25 @@ function markAccountingFailure({ state, status, cancelOwnedBuysAfterAccountingFa
 }
 
 function updateRecoveryGeneration({ state, status, diagnosticOnlyRpcError }) {
-  if (!diagnosticOnlyRpcError && status.type === "reconciled" &&
-      status.recoveryRequired !== true && status.reconciliationRequired !== true) {
-    state.streamUnsafe = false
-    if (
-      status.subscriptionId !== undefined &&
-      status.subscriptionId !== null &&
-      status.subscriptionId === state.recoverySubscriptionId &&
-      status.recoveryGeneration === state.recoveryBrokerGeneration &&
-      Number.isSafeInteger(state.recoveryBrokerGeneration) &&
-      state.lastAcknowledgedRecoveryGeneration === state.recoveryGeneration &&
-      !state.accountingFailed &&
-      (!state.retryableRecoveryFailure ||
-        state.retryableRecoveryFailure.generation !== state.recoveryGeneration)
-    ) {
-      state.requiresReconciliation = false
-    }
+  if (diagnosticOnlyRpcError) {
+    return
   }
-  const invalidatingStatuses = [
-    "connectionClosed",
-    "recovering",
-    "recoveryFailed",
-    "terminated",
-    "rpcError",
-    "executionNormalizationFailed",
-  ]
-  if (!diagnosticOnlyRpcError && invalidatingStatuses.includes(status.type)) {
+  if (isRestoredSubscription({ state, status })) {
+    state.streamUnsafe = false
+    state.requiresReconciliation = false
+  }
+  if (INVALIDATING_USER_DATA_STATUSES.has(status.type)) {
     state.recoveryGeneration += 1
     state.recoverySubscriptionId = null
     state.recoveryBrokerGeneration = null
   }
-  if (!diagnosticOnlyRpcError && status.type === "recovered") {
+  if (status.type === "recovered") {
     state.recoverySubscriptionId = status.subscriptionId ?? null
     state.recoveryBrokerGeneration = Number.isSafeInteger(status.recoveryGeneration)
       ? status.recoveryGeneration
       : null
   }
 }
-
 function updateUserDataReadiness({
   state,
   status,
@@ -374,6 +377,11 @@ status })
   if (state.accountingFailed) {
     state.ready = false
     state.status = "EXECUTION_ACCOUNTING_FAILED"
+    return
+  }
+  if (state.tradingActivationDeferred === true) {
+    state.ready = false
+    state.status = "STARTUP_READINESS_AUDIT_PENDING"
     return
   }
   if (state.initialAccountSnapshotReady && tradingEnabled) {
@@ -422,81 +430,103 @@ error })
  * Create the broker user-data status handler and its application-readiness transitions.
  * Stream-level recovery never clears the application reconciliation gate by itself.
  */
-export function createUserDataStatusHandler({
+function prepareUserDataStatusEvent({
   state,
-  isStopped,
+  status,
   eventPublisher,
   brokerName,
   logger,
+} = {}) {
+  publishBrokerEvidence({ eventPublisher, status })
+  if (shouldSkipAcknowledgedRecovery({ state, status })) {
+    return false
+  }
+  publishBrokerStatusChanged({
+    state,
+    status,
+    eventPublisher,
+    brokerName,
+  })
+  logUserDataStreamTransition({ state, logger, status })
+  return true
+}
+
+function applyUserDataStatusTransition({
+  state,
+  status,
+  diagnosticOnlyRpcError,
   tradingEnabled,
+  resumeDeferredStrategyEvaluations,
   startUserDataRecovery,
   cancelOwnedBuysAfterAccountingFailure,
-  resumeDeferredStrategyEvaluations,
-  onUserDataStatus,
 } = {}) {
-  return (status = {}) => {
-    if (isStopped()) {
-      return
-    }
-    publishBrokerEvidence({ eventPublisher,
-status })
-    if (shouldSkipAcknowledgedRecovery({ state,
-status })) {
-      return
-    }
-    publishBrokerStatusChanged({
+  if (!diagnosticOnlyRpcError) {
+    state.status = status.type ?? "UNKNOWN"
+    markAccountingFailure({
       state,
       status,
-      eventPublisher,
-      brokerName,
-    })
-    logUserDataStreamTransition({ state,
-logger,
-status })
-
-    const diagnosticOnlyRpcError = isDiagnosticOnlyRpcError({ status })
-    if (!diagnosticOnlyRpcError) {
-      state.status = status.type ?? "UNKNOWN"
-    }
-    if (!diagnosticOnlyRpcError) {
-      markAccountingFailure({
-        state,
-        status,
-        cancelOwnedBuysAfterAccountingFailure,
-      })
-    }
-    const connectionUnsafe = !diagnosticOnlyRpcError && [
-      "connectionClosed",
-      "recovering",
-      "recovered",
-      "recoveryFailed",
-      "terminated",
-      "rpcError",
-      "executionNormalizationFailed",
-    ].includes(status.type)
-    updateRecoveryGeneration({ state,
-status,
-diagnosticOnlyRpcError })
-    updateUserDataReadiness({
-      state,
-      status,
-      diagnosticOnlyRpcError,
-      connectionUnsafe,
-      tradingEnabled,
-      resumeDeferredStrategyEvaluations,
-    })
-    startRequiredUserDataRecovery({
-      state,
-      status,
-      diagnosticOnlyRpcError,
-      startUserDataRecovery,
-    })
-    reportUserDataStatus({
-      state,
-      status,
-      logger,
-      onUserDataStatus,
       cancelOwnedBuysAfterAccountingFailure,
     })
   }
+  const connectionUnsafe = !diagnosticOnlyRpcError && UNSAFE_CONNECTION_STATUSES.has(status.type)
+  updateRecoveryGeneration({ state, status, diagnosticOnlyRpcError })
+  updateUserDataReadiness({
+    state,
+    status,
+    diagnosticOnlyRpcError,
+    connectionUnsafe,
+    tradingEnabled,
+    resumeDeferredStrategyEvaluations,
+  })
+  startRequiredUserDataRecovery({
+    state,
+    status,
+    diagnosticOnlyRpcError,
+    startUserDataRecovery,
+  })
+}
+
+function handleUserDataStatusEvent({ status, ...dependencies } = {}) {
+  const { state, isStopped, logger, onUserDataStatus, cancelOwnedBuysAfterAccountingFailure } = dependencies
+  if (isStopped()) {
+    return
+  }
+  const prepared = prepareUserDataStatusEvent({
+    state,
+    status,
+    eventPublisher: dependencies.eventPublisher,
+    brokerName: dependencies.brokerName,
+    logger,
+  })
+  if (!prepared) {
+    return
+  }
+  const diagnosticOnlyRpcError = isDiagnosticOnlyRpcError({ status })
+  applyUserDataStatusTransition({
+    state,
+    status,
+    diagnosticOnlyRpcError,
+    tradingEnabled: dependencies.tradingEnabled,
+    resumeDeferredStrategyEvaluations: dependencies.resumeDeferredStrategyEvaluations,
+    startUserDataRecovery: dependencies.startUserDataRecovery,
+    cancelOwnedBuysAfterAccountingFailure,
+  })
+  reportUserDataStatus({
+    state,
+    status,
+    logger,
+    onUserDataStatus,
+    cancelOwnedBuysAfterAccountingFailure,
+  })
+}
+
+/**
+ * Create the broker user-data status handler and its application-readiness transitions.
+ * Stream-level recovery never clears the application reconciliation gate by itself.
+ */
+export function createUserDataStatusHandler(options = {}) {
+  return (status = {}) => handleUserDataStatusEvent({
+    ...options,
+    status,
+  })
 }

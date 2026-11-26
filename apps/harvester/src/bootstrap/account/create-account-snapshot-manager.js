@@ -332,6 +332,9 @@ function createInitialAccountSnapshotManagerState() {
     commissionBaselineAssetCodesById: new Map(),
     unownedOpenOrderSymbols: new Set(),
     lastOpenOrdersObservedAt: undefined,
+    lastOpenOrdersAudit: undefined,
+    preflightOpenOrdersAudit: undefined,
+    preflightAuditCompleted: false,
     pendingExternalOrderVersions: new Map(),
     externalOrderObservationSequence: 0,
   }
@@ -871,6 +874,19 @@ async function publishOpenOrdersSnapshot({ context, options }) {
     context,
     classification: snapshot.classification,
   })
+  const auditSummary = Object.freeze({
+    phase: options.phase,
+    observedAt: snapshot.dataResult.data.observedAt,
+    orderCount: orders.length,
+    readiness: snapshot.classification.readiness,
+    blockReasons: Object.freeze([...snapshot.classification.blockReasons]),
+    unownedSymbols: Object.freeze([...context.state.unownedOpenOrderSymbols].sort()),
+    durable: true,
+  })
+  context.state.lastOpenOrdersAudit = auditSummary
+  if (options.phase === "PREFLIGHT") {
+    context.state.preflightOpenOrdersAudit = auditSummary
+  }
   logOpenOrdersSnapshot({
     context,
     phase: options.phase,
@@ -994,6 +1010,9 @@ async function publishAccountSnapshot({ context, options }) {
     runtimeSessionId: context.runtimeSessionId,
     monotonicNow: context.monotonicNow,
   })
+  if (options.phase === "PREFLIGHT") {
+    context.state.preflightAuditCompleted = true
+  }
   logSystem({ logger: context.logger,
     message: "Account snapshot captured and durably journaled",
     phase: options.phase,
@@ -1300,6 +1319,46 @@ function createAccountSnapshotManagerContext({
  * @param {Function} [options.now] Clock returning epoch milliseconds.
  * @returns {object} Account snapshot read and durable audit operations.
  */
+function createAccountPreflightReadinessSnapshot({ state }) {
+  return Object.freeze({
+    completed: state.preflightAuditCompleted === true,
+    durable: state.preflightAuditCompleted === true,
+    sourceTime: state.preflightSourceTime ?? null,
+    balanceCount: state.preflightBalancesByCode.size,
+  })
+}
+
+function createAccountOpenOrdersReadinessSnapshot({ state }) {
+  const audit = state.lastOpenOrdersAudit
+  return Object.freeze({
+    completed: audit !== undefined,
+    durable: audit?.durable === true,
+    phase: audit?.phase ?? null,
+    observedAt: audit?.observedAt ?? null,
+    orderCount: audit?.orderCount ?? null,
+    readiness: audit?.readiness ?? "UNKNOWN",
+    blockReasons: audit?.blockReasons ?? [],
+    unownedSymbols: audit?.unownedSymbols ?? [],
+    preflight: state.preflightOpenOrdersAudit ?? null,
+  })
+}
+
+function createCurrentAccountReadinessSnapshot({ state }) {
+  const snapshot = state.accountSnapshot
+  return Object.freeze({
+    sourceTime: snapshot?.sourceTime ?? null,
+    balanceCount: snapshot?.balances?.length ?? null,
+  })
+}
+
+function createAccountReadinessSnapshot({ state }) {
+  return Object.freeze({
+    preflight: createAccountPreflightReadinessSnapshot({ state }),
+    openOrders: createAccountOpenOrdersReadinessSnapshot({ state }),
+    currentAccount: createCurrentAccountReadinessSnapshot({ state }),
+  })
+}
+
 export function createAccountSnapshotManager(options = {}) {
   const { context, state } = createAccountSnapshotManagerContext(options)
   const { publishOrders, observeExternalOrder } = createExternalOrderReconciliation({
@@ -1332,6 +1391,7 @@ export function createAccountSnapshotManager(options = {}) {
 
   return Object.freeze({
     getAccountSnapshot: () => state.accountSnapshot,
+    getReadinessSnapshot: () => createAccountReadinessSnapshot({ state }),
     hasUnownedOpenOrdersForSymbol: ({ symbol } = {}) =>
       typeof symbol === "string" && (
         state.unownedOpenOrderSymbols.has(symbol) ||

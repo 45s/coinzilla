@@ -2416,3 +2416,9 @@ The initial inventory contains 18 scenarios across 16 categories: 15 TEST-MAPPED
 - Full production RS adapter composition remains blocked by the independent terminal-SELL/STOP accounting defect in [issue #1842](https://github.com/45s/coinzilla) and by the absence of a trusted OS-level sandbox launcher. Public RS scenarios remain non-executable.
 - Maintained Markdown style findings from the first full-workspace quality run were corrected: normalized blank lines, final newlines and list separation in the modified roadmaps, architecture and instruction/index documents.
 - In-memory run history is accepted for the MVP; durable persistence is deferred and is not a blocker.
+
+## Startup readiness diagnostics — issue #1860
+
+Implemented on [PR #1861](https://github.com/45s/coinzilla/pull/1861): a shared immutable readiness projection now covers startup and authorized operator status/market queries. Startup keeps the existing user-data trading gate closed until PREFLIGHT, market-data and candle-history evidence is sampled; runtime/account blockers remain global while market-local book, metadata and volatility blockers remain scoped to their market. Existing engine admission guards remain authoritative, external orders remain unowned, and process restoration remains disabled.
+
+The branch is being synchronized with current `develop`; exact-head Harvester tests, coverage, lint and required workflows must pass before this work is considered complete.

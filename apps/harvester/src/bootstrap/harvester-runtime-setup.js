@@ -5,6 +5,8 @@ export function createHarvesterUserDataState() {
     shutdownRequested: false,
     marketIntakeStopped: false,
     ready: false,
+    preflightComplete: false,
+    tradingActivationDeferred: false,
     initialAccountSnapshotReady: false,
     requiresReconciliation: false,
     streamUnsafe: false,
@@ -32,6 +34,8 @@ export function getHarvesterOperatorRuntimeSnapshot({
   brokerName,
   tradingEnabled,
   tradingMode,
+  startupBoundary = false,
+  readinessInputs = {},
 } = {}) {
   const observedAt = now()
   const lastEventAt = userDataState.lastStatusEventAt
@@ -39,6 +43,9 @@ export function getHarvesterOperatorRuntimeSnapshot({
     observedAt,
     startedAt: runtimeStartedAt,
     runtimeState: userDataState.stopped ? "STOPPING" : "RUNNING",
+    startupComplete: userDataState.startupComplete === true,
+    startupBoundary: startupBoundary === true,
+    readinessInputs,
     broker: brokerName,
     tradingEnabled,
     tradingMode,

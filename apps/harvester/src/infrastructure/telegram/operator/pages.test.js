@@ -38,6 +38,14 @@ test("reads a status page through the authorized read-only application query", a
             strategyMode: "conservative",
             tradingMode: "testnet",
             tradingEnabled: true,
+            readinessReport: {
+              status: "DEGRADED",
+              tradingGateOpen: false,
+              runtimeBlockers: ["ACCOUNT_PREFLIGHT_NOT_DURABLE"],
+              marketBlockers: [{ symbol: "BTCUSDT", blockers: ["MARKET_BOOK_UNAVAILABLE"] }],
+              warnings: ["EXTERNAL_ORDERS_IGNORED_BY_POLICY"],
+              summary: { readyMarkets: 1, enabledMarkets: 2, blockedMarkets: 1, warnings: 1 },
+            },
             observedAt: 1700000000000,
           },
         }
@@ -66,11 +74,54 @@ test("reads a status page through the authorized read-only application query", a
     /Harvester status/,
     "The status response must be formatted from the application-owned status snapshot.",
   )
+  assert.match(page.text, /Startup audit: DEGRADED/)
+  assert.match(page.text, /Trading gate: CLOSED/)
+  assert.match(page.text, /ACCOUNT_PREFLIGHT_NOT_DURABLE/)
   assert.deepEqual(
     page.keyboard,
     { page: "status" },
     "The page must use the navigation keyboard for the selected query.",
   )
+})
+
+test("renders source-backed market readiness and accepted book freshness", async () => {
+  const fixture = createPageDependencies({
+    operator: {
+      getMarkets: async () => ({
+        ok: true,
+        data: {
+          readinessReport: {
+            status: "DEGRADED",
+            tradingGateOpen: true,
+            summary: { readyMarkets: 1, enabledMarkets: 2, blockedMarkets: 1, warnings: 0 },
+            runtimeBlockers: [],
+            marketBlockers: [{ symbol: "BTCUSDT", blockers: ["MARKET_BOOK_UNAVAILABLE"] }],
+            warnings: [],
+          },
+          markets: [{
+            symbol: "BTCUSDT",
+            readiness: "BLOCKED",
+            latestPrice: "65000",
+            priceFresh: true,
+            bookRequired: true,
+            bookFresh: false,
+            bookTimestamp: null,
+            blockers: ["MARKET_BOOK_UNAVAILABLE"],
+          }],
+        },
+      }),
+    },
+  })
+  const page = await readTelegramOperatorPage({
+    page: "markets",
+    userId: "123",
+    interaction: {},
+    ...fixture.dependencies,
+  })
+
+  assert.match(page.text, /Startup audit: DEGRADED/)
+  assert.match(page.text, /Book: unavailable/)
+  assert.match(page.text, /MARKET_BOOK_UNAVAILABLE/)
 })
 
 test("returns an unavailable page when the requested query is not provided", async () => {

@@ -24,6 +24,27 @@ function appendStatusBlockers({ lines, blockers }) {
   }
 }
 
+function appendReadinessReport({ lines, report }) {
+  if (!report || typeof report !== "object") return
+  lines.push(`Startup audit: ${String(report.status ?? "UNKNOWN")}`)
+  lines.push(`Trading gate: ${report.tradingGateOpen === true ? "OPEN" : "CLOSED"}`)
+  const summary = report.summary
+  if (summary) {
+    lines.push(`Markets ready: ${summary.readyMarkets ?? 0}/${summary.enabledMarkets ?? 0} (${summary.blockedMarkets ?? 0} blocked; ${summary.warnings ?? 0} warnings)`)
+  }
+  if (Array.isArray(report.runtimeBlockers) && report.runtimeBlockers.length > 0) {
+    lines.push(`Startup blockers: ${report.runtimeBlockers.join(", ")}`)
+  }
+  const marketBlockers = (report.marketBlockers ?? [])
+    .flatMap(({ symbol, blockers = [] }) => blockers.map((code) => `${symbol}:${code}`))
+  if (marketBlockers.length > 0) {
+    lines.push(`Market blockers: ${marketBlockers.join(", ")}`)
+  }
+  if (Array.isArray(report.warnings) && report.warnings.length > 0) {
+    lines.push(`Warnings: ${report.warnings.join(", ")}`)
+  }
+}
+
 function formatMarketPriceLine({ market }) {
   const hasPrice = market.latestPrice !== null && market.latestPrice !== undefined
   let priceStatus = "stale"
@@ -56,6 +77,14 @@ function appendMarketDetails({
   if (market.priceTimestamp !== null && market.priceTimestamp !== undefined) {
     lines.push(`Price updated: ${formatTimestamp(market.priceTimestamp)}`)
   }
+  const bookStatus = market.bookRequired !== true
+    ? "not required"
+    : market.bookFresh === true
+      ? "fresh"
+      : market.bookTimestamp !== null && market.bookTimestamp !== undefined
+        ? "stale"
+        : "unavailable"
+  lines.push(`Book: ${bookStatus}`)
   lines.push(`Operator pause: ${market.operatorPaused ? "ACTIVE" : "OFF"}`)
   lines.push(`BUY pause: ${market.operatorBuysPaused ? "ACTIVE" : "OFF"}`)
   lines.push(`Safety pause: ${market.safetyPaused ? "ACTIVE" : "OFF"}`)
@@ -91,6 +120,7 @@ export function formatTelegramOperatorStatus({ status } = {}) {
     lines,
     blockers: readiness.blockers,
   })
+  appendReadinessReport({ lines, report: status.readinessReport })
   if (status.stopping === true) {lines.push("Runtime is stopping.")}
   lines.push(`Observed: ${  formatTimestamp(status.observedAt)}`)
   return lines.join("\n")
@@ -101,6 +131,7 @@ export function formatTelegramOperatorMarkets({ snapshot } = {}) {
     throw new TypeError("formatTelegramOperatorMarkets requires a market snapshot")
   }
   const lines = ["Harvester markets"]
+  appendReadinessReport({ lines, report: snapshot.readinessReport })
   if (snapshot.markets.length === 0) {lines.push("No configured markets.")}
   for (const market of snapshot.markets) {
     lines.push("")

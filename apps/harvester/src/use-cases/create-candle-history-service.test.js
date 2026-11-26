@@ -110,6 +110,7 @@ isClosed: false }))
   assert.equal(snapshot.metrics.volatilityRatio, "1", "A stable current NATR equal to its prior-60 reference must produce a ratio of one.")
   assert.equal(snapshot.metrics.referenceObservations, 60, "The published reference must identify the exact number of prior observations used.")
   assert.equal(snapshot.status.isReady, true, "A complete history plus a fresh live candle event must make the market data ready.")
+  assert.equal(snapshot.status.freshnessThresholdMs, 65_000, "The volatility candle stream must retain its one-minute interval plus five-second freshness threshold.")
 })
 
 test("rejects discontinuous historical data instead of calculating indicators across a missing candle", async () => {

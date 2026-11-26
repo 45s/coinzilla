@@ -138,6 +138,8 @@ test("preserves configured market-data source identity on live price events", as
     timestamp: 10_000,
     ...sourceIdentity,
   })
+  assert.equal(fixture.marketPriceIntake.get("BTCUSDT").hasFreshWebSocketPrice, true)
+  assert.equal(fixture.marketPriceIntake.get("BTCUSDT").initialPriceSeeded, false)
 })
 
 test("preserves configured market-data source identity on initial price snapshots", async () => {
@@ -164,6 +166,8 @@ test("preserves configured market-data source identity on initial price snapshot
     timestamp: 10_000,
     ...sourceIdentity,
   })
+  assert.equal(fixture.marketPriceIntake.get("BTCUSDT").initialPriceSeeded, true)
+  assert.equal(fixture.marketPriceIntake.get("BTCUSDT").hasFreshWebSocketPrice, false)
 })
 
 test("establishes all enabled book/price streams before WebSocket API ticker.price seeding", async () => {
@@ -246,6 +250,36 @@ stream: "price" } }
 
   assert.equal(fixture.calls.includes("ticker-price-request:BTCUSDT"), false, "A fresh first WebSocket Streams price must avoid a redundant ticker.price request.")
   assert.equal(fixture.calls.includes("process-price:BTCUSDT"), true, "The fresh WebSocket price must be processed.")
+})
+
+
+test("distinguishes subscription acknowledgements from accepted first price and book events", async () => {
+  const fixture = createFixture({
+    tradingEnabled: true,
+    subscribeForPrices: async ({ symbol, onPrice }) => {
+      await onPrice({ symbol, price: "65000", timestamp: 10_000 })
+      return { ok: true, data: { unsubscribe: async () => {}, stream: "price" } }
+    },
+    subscribeForBookTicker: async ({ symbol, onBookTicker }) => {
+      await onBookTicker({
+        symbol,
+        bidPrice: "64999",
+        bidQuantity: "1",
+        askPrice: "65001",
+        askQuantity: "1",
+        timestamp: 10_000,
+      })
+      return { ok: true, data: { unsubscribe: async () => {}, stream: "book" } }
+    },
+  })
+  await fixture.result
+  const intake = fixture.marketPriceIntake.get("BTCUSDT")
+
+  assert.equal(intake.marketPriceSubscriptionReady, true, "The price subscription acknowledgement must be tracked.")
+  assert.equal(intake.hasFreshWebSocketPrice, true, "Only an accepted valid price event may satisfy first-price evidence.")
+  assert.equal(intake.bookSubscriptionReady, true, "The book subscription acknowledgement must be tracked.")
+  assert.equal(intake.hasFreshWebSocketBook, true, "Only an accepted book event may satisfy first-book evidence.")
+  assert.equal(intake.initialPriceSeeded, false, "A live first price must not be mislabeled as an initial REST/WebSocket API seed.")
 })
 
 
