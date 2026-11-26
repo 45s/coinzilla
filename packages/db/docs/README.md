@@ -8,7 +8,8 @@ This is the local index for durable Database Infrastructure decisions and design
 
 ## Current implementation guidance
 
-- [Package README](../README.md) — public API, CRUD/query semantics, composition examples, SQLite behavior and provider conformance usage.
+- [Package README](../README.md) — public API, CRUD/query semantics, composition examples, provider behavior and provider conformance usage.
+- [MongoDB provider support and limitations](./mongodb.md) — protocol/authentication support, configuration, topology and transaction guarantees, BSON mapping and operational exclusions.
 - [Package instructions](../AGENTS.md) — ownership, dependency direction, provider rules and required verification.
 - [Database roadmap](../ROADMAP.md) — implementation phases and deferred evidence-driven work.
 
