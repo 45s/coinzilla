@@ -697,3 +697,14 @@ test("MongoDB provider rejects passwords configured without a username", () => {
     /password requires a username/i,
   )
 })
+
+
+test("MongoDB provider rejects invalid explicit database names before connecting", () => {
+  assert.throws(
+    () => createMongoProvider({
+      host: "localhost",
+      databaseName: "bad/name",
+    }),
+    /databaseName.*unsupported character/i,
+  )
+})
