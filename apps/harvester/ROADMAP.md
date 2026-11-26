@@ -15,8 +15,11 @@ Feature branch: `fix/harvester/incident-1856-ownership-shutdown-safety`
 - The strategy shutdown coordinator did not retain timed-out participant wait promises. A later shutdown attempt could start a second `waitUntilSafe()` operation while the first remained unresolved.
 - The shutdown handler and outer `createHarvesterStop` boundary awaited asynchronous work without their own bounded deadlines. A pending CLOSING audit or durable `PROCESS_STOPPED` append could leave shutdown waiting indefinitely.
 
+- The shared market-price dispatcher selected any active BUY for Conservative CG trailing-BUY repricing without checking canonical strategy ownership. An RS-owned LINEAUSDT BUY therefore entered the CG path, where the RS-only symbol had no CG pair config and `evaluateTrailingBuyTrigger` dereferenced missing `priceStepPercent`.
+
 ### Implementation recorded on PR #1858
 
+- Shared market-price dispatch now checks canonical OrderRegistry ownership and invokes the CG-specific trailing-BUY workflow only for CG-owned BUYs. RS-owned and unowned BUY events continue through the shared latest-transition evaluator without dereferencing CG-only pair configuration.
 - Shared ownership validation now covers CG Position-scoped ownership and RS Position/cycle-scoped ownership, including strategy, purpose, side and identity checks.
 - CG pending-order registration now preserves the originating Position identity and returns the exact registered ownership. Durable Journal `ORDER_SUBMISSION_REQUESTED` facts include that ownership; Operational State Store intent remains a separate durable boundary before broker placement.
 - Conflicting supplied ownership metadata is rejected before broker I/O. The registered ownership is used for subsequent durable intent/outcome processing.
