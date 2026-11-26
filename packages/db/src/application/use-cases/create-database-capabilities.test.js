@@ -289,6 +289,7 @@ test("database CRUD inside a transaction reuses its transaction context", async 
     delete() {},
   })
   const database = createDatabase({ provider })
+  let nestedTransaction
   await database.connect()
 
   try {
