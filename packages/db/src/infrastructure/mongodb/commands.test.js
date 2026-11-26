@@ -95,6 +95,23 @@ test("MongoDB readOne returns null or the decoded stored record", async () => {
   )
 })
 
+
+test("MongoDB rejects stored documents whose decoded record has no valid identifier", async () => {
+  const operations = createMongoRecordOperations({
+    command: async () => ({
+      ok: 1,
+      cursor: { firstBatch: [{ data: { name: "missing id" } }] },
+    }),
+    databaseName: "app",
+  })
+
+  await assert.rejects(
+    operations.readOne({ collection: "people", id: "record-1" }),
+    (error) => error instanceof DatabaseProviderError
+      && error.cause?.message.includes("Record identifier"),
+  )
+})
+
 test("MongoDB readMany builds exact-null filters and portable sort pagination stages", async () => {
   const stub = createCommandStub([{
     ok: 1,
