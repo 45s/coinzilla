@@ -46,7 +46,7 @@ function awaitWithShutdownSignal(operation, signal) {
   }
 
   let abortHandler
-  const abortPromise = new Promise((resolve, reject) => {
+  const abortPromise = new Promise((_, reject) => {
     abortHandler = () => reject(
       signal.reason ?? new Error("Strategy shutdown participant operation was aborted"),
     )
