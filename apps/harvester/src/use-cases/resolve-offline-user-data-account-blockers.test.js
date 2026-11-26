@@ -394,7 +394,7 @@ test("parses explicit offline account blocker resolution confirmation", () => {
     "action-unique-001",
     "--resolution-reason",
     resolutionReason,
-  ]), /--cause-fixed/
+  ]), /--cause-fixed/)
 })
 
 test("runs the production offline account/order/fill audit for every configured market", async () => {
@@ -576,6 +576,7 @@ test("CLI reports durable resolution while explicitly keeping trading blocked", 
       "--cause-fixed",
     ],
     cwd: "/tmp",
+    getUserInfo: () => ({ username: "operator-7" }),
     getUserInfo: () => ({ username: "operator-7" }),
     readContext: async () => JSON.stringify(makeContext()),
     createStore: () => makeStore(),
