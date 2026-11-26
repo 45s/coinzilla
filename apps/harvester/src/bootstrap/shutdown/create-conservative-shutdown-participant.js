@@ -876,6 +876,9 @@ async function secureUnsafeMarket({
       result,
     }
   } catch (error) {
+    if (signal?.aborted) {
+      throw signal.reason ?? error
+    }
     return {
       symbol,
       result: {
@@ -968,7 +971,7 @@ async function waitForConservativeMarkets({
     }
     throwIfShutdownAborted(signal)
     safetyPassCount += 1
-    await secureUnsafeMarkets({
+    snapshot = await secureUnsafeMarkets({
       engine,
       snapshot,
       eventPublisher,
@@ -980,7 +983,6 @@ async function waitForConservativeMarkets({
       stageDiagnostics,
     })
     throwIfShutdownAborted(signal)
-    snapshot = engine.getShutdownSafetySnapshot()
     if (snapshot.markets.every((market) => market.status === "SAFE_TO_SHUTDOWN")) {
       return {
         ok: true,
