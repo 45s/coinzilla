@@ -19,7 +19,7 @@ describe('market screener theme contract', () => {
   });
 
   it('binds contextual navigation to the active theme panel surface', () => {
-    const sectionNav = shellStyles.match(/\\.section-nav \\{([^}]*)\\}/)?.[1];
+    const sectionNav = shellStyles.match(/\.section-nav \{([^}]*)\}/)?.[1];
 
     expect(sectionNav).toContain('background: var(--panel-bg);');
     expect(sectionNav).not.toContain('var(--panel, #fff)');
