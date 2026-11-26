@@ -165,7 +165,8 @@
       "src/infrastructure/scenario-runner/scenario-worker-message-handler.test.js",
       "src/infrastructure/scenario-runner/scenario-worker-dispatch.test.js",
       "src/infrastructure/scenario-runner/rs-scenario-adapter.test.js",
-      "src/infrastructure/http/scenario-runner-api.test.js"
+      "src/infrastructure/http/scenario-runner-api.test.js",
+      "src/infrastructure/http/scenario-runner-process-acceptance.test.js"
     ]
   },
   "scripts": {
