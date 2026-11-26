@@ -1,6 +1,6 @@
 # Harvester documentation inventory
 
-- Status: Frozen 42-file baseline dispositions complete; all 4 initial Harvester REVIEW candidates have verified KEEP/SUPERSEDE dispositions; 46 post-baseline additions are recorded below; no current Harvester REVIEW candidates remain
+- Status: Frozen historical inventory; 42-file baseline dispositions complete; all 4 initial REVIEW candidates have verified KEEP/SUPERSEDE dispositions; 46 post-baseline additions are recorded through the 2026-11-18 checkpoint; no REVIEW candidates remained at that checkpoint
 - Type: Documentation inventory
 - Owner: Harvester
 - Inventory baseline: `develop` at `cea27e580f9f9bf3d7fa109b9e6353f68aef9ff2`
