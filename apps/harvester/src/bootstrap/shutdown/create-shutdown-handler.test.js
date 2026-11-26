@@ -188,7 +188,7 @@ test("bounds a pending CLOSING audit phase and retains shared services", async (
       return pendingAudit
     },
     phaseTimeoutMs: 25,
-    setTimeoutFn: (callback, timeoutMs, phase) => {
+    setTimeoutFn: ({ callback, timeoutMs, phase }) => {
       if (phase === "CLOSING_AUDIT") {
         closingAuditDeadline = callback
         closingAuditTimeoutMs = timeoutMs
@@ -906,7 +906,10 @@ test("keeps every shared service alive and reports incomplete shutdown when a st
     },
     isSafeToShutdown: () => false,
     getSafetySnapshot: () => ({
-      markets: [{ symbol: "DOGEUSDT", blockers: ["ORDER_RECONCILIATION_PENDING"] }],
+      markets: [{
+        symbol: "DOGEUSDT",
+        blockers: ["ORDER_RECONCILIATION_PENDING"],
+      }],
     }),
   }
   const strategyShutdownCoordinator = createStrategyShutdownCoordinator({

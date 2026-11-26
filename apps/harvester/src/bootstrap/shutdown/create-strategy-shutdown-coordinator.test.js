@@ -187,7 +187,10 @@ test("returns a participant-specific timeout blocker and aborts its safety signa
       },
       isSafeToShutdown: () => false,
       getSafetySnapshot: () => ({
-        markets: [{ symbol: "DOGEUSDT", blockers: ["ORDER_RECONCILIATION_PENDING"] }],
+        markets: [{
+          symbol: "DOGEUSDT",
+          blockers: ["ORDER_RECONCILIATION_PENDING"],
+        }],
       }),
     }],
   })

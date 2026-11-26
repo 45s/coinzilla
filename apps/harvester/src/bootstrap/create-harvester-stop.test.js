@@ -118,7 +118,7 @@ test("bounds pending durable PROCESS_STOPPED and prevents overlapping retries", 
   const dependencies = createStopDependencies({
     calls,
     processStopDurabilityTimeoutMs: 25,
-    setTimeoutFn: (callback, timeoutMs, phase) => {
+    setTimeoutFn: ({ callback, timeoutMs, phase }) => {
       if (phase === "PROCESS_STOP_DURABILITY") {
         processStopDeadline = callback
         processStopTimeoutMs = timeoutMs

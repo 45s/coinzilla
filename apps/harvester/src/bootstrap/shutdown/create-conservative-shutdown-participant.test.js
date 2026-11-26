@@ -910,7 +910,10 @@ test("does not advance to BUY cancellation or recovery proof after a participant
     status: "PENDING",
     remainingQuantity: { amount: "398" },
   }]
-  const participant = createParticipant({ engine, calls })
+  const participant = createParticipant({
+    engine,
+    calls,
+  })
   const controller = new AbortController()
 
   participant.beginShutdown()
