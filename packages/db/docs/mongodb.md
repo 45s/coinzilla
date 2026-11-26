@@ -122,11 +122,9 @@ The integration suite creates a distinct database name for each test from the co
 
 A test suite using fake transports does not prove compatibility with a live MongoDB server. Record the exact server version, topology and authentication mode whenever real-server conformance is run.
 
-
 ## Official driver reference
 
 The implementation may consult and selectively adapt small, proven parts of the official MongoDB Node.js driver, but it does not vendor or recreate that driver. The pinned source baseline, component-by-component mapping, dependency analysis, mandatory porting workflow and Apache-2.0 attribution requirements are documented in [the official-driver reference and selective-port strategy](./mongodb-driver-reference-strategy.md). This package remains Node.js-built-ins-only; the official driver's `bson`, SASL preparation and connection-string dependencies must not be added as runtime dependencies.
-
 
 ### Automated real-server integration
 
