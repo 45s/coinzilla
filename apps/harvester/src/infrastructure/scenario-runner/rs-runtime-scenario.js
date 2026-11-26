@@ -1567,7 +1567,10 @@ function createRuntimeScenarioTerminalSellExpected({
   stopPersistenceFailure = false,
 }) {
   const expected = {
-    ...createRuntimeScenarioSellExpectedBase({ seed, pairConfig }),
+    ...createRuntimeScenarioSellExpectedBase({
+      seed,
+      pairConfig,
+    }),
     terminalOrderStatus,
     terminalCycleStatus: "UNRESOLVED",
     terminalReconciled: true,
@@ -1643,7 +1646,10 @@ function createRuntimeScenarioExpected({ seed, pairConfig, scenarioId }) {
       profitabilityEligible: true,
     })
   }
-  return createRuntimeScenarioSellExpectedBase({ seed, pairConfig })
+  return createRuntimeScenarioSellExpectedBase({
+    seed,
+    pairConfig,
+  })
 }
 
 function createRejectedSellAssertions({ output, expected }) {
@@ -2037,7 +2043,10 @@ async function executeRuntimeScenarioAdmission({ runtime, scenarioId, effectiveI
       effectiveInput,
       expectRejection: scenarioId === "RS-RUNTIME-SELL-REJECTION-001",
     })
-    return { execution, stopAdmissionChecks: null }
+    return {
+      execution,
+      stopAdmissionChecks: null,
+    }
   }
   const stopResult = await runtime.stopWorkflow.latch({
     explanation: "Scenario verifies that STOP blocks new BUY spending but permits an eligible first recovery SELL.",
@@ -2055,15 +2064,24 @@ async function executeRuntimeScenarioAdmission({ runtime, scenarioId, effectiveI
     accountAdmissionBlocked: runtime.stopWorkflow.isAccountAdmissionBlocked(),
     buyAdmissionBlocked: runtime.stopWorkflow.isAccountAdmissionBlocked(),
   }
-  return { execution, stopAdmissionChecks }
+  return {
+    execution,
+    stopAdmissionChecks,
+  }
 }
 
 async function executeRuntimeScenarioTerminalSell({ runtime, scenarioId, effectiveInput, execution }) {
   if (scenarioId === "RS-RUNTIME-SELL-PARTIAL-CANCEL-001") {
-    return reconcileRuntimeScenarioPartialSell({ runtime, execution })
+    return reconcileRuntimeScenarioPartialSell({
+      runtime,
+      execution,
+    })
   }
   if (scenarioId === "RS-RUNTIME-SELL-FILLED-UNDER-TARGET-001") {
-    return reconcileRuntimeScenarioFilledSell({ runtime, execution })
+    return reconcileRuntimeScenarioFilledSell({
+      runtime,
+      execution,
+    })
   }
   if (scenarioId !== "RS-RUNTIME-SELL-STOP-PERSISTENCE-FAILURE-001") {
     return null
