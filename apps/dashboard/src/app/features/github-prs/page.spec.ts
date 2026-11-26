@@ -57,7 +57,7 @@ describe('GitHubPullRequestsComponent', () => {
     const name = root.querySelector('.label-create input') as HTMLInputElement;
     name.value = 'Codex';
     name.dispatchEvent(new Event('input'));
-    root.querySelector<HTMLButtonElement>('.label-create button')?.click();
+    root.querySelector<HTMLButtonElement>('.label-create .add-label-button')?.click();
     fixture.detectChanges();
 
     const assignment = root.querySelector<HTMLButtonElement>('.assignment-chip');
@@ -65,7 +65,9 @@ describe('GitHubPullRequestsComponent', () => {
     assignment?.click();
     fixture.detectChanges();
 
-    expect(fixture.componentInstance.isAssigned(snapshot.pullRequests[0], JSON.parse(window.localStorage.getItem('coinzilla.dashboard.github-pr-labels.v1') ?? '{}').labels[0].id)).toBe(true);
+    const savedStore = JSON.parse(window.localStorage.getItem('coinzilla.dashboard.github-pr-labels.v1') ?? '{}');
+    expect(savedStore.labels).toHaveLength(1);
+    expect(fixture.componentInstance.isAssigned(snapshot.pullRequests[0], savedStore.labels[0].id)).toBe(true);
     expect(root.textContent).toContain('Codex');
     expect(JSON.parse(window.localStorage.getItem('coinzilla.dashboard.github-pr-labels.v1') ?? '{}').assignments)
       .toEqual({ '45s/coinzilla#1824': [expect.any(String)] });
@@ -77,7 +79,7 @@ describe('GitHubPullRequestsComponent', () => {
     const name = root.querySelector('.label-create input') as HTMLInputElement;
     name.value = 'Codex';
     name.dispatchEvent(new Event('input'));
-    root.querySelector<HTMLButtonElement>('.label-create button')?.click();
+    root.querySelector<HTMLButtonElement>('.label-create .add-label-button')?.click();
     fixture.detectChanges();
 
     const renameInput = root.querySelector<HTMLInputElement>('.label-name-input');
