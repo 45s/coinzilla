@@ -138,7 +138,8 @@ function validateOpMsgFrame({ message }) {
     requestId: message.readInt32LE(4),
     responseTo: message.readInt32LE(8),
     flags,
-    state: { offset: 20, end: message.length },
+    state: { offset: 20,
+end: message.length },
   }
 }
 
@@ -169,7 +170,8 @@ function decodeOpMsgSections({ message, state }) {
       if (body === undefined) {
         throw new TypeError("MongoDB OP_MSG body section must precede document sequences")
       }
-      const sequence = readSequence({ buffer: message, state })
+      const sequence = readSequence({ buffer: message,
+state })
       if (Object.hasOwn(sequences, sequence.identifier)) {
         throw new TypeError("MongoDB OP_MSG contains a duplicate sequence identifier")
       }
@@ -178,14 +180,17 @@ function decodeOpMsgSections({ message, state }) {
     }
     throw new TypeError(`Unsupported MongoDB OP_MSG section kind ${kind}`)
   }
-  return { body, sequences }
+  return { body,
+sequences }
 }
 
 /** Decode one complete MongoDB OP_MSG frame. */
 export function decodeOpMsg(message) {
   const frame = validateOpMsgFrame({ message })
-  validateMessageIdentifier({ value: frame.requestId, label: "requestId" })
-  validateMessageIdentifier({ value: frame.responseTo, label: "responseTo" })
+  validateMessageIdentifier({ value: frame.requestId,
+label: "requestId" })
+  validateMessageIdentifier({ value: frame.responseTo,
+label: "responseTo" })
   const { body, sequences } = decodeOpMsgSections({
     message,
     state: frame.state,

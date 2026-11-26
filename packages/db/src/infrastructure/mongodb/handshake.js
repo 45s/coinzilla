@@ -94,7 +94,8 @@ function validateMongoUriOptions({ url }) {
     }
     seenOptions.add(key)
   }
-  if (parseBooleanOption({ value: url.searchParams.get("loadBalanced"), name: "loadBalanced" })) {
+  if (parseBooleanOption({ value: url.searchParams.get("loadBalanced"),
+name: "loadBalanced" })) {
     throw new TypeError("MongoDB load-balanced topology is not supported")
   }
   if (url.searchParams.has("compressors") && url.searchParams.get("compressors") !== "") {
@@ -103,7 +104,8 @@ function validateMongoUriOptions({ url }) {
   if (url.searchParams.has("readPreference") && url.searchParams.get("readPreference") !== "primary") {
     throw new TypeError("MongoDB provider supports primary read preference only")
   }
-  if (parseBooleanOption({ value: url.searchParams.get("retryWrites"), name: "retryWrites" })) {
+  if (parseBooleanOption({ value: url.searchParams.get("retryWrites"),
+name: "retryWrites" })) {
     throw new TypeError("MongoDB retryable writes are not supported")
   }
 }
@@ -127,7 +129,8 @@ function parseCredentials({ url, authority }) {
   if (username !== undefined && password === undefined) {
     throw new TypeError("MongoDB URI username requires a password")
   }
-  return { username, password }
+  return { username,
+password }
 }
 
 /** Parse the deliberately supported single-seed mongodb:// URI form. */
@@ -137,7 +140,8 @@ export function parseMongoConnectionString(connectionString) {
   const url = parseMongoUrl({ connectionString })
   validateMongoUriOptions({ url })
   const databaseName = parseDatabaseName({ url })
-  const credentials = parseCredentials({ url, authority })
+  const credentials = parseCredentials({ url,
+authority })
   const tlsValue = url.searchParams.get("tls") ?? url.searchParams.get("ssl")
   const host = url.hostname.startsWith("[") ? url.hostname.slice(1, -1) : url.hostname
   if (host === "") {
@@ -150,7 +154,8 @@ export function parseMongoConnectionString(connectionString) {
     databaseName,
     authSource: url.searchParams.get("authSource") ?? databaseName,
     authMechanism: url.searchParams.get("authMechanism") ?? undefined,
-    tls: parseBooleanOption({ value: tlsValue, name: "tls" }),
+    tls: parseBooleanOption({ value: tlsValue,
+name: "tls" }),
     replicaSet: url.searchParams.get("replicaSet") ?? undefined,
     directConnection: parseBooleanOption({
       value: url.searchParams.get("directConnection"),
@@ -214,7 +219,8 @@ function createHelloCommand({ username, authSource }) {
     hello: 1,
     helloOk: true,
     client: {
-      driver: { name: "coinzilla-db-native", version: "1.0.0" },
+      driver: { name: "coinzilla-db-native",
+version: "1.0.0" },
       os: { type: process.platform },
       platform: `Node.js ${process.version}`,
     },
@@ -240,7 +246,8 @@ function validateWireVersion({ hello }) {
       `MongoDB wire protocol version range ${minWireVersion}-${maxWireVersion} is not supported; supported range is ${MIN_SUPPORTED_WIRE_VERSION}-${MAX_SUPPORTED_WIRE_VERSION}`,
     )
   }
-  return { minWireVersion, maxWireVersion }
+  return { minWireVersion,
+maxWireVersion }
 }
 
 function validateTopology({ hello, replicaSet }) {
@@ -254,7 +261,8 @@ function validateTopology({ hello, replicaSet }) {
   if (!writablePrimary && typeof hello.primary !== "string") {
     throw new Error("MongoDB topology did not advertise a writable primary")
   }
-  return { topology, writablePrimary }
+  return { topology,
+writablePrimary }
 }
 
 async function authenticateIfConfigured({
@@ -308,14 +316,17 @@ export async function performMongoHandshake({
     throw new TypeError("MongoDB database name must be a non-empty string")
   }
   const hello = await transport.command({
-    body: createHelloCommand({ username, authSource }),
+    body: createHelloCommand({ username,
+authSource }),
   })
-  assertCommandSucceeded({ response: hello, commandName: "hello" })
+  assertCommandSucceeded({ response: hello,
+commandName: "hello" })
   if (hello.serviceId !== undefined) {
     throw new Error("MongoDB load-balanced topology is not supported")
   }
   const { minWireVersion, maxWireVersion } = validateWireVersion({ hello })
-  const { topology, writablePrimary } = validateTopology({ hello, replicaSet })
+  const { topology, writablePrimary } = validateTopology({ hello,
+replicaSet })
   const mechanism = await authenticateIfConfigured({
     transport,
     hello,

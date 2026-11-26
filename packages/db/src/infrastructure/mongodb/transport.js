@@ -16,7 +16,8 @@ function validateOptions({ host, port, connectTimeoutMS, socketTimeoutMS }) {
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
     throw new TypeError("MongoDB transport port must be between 1 and 65535")
   }
-  for (const [name, value] of Object.entries({ connectTimeoutMS, socketTimeoutMS })) {
+  for (const [name, value] of Object.entries({ connectTimeoutMS,
+socketTimeoutMS })) {
     if (!Number.isSafeInteger(value) || value < 1) {
       throw new TypeError(`MongoDB transport ${name} must be a positive safe integer`)
     }
@@ -25,7 +26,9 @@ function validateOptions({ host, port, connectTimeoutMS, socketTimeoutMS }) {
 
 function createSocket({ host, port, tlsOptions, socketFactory }) {
   if (socketFactory) {
-    return socketFactory({ host, port, tls: tlsOptions })
+    return socketFactory({ host,
+port,
+tls: tlsOptions })
   }
   if (tlsOptions) {
     return tls.connect({
@@ -35,7 +38,8 @@ function createSocket({ host, port, tlsOptions, socketFactory }) {
       servername: tlsOptions.servername ?? host,
     })
   }
-  return net.createConnection({ host, port })
+  return net.createConnection({ host,
+port })
 }
 
 function createRequestError({ message, cause, outcomeUnknown = false }) {
@@ -61,7 +65,10 @@ class MongoTransport {
     socketTimeoutMS = 30_000,
     socketFactory,
   } = {}) {
-    validateOptions({ host, port, connectTimeoutMS, socketTimeoutMS })
+    validateOptions({ host,
+port,
+connectTimeoutMS,
+socketTimeoutMS })
     if (tlsOptions !== null && (typeof tlsOptions !== "object" || Array.isArray(tlsOptions))) {
       throw new TypeError("MongoDB TLS options must be an object")
     }
@@ -165,7 +172,8 @@ class MongoTransport {
       })
       return
     }
-    this.settleRequest({ requestId: response.responseTo, response: response.body })
+    this.settleRequest({ requestId: response.responseTo,
+response: response.body })
   }
 
   handleData({ chunk }) {
@@ -296,7 +304,9 @@ class MongoTransport {
 
   createCommandFrame({ requestId, body, sequences }) {
     try {
-      return encodeOpMsg({ requestId, body, sequences })
+      return encodeOpMsg({ requestId,
+body,
+sequences })
     } catch (error) {
       error.outcomeUnknown = false
       throw error
@@ -316,7 +326,12 @@ class MongoTransport {
         }),
       })
     }, timeoutMS)
-    const entry = { resolve, reject, timer, operation, transaction, sent: false }
+    const entry = { resolve,
+reject,
+timer,
+operation,
+transaction,
+sent: false }
     this.pending.set(requestId, entry)
     try {
       entry.sent = true
@@ -358,7 +373,8 @@ class MongoTransport {
       }))
     }
     try {
-      this.validateCommand({ transaction, timeoutMS })
+      this.validateCommand({ transaction,
+timeoutMS })
     } catch (error) {
       return Promise.reject(error)
     }
@@ -366,7 +382,9 @@ class MongoTransport {
     this.nextRequestId = this.nextRequestId >= 0x7fffffff ? 1 : this.nextRequestId + 1
     let frame
     try {
-      frame = this.createCommandFrame({ requestId, body, sequences })
+      frame = this.createCommandFrame({ requestId,
+body,
+sequences })
     } catch (error) {
       return Promise.reject(error)
     }
