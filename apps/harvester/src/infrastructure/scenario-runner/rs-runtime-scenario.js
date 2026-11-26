@@ -79,7 +79,7 @@ const RUNTIME_FIXTURE = Object.freeze({
   }),
   input: Object.freeze({
     marketPrice: "12.3",
-    symbol: runtime.market.symbol,
+    symbol: "ZROUSDT",
     baseAssetCode: "ZRO",
     quoteAssetCode: "USDT",
     venue: "binance",
@@ -854,10 +854,10 @@ async function executeRuntimeScenarioDispatch({ runtime, effectiveInput, expectR
 async function executeRuntimeScenarioDispatch({ runtime, effectiveInput, expectRejection = false }) {
   let submittedAction
   const dispatchResult = await runtime.dispatch({
-    symbol: "ZROUSDT",
+    symbol: runtime.market.symbol,
     state: {
       prices: new Map([[runtime.market.symbol, {
-        symbol: "ZROUSDT",
+        symbol: runtime.market.symbol,
         price: effectiveInput.marketPrice,
       }]]),
       paused: new Set(),
@@ -1340,7 +1340,7 @@ function createRuntimeScenarioEvaluationTrace({ runtime, effectiveInput, output 
     kind: "production-runtime",
     label: "Evaluate production Recovery Seller runtime transition",
     inputs: {
-      symbol: "ZROUSDT",
+      symbol: runtime.market.symbol,
       marketPrice: effectiveInput.marketPrice,
       config: runtime.pairConfig,
       marketMetadata: {
