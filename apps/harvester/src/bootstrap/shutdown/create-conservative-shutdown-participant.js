@@ -828,6 +828,7 @@ async function waitForConservativeMarkets({
       stageDiagnostics,
     })
     throwIfShutdownAborted(signal)
+    snapshot = engine.getShutdownSafetySnapshot()
     if (snapshot.markets.every((market) => market.status === "SAFE_TO_SHUTDOWN")) {
       return {
         ok: true,

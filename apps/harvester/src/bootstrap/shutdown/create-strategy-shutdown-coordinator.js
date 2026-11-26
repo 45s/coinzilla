@@ -133,12 +133,7 @@ async function waitForParticipantWithDeadline({
 
   let timeoutHandle
   let resolveAbort
-  const participantResult = Promise.resolve()
-    .then(() => participant.waitUntilSafe({ signal: participantController.signal }))
-    .then(
-      (value) => ({ status: "fulfilled", value }),
-      (reason) => ({ status: "rejected", reason }),
-    )
+  let reproofCount = 0
   const timeoutResult = new Promise((resolve) => {
     timeoutHandle = setTimeoutFn(() => {
       const error = Object.assign(
@@ -148,6 +143,7 @@ async function waitForParticipantWithDeadline({
           strategyId: participant.strategyId,
           operation: "waitUntilSafe",
           timeoutMs,
+          reproofCount,
         },
       )
       participantController.abort(error)
@@ -164,7 +160,23 @@ async function waitForParticipantWithDeadline({
     })
     : new Promise(() => {})
 
-  const outcome = await Promise.race([participantResult, timeoutResult, abortResult])
+  let outcome
+  while (true) {
+    const participantResult = Promise.resolve()
+      .then(() => participant.waitUntilSafe({ signal: participantController.signal }))
+      .then(
+        (value) => ({ status: "fulfilled", value }),
+        (reason) => ({ status: "rejected", reason }),
+      )
+    outcome = await Promise.race([participantResult, timeoutResult, abortResult])
+    if (outcome.status !== "fulfilled" || outcome.value?.ok !== true) {
+      break
+    }
+    if (participant.isSafeToShutdown() === true) {
+      break
+    }
+    reproofCount += 1
+  }
   clearTimeoutFn(timeoutHandle)
   signal?.removeEventListener("abort", forwardAbort)
   if (resolveAbort) {

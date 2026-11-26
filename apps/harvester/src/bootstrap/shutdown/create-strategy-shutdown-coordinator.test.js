@@ -285,3 +285,36 @@ test("rejects an invalid participant deadline instead of silently disabling boun
     "The shared shutdown coordinator must require an explicit positive deadline.",
   )
 })
+
+
+test("re-runs participant safety when a late fill invalidates a previously completed proof", async () => {
+  let waitCalls = 0
+  let safe = false
+  const coordinator = createStrategyShutdownCoordinator({
+    participants: [{
+      strategyId: "CONSERVATIVE",
+      beginShutdown: () => { safe = false },
+      waitUntilSafe: async () => {
+        waitCalls += 1
+        if (waitCalls === 2) {
+          safe = true
+        }
+        return { ok: true }
+      },
+      isSafeToShutdown: () => safe,
+      getSafetySnapshot: () => ({
+        markets: [{
+          symbol: "DOGEUSDT",
+          blockers: safe ? [] : ["LATE_ORDER_EXECUTION_EVIDENCE"],
+        }],
+      }),
+    }],
+    timeoutMs: 1000,
+  })
+
+  const result = await coordinator.waitUntilSafe()
+
+  assert.equal(result.ok, true)
+  assert.equal(waitCalls, 2, "The coordinator must re-run reconciliation after the safety marker is invalidated.")
+  assert.equal(safe, true)
+})
