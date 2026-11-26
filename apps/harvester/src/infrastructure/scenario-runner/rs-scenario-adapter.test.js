@@ -35,14 +35,14 @@ test("RS scenario adapter blocks unsupported scenario IDs", async () => {
   )
 })
 
-test("RS helper catalog labels the unmerged registry candidate as preliminary and non-executable", () => {
+test("RS helper catalog labels the merged test-only registry candidate as preliminary and non-executable", () => {
   const scenario = getRecoverySellerRunnerCatalog().find((item) => item.id === "RS-004-011")
   assert.ok(scenario, "the helper scenario must remain present in the catalog")
   assert.equal(scenario.id, "RS-004-011", "the helper remains mapped to its source scenario")
-  assert.equal(scenario.status, "PRELIMINARY", "the registry proposal is not merged into develop")
+  assert.equal(scenario.status, "PRELIMINARY", "the merged test-only registry is not a production runtime catalogue")
   assert.equal(scenario.executionStatus, "PRELIMINARY", "helper-only execution must be labelled preliminary")
   assert.equal(scenario.executable, false, "helper-only execution must not be advertised as a full scenario")
-  assert.ok(scenario.readinessReasons.some((reason) => reason.includes("replacement Draft PR #1852")))
+  assert.ok(scenario.readinessReasons.some((reason) => reason.includes("merged test-only RS scenario registry in PR #1852")))
   assert.ok(scenario.readinessReasons.some((reason) => reason.includes("full Recovery Seller strategy lifecycle")))
 })
 

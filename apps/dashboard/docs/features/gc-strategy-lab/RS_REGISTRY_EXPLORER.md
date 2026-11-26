@@ -1,11 +1,11 @@
 # RS scenario catalogue — first strategy adapter
 
 - Status: draft design companion to [Scenario Explorer SPEC](SPEC.md)
-- Original source history: [PR #1823](https://github.com/45s/coinzilla/pull/1823) (closed unmerged as superseded). Current replacement review: [Draft PR #1852](https://github.com/45s/coinzilla/pull/1852), with issue [#1780](https://github.com/45s/coinzilla/issues/1780) as the live RS matrix.
+- Original source history: [PR #1823](https://github.com/45s/coinzilla/pull/1823) (closed unmerged as superseded). Consolidated test registry: [PR #1852](https://github.com/45s/coinzilla/pull/1852), merged into develop at `ef5f5e25b0994f244eb6b29b62f5d48235df4544`. Issue [#1780](https://github.com/45s/coinzilla/issues/1780) remains the live RS matrix.
 - Strategy scope: Recovery Seller (RS) first; GC later
 
 ## Goal
-Provide the initial strategy-owned scenario catalogue adapter for the strategy-neutral Scenario Runner. RS is the first integration target because its production runtime evaluator, accounting workflow, action authorizer and order submitter exist on develop. The structured RS registry proposal is now in replacement Draft PR #1852 (original PR #1823 was closed as superseded); it is not merged into develop; its records are not an authoritative production catalogue and must not be imported directly. The current public catalogue exposes only RS-004-011 as a provisional PRELIMINARY candidate, and its adapter invokes only the pure profitability helper. A separate deterministic SELL dispatch fixture lives under Harvester test support; it has no scenario ID, is not RS-004-012, and is not exposed in the public catalogue. No RS scenario is executable through the host. The generic runner owns discovery, configuration orchestration, isolated execution lifecycle, result comparison and graph presentation; the RS adapter supplies source-backed scenarios only when their registry and execution contracts are available.
+Provide the initial strategy-owned scenario catalogue adapter for the strategy-neutral Scenario Runner. RS is the first integration target because its production runtime evaluator, accounting workflow, action authorizer and order submitter exist on develop. The structured RS registry and mapped records are now merged in PR #1852, but they live under Harvester test support and remain the authoritative **test-coverage registry**, not a production runtime catalogue. Do not import private Harvester test modules into the production host or Dashboard bundle. A supported production catalogue/export boundary is still required. The current public catalogue exposes only RS-004-011 as a provisional PRELIMINARY candidate, and its adapter invokes only the pure profitability helper. A separate deterministic SELL dispatch fixture lives under Harvester test support; it has no scenario ID, is not RS-004-012, and is not exposed in the public catalogue. No RS scenario is executable through the host. The generic runner owns discovery, configuration orchestration, isolated execution lifecycle, result comparison and graph presentation; the RS adapter supplies source-backed scenarios only when their registry and execution contracts are available.
 
 ## Source model and fields
 PR #1852 registry records contain these relevant fields (exact schema remains owned by the registry):
@@ -87,7 +87,7 @@ Based on its description and records at PR head (not a fresh checkout audit):
 
 - RS-001 authorization/custody: 14 records, including freshness-related blocked subcases.
 - RS-002 BUY accounting: 21 records (20 reserved IDs plus cross-cutting RS-002-004), with mapped/partial cases and blockers.
-- RS-004-011 profitability helper candidate (PRELIMINARY; provisional while Draft PR #1852 remains unmerged and the source registry is not integrated).
+- RS-004-011 profitability helper candidate (PRELIMINARY; helper-only and non-executable. PR #1852's test registry is merged, but it is not a production runtime catalogue).
 - The deterministic production SELL dispatch fixture is internal test support with a fixture ID, not a registry scenario or public RS-004-012 record.
 - Catalogs for rules, decisions, states, transitions, invariants and configuration fields; DOMAIN/APPLICATION runner and test mappings.
 
@@ -126,7 +126,7 @@ The Explorer reads records available from source rather than hardcoding the fami
 
 ## Discussion log
 
-- **2026-11-26 audit:** PR #1823 was closed unmerged as superseded; replacement Draft PR #1852 remains unmerged, so its 44 scenario records and test mappings are not available in `develop`. RS-004-011 is a provisional helper-only candidate, marked PRELIMINARY and non-executable. The production SELL dispatch integration fixture is test-only and is not a registry scenario. The host requires a simulation-only adapter with verified OS sandbox attestation; no production launcher currently provides that attestation, so no RS scenario is executable.
+- **2026-11-26 post-merge audit:** PR #1823 is closed unmerged as superseded; PR #1852 is merged into `develop` and supplies the RS test-coverage registry and mapped records. Those records remain test-only and are not a production runtime catalogue. RS-004-011 remains a provisional helper-only candidate, marked PRELIMINARY and non-executable. The production SELL dispatch integration fixture is test-only and is not a registry scenario. The host requires a simulation-only adapter with verified OS sandbox attestation; no production launcher currently provides that attestation, so no RS scenario is executable.
 
 ## Framework-independent execution architecture — required runner foundation
 

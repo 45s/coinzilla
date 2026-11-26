@@ -16,7 +16,7 @@ const SCENARIO = Object.freeze({
   executionStatus: "PRELIMINARY",
   executable: false,
   readinessReasons: Object.freeze([
-    "The source scenario registry and mapped tests are in replacement Draft PR #1852 (original PR #1823 was closed as superseded); this entry is a provisional projection, not an authoritative runtime registry record.",
+    "The RS scenario coverage registry and mapped tests from PR #1852 are merged, but remain test-only; this entry is a provisional runtime projection, not an authoritative production scenario registry record.",
     "This mapping invokes only the pure calculateRecoverySellerProfitability helper; it does not execute the full Recovery Seller strategy lifecycle.",
     "No production OS-level sandbox launcher attestation is available, so the host must keep RS execution blocked.",
   ]),
