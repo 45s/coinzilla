@@ -170,7 +170,7 @@ The diagram describes the accepted target contract, not current runtime behavior
 
 ## References
 
-- [Harvester process-restart roadmap](../../../ROADMAP.md#process-restart-recovery--small-step-delivery-plan-654)
+- [Harvester process-restart roadmap](../../../ROADMAP.md#current-priorities)
 - [Process-restart reconciliation issue #654](https://github.com/45s/coinzilla/issues/654)
 - [Recovery reliability issue #626](https://github.com/45s/coinzilla/issues/626)
 - [Harvester Journal Operations](../../JOURNAL_OPERATIONS.md)
@@ -195,7 +195,7 @@ POSIX installations create the directory with mode `0700` and both streams with 
 
 ## Implementation tracking (non-normative)
 
-The accepted contract remains the authority for recovery boundaries; delivery status is maintained in the [Harvester roadmap](../../../ROADMAP.md#process-restart-recovery--small-step-delivery-plan-654).
+The accepted contract remains the authority for recovery boundaries; delivery status is maintained in the [Harvester roadmap](../../../ROADMAP.md#current-priorities).
 
 - The durable-fact store, committed-head integrity, typed coverage facts and market-history coverage read/write primitives are implemented in merged recovery PRs through #1036.
 - The read-only one-market reconciliation orchestrator and guarded operator confirmation workflow merged in [PR #1047](https://github.com/45s/coinzilla/pull/1047). They compose canonical owned-order reconciliation, current account balances, account-wide open orders and complete target-market fill history. The coverage fact is appended only after the target-market audit is READY and is read back after commit.
