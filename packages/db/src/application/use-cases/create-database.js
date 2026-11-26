@@ -183,9 +183,8 @@ function createProviderNeutralFacade({ database, provider }) {
           return Promise.reject(new Error("Database transaction callback has already completed"))
         }
         if (!capabilities.transactions.nestedTransactions) {
-          return Promise.reject(new DatabaseProviderError({
-            operation: "transaction",
-            cause: new Error("Nested database transactions are not supported by this provider"),
+          return Promise.reject(new DatabaseTransactionUnsupportedError({
+            capability: "nestedTransactions",
           }))
         }
         return database.transaction((transaction) => {
