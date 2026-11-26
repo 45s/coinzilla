@@ -158,36 +158,29 @@ After installing abort handling, the adapter checks the signal again before read
 
 Worker startup preconditions and readiness notification are named helpers: the execution path rejects unverified isolation before spawning, and the post-spawn readiness helper rechecks cancellation before any execute message is sent.
 
-
 ## Original-revision replay — initial implementation boundary
 
 Every run record carries the full source commit SHA supplied by the Harvester composition root, plus an optional `replayOfRunId`. The runner exposes replay only for terminal runs and reuses the original recorded input snapshot. Replay is allowed only when both the original and active runtime source revisions are known and identical. Unknown, unavailable, or mismatched revisions produce a queryable `Blocked` run with an explicit diagnostic; the runner never silently substitutes current code. A blocked/non-executed original cannot be replayed.
 
 The current implementation deliberately does not perform arbitrary Git checkout or load historical code into a running Harvester process. Run history remains in-memory as approved for this MVP, so this first replay capability is same-process and same-revision only. The runtime composition root must supply a trusted full Git SHA; absent provenance disables replay rather than weakening the guarantee. Cross-process historical replay and source artifact retention remain future work.
 
-
 ## Replay REST command
 
 `POST /api/v1/scenario-runner/runs/{runId}/replay` requests an original-revision replay. Harvester validates that the original run is terminal and that its full source SHA matches the active runtime source SHA, then submits the original recorded input snapshot through the normal validation/execution pipeline. A successful accepted replay returns `202` with a new run record linked by `replayOfRunId`; a provenance/safety block returns `409` with the authoritative `Blocked` record and diagnostic. Missing original runs return `404`. If replay is not composed, the API returns `503`; it never falls back to current scenario defaults or current code without matching provenance.
-
 
 ### Runtime source revision injection
 
 The Harvester API composition root reads the non-secret build metadata variable `COINZILLA_SOURCE_REVISION`. Only a full 40- or 64-character hexadecimal Git commit SHA is accepted; malformed or absent metadata is treated as unknown and disables replay. Release/build automation should set this variable to the exact source commit used to produce the running artifact. The runner does not infer a branch name or moving tag as a revision.
 
-
 The Dashboard exposes the replay command only for terminal, previously executed runs. The UI displays the original source SHA and the `replayOfRunId` relationship; a blocked replay remains visible with its server-provided reason.
 
-
 When `COINZILLA_SOURCE_REVISION` is absent, Harvester attempts to resolve `HEAD` from the repository's own Git metadata and accepts it only when the worktree is clean. If Git metadata is unavailable, the checkout is dirty, or the supplied build SHA is malformed, the revision is unknown and replay remains blocked. This prevents a dirty local working tree from being misrepresented as the code identified by its HEAD commit.
-
 
 ## Worker-level isolation acceptance slice
 
 The worker loads its trusted strategy adapter graph first, then installs explicit Node API guards before accepting or dispatching scenario work. CommonJS and synchronous ESM resolution hooks deny child-process, worker-thread, inspector, VM and network modules when initiated by worker application code; Node-internal modules retain only their own internal loading path. Global network entry points are blocked; filesystem mutation methods (including `fs/promises` and writable file handles) are blocked; and the launcher passes only an allowlisted environment rather than inheriting Harvester credentials. The process-adapter acceptance test exercises these controls in a real child worker and verifies that a secret environment variable is not inherited and no write is performed.
 
 This is **Node/application-level defense in depth**, not an OS security boundary. It does not prove that arbitrary native code, runtime escapes, direct syscalls, filesystem reads, or all network paths are contained. The worker remains non-executable unless the trusted launcher independently supplies the required OS-level attestation. Production OS sandboxing and adversarial host-boundary tests remain required.
-
 
 ## Host-to-worker simulation acceptance slice — 2026-11-26
 

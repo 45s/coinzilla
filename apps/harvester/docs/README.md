@@ -122,5 +122,4 @@ Historical reports are snapshots, not current implementation authority. Use thei
 - Current behavior belongs in the canonical specification, architecture or runbook; task status belongs in the roadmap and GitHub Issues/PRs.
 - Preserve historical evidence, timestamps, source commit SHAs and uncertainty during migrations.
 
-
 **Scenario Runner:** [Architecture](features/scenario-runner-architecture.md) documents the Harvester-side process worker, simulation boundary, replay provenance and fail-closed isolation contract. The production RS adapter and trusted OS sandbox remain incomplete; this is not authorization for exchange execution.

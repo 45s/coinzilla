@@ -49,7 +49,6 @@ Implemented on the task branch: generic run lifecycle/API, process worker adapte
 
 Still required: production RS use-case adapter and faithful simulation ports; safe integration of merged scenario definitions/mappings; a trusted OS-level sandbox for production execution; complete execution-produced trace/assertions/effective configuration/events; and exact-head verification after synchronization. Do not enable any scenario until the adapter and isolation gates are genuinely satisfied.
 
-
 ## Approved Scenario Runner lifecycle decision — 2026-11-25
 
 Scenario execution uses explicit server-owned states: Accepted/Queued → Starting → Running, with Cancelling as a non-terminal shutdown state and terminal outcomes Completed, Failed, Cancelled, Timed out or Blocked. Cancellation is cooperative first, followed by forced worker termination after a configurable grace period. Repeated cancellation is idempotent; a cancelled run is never reported as passed/completed. Timeouts remain distinct from user cancellation. Preserve partial trace/diagnostics when safely available, fail closed if worker initialization/isolation cannot be verified, and release resources on every terminal path. WebSocket publishes state changes; REST remains authoritative after reconnect. Numeric timeouts/grace periods and OS-level termination/cleanup details require implementation audit.

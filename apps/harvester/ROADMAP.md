@@ -2361,6 +2361,7 @@ The application runner now retains its execution slot and history record when an
 - Exact-head targeted Harvester tests, workspace unit tests, test coverage and Repository Quality passed at implementation checkpoint `8dadd5bab3686e91621934557e7ffda83849bbe5`; External Documentation Links was still running at the time of this note.
 - A test-only host-to-process-worker acceptance test (`src/infrastructure/http/scenario-runner-process-acceptance.test.js`, included in `config.targetedTestFiles`) now executes the ZRO runtime-dispatch fixture through the actual host, verifies lifecycle ordering and a simulated-broker trace. The worker bootstrap remains test-only and uses a simulated attestation; it is not a public scenario or OS-isolation proof.
 - Remaining release gates: no production OS sandbox launcher is wired; no full production RS flow is registered; the merged RS test registry still needs a production-safe catalogue/export boundary; same-revision replay is implemented but historical code/artifact reconstruction and full provenance remain incomplete; and full production end-to-end acceptance is outstanding. In-memory run history is accepted for this MVP and is not a blocker. PR #1837 remains Draft and unmerged.
+
 ### Registry, replay and isolation synchronization — 2026-11-26
 
 - RS scenario registry and mapped scenario records are now merged into `develop` by [PR #1852](https://github.com/45s/coinzilla/pull/1852), merge commit `ef5f5e25b0994f244eb6b29b62f5d48235df4544`; all six required workflows passed on exact PR head `6770c6b66bec01f9746db720be3d80416795d837`. This is a test-only registry and does not make its scenarios production-executable.
@@ -2376,7 +2377,6 @@ The scenario-definition and reporting workstream is tracked separately from the 
 
 The initial inventory contains 18 scenarios across 16 categories: 15 TEST-MAPPED, one PARTIAL configuration scenario, one MISSING startup-history-gate scenario (CON-PERSIST-003), and one UNSUPPORTED runtime-restoration scenario. TEST-MAPPED is a mapping state, not proof of assertion-level coverage. Runtime restoration remains unsupported by the active Conservative specification.
 
-
 ### 2026-11-26 — Worker protocol and regression corrections
 
 - A RED regression proved that the process adapter previously marked a run `Running` on child creation/bootstrap, before the worker accepted its execute request. The worker now sends distinct `ready` and `started` IPC acknowledgements; only `started` advances the lifecycle.
@@ -2384,7 +2384,6 @@ The initial inventory contains 18 scenarios across 16 categories: 15 TEST-MAPPED
 - A refactor had removed `createScenarioRunner` option defaults and caused broad runner/host/API regressions. The public factory's defaults were restored.
 - The merged PR #1852 registry remains test-only and is not a production runtime catalogue.
 - Full RS adapter work remains gated by the independent terminal-SELL/STOP accounting defect in [issue #1842](https://github.com/45s/coinzilla/issues/1842), plus the trusted OS-level launcher. Keep all public RS scenarios non-executable.
-
 
 ### Final PR #1837 audit checkpoint — 2026-11-26
 
