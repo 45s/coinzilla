@@ -91,7 +91,7 @@ test("MongoDB URI parser rejects incomplete credentials and accepts explicit fal
   )
 })
 
-test("MongoDB handshake validates requested mechanisms and selects server-supported SCRAM", async () => {
+test("MongoDB handshake rejects unsupported requested and server mechanisms", async () => {
   const baseHello = {
     ok: 1,
     minWireVersion: 13,
@@ -116,9 +116,9 @@ test("MongoDB handshake validates requested mechanisms and selects server-suppor
   const unsupportedByServer = {
     async command() {
       return {
-          ...baseHello,
-          saslSupportedMechs: ["SCRAM-SHA-1"],
-        }
+        ...baseHello,
+        saslSupportedMechs: ["SCRAM-SHA-1"],
+      }
     },
   }
   await assert.rejects(
@@ -130,7 +130,9 @@ test("MongoDB handshake validates requested mechanisms and selects server-suppor
     }),
     /does not support SCRAM-SHA-256/,
   )
+})
 
+test("MongoDB handshake selects a server-supported SCRAM mechanism", async () => {
   for (const supported of [["SCRAM-SHA-1"], []]) {
     const commands = []
     const transport = {
@@ -162,6 +164,7 @@ test("MongoDB handshake validates requested mechanisms and selects server-suppor
     )
   }
 })
+
 
 test("MongoDB URI parser reads credentials, database, authentication source, and timeouts", () => {
   assert.deepEqual(
