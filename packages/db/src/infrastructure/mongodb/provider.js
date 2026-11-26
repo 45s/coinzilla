@@ -84,7 +84,8 @@ function resolveConnectionOptions({ options }) {
 }
 
 function resolveTlsOptions({ options, parsed }) {
-  const value = firstDefined({ primary: options.tls, secondary: parsed.tls })
+  const value = firstDefined({ primary: options.tls,
+secondary: parsed.tls })
   if (value === true) {
     return {}
   }
@@ -94,22 +95,38 @@ function resolveTlsOptions({ options, parsed }) {
 function resolveOptions(options) {
   const parsed = resolveConnectionOptions({ options })
   return {
-    host: firstDefined({ primary: options.host, secondary: parsed.host }),
-    port: firstDefined({ primary: options.port, secondary: parsed.port, fallback: 27017 }),
-    username: firstDefined({ primary: options.username, secondary: parsed.username }),
-    password: firstDefined({ primary: options.password, secondary: parsed.password }),
-    databaseName: firstDefined({ primary: options.databaseName, secondary: parsed.databaseName, fallback: "admin" }),
+    host: firstDefined({ primary: options.host,
+secondary: parsed.host }),
+    port: firstDefined({ primary: options.port,
+secondary: parsed.port,
+fallback: 27017 }),
+    username: firstDefined({ primary: options.username,
+secondary: parsed.username }),
+    password: firstDefined({ primary: options.password,
+secondary: parsed.password }),
+    databaseName: firstDefined({ primary: options.databaseName,
+secondary: parsed.databaseName,
+fallback: "admin" }),
     authSource: firstDefined({
       primary: options.authSource,
       secondary: parsed.authSource,
       fallback: options.databaseName ?? "admin",
     }),
-    authMechanism: firstDefined({ primary: options.authMechanism, secondary: parsed.authMechanism }),
-    replicaSet: firstDefined({ primary: options.replicaSet, secondary: parsed.replicaSet }),
-    directConnection: firstDefined({ primary: options.directConnection, secondary: parsed.directConnection, fallback: false }),
-    tlsOptions: resolveTlsOptions({ options, parsed }),
-    connectTimeoutMS: firstDefined({ primary: options.connectTimeoutMS, secondary: parsed.connectTimeoutMS, fallback: 10_000 }),
-    socketTimeoutMS: firstDefined({ primary: options.socketTimeoutMS, secondary: parsed.socketTimeoutMS, fallback: 30_000 }),
+    authMechanism: firstDefined({ primary: options.authMechanism,
+secondary: parsed.authMechanism }),
+    replicaSet: firstDefined({ primary: options.replicaSet,
+secondary: parsed.replicaSet }),
+    directConnection: firstDefined({ primary: options.directConnection,
+secondary: parsed.directConnection,
+fallback: false }),
+    tlsOptions: resolveTlsOptions({ options,
+parsed }),
+    connectTimeoutMS: firstDefined({ primary: options.connectTimeoutMS,
+secondary: parsed.connectTimeoutMS,
+fallback: 10_000 }),
+    socketTimeoutMS: firstDefined({ primary: options.socketTimeoutMS,
+secondary: parsed.socketTimeoutMS,
+fallback: 30_000 }),
   }
 }
 
@@ -162,7 +179,8 @@ function assertConnectionPolicy({ options }) {
     throw new TypeError("MongoDB provider authMechanism must be SCRAM-SHA-256 or SCRAM-SHA-1")
   }
   if (options.authSource !== undefined) {
-    assertDatabaseName({ value: options.authSource, label: "authSource" })
+    assertDatabaseName({ value: options.authSource,
+label: "authSource" })
   }
 }
 
@@ -197,7 +215,8 @@ function assertProviderFunctions({ options }) {
 
 function assertProviderOptions(options) {
   assertHostAndPort({ options })
-  assertDatabaseName({ value: options.databaseName, label: "databaseName" })
+  assertDatabaseName({ value: options.databaseName,
+label: "databaseName" })
   assertCredentials({ options })
   assertConnectionPolicy({ options })
   assertTimeouts({ options })
