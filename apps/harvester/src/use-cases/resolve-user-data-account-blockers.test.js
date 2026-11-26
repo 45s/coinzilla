@@ -20,7 +20,7 @@ function record({ sequence, factType, data, factId = `${factType}:${sequence}` }
   }
 }
 
-function makeRecords() {
+function makeBaselineRecords() {
   const fingerprint = "f".repeat(64)
   return [
     record({
@@ -51,6 +51,11 @@ function makeRecords() {
       },
       factId: `process-started:${sessionId}`,
     }),
+  ]
+}
+
+function makePreflightRecords() {
+  return [
     record({
       sequence: 3,
       factType: "ACCOUNT_SNAPSHOT_CAPTURED",
@@ -75,21 +80,31 @@ function makeRecords() {
         blockReasons: [],
       },
     }),
-    record({
-      sequence: 5,
-      factType: "SAFETY_BLOCKER_RAISED",
-      data: {
-        blockerId,
-        scope: "ACCOUNT",
-        symbol: null,
-        reason: "ACCOUNTING_INTEGRITY_FAILURE",
-        evidenceDigest: triggerDigest,
-      },
-      factId: `safety-blocker-raised:${blockerId}`,
-    }),
   ]
 }
 
+function makeBlockerRecord() {
+  return record({
+    sequence: 5,
+    factType: "SAFETY_BLOCKER_RAISED",
+    data: {
+      blockerId,
+      scope: "ACCOUNT",
+      symbol: null,
+      reason: "ACCOUNTING_INTEGRITY_FAILURE",
+      evidenceDigest: triggerDigest,
+    },
+    factId: `safety-blocker-raised:${blockerId}`,
+  })
+}
+
+function makeRecords() {
+  return [
+    ...makeBaselineRecords(),
+    ...makePreflightRecords(),
+    makeBlockerRecord(),
+  ]
+}
 function makeStore() {
   const records = makeRecords()
   return {
@@ -107,7 +122,10 @@ function makeStore() {
       if (records.some(({ factId }) => factId === fact.factId)) {
         return {
           ok: true,
-          data: { durable: true, duplicate: true },
+          data: {
+            durable: true,
+            duplicate: true,
+          },
         }
       }
       records.push(record({
@@ -118,7 +136,10 @@ function makeStore() {
       }))
       return {
         ok: true,
-        data: { durable: true, duplicate: false },
+        data: {
+          durable: true,
+          duplicate: false,
+        },
       }
     },
   }
@@ -155,7 +176,10 @@ function makeResolutionOptions({ store, audit, actionId, causeFixed = true }) {
     reconcileAccount: async ({ scope, blockerIds: ids }) => {
       assert.equal(scope, "ACCOUNT")
       assert.deepEqual(ids, [blockerId])
-      return { ok: true, data: audit }
+      return {
+        ok: true,
+        data: audit,
+      }
     },
     operatorId: "operator-7",
     actionId,
