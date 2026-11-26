@@ -907,7 +907,7 @@ work: async () => {
  * Create a dependency-free MongoDB implementation of the provider-neutral API.
  *
  * Supports mongodb:// single-seed URIs, TCP/TLS, SCRAM-SHA-256/SCRAM-SHA-1,
- * standalone/replica-set/sharded topology detection, and provider-neutral CRUD.
+ * standalone/replica-set topology detection, and provider-neutral CRUD.
  * Multi-document transactions are available only when the connected topology
  * supports logical sessions and transaction semantics.
  *
