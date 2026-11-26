@@ -11,7 +11,7 @@ const TEST_WORKER_PATH = fileURLToPath(new URL(
 
 function createTestSandboxLauncher() {
   // Test-only attestation exercises the host gate; it does not apply an OS sandbox.
-  const launcher = ({ workerPath, env, execArgv, stdio }) => fork(workerPath, [], {
+  // The adapter validates its production worker path; this test launcher substitutes only the child entrypoint.\n  const launcher = ({ env, execArgv, stdio }) => fork(TEST_WORKER_PATH, [], {
     env,
     execArgv,
     stdio,
@@ -55,7 +55,6 @@ test("host executes the test-only RS runtime fixture in a child process with a s
   }
   const adapter = createProcessScenarioAdapter({
     strategyId: "RS",
-    workerPath: TEST_WORKER_PATH,
     spawnSandboxedWorker: createTestSandboxLauncher(),
   })
   const updates = []
