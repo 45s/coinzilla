@@ -981,7 +981,7 @@ test("stages streamed RS SELL fills for complete terminal mixed-SELL reconciliat
 })
 
 
-test("routes terminal RS SELL fill history through mixed accounting without Conservative completion", async () => {
+function createTerminalRecoverySellerOrderEventFixture() {
   const previousOrder = makeOrder({
     side: "SELL",
     status: "OPEN",
@@ -1022,10 +1022,33 @@ test("routes terminal RS SELL fill history through mixed accounting without Cons
     terminalFills: [fill],
     reconcileRecoverySellerMixedSell: async (input) => {
       mixedSellReconciliations.push(input)
-      return toResult({ data: { reconciled: true } })
+      return toResult({
+        data: {
+          reconciled: true,
+          profitability: {
+            eligible: true,
+          },
+        },
+      })
     },
   })
+  return {
+    terminalOrder,
+    fill,
+    workflow,
+    calls,
+    mixedSellReconciliations,
+  }
+}
 
+test("routes terminal RS SELL fill history through mixed accounting without Conservative completion", async () => {
+  const {
+    terminalOrder,
+    fill,
+    workflow,
+    calls,
+    mixedSellReconciliations,
+  } = createTerminalRecoverySellerOrderEventFixture()
   const result = await workflow.processUserDataEventTransition({
     event: {
       eventType: "executionReport",
@@ -1040,7 +1063,77 @@ test("routes terminal RS SELL fill history through mixed accounting without Cons
   assert.deepEqual(calls.completedCycles, [], "RS SELL must never enter Conservative recovery-cycle completion.")
   assert.deepEqual(calls.sellFills, [fill], "The terminal canonical fill must be staged exactly once.")
 })
+function createUnderTargetRecoverySellerOrderEventFixture() {
+  const terminalOrder = makeOrder({
+    side: "SELL",
+    status: "FILLED",
+    quantity: "1",
+    executedQuantity: "1",
+    clientOrderId: "h-dogeusdt-rs-sell-under-target-1",
+  })
+  const fill = makeFill({
+    side: "SELL",
+    quantity: "1",
+    quoteQuantity: "1",
+    clientOrderId: terminalOrder.clientOrderId,
+    brokerOrderId: terminalOrder.brokerOrderId,
+  })
+  const registry = createLifecycleRegistry({
+    currentOrder: terminalOrder,
+    ownership: {
+      clientOrderId: terminalOrder.clientOrderId,
+      strategyId: StrategyId.RECOVERY_SELLER,
+      positionId: "doge-recovery-seller-position",
+      purpose: "RECOVERY_SELL",
+      cycleId: "doge-recovery-seller-cycle-under-target-1",
+    },
+  })
+  const { workflow, calls } = makeWorkflow({
+    registry,
+    terminalFills: [fill],
+    reconcileRecoverySellerMixedSell: async () => toResult({
+      data: {
+        profitability: {
+          eligible: false,
+        },
+      },
+    }),
+    latchRecoverySellerStop: async (input) => {
+      calls.recoverySellerStops.push(input)
+      return toResult({
+        data: {
+          durable: true,
+        },
+      })
+    },
+  })
+  return {
+    terminalOrder,
+    workflow,
+    calls,
+  }
+}
 
+test("durably latches global RS STOP after a reconciled FILLED SELL misses profitability", async () => {
+  const { terminalOrder, workflow, calls } = createUnderTargetRecoverySellerOrderEventFixture()
+  const result = await workflow.processUserDataEventTransition({
+    event: {
+      eventType: "executionReport",
+      executedOrder: terminalOrder,
+    },
+  })
+
+  assert.equal(result.ok, false,
+    "A FILLED under-target SELL must not be reported as a successful terminal strategy transition.")
+  assert.equal(calls.recoverySellerStops.length, 1,
+    "The adverse realized-profit result must durably latch account-wide STOP.")
+  assert.equal(calls.recoverySellerStops[0].order, terminalOrder,
+    "The STOP evidence must identify the exact canonical terminal SELL.")
+  assert.equal(calls.recoverySellerStops[0].reason, "RS_TERMINAL_SELL_PROFITABILITY_STOP",
+    "The durable STOP must use the stable under-target terminal reason.")
+  assert.equal(calls.pauses[0].reason, "RS_TERMINAL_SELL_PROFITABILITY_STOP",
+    "The affected market must also pause when the global STOP is latched.")
+})
 test("latches the durable global RS STOP when terminal mixed-SELL reconciliation is unavailable", async () => {
   const terminalOrder = makeOrder({
     side: "SELL",
@@ -1120,4 +1213,63 @@ test("fails closed for a registered order owned by an unsupported strategy", asy
   assert.equal(result.ok, false, "Unsupported strategy ownership must not fall through to Conservative accounting.")
   assert.deepEqual(calls.accounting, [], "An unsupported strategy fill must not mutate Conservative accounting.")
   assert.equal(calls.pauses[0]?.reason, "EXECUTION_ACCOUNTING_FAILED", "Unsupported attribution must fail closed.")
+})
+
+test("routes a zero-fill REJECTED RS SELL through terminal mixed accounting without cycle completion", async () => {
+  const previousOrder = makeOrder({
+    side: "SELL",
+    status: "OPEN",
+    quantity: "1",
+    executedQuantity: "0",
+    clientOrderId: "h-dogeusdt-rs-sell-rejected-1",
+    brokerOrderId: "broker-rs-sell-rejected-1",
+  })
+  const terminalOrder = makeOrder({
+    side: "SELL",
+    status: "REJECTED",
+    quantity: "1",
+    executedQuantity: "0",
+    clientOrderId: previousOrder.clientOrderId,
+    brokerOrderId: previousOrder.brokerOrderId,
+  })
+  const registry = createLifecycleRegistry({
+    currentOrder: previousOrder,
+    ownership: {
+      clientOrderId: previousOrder.clientOrderId,
+      strategyId: StrategyId.RECOVERY_SELLER,
+      positionId: "doge-recovery-seller-position",
+      purpose: "RECOVERY_SELL",
+      cycleId: "doge-recovery-seller-cycle-rejected-1",
+    },
+  })
+  const mixedSellReconciliations = []
+  const { workflow, calls } = makeWorkflow({
+    registry,
+    terminalFills: [],
+    reconcileRecoverySellerMixedSell: async (input) => {
+      mixedSellReconciliations.push(input)
+      return toResult({
+        data: {
+          reconciled: true,
+          profitability: {
+            eligible: false,
+          },
+        },
+      })
+    },
+  })
+  const result = await workflow.processUserDataEventTransition({
+    event: {
+      eventType: "executionReport",
+      executedOrder: terminalOrder,
+    },
+  })
+
+  assert.equal(result.ok, true, "A zero-fill REJECTED RS SELL must be a reconciled terminal lifecycle event.")
+  assert.equal(mixedSellReconciliations.length, 1)
+  assert.deepEqual(mixedSellReconciliations[0].canonicalFills, [])
+  assert.deepEqual(calls.completedCycles, [],
+    "A REJECTED SELL must never complete the Recovery Seller cycle.")
+  assert.deepEqual(calls.sellFills, [],
+    "A zero-fill REJECTED SELL must not stage a fabricated execution Fill.")
 })

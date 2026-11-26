@@ -1,5 +1,27 @@
 # Harvester Roadmap
 
+## Scenario Runner / GC Strategy Lab — current status (2026-11-26)
+
+Implemented in [PR #1837](https://github.com/45s/coinzilla/pull/1837), which remains Draft and unmerged. Terminal mixed-SELL accounting now publishes the canonical cycle state via `reconcileRecoverySellerCycleSell`; profitable partial CANCELED/EXPIRED outcomes remain `UNRESOLVED`, and under-target FILLED SELL outcomes latch the durable account-wide STOP in the order-event workflow. Regression coverage was added for partial CANCELED/EXPIRED reconciliation, canonical state publication and under-target STOP. The canonical order contract prohibits non-zero execution on REJECTED orders; zero-fill REJECTED accounting remains fail-closed.
+
+Terminal TRADE events now enter the canonical terminal-fill reconciliation once; the stream fill is supplied as evidence and is applied together with deduplicated REST history. This prevents the same terminal SELL fill from being staged twice by the pre-terminal event path and terminal reconciliation path.
+
+The partial-terminal SELL acceptance assertion now reports the exact number of canonical SELL fill staging callbacks, so a zero-stage or duplicate-stage regression is distinguishable in CI diagnostics.
+
+The RS partial-terminal runtime scenario now resolves the current order from the event workflow's replaced registry snapshot rather than a stale pre-transition registry reference; this preserves the canonical terminal-order state when staging the mixed SELL fill.
+
+The runtime scenario configuration assembly is split from option resolution to keep the resolver within the repository's function-size limit; this is a behavior-preserving refactor.
+
+The production registry is integrated into the trading-history API and contains three PARTIAL runtime scenarios: authorized SELL submission, rejected SELL with STOP workflow, and profitable partial CANCELED SELL through production order-event and accounting workflows. They use a run-local simulated broker and in-memory operational-state store, so they are not production-ready and remain non-executable. The API registers an explicit unavailable adapter until a trusted OS-level sandbox launcher exists. Node worker guards and simulated launcher attestations are not OS isolation.
+
+Replay now verifies declared and checked-out commit identities, clean source-tree identity, dependency lock, scenario registry, original input digest and runtime identity. A trusted build-artifact attestation is not available, so exact replay is refused with explicit missing-provenance diagnostics. Remaining work: full user-data event transition dispatch, a runtime under-target FILLED STOP scenario, generic infrastructure-failure scenarios, durable operational-state integration, and a real platform-specific OS sandbox launcher. In-memory run history remains acceptable for this MVP. The expanded scenario tests have not yet completed on the latest commit; formatting/CI-only issues are not being treated as functional blockers.
+
+*Older Scenario Runner entries below are historical checkpoints and are superseded by this current status.*
+
+## Recovery Seller terminal SELL lifecycle — issue #1842
+
+Fixed in [PR #1837](https://github.com/45s/coinzilla/pull/1837): terminal mixed-SELL accounting now delegates cycle publication to the canonical `reconcileRecoverySellerCycleSell` domain transition, preserving sole-SELL identity, terminal status, reconciliation and profitability fields. CANCELED/REJECTED/EXPIRED outcomes remain `UNRESOLVED` even when profitability is positive. A reconciled FILLED SELL that misses the approved profit threshold now latches the durable account-wide STOP before the order-event transition is reported successful. Regression coverage was added for all three non-FILLED terminal statuses, under-target FILLED outcomes, canonical state publication and durable STOP. The production scenario registry now includes a PARTIAL successful SELL-submission scenario that invokes the actual Recovery Seller runtime dispatch with run-local simulated infrastructure. It remains non-executable until event handling, partial-fill/terminal reconciliation, rejection/failure and safety-stop scenarios are composed; the process acceptance test uses a test-only registration override and simulated launcher attestation to exercise the production worker bootstrap. Exact replay is being tightened to require source-tree, dependency, build, runtime, registry and original-input provenance rather than matching commit strings alone. Focused execution evidence is still pending. Rejection, partial-fill/terminal reconciliation, injected failure and safety-stop scenarios remain missing; OS-level isolation remains unimplemented and the host must continue to fail closed.
+
 ## Relational trading-history startup failure — issue #1854
 
 In progress in [PR #1855](https://github.com/45s/coinzilla/pull/1855), branch
@@ -211,7 +233,7 @@ Complete in merged [PR #1741](https://github.com/45s/coinzilla/pull/1741), merge
 
 **Historical baseline:** merged [PR #1793](https://github.com/45s/coinzilla/pull/1793) provides the earlier four-file scenario suite with deliberately PARTIAL evidence across RS-003 through RS-007. The consolidated registry and playbook in #1852 extend that baseline; existing production/runtime tests are not credited as scenario coverage merely because they exist.
 
-**Current consolidated review target:** [PR #1852](https://github.com/45s/coinzilla/pull/1852), branch `feat/harvester/rs-scenario-suite-current-develop`. Former Draft [PR #1823](https://github.com/45s/coinzilla/pull/1823) was closed unmerged on 2026-11-26 after verifying 40/40 changed paths transferred to #1852. Its unique authorizer scenarios RS-002-006-B and RS-002-020-B, docs, agent guidance, inventory and scenario catalog are retained in the consolidated branch. No direct develop/main update or PR merge was performed.
+**Merged consolidated scenario registry:** [PR #1852](https://github.com/45s/coinzilla/pull/1852) merged into `develop` at `ef5f5e25b0994f244eb6b29b62f5d48235df4544`; all six required workflows passed on exact PR head `6770c6b66bec01f9746db720be3d80416795d837`. Former Draft [PR #1823](https://github.com/45s/coinzilla/pull/1823) was closed unmerged after verifying 40/40 changed paths transferred to #1852. Its unique authorizer scenarios RS-002-006-B and RS-002-020-B, docs, agent guidance, inventory and scenario catalog are retained in the merged test-only registry. This does not provide a production runtime catalogue or full RS adapter.
 
 **Transferred suite:** immutable registry and validation, distinct DOMAIN/APPLICATION runners, RS-001 authorization/custody, RS-002 BUY accounting, RS-003 mixed-SELL planning/fill allocation, RS-004 profitability, shared-account reservation/volatility cases, and dedicated scenario test files. The two transferred application authorizer cases are mapped and included in the targeted-test list.
 
@@ -2338,10 +2360,59 @@ Open Draft [PR #1798](https://github.com/45s/coinzilla/pull/1798) has current he
 
 ## Strategy-neutral production-flow Scenario Runner — issue #1836
 
-Open Draft [PR #1837](https://github.com/45s/coinzilla/pull/1837) has current exact head `d93898e4099654cfe2a87aa599c1b9d59f6ec921`, 194 commits ahead / 0 behind current `develop` (`b69b32ce438a56de84bb51eaa16cce87be253c95`). All six required workflows passed on that exact head. The runner remains Draft because acceptance is incomplete: trusted OS-level isolation, full production-flow scenarios, configuration/market metadata, exact-revision replay, complete execution trace/assertions/report, bounded history and reconnect/missed-update recovery. Do not enable real broker/exchange access or claim executable RS coverage. No live operations, credentials, production account state or production persistence.
+Active and incomplete in draft [PR #1837](https://github.com/45s/coinzilla/pull/1837). The Harvester-side architecture note is [Scenario Runner architecture](docs/features/scenario-runner-architecture.md); Dashboard owns the specification and phased plan.
+
+- The generic run lifecycle, process adapter, REST routes, WebSocket notifications and preliminary Dashboard workspace exist on the task branch.
+- RS-004-011 currently has only a helper-level adapter around `calculateRecoverySellerProfitability`. It does **not** execute the full production RS strategy/use-case lifecycle and is not an executable scenario. The host derives `executable` only when both the strategy-owned scenario mapping is source-approved and a matching strategy adapter is registered; the runner independently blocks unknown, preliminary and unmapped scenario IDs. The current helper remains `PRELIMINARY` / `executable: false`. The worker-only registry contains a helper-level RS dispatch, but the public host registers no executable RS adapter and continues to block submissions.
+- The process adapter now sends cooperative cancellation first, the worker aborts its active run through an `AbortController`, and the parent escalates to SIGTERM/SIGKILL only after bounded grace periods. Failed cleanup retains the child registration for retry. This lifecycle work does not establish a secure simulation sandbox.
+- Remaining gates: production RS flow reuse and source-mapped scenario coverage; defensible OS-level network/filesystem/process isolation with adversarial tests; shared production config/market metadata and run-local Playground overrides; complete REST/WS contracts and missed-update recovery; persistent bounded history; exact-revision replay; complete versioned debug evidence; Angular-independent application orchestration; and end-to-end acceptance.
+- No LIVE/TESTNET broker, credentials, production persistence or real trading actions are permitted. Keep the PR draft and do not mark roadmap phases complete until exact evidence and CI support it.
+
+### Runner implementation-quality follow-up — 2026-11-25
+
+The process-worker lifecycle and RS input validator were decomposed into focused helpers to satisfy strict changed-file function-length, parameter and complexity policies without suppressions. This is a behavior-preserving refactor; cancellation/termination ordering, output limits, fail-closed sandbox requirements and exact decimal validation remain unchanged.
+
+The application runner now retains its execution slot and history record when an adapter reports `cleanupConfirmed: false`. History pruning skips these records, and the cancel endpoint retries the adapter; only an explicit `true` releases capacity. Normal execution cleanup failures are FAILED (not misreported as TIMED_OUT), while timeout cleanup failures remain TIMED_OUT. The behavior is covered by offline capacity/retry tests.
+
+### 2026-11-26 — Scenario Runner lifecycle and API audit
+
+- The process adapter now uses a two-stage worker handshake: `ready` confirms trusted adapter loading, Node guard installation, dispatcher construction and IPC listener registration; `started` is emitted after the execute request is received and immediately before strategy dispatch. Only `started` invokes `onStarted` and transitions the run to `Running`; results before readiness/start fail closed.
+- The process adapter rechecks the AbortSignal after worker creation and before dispatch. A cancellation that races the launcher's synchronous spawn call sends cooperative cancellation but never sends the execute request.
+- The runner preserves the original validated execution input for the worker while public run snapshots and history remain recursively redacted.
+- Scenario Runner REST errors now preserve explicit 4xx/capacity outcomes, classify unexpected failures as HTTP 500, return a generic browser-safe message and log only safe error metadata.
+- Exact-head targeted Harvester tests, workspace unit tests, test coverage and Repository Quality passed at implementation checkpoint `8dadd5bab3686e91621934557e7ffda83849bbe5`; External Documentation Links was still running at the time of this note.
+- A test-only host-to-process-worker acceptance test (`src/infrastructure/http/scenario-runner-process-acceptance.test.js`, included in `config.targetedTestFiles`) now executes the ZRO runtime-dispatch fixture through the actual host, verifies lifecycle ordering and a simulated-broker trace. The worker bootstrap remains test-only and uses a simulated attestation; it is not a public scenario or OS-isolation proof.
+- Remaining release gates: no production OS sandbox launcher is wired; no full production RS flow is registered; the merged RS test registry still needs a production-safe catalogue/export boundary; same-revision replay is implemented but historical code/artifact reconstruction and full provenance remain incomplete; and full production end-to-end acceptance is outstanding. In-memory run history is accepted for this MVP and is not a blocker. PR #1837 remains Draft and unmerged.
+
+### Registry, replay and isolation synchronization — 2026-11-26
+
+- RS scenario registry and mapped scenario records are now merged into `develop` by [PR #1852](https://github.com/45s/coinzilla/pull/1852), merge commit `ef5f5e25b0994f244eb6b29b62f5d48235df4544`; all six required workflows passed on exact PR head `6770c6b66bec01f9746db720be3d80416795d837`. This is a test-only registry and does not make its scenarios production-executable.
+- Conservative scenario registry/reporting is merged by [PR #1798](https://github.com/45s/coinzilla/pull/1798), merge commit `6a864f26e86ef5a6970d2382734e796b0bc1002b`; all six required workflows passed on exact PR head `081d14fe2a1849c3b745261a14af1fc8cdb99ed9`.
+- Same-revision replay now records source SHA and replay ancestry, exposes a replay endpoint/UI action, reuses original recorded input, and blocks when the original SHA is unknown or does not match the active revision. It does not fetch historical commits or restore runs after restart.
+- Node-level worker guards and a real child-worker acceptance fixture cover selected dangerous module imports, global network APIs, standard filesystem mutation APIs, writable file handles and secret-environment non-inheritance. These controls are not an OS sandbox and do not prove filesystem-read, native-code, direct-syscall or network-namespace isolation.
+- In-memory run history is accepted for the MVP and is not a blocker. The production RS adapter, safe registry integration, trusted OS-level sandbox and full end-to-end host-to-simulation acceptance remain incomplete.
+- PR #1837 is synchronized against current `develop` (0 commits behind); exact-head CI must pass after the latest worker lifecycle and cleanup changes. Keep the PR Draft and keep the host fail-closed.
 
 ## Conservative executable scenario tooling — issue #1797
 
 The scenario-definition and reporting workstream is tracked separately from the active domain-test implementation in [#1763](https://github.com/45s/coinzilla/issues/1763). Child issue [#1797](https://github.com/45s/coinzilla/issues/1797) owns the stable `CON-*` inventory, validated registry, mapped-test runner, and JSON reports. The existing Harvester Targeted Tests workflow runs the suite conditionally when related paths change and uploads its reports. It reuses `docs/critical-behaviors.json` and the repository scenario methodology; it does not duplicate critical-behavior ownership or change production trading behavior.
 
 The initial inventory contains 18 scenarios across 16 categories: 15 TEST-MAPPED, one PARTIAL configuration scenario, one MISSING startup-history-gate scenario (CON-PERSIST-003), and one UNSUPPORTED runtime-restoration scenario. TEST-MAPPED is a mapping state, not proof of assertion-level coverage. Runtime restoration remains unsupported by the active Conservative specification.
+
+### 2026-11-26 — Worker protocol and regression corrections
+
+- A RED regression proved that the process adapter previously marked a run `Running` on child creation/bootstrap, before the worker accepted its execute request. The worker now sends distinct `ready` and `started` IPC acknowledgements; only `started` advances the lifecycle.
+- A real child-process regression exposed that the ESM module guard blocked Node's own internal IPC resolution for `child_process`. The guard now permits only Node-internal parent modules to load their own built-ins while still blocking direct application imports; it does not weaken the OS-sandbox gate.
+- A refactor had removed `createScenarioRunner` option defaults and caused broad runner/host/API regressions. The public factory's defaults were restored.
+- The merged PR #1852 registry remains test-only and is not a production runtime catalogue.
+- Full RS adapter work remains gated by the independent terminal-SELL/STOP accounting defect in [issue #1842](https://github.com/45s/coinzilla/issues/1842), plus the trusted OS-level launcher. Keep all public RS scenarios non-executable.
+
+### Final PR #1837 audit checkpoint — 2026-11-26
+
+- PR #1837 remains Draft and unmerged; consult the PR for the current exact head, base comparison and live workflow status.
+- The process adapter now waits for `ready` before dispatch and `started` before publishing `Running`. Node-internal IPC resolution is permitted without allowing direct worker-application imports of forbidden modules.
+- A test-only host-to-process acceptance test is configured in `apps/harvester/package.json`. It runs the ZRO runtime-dispatch fixture with a run-local simulated broker through a dedicated child process. Its test attestation is simulated; this is not OS isolation or the full production RS adapter.
+- The configured Harvester targeted suite passed on code-identical checkpoint `302d0601558f5b5512fb1a755e9ac57d46f811ee`, including `scenario-runner-process-acceptance.test.js` (1/1), the configured regression files and Conservative scenario execution/report generation. The Conservative JSON reports were generated and uploaded as a workflow artifact. The final PR commits after that checkpoint are documentation-only; remaining full-workflow checks are tracked separately.
+- Full production RS adapter composition remains blocked by the independent terminal-SELL/STOP accounting defect in [issue #1842](https://github.com/45s/coinzilla) and by the absence of a trusted OS-level sandbox launcher. Public RS scenarios remain non-executable.
+- Maintained Markdown style findings from the first full-workspace quality run were corrected: normalized blank lines, final newlines and list separation in the modified roadmaps, architecture and instruction/index documents.
+- In-memory run history is accepted for the MVP; durable persistence is deferred and is not a blocker.

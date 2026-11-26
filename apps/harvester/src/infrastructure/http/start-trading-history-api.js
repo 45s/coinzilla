@@ -1,8 +1,12 @@
+import { execFileSync } from "node:child_process"
+import { fileURLToPath } from "node:url"
 import { defaultLogger, SystemCustomError } from "@coinzilla/utils"
 import { createTradingHistoryQueryRepository } from "../persistence/trading-history-query-repository.js"
 import { createBitunixFuturesMarketDataClient } from "./bitunix-futures-market-data.js"
 import { createTradingHistoryQueries } from "../../use-cases/trading-history/queries.js"
 import { startTradingHistoryApiServer } from "./trading-history-api.js"
+import { createScenarioRunnerHost } from "./create-scenario-runner-host.js"
+import { createUnavailableScenarioAdapter } from "../scenario-runner/create-unavailable-scenario-adapter.js"
 
 const DEFAULT_API_HOST = "127.0.0.1"
 const DEFAULT_API_PORT = 4201
@@ -60,15 +64,91 @@ function resolveStartupConfiguration({ env, environment } = {}) {
   })
 }
 
+function validateApiDependencies({ database, eventBus, environment }) {
+  if (!database || typeof database.prepare !== "function") {
+    throw new TradingHistoryApiStartupError({
+      message: "The Harvester relational trading-history database is unavailable; the optional API cannot start.",
+      code: "HARVESTER_TRADING_HISTORY_API_DATABASE_UNAVAILABLE",
+      environment,
+    })
+  }
+  if (!eventBus || typeof eventBus.subscribe !== "function") {
+    throw new TradingHistoryApiStartupError({
+      message: "The Harvester EventBus is unavailable; the optional trading-history API cannot start.",
+      code: "HARVESTER_TRADING_HISTORY_API_EVENT_BUS_UNAVAILABLE",
+      environment,
+    })
+  }
+}
+
+const HARVESTER_REPOSITORY_ROOT = fileURLToPath(new URL("../../../../..", import.meta.url))
+const GIT_COMMIT_SHA_PATTERN = /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/i
+
+function resolveScenarioRunnerSourceRevision({ env } = {}) {
+  const configuredRevision = env.COINZILLA_SOURCE_REVISION
+  if (configuredRevision !== undefined) {
+    return typeof configuredRevision === "string" && GIT_COMMIT_SHA_PATTERN.test(configuredRevision)
+      ? configuredRevision.toLowerCase()
+      : null
+  }
+  try {
+    const sourceRevision = execFileSync("git", [
+      "-C", HARVESTER_REPOSITORY_ROOT, "rev-parse", "--verify", "HEAD",
+    ], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim()
+    if (!GIT_COMMIT_SHA_PATTERN.test(sourceRevision)) {
+      return null
+    }
+    const worktreeStatus = execFileSync("git", [
+      "-C", HARVESTER_REPOSITORY_ROOT, "status", "--porcelain", "--untracked-files=all",
+    ], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim()
+    return worktreeStatus ? null : sourceRevision.toLowerCase()
+  } catch {
+    return null
+  }
+}
+
+function createQueryFacade({ database }) {
+  const repository = createTradingHistoryQueryRepository({ database })
+  return createTradingHistoryQueries({ repository })
+}
+
+async function openApiServer({
+  startServer,
+  configuration,
+  queries,
+  logger,
+  eventBus,
+  operator,
+  exchangeAccounts,
+  subscribeExchangeAccountUpdates,
+  marketData,
+  runnerHost,
+}) {
+  return startServer({
+    queries,
+    environment: configuration.environment,
+    host: configuration.host,
+    port: configuration.port,
+    logger,
+    eventBus,
+    ...(operator === undefined ? {} : { operator }),
+    exchangeAccounts,
+    subscribeExchangeAccountUpdates,
+    marketData,
+    scenarioRunner: runnerHost.runner,
+    scenarioRunnerCatalog: runnerHost.catalog,
+  })
+}
+
 /**
  * Start the local trading-history HTTP and WebSocket API inside the existing Harvester process.
- *
- * The API composes its query facade over Harvester's already-open relational database and
- * subscribes to persisted-history invalidation events on the existing EventBus.
- * Harvester retains ownership of the database and closes the listener before persistence.
- *
- * @param {{database: object, env?: object, environment?: string, logger?: object, eventBus: object, startServer?: Function}} input
- * @returns {Promise<Readonly<object>>} API lifecycle handle.
+ * The API owns neither Harvester's shared database nor its EventBus.
  */
 export async function startTradingHistoryApi({
   database,
@@ -86,40 +166,37 @@ export async function startTradingHistoryApi({
     env,
     environment,
   })
-  if (!database || typeof database.prepare !== "function") {
-    throw new TradingHistoryApiStartupError({
-      message: "The Harvester relational trading-history database is unavailable; the optional API cannot start.",
-      code: "HARVESTER_TRADING_HISTORY_API_DATABASE_UNAVAILABLE",
-      environment: configuration.environment,
-    })
-  }
-  if (!eventBus || typeof eventBus.subscribe !== "function") {
-    throw new TradingHistoryApiStartupError({
-      message: "The Harvester EventBus is unavailable; the optional trading-history API cannot start.",
-      code: "HARVESTER_TRADING_HISTORY_API_EVENT_BUS_UNAVAILABLE",
-      environment: configuration.environment,
-    })
-  }
-  const repository = createTradingHistoryQueryRepository({
+  validateApiDependencies({
     database,
-  })
-  const queries = createTradingHistoryQueries({
-    repository,
-  })
-  const server = await startServer({
-    queries,
+    eventBus,
     environment: configuration.environment,
-    host: configuration.host,
-    port: configuration.port,
+  })
+  const queries = createQueryFacade({ database })
+  const runnerHost = createScenarioRunnerHost({
+    eventBus,
+    adapters: [createUnavailableScenarioAdapter({ strategyId: "RS" })],
+    sourceRevision: resolveScenarioRunnerSourceRevision({ env }),
+  })
+  const server = await openApiServer({
+    startServer,
+    configuration,
+    queries,
     logger,
     eventBus,
-    ...(operator === undefined ? {} : { operator }),
+    operator,
     exchangeAccounts,
     subscribeExchangeAccountUpdates,
     marketData,
+    runnerHost,
   })
   return Object.freeze({
     address: server.address,
-    close: () => server.close(),
+    close: async () => {
+      try {
+        await runnerHost.runner.close()
+      } finally {
+        await server.close()
+      }
+    },
   })
 }

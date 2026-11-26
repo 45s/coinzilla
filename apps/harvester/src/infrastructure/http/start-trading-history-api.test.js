@@ -1,4 +1,6 @@
 import assert from "node:assert/strict"
+import { execFileSync } from "node:child_process"
+import { resolve } from "node:path"
 import test from "node:test"
 import { EventBus } from "@coinzilla/event-bus"
 import { startTradingHistoryApi } from "./start-trading-history-api.js"
@@ -55,6 +57,22 @@ test("starts the local API without requiring bearer-token configuration", async 
   assert.equal(serverInput.host, "127.0.0.1", "The unauthenticated local API must bind only to loopback.")
   assert.equal(serverInput.port, 4201, "The API must use its documented default local port.")
   assert.equal(serverInput.eventBus, eventBus, "The WebSocket endpoint must share Harvester's EventBus.")
+  const rsRegistration = serverInput.scenarioRunnerCatalog.find((strategy) => strategy.strategyId === "RS")
+  assert.ok(rsRegistration, "The real API composition must register the production Recovery Seller scenario catalogue.")
+  const runtimeScenario = rsRegistration.scenarios.find((scenario) =>
+    scenario.id === "RS-RUNTIME-SELL-SUBMISSION-001")
+  assert.equal(runtimeScenario.executable, false,
+    "The incomplete runtime scenario must remain non-executable in production.")
+  assert.equal(runtimeScenario.executionStatus, "PRELIMINARY")
+  assert.ok(runtimeScenario.readinessReasons.some((reason) => /sandbox/i.test(reason)),
+    "The production catalogue must expose the missing OS-sandbox boundary.")
+  const blockedRun = serverInput.scenarioRunner.submit({
+    strategyId: "RS",
+    scenarioId: runtimeScenario.id,
+    input: runtimeScenario.defaultInput,
+  })
+  assert.equal(blockedRun.status, "Blocked",
+    "The production API must fail closed instead of falling back to an unsandboxed worker.")
   await service.close()
   assert.equal(serverCloseCalls, 1, "The optional API lifecycle must close its listener.")
   assert.equal(database.closeCalls, 0, "The API must not close Harvester's shared database.")
@@ -163,5 +181,100 @@ test("preserves the HTTP startup error without closing Harvester's shared databa
     "The original HTTP startup failure must remain available to Harvester diagnostics.",
   )
   assert.equal(database.closeCalls, 0, "A failed optional API startup must not close Harvester's database.")
+  await eventBus.close()
+})
+
+
+test("records the exact build revision on Scenario Runner records", async () => {
+  const database = createDatabase()
+  const eventBus = new EventBus()
+  let serverInput
+  const sourceRevision = "b".repeat(40)
+  const service = await startTradingHistoryApi({
+    database,
+    eventBus,
+    env: {
+      TRADING_MODE: "testnet",
+      COINZILLA_SOURCE_REVISION: sourceRevision,
+    },
+    logger: {
+      info() {},
+    },
+    startServer: async (input) => {
+      serverInput = input
+      return {
+        address: {
+          address: "127.0.0.1",
+          port: 4201,
+        },
+        close: async () => {},
+      }
+    },
+  })
+
+  const blocked = serverInput.scenarioRunner.submit({
+    strategyId: "RS",
+    scenarioId: "not-registered",
+    input: {},
+  })
+
+  assert.equal(blocked.sourceRevision, sourceRevision,
+    "The API composition root must stamp every run with the exact source revision supplied by the deployment.")
+  await service.close()
+  await eventBus.close()
+})
+
+
+test("derives the source revision from a clean Git checkout when build metadata is absent", async (t) => {
+  const repositoryRoot = resolve(process.cwd(), "../..")
+  const expectedRevision = execFileSync("git", [
+    "-C", repositoryRoot, "rev-parse", "--verify", "HEAD",
+  ], {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "ignore"],
+  }).trim()
+  const worktreeStatus = execFileSync("git", [
+    "-C", repositoryRoot, "status", "--porcelain", "--untracked-files=all",
+  ], {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "ignore"],
+  }).trim()
+  if (worktreeStatus) {
+    t.skip("A dirty checkout must not claim that HEAD identifies the running source tree.")
+    return
+  }
+
+  const database = createDatabase()
+  const eventBus = new EventBus()
+  let serverInput
+  const service = await startTradingHistoryApi({
+    database,
+    eventBus,
+    env: {
+      TRADING_MODE: "testnet",
+    },
+    logger: {
+      info() {},
+    },
+    startServer: async (input) => {
+      serverInput = input
+      return {
+        address: {
+          address: "127.0.0.1",
+          port: 4201,
+        },
+        close: async () => {},
+      }
+    },
+  })
+  const blocked = serverInput.scenarioRunner.submit({
+    strategyId: "RS",
+    scenarioId: "not-registered",
+    input: {},
+  })
+
+  assert.equal(blocked.sourceRevision, expectedRevision,
+    "A clean source checkout must stamp runs with the exact checked-out commit.")
+  await service.close()
   await eventBus.close()
 })

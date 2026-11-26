@@ -3,6 +3,7 @@ import { SystemCustomError } from "@coinzilla/utils"
 import { attachTradingHistoryWebSocket } from "./trading-history-websocket.js"
 import { handleOperatorControlRequest } from "./operator-control-api.js"
 import { handleExchangeAccountRequest } from "./exchange-account-api.js"
+import { handleScenarioRunnerRequest } from "./scenario-runner-api.js"
 
 const API_PREFIX = "/api/v1/trading"
 const METADATA_ROUTE = `${API_PREFIX}/metadata`
@@ -390,7 +391,19 @@ async function handleEarlyRequestRoutes({
   marketData,
   logger,
   exchangeAccounts,
+  scenarioRunner,
+  scenarioRunnerCatalog,
 } = {}) {
+  if (await handleScenarioRunnerRequest({
+    request,
+    response,
+    pathname: url.pathname,
+    runner: scenarioRunner,
+    catalog: scenarioRunnerCatalog,
+    logger,
+  })) {
+    return true
+  }
   if (await handleOperatorControlRequest({
     request,
     response,
@@ -430,6 +443,8 @@ async function handleTradingHistoryRequest({
   marketData,
   logger,
   exchangeAccounts,
+  scenarioRunner,
+  scenarioRunnerCatalog,
 } = {}) {
   const url = new URL(request.url ?? "/", "http://127.0.0.1")
   if (await handleEarlyRequestRoutes({
@@ -440,6 +455,8 @@ async function handleTradingHistoryRequest({
     marketData,
     logger,
     exchangeAccounts,
+    scenarioRunner,
+    scenarioRunnerCatalog,
   })) {
     return
   }
@@ -478,12 +495,13 @@ async function handleTradingHistoryRequest({
   })
 }
 
-function createRequestHandler({ queries, environment, logger, operator, marketData, exchangeAccounts } = {}) {
+function createRequestHandler({ queries, environment, logger, operator, marketData, exchangeAccounts, scenarioRunner, scenarioRunnerCatalog } = {}) {
   return async (...requestArguments) => {
     const [request, response] = requestArguments
     response.tradingHistoryOrigin = ALLOWED_BROWSER_ORIGINS.has(request.headers.origin)
       ? request.headers.origin
       : undefined
+    response.scenarioRunnerOrigin = response.tradingHistoryOrigin
     try {
       await handleTradingHistoryRequest({
         request,
@@ -494,6 +512,8 @@ function createRequestHandler({ queries, environment, logger, operator, marketDa
         marketData,
         logger,
         exchangeAccounts,
+        scenarioRunner,
+        scenarioRunnerCatalog,
       })
     } catch (error) {
       if (error instanceof TradingHistoryApiRequestError) {
@@ -581,7 +601,7 @@ function validateApiServerConfiguration({
   })
 }
 
-function createConfiguredServer({ queries, environment, logger, operator, marketData, exchangeAccounts } = {}) {
+function createConfiguredServer({ queries, environment, logger, operator, marketData, exchangeAccounts, scenarioRunner, scenarioRunnerCatalog } = {}) {
   const server = createServer({
     maxHeaderSize: MAX_HEADER_SIZE,
   }, createRequestHandler({
@@ -591,6 +611,8 @@ function createConfiguredServer({ queries, environment, logger, operator, market
     operator,
     marketData,
     exchangeAccounts,
+    scenarioRunner,
+    scenarioRunnerCatalog,
   }))
   server.requestTimeout = REQUEST_TIMEOUT_MS
   server.headersTimeout = HEADERS_TIMEOUT_MS
@@ -628,6 +650,8 @@ export async function startTradingHistoryApiServer({
   marketData,
   exchangeAccounts = [],
   subscribeExchangeAccountUpdates,
+  scenarioRunner,
+  scenarioRunnerCatalog,
 } = {}) {
   const configuration = validateApiServerConfiguration({
     queries,
@@ -642,6 +666,8 @@ export async function startTradingHistoryApiServer({
     operator,
     marketData,
     exchangeAccounts,
+    scenarioRunner,
+    scenarioRunnerCatalog,
   })
   const websocket = eventBus
     ? attachTradingHistoryWebSocket({

@@ -241,18 +241,24 @@ async function handlePreFillRecoveryState({ dependencies, order, symbol, recover
 
 async function reconcileEventFills({ dependencies, order, event, terminalFillsReconciled } = {}) {
   const { processExecutionFillTransition, reconcileTerminalOrderFills } = dependencies
-  if (event.executionType === "TRADE") {
-    const fillResult = await processExecutionFillTransition({ order,
-      fill: event.fill })
-    if (!fillResult.ok) {return fillResult}
+  const terminalOrder = ["FILLED", "CANCELED", "EXPIRED", "REJECTED"].includes(order.status)
+  if (event.executionType === "TRADE" && (!terminalOrder || terminalFillsReconciled)) {
+    const fillResult = await processExecutionFillTransition({
+      order,
+      fill: event.fill,
+    })
+    if (!fillResult.ok) {
+      return fillResult
+    }
   }
-  if (!terminalFillsReconciled &&
-      ["FILLED", "CANCELED", "EXPIRED", "REJECTED"].includes(order.status)) {
+  if (!terminalFillsReconciled && terminalOrder) {
     const terminal = await reconcileTerminalOrderFills({
       order,
       ...(event.executionType === "TRADE" ? { eventFill: event.fill } : {}),
     })
-    if (!terminal?.ok) {return terminal}
+    if (!terminal?.ok) {
+      return terminal
+    }
   }
   return null
 }
