@@ -12,10 +12,11 @@ import type { TradingHistoryResource } from './features/trading-history/api';
 import { ScenarioRunnerComponent } from './features/scenario-runner/page';
 
 type DashboardPage = 'overview' | 'operator' | 'bots' | 'markets' | 'exchanges' | 'open-orders' | 'github-prs' | 'scenario-runner' | TradingHistoryResource;
-type DashboardTheme = 'current' | 'midnight' | 'light' | 'oled' | 'green' | 'arctic' | 'warm' | 'system';
+type DashboardTheme = 'staradmin' | 'current' | 'midnight' | 'light' | 'oled' | 'green' | 'arctic' | 'warm' | 'system';
 
 const THEME_STORAGE_KEY = 'coinzilla.dashboard.theme';
 const THEMES: readonly { value: DashboardTheme; label: string }[] = [
+  { value: 'staradmin', label: 'StarAdmin · Warm Light' },
   { value: 'current', label: 'Current · Emerald' },
   { value: 'midnight', label: 'Midnight Terminal' },
   { value: 'light', label: 'Clean Light' },
@@ -29,14 +30,14 @@ const THEMES: readonly { value: DashboardTheme; label: string }[] = [
 export function readSavedDashboardTheme(
   storage: Pick<Storage, 'getItem'> | null | undefined,
 ): DashboardTheme {
-  if (!storage) return 'current';
+  if (!storage) return 'staradmin';
   try {
     const saved = storage.getItem(THEME_STORAGE_KEY);
     return THEMES.some((theme) => theme.value === saved)
       ? (saved as DashboardTheme)
-      : 'current';
+      : 'staradmin';
   } catch {
-    return 'current';
+    return 'staradmin';
   }
 }
 
