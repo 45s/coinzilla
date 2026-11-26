@@ -217,6 +217,7 @@ test("does not overlap a retry with a timed-out participant operation that ignor
   let activeWaitCount = 0
   let maximumConcurrentWaits = 0
   let safe = false
+  let timerCalls = 0
   const participant = {
     strategyId: "CONSERVATIVE",
     beginShutdown() {},
@@ -248,7 +249,10 @@ test("does not overlap a retry with a timed-out participant operation that ignor
   const coordinator = createStrategyShutdownCoordinator({
     timeoutMs: 25,
     setTimeoutFn: (callback) => {
-      callback()
+      timerCalls += 1
+      if (timerCalls === 1) {
+        callback()
+      }
       return "fake-deadline"
     },
     clearTimeoutFn: () => {},
