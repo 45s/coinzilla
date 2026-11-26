@@ -254,7 +254,8 @@ function createDeferredTradingActivation({
     subscription: userDataSubscription,
     activateTrading: async () => {
       if (activated) {
-        return Object.freeze({ activated: true, alreadyActivated: true })
+        return Object.freeze({ activated: true,
+alreadyActivated: true })
       }
       await waitForUserDataEventQueue({ state })
       assertTradingStartupSafety({
@@ -278,7 +279,8 @@ function createDeferredTradingActivation({
         throw error
       }
       activated = true
-      return Object.freeze({ activated: true, alreadyActivated: false })
+      return Object.freeze({ activated: true,
+alreadyActivated: false })
     },
   })
 }
@@ -313,9 +315,11 @@ export async function subscribeToUserData({
   onSubscriptionEstablished?.(userDataSubscription)
   logUserDataSubscriptionEstablished(logger)
   markUserDataReconciliationRequired(state)
-  await publishInitialAccountSnapshot({ state, publishAccountSnapshot })
+  await publishInitialAccountSnapshot({ state,
+publishAccountSnapshot })
   if (!tradingEnabled) {
-    await completeReadOnlyUserDataPreflight({ state, publishOpenOrdersSnapshot })
+    await completeReadOnlyUserDataPreflight({ state,
+publishOpenOrdersSnapshot })
     return userDataSubscription
   }
   await completeTradingUserDataPreflight({

@@ -254,7 +254,8 @@ test("rejects trading startup while an account-scoped safety blocker is active",
 
 
 test("defers the existing user-data trading gate until the startup readiness audit completes", async () => {
-  const fixture = createFixture({ tradingEnabled: true, deferTradingActivation: true })
+  const fixture = createFixture({ tradingEnabled: true,
+deferTradingActivation: true })
   const setup = await fixture.result
 
   assert.equal(setup.subscription, fixture.subscription, "Bootstrap must retain the live user-data subscription while trading remains gated.")
@@ -270,7 +271,8 @@ test("defers the existing user-data trading gate until the startup readiness aud
 })
 
 test("revalidates user-data safety before deferred trading activation", async () => {
-  const fixture = createFixture({ tradingEnabled: true, deferTradingActivation: true })
+  const fixture = createFixture({ tradingEnabled: true,
+deferTradingActivation: true })
   const setup = await fixture.result
   fixture.state.accountingFailed = true
 

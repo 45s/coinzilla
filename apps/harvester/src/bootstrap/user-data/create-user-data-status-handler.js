@@ -332,7 +332,8 @@ function updateRecoveryGeneration({ state, status, diagnosticOnlyRpcError }) {
   if (diagnosticOnlyRpcError) {
     return
   }
-  if (isRestoredSubscription({ state, status })) {
+  if (isRestoredSubscription({ state,
+status })) {
     state.streamUnsafe = false
     state.requiresReconciliation = false
   }
@@ -437,8 +438,10 @@ function prepareUserDataStatusEvent({
   brokerName,
   logger,
 } = {}) {
-  publishBrokerEvidence({ eventPublisher, status })
-  if (shouldSkipAcknowledgedRecovery({ state, status })) {
+  publishBrokerEvidence({ eventPublisher,
+status })
+  if (shouldSkipAcknowledgedRecovery({ state,
+status })) {
     return false
   }
   publishBrokerStatusChanged({
@@ -447,7 +450,9 @@ function prepareUserDataStatusEvent({
     eventPublisher,
     brokerName,
   })
-  logUserDataStreamTransition({ state, logger, status })
+  logUserDataStreamTransition({ state,
+logger,
+status })
   return true
 }
 
@@ -469,7 +474,9 @@ function applyUserDataStatusTransition({
     })
   }
   const connectionUnsafe = !diagnosticOnlyRpcError && UNSAFE_CONNECTION_STATUSES.has(status.type)
-  updateRecoveryGeneration({ state, status, diagnosticOnlyRpcError })
+  updateRecoveryGeneration({ state,
+status,
+diagnosticOnlyRpcError })
   updateUserDataReadiness({
     state,
     status,

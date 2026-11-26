@@ -817,7 +817,9 @@ function createHarvesterAccountSnapshotRuntime({ startup,
     tradingEnabled: startup.tradingEnabled,
     tradingMode: startup.tradingMode,
     startupBoundary,
-    readinessInputs: createHarvesterReadinessInputs({ startup, portfolio, resources }),
+    readinessInputs: createHarvesterReadinessInputs({ startup,
+portfolio,
+resources }),
   })
   startup.accountSnapshotManagerRef.current = createAccountSnapshotManager({
     broker: resources.broker,
@@ -1284,11 +1286,14 @@ function logHarvesterReadinessReport({ logger, report } = {}) {
     observedAt: report.observedAt,
   })
   for (const check of report.checks) {
-    logHarvesterReadinessCheck({ logger, check })
+    logHarvesterReadinessCheck({ logger,
+check })
   }
   for (const market of report.markets) {
     for (const check of market.checks) {
-      logHarvesterReadinessCheck({ logger, check, symbol: market.symbol })
+      logHarvesterReadinessCheck({ logger,
+check,
+symbol: market.symbol })
     }
     logger.system?.({
       message: `[HEALTH] [${market.readiness}] ${market.symbol}`,
@@ -1334,7 +1339,8 @@ async function runHarvesterStartupReadinessAudit({
     readinessInputs,
     observedAt: runtime.observedAt,
   })
-  logHarvesterReadinessReport({ logger: startup.logger, report })
+  logHarvesterReadinessReport({ logger: startup.logger,
+report })
   return report
 }
 
@@ -1476,7 +1482,7 @@ async function reportHarvesterStartupFailure({ startup, resources, accountSnapsh
       },
     })
   } catch (diagnosticError) {
-    const logger = startup.logger
+    const {logger} = startup
     const writer = logger?.system ?? logger?.error ?? logger?.info
     writer?.call(logger, {
       message: "[HEALTH] Startup readiness diagnostics could not complete after the original startup failure.",
@@ -1540,7 +1546,8 @@ async function startHarvesterMarketServices({ startup, portfolio, resources, fre
     throw startupError
   }
   try {
-    await startHarvesterCandleHistory({ resources, marketDataPairs })
+    await startHarvesterCandleHistory({ resources,
+marketDataPairs })
   } catch (startupError) {
     await reportHarvesterStartupFailure({
       startup,
@@ -1557,7 +1564,9 @@ async function startHarvesterMarketServices({ startup, portfolio, resources, fre
     resources,
     accountSnapshots,
   })
-  await activateHarvesterTrading({ startup, resources, report })
+  await activateHarvesterTrading({ startup,
+resources,
+report })
 }
 async function unsubscribeMarketDataEntries(entries) {
   const errors = []
@@ -1962,7 +1971,9 @@ function createHarvesterStartupFailureSnapshotReader({ startup, portfolio, resou
       tradingEnabled: startup.tradingEnabled,
       tradingMode: startup.tradingMode,
       startupBoundary,
-      readinessInputs: createHarvesterReadinessInputs({ startup, portfolio, resources }),
+      readinessInputs: createHarvesterReadinessInputs({ startup,
+portfolio,
+resources }),
     }),
   }
 }
@@ -1975,7 +1986,8 @@ async function createHarvesterRuntimeComponents({ startup, portfolio }) {
     resources,
   })
   try {
-    await connectHarvesterRuntimeBroker({ startup, resources })
+    await connectHarvesterRuntimeBroker({ startup,
+resources })
   } catch (startupError) {
     await reportHarvesterStartupFailure({
       startup,
@@ -1988,7 +2000,8 @@ async function createHarvesterRuntimeComponents({ startup, portfolio }) {
     throw startupError
   }
   try {
-    initializeHarvesterCandleHistoryService({ startup, resources })
+    initializeHarvesterCandleHistoryService({ startup,
+resources })
   } catch (startupError) {
     await reportHarvesterStartupFailure({
       startup,

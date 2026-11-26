@@ -2,27 +2,123 @@ import nodeTest from "node:test"
 import assert from "node:assert/strict"
 import { createHarvesterReadinessReport } from "./create-harvester-readiness-report.js"
 
-const test = (...args) => nodeTest("[create-harvester-readiness-report.test.js] " + args[0], ...args.slice(1))
-const identity = Object.freeze({ providerInstanceId: "binanceTestnet", providerType: "binance", environment: "testnet" })
+const test = (...args) => nodeTest(`[create-harvester-readiness-report.test.js] ${  args[0]}`, ...args.slice(1))
+const identity = Object.freeze({ providerInstanceId: "binanceTestnet",
+providerType: "binance",
+environment: "testnet" })
 
 function createInputs() {
   return {
     observedAt: 20000,
-    runtime: { runtimeState: "STARTING", startupBoundary: true, tradingEnabled: true, tradingMode: "testnet", broker: "binance", stopping: false, startupComplete: false, userData: { ready: false, status: "PREFLIGHT_COMPLETE", lastEventAt: 19990, ageMs: 10 } },
+    runtime: { runtimeState: "STARTING",
+startupBoundary: true,
+tradingEnabled: true,
+tradingMode: "testnet",
+broker: "binance",
+stopping: false,
+startupComplete: false,
+userData: { ready: false,
+status: "PREFLIGHT_COMPLETE",
+lastEventAt: 19990,
+ageMs: 10 } },
     readinessInputs: {
-      configuration: { validated: true, enabledMarkets: ["BTCUSDT", "ETHUSDT"] },
-      broker: { connected: true, identity, capabilities: { validated: true, missing: [] } },
-      account: { preflight: { completed: true, durable: true, sourceTime: 19900, balanceCount: 2 }, openOrders: { completed: true, durable: true, observedAt: 19950, orderCount: 0, readiness: "READY", blockReasons: [], unownedSymbols: [] } },
-      userData: { subscriptionEstablished: true, preflightComplete: true, requiresReconciliation: false, accountingFailed: false, streamUnsafe: false, pendingRecovery: false, safetyHaltRequired: false },
-      processContinuity: { storeConfigured: true, previousProcessStarted: false, restorationEnabled: false },
+      configuration: { validated: true,
+enabledMarkets: ["BTCUSDT", "ETHUSDT"] },
+      broker: { connected: true,
+identity,
+capabilities: { validated: true,
+missing: [] } },
+      account: { preflight: { completed: true,
+durable: true,
+sourceTime: 19900,
+balanceCount: 2 },
+openOrders: { completed: true,
+durable: true,
+observedAt: 19950,
+orderCount: 0,
+readiness: "READY",
+blockReasons: [],
+unownedSymbols: [] } },
+      userData: { subscriptionEstablished: true,
+preflightComplete: true,
+requiresReconciliation: false,
+accountingFailed: false,
+streamUnsafe: false,
+pendingRecovery: false,
+safetyHaltRequired: false },
+      processContinuity: { storeConfigured: true,
+previousProcessStarted: false,
+restorationEnabled: false },
       markets: {
-        BTCUSDT: { route: { expected: identity, actual: identity, priceSubscriptionReady: true, bookSubscriptionReady: true }, price: { valid: true, fresh: true, timestamp: 19999, source: "INITIAL_SEED", websocketEventReceived: false, freshnessThresholdMs: 5000 }, book: { required: true, fresh: true, timestamp: 19998, eventReceived: true, freshnessThresholdMs: 5000 }, volatility: { enabled: true, snapshot: { ok: true, data: { status: { isReady: true, isFresh: true, blockers: [], historyCount: 100, requiredHistoryCount: 74, lastEventAt: 19999, freshnessThresholdMs: 65000, observedAt: 20000 } } } }, externalOrdersPolicy: "IGNORE", unownedOrderObserved: false },
-        ETHUSDT: { route: { expected: identity, actual: identity, priceSubscriptionReady: true, bookSubscriptionReady: true }, price: { valid: true, fresh: true, timestamp: 19999, source: "WEBSOCKET", websocketEventReceived: true }, book: { required: true, fresh: true, timestamp: 19998, eventReceived: true }, volatility: { enabled: false, snapshot: null }, externalOrdersPolicy: "IGNORE", unownedOrderObserved: false },
+        BTCUSDT: { route: { expected: identity,
+actual: identity,
+priceSubscriptionReady: true,
+bookSubscriptionReady: true },
+price: { valid: true,
+fresh: true,
+timestamp: 19999,
+source: "INITIAL_SEED",
+websocketEventReceived: false,
+freshnessThresholdMs: 5000 },
+book: { required: true,
+fresh: true,
+timestamp: 19998,
+eventReceived: true,
+freshnessThresholdMs: 5000 },
+volatility: { enabled: true,
+snapshot: { ok: true,
+data: { status: { isReady: true,
+isFresh: true,
+blockers: [],
+historyCount: 100,
+requiredHistoryCount: 74,
+lastEventAt: 19999,
+freshnessThresholdMs: 65000,
+observedAt: 20000 } } } },
+externalOrdersPolicy: "IGNORE",
+unownedOrderObserved: false },
+        ETHUSDT: { route: { expected: identity,
+actual: identity,
+priceSubscriptionReady: true,
+bookSubscriptionReady: true },
+price: { valid: true,
+fresh: true,
+timestamp: 19999,
+source: "WEBSOCKET",
+websocketEventReceived: true },
+book: { required: true,
+fresh: true,
+timestamp: 19998,
+eventReceived: true },
+volatility: { enabled: false,
+snapshot: null },
+externalOrdersPolicy: "IGNORE",
+unownedOrderObserved: false },
       },
     },
     markets: [
-      { symbol: "BTCUSDT", enabled: true, marketMetadataReady: true, orderType: "LIMIT_MAKER", latestPrice: "65000", priceTimestamp: 19999, priceFresh: true, bookTimestamp: 19998, bookFresh: true, volatilityProtection: { mode: "NORMAL" }, blockers: [] },
-      { symbol: "ETHUSDT", enabled: true, marketMetadataReady: true, orderType: "LIMIT_MAKER", latestPrice: "2000", priceTimestamp: 19999, priceFresh: true, bookTimestamp: 19998, bookFresh: true, volatilityProtection: null, blockers: [] },
+      { symbol: "BTCUSDT",
+enabled: true,
+marketMetadataReady: true,
+orderType: "LIMIT_MAKER",
+latestPrice: "65000",
+priceTimestamp: 19999,
+priceFresh: true,
+bookTimestamp: 19998,
+bookFresh: true,
+volatilityProtection: { mode: "NORMAL" },
+blockers: [] },
+      { symbol: "ETHUSDT",
+enabled: true,
+marketMetadataReady: true,
+orderType: "LIMIT_MAKER",
+latestPrice: "2000",
+priceTimestamp: 19999,
+priceFresh: true,
+bookTimestamp: 19998,
+bookFresh: true,
+volatilityProtection: null,
+blockers: [] },
     ],
   }
 }
@@ -40,7 +136,13 @@ test("reports healthy pre-trading readiness from actual component snapshots with
 
 test("keeps ADR-0004 external orders scoped to the affected market", () => {
   const inputs = createInputs()
-  inputs.readinessInputs.account.openOrders = { completed: true, durable: true, observedAt: 19950, orderCount: 1, readiness: "BLOCKED", blockReasons: ["UNOWNED_OPEN_ORDERS:1"], unownedSymbols: ["ETHUSDT"] }
+  inputs.readinessInputs.account.openOrders = { completed: true,
+durable: true,
+observedAt: 19950,
+orderCount: 1,
+readiness: "BLOCKED",
+blockReasons: ["UNOWNED_OPEN_ORDERS:1"],
+unownedSymbols: ["ETHUSDT"] }
   inputs.readinessInputs.markets.ETHUSDT.unownedOrderObserved = true
   inputs.readinessInputs.markets.ETHUSDT.externalOrdersPolicy = "BLOCK"
   inputs.markets[1].openOrderBlockerActive = true
@@ -139,11 +241,18 @@ test("exposes source, expected condition and source-owned freshness thresholds w
 
 test("fails closed for route mismatch, stale price, missing first book and unavailable enabled volatility", () => {
   const inputs = createInputs()
-  inputs.readinessInputs.markets.BTCUSDT.route.actual = { providerInstanceId: "wrong-provider", providerType: "binance", environment: "testnet" }
+  inputs.readinessInputs.markets.BTCUSDT.route.actual = { providerInstanceId: "wrong-provider",
+providerType: "binance",
+environment: "testnet" }
   inputs.readinessInputs.markets.BTCUSDT.price.fresh = false
   inputs.readinessInputs.markets.BTCUSDT.book.fresh = false
   inputs.readinessInputs.markets.BTCUSDT.book.eventReceived = false
-  inputs.readinessInputs.markets.BTCUSDT.volatility.snapshot = { ok: true, data: { status: { isReady: false, isFresh: false, blockers: ["AWAITING_LIVE_DATA"], historyCount: 20, requiredHistoryCount: 74 } } }
+  inputs.readinessInputs.markets.BTCUSDT.volatility.snapshot = { ok: true,
+data: { status: { isReady: false,
+isFresh: false,
+blockers: ["AWAITING_LIVE_DATA"],
+historyCount: 20,
+requiredHistoryCount: 74 } } }
   inputs.markets[0].priceFresh = false
   inputs.markets[0].bookFresh = false
   inputs.markets[0].blockers = ["MARKET_PRICE_STALE", "MARKET_BOOK_UNAVAILABLE", "VOLATILITY_DATA_UNAVAILABLE"]
@@ -157,7 +266,9 @@ test("fails closed for route mismatch, stale price, missing first book and unava
 
 test("reports prior-process observation-only state and never claims restoration", () => {
   const inputs = createInputs()
-  inputs.readinessInputs.processContinuity = { storeConfigured: true, previousProcessStarted: true, restorationEnabled: false }
+  inputs.readinessInputs.processContinuity = { storeConfigured: true,
+previousProcessStarted: true,
+restorationEnabled: false }
   inputs.runtime.tradingEnabled = false
   const report = createHarvesterReadinessReport(inputs)
   assert.equal(report.status, "BLOCKED", "A prior process with restoration disabled must not be described as healthy.")
@@ -167,7 +278,9 @@ test("reports prior-process observation-only state and never claims restoration"
 
 test("does not claim a first process when continuity evidence is not configured and redacts private account identifiers", () => {
   const inputs = createInputs()
-  inputs.readinessInputs.processContinuity = { storeConfigured: false, previousProcessStarted: null, restorationEnabled: false }
+  inputs.readinessInputs.processContinuity = { storeConfigured: false,
+previousProcessStarted: null,
+restorationEnabled: false }
   inputs.readinessInputs.broker.identity.accountId = "private-account-id"
   const report = createHarvesterReadinessReport(inputs)
   const restoration = report.checks.find(({ id }) => id === "process.restoration")

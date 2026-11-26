@@ -158,7 +158,8 @@ test("reports broker connection failure before rethrowing the original startup e
       "The startup audit must log its terminal summary when broker connection fails.",
     )
   } finally {
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, { recursive: true,
+force: true })
   }
 })
 
@@ -229,7 +230,8 @@ test("keeps startup incomplete and the user-data gate closed until deferred mark
         ok: true,
         data: { skipped: true },
       }),
-      logger: { info() {}, error() {} },
+      logger: { info() {},
+error() {} },
     })
 
     assert.equal(result.userDataReady, false, "User-data PREFLIGHT must not open trading while market-data startup is deferred.")
@@ -239,7 +241,8 @@ test("keeps startup incomplete and the user-data gate closed until deferred mark
     assert.ok(calls.includes("subscribe:LINEAUSDT"), "The explicit continuation must start the configured market-data subscription.")
   } finally {
     await result?.stop()
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, { recursive: true,
+force: true })
   }
 })
 

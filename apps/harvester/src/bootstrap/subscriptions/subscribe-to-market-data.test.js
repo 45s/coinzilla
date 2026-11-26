@@ -257,8 +257,12 @@ test("distinguishes subscription acknowledgements from accepted first price and 
   const fixture = createFixture({
     tradingEnabled: true,
     subscribeForPrices: async ({ symbol, onPrice }) => {
-      await onPrice({ symbol, price: "65000", timestamp: 10_000 })
-      return { ok: true, data: { unsubscribe: async () => {}, stream: "price" } }
+      await onPrice({ symbol,
+price: "65000",
+timestamp: 10_000 })
+      return { ok: true,
+data: { unsubscribe: async () => {},
+stream: "price" } }
     },
     subscribeForBookTicker: async ({ symbol, onBookTicker }) => {
       await onBookTicker({
@@ -269,7 +273,9 @@ test("distinguishes subscription acknowledgements from accepted first price and 
         askQuantity: "1",
         timestamp: 10_000,
       })
-      return { ok: true, data: { unsubscribe: async () => {}, stream: "book" } }
+      return { ok: true,
+data: { unsubscribe: async () => {},
+stream: "book" } }
     },
   })
   await fixture.result

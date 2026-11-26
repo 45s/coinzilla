@@ -99,7 +99,8 @@ function getEvaluationGateResult({ dependencies, symbol, shutdownRecoveryOnly } 
       : null
     if (!metadata?.market) {
       state.deferredEvaluations.add(symbol)
-      return toResult({ data: { deferred: true, reason: "MARKET_METADATA_UNAVAILABLE" } })
+      return toResult({ data: { deferred: true,
+reason: "MARKET_METADATA_UNAVAILABLE" } })
     }
     const orderType = metadata.orderType ?? pairs?.[symbol]?.orderType ?? "LIMIT_MAKER"
     if (orderType === "LIMIT_MAKER") {
@@ -129,7 +130,8 @@ function getEvaluationGateResult({ dependencies, symbol, shutdownRecoveryOnly } 
         typeof protection === "object"
       if (!volatilityReady) {
         state.deferredEvaluations.add(symbol)
-        return toResult({ data: { deferred: true, reason: "VOLATILITY_PROTECTION_NOT_READY" } })
+        return toResult({ data: { deferred: true,
+reason: "VOLATILITY_PROTECTION_NOT_READY" } })
       }
     }
   }

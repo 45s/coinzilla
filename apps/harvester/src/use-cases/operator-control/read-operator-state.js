@@ -20,7 +20,8 @@ function hasValidUserDataSnapshot({ userData }) {
 
 function validateRuntimeSnapshot({ snapshot, operation }) {
   const runtimeState = snapshot?.runtimeState ?? (snapshot?.connected === true ? "RUNNING" : "UNKNOWN")
-  const validMetadata = hasValidRuntimeMetadata({ snapshot, runtimeState })
+  const validMetadata = hasValidRuntimeMetadata({ snapshot,
+runtimeState })
   const validUserData = hasValidUserDataSnapshot({ userData: snapshot?.userData })
   if (!validMetadata || !validUserData) {
     const cause = new TypeError("Runtime snapshot must include an integer observedAt, runtime state, trading flag and user-data readiness.")
@@ -100,7 +101,8 @@ function readRuntimeSnapshot({ getRuntimeSnapshot, operation }) {
       context: { operation },
     })
   }
-  return validateRuntimeSnapshot({ snapshot: source, operation })
+  return validateRuntimeSnapshot({ snapshot: source,
+operation })
 }
 
 async function readEngineMarketSnapshots({ engine, operation }) {
@@ -161,8 +163,10 @@ function evaluateOperatorReadinessReport({ runtime, markets, operation }) {
 async function readOperatorSnapshot({ engine, getRuntimeSnapshot, actor, operation }) {
   try {
     authorizeOperatorActor({ actor })
-    const runtime = readRuntimeSnapshot({ getRuntimeSnapshot, operation })
-    const marketRead = await readEngineMarketSnapshots({ engine, operation })
+    const runtime = readRuntimeSnapshot({ getRuntimeSnapshot,
+operation })
+    const marketRead = await readEngineMarketSnapshots({ engine,
+operation })
     if (marketRead.result) {
       return marketRead.result
     }

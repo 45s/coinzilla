@@ -25,10 +25,10 @@ function appendStatusBlockers({ lines, blockers }) {
 }
 
 function appendReadinessReport({ lines, report }) {
-  if (!report || typeof report !== "object") return
+  if (!report || typeof report !== "object") {return}
   lines.push(`Startup audit: ${String(report.status ?? "UNKNOWN")}`)
   lines.push(`Trading gate: ${report.tradingGateOpen === true ? "OPEN" : "CLOSED"}`)
-  const summary = report.summary
+  const {summary} = report
   if (summary) {
     lines.push(`Markets ready: ${summary.readyMarkets ?? 0}/${summary.enabledMarkets ?? 0} (${summary.blockedMarkets ?? 0} blocked; ${summary.warnings ?? 0} warnings)`)
   }
@@ -120,7 +120,8 @@ export function formatTelegramOperatorStatus({ status } = {}) {
     lines,
     blockers: readiness.blockers,
   })
-  appendReadinessReport({ lines, report: status.readinessReport })
+  appendReadinessReport({ lines,
+report: status.readinessReport })
   if (status.stopping === true) {lines.push("Runtime is stopping.")}
   lines.push(`Observed: ${  formatTimestamp(status.observedAt)}`)
   return lines.join("\n")
@@ -131,7 +132,8 @@ export function formatTelegramOperatorMarkets({ snapshot } = {}) {
     throw new TypeError("formatTelegramOperatorMarkets requires a market snapshot")
   }
   const lines = ["Harvester markets"]
-  appendReadinessReport({ lines, report: snapshot.readinessReport })
+  appendReadinessReport({ lines,
+report: snapshot.readinessReport })
   if (snapshot.markets.length === 0) {lines.push("No configured markets.")}
   for (const market of snapshot.markets) {
     lines.push("")

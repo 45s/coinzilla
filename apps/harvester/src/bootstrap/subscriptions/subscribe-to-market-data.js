@@ -421,7 +421,8 @@ async function subscribeToMarketPrice({
   subscriptions,
   marketPriceIntake,
 }) {
-  const intakeState = resetMarketPriceIntakeState({ marketPriceIntake, symbol })
+  const intakeState = resetMarketPriceIntakeState({ marketPriceIntake,
+symbol })
   const handler = createMarketPriceHandler({
     symbol,
     pairConfig,

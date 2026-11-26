@@ -2152,7 +2152,8 @@ function createOperatorMarketDataFacts({
 function createOperatorMarketControlFacts({ state, symbol }) {
   return {
     operatorPaused: state.operatorPausedMarkets.has(symbol),
-    operatorBuyPaused: isOperatorBuyPauseActive({ state, symbol }),
+    operatorBuyPaused: isOperatorBuyPauseActive({ state,
+symbol }),
     safetyPaused: state.durablePausedMarkets.has(symbol) ||
       (state.paused.has(symbol) && !state.recoveryManagedPausedMarkets.has(symbol)),
     recoveryManagedPaused: state.recoveryManagedPausedMarkets.has(symbol),
@@ -2183,7 +2184,8 @@ function createOperatorMarketProtectionFacts({
 function createOperatorMarketSnapshotFacts(options) {
   const { state, symbol, pairConfig } = options
   const dataFacts = createOperatorMarketDataFacts(options)
-  const controlFacts = createOperatorMarketControlFacts({ state, symbol })
+  const controlFacts = createOperatorMarketControlFacts({ state,
+symbol })
   const protectionFacts = createOperatorMarketProtectionFacts(options)
   const facts = {
     ...dataFacts,
@@ -2256,8 +2258,10 @@ function createOperatorMarketSnapshot(options) {
   const { symbol, pairConfig } = options
   const facts = createOperatorMarketSnapshotFacts(options)
   return Object.freeze({
-    ...createOperatorMarketSnapshotIdentity({ symbol, pairConfig }),
-    ...createOperatorMarketSnapshotMetadata({ facts, pairConfig }),
+    ...createOperatorMarketSnapshotIdentity({ symbol,
+pairConfig }),
+    ...createOperatorMarketSnapshotMetadata({ facts,
+pairConfig }),
     ...createOperatorMarketSnapshotPrice({ facts }),
     ...createOperatorMarketSnapshotBook({ facts }),
     ...createOperatorMarketSnapshotControls({ facts }),

@@ -131,7 +131,8 @@ function createCheck({
     id,
     scope,
     status,
-    severity: getCheckSeverity({ status, blocksTrading: blocks }),
+    severity: getCheckSeverity({ status,
+blocksTrading: blocks }),
     evidenceState: getEvidenceState(status),
     code,
     sourceOfTruth,
@@ -181,7 +182,7 @@ function createRuntimeLifecycleCheck({ runtime, observedAt } = {}) {
 }
 
 function createConfigurationCheck({ runtime, inputs, observedAt } = {}) {
-  const configuration = inputs.configuration
+  const {configuration} = inputs
   if (!configuration && runtime.startupBoundary !== true) {
     return createCheck({
       id: "configuration.validation",
@@ -195,7 +196,7 @@ function createConfigurationCheck({ runtime, inputs, observedAt } = {}) {
       blocksTrading: false,
     })
   }
-  const enabledMarkets = configuration.enabledMarkets
+  const {enabledMarkets} = configuration
   let valid = configuration.validated === true && Array.isArray(enabledMarkets)
   if (runtime.tradingEnabled === true && Array.isArray(enabledMarkets) && enabledMarkets.length === 0) {
     valid = false
@@ -225,7 +226,7 @@ function createConfigurationCheck({ runtime, inputs, observedAt } = {}) {
 }
 
 function createBrokerConnectionCheck({ inputs, runtime, observedAt } = {}) {
-  const broker = inputs.broker
+  const {broker} = inputs
   if (!broker && runtime.startupBoundary !== true) {
     return createCheck({
       id: "broker.connection",
@@ -428,7 +429,8 @@ function createAccountPreflightCheck({ inputs, runtime, observedAt } = {}) {
       completed: accountPreflight.completed === true,
       durable: accountPreflight.durable === true,
       sourceTime: isTimestamp(accountPreflight.sourceTime) ? accountPreflight.sourceTime : null,
-      ageMs: ageMs({ observedAt, timestamp: accountPreflight.sourceTime }),
+      ageMs: ageMs({ observedAt,
+timestamp: accountPreflight.sourceTime }),
       balanceCount: Number.isSafeInteger(accountPreflight.balanceCount) ? accountPreflight.balanceCount : null,
     },
   })
@@ -496,7 +498,8 @@ function createOpenOrdersCheck({ inputs, runtime, observedAt } = {}) {
       durable: openOrderState.durable === true,
       phase: openOrderState.phase ?? null,
       observedAt: isTimestamp(openOrderState.observedAt) ? openOrderState.observedAt : null,
-      ageMs: ageMs({ observedAt, timestamp: openOrderState.observedAt }),
+      ageMs: ageMs({ observedAt,
+timestamp: openOrderState.observedAt }),
       orderCount: Number.isSafeInteger(openOrderState.orderCount) ? openOrderState.orderCount : null,
       unownedSymbols: Array.isArray(openOrderState.unownedSymbols) ? openOrderState.unownedSymbols : [],
       blockReasons: Array.isArray(openOrderState.blockReasons) ? openOrderState.blockReasons : [],
@@ -636,11 +639,13 @@ function createUserDataDetails({ facts, runtime, observedAt } = {}) {
     safetyHaltRequired: userData.safetyHaltRequired === true || runtimeUserData.safetyHaltRequired === true,
     retryableRecoveryFailure: userData.retryableRecoveryFailure === true || runtimeUserData.retryableRecoveryFailure === true,
     lastStatusEventAt: isTimestamp(lastStatusEventAt) ? lastStatusEventAt : null,
-    lastStatusEventAgeMs: ageMs({ observedAt, timestamp: lastStatusEventAt }),
+    lastStatusEventAgeMs: ageMs({ observedAt,
+timestamp: lastStatusEventAt }),
   }
 }
 function createUserDataCheck({ runtime, inputs, observedAt } = {}) {
-  const facts = getUserDataSafetyFacts({ runtime, inputs })
+  const facts = getUserDataSafetyFacts({ runtime,
+inputs })
   return createCheck({
     id: "user-data.reconciliation",
     scope: "ACCOUNT",
@@ -655,20 +660,39 @@ function createUserDataCheck({ runtime, inputs, observedAt } = {}) {
     sourceOfTruth: facts.evidenceAvailable
       ? undefined
       : "Existing userDataState.ready gate; startup reconciliation provenance is not included in this operator read",
-    details: createUserDataDetails({ facts, runtime, observedAt }),
+    details: createUserDataDetails({ facts,
+runtime,
+observedAt }),
   })
 }
 function createRuntimeChecks({ runtime, inputs, observedAt } = {}) {
   return [
-    createRuntimeLifecycleCheck({ runtime, observedAt }),
-    createConfigurationCheck({ runtime, inputs, observedAt }),
-    createBrokerConnectionCheck({ inputs, runtime, observedAt }),
-    createBrokerCapabilitiesCheck({ inputs, runtime, observedAt }),
-    createProcessRestorationCheck({ inputs, runtime, observedAt }),
-    createAccountPreflightCheck({ inputs, runtime, observedAt }),
-    createOpenOrdersCheck({ inputs, runtime, observedAt }),
-    createAccountSafetyCheck({ inputs, runtime, observedAt }),
-    createUserDataCheck({ runtime, inputs, observedAt }),
+    createRuntimeLifecycleCheck({ runtime,
+observedAt }),
+    createConfigurationCheck({ runtime,
+inputs,
+observedAt }),
+    createBrokerConnectionCheck({ inputs,
+runtime,
+observedAt }),
+    createBrokerCapabilitiesCheck({ inputs,
+runtime,
+observedAt }),
+    createProcessRestorationCheck({ inputs,
+runtime,
+observedAt }),
+    createAccountPreflightCheck({ inputs,
+runtime,
+observedAt }),
+    createOpenOrdersCheck({ inputs,
+runtime,
+observedAt }),
+    createAccountSafetyCheck({ inputs,
+runtime,
+observedAt }),
+    createUserDataCheck({ runtime,
+inputs,
+observedAt }),
   ]
 }
 
@@ -769,15 +793,17 @@ function createMarketRouteCheck({ market, input, routeRequired, bookRequired, ru
       sourceOfTruth: "Startup subscription identity snapshot; not included in this live operator read",
     })
   }
-  const expected = route.expected
+  const {expected} = route
   const priceIdentity = route.priceSourceIdentity ?? route.actual
   const bookIdentity = route.bookSourceIdentity ?? route.actual
   let matches = true
   if (routeRequired) {
-    matches = identitiesMatch({ expected, actual: priceIdentity }) &&
+    matches = identitiesMatch({ expected,
+actual: priceIdentity }) &&
       route.priceSubscriptionReady === true
     if (matches && bookRequired) {
-      matches = identitiesMatch({ expected, actual: bookIdentity }) &&
+      matches = identitiesMatch({ expected,
+actual: bookIdentity }) &&
         route.bookSubscriptionReady === true
     }
   }
@@ -828,7 +854,8 @@ function createMarketPriceCheck({ market, input, routeRequired, runtime, observe
       details: {
         fresh: market.priceFresh === true,
         timestamp: isTimestamp(market.priceTimestamp) ? market.priceTimestamp : null,
-        ageMs: ageMs({ observedAt, timestamp: market.priceTimestamp }),
+        ageMs: ageMs({ observedAt,
+timestamp: market.priceTimestamp }),
       },
     })
   }
@@ -870,7 +897,8 @@ function createMarketPriceCheck({ market, input, routeRequired, runtime, observe
       subscriptionAcknowledged: route.priceSubscriptionReady === true,
       websocketEventReceived: eventReceived,
       timestamp: isTimestamp(market.priceTimestamp) ? market.priceTimestamp : null,
-      ageMs: ageMs({ observedAt, timestamp: market.priceTimestamp }),
+      ageMs: ageMs({ observedAt,
+timestamp: market.priceTimestamp }),
       freshnessThresholdMs: price.freshnessThresholdMs ?? null,
       fresh: market.priceFresh === true,
     },
@@ -926,7 +954,8 @@ function createMarketBookCheck({ market, input, routeRequired, bookRequired, run
       subscriptionAcknowledged: route.bookSubscriptionReady === true,
       firstEventReceived: book.eventReceived === true,
       timestamp: isTimestamp(market.bookTimestamp) ? market.bookTimestamp : null,
-      ageMs: ageMs({ observedAt, timestamp: market.bookTimestamp }),
+      ageMs: ageMs({ observedAt,
+timestamp: market.bookTimestamp }),
       freshnessThresholdMs: book.freshnessThresholdMs ?? null,
       fresh: market.bookFresh === true,
     },
@@ -1000,7 +1029,8 @@ function createVolatilityDetails({ market, snapshotStatus, observedAt } = {}) {
       ? snapshotStatus.requiredHistoryCount
       : null,
     lastEventAt: isTimestamp(snapshotStatus?.lastEventAt) ? snapshotStatus.lastEventAt : null,
-    lastEventAgeMs: ageMs({ observedAt, timestamp: snapshotStatus?.lastEventAt }),
+    lastEventAgeMs: ageMs({ observedAt,
+timestamp: snapshotStatus?.lastEventAt }),
     freshnessThresholdMs: snapshotStatus?.freshnessThresholdMs ?? null,
     reason: snapshotStatus?.reason ?? null,
     blockers: Array.isArray(snapshotStatus?.blockers) ? snapshotStatus.blockers : [],
@@ -1009,7 +1039,7 @@ function createVolatilityDetails({ market, snapshotStatus, observedAt } = {}) {
 }
 
 function createMarketVolatilityCheck({ market, input, runtime, observedAt } = {}) {
-  const volatility = input.volatility
+  const {volatility} = input
   if (!volatility && runtime.startupBoundary !== true) {
     return createMarketCheck({
       id: "market.volatility",
@@ -1047,9 +1077,10 @@ function createMarketVolatilityCheck({ market, input, runtime, observedAt } = {}
       },
     })
   }
-  const snapshot = volatility.snapshot
+  const {snapshot} = volatility
   const snapshotStatus = getVolatilitySnapshotStatus(snapshot)
-  const ready = isVolatilityProtectionReady({ market, snapshotStatus })
+  const ready = isVolatilityProtectionReady({ market,
+snapshotStatus })
   let status = "BLOCKED"
   let code = "VOLATILITY_PROTECTION_NOT_READY"
   let message = "Required candle history or live volatility protection is unavailable, stale or incomplete."
@@ -1066,8 +1097,11 @@ function createMarketVolatilityCheck({ market, input, runtime, observedAt } = {}
     expected: "Required candle history is complete and the live 1-minute candle event is fresh within the service-owned threshold.",
     remediation: "Restore the configured candle-history route, obtain complete history and a fresh live candle event, then verify engine protection initialization.",
     observedAt,
-    possibleCauses: getVolatilityPossibleCauses({ snapshot, snapshotStatus }),
-    details: createVolatilityDetails({ market, snapshotStatus, observedAt }),
+    possibleCauses: getVolatilityPossibleCauses({ snapshot,
+snapshotStatus }),
+    details: createVolatilityDetails({ market,
+snapshotStatus,
+observedAt }),
   })
 }
 function createMarketEngineSafetyCheck({ market, engineBlockers, observedAt } = {}) {
@@ -1106,10 +1140,13 @@ function getMarketBlockers({ checks, engineBlockers, startupBoundary } = {}) {
 
 function createMarketReadiness({ market, input = {}, runtime, observedAt } = {}) {
   if (market.enabled === false) {
-    return freezeValue(createDisabledMarketReport({ market, observedAt }))
+    return freezeValue(createDisabledMarketReport({ market,
+observedAt }))
   }
   const routeRequired = input.route?.required !== false
-  const bookRequired = getBookRequired({ market, input, runtime })
+  const bookRequired = getBookRequired({ market,
+input,
+runtime })
   const engineBlockers = Array.isArray(market.blockers) ? [...market.blockers] : []
   if (runtime.tradingEnabled === true &&
       runtime.userData?.ready !== true &&
@@ -1118,12 +1155,32 @@ function createMarketReadiness({ market, input = {}, runtime, observedAt } = {})
     engineBlockers.push("USER_DATA_NOT_READY")
   }
   const checks = [
-    createMarketRouteCheck({ market, input, routeRequired, bookRequired, runtime, observedAt }),
-    createMarketPriceCheck({ market, input, routeRequired, runtime, observedAt }),
-    createMarketBookCheck({ market, input, routeRequired, bookRequired, runtime, observedAt }),
-    createMarketMetadataCheck({ market, observedAt }),
-    createMarketVolatilityCheck({ market, input, runtime, observedAt }),
-    createMarketEngineSafetyCheck({ market, engineBlockers, observedAt }),
+    createMarketRouteCheck({ market,
+input,
+routeRequired,
+bookRequired,
+runtime,
+observedAt }),
+    createMarketPriceCheck({ market,
+input,
+routeRequired,
+runtime,
+observedAt }),
+    createMarketBookCheck({ market,
+input,
+routeRequired,
+bookRequired,
+runtime,
+observedAt }),
+    createMarketMetadataCheck({ market,
+observedAt }),
+    createMarketVolatilityCheck({ market,
+input,
+runtime,
+observedAt }),
+    createMarketEngineSafetyCheck({ market,
+engineBlockers,
+observedAt }),
   ]
   const blockers = getMarketBlockers({
     checks,
@@ -1209,7 +1266,8 @@ function createRuntimeReadinessChecks({ runtime, readinessInputs, marketCount, o
   const snapshotsMissing = readinessInputs.marketSnapshotAvailable === false ||
     (configuredMarketsExist && marketCount === 0)
   if (snapshotsMissing) {
-    checks.push(createEngineSnapshotCheck({ readinessInputs, observedAt }))
+    checks.push(createEngineSnapshotCheck({ readinessInputs,
+observedAt }))
   }
   if (readinessInputs.startupFailure) {
     checks.push(createStartupFailureCheck({
@@ -1286,7 +1344,8 @@ export function createHarvesterReadinessReport({
     runtime,
     observedAt,
   })
-  const facts = createReportFacts({ runtimeChecks, marketReports })
+  const facts = createReportFacts({ runtimeChecks,
+marketReports })
   const status = resolveReportStatus({
     runtime,
     runtimeBlockers: facts.runtimeBlockers,
