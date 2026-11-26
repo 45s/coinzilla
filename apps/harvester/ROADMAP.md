@@ -2,17 +2,15 @@
 
 ## Binance historical order identity collisions — issue #1851
 
-In review in [PR #1849](https://github.com/45s/coinzilla/pull/1849). The 2026-11-25 TESTNET startup history scan failed independently for ZROUSDT and DOGEUSDT with immutable-price conflicts while records shared client IDs but carried exchange order IDs 661748 and 1193792. Source inspection confirmed the canonical identity and relational uniqueness constraint were clientOrderId-based. Binance permits clientOrderId reuse after the previous order is FILLED; pending identities remain market-scoped because the REST documentation does not specify cross-symbol client-ID uniqueness. The corrected model keys exchange-identified orders by provider/account/environment/market/exchangeOrderId and links fills by that same identity. Migration v5 preserves old row IDs and foreign-key links, verifies a pre-migration backup, and fails closed on duplicate exchange identities. Same-order immutable price conflicts remain fatal and any failed history page keeps coverage incomplete. The sanitized report is [2026-11-25 ZRO/DOGE order-history identity investigation](./docs/audits/reports/2026-11-25_binance-order-history-identity-conflicts.md). The exact old SQLite row broker IDs/prices were not present in recovered logs or Library files; regression prices are synthetic, so the per-symbol original row pairing remains explicitly unproven.
+Complete in merged [PR #1849](https://github.com/45s/coinzilla/pull/1849); all six required workflows passed on exact PR head `7c8763d3153eb7ea4c5c9a929ea78eab33ea2f9d`. The 2026-11-25 TESTNET startup history scan failed independently for ZROUSDT and DOGEUSDT with immutable-price conflicts while records shared client IDs but carried exchange order IDs 661748 and 1193792. Source inspection confirmed the canonical identity and relational uniqueness constraint were clientOrderId-based. Binance permits clientOrderId reuse after the previous order is FILLED; pending identities remain market-scoped because the REST documentation does not specify cross-symbol client-ID uniqueness. The corrected model keys exchange-identified orders by provider/account/environment/market/exchangeOrderId and links fills by that same identity. Migration v5 preserves old row IDs and foreign-key links, verifies a pre-migration backup, and fails closed on duplicate exchange identities. Same-order immutable price conflicts remain fatal and any failed history page keeps coverage incomplete. The sanitized report is [2026-11-25 ZRO/DOGE order-history identity investigation](./docs/audits/reports/2026-11-25_binance-order-history-identity-conflicts.md). The exact old SQLite row broker IDs/prices were not present in recovered logs or Library files; regression prices are synthetic, so the per-symbol original row pairing remains explicitly unproven.
 
 ## Trading-history WebSocket large-frame crash — issue #1826
 
-In progress in draft PR #1830: https://github.com/45s/coinzilla/pull/1830 on the existing branch `fix/harvester/1826-websocket-frame-length`. The test-first checkpoint confirmed both the 16-bit encoder overflow (198,918-byte UTF-8 snapshot) and an uncaught circular-JSON serialization failure. The implementation now uses RFC 6455 7-bit/16-bit/64-bit server framing, a 1 MiB complete-message cap, a 2 MiB per-client buffered-write cap, and client-local cleanup for serialization/encoding/write failures. Regression coverage includes 125/126, 65,535/65,536, 115,638-byte and multibyte UTF-8 frames, a large account-snapshot integration, malformed serialization isolation and oversized-message rejection. API and operator documentation record the actual limits and close codes. Exact-head required CI passed on implementation head `9c2bd95afa03a795f17ebb332724c4d97c7c7f58`: Harvester 2,728/2,728, focused regressions, workspace tests, coverage, strict/workspace lint, syntax, actionlint and dependency audit all passed; optional read-only Binance TESTNET integration was skipped. The PR remains draft because integration must follow #1828 then #1827, both now merged. No trading or exchange-write behavior is changed.
+Complete in merged [PR #1830](https://github.com/45s/coinzilla/pull/1830), merge commit `1a91d3a5360403b22fa6c3402cb9811d36796ae8`. All six required workflows passed on exact head `0c79e83ec787351666da2c070f8e53f4466eeacf`. The implementation provides RFC 6455 7-bit/16-bit/64-bit server framing, a 1 MiB complete-message cap, a 2 MiB per-client buffered-write cap, and client-local cleanup for serialization/encoding/write failures. Issue #1826 is closed. No trading or exchange-write behavior changed.
 
 ## P0 Conservative recovery SELL idempotency — issue #1827
 
-**Implementation:** ready for review in [PR #1831](https://github.com/45s/coinzilla/pull/1831), branch
-`fix/harvester/1827-recovery-sell-idempotency`. The issue remains open for incident evidence and
-root-cause classification.
+Implementation complete in merged [PR #1831](https://github.com/45s/coinzilla/pull/1831), merge commit `c9ba1326f301ab4804b2929aff4b9d0b1f1496f1`. All six required workflows passed on exact head `dce0c6bf9ce8a0574243824840ff9c4f6b19b229`. Issue #1827 remains open for historical incident evidence and root-cause classification.
 
 - The final submission gate mirrors the existing Conservative active-SELL ownership predicate.
   Any active COIN_GRABBER-owned SELL for the same market reserves its single Position, including
@@ -58,10 +56,11 @@ root-cause classification.
   clientOrderIds, brokerOrderIds, timestamps, statuses and error codes. Until then, do not claim
   any incident SELL was accepted, rejected, unknown or never sent.
 
-[Issue #1828](https://github.com/45s/coinzilla/issues/1828) is an integration prerequisite. After
-#1828 merges, merge the updated `develop` into this branch without rewriting history, resolve
-genuine conflicts, and rerun focused tests and exact-head verification. No exchange writes,
-cancellations, account mutations or Harvester restarts are authorized or required.
+Integration prerequisite #1828 was addressed by merged [PR #1833](https://github.com/45s/coinzilla/pull/1833), merge commit `3a5d6c5aa284c5f84f8c935ce9570e626bf7dc31`. All six required workflows passed on exact head `709d131b3f1b124e7f968281616e20ae7159c626`. Issue #1828 remains open for the broader producer/restoration/durable-resolution matrix. No exchange writes, cancellations, account mutations or Harvester restarts are authorized or required.
+
+## Account-scoped STOP admission — issue #1828
+
+The confirmed account-scoped admission bypass is fixed and integrated through [PR #1833](https://github.com/45s/coinzilla/pull/1833), merge commit `3a5d6c5aa284c5f84f8c935ce9570e626bf7dc31`. All six required workflows passed on exact head `709d131b3f1b124e7f968281616e20ae7159c626`. The in-memory account block latches before durable persistence, remains fail-closed on persistence failure, deduplicates concurrent latches and is checked at the shared final submission gate. Issue #1828 remains open for broader producer, restoration and durable-resolution acceptance; this merge does not close the parent issue.
 
 ## Conservative trading correctness and exhaustive scenario coverage — issue #1763
 
@@ -111,6 +110,10 @@ A targeted source sweep also reviewed all 11 Conservative strategy unit-test fil
 The remaining engine-suite oracle cleanup is not complete. [#1772](https://github.com/45s/coinzilla/pull/1772) was closed without merge: its test-only fixture correction was blocked by 33 existing strict changed-file ESLint violations in the 11,494-line `conservative-trading-engine.test.js`. The exact-head Repository Quality run [45150853240](https://github.com/45s/coinzilla/actions/runs/45150853240) failed at the changed-file ESLint job; the other five applicable workflows passed. The full violation list and exact affected financial assertions are recorded in the domain test inventory.
 
 **Next:** decompose the 33 overlong test/helper functions into cohesive, lint-compliant units, then correct the SELL Fill default and remaining financial comparisons. Do not suppress ESLint, weaken policy, or change production behavior. Phase 2 remains in progress until the exact financial oracles are corrected or a narrower evidence-backed disposition is agreed.
+
+### Phase 5–6 checkpoint — 2026-11-26
+
+Complete in merged [PR #1844](https://github.com/45s/coinzilla/pull/1844). Its exact PR head `b7b8780d274a968a0e90ba4688e7a23914bfeed2` passed all six required workflows and is integrated into current `develop`. The test-only increment adds composed Conservative SELL-accounting and initial BUY/SELL strategy-evaluation scenarios; it changes no production behavior. Issue #1763 remains open for the later state-machine, event-ordering/idempotency, fail-closed, inventory/market-constraint, application-integration, replay and source-to-test closure phases. Do not mark the initiative complete based on this increment.
 
 ### Small-PR operating protocol
 
@@ -169,30 +172,42 @@ Do not claim 100% correctness from line/branch coverage. Completion means every 
 
 ## Read-only Operational State diagnostics (#1740)
 
-- **In progress in [PR #1741](https://github.com/45s/coinzilla/pull/1741):** add `pnpm run operational-state:diagnose` to verify the existing facts/manifest streams with the production store reader, then independently report the offline recovery-projection result.
-- The command is read-only, prints a safe fact-type/candidate summary and exact source identity, and never initializes, repairs, truncates, or mutates the ledger. It does not connect to Binance or enable process-restart restoration.
+Complete in merged [PR #1741](https://github.com/45s/coinzilla/pull/1741), merge commit `516c3669e76e1b7927a143a433144b8f1e77cbe1`. All six required workflows passed on exact head `a8659cd54c424b75020949284d638e930c6d5833`. The read-only `pnpm run operational-state:diagnose` verifies facts/manifest streams with the production store reader and independently reports offline recovery-projection results. It prints safe fact-type/candidate summaries and source identity; it never initializes, repairs, truncates or mutates the ledger, connects to Binance, or enables process-restart restoration. Issue #1740 is closed.
 
 ## Recovery Seller domain scenario testing — issue #1780
 
-**Purpose:** deliver a from-scratch, source-grounded RS scenario suite. This is a test-evidence workstream, not a trading-policy, configuration, activation or exchange-operation task. The shared strategy-neutral method is [DOMAIN_SCENARIO_TESTING.md](../../docs/testing/DOMAIN_SCENARIO_TESTING.md); the [RS Scenario Testing Playbook](./docs/domain/recovery-seller-scenario-testing.md) owns RS authoring rules; [issue #1780](https://github.com/45s/coinzilla/issues/1780) owns the detailed matrix and evidence; the [Repository Scenario Catalog](../../docs/testing/SCENARIO_CATALOG.md) is the navigation index.
+**Purpose:** deliver a from-scratch, source-grounded RS scenario suite. This is a test-evidence workstream, not a trading-policy, configuration, activation or exchange-operation task. The shared strategy-neutral method is [DOMAIN_SCENARIO_TESTING.md](../../docs/testing/DOMAIN_SCENARIO_TESTING.md); the [RS Scenario Testing Playbook](./docs/domain/recovery-seller-scenario-testing.md) owns RS authoring rules; [issue #1780](https://github.com/45s/coinzilla/issues/1780) owns the detailed RS-001…RS-010 matrix and evidence; the [Repository Scenario Catalog](../../docs/testing/SCENARIO_CATALOG.md) is the navigation index.
 
-**Current consolidated review target:** [PR #1852](https://github.com/45s/coinzilla/pull/1852), branch `feat/harvester/rs-scenario-suite-current-develop`. The original [PR #1823](https://github.com/45s/coinzilla/pull/1823) was the source of the expanded registry/playbook work but diverged heavily from current `develop`. Its unique authorizer scenarios RS-002-006-B and RS-002-020-B, owner-approved STOP contract updates, agent guidance, domain inventory and scenario catalog have been transferred to #1852. #1823 remains open until exact-head verification and transfer parity are confirmed; do not merge or close it prematurely.
+**Historical baseline:** merged [PR #1793](https://github.com/45s/coinzilla/pull/1793) provides the earlier four-file scenario suite with deliberately PARTIAL evidence across RS-003 through RS-007. The consolidated registry and playbook in #1852 extend that baseline; existing production/runtime tests are not credited as scenario coverage merely because they exist.
 
-**Transferred suite:** immutable registry and validation, distinct DOMAIN/APPLICATION runners, RS-001 authorization/custody, RS-002 BUY accounting, RS-003 mixed-SELL planning/fill allocation, RS-004 profitability, shared-account reservation/volatility cases, and five dedicated scenario test files. The two unique application authorizer cases are also mapped and included in the targeted-test list. Existing production/runtime tests are not credited as scenario coverage merely because they exist.
+**Current consolidated review target:** [PR #1852](https://github.com/45s/coinzilla/pull/1852), branch `feat/harvester/rs-scenario-suite-current-develop`. Former Draft [PR #1823](https://github.com/45s/coinzilla/pull/1823) was closed unmerged on 2026-11-26 after verifying 40/40 changed paths transferred to #1852. Its unique authorizer scenarios RS-002-006-B and RS-002-020-B, docs, agent guidance, inventory and scenario catalog are retained in the consolidated branch. No direct develop/main update or PR merge was performed.
+
+**Transferred suite:** immutable registry and validation, distinct DOMAIN/APPLICATION runners, RS-001 authorization/custody, RS-002 BUY accounting, RS-003 mixed-SELL planning/fill allocation, RS-004 profitability, shared-account reservation/volatility cases, and dedicated scenario test files. The two transferred application authorizer cases are mapped and included in the targeted-test list.
 
 **Current family disposition — no overclaim:**
 
 - **RS-001 — PARTIAL:** 14 registered cases; declared legacy basis and verified Spot custody are separated. Snapshot freshness cases remain blocked because no authoritative freshness marker exists.
-- **RS-002 — PARTIAL:** all 20 reserved business-matrix IDs are represented; 15 are TEST-MAPPED and five remain PARTIAL. The two transferred authorizer cases cover remaining partial BUY commitments and exact investment-cap equality. Third-asset valuation, full order-event/partial-fill lifecycle and other listed application boundaries remain incomplete.
+- **RS-002 — PARTIAL:** all 20 reserved business-matrix IDs are represented; 15 are TEST-MAPPED and five remain PARTIAL. The transferred authorizer cases cover remaining partial BUY commitments and exact investment-cap equality. Third-asset valuation, full order-event/partial-fill lifecycle and other listed application boundaries remain incomplete.
 - **RS-003 — PARTIAL:** additive mixed-SELL planning and allocation cases are registered, including focused precision and filter fail-closed cases. Full custody/workflow composition, multi-fill/commission permutations, broader TradingRules, durability and dust boundaries remain incomplete.
-- **RS-006 — PARTIAL:** PR #1852 now registers application scenarios for two-Fill commit/replay, durable append failure, incomplete terminal history and confirmed-fill accounting after a profitability miss. domain-level duplicate/conflict staging is mapped, but end-to-end REST/stream ordering and full persistence/failure interleaving coverage remain.
 - **RS-004 — PARTIAL:** profitability scenarios cover independent recovery/legacy/combined gates and recovery-only behavior; the full adverse matrix remains incomplete.
 - **RS-005/006/007 — PARTIAL:** one-SELL lifecycle, atomic mixed-SELL accounting and unknown-outcome behavior still need broader application-level lifecycle, reconciliation and durable failure evidence.
-- **RS-008 — PARTIAL:** volatility and shared account reservation cases include independent CG/RS Positions and seeded-reservation runtime gates. Concurrent newly-created SELL/base intents, cross-asset atomic reservation and broader failure interleavings remain missing.
+- **RS-006 — PARTIAL:** seven registered subcases cover two-Fill commit/replay, durable append failure, domain-level duplicate/conflicting Fill staging, incomplete terminal history and confirmed-fill accounting after a profitability miss. Full REST/stream retrieval ordering, projection-specific failure interleavings and the complete persistence-barrier matrix remain open.
+- **RS-008 — PARTIAL:** volatility and shared-account reservation cases include independent CG/RS Positions and seeded-reservation runtime gates. Concurrent newly-created SELL/base intents, cross-asset atomic reservation and broader failure interleavings remain missing.
 - **RS-009 — SPECIFIED, implementation/scenario proof MISSING:** owner-approved STOP is investment-only. STOP blocks additional BUY spending; eligible recovery SELL and existing-order reconciliation/accounting continue. Authorized resolution requires cause correction, authoritative reconciliation, verified accounting/reservations and durable acknowledgement; no automatic clear or self-resume.
 - **RS-010 — UNSUPPORTED/BLOCKED:** restart/replay remains deferred; reliable third-asset commission quote valuation has no approved authoritative source.
 
-**Verification boundary:** the former #1852 head `d2a8a3b09adfb9a23f62aeec83ba853b7817806b` had all six required workflows passing. The branch has since been synchronized with current `develop` and received additional test/documentation transfers. Those earlier results do not verify the new exact head; fresh exact-head CI is required. All scenario statuses remain at most TEST-MAPPED/PARTIAL until the exact evidence required by the playbook is recorded. No exchange operations, broker mutations or TESTNET/LIVE session are authorized by #1780.
+**RS-006 mapped application/domain subcases:**
+
+- `RS-006-003-A/B`: two canonical partial SELL Fills commit the recovery/legacy projections once; identical terminal replay is an exact no-op.
+- `RS-006-012-A`: failed durable append preserves Portfolio, legacy Position/accounting, OrderRegistry and the active SELL reservation.
+- `RS-006-014-A`: identical canonical Fill delivery is staged once.
+- `RS-006-015-A`: conflicting facts for the same canonical Fill identity are rejected without mutating accepted staging.
+- `RS-006-016-A`: incomplete terminal Fill history cannot publish accounting or release the reservation.
+- `RS-006-018-A`: confirmed fills are committed even when realized profitability misses `minProfit`.
+
+The duplicate/conflict cases prove domain staging behavior only; they do not prove end-to-end REST/stream retrieval ordering. All seven subcases are TEST-MAPPED, not VERIFIED. No scenario family is complete solely because its registry entries or CI pass.
+
+**Verification boundary:** this synchronization merges the current `develop` history and resolves the two overlapping roadmap files. CI results from earlier heads do not verify the merge commit. Run the required targeted, workspace, coverage, quality, dependency and documentation-link checks against the exact resulting head. No exchange operations, broker mutations or TESTNET/LIVE session are authorized by #1780.
 
 ## Recovery Seller activation — 2026-11-22
 
@@ -236,17 +251,13 @@ Do not claim 100% correctness from line/branch coverage. Completion means every 
 
 ## Trading-history real-time notifications (#1643)
 
-- **Complete in merged [PR #1641](https://github.com/45s/coinzilla/pull/1641):** add local WebSocket invalidation notifications to the trading-history API. The API is intentionally unauthenticated and fixed to loopback for single-user local development; it shares Harvester's process lifecycle and relational persistence connection.
-- Order and fill history observers publish resource-only invalidation events only after their respective relational upserts succeed. Fill persistence invalidates both Fills and Commissions. Failed writes never produce a success notification.
-- Notifications are best-effort in-memory EventBus messages, not durable replay, exactly-once delivery or an audit log. REST list/detail resources remain authoritative; browser clients must load fresh snapshots on connection and every reconnect.
-- The transport is read-only and does not call brokers/exchanges, change trading decisions, or introduce database schema/migration changes. The Dashboard is a client and owns its reconnect and UI state.
-- Tracked by [#1643](https://github.com/45s/coinzilla/issues/1643). Do not mark complete until exact-head CI, API lifecycle/security tests, persistence ordering tests, Dashboard reconnect/resync tests and documentation checks pass and the PR is merged.
+Complete in merged [PR #1641](https://github.com/45s/coinzilla/pull/1641), merge commit `a86b8c95d8ec900c7053355424cbcc344b616e0a`. All required checks passed on exact head `c60a850d847bba6aae1e7fdcdc2439ff4e2603eb`; the advisory External Documentation Links workflow also passed; issue #1643 is closed. Order/fill history observers publish resource-only invalidations only after relational upserts succeed. Notifications remain best-effort and in-memory; REST snapshots remain authoritative, with reconnect resynchronization.
 
 ## Critical trading reliability initiative (#1639)
 
 - **Status — IN PROGRESS.** The original source-backed critical-behavior inventory, ownership mappings, and measured coverage floors were completed in merged [PR #1697](https://github.com/45s/coinzilla/pull/1697): 15 critical behaviors and 39 production-module floors. This CLOSING open-order audit increment adds the 16th behavior and the 41st production-module coverage floor; exact-head coverage passed on [run #45012989393](https://github.com/45s/coinzilla/actions/runs/45012989393). The parent issue [#1639](https://github.com/45s/coinzilla/issues/1639) tracks the remaining runtime and failure-path evidence.
 - **Completed runtime replay — PR #1702:** merged partial BUY and partial recovery-SELL execution replay through `startHarvester()`. The replay preserves incremental fills, cumulative order quantities, actual commissions, Portfolio/RecoveryLedger alignment, and terminal recovery completion. Exact-head Harvester replay passed 6/6.
-- **Current increment — issue #1707 / draft [PR #1708](https://github.com/45s/coinzilla/pull/1708):** verify duplicate and out-of-order execution-report delivery through the real runtime. The test-first RED confirmed that a distinct earlier Fill was discarded when its accompanying cumulative order snapshot was stale. The source fix applies that Fill against the current registered order without regressing canonical order state. Implementation head `997c0515d078da8f33a35d523cdd4d91551c4129` passed the 8/8 Harvester runtime replay, workspace unit tests, all package coverage floors, strict changed-file ESLint, workspace lint, actionlint, JavaScript syntax, and Dependency Audit; final documentation-head CI passed all six required workflows on the exact PR head.
+- **Complete — issue #1707 / merged [PR #1708](https://github.com/45s/coinzilla/pull/1708), merge commit `39eec79531c46a93063be017b1d0173d02136545`.** The source fix applies a distinct earlier Fill against the current registered order without regressing canonical order state. All six required workflows passed on exact head `241b4a4bc44efaa1f04c2164e0aad0ded6418582`; issue #1707 is closed.
 - **Coverage baseline:** the exact `develop` production-source baseline at `7767ea8ce871b658a4bd68a03cc4c4999f582b49` was 90.35% lines / 83.22% branches / 96.00% functions. The latest 41-module PR-head measurement is [run #45012989393](https://github.com/45s/coinzilla/actions/runs/45012989393): 90.48% lines / 83.50% branches / 95.97% functions aggregate; all 41 critical-module floors passed. Per-module observations and floors remain in `critical-behaviors.json`; historical provenance is preserved in [RELIABILITY_BASELINE_2026-11-21.md](./docs/RELIABILITY_BASELINE_2026-11-21.md).
 - **Remaining next slices:** user-data disconnect/reconnect and queued-event draining; unresolved cancellation and shutdown durability failure paths; targeted branch-coverage improvements in Portfolio, operational-state projection, shutdown coordination, multi-lock orchestration, and the Conservative engine.
 - **Restart boundary:** durable-fact and crash-matrix evidence remains offline only. Default runtime restoration and Journal replay remain disabled under the independent [#654](https://github.com/45s/coinzilla/issues/654) acceptance gates.
@@ -255,7 +266,7 @@ Do not claim 100% correctness from line/branch coverage. Completion means every 
 ## Read-only SQLite JSON export (#1629)
 
 - **Exporter delivered:** the read-only all-table JSON export was introduced in merged [PR #1630](https://github.com/45s/coinzilla/pull/1630); explicit positional `testnet` / `live` selection and argument validation were completed in merged [PR #1629](https://github.com/45s/coinzilla/pull/1629). The command exports every non-internal table, including empty tables, preserves decimal text and out-of-safe-range integer values, and makes no exchange calls or trading-runtime changes.
-- **Serialization correction:** [#1646](https://github.com/45s/coinzilla/issues/1646) / [PR #1647](https://github.com/45s/coinzilla/pull/1647) corrects safe-integer JSON typing and preserves valid special SQLite table/column names. Track final verification and completion in that follow-up.
+- **Serialization correction complete:** [#1646](https://github.com/45s/coinzilla/issues/1646) / merged [PR #1647](https://github.com/45s/coinzilla/pull/1647), merge commit `6436b33b250290a4aac7a045e36a465a930da8bb`, corrects safe-integer JSON typing and preserves valid special SQLite table/column names. All six required workflows passed on exact head `cba75a260e491d40e75654fd456f25f44112f2ef`; issue #1646 is closed.
 
 ## Repository-wide source naming audit — Harvester slice (#1582)
 
@@ -331,7 +342,7 @@ The temporary `harvester_processes` process-ID smoke-test row and its obsolete p
 
 1. Filtered account snapshot history only with explicit provenance and completeness semantics.
 2. Offline, idempotent historical imports from verified source evidence.
-3. **Versioned trading-history query API and Dashboard consumer — IN PROGRESS (#1635, #1634; PR #1636).** Expose existing orders, individual fills, and commission facts through Harvester-owned application queries and an authenticated in-process `/api/v1` HTTP listener. The Angular Dashboard consumes the same versioned contract for read-only Orders, Fills, and Commissions pages. Harvester owns the shared database connection and listener lifecycle; no separate API process, schema changes, sessions/errors tables, trading controls, or exchange operations.
+3. **Versioned trading-history query API and Dashboard consumer — COMPLETE (#1635, #1634; merged PR #1636).** Existing orders, individual fills and commission facts are exposed through Harvester-owned application queries and an authenticated in-process `/api/v1` HTTP listener. The Angular Dashboard consumes the same versioned contract for read-only Orders, Fills and Commissions pages. Harvester owns the shared database connection and listener lifecycle; no separate API process, schema changes, sessions/errors tables, trading controls or exchange operations. All required checks passed on exact head `38e26aca14e8c146ea974dbf42fe133524ad83c6`; the advisory External Documentation Links workflow also passed; issues #1634 and #1635 are closed.
 
 **Explicit exclusions from #1554/#1556:** no account-wide or delisted-market history completeness claim, account snapshots as a history source, strategy-cycle lifecycle, PnL/analytics, equity/drawdown snapshots, process-restart restoration/adoption, Journal replay, new providers, `sessions`/`errors` tables, broker order-mutation behavior changes, Journal semantics changes, ADR-0001 rewrite, or exchange operations.
 
@@ -2147,7 +2158,11 @@ The current rationale, filter mapping, deliberately excluded order-type-specific
 - [ ] Binance remains authoritative for unsupported dynamic/account/exchange constraints. Definite exchange filter rejections must be surfaced as `DEFINITE_EXCHANGE_FILTER_REJECTED`, remove only the definitely rejected PENDING order, and never be confused with an ambiguous/UNKNOWN outcome.
 - [ ] Verify the readiness, bootstrap, and refreshed trailing-order paths with offline regression tests and exact-head CI. No TESTNET or LIVE exchange operations are part of this change.
 
-### P2 — Telegram Command Center read-query reliability\n\n- [x] **Fix account-wide `/orders` query argument handling** — completed in merged [PR #1261](https://github.com/45s/coinzilla/pull/1261), tracked under [#1214](https://github.com/45s/coinzilla/issues/1214). Telegram calls `broker.getOpenOrders()` with no symbol filter; the Harvester Binance adapter now defaults the optional argument to `{}` and preserves the account-wide read. Regression coverage protects the contract. Keep this read-only; external orders remain external and untouched.\n\n## 2026-11-16 — Bitunix Spot market metadata preparation (issue #1185)
+### P2 — Telegram Command Center read-query reliability
+
+- [x] **Fix account-wide `/orders` query argument handling** — completed in merged [PR #1261](https://github.com/45s/coinzilla/pull/1261), tracked under [#1214](https://github.com/45s/coinzilla/issues/1214). Telegram calls `broker.getOpenOrders()` with no symbol filter; the Harvester Binance adapter now defaults the optional argument to `{}` and preserves the account-wide read. Regression coverage protects the contract. Keep this read-only; external orders remain external and untouched.
+
+## 2026-11-16 — Bitunix Spot market metadata preparation (issue #1185)
 
 - [x] Implement a pure Harvester mapping from raw Bitunix Spot pair metadata into canonical `Market` and `TradingRules`: `minVolume` to `MIN_QUANTITY`, `minPrice` to `MIN_NOTIONAL`.
 - [x] Keep price/quantity increments, maximum bounds, and depth precision UNKNOWN where the official API does not define their semantics; record reference-only maximum field names as unvalidated diagnostics.
@@ -2286,15 +2301,10 @@ The detailed evidence, implementation commits, CI state and remaining unknowns a
 - The persistence contract and audit report are updated. No TESTNET/LIVE writes, production restarts, account mutations or historical-row repairs were performed.
 - Issue #1851 remains open only for the unavailable original SQLite rows and exact conflicting price pair; regression fixture prices and prior-order IDs are explicitly synthetic, not recovered production facts. Do not infer the per-symbol old-row/new-row pairing.
 
-## 2026-11-25 — #1763 Phase 5 Conservative SELL accounting
+## Conservative scenario registry and runner — issue #1797
 
-- PR #1844 adds `src/use-cases/conservative-sell-accounting-scenario.test.js`: canonical BUY plus three SELL fills applied through production `updateTradingAccounting`, real Portfolio/Position and RecoveryLedger, explicit commission-aware decimal oracles, duplicate/conflict/valuation-failure atomicity.
-- The composed completion case feeds the exact post-fill projections into the real recovery-completion policy and proves remaining inventory, full BUY cost basis, actual net proceeds, realized profit, and configured keep quantity plus validated dust allocation.
-- Current `develop` already contains `recovery-completion.dust.test.js`; the PR does not duplicate its pure-policy cases. Synchronized head `2c91dbb530f8993833b8980b3710e82ea9abc403` passed all six required workflows.
-- Test/documentation only; no production behavior or exchange state changed. PR #1844 remains open for owner review.
+Open Draft [PR #1798](https://github.com/45s/coinzilla/pull/1798) has current head `5b18b9f55e195017e56f036fcd872c3877f8c54d`, 91 commits ahead / 168 behind current `develop`. All six reported workflows passed on that exact stale head; the branch must be synchronized and exact-head CI rerun before review/merge. Issue #1797 remains open.
 
-## 2026-11-25 — #1763 Phase 6 initial strategy scenario
+## Strategy-neutral production-flow Scenario Runner — issue #1836
 
-- Added `src/use-cases/conservative-initial-buy-scenario.test.js`, composing initial BUY policy, canonical BUY Fill, production accounting, Portfolio/Position, RecoveryLedger and the real Conservative evaluator.
-- Verifies exact initial BUY intent, commission-adjusted active inventory (`99.9` DOGE) and cost basis (`10.03` USDT), then exact ordered recovery SELL (`99.8` at `0.101`, required net `10.04`) and next standing BUY (`100` at `0.099`).
-- Existing strategy unit tests cover policy decisions from separately applied projections; this scenario closes the Fill-to-accounting-to-policy composition gap. Synchronized head `84c9d7e2c176c17c794bf0f741e33d7fd56d5459` passed all six required workflows. Test-only; no production behavior changed.
+Open Draft [PR #1837](https://github.com/45s/coinzilla/pull/1837) has current exact head `d93898e4099654cfe2a87aa599c1b9d59f6ec921`, 194 commits ahead / 0 behind current `develop` (`b69b32ce438a56de84bb51eaa16cce87be253c95`). All six required workflows passed on that exact head. The runner remains Draft because acceptance is incomplete: trusted OS-level isolation, full production-flow scenarios, configuration/market metadata, exact-revision replay, complete execution trace/assertions/report, bounded history and reconnect/missed-update recovery. Do not enable real broker/exchange access or claim executable RS coverage. No live operations, credentials, production account state or production persistence.
