@@ -59,8 +59,6 @@ export function createBitunixWebSocketSignature(input = {}) {
 
   const parameterString = serializeBitunixWebSocketParams({ params })
 
-  // Bitunix requires this double-SHA256 construction for WebSocket authentication.
-  // This is a protocol signature, not password storage; changing it breaks API auth.
   const digest = createHash("sha256").update(`${nonce}${timestamp}${apiKey}${parameterString}`, "utf8").digest("hex")
 
   return createHash("sha256").update(`${digest}${signingSecret}`, "utf8").digest("hex")
