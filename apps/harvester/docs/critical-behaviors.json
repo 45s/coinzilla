@@ -1,30 +1,31 @@
 {
   "schemaVersion": 1,
   "criticalPathPrefixes": [
+    "src/bootstrap/account/",
+    "src/bootstrap/shutdown/",
+    "src/bootstrap/start-harvester.js",
+    "src/domain/fills/",
     "src/domain/orders/",
     "src/domain/portfolio/",
     "src/domain/strategies/conservative/",
-    "src/use-cases/conservative-trading-engine.js",
-    "src/use-cases/create-submission-gate.js",
-    "src/use-cases/restore-harvester-operational-state.js",
-    "src/bootstrap/account/",
-    "src/bootstrap/start-harvester.js",
-    "src/infrastructure/operational-state/",
-    "src/index.js",
-    "src/infrastructure/process-lock/",
-    "src/domain/fills/",
-    "src/bootstrap/shutdown/",
-    "src/infrastructure/process/",
-    "src/infrastructure/brokers/",
-    "src/use-cases/collect-owned-order-snapshots.js",
-    "src/use-cases/reconcile-terminal-order-fills.js",
-    "src/use-cases/fetch-account-trade-history.js",
-    "src/use-cases/create-user-data-event-transition.js",
     "src/domain/strategies/strategy-ids.js",
+    "src/index.js",
+    "src/infrastructure/brokers/",
+    "src/infrastructure/operational-state/",
+    "src/infrastructure/operational-state/project-harvester.js",
+    "src/infrastructure/process-lock/",
+    "src/infrastructure/process/",
+    "src/use-cases/collect-owned-order-snapshots.js",
+    "src/use-cases/conservative-trading-engine.js",
     "src/use-cases/create-conservative-shutdown-safety.js",
+    "src/use-cases/create-submission-gate.js",
+    "src/use-cases/create-user-data-event-transition.js",
+    "src/use-cases/fetch-account-trade-history.js",
+    "src/use-cases/reconcile-terminal-order-fills.js",
     "src/use-cases/record-safety-control-facts.js",
+    "src/use-cases/resolve-user-data-account-blockers.helpers.js",
     "src/use-cases/resolve-user-data-account-blockers.js",
-    "src/use-cases/resolve-user-data-account-blockers.helpers.js"
+    "src/use-cases/restore-harvester-operational-state.js"
   ],
   "behaviors": [
     {
@@ -1167,9 +1168,10 @@
       "title": "User-data ACCOUNT blocker provenance and fail-closed operator resolution",
       "sourceModules": [
         "src/infrastructure/operational-state/helpers/validate-operational-state-lifecycle-facts.js",
+        "src/infrastructure/operational-state/project-harvester.js",
         "src/use-cases/record-safety-control-facts.js",
-        "src/use-cases/resolve-user-data-account-blockers.js",
-        "src/use-cases/resolve-user-data-account-blockers.helpers.js"
+        "src/use-cases/resolve-user-data-account-blockers.helpers.js",
+        "src/use-cases/resolve-user-data-account-blockers.js"
       ],
       "integrationRequired": false,
       "tests": [
@@ -1202,6 +1204,11 @@
           "path": "src/use-cases/resolve-user-data-account-blockers.test.js",
           "name": "refuses to resolve account blockers without durable producer provenance",
           "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/resolve-user-data-account-blockers.test.js",
+          "name": "allows durable blocker resolution after a clean process stop",
+          "kind": "normal"
         }
       ],
       "runtimeStatus": "offline-only",
