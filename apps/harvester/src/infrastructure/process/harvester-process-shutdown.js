@@ -194,7 +194,9 @@ async function flushShutdownEventBus({ eventBus } = {}) {
   try {
     const result = await eventBus.flush()
     if (result?.ok === false) {
-      return result.errors ?? [new Error("EventBus flush failed before Telegram shutdown")]
+      return Array.isArray(result.errors) && result.errors.length > 0
+        ? result.errors
+        : [new Error("EventBus flush failed before Telegram shutdown")]
     }
     if (result?.ok !== true) {
       return [new Error("EventBus flush did not return an explicit success result")]
@@ -214,7 +216,12 @@ async function closeTelegramNotifications({
     return []
   }
   try {
-    await notifications.close()
+    const closeResult = await notifications.close()
+    if (closeResult === false || closeResult?.ok === false) {
+      return Array.isArray(closeResult?.errors) && closeResult.errors.length > 0
+        ? closeResult.errors
+        : [new Error("Telegram notification close was not confirmed")]
+    }
     logTelegramNotificationSummary({
       notifications,
       logger,
@@ -238,7 +245,12 @@ async function closeProcessLogger({ closeLogger } = {}) {
     return [new Error("Process logger close capability is unavailable")]
   }
   try {
-    await closeLogger()
+    const closeResult = await closeLogger()
+    if (closeResult === false || closeResult?.ok === false) {
+      return Array.isArray(closeResult?.errors) && closeResult.errors.length > 0
+        ? closeResult.errors
+        : [new Error("Process logger close was not confirmed")]
+    }
     return []
   } catch (error) {
     return [error]
@@ -257,7 +269,9 @@ async function releaseProcessLock({ processLock } = {}) {
     if (result?.ok === true) {
       return []
     }
-    return result?.errors ?? [new Error("Harvester trading process lock release was not confirmed")]
+    return Array.isArray(result?.errors) && result.errors.length > 0
+      ? result.errors
+      : [new Error("Harvester trading process lock release was not confirmed")]
   } catch (error) {
     return [error]
   }
@@ -381,6 +395,122 @@ async function runRequiredShutdownStep({
   return true
 }
 
+async function runDeliveryCleanupSteps({
+  shutdownState,
+  eventBus,
+  telegramNotifications,
+  logger,
+  logTelegramNotificationSummary,
+  cleanupTimeoutMs,
+  setTimeoutFn,
+  clearTimeoutFn,
+}) {
+  const common = {
+    shutdownState,
+    logger,
+    setTimeoutFn,
+    clearTimeoutFn,
+  }
+  const eventBusFlushed = await runRequiredShutdownStep({
+    ...common,
+    key: "event-bus-flush",
+    phase: "EVENT_BUS_FLUSH",
+    operation: () => flushShutdownEventBus({ eventBus }),
+    timeoutMs: cleanupTimeoutMs,
+    fallbackMessage: "EventBus flush failed before Telegram shutdown",
+  })
+  if (!eventBusFlushed) {
+    return false
+  }
+  return runRequiredShutdownStep({
+    ...common,
+    key: "telegram-close",
+    phase: "TELEGRAM_CLOSE",
+    operation: () => closeTelegramNotifications({
+      notifications: telegramNotifications,
+      logger,
+      logTelegramNotificationSummary,
+    }),
+    timeoutMs: cleanupTimeoutMs,
+    fallbackMessage: "Telegram notification shutdown failed",
+  })
+}
+
+async function runObservabilityCleanupSteps({
+  shutdownState,
+  journalService,
+  eventBus,
+  processLock,
+  logger,
+  closeObservability,
+  closeLogger,
+  cleanupTimeoutMs,
+  observabilityCleanupTimeoutMs,
+  setTimeoutFn,
+  clearTimeoutFn,
+}) {
+  const common = {
+    shutdownState,
+    logger,
+    setTimeoutFn,
+    clearTimeoutFn,
+  }
+  const observabilityClosed = await runRequiredShutdownStep({
+    ...common,
+    key: "observability-close",
+    phase: "OBSERVABILITY_CLOSE",
+    operation: async () => {
+      const errors = await closeObservability({
+        journalService,
+        eventBus,
+        processLock,
+        deferProcessLockRelease: true,
+        allowProcessLockRelease: false,
+        logger,
+      })
+      return Array.isArray(errors)
+        ? errors
+        : [new Error("Observability cleanup returned an invalid result")]
+    },
+    timeoutMs: observabilityCleanupTimeoutMs,
+    fallbackMessage: "Harvester observability cleanup failed",
+  })
+  if (!observabilityClosed) {
+    return false
+  }
+  return runRequiredShutdownStep({
+    ...common,
+    key: "logger-close",
+    phase: "LOGGER_CLOSE",
+    operation: () => closeProcessLogger({ closeLogger }),
+    timeoutMs: cleanupTimeoutMs,
+    fallbackMessage: "Process logger close failed",
+  })
+}
+
+async function runProcessLockReleaseStep({
+  shutdownState,
+  processLock,
+  cleanupTimeoutMs,
+  setTimeoutFn,
+  clearTimeoutFn,
+}) {
+  return runRequiredShutdownStep({
+    shutdownState,
+    key: "process-lock-release",
+    phase: "PROCESS_LOCK_RELEASE",
+    operation: () => releaseProcessLock({ processLock }),
+    timeoutMs: cleanupTimeoutMs,
+    fallbackMessage: "Harvester process lock release failed",
+    logger: undefined,
+    setTimeoutFn,
+    clearTimeoutFn,
+    onFailure: (error) => {
+      process.stderr.write(`Harvester shutdown incomplete; process lock release failed: ${error.message}\n`)
+    },
+  })
+}
+
 async function runRuntimeShutdown({
   runtime,
   reason,
@@ -422,110 +552,53 @@ async function runRuntimeShutdown({
     logger,
   })
 
-  const commonStepOptions = {
+  const deliveryComplete = await runDeliveryCleanupSteps({
     shutdownState,
+    eventBus,
+    telegramNotifications,
     logger,
+    logTelegramNotificationSummary,
+    cleanupTimeoutMs,
     setTimeoutFn,
     clearTimeoutFn,
-  }
-  const eventBusFlushed = await runRequiredShutdownStep({
-    ...commonStepOptions,
-    key: "event-bus-flush",
-    phase: "EVENT_BUS_FLUSH",
-    operation: () => flushShutdownEventBus({ eventBus }),
-    timeoutMs: cleanupTimeoutMs,
-    fallbackMessage: "EventBus flush failed before Telegram shutdown",
   })
-  if (!eventBusFlushed) {
+  if (!deliveryComplete) {
     return {
       runtimeStopped: true,
       shutdownComplete: false,
     }
   }
 
-  const telegramClosed = await runRequiredShutdownStep({
-    ...commonStepOptions,
-    key: "telegram-close",
-    phase: "TELEGRAM_CLOSE",
-    operation: () => closeTelegramNotifications({
-      notifications: telegramNotifications,
-      logger,
-      logTelegramNotificationSummary,
-    }),
-    timeoutMs: cleanupTimeoutMs,
-    fallbackMessage: "Telegram notification shutdown failed",
+  const observabilityComplete = await runObservabilityCleanupSteps({
+    shutdownState,
+    journalService,
+    eventBus,
+    processLock,
+    logger,
+    closeObservability,
+    closeLogger,
+    cleanupTimeoutMs,
+    observabilityCleanupTimeoutMs,
+    setTimeoutFn,
+    clearTimeoutFn,
   })
-  if (!telegramClosed) {
+  if (!observabilityComplete) {
     return {
       runtimeStopped: true,
       shutdownComplete: false,
     }
   }
 
-  const observabilityClosed = await runRequiredShutdownStep({
-    ...commonStepOptions,
-    key: "observability-close",
-    phase: "OBSERVABILITY_CLOSE",
-    operation: async () => {
-      const errors = await closeObservability({
-        journalService,
-        eventBus,
-        processLock,
-        deferProcessLockRelease: true,
-        allowProcessLockRelease: false,
-        logger,
-      })
-      return Array.isArray(errors)
-        ? errors
-        : [new Error("Observability cleanup returned an invalid result")]
-    },
-    timeoutMs: observabilityCleanupTimeoutMs,
-    fallbackMessage: "Harvester observability cleanup failed",
+  const lockReleased = await runProcessLockReleaseStep({
+    shutdownState,
+    processLock,
+    cleanupTimeoutMs,
+    setTimeoutFn,
+    clearTimeoutFn,
   })
-  if (!observabilityClosed) {
-    return {
-      runtimeStopped: true,
-      shutdownComplete: false,
-    }
-  }
-
-  const loggerClosed = await runRequiredShutdownStep({
-    ...commonStepOptions,
-    key: "logger-close",
-    phase: "LOGGER_CLOSE",
-    operation: () => closeProcessLogger({ closeLogger }),
-    timeoutMs: cleanupTimeoutMs,
-    fallbackMessage: "Process logger close failed",
-  })
-  if (!loggerClosed) {
-    return {
-      runtimeStopped: true,
-      shutdownComplete: false,
-    }
-  }
-
-  const lockReleased = await runRequiredShutdownStep({
-    ...commonStepOptions,
-    key: "process-lock-release",
-    phase: "PROCESS_LOCK_RELEASE",
-    operation: () => releaseProcessLock({ processLock }),
-    timeoutMs: cleanupTimeoutMs,
-    fallbackMessage: "Harvester process lock release failed",
-    logger: undefined,
-    onFailure: (error) => {
-      process.stderr.write(`Harvester shutdown incomplete; process lock release failed: ${error.message}\n`)
-    },
-  })
-  if (!lockReleased) {
-    return {
-      runtimeStopped: true,
-      shutdownComplete: false,
-    }
-  }
-
   return {
     runtimeStopped: true,
-    shutdownComplete: true,
+    shutdownComplete: lockReleased,
   }
 }
 
