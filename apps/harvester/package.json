@@ -48,6 +48,7 @@
       "test/replays/doge-zro-conservative-replay.test.js",
       "test/replays/2026-11-22-conservative-recovery-runtime-replay.test.js",
       "src/bootstrap/start-harvester.test.js",
+      "src/bootstrap/start-harvester.lifecycle-events.test.js",
       "test/bootstrap/trading-safety.test.js",
       "test/bootstrap/operator-control.test.js",
       "test/bootstrap/broker-boundaries.test.js",
@@ -170,6 +171,7 @@
       "src/application/operator/create-harvester-readiness-report.test.js",
       "src/use-cases/operator-control/read-operator-state.test.js",
       "src/bootstrap/user-data/subscribe-to-user-data.test.js",
+      "src/bootstrap/harvester-runtime-setup.test.js",
       "src/bootstrap/user-data/create-user-data-status-handler.test.js",
       "src/use-cases/create-candle-history-service.test.js"
     ]

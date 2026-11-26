@@ -273,14 +273,17 @@ deferTradingActivation: true })
 
 test("waits for deferred strategy replay before completing trading activation", async () => {
   let releaseReplay
+  let signalReplayStarted
   let replayStarted = false
   let activationCompleted = false
   const replay = new Promise((resolve) => { releaseReplay = resolve })
+  const replayStartedSignal = new Promise((resolve) => { signalReplayStarted = resolve })
   const fixture = createFixture({
     tradingEnabled: true,
     deferTradingActivation: true,
     resumeDeferredStrategyEvaluations: async () => {
       replayStarted = true
+      signalReplayStarted()
       await replay
     },
   })
@@ -289,7 +292,7 @@ test("waits for deferred strategy replay before completing trading activation", 
     activationCompleted = true
   })
 
-  await Promise.resolve()
+  await replayStartedSignal
   assert.equal(replayStarted, true, "Activation must begin draining deferred strategy evaluations.")
   assert.equal(activationCompleted, false, "Startup activation must not complete while deferred evaluation replay is still running.")
   assert.equal(fixture.state.ready, true, "The authoritative gate opens only after readiness checks have passed.")
