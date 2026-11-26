@@ -81,7 +81,9 @@ applied: [] }
   const broker = {
     getFills: async (args) => {
       calls.broker.push(args)
-      if (brokerError) throw brokerError
+      if (brokerError) {
+        throw brokerError
+      }
       return brokerResult ?? toResult({ data: fills })
     },
   }
@@ -226,7 +228,10 @@ test("pauses when broker fill history omits an explicit success flag", async () 
 
 test("pauses when broker fill history contains malformed execution records", async () => {
   const { workflow, calls } = makeWorkflow({
-    brokerResult: { ok: true, data: [{}] },
+    brokerResult: {
+      ok: true,
+      data: [{}],
+    },
   })
 
   const result = await workflow({ order: makeOrder() })
@@ -241,7 +246,10 @@ test("rejects a stream fill that does not belong to the terminal canonical order
 
   const result = await workflow({
     order: makeOrder(),
-    eventFill: makeFill({ tradeId: "9", brokerOrderId: "different-order" }),
+    eventFill: makeFill({
+      tradeId: "9",
+      brokerOrderId: "different-order",
+    }),
   })
 
   assert.equal(result.ok, false)
@@ -251,12 +259,18 @@ test("rejects a stream fill that does not belong to the terminal canonical order
 
 test("rejects conflicting duplicate stream facts for the same fill ID", async () => {
   const { workflow, calls } = makeWorkflow({
-    processedFills: [makeFill({ tradeId: "7", quantity: "0.5" })],
+    processedFills: [makeFill({
+      tradeId: "7",
+      quantity: "0.5",
+    })],
   })
 
   const result = await workflow({
     order: makeOrder(),
-    eventFill: makeFill({ tradeId: "7", quantity: "1" }),
+    eventFill: makeFill({
+      tradeId: "7",
+      quantity: "1",
+    }),
   })
 
   assert.equal(result.ok, false)
@@ -266,7 +280,10 @@ test("rejects conflicting duplicate stream facts for the same fill ID", async ()
 
 test("rejects mismatched REST fill identity when no canonical stream fill exists", async () => {
   const { workflow, calls } = makeWorkflow({
-    fills: [makeFill({ tradeId: "8", clientOrderId: "unrelated-order" })],
+    fills: [makeFill({
+      tradeId: "8",
+      clientOrderId: "unrelated-order",
+    })],
   })
 
   const result = await workflow({ order: makeOrder() })
@@ -279,8 +296,14 @@ test("rejects mismatched REST fill identity when no canonical stream fill exists
 test("rejects conflicting duplicate REST fill facts for the same fill ID", async () => {
   const { workflow, calls } = makeWorkflow({
     fills: [
-      makeFill({ tradeId: "11", quantity: "0.5" }),
-      makeFill({ tradeId: "11", quantity: "1" }),
+      makeFill({
+        tradeId: "11",
+        quantity: "0.5",
+      }),
+      makeFill({
+        tradeId: "11",
+        quantity: "1",
+      }),
     ],
   })
 
@@ -293,11 +316,17 @@ test("rejects conflicting duplicate REST fill facts for the same fill ID", async
 
 test("rejects FILLED status when executed quantity is less than original quantity", async () => {
   const { workflow, calls } = makeWorkflow({
-    fills: [makeFill({ tradeId: "12", quantity: "1" })],
+    fills: [makeFill({
+      tradeId: "12",
+      quantity: "1",
+    })],
   })
 
   const result = await workflow({
-    order: makeOrder({ quantity: "2", executedQuantity: "1" }),
+    order: makeOrder({
+      quantity: "2",
+      executedQuantity: "1",
+    }),
   })
 
   assert.equal(result.ok, false)
