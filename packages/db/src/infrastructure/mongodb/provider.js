@@ -79,6 +79,7 @@ function resolveOptions(options) {
     authSource: options.authSource ?? parsed.authSource ?? options.databaseName ?? "admin",
     authMechanism: options.authMechanism ?? parsed.authMechanism,
     replicaSet: options.replicaSet ?? parsed.replicaSet,
+    directConnection: options.directConnection ?? parsed.directConnection ?? false,
     tlsOptions,
     connectTimeoutMS: options.connectTimeoutMS ?? parsed.connectTimeoutMS ?? 10_000,
     socketTimeoutMS: options.socketTimeoutMS ?? parsed.socketTimeoutMS ?? 30_000,
@@ -312,7 +313,7 @@ async function connectToPrimary({ state, transportFactory, handshake }) {
       authMechanism: state.options.authMechanism,
       replicaSet: state.options.replicaSet,
     })
-    if (!result.primary || result.topology !== "replicaSet") {
+    if (!result.primary || result.topology !== "replicaSet" || state.options.directConnection) {
       state.handshake = result
       return
     }
