@@ -6,6 +6,7 @@ const HISTORICAL_PATHS = [
   /^apps\/harvester\/docs\/tasks\/(?!README\.md$).+/,
   /^apps\/harvester\/docs\/DDD_CLEAN_ARCHITECTURE_AUDIT\.md$/,
   /^apps\/harvester\/docs\/DOMAIN_FIRST_DELIVERY_PLAN\.md$/,
+  /^docs\/archive\/roadmap-history-\d{4}-\d{2}-\d{2}\.md$/,
   /^docs\/audits\/(?!README\.md$).+/,
   /^docs\/ai-agent\/repository-engineering-audit\.md$/,
 ]

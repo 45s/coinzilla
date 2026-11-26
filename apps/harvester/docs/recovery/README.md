@@ -10,7 +10,7 @@ The implementation is split into three application boundaries:
 - `confirmMarketHistoryCoverage()` verifies the existing ADR-0001 fact ledger, invokes reconciliation, appends the per-market coverage fact only after a READY result, then reads the committed fact back.
 - `runOfflineMarketRecovery()` adapts a supplied evidence bundle into canonical entities and the production use cases. The CLI never creates a broker, reads a live exchange, starts Harvester, or invokes an order-placement/cancellation port.
 
-See [ADR-0001](../architecture/decisions/0001-application-owned-recovery-facts.md), [Journal operations](../JOURNAL_OPERATIONS.md) and [the recovery roadmap](../../ROADMAP.md#process-restart-recovery--small-step-delivery-plan-654).
+See [ADR-0001](../architecture/decisions/0001-application-owned-recovery-facts.md), [Journal operations](../JOURNAL_OPERATIONS.md) and [the recovery roadmap](../domain/recovery-seller-implementation-roadmap.md#rs-5--offline-lifecycle-verification-and-delivery).
 
 ## Offline CLI
 

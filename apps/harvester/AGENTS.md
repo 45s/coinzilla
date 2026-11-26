@@ -6,7 +6,7 @@ These instructions apply to all work in `apps/harvester/` and take precedence ov
 
 For Harvester work, read the applicable repository-wide instructions and checklist, then consult relevant Harvester guidance such as [TRADING_FIRST.md](./docs/TRADING_FIRST.md), [ROADMAP.md](./ROADMAP.md), architecture/domain specifications, broker/API contracts, operational and TESTNET runbooks, configuration documentation, and test guidance. Inspect the affected implementation, consumers, tests, and configuration before changing behavior. Do not read unrelated domain internals.
 
-Task Preflight is not a required development step. No Preflight command, readiness summary, attestation, or issue-evidence recording is required before work or as a completion gate. Understand the selected task's scope and preserve the Harvester safety constraints below. A TESTNET acceptance milestone is not a blanket prerequisite for separate engineering work.
+A TESTNET acceptance milestone is not a blanket prerequisite for separate engineering work. Understand the selected task's scope and preserve the Harvester safety constraints below.
 
 Follow the selected issue's scope and repository task workflow. Journal evidence is an explicitly selected Harvester workstream; it must not change strategy decisions, become trading-state authority, or add blocking I/O to market, broker-event, or fill-accounting paths.
 
@@ -30,7 +30,7 @@ Follow the canonical [ENGINEERING_STANDARDS.md](../../ENGINEERING_STANDARDS.md) 
 
 For any Recovery Seller domain-scenario task, read [recovery-seller-scenario-testing.md](./docs/domain/recovery-seller-scenario-testing.md) and the live [RS scenario matrix, issue #1780](https://github.com/45s/coinzilla/issues/1780) before editing. The playbook owns the RS-001…RS-010 family/subcase schema, A–K matrix crosswalk, file trees, domain/application boundaries, canonical fixture and fake-port contracts, independent financial oracles, test registration/commands, evidence requirements and phased delivery.
 
-Do not treat existing RS unit/workflow/runtime/operator tests as scenario coverage. Do not invent or resolve STOP, third-asset valuation, restart/replay, or other deferred behavior in a scenario PR. Keep #1780, the repository scenario catalog, Harvester/root roadmaps and affected domain docs synchronized. Leave PRs open for owner review; never merge.
+Do not treat existing RS unit/workflow/runtime/operator tests as scenario coverage. Do not invent or resolve STOP, third-asset valuation, restart/replay, or other deferred behavior in a scenario PR. Keep #1780, the repository scenario catalog, Harvester/root roadmaps and affected domain docs synchronized.
 
 ## Tests and verification
 
@@ -64,8 +64,6 @@ Follow the [Shared Utilities Policy](../../docs/engineering/SHARED_UTILITIES_POL
 
 Harvester agents MUST write the implementation, regression tests, and same-commit documentation updates. GitHub Actions runs the tests and checks for task PRs.
 
-A missing local checkout, terminal, Node installation, pnpm installation, or local test runner is not a reason to stop, defer implementation, or ask the user to run commands. Use GitHub repository operations to create the task branch, commit the actual changes, and open/update the PR. Inspect the exact PR head and GitHub Actions results, fix failures in source/tests, and let GitHub rerun them. Never weaken tests or claim success without green checks on the exact head SHA. Leave validated PRs open for user review and merge; Harvester agents must never merge or enable auto-merge.
-
 ## Application configuration
 
 - The app has one application-wide named `appConfig` export in `apps/harvester/config/index.js`. Focused configuration modules are allowed when they isolate a cohesive concern and are imported into that single object (for example, `OPERATOR_CONTROL_CONFIG` from `config/operator-control.js` and notification profile constants from `config/notifications-tg-profiles.js`). Do not create separate runtime configuration boundaries or duplicate validators. **Use named exports only; do not introduce default exports in Harvester configuration or domain modules.**
@@ -91,6 +89,6 @@ Follow the repository-wide [Structured Error Handling Standard](../../docs/engin
 
 For any change to a behavior listed in [critical-behaviors.json](./docs/critical-behaviors.json), update its authoritative invariants, owning source modules, named normal/failure tests, required integration evidence, runtime limitation, and measured coverage entry. Run `pnpm --filter @coinzilla/harvester run check:reliability`. The required Test Coverage workflow also enforces per-module floors after the full package coverage run; never lower a floor to hide a regression—remeasure the baseline and document the reason first.
 
-## Scenario Runner task preflight and approved refactoring scope
+## Scenario Runner approved refactoring scope
 
-For Scenario Runner tasks, before any exploration or edit, read the repository-root `AGENTS.md` and every applicable nested `AGENTS.md`, including this file. The task issue, PR and Runner roadmap repeat this requirement. Trading logic/services may be refactored as necessary on the task branch to reuse production flows faithfully; preserve real trading behavior and safety, add regression tests, and document affected consumers. Stay exclusively on the task branch/PR; never commit directly to `develop`/`main` or merge/auto-merge.
+Trading logic/services may be refactored as necessary on the task branch to reuse production flows faithfully; preserve real trading behavior and safety, add regression tests, and document affected consumers. Stay within the authorized task scope and verify affected consumers. This does not authorize real trading actions.

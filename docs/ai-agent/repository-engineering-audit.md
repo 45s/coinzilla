@@ -1,5 +1,8 @@
 # AI Agent Engineering Task Brief
 
+> **Status:** Historical scope/acceptance brief for the repository engineering audit. The initial audit report is [here](../audits/repository-engineering-audit.md). This brief is not a current implementation checklist or repository-wide policy; follow the canonical root agent and engineering documents for current work.
+
+
 ## Repository-Wide Architecture, Reliability & Maintainability Audit
 
 **Repository:** `45s/coinzilla`  
