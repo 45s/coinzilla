@@ -172,8 +172,13 @@ export const scenarios = [
         name: "allows a clean observation-only restart without enabling trading",
         kind: "normal",
       },
+      {
+        path: "src/bootstrap/start-harvester.test.js",
+        name: "restores a persisted account STOP and keeps a restarted account observation-only",
+        kind: "normal",
+      },
     ],
     coverageStatus: "TEST-MAPPED",
-    coverageReason: "Mapped tests prove default recovery-disabled observation-only restart, rejection of unclean recovery-enabled history before broker connection, and acceptance of a clean observation-only session. The single account-level RS STOP latch case is tracked in open PR #1867 and remains pending its merge; this does not complete #654.",
+    coverageReason: "Mapped tests prove default recovery-disabled observation-only restart, rejection of unclean recovery-enabled history before broker connection, acceptance of a clean observation-only session, and restoration of one durable account-level RS STOP latch. Runtime state restoration remains disabled and the remaining Step 8/9 acceptance gates remain open.",
   }),
 ]
