@@ -323,10 +323,15 @@ test("rejects FILLED status when executed quantity is less than original quantit
   })
 
   const result = await workflow({
-    order: makeOrder({
-      quantity: "2",
-      executedQuantity: "1",
-    }),
+    order: {
+      status: "FILLED",
+      brokerOrderId: "broker-order-1",
+      clientOrderId: "h-dogeusdt-order-1",
+      market,
+      side: "BUY",
+      executedQuantity: { amount: "1" },
+      originalQuantity: { amount: "2" },
+    },
   })
 
   assert.equal(result.ok, false)
