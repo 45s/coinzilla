@@ -582,7 +582,6 @@ test("CLI reports durable resolution while explicitly keeping trading blocked", 
     ],
     cwd: "/tmp",
     getUserInfo: () => ({ username: "operator-7" }),
-    getUserInfo: () => ({ username: "operator-7" }),
     readContext: async () => JSON.stringify(makeContext()),
     createStore: () => makeStore(),
     runResolution: async () => ({
@@ -625,6 +624,7 @@ test("CLI returns nonzero when durable resolution is not confirmed", async () =>
       resolutionReason,
       "--cause-fixed",
     ],
+    getUserInfo: () => ({ username: "operator-7" }),
     readContext: async () => JSON.stringify(makeContext()),
     createStore: () => makeStore(),
     runResolution: async () => ({
