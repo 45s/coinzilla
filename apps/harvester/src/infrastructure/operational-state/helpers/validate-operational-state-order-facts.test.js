@@ -1,5 +1,6 @@
 import assert from "node:assert/strict"
 import test from "node:test"
+import { StrategyId } from "../../../domain/strategies/strategy-ids.js"
 import {
   validateOrderCancellationIntentFact,
   validateOrderCancellationOutcomeFact,
@@ -20,6 +21,10 @@ const COMMON_ORDER_FIELDS = {
 
 function makeSubmissionIntent(overrides = {}) {
   const clientOrderId = "client-order-1"
+  const purpose = overrides.purpose ?? null
+  const ownership = purpose === "RECOVERY_SELL"
+    ? { strategyId: StrategyId.COIN_GRABBER, positionId: "position:cg:test" }
+    : {}
   return {
     factType: "ORDER_SUBMISSION_INTENT",
     factId: `order-submission-intent:${clientOrderId}`,
@@ -28,7 +33,8 @@ function makeSubmissionIntent(overrides = {}) {
       ...COMMON_ORDER_FIELDS,
       price: "100",
       quantity: "2",
-      purpose: null,
+      purpose,
+      ...ownership,
       ...overrides,
     },
   }
@@ -36,6 +42,10 @@ function makeSubmissionIntent(overrides = {}) {
 
 function makeSubmissionOutcome(overrides = {}) {
   const clientOrderId = "client-order-1"
+  const purpose = overrides.purpose ?? null
+  const ownership = purpose === "RECOVERY_SELL"
+    ? { strategyId: StrategyId.COIN_GRABBER, positionId: "position:cg:test" }
+    : {}
   return {
     factType: "ORDER_SUBMISSION_OUTCOME",
     factId: `order-submission-outcome:${clientOrderId}:${overrides.outcome ?? "REJECTED"}`,
