@@ -12,6 +12,7 @@ import {
 import { Portfolio } from "../../domain/portfolio/portfolio.js"
 import { RecoveryLedger } from "../../domain/strategies/conservative/recovery-ledger.js"
 import { updateTradingAccounting } from "../../use-cases/update-trading-accounting.js"
+import { StrategyId } from "../../domain/strategies/strategy-ids.js"
 
 const record = (...args) => {
   const [name, data, id = name] = args
@@ -64,6 +65,46 @@ assetId: "binance:BTC",
 asset: "BTC" }],
   commissionStatus: "COMPLETE",
   ...overrides,
+})
+
+test("inherits Conservative recovery ownership from the durable order when the Fill has no strategy fields", () => {
+  const ownership = {
+    strategyId: StrategyId.COIN_GRABBER,
+    positionId: "position:cg:BTCUSDT",
+    purpose: "RECOVERY_SELL",
+  }
+  const providerIdentity = {
+    providerInstanceId: "binance-testnet-primary",
+    providerType: "binance",
+    accountId: "harvester-testnet",
+  }
+  const result = projectHarvesterJournalRecovery({
+    records: [
+      submissionRequested({
+        ...providerIdentity,
+        side: "SELL",
+        purpose: ownership.purpose,
+        strategyId: ownership.strategyId,
+        positionId: ownership.positionId,
+      }),
+      submitted({
+        ...providerIdentity,
+        side: "SELL",
+        purpose: ownership.purpose,
+        strategyId: ownership.strategyId,
+        positionId: ownership.positionId,
+      }),
+      fill({
+        ...providerIdentity,
+        side: "SELL",
+      }),
+    ],
+  })
+
+  assert.equal(result.ok, true, result.errors?.map(({ message }) => message).join("; "))
+  assert.equal(result.data.orders[0].strategyId, StrategyId.COIN_GRABBER)
+  assert.equal(result.data.orders[0].positionId, ownership.positionId)
+  assert.equal(result.data.fills[0].strategyId, undefined)
 })
 
 test("projects durable order identity and exact fill facts without claiming exchange state is restored", () => {
