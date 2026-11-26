@@ -1138,6 +1138,11 @@
           "path": "src/use-cases/conservative-trading-engine.test.js",
           "name": "rechecks a newly raised account blocker after durable intent and before broker submission",
           "kind": "integration"
+        },
+        {
+          "path": "src/use-cases/create-submission-gate.test.js",
+          "name": "market-scoped strategy safety pause blocks only its symbol and preserves the recovery SELL exception",
+          "kind": "unit"
         }
       ],
       "runtimeStatus": "active",
