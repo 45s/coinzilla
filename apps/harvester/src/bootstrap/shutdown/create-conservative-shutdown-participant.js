@@ -487,6 +487,38 @@ async function reconcileOwnedOrders({
   }
 }
 
+async function reconcileRecoverySellsWithFreshPrice({ engine, symbol, signal } = {}) {
+  const result = await engine.reconcileRecoverySellsForShutdown({
+    symbols: [symbol],
+  })
+  throwIfShutdownAborted(signal)
+  if (
+    !isRefreshableRecoveryPriceFailure(result) ||
+    typeof engine.waitForFreshMarketPrice !== "function"
+  ) {
+    return result
+  }
+  try {
+    await engine.waitForFreshMarketPrice({
+      symbol,
+      timeoutMs: MARKET_DATA_MAX_AGE_MS,
+      signal,
+    })
+  } catch (error) {
+    if (signal?.aborted) {
+      throw signal.reason ?? error
+    }
+    return createRecoveryPriceRefreshFailure({
+      symbol,
+      error,
+    })
+  }
+  throwIfShutdownAborted(signal)
+  return engine.reconcileRecoverySellsForShutdown({
+    symbols: [symbol],
+  })
+}
+
 async function reconcileRecoverySells({
   engine,
   symbol,
@@ -499,38 +531,16 @@ async function reconcileRecoverySells({
   if (blockers.length > 0) {
     return
   }
-
   const recoveryBlockers = await runStage({
     stage: "RECOVERY_SELL_RECONCILIATION",
     signal,
     symbol,
     stageDiagnostics,
-    operation: async () => {
-      const result = await engine.reconcileRecoverySellsForShutdown({ symbols: [symbol] })
-      throwIfShutdownAborted(signal)
-      if (
-        !isRefreshableRecoveryPriceFailure(result) ||
-        typeof engine.waitForFreshMarketPrice !== "function"
-      ) {
-        return result
-      }
-
-      try {
-        await engine.waitForFreshMarketPrice({
-          symbol,
-          timeoutMs: MARKET_DATA_MAX_AGE_MS,
-          signal,
-        })
-      } catch (error) {
-        return createRecoveryPriceRefreshFailure({
-          symbol,
-          error,
-        })
-      }
-
-      throwIfShutdownAborted(signal)
-      return engine.reconcileRecoverySellsForShutdown({ symbols: [symbol] })
-    },
+    operation: () => reconcileRecoverySellsWithFreshPrice({
+      engine,
+      symbol,
+      signal,
+    }),
   })
   blockers.push(...recoveryBlockers)
   await collectDrainBlockers({
@@ -541,11 +551,9 @@ async function reconcileRecoverySells({
     symbol,
     stageDiagnostics,
   })
-
   if (blockers.length > 0) {
     return
   }
-
   await collectStageBlockers({
     blockers,
     reconciliationBlockers,
