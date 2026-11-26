@@ -614,9 +614,11 @@ databaseName })
     collection,
     body: {
       delete: mongoCollection,
-      deletes: [{ q: { _id: id },
-limit: 1 }],
-      collation: { locale: "simple" },
+      deletes: [{
+        q: { _id: id },
+        limit: 1,
+        collation: { locale: "simple" },
+      }],
       ordered: true,
       $db: databaseName,
     },
