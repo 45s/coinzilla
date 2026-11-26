@@ -1037,6 +1037,7 @@ function createRuntimeScenarioPartialSellResult({
     profitabilityEligible: result.data.profitability?.eligible === true,
     eventWorkflowReconciled: eventState.reconciledTerminalOrderClientIds.has(terminalOrder.clientOrderId),
     eventFillStaged: stagedSellFills.length === 1,
+    stagedSellFillCount: stagedSellFills.length,
     cycleState: runtime.seed.workflow.getCycleStateForMarket({
       marketId: runtime.market.id,
     }),
@@ -1458,8 +1459,8 @@ function createPartialSellAssertions({ output, expected }) {
     }),
     createAssertion({
       name: "production order-event workflow stages the canonical SELL fill",
-      actual: output.terminalSell?.eventFillStaged,
-      expected: true,
+      actual: output.terminalSell?.stagedSellFillCount,
+      expected: 1,
     }),
     createAssertion({
       name: "production order-event workflow reconciles the terminal order",
