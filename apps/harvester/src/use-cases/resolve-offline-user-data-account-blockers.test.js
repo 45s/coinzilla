@@ -721,8 +721,8 @@ test("rejects an unclean process stop before running market audits", async () =>
   assert.equal(auditCalls, 0)
 })
 
-function makeAuditFailureScenarios() {
-  const first = [
+function makeTradeHistoryFailureScenarios() {
+  return [
     {
       name: "incomplete trade history",
       mutate: ({ audit }) => {
@@ -759,7 +759,10 @@ function makeAuditFailureScenarios() {
       },
     },
   ]
-  const second = [
+}
+
+function makeAccountConsistencyFailureScenarios() {
+  return [
     {
       name: "missing balance coverage",
       mutate: ({ audit }) => {
@@ -785,9 +788,14 @@ function makeAuditFailureScenarios() {
       },
     },
   ]
-  return [...first, ...second]
 }
 
+function makeAuditFailureScenarios() {
+  return [
+    ...makeTradeHistoryFailureScenarios(),
+    ...makeAccountConsistencyFailureScenarios(),
+  ]
+}
 async function runAuditFailureScenario({ scenario, index }) {
   let resolutionCalled = false
   const result = await runOfflineAccountBlockerResolution({
