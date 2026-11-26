@@ -446,7 +446,7 @@ data: 1 },
     cursorId: cursor.id,
     operation: "readOne",
   })
-  const document = firstBatch[0]
+  const [document] = firstBatch
   return document ? decodeStoredRecord({ document,
 operation: "readOne",
 collection }) : null
@@ -526,9 +526,10 @@ async function readMongoCursorRecords({
         mongoCollection,
         cursorId,
       })
-      cursorId = next.cursorId
+      const { cursorId: nextCursorId, documents } = next
+      cursorId = nextCursorId
       records.push(...decodeMongoBatch({
-        documents: next.documents,
+        documents,
         operation: "readMany",
         collection,
       }))
