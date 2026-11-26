@@ -344,6 +344,7 @@ function createExecutionPromise({
   children,
   terminationGraceMs,
   maxOutputBytes,
+  onReady,
 }) {
   let finishExecution
   const promise = new Promise((...settlers) => {
@@ -375,6 +376,7 @@ function createExecutionPromise({
       maxOutputBytes,
       finish,
       signal,
+      onReady,
       setMessageReceived: () => {
         messageReceived = true
       },
@@ -517,32 +519,34 @@ function createWorkerExecutor({
       children,
       terminationGraceMs,
       maxOutputBytes,
+      onReady: () => {
+        if (!confirmWorkerReadiness({
+          signal,
+          onStarted,
+        })) {
+          return
+        }
+        try {
+          child.send({
+            type: "execute",
+            runId,
+            strategyId,
+            scenarioId,
+            input,
+          })
+        } catch (error) {
+          void terminateChild({
+            child,
+            graceMs: terminationGraceMs,
+          }).then(() => execution.fail({
+            error,
+          })).catch((cleanupError) => execution.fail({
+            error: cleanupError,
+            preserveChild: true,
+          }))
+        }
+      },
     })
-    if (!confirmWorkerReadiness({
-      signal,
-      onStarted,
-    })) {
-      return execution.promise
-    }
-    try {
-      child.send({
-        type: "execute",
-        runId,
-        strategyId,
-        scenarioId,
-        input,
-      })
-    } catch (error) {
-      void terminateChild({
-        child,
-        graceMs: terminationGraceMs,
-      }).then(() => execution.fail({
-        error,
-      })).catch((cleanupError) => execution.fail({
-        error: cleanupError,
-        preserveChild: true,
-      }))
-    }
     return execution.promise
   }
 }
