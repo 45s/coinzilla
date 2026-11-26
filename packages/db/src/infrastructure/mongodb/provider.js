@@ -105,6 +105,26 @@ function assertProviderOptions(options) {
   if (typeof options.directConnection !== "boolean") {
     throw new TypeError("MongoDB provider directConnection must be a boolean")
   }
+  if (options.replicaSet !== undefined && (typeof options.replicaSet !== "string" || options.replicaSet.trim() === "")) {
+    throw new TypeError("MongoDB provider replicaSet must be a non-empty string")
+  }
+  if (options.authSource !== undefined && (typeof options.authSource !== "string" || options.authSource.trim() === "")) {
+    throw new TypeError("MongoDB provider authSource must be a non-empty string")
+  }
+  if (options.authMechanism !== undefined && !["SCRAM-SHA-256", "SCRAM-SHA-1"].includes(options.authMechanism)) {
+    throw new TypeError("MongoDB provider authMechanism must be SCRAM-SHA-256 or SCRAM-SHA-1")
+  }
+  for (const [name, value] of Object.entries({
+    connectTimeoutMS: options.connectTimeoutMS,
+    socketTimeoutMS: options.socketTimeoutMS,
+  })) {
+    if (!Number.isSafeInteger(value) || value < 1) {
+      throw new TypeError(`MongoDB provider ${name} must be a positive safe integer`)
+    }
+  }
+  if (options.tlsOptions !== null && (typeof options.tlsOptions !== "object" || Array.isArray(options.tlsOptions))) {
+    throw new TypeError("MongoDB provider TLS options must be an object or disabled")
+  }
 }
 
 function createTransactionCommand({ transport, session }) {
