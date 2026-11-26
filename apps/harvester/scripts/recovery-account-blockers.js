@@ -122,8 +122,7 @@ export function parseRecoveryAccountBlockerArguments(args = []) {
 }
 
 async function readContextFile({ filePath }) {
-  const content = await readFile(path.resolve(filePath), "utf8")
-  return JSON.parse(content)
+  return readFile(path.resolve(filePath), "utf8")
 }
 
 /**
@@ -170,9 +169,12 @@ export async function runRecoveryAccountBlockerCommand({
   }
 
   try {
-    const context = await readContext({
+    const contextContent = await readContext({
       filePath: parsed.contextPath,
     })
+    const context = typeof contextContent === "string"
+      ? JSON.parse(contextContent)
+      : contextContent
     const store = await createStore({ env })
     const result = await runResolution({
       ...parsed,
@@ -185,8 +187,19 @@ export async function runRecoveryAccountBlockerCommand({
       writeError(error.message)
       return 1
     }
-    writeOutput(`Resolved ACCOUNT blockers: ${result.data.resolvedBlockerIds.join(", ")}`)
-    writeOutput(`Resolution action: ${parsed.actionId}; evidence: ${result.data.evidenceDigest}`)
+    writeOutput(JSON.stringify({
+      ok: true,
+      data: {
+        resolvedBlockerIds: result.data.resolvedBlockerIds,
+        evidenceDigest: result.data.evidenceDigest,
+        durableReadbackVerified: result.data.durableReadbackVerified,
+        readiness: result.data.readiness,
+        requiresControlledRestart: result.data.requiresControlledRestart,
+        runtimeStateReset: result.data.runtimeStateReset,
+        recoverySellerStopReset: result.data.recoverySellerStopReset,
+        idempotentReplay: result.data.idempotentReplay === true,
+      },
+    }))
     return 0
   } catch (error) {
     writeError(error.message)
