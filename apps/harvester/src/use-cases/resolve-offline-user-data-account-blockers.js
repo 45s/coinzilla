@@ -121,7 +121,12 @@ function hasCompleteMarketTradeHistory({ tradeHistory, symbol }) {
     tradeHistory.reconciledOwnedOrderFills === 0
 }
 
-function isMarketAuditReady({ result, reconciliation, audit, symbol }) {
+function isMarketAuditReady({
+    result,
+    reconciliation,
+    audit,
+    symbol,
+  }) {
   return result?.ok === true &&
     reconciliation?.ready === true &&
     reconciliation.status === "READY" &&
@@ -203,9 +208,13 @@ async function auditAllConfiguredMarkets({ context, configuredMarkets, reconcile
 
 function validateAccountAuditSet({ configuredMarkets, marketAudits, context }) {
   const auditedMarkets = marketAudits.map(({ symbol }) => symbol)
-  const sourceTime = context.exchange.currentAccountSnapshot.sourceTime
+  const { currentAccountSnapshot } = context.exchange
+  const { sourceTime } = currentAccountSnapshot
   if (marketAudits.length !== configuredMarkets.length ||
-      !sameStringSet({ left: auditedMarkets, right: configuredMarkets }) ||
+      !sameStringSet({
+        left: auditedMarkets,
+        right: configuredMarkets,
+      }) ||
       !Number.isSafeInteger(sourceTime) ||
       marketAudits.some((audit) => audit.accountSnapshotSourceTime !== sourceTime ||
         audit.ready !== true ||
