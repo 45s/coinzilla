@@ -201,7 +201,7 @@ test("RS-003-008: one canonical SELL Fill is split exactly between recovery and 
 const multiFillScenarioPositionId = "rs-multi-fill-position"
 const multiFillScenarioCycleId = "rs-multi-fill-cycle"
 
-function createMultiFillAccountingScenarioFixture() {
+function createMultiFillAccountingScenarioFixture({ stageCount = 2, failDurableCommit = false } = {}) {
   const scenarioBaseAsset = new Asset({
     id: "binance:ZRO",
     code: "ZRO",
@@ -375,7 +375,7 @@ function createMultiFillAccountingScenarioFixture() {
     order: openSellOrder,
     orderRegistry: openOrderRegistry,
   })
-  for (const allocation of canonicalFillAllocations) {
+  for (const allocation of canonicalFillAllocations.slice(0, stageCount)) {
     const { applied, reconciliation: nextReconciliation } = stageMixedSellFillAllocation({
       reconciliation,
       allocation,
@@ -398,6 +398,12 @@ function createMultiFillAccountingScenarioFixture() {
     }],
     onOperationalStateRecoverySellerMixedSellReconciled: async () => {
       durableCommitCount += 1
+      if (failDurableCommit) {
+        return {
+          ok: false,
+          errors: [new Error("durable terminal reconciliation append failed")],
+        }
+      }
       return {
         ok: true,
         data: { durable: true },
@@ -500,4 +506,124 @@ test("RS-006-003-B: duplicate terminal mixed-SELL replay is an exact no-op", asy
     "Duplicate replay must not release or recreate the terminal order reservation.")
   assert.equal(fixture.durableCommitCount(), 1,
     "Duplicate replay must not append a second durable terminal reconciliation fact.")
+})
+
+
+test("RS-006-012-A: failed durable terminal fact append leaves both accounting projections and SELL reservation unchanged", async () => {
+  const fixture = createMultiFillAccountingScenarioFixture({
+    failDurableCommit: true,
+  })
+  const reservation = await fixture.workflow.reserveSellCycle({
+    order: fixture.openSellOrder,
+    ownership: fixture.ownership,
+    durableIntent: true,
+  })
+  assert.equal(reservation.ok, true)
+  const portfolioBefore = fixture.workflow.getPortfolio()
+  const legacyPositionBefore = fixture.workflow.getLegacyPosition({ marketId: fixture.market.id })
+  const legacyAccountingBefore = fixture.workflow.getLegacyAccounting({ marketId: fixture.market.id })
+  const registryBefore = fixture.workflow.getOrderRegistry()
+
+  const result = await fixture.workflow.reconcileTerminalMixedSell({
+    reconciliation: fixture.reconciliation,
+    terminalOrder: fixture.terminalSellOrder,
+    canonicalFills: fixture.canonicalFills,
+    canonicalFillAllocations: fixture.canonicalFillAllocations,
+    minProfit: "0.2",
+  })
+
+  assert.equal(result.ok, false,
+    "A failed durable terminal fact append must abort both accounting projections.")
+  assert.strictEqual(fixture.workflow.getPortfolio(), portfolioBefore,
+    "The recovery Portfolio must remain unpublished after the durable append fails.")
+  assert.strictEqual(fixture.workflow.getLegacyPosition({ marketId: fixture.market.id }), legacyPositionBefore,
+    "The legacy Position must remain unpublished after the durable append fails.")
+  assert.strictEqual(fixture.workflow.getLegacyAccounting({ marketId: fixture.market.id }), legacyAccountingBefore,
+    "The legacy P&L projection must remain unpublished after the durable append fails.")
+  assert.strictEqual(fixture.workflow.getOrderRegistry(), registryBefore,
+    "The terminal OrderRegistry projection must not publish after the durable append fails.")
+  assert.equal(fixture.workflow.getOrderRegistry().getActiveOrders().length, 1,
+    "The unresolved SELL must continue reserving its remaining base quantity.")
+  assert.equal(fixture.workflow.getReservedSellCycle({
+    cycleId: multiFillScenarioCycleId,
+  }).clientOrderId, fixture.openSellOrder.clientOrderId,
+  "The cycle SELL reservation must remain held until durable accounting commits.")
+  assert.equal(fixture.durableCommitCount(), 1,
+    "The failed durable boundary must be attempted once and must not be retried implicitly.")
+})
+
+test("RS-006-016-A: incomplete canonical SELL fill history keeps both projections and reservation unchanged", async () => {
+  const fixture = createMultiFillAccountingScenarioFixture({
+    stageCount: 1,
+  })
+  const reservation = await fixture.workflow.reserveSellCycle({
+    order: fixture.openSellOrder,
+    ownership: fixture.ownership,
+    durableIntent: true,
+  })
+  assert.equal(reservation.ok, true)
+  const portfolioBefore = fixture.workflow.getPortfolio()
+  const legacyPositionBefore = fixture.workflow.getLegacyPosition({ marketId: fixture.market.id })
+  const legacyAccountingBefore = fixture.workflow.getLegacyAccounting({ marketId: fixture.market.id })
+  const registryBefore = fixture.workflow.getOrderRegistry()
+
+  const result = await fixture.workflow.reconcileTerminalMixedSell({
+    reconciliation: fixture.reconciliation,
+    terminalOrder: fixture.terminalSellOrder,
+    canonicalFills: fixture.canonicalFills.slice(0, 1),
+    canonicalFillAllocations: fixture.canonicalFillAllocations.slice(0, 1),
+    minProfit: "0.2",
+  })
+
+  assert.equal(result.ok, false,
+    "A terminal SELL cannot reconcile when canonical history covers only part of executed quantity.")
+  assert.strictEqual(fixture.workflow.getPortfolio(), portfolioBefore,
+    "Incomplete terminal history must not publish recovery accounting.")
+  assert.strictEqual(fixture.workflow.getLegacyPosition({ marketId: fixture.market.id }), legacyPositionBefore,
+    "Incomplete terminal history must not publish legacy inventory accounting.")
+  assert.strictEqual(fixture.workflow.getLegacyAccounting({ marketId: fixture.market.id }), legacyAccountingBefore,
+    "Incomplete terminal history must not publish legacy P&L.")
+  assert.strictEqual(fixture.workflow.getOrderRegistry(), registryBefore,
+    "Incomplete terminal history must not replace the active OrderRegistry projection.")
+  assert.equal(fixture.workflow.getOrderRegistry().getActiveOrders().length, 1,
+    "The SELL reservation must remain active until complete terminal Fill history is available.")
+  assert.equal(fixture.durableCommitCount(), 0,
+    "Incomplete terminal history must be rejected before the durable reconciliation append.")
+})
+
+test("RS-006-018-A: confirmed mixed SELL fills are committed even when realized profitability misses minProfit", async () => {
+  const fixture = createMultiFillAccountingScenarioFixture()
+  const reservation = await fixture.workflow.reserveSellCycle({
+    order: fixture.openSellOrder,
+    ownership: fixture.ownership,
+    durableIntent: true,
+  })
+  assert.equal(reservation.ok, true)
+
+  const result = await fixture.workflow.reconcileTerminalMixedSell({
+    reconciliation: fixture.reconciliation,
+    terminalOrder: fixture.terminalSellOrder,
+    canonicalFills: fixture.canonicalFills,
+    canonicalFillAllocations: fixture.canonicalFillAllocations,
+    minProfit: "100",
+  })
+
+  assert.equal(result.ok, true,
+    result.errors?.[0]?.message ?? "Confirmed exchange execution facts must still be accounted after a profitability miss.")
+  assert.equal(result.data.applied, true,
+    "A profitability miss must not discard confirmed recovery or legacy execution facts.")
+  assert.equal(result.data.profitability.eligible, false,
+    "The mixed SELL must remain ineligible when realized net profit is below minProfit.")
+  assert.equal(fixture.workflow.getPortfolio().getPosition({
+    positionId: multiFillScenarioPositionId,
+  }).baseQuantity.amount, "0.01",
+  "Confirmed recovery base debit must be committed even though the profitability gate failed.")
+  assert.equal(fixture.workflow.getLegacyPosition({
+    marketId: fixture.market.id,
+  }).remainingQuantity, "49.99",
+  "Confirmed legacy base debit must be committed even though the profitability gate failed.")
+  assert.equal(fixture.workflow.getOrderRegistry().getActiveOrders().length, 0,
+    "A fully reconciled terminal order releases its reservation after actual fills are committed.")
+  assert.equal(fixture.durableCommitCount(), 1,
+    "The actual terminal Fill boundary must be durably recorded once despite the profitability miss.")
 })
