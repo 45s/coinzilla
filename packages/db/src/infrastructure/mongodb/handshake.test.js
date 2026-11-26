@@ -109,3 +109,26 @@ test("MongoDB handshake rejects unsupported wire versions and a missing writable
     /primary/i,
   )
 })
+
+
+test("MongoDB URI parser rejects unsupported options instead of silently ignoring them", () => {
+  assert.throws(
+    () => parseMongoConnectionString("mongodb://localhost/app?readPreference=secondary"),
+    /unsupported.*option/i,
+  )
+  assert.throws(
+    () => parseMongoConnectionString("mongodb://localhost/app?tls=true&tls=false"),
+    /duplicate.*option/i,
+  )
+})
+
+test("MongoDB URI parser normalizes IPv6 hosts and rejects credentials without a username", () => {
+  assert.equal(
+    parseMongoConnectionString("mongodb://[::1]:27018/app").host,
+    "::1",
+  )
+  assert.throws(
+    () => parseMongoConnectionString("mongodb://:password@localhost/app"),
+    /username/i,
+  )
+})
