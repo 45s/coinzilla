@@ -611,6 +611,9 @@ test("MongoDB transport closes idle and connecting sockets and rejects factory f
       return {}
     },
   })
-  await assert.rejects(invalidFactory.connect(), /invalid socket/)
+  await assert.rejects(
+    invalidFactory.connect(),
+    (error) => error.cause?.message.includes("invalid socket"),
+  )
 })
 
