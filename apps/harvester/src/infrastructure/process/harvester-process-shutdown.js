@@ -34,7 +34,10 @@ function assertShutdownTimeout({
 }
 
 async function waitForShutdownStep({ promise, phase, timeoutMs, setTimeoutFn, clearTimeoutFn }) {
-  assertShutdownTimeout({ phase, timeoutMs })
+  assertShutdownTimeout({
+    phase,
+    timeoutMs,
+  })
   let timeoutHandle
   const timeoutPromise = new Promise((resolve) => {
     timeoutHandle = setTimeoutFn(() => resolve({
@@ -52,6 +55,50 @@ async function waitForShutdownStep({ promise, phase, timeoutMs, setTimeoutFn, cl
       clearTimeoutFn(timeoutHandle)
     }
   }
+}
+
+function getOrStartShutdownStepPromise({
+  state,
+  key,
+  operation,
+  isSuccess,
+  createFailure,
+}) {
+  const existing = state.get(key)
+  if (existing?.status === "pending") {
+    return existing.promise
+  }
+  const trackedPromise = Promise.resolve()
+    .then(operation)
+    .then((value) => {
+      if (isSuccess(value)) {
+        state.set(key, {
+          status: "completed",
+          value,
+        })
+        return {
+          status: "completed",
+          value,
+        }
+      }
+      state.delete(key)
+      return {
+        status: "failed",
+        error: createFailure(value),
+        value,
+      }
+    }, (error) => {
+      state.delete(key)
+      return {
+        status: "failed",
+        error,
+      }
+    })
+  state.set(key, {
+    status: "pending",
+    promise: trackedPromise,
+  })
+  return trackedPromise
 }
 
 async function runShutdownStep({
@@ -72,41 +119,13 @@ async function runShutdownStep({
       value: existing.value,
     }
   }
-  let trackedPromise = existing?.status === "pending"
-    ? existing.promise
-    : undefined
-  if (!trackedPromise) {
-    trackedPromise = Promise.resolve()
-      .then(operation)
-      .then((value) => {
-        if (isSuccess(value)) {
-          state.set(key, {
-            status: "completed",
-            value,
-          })
-          return {
-            status: "completed",
-            value,
-          }
-        }
-        state.delete(key)
-        return {
-          status: "failed",
-          error: createFailure(value),
-          value,
-        }
-      }, (error) => {
-        state.delete(key)
-        return {
-          status: "failed",
-          error,
-        }
-      })
-    state.set(key, {
-      status: "pending",
-      promise: trackedPromise,
-    })
-  }
+  const trackedPromise = getOrStartShutdownStepPromise({
+    state,
+    key,
+    operation,
+    isSuccess,
+    createFailure,
+  })
   const outcome = await waitForShutdownStep({
     promise: trackedPromise,
     phase,
@@ -114,13 +133,7 @@ async function runShutdownStep({
     setTimeoutFn,
     clearTimeoutFn,
   })
-  if (outcome.status === "timed_out") {
-    return {
-      ok: false,
-      error: outcome.error,
-    }
-  }
-  if (outcome.status === "failed") {
+  if (outcome.status !== "completed") {
     return {
       ok: false,
       error: outcome.error,
@@ -131,7 +144,6 @@ async function runShutdownStep({
     value: outcome.value,
   }
 }
-
 function logShutdownFailure({ logger, phase, error } = {}) {
   process.exitCode = 1
   try {
@@ -139,6 +151,7 @@ function logShutdownFailure({ logger, phase, error } = {}) {
       message: "Harvester shutdown is incomplete; process lock remains held.",
       shutdownPhase: phase,
       error,
+      shutdownDiagnostics: error?.shutdownDiagnostics,
     })
   } catch {
     // A failed diagnostic must not weaken the process-lock safety barrier.
@@ -146,47 +159,35 @@ function logShutdownFailure({ logger, phase, error } = {}) {
 }
 
 async function stopRuntimeForShutdown({ runtime, logger } = {}) {
+  let stopResult
   try {
-    const stopResult = await runtime.stop()
-    const runtimeStopped = stopResult?.ok === true && stopResult.status === "STOPPED"
-    if (!runtimeStopped) {
-      const error = stopResult?.errors?.[0] ??
-        new Error("Harvester runtime stop did not confirm shutdown")
-      logger?.error?.({
-        message: "Shutdown was not confirmed; required runtime services remain connected.",
-        error,
-      })
-      return {
-        runtimeStopped: false,
-        error,
-      }
-    }
-    try {
-      logSystem({
-        logger,
-        message: "Shutdown completed.",
-      })
-    } catch {
-      // A diagnostic failure cannot invalidate the durable STOPPED acknowledgement.
-    }
-    return { runtimeStopped: true }
+    stopResult = await runtime.stop()
   } catch (error) {
-    try {
-      logger?.error?.({
-        message: "Shutdown failed; required runtime services remain connected.",
-        error,
-        shutdownDiagnostics: error?.shutdownDiagnostics,
-      })
-    } catch {
-      // Logging failure must not prevent a later controlled shutdown retry.
-    }
     return {
       runtimeStopped: false,
       error,
     }
   }
+  const runtimeStopped = stopResult?.ok === true && stopResult.status === "STOPPED"
+  if (!runtimeStopped) {
+    return {
+      runtimeStopped: false,
+      error: stopResult?.errors?.[0] ??
+        new Error("Harvester runtime stop did not confirm shutdown"),
+    }
+  }
+  try {
+    logSystem({
+      logger,
+      message: "Shutdown completed.",
+    })
+  } catch {
+    // A diagnostic failure cannot invalidate the durable STOPPED acknowledgement.
+  }
+  return {
+    runtimeStopped: true,
+  }
 }
-
 async function flushShutdownEventBus({ eventBus } = {}) {
   if (typeof eventBus?.flush !== "function") {
     return []
@@ -257,6 +258,16 @@ async function closeProcessLogger({ closeLogger } = {}) {
   }
 }
 
+function getProcessLockReleaseErrors(result) {
+  if (result?.ok === true) {
+    return []
+  }
+  if (Array.isArray(result?.errors) && result.errors.length > 0) {
+    return result.errors
+  }
+  return [new Error("Harvester trading process lock release was not confirmed")]
+}
+
 async function releaseProcessLock({ processLock } = {}) {
   if (!processLock) {
     return []
@@ -265,18 +276,11 @@ async function releaseProcessLock({ processLock } = {}) {
     return [new Error("Harvester process lock release capability is unavailable")]
   }
   try {
-    const result = await processLock.release()
-    if (result?.ok === true) {
-      return []
-    }
-    return Array.isArray(result?.errors) && result.errors.length > 0
-      ? result.errors
-      : [new Error("Harvester trading process lock release was not confirmed")]
+    return getProcessLockReleaseErrors(await processLock.release())
   } catch (error) {
     return [error]
   }
 }
-
 function getFirstCleanupError({ errors, fallbackMessage }) {
   return errors?.[0] ?? new Error(fallbackMessage)
 }
@@ -511,10 +515,10 @@ async function runProcessLockReleaseStep({
   })
 }
 
-async function runRuntimeShutdown({
-  runtime,
-  reason,
+async function runPostStopCleanup({
+  shutdownState,
   eventPublisher,
+  reason,
   eventBus,
   telegramNotifications,
   journalService,
@@ -523,13 +527,65 @@ async function runRuntimeShutdown({
   closeLogger,
   closeObservability,
   logTelegramNotificationSummary,
-  shutdownState,
-  cleanupTimeoutMs = DEFAULT_SHUTDOWN_CLEANUP_TIMEOUT_MS,
-  observabilityCleanupTimeoutMs = DEFAULT_OBSERVABILITY_CLEANUP_TIMEOUT_MS,
-  runtimeStopTimeoutMs = DEFAULT_RUNTIME_STOP_TIMEOUT_MS,
-  setTimeoutFn = setTimeout,
-  clearTimeoutFn = clearTimeout,
-} = {}) {
+  cleanupTimeoutMs,
+  observabilityCleanupTimeoutMs,
+  setTimeoutFn,
+  clearTimeoutFn,
+}) {
+  publishStoppedLifecycleEvent({
+    shutdownState,
+    eventPublisher,
+    reason,
+    logger,
+  })
+  const deliveryComplete = await runDeliveryCleanupSteps({
+    shutdownState,
+    eventBus,
+    telegramNotifications,
+    logger,
+    logTelegramNotificationSummary,
+    cleanupTimeoutMs,
+    setTimeoutFn,
+    clearTimeoutFn,
+  })
+  if (!deliveryComplete) {
+    return false
+  }
+  return runObservabilityCleanupSteps({
+    shutdownState,
+    journalService,
+    eventBus,
+    processLock,
+    logger,
+    closeObservability,
+    closeLogger,
+    cleanupTimeoutMs,
+    observabilityCleanupTimeoutMs,
+    setTimeoutFn,
+    clearTimeoutFn,
+  })
+}
+
+async function runRuntimeShutdown(dependencies = {}) {
+  const {
+    runtime,
+    reason,
+    eventPublisher,
+    eventBus,
+    telegramNotifications,
+    journalService,
+    processLock,
+    logger,
+    closeLogger,
+    closeObservability,
+    logTelegramNotificationSummary,
+    shutdownState,
+    cleanupTimeoutMs = DEFAULT_SHUTDOWN_CLEANUP_TIMEOUT_MS,
+    observabilityCleanupTimeoutMs = DEFAULT_OBSERVABILITY_CLEANUP_TIMEOUT_MS,
+    runtimeStopTimeoutMs = DEFAULT_RUNTIME_STOP_TIMEOUT_MS,
+    setTimeoutFn = setTimeout,
+    clearTimeoutFn = clearTimeout,
+  } = dependencies
   const stopResult = await runRuntimeStopStep({
     shutdownState,
     runtime,
@@ -544,51 +600,29 @@ async function runRuntimeShutdown({
       shutdownComplete: false,
     }
   }
-
-  publishStoppedLifecycleEvent({
+  const cleanupComplete = await runPostStopCleanup({
     shutdownState,
     eventPublisher,
     reason,
-    logger,
-  })
-
-  const deliveryComplete = await runDeliveryCleanupSteps({
-    shutdownState,
     eventBus,
     telegramNotifications,
-    logger,
-    logTelegramNotificationSummary,
-    cleanupTimeoutMs,
-    setTimeoutFn,
-    clearTimeoutFn,
-  })
-  if (!deliveryComplete) {
-    return {
-      runtimeStopped: true,
-      shutdownComplete: false,
-    }
-  }
-
-  const observabilityComplete = await runObservabilityCleanupSteps({
-    shutdownState,
     journalService,
-    eventBus,
     processLock,
     logger,
-    closeObservability,
     closeLogger,
+    closeObservability,
+    logTelegramNotificationSummary,
     cleanupTimeoutMs,
     observabilityCleanupTimeoutMs,
     setTimeoutFn,
     clearTimeoutFn,
   })
-  if (!observabilityComplete) {
+  if (!cleanupComplete) {
     return {
       runtimeStopped: true,
       shutdownComplete: false,
     }
   }
-
   const lockReleased = await runProcessLockReleaseStep({
     shutdownState,
     processLock,
@@ -601,7 +635,6 @@ async function runRuntimeShutdown({
     shutdownComplete: lockReleased,
   }
 }
-
 /**
  * Create an idempotent signal-shutdown handler for a started Harvester runtime.
  *

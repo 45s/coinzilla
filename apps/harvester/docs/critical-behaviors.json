@@ -844,7 +844,7 @@
         },
         {
           "path": "src/infrastructure/process/harvester-process-shutdown.test.js",
-          "name": "exits child process only after Journal shutdown and real process-lock release",
+          "name": "exits the child process only after Journal shutdown and real process-lock release",
           "kind": "integration"
         },
         {

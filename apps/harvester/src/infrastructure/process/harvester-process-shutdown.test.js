@@ -173,7 +173,7 @@ test("exits the child process only after Journal shutdown and real process-lock 
     assert.equal(exit.code, 0, `The child must exit successfully after shutdown; stderr: ${output.stderr}`)
     assert.equal(exit.signal, null, "The child must exit naturally rather than being killed by a signal.")
     assert.deepEqual(
-      output.stdout.trim().split("\\n"),
+      output.stdout.trim().split(/\r?\n/),
       ["LOGGER_CLOSED", "LOCK_RELEASED", "SHUTDOWN_COMPLETE"],
       "The process logger must close before the process lock is released, and the lock must release before process exit.",
     )
@@ -309,7 +309,10 @@ test("retains all shared resources and the process lock when the final EventBus 
       publish: () => ({ ok: true }),
     },
     eventBus: {
-      flush: async () => ({ ok: false, errors: [] }),
+      flush: async () => ({
+        ok: false,
+        errors: [],
+      }),
     },
     processLock: {
       release: async () => {
@@ -337,15 +340,27 @@ test("retains all shared resources and the process lock when the final EventBus 
   }
 })
 
-test("bounds a hung EventBus flush and retains the process lock without overlapping retries", async () => {
-  const calls = []
-  const previousExitCode = process.exitCode
-  process.exitCode = 0
+function createPendingEventBusFlush() {
   let releaseFlush
   let flushCalls = 0
   const flushPromise = new Promise((resolve) => {
     releaseFlush = () => resolve({ ok: true })
   })
+  return {
+    flush: () => {
+      flushCalls += 1
+      return flushPromise
+    },
+    release: () => releaseFlush(),
+    getCalls: () => flushCalls,
+  }
+}
+
+test("bounds a hung EventBus flush and retains the process lock without overlapping retries", async () => {
+  const calls = []
+  const previousExitCode = process.exitCode
+  process.exitCode = 0
+  const pendingFlush = createPendingEventBusFlush()
   const handler = createRuntimeShutdownHandler({
     cleanupTimeoutMs: 10,
     runtimeStopTimeoutMs: 100,
@@ -363,10 +378,7 @@ test("bounds a hung EventBus flush and retains the process lock without overlapp
       publish: () => ({ ok: true }),
     },
     eventBus: {
-      flush: () => {
-        flushCalls += 1
-        return flushPromise
-      },
+      flush: pendingFlush.flush,
     },
     processLock: {
       release: async () => {
@@ -385,11 +397,11 @@ test("bounds a hung EventBus flush and retains the process lock without overlapp
   try {
     await handler("SIGTERM")
     assert.equal(process.exitCode, 1, "A hung EventBus flush must fail closed at its configured deadline.")
-    assert.equal(flushCalls, 1, "A timed-out EventBus flush must remain single-flight.")
+    assert.equal(pendingFlush.getCalls(), 1, "A timed-out EventBus flush must remain single-flight.")
     assert.deepEqual(calls, [], "No downstream cleanup or process-lock release may run while delivery draining is pending.")
 
     const retry = handler("SIGTERM")
-    releaseFlush()
+    pendingFlush.release()
     await retry
     assert.equal(flushCalls, 1, "A retry must await the original pending flush instead of starting a concurrent one.")
     assert.deepEqual(
