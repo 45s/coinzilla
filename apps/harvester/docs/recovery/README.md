@@ -170,12 +170,13 @@ From `apps/harvester`, run:
 OPERATIONAL_STATE_DIRECTORY=/absolute/path/to/existing/operational-state \\
   pnpm run recovery:account-blockers -- \\
     --context ./recovery-evidence/account-wide.json \\
-    --operator-id operator-7 \\
+    --operator-id <current-os-user> \\
     --action-id account-resolution-2026-11-26-001 \\
+    --resolution-reason "Reviewed complete account evidence and confirmed the underlying cause is fixed." \\
     --cause-fixed
 ```
 
-The command requires an existing, durable Operational State Store and the `runtimeSessionId` of the latest process session. The latest matching `PROCESS_STOPPED` fact must be clean; a later unclean stop invalidates an earlier clean-stop fact. The supplied `--operator-id` must exactly match the authenticated operating-system account running the command; a caller-supplied name alone is not trusted. The required `--resolution-reason` is persisted with every per-blocker resolution fact alongside the operator ID, `OS_ACCOUNT` authentication method, unique action ID, full original blocker set, and canonical evidence digest.
+Replace `<current-os-user>` with the exact username returned by the operating system for the account running the command. The utility also supports `--version` to print its build identity. The command requires an existing, durable Operational State Store and the `runtimeSessionId` of the latest process session. The latest matching `PROCESS_STOPPED` fact must be clean; a later unclean stop invalidates an earlier clean-stop fact. The supplied `--operator-id` must exactly match the authenticated operating-system account running the command; a caller-supplied name alone is not trusted. The required `--resolution-reason` is persisted with every per-blocker resolution fact alongside the operator ID, `OS_ACCOUNT` authentication method, unique action ID, full original blocker set, and canonical evidence digest.
 
 The action ID is globally unique across operator-resolution facts. An exact retry using the same authenticated operator, action ID, reason, original blocker set, and evidence digest is idempotent. If a multi-blocker append partially commits, retry the same command with the same action ID and unchanged evidence bundle: the workflow verifies the previously committed facts and appends only the remaining blockers. A completed exact duplicate returns an idempotent success without appending new facts. Reusing the action ID with a different operator, reason, blocker set, or evidence is rejected. Legacy operator-resolution facts without structured action metadata cannot be safely replayed; choose a new action ID for a new operation.
 
