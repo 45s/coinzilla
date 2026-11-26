@@ -74,6 +74,22 @@ function parseEmergencyBuyCommand({ command, argumentsList } = {}) {
   })
 }
 
+function parseAccountBlockerResolutionCommand({ command, argumentsList } = {}) {
+  if (command !== "/resolveaccountblockers") {
+    return undefined
+  }
+  if (argumentsList.length !== 1 || argumentsList[0] !== "cause-fixed") {
+    return {
+      type: "INVALID",
+      command: "RESOLVEACCOUNTBLOCKERS",
+    }
+  }
+  return {
+    type: TELEGRAM_OPERATOR_ACTIONS.RESOLVE_ACCOUNT_BLOCKERS,
+    causeFixed: true,
+  }
+}
+
 function parseMarketPauseCommand({ command, argumentsList } = {}) {
   if (command !== "/pause" && command !== "/resume") {
     return undefined
