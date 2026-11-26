@@ -35,7 +35,7 @@ const market = new Market({
 const positionId = "rs-position-1"
 const strategyId = StrategyId.RECOVERY_SELLER
 
-function makeFill({ tradeId = "sell-1", quantity = "5.01", quoteQuantity = "10.5", commissions = [] } = {}) {
+function makeFill({ tradeId = "sell-1", quantity = "5.01", quoteQuantity = "10.5", price = "2", commissions = [] } = {}) {
   return new Fill({
     tradeId,
     brokerOrderId: "broker-sell-1",
@@ -43,7 +43,7 @@ function makeFill({ tradeId = "sell-1", quantity = "5.01", quoteQuantity = "10.5
     market,
     side: "SELL",
     price: new Money({
-      amount: "2",
+      amount: price,
       asset: quoteAsset,
     }),
     quantity: new Quantity({
@@ -138,36 +138,51 @@ function makeRecoveryBuyPortfolio() {
   }).portfolio
 }
 
-function makeContext({ fill = makeFill(), terminalOrderStatus = "FILLED" } = {}) {
+function makeContext({
+  fill = makeFill(),
+  terminalOrderStatus = "FILLED",
+  executedQuantity,
+  recoveryQuantity = "5",
+  legacyQuantity = "0.01",
+} = {}) {
   const portfolio = makeRecoveryBuyPortfolio()
   const openOrder = makeOrder()
+  const rejectedWithoutExecution = terminalOrderStatus === "REJECTED"
+  const effectiveFill = rejectedWithoutExecution ? undefined : fill
   const terminalOrder = makeOrder({
     status: terminalOrderStatus,
-    executedQuantity: "5.01",
+    executedQuantity: executedQuantity ??
+      (effectiveFill ? effectiveFill.quantity.amount : "0"),
   })
   const openRegistry = makeRegistry(openOrder)
   const terminalRegistry = makeRegistry(terminalOrder)
-  const allocation = createMixedSellFillAllocation({
-    fill,
-    orderRegistry: terminalRegistry,
-    recoveryQuantity: "5",
-    legacyQuantity: "0.01",
+  const allocation = effectiveFill
+    ? createMixedSellFillAllocation({
+        fill: effectiveFill,
+        orderRegistry: terminalRegistry,
+        recoveryQuantity,
+        legacyQuantity,
+      })
+    : undefined
+  let reconciliation = createMixedSellFillReconciliation({
+    order: openOrder,
+    orderRegistry: openRegistry,
   })
-  const staged = stageMixedSellFillAllocation({
-    reconciliation: createMixedSellFillReconciliation({
-      order: openOrder,
-      orderRegistry: openRegistry,
-    }),
-    allocation,
-  })
-  const { reconciliation } = staged
+  if (allocation) {
+    reconciliation = stageMixedSellFillAllocation({
+      reconciliation,
+      allocation,
+    }).reconciliation
+  }
   return {
     portfolio,
     openRegistry,
     terminalOrder,
     reconciliation,
-    fill,
+    fill: effectiveFill,
     allocation,
+    fills: effectiveFill ? [effectiveFill] : [],
+    allocations: allocation ? [allocation] : [],
     legacyPosition: createLegacyPosition({
       invested: "100",
       quantity: "50",
@@ -463,12 +478,33 @@ async function reserveRecoverySellerSell({ workflow, openOrder } = {}) {
   })
 }
 
+async function ensureRecoverySellerSellReserved({ workflow, context } = {}) {
+  const cycleState = workflow.getCycleStateForMarket({ marketId: market.id })
+  if (["SELL_SUBMITTED", "RECONCILIATION_REQUIRED"].includes(cycleState?.status)) {
+    return
+  }
+  const openOrder = context.openRegistry.getOrder({
+    clientOrderId: context.terminalOrder.clientOrderId,
+  })
+  const reservation = await reserveRecoverySellerSell({
+    workflow,
+    openOrder,
+  })
+  if (reservation?.ok !== true) {
+    throw reservation?.errors?.[0] ?? new Error("Recovery Seller SELL reservation was not created")
+  }
+}
+
 async function reconcileTerminalMixedSell({ workflow, context, minProfit = "0.2" } = {}) {
+  await ensureRecoverySellerSellReserved({
+    workflow,
+    context,
+  })
   return workflow.reconcileTerminalMixedSell({
     reconciliation: context.reconciliation,
     terminalOrder: context.terminalOrder,
-    canonicalFills: [context.fill],
-    canonicalFillAllocations: [context.allocation],
+    canonicalFills: context.fills,
+    canonicalFillAllocations: context.allocations,
     minProfit,
   })
 }
@@ -531,13 +567,7 @@ test("keeps both accounting projections and the SELL reservation unchanged when 
   const legacyBefore = workflow.getLegacyPosition({ marketId: market.id })
   const registryBefore = workflow.getOrderRegistry()
 
-  const result = await workflow.reconcileTerminalMixedSell({
-    reconciliation: context.reconciliation,
-    terminalOrder: context.terminalOrder,
-    canonicalFills: [context.fill],
-    canonicalFillAllocations: [context.allocation],
-    minProfit: "0.2",
-  })
+  const result = await reconcileTerminalMixedSell({ workflow, context })
 
   assert.equal(result.ok, false, "A failed durable reconciliation append must abort the terminal accounting transition.")
   assert.equal(result.errors[0].code, "RS_MIXED_SELL_DURABLE_FACT_COMMIT_FAILED", "A durable append failure must expose a stable Recovery Seller error code.")
@@ -559,6 +589,7 @@ test("keeps the SELL reservation and both projections unchanged when terminal fi
   const legacyBefore = workflow.getLegacyPosition({ marketId: market.id })
   const registryBefore = workflow.getOrderRegistry()
 
+  await ensureRecoverySellerSellReserved({ workflow, context })
   const result = await workflow.reconcileTerminalMixedSell({
     reconciliation: context.reconciliation,
     terminalOrder: context.terminalOrder,
@@ -647,6 +678,7 @@ test("fails closed when the legacy Spot base asset is missing from the authorita
 test("treats a repeated terminal RS accounting event as an exact no-op", async () => {
   const context = makeContext()
   const workflow = makeWorkflow({ context })
+  await ensureRecoverySellerSellReserved({ workflow, context })
   const input = {
     reconciliation: context.reconciliation,
     terminalOrder: context.terminalOrder,
@@ -745,11 +777,9 @@ test("commits actual fills when the combined cycle misses minProfit", async () =
     }),
   })
 
-  const result = await workflow.reconcileTerminalMixedSell({
-    reconciliation: context.reconciliation,
-    terminalOrder: context.terminalOrder,
-    canonicalFills: [context.fill],
-    canonicalFillAllocations: [context.allocation],
+  const result = await reconcileTerminalMixedSell({
+    workflow,
+    context,
     minProfit: "1",
   })
 
@@ -1394,7 +1424,23 @@ test("initializes operator-authorized legacy positions once in the shared accoun
 
 for (const terminalOrderStatus of ["CANCELED", "REJECTED", "EXPIRED"]) {
   test(`keeps a reconciled ${terminalOrderStatus} Recovery Seller SELL unresolved`, async () => {
-    const context = makeContext({ terminalOrderStatus })
+    const partialFill = makeFill({
+      quantity: "2.5",
+      quoteQuantity: "10.5",
+      price: "4.2",
+    })
+    const context = terminalOrderStatus === "REJECTED"
+      ? makeContext({
+          terminalOrderStatus,
+          executedQuantity: "0",
+        })
+      : makeContext({
+          fill: partialFill,
+          terminalOrderStatus,
+          executedQuantity: "2.5",
+          recoveryQuantity: "2.49",
+          legacyQuantity: "0.01",
+        })
     const workflow = makeWorkflow({ context })
     const openOrder = context.openRegistry.getOrder({ clientOrderId: "rs-sell-1" })
     const reservation = await reserveRecoverySellerSell({ workflow, openOrder })
@@ -1402,8 +1448,9 @@ for (const terminalOrderStatus of ["CANCELED", "REJECTED", "EXPIRED"]) {
 
     const result = await reconcileTerminalMixedSell({ workflow, context })
     assert.equal(result.ok, true, result.errors?.[0]?.message)
-    assert.equal(result.data.profitability.eligible, true,
-      "The fixture must prove that profitability alone cannot close a non-FILLED terminal SELL.")
+    const expectedProfitabilityEligible = terminalOrderStatus !== "REJECTED"
+    assert.equal(result.data.profitability.eligible, expectedProfitabilityEligible,
+      "CANCELED/EXPIRED partial proceeds may be profitable; REJECTED is constrained to zero executed quantity.")
     const cycleState = workflow.getCycleStateForMarket({ marketId: market.id })
     assert.equal(cycleState.status, "UNRESOLVED",
       "Only a FILLED terminal SELL may close the Recovery Seller cycle.")
@@ -1411,7 +1458,7 @@ for (const terminalOrderStatus of ["CANCELED", "REJECTED", "EXPIRED"]) {
       "The canonical cycle state must retain the exact non-FILLED terminal status.")
     assert.equal(cycleState.terminalReconciled, true,
       "The terminal partial-fill history must remain explicitly reconciled.")
-    assert.equal(cycleState.profitabilityEligible, true,
+    assert.equal(cycleState.profitabilityEligible, expectedProfitabilityEligible,
       "The canonical state must retain profitability without confusing it with terminal status.")
     assert.equal(cycleState.sellOrderIdentity.clientOrderId, openOrder.clientOrderId,
       "The unresolved cycle must retain its one SELL identity.")
