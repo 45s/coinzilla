@@ -389,7 +389,7 @@
   overflow-x: auto;
   padding: 0 34px;
   border-bottom: 1px solid var(--line);
-  background: var(--panel, #fff);
+  background: var(--panel-bg);
   scrollbar-width: thin;
 }
 
