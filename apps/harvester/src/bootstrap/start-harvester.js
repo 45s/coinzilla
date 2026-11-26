@@ -1498,17 +1498,19 @@ async function reportHarvesterStartupFailure({ startup, resources, accountSnapsh
       accountSnapshots,
       startupFailure: {
         component,
-        code: getSafeStartupErrorCode({ error: startupError, fallbackCode }),
+        code: getSafeStartupErrorCode({ error: startupError,
+fallbackCode }),
       },
     })
   } catch (diagnosticError) {
-    const logger = startup.logger
+    const {logger} = startup
     const writer = logger?.system ?? logger?.error ?? logger?.info
     writer?.call(logger, {
       message: "[HEALTH] Startup readiness diagnostics could not complete after the original startup failure.",
       component: "harvester-startup-readiness",
       startupComponent: component,
-      startupErrorCode: getSafeStartupErrorCode({ error: startupError, fallbackCode }),
+      startupErrorCode: getSafeStartupErrorCode({ error: startupError,
+fallbackCode }),
       diagnosticErrorCode: getSafeStartupErrorCode({
         error: diagnosticError,
         fallbackCode: "READINESS_DIAGNOSTIC_FAILED",
@@ -1569,7 +1571,8 @@ async function startHarvesterMarketServices({ startup, portfolio, resources, fre
     throw startupError
   }
   try {
-    await startHarvesterCandleHistory({ resources, marketDataPairs })
+    await startHarvesterCandleHistory({ resources,
+marketDataPairs })
   } catch (startupError) {
     await reportHarvesterStartupFailure({
       startup,
@@ -1586,7 +1589,9 @@ async function startHarvesterMarketServices({ startup, portfolio, resources, fre
     resources,
     accountSnapshots,
   })
-  await activateHarvesterTrading({ startup, resources, report })
+  await activateHarvesterTrading({ startup,
+resources,
+report })
 }
 
 async function unsubscribeMarketDataEntries(entries) {

@@ -97,7 +97,8 @@ function getEvaluationGateResult({ dependencies, symbol, shutdownRecoveryOnly } 
   if (entryGateResult) {
     return entryGateResult
   }
-  const priceGateResult = getFreshMarketPriceGateResult({ dependencies, symbol })
+  const priceGateResult = getFreshMarketPriceGateResult({ dependencies,
+symbol })
   if (!priceGateResult.marketPrice) {
     return priceGateResult
   }
