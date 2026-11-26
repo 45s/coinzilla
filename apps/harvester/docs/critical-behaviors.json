@@ -1381,13 +1381,18 @@
         },
         {
           "path": "src/infrastructure/operational-state/project-harvester-operational-state.test.js",
-          "name": "classifies Recovery Seller STOP by producer rather than a colliding reason string",
+          "name": "rejects structured user-data resolution when the Recovery Seller STOP reason has conflicting provenance",
           "kind": "failure"
         },
         {
           "path": "src/use-cases/record-safety-control-facts.test.js",
           "name": "requires structured user-data action metadata even when its reason matches Recovery Seller STOP",
           "kind": "normal"
+        },
+        {
+          "path": "src/use-cases/record-safety-control-facts.test.js",
+          "name": "rejects user-data resolution when its reason is reserved for Recovery Seller STOP",
+          "kind": "failure"
         }
       ],
       "runtimeStatus": "offline-only",
