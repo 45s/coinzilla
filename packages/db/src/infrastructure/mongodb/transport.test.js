@@ -190,3 +190,17 @@ test("MongoDB transport close rejects an in-progress connection attempt", async 
   assert.equal(socket.destroyed, true)
   assert.equal(transport.state, "closed")
 })
+
+
+test("MongoDB transport enforces the queued write-buffer bound before writing", async () => {
+  const { transport, socket } = createFakeTransport()
+  await transport.connect()
+  socket.writableLength = 64 * 1024 * 1024 - 1
+
+  await assert.rejects(
+    transport.command({ body: { ping: 1 } }),
+    /write buffer limit/i,
+  )
+  assert.equal(socket.writes.length, 0)
+  await transport.close()
+})
