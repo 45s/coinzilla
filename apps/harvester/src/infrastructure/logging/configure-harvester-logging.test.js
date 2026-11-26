@@ -939,3 +939,19 @@ test("compacts rejected lifecycle lines and retains the rejection reason", () =>
   assert.doesNotMatch(written, /#3215105/)
   output.destroy()
 })
+
+test("abbreviates Operational State Store wording in the terminal", () => {
+  const output = new PassThrough()
+  let written = ""
+  output.on("data", (chunk) => { written += chunk.toString() })
+  const transport = createHarvesterConsoleTransport({ output, color: false })
+  transport.write({
+    timestamp: "2026-11-26T21:45:18",
+    level: "info",
+    method: "info",
+    data: { message: "Operational State Store verified" },
+  })
+  assert.match(written, /OSS verified/)
+  assert.doesNotMatch(written, /Operational State Store/)
+  output.destroy()
+})
