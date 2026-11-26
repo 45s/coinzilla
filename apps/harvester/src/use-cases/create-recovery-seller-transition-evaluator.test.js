@@ -218,6 +218,50 @@ test("does not evaluate SELL before the first recovery Position exists", async (
   assert.equal(submitted.action.side, "BUY")
 })
 
+test("allows an eligible first SELL while account admission blocks new BUYs", async () => {
+  let submitted
+  const stoppedSnapshot = Object.freeze({
+    ...snapshot,
+    stopState: Object.freeze({
+      status: "STOPPED",
+      decision: Object.freeze({
+        outcome: "BLOCK",
+        reasonCode: "RS_STOPPED",
+        explanation: "STOP blocks additional BUY spending only.",
+      }),
+    }),
+    buyAdmissionBlocked: true,
+    strategyStopped: false,
+  })
+  const evaluate = createRecoverySellerTransitionEvaluator({
+    getSnapshot: async () => stoppedSnapshot,
+    evaluateSellDecision: () => createSellDecision(),
+    evaluateBuyDecision: () => createBuyDecision({
+      outcome: "WAIT",
+    }),
+    submitOrder: async (input) => {
+      submitted = input
+      return {
+        ok: true,
+        data: {
+          submitted: true,
+        },
+      }
+    },
+  })
+
+  const result = await evaluate({
+    symbol: marketPrice.symbol,
+    marketPrice,
+    marketMetadata,
+    pairConfig: {},
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(submitted.action.side, "SELL",
+    "A latched STOP must not prevent an otherwise eligible first recovery SELL.")
+})
+
 test("does not submit a BUY after the SELL policy latches STOP", async () => {
   let submitted = false
   const stoppedSellDecision = Object.freeze({

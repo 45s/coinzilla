@@ -197,6 +197,106 @@ test("production RS accounting durably stops after a profitable partial CANCELED
     fact.factType === "RECOVERY_SELLER_MIXED_SELL_RECONCILED"))
 })
 
+test("production RS accounting durably stops after a fully FILLED SELL misses the profitability target", async () => {
+  const result = await executeRecoverySellerRuntimeScenario({
+    runId: "run-rs-runtime-filled-under-target",
+    scenarioId: "RS-RUNTIME-SELL-FILLED-UNDER-TARGET-001",
+    input: {
+      marketPrice: "12.3",
+    },
+  })
+
+  assert.equal(result.passed, true, JSON.stringify(result.assertions))
+  assert.equal(result.output.terminalSell.orderStatus, "FILLED",
+    "The simulated broker lifecycle must report the complete SELL as FILLED.")
+  assert.equal(result.output.terminalSell.executedQuantity, "55",
+    "The FILLED SELL must reconcile its complete 55-unit original quantity.")
+  assert.equal(result.output.terminalSell.profitabilityEligible, false,
+    "The realized quote proceeds after the canonical commission must miss the approved target.")
+  assert.equal(result.output.terminalSell.cycleState.status, "UNRESOLVED",
+    "An under-target FILLED SELL must not close the Recovery Seller cycle.")
+  assert.equal(result.output.terminalSell.cycleState.terminalReconciled, true,
+    "The full canonical fill and terminal order facts must reconcile before STOP is accepted.")
+  assert.equal(result.output.terminalSell.cycleState.profitabilityEligible, false,
+    "The canonical cycle state must retain the failed profitability result.")
+  assert.equal(result.output.terminalSell.eventFillStaged, true,
+    "The production user-data transition must stage the canonical SELL fill exactly once.")
+  assert.equal(result.output.terminalSell.stagedSellFillCount, 1,
+    "The complete terminal SELL fill must be staged exactly once.")
+  assert.equal(result.output.terminalSell.eventWorkflowFailedClosed, true,
+    "The terminal event must fail closed after the adverse profitability outcome.")
+  assert.equal(result.output.terminalSell.marketPaused, true,
+    "The affected market must be paused after the terminal profitability STOP.")
+  assert.ok(result.output.terminalSell.pauseReasons.includes("RS_TERMINAL_SELL_PROFITABILITY_STOP"),
+    "The production event workflow must use the canonical under-target FILLED SELL STOP reason.")
+  assert.equal(result.output.terminalSell.stopFactAppended, true,
+    "The adverse FILLED SELL must durably append the account-wide STOP fact.")
+  assert.equal(result.output.reservedSellCycle, null,
+    "Canonical terminal accounting releases the completed order reservation while account STOP remains active.")
+})
+
+test("production RS STOP blocks new BUY spending while allowing an eligible first recovery SELL", async () => {
+  const result = await executeRecoverySellerRuntimeScenario({
+    runId: "run-rs-runtime-stop-buy-block-sell-allowed",
+    scenarioId: "RS-RUNTIME-STOP-BLOCK-BUY-ALLOW-SELL-001",
+    input: {
+      marketPrice: "12.3",
+    },
+  })
+
+  assert.equal(result.passed, true, JSON.stringify(result.assertions))
+  assert.equal(result.output.stopAdmissionChecks.buyActionSubmitted, false,
+    "The lower-price dispatch must not submit a new BUY while STOP is latched.")
+  assert.equal(result.output.stopAdmissionChecks.sellActionSide, "SELL",
+    "The higher-price dispatch must still submit an eligible first recovery SELL.")
+  assert.equal(result.output.stopAdmissionChecks.stopStateStatus, "STOPPED",
+    "The STOP must remain latched after the recovery SELL is submitted.")
+  assert.equal(result.output.stopAdmissionChecks.accountAdmissionBlocked, true,
+    "Account admission must remain blocked for additional BUY spending.")
+  assert.equal(result.output.action.side, "SELL")
+  assert.equal(result.output.submitted, true)
+})
+
+test("production RS runtime fails closed when account STOP persistence fails after an under-target FILLED SELL", async () => {
+  const result = await executeRecoverySellerRuntimeScenario({
+    runId: "run-rs-runtime-filled-stop-persistence-failure",
+    scenarioId: "RS-RUNTIME-SELL-STOP-PERSISTENCE-FAILURE-001",
+    input: {
+      marketPrice: "12.3",
+    },
+  })
+
+  assert.equal(result.passed, true, JSON.stringify(result.assertions))
+  assert.equal(result.output.terminalSell.orderStatus, "FILLED",
+    "The broker terminal state must remain FILLED even when STOP persistence fails.")
+  assert.equal(result.output.terminalSell.cycleState.status, "UNRESOLVED",
+    "The under-target cycle must remain unresolved.")
+  assert.equal(result.output.terminalSell.cycleState.terminalReconciled, true,
+    "Canonical terminal accounting must complete before the STOP persistence failure is handled.")
+  assert.equal(result.output.terminalSell.profitabilityEligible, false,
+    "The realized profitability gates must remain failed.")
+  assert.equal(result.output.terminalSell.stopFactAppended, false,
+    "The simulated operational store must not claim a STOP fact was persisted.")
+  assert.equal(result.output.terminalSell.stopPersistenceFailed, true,
+    "The production workflow must surface that durable account STOP could not be confirmed.")
+  assert.equal(result.output.terminalSell.marketPaused, true,
+    "The affected market must still be paused after STOP persistence fails.")
+  assert.ok(result.output.terminalSell.pauseReasons.includes("RS_TERMINAL_SELL_PROFITABILITY_STOP"),
+    "The failure path must retain the canonical under-target FILLED SELL STOP reason.")
+  assert.equal(result.output.terminalSell.eventWorkflowFailedClosed, true,
+    "The terminal event must fail closed when account STOP persistence is unavailable.")
+  assert.equal(result.output.terminalSell.accountAdmissionBlocked, true,
+    "The STOP workflow must block account admission before attempting persistence.")
+  assert.equal(result.output.terminalSell.postFailureAdmissionBlocked, true,
+    "The production runtime must continue blocking account admission after persistence fails.")
+  assert.equal(result.output.terminalSell.postFailureSubmittedOrderCount, 0,
+    "The production runtime must submit no further orders while account STOP persistence is unresolved.")
+  assert.equal(result.output.terminalSell.postFailureActionSubmitted, false,
+    "The follow-up production dispatch must not create an order action.")
+  assert.equal(result.output.reservedSellCycle, null,
+    "The terminal reservation may be released only after canonical accounting has committed.")
+})
+
 test("production RS registry exposes the runtime scenario and keeps the helper-only mapping preliminary", () => {
   const catalog = getRecoverySellerRunnerCatalog()
   assert.deepEqual(catalog.map((scenario) => scenario.id), [
@@ -204,14 +304,32 @@ test("production RS registry exposes the runtime scenario and keeps the helper-o
     "RS-RUNTIME-SELL-SUBMISSION-001",
     "RS-RUNTIME-SELL-REJECTION-001",
     "RS-RUNTIME-SELL-PARTIAL-CANCEL-001",
+    "RS-RUNTIME-SELL-FILLED-UNDER-TARGET-001",
+    "RS-RUNTIME-SELL-STOP-PERSISTENCE-FAILURE-001",
+    "RS-RUNTIME-STOP-BLOCK-BUY-ALLOW-SELL-001",
   ])
   const runtimeScenario = catalog.find((scenario) => scenario.id === "RS-RUNTIME-SELL-SUBMISSION-001")
   assert.equal(runtimeScenario.executable, false)
   assert.equal(runtimeScenario.executionStatus, "PRELIMINARY")
   assert.equal(runtimeScenario.status, "PARTIAL")
   assert.equal(runtimeScenario.layer, "APPLICATION")
-  assert.ok(runtimeScenario.readinessReasons.some((reason) => reason.includes("under-target FILLED SELL STOP")))
+  assert.equal(runtimeScenario.readinessReasons.some((reason) => reason.includes("under-target FILLED SELL STOP")), false,
+    "The under-target FILLED SELL STOP runtime scenario is now present in the production-flow catalogue.")
+  assert.ok(runtimeScenario.readinessReasons.some((reason) => reason.includes("infrastructure-failure")),
+    "General infrastructure-failure coverage remains an explicit readiness gap.")
   assert.ok(runtimeScenario.readinessReasons.some((reason) => reason.includes("OS-level sandbox")))
+  const underTargetScenario = catalog.find((scenario) =>
+    scenario.id === "RS-RUNTIME-SELL-FILLED-UNDER-TARGET-001")
+  assert.ok(underTargetScenario, "The under-target FILLED runtime scenario must be registered.")
+  assert.equal(underTargetScenario.status, "PARTIAL")
+  assert.equal(underTargetScenario.executable, false,
+    "A runtime scenario must remain non-executable until trusted OS isolation is verified.")
+  const stopFailureScenario = catalog.find((scenario) =>
+    scenario.id === "RS-RUNTIME-SELL-STOP-PERSISTENCE-FAILURE-001")
+  assert.ok(stopFailureScenario, "The STOP persistence-failure runtime scenario must be registered.")
+  assert.equal(stopFailureScenario.status, "PARTIAL")
+  assert.equal(stopFailureScenario.executable, false,
+    "Infrastructure-failure scenarios must remain non-executable until trusted OS isolation is verified.")
   assert.equal(catalog[0].executable, false)
   assert.equal(catalog[0].executionStatus, "PRELIMINARY")
 })
