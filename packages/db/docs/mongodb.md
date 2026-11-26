@@ -33,11 +33,14 @@ The provider accepts either uri or connectionString, or explicit connection fiel
 - username, password, authSource (defaults to database name)
 - authMechanism (SCRAM-SHA-256 or SCRAM-SHA-1)
 - replicaSet
+- directConnection (defaults to false; prevents replica-set primary redirection when true)
+- readPreference=primary only; other read preferences are rejected
+- retryWrites=false only; retryable writes are not implemented
 - tls (true for Node TLS defaults, or a TLS options object)
 - connectTimeoutMS (default 10,000)
 - socketTimeoutMS (default 30,000)
 
-Explicit options override URI values. The URI form is deliberately restricted to one mongodb:// seed. mongodb+srv:// and comma-separated hosts are rejected. Do not place credentials in source control; pass secrets through the runtime's secret/configuration mechanism.
+Explicit options override URI values. Supported URI options are authSource, tls/ssl, authMechanism, replicaSet, directConnection, readPreference=primary, retryWrites=false, and connection/socket timeouts. Unknown or repeated options are rejected. The URI form is deliberately restricted to one mongodb:// seed. mongodb+srv:// and comma-separated hosts are rejected. Do not place credentials in source control; pass secrets through the runtime's secret/configuration mechanism.
 
 ## BSON and record mapping
 
