@@ -570,7 +570,8 @@ test("MongoDB transport handles asynchronous write failures and exhaust response
 
   const exhaust = createFakeTransport()
   await exhaust.transport.connect()
-  exhaust.socket.respond = (socket, request) => {
+  exhaust.socket.respond = (...argumentsList) => {
+    const [socket, request] = argumentsList
     socket.emit("data", encodeOpMsg({
       requestId: 99,
       responseTo: request.requestId,
