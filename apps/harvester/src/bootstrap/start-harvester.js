@@ -130,7 +130,7 @@ function getLatestResolvedUserDataAccountBlockerIndex(records) {
     .map((record) => record.data.blockerId))
   let latestResolutionIndex = -1
   records.forEach((record, index) => {
-    const data = record.data
+    const { data } = record
     const structuredResolution = record.factType === "SAFETY_BLOCKER_RESOLVED" &&
       accountBlockerIds.has(data?.blockerId) &&
       data?.resolution === "OPERATOR_ACTION" &&

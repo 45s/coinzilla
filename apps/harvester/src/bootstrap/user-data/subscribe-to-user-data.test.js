@@ -10,13 +10,16 @@ const createState = (overrides = {}) => ({
   preflightComplete: false,
   initialAccountSnapshotReady: false,
   requiresReconciliation: false,
+  accountRecoverySnapshotRequired: false,
+  accountRecoverySnapshotWasRequired: false,
+  accountRecoverySnapshotVerified: false,
   accountingFailed: false,
   status: "NOT_SUBSCRIBED",
   eventQueue: Promise.resolve(),
   ...overrides,
 })
 
-const createFixture = ({ tradingEnabled = false, tradingMode = "testnet", state = createState(), subscribe, onEvent = () => {}, onObservation = () => {}, publishAccountSnapshot, publishOpenOrdersSnapshot, getAccountSafetyBlocker, deferTradingActivation = false, resumeDeferredStrategyEvaluations, logger = {} } = {}) => {
+const createFixture = ({ tradingEnabled = false, tradingMode = "testnet", state = createState(), subscribe, onEvent = () => {}, onObservation = () => {}, publishAccountSnapshot, publishOpenOrdersSnapshot, getAccountSafetyBlocker, getAccountReadinessSnapshot, deferTradingActivation = false, resumeDeferredStrategyEvaluations, logger = {} } = {}) => {
   const calls = []
   const events = []
   const subscription = { disconnect: async () => calls.push("disconnect") }
@@ -50,6 +53,7 @@ data: subscription }
     },
     getAccountSnapshot: () => ({ sourceTime: 100 }),
     getAccountSafetyBlocker,
+    getAccountReadinessSnapshot,
     deferTradingActivation,
     resumeDeferredStrategyEvaluations: resumeDeferredStrategyEvaluations ?? (() => calls.push("resume")),
   })
@@ -69,6 +73,81 @@ test("read-only startup subscribes, durably audits account and open orders, and 
   assert.equal(fixture.state.initialAccountSnapshotReady, true, "The initial account snapshot gate must open after its audit completes.")
   assert.equal(fixture.state.ready, false, "Read-only mode must not mark trading readiness true.")
   assert.equal(fixture.events[0].name, HARVESTER_EVENT_NAMES.BROKER_SUBSCRIPTION_ESTABLISHED, "Successful subscription must publish lifecycle evidence.")
+})
+
+test("post-resolution restart accepts only a fresh durable account and clean open-order PREFLIGHT pair", async () => {
+  const state = createState({
+    accountRecoverySnapshotRequired: true,
+    accountRecoverySnapshotWasRequired: true,
+  })
+  const fixture = createFixture({
+    state,
+    getAccountReadinessSnapshot: () => ({
+      preflight: {
+        completed: true,
+        durable: true,
+        sourceTime: 100,
+        balanceCount: 2,
+      },
+      currentAccount: {
+        sourceTime: 100,
+        balanceCount: 2,
+      },
+      openOrders: {
+        preflight: {
+          completed: true,
+          durable: true,
+          phase: "PREFLIGHT",
+          readiness: "READY",
+          blockReasons: [],
+          unownedSymbols: [],
+        },
+      },
+    }),
+  })
+
+  await fixture.result
+
+  assert.equal(state.accountRecoverySnapshotRequired, false)
+  assert.equal(state.accountRecoverySnapshotVerified, true)
+  assert.equal(state.ready, false, "Observation-only restart must not reopen trading readiness.")
+})
+
+test("post-resolution restart remains blocked when PREFLIGHT finds an unowned external order", async () => {
+  const state = createState({
+    accountRecoverySnapshotRequired: true,
+    accountRecoverySnapshotWasRequired: true,
+  })
+  const fixture = createFixture({
+    state,
+    getAccountReadinessSnapshot: () => ({
+      preflight: {
+        completed: true,
+        durable: true,
+        sourceTime: 100,
+        balanceCount: 2,
+      },
+      currentAccount: {
+        sourceTime: 100,
+        balanceCount: 2,
+      },
+      openOrders: {
+        preflight: {
+          completed: true,
+          durable: true,
+          phase: "PREFLIGHT",
+          readiness: "BLOCKED",
+          blockReasons: ["UNOWNED_EXTERNAL_ORDER"],
+          unownedSymbols: ["BTCUSDT"],
+        },
+      },
+    }),
+  })
+
+  await assert.rejects(fixture.result, /fresh durable account snapshot and a clean account-wide open-order PREFLIGHT audit/)
+  assert.equal(state.accountRecoverySnapshotRequired, true)
+  assert.equal(state.accountRecoverySnapshotVerified, false)
+  assert.equal(state.ready, false)
 })
 
 test("trading startup opens readiness only after both PREFLIGHT audits and safe stream state", async () => {
