@@ -172,3 +172,6 @@ The current implementation deliberately does not perform arbitrary Git checkout 
 ### Runtime source revision injection
 
 The Harvester API composition root reads the non-secret build metadata variable `COINZILLA_SOURCE_REVISION`. Only a full 40- or 64-character hexadecimal Git commit SHA is accepted; malformed or absent metadata is treated as unknown and disables replay. Release/build automation should set this variable to the exact source commit used to produce the running artifact. The runner does not infer a branch name or moving tag as a revision.
+
+
+The Dashboard exposes the replay command only for terminal, previously executed runs. The UI displays the original source SHA and the `replayOfRunId` relationship; a blocked replay remains visible with its server-provided reason.
