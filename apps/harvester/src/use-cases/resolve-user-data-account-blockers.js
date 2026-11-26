@@ -2,6 +2,7 @@ import { toResult } from "@coinzilla/utils"
 import {
   createAccountResolutionEvidenceDigest,
   getAccountResolutionTargetBlockers,
+  getActiveAccountResolutionBlockers,
   readVerifiedAccountResolutionProjection,
   validateAccountResolutionAudit,
   validateAccountResolutionInput,
