@@ -189,12 +189,12 @@ test("BSON decodes protocol ObjectId and timestamp values", () => {
   timestamp.writeBigUInt64LE(123456789n)
   const objectIdElement = Buffer.concat([
     Buffer.from([0x07]),
-    Buffer.from("objectId\\0"),
+    Buffer.from("objectId\0"),
     objectId,
   ])
   const timestampElement = Buffer.concat([
     Buffer.from([0x11]),
-    Buffer.from("timestamp\\0"),
+    Buffer.from("timestamp\0"),
     timestamp,
   ])
   const decoded = decodeBsonDocument(rawBsonDocument([
@@ -210,7 +210,7 @@ test("BSON decoder rejects duplicate keys, invalid array indexes, and unsupporte
   const int32 = (key, value) => {
     const payload = Buffer.alloc(4)
     payload.writeInt32LE(value)
-    return Buffer.concat([Buffer.from([0x10]), Buffer.from(`${key}\\0`), payload])
+    return Buffer.concat([Buffer.from([0x10]), Buffer.from(`${key}\0`), payload])
   }
   assert.throws(
     () => decodeBsonDocument(rawBsonDocument([
@@ -223,7 +223,7 @@ test("BSON decoder rejects duplicate keys, invalid array indexes, and unsupporte
   const invalidArray = rawBsonDocument([int32("1", 1)])
   const arrayElement = Buffer.concat([
     Buffer.from([0x04]),
-    Buffer.from("values\\0"),
+    Buffer.from("values\0"),
     invalidArray,
   ])
   assert.throws(
@@ -233,7 +233,7 @@ test("BSON decoder rejects duplicate keys, invalid array indexes, and unsupporte
 
   assert.throws(
     () => decodeBsonDocument(rawBsonDocument([
-      Buffer.concat([Buffer.from([0xff]), Buffer.from("unknown\\0")]),
+      Buffer.concat([Buffer.from([0xff]), Buffer.from("unknown\0")]),
     ])),
     /Unsupported BSON element type/,
   )
