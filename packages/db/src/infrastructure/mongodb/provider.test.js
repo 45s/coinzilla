@@ -813,3 +813,35 @@ test("MongoDB URI authSource defaults to the effective databaseName after an exp
     await provider.close()
   }
 })
+
+test("MongoDB URI authSource remains explicit when databaseName is overridden", async () => {
+  let handshakeOptions
+  const provider = createMongoProvider({
+    uri: "mongodb://alice:secret@localhost/original?authSource=security",
+    databaseName: "override",
+    transportFactory: () => ({
+      async connect() {},
+      async command() {
+        throw new Error("The injected handshake must own handshake commands")
+      },
+      async close() {},
+    }),
+    handshake: async (options) => {
+      handshakeOptions = options
+      return {
+        topology: "standalone",
+        transactionSupported: false,
+        sessionsSupported: false,
+        primary: null,
+      }
+    },
+  })
+
+  await provider.connect()
+  try {
+    assert.equal(handshakeOptions.databaseName, "override")
+    assert.equal(handshakeOptions.authSource, "security")
+  } finally {
+    await provider.close()
+  }
+})

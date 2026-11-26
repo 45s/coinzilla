@@ -30,7 +30,7 @@ The provider accepts either uri or connectionString, or explicit connection fiel
 
 - host, port (default 27017)
 - databaseName (default admin)
-- username, password, authSource (defaults to database name)
+- username, password, authSource (defaults to the effective databaseName after URI and explicit-option overrides)
 - authMechanism (SCRAM-SHA-256 or SCRAM-SHA-1)
 - replicaSet
 - directConnection (defaults to false; prevents replica-set primary redirection when true; a replica-set secondary target is rejected because only primary routing is supported)
