@@ -198,7 +198,6 @@ assert.equal(
 
 - `DatabaseConflictError` identifies a duplicate record identifier. Its stable code is `DB_RECORD_CONFLICT`.
 - `DatabaseProviderError` identifies a provider operation failure. Its stable code is `DB_PROVIDER_OPERATION_FAILED`; the original provider failure is preserved as `cause`. `DatabaseTransactionUnsupportedError` identifies an unsupported multi-document or nested transaction capability with stable code `DB_TRANSACTION_UNSUPPORTED` and a provider-neutral `context.capability`.
-- `DatabaseTransactionUnsupportedError` identifies a provider/topology that cannot guarantee the requested multi-document transaction (`DB_TRANSACTION_UNSUPPORTED`).
 - `DatabaseOperationOutcomeUnknownError` identifies a non-transactional write sent to the server whose response was lost (`DB_OPERATION_OUTCOME_UNKNOWN`); read/reconcile the record before retrying.
 - `DatabaseTransactionOutcomeUnknownError` identifies a commit whose final outcome could not be confirmed (`DB_TRANSACTION_OUTCOME_UNKNOWN`); reconcile before retrying application work.
 - Invalid collection names, identifiers, records and queries throw `TypeError`.
