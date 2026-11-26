@@ -128,7 +128,10 @@ function assertProviderOptions(options) {
 }
 
 function createTransactionCommand({ transport, session }) {
-  return async function runSessionCommand({ body, sequences, timeoutMS }) {
+  let queue = Promise.resolve()
+  let firstError = null
+
+  async function sendSessionCommand({ body, sequences, timeoutMS }) {
     const database = body.$db
     const commandBody = { ...body }
     delete commandBody.$db
@@ -144,12 +147,37 @@ function createTransactionCommand({ transport, session }) {
       session.started = true
     }
     sessionBody.$db = database
-    return transport.command({
+    const response = await transport.command({
       body: sessionBody,
       sequences,
       timeoutMS,
     })
+    if (!response || Number(response.ok) !== 1
+      || (Array.isArray(response.writeErrors) && response.writeErrors.length > 0)
+      || response.writeConcernError) {
+      const failure = response?.writeErrors?.[0] ?? response?.writeConcernError ?? response
+      throw createServerCommandError(failure ?? {})
+    }
+    return response
   }
+
+  const runSessionCommand = ({ body, sequences, timeoutMS }) => {
+    const operation = queue.then(() => {
+      if (firstError) throw firstError
+      return sendSessionCommand({ body, sequences, timeoutMS })
+    })
+    operation.catch(() => {})
+    queue = operation.catch((error) => {
+      firstError ??= error
+    })
+    return operation
+  }
+
+  runSessionCommand.drain = async () => {
+    await queue
+    if (firstError) throw firstError
+  }
+  return runSessionCommand
 }
 
 function createSession({ state, randomBytes }) {
@@ -257,12 +285,34 @@ function createTransactionRunner({ state, randomBytes }) {
       command,
       databaseName: state.options.databaseName,
     })
-    const transaction = transactionScope.run(session, async () => work(operations))
+    let callbackResult
+    const transaction = transactionScope.run(session, async () => {
+      callbackResult = work(operations)
+      return callbackResult
+    })
 
     let result
     try {
       result = await transaction
+      await command.drain()
+      if (session.started
+        && !(callbackResult !== null
+          && (typeof callbackResult === "object" || typeof callbackResult === "function")
+          && typeof callbackResult.then === "function")) {
+        throw new TypeError("MongoDB transaction callbacks must await asynchronous CRUD operations")
+      }
     } catch (error) {
+      try {
+        await command.drain()
+      } catch (drainError) {
+        if (error !== drainError && error?.cause !== drainError) {
+          error = new AggregateError(
+            [error, drainError],
+            "MongoDB transaction callback and pending command both failed",
+            { cause: error },
+          )
+        }
+      }
       if (session.started) {
         try {
           await abortMongoTransaction({
