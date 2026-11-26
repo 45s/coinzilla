@@ -11867,6 +11867,11 @@ test("pauses a market after durable submission-intent failure so repeated ticks 
   let intentCalls = 0
   let brokerCalls = 0
   const harness = await createHarness({
+    providerIdentity: {
+      providerInstanceId: "binanceTestnet",
+      providerType: "binance",
+      accountId: "binance-primary",
+    },
     onOperationalStateSubmissionIntent: async () => {
       intentCalls += 1
       return {
