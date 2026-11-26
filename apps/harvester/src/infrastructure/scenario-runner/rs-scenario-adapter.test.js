@@ -120,10 +120,26 @@ test("production RS runtime resolves caller-supplied symbol, configuration and m
     step.source === "createRecoverySellerRuntimeDispatch")
   assert.equal(runtimeStep.inputs.symbol, "ADAUSDT")
   assert.deepEqual(runtimeStep.inputs.marketMetadata.tradingRules, [
-    { type: "PRICE_INCREMENT", status: "SUPPORTED", amount: "0.01" },
-    { type: "QUANTITY_INCREMENT", status: "SUPPORTED", amount: "0.1" },
-    { type: "MIN_QUANTITY", status: "SUPPORTED", amount: "0.1" },
-    { type: "MIN_NOTIONAL", status: "SUPPORTED", amount: "5" },
+    {
+      type: "PRICE_INCREMENT",
+      status: "SUPPORTED",
+      amount: "0.01",
+    },
+    {
+      type: "QUANTITY_INCREMENT",
+      status: "SUPPORTED",
+      amount: "0.1",
+    },
+    {
+      type: "MIN_QUANTITY",
+      status: "SUPPORTED",
+      amount: "0.1",
+    },
+    {
+      type: "MIN_NOTIONAL",
+      status: "SUPPORTED",
+      amount: "5",
+    },
   ])
 })
 

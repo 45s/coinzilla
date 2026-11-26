@@ -48,33 +48,107 @@ const RUNTIME_FIXTURE = Object.freeze({
       "legacyInvested", "legacyQuantity", "enableVolatilityProtection", "externalOrdersPolicy",
     ],
     additionalProperties: false,
-    properties: Object.freeze({
-      marketPrice: Object.freeze({ type: "string", pattern: "^(?:0|[1-9][0-9]*)(?:[.][0-9]+)?$", exclusiveMinimum: "0" }),
-      symbol: Object.freeze({ type: "string", pattern: "^[A-Z0-9]{3,20}$" }),
-      baseAssetCode: Object.freeze({ type: "string", pattern: "^[A-Z0-9]{2,10}$" }),
-      quoteAssetCode: Object.freeze({ type: "string", pattern: "^[A-Z0-9]{2,10}$" }),
-      venue: Object.freeze({ type: "string", pattern: "^[a-z0-9_-]{2,32}$" }),
-      initialBuyPrice: Object.freeze({ type: "string", pattern: "^(?:0|[1-9][0-9]*)(?:[.][0-9]+)?$", exclusiveMinimum: "0" }),
-      quoteBalanceFree: Object.freeze({ type: "string", pattern: "^(?:0|[1-9][0-9]*)(?:[.][0-9]+)?$", exclusiveMinimum: "0" }),
-      priceIncrement: Object.freeze({ type: "string", pattern: "^(?:0|[1-9][0-9]*)(?:[.][0-9]+)?$", exclusiveMinimum: "0" }),
-      quantityIncrement: Object.freeze({ type: "string", pattern: "^(?:0|[1-9][0-9]*)(?:[.][0-9]+)?$", exclusiveMinimum: "0" }),
-      minQuantity: Object.freeze({ type: "string", pattern: "^(?:0|[1-9][0-9]*)(?:[.][0-9]+)?$", exclusiveMinimum: "0" }),
-      minNotional: Object.freeze({ type: "string", pattern: "^(?:0|[1-9][0-9]*)(?:[.][0-9]+)?$", exclusiveMinimum: "0" }),
-      investment: Object.freeze({ type: "number" }),
-      orderQuantity: Object.freeze({ type: "number" }),
-      sellQuantity: Object.freeze({ type: "number" }),
-      keepQuantity: Object.freeze({ type: "number" }),
-      minProfit: Object.freeze({ type: "number" }),
-      priceStepPercent: Object.freeze({ type: "number" }),
-      makerPercent: Object.freeze({ type: "number" }),
-      takerPercent: Object.freeze({ type: "number" }),
-      thirdAssetFeeQuoteValue: Object.freeze({ type: "string", pattern: "^(?:0|[1-9][0-9]*)(?:[.][0-9]+)?$" }),
-      pricePrecision: Object.freeze({ type: "number" }),
-      quantityPrecision: Object.freeze({ type: "number" }),
-      legacyInvested: Object.freeze({ type: "number" }),
-      legacyQuantity: Object.freeze({ type: "number" }),
-      enableVolatilityProtection: Object.freeze({ type: "boolean" }),
-      externalOrdersPolicy: Object.freeze({ type: "string", pattern: "^(?:BLOCK|IGNORE)$" }),
+properties: Object.freeze({
+      marketPrice: Object.freeze({
+        type: "string",
+        pattern: "^(?:0|[1-9][0-9]*)(?:[.][0-9]+)?$",
+        exclusiveMinimum: "0",
+      }),
+      symbol: Object.freeze({
+        type: "string",
+        pattern: "^[A-Z0-9]{3,20}$",
+      }),
+      baseAssetCode: Object.freeze({
+        type: "string",
+        pattern: "^[A-Z0-9]{2,10}$",
+      }),
+      quoteAssetCode: Object.freeze({
+        type: "string",
+        pattern: "^[A-Z0-9]{2,10}$",
+      }),
+      venue: Object.freeze({
+        type: "string",
+        pattern: "^[a-z0-9_-]{2,32}$",
+      }),
+      initialBuyPrice: Object.freeze({
+        type: "string",
+        pattern: "^(?:0|[1-9][0-9]*)(?:[.][0-9]+)?$",
+        exclusiveMinimum: "0",
+      }),
+      quoteBalanceFree: Object.freeze({
+        type: "string",
+        pattern: "^(?:0|[1-9][0-9]*)(?:[.][0-9]+)?$",
+        exclusiveMinimum: "0",
+      }),
+      priceIncrement: Object.freeze({
+        type: "string",
+        pattern: "^(?:0|[1-9][0-9]*)(?:[.][0-9]+)?$",
+        exclusiveMinimum: "0",
+      }),
+      quantityIncrement: Object.freeze({
+        type: "string",
+        pattern: "^(?:0|[1-9][0-9]*)(?:[.][0-9]+)?$",
+        exclusiveMinimum: "0",
+      }),
+      minQuantity: Object.freeze({
+        type: "string",
+        pattern: "^(?:0|[1-9][0-9]*)(?:[.][0-9]+)?$",
+        exclusiveMinimum: "0",
+      }),
+      minNotional: Object.freeze({
+        type: "string",
+        pattern: "^(?:0|[1-9][0-9]*)(?:[.][0-9]+)?$",
+        exclusiveMinimum: "0",
+      }),
+      investment: Object.freeze({
+        type: "number",
+      }),
+      orderQuantity: Object.freeze({
+        type: "number",
+      }),
+      sellQuantity: Object.freeze({
+        type: "number",
+      }),
+      keepQuantity: Object.freeze({
+        type: "number",
+      }),
+      minProfit: Object.freeze({
+        type: "number",
+      }),
+      priceStepPercent: Object.freeze({
+        type: "number",
+      }),
+      makerPercent: Object.freeze({
+        type: "number",
+      }),
+      takerPercent: Object.freeze({
+        type: "number",
+      }),
+      thirdAssetFeeQuoteValue: Object.freeze({
+        type: "string",
+        pattern: "^(?:0|[1-9][0-9]*)(?:[.][0-9]+)?$",
+      }),
+      pricePrecision: Object.freeze({
+        type: "number",
+      }),
+      quantityPrecision: Object.freeze({
+        type: "number",
+      }),
+      legacyInvested: Object.freeze({
+        type: "number",
+      }),
+      legacyQuantity: Object.freeze({
+        type: "number",
+      }),
+      enableVolatilityProtection: Object.freeze({
+        type: "boolean",
+      }),
+      externalOrdersPolicy: Object.freeze({
+        type: "string",
+        pattern: "^(?:BLOCK|IGNORE)$",
+      }),
+    }),
+
     }),
   }),
   input: Object.freeze({
@@ -320,10 +394,38 @@ function createRuntimeScenarioMarketMetadata({ market, baseAsset, quoteAsset, in
     tradingRules: new TradingRules({
       market,
       constraints: [
-        { type: "PRICE_INCREMENT", status: "SUPPORTED", value: new Money({ amount: input.priceIncrement, asset: quoteAsset }) },
-        { type: "QUANTITY_INCREMENT", status: "SUPPORTED", value: new Quantity({ amount: input.quantityIncrement, asset: baseAsset }) },
-        { type: "MIN_QUANTITY", status: "SUPPORTED", value: new Quantity({ amount: input.minQuantity, asset: baseAsset }) },
-        { type: "MIN_NOTIONAL", status: "SUPPORTED", value: new Money({ amount: input.minNotional, asset: quoteAsset }) },
+        {
+          type: "PRICE_INCREMENT",
+          status: "SUPPORTED",
+          value: new Money({
+            amount: input.priceIncrement,
+            asset: quoteAsset,
+          }),
+        },
+        {
+          type: "QUANTITY_INCREMENT",
+          status: "SUPPORTED",
+          value: new Quantity({
+            amount: input.quantityIncrement,
+            asset: baseAsset,
+          }),
+        },
+        {
+          type: "MIN_QUANTITY",
+          status: "SUPPORTED",
+          value: new Quantity({
+            amount: input.minQuantity,
+            asset: baseAsset,
+          }),
+        },
+        {
+          type: "MIN_NOTIONAL",
+          status: "SUPPORTED",
+          value: new Money({
+            amount: input.minNotional,
+            asset: quoteAsset,
+          }),
+        },
       ],
     }),
   }
@@ -344,18 +446,33 @@ function createRuntimeScenarioAccountSnapshot({
   return new AccountSnapshot({
     balances: [
       new Balance({
-        free: new Quantity({ amount: totalBaseQuantity, asset: baseAsset }),
-        locked: new Quantity({ amount: "0", asset: baseAsset }),
+        free: new Quantity({
+          amount: totalBaseQuantity,
+          asset: baseAsset,
+        }),
+        locked: new Quantity({
+          amount: "0",
+          asset: baseAsset,
+        }),
       }),
       new Balance({
-        free: new Quantity({ amount: quoteBalanceFree, asset: quoteAsset }),
-        locked: new Quantity({ amount: "0", asset: quoteAsset }),
+        free: new Quantity({
+          amount: quoteBalanceFree,
+          asset: quoteAsset,
+        }),
+        locked: new Quantity({
+          amount: "0",
+          asset: quoteAsset,
+        }),
       }),
     ],
     sourceTime: 1,
     quoteCashFlowBaseline: [{
       assetId: quoteAsset.id,
-      amount: subtractDecimal({ left: "0", right: buyQuoteQuantity }),
+      amount: subtractDecimal({
+        left: "0",
+        right: buyQuoteQuantity,
+      }),
     }],
     portfolioBaseQuantityBaseline: [{
       assetId: baseAsset.id,
@@ -983,31 +1100,26 @@ function createRuntimeScenarioMixedSellReconciler({
   }
 }
 
-function createRuntimeScenarioOrderEventWorkflow({
-  runtime,
-  eventState,
-  fill,
-  stagedSellFills,
-  pauses,
-  reconcileRecoverySellerMixedSell,
-}) {
-  return makeOrderEventWorkflow({
-    state: eventState,
-    broker: {
-      getFills: async () => toResult({
-        data: [fill],
-      }),
-    },
-    pairs: {
-      [runtime.market.symbol]: runtime.pairConfig,
-    },
-    eventPublisher: {
-      publish: () => toResult({
-        data: {
-          accepted: true,
-        },
-      }),
-    },
+function createRuntimeScenarioEventBroker({ fill }) {
+  return {
+    getFills: async () => toResult({
+      data: [fill],
+    }),
+  }
+}
+
+function createRuntimeScenarioEventPublisher() {
+  return {
+    publish: () => toResult({
+      data: {
+        accepted: true,
+      },
+    }),
+  }
+}
+
+function createRuntimeScenarioEventAccountingPorts({ stagedSellFills }) {
+  return {
     updateTradingAccounting: async () => toResult({
       data: {
         applied: true,
@@ -1022,6 +1134,11 @@ function createRuntimeScenarioOrderEventWorkflow({
     }),
     recordBuyExecutionFill: () => {},
     recordSellExecutionFill: ({ fill: stagedFill }) => stagedSellFills.push(stagedFill),
+  }
+}
+
+function createRuntimeScenarioEventControlPorts({ pauses }) {
+  return {
     pause: async (input) => pauses.push(input),
     resolveRecoveryManagedCancellation: () => false,
     cancelAndReconcileRecoverySells: async () => toResult({
@@ -1042,6 +1159,11 @@ function createRuntimeScenarioOrderEventWorkflow({
     publishRecoveryCycleNotCompleted: () => {},
     isStopping: () => false,
     onUnownedExternalOrderObserved: () => {},
+  }
+}
+
+function createRuntimeScenarioEventSafetyPorts({ runtime, reconcileRecoverySellerMixedSell }) {
+  return {
     reconcileRecoverySellerMixedSell,
     latchRecoverySellerStop: async ({ order, reason, error }) => runtime.stopWorkflow.latch({
       explanation: `Scenario Runner terminal reconciliation failed: ${reason}: ${error?.message ?? "unknown"}`,
@@ -1050,9 +1172,36 @@ function createRuntimeScenarioOrderEventWorkflow({
         ...(order.brokerOrderId ? { brokerOrderId: order.brokerOrderId } : {}),
       },
     }),
-  })
+  }
 }
 
+function createRuntimeScenarioOrderEventWorkflow({
+  runtime,
+  eventState,
+  fill,
+  stagedSellFills,
+  pauses,
+  reconcileRecoverySellerMixedSell,
+}) {
+  return makeOrderEventWorkflow({
+    state: eventState,
+    broker: createRuntimeScenarioEventBroker({ fill }),
+    pairs: {
+      [runtime.market.symbol]: runtime.pairConfig,
+    },
+    eventPublisher: createRuntimeScenarioEventPublisher(),
+    ...createRuntimeScenarioEventAccountingPorts({
+      stagedSellFills,
+    }),
+    ...createRuntimeScenarioEventControlPorts({
+      pauses,
+    }),
+    ...createRuntimeScenarioEventSafetyPorts({
+      runtime,
+      reconcileRecoverySellerMixedSell,
+    }),
+  })
+}
 function assertRuntimeScenarioPartialSellReconciled({ eventResult, terminalAccountingResult }) {
   if (eventResult?.ok === true && terminalAccountingResult?.ok === true) {
     return

@@ -1462,33 +1462,11 @@ for (const terminalOrderStatus of ["CANCELED", "EXPIRED"]) {
   })
 }
 
-test("commits a zero-fill REJECTED Recovery Seller SELL as reconciled UNRESOLVED", async () => {
-  const context = makeContext({
-    terminalOrderStatus: "REJECTED",
-    executedQuantity: "0",
-  })
-  const durableFacts = []
-  const workflow = makeWorkflow({
-    context,
-    onOperationalStateRecoverySellerMixedSellReconciled: async (fact) => {
-      durableFacts.push(fact)
-      return {
-        ok: true,
-        data: {
-          durable: true,
-        },
-      }
-    },
-  })
-  const openOrder = context.openRegistry.getOrder({
-    clientOrderId: "rs-sell-1",
-  })
-  const reservation = await reserveRecoverySellerSell({
-    workflow,
-    openOrder,
-  })
-  assert.equal(reservation.ok, true, reservation.errors?.[0]?.message)
-
+async function assertZeroFillRejectedRecoverySellerTerminal({
+  workflow,
+  context,
+  durableFacts,
+}) {
   const result = await reconcileTerminalMixedSell({
     workflow,
     context,
@@ -1531,6 +1509,39 @@ test("commits a zero-fill REJECTED Recovery Seller SELL as reconciled UNRESOLVED
   assert.equal(duplicate.data.duplicate, true)
   assert.equal(durableFacts.length, 1,
     "Replaying the zero-fill terminal boundary must not append a second durable fact.")
+}
+
+test("commits a zero-fill REJECTED Recovery Seller SELL as reconciled UNRESOLVED", async () => {
+  const context = makeContext({
+    terminalOrderStatus: "REJECTED",
+    executedQuantity: "0",
+  })
+  const durableFacts = []
+  const workflow = makeWorkflow({
+    context,
+    onOperationalStateRecoverySellerMixedSellReconciled: async (fact) => {
+      durableFacts.push(fact)
+      return {
+        ok: true,
+        data: {
+          durable: true,
+        },
+      }
+    },
+  })
+  const openOrder = context.openRegistry.getOrder({
+    clientOrderId: "rs-sell-1",
+  })
+  const reservation = await reserveRecoverySellerSell({
+    workflow,
+    openOrder,
+  })
+  assert.equal(reservation.ok, true, reservation.errors?.[0]?.message)
+  await assertZeroFillRejectedRecoverySellerTerminal({
+    workflow,
+    context,
+    durableFacts,
+  })
 })
 
 test("keeps a FILLED but under-target Recovery Seller SELL unresolved", async () => {
