@@ -92,6 +92,54 @@ test("internal RS runtime fixture exercises the production SELL dispatch with a 
   assert.ok(result.trace.some((step) => step.kind === "assertion"))
 })
 
+test("production RS runtime resolves caller-supplied symbol, configuration and market rules", async () => {
+  const result = await executeRecoverySellerRuntimeScenario({
+    runId: "run-rs-runtime-custom-config",
+    input: {
+      marketPrice: "12.3",
+      symbol: "ADAUSDT",
+      baseAssetCode: "ADA",
+      quoteAssetCode: "USDT",
+      orderQuantity: 6,
+      sellQuantity: 40,
+      legacyInvested: 80,
+      legacyQuantity: 40,
+      investment: 80,
+      priceIncrement: "0.01",
+      quantityIncrement: "0.1",
+      minQuantity: "0.1",
+      minNotional: "5",
+      pricePrecision: 2,
+      quantityPrecision: 1,
+    },
+  })
+
+  assert.equal(result.passed, true, JSON.stringify(result.assertions))
+  assert.equal(result.output.action.quantity, "46")
+  const runtimeStep = result.trace.find((step) =>
+    step.source === "createRecoverySellerRuntimeDispatch")
+  assert.equal(runtimeStep.inputs.symbol, "ADAUSDT")
+  assert.deepEqual(runtimeStep.inputs.marketMetadata.tradingRules, [
+    { type: "PRICE_INCREMENT", status: "SUPPORTED", amount: "0.01" },
+    { type: "QUANTITY_INCREMENT", status: "SUPPORTED", amount: "0.1" },
+    { type: "MIN_QUANTITY", status: "SUPPORTED", amount: "0.1" },
+    { type: "MIN_NOTIONAL", status: "SUPPORTED", amount: "5" },
+  ])
+})
+
+test("production RS runtime rejects inconsistent symbol/asset configuration before dispatch", async () => {
+  await assert.rejects(
+    executeRecoverySellerRuntimeScenario({
+      runId: "run-rs-runtime-invalid-market",
+      input: {
+        symbol: "ADAUSDT",
+        baseAssetCode: "BTC",
+      },
+    }),
+    /symbol must match its base and quote asset codes/,
+  )
+})
+
 test("production RS submitter records a rejected SELL and invokes the STOP workflow", async () => {
   const result = await executeRecoverySellerRuntimeScenario({
     runId: "run-rs-runtime-rejected",
