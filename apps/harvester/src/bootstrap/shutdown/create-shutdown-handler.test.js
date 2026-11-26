@@ -167,17 +167,9 @@ function createShutdown(input = {}) {
     calls,
   }
 }
-async function assertClosingAuditTimeout({
-  fixture,
-  calls,
-  auditStarted,
-  getClosingAuditDeadline,
-  getClosingAuditTimeoutMs,
-  getAuditCalls,
-  stopPromise,
-} = {}) {
+async function waitForAuditStartOrShutdownFailure({ auditStarted, stopPromise } = {}) {
   let auditStartTimeout
-  const startOutcome = await Promise.race([
+  const outcome = await Promise.race([
     auditStarted.then(() => ({ status: "audit-started" })),
     stopPromise.then(
       () => ({ status: "shutdown-resolved-before-audit" }),
@@ -188,6 +180,22 @@ async function assertClosingAuditTimeout({
     }),
   ])
   clearTimeout(auditStartTimeout)
+  return outcome
+}
+
+async function assertClosingAuditTimeout({
+  fixture,
+  calls,
+  auditStarted,
+  getClosingAuditDeadline,
+  getClosingAuditTimeoutMs,
+  getAuditCalls,
+  stopPromise,
+} = {}) {
+  const startOutcome = await waitForAuditStartOrShutdownFailure({
+    auditStarted,
+    stopPromise,
+  })
   assert.equal(
     startOutcome.status,
     "audit-started",
@@ -219,6 +227,7 @@ test("bounds a pending CLOSING audit phase and retains shared services", async (
   const calls = []
   let resolveAudit
   let auditCalls = 0
+  let closingAuditStarted = false
   let markAuditStarted
   let closingAuditDeadline
   let closingAuditTimeoutMs
@@ -242,10 +251,13 @@ test("bounds a pending CLOSING audit phase and retains shared services", async (
     strategyShutdownCoordinator,
     publishAccountSnapshot: async () => {
       auditCalls += 1
+      closingAuditStarted = true
       markAuditStarted()
       return pendingAudit
     },
-    logger: { system: (entry) => calls.push(`${entry.shutdownPhase}:${entry.phaseStatus}`) },
+    logger: {
+      system: (entry) => calls.push(`${entry.shutdownPhase}:${entry.phaseStatus}`),
+    },
     phaseTimeoutMs: 25,
     setTimeoutFn: ({ callback, timeoutMs, phase }) => {
       if (phase === "CLOSING_AUDIT") {
@@ -271,10 +283,12 @@ test("bounds a pending CLOSING audit phase and retains shared services", async (
     })
   } finally {
     resolveAudit?.({ ok: true })
-    await Promise.all([
-      stopPromise.catch(() => {}),
-      retryStopPromise?.catch(() => {}),
-    ])
+    if (closingAuditStarted) {
+      await Promise.all([
+        stopPromise.catch(() => {}),
+        retryStopPromise?.catch(() => {}),
+      ])
+    }
   }
 })
 
