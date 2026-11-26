@@ -534,8 +534,7 @@ test("provider-neutral facade rejects async callbacks for synchronous providers"
   }
 })
 
-test("provider-neutral transaction facade forwards every CRUD method", async () => {
-  const calls = []
+function createTransactionForwardingProvider({ calls }) {
   const transaction = {
     create(input) {
       calls.push(["create", input])
@@ -553,7 +552,7 @@ test("provider-neutral transaction facade forwards every CRUD method", async () 
       calls.push(["delete", input])
     },
   }
-  const provider = {
+  return {
     capabilities: {
       transactions: {
         callbackMode: "asynchronous",
@@ -579,20 +578,36 @@ test("provider-neutral transaction facade forwards every CRUD method", async () 
     },
     execute() {},
   }
+}
+
+test("provider-neutral transaction facade forwards every CRUD method", async () => {
+  const calls = []
+  const provider = createTransactionForwardingProvider({ calls })
   const database = createDatabase({ provider })
   await database.connect()
 
   try {
     await database.transaction(async (context) => {
-      await context.create({ collection: "people", record: { id: "one" } })
-      await context.readOne({ collection: "people", id: "one" })
-      await context.readMany({ collection: "people" })
+      await context.create({
+        collection: "people",
+        record: { id: "one" },
+      })
+      await context.readOne({
+        collection: "people",
+        id: "one",
+      })
+      await context.readMany({
+        collection: "people",
+      })
       await context.update({
         collection: "people",
         id: "one",
         changes: { name: "Ada" },
       })
-      await context.delete({ collection: "people", id: "one" })
+      await context.delete({
+        collection: "people",
+        id: "one",
+      })
     })
     assert.deepEqual(
       calls.map(([method]) => method),
