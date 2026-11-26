@@ -159,7 +159,7 @@ function createBlockedRecord({
     strategyId,
     scenarioId,
     scenarioIdentity: createScenarioIdentity({ strategyId, scenarioId }),
-    inputSha256: input === null ? null : createJsonDigest(input),
+    inputSha256: createJsonDigest(input),
     replayProvenance: replayProvenance === null ? null : structuredClone(replayProvenance),
     sourceRevision,
     replayOfRunId,
