@@ -738,3 +738,42 @@ test("CLI returns nonzero when durable resolution is not confirmed", async () =>
   assert.equal(exitCode, 1)
   assert.equal(errors.length, 0)
 })
+
+test("rejects an action ID already present in durable resolution history", async () => {
+  const store = makeStore()
+  const read = await store.readAll()
+  const records = [...read.data.records, fact({
+    sequence: 7,
+    factType: "SAFETY_BLOCKER_RESOLVED",
+    data: {
+      blockerId: "b".repeat(64),
+      resolvedBy: "operator:prior-operator:action-unique-012",
+      resolution: "OPERATOR_ACTION",
+      evidenceDigest: "d".repeat(64),
+    },
+    factId: `safety-blocker-resolved:${"b".repeat(64)}`,
+  })]
+  store.readAll = async () => ({
+    ok: true,
+    data: {
+      ...read.data,
+      records,
+    },
+  })
+  let auditCalls = 0
+  const result = await runOfflineAccountBlockerResolution({
+    context: makeContext(),
+    operationalStateStore: store,
+    operatorId: "operator-7",
+    actionId: "action-unique-012",
+    causeFixed: true,
+    reconcileMarket: async () => {
+      auditCalls += 1
+      return readyMarketAudit("BTCUSDT")
+    },
+  })
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /action ID has already been used/)
+  assert.equal(auditCalls, 0)
+})
