@@ -1,0 +1,62 @@
+name: Temporary MongoDB provider ESLint autofix
+
+on:
+  push:
+    branches:
+      - feat/db/dependency-free-mongodb-provider-1865
+
+permissions:
+  contents: write
+
+concurrency:
+  group: mongodb-eslint-autofix
+  cancel-in-progress: true
+
+jobs:
+  autofix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out feature branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        with:
+          version: 12.11.2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24.x
+          cache: pnpm
+
+      - name: Install dependencies without lifecycle scripts
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Apply ESLint-supported safe fixes to changed database JavaScript
+        shell: bash
+        run: |
+          git fetch --no-tags origin develop
+          mapfile -t files < <(git diff --name-only origin/develop...HEAD -- 'packages/db/**/*.js')
+          if (( ${#files[@]} == 0 )); then
+            echo "No changed database JavaScript files."
+            exit 0
+          fi
+          set +e
+          pnpm exec eslint "${files[@]}" --fix
+          lint_status=$?
+          set -e
+          git add -- "${files[@]}"
+          if git diff --cached --quiet; then
+            echo "ESLint produced no automatic changes (exit ${lint_status})."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "style(db): apply safe ESLint autofixes"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
+          echo "Committed safe autofixes; remaining lint exit code was ${lint_status}."
