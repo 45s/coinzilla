@@ -21,6 +21,7 @@
 Foundation [PR #1837](https://github.com/45s/coinzilla/pull/1837) is merged. It does **not** make the Scenario Runner production-ready or executable.
 
 The current [Runner roadmap](../../apps/dashboard/docs/features/gc-strategy-lab/RUNNER_ROADMAP.md) remains the feature-specific plan. Keep execution blocked until:
+
 - full user-data event transition and terminal reconciliation scenarios are composed;
 - under-target FILLED SELL STOP and general infrastructure-failure scenarios are covered;
 - a trusted OS-level sandbox and matching attestation are available and verified;
