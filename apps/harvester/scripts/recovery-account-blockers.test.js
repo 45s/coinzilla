@@ -274,7 +274,7 @@ test("audits every configured market before recording account blocker resolution
   assert.equal(result.ok, true)
   assert.deepEqual(reconciledSymbols, configuredMarkets)
   assert.deepEqual(resolutionRequest.configuredMarkets, configuredMarkets)
-  assert.deepEqual(resolutionRequest.reconcileAccount && [blockerId], [blockerId])
+  assert.equal(typeof resolutionRequest.reconcileAccount, "function")
 })
 
 test("fails closed if any configured market is not fully reconciled", async () => {
