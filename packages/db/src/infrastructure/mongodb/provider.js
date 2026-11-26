@@ -548,24 +548,25 @@ export function createMongoProvider(options = {}) {
         command: (commandInput) => state.transport.command(commandInput),
         databaseName: state.options.databaseName,
       })
-      let operationCount = 0
+      let readOperationPromise = null
+      function invokeRead(method, input) {
+        if (readOperationPromise) {
+          return Promise.resolve(readOperationPromise).then(() => {
+            throw new Error("MongoDB read transaction supports one provider-neutral read operation")
+          })
+        }
+        readOperationPromise = operations[method](input)
+        return readOperationPromise
+      }
       const readContext = Object.freeze({
         create() {
           throw new Error("MongoDB read transaction cannot execute mutations")
         },
         readOne(input) {
-          operationCount += 1
-          if (operationCount > 1) {
-            throw new Error("MongoDB read transaction supports one provider-neutral read operation")
-          }
-          return operations.readOne(input)
+          return invokeRead("readOne", input)
         },
         readMany(input) {
-          operationCount += 1
-          if (operationCount > 1) {
-            throw new Error("MongoDB read transaction supports one provider-neutral read operation")
-          }
-          return operations.readMany(input)
+          return invokeRead("readMany", input)
         },
         update() {
           throw new Error("MongoDB read transaction cannot execute mutations")
@@ -574,7 +575,16 @@ export function createMongoProvider(options = {}) {
           throw new Error("MongoDB read transaction cannot execute mutations")
         },
       })
-      return work(readContext)
+      try {
+        const result = await work(readContext)
+        if (readOperationPromise) {
+          await readOperationPromise
+        }
+        return result
+      } catch (error) {
+        await readOperationPromise?.catch(() => {})
+        throw error
+      }
     })
   }
 
