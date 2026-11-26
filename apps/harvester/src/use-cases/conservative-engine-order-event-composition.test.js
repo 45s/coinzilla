@@ -39,7 +39,12 @@ function createContext({ orderRegistry, reconcileTerminalMixedSell } = {}) {
         }),
       },
       recoverySellerWorkflow: { reconcileTerminalMixedSell },
-      recoverySellerStopWorkflow: { latch: async () => ({ ok: true, data: { durable: true } }) },
+      recoverySellerStopWorkflow: {
+        latch: async () => ({
+          ok: true,
+          data: { durable: true },
+        }),
+      },
       eventPublisher: { publish: noOperation },
       isStopping: () => false,
       logger: {},

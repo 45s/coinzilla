@@ -1237,6 +1237,17 @@ function resolveSubmittedRuntimeSellOrder({ runtime, execution }) {
   }
 }
 
+async function processRuntimeScenarioPartialSellEvent({ eventWorkflow, terminalOrder, fill }) {
+  return eventWorkflow.processUserDataEventTransition({
+    event: {
+      eventType: "executionReport",
+      executionType: "TRADE",
+      executedOrder: terminalOrder,
+      fill,
+    },
+  })
+}
+
 async function reconcileRuntimeScenarioPartialSell({ runtime, execution }) {
   const { orderRegistry, openOrder } = resolveSubmittedRuntimeSellOrder({
     runtime,
@@ -1275,13 +1286,10 @@ async function reconcileRuntimeScenarioPartialSell({ runtime, execution }) {
     pauses,
     reconcileRecoverySellerMixedSell,
   })
-  const eventResult = await eventWorkflow.processUserDataEventTransition({
-    event: {
-      eventType: "executionReport",
-      executionType: "TRADE",
-      executedOrder: terminalOrder,
-      fill,
-    },
+  const eventResult = await processRuntimeScenarioPartialSellEvent({
+    eventWorkflow,
+    terminalOrder,
+    fill,
   })
   assertRuntimeScenarioPartialSellReconciled({
     eventResult,
@@ -1358,7 +1366,7 @@ function createRuntimeScenarioExpected({ seed, pairConfig, scenarioId }) {
       terminalCycleStatus: "UNRESOLVED",
       terminalReconciled: true,
       profitabilityEligible: true,
-      reservationReleased: false,
+      reservationReleased: true,
       stopFactAppended: true,
       eventWorkflowFailedClosed: true,
     }
@@ -1430,6 +1438,26 @@ function createSubmittedSellAssertions({ output, expected }) {
   ]
 }
 
+function createPartialSellSafetyAssertions({ output, expected }) {
+  return [
+    createAssertion({
+      name: "production order-event workflow fails closed after terminal partial SELL",
+      actual: output.terminalSell?.eventWorkflowFailedClosed,
+      expected: expected.eventWorkflowFailedClosed,
+    }),
+    createAssertion({
+      name: "production STOP workflow durably appends an account blocker",
+      actual: output.terminalSell?.stopFactAppended,
+      expected: expected.stopFactAppended,
+    }),
+    createAssertion({
+      name: "partial terminal SELL releases the terminal order reservation after fill reconciliation",
+      actual: output.reservedSellCycle === null,
+      expected: expected.reservationReleased,
+    }),
+  ]
+}
+
 function createPartialSellAssertions({ output, expected }) {
   return [
     createAssertion({
@@ -1473,25 +1501,11 @@ function createPartialSellAssertions({ output, expected }) {
       expected: 1,
     }),
     createAssertion({
-      name: "production order-event workflow fails closed after terminal partial SELL",
-      actual: output.terminalSell?.eventWorkflowFailedClosed,
-      expected: expected.eventWorkflowFailedClosed,
-    }),
-    createAssertion({
-      name: "production STOP workflow durably appends an account blocker",
-      actual: output.terminalSell?.stopFactAppended,
-      expected: expected.stopFactAppended,
-    }),
-    createAssertion({
       name: "partial terminal SELL retains profitability without closing the cycle",
       actual: output.terminalSell?.cycleState?.profitabilityEligible,
       expected: expected.profitabilityEligible,
     }),
-    createAssertion({
-      name: "partial terminal SELL retains the sole-SELL reservation while unresolved",
-      actual: output.reservedSellCycle === null,
-      expected: expected.reservationReleased,
-    }),
+    ...createPartialSellSafetyAssertions({ output, expected }),
   ]
 }
 

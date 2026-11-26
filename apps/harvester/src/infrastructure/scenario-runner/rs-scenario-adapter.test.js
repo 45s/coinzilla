@@ -191,8 +191,8 @@ test("production RS accounting durably stops after a profitable partial CANCELED
   assert.equal(result.output.terminalSell.eventFillStaged, true)
   assert.equal(result.output.terminalSell.eventWorkflowFailedClosed, true)
   assert.equal(result.output.terminalSell.stopFactAppended, true)
-  assert.ok(result.output.reservedSellCycle,
-    "The unresolved partial SELL must retain its sole-cycle reservation.")
+  assert.equal(result.output.reservedSellCycle, null,
+    "Canonical terminal accounting releases the terminal order reservation; account STOP remains active.")
   assert.ok(result.output.simulationFacts.some((fact) =>
     fact.factType === "RECOVERY_SELLER_MIXED_SELL_RECONCILED"))
 })

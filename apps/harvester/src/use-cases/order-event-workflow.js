@@ -153,7 +153,10 @@ async function reconcileRecoverySellerTerminalSell({
       error: new Error("Recovery Seller terminal SELL requires the mixed-SELL accounting workflow"),
     })
   }
-  const result = await reconcileRecoverySellerMixedSell({ order, canonicalFills })
+  const result = await reconcileRecoverySellerMixedSell({
+    order,
+    canonicalFills,
+  })
   const failure = resolveRecoverySellerTerminalFailure({ order, result })
   if (failure) {
     return pauseAndLatchRecoverySellerTerminalFailure({

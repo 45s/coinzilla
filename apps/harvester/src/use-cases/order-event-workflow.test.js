@@ -985,7 +985,10 @@ function createProfitableMixedSellRecorder({ mixedSellReconciliations } = {}) {
   return async (input) => {
     mixedSellReconciliations.push(input)
     return toResult({
-      data: { reconciled: true, profitability: { eligible: true } },
+      data: {
+        reconciled: true,
+        profitability: { eligible: true },
+      },
     })
   }
 }
@@ -1056,7 +1059,10 @@ async function assertPartialTerminalSellStops({ terminalStatus } = {}) {
       fillQuantity: "0.5",
     })
   const result = await workflow.processUserDataEventTransition({
-    event: { eventType: "executionReport", executedOrder: terminalOrder },
+    event: {
+      eventType: "executionReport",
+      executedOrder: terminalOrder,
+    },
   })
   assert.equal(mixedSellReconciliations.length, 1)
   assert.equal(result.ok, false)
@@ -1246,7 +1252,7 @@ test("fails closed for a registered order owned by an unsupported strategy", asy
   assert.equal(calls.pauses[0]?.reason, "EXECUTION_ACCOUNTING_FAILED", "Unsupported attribution must fail closed.")
 })
 
-test("routes a zero-fill REJECTED RS SELL through terminal mixed accounting without cycle completion", async () => {
+function createRejectedRecoverySellerOrderEventFixture() {
   const previousOrder = makeOrder({
     side: "SELL",
     status: "OPEN",
@@ -1282,9 +1288,7 @@ test("routes a zero-fill REJECTED RS SELL through terminal mixed accounting with
       return toResult({
         data: {
           reconciled: true,
-          profitability: {
-            eligible: false,
-          },
+          profitability: { eligible: false },
         },
       })
     },
@@ -1293,6 +1297,12 @@ test("routes a zero-fill REJECTED RS SELL through terminal mixed accounting with
       return toResult({ data: { durable: true } })
     },
   })
+  return { terminalOrder, workflow, calls, mixedSellReconciliations }
+}
+
+test("routes a zero-fill REJECTED RS SELL through terminal mixed accounting without cycle completion", async () => {
+  const { terminalOrder, workflow, calls, mixedSellReconciliations } =
+    createRejectedRecoverySellerOrderEventFixture()
   const result = await workflow.processUserDataEventTransition({
     event: {
       eventType: "executionReport",
@@ -1306,8 +1316,6 @@ test("routes a zero-fill REJECTED RS SELL through terminal mixed accounting with
   assert.equal(calls.pauses[0].reason, "RS_TERMINAL_SELL_NOT_FILLED_STOP")
   assert.equal(mixedSellReconciliations.length, 1)
   assert.deepEqual(mixedSellReconciliations[0].canonicalFills, [])
-  assert.deepEqual(calls.completedCycles, [],
-    "A REJECTED SELL must never complete the Recovery Seller cycle.")
-  assert.deepEqual(calls.sellFills, [],
-    "A zero-fill REJECTED SELL must not stage a fabricated execution Fill.")
+  assert.deepEqual(calls.completedCycles, [])
+  assert.deepEqual(calls.sellFills, [])
 })
