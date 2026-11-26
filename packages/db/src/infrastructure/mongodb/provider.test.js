@@ -927,6 +927,73 @@ test("MongoDB retries only ambiguous write-concern timeouts and reports exhausti
   }
 })
 
+test("MongoDB retries commit after a RetryableWriteError label", async () => {
+  let commitAttempts = 0
+  const { provider, calls } = createProviderHarness({
+    topology: "replicaSet",
+    transactionSupported: true,
+    commandHandler: async (body) => {
+      if (body.commitTransaction === 1) {
+        commitAttempts += 1
+        if (commitAttempts === 1) {
+          return {
+            ok: 0,
+            code: 91,
+            errmsg: "not primary",
+            errorLabels: ["RetryableWriteError"],
+          }
+        }
+      }
+      return { ok: 1, n: 1 }
+    },
+  })
+  const database = createDatabase({ provider })
+  await database.connect()
+
+  try {
+    await database.transaction((transaction) => transaction.create({
+      collection: "people",
+      record: { id: "retryable-commit" },
+    }))
+    assert.equal(calls.filter((body) => body.commitTransaction === 1).length, 2)
+  } finally {
+    await database.close()
+  }
+})
+
+test("MongoDB treats MaxTimeMSExpired during commit as an unknown result after bounded retries", async () => {
+  const { provider, calls } = createProviderHarness({
+    topology: "replicaSet",
+    transactionSupported: true,
+    commandHandler: async (body) => {
+      if (body.commitTransaction === 1) {
+        return {
+          ok: 0,
+          code: 50,
+          codeName: "MaxTimeMSExpired",
+          errmsg: "commit time limit expired",
+        }
+      }
+      return { ok: 1, n: 1 }
+    },
+  })
+  const database = createDatabase({ provider })
+  await database.connect()
+
+  try {
+    await assert.rejects(
+      database.transaction((transaction) => transaction.create({
+        collection: "people",
+        record: { id: "commit-timeout" },
+      })),
+      (error) => error instanceof DatabaseTransactionOutcomeUnknownError,
+    )
+    assert.equal(calls.filter((body) => body.commitTransaction === 1).length, 3)
+  } finally {
+    await database.close()
+  }
+})
+
 test("MongoDB preserves an ambiguous commit outcome after a lost reply and a later NoSuchTransaction", async () => {
   let commitAttempts = 0
   const { provider, calls } = createProviderHarness({
