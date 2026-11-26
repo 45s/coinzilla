@@ -1142,7 +1142,7 @@
         {
           "path": "src/use-cases/create-submission-gate.test.js",
           "name": "market-scoped strategy safety pause blocks only its symbol and preserves the recovery SELL exception",
-          "kind": "unit"
+          "kind": "normal"
         }
       ],
       "runtimeStatus": "active",
