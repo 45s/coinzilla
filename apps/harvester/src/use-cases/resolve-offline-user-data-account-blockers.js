@@ -3,7 +3,7 @@ import { projectHarvesterOperationalState } from "../infrastructure/operational-
 import { resolveUserDataAccountBlockers } from "./resolve-user-data-account-blockers.js"
 import { runOfflineMarketRecovery } from "../../scripts/recovery-market-context.js"
 
-function sameStringSet(left, right) {
+function sameStringSet({ left, right }) {
   return Array.isArray(left) &&
     [...left].sort().join("|") === [...right].sort().join("|")
 }
@@ -19,35 +19,52 @@ function validateStoppedSession({ records, runtimeSessionId }) {
       !baseline ||
       started.runtimeSessionId !== runtimeSessionId ||
       started.data.configurationFingerprint !== baseline.data.fingerprint ||
-      !sameStringSet(started.data.markets, baseline.data.markets)) {
+      !sameStringSet({
+        left: started.data.markets,
+        right: baseline.data.markets,
+      })) {
     throw new Error("Evidence runtime session does not match the latest durable configuration/process baseline")
   }
-  const startedIndex = records.findIndex((record) => record.factId === started.factId)
-  const stoppedIndex = records.findIndex((record, index) =>
-    index > startedIndex &&
+  const stopped = records.find((record) =>
+    Number(record.sequence) > Number(started.sequence) &&
     record.factType === "PROCESS_STOPPED" &&
     record.runtimeSessionId === runtimeSessionId
   )
-  const stopped = stoppedIndex >= 0 ? records[stoppedIndex] : undefined
   if (!stopped || stopped.data.clean !== true) {
     throw new Error("Account blocker resolution requires the matching process to be cleanly stopped")
   }
   return [...baseline.data.markets]
 }
 
+function hasSharedAccountEvidence(context) {
+  return Array.isArray(context.journalRecords) &&
+    Array.isArray(context.markets) &&
+    Array.isArray(context.assets) &&
+    Boolean(context.exchange?.currentAccountSnapshot) &&
+    Array.isArray(context.exchange?.openOrders) &&
+    Array.isArray(context.exchange?.ownedOrderHistory) &&
+    Boolean(context.marketsEvidence)
+}
+
+function hasExactMarketEvidence({ context, configuredMarkets }) {
+  return sameStringSet({
+    left: context.configuredMarkets,
+    right: configuredMarkets,
+  }) &&
+    sameStringSet({
+      left: context.markets.map(({ symbol }) => symbol),
+      right: configuredMarkets,
+    }) &&
+    sameStringSet({
+      left: Object.keys(context.marketsEvidence),
+      right: configuredMarkets,
+    })
+}
+
 function validateEvidenceContext({ context, configuredMarkets }) {
-  if (context?.runtimeSessionId === undefined ||
-      !Array.isArray(context.journalRecords) ||
-      !Array.isArray(context.markets) ||
-      !Array.isArray(context.assets) ||
-      !context.exchange ||
-      !context.exchange.currentAccountSnapshot ||
-      !Array.isArray(context.exchange.openOrders) ||
-      !Array.isArray(context.exchange.ownedOrderHistory) ||
-      !context.marketsEvidence ||
-      !sameStringSet(context.configuredMarkets, configuredMarkets) ||
-      !sameStringSet(context.markets.map(({ symbol }) => symbol), configuredMarkets) ||
-      !sameStringSet(Object.keys(context.marketsEvidence), configuredMarkets)) {
+  if (typeof context?.runtimeSessionId !== "string" ||
+      !hasSharedAccountEvidence(context) ||
+      !hasExactMarketEvidence({ context, configuredMarkets })) {
     throw new TypeError("Account evidence bundle must cover the exact configured markets and shared account/order evidence")
   }
 }
@@ -78,27 +95,41 @@ function createMarketEvidenceContext({ context, symbol }) {
   }
 }
 
+function isMarketAuditReady({ result, reconciliation, audit }) {
+  return result?.ok === true &&
+    reconciliation?.ready === true &&
+    audit?.status === "READY" &&
+    audit?.targetMarketBlocked !== true &&
+    audit?.tradeHistory?.complete === true &&
+    Array.isArray(audit.unownedOpenOrders) &&
+    audit.unownedOpenOrders.length === 0 &&
+    Array.isArray(audit.blockedMarkets) &&
+    audit.blockedMarkets.length === 0
+}
+
+function validateMarketAuditEvidence({ symbol, audit, accountSnapshotSourceTime }) {
+  if (audit.accountSnapshot?.sourceTime !== accountSnapshotSourceTime ||
+      !Number.isSafeInteger(audit.balancesChecked) ||
+      audit.balancesChecked <= 0) {
+    throw new Error(`${symbol}: account balance evidence is incomplete or not from the shared snapshot`)
+  }
+}
+
 function validateMarketAudit({ symbol, result, accountSnapshotSourceTime }) {
   const reconciliation = result?.data?.reconciliation
   const audit = reconciliation?.audit
-  if (result?.ok !== true ||
-      reconciliation?.ready !== true ||
-      audit?.status !== "READY" ||
-      audit?.targetMarketBlocked === true ||
-      audit?.tradeHistory?.complete !== true ||
-      !Array.isArray(audit.unownedOpenOrders) ||
-      audit.unownedOpenOrders.length !== 0 ||
-      !Array.isArray(audit.blockedMarkets) ||
-      audit.blockedMarkets.length !== 0 ||
-      audit.accountSnapshot?.sourceTime !== accountSnapshotSourceTime ||
-      !Number.isSafeInteger(audit.balancesChecked) ||
-      audit.balancesChecked <= 0) {
+  if (!isMarketAuditReady({ result, reconciliation, audit })) {
     const cause = result?.errors?.[0]
     throw new Error(
       `${symbol}: ${cause?.message ?? "account-wide reconciliation did not prove READY"}`,
       { cause },
     )
   }
+  validateMarketAuditEvidence({
+    symbol,
+    audit,
+    accountSnapshotSourceTime,
+  })
   return {
     symbol,
     ready: true,
@@ -115,7 +146,10 @@ async function auditAllConfiguredMarkets({ context, configuredMarkets, reconcile
   const sourceTime = context.exchange.currentAccountSnapshot.sourceTime
   const summaries = []
   for (const symbol of configuredMarkets) {
-    const marketContext = createMarketEvidenceContext({ context, symbol })
+    const marketContext = createMarketEvidenceContext({
+      context,
+      symbol,
+    })
     const result = await reconcileMarket({
       context: marketContext,
       confirm: false,
@@ -129,7 +163,14 @@ async function auditAllConfiguredMarkets({ context, configuredMarkets, reconcile
   return summaries
 }
 
-function createAccountAudit({ blockerIds, configuredMarkets, operatorId, actionId, context, marketAudits }) {
+function createAccountAudit({
+  blockerIds,
+  configuredMarkets,
+  operatorId,
+  actionId,
+  context,
+  marketAudits,
+}) {
   return {
     status: "READY",
     scope: "ACCOUNT",
@@ -155,9 +196,66 @@ function createAccountAudit({ blockerIds, configuredMarkets, operatorId, actionI
   }
 }
 
+function validateResolutionRequest({ operatorId, actionId, causeFixed }) {
+  if (causeFixed !== true ||
+      typeof operatorId !== "string" ||
+      operatorId.trim() === "" ||
+      typeof actionId !== "string" ||
+      actionId.trim() === "") {
+    throw new TypeError("Offline account resolution requires operator identity, unique action ID, and causeFixed=true")
+  }
+}
+
+async function readVerifiedOperationalProjection(operationalStateStore) {
+  const result = await operationalStateStore.readAll()
+  if (result?.ok !== true ||
+      result.data?.durableWriteSupported !== true ||
+      !Array.isArray(result.data.records)) {
+    throw result?.errors?.[0] ?? new Error("Offline account resolution requires a verified durable Operational State Store")
+  }
+  const projection = projectHarvesterOperationalState({ records: result.data.records })
+  if (projection?.ok !== true) {
+    throw projection?.errors?.[0] ?? new Error("Operational State projection failed")
+  }
+  return {
+    records: result.data.records,
+    projection: projection.data,
+  }
+}
+
+async function resolveAuditedAccountBlockers({
+  operationalStateStore,
+  context,
+  operatorId,
+  actionId,
+  causeFixed,
+  configuredMarkets,
+  blockers,
+  marketAudits,
+  resolveBlockers,
+}) {
+  const blockerIds = blockers.map(({ blockerId }) => blockerId).sort()
+  const audit = createAccountAudit({
+    blockerIds,
+    configuredMarkets,
+    operatorId,
+    actionId,
+    context,
+    marketAudits,
+  })
+  return resolveBlockers({
+    operationalStateStore,
+    reconcileAccount: async () => toResult({ data: audit }),
+    operatorId,
+    actionId,
+    causeFixed,
+    configuredMarkets,
+  })
+}
+
 /**
- * Run the existing production account/order/fill audit once for every market
- * using one shared account snapshot and open-order/owned-order evidence bundle.
+ * Run the existing production account/order/fill audit for every configured
+ * market against one shared account snapshot and order evidence bundle.
  */
 export async function runOfflineAccountBlockerResolution({
   context,
@@ -169,50 +267,36 @@ export async function runOfflineAccountBlockerResolution({
   resolveBlockers = resolveUserDataAccountBlockers,
 } = {}) {
   try {
-    if (causeFixed !== true ||
-        typeof operatorId !== "string" ||
-        operatorId.trim() === "" ||
-        typeof actionId !== "string" ||
-        actionId.trim() === "") {
-      throw new TypeError("Offline account resolution requires operator identity, unique action ID, and causeFixed=true")
-    }
-    const storeResult = await operationalStateStore.readAll()
-    if (storeResult?.ok !== true ||
-        storeResult.data?.durableWriteSupported !== true ||
-        !Array.isArray(storeResult.data.records)) {
-      throw storeResult?.errors?.[0] ?? new Error("Offline account resolution requires a verified durable Operational State Store")
-    }
-    const projection = projectHarvesterOperationalState({ records: storeResult.data.records })
-    if (projection?.ok !== true) {
-      throw projection?.errors?.[0] ?? new Error("Operational State projection failed")
-    }
+    validateResolutionRequest({
+      operatorId,
+      actionId,
+      causeFixed,
+    })
+    const state = await readVerifiedOperationalProjection(operationalStateStore)
     const configuredMarkets = validateStoppedSession({
-      records: storeResult.data.records,
+      records: state.records,
       runtimeSessionId: context.runtimeSessionId,
     })
-    validateEvidenceContext({ context, configuredMarkets })
-    const blockers = getActiveUserDataAccountBlockers(projection.data)
-    const blockerIds = blockers.map(({ blockerId }) => blockerId).sort()
+    validateEvidenceContext({
+      context,
+      configuredMarkets,
+    })
+    const blockers = getActiveUserDataAccountBlockers(state.projection)
     const marketAudits = await auditAllConfiguredMarkets({
       context,
       configuredMarkets,
       reconcileMarket,
     })
-    const audit = createAccountAudit({
-      blockerIds,
-      configuredMarkets,
-      operatorId,
-      actionId,
-      context,
-      marketAudits,
-    })
-    return await resolveBlockers({
+    return await resolveAuditedAccountBlockers({
       operationalStateStore,
-      reconcileAccount: async () => toResult({ data: audit }),
+      context,
       operatorId,
       actionId,
       causeFixed,
       configuredMarkets,
+      blockers,
+      marketAudits,
+      resolveBlockers,
     })
   } catch (error) {
     return toResult({ error })
