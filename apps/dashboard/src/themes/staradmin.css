@@ -363,3 +363,25 @@ html[data-theme="staradmin"] .health-count {
   border-color: #f4df9b;
   background: #fff8df;
 }
+
+
+/* Native select popups must match the light StarAdmin controls, not the OS dark palette. */
+html[data-theme="staradmin"] select,
+html[data-theme="staradmin"] select:focus {
+  color-scheme: light;
+}
+
+html[data-theme="staradmin"] select option,
+html[data-theme="staradmin"] select optgroup {
+  background-color: #ffffff;
+  color: #24242d;
+}
+
+html[data-theme="staradmin"] select option:checked {
+  background-color: #fff0e6;
+  color: #8f451f;
+}
+
+html[data-theme="staradmin"] select option:disabled {
+  color: #92939a;
+}
