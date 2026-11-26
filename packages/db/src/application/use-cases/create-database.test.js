@@ -365,3 +365,10 @@ test("provider CRUD operations are tracked so close waits before releasing the p
   assert.equal(providerClosed, true)
   assert.equal(database.state, "closed")
 })
+
+
+test("legacy lifecycle adapters do not expose the provider-only execution port", () => {
+  const { adapter } = createAdapter()
+  const database = createDatabase({ adapter })
+  assert.equal(Object.hasOwn(database, "execute"), false)
+})
