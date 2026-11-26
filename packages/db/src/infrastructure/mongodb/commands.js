@@ -59,19 +59,30 @@ function decodeUserKey(key) {
   }
 }
 
+function encodeUserObject({ value }) {
+  const entries = Object.entries(value).map(([key, nestedValue]) => [
+    encodeUserKey(key),
+    encodeUserValue(nestedValue),
+  ])
+  return Object.fromEntries(entries)
+}
+
 function encodeUserValue(value) {
   if (Array.isArray(value)) {
     return value.map(encodeUserValue)
   }
   if (value !== null && typeof value === "object") {
-    return Object.fromEntries(
-      Object.entries(value).map(([key, nestedValue]) => [
-        encodeUserKey(key),
-        encodeUserValue(nestedValue),
-      ]),
-    )
+    return encodeUserObject({ value })
   }
   return value
+}
+
+function decodeUserObject({ value }) {
+  const entries = Object.entries(value).map(([key, nestedValue]) => [
+    decodeUserKey(key),
+    decodeUserValue(nestedValue),
+  ])
+  return Object.fromEntries(entries)
 }
 
 function decodeUserValue(value) {
@@ -79,12 +90,7 @@ function decodeUserValue(value) {
     return value.map(decodeUserValue)
   }
   if (value !== null && typeof value === "object" && !Buffer.isBuffer(value) && !(value instanceof Date)) {
-    return Object.fromEntries(
-      Object.entries(value).map(([key, nestedValue]) => [
-        decodeUserKey(key),
-        decodeUserValue(nestedValue),
-      ]),
-    )
+    return decodeUserObject({ value })
   }
   return value
 }
