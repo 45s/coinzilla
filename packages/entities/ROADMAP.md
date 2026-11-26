@@ -17,4 +17,4 @@
 - Current interfaces, schemas, and tests: package source
 - Task status and consumer requirements: GitHub Issues/PRs
 
-Detailed prior execution plan, FR-009–FR-016 contract notes, and completed maintenance history are preserved in [ROADMAP_HISTORY_2026-11-26.md](./ROADMAP_HISTORY_2026-11-26.md).
+Detailed prior execution plan, FR-009–FR-016 contract notes, and completed maintenance history are preserved in [ROADMAP_HISTORY_2026-11-26.md](../../docs/archive/roadmap-history-2026-11-26.md#entities-roadmap).
