@@ -16,14 +16,14 @@ const market = new Market({ venue: "binance",
 symbol: "DOGEUSDT",
 baseAsset,
 quoteAsset })
-const makeOrder = ({ brokerOrderId, status = "PENDING", executedQuantity = "0" } = {}) => new CanonicalOrder({
-  clientOrderId: "h-0123456789abcdef012345-1",
+const makeOrder = ({ brokerOrderId, status = "PENDING", executedQuantity = "0", side = "BUY", clientOrderId = "h-0123456789abcdef012345-1" } = {}) => new CanonicalOrder({
+  clientOrderId,
   providerInstanceId: "binanceTestnet",
   providerType: "binance",
   accountId: "binance-primary",
   brokerOrderId,
   market,
-  side: "BUY",
+  side,
   type: "LIMIT_MAKER",
   limitPrice: new Money({ amount: "0.099",
 asset: quoteAsset }),
@@ -210,4 +210,60 @@ test("rejects Recovery Seller BUY outcomes without exact cycle ownership", async
   })
 
   assert.equal(result.ok, false, "A Recovery Seller BUY outcome must preserve its strategy, position, and cycle ownership.")
+})
+
+
+test("persists a Conservative recovery SELL outcome with CG ownership and no RS cycle", async (t) => {
+  const operationalStateStore = await createStore(t)
+  const order = makeOrder({
+    clientOrderId: "h-0123456789abcdef012345-cg-sell",
+    brokerOrderId: "broker-cg-sell",
+    status: "OPEN",
+    side: "SELL",
+  })
+  const result = await recordOrderSubmissionOutcome({
+    operationalStateStore,
+    order,
+    outcome: "ACKNOWLEDGED",
+    purpose: "RECOVERY_SELL",
+    ownership: {
+      strategyId: StrategyId.COIN_GRABBER,
+      positionId: "position:cg:dogeusdt",
+      purpose: "RECOVERY_SELL",
+    },
+  })
+
+  assert.equal(result.ok, true, result.errors?.map(({ message }) => message).join("; "))
+  assert.equal(result.data.durable, true)
+  assert.equal(result.data.record.data.strategyId, StrategyId.COIN_GRABBER)
+  assert.equal(result.data.record.data.positionId, "position:cg:dogeusdt")
+  assert.equal(Object.hasOwn(result.data.record.data, "cycleId"), false)
+})
+
+test("persists a Recovery Seller recovery SELL outcome with its independent cycle identity", async (t) => {
+  const operationalStateStore = await createStore(t)
+  const order = makeOrder({
+    clientOrderId: "h-0123456789abcdef012345-rs-sell",
+    brokerOrderId: "broker-rs-sell",
+    status: "OPEN",
+    side: "SELL",
+  })
+  const result = await recordOrderSubmissionOutcome({
+    operationalStateStore,
+    order,
+    outcome: "ACKNOWLEDGED",
+    purpose: "RECOVERY_SELL",
+    ownership: {
+      strategyId: StrategyId.RECOVERY_SELLER,
+      positionId: "rs-position-1",
+      purpose: "RECOVERY_SELL",
+      cycleId: "rs-cycle-1",
+    },
+  })
+
+  assert.equal(result.ok, true, result.errors?.map(({ message }) => message).join("; "))
+  assert.equal(result.data.durable, true)
+  assert.equal(result.data.record.data.strategyId, StrategyId.RECOVERY_SELLER)
+  assert.equal(result.data.record.data.positionId, "rs-position-1")
+  assert.equal(result.data.record.data.cycleId, "rs-cycle-1")
 })

@@ -81,7 +81,13 @@ function createMainOptions({ database, calls, handlers, startTradingHistoryApi }
     }),
     start: async () => ({
       getOperator: () => ({ facade: "shared-harvester-operator" }),
-      stop: async () => { calls.push("runtime-stop") },
+      stop: async () => {
+        calls.push("runtime-stop")
+        return {
+          ok: true,
+          status: "STOPPED",
+        }
+      },
     }),
     registerSignalHandler: (...args) => {
       const [signal, handler] = args

@@ -7,7 +7,7 @@ const test = (...args) => {
   return nodeTest(`[create-harvester-stop.test.js] ${name}`, ...testArgs)
  }
 
-function createStopDependencies({ calls, stopRuntime, operatorStop } = {}) {
+function createStopDependencies({ calls, stopRuntime, operatorStop, recordProcessStoppedOperation, processStopDurabilityTimeoutMs, setTimeoutFn, clearTimeoutFn } = {}) {
   return {
     userDataState: {
       shutdownRequested: false,
@@ -32,11 +32,20 @@ function createStopDependencies({ calls, stopRuntime, operatorStop } = {}) {
       if (stopRuntime) {
         return stopRuntime(options)
       }
-      return undefined
+      return {
+        ok: true,
+        status: "STOPPED",
+      }
     },
     operationalStateStore: {},
+    processStopDurabilityTimeoutMs,
+    setTimeoutFn,
+    clearTimeoutFn,
     recordProcessStopped: async () => {
       calls.push("process-stop-record")
+      if (recordProcessStoppedOperation) {
+        return recordProcessStoppedOperation()
+      }
       return {
         ok: true,
         data: {
@@ -55,6 +64,10 @@ test("stops operator control only after the runtime confirms strategy safety", a
       calls.push("runtime-safety-start")
       await beforeSharedServicesStop()
       calls.push("runtime-shared-cleanup")
+      return {
+        ok: true,
+        status: "STOPPED",
+      }
     },
   })
 
@@ -71,6 +84,24 @@ test("stops operator control only after the runtime confirms strategy safety", a
     ],
     "Inbound operator control must remain available until the strategy coordinator has proven safety, then stop before shared broker cleanup.",
   )
+})
+
+test("does not record PROCESS_STOPPED when runtime stop omits an explicit terminal outcome", async () => {
+  const calls = []
+  const dependencies = createStopDependencies({
+    calls,
+    stopRuntime: async () => undefined,
+  })
+  const stop = createHarvesterStop(dependencies)
+
+  await assert.rejects(
+    stop(),
+    /explicit STOPPED confirmation/,
+    "An ambiguous runtime stop result must not be treated as successful shutdown.",
+  )
+
+  assert.equal(dependencies.userDataState.status, "SHUTDOWN_INCOMPLETE")
+  assert.deepEqual(calls, ["runtime-stop-start"])
 })
 
 test("keeps operator control and process-stop facts alive when runtime safety cannot be proven", async () => {
@@ -96,6 +127,80 @@ test("keeps operator control and process-stop facts alive when runtime safety ca
   )
 })
 
+
+async function settleProcessStopAttempt({ resolveProcessStop, firstStop, retryStop } = {}) {
+  resolveProcessStop?.({
+    ok: true,
+    data: {
+      durable: true,
+    },
+  })
+  await Promise.all([
+    firstStop.catch(() => {}),
+    retryStop?.catch(() => {}),
+  ])
+}
+
+test("bounds pending durable PROCESS_STOPPED and prevents overlapping retries", async () => {
+  const calls = []
+  let resolveProcessStop
+  let markProcessStopStarted
+  let processStopDeadline
+  let processStopTimeoutMs
+  const processStopStarted = new Promise((resolve) => {
+    markProcessStopStarted = resolve
+  })
+  const pendingProcessStop = new Promise((resolve) => {
+    resolveProcessStop = resolve
+  })
+  const dependencies = createStopDependencies({
+    calls,
+    processStopDurabilityTimeoutMs: 25,
+    setTimeoutFn: ({ callback, timeoutMs, phase }) => {
+      if (phase === "PROCESS_STOP_DURABILITY") {
+        processStopDeadline = callback
+        processStopTimeoutMs = timeoutMs
+      }
+      return `fake-deadline:${phase}`
+    },
+    clearTimeoutFn: () => {},
+    recordProcessStoppedOperation: async () => {
+      markProcessStopStarted()
+      return pendingProcessStop
+    },
+  })
+  const stop = createHarvesterStop(dependencies)
+  const firstStop = stop()
+  let retryStop
+
+  try {
+    await processStopStarted
+    assert.equal(typeof processStopDeadline, "function", "PROCESS_STOPPED durability must have an explicit deadline.")
+    assert.equal(processStopTimeoutMs, 25, "The process-stop durability deadline must use the configured timeout.")
+    processStopDeadline()
+    await assert.rejects(
+      firstStop,
+      (error) => error.code === "PROCESS_STOP_DURABILITY_TIMEOUT",
+      "A pending durable PROCESS_STOPPED append must fail closed at its deadline.",
+    )
+    assert.equal(dependencies.userDataState.status, "SHUTDOWN_INCOMPLETE", "A missing durable STOPPED fact must not leave the runtime marked complete.")
+    retryStop = stop()
+    await assert.rejects(
+      retryStop,
+      (error) => error.code === "PROCESS_STOP_DURABILITY_STILL_RUNNING"
+        && error.status === "PENDING",
+      "A retry must not overlap a still-pending PROCESS_STOPPED append.",
+    )
+    assert.equal(calls.filter((call) => call === "process-stop-record").length, 1, "The same process-stop fact must not be appended concurrently.")
+  } finally {
+    await settleProcessStopAttempt({
+      resolveProcessStop,
+      firstStop,
+      retryStop,
+    })
+  }
+})
+
 test("allows a later shutdown attempt after an earlier strategy-safety failure", async () => {
   const calls = []
   let attempts = 0
@@ -107,7 +212,10 @@ test("allows a later shutdown attempt after an earlier strategy-safety failure",
         throw new Error("first safety proof incomplete")
       }
       await beforeSharedServicesStop()
-      return undefined
+      return {
+        ok: true,
+        status: "STOPPED",
+      }
     },
   }))
 

@@ -13,7 +13,7 @@ const logSystem = ({ logger, message } = {}) => {
 async function stopRuntimeForShutdown({ runtime, logger } = {}) {
   try {
     const stopResult = await runtime.stop()
-    const runtimeStopped = stopResult === undefined || stopResult?.ok === true
+    const runtimeStopped = stopResult?.ok === true && stopResult.status === "STOPPED"
     if (!runtimeStopped) {
       const error = stopResult?.errors?.[0] ??
         new Error("Harvester runtime stop did not confirm shutdown")

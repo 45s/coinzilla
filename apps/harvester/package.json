@@ -173,7 +173,11 @@
       "src/bootstrap/user-data/subscribe-to-user-data.test.js",
       "src/bootstrap/harvester-runtime-setup.test.js",
       "src/bootstrap/user-data/create-user-data-status-handler.test.js",
-      "src/use-cases/create-candle-history-service.test.js"
+      "src/use-cases/create-candle-history-service.test.js",
+      "src/domain/strategies/conservative/strategy.test.js",
+      "src/bootstrap/create-harvester-stop.test.js",
+      "src/bootstrap/shutdown/create-strategy-shutdown-coordinator.test.js",
+      "src/bootstrap/shutdown/create-shutdown-handler.test.js"
     ]
   },
   "scripts": {

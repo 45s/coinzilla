@@ -1,5 +1,6 @@
 import test from "node:test"
 import assert from "node:assert/strict"
+import { StrategyId } from "../domain/strategies/strategy-ids.js"
 import {
   createFreshMarketPriceWaiter,
   createMarketPriceTransitionHandler,
@@ -7,6 +8,8 @@ import {
 
 const activeBuyOrder = Object.freeze({
   side: "BUY",
+  clientOrderId: "harvester-market-price-test-buy",
+  brokerOrderId: "market-price-test-broker-buy",
   value: Object.freeze({
     clientOrderId: "harvester-market-price-test-buy",
   }),
@@ -16,6 +19,7 @@ function createState({
   paused = false,
   operatorPaused = false,
   trailingBuyEnabled = true,
+  activeBuyOwnershipStrategyId = StrategyId.COIN_GRABBER,
   activeOrders = [activeBuyOrder],
   initialPrice,
   initialEventId,
@@ -32,6 +36,13 @@ function createState({
     trailingBuy: new Map([["DOGEUSDT", trailingBuyEnabled]]),
     registry: {
       getActiveOrders: () => activeOrders,
+      getOwnership: ({ clientOrderId, brokerOrderId } = {}) => {
+        const ownedOrder = activeOrders.find((order) =>
+          order.clientOrderId === clientOrderId && order.brokerOrderId === brokerOrderId)
+        return ownedOrder
+          ? { strategyId: activeBuyOwnershipStrategyId }
+          : undefined
+      },
     },
   }
 
@@ -186,6 +197,25 @@ test("logs a received stale price before freshness rejection and preserves the a
     harness.state.marketPriceEventIds.get("DOGEUSDT"),
     7,
     "A stale event must not replace the identity associated with the previously accepted market price.",
+  )
+})
+
+test("routes an RS-owned active BUY through its strategy evaluator instead of CG trailing replacement", async () => {
+  const harness = createHarness({
+    activeBuyOwnershipStrategyId: StrategyId.RECOVERY_SELLER,
+  })
+
+  const result = await harness.handler({
+    symbol: "DOGEUSDT",
+    priceEvent: validPriceEvent,
+  })
+
+  assert.equal(result.ok, true, "An RS-owned active BUY must not fail in the CG-specific trailing-BUY workflow.")
+  assert.equal(result.data.route, "evaluate", "RS-owned BUY events must reach the shared latest evaluator for RS dispatch.")
+  assert.deepEqual(
+    harness.trace,
+    ["event-id", "received", "freshness", "evaluate"],
+    "The shared dispatcher must inspect canonical ownership and bypass CG trailing-BUY repricing for an RS order.",
   )
 })
 

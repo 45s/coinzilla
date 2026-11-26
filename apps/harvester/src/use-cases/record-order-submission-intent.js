@@ -1,8 +1,8 @@
 import { CanonicalOrder } from "@coinzilla/entities"
 import { toResult } from "@coinzilla/utils"
-import { validateRecoverySellerSubmissionOwnership } from "../domain/orders/recovery-seller-submission-ownership.js"
+import { validateStrategySubmissionOwnership } from "../domain/orders/recovery-seller-submission-ownership.js"
 
-const SUPPORTED_PURPOSES = new Set([null, "RECOVERY_BUY", "RECOVERY_SELL"])
+const SUPPORTED_PURPOSES = new Set([null, "CONSERVATIVE_BUY", "CONSERVATIVE_SELL", "RECOVERY_BUY", "RECOVERY_SELL"])
 
 function validateCanonicalMarketIdentity({ market }) {
   const requiredMarketValues = [
@@ -44,9 +44,9 @@ function validateSubmissionIntent({ operationalStateStore, order, purpose, owner
     throw new TypeError("Order-submission intent must identify a PENDING order without broker acknowledgement")
   }
   if (!SUPPORTED_PURPOSES.has(purpose)) {
-    throw new TypeError("Order-submission intent purpose must be null, RECOVERY_BUY, or RECOVERY_SELL")
+    throw new TypeError("Order-submission intent purpose must be null or a supported CG/RS strategy purpose")
   }
-  const normalizedOwnership = validateRecoverySellerSubmissionOwnership({
+  const normalizedOwnership = validateStrategySubmissionOwnership({
     order,
     purpose,
     ownership,
@@ -75,7 +75,7 @@ function validateSubmissionIntent({ operationalStateStore, order, purpose, owner
  * @param {object} options.operationalStateStore - Initialized ADR-0001 Operational State Store append capability.
  * @param {CanonicalOrder} options.order - Validated PENDING canonical order.
  * @param {string|null} options.purpose - Explicit application strategy purpose.
- * @param {object} [options.ownership] - Exact Recovery Seller strategy, Position, and cycle ownership.
+ * @param {object} [options.ownership] - Exact originating strategy and Position ownership; RS also requires a cycle.
  * @returns {Promise<object>} Durable append result; success requires durable === true.
  */
 export async function recordOrderSubmissionIntent(options = {}) {

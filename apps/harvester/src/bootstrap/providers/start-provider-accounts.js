@@ -260,6 +260,7 @@ function createMultiAccountRuntime({
     }
     return {
       ok: true,
+      status: "STOPPED",
       stopped: true,
     }
   }

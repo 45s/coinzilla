@@ -512,6 +512,34 @@ test("maps order request and acknowledgement without leaking extra order propert
   })
 })
 
+test("preserves originating strategy and Position ownership in durable submission-requested events", () => {
+  const ownership = {
+    strategyId: "CG_coinGrabber",
+    positionId: "position:cg:dogeusdt",
+    purpose: "RECOVERY_SELL",
+  }
+  assert.deepEqual(mapOrderSubmissionRequestedData({
+    order: {
+      ...canonicalOrderFacts,
+      side: "SELL",
+      status: "PENDING",
+    },
+    ownership,
+  }), {
+    ok: true,
+    data: {
+      clientOrderId: "h-DOGEUSDT-1",
+      symbol: "DOGEUSDT",
+      side: "SELL",
+      type: "LIMIT_MAKER",
+      price: "99.9500",
+      quantity: "1.00",
+      status: "PENDING",
+      ownership,
+    },
+  })
+})
+
 test("rejects partial provider provenance and preserves a complete identity in order lifecycle DTOs", () => {
   const partialProviderValues = {
     providerInstanceId: "binanceTestnet",
