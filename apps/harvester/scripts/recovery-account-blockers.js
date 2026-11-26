@@ -24,6 +24,58 @@ or reopen trading. After success, perform a controlled restart and require a fre
 account snapshot before trading admission can reopen.
 `
 
+const VALUE_ARGUMENT_KEYS = Object.freeze({
+  "--context": "contextPath",
+  "--operator-id": "operatorId",
+  "--action-id": "actionId",
+})
+
+function consumeArgument({ args, index, parsed }) {
+  const argument = args[index]
+  if (argument === "--help") {
+    parsed.help = true
+    return index
+  }
+  if (argument === "--cause-fixed") {
+    if (parsed.causeFixed) {
+      throw new Error("--cause-fixed must not be repeated")
+    }
+    parsed.causeFixed = true
+    return index
+  }
+  const key = VALUE_ARGUMENT_KEYS[argument]
+  if (!key) {
+    throw new Error(`Unknown account blocker recovery argument: ${argument}`)
+  }
+  const value = args[index + 1]
+  if (!value || value.startsWith("--")) {
+    throw new Error(`${argument} requires a value`)
+  }
+  if (parsed[key] !== undefined) {
+    throw new Error(`${argument} must not be repeated`)
+  }
+  parsed[key] = value
+  return index + 1
+}
+
+function validateParsedArguments(parsed) {
+  if (parsed.help) {
+    return
+  }
+  if (!parsed.contextPath) {
+    throw new Error("--context is required")
+  }
+  if (!parsed.operatorId || !/^[A-Za-z0-9][A-Za-z0-9._:@-]{2,127}$/.test(parsed.operatorId)) {
+    throw new Error("--operator-id must be 3-128 canonical characters")
+  }
+  if (!parsed.actionId || !/^[A-Za-z0-9][A-Za-z0-9._:@-]{7,127}$/.test(parsed.actionId)) {
+    throw new Error("--action-id must be a unique 8-128 character token")
+  }
+  if (parsed.causeFixed !== true) {
+    throw new Error("--cause-fixed is required to confirm the underlying cause is fixed")
+  }
+}
+
 export function parseRecoveryAccountBlockerArguments(args = []) {
   if (!Array.isArray(args)) {
     throw new TypeError("CLI arguments must be an array")
@@ -36,54 +88,15 @@ export function parseRecoveryAccountBlockerArguments(args = []) {
     help: false,
   }
   for (let index = 0; index < args.length; index += 1) {
-    const argument = args[index]
-    if (argument === "--help") {
-      parsed.help = true
-      continue
-    }
-    if (argument === "--cause-fixed") {
-      if (parsed.causeFixed) {
-        throw new Error("--cause-fixed must not be repeated")
-      }
-      parsed.causeFixed = true
-      continue
-    }
-    if (["--context", "--operator-id", "--action-id"].includes(argument)) {
-      const value = args[index + 1]
-      if (!value || value.startsWith("--")) {
-        throw new Error(`${argument} requires a value`)
-      }
-      const key = {
-        "--context": "contextPath",
-        "--operator-id": "operatorId",
-        "--action-id": "actionId",
-      }[argument]
-      if (parsed[key] !== undefined) {
-        throw new Error(`${argument} must not be repeated`)
-      }
-      parsed[key] = value
-      index += 1
-      continue
-    }
-    throw new Error(`Unknown account blocker recovery argument: ${argument}`)
+    index = consumeArgument({
+      args,
+      index,
+      parsed,
+    })
   }
-  if (!parsed.help) {
-    if (!parsed.contextPath) {
-      throw new Error("--context is required")
-    }
-    if (!parsed.operatorId || !/^[A-Za-z0-9][A-Za-z0-9._:@-]{2,127}$/.test(parsed.operatorId)) {
-      throw new Error("--operator-id must be 3-128 canonical characters")
-    }
-    if (!parsed.actionId || !/^[A-Za-z0-9][A-Za-z0-9._:@-]{7,127}$/.test(parsed.actionId)) {
-      throw new Error("--action-id must be a unique 8-128 character token")
-    }
-    if (parsed.causeFixed !== true) {
-      throw new Error("--cause-fixed is required to confirm the underlying cause is fixed")
-    }
-  }
+  validateParsedArguments(parsed)
   return Object.freeze(parsed)
 }
-
 function createResolutionStore({ context, env }) {
   if (typeof context.runtimeSessionId !== "string" || !context.runtimeSessionId.trim()) {
     throw new Error("Account evidence bundle requires the stopped runtimeSessionId")
@@ -145,7 +158,10 @@ export async function runRecoveryAccountBlockerCommand({
     }
     const contextPath = path.resolve(cwd, parsed.contextPath)
     const context = JSON.parse(await readContext(contextPath, "utf8"))
-    const operationalStateStore = createStore({ context, env })
+    const operationalStateStore = createStore({
+      context,
+      env,
+    })
     const result = await runResolution({
       context,
       operationalStateStore,
