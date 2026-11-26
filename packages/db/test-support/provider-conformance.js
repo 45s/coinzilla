@@ -5,7 +5,10 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import test from "node:test"
 
-import { DatabaseConflictError, DatabaseProviderError } from "../src/index.js"
+import {
+  DatabaseConflictError,
+  DatabaseTransactionUnsupportedError,
+} from "../src/index.js"
 
 async function withConnectedDatabase({ database, callback }) {
   await database.connect()
@@ -337,8 +340,7 @@ async function verifySorting(database) {
   )
 }
 
-async function createScalarSortRecords(database) {
-  const records = [
+const SCALAR_SORT_RECORDS = [
     {
       id: "missing",
     },
@@ -370,9 +372,34 @@ async function createScalarSortRecords(database) {
       id: "string-2",
       rank: "2",
     },
+    {
+      id: "array-2",
+      rank: [2],
+    },
+    {
+      id: "array-1",
+      rank: [1],
+    },
+    {
+      id: "array-1-tie",
+      rank: [1],
+    },
+    {
+      id: "array-10",
+      rank: [10],
+    },
+    {
+      id: "object",
+      rank: { a: 1 },
+    },
+    {
+      id: "object-z",
+      rank: { z: 1 },
+    },
   ]
 
-  for (const record of records) {
+async function createScalarSortRecords(database) {
+  for (const record of SCALAR_SORT_RECORDS) {
     await database.create({
       collection: "sort-types",
       record,
@@ -394,8 +421,8 @@ async function verifyScalarSortAscending(database) {
   })
   assert.deepEqual(
     ascending.map((record) => record.id),
-    ["missing", "null", "false", "true", "number-2", "number-10", "string-10", "string-2"],
-    "Ascending scalar sorting must order null/missing, booleans, numbers, and strings consistently",
+    ["missing", "null", "false", "true", "number-2", "number-10", "string-10", "string-2", "array-1", "array-1-tie", "array-10", "array-2", "object", "object-z"],
+    "Ascending sorting orders JSON scalars by type/value and compound arrays/objects by stable record ID",
   )
 }
 
@@ -413,8 +440,8 @@ async function verifyScalarSortDescending(database) {
   })
   assert.deepEqual(
     descending.map((record) => record.id),
-    ["string-2", "string-10", "number-10", "number-2", "true", "false", "missing", "null"],
-    "Descending scalar sorting must reverse value/type order while keeping the identifier tie-breaker ascending",
+    ["array-1", "array-1-tie", "array-10", "array-2", "object", "object-z", "string-2", "string-10", "number-10", "number-2", "true", "false", "missing", "null"],
+    "Descending sorting reverses scalar type/value order while compound values and equal values retain the ascending ID tie-breaker",
   )
 }
 
@@ -422,6 +449,37 @@ async function verifyScalarSortOrdering(database) {
   await createScalarSortRecords(database)
   await verifyScalarSortAscending(database)
   await verifyScalarSortDescending(database)
+}
+
+async function verifySortingAfterUpdate(database) {
+  await database.create({
+    collection: "people",
+    record: { id: "updated-rank",
+rank: 2 },
+  })
+  await database.create({
+    collection: "people",
+    record: { id: "stable-rank",
+rank: 1 },
+  })
+  await database.update({
+    collection: "people",
+    id: "updated-rank",
+    changes: { rank: 0 },
+  })
+
+  const records = await database.readMany({
+    collection: "people",
+    query: {
+      sort: [{ field: "rank",
+direction: "asc" }],
+    },
+  })
+  assert.deepEqual(
+    records.map((record) => record.id),
+    ["updated-rank", "stable-rank"],
+    "Sorting must observe the latest updated field value rather than stale derived metadata",
+  )
 }
 
 async function verifyPagination(database) {
@@ -507,9 +565,18 @@ async function verifyMissingRecords(database) {
 
 async function verifyRollback(database) {
   const failure = new Error("abort the complete transaction")
-
-  await assert.rejects(
-    database.transaction((transaction) => {
+  const work = database.capabilities.transactions.callbackMode === "asynchronous"
+    ? async (transaction) => {
+      await transaction.create({
+        collection: "people",
+        record: {
+          id: "transaction-1",
+          name: "Uncommitted",
+        },
+      })
+      throw failure
+    }
+    : (transaction) => {
       transaction.create({
         collection: "people",
         record: {
@@ -518,7 +585,10 @@ async function verifyRollback(database) {
         },
       })
       throw failure
-    }),
+    }
+
+  await assert.rejects(
+    database.transaction(work),
     (error) => error === failure,
     "A failed transaction must preserve the original callback error",
   )
@@ -534,16 +604,28 @@ async function verifyRollback(database) {
 }
 
 async function verifyCommit(database) {
-  const result = await database.transaction((transaction) => {
-    transaction.create({
-      collection: "people",
-      record: {
-        id: "committed-1",
-        name: "Committed",
-      },
-    })
-    return "committed"
-  })
+  const work = database.capabilities.transactions.callbackMode === "asynchronous"
+    ? async (transaction) => {
+      await transaction.create({
+        collection: "people",
+        record: {
+          id: "committed-1",
+          name: "Committed",
+        },
+      })
+      return "committed"
+    }
+    : (transaction) => {
+      transaction.create({
+        collection: "people",
+        record: {
+          id: "committed-1",
+          name: "Committed",
+        },
+      })
+      return "committed"
+    }
+  const result = await database.transaction(work)
 
   assert.equal(
     result,
@@ -654,8 +736,9 @@ async function verifyNestedTransactionUnsupportedAsynchronous({
         collection: "people",
         record: nestedRecord,
       })),
-      (error) => error instanceof DatabaseProviderError,
-      "A provider declaring nestedTransactions=false must reject nested transaction work with the shared provider error",
+      (error) => error instanceof DatabaseTransactionUnsupportedError
+        && error.context?.capability === "nestedTransactions",
+      "A provider declaring nestedTransactions=false must reject nested work with the shared transaction-unsupported error",
     )
   })
 }
@@ -680,8 +763,9 @@ async function verifyNestedTransactionUnsupportedSynchronous({
   })
   await Promise.resolve()
   assert.ok(
-    nestedError instanceof DatabaseProviderError,
-    "A synchronous provider declaring nestedTransactions=false must reject nested transaction work with the shared provider error",
+    nestedError instanceof DatabaseTransactionUnsupportedError
+      && nestedError.context?.capability === "nestedTransactions",
+    "A synchronous provider declaring nestedTransactions=false must reject nested work with the shared transaction-unsupported error",
   )
 }
 
@@ -920,9 +1004,14 @@ function registerQueryTests({ name, createDatabase, capabilities, storageMode, c
       verify: verifySorting,
     },
     {
-      description: "sorting uses portable JSON scalar ordering",
+      description: "sorting uses portable JSON value ordering",
       capability: "sorting",
       verify: verifyScalarSortOrdering,
+    },
+    {
+      description: "sorting observes updated field values",
+      capability: "sorting",
+      verify: verifySortingAfterUpdate,
     },
     {
       description: "pagination applies limit and offset after sorting",
@@ -948,7 +1037,7 @@ function registerCrudAndQueryTests(options) {
   registerQueryTests(options)
 }
 
-function registerTransactionTests({ name, createDatabase, storageMode, cleanupStorage }) {
+function registerTransactionTests({ name, createDatabase, capabilities, storageMode, cleanupStorage }) {
   registerStandardTest({
     name,
     description: "missing updates and deletes use non-exception results",
@@ -957,38 +1046,38 @@ function registerTransactionTests({ name, createDatabase, storageMode, cleanupSt
     storageMode,
     cleanupStorage,
   })
-  registerStandardTest({
-    name,
-    description: "transaction failures roll back every record change",
-    createDatabase,
-    verify: verifyRollback,
-    storageMode,
-    cleanupStorage,
-  })
-  registerStandardTest({
-    name,
-    description: "successful transactions commit all record changes",
-    createDatabase,
-    verify: verifyCommit,
-    storageMode,
-    cleanupStorage,
-  })
-  registerStandardTest({
-    name,
-    description: "transaction callbacks follow the declared callback mode",
-    createDatabase,
-    verify: verifyTransactionCallbackMode,
-    storageMode,
-    cleanupStorage,
-  })
-  registerStandardTest({
-    name,
-    description: "nested transaction behavior matches the declared capability",
-    createDatabase,
-    verify: verifyNestedTransactions,
-    storageMode,
-    cleanupStorage,
-  })
+  const transactionTests = [
+    {
+      description: "transaction failures roll back every record change",
+      verify: verifyRollback,
+    },
+    {
+      description: "successful transactions commit all record changes",
+      verify: verifyCommit,
+    },
+    {
+      description: "transaction callbacks follow the declared callback mode",
+      verify: verifyTransactionCallbackMode,
+    },
+    {
+      description: "nested transaction behavior matches the declared capability",
+      verify: verifyNestedTransactions,
+    },
+  ]
+  for (const transactionTest of transactionTests) {
+    test(`${name} (${storageMode}): ${transactionTest.description}`, async (context) => {
+      if (capabilities.transactions.multiDocument !== true) {
+        context.skip("Provider does not guarantee multi-document transactions for every supported topology")
+        return
+      }
+      await withDatabase({
+        createDatabase,
+        callback: transactionTest.verify,
+        storageMode,
+        cleanupStorage,
+      })
+    })
+  }
   registerStandardTest({
     name,
     description: "provider capabilities are exposed as an immutable snapshot",
@@ -1014,8 +1103,8 @@ function registerLifecycleTests({
     })
   })
   test(`${name} (${storageMode}): close waits for active asynchronous transactions`, async (context) => {
-    if (capabilities.transactions.callbackMode === "synchronous") {
-      context.skip("Synchronous providers cannot keep an asynchronous transaction callback active")
+    if (capabilities.transactions.callbackMode === "synchronous" || capabilities.transactions.multiDocument !== true) {
+      context.skip("Provider cannot keep a multi-document transaction active")
       return
     }
     await withDatabase({

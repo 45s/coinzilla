@@ -125,9 +125,12 @@ export function validateSafetyBlockerRaisedFact({ factType, canonicalData, factI
   if (factType !== "SAFETY_BLOCKER_RAISED") {
     return
   }
-  const allowedFields = new Set(["blockerId", "scope", "symbol", "reason", "evidenceDigest"])
+  const allowedFields = new Set(["blockerId", "producer", "scope", "symbol", "reason", "evidenceDigest"])
   if (Object.keys(canonicalData).some((key) => !allowedFields.has(key))) {
     throw new TypeError("Safety-blocker fact contains unsupported fields")
+  }
+  if (canonicalData.producer !== undefined && canonicalData.producer !== "USER_DATA_EVENT_HANDLER") {
+    throw new TypeError("Safety-blocker producer must identify a supported producer")
   }
   validateSafetyBlockerScope({ canonicalData })
   const reason = requireNonEmptyString({ value: canonicalData.reason,

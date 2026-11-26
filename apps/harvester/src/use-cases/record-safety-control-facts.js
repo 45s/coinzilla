@@ -60,8 +60,26 @@ reason },
  * of the evidence that caused the blocker; the evidence itself remains outside
  * the fact stream unless separately allowlisted.
  */
+function validateSafetyBlockerRaisedData({ producer, scope, symbol, reason, evidenceDigest }) {
+  if (scope !== "ACCOUNT" && scope !== "MARKET") {
+    throw new TypeError("Safety blocker scope must be ACCOUNT or MARKET")
+  }
+  if ((scope === "ACCOUNT" && symbol !== null) ||
+      (scope === "MARKET" && (typeof symbol !== "string" || !/^[A-Z0-9]{3,30}$/.test(symbol)))) {
+    throw new TypeError("Safety blocker symbol must be null for ACCOUNT scope or canonical for MARKET scope")
+  }
+  if (producer !== undefined && producer !== "USER_DATA_EVENT_HANDLER") {
+    throw new TypeError("Safety blocker producer must identify a supported producer")
+  }
+  if (typeof reason !== "string" || !/^[A-Z][A-Z0-9_]{1,127}$/.test(reason) ||
+      typeof evidenceDigest !== "string" || !/^[a-f0-9]{64}$/.test(evidenceDigest)) {
+    throw new TypeError("Safety blocker requires a canonical reason code and SHA-256 evidence digest")
+  }
+}
+
 export async function recordSafetyBlockerRaised({
   operationalStateStore,
+  producer = "USER_DATA_EVENT_HANDLER",
   scope,
   symbol = null,
   reason,
@@ -70,17 +88,13 @@ export async function recordSafetyBlockerRaised({
   try {
     requireStore({ operationalStateStore,
 operation: "recordSafetyBlockerRaised" })
-    if (scope !== "ACCOUNT" && scope !== "MARKET") {
-      throw new TypeError("Safety blocker scope must be ACCOUNT or MARKET")
-    }
-    if ((scope === "ACCOUNT" && symbol !== null) ||
-        (scope === "MARKET" && (typeof symbol !== "string" || !/^[A-Z0-9]{3,30}$/.test(symbol)))) {
-      throw new TypeError("Safety blocker symbol must be null for ACCOUNT scope or canonical for MARKET scope")
-    }
-    if (typeof reason !== "string" || !/^[A-Z][A-Z0-9_]{1,127}$/.test(reason) ||
-        typeof evidenceDigest !== "string" || !/^[a-f0-9]{64}$/.test(evidenceDigest)) {
-      throw new TypeError("Safety blocker requires a canonical reason code and SHA-256 evidence digest")
-    }
+    validateSafetyBlockerRaisedData({
+      producer,
+      scope,
+      symbol,
+      reason,
+      evidenceDigest,
+    })
     const blockerId = createHash("sha256")
       .update([scope, symbol ?? "", reason, evidenceDigest].join("\0"))
       .digest("hex")
@@ -90,11 +104,14 @@ operation: "recordSafetyBlockerRaised" })
       fact: {
         factId: `safety-blocker-raised:${  blockerId}`,
         factType: "SAFETY_BLOCKER_RAISED",
-        data: { blockerId,
-scope,
-symbol,
-reason,
-evidenceDigest },
+        data: {
+          blockerId,
+          ...(producer === undefined ? {} : { producer }),
+          scope,
+          symbol,
+          reason,
+          evidenceDigest,
+        },
       },
     })
   } catch (error) {
