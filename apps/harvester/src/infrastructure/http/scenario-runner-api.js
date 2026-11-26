@@ -111,7 +111,7 @@ async function readBody({ request }) {
 }
 
 function resolveRunId({ pathname }) {
-  const match = pathname.match(/^\/api\/v1\/scenario-runner\/runs\/([^/]+)(?:\/cancel)?$/)
+  const match = pathname.match(/^\/api\/v1\/scenario-runner\/runs\/([^/]+)(?:\/(?:cancel|replay))?$/)
   if (!match) {
     return null
   }
@@ -212,6 +212,36 @@ async function handleCancel({ response, runner, runId }) {
   })
 }
 
+async function handleReplay({ response, runner, runId }) {
+  if (typeof runner.replay !== "function") {
+    sendError({
+      response,
+      status: 503,
+      code: "SCENARIO_RUNNER_REPLAY_UNAVAILABLE",
+      message: "Exact-revision replay is not configured.",
+    })
+    return
+  }
+  if (!runner.getRun(runId)) {
+    sendError({
+      response,
+      status: 404,
+      code: "SCENARIO_RUN_NOT_FOUND",
+      message: "Scenario run does not exist.",
+    })
+    return
+  }
+  const replay = await runner.replay(runId)
+  sendJson({
+    response,
+    status: replay.status === "Blocked" ? 409 : 202,
+    body: {
+      ok: true,
+      data: replay,
+    },
+  })
+}
+
 function handleUnknownRoute({ response }) {
   sendError({
     response,
@@ -259,6 +289,14 @@ async function handleRunRoute({ request, response, pathname, runner }) {
   }
   if (runId && request.method === "POST" && pathname.endsWith("/cancel")) {
     await handleCancel({
+      response,
+      runner,
+      runId,
+    })
+    return true
+  }
+  if (runId && request.method === "POST" && pathname.endsWith("/replay")) {
+    await handleReplay({
       response,
       runner,
       runId,
