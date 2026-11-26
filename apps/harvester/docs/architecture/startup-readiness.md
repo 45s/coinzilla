@@ -119,3 +119,8 @@ The readiness projection now reports the market-data service's 5-second price/bo
 ## Diagnostic record contract
 
 Each report check now carries a stable code, source-of-truth description, expected condition, observed timestamp and evidence, severity, evidence state, diagnosis, possible causes where supported, recovery outcome where available, impact and operator action. The report remains a projection: it does not persist a second readiness state or perform financial operations.
+
+
+## Operator read-model boundary
+
+The startup boundary requires the full source-backed evidence set. A later operator query does not pretend that startup-only evidence (process continuity, PREFLIGHT durability, first-event provenance, or broker capability inspection) was rechecked if the source snapshot does not include it; those checks are explicitly `NOT_APPLICABLE` with their source limitation. Live engine blockers and the existing user-data readiness flag remain authoritative for current market/account admission.

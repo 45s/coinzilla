@@ -181,7 +181,20 @@ function createRuntimeLifecycleCheck({ runtime, observedAt } = {}) {
 }
 
 function createConfigurationCheck({ runtime, inputs, observedAt } = {}) {
-  const configuration = inputs.configuration ?? {}
+  const configuration = inputs.configuration
+  if (!configuration && runtime.startupBoundary !== true) {
+    return createCheck({
+      id: "configuration.validation",
+      scope: "RUNTIME",
+      status: "NOT_APPLICABLE",
+      code: "CONFIGURATION_NOT_IN_OPERATOR_SNAPSHOT",
+      message: "Effective startup configuration was not included in this operator snapshot.",
+      expected: "Configuration is validated during the startup boundary.",
+      remediation: "Inspect startup diagnostics for the authoritative configuration result.",
+      observedAt,
+      blocksTrading: false,
+    })
+  }
   const enabledMarkets = configuration.enabledMarkets
   let valid = configuration.validated === true && Array.isArray(enabledMarkets)
   if (runtime.tradingEnabled === true && Array.isArray(enabledMarkets) && enabledMarkets.length === 0) {
@@ -211,8 +224,21 @@ function createConfigurationCheck({ runtime, inputs, observedAt } = {}) {
   })
 }
 
-function createBrokerConnectionCheck({ inputs, observedAt } = {}) {
-  const broker = inputs.broker ?? {}
+function createBrokerConnectionCheck({ inputs, runtime, observedAt } = {}) {
+  const broker = inputs.broker
+  if (!broker && runtime.startupBoundary !== true) {
+    return createCheck({
+      id: "broker.connection",
+      scope: "ACCOUNT",
+      status: "NOT_APPLICABLE",
+      code: "BROKER_CONNECTION_NOT_IN_OPERATOR_SNAPSHOT",
+      message: "Broker connection evidence was not included in this operator snapshot.",
+      expected: "The execution BrokerPort is connected at startup.",
+      remediation: "Inspect startup diagnostics for the authoritative BrokerPort connection result.",
+      observedAt,
+      blocksTrading: false,
+    })
+  }
   const connected = broker.connected === true
   let status = "BLOCKED"
   let code = "BROKER_NOT_CONNECTED"
@@ -238,8 +264,21 @@ function createBrokerConnectionCheck({ inputs, observedAt } = {}) {
   })
 }
 
-function createBrokerCapabilitiesCheck({ inputs, observedAt } = {}) {
-  const capabilities = inputs.broker?.capabilities ?? {}
+function createBrokerCapabilitiesCheck({ inputs, runtime, observedAt } = {}) {
+  const capabilities = inputs.broker?.capabilities
+  if (!capabilities && runtime.startupBoundary !== true) {
+    return createCheck({
+      id: "broker.capabilities",
+      scope: "ACCOUNT",
+      status: "NOT_APPLICABLE",
+      code: "BROKER_CAPABILITIES_NOT_IN_OPERATOR_SNAPSHOT",
+      message: "BrokerPort capability evidence was not included in this operator snapshot.",
+      expected: "Every method declared by BROKER_PORT_METHODS is available at startup.",
+      remediation: "Inspect startup diagnostics for the authoritative BrokerPort capability result.",
+      observedAt,
+      blocksTrading: false,
+    })
+  }
   const missing = Array.isArray(capabilities.missing) ? capabilities.missing : null
   const complete = capabilities.validated === true && Array.isArray(missing) && missing.length === 0
   let status = "BLOCKED"
@@ -267,22 +306,36 @@ function createBrokerCapabilitiesCheck({ inputs, observedAt } = {}) {
   })
 }
 
-function createProcessRestorationCheck({ inputs, observedAt } = {}) {
-  const continuity = inputs.processContinuity ?? {}
+function createProcessRestorationCheck({ inputs, runtime, observedAt } = {}) {
+  const continuity = inputs.processContinuity
+  if (!continuity && runtime.startupBoundary !== true) {
+    return createCheck({
+      id: "process.restoration",
+      scope: "ACCOUNT",
+      status: "NOT_APPLICABLE",
+      code: "PROCESS_CONTINUITY_NOT_IN_OPERATOR_SNAPSHOT",
+      message: "Prior-process continuity is a startup-only fact and is not re-inferred by this operator query.",
+      expected: "Prior-process state is evaluated at the startup boundary.",
+      remediation: "Inspect startup diagnostics for the authoritative process-ledger result.",
+      observedAt,
+      blocksTrading: false,
+    })
+  }
+  const processState = continuity ?? {}
   let status = "BLOCKED"
   let code = "PROCESS_CONTINUITY_UNKNOWN"
   let message = "The durable process ledger did not provide a definitive prior-process result."
   let remediation = "Inspect the durable process ledger and follow the approved recovery procedure."
-  if (continuity.storeConfigured !== true) {
+  if (processState.storeConfigured !== true) {
     status = "NOT_APPLICABLE"
     code = "PROCESS_CONTINUITY_STORE_NOT_CONFIGURED"
     message = "No durable process-continuity store is configured; prior-process history is unknown."
     remediation = "Configure the approved durable operational-state store if process continuity is required."
-  } else if (continuity.previousProcessStarted === true && continuity.restorationEnabled !== true) {
+  } else if (processState.previousProcessStarted === true && processState.restorationEnabled !== true) {
     code = "PROCESS_RESTART_RESTORATION_DISABLED"
     message = "A prior process session was detected. Runtime restoration remains disabled."
     remediation = "Complete the approved restart and reconciliation procedure; this report never restores trading state."
-  } else if (continuity.previousProcessStarted === false) {
+  } else if (processState.previousProcessStarted === false) {
     status = "NOT_APPLICABLE"
     code = "NO_PRIOR_PROCESS_SESSION"
     message = "The verified process ledger contains no prior process session."
@@ -298,21 +351,35 @@ function createProcessRestorationCheck({ inputs, observedAt } = {}) {
     remediation,
     observedAt,
     details: {
-      storeConfigured: continuity.storeConfigured === true,
-      previousProcessStarted: continuity.storeConfigured === true
-        ? continuity.previousProcessStarted ?? null
+      storeConfigured: processState.storeConfigured === true,
+      previousProcessStarted: processState.storeConfigured === true
+        ? processState.previousProcessStarted ?? null
         : null,
-      restorationEnabled: continuity.restorationEnabled === true,
+      restorationEnabled: processState.restorationEnabled === true,
     },
   })
 }
 
-function createAccountPreflightCheck({ inputs, observedAt } = {}) {
-  const preflight = inputs.account?.preflight ?? {}
-  const complete = preflight.completed === true &&
-    preflight.durable === true &&
-    isTimestamp(preflight.sourceTime) &&
-    Number.isSafeInteger(preflight.balanceCount)
+function createAccountPreflightCheck({ inputs, runtime, observedAt } = {}) {
+  const preflight = inputs.account?.preflight
+  if (!preflight && runtime.startupBoundary !== true) {
+    return createCheck({
+      id: "account.preflight",
+      scope: "ACCOUNT",
+      status: "NOT_APPLICABLE",
+      code: "ACCOUNT_PREFLIGHT_NOT_IN_OPERATOR_SNAPSHOT",
+      message: "The account PREFLIGHT audit is a startup-boundary fact and is not re-inferred by this operator query.",
+      expected: "A durable account PREFLIGHT snapshot is verified during startup.",
+      remediation: "Inspect startup diagnostics for the authoritative account PREFLIGHT result.",
+      observedAt,
+      blocksTrading: false,
+    })
+  }
+  const accountPreflight = preflight ?? {}
+  const complete = accountPreflight.completed === true &&
+    accountPreflight.durable === true &&
+    isTimestamp(accountPreflight.sourceTime) &&
+    Number.isSafeInteger(accountPreflight.balanceCount)
   let status = "BLOCKED"
   let code = "ACCOUNT_PREFLIGHT_INCOMPLETE"
   let message = "The account PREFLIGHT snapshot or its durability barrier is incomplete."
@@ -331,31 +398,45 @@ function createAccountPreflightCheck({ inputs, observedAt } = {}) {
     remediation: "Inspect account snapshot retrieval, lifecycle-event publication and the existing Journal PREFLIGHT flush barrier.",
     observedAt,
     details: {
-      completed: preflight.completed === true,
-      durable: preflight.durable === true,
-      sourceTime: isTimestamp(preflight.sourceTime) ? preflight.sourceTime : null,
-      ageMs: ageMs({ observedAt, timestamp: preflight.sourceTime }),
-      balanceCount: Number.isSafeInteger(preflight.balanceCount) ? preflight.balanceCount : null,
+      completed: accountPreflight.completed === true,
+      durable: accountPreflight.durable === true,
+      sourceTime: isTimestamp(accountPreflight.sourceTime) ? accountPreflight.sourceTime : null,
+      ageMs: ageMs({ observedAt, timestamp: accountPreflight.sourceTime }),
+      balanceCount: Number.isSafeInteger(accountPreflight.balanceCount) ? accountPreflight.balanceCount : null,
     },
   })
 }
 
 function isExternalOrderOnlyAudit({ openOrders } = {}) {
-  const symbols = openOrders.unownedSymbols
-  const reasons = openOrders.blockReasons
+  const symbols = openOrderState.unownedSymbols
+  const reasons = openOrderState.blockReasons
   if (!Array.isArray(symbols) || symbols.length === 0 || !Array.isArray(reasons) || reasons.length === 0) {
     return false
   }
   return reasons.every((reason) => String(reason).startsWith("UNOWNED_OPEN_ORDERS"))
 }
 
-function createOpenOrdersCheck({ inputs, observedAt } = {}) {
-  const openOrders = inputs.account?.openOrders ?? {}
-  const externalOrderOnly = isExternalOrderOnlyAudit({ openOrders })
-  const complete = openOrders.completed === true &&
-    openOrders.durable === true &&
-    isTimestamp(openOrders.observedAt) &&
-    Number.isSafeInteger(openOrders.orderCount)
+function createOpenOrdersCheck({ inputs, runtime, observedAt } = {}) {
+  const openOrders = inputs.account?.openOrders
+  if (!openOrders && runtime.startupBoundary !== true) {
+    return createCheck({
+      id: "account.open-orders",
+      scope: "ACCOUNT",
+      status: "NOT_APPLICABLE",
+      code: "OPEN_ORDERS_NOT_IN_OPERATOR_SNAPSHOT",
+      message: "The account-wide open-order PREFLIGHT audit is a startup-boundary fact and is not re-inferred by this operator query.",
+      expected: "A complete durable account-wide open-order audit is verified during startup.",
+      remediation: "Inspect startup diagnostics for the authoritative open-order audit result.",
+      observedAt,
+      blocksTrading: false,
+    })
+  }
+  const openOrderState = openOrders ?? {}
+  const externalOrderOnly = isExternalOrderOnlyAudit({ openOrders: openOrderState })
+  const complete = openOrderState.completed === true &&
+    openOrderState.durable === true &&
+    isTimestamp(openOrderState.observedAt) &&
+    Number.isSafeInteger(openOrderState.orderCount)
   let status = "BLOCKED"
   let code = "ACCOUNT_OPEN_ORDERS_AUDIT_INCOMPLETE"
   let message = "The account-wide open-order audit is incomplete or contains an unresolved condition."
@@ -365,7 +446,7 @@ function createOpenOrdersCheck({ inputs, observedAt } = {}) {
     code = "UNOWNED_EXTERNAL_ORDERS_OBSERVED"
     message = "The account snapshot contains unowned external orders; existing per-market policy determines impact."
     blocksTrading = false
-  } else if (complete && (openOrders.blockReasons?.length ?? 0) === 0) {
+  } else if (complete && (openOrderState.blockReasons?.length ?? 0) === 0) {
     status = "PASS"
     code = "ACCOUNT_OPEN_ORDERS_AUDITED"
     message = "The account-wide open-order PREFLIGHT audit completed and was durably recorded."
@@ -384,28 +465,42 @@ function createOpenOrdersCheck({ inputs, observedAt } = {}) {
     observedAt,
     blocksTrading,
     details: {
-      completed: openOrders.completed === true,
-      durable: openOrders.durable === true,
-      phase: openOrders.phase ?? null,
-      observedAt: isTimestamp(openOrders.observedAt) ? openOrders.observedAt : null,
-      ageMs: ageMs({ observedAt, timestamp: openOrders.observedAt }),
-      orderCount: Number.isSafeInteger(openOrders.orderCount) ? openOrders.orderCount : null,
-      unownedSymbols: Array.isArray(openOrders.unownedSymbols) ? openOrders.unownedSymbols : [],
-      blockReasons: Array.isArray(openOrders.blockReasons) ? openOrders.blockReasons : [],
+      completed: openOrderState.completed === true,
+      durable: openOrderState.durable === true,
+      phase: openOrderState.phase ?? null,
+      observedAt: isTimestamp(openOrderState.observedAt) ? openOrderState.observedAt : null,
+      ageMs: ageMs({ observedAt, timestamp: openOrderState.observedAt }),
+      orderCount: Number.isSafeInteger(openOrderState.orderCount) ? openOrderState.orderCount : null,
+      unownedSymbols: Array.isArray(openOrderState.unownedSymbols) ? openOrderState.unownedSymbols : [],
+      blockReasons: Array.isArray(openOrderState.blockReasons) ? openOrderState.blockReasons : [],
       externalOrderOnly,
     },
   })
 }
 
-function createAccountSafetyCheck({ inputs, observedAt } = {}) {
+function createAccountSafetyCheck({ inputs, runtime, observedAt } = {}) {
   const blocker = inputs.accountSafety?.blocker ?? null
+  const runtimeSafetyHalt = runtime.userData?.safetyHaltRequired === true
+  if (!inputs.accountSafety && !runtimeSafetyHalt && runtime.startupBoundary !== true) {
+    return createCheck({
+      id: "account.safety-blocker",
+      scope: "ACCOUNT",
+      status: "NOT_APPLICABLE",
+      code: "ACCOUNT_SAFETY_NOT_IN_OPERATOR_SNAPSHOT",
+      message: "The account safety-blocker projection was not included in this operator snapshot.",
+      expected: "Account-scoped safety blockers are checked at startup and enforced by existing runtime gates.",
+      remediation: "Inspect the owning safety workflow if a separate account blocker is reported.",
+      observedAt,
+      blocksTrading: false,
+    })
+  }
   let status = "PASS"
   let code = "ACCOUNT_SAFETY_CLEAR"
   let message = "No account-scoped safety blocker is active."
   let blocksTrading = false
-  if (blocker && blocker.scope === "ACCOUNT") {
+  if (runtimeSafetyHalt || blocker?.scope === "ACCOUNT") {
     status = "BLOCKED"
-    code = blocker.reason ?? "ACCOUNT_SAFETY_BLOCKER_ACTIVE"
+    code = blocker?.reason ?? "ACCOUNT_SAFETY_HALT_REQUIRED"
     message = "An existing account-scoped safety blocker prohibits trading activation."
     blocksTrading = true
   } else if (blocker) {
@@ -518,12 +613,12 @@ function createRuntimeChecks({ runtime, inputs, observedAt } = {}) {
   return [
     createRuntimeLifecycleCheck({ runtime, observedAt }),
     createConfigurationCheck({ runtime, inputs, observedAt }),
-    createBrokerConnectionCheck({ inputs, observedAt }),
-    createBrokerCapabilitiesCheck({ inputs, observedAt }),
-    createProcessRestorationCheck({ inputs, observedAt }),
-    createAccountPreflightCheck({ inputs, observedAt }),
-    createOpenOrdersCheck({ inputs, observedAt }),
-    createAccountSafetyCheck({ inputs, observedAt }),
+    createBrokerConnectionCheck({ inputs, runtime, observedAt }),
+    createBrokerCapabilitiesCheck({ inputs, runtime, observedAt }),
+    createProcessRestorationCheck({ inputs, runtime, observedAt }),
+    createAccountPreflightCheck({ inputs, runtime, observedAt }),
+    createOpenOrdersCheck({ inputs, runtime, observedAt }),
+    createAccountSafetyCheck({ inputs, runtime, observedAt }),
     createUserDataCheck({ runtime, inputs, observedAt }),
   ]
 }
@@ -607,11 +702,24 @@ function getBookRequired({ market, input, runtime } = {}) {
   if (market.bookRequired !== undefined) {
     return market.bookRequired === true
   }
-  return market.orderType !== "LIMIT"
+  return market.orderType === "LIMIT_MAKER"
 }
 
-function createMarketRouteCheck({ market, input, routeRequired, bookRequired, observedAt } = {}) {
+function createMarketRouteCheck({ market, input, routeRequired, bookRequired, runtime, observedAt } = {}) {
   const route = input.route ?? {}
+  if (!input.route && runtime.startupBoundary !== true) {
+    return createMarketCheck({
+      id: "market.route",
+      status: "NOT_APPLICABLE",
+      code: "MARKET_ROUTE_NOT_IN_OPERATOR_SNAPSHOT",
+      message: "Provider/account/environment route evidence is not included in this operator snapshot.",
+      expected: "The startup boundary verifies the configured provider route for every enabled market.",
+      remediation: "Inspect startup diagnostics for the authoritative per-market route result.",
+      observedAt,
+      blocksTrading: false,
+      sourceOfTruth: "Startup subscription identity snapshot; not included in this live operator read",
+    })
+  }
   const expected = route.expected
   const priceIdentity = route.priceSourceIdentity ?? route.actual
   const bookIdentity = route.bookSourceIdentity ?? route.actual
@@ -656,7 +764,26 @@ function createMarketRouteCheck({ market, input, routeRequired, bookRequired, ob
   })
 }
 
-function createMarketPriceCheck({ market, input, routeRequired, observedAt } = {}) {
+function createMarketPriceCheck({ market, input, routeRequired, runtime, observedAt } = {}) {
+  const price = input.price ?? {}
+  if (!input.price && runtime.startupBoundary !== true) {
+    return createMarketCheck({
+      id: "market.price",
+      status: "NOT_APPLICABLE",
+      code: "MARKET_PRICE_EVENT_NOT_IN_OPERATOR_SNAPSHOT",
+      message: "First-event provenance is not included in this operator snapshot; the engine's live freshness gate remains authoritative.",
+      expected: "Startup verifies an accepted first price event or initial seed before trading activation.",
+      remediation: "Inspect startup diagnostics for the authoritative first-price event result.",
+      observedAt,
+      blocksTrading: false,
+      sourceOfTruth: "Existing engine market-price freshness snapshot; first-event provenance is not included in this operator read",
+      details: {
+        fresh: market.priceFresh === true,
+        timestamp: isTimestamp(market.priceTimestamp) ? market.priceTimestamp : null,
+        ageMs: ageMs({ observedAt, timestamp: market.priceTimestamp }),
+      },
+    })
+  }
   const route = input.route ?? {}
   const price = input.price ?? {}
   const source = price.source ?? "UNKNOWN"
@@ -702,7 +829,20 @@ function createMarketPriceCheck({ market, input, routeRequired, observedAt } = {
   })
 }
 
-function createMarketBookCheck({ market, input, routeRequired, bookRequired, observedAt } = {}) {
+function createMarketBookCheck({ market, input, routeRequired, bookRequired, runtime, observedAt } = {}) {
+  if (!input.book && runtime.startupBoundary !== true) {
+    return createMarketCheck({
+      id: "market.book",
+      status: "NOT_APPLICABLE",
+      code: "MARKET_BOOK_EVENT_NOT_IN_OPERATOR_SNAPSHOT",
+      message: "First-book-event provenance is not included in this operator snapshot; the engine's live book gate remains authoritative.",
+      expected: "Startup verifies the first required order-book event before trading activation.",
+      remediation: "Inspect startup diagnostics for the authoritative first-book event result.",
+      observedAt,
+      blocksTrading: false,
+      sourceOfTruth: "Existing engine order-book freshness snapshot; first-event provenance is not included in this operator read",
+    })
+  }
   const route = input.route ?? {}
   const book = input.book ?? {}
   const ready = route.bookSubscriptionReady === true &&
@@ -820,9 +960,21 @@ function createVolatilityDetails({ market, snapshotStatus, observedAt } = {}) {
   }
 }
 
-function createMarketVolatilityCheck({ market, input, observedAt } = {}) {
-  const volatility = input.volatility ?? {}
-  if (volatility.enabled !== true) {
+function createMarketVolatilityCheck({ market, input, runtime, observedAt } = {}) {
+  const volatility = input.volatility
+  if (!volatility && runtime.startupBoundary !== true) {
+    return createMarketCheck({
+      id: "market.volatility",
+      status: "NOT_APPLICABLE",
+      code: "VOLATILITY_SNAPSHOT_NOT_IN_OPERATOR_READ",
+      message: "The candle-history service snapshot is not part of this operator read; engine protection remains authoritative.",
+      expected: "Startup verifies candle-history completeness and freshness for enabled volatility protection.",
+      remediation: "Inspect startup diagnostics for the authoritative candle-history result.",
+      observedAt,
+      blocksTrading: false,
+    })
+  }
+  if (volatility?.enabled !== true) {
     return createMarketCheck({
       id: "market.volatility",
       status: "NOT_APPLICABLE",
@@ -883,8 +1035,18 @@ function createMarketEngineSafetyCheck({ market, engineBlockers, observedAt } = 
   })
 }
 
+function getMarketBlockers({ checks, engineBlockers, startupBoundary } = {}) {
+  if (startupBoundary !== true) {
+    return [...new Set(engineBlockers)]
+  }
+  const diagnosticBlockers = checks
+    .filter((check) => check.status === "BLOCKED" && check.id !== "market.engine-safety")
+    .map((check) => check.code)
+  return [...new Set([...engineBlockers, ...diagnosticBlockers])]
+}
+
 function createMarketReadiness({ market, input = {}, runtime, observedAt } = {}) {
-  if (market.enabled !== true) {
+  if (market.enabled === false) {
     return freezeValue(createDisabledMarketReport({ market, observedAt }))
   }
   const routeRequired = input.route?.required !== false
@@ -897,17 +1059,18 @@ function createMarketReadiness({ market, input = {}, runtime, observedAt } = {})
     engineBlockers.push("USER_DATA_NOT_READY")
   }
   const checks = [
-    createMarketRouteCheck({ market, input, routeRequired, bookRequired, observedAt }),
-    createMarketPriceCheck({ market, input, routeRequired, observedAt }),
-    createMarketBookCheck({ market, input, routeRequired, bookRequired, observedAt }),
+    createMarketRouteCheck({ market, input, routeRequired, bookRequired, runtime, observedAt }),
+    createMarketPriceCheck({ market, input, routeRequired, runtime, observedAt }),
+    createMarketBookCheck({ market, input, routeRequired, bookRequired, runtime, observedAt }),
     createMarketMetadataCheck({ market, observedAt }),
-    createMarketVolatilityCheck({ market, input, observedAt }),
+    createMarketVolatilityCheck({ market, input, runtime, observedAt }),
     createMarketEngineSafetyCheck({ market, engineBlockers, observedAt }),
   ]
-  const checkBlockers = checks
-    .filter((check) => check.status === "BLOCKED")
-    .map((check) => check.code)
-  const blockers = [...new Set([...checkBlockers, ...engineBlockers])]
+  const blockers = getMarketBlockers({
+    checks,
+    engineBlockers,
+    startupBoundary: runtime.startupBoundary,
+  })
   const warnings = []
   if (input.unownedOrderObserved === true && input.externalOrdersPolicy === "IGNORE") {
     warnings.push("EXTERNAL_ORDERS_IGNORED_BY_POLICY")
