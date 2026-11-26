@@ -130,7 +130,7 @@ function makeContext() {
     {
       coverage: {
         coveredFromTime: 1_699_000_000_000,
-        verifiedAt: 1_700_000_000_100,
+        verifiedAt: 1_699_999_999_900,
         evidenceDigest: "c".repeat(64),
         verifiedBy: "operator-7",
       },
@@ -165,33 +165,39 @@ function makeContext() {
   }
 }
 
-function readyMarketAudit() {
+function readyMarketAudit(symbol) {
   return {
     ok: true,
     data: {
       mode: "AUDIT_ONLY",
       reconciliation: {
         ready: true,
+        status: "READY",
         audit: {
-          status: "READY",
+          skipped: false,
+          sourceTime: 1_700_000_000_000,
           targetMarketBlocked: false,
           tradeHistory: {
             complete: true,
-            historyPagesComplete: true,
-            marketsQueried: [],
+            scope: "MARKET",
+            marketSymbol: symbol,
+            historyStartTime: 1_699_000_000_000,
+            historyRetentionFactType: "MARKET_HISTORY_COVERAGE_CONFIRMED",
+            historyRetentionVerifiedAt: 1_699_999_999_900,
+            historyRetentionEvidenceDigest: "c".repeat(64),
+            historyRetentionVerifiedBy: "operator-7",
+            fillsChecked: 0,
+            journalFillsChecked: 0,
+            reconciledOwnedOrderFills: 0,
           },
           unownedOpenOrders: [],
           blockedMarkets: [],
-          accountSnapshot: {
-            sourceTime: 1_700_000_000_000,
-          },
           balancesChecked: 2,
           openOrdersChecked: 0,
           reservationsChecked: 0,
         },
         orderReconciliation: {
-          reconciledOrderCount: 0,
-          unresolvedOwnedOrders: 0,
+          reconciledOrders: 0,
         },
       },
     },
@@ -279,8 +285,7 @@ test("audits every configured market before recording account blocker resolution
     causeFixed: true,
     reconcileMarket: async ({ context }) => {
       reconciledSymbols.push(context.symbol)
-      const audit = readyMarketAudit()
-      audit.data.reconciliation.audit.tradeHistory.marketsQueried = [context.symbol]
+      const audit = readyMarketAudit(context.symbol)
       return audit
     },
     resolveBlockers: async (request) => {
@@ -311,7 +316,7 @@ test("fails closed if any configured market is not fully reconciled", async () =
     actionId: "action-unique-003",
     causeFixed: true,
     reconcileMarket: async ({ context }) => {
-      const audit = readyMarketAudit()
+      const audit = readyMarketAudit(context.symbol)
       if (context.symbol === "ETHUSDT") {
         audit.data.reconciliation.ready = false
       }
@@ -323,6 +328,29 @@ test("fails closed if any configured market is not fully reconciled", async () =
         ok: true,
         data: {},
       }
+    },
+  })
+
+  assert.equal(result.ok, false)
+  assert.equal(resolutionCalled, false)
+})
+
+test("rejects exchange fills that are not durably represented in the Journal", async () => {
+  let resolutionCalled = false
+  const result = await runOfflineAccountBlockerResolution({
+    context: makeContext(),
+    operationalStateStore: makeStore(),
+    operatorId: "operator-7",
+    actionId: "action-unique-011",
+    causeFixed: true,
+    reconcileMarket: async ({ context }) => {
+      const audit = readyMarketAudit(context.symbol)
+      audit.data.reconciliation.audit.tradeHistory.reconciledOwnedOrderFills = 1
+      return audit
+    },
+    resolveBlockers: async () => {
+      resolutionCalled = true
+      return { ok: true, data: {} }
     },
   })
 
