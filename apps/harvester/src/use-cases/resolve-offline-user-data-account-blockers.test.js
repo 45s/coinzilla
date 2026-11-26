@@ -712,15 +712,65 @@ test("rejects an unclean process stop before running market audits", async () =>
 
 test("fails closed for incomplete or contradictory market audit evidence", async () => {
   const scenarios = [
-    { name: "incomplete trade history", mutate: (audit) => { audit.tradeHistory.complete = false } },
-    { name: "unresolved owned-order fills", mutate: (audit) => { audit.tradeHistory.reconciledOwnedOrderFills = 1 } },
-    { name: "unowned external open orders", mutate: (audit) => { audit.unownedOpenOrders = [{ symbol: "BTCUSDT", brokerOrderId: "external-1" }] } },
-    { name: "blocked market", mutate: (audit) => { audit.blockedMarkets = ["BTCUSDT"] } },
-    { name: "stale account snapshot", mutate: (audit) => { audit.sourceTime += 1 } },
-    { name: "missing balance coverage", mutate: (audit) => { audit.balancesChecked = 0 } },
-    { name: "missing owned-order reconciliation count", mutate: (audit, reconciliation) => { delete reconciliation.orderReconciliation.reconciledOrders } },
-    { name: "skipped account audit", mutate: (audit) => { audit.skipped = true } },
-    { name: "target market blocked", mutate: (audit) => { audit.targetMarketBlocked = true } },
+    {
+      name: "incomplete trade history",
+      mutate: ({ audit }) => {
+        audit.tradeHistory.complete = false
+      },
+    },
+    {
+      name: "unresolved owned-order fills",
+      mutate: ({ audit }) => {
+        audit.tradeHistory.reconciledOwnedOrderFills = 1
+      },
+    },
+    {
+      name: "unowned external open orders",
+      mutate: ({ audit }) => {
+        audit.unownedOpenOrders = [
+          {
+            symbol: "BTCUSDT",
+            brokerOrderId: "external-1",
+          },
+        ]
+      },
+    },
+    {
+      name: "blocked market",
+      mutate: ({ audit }) => {
+        audit.blockedMarkets = ["BTCUSDT"]
+      },
+    },
+    {
+      name: "stale account snapshot",
+      mutate: ({ audit }) => {
+        audit.sourceTime += 1
+      },
+    },
+    {
+      name: "missing balance coverage",
+      mutate: ({ audit }) => {
+        audit.balancesChecked = 0
+      },
+    },
+    {
+      name: "missing owned-order reconciliation count",
+      mutate: ({ reconciliation }) => {
+        delete reconciliation.orderReconciliation.reconciledOrders
+      },
+    },
+    {
+      name: "skipped account audit",
+      mutate: ({ audit }) => {
+        audit.skipped = true
+      },
+    },
+    {
+      name: "target market blocked",
+      mutate: ({ audit }) => {
+        audit.targetMarketBlocked = true
+      },
+    },
   ]
 
   for (const [index, scenario] of scenarios.entries()) {
@@ -733,12 +783,18 @@ test("fails closed for incomplete or contradictory market audit evidence", async
       causeFixed: true,
       reconcileMarket: async ({ context }) => {
         const reconciliation = readyMarketAudit(context.symbol)
-        scenario.mutate(reconciliation.data.reconciliation.audit, reconciliation.data.reconciliation)
+        scenario.mutate({
+          audit: reconciliation.data.reconciliation.audit,
+          reconciliation: reconciliation.data.reconciliation,
+        })
         return reconciliation
       },
       resolveBlockers: async () => {
         resolutionCalled = true
-        return { ok: true, data: {} }
+        return {
+          ok: true,
+          data: {},
+        }
       },
     })
 
@@ -795,11 +851,20 @@ test("rejects ACCOUNT blockers without verified user-data producer provenance", 
   const store = makeStore()
   const read = await store.readAll()
   const records = read.data.records.map((record) => record.factType === "SAFETY_BLOCKER_RAISED"
-    ? { ...record, data: { ...record.data, producer: "RECOVERY_SELLER" } }
+    ? {
+      ...record,
+      data: {
+        ...record.data,
+        producer: "RECOVERY_SELLER",
+      },
+    }
     : record)
   store.readAll = async () => ({
     ok: true,
-    data: { ...read.data, records },
+    data: {
+      ...read.data,
+      records,
+    },
   })
   let auditCalls = 0
   const result = await runOfflineAccountBlockerResolution({
