@@ -1065,12 +1065,11 @@ function createRuntimeScenarioEventState({ orderRegistry }) {
 
 function createRuntimeScenarioMixedSellReconciler({
   runtime,
-  orderRegistry,
   state,
   setTerminalAccountingResult,
 }) {
   return async ({ order: reconciledOrder, canonicalFills }) => {
-    const currentOpenOrder = orderRegistry.getOrder({
+    const currentOpenOrder = state.registry.getOrder({
       clientOrderId: reconciledOrder.clientOrderId,
     })
     let reconciliation = createMixedSellFillReconciliation({
@@ -1256,7 +1255,6 @@ async function reconcileRuntimeScenarioPartialSell({ runtime, execution }) {
   })
   const reconcileRecoverySellerMixedSell = createRuntimeScenarioMixedSellReconciler({
     runtime,
-    orderRegistry,
     state: eventState,
     setTerminalAccountingResult: (result) => {
       terminalAccountingResult = result

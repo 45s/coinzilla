@@ -4,6 +4,8 @@
 
 Implemented in [PR #1837](https://github.com/45s/coinzilla/pull/1837), which remains Draft and unmerged. Terminal mixed-SELL accounting now publishes the canonical cycle state via `reconcileRecoverySellerCycleSell`; profitable partial CANCELED/EXPIRED outcomes remain `UNRESOLVED`, and under-target FILLED SELL outcomes latch the durable account-wide STOP in the order-event workflow. Regression coverage was added for partial CANCELED/EXPIRED reconciliation, canonical state publication and under-target STOP. The canonical order contract prohibits non-zero execution on REJECTED orders; zero-fill REJECTED accounting remains fail-closed.
 
+The RS partial-terminal runtime scenario now resolves the current order from the event workflow's replaced registry snapshot rather than a stale pre-transition registry reference; this preserves the canonical terminal-order state when staging the mixed SELL fill.
+
 The runtime scenario configuration assembly is split from option resolution to keep the resolver within the repository's function-size limit; this is a behavior-preserving refactor.
 
 The production registry is integrated into the trading-history API and contains three PARTIAL runtime scenarios: authorized SELL submission, rejected SELL with STOP workflow, and profitable partial CANCELED SELL through production order-event and accounting workflows. They use a run-local simulated broker and in-memory operational-state store, so they are not production-ready and remain non-executable. The API registers an explicit unavailable adapter until a trusted OS-level sandbox launcher exists. Node worker guards and simulated launcher attestations are not OS isolation.
