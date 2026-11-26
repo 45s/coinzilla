@@ -479,3 +479,30 @@ test("MongoDB reads reject stored records whose envelope identifier disagrees wi
       && /identifier.*does not match/i.test(error.cause.message),
   )
 })
+
+
+test("MongoDB reads reject malformed encoded user field names", async () => {
+  const stub = createCommandStub([{
+    ok: 1,
+    cursor: {
+      id: 0,
+      firstBatch: [{
+        _id: "person-1",
+        data: {
+          __coinzilla_key_aWQ: "person-1",
+          __coinzilla_key__w: "invalid UTF-8 key",
+        },
+      }],
+    },
+  }])
+  const operations = createMongoRecordOperations({
+    command: stub.command,
+    databaseName: "app",
+  })
+
+  await assert.rejects(
+    operations.readOne({ collection: "people", id: "person-1" }),
+    (error) => error instanceof DatabaseProviderError
+      && /invalid encoded MongoDB user key/i.test(error.cause.message),
+  )
+})
