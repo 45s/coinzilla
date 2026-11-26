@@ -213,7 +213,8 @@ test("MongoDB provider rejects malformed and looping replica-set primary address
   })
   await assert.rejects(
     redirectLoop.provider.connect(),
-    /exceeded the redirect limit/,
+    (error) => error instanceof DatabaseProviderError
+      && /exceeded the redirect limit/.test(error.cause?.message ?? ""),
   )
 })
 
@@ -359,7 +360,7 @@ test("MongoDB transaction command queue rejects commands after the first failure
       ])
     }),
     (error) => error instanceof DatabaseProviderError
-      && error.cause?.cause?.message.includes("first transaction command failed"),
+      && /first transaction command failed/.test(error.cause?.message ?? ""),
   )
   await harness.provider.close()
 })
