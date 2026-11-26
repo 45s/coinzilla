@@ -222,7 +222,6 @@ test("provider-neutral reads and writes use their distinct execution boundaries"
     return execute(input)
   }
   const database = createDatabase({ provider })
-  let nestedTransaction
   await database.connect()
 
   try {
@@ -240,13 +239,7 @@ id: "one" })
 })
 
 
-test("database CRUD inside a transaction reuses its transaction context", async () => {
-  const calls = {
-    transactionCreate: 0,
-    transactionRead: 0,
-    standaloneCreate: 0,
-    standaloneRead: 0,
-  }
+function createTransactionContextProvider({ calls }) {
   const provider = createProvider({
     capabilities: {
       transactions: {
@@ -259,9 +252,7 @@ test("database CRUD inside a transaction reuses its transaction context", async 
         sorting: true,
         pagination: true,
       },
-      storage: {
-        modes: ["memory"],
-      },
+      storage: { modes: ["memory"] },
     },
   })
   provider.execute = () => {
@@ -288,6 +279,24 @@ test("database CRUD inside a transaction reuses its transaction context", async 
     update() {},
     delete() {},
   })
+  return provider
+}
+
+function assertDatabaseCloseBlocked({ database }) {
+  assert.throws(
+    () => database.close(),
+    /Cannot close a database from inside its transaction callback/,
+  )
+}
+
+test("database CRUD inside a transaction reuses its transaction context", async () => {
+  const calls = {
+    transactionCreate: 0,
+    transactionRead: 0,
+    standaloneCreate: 0,
+    standaloneRead: 0,
+  }
+  const provider = createTransactionContextProvider({ calls })
   const database = createDatabase({ provider })
   let nestedTransaction
   await database.connect()
@@ -303,10 +312,7 @@ record: { id: "inside" } })
       database.readOne({ collection: "people",
 id: "inside" })
       nestedTransaction = database.transaction(() => {})
-      assert.throws(
-        () => database.close(),
-        /Cannot close a database from inside its transaction callback/,
-      )
+      assertDatabaseCloseBlocked({ database })
     })
     await assert.rejects(nestedTransaction, /Nested transactions are not supported/)
 
