@@ -24,7 +24,10 @@ function createShutdownTimeoutError({ phase, timeoutMs } = {}) {
   return error
 }
 
-function assertShutdownTimeout({ phase, timeoutMs }) {
+function assertShutdownTimeout({
+    phase,
+    timeoutMs,
+  }) {
   if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1) {
     throw new TypeError(`Harvester shutdown ${phase} timeout must be a positive safe integer`)
   }
@@ -36,7 +39,10 @@ async function waitForShutdownStep({ promise, phase, timeoutMs, setTimeoutFn, cl
   const timeoutPromise = new Promise((resolve) => {
     timeoutHandle = setTimeoutFn(() => resolve({
       status: "timed_out",
-      error: createShutdownTimeoutError({ phase, timeoutMs }),
+      error: createShutdownTimeoutError({
+      phase,
+      timeoutMs,
+    }),
     }), timeoutMs)
   })
   try {
@@ -61,7 +67,10 @@ async function runShutdownStep({
 }) {
   const existing = state.get(key)
   if (existing?.status === "completed") {
-    return { ok: true, value: existing.value }
+    return {
+      ok: true,
+      value: existing.value,
+    }
   }
   let trackedPromise = existing?.status === "pending"
     ? existing.promise
@@ -254,8 +263,122 @@ async function releaseProcessLock({ processLock } = {}) {
   }
 }
 
-function getFirstCleanupError(errors, fallbackMessage) {
+function getFirstCleanupError({ errors, fallbackMessage }) {
   return errors?.[0] ?? new Error(fallbackMessage)
+}
+
+async function runRuntimeStopStep({
+  shutdownState,
+  runtime,
+  logger,
+  runtimeStopTimeoutMs,
+  setTimeoutFn,
+  clearTimeoutFn,
+}) {
+  const result = await runShutdownStep({
+    state: shutdownState,
+    key: "runtime-stop",
+    phase: "RUNTIME_STOP",
+    operation: () => stopRuntimeForShutdown({
+      runtime,
+      logger,
+    }),
+    timeoutMs: runtimeStopTimeoutMs,
+    isSuccess: (value) => value?.runtimeStopped === true,
+    createFailure: (value) => value?.error ??
+      new Error("Harvester runtime stop did not confirm shutdown"),
+    setTimeoutFn,
+    clearTimeoutFn,
+  })
+  if (!result.ok) {
+    logShutdownFailure({
+      logger,
+      phase: "RUNTIME_STOP",
+      error: result.error,
+    })
+  }
+  return result
+}
+
+function publishStoppedLifecycleEvent({
+  shutdownState,
+  eventPublisher,
+  reason,
+  logger,
+}) {
+  if (shutdownState.has("stopped-event")) {
+    return
+  }
+  try {
+    const publication = publishLifecycleEvent({
+      eventPublisher,
+      eventName: HARVESTER_EVENT_NAMES.STOPPED,
+      dataResult: mapHarvesterStoppedData({
+        reason,
+        outcome: "success",
+      }),
+    })
+    if (publication?.ok === false) {
+      logger?.warn?.({
+        message: "Durable PROCESS_STOPPED was confirmed, but the non-durable STOPPED notification was rejected.",
+        errors: publication.errors,
+      })
+    }
+  } catch (error) {
+    try {
+      logger?.warn?.({
+        message: "Durable PROCESS_STOPPED was confirmed, but the non-durable STOPPED notification failed.",
+        error,
+      })
+    } catch {
+      // The durable operational-state acknowledgement remains authoritative.
+    }
+  }
+  shutdownState.set("stopped-event", {
+    status: "completed",
+  })
+}
+
+async function runRequiredShutdownStep({
+  shutdownState,
+  key,
+  phase,
+  operation,
+  timeoutMs,
+  fallbackMessage,
+  logger,
+  setTimeoutFn,
+  clearTimeoutFn,
+  onFailure,
+}) {
+  const result = await runShutdownStep({
+    state: shutdownState,
+    key,
+    phase,
+    operation,
+    timeoutMs,
+    isSuccess: (errors) => Array.isArray(errors) && errors.length === 0,
+    createFailure: (errors) => getFirstCleanupError({
+      errors,
+      fallbackMessage,
+    }),
+    setTimeoutFn,
+    clearTimeoutFn,
+  })
+  if (!result.ok) {
+    process.exitCode = 1
+    if (typeof onFailure === "function") {
+      onFailure(result.error)
+    } else {
+      logShutdownFailure({
+        logger,
+        phase,
+        error: result.error,
+      })
+    }
+    return false
+  }
+  return true
 }
 
 async function runRuntimeShutdown({
@@ -277,85 +400,51 @@ async function runRuntimeShutdown({
   setTimeoutFn = setTimeout,
   clearTimeoutFn = clearTimeout,
 } = {}) {
-  const stopResult = await runShutdownStep({
-    state: shutdownState,
-    key: "runtime-stop",
-    phase: "RUNTIME_STOP",
-    operation: () => stopRuntimeForShutdown({ runtime, logger }),
-    timeoutMs: runtimeStopTimeoutMs,
-    isSuccess: (result) => result?.runtimeStopped === true,
-    createFailure: (result) => result?.error ?? new Error("Harvester runtime stop did not confirm shutdown"),
+  const stopResult = await runRuntimeStopStep({
+    shutdownState,
+    runtime,
+    logger,
+    runtimeStopTimeoutMs,
     setTimeoutFn,
     clearTimeoutFn,
   })
   if (!stopResult.ok) {
-    logShutdownFailure({
-      logger,
-      phase: "RUNTIME_STOP",
-      error: stopResult.error,
-    })
     return {
       runtimeStopped: false,
       shutdownComplete: false,
     }
   }
 
-  if (!shutdownState.has("stopped-event")) {
-    try {
-      const publication = publishLifecycleEvent({
-        eventPublisher,
-        eventName: HARVESTER_EVENT_NAMES.STOPPED,
-        dataResult: mapHarvesterStoppedData({
-          reason,
-          outcome: "success",
-        }),
-      })
-      if (publication?.ok === false) {
-        logger?.warn?.({
-          message: "Durable PROCESS_STOPPED was confirmed, but the non-durable STOPPED notification was rejected.",
-          errors: publication.errors,
-        })
-      }
-    } catch (error) {
-      try {
-        logger?.warn?.({
-          message: "Durable PROCESS_STOPPED was confirmed, but the non-durable STOPPED notification failed.",
-          error,
-        })
-      } catch {
-        // The durable operational-state acknowledgement remains authoritative.
-      }
-    }
-    shutdownState.set("stopped-event", {
-      status: "completed",
-    })
-  }
+  publishStoppedLifecycleEvent({
+    shutdownState,
+    eventPublisher,
+    reason,
+    logger,
+  })
 
-  const notificationResult = await runShutdownStep({
-    state: shutdownState,
+  const commonStepOptions = {
+    shutdownState,
+    logger,
+    setTimeoutFn,
+    clearTimeoutFn,
+  }
+  const eventBusFlushed = await runRequiredShutdownStep({
+    ...commonStepOptions,
     key: "event-bus-flush",
     phase: "EVENT_BUS_FLUSH",
     operation: () => flushShutdownEventBus({ eventBus }),
     timeoutMs: cleanupTimeoutMs,
-    isSuccess: (errors) => errors.length === 0,
-    createFailure: (errors) => getFirstCleanupError(errors, "EventBus flush failed before Telegram shutdown"),
-    setTimeoutFn,
-    clearTimeoutFn,
+    fallbackMessage: "EventBus flush failed before Telegram shutdown",
   })
-  if (!notificationResult.ok) {
-    logShutdownFailure({
-      logger,
-      phase: "EVENT_BUS_FLUSH",
-      error: notificationResult.error,
-    })
+  if (!eventBusFlushed) {
     return {
       runtimeStopped: true,
       shutdownComplete: false,
     }
   }
 
-  const telegramResult = await runShutdownStep({
-    state: shutdownState,
+  const telegramClosed = await runRequiredShutdownStep({
+    ...commonStepOptions,
     key: "telegram-close",
     phase: "TELEGRAM_CLOSE",
     operation: () => closeTelegramNotifications({
@@ -364,90 +453,70 @@ async function runRuntimeShutdown({
       logTelegramNotificationSummary,
     }),
     timeoutMs: cleanupTimeoutMs,
-    isSuccess: (errors) => errors.length === 0,
-    createFailure: (errors) => getFirstCleanupError(errors, "Telegram notification shutdown failed"),
-    setTimeoutFn,
-    clearTimeoutFn,
+    fallbackMessage: "Telegram notification shutdown failed",
   })
-  if (!telegramResult.ok) {
-    logShutdownFailure({
-      logger,
-      phase: "TELEGRAM_CLOSE",
-      error: telegramResult.error,
-    })
+  if (!telegramClosed) {
     return {
       runtimeStopped: true,
       shutdownComplete: false,
     }
   }
 
-  const cleanupResult = await runShutdownStep({
-    state: shutdownState,
+  const observabilityClosed = await runRequiredShutdownStep({
+    ...commonStepOptions,
     key: "observability-close",
     phase: "OBSERVABILITY_CLOSE",
-    operation: () => closeObservability({
-      journalService,
-      eventBus,
-      processLock,
-      deferProcessLockRelease: true,
-      allowProcessLockRelease: false,
-      logger,
-    }),
+    operation: async () => {
+      const errors = await closeObservability({
+        journalService,
+        eventBus,
+        processLock,
+        deferProcessLockRelease: true,
+        allowProcessLockRelease: false,
+        logger,
+      })
+      return Array.isArray(errors)
+        ? errors
+        : [new Error("Observability cleanup returned an invalid result")]
+    },
     timeoutMs: observabilityCleanupTimeoutMs,
-    isSuccess: (errors) => errors.length === 0,
-    createFailure: (errors) => getFirstCleanupError(errors, "Harvester observability cleanup failed"),
-    setTimeoutFn,
-    clearTimeoutFn,
+    fallbackMessage: "Harvester observability cleanup failed",
   })
-  if (!cleanupResult.ok) {
-    logShutdownFailure({
-      logger,
-      phase: "OBSERVABILITY_CLOSE",
-      error: cleanupResult.error,
-    })
+  if (!observabilityClosed) {
     return {
       runtimeStopped: true,
       shutdownComplete: false,
     }
   }
 
-  const loggerResult = await runShutdownStep({
-    state: shutdownState,
+  const loggerClosed = await runRequiredShutdownStep({
+    ...commonStepOptions,
     key: "logger-close",
     phase: "LOGGER_CLOSE",
     operation: () => closeProcessLogger({ closeLogger }),
     timeoutMs: cleanupTimeoutMs,
-    isSuccess: (errors) => errors.length === 0,
-    createFailure: (errors) => getFirstCleanupError(errors, "Process logger close failed"),
-    setTimeoutFn,
-    clearTimeoutFn,
+    fallbackMessage: "Process logger close failed",
   })
-  if (!loggerResult.ok) {
-    logShutdownFailure({
-      logger,
-      phase: "LOGGER_CLOSE",
-      error: loggerResult.error,
-    })
+  if (!loggerClosed) {
     return {
       runtimeStopped: true,
       shutdownComplete: false,
     }
   }
 
-  const lockResult = await runShutdownStep({
-    state: shutdownState,
+  const lockReleased = await runRequiredShutdownStep({
+    ...commonStepOptions,
     key: "process-lock-release",
     phase: "PROCESS_LOCK_RELEASE",
     operation: () => releaseProcessLock({ processLock }),
     timeoutMs: cleanupTimeoutMs,
-    isSuccess: (errors) => errors.length === 0,
-    createFailure: (errors) => getFirstCleanupError(errors, "Harvester process lock release failed"),
-    setTimeoutFn,
-    clearTimeoutFn,
+    fallbackMessage: "Harvester process lock release failed",
+    logger: undefined,
+    onFailure: (error) => {
+      process.stderr.write(`Harvester shutdown incomplete; process lock release failed: ${error.message}\n`)
+    },
   })
-  if (!lockResult.ok) {
-    process.stderr.write(`Harvester shutdown incomplete; process lock release failed: ${lockResult.error.message}\n`)
-    process.exitCode = 1
+  if (!lockReleased) {
     return {
       runtimeStopped: true,
       shutdownComplete: false,
