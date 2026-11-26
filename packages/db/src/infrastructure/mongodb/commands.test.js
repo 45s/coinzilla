@@ -453,3 +453,29 @@ test("MongoDB rejects collection names whose encoded namespace exceeds the serve
     /namespace length/i,
   )
 })
+
+
+test("MongoDB reads reject stored records whose envelope identifier disagrees with public id", async () => {
+  const stub = createCommandStub([{
+    ok: 1,
+    cursor: {
+      id: 0,
+      firstBatch: [{
+        _id: "envelope-id",
+        data: {
+          __coinzilla_key_aWQ: "record-id",
+        },
+      }],
+    },
+  }])
+  const operations = createMongoRecordOperations({
+    command: stub.command,
+    databaseName: "app",
+  })
+
+  await assert.rejects(
+    operations.readOne({ collection: "people", id: "envelope-id" }),
+    (error) => error instanceof DatabaseProviderError
+      && /identifier.*does not match/i.test(error.cause.message),
+  )
+})
