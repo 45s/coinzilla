@@ -356,4 +356,34 @@ export function createScenarioRunnerHost({
   sourceRevision = null,
   buildProvenance,
   buildProvenanceVerifier,
+} = {}) {
+  if (!Array.isArray(adapters)) {
+    throw new TypeError("Scenario Runner host adapters must be an array")
+  }
+  const registeredAdapters = Object.freeze(adapters.map((adapter) =>
+    Object.freeze({ ...adapter })))
+  const resolvedRegistrations = resolveStrategyRegistrations({
+    strategyRegistrations,
+    scenarioCatalog,
+  })
+  const catalog = createCatalog({
+    adapters: registeredAdapters,
+    strategyRegistrations: resolvedRegistrations,
+  })
+  const replayProvenance = createScenarioReplayProvenance({
+    sourceRevision,
+    strategyRegistrations: resolvedRegistrations,
+    buildProvenance,
+    buildProvenanceVerifier,
+  })
+  const runner = createRunner({
+    adapters: registeredAdapters,
+    catalog,
+    replayProvenance,
+    eventBus,
+  })
+  return Object.freeze({
+    runner,
+    catalog,
+  })
 }
