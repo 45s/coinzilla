@@ -73,11 +73,12 @@ function createNestedErrorSummary(error) {
   if (!error) {
     return null
   }
-  const nestedErrors = Array.isArray(error.errors)
-    ? error.errors
-    : error.cause instanceof Error
-      ? [error.cause]
-      : []
+  let nestedErrors = []
+  if (Array.isArray(error.errors)) {
+    nestedErrors = error.errors
+  } else if (error.cause instanceof Error) {
+    nestedErrors = [error.cause]
+  }
   return Object.freeze({
     name: error.name ?? "Error",
     code: error.code ?? null,
