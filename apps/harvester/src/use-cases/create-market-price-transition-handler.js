@@ -294,6 +294,7 @@ function invalidateSafeShutdownMarkerForAcceptedPrice({ state, symbol } = {}) {
 /** Dispatch an accepted price through the existing trailing or evaluation workflow. */
 function dispatchAcceptedMarketPriceTransition({
   state,
+  logger,
   canTrade,
   maybeReplaceTrailingBuy,
   evaluateLatestTransition,
@@ -308,7 +309,19 @@ function dispatchAcceptedMarketPriceTransition({
   }
   if (!canTrade({ symbol })) {
     state.deferredEvaluations.add(symbol)
-    return evaluateLatestTransition({ symbol })
+    logger?.debug?.({
+      message: "Accepted market price deferred until trading readiness opens",
+      symbol,
+      marketEventId: transition.marketEventId,
+      reason: "TRADING_NOT_READY",
+    })
+    return toResult({
+      data: {
+        deferred: true,
+        reason: "TRADING_NOT_READY",
+        symbol,
+      },
+    })
   }
   if (state.paused.has(symbol)) {
     return evaluateLatestTransition({ symbol })
@@ -376,6 +389,7 @@ export function createMarketPriceTransitionHandler({
 
       return dispatchAcceptedMarketPriceTransition({
         state,
+        logger,
         canTrade,
         maybeReplaceTrailingBuy,
         evaluateLatestTransition,

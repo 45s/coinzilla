@@ -158,7 +158,7 @@ function assertTradingStartupSafety({ state, tradingModeLabel, getAccountSafetyB
   }
 }
 
-function activateTradingEngine({
+async function activateTradingEngine({
   state,
   logger,
   tradingModeLabel,
@@ -176,7 +176,7 @@ function activateTradingEngine({
   state.requiresReconciliation = false
   state.ready = true
   state.status = "READY"
-  resumeDeferredStrategyEvaluations()
+  await resumeDeferredStrategyEvaluations()
   logSystem({
     logger,
     message: `Conservative ${tradingModeLabel} trading engine activated`,
@@ -264,7 +264,7 @@ alreadyActivated: true })
         getAccountSafetyBlocker,
       })
       try {
-        activateTradingEngine({
+        await activateTradingEngine({
           state,
           logger,
           tradingModeLabel,
@@ -340,7 +340,7 @@ publishOpenOrdersSnapshot })
       resumeDeferredStrategyEvaluations,
     })
   }
-  activateTradingEngine({
+  await activateTradingEngine({
     state,
     logger,
     tradingModeLabel,
