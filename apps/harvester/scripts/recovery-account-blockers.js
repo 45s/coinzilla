@@ -12,6 +12,15 @@ import {
 import { createFileOperationalStateStore } from "../src/infrastructure/operational-state/create-file-store.js"
 import { resolveOperationalStateDirectory } from "../src/infrastructure/operational-state/resolve-directory.js"
 import { runOfflineAccountBlockerResolution } from "../src/use-cases/resolve-offline-user-data-account-blockers.js"
+import { runOfflineMarketRecovery } from "./recovery-market-context.js"
+
+
+async function runAccountBlockerResolution(options) {
+  return runOfflineAccountBlockerResolution({
+    ...options,
+    reconcileMarket: runOfflineMarketRecovery,
+  })
+}
 
 const PACKAGE_DIRECTORY = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 
@@ -272,7 +281,7 @@ export async function runRecoveryAccountBlockerCommand({
     error: message,
   }),
   createStore = createResolutionStore,
-  runResolution = runOfflineAccountBlockerResolution,
+  runResolution = runAccountBlockerResolution,
 } = {}) {
   writeOutput(createRecoveryIdentity({ env }))
   const parsed = parseCommandArguments({
