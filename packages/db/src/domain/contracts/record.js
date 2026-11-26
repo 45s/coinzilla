@@ -87,7 +87,8 @@ function cloneJsonObject({ value, ancestors, label }) {
     if (typeof key !== "string") {
       throw new TypeError(`${label} must not contain symbol keys`)
     }
-    assertWellFormedUnicode({ value: key, label })
+    assertWellFormedUnicode({ value: key,
+label })
 
     const descriptor = descriptors[key]
     if (!descriptor.enumerable || !Object.hasOwn(descriptor, "value")) {
@@ -111,7 +112,8 @@ function cloneJsonObject({ value, ancestors, label }) {
 
 function cloneJsonValue({ value, ancestors, label }) {
   if (typeof value === "string") {
-    assertWellFormedUnicode({ value, label })
+    assertWellFormedUnicode({ value,
+label })
     return value
   }
   if (value === null || typeof value === "boolean") {
@@ -159,7 +161,8 @@ export function validateCollectionName(collection) {
   if (typeof collection !== "string" || collection.trim() === "" || collection !== collection.trim()) {
     throw new TypeError("Collection name must be a non-empty string without surrounding whitespace")
   }
-  assertWellFormedUnicode({ value: collection, label: "Collection name" })
+  assertWellFormedUnicode({ value: collection,
+label: "Collection name" })
 
   return collection
 }
@@ -168,7 +171,8 @@ export function validateRecordIdentifier(identifier) {
   if (typeof identifier !== "string" || identifier.trim() === "" || identifier !== identifier.trim()) {
     throw new TypeError("Record identifier must be a non-empty string without surrounding whitespace")
   }
-  assertWellFormedUnicode({ value: identifier, label: "Record identifier" })
+  assertWellFormedUnicode({ value: identifier,
+label: "Record identifier" })
 
   return identifier
 }
