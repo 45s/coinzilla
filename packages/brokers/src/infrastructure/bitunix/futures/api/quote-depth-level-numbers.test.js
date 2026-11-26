@@ -59,3 +59,12 @@ test("quoteDepthLevelNumbers handles deeply nested arrays and large depth payloa
   assert.equal(parsed.asks[19_999][0], "19999.000000000000000001")
   assert.equal(parsed.bids[0][0][0][0], "-2.5E+3")
 })
+
+test("quoteDepthLevelNumbers does not rewrite bracket-shaped text or escaped property names", () => {
+  const source = String.raw`{"metadata":"escaped \"asks\":[[1,2]]","asks":[["literal [1,2] and \"bids\":[[3,4]]",0.123456789012345678]],"bids":[]}`
+  const parsed = JSON.parse(quoteDepthLevelNumbers({ text: source }))
+
+  assert.equal(parsed.metadata, 'escaped "asks":[[1,2]]')
+  assert.equal(parsed.asks[0][0], 'literal [1,2] and "bids":[[3,4]]')
+  assert.equal(parsed.asks[0][1], "0.123456789012345678")
+})
