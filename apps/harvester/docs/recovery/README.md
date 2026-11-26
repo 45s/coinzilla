@@ -166,6 +166,8 @@ This is the explicit operator workflow for a user-data ACCOUNT safety blocker. I
 
 Producer provenance determines resolver ownership. `RECOVERY_SELLER_STOP_WORKFLOW` facts remain exclusively owned by the existing Recovery Seller resolver; legacy untagged Recovery Seller facts retain that resolver through the reserved reason code. If a fact explicitly identifies `USER_DATA_EVENT_HANDLER` but uses the reserved Recovery Seller STOP reason, projection fails closed and neither resolver may clear it.
 
+After durable user-data ACCOUNT resolution, the next restart is observation-only. It must record and verify a fresh durable account PREFLIGHT snapshot matching the current account snapshot and a clean account-wide open-order PREFLIGHT audit (no block reasons or unowned symbols) in the same runtime session. This verification does not set trading readiness, enable execution, or reopen strategy admission; the separate ADR-0001 restart acceptance gate remains in force.
+
 From `apps/harvester`, run:
 
 ```sh
