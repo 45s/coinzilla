@@ -883,6 +883,8 @@ Compose real use cases and inject deterministic fake external ports:
 
 A domain test cannot claim that the broker was called once, a reservation is durable, or a persistence barrier was crossed. Those are application-level assertions.
 
+Scenario Runner application-level cases tracked under issue #1836 are maintained separately in `docs/testing/SCENARIO_CATALOG.md`. They exercise production use cases with simulated ports, but they do not count as domain scenario-suite coverage under #1780 and must not promote an RS family to VERIFIED.
+
 ### 8.3 REPLAY scenarios
 
 Full RS process restart/replay is currently unsupported/deferred. Do not add tests that claim restart restoration works. A test may verify that unsupported RS replay is rejected or that an existing CG-only replay path does not accidentally restore RS, but label the exact claim and do not promote it to supported restart coverage.

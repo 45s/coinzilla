@@ -293,7 +293,7 @@ function validateScenarioInput({ schema, defaults, input }) {
 
 const RUNTIME_SCENARIO_READINESS_REASONS = Object.freeze([
   "Scenario infrastructure uses a run-local simulated broker and in-memory operational store; it does not prove durable production account or STOP state.",
-  "STOP-persistence failure is covered; additional infrastructure-failure scenarios remain incomplete.",
+  "STOP-persistence failure and BUY-only STOP admission are covered; additional infrastructure-failure scenarios remain incomplete.",
   "No trusted OS-level sandbox launcher is available; the host must continue to fail closed.",
 ])
 
@@ -345,6 +345,17 @@ export const RECOVERY_SELLER_RUNTIME_SCENARIOS = Object.freeze([
   Object.freeze({
     id: "RS-RUNTIME-SELL-STOP-PERSISTENCE-FAILURE-001",
     name: "Production Recovery Seller fails closed when account STOP persistence fails after a FILLED SELL",
+    layer: "APPLICATION",
+    status: "PARTIAL",
+    executionStatus: "PRELIMINARY",
+    executable: false,
+    readinessReasons: RUNTIME_SCENARIO_READINESS_REASONS,
+    inputSchema: RUNTIME_FIXTURE.inputSchema,
+    input: RUNTIME_FIXTURE.input,
+  }),
+  Object.freeze({
+    id: "RS-RUNTIME-STOP-BLOCK-BUY-ALLOW-SELL-001",
+    name: "Production Recovery Seller STOP blocks new BUY spending while allowing an eligible first SELL",
     layer: "APPLICATION",
     status: "PARTIAL",
     executionStatus: "PRELIMINARY",
@@ -1486,7 +1497,14 @@ async function reconcileRuntimeScenarioFilledSell({
     expectedStopPersisted: !stopPersistenceFailure,
   })
 }
-function createRuntimeScenarioOutput({ runtime, data, submittedAction, submissionRejected = false, terminalSell = null }) {
+function createRuntimeScenarioOutput({
+  runtime,
+  data,
+  submittedAction,
+  submissionRejected = false,
+  terminalSell = null,
+  stopAdmissionChecks = null,
+}) {
   const action = submittedAction ? {
     side: submittedAction.side,
     purpose: submittedAction.purpose,
@@ -1515,6 +1533,7 @@ function createRuntimeScenarioOutput({ runtime, data, submittedAction, submissio
     stopFactAppended: runtime.operationalStateStore.getRecords().some((fact) =>
       fact.factType === "SAFETY_BLOCKER_RAISED"),
     terminalSell,
+    stopAdmissionChecks,
     submittedOrders,
     reservedSellCycle,
     simulationFacts: runtime.operationalStateStore.getRecords().map((fact) => ({
@@ -1526,6 +1545,24 @@ function createRuntimeScenarioOutput({ runtime, data, submittedAction, submissio
 }
 
 function createRuntimeScenarioExpected({ seed, pairConfig, scenarioId }) {
+  if (scenarioId === "RS-RUNTIME-STOP-BLOCK-BUY-ALLOW-SELL-001") {
+    return {
+      decisionOutcome: "SUBMIT",
+      actionSide: "SELL",
+      actionQuantity: addDecimal({
+        left: seed.buyQuantity,
+        right: String(pairConfig.sellQuantity),
+      }),
+      submittedOrderCount: 1,
+      reservationMatchesSubmittedOrder: true,
+      stopAdmissionChecks: {
+        buyActionSubmitted: false,
+        sellActionSide: "SELL",
+        stopStateStatus: "STOPPED",
+        accountAdmissionBlocked: true,
+      },
+    }
+  }
   if (scenarioId === "RS-RUNTIME-SELL-REJECTION-001") {
     return {
       submissionRejected: true,
@@ -1781,23 +1818,59 @@ function createPartialSellAssertions({ output, expected }) {
   ]
 }
 
+function createStopAdmissionAssertions({ output, expected }) {
+  if (!expected.stopAdmissionChecks) {
+    return []
+  }
+  return [
+    createAssertion({
+      name: "latched STOP blocks a new BUY when the market is below the SELL target",
+      actual: output.stopAdmissionChecks?.buyActionSubmitted,
+      expected: expected.stopAdmissionChecks.buyActionSubmitted,
+    }),
+    createAssertion({
+      name: "latched STOP permits an otherwise eligible first recovery SELL",
+      actual: output.stopAdmissionChecks?.sellActionSide,
+      expected: expected.stopAdmissionChecks.sellActionSide,
+    }),
+    createAssertion({
+      name: "the STOP remains latched after the eligible SELL is submitted",
+      actual: output.stopAdmissionChecks?.stopStateStatus,
+      expected: expected.stopAdmissionChecks.stopStateStatus,
+    }),
+    createAssertion({
+      name: "account admission remains blocked for additional BUY spending",
+      actual: output.stopAdmissionChecks?.accountAdmissionBlocked,
+      expected: expected.stopAdmissionChecks.accountAdmissionBlocked,
+    }),
+  ]
+}
+
 function createRuntimeScenarioAssertions({ output, expected }) {
+  let assertions
   if (expected.submissionRejected === true) {
-    return createRejectedSellAssertions({
+    assertions = createRejectedSellAssertions({
+      output,
+      expected,
+    })
+  } else if (expected.terminalOrderStatus) {
+    assertions = createPartialSellAssertions({
+      output,
+      expected,
+    })
+  } else {
+    assertions = createSubmittedSellAssertions({
       output,
       expected,
     })
   }
-  if (expected.terminalOrderStatus) {
-    return createPartialSellAssertions({
+  return [
+    ...assertions,
+    ...createStopAdmissionAssertions({
       output,
       expected,
-    })
-  }
-  return createSubmittedSellAssertions({
-    output,
-    expected,
-  })
+    }),
+  ]
 }
 
 function createRuntimeScenarioEvaluationTrace({ runtime, effectiveInput, output }) {
@@ -1910,6 +1983,15 @@ function createRuntimeScenarioTrace({ runtime, effectiveInput, output, assertion
   if (output.terminalSell) {
     steps.push(createRuntimeScenarioTerminalTraceStep({ output }))
   }
+  if (output.stopAdmissionChecks) {
+    steps.push({
+      id: "stop-admission-1",
+      kind: "safety-stop",
+      label: "Verify STOP blocks new BUY spending while preserving an eligible first recovery SELL",
+      outputs: output.stopAdmissionChecks,
+      source: "createRecoverySellerRuntimeEvaluator",
+    })
+  }
   steps.push({
     id: "assertions-1",
     kind: "assertion",
@@ -1951,15 +2033,45 @@ async function executeRuntimeScenario({ runId, scenarioId, effectiveInput, signa
     effectiveInput,
   })
   const expectRejection = scenarioId === "RS-RUNTIME-SELL-REJECTION-001"
-  const execution = await executeRuntimeScenarioDispatch({
-    runtime,
-    effectiveInput,
-    expectRejection,
-  })
+  let execution
+  let terminalSell = null
+  let stopAdmissionChecks = null
+  if (scenarioId === "RS-RUNTIME-STOP-BLOCK-BUY-ALLOW-SELL-001") {
+    const stopResult = await runtime.stopWorkflow.latch({
+      explanation: "Scenario verifies that STOP blocks new BUY spending but permits an eligible first recovery SELL.",
+    })
+    if (stopResult?.ok !== true || stopResult.data?.durable !== true) {
+      throw stopResult?.errors?.[0] ?? new Error("Scenario STOP could not be persisted in the run-local store")
+    }
+    const buyAttempt = await executeRuntimeScenarioDispatch({
+      runtime,
+      effectiveInput: {
+        ...effectiveInput,
+        marketPrice: "9",
+      },
+      expectBlocked: true,
+    })
+    const sellAttempt = await executeRuntimeScenarioDispatch({
+      runtime,
+      effectiveInput,
+    })
+    execution = sellAttempt
+    stopAdmissionChecks = {
+      buyActionSubmitted: Boolean(buyAttempt.submittedAction),
+      sellActionSide: sellAttempt.submittedAction?.side ?? null,
+      stopStateStatus: (await runtime.stopWorkflow.getState()).status,
+      accountAdmissionBlocked: runtime.stopWorkflow.isAccountAdmissionBlocked(),
+    }
+  } else {
+    execution = await executeRuntimeScenarioDispatch({
+      runtime,
+      effectiveInput,
+      expectRejection,
+    })
+  }
   if (signal?.aborted) {
     throw new Error("Scenario worker was cancelled")
   }
-  let terminalSell = null
   if (scenarioId === "RS-RUNTIME-SELL-PARTIAL-CANCEL-001") {
     terminalSell = await reconcileRuntimeScenarioPartialSell({
       runtime,
@@ -1978,7 +2090,10 @@ async function executeRuntimeScenario({ runId, scenarioId, effectiveInput, signa
     })
     const followUp = await executeRuntimeScenarioDispatch({
       runtime,
-      effectiveInput,
+      effectiveInput: {
+        ...effectiveInput,
+        marketPrice: "9",
+      },
       expectBlocked: true,
     })
     terminalSell = {
@@ -1992,16 +2107,26 @@ async function executeRuntimeScenario({ runId, scenarioId, effectiveInput, signa
     runtime,
     execution,
     terminalSell,
+    stopAdmissionChecks,
   }
 }
 
-function createRuntimeScenarioResult({ runId, scenario, effectiveInput, execution, runtime, terminalSell }) {
+function createRuntimeScenarioResult({
+  runId,
+  scenario,
+  effectiveInput,
+  execution,
+  runtime,
+  terminalSell,
+  stopAdmissionChecks,
+}) {
   const output = createRuntimeScenarioOutput({
     runtime,
     data: execution.data,
     submittedAction: execution.submittedAction,
     submissionRejected: execution.submissionRejected,
     terminalSell,
+    stopAdmissionChecks,
   })
   const expected = createRuntimeScenarioExpected({
     seed: runtime.seed,
@@ -2045,7 +2170,7 @@ export async function executeRecoverySellerRuntimeScenario({
     input,
     signal,
   })
-  const { runtime, execution, terminalSell } = await executeRuntimeScenario({
+  const { runtime, execution, terminalSell, stopAdmissionChecks } = await executeRuntimeScenario({
     runId,
     scenarioId,
     effectiveInput,
@@ -2058,5 +2183,6 @@ export async function executeRecoverySellerRuntimeScenario({
     execution,
     runtime,
     terminalSell,
+    stopAdmissionChecks,
   })
 }

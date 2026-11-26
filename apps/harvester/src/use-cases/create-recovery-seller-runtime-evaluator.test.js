@@ -85,6 +85,7 @@ function createRuntime({
           ...snapshot,
           stopState: input.stopState,
           strategyStopped: input.strategyStopped,
+          buyAdmissionBlocked: input.buyAdmissionBlocked,
           marketPaused: input.marketPaused,
           reconciliationComplete: input.reconciliationComplete,
         })
@@ -161,21 +162,23 @@ test("fails closed for stopped, paused or unreconciled runtime state", async () 
   assert.equal(snapshotInput.reconciliationComplete, false)
 })
 
-test("blocks account admission while a STOP persistence attempt is unresolved", async () => {
+test("blocks new BUY admission while allowing the runtime to remain active for eligible SELLs", async () => {
   const runtime = createRuntime({
     accountAdmissionBlocked: true,
     stopStateOverride: Object.freeze({
-      status: "RUNNING",
+      status: "CLEAR",
       decision: null,
     }),
   })
   const result = await runtime.evaluate(runtime.input)
   const snapshotInput = runtime.getSnapshotInput()
 
-  assert.equal(result.ok, true, "A blocked runtime snapshot must remain a successful evaluation result.")
-  assert.equal(result.data.decision.outcome, "WAIT", "Account admission failure must not produce a trading action.")
-  assert.equal(snapshotInput.strategyStopped, true,
-    "The runtime evaluator must honor the in-memory account-admission gate before STOP persistence succeeds.")
+  assert.equal(result.ok, true, "A BUY-blocked runtime snapshot must remain a successful evaluation result.")
+  assert.equal(result.data.decision.outcome, "WAIT", "The BUY policy must not create an action.")
+  assert.equal(snapshotInput.strategyStopped, false,
+    "Account STOP must not mark the whole strategy runtime as shut down.")
+  assert.equal(snapshotInput.buyAdmissionBlocked, true,
+    "An unresolved account STOP persistence attempt must block new BUY spending.")
 })
 
 test("skips evaluation when market price is missing or stale", async () => {

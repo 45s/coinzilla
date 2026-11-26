@@ -235,6 +235,28 @@ test("production RS accounting durably stops after a fully FILLED SELL misses th
     "Canonical terminal accounting releases the completed order reservation while account STOP remains active.")
 })
 
+test("production RS STOP blocks new BUY spending while allowing an eligible first recovery SELL", async () => {
+  const result = await executeRecoverySellerRuntimeScenario({
+    runId: "run-rs-runtime-stop-buy-block-sell-allowed",
+    scenarioId: "RS-RUNTIME-STOP-BLOCK-BUY-ALLOW-SELL-001",
+    input: {
+      marketPrice: "12.3",
+    },
+  })
+
+  assert.equal(result.passed, true, JSON.stringify(result.assertions))
+  assert.equal(result.output.stopAdmissionChecks.buyActionSubmitted, false,
+    "The lower-price dispatch must not submit a new BUY while STOP is latched.")
+  assert.equal(result.output.stopAdmissionChecks.sellActionSide, "SELL",
+    "The higher-price dispatch must still submit an eligible first recovery SELL.")
+  assert.equal(result.output.stopAdmissionChecks.stopStateStatus, "STOPPED",
+    "The STOP must remain latched after the recovery SELL is submitted.")
+  assert.equal(result.output.stopAdmissionChecks.accountAdmissionBlocked, true,
+    "Account admission must remain blocked for additional BUY spending.")
+  assert.equal(result.output.action.side, "SELL")
+  assert.equal(result.output.submitted, true)
+})
+
 test("production RS runtime fails closed when account STOP persistence fails after an under-target FILLED SELL", async () => {
   const result = await executeRecoverySellerRuntimeScenario({
     runId: "run-rs-runtime-filled-stop-persistence-failure",
@@ -284,6 +306,7 @@ test("production RS registry exposes the runtime scenario and keeps the helper-o
     "RS-RUNTIME-SELL-PARTIAL-CANCEL-001",
     "RS-RUNTIME-SELL-FILLED-UNDER-TARGET-001",
     "RS-RUNTIME-SELL-STOP-PERSISTENCE-FAILURE-001",
+    "RS-RUNTIME-STOP-BLOCK-BUY-ALLOW-SELL-001",
   ])
   const runtimeScenario = catalog.find((scenario) => scenario.id === "RS-RUNTIME-SELL-SUBMISSION-001")
   assert.equal(runtimeScenario.executable, false)

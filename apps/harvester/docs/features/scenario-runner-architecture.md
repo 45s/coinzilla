@@ -279,3 +279,8 @@ This proves the adverse FILLED runtime path only against simulated broker and in
 ## STOP persistence failure runtime scenario — implementation in PR #1887
 
 The runtime catalogue now includes `RS-RUNTIME-SELL-STOP-PERSISTENCE-FAILURE-001`. It reuses the under-target fully FILLED SELL path and injects failure only when the run-local operational-state store receives the account STOP fact. The production order-event workflow surfaces that durable STOP could not be confirmed, pauses the affected market and fails the terminal event closed. The canonical mixed-SELL accounting boundary remains committed, so the UNRESOLVED cycle is terminally reconciled and its reservation is released. The STOP workflow's in-memory account-admission gate remains active, and a follow-up production runtime dispatch submits no new order. The scenario explicitly reports that no account STOP fact was persisted; it never presents a failed persistence attempt as durable success. This is a simulated adapter-failure test, not proof of a production storage adapter.
+
+
+## STOP buy-only admission runtime scenario — implementation in PR #1887
+
+The runtime catalogue includes `RS-RUNTIME-STOP-BLOCK-BUY-ALLOW-SELL-001`. It latches STOP, first evaluates the market below the profitable SELL target and verifies that no new BUY is submitted, then evaluates the same accumulating cycle at an eligible SELL price and verifies that the first recovery SELL is still submitted. The STOP remains latched and account admission remains blocked for additional BUY spending. This preserves the owner-resolved RS-009 contract: STOP is not a blanket shutdown of eligible recovery SELLs or reconciliation.

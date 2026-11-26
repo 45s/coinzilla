@@ -139,6 +139,23 @@ The catalog is a navigation and traceability layer. Domain specifications, accep
 - [RS-009 — Investment-only STOP and continued recovery](#rs-009--stop-blocks-additional-buy-spending-only)
 - [RS-010 — Deferred restart and fee valuation](#rs-010--unsupported-restart-and-fee-valuation-capabilities-remain-blocked)
 
+### Scenario Runner application-level integration scenarios (#1836)
+
+These APPLICATION-layer cases exercise the production Recovery Seller runtime/use-case path with deterministic simulated broker and run-local operational-state ports. They are tracked separately from the domain scenario matrix above.
+
+| Scenario ID | Claim | Status |
+| --- | --- | --- |
+| `RS-RUNTIME-SELL-SUBMISSION-001` | Normal production-flow SELL submission and reservation | PARTIAL / non-executable |
+| `RS-RUNTIME-SELL-REJECTION-001` | Broker rejection is surfaced and STOP is latched | PARTIAL / non-executable |
+| `RS-RUNTIME-SELL-PARTIAL-CANCEL-001` | Partial terminal SELL is reconciled before STOP | PARTIAL / non-executable |
+| `RS-RUNTIME-SELL-FILLED-UNDER-TARGET-001` | Fully FILLED under-target SELL reconciles accounting, pauses the market and latches STOP | PARTIAL / non-executable |
+| `RS-RUNTIME-SELL-STOP-PERSISTENCE-FAILURE-001` | Failed account STOP persistence is surfaced and new BUY admission fails closed | PARTIAL / non-executable |
+| `RS-RUNTIME-STOP-BLOCK-BUY-ALLOW-SELL-001` | STOP blocks new BUY spending while an eligible first recovery SELL remains allowed | PARTIAL / non-executable |
+
+**Automated test:** `apps/harvester/src/infrastructure/scenario-runner/rs-scenario-adapter.test.js`.
+
+**Coverage boundary:** these runtime integration scenarios do not count as domain scenario-suite coverage under issue #1780 and do not mark RS-009 VERIFIED. The broker and operational-state store are simulated/run-local; these tests do not prove production durability, trusted OS isolation, build attestation or live-account safety. Keep the runtime catalogue PARTIAL and non-executable until the Scenario Runner production-adapter and sandbox gates are met.
+
 ### Shared packages
 
 - [BRK-001 — Unknown broker mutation outcome](#brk-001--unknown-broker-mutation-outcome-is-not-treated-as-failure)
