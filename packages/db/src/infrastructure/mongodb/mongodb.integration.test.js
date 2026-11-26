@@ -97,17 +97,20 @@ if (connectionString) {
     createDatabase: ({ storageKey }) => createDatabase({
       provider: createMongoProvider({
         uri: connectionString,
-        databaseName: databaseNameForKey({ storageKey, parsed }),
+        databaseName: databaseNameForKey({ storageKey,
+parsed }),
       }),
     }),
     cleanupStorage: ({ storageKey }) => dropDatabase({
-      databaseName: databaseNameForKey({ storageKey, parsed }),
+      databaseName: databaseNameForKey({ storageKey,
+parsed }),
       parsed,
     }),
   })
 
   test("MongoDB multi-document transactions roll back writes atomically", async (context) => {
-    const databaseName = databaseNameForKey({ storageKey: randomUUID(), parsed })
+    const databaseName = databaseNameForKey({ storageKey: randomUUID(),
+parsed })
     const database = createDatabase({
       provider: createMongoProvider({
         uri: connectionString,
@@ -145,12 +148,14 @@ if (connectionString) {
       )
     } finally {
       await database.close()
-      await dropDatabase({ databaseName, parsed })
+      await dropDatabase({ databaseName,
+parsed })
     }
   })
 
   test("MongoDB multi-document transactions commit multiple records atomically", async (context) => {
-    const databaseName = databaseNameForKey({ storageKey: randomUUID(), parsed })
+    const databaseName = databaseNameForKey({ storageKey: randomUUID(),
+parsed })
     const database = createDatabase({
       provider: createMongoProvider({
         uri: connectionString,
@@ -192,7 +197,8 @@ value: 2 },
       }
     } finally {
       await database.close()
-      await dropDatabase({ databaseName, parsed })
+      await dropDatabase({ databaseName,
+parsed })
     }
   })
 

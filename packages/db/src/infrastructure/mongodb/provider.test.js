@@ -805,7 +805,8 @@ data: structuredClone(document.data) }] : [],
     }
 
     if (body.aggregate) {
-      let documents = [...records.values()].filter((document) => matches({ document, filter: body.pipeline[0].$match }))
+      let documents = [...records.values()].filter((document) => matches({ document,
+filter: body.pipeline[0].$match }))
       const additions = body.pipeline.find((stage) => stage.$addFields)?.$addFields ?? {}
       const sort = body.pipeline.find((stage) => stage.$sort)?.$sort ?? { _id: 1 }
       const sortFields = Object.entries(sort).filter(([key]) => key !== "_id")
@@ -822,7 +823,8 @@ data: structuredClone(document.data) }] : [],
           const rightValue = field ? right.data[field] : undefined
           const comparison = typeKey
             ? scalarRank(leftValue) - scalarRank(rightValue)
-            : compareScalar({ left: leftValue, right: rightValue })
+            : compareScalar({ left: leftValue,
+right: rightValue })
           if (comparison !== 0) {return comparison * direction}
         }
         return left._id < right._id ? -1 : left._id > right._id ? 1 : 0
@@ -881,7 +883,8 @@ runDatabaseProviderConformanceTests({
         databaseName: "conformance",
         transportFactory: () => ({
           async connect() {},
-          command: ({ body, sequences }) => command({ body, sequences }),
+          command: ({ body, sequences }) => command({ body,
+sequences }),
           async close() {},
         }),
         handshake: async () => ({
