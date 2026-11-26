@@ -76,7 +76,7 @@ class MongoTransport {
     this.socketFactory = socketFactory
     this.pending = new Map()
     this.socket = null
-    this.state = "idle"
+    this.lifecycle = "idle"
     this.connectPromise = null
     this.connectResolve = null
     this.connectReject = null
@@ -115,13 +115,13 @@ class MongoTransport {
   }
 
   failConnection({ error }) {
-    if (this.state === "closed") {
+    if (this.lifecycle === "closed") {
       return
     }
-    const wasConnecting = this.state === "connecting"
+    const wasConnecting = this.lifecycle === "connecting"
     clearTimeout(this.connectTimer)
     this.connectTimer = null
-    this.state = "closed"
+    this.lifecycle = "closed"
     this.rejectPending({
       error: createRequestError({
         message: "MongoDB connection closed before command completed",
@@ -169,7 +169,7 @@ class MongoTransport {
   }
 
   handleData({ chunk }) {
-    if (this.state !== "connected") {
+    if (this.lifecycle !== "connected") {
       return
     }
     if (!Buffer.isBuffer(chunk)) {
@@ -198,7 +198,7 @@ class MongoTransport {
       const message = this.receiveBuffer.subarray(0, length)
       this.receiveBuffer = this.receiveBuffer.subarray(length)
       this.handleMessage({ message })
-      if (this.state !== "connected") {
+      if (this.lifecycle !== "connected") {
         return
       }
     }
@@ -206,12 +206,12 @@ class MongoTransport {
 
   registerSocketListeners() {
     const onConnected = () => {
-      if (this.state !== "connecting") {
+      if (this.lifecycle !== "connecting") {
         return
       }
       clearTimeout(this.connectTimer)
       this.connectTimer = null
-      this.state = "connected"
+      this.lifecycle = "connected"
       this.connectResolve?.()
       this.connectResolve = null
       this.connectReject = null
@@ -237,16 +237,16 @@ class MongoTransport {
   }
 
   connect() {
-    if (this.state === "connected") {
+    if (this.lifecycle === "connected") {
       return Promise.resolve()
     }
-    if (this.state === "connecting") {
+    if (this.lifecycle === "connecting") {
       return this.connectPromise
     }
-    if (this.state === "closing" || this.state === "closed") {
-      return Promise.reject(new Error(`Cannot connect MongoDB transport while ${this.state}`))
+    if (this.lifecycle === "closing" || this.lifecycle === "closed") {
+      return Promise.reject(new Error(`Cannot connect MongoDB transport while ${this.lifecycle}`))
     }
-    this.state = "connecting"
+    this.lifecycle = "connecting"
     this.connectPromise = new Promise((...handlers) => {
       const [resolve, reject] = handlers
       this.connectResolve = resolve
@@ -351,7 +351,7 @@ class MongoTransport {
     operation,
     transaction = false,
   } = {}) {
-    if (this.state !== "connected" || !this.socket) {
+    if (this.lifecycle !== "connected" || !this.socket) {
       return Promise.reject(createRequestError({
         message: "MongoDB transport is not connected",
         outcomeUnknown: false,
@@ -390,12 +390,12 @@ class MongoTransport {
   }
 
   async close() {
-    if (this.state === "closed" || this.state === "idle") {
-      this.state = "closed"
+    if (this.lifecycle === "closed" || this.lifecycle === "idle") {
+      this.lifecycle = "closed"
       return
     }
-    const wasConnecting = this.state === "connecting"
-    this.state = "closing"
+    const wasConnecting = this.lifecycle === "connecting"
+    this.lifecycle = "closing"
     clearTimeout(this.connectTimer)
     this.connectTimer = null
     this.rejectPending({ error: new Error("MongoDB transport closed") })
@@ -407,13 +407,13 @@ class MongoTransport {
     this.connectResolve = null
     this.connectReject = null
     activeSocket?.destroy()
-    this.state = "closed"
+    this.lifecycle = "closed"
     this.receiveBuffer = Buffer.alloc(0)
     this.connectPromise = null
   }
 
-  get stateName() {
-    return this.state
+  get state() {
+    return this.lifecycle
   }
 
   get pendingRequestCount() {
