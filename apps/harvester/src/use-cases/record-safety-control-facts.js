@@ -170,7 +170,7 @@ function validateSafetyBlockerResolution({
       resolvedBy !== expectedResolvedBy ||
       !Array.isArray(actionBlockerIds) ||
       actionBlockerIds.length === 0 ||
-      actionBlockerIds.length > 64 ||
+      actionBlockerIds.length > 256 ||
       actionBlockerIds.some((id) => typeof id !== "string" || !/^[a-f0-9]{64}$/.test(id)) ||
       new Set(actionBlockerIds).size !== actionBlockerIds.length ||
       [...actionBlockerIds].sort().join("|") !== actionBlockerIds.join("|") ||
@@ -257,6 +257,7 @@ async function verifyRaisedSafetyBlocker({
       }
     }
     const legacyActionRecord = resolutions.find((record) =>
+      record.data?.resolution === "OPERATOR_ACTION" &&
       typeof record.data?.resolvedBy === "string" &&
       record.data.resolvedBy.endsWith(`:${expectedResolution.actionId}`) &&
       record.data.actionId === undefined
