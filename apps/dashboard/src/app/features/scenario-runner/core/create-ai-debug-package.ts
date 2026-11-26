@@ -35,9 +35,20 @@ function redact(value: unknown): unknown {
 export interface DebugPackageInput {
   readonly run: ScenarioRunRecord;
   readonly trace: readonly ScenarioTraceStep[];
+  readonly scenario?: unknown;
   readonly expected?: unknown;
   readonly assertionResults?: unknown;
   readonly metadata?: unknown;
+}
+
+function resolveExecutionOutcome({ run }: { run: ScenarioRunRecord }): string {
+  if (run.status === 'Blocked') {
+    return 'not-executed';
+  }
+  if (['Accepted', 'Queued', 'Starting', 'Running', 'Cancelling'].includes(run.status)) {
+    return 'in-progress';
+  }
+  return run.output === null || run.output === undefined ? 'terminal-without-output' : 'result-recorded';
 }
 
 export function createAiDebugPackage(input: DebugPackageInput): string {
@@ -46,9 +57,18 @@ export function createAiDebugPackage(input: DebugPackageInput): string {
   }
   const report = {
     schema: 'coinzilla.scenario-run.debug',
-    schemaVersion: 1,
+    schemaVersion: 2,
     executionMode: 'simulation-only',
+    execution: {
+      mode: 'simulation-only',
+      outcome: resolveExecutionOutcome({ run: input.run }),
+      workerIsolation: 'unverified',
+    },
     run: input.run,
+    scenarioCatalogSnapshot: input.scenario ?? null,
+    scenarioCatalogSnapshotProvenance: input.scenario
+      ? 'current-catalog-at-export-time-not-verified-as-run-time'
+      : 'unavailable',
     trace: input.trace,
     expected: input.expected ?? null,
     assertionResults: input.assertionResults ?? null,

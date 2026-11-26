@@ -2320,5 +2320,4 @@ Active and incomplete in draft [PR #1837](https://github.com/45s/coinzilla/pull/
 
 The process-worker lifecycle and RS input validator were decomposed into focused helpers to satisfy strict changed-file function-length, parameter and complexity policies without suppressions. This is a behavior-preserving refactor; cancellation/termination ordering, output limits, fail-closed sandbox requirements and exact decimal validation remain unchanged.
 
-
 The application runner now retains its execution slot and history record when an adapter reports `cleanupConfirmed: false`. History pruning skips these records, and the cancel endpoint retries the adapter; only an explicit `true` releases capacity. Normal execution cleanup failures are FAILED (not misreported as TIMED_OUT), while timeout cleanup failures remain TIMED_OUT. The behavior is covered by offline capacity/retry tests.

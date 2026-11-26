@@ -237,12 +237,16 @@ export function createScenarioRunnerApplication({ gateway }: {
       return createAiDebugPackage({
         run,
         trace,
+        scenario,
         expected: output?.expected,
         assertionResults: output?.assertions,
         metadata: {
           executionSource: output?.source,
           codeRevision: 'unavailable',
           scenarioSchema: scenario?.inputSchema,
+          scenarioCatalogSnapshotProvenance: scenario
+            ? 'current-catalog-at-export-time-not-verified-as-run-time'
+            : 'unavailable',
         },
       });
     },

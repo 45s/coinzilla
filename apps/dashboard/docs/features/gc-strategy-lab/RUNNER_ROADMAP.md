@@ -89,10 +89,10 @@ A cross-document audit found that the Dashboard agent instructions still require
 - The task branch is synchronized with current `develop` (0 commits behind); exact head and CI evidence are maintained in [issue #1836](https://github.com/45s/coinzilla/issues/1836) and [PR #1837](https://github.com/45s/coinzilla/pull/1837).
 - PR #1837 remains Draft and unmerged. The full approved MVP is not complete; all previously listed isolation, production-flow, persistence, replay, trace/report, configuration and E2E gates remain applicable.
 - Do not claim CI success from a superseded head; all required checks must pass on the final exact head.
+
 ## Strategy-neutral Harvester registration — 2026-11-25
 
 The Harvester host now accepts explicit strategy registrations and builds its catalog/execution policy from registered strategy IDs rather than a hardcoded RS-only catalog branch. The default composition still supplies the provisional RS catalogue, which remains non-executable without a verified OS sandbox and full production-flow adapter. A RED regression on test-only head `0b3a3fe9d10c844f4a7bd89fb94c66342fcdb561` reproduced the RS-only catalog; the implementation restores strategy-neutral registration without enabling any additional strategy.
-
 
 ### Cleanup capacity and retry — 2026-11-25
 

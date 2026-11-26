@@ -104,34 +104,30 @@ The process adapter enforces its own OS-attestation gate at the start of `execut
 
 The parent sends a typed `cancel` IPC message first and waits for the bounded cooperative grace period. The worker message handler aborts the active run's `AbortController`; strategy adapters receive that signal and must honor it. If the worker does not close, the parent escalates to SIGTERM and then SIGKILL, each with a bounded grace period. A failed kill or missing close confirmation rejects cleanup and retains the child registration so the operator can retry; it is never reported as successful cleanup. The adapter itself remains unavailable unless the OS sandbox attestation is verified. Once the caller's AbortSignal has fired, the parent ignores any late worker result and lets the cancellation path own final settlement and cleanup reporting.
 
-
 ## Strict lint boundary correction — 2026-11-25
 
 Worker dispatch and message-handler contracts use one object argument, consistent with the repository's one-parameter function policy. Termination controller orchestration and forced-kill escalation are separate helpers; cleanup behavior and escalation order are unchanged.
-
 
 ## One-argument worker contracts — 2026-11-25
 
 Worker dispatch receives a single request object containing both the run request and AbortSignal. This keeps worker boundaries consistent with the repository's one-parameter function rule while preserving cancellation propagation.
 
-
 The worker message handler returns a completion promise for each message; the process event listener may ignore it, while deterministic unit tests can await dispatch, cancellation and disconnect settlement.
-
 
 The worker spawn/profile construction is isolated from the execution lifecycle so the executor remains within the strict function-size policy; the verified attestation gate remains mandatory before this helper is called.
 
-
 The application-level unconfirmed-cleanup regression uses unique run IDs so its second submission reaches the retained-capacity gate rather than the independent duplicate-run-ID guard.
-
 
 ## Retained execution capacity and cleanup retry — 2026-11-25
 
 A terminal-looking FAILED/TIMED_OUT record does not release capacity while its worker termination is unconfirmed. History pruning skips records whose execution slot remains registered. The operator cancel endpoint can retry cleanup; capacity is released only after the adapter returns an explicit `true`. Shutdown also fails closed while any worker remains unconfirmed.
 
-
 Cleanup retry is exposed through the existing cancel command for a terminal run whose worker cleanup remains unconfirmed. The API awaits that retry and returns acceptance only after the adapter explicitly confirms termination.
-
 
 ## Explicit cleanup confirmation contract — 2026-11-26
 
 The application runner treats worker cleanup as confirmed only when the adapter's `cancel()` operation returns the literal boolean `true`. A successful cancellation test double must return `true` after simulating termination; an omitted/undefined, false, or rejected result is not proof of cleanup. Unconfirmed cleanup retains the execution slot and run record until an explicit successful retry, and shutdown remains fail-closed.
+
+## Strategy-neutral worker dispatch — 2026-11-26
+
+The worker dispatcher validates the typed execution envelope and resolves a strategy adapter from an explicit registry. It contains no strategy-specific ID branches; the worker composition module owns the current RS registration. Duplicate/malformed registrations and unknown strategy IDs fail closed, and the active AbortSignal is passed unchanged to the selected adapter. The dispatcher contract has focused tests and is included in the configured Harvester targeted test suite. This composition change does not make the preliminary RS profitability helper an executable full-flow scenario.

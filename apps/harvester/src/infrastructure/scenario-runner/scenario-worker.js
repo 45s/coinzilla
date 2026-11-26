@@ -35,16 +35,21 @@ for (const operation of [
   }
 }
 
-const { createScenarioWorkerMessageHandler } = await import("./scenario-worker-message-handler.js")
+const [
+  { createScenarioWorkerMessageHandler },
+  { createScenarioWorkerDispatcher },
+  { SCENARIO_WORKER_ADAPTERS },
+] = await Promise.all([
+  import("./scenario-worker-message-handler.js"),
+  import("./scenario-worker-dispatch.js"),
+  import("./scenario-worker-adapters.js"),
+])
+const dispatchScenarioWorkerRequest = createScenarioWorkerDispatcher({
+  adapters: SCENARIO_WORKER_ADAPTERS,
+})
 
 const handleWorkerMessage = createScenarioWorkerMessageHandler({
-  dispatch: async ({ request, signal }) => {
-    const { runScenarioWorkerRequest } = await import("./scenario-worker-dispatch.js")
-    return runScenarioWorkerRequest({
-      request,
-      signal,
-    })
-  },
+  dispatch: dispatchScenarioWorkerRequest,
   send: (message) => process.send?.(message),
   disconnect: () => process.disconnect?.(),
 })

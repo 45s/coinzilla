@@ -27,12 +27,26 @@ describe('scenario-runner framework-independent core', () => {
   });
 
   it('produces versioned JSON and redacts secret-like keys recursively', () => {
+    const scenario = {
+      id: 'RS-001-001',
+      name: 'Original recovery SELL scenario',
+      defaultInput: { market: 'DOGEUSDT' },
+    };
     const report = JSON.parse(createAiDebugPackage({
-      run, trace: [{ id: 's1', kind: 'step', label: 'Step', outputs: { apiKey: 'secret', value: 1 } }],
+      run,
+      trace: [{ id: 's1', kind: 'step', label: 'Step', outputs: { apiKey: 'secret', value: 1 } }],
+      scenario,
     }));
-    expect(report.schemaVersion).toBe(1);
+    expect(report.schemaVersion).toBe(2);
     expect(report.run.input.secret).toBe('[REDACTED]');
     expect(report.trace[0].outputs.apiKey).toBe('[REDACTED]');
+    expect(report.scenarioCatalogSnapshot).toEqual(scenario);
+    expect(report.scenarioCatalogSnapshotProvenance).toBe('current-catalog-at-export-time-not-verified-as-run-time');
+    expect(report.execution).toEqual({
+      mode: 'simulation-only',
+      outcome: 'result-recorded',
+      workerIsolation: 'unverified',
+    });
     expect(report.traceCompleteness).toBe('completeness-unverified');
   });
 
@@ -68,6 +82,22 @@ describe('scenario-runner framework-independent core', () => {
     expect(report.metadata.sessionId).toBe('[REDACTED]');
     expect(sensitiveEvidence.privateKey).toBe('private-key-value');
     expect(sensitiveEvidence.nested.signature).toBe('signature-value');
+  });
+
+  it('labels blocked runs as not executed and preserves unavailable worker isolation evidence', () => {
+    const blockedRun: ScenarioRunRecord = {
+      ...run,
+      status: 'Blocked',
+      startedAt: null,
+      completedAt: null,
+      output: null,
+    };
+    const report = JSON.parse(createAiDebugPackage({ run: blockedRun, trace: [] }));
+    expect(report.execution).toEqual({
+      mode: 'simulation-only',
+      outcome: 'not-executed',
+      workerIsolation: 'unverified',
+    });
   });
 
   it('requires run record and ordered trace', () => {
