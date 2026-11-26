@@ -152,7 +152,8 @@ direction: "desc" }],
 
   assert.deepEqual(records, [{ id: "person-1",
 nickname: null }])
-  const {pipeline} = stub.calls[0]
+  const [firstCall] = stub.calls
+  const { pipeline } = firstCall
   assert.deepEqual(pipeline[0].$match.$and[0]["data.__coinzilla_key_bmlja25hbWU"], { $type: 10 })
   assert.ok(pipeline.some((stage) => stage.$addFields))
   assert.deepEqual(pipeline.find((stage) => stage.$sort).$sort, {
