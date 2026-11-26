@@ -125,3 +125,40 @@ test("rejects Conservative ownership when it carries an RS-only cycle identity",
     "A CG Position must not acquire an RS cycle identity through shared submission infrastructure.",
   )
 })
+
+
+test("rejects a CG owner using the Recovery Seller BUY purpose", () => {
+  assert.throws(
+    () => validateRecoverySellerSubmissionOwnership({
+      order: {
+        ...recoverySellerSellOrder,
+        side: "BUY",
+      },
+      purpose: "RECOVERY_BUY",
+      ownership: {
+        ...conservativeOwnership,
+        purpose: "RECOVERY_BUY",
+      },
+    }),
+    /supported strategy and purpose/,
+    "A valid CG Position must not be accepted as a Recovery Seller BUY.",
+  )
+})
+
+test("rejects an RS owner using a Conservative-only purpose", () => {
+  assert.throws(
+    () => validateRecoverySellerSubmissionOwnership({
+      order: {
+        ...recoverySellerSellOrder,
+        side: "BUY",
+      },
+      purpose: "CONSERVATIVE_BUY",
+      ownership: {
+        ...recoverySellerOwnership,
+        purpose: "CONSERVATIVE_BUY",
+      },
+    }),
+    /supported strategy and purpose/,
+    "A valid RS cycle must not be accepted as a Conservative BUY.",
+  )
+})

@@ -287,3 +287,40 @@ test("persists a Conservative BUY with CG Position ownership and its explicit du
   assert.equal(result.data.record.data.positionId, ownership.positionId)
   assert.equal(Object.hasOwn(result.data.record.data, "cycleId"), false)
 })
+
+
+test("persists a Recovery Seller recovery SELL intent with its independent Position and cycle ownership", async (t) => {
+  const operationalStateStore = await createStore(t)
+  const recoverySellOrder = new CanonicalOrder({
+    clientOrderId: "h-0123456789abcdef012345-rs-sell-intent",
+    providerInstanceId: "binanceTestnet",
+    providerType: "binance",
+    accountId: "binance-primary",
+    market,
+    side: "SELL",
+    type: "LIMIT_MAKER",
+    limitPrice: new Money({ amount: "0.101", asset: quoteAsset }),
+    originalQuantity: new Quantity({ amount: "100", asset: baseAsset }),
+    executedQuantity: new Quantity({ amount: "0", asset: baseAsset }),
+    status: "PENDING",
+  })
+  const ownership = {
+    strategyId: StrategyId.RECOVERY_SELLER,
+    positionId: "rs-position-1",
+    purpose: "RECOVERY_SELL",
+    cycleId: "rs-cycle-1",
+  }
+
+  const result = await recordOrderSubmissionIntent({
+    operationalStateStore,
+    order: recoverySellOrder,
+    purpose: "RECOVERY_SELL",
+    ownership,
+  })
+
+  assert.equal(result.ok, true, result.errors?.map(({ message }) => message).join("; "))
+  assert.equal(result.data.durable, true)
+  assert.equal(result.data.record.data.strategyId, StrategyId.RECOVERY_SELLER)
+  assert.equal(result.data.record.data.positionId, ownership.positionId)
+  assert.equal(result.data.record.data.cycleId, ownership.cycleId)
+})
