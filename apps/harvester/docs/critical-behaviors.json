@@ -1238,6 +1238,16 @@
           "path": "scripts/recovery-account-blockers.test.js",
           "name": "durably resolves after clean stop and leaves readiness blocked for restart",
           "kind": "normal"
+        },
+        {
+          "path": "scripts/recovery-account-blockers.test.js",
+          "name": "CLI reports durable resolution while explicitly keeping trading blocked",
+          "kind": "normal"
+        },
+        {
+          "path": "scripts/recovery-account-blockers.test.js",
+          "name": "CLI returns nonzero when durable resolution is not confirmed",
+          "kind": "failure"
         }
       ],
       "runtimeStatus": "offline-only",
