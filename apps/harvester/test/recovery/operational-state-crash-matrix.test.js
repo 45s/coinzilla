@@ -136,12 +136,19 @@ asset: quoteAsset }),
     commissionStatus: "COMPLETE",
     commissions: [],
   })
-const persistOrder = async ({ store, clientOrderId, side, quantity, price, purpose = null }) => {
+const persistOrder = async ({
+  store,
+  clientOrderId,
+  side,
+  quantity,
+  price,
+  purpose = side === "BUY" ? "CONSERVATIVE_BUY" : "RECOVERY_SELL",
+}) => {
   const pending = makeOrder({ clientOrderId,
 side,
 quantity,
 price })
-  const ownership = purpose === "RECOVERY_SELL"
+  const ownership = ["CONSERVATIVE_BUY", "RECOVERY_SELL"].includes(purpose)
     ? {
         strategyId: StrategyId.COIN_GRABBER,
         positionId: createPositionId({ marketId: market.id, strategyId: StrategyId.COIN_GRABBER }),
@@ -428,7 +435,7 @@ test("reopens a NOT_COMPLETED recovery SELL with exact cycle evidence and sticky
   })
 
   const recovered = await readCandidate(directory, "crash-reader-after-noncompleted-sell")
-  assert.equal(recovered.ok, true, recovered.errors?.map(({ message }) => message).join("; "))
+  assert.equal(recovered.ok, true, recovered.errors?.map(({ message }) => message).join("; ") || "Conservative recovery must produce an offline candidate without enabling runtime restoration.")
   assert.equal(recovered.data.recoveryCycleEvaluations.length, 1)
   assert.equal(recovered.data.recoveryCycleEvaluations[0].outcome, "CONTINUE_SELL_THROUGH")
   assert.ok(Number.isSafeInteger(recovered.data.recoveryCycleEvaluations[0].sequence), "Durable fact sequence must become a safe numeric replay sequence.")
