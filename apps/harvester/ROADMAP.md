@@ -2421,4 +2421,4 @@ The initial inventory contains 18 scenarios across 16 categories: 15 TEST-MAPPED
 
 Implemented on [PR #1861](https://github.com/45s/coinzilla/pull/1861): a shared immutable readiness projection now covers startup and authorized operator status/market queries. Startup keeps the existing user-data trading gate closed until PREFLIGHT, market-data and candle-history evidence is sampled; runtime/account blockers remain global while market-local book, metadata and volatility blockers remain scoped to their market. Existing engine admission guards remain authoritative, external orders remain unowned, and process restoration remains disabled.
 
-The branch is being synchronized with current `develop`; exact-head Harvester tests, coverage, lint and required workflows must pass before this work is considered complete.
+The branch has been synchronized with current `develop`. Exact-head Harvester tests, coverage, lint and required workflows remain the completion gate.
