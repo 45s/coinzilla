@@ -100,11 +100,16 @@ async function closeJournalService({ journalService } = {}) {
   if (typeof journalService?.close === "function") {
     try {
       const result = await journalService.close()
-      journalClosed = result?.ok === true
+      const journalDisabled = journalService.status?.enabled === false
+      journalClosed = result?.ok === true &&
+        result?.closed === true &&
+        (journalDisabled ? result?.disabled === true : result?.durable === true)
       if (!journalClosed) {
         errors.push(...getCleanupErrors({
           result,
-          fallbackError: new Error("Journal close did not complete successfully"),
+          fallbackError: new Error(
+            "Journal close did not confirm a durable closure acknowledgement",
+          ),
         }))
       }
     } catch (error) {
@@ -122,8 +127,11 @@ async function closeJournalService({ journalService } = {}) {
 }
 
 async function closeEventBus({ eventBus } = {}) {
-  if (typeof eventBus?.close !== "function") {
+  if (!eventBus) {
     return []
+  }
+  if (typeof eventBus.close !== "function") {
+    return [new Error("EventBus close capability is unavailable; process lock must be retained")]
   }
 
   try {
@@ -218,8 +226,11 @@ function reportObservabilityCleanupErrors({ errors, logger } = {}) {
 }
 
 async function closeTradingHistoryApi({ service, logger } = {}) {
-  if (typeof service?.close !== "function") {
+  if (!service) {
     return []
+  }
+  if (typeof service.close !== "function") {
+    return [new Error("Trading-history API close capability is unavailable; process lock must be retained")]
   }
   try {
     await service.close()
@@ -254,8 +265,8 @@ async function closeObservability({
     service: tradingHistoryApi,
     logger,
   })
-  const databaseErrors = tradingHistoryApiErrors.length > 0
-    ? [new Error("Harvester persistence was retained because the trading-history API listener did not confirm shutdown.")]
+  const databaseErrors = eventBusErrors.length > 0 || tradingHistoryApiErrors.length > 0
+    ? [new Error("Harvester persistence was retained because EventBus or trading-history API shutdown was not confirmed.")]
     : await closeHarvesterPersistence({
         observer: orderHistoryPersistence?.observer,
         relationalOrderObserver: orderHistoryPersistence?.relationalOrderObserver,

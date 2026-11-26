@@ -257,6 +257,7 @@ async function recordDurableProcessStop({
     startedAt,
     clearTimeoutFn,
   })
+  return true
 }
 
 function createBeforeSharedServicesStop({ operatorControlLifecycle, logShutdownPhase } = {}) {
@@ -293,7 +294,7 @@ async function stopRuntimeAndRecordProcessStop({
     throw runtimeResult?.errors?.[0] ?? new Error("Runtime shutdown did not return an explicit STOPPED confirmation")
   }
   if (!operationalStateStore) {
-    return
+    return false
   }
   await recordDurableProcessStop({
     operationalStateStore,
@@ -337,7 +338,7 @@ async function executeShutdown({
     status: "COMPLETED",
     startedAt: shutdownRequestedAt,
   })
-  await stopRuntimeAndRecordProcessStop({
+  const durableProcessStopAcknowledged = await stopRuntimeAndRecordProcessStop({
     stopRuntime,
     shutdownRequestedAt,
     beforeSharedServicesStop: createBeforeSharedServicesStop({
@@ -361,6 +362,9 @@ async function executeShutdown({
   return {
     ok: true,
     status: "STOPPED",
+    data: {
+      durableProcessStopAcknowledged,
+    },
   }
 }
 

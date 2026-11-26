@@ -158,7 +158,7 @@ function logShutdownFailure({ logger, phase, error } = {}) {
   }
 }
 
-async function stopRuntimeForShutdown({ runtime, logger } = {}) {
+async function stopRuntimeForShutdown({ runtime, logger, shutdownState } = {}) {
   let stopResult
   try {
     stopResult = await runtime.stop()
@@ -176,6 +176,12 @@ async function stopRuntimeForShutdown({ runtime, logger } = {}) {
         new Error("Harvester runtime stop did not confirm shutdown"),
     }
   }
+  const durableProcessStopAcknowledged =
+    stopResult.data?.durableProcessStopAcknowledged === true
+  shutdownState?.set("durable-process-stop-acknowledgement", {
+    status: "completed",
+    value: durableProcessStopAcknowledged,
+  })
   try {
     logSystem({
       logger,
@@ -186,11 +192,15 @@ async function stopRuntimeForShutdown({ runtime, logger } = {}) {
   }
   return {
     runtimeStopped: true,
+    durableProcessStopAcknowledged,
   }
 }
 async function flushShutdownEventBus({ eventBus } = {}) {
-  if (typeof eventBus?.flush !== "function") {
+  if (!eventBus) {
     return []
+  }
+  if (typeof eventBus.flush !== "function") {
+    return [new Error("EventBus flush capability is unavailable; shutdown cannot confirm Journal delivery")]
   }
   try {
     const result = await eventBus.flush()
@@ -321,40 +331,52 @@ async function runRuntimeStopStep({
 function publishStoppedLifecycleEvent({
   shutdownState,
   eventPublisher,
+  journalService,
   reason,
   logger,
+  durableProcessStopAcknowledged,
 }) {
   if (shutdownState.has("stopped-event")) {
-    return
+    return { ok: true }
   }
-  try {
-    const publication = publishLifecycleEvent({
-      eventPublisher,
-      eventName: HARVESTER_EVENT_NAMES.STOPPED,
-      dataResult: mapHarvesterStoppedData({
-        reason,
-        outcome: "success",
-      }),
+  const publisherAvailable = typeof eventPublisher?.publish === "function"
+  const journalAvailable = journalService?.status?.enabled === true
+  if (durableProcessStopAcknowledged !== true && (!publisherAvailable || !journalAvailable)) {
+    return {
+      ok: false,
+      error: new Error(
+        "A durable PROCESS_STOPPED fact or an enabled Journal-backed STOPPED acknowledgement is required before process cleanup",
+      ),
+    }
+  }
+  if (!publisherAvailable) {
+    logger?.warn?.({
+      message: "Durable PROCESS_STOPPED was confirmed, but the STOPPED notification publisher is unavailable.",
     })
-    if (publication?.ok === false) {
-      logger?.warn?.({
-        message: "Durable PROCESS_STOPPED was confirmed, but the non-durable STOPPED notification was rejected.",
-        errors: publication.errors,
-      })
-    }
-  } catch (error) {
-    try {
-      logger?.warn?.({
-        message: "Durable PROCESS_STOPPED was confirmed, but the non-durable STOPPED notification failed.",
-        error,
-      })
-    } catch {
-      // The durable operational-state acknowledgement remains authoritative.
-    }
+    shutdownState.set("stopped-event", { status: "completed" })
+    return { ok: true }
   }
-  shutdownState.set("stopped-event", {
-    status: "completed",
+  const publication = publishLifecycleEvent({
+    eventPublisher,
+    eventName: HARVESTER_EVENT_NAMES.STOPPED,
+    dataResult: mapHarvesterStoppedData({
+      reason,
+      outcome: "success",
+    }),
   })
+  if (publication?.ok !== true) {
+    const error = publication?.errors?.[0] ??
+      new Error("STOPPED lifecycle event publication was not confirmed")
+    if (durableProcessStopAcknowledged !== true) {
+      return { ok: false, error }
+    }
+    logger?.warn?.({
+      message: "Durable PROCESS_STOPPED was confirmed, but the non-durable STOPPED notification was rejected.",
+      errors: publication?.errors,
+    })
+  }
+  shutdownState.set("stopped-event", { status: "completed" })
+  return { ok: true }
 }
 
 async function runRequiredShutdownStep({
@@ -538,6 +560,24 @@ async function runPostStopCleanup({
     reason,
     logger,
   })
+  const stoppedEventResult = publishStoppedLifecycleEvent({
+    shutdownState,
+    eventPublisher,
+    journalService,
+    reason,
+    logger,
+    durableProcessStopAcknowledged:
+      shutdownState.get("durable-process-stop-acknowledgement")?.value === true,
+  })
+  if (stoppedEventResult.ok !== true) {
+    process.exitCode = 1
+    logShutdownFailure({
+      logger,
+      phase: "STOPPED_EVENT",
+      error: stoppedEventResult.error,
+    })
+    return false
+  }
   const deliveryComplete = await runDeliveryCleanupSteps({
     shutdownState,
     eventBus,
