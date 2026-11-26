@@ -52,27 +52,64 @@ describe('GitHubPullRequestsComponent', () => {
     expect(loadOpenPullRequests).toHaveBeenCalledTimes(1);
   });
 
-  it('Scenario 09/10/11/15 — creates, assigns and persists local labels without another GitHub request', () => {
+  it('Scenario 09/10/11/15 — creates, directly assigns and persists local labels without another GitHub request', () => {
     const root = fixture.nativeElement as HTMLElement;
     const name = root.querySelector('.label-create input') as HTMLInputElement;
     name.value = 'Codex';
-    name.dispatchEvent(new Event('input'));
-    const add = Array.from(root.querySelectorAll('button')).find((button) => button.textContent?.includes('Add label'));
-    add?.click();
+    name.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(fixture.componentInstance.newLabelName()).toBe('Codex');
+    const createForm = root.querySelector<HTMLFormElement>('form.label-create');
+    expect(createForm).toBeDefined();
+    createForm?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
     fixture.detectChanges();
 
-    const assignment = root.querySelector('.assignment-editor summary') as HTMLElement;
-    assignment.click();
-    fixture.detectChanges();
-    const checkbox = root.querySelector('.assignment-option input') as HTMLInputElement;
-    checkbox.checked = true;
-    checkbox.dispatchEvent(new Event('change'));
+    expect(fixture.componentInstance.labels().labels).toHaveLength(1);
+    const assignment = root.querySelector<HTMLButtonElement>('.assignment-chip');
+    expect(assignment).toBeDefined();
+    assignment?.click();
     fixture.detectChanges();
 
+    const savedStore = JSON.parse(window.localStorage.getItem('coinzilla.dashboard.github-pr-labels.v1') ?? '{}');
+    expect(savedStore.labels).toHaveLength(1);
+    expect(fixture.componentInstance.isAssigned(snapshot.pullRequests[0], savedStore.labels[0].id)).toBe(true);
     expect(root.textContent).toContain('Codex');
     expect(JSON.parse(window.localStorage.getItem('coinzilla.dashboard.github-pr-labels.v1') ?? '{}').assignments)
       .toEqual({ '45s/coinzilla#1824': [expect.any(String)] });
     expect(loadOpenPullRequests).toHaveBeenCalledTimes(1);
+  });
+
+  it('allows label names and colors to be edited directly without a separate rename action', () => {
+    const root = fixture.nativeElement as HTMLElement;
+    const name = root.querySelector('.label-create input') as HTMLInputElement;
+    name.value = 'Codex';
+    name.dispatchEvent(new Event('input', { bubbles: true }));
+    const createForm = root.querySelector<HTMLFormElement>('form.label-create');
+    expect(createForm).toBeDefined();
+    createForm?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    fixture.detectChanges();
+
+    const renameInput = root.querySelector<HTMLInputElement>('.label-name-input');
+    expect(renameInput).toBeDefined();
+    if (!renameInput) return;
+    renameInput.value = 'Review';
+    renameInput.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    root.querySelector<HTMLButtonElement>('[aria-label="Set green color for Review"]')?.click();
+    fixture.detectChanges();
+
+    expect(root.querySelector<HTMLInputElement>('.label-name-input')?.value).toBe('Review');
+    expect(root.querySelector<HTMLButtonElement>('[aria-label="Set green color for Review"]')?.getAttribute('aria-pressed')).toBe('true');
+    expect(root.querySelector('.assignment-editor')).toBeNull();
+    expect(root.querySelector('.delete-label-button')?.getAttribute('aria-label')).toBe('Delete Review');
+  });
+
+  it('keeps a refresh action available in the viewport while browsing the PR list', () => {
+    const root = fixture.nativeElement as HTMLElement;
+    const refresh = root.querySelector<HTMLButtonElement>('.floating-refresh-button');
+    expect(refresh).toBeDefined();
+    refresh?.click();
+    expect(loadOpenPullRequests).toHaveBeenCalledTimes(2);
   });
 
   it('Scenario 17 — displays the explicit empty state when no open PRs exist', async () => {
