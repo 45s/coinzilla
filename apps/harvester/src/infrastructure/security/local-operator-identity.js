@@ -39,3 +39,16 @@ export function isAuthenticatedLocalOperatorIdentity(identity) {
     authenticatedLocalOperatorIdentities.has(identity),
   )
 }
+
+export function hasControlCharacters(value) {
+  if (typeof value !== "string") {
+    return false
+  }
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index)
+    if (code <= 31 || code === 127) {
+      return true
+    }
+  }
+  return false
+}
