@@ -8,6 +8,7 @@ const REQUIRED_PROVIDER_METHODS = Object.freeze([
 ])
 const REQUIRED_DATABASE_PROVIDER_METHODS = Object.freeze([
   ...REQUIRED_PROVIDER_METHODS,
+  "withReadTransaction",
   "execute",
 ])
 const READ_ONLY_OPERATIONS = new Set(["readOne", "readMany"])
