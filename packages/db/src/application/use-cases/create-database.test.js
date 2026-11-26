@@ -430,3 +430,57 @@ test("legacy lifecycle adapters do not expose the provider-only execution port",
   const database = createDatabase({ adapter })
   assert.equal(Object.hasOwn(database, "execute"), false)
 })
+
+test("provider-neutral facade rejects transactions from an expired callback scope", async () => {
+  const transaction = {
+    create() {},
+    readOne() {},
+    readMany() {},
+    update() {},
+    delete() {},
+  }
+  const provider = {
+    capabilities: {
+      transactions: {
+        callbackMode: "asynchronous",
+        nestedTransactions: true,
+        multiDocument: true,
+      },
+      queries: {
+        equalityFilters: true,
+        sorting: true,
+        pagination: true,
+      },
+      storage: {
+        modes: ["server"],
+      },
+    },
+    connect() {},
+    close() {},
+    withTransaction(work) {
+      return work(transaction)
+    },
+    withReadTransaction(work) {
+      return work(transaction)
+    },
+    execute() {},
+  }
+  const database = createDatabase({ provider })
+  await database.connect()
+  let lateTransaction
+
+  try {
+    await database.transaction(() => {
+      queueMicrotask(() => {
+        lateTransaction = database.transaction(() => {})
+      })
+    })
+    await new Promise((resolve) => queueMicrotask(resolve))
+    await assert.rejects(
+      lateTransaction,
+      /transaction callback has already completed/,
+    )
+  } finally {
+    await database.close()
+  }
+})
