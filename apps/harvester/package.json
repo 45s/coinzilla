@@ -159,7 +159,10 @@
       "test/scenarios/recovery-seller/buy-accounting.scenario.test.js",
       "test/scenarios/recovery-seller/mixed-sell-planning.scenario.test.js",
       "test/scenarios/recovery-seller/mixed-sell-fill-allocation.scenario.test.js",
-      "src/use-cases/create-recovery-seller-action-authorizer.test.js"
+      "src/use-cases/create-recovery-seller-action-authorizer.test.js",
+      "src/domain/strategies/conservative/strategy.test.js",
+      "src/bootstrap/shutdown/create-strategy-shutdown-coordinator.test.js",
+      "src/bootstrap/shutdown/create-shutdown-handler.test.js"
     ]
   },
   "scripts": {
