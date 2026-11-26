@@ -103,12 +103,23 @@ async function waitForUserDataEventQueue({ state }) {
 }
 
 class HarvesterUserDataStartupUnsafeError extends SystemCustomError {
-  constructor({ tradingModeLabel, code, message, status } = {}) {
+  constructor({
+    tradingModeLabel,
+    code,
+    message,
+    status,
+    accountPreflightReady,
+    openOrdersPreflightReady,
+    openOrdersReadiness,
+  } = {}) {
     super(message, {
       code,
       context: {
         tradingModeLabel,
         status: status ?? "UNKNOWN",
+        ...(accountPreflightReady === undefined ? {} : { accountPreflightReady }),
+        ...(openOrdersPreflightReady === undefined ? {} : { openOrdersPreflightReady }),
+        ...(openOrdersReadiness === undefined ? {} : { openOrdersReadiness }),
       },
       retryable: false,
     })
