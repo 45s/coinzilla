@@ -24,7 +24,7 @@
 
 ## Current cleanup scope
 
-The first cleanup pass targets these oversized active documents:
+The initial cleanup targeted these oversized active documents:
 
 - [Root roadmap](../ROADMAP.md): active cross-workspace priorities and ownership links only.
 - [Harvester roadmap](../apps/harvester/ROADMAP.md): current safety/correctness priorities only.
@@ -58,3 +58,16 @@ The second cleanup pass reduced four high-volume package roadmaps to active prio
 - [Utils roadmap history](../packages/utils/ROADMAP_HISTORY_2026-11-26.md) — prior 21 KB roadmap.
 
 No package source, public API, tests, README, domain specification, or ADR was changed. Active pages now point to canonical API/readme/source and issues; detailed delivery evidence remains in the snapshots. These snapshots are archival provenance, not current instructions or status authority.
+
+
+## Roadmap consolidation — 2026-11-26
+
+Additional active roadmap pages were reduced to concise owner/status/next-action indexes; full prior contents were preserved as dated sibling snapshots:
+
+- [Dashboard roadmap history](../apps/dashboard/ROADMAP_HISTORY_2026-11-26.md) — feature-specific Scenario Runner decisions remain in its dedicated roadmap.
+- [Database roadmap history](../packages/db/ROADMAP_HISTORY_2026-11-26.md) — completed infrastructure delivery and provider-neutral contract notes.
+- [Entities roadmap history](../packages/entities/ROADMAP_HISTORY_2026-11-26.md) — detailed FR contract execution notes.
+- [Notifiers roadmap history](../packages/notifiers/ROADMAP_HISTORY_2026-11-26.md) — completed phases and validation records.
+- [Harvester Journal integration history](../apps/harvester/docs/JOURNAL_INTEGRATION_ROADMAP_HISTORY_2026-11-26.md) — staged PR-by-PR integration evidence; Step 8 closeout remains open.
+
+The active pages now point to canonical READMEs, contracts, tests, issues, or feature roadmaps instead of repeating completed phase histories. These snapshots preserve provenance but are not current task-status authority.
