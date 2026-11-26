@@ -340,27 +340,31 @@ const transactionDocument = {
   },
 }
 
+function createTransactionCrudCommandHandler(commands) {
+  return async (body) => {
+    commands.push(body)
+    if (body.find || body.aggregate) {
+      return {
+        ok: 1,
+        cursor: {
+          id: 0,
+          firstBatch: [transactionDocument],
+        },
+      }
+    }
+    return {
+      ok: 1,
+      n: 1,
+      nModified: 1,
+    }
+  }
+}
+
 test("MongoDB transaction facade tracks every CRUD operation", async () => {
   const commands = []
   const harness = createProviderHarness({
     transactionSupported: true,
-    commandHandler: async (body) => {
-      commands.push(body)
-      if (body.find || body.aggregate) {
-        return {
-          ok: 1,
-          cursor: {
-            id: 0,
-            firstBatch: [transactionDocument],
-          },
-        }
-      }
-      return {
-        ok: 1,
-        n: 1,
-        nModified: 1,
-      }
-    },
+    commandHandler: createTransactionCrudCommandHandler(commands),
   })
   await harness.provider.connect()
 
@@ -389,7 +393,10 @@ test("MongoDB transaction facade tracks every CRUD operation", async () => {
         collection: "people",
         id: "transaction-record",
       })
-      return { one, many }
+      return {
+        one,
+        many,
+      }
     })
 
     assert.equal(result.one.id, "transaction-record")
