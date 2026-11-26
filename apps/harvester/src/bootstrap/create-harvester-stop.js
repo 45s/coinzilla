@@ -90,6 +90,94 @@ function logDurableProcessStopFailure({ error, userDataState, logShutdownPhase, 
   })
 }
 
+function startProcessStopAppend({
+  operationalStateStore,
+  recordProcessStopped,
+  pendingProcessStopOperation,
+  controller,
+  startedAt,
+  timeoutMs,
+} = {}) {
+  const operationPromise = Promise.resolve()
+    .then(() => recordProcessStopped({
+      operationalStateStore,
+      reason: "SHUTDOWN_COMPLETED",
+      clean: true,
+      signal: controller.signal,
+    }))
+    .then(
+      (value) => ({
+        status: "fulfilled",
+        value,
+      }),
+      (reason) => ({
+        status: "rejected",
+        reason,
+      }),
+    )
+  pendingProcessStopOperation.current = {
+    operationPromise,
+    startedAt,
+    timeoutMs,
+  }
+  operationPromise.then(() => {
+    if (pendingProcessStopOperation.current?.operationPromise === operationPromise) {
+      pendingProcessStopOperation.current = null
+    }
+  })
+  return operationPromise
+}
+
+function createProcessStopTimeout({
+  setTimeoutFn,
+  timeoutMs,
+  startedAt,
+  controller,
+} = {}) {
+  const state = {
+    error: null,
+    handle: undefined,
+  }
+  const promise = new Promise((resolve) => {
+    state.handle = setTimeoutFn({
+      phase: "PROCESS_STOP_DURABILITY",
+      timeoutMs,
+      callback: () => {
+        state.error = createProcessStopDurabilityError({
+          code: "PROCESS_STOP_DURABILITY_TIMEOUT",
+          status: "TIMED_OUT",
+          timeoutMs,
+          startedAt,
+          now: () => performance.now(),
+        })
+        controller.abort(state.error)
+        resolve({
+          status: "timed_out",
+          reason: state.error,
+        })
+      },
+    })
+  })
+  return {
+    promise,
+    state,
+  }
+}
+
+function assertNoPendingProcessStop({ pendingProcessStopOperation, now } = {}) {
+  const pending = pendingProcessStopOperation.current
+  if (!pending) {
+    return
+  }
+  throw createProcessStopDurabilityError({
+    code: "PROCESS_STOP_DURABILITY_STILL_RUNNING",
+    status: "PENDING",
+    timeoutMs: pending.timeoutMs,
+    startedAt: pending.startedAt,
+    now,
+  })
+}
+
 async function recordDurableProcessStop({
   operationalStateStore,
   recordProcessStopped,
@@ -101,71 +189,35 @@ async function recordDurableProcessStop({
   clearTimeoutFn = (handle) => clearTimeout(handle),
 } = {}) {
   const startedAt = performance.now()
-  const existing = pendingProcessStopOperation.current
-  if (existing) {
-    throw createProcessStopDurabilityError({
-      code: "PROCESS_STOP_DURABILITY_STILL_RUNNING",
-      status: "PENDING",
-      timeoutMs: existing.timeoutMs,
-      startedAt: existing.startedAt,
-      now: () => performance.now(),
-    })
-  }
+  assertNoPendingProcessStop({
+    pendingProcessStopOperation,
+    now: () => performance.now(),
+  })
   logShutdownPhase({
     phase: "PROCESS_STOP_DURABILITY",
     status: "STARTED",
   })
   const controller = new AbortController()
-  let timeoutHandle
-  let timeoutError
-  const operationPromise = Promise.resolve()
-    .then(() => recordProcessStopped({
-      operationalStateStore,
-      reason: "SHUTDOWN_COMPLETED",
-      clean: true,
-      signal: controller.signal,
-    }))
-    .then(
-      (value) => ({ status: "fulfilled", value }),
-      (reason) => ({ status: "rejected", reason }),
-    )
-  pendingProcessStopOperation.current = {
-    operationPromise,
+  const operationPromise = startProcessStopAppend({
+    operationalStateStore,
+    recordProcessStopped,
+    pendingProcessStopOperation,
+    controller,
     startedAt,
     timeoutMs: processStopDurabilityTimeoutMs,
-  }
-  operationPromise.then(() => {
-    if (pendingProcessStopOperation.current?.operationPromise === operationPromise) {
-      pendingProcessStopOperation.current = null
-    }
   })
-  const timeoutPromise = new Promise((resolve) => {
-    timeoutHandle = setTimeoutFn({
-      phase: "PROCESS_STOP_DURABILITY",
-      timeoutMs: processStopDurabilityTimeoutMs,
-      callback: () => {
-        const error = createProcessStopDurabilityError({
-          code: "PROCESS_STOP_DURABILITY_TIMEOUT",
-          status: "TIMED_OUT",
-          timeoutMs: processStopDurabilityTimeoutMs,
-          startedAt,
-          now: () => performance.now(),
-        })
-        timeoutError = error
-        controller.abort(error)
-        resolve({
-          status: "timed_out",
-          reason: error,
-        })
-      },
-    })
+  const timeout = createProcessStopTimeout({
+    setTimeoutFn,
+    timeoutMs: processStopDurabilityTimeoutMs,
+    startedAt,
+    controller,
   })
   try {
-    const outcome = await Promise.race([operationPromise, timeoutPromise])
-    if (timeoutError) {
-      throw timeoutError
+    const outcome = await Promise.race([operationPromise, timeout.promise])
+    if (timeout.state.error) {
+      throw timeout.state.error
     }
-    if (outcome.status === "timed_out" || outcome.status === "rejected") {
+    if (outcome.status !== "fulfilled") {
       throw outcome.reason
     }
     assertDurableProcessStop(outcome.value)
@@ -183,10 +235,57 @@ async function recordDurableProcessStop({
     })
     throw error
   } finally {
-    if (timeoutHandle !== undefined) {
-      clearTimeoutFn(timeoutHandle)
+    if (timeout.state.handle !== undefined) {
+      clearTimeoutFn(timeout.state.handle)
     }
   }
+}
+
+function createBeforeSharedServicesStop({ operatorControlLifecycle, logShutdownPhase } = {}) {
+  return async function beforeSharedServicesStop() {
+    const operatorStopError = await stopOperatorControl({
+      operatorControlLifecycle,
+      logShutdownPhase,
+    })
+    return operatorStopError ? [operatorStopError] : []
+  }
+}
+
+async function stopRuntimeAndRecordProcessStop({
+  stopRuntime,
+  shutdownRequestedAt,
+  beforeSharedServicesStop,
+  operationalStateStore,
+  recordProcessStopped,
+  userDataState,
+  logShutdownPhase,
+  pendingProcessStopOperation,
+  processStopDurabilityTimeoutMs,
+  setTimeoutFn,
+  clearTimeoutFn,
+} = {}) {
+  const runtimeResult = await stopRuntime({
+    requestedAt: shutdownRequestedAt,
+    requestLogged: true,
+    stopStateEstablishedLogged: true,
+    beforeSharedServicesStop,
+  })
+  if (runtimeResult?.ok === false) {
+    throw runtimeResult.errors?.[0] ?? new Error("Runtime shutdown did not prove strategy safety")
+  }
+  if (!operationalStateStore) {
+    return
+  }
+  await recordDurableProcessStop({
+    operationalStateStore,
+    recordProcessStopped,
+    userDataState,
+    logShutdownPhase,
+    pendingProcessStopOperation,
+    processStopDurabilityTimeoutMs,
+    setTimeoutFn,
+    clearTimeoutFn,
+  })
 }
 
 async function executeShutdown({
@@ -219,34 +318,22 @@ async function executeShutdown({
     status: "COMPLETED",
     startedAt: shutdownRequestedAt,
   })
-  const beforeSharedServicesStop = async () => {
-    const operatorStopError = await stopOperatorControl({
+  await stopRuntimeAndRecordProcessStop({
+    stopRuntime,
+    shutdownRequestedAt,
+    beforeSharedServicesStop: createBeforeSharedServicesStop({
       operatorControlLifecycle,
       logShutdownPhase,
-    })
-    return operatorStopError ? [operatorStopError] : []
-  }
-  const runtimeResult = await stopRuntime({
-    requestedAt: shutdownRequestedAt,
-    requestLogged: true,
-    stopStateEstablishedLogged: true,
-    beforeSharedServicesStop,
+    }),
+    operationalStateStore,
+    recordProcessStopped,
+    userDataState,
+    logShutdownPhase,
+    pendingProcessStopOperation,
+    processStopDurabilityTimeoutMs,
+    setTimeoutFn,
+    clearTimeoutFn,
   })
-  if (runtimeResult?.ok === false) {
-    throw runtimeResult.errors?.[0] ?? new Error("Runtime shutdown did not prove strategy safety")
-  }
-  if (operationalStateStore) {
-    await recordDurableProcessStop({
-      operationalStateStore,
-      recordProcessStopped,
-      userDataState,
-      logShutdownPhase,
-      pendingProcessStopOperation,
-      processStopDurabilityTimeoutMs,
-      setTimeoutFn,
-      clearTimeoutFn,
-    })
-  }
   logShutdownPhase({
     phase: "SHUTDOWN_COMPLETED",
     status: "COMPLETED",
