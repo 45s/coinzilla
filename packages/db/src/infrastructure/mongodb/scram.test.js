@@ -171,3 +171,20 @@ test("SCRAM rejects unsupported mechanisms and unsafe iteration counts", async (
     /iteration/i,
   )
 })
+
+
+test("SCRAM-SHA-256 rejects passwords outside the explicitly supported SASLprep subset", async () => {
+  for (const password of ["pässword", "password\u0001"]) {
+    const server = createScramServer({ username: "alice", password })
+    await assert.rejects(
+      authenticateMongoScram({
+        command: server.command,
+        username: "alice",
+        password,
+        mechanism: "SCRAM-SHA-256",
+        randomBytes: () => Buffer.from("nonce"),
+      }),
+      /ASCII|SASLprep|prohibited/i,
+    )
+  }
+})
