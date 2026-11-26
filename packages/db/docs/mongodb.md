@@ -20,7 +20,7 @@ The public API remains record-oriented. It does not expose MongoDB collections, 
 | Queries | Exact scalar equality, scalar sort, offset/limit | No operators, projections, aggregation API or user-defined MongoDB queries |
 | BSON | JSON contract plus internal binary/date/int64 and ObjectId decoding | Unsupported BSON types are rejected |
 | Transactions | Multi-document transactions on replica sets/sharded clusters with logical sessions | Standalone transactions are rejected; no nested transactions |
-| Retry behavior | Bounded retry of commit when server labels outcome unknown | CRUD is not automatically replayed; no retryable writes |
+| Retry behavior | Bounded retry of ambiguous commit results; non-transactional writes are never replayed and may raise `DatabaseOperationOutcomeUnknownError` if the response is lost | No retryable writes |
 
 The protocol implementation accepts a server when its advertised wire-version range intersects the supported range 13–25. This is a protocol compatibility gate, not a substitute for testing every server patch release. Real-server integration should cover the exact MongoDB versions used in deployment.
 
@@ -73,7 +73,7 @@ On supported replica-set and sharded deployments:
 5. A successful callback commits with majority write concern.
 6. Commit attempts are bounded. If the final result cannot be confirmed, DatabaseTransactionOutcomeUnknownError is thrown.
 
-An unknown commit outcome is not a rollback. Application code must reconcile the affected records/state before deciding whether to retry. The provider never automatically replays a transaction callback.
+An unknown commit outcome is not a rollback. Application code must reconcile the affected records/state before deciding whether to retry. The provider never automatically replays a transaction callback. A non-transactional create/update/delete whose request was sent but whose response is lost raises `DatabaseOperationOutcomeUnknownError`; the provider does not replay the write. A read timeout or a write rejected before it is sent remains a `DatabaseProviderError`.
 
 ## Lifecycle and failure behavior
 
@@ -86,7 +86,7 @@ An unknown commit outcome is not a rollback. Application code must reconcile the
 
 ## Testing
 
-Default unit tests are offline and deterministic. They cover BSON codec validation, OP_MSG framing and correlation, transport fragmentation/concurrency/timeouts/cleanup, URI parsing, hello/topology negotiation, SCRAM exchanges/signature verification, command mapping, provider CRUD and transaction commit/abort/unknown outcomes.
+Default unit tests are offline and deterministic. They cover BSON codec validation, OP_MSG framing and correlation, transport fragmentation/concurrency/timeouts/cleanup and interrupted-write outcome classification, URI parsing, hello/topology negotiation, SCRAM exchanges/signature verification, command mapping, provider CRUD and transaction commit/abort/unknown outcomes.
 
 The shared provider-conformance suite is the authoritative contract for CRUD/query/lifecycle behavior. A real-server conformance suite is available in mongodb.integration.test.js and is opt-in through MONGODB_URI:
 
