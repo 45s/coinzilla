@@ -717,6 +717,77 @@ marketMetadata })
 })
 
 
+test("does not submit a sibling BUY when the recovery SELL intent is not durable", async () => {
+  const failure = new Error("Recovery SELL intent was not committed")
+  const calls = []
+  let brokerCalls = 0
+  const ownershipFor = (purpose) => ({
+    strategyId: StrategyId.COIN_GRABBER,
+    positionId: "position:cg:dogeusdt",
+    purpose,
+  })
+  const execute = makeExecuteStrategyDecision({
+    broker: {
+      providerInstanceId: "binanceTestnet",
+      providerType: "binance",
+      accountId: "binance-primary",
+      placeOrder: async ({ order }) => {
+        brokerCalls += 1
+        return { ok: true, data: makeAcknowledgement(order) }
+      },
+    },
+    onPendingOrder: async ({ purpose }) => ({
+      ownership: ownershipFor(purpose),
+    }),
+    onDurableSubmissionIntent: async ({ order }) => {
+      calls.push(`intent:${order.side}`)
+      return order.side === "SELL"
+        ? { ok: false, errors: [failure] }
+        : { ok: true, data: { durable: true } }
+    },
+    onDurableSubmissionOutcome: async () => {
+      assert.fail("A rejected intent must not produce a durable submission outcome")
+    },
+    onAcknowledgedOrder: async () => {},
+    onSubmissionFailure: async () => {
+      assert.fail("A rejected intent must not reach broker-submission failure handling")
+    },
+    onSubmissionDeferred: async ({ order }) => {
+      calls.push(`deferred:${order.side}`)
+    },
+  })
+  const result = await execute({
+    decision: {
+      strategy: "CONSERVATIVE",
+      actions: [
+        {
+          side: "SELL",
+          purpose: "RECOVERY_SELL",
+          strategyId: StrategyId.COIN_GRABBER,
+          positionId: "position:cg:dogeusdt",
+          type: "LIMIT_MAKER",
+          price: "0.099",
+          quantity: "100",
+        },
+        {
+          side: "BUY",
+          purpose: "CONSERVATIVE_BUY",
+          strategyId: StrategyId.COIN_GRABBER,
+          positionId: "position:cg:dogeusdt",
+          type: "LIMIT_MAKER",
+          price: "0.099",
+          quantity: "100",
+        },
+      ],
+    },
+    marketMetadata,
+  })
+
+  assert.equal(result.ok, false)
+  assert.deepEqual(calls, ["intent:SELL", "deferred:SELL"])
+  assert.equal(brokerCalls, 0, "Neither sibling order may reach broker I/O after the recovery SELL intent fails.")
+})
+ 
 test("does not apply a broker acknowledgement when its durable outcome append fails", async () => {
   let acknowledged = false
   const failureOutcomes = []

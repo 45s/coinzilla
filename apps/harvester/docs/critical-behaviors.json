@@ -109,6 +109,11 @@
           "path": "src/domain/orders/recovery-seller-submission-ownership.test.js",
           "name": "rejects an RS owner using a Conservative-only purpose",
           "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/execute-strategy-decision.test.js",
+          "name": "does not submit a sibling BUY when the recovery SELL intent is not durable",
+          "kind": "failure"
         }
       ],
       "runtimeStatus": "active",
