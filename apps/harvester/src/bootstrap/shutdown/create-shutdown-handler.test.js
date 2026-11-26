@@ -223,8 +223,7 @@ async function assertClosingAuditTimeout({
   return retryStopPromise
 }
 
-test("bounds a pending CLOSING audit phase and retains shared services", async () => {
-  const calls = []
+function createClosingAuditTimeoutFixture({ calls } = {}) {
   let resolveAudit
   let auditCalls = 0
   let closingAuditStarted = false
@@ -268,6 +267,21 @@ test("bounds a pending CLOSING audit phase and retains shared services", async (
     },
     clearTimeoutFn: () => {},
   })
+  return {
+    fixture,
+    auditStarted,
+    getClosingAuditDeadline: () => closingAuditDeadline,
+    getClosingAuditTimeoutMs: () => closingAuditTimeoutMs,
+    getAuditCalls: () => auditCalls,
+    resolveAudit: () => resolveAudit?.({ ok: true }),
+    isClosingAuditStarted: () => closingAuditStarted,
+  }
+}
+
+test("bounds a pending CLOSING audit phase and retains shared services", async () => {
+  const calls = []
+  const timeoutFixture = createClosingAuditTimeoutFixture({ calls })
+  const { fixture, auditStarted } = timeoutFixture
   const stopPromise = fixture.stop()
   let retryStopPromise
 
@@ -276,14 +290,14 @@ test("bounds a pending CLOSING audit phase and retains shared services", async (
       fixture,
       calls,
       auditStarted,
-      getClosingAuditDeadline: () => closingAuditDeadline,
-      getClosingAuditTimeoutMs: () => closingAuditTimeoutMs,
-      getAuditCalls: () => auditCalls,
+      getClosingAuditDeadline: timeoutFixture.getClosingAuditDeadline,
+      getClosingAuditTimeoutMs: timeoutFixture.getClosingAuditTimeoutMs,
+      getAuditCalls: timeoutFixture.getAuditCalls,
       stopPromise,
     })
   } finally {
-    resolveAudit?.({ ok: true })
-    if (closingAuditStarted) {
+    timeoutFixture.resolveAudit()
+    if (timeoutFixture.isClosingAuditStarted()) {
       await Promise.all([
         stopPromise.catch(() => {}),
         retryStopPromise?.catch(() => {}),
