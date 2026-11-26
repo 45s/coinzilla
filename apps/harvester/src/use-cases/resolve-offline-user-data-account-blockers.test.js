@@ -608,17 +608,44 @@ test("CLI returns nonzero when durable resolution is not confirmed", async () =>
 test("rejects an action ID already present in durable resolution history", async () => {
   const store = makeStore()
   const read = await store.readAll()
-  const records = [...read.data.records, fact({
+  const priorEvidenceDigest = "e".repeat(64)
+  const priorBlockerId = createHash("sha256")
+    .update(["ACCOUNT", "", "ACCOUNTING_INTEGRITY_FAILURE", priorEvidenceDigest].join("\0"))
+    .digest("hex")
+  const records = read.data.records.filter((record) => record.factType !== "PROCESS_STOPPED")
+  records.push(fact({
+    sequence: 6,
+    factType: "SAFETY_BLOCKER_RAISED",
+    data: {
+      blockerId: priorBlockerId,
+      producer: "USER_DATA_EVENT_HANDLER",
+      scope: "ACCOUNT",
+      symbol: null,
+      reason: "ACCOUNTING_INTEGRITY_FAILURE",
+      evidenceDigest: priorEvidenceDigest,
+    },
+    factId: `safety-blocker-raised:${priorBlockerId}`,
+  }))
+  records.push(fact({
     sequence: 7,
+    factType: "PROCESS_STOPPED",
+    data: {
+      reason: "OPERATOR_SHUTDOWN",
+      clean: true,
+    },
+    factId: `process-stopped:${runtimeSessionId}`,
+  }))
+  records.push(fact({
+    sequence: 8,
     factType: "SAFETY_BLOCKER_RESOLVED",
     data: {
-      blockerId: "b".repeat(64),
+      blockerId: priorBlockerId,
       resolvedBy: "operator:prior-operator:action-unique-012",
       resolution: "OPERATOR_ACTION",
       evidenceDigest: "d".repeat(64),
     },
-    factId: `safety-blocker-resolved:${"b".repeat(64)}`,
-  })]
+    factId: `safety-blocker-resolved:${priorBlockerId}`,
+  }))
   store.readAll = async () => ({
     ok: true,
     data: {
@@ -644,18 +671,20 @@ test("rejects an action ID already present in durable resolution history", async
   assert.equal(auditCalls, 0)
 })
 
-test("rejects an unclean latest stop even when an earlier clean stop exists", async () => {
+test("rejects an unclean process stop before running market audits", async () => {
   const store = makeStore()
   const read = await store.readAll()
-  const records = [...read.data.records, fact({
-    sequence: 7,
-    factType: "PROCESS_STOPPED",
-    data: {
-      reason: "ABNORMAL_TERMINATION",
-      clean: false,
-    },
-    factId: `process-stopped-unclean:${runtimeSessionId}`,
-  })]
+  const records = read.data.records.map((record) =>
+    record.factType === "PROCESS_STOPPED"
+      ? {
+        ...record,
+        data: {
+          reason: "ABNORMAL_TERMINATION",
+          clean: false,
+        },
+      }
+      : record
+  )
   store.readAll = async () => ({
     ok: true,
     data: {
