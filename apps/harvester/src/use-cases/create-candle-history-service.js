@@ -168,6 +168,7 @@ function createSnapshot({ context, symbol }) {
         subscriptionReady: state.subscriptionReady,
         historyCount: state.candles.length,
         requiredHistoryCount: REQUIRED_CANDLE_COUNT,
+        freshnessThresholdMs: CANDLE_STREAM_MAX_AGE_MS,
         lastEventAt: state.lastEventAt,
         observedAt,
         lastClosedCandleOpenTime: state.candles.at(-1)?.openTime ?? null,

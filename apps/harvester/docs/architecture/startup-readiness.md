@@ -109,3 +109,8 @@ The startup composition now derives market route expectations from the configure
 ## Deferred user-data readiness
 
 The existing `userDataState.ready` remains the only global trading gate. While the startup report is pending, the user-data status observer is prevented from reopening that gate on an early `connected` status. The explicit post-report activation continuation revalidates the existing reconciliation/account safety conditions, clears the temporary lifecycle deferral flag, and opens the same gate. This prevents asynchronous status callbacks from bypassing the startup boundary without adding a second readiness authority.
+
+
+## Source-owned freshness thresholds and account safety
+
+The readiness projection now reports the market-data service's 5-second price/book threshold and the candle-history service's own 65-second threshold. Account-scoped safety blockers are global blockers; a non-account-scoped blocker is surfaced as a warning and remains enforced by its owning market/runtime scope. The report includes each check's source of truth, expected condition, observed timestamp, severity and evidence state.

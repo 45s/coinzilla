@@ -52,6 +52,46 @@ test("keeps ADR-0004 external orders scoped to the affected market", () => {
   assert.equal(report.status, "DEGRADED", "A market-local blocker must not globally block another ready market.")
 })
 
+test("account-scoped safety blockers block globally while non-account blockers remain scoped warnings", () => {
+  const accountInputs = createInputs()
+  accountInputs.readinessInputs.accountSafety = {
+    blocker: {
+      scope: "ACCOUNT",
+      reason: "ACCOUNT_SAFETY_HALT",
+      blockerId: "safety-halt-1",
+    },
+  }
+  const accountReport = createHarvesterReadinessReport(accountInputs)
+  assert.equal(accountReport.runtimeBlockers.includes("ACCOUNT_SAFETY_HALT"), true, "An account-scoped safety blocker must prevent global trading activation.")
+
+  const marketInputs = createInputs()
+  marketInputs.readinessInputs.accountSafety = {
+    blocker: {
+      scope: "MARKET",
+      reason: "MARKET_SAFETY_PAUSE",
+      blockerId: "market-pause-1",
+    },
+  }
+  const marketReport = createHarvesterReadinessReport(marketInputs)
+  const safetyCheck = marketReport.checks.find(({ id }) => id === "account.safety-blocker")
+  assert.equal(safetyCheck.status, "WARNING", "A non-account safety blocker must not become a global trading blocker.")
+  assert.equal(marketReport.runtimeBlockers.includes("MARKET_SAFETY_PAUSE"), false, "Market-scoped safety must remain outside the account-wide blocker list.")
+})
+
+test("exposes source, expected condition and source-owned freshness thresholds without leaking account identity", () => {
+  const report = createHarvesterReadinessReport(createInputs())
+  const priceCheck = report.markets[0].checks.find(({ id }) => id === "market.price")
+  const volatilityCheck = report.markets[0].checks.find(({ id }) => id === "market.volatility")
+
+  assert.equal(priceCheck.observedAt, 20_000, "Every market diagnostic must carry the report observation time.")
+  assert.equal(priceCheck.sourceOfTruth, "Accepted market-price event and existing engine freshness snapshot", "The report must identify the authoritative source for its price claim.")
+  assert.equal(priceCheck.expected.length > 0, true, "The report must state the expected price condition.")
+  assert.equal(priceCheck.observed.freshnessThresholdMs, 5_000, "Price diagnostics must preserve the existing five-second gate.")
+  assert.equal(volatilityCheck.observed.freshnessThresholdMs, 65_000, "Volatility diagnostics must preserve the candle service's 65-second threshold.")
+  assert.equal(JSON.stringify(report).includes("private-account-123"), false, "Provider account identity must not be exposed in the report.")
+})
+
+
 test("fails closed for route mismatch, stale price, missing first book and unavailable enabled volatility", () => {
   const inputs = createInputs()
   inputs.readinessInputs.markets.BTCUSDT.route.actual = { providerInstanceId: "wrong-provider", providerType: "binance", environment: "testnet" }
