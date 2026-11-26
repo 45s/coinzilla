@@ -99,6 +99,24 @@ test("MongoDB handshake rejects servers outside the documented wire-version rang
   }
 })
 
+
+test("MongoDB handshake accepts compatible wire-version overlap even when the server maximum is newer", async () => {
+  const result = await performMongoHandshake({
+    transport: {
+      async command() {
+        return {
+          ok: 1,
+          minWireVersion: 25,
+          maxWireVersion: 26,
+          isWritablePrimary: true,
+        }
+      },
+    },
+  })
+
+  assert.equal(result.maxWireVersion, 26)
+})
+
 test("MongoDB handshake rejects unsupported wire versions and a missing writable primary", async () => {
   await assert.rejects(
     performMongoHandshake({
@@ -168,8 +186,8 @@ test("MongoDB handshake rejects server wire versions newer than the implemented 
         async command() {
           return {
             ok: 1,
-            minWireVersion: 25,
-            maxWireVersion: 26,
+            minWireVersion: 26,
+            maxWireVersion: 27,
             isWritablePrimary: true,
           }
         },
