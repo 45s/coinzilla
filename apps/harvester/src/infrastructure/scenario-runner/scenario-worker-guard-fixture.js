@@ -40,6 +40,13 @@ process.on("message", async (message) => {
     syncWriteBlocked = true
   }
   const fsPromises = require("node:fs/promises")
+  let esmPromiseWriteBlocked = false
+  try {
+    const { writeFile } = await import("node:fs/promises")
+    await writeFile(message.input.writePath, "blocked")
+  } catch {
+    esmPromiseWriteBlocked = true
+  }
   let promiseWriteBlocked = false
   try {
     await fsPromises.writeFile(message.input.writePath, "blocked")
@@ -61,6 +68,7 @@ process.on("message", async (message) => {
       fetchBlocked,
       syncWriteBlocked,
       promiseWriteBlocked,
+      esmPromiseWriteBlocked,
       writeOpenBlocked,
       secretInherited: process.env.COINZILLA_SCENARIO_TEST_SECRET !== undefined,
     },

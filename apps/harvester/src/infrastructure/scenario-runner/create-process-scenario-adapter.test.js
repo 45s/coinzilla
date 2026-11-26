@@ -382,6 +382,7 @@ test("process worker rejects dangerous Node APIs and does not inherit Harvester 
     assert.equal(result.fetchBlocked, true, "the worker must reject the global fetch API")
     assert.equal(result.syncWriteBlocked, true, "the worker must reject synchronous filesystem writes")
     assert.equal(result.promiseWriteBlocked, true, "the worker must reject promise-based filesystem writes")
+    assert.equal(result.esmPromiseWriteBlocked, true, "the worker must reject ESM promise-based filesystem writes")
     assert.equal(result.writeOpenBlocked, true, "the worker must reject writable file handles")
     assert.equal(result.secretInherited, false, "Harvester secrets must not be inherited by the worker")
     assert.equal(existsSync(writePath), false, "the worker must not create a file through guarded filesystem APIs")
