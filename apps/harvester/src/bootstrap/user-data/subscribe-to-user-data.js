@@ -133,6 +133,15 @@ class HarvesterAccountSafetyBlockerActiveError extends SystemCustomError {
 }
 
 function assertTradingStartupSafety({ state, tradingModeLabel, getAccountSafetyBlocker }) {
+  if (state.accountRecoverySnapshotWasRequired === true &&
+      state.accountRecoverySnapshotVerified !== true) {
+    throw new HarvesterUserDataStartupUnsafeError({
+      tradingModeLabel,
+      code: "ACCOUNT_RECOVERY_FRESH_PREFLIGHT_REQUIRED",
+      message: "Trading admission remains blocked until the post-resolution account PREFLIGHT snapshot is verified",
+      status: state.status,
+    })
+  }
   if (state.accountingFailed || UNSAFE_USER_DATA_STARTUP_STATUSES.has(state.status)) {
     throw new HarvesterUserDataStartupUnsafeError({
       tradingModeLabel,
@@ -209,9 +218,52 @@ function logUserDataSubscriptionEstablished(logger) {
   })
 }
 
-async function completeReadOnlyUserDataPreflight({ state, publishOpenOrdersSnapshot } = {}) {
+function assertAccountRecoveryPreflight({
+  state,
+  tradingModeLabel,
+  getAccountReadinessSnapshot,
+} = {}) {
+  if (state.accountRecoverySnapshotRequired !== true) return
+  const readiness = getAccountReadinessSnapshot?.()
+  const accountSnapshot = readiness?.preflight
+  const currentAccount = readiness?.currentAccount
+  const openOrdersSnapshot = readiness?.openOrders?.preflight
+  const accountReady = accountSnapshot?.completed === true &&
+    accountSnapshot.durable === true &&
+    accountSnapshot.sourceTime !== null &&
+    accountSnapshot.sourceTime === currentAccount?.sourceTime &&
+    accountSnapshot.balanceCount === currentAccount?.balanceCount
+  const openOrdersReady = openOrdersSnapshot?.completed === true &&
+    openOrdersSnapshot.durable === true &&
+    openOrdersSnapshot.phase === "PREFLIGHT" &&
+    openOrdersSnapshot.readiness === "READY" &&
+    openOrdersSnapshot.blockReasons?.length === 0 &&
+    openOrdersSnapshot.unownedSymbols?.length === 0
+  if (!accountReady || !openOrdersReady) {
+    throw new HarvesterUserDataStartupUnsafeError({
+      tradingModeLabel,
+      code: "ACCOUNT_RECOVERY_FRESH_PREFLIGHT_REQUIRED",
+      message: "Post-resolution restart requires a fresh durable account snapshot and a clean account-wide open-order PREFLIGHT audit",
+      status: state.status,
+    })
+  }
+  state.accountRecoverySnapshotRequired = false
+  state.accountRecoverySnapshotVerified = true
+}
+
+async function completeReadOnlyUserDataPreflight({
+  state,
+  publishOpenOrdersSnapshot,
+  getAccountReadinessSnapshot,
+  tradingModeLabel,
+} = {}) {
   await publishOpenOrdersSnapshot({ phase: "PREFLIGHT" })
   await waitForUserDataEventQueue({ state })
+  assertAccountRecoveryPreflight({
+    state,
+    tradingModeLabel,
+    getAccountReadinessSnapshot,
+  })
   state.preflightComplete = true
 }
 
@@ -220,6 +272,7 @@ async function completeTradingUserDataPreflight({
   publishOpenOrdersSnapshot,
   tradingModeLabel,
   getAccountSafetyBlocker,
+  getAccountReadinessSnapshot,
 } = {}) {
   if (state.accountingFailed) {
     throw new HarvesterUserDataStartupUnsafeError({
@@ -231,6 +284,11 @@ async function completeTradingUserDataPreflight({
   }
   await publishOpenOrdersSnapshot({ phase: "PREFLIGHT" })
   await waitForUserDataEventQueue({ state })
+  assertAccountRecoveryPreflight({
+    state,
+    tradingModeLabel,
+    getAccountReadinessSnapshot,
+  })
   assertTradingStartupSafety({
     state,
     tradingModeLabel,
@@ -327,6 +385,7 @@ publishOpenOrdersSnapshot })
     publishOpenOrdersSnapshot,
     tradingModeLabel,
     getAccountSafetyBlocker,
+    getAccountReadinessSnapshot,
   })
   if (deferTradingActivation) {
     return createDeferredTradingActivation({
