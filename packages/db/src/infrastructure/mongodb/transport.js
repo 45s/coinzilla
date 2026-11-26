@@ -65,6 +65,7 @@ export function createMongoTransport({
   let connectResolve = null
   let connectReject = null
   let receiveBuffer = Buffer.alloc(0)
+  let connectTimer = null
   let nextRequestId = 1
 
   function settleRequest(requestId, error, response) {
@@ -92,6 +93,8 @@ export function createMongoTransport({
       return
     }
     const wasConnecting = state === "connecting"
+    clearTimeout(connectTimer)
+    connectTimer = null
     state = "closed"
     rejectPending(createRequestError("MongoDB connection closed before command completed", error))
     if (wasConnecting && connectReject) {
@@ -195,6 +198,7 @@ export function createMongoTransport({
           return
         }
         clearTimeout(connectTimer)
+        connectTimer = null
         state = "connected"
         connectResolve?.()
         connectResolve = null
@@ -208,7 +212,6 @@ export function createMongoTransport({
         failConnection(new Error("MongoDB socket closed"))
       }
       const connectEvent = tlsOptions ? "secureConnect" : "connect"
-      let connectTimer
       socket.setNoDelay?.(true)
       socket.on(connectEvent, onConnected)
       socket.on("data", handleData)
