@@ -26,9 +26,18 @@ The infrastructure adapter uses Node.js built-ins only and currently includes na
 
 **Explicit limits:** single-seed `mongodb://` only; no SRV/multi-seed discovery, pooling, topology monitoring/failover, retryable writes or compression; supported wire-version overlap 13–25; printable-ASCII SCRAM usernames and SHA-256 passwords (full SASLprep is not implemented); JSON record contract rather than arbitrary BSON; no change streams, GridFS, client-side encryption or legacy wire opcodes. Client session pooling and `endSessions` cleanup remain deferred.
 
-**Verification:** on the previous head `40c6e5d830232f86ebe05b595a09dfa12bf207f0`, Dependency Audit and External Documentation Links passed. DB unit/coverage jobs were cancelled after the workspace run failed in Harvester transaction consumers. Those failures exposed a provider-facade callback argument bug; a regression test and correction are now committed on the feature branch, but have not yet been re-run. Repository Quality and strict changed-file ESLint failed on that head (the changed-file report contained 418 problems); lint cleanup remains outstanding. No live MongoDB server result is claimed.
+**Verification evidence (latest completed run before the current follow-up commits):**
 
-**Remaining acceptance work:** verify the transaction callback regression fix and all DB package tests/coverage on the exact current head; resolve all applicable workspace and strict changed-file lint findings without weakening rules; complete adversarial protocol/authentication/lifecycle review; and obtain real standalone plus replica-set/sharded integration evidence where infrastructure is available. Keep topology, authentication and transaction claims aligned with actual tests.
+- Real MongoDB 8.0 authenticated standalone: 20 integration tests, 13 passed, 0 failed, 7 skipped because standalone topology does not support multi-document transactions.
+- Real MongoDB 8.0 replica set: 20 integration tests, 15 passed, 0 failed, 5 skipped. Transaction rollback and commit tests passed. Concurrent CRUD correlation passed on both topologies.
+- The real standalone run exposed a delete-command wire-format defect: collation was placed at the command level instead of inside the delete statement. A regression assertion and implementation fix were added; both real-server jobs passed afterward.
+- DB unit tests on `ca1e386`: 399 tests, 378 passed, 0 failed. Function coverage was 99.76%, below the required 100% threshold. A further read-transaction failure-cleanup test was added on `82f55a9`; exact-head coverage is pending.
+- Strict changed-file ESLint passed on `ca1e386`. Workspace quality then failed only the maintained-Markdown spacing check in the reference strategy, MongoDB support guide and package README. Those whitespace/repeated-blank-line issues were corrected in subsequent commits; exact-head workspace quality is pending.
+- Dependency Audit, External Documentation Links, Harvester Targeted Tests and the MongoDB standalone/replica-set integration workflow passed on `ca1e386`.
+- The feature branch was synchronized with the latest `develop` using a normal merge commit; it is currently 0 commits behind.
+- Sharded topology and real server-kill interruption scenarios remain unverified. Deterministic transport tests cover partial frames, concurrent request correlation, pending-request rejection and interrupted writes.
+
+**Remaining acceptance work:** reach 100% function coverage and pass the full DB unit/coverage gate on the exact final commit; rerun workspace quality after the Markdown cleanup; complete final protocol/authentication/lifecycle review; and keep sharded/TLS/connection-interruption guarantees explicitly limited to what is actually verified. No assertion or threshold has been weakened.
 
 See [MongoDB support and limitations](./docs/mongodb.md) for the operational configuration and behavior contract.
 
