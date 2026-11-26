@@ -118,7 +118,9 @@ The shared provider-conformance suite is the authoritative contract for CRUD/que
 MONGODB_URI='mongodb://test-user:test-password@localhost:27017/admin?authSource=admin' pnpm --filter @coinzilla/db test
 ```
 
-The integration suite creates a distinct database name for each test from the configured URI database name and an opaque test key, then drops only that generated database after the provider connection closes. The test account therefore needs permission to create and drop databases. Use a dedicated disposable MongoDB instance or test cluster, not a production database. The integration suite checks the shared CRUD/query/lifecycle contract and attempts transaction rollback; standalone topologies skip transaction verification explicitly. The deterministic unit tests remain offline and credential-free.
+The integration suite creates a distinct database name for each test from the configured URI database name and an opaque test key, then drops only that generated database after the provider connection closes. The test account therefore needs permission to create and drop databases. Use a dedicated disposable MongoDB instance or test cluster, not a production database. The suite checks the shared CRUD/query/lifecycle contract, concurrent CRUD request correlation, and transaction commit/abort on replica sets. Standalone topologies skip transaction verification explicitly. The deterministic unit tests remain offline and credential-free.
+
+The PR CI workflow `.github/workflows/mongodb-integration.yml` provisions MongoDB 8.0 in two isolated jobs: an authenticated standalone server using SCRAM and a single-node replica set. It runs the real-server conformance suite against both; the replica-set job also verifies atomic commit and abort. This workflow does not verify sharded deployments, TLS certificates or server-process interruption. Transport interruption and pending-request cleanup are covered by deterministic socket tests.
 
 A test suite using fake transports does not prove compatibility with a live MongoDB server. Record the exact server version, topology and authentication mode whenever real-server conformance is run.
 
