@@ -710,3 +710,74 @@ html[data-theme="staradmin"] .theme-picker select {
   background: #ffffff;
   color: #24242d;
 }
+
+
+/* Small status and secondary accents use the reference palette consistently. */
+html[data-theme="staradmin"] .summary-card {
+  border-color: #e3e4e8;
+  background: #ffffff;
+  color: #24242d;
+}
+
+html[data-theme="staradmin"] .panel.health-panel {
+  border-color: #1e1e2c;
+  background: #1e1e2c;
+  color: #ffffff;
+}
+
+html[data-theme="staradmin"] .metric-mark,
+html[data-theme="staradmin"] .service-icon,
+html[data-theme="staradmin"] .connection-icon,
+html[data-theme="staradmin"] .loading-mark,
+html[data-theme="staradmin"] .empty-mark {
+  color: #3b8ff3;
+}
+
+html[data-theme="staradmin"] .records-count {
+  border-color: #dbeafe;
+  background: #eff6ff;
+  color: #286fc4;
+}
+
+html[data-theme="staradmin"] .health-count,
+html[data-theme="staradmin"] .state-pill.warning,
+html[data-theme="staradmin"] .notice.warning,
+html[data-theme="staradmin"] .market-status.blocked,
+html[data-theme="staradmin"] .market-readiness.blocked,
+html[data-theme="staradmin"] .connection-indicator.reconnecting {
+  color: #9a7600;
+}
+
+html[data-theme="staradmin"] .metric-change.positive,
+html[data-theme="staradmin"] .service-state,
+html[data-theme="staradmin"] .provider-status,
+html[data-theme="staradmin"] .connection-indicator.live,
+html[data-theme="staradmin"] .market-status.ready,
+html[data-theme="staradmin"] .market-readiness,
+html[data-theme="staradmin"] .state-pill.state-good {
+  color: #218f89;
+}
+
+html[data-theme="staradmin"] .snapshot-meta,
+html[data-theme="staradmin"] .connection-strip,
+html[data-theme="staradmin"] .environment-summary,
+html[data-theme="staradmin"] .source-picker,
+html[data-theme="staradmin"] .movement-filter,
+html[data-theme="staradmin"] .favorites-filter,
+html[data-theme="staradmin"] .market-count span {
+  color: #777983;
+}
+
+html[data-theme="staradmin"] .market-count {
+  color: #24242d;
+}
+
+html[data-theme="staradmin"] .period-select,
+html[data-theme="staradmin"] .health-count {
+  border-color: #e3e4e8;
+}
+
+html[data-theme="staradmin"] .health-count {
+  border-color: #f4df9b;
+  background: #fff8df;
+}
