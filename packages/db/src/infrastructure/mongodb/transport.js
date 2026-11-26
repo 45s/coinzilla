@@ -209,7 +209,8 @@ response: response.body })
     }
 
     state = "connecting"
-    connectPromise = new Promise((resolve, reject) => {
+    connectPromise = new Promise((...handlers) => {
+      const [resolve, reject] = handlers
       connectResolve = resolve
       connectReject = reject
       try {
@@ -313,7 +314,8 @@ response: response.body })
       return Promise.reject(error)
     }
 
-    return new Promise((resolve, reject) => {
+    return new Promise((...handlers) => {
+      const [resolve, reject] = handlers
       const timer = setTimeout(() => {
         const entry = pending.get(requestId)
         settleRequest({
