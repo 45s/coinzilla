@@ -63,6 +63,8 @@ export class AppComponent {
       return [
         { label: 'Markets', page: 'markets' as const, enabled: true },
         { label: 'Orders', page: 'orders' as const, enabled: true },
+        { label: 'Fills', page: 'fills' as const, enabled: true },
+        { label: 'Commissions', page: 'commissions' as const, enabled: true },
         { label: 'Open Orders', page: 'open-orders' as const, enabled: true },
         { label: 'Exchanges', page: 'exchanges' as const, enabled: true },
         { label: 'History', page: null, enabled: false },
@@ -84,7 +86,9 @@ export class AppComponent {
   readonly activePage = signal<DashboardPage>('overview');
   readonly activeSection = signal<'overview' | 'bots' | 'brokers' | 'github' | 'scenario-runner'>('overview');
   readonly activeLabel = computed(() =>
-    this.navigationItems.find((item) => item.page === this.activePage())?.label ?? 'Overview',
+    this.sectionNavigationItems().find((item) => item.page === this.activePage())?.label
+      ?? this.navigationItems.find((item) => item.page === this.activePage())?.label
+      ?? 'Overview',
   );
   readonly historyResource = computed<TradingHistoryResource>(() => {
     const page = this.activePage();
