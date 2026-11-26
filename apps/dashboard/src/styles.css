@@ -196,6 +196,13 @@ html[data-theme="system"] {
   }
 }
 
+/* Feature styles use these semantic aliases across every selectable palette. */
+html[data-theme]:not([data-theme="current"]):not([data-theme="staradmin"]) {
+  --surface: var(--surface-bg);
+  --surface-raised: var(--raised-bg);
+  --border: var(--line);
+}
+
 /* Shared surfaces and typography use the selected palette across feature pages. */
 html[data-theme]:not([data-theme="current"]) .sidebar {
   background: var(--sidebar-bg);
@@ -231,6 +238,8 @@ html[data-theme]:not([data-theme="current"]) .state-panel,
 html[data-theme]:not([data-theme="current"]) .screener-table-panel,
 html[data-theme]:not([data-theme="current"]) .filter-workspace,
 html[data-theme]:not([data-theme="current"]) .label-manager,
+html[data-theme]:not([data-theme="current"]) .summary-strip,
+html[data-theme]:not([data-theme="current"]) .table-scroll,
 html[data-theme]:not([data-theme="current"]) .command-panel,
 html[data-theme]:not([data-theme="current"]) .snapshot-card,
 html[data-theme]:not([data-theme="current"]) .market-control-row,

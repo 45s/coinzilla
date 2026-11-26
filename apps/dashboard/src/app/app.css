@@ -389,7 +389,7 @@
   overflow-x: auto;
   padding: 0 34px;
   border-bottom: 1px solid var(--line);
-  background: var(--panel, #fff);
+  background: var(--panel-bg);
   scrollbar-width: thin;
 }
 
@@ -457,5 +457,74 @@
 
   .section-nav-item {
     min-height: 46px;
+  }
+}
+
+
+.context-subnav {
+  position: sticky;
+  top: 118px;
+  z-index: 2;
+  display: flex;
+  gap: 20px;
+  overflow-x: auto;
+  padding: 0 34px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel-bg, #fff);
+  scrollbar-width: thin;
+}
+
+.context-subnav-item {
+  position: relative;
+  display: inline-flex;
+  min-height: 42px;
+  flex: 0 0 auto;
+  align-items: center;
+  padding: 0 2px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.context-subnav-item.active {
+  color: var(--accent);
+}
+
+.context-subnav-item.active::after {
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: var(--accent);
+  content: '';
+}
+
+.context-subnav-item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -3px;
+}
+
+@media (max-width: 900px) {
+  .context-subnav {
+    top: 118px;
+    padding: 0 20px;
+  }
+}
+
+@media (max-width: 560px) {
+  .context-subnav {
+    top: 104px;
+    gap: 16px;
+    padding: 0 14px;
+  }
+
+  .context-subnav-item {
+    min-height: 38px;
   }
 }
