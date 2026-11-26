@@ -431,7 +431,7 @@ function createAccountSafetyCheck({ inputs, observedAt } = {}) {
   })
 }
 
-function createUserDataCheck({ runtime, inputs, observedAt } = {}) {
+function getUserDataSafetyFacts({ runtime, inputs } = {}) {
   const userData = inputs.userData ?? {}
   const userDataStatus = userData.status ?? runtime.userData?.status ?? "UNKNOWN"
   const normalizedStatus = normalizeUserDataStatus(userDataStatus)
@@ -470,39 +470,50 @@ function createUserDataCheck({ runtime, inputs, observedAt } = {}) {
     code = "USER_DATA_NOT_READY"
     message = "The existing user-data trading-readiness gate is closed."
   }
-  return createCheck({
-    id: "user-data.reconciliation",
-    scope: "ACCOUNT",
+  return {
+    userData,
+    userDataStatus,
     status,
     code,
     message,
+  }
+}
+
+function createUserDataDetails({ facts, runtime, observedAt } = {}) {
+  const { userData, userDataStatus } = facts
+  const lastStatusEventAt = userData.lastStatusEventAt ?? runtime.userData?.lastEventAt
+  return {
+    subscriptionEstablished: userData.subscriptionEstablished === true,
+    preflightComplete: userData.preflightComplete === true,
+    ready: runtime.userData?.ready === true,
+    activationDeferred: userData.tradingActivationDeferred === true,
+    activationPending: runtime.startupBoundary === true && runtime.userData?.ready !== true,
+    status: userDataStatus,
+    requiresReconciliation: userData.requiresReconciliation === true,
+    accountingFailed: userData.accountingFailed === true,
+    streamUnsafe: userData.streamUnsafe === true,
+    pendingRecovery: userData.pendingRecovery === true,
+    safetyHaltRequired: userData.safetyHaltRequired === true,
+    retryableRecoveryFailure: userData.retryableRecoveryFailure === true,
+    lastStatusEventAt: isTimestamp(lastStatusEventAt) ? lastStatusEventAt : null,
+    lastStatusEventAgeMs: ageMs({ observedAt, timestamp: lastStatusEventAt }),
+  }
+}
+
+function createUserDataCheck({ runtime, inputs, observedAt } = {}) {
+  const facts = getUserDataSafetyFacts({ runtime, inputs })
+  return createCheck({
+    id: "user-data.reconciliation",
+    scope: "ACCOUNT",
+    status: facts.status,
+    code: facts.code,
+    message: facts.message,
     expected: "An established stream, completed authoritative PREFLIGHT reconciliation and no recovery/accounting blockers.",
     remediation: "Restore user-data delivery, complete authoritative account/open-order reconciliation and verify queued events are drained.",
     observedAt,
-    details: {
-      subscriptionEstablished: userData.subscriptionEstablished === true,
-      preflightComplete: userData.preflightComplete === true,
-      ready: runtime.userData?.ready === true,
-      activationDeferred: userData.tradingActivationDeferred === true,
-      activationPending: runtime.startupBoundary === true && runtime.userData?.ready !== true,
-      status: userDataStatus,
-      requiresReconciliation: userData.requiresReconciliation === true,
-      accountingFailed: userData.accountingFailed === true,
-      streamUnsafe: userData.streamUnsafe === true,
-      pendingRecovery: userData.pendingRecovery === true,
-      safetyHaltRequired: userData.safetyHaltRequired === true,
-      retryableRecoveryFailure: userData.retryableRecoveryFailure === true,
-      lastStatusEventAt: isTimestamp(userData.lastStatusEventAt)
-        ? userData.lastStatusEventAt
-        : runtime.userData?.lastEventAt ?? null,
-      lastStatusEventAgeMs: ageMs({
-        observedAt,
-        timestamp: userData.lastStatusEventAt ?? runtime.userData?.lastEventAt,
-      }),
-    },
+    details: createUserDataDetails({ facts, runtime, observedAt }),
   })
 }
-
 function createRuntimeChecks({ runtime, inputs, observedAt } = {}) {
   return [
     createRuntimeLifecycleCheck({ runtime, observedAt }),
@@ -759,6 +770,56 @@ function createMarketMetadataCheck({ market, observedAt } = {}) {
   })
 }
 
+function getVolatilitySnapshotStatus(snapshot) {
+  if (snapshot?.ok !== true) {
+    return null
+  }
+  return snapshot.data?.status ?? null
+}
+
+function isVolatilityProtectionReady({ market, snapshotStatus } = {}) {
+  const historyReady = Number.isSafeInteger(snapshotStatus?.historyCount) &&
+    Number.isSafeInteger(snapshotStatus?.requiredHistoryCount) &&
+    snapshotStatus.historyCount >= snapshotStatus.requiredHistoryCount
+  const protectionInitialized = market.volatilityProtection !== null &&
+    typeof market.volatilityProtection === "object"
+  return snapshotStatus?.isReady === true &&
+    snapshotStatus.isFresh === true &&
+    Array.isArray(snapshotStatus.blockers) &&
+    snapshotStatus.blockers.length === 0 &&
+    historyReady &&
+    protectionInitialized
+}
+
+function getVolatilityPossibleCauses({ snapshot, snapshotStatus } = {}) {
+  const possibleCauses = []
+  if (snapshot?.ok !== true) {
+    possibleCauses.push("The candle-history service did not provide a usable snapshot.")
+  } else if (Array.isArray(snapshotStatus?.blockers)) {
+    possibleCauses.push(...snapshotStatus.blockers)
+  }
+  return possibleCauses
+}
+
+function createVolatilityDetails({ market, snapshotStatus, observedAt } = {}) {
+  return {
+    enabled: true,
+    isReady: snapshotStatus?.isReady === true,
+    isFresh: snapshotStatus?.isFresh === true,
+    subscriptionReady: snapshotStatus?.subscriptionReady === true,
+    historyCount: Number.isSafeInteger(snapshotStatus?.historyCount) ? snapshotStatus.historyCount : null,
+    requiredHistoryCount: Number.isSafeInteger(snapshotStatus?.requiredHistoryCount)
+      ? snapshotStatus.requiredHistoryCount
+      : null,
+    lastEventAt: isTimestamp(snapshotStatus?.lastEventAt) ? snapshotStatus.lastEventAt : null,
+    lastEventAgeMs: ageMs({ observedAt, timestamp: snapshotStatus?.lastEventAt }),
+    freshnessThresholdMs: snapshotStatus?.freshnessThresholdMs ?? null,
+    reason: snapshotStatus?.reason ?? null,
+    blockers: Array.isArray(snapshotStatus?.blockers) ? snapshotStatus.blockers : [],
+    protectionMode: market.volatilityProtection?.mode ?? null,
+  }
+}
+
 function createMarketVolatilityCheck({ market, input, observedAt } = {}) {
   const volatility = input.volatility ?? {}
   if (volatility.enabled !== true) {
@@ -776,19 +837,8 @@ function createMarketVolatilityCheck({ market, input, observedAt } = {}) {
     })
   }
   const snapshot = volatility.snapshot
-  let snapshotStatus = null
-  if (snapshot?.ok === true) {
-    snapshotStatus = snapshot.data?.status ?? null
-  }
-  const historyReady = Number.isSafeInteger(snapshotStatus?.historyCount) &&
-    Number.isSafeInteger(snapshotStatus?.requiredHistoryCount) &&
-    snapshotStatus.historyCount >= snapshotStatus.requiredHistoryCount
-  const ready = snapshotStatus?.isReady === true &&
-    snapshotStatus.isFresh === true &&
-    Array.isArray(snapshotStatus.blockers) &&
-    snapshotStatus.blockers.length === 0 &&
-    historyReady &&
-    market.volatilityProtection !== null
+  const snapshotStatus = getVolatilitySnapshotStatus(snapshot)
+  const ready = isVolatilityProtectionReady({ market, snapshotStatus })
   let status = "BLOCKED"
   let code = "VOLATILITY_PROTECTION_NOT_READY"
   let message = "Required candle history or live volatility protection is unavailable, stale or incomplete."
@@ -796,12 +846,6 @@ function createMarketVolatilityCheck({ market, input, observedAt } = {}) {
     status = "PASS"
     code = "VOLATILITY_PROTECTION_READY"
     message = "Required candle history and live volatility inputs are fresh; engine protection is initialized."
-  }
-  const possibleCauses = []
-  if (!snapshot?.ok) {
-    possibleCauses.push("The candle-history service did not provide a usable snapshot.")
-  } else if (Array.isArray(snapshotStatus?.blockers)) {
-    possibleCauses.push(...snapshotStatus.blockers)
   }
   return createMarketCheck({
     id: "market.volatility",
@@ -811,26 +855,10 @@ function createMarketVolatilityCheck({ market, input, observedAt } = {}) {
     expected: "Required candle history is complete and the live 1-minute candle event is fresh within the service-owned threshold.",
     remediation: "Restore the configured candle-history route, obtain complete history and a fresh live candle event, then verify engine protection initialization.",
     observedAt,
-    possibleCauses,
-    details: {
-      enabled: true,
-      isReady: snapshotStatus?.isReady === true,
-      isFresh: snapshotStatus?.isFresh === true,
-      subscriptionReady: snapshotStatus?.subscriptionReady === true,
-      historyCount: Number.isSafeInteger(snapshotStatus?.historyCount) ? snapshotStatus.historyCount : null,
-      requiredHistoryCount: Number.isSafeInteger(snapshotStatus?.requiredHistoryCount)
-        ? snapshotStatus.requiredHistoryCount
-        : null,
-      lastEventAt: isTimestamp(snapshotStatus?.lastEventAt) ? snapshotStatus.lastEventAt : null,
-      lastEventAgeMs: ageMs({ observedAt, timestamp: snapshotStatus?.lastEventAt }),
-      freshnessThresholdMs: snapshotStatus?.freshnessThresholdMs ?? null,
-      reason: snapshotStatus?.reason ?? null,
-      blockers: Array.isArray(snapshotStatus?.blockers) ? snapshotStatus.blockers : [],
-      protectionMode: market.volatilityProtection?.mode ?? null,
-    },
+    possibleCauses: getVolatilityPossibleCauses({ snapshot, snapshotStatus }),
+    details: createVolatilityDetails({ market, snapshotStatus, observedAt }),
   })
 }
-
 function createMarketEngineSafetyCheck({ market, engineBlockers, observedAt } = {}) {
   let status = "PASS"
   let code = "MARKET_ENGINE_SAFETY_CLEAR"
@@ -948,67 +976,112 @@ function createReportSummary({ runtimeChecks, marketReports, runtimeBlockers, bl
  * @param {number} [options.observedAt] - Observation time in epoch milliseconds.
  * @returns {Readonly<object>} Immutable global and per-market readiness report.
  */
-export function createHarvesterReadinessReport({
-  runtime = {},
-  markets = [],
-  readinessInputs = {},
-  observedAt = runtime.observedAt ?? Date.now(),
-} = {}) {
-  const runtimeChecks = createRuntimeChecks({
+function createRuntimeReadinessChecks({ runtime, readinessInputs, marketCount, observedAt } = {}) {
+  const checks = createRuntimeChecks({
     runtime,
     inputs: readinessInputs,
     observedAt,
   })
-  const enabledConfiguration = readinessInputs.configuration?.enabledMarkets
-  const configuredMarketsExist = Array.isArray(enabledConfiguration) && enabledConfiguration.length > 0
-  const marketSnapshotsMissing = readinessInputs.marketSnapshotAvailable === false ||
-    (configuredMarketsExist && markets.length === 0)
-  if (marketSnapshotsMissing) {
-    runtimeChecks.push(createEngineSnapshotCheck({ readinessInputs, observedAt }))
+  const enabledMarkets = readinessInputs.configuration?.enabledMarkets
+  const configuredMarketsExist = Array.isArray(enabledMarkets) && enabledMarkets.length > 0
+  const snapshotsMissing = readinessInputs.marketSnapshotAvailable === false ||
+    (configuredMarketsExist && marketCount === 0)
+  if (snapshotsMissing) {
+    checks.push(createEngineSnapshotCheck({ readinessInputs, observedAt }))
   }
   if (readinessInputs.startupFailure) {
-    runtimeChecks.push(createStartupFailureCheck({
+    checks.push(createStartupFailureCheck({
       startupFailure: readinessInputs.startupFailure,
       observedAt,
     }))
   }
+  return checks
+}
+
+function createMarketReports({ markets, readinessInputs, runtime, observedAt } = {}) {
+  if (!Array.isArray(markets)) {
+    return []
+  }
+  const marketInputs = readinessInputs.markets ?? {}
+  return markets.map((market) => createMarketReadiness({
+    market,
+    input: marketInputs[market.symbol] ?? {},
+    runtime,
+    observedAt,
+  }))
+}
+
+function createReportFacts({ runtimeChecks, marketReports } = {}) {
   const runtimeBlockers = runtimeChecks
     .filter((check) => check.status === "BLOCKED" && check.blocksTrading)
     .map((check) => check.code)
   const runtimeWarnings = runtimeChecks
     .filter((check) => check.status === "WARNING")
     .map((check) => check.code)
-  const marketInputs = readinessInputs.markets ?? {}
-  const marketReports = Array.isArray(markets)
-    ? markets.map((market) => createMarketReadiness({
-      market,
-      input: marketInputs[market.symbol] ?? {},
-      runtime,
-      observedAt,
-    }))
-    : []
   const enabledMarkets = marketReports.filter((market) => market.enabled)
   const blockedMarkets = enabledMarkets.filter((market) => market.readiness === "BLOCKED")
   const readyMarkets = enabledMarkets.filter((market) => market.readiness === "READY")
   const marketWarnings = marketReports.flatMap((market) => market.warnings)
-  const warnings = [...runtimeWarnings, ...marketWarnings]
-  const status = resolveReportStatus({
-    runtime,
+  return {
     runtimeBlockers,
     enabledMarkets,
-    readyMarkets,
     blockedMarkets,
-    warnings,
+    readyMarkets,
+    warnings: [...runtimeWarnings, ...marketWarnings],
+  }
+}
+
+/**
+ * Build an immutable, read-only startup readiness projection from authoritative runtime snapshots.
+ *
+ * The report never mutates the engine, authorizes trading, restores process state or performs
+ * broker operations. The existing user-data readiness flag and per-market engine submission
+ * guards remain the only trading admission controls.
+ *
+ * @param {object} options
+ * @param {object} options.runtime - Current Harvester process/runtime snapshot.
+ * @param {Array<object>} options.markets - Current engine market snapshots.
+ * @param {object} options.readinessInputs - Bootstrap-owned snapshots from existing services.
+ * @param {number} [options.observedAt] - Observation time in epoch milliseconds.
+ * @returns {Readonly<object>} Immutable global and per-market readiness report.
+ */
+export function createHarvesterReadinessReport({
+  runtime = {},
+  markets = [],
+  readinessInputs = {},
+  observedAt = runtime.observedAt ?? Date.now(),
+} = {}) {
+  const normalizedMarkets = Array.isArray(markets) ? markets : []
+  const runtimeChecks = createRuntimeReadinessChecks({
+    runtime,
+    readinessInputs,
+    marketCount: normalizedMarkets.length,
+    observedAt,
+  })
+  const marketReports = createMarketReports({
+    markets: normalizedMarkets,
+    readinessInputs,
+    runtime,
+    observedAt,
+  })
+  const facts = createReportFacts({ runtimeChecks, marketReports })
+  const status = resolveReportStatus({
+    runtime,
+    runtimeBlockers: facts.runtimeBlockers,
+    enabledMarkets: facts.enabledMarkets,
+    readyMarkets: facts.readyMarkets,
+    blockedMarkets: facts.blockedMarkets,
+    warnings: facts.warnings,
   })
   const summary = createReportSummary({
     runtimeChecks,
     marketReports,
-    runtimeBlockers,
-    blockedMarkets,
-    readyMarkets,
-    warnings,
+    runtimeBlockers: facts.runtimeBlockers,
+    blockedMarkets: facts.blockedMarkets,
+    readyMarkets: facts.readyMarkets,
+    warnings: facts.warnings,
   })
-  const marketBlockers = blockedMarkets.map((market) => ({
+  const marketBlockers = facts.blockedMarkets.map((market) => ({
     symbol: market.symbol,
     blockers: market.blockers,
   }))
@@ -1021,10 +1094,10 @@ export function createHarvesterReadinessReport({
     restorationEnabled: readinessInputs.processContinuity?.restorationEnabled === true,
     checks: runtimeChecks,
     markets: marketReports,
-    runtimeBlockers,
+    runtimeBlockers: facts.runtimeBlockers,
     marketBlockers,
-    blockers: runtimeBlockers,
-    warnings,
+    blockers: facts.runtimeBlockers,
+    warnings: facts.warnings,
     summary,
   })
 }

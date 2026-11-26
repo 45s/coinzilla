@@ -114,3 +114,8 @@ The existing `userDataState.ready` remains the only global trading gate. While t
 ## Source-owned freshness thresholds and account safety
 
 The readiness projection now reports the market-data service's 5-second price/book threshold and the candle-history service's own 65-second threshold. Account-scoped safety blockers are global blockers; a non-account-scoped blocker is surfaced as a warning and remains enforced by its owning market/runtime scope. The report includes each check's source of truth, expected condition, observed timestamp, severity and evidence state.
+
+
+## Diagnostic record contract
+
+Each report check now carries a stable code, source-of-truth description, expected condition, observed timestamp and evidence, severity, evidence state, diagnosis, possible causes where supported, recovery outcome where available, impact and operator action. The report remains a projection: it does not persist a second readiness state or perform financial operations.
