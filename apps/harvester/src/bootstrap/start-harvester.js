@@ -166,7 +166,7 @@ function hasCleanAccountRecoveryPreflight({ records, resolutionIndex } = {}) {
   const openOrdersSnapshot = laterRecords.findLast((record) =>
     record.factType === "ACCOUNT_OPEN_ORDERS_CAPTURED" &&
     record.data?.phase === "PREFLIGHT" &&
-    record.data?.readiness === "READY" &&
+    ["READY", "RECONCILED"].includes(record.data?.readiness) &&
     record.data?.blockReasons?.length === 0 &&
     record.data?.unownedSymbols?.length === 0
   )
