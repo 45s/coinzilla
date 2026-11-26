@@ -147,3 +147,8 @@ The redaction test deliberately supplies a private account identifier and verifi
 ## Startup failure preservation
 
 Market-data and candle-history startup failures trigger a best-effort readiness report, but a secondary diagnostic failure is logged separately and never replaces the original startup exception. The original broker, market-data or candle-history failure remains the error rethrown to the existing lifecycle owner.
+
+
+## User-data startup decomposition
+
+The user-data startup sequence is split into explicit read-only PREFLIGHT, trading PREFLIGHT, and deferred activation steps. The subscription owner remains unchanged, and the existing account snapshot, open-order audit, queue drain, safety assertion and user-data readiness gate retain their original order.
