@@ -1,6 +1,6 @@
 # Database
 
-`@coinzilla/db` provides a provider-neutral record CRUD API and database lifecycle. The first provider is Node.js' built-in `node:sqlite`; no external SQLite driver, ORM, query builder, or database server is required.
+`@coinzilla/db` provides a provider-neutral record CRUD API and database lifecycle. It includes Node.js' built-in `node:sqlite` provider and a dependency-free MongoDB network provider; no external database driver, BSON package, ORM, or query builder is required.
 
 The package owns generic database infrastructure contracts only. It does not own application schemas, business entities, repositories, or trading concepts.
 
@@ -84,7 +84,7 @@ The methods have consistent provider-neutral results:
 - A collection name is a non-empty string without surrounding whitespace.
 - Every record is a plain JSON object with its own non-empty string `id`.
 - Identifiers are unique inside a collection. Different collections may use the same identifier.
-- Records support nested JSON objects and arrays. Values must be JSON-safe: no `undefined`, functions, symbols, `BigInt`, non-finite numbers, class instances, accessors, sparse arrays, or circular references.
+- Records support nested JSON objects and arrays. Values must be JSON-safe: no `undefined`, functions, symbols, `BigInt`, non-finite numbers, class instances, accessors, sparse arrays, or circular references. Collection names, identifiers, object keys and string values must contain well-formed Unicode.
 - The `id` cannot be changed by `update`.
 - Updates are shallow merges. Existing fields not included in `changes` remain unchanged.
 
@@ -124,11 +124,11 @@ const page = await database.readMany({
 - `limit` is an optional positive safe integer. `offset` is a non-negative safe integer and defaults to zero.
 - Unsupported query options and non-scalar filter values are rejected with `TypeError`.
 
-The first SQLite provider supports exact equality filters, sorting and pagination. More filter operators must be added to the provider-neutral contract and conformance tests before any provider implements them.
+SQLite and MongoDB support exact equality filters, sorting and pagination. More filter operators must be added to the provider-neutral contract and conformance tests before any provider implements them.
 
 ### Transactions
 
-A transaction callback receives the same provider-neutral CRUD operations:
+A transaction callback receives the same provider-neutral CRUD operations. This first example uses SQLite's synchronous callback mode:
 
 ```js
 await database.transaction((transaction) => {
@@ -150,11 +150,27 @@ await database.transaction((transaction) => {
 })
 ```
 
-A thrown error rolls back the complete transaction. SQLite transaction callbacks must be synchronous because Node's built-in SQLite API is synchronous; an async callback or a returned Promise is rejected. Transaction handles, prepared statements and iterators are invalidated immediately after either COMMIT or ROLLBACK; do not retain them or use them after the callback returns. Do not use `await`, network calls, timers, or unrelated asynchronous work inside a SQLite transaction.
+A thrown error rolls back the complete transaction. CRUD calls made through the outer `database` facade while the callback is active are routed to the same transaction context. Nested transactions are accepted only when `database.capabilities.transactions.nestedTransactions` is `true`; otherwise the nested request is rejected with `DatabaseTransactionUnsupportedError` without aborting the outer transaction. When supported, the provider owns the nested transaction semantics. Closing the database from inside a transaction callback is always rejected. Transaction callback mode is provider-specific and is declared in `database.capabilities`. SQLite transaction callbacks must be synchronous because Node's built-in SQLite API is synchronous; an async callback or a returned Promise is rejected. MongoDB transaction callbacks are asynchronous and must await their CRUD operations. Transaction handles, prepared statements and iterators are invalidated immediately after either COMMIT or ROLLBACK; do not retain them or use them after the callback returns. Do not use `await`, network calls, timers, or unrelated asynchronous work inside a SQLite transaction.
 
 For the provider-neutral SQLite facade, an async-function callback is rejected before its body runs. If a non-async callback returns a Promise or thenable, SQLite rolls back and invalidates the transaction handle and prepared statements before deferred continuations can use them. Such a continuation cannot perform work outside the failed transaction. The low-level `createSqliteDatabase` transaction handle follows the same rollback rule.
 
-For example, a Promise-returning callback is rejected and its deferred write does not escape the rollback:
+MongoDB transaction callbacks are asynchronous. Use an async callback and await every operation; the provider serializes session commands and drains pending work before commit. A synchronous callback that starts an asynchronous CRUD operation is rejected and the transaction is aborted. For example:
+
+```js
+await database.transaction(async (transaction) => {
+  await transaction.create({
+    collection: "accounts",
+    record: { id: "account-3", balance: 100 },
+  })
+  await transaction.update({
+    collection: "accounts",
+    id: "account-3",
+    changes: { status: "active" },
+  })
+})
+```
+
+For SQLite, a Promise-returning callback is rejected and its deferred write does not escape the rollback:
 
 ```js
 await assert.rejects(
@@ -180,7 +196,9 @@ assert.equal(
 ### Errors
 
 - `DatabaseConflictError` identifies a duplicate record identifier. Its stable code is `DB_RECORD_CONFLICT`.
-- `DatabaseProviderError` identifies an underlying provider operation failure. Its stable code is `DB_PROVIDER_OPERATION_FAILED`; the original provider failure is preserved as `cause`.
+- `DatabaseProviderError` identifies a provider operation failure. Its stable code is `DB_PROVIDER_OPERATION_FAILED`; the original provider failure is preserved as `cause`. `DatabaseTransactionUnsupportedError` identifies an unsupported multi-document or nested transaction capability with stable code `DB_TRANSACTION_UNSUPPORTED` and a provider-neutral `context.capability`.
+- `DatabaseOperationOutcomeUnknownError` identifies a non-transactional write sent to the server whose response was lost (`DB_OPERATION_OUTCOME_UNKNOWN`); read/reconcile the record before retrying.
+- `DatabaseTransactionOutcomeUnknownError` identifies a commit whose final outcome could not be confirmed (`DB_TRANSACTION_OUTCOME_UNKNOWN`); reconcile before retrying application work.
 - Invalid collection names, identifiers, records and queries throw `TypeError`.
 - Missing records are ordinary results (`null` or `false`), not exceptions.
 - If transaction work fails and SQLite rollback also fails, the low-level transaction rejects with an `AggregateError` whose `errors` preserve the work error first and rollback error second; its `cause` is the original work error. A failed rollback can leave the connection inside a native transaction; do not continue using it until the underlying transaction state has been recovered or the connection has been closed.
@@ -190,17 +208,72 @@ Consumers should branch on the public error class or stable code, not provider e
 
 ### Provider capabilities
 
-Read `database.capabilities` to inspect the provider-neutral capability declaration. The declaration is a frozen snapshot. The SQLite provider currently reports:
+Read `database.capabilities` to inspect the provider-neutral capability declaration. The declaration is a frozen snapshot. SQLite reports synchronous callbacks, no nested transactions, multi-document transactions, file/memory storage and all three query capabilities. MongoDB reports asynchronous callbacks, no nested transactions, server storage and all three query capabilities. Its `transactions.multiDocument` capability is `"topology-dependent"`; standalone deployments reject multi-document transactions. The following transaction-callback and locking details are SQLite-specific:
 
 - Transaction callbacks are synchronous; nested transactions are not supported.
 - Exact equality filters, sorting and pagination are supported.
 - Storage modes are file-backed and in-memory.
 
-A provider passed to `createDatabase({ provider })` implements both `withTransaction(work)` and `withReadTransaction(work)`. Creates, updates, deletes and explicit `database.transaction(work)` callbacks use the write transaction path; `readOne` and `readMany` use the read transaction path. Providers preserve the same CRUD and transaction semantics across both paths while selecting appropriate locking behavior. SQLite uses `BEGIN IMMEDIATE` for writes and `BEGIN DEFERRED` for reads, allowing WAL readers to continue while another connection holds a write reservation. The legacy `adapter` lifecycle/SQL API remains compatible with adapters that only implement `withTransaction`.
+A provider passed to `createDatabase({ provider })` implements `execute({ operation, input })` for atomic mutations, `withReadTransaction(work)` for provider-neutral reads, and `withTransaction(work)` for explicit multi-operation transactions. The facade routes `readOne`/`readMany` through the read-only boundary and mutations through single-operation execution. SQLite uses `BEGIN IMMEDIATE` for mutations and `BEGIN DEFERRED` for reads, allowing WAL readers to continue while another connection holds a write reservation. MongoDB's read boundary accepts one read operation and rejects mutations. The legacy `adapter` lifecycle/SQL API remains compatible with adapters that only implement `withTransaction`.
 
-A synchronous provider cannot declare `nestedTransactions: true`; the provider-neutral facade requires asynchronous callbacks to invoke nested transactions safely. The capability validator rejects that incompatible declaration at composition time.
+`nestedTransactions: true` is valid only when the provider uses asynchronous callbacks and `multiDocument` is either `true` or `"topology-dependent"`. A synchronous provider or a provider declaring `multiDocument: false` cannot declare nested transaction support; the capability validator rejects either contradiction at composition time.
 
 A future provider must declare its own actual guarantees. The package will not silently emulate unsupported transaction, query, or durability guarantees.
+
+## MongoDB provider
+
+The MongoDB adapter is exported as `createMongoProvider`. It implements the same provider-neutral CRUD API; application/domain code does not receive MongoDB collections, BSON documents, sessions, cursors, sockets, commands or native errors.
+
+```js
+import { createDatabase, createMongoProvider } from "@coinzilla/db"
+
+const database = createDatabase({
+  provider: createMongoProvider({
+    uri: process.env.MONGODB_URI,
+    // Optional explicit TLS options; true enables TLS with Node defaults.
+    // tls: true,
+    connectTimeoutMS: 10_000,
+    socketTimeoutMS: 30_000,
+  }),
+})
+
+await database.connect()
+try {
+  await database.create({
+    collection: "users",
+    record: { id: "user-1", name: "Ada" },
+  })
+} finally {
+  await database.close()
+}
+```
+
+The URI parser deliberately accepts a single-seed `mongodb://` URI. `mongodb+srv://`, multi-host seed lists and DNS SRV discovery are rejected rather than silently reduced to one host. Credentials, database name, `authSource`, `authMechanism`, `replicaSet`, `directConnection`, TLS and connection/socket timeouts can be supplied in the URI or as explicit provider options. When a URI path is present, its database remains the default `authSource` unless `authSource` is explicitly set; overriding the target `databaseName` does not rewrite that URI-derived authentication database. With no URI, `authSource` defaults to the configured `databaseName` or `admin`. `directConnection=true` requires the selected replica-set node to already be the writable primary. `readPreference=primary` and `retryWrites=false` are the only accepted values for those URI options. Explicit provider options override matching parsed URI values.
+
+The adapter uses Node.js built-ins only (`node:net`, `node:tls`, `node:crypto`, `node:buffer`, `node:async_hooks` and timers). It implements BSON and MongoDB OP_MSG internally; it does not add a runtime dependency.
+
+**Supported protocol and deployment scope**
+
+- OP_MSG wire protocol with server wire-version overlap in the range 13–25 (MongoDB 5.0–8.0 protocol generations).
+- Standalone servers and replica sets reached through a single seed. The handshake rejects mongos/sharded topology. Replica-set primary redirection is followed; this is not a full topology monitor or failover-aware connection pool.
+- Optional unauthenticated connections, SCRAM-SHA-256 and legacy SCRAM-SHA-1. SCRAM-SHA-256 currently accepts printable ASCII passwords only because complete Unicode SASLprep tables are not available in Node built-ins; unsupported input is rejected rather than prepared incorrectly.
+- TCP and TLS. TLS validation follows Node.js defaults unless explicit TLS options are supplied.
+- JSON record CRUD, exact scalar equality filters, portable JSON value sorting, offset/limit pagination, and provider-neutral error mapping.
+- A single multiplexed socket per provider instance, with bounded pending-request and message sizes. This is not a connection pool.
+
+**Transactions and capability behavior**
+
+The MongoDB provider declares `transactions.multiDocument: "topology-dependent"`. Standalone servers do not support multi-document transactions; `database.transaction(work)` rejects with `DatabaseTransactionUnsupportedError` before invoking the callback. Only replica sets with logical-session support are transaction-capable. Mongos/sharded servers are rejected during handshake. The adapter uses one logical session and transaction number for callback operations, starts a snapshot transaction on the first command, and commits with majority write concern.
+
+MongoDB read transaction callbacks are limited to one logical read operation; `readMany` may drain multiple internal cursor batches. They do not provide a multi-query snapshot on standalone servers. MongoDB transaction callbacks are asynchronous: await every CRUD operation on the supplied transaction object. Do not start unawaited writes and allow the callback to return, because commit follows callback completion. SQLite callbacks remain synchronous and reject async work.
+
+If commit cannot be confirmed after bounded retries, the provider throws `DatabaseTransactionOutcomeUnknownError`. This means the caller must reconcile the outcome; it must not assume rollback and blindly replay non-idempotent work. Ordinary interrupted CRUD operations are not automatically replayed. If a non-transactional write was sent but its response was lost, the provider throws `DatabaseOperationOutcomeUnknownError`; reads and commands known not to have been sent remain ordinary provider failures. Reconcile before retrying. Automatic topology monitoring, reconnect and transparent operation retry are not implemented.
+
+**Explicit exclusions**
+
+No SRV/multi-seed discovery, connection pooling, topology monitoring/failover, non-primary read preference routing, retryable writes, compression, legacy OP_QUERY, change streams, GridFS, client-side encryption, or arbitrary BSON types are promised. The codec supports the JSON record contract and the additional binary/date/integer forms required internally by the protocol. Unsupported BSON types and malformed frames fail explicitly. See [MongoDB provider support and limitations](./docs/mongodb.md) for the exact matrix and operational notes.
+
+The default package tests use deterministic fake transports and do not require MongoDB credentials or a running server. To run the opt-in real-server conformance suite, set MONGODB_URI and run `pnpm --filter @coinzilla/db test`. It creates and drops uniquely named disposable databases; the test account needs create/drop database permissions. Use a dedicated test cluster, never production data. Unit tests alone do not claim live-server compatibility.
 
 ## Provider conformance tests
 
@@ -234,7 +307,7 @@ runDatabaseProviderConformanceTests({
 
 The example is illustrative; no PostgreSQL provider is included. The factory receives a unique `storageKey` and one declared `storageMode`. The suite runs the contract against every mode in `database.capabilities.storage.modes`, using an isolated key for each test. For `file` and `server` modes it reuses the same key across a new connection to verify persistence; the reconnect test is explicitly skipped for `memory` mode. SQLite maps `memory` to `:memory:` and `file` to the isolated temporary file path. For server-backed providers, supply the optional `cleanupStorage({ storageKey, storageMode })` callback to drop the temporary database or namespace after all connections for that test have closed. The callback runs once per isolated key, including after both connections in the persistence test; `close()` should close the connection, not destroy the store before reconnect verification. The suite removes its local temporary directory automatically. Providers must not silently skip a declared storage mode or a supported contract.
 
-The suite verifies CRUD and collection isolation, duplicate handling, every declared storage mode, each declared query capability, portable scalar sorting, missing-record results, transaction commit/rollback, declared nested-transaction behavior, the synchronous/asynchronous callback mode, immutable capability snapshots, lifecycle closure, close-time draining of active asynchronous transactions, cleanup-hook invocation, and persistence across a new connection where storage is persistent. Query cases are skipped with a reason only when the provider declares the corresponding capability unavailable. The in-memory reconnect-persistence case is skipped because that storage mode is explicitly ephemeral. Add provider-specific lifecycle, lock/concurrency and cleanup tests where the generic contract cannot express the provider's operational guarantees.
+The suite verifies CRUD and collection isolation, duplicate handling, every declared storage mode, each declared query capability, portable scalar sorting, missing-record results, transaction commit/rollback, declared nested-transaction behavior, the synchronous/asynchronous callback mode, immutable capability snapshots, lifecycle closure, close-time draining of active CRUD operations and transactions, cleanup-hook invocation, and persistence across a new connection where storage is persistent. Query cases are skipped with a reason only when the provider declares the corresponding capability unavailable. The in-memory reconnect-persistence case is skipped because that storage mode is explicitly ephemeral. Add provider-specific lifecycle, lock/concurrency and cleanup tests where the generic contract cannot express the provider's operational guarantees.
 
 ## Provider composition
 
@@ -474,7 +547,7 @@ The accepted architecture decision is recorded in [ADR-0001](./docs/decisions/00
 
 - Domain owns provider-independent record/query contracts, database error classification, lifecycle invariants and migration identity.
 - Application owns provider composition and provider-neutral CRUD orchestration.
-- Infrastructure owns concrete adapters. `infrastructure/sqlite/` owns `node:sqlite`, SQL, prepared statements, JSON storage, transaction mechanics and migration persistence.
+- Infrastructure owns concrete adapters. `infrastructure/sqlite/` owns `node:sqlite`, SQL, prepared statements, JSON storage, transaction mechanics and migration persistence. `infrastructure/mongodb/` owns BSON, OP_MSG, TCP/TLS, authentication, topology, sessions, MongoDB commands and MongoDB error translation.
 - Consumers own their business entities, aggregate invariants, schemas and repository interfaces. Do not add application-specific repositories or schemas here.
 
 Dependency direction is inward: infrastructure implements the application-facing provider port; application depends on provider-neutral contracts; domain policy does not import database drivers or SQL.

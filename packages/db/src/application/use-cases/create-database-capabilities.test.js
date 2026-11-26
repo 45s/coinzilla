@@ -6,6 +6,9 @@ import { createDatabase } from "../../index.js"
 function createProvider({ capabilities }) {
   return {
     capabilities,
+    execute({ operation, input }) {
+      return operation === "create" ? input.record : null
+    },
     connect() {},
     close() {},
     withTransaction(work) {
@@ -35,6 +38,7 @@ const invalidCapabilities = [
       transactions: {
         callbackMode: "sometimes",
         nestedTransactions: false,
+      multiDocument: true,
       },
       queries: {
         equalityFilters: true,
@@ -62,6 +66,22 @@ const invalidCapabilities = [
       transactions: {
         callbackMode: "synchronous",
         nestedTransactions: true,
+        multiDocument: true,
+      },
+      queries: {
+        equalityFilters: true,
+        sorting: true,
+        pagination: true,
+      },
+      storage: {
+        modes: ["file"],
+      },
+    },
+    {
+      transactions: {
+        callbackMode: "asynchronous",
+        nestedTransactions: true,
+        multiDocument: false,
       },
       queries: {
         equalityFilters: true,
@@ -76,6 +96,7 @@ const invalidCapabilities = [
       transactions: {
         callbackMode: "synchronous",
         nestedTransactions: false,
+      multiDocument: true,
       },
       queries: {
         equalityFilters: true,
@@ -90,6 +111,7 @@ const invalidCapabilities = [
       transactions: {
         callbackMode: "synchronous",
         nestedTransactions: false,
+      multiDocument: true,
       },
       queries: {
         equalityFilters: true,
@@ -104,6 +126,7 @@ const invalidCapabilities = [
       transactions: {
         callbackMode: "synchronous",
         nestedTransactions: false,
+      multiDocument: true,
       },
       queries: {
         equalityFilters: true,
@@ -115,6 +138,8 @@ const invalidCapabilities = [
       },
     },
   ]
+
+function emptyTransactionCallback() {}
 
 test("provider composition requires complete standard capability declarations", () => {
   for (const capabilities of invalidCapabilities) {
@@ -135,6 +160,7 @@ test("provider capability declarations support the documented storage modes", ()
     transactions: {
       callbackMode: "synchronous",
       nestedTransactions: false,
+      multiDocument: true,
     },
     queries: {
       equalityFilters: true,
@@ -166,12 +192,181 @@ test("provider capability declarations support the documented storage modes", ()
   )
 })
 
-test("provider composition requires a read transaction operation", () => {
+
+test("provider-neutral reads and writes use their distinct execution boundaries", async () => {
   const provider = createProvider({
     capabilities: {
       transactions: {
         callbackMode: "synchronous",
         nestedTransactions: false,
+        multiDocument: true,
+      },
+      queries: {
+        equalityFilters: true,
+        sorting: true,
+        pagination: true,
+      },
+      storage: {
+        modes: ["memory"],
+      },
+    },
+  })
+  let readTransactions = 0
+  let singleOperations = 0
+  const withReadTransaction = provider.withReadTransaction.bind(provider)
+  const execute = provider.execute.bind(provider)
+  provider.withReadTransaction = (work) => {
+    readTransactions += 1
+    return withReadTransaction(work)
+  }
+  provider.execute = (input) => {
+    singleOperations += 1
+    return execute(input)
+  }
+  const database = createDatabase({ provider })
+  await database.connect()
+
+  try {
+    await database.readOne({ collection: "people",
+id: "one" })
+    await database.create({
+      collection: "people",
+      record: { id: "one" },
+    })
+    assert.equal(readTransactions, 1)
+    assert.equal(singleOperations, 1)
+  } finally {
+    await database.close()
+  }
+})
+
+
+function createTransactionContextProvider({ calls }) {
+  const provider = createProvider({
+    capabilities: {
+      transactions: {
+        callbackMode: "synchronous",
+        nestedTransactions: false,
+        multiDocument: true,
+      },
+      queries: {
+        equalityFilters: true,
+        sorting: true,
+        pagination: true,
+      },
+      storage: { modes: ["memory"] },
+    },
+  })
+  provider.execute = () => {
+    calls.standaloneCreate += 1
+  }
+  provider.withReadTransaction = (work) => {
+    calls.standaloneRead += 1
+    return work({
+      create() {},
+      readOne() {},
+      readMany() {},
+      update() {},
+      delete() {},
+    })
+  }
+  provider.withTransaction = (work) => work({
+    create() {
+      calls.transactionCreate += 1
+    },
+    readOne() {
+      calls.transactionRead += 1
+    },
+    readMany() {},
+    update() {},
+    delete() {},
+  })
+  return provider
+}
+
+function assertDatabaseCloseBlocked({ database }) {
+  assert.throws(
+    () => database.close(),
+    /Cannot close a database from inside its transaction callback/,
+  )
+}
+
+test("database CRUD inside a transaction reuses its transaction context", async () => {
+  const calls = {
+    transactionCreate: 0,
+    transactionRead: 0,
+    standaloneCreate: 0,
+    standaloneRead: 0,
+  }
+  const provider = createTransactionContextProvider({ calls })
+  const database = createDatabase({ provider })
+  let nestedTransaction
+  await database.connect()
+
+  try {
+    await database.create({ collection: "people",
+record: { id: "outside" } })
+    await database.readOne({ collection: "people",
+id: "outside" })
+    await database.transaction(() => {
+      database.create({ collection: "people",
+record: { id: "inside" } })
+      database.readOne({ collection: "people",
+id: "inside" })
+      nestedTransaction = database.transaction(emptyTransactionCallback)
+      assertDatabaseCloseBlocked({ database })
+    })
+    await assert.rejects(nestedTransaction, /Nested transactions are not supported/)
+
+    assert.deepEqual(calls, {
+      transactionCreate: 1,
+      transactionRead: 1,
+      standaloneCreate: 1,
+      standaloneRead: 1,
+    })
+  } finally {
+    await database.close()
+  }
+})
+
+test("provider composition requires atomic single-operation execution", () => {
+  const provider = createProvider({
+    capabilities: {
+      transactions: {
+        callbackMode: "synchronous",
+        nestedTransactions: false,
+        multiDocument: true,
+      },
+      queries: {
+        equalityFilters: true,
+        sorting: true,
+        pagination: true,
+      },
+      storage: {
+        modes: ["memory"],
+      },
+    },
+  })
+  delete provider.execute
+
+  assert.throws(
+    () => createDatabase({
+      provider,
+    }),
+    /execute/,
+    "A provider-neutral database must expose atomic single-operation execution",
+  )
+})
+
+
+
+test("provider composition requires the explicit read transaction port", () => {
+  const provider = createProvider({
+    capabilities: {
+      transactions: {
+        callbackMode: "synchronous",
+        nestedTransactions: false,
+        multiDocument: true,
       },
       queries: {
         equalityFilters: true,
@@ -186,20 +381,18 @@ test("provider composition requires a read transaction operation", () => {
   delete provider.withReadTransaction
 
   assert.throws(
-    () => createDatabase({
-      provider,
-    }),
+    () => createDatabase({ provider }),
     /withReadTransaction/,
-    "A provider-neutral database must expose an explicit read transaction operation",
+    "A provider-neutral database must expose its explicit read transaction boundary",
   )
 })
-
 
 test("provider composition rejects non-JSON capability declarations with their original cause", () => {
   const capabilities = {
     transactions: {
       callbackMode: "synchronous",
       nestedTransactions: false,
+      multiDocument: true,
     },
     queries: {
       equalityFilters: true,
@@ -229,6 +422,7 @@ test("provider transaction facades reject incomplete transaction contexts", asyn
       transactions: {
         callbackMode: "synchronous",
         nestedTransactions: false,
+      multiDocument: true,
       },
       queries: {
         equalityFilters: true,
@@ -257,19 +451,103 @@ test("provider transaction facades reject incomplete transaction contexts", asyn
       /must implement:.*readOne/,
       "An explicit transaction must reject a provider context missing any required CRUD operation",
     )
-    await assert.rejects(
-      database.create({
+    assert.deepEqual(
+      await database.create({
         collection: "people",
         record: { id: "incomplete-context-1" },
       }),
-      /must implement:.*readOne/,
-      "A standalone CRUD operation must reject an incomplete provider transaction context",
+      { id: "incomplete-context-1" },
+      "A standalone CRUD operation must use the single-operation provider port",
     )
   } finally {
     await database.close()
   }
 })
 
+
+
+test("providers can reject multi-document transactions while retaining single-operation execution", async () => {
+  const calls = []
+  const capabilities = {
+    transactions: {
+      callbackMode: "asynchronous",
+      nestedTransactions: false,
+      multiDocument: false,
+    },
+    queries: {
+      equalityFilters: true,
+      sorting: true,
+      pagination: true,
+    },
+    storage: {
+      modes: ["server"],
+    },
+  }
+  const provider = createProvider({ capabilities })
+  provider.execute = ({ operation, input }) => {
+    calls.push(operation)
+    return operation === "create" ? input.record : null
+  }
+  let callbackInvoked = false
+  const database = createDatabase({ provider })
+  await database.connect()
+
+  try {
+    await assert.rejects(
+      database.transaction(() => {
+        callbackInvoked = true
+      }),
+      /multi-document transactions are not supported/i,
+    )
+    assert.equal(callbackInvoked, false)
+    assert.deepEqual(
+      await database.create({
+        collection: "people",
+        record: { id: "standalone-record" },
+      }),
+      { id: "standalone-record" },
+    )
+    assert.deepEqual(calls, ["create"])
+    assert.equal(database.capabilities.transactions.multiDocument, false)
+  } finally {
+    await database.close()
+  }
+})
+
+
+test("provider composition accepts topology-dependent transaction guarantees", async () => {
+  const capabilities = {
+    transactions: {
+      callbackMode: "asynchronous",
+      nestedTransactions: false,
+      multiDocument: "topology-dependent",
+    },
+    queries: {
+      equalityFilters: true,
+      sorting: true,
+      pagination: true,
+    },
+    storage: {
+      modes: ["server"],
+    },
+  }
+  const provider = createProvider({ capabilities })
+  const database = createDatabase({ provider })
+  await database.connect()
+
+  try {
+    assert.equal(
+      database.capabilities.transactions.multiDocument,
+      "topology-dependent",
+    )
+    assert.equal(
+      await database.transaction(() => "delegated"),
+      "delegated",
+    )
+  } finally {
+    await database.close()
+  }
+})
 
 test("provider composition rejects missing and array capability declarations", () => {
   for (const capabilities of [null, [], "not-an-object"]) {
@@ -281,4 +559,31 @@ test("provider composition rejects missing and array capability declarations", (
       "A provider must supply one non-array capability object at the composition boundary",
     )
   }
+})
+
+
+test("provider composition requires a read transaction boundary", () => {
+  const provider = createProvider({
+    capabilities: {
+      transactions: {
+        callbackMode: "asynchronous",
+        nestedTransactions: false,
+        multiDocument: false,
+      },
+      queries: {
+        equalityFilters: true,
+        sorting: true,
+        pagination: true,
+      },
+      storage: {
+        modes: ["server"],
+      },
+    },
+  })
+  delete provider.withReadTransaction
+
+  assert.throws(
+    () => createDatabase({ provider }),
+    /withReadTransaction/,
+  )
 })

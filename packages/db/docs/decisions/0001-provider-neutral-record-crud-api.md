@@ -10,7 +10,7 @@
 
 The package already provides a built-in SQLite lifecycle boundary, explicit transactions, and immutable schema migrations. Its public operations are SQL-oriented, however, so a consumer that uses persistence directly must understand SQLite statements and result shapes.
 
-The approved direction is to let consumers use one provider-neutral CRUD API while keeping the concrete storage implementation behind an adapter. SQLite is the first provider. PostgreSQL and MongoDB are possible future providers, not current implementation commitments.
+The approved direction is to let consumers use one provider-neutral CRUD API while keeping the concrete storage implementation behind an adapter. SQLite is the first provider; the dependency-free MongoDB adapter is the second provider, implemented under issue #1865. PostgreSQL remains a possible future provider, not a current implementation commitment.
 
 The package must remain its own Database Infrastructure bounded context. It must not own business aggregates, business schemas, repositories, or trading/application concepts.
 
@@ -48,22 +48,26 @@ This is a plain data object, not a chainable query builder. New operators or nes
 - A provider transaction callback receives only generic CRUD operations.
 - Portable sorting uses `missing/null < false < true < number < string`; numeric values compare numerically, strings compare by binary UTF-8 order, and identifier tie-breaking is always ascending.
 - The reusable conformance suite runs every declared storage mode and supports an optional provider-owned cleanup callback after all connections for an isolated key have closed.
-- Provider-neutral providers implement separate `withTransaction(work)` and `withReadTransaction(work)` operations. Explicit transactions and mutations use the write path; `readOne` and `readMany` use the read path. Legacy adapters may omit the read path and retain the original lifecycle/SQL behavior.
+- A provider implements `execute({ operation, input })` for atomic single-record mutations, `withReadTransaction(work)` for provider-neutral reads, and `withTransaction(work)` for explicit multi-operation transactions. The facade routes reads through the read-only boundary and mutations through single-operation execution. SQLite implements writes using its write transaction and reads using its read transaction; MongoDB uses atomic single-document commands and a read-only one-operation boundary.
+- `transactions.multiDocument` is an explicit capability: `true`, `false`, or `"topology-dependent"`. The provider must reject an unsupported multi-document transaction before invoking user work with `DatabaseTransactionUnsupportedError` (`context.capability: "multiDocument"`). `transactions.nestedTransactions` declares nested callback support; when false, nested work is rejected with the same error class and `context.capability: "nestedTransactions"`. Declaring it true requires asynchronous callback mode and `multiDocument: true` or `"topology-dependent"`. Provider topology labels remain inside infrastructure. Standalone MongoDB rejects multi-document transactions after topology detection; replica-set/sharded deployments may support them when logical sessions are available.
 - SQLite uses `BEGIN IMMEDIATE` for writes and `BEGIN DEFERRED` for reads. This preserves write reservation before read-modify-write operations while allowing WAL readers during a competing writer reservation.
 - A synchronous callback provider cannot declare nested transactions because the facade's nested transaction call is asynchronous; capability validation rejects that incompatible declaration.
-- Provider-native connections, SQL, statements, result objects and driver errors stay inside infrastructure.
+- Provider-native connections, SQL, statements, result objects, topology details and driver errors stay inside infrastructure. Unsupported transaction errors expose the provider-neutral error code, not a provider's topology labels.
 - Provider capabilities must state the actual query, transaction and storage guarantees. Unsupported guarantees must not be silently emulated.
-- The standard capability declaration describes transaction callback mode/nesting, equality filtering/sorting/pagination, and supported storage modes (`file`, `memory`, `server`). The reusable conformance suite executes every declared storage mode with isolated keys; file/server modes must prove persistence across a new connection.
+- `readMany` sorting has one portable scalar JSON order: missing/null, false, true, numbers, then strings. Arrays and objects are not portable sort values. Equal sort values use record ID ascending as a stable tie-breaker, even for descending sorts.
+- The standard capability declaration describes transaction callback mode/nesting/multi-document guarantees, equality filtering/sorting/pagination, and supported storage modes (`file`, `memory`, `server`). The reusable conformance suite executes every declared storage mode with isolated keys; file/server modes must prove persistence across a new connection.
 
 The original `createDatabase({ adapter })` lifecycle facade and `createSqliteDatabase(...)` low-level SQL/migration API remain available for compatibility and infrastructure use.
 
-### 4. First provider
+### 4. Initial providers
 
-Use Node.js built-in `node:sqlite` only.
+The SQLite adapter uses Node.js built-in `node:sqlite` only.
 
 The SQLite adapter stores collection/id/JSON-record tuples in an internal table, uses prepared statements and bound values, and preserves the existing SQLite lifecycle, WAL, foreign-key, lock-timeout, synchronous transaction and cleanup behavior. It supports file-backed and in-memory databases.
 
 SQLite transaction callbacks remain synchronous. They must reject async callbacks rather than committing before awaited work completes. A transaction context, prepared statements and iterators are valid only for the callback lifetime and are invalidated immediately after commit or rollback; retaining them must never permit SQL execution outside the transaction boundary.
+
+The MongoDB adapter uses Node.js built-in modules only. It implements the required BSON subset, OP_MSG framing, TCP/TLS transport, hello/topology negotiation, SCRAM authentication, CRUD/query mapping and topology-dependent sessions/transactions under `src/infrastructure/mongodb/`. No MongoDB driver, BSON package or other external runtime dependency is permitted. Exact protocol, topology, authentication and transaction limitations are maintained in [`docs/mongodb.md`](../mongodb.md).
 
 ### 5. DDD ownership
 
@@ -97,9 +101,9 @@ Rejected because repository and schema ownership follows the business bounded co
 - SQLite stores records as JSON text and evaluates supported filters/sorts using SQLite JSON functions. Query performance and indexing needs must be measured before adding generic indexing abstractions.
 - JSON records require JSON-safe values. Consumers needing exact decimal or financial values should represent them using their owning domain's safe value contract rather than relying on JavaScript floating-point values.
 - Provider differences remain visible through capabilities. The conformance suite defines shared guarantees but does not claim identical performance, deployment, concurrency or durability characteristics.
-- No PostgreSQL or MongoDB adapter is promised by this decision. Add one only when real deployment and consumer requirements justify it.
+- The MongoDB adapter is an implemented second provider with explicit protocol and topology limits. No PostgreSQL adapter is promised; add one only when real deployment and consumer requirements justify it.
 
-## Verification and implementation evidence
+## Amendment — dependency-free MongoDB provider (2026-11-26)\n\nIssue [#1865](https://github.com/45s/coinzilla/issues/1865) implements MongoDB as the second infrastructure adapter. The amendment preserves the provider-neutral record/query model and adds the single-operation provider port plus explicit `transactions.multiDocument` capability so standalone MongoDB does not pretend to provide multi-document atomicity. MongoDB-specific protocol and serialization types remain infrastructure-only. See [PR #1868](https://github.com/45s/coinzilla/pull/1868) and [`docs/mongodb.md`](../mongodb.md) for implementation and support details.\n\n## Verification and implementation evidence
 
 - Provider-neutral CRUD contract test and expected RED are recorded in PR #1353.
 - SQLite provider conformance tests cover CRUD, collection isolation, duplicate handling, filtering, sorting, pagination, missing records, transaction rollback, declared nested-transaction rejection, capability immutability, both declared storage modes (memory and file), and persistence across a new file-backed connection. The reusable suite gives each test an isolated storage key and reuses it only for reconnect-persistence verification.

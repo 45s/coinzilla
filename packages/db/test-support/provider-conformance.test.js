@@ -100,6 +100,7 @@ function createAsyncProviderFactory({ nestedTransactions, stores }) {
     transactions: {
       callbackMode: "asynchronous",
       nestedTransactions,
+      multiDocument: true,
     },
     queries: {
       equalityFilters: false,
@@ -136,6 +137,7 @@ function createAsyncProviderFactory({ nestedTransactions, stores }) {
         },
         withTransaction: runTransaction,
         withReadTransaction: runTransaction,
+        execute: ({ operation, input }) => runTransaction((transaction) => transaction[operation](input)),
       },
     })
   }

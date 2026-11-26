@@ -334,3 +334,286 @@ test("read transactions fall back to the required write transaction port for leg
     await database.close()
   }
 })
+
+
+test("provider CRUD operations are tracked so close waits before releasing the provider", async () => {
+  let finishOperation
+  let providerClosed = false
+  const capabilities = {
+    transactions: { callbackMode: "asynchronous",
+nestedTransactions: false,
+multiDocument: false },
+    queries: { equalityFilters: true,
+sorting: true,
+pagination: true },
+    storage: { modes: ["server"] },
+  }
+  const provider = {
+    capabilities,
+    connect() {},
+    close() { providerClosed = true },
+    withTransaction(work) { return work({ create() {},
+readOne() {},
+readMany() {},
+update() {},
+delete() {} }) },
+    withReadTransaction(work) { return work({ create() {},
+readOne() {},
+readMany() {},
+update() {},
+delete() {} }) },
+    execute() { return new Promise((resolve) => { finishOperation = resolve }) },
+  }
+  const database = createDatabase({ provider })
+  await database.connect()
+
+  const operation = database.create({ collection: "people",
+record: { id: "pending" } })
+  const closing = database.close()
+  assert.equal(database.state, "closing")
+  assert.equal(providerClosed, false)
+  finishOperation({ id: "pending" })
+  assert.deepEqual(await operation, { id: "pending" })
+  await closing
+  assert.equal(providerClosed, true)
+  assert.equal(database.state, "closed")
+})
+
+
+
+test("provider-neutral transaction callbacks receive the CRUD transaction facade", async () => {
+  const record = { id: "person-1",
+name: "Ada" };
+  const transaction = {
+    create: () => record,
+    readOne: () => record,
+    readMany: () => [record],
+    update: () => record,
+    delete: () => true,
+  };
+  const provider = {
+    capabilities: {
+      transactions: {
+        callbackMode: "asynchronous",
+        nestedTransactions: false,
+        multiDocument: true,
+      },
+      queries: {
+        equalityFilters: true,
+        sorting: true,
+        pagination: true,
+      },
+      storage: { modes: ["server"] },
+    },
+    connect() {},
+    close() {},
+    withTransaction: (work) => work(transaction),
+    withReadTransaction: (work) => work(transaction),
+    execute: ({ operation, input }) => transaction[operation](input),
+  };
+  const database = createDatabase({ provider });
+  await database.connect();
+
+  try {
+    const result = await database.transaction((context) => context.readOne({
+      collection: "people",
+      id: "person-1",
+    }));
+    assert.deepEqual(result, record);
+  } finally {
+    await database.close();
+  }
+});
+
+test("legacy lifecycle adapters do not expose the provider-only execution port", () => {
+  const { adapter } = createAdapter()
+  const database = createDatabase({ adapter })
+  assert.equal(Object.hasOwn(database, "execute"), false)
+})
+
+test("provider-neutral facade rejects transactions from an expired callback scope", async () => {
+  const transaction = {
+    create() {},
+    readOne() {},
+    readMany() {},
+    update() {},
+    delete() {},
+  }
+  const provider = {
+    capabilities: {
+      transactions: {
+        callbackMode: "asynchronous",
+        nestedTransactions: true,
+        multiDocument: true,
+      },
+      queries: {
+        equalityFilters: true,
+        sorting: true,
+        pagination: true,
+      },
+      storage: {
+        modes: ["server"],
+      },
+    },
+    connect() {},
+    close() {},
+    withTransaction(work) {
+      return work(transaction)
+    },
+    withReadTransaction(work) {
+      return work(transaction)
+    },
+    execute() {},
+  }
+  const database = createDatabase({ provider })
+  await database.connect()
+  let lateTransaction
+
+  function emptyTransaction() {}
+
+  function scheduleLateTransaction() {
+    queueMicrotask(() => {
+      lateTransaction = database.transaction(emptyTransaction)
+    })
+  }
+
+  try {
+    await database.transaction(scheduleLateTransaction)
+    await assert.rejects(
+      lateTransaction,
+      /transaction callback has already completed/,
+    )
+  } finally {
+    await database.close()
+  }
+})
+
+test("provider-neutral facade rejects async callbacks for synchronous providers", async () => {
+  const transaction = {
+    create() {},
+    readOne() {},
+    readMany() {},
+    update() {},
+    delete() {},
+  }
+  const provider = {
+    capabilities: {
+      transactions: {
+        callbackMode: "synchronous",
+        nestedTransactions: false,
+        multiDocument: true,
+      },
+      queries: {
+        equalityFilters: true,
+        sorting: true,
+        pagination: true,
+      },
+      storage: {
+        modes: ["memory"],
+      },
+    },
+    connect() {},
+    close() {},
+    withTransaction(work) {
+      return work(transaction)
+    },
+    withReadTransaction(work) {
+      return work(transaction)
+    },
+    execute() {},
+  }
+  const database = createDatabase({ provider })
+  await database.connect()
+  try {
+    await assert.rejects(
+      database.transaction(async () => "unsupported"),
+      /Synchronous database provider transaction callbacks must be synchronous/,
+    )
+  } finally {
+    await database.close()
+  }
+})
+
+function createTransactionForwardingProvider({ calls }) {
+  const transaction = {
+    create(input) {
+      calls.push(["create", input])
+    },
+    readOne(input) {
+      calls.push(["readOne", input])
+    },
+    readMany(input) {
+      calls.push(["readMany", input])
+    },
+    update(input) {
+      calls.push(["update", input])
+    },
+    delete(input) {
+      calls.push(["delete", input])
+    },
+  }
+  return {
+    capabilities: {
+      transactions: {
+        callbackMode: "asynchronous",
+        nestedTransactions: false,
+        multiDocument: true,
+      },
+      queries: {
+        equalityFilters: true,
+        sorting: true,
+        pagination: true,
+      },
+      storage: {
+        modes: ["memory"],
+      },
+    },
+    connect() {},
+    close() {},
+    withTransaction(work) {
+      return work(transaction)
+    },
+    withReadTransaction(work) {
+      return work(transaction)
+    },
+    execute() {},
+  }
+}
+
+test("provider-neutral transaction facade forwards every CRUD method", async () => {
+  const calls = []
+  const provider = createTransactionForwardingProvider({ calls })
+  const database = createDatabase({ provider })
+  await database.connect()
+
+  try {
+    await database.transaction(async (context) => {
+      await context.create({
+        collection: "people",
+        record: { id: "one" },
+      })
+      await context.readOne({
+        collection: "people",
+        id: "one",
+      })
+      await context.readMany({
+        collection: "people",
+      })
+      await context.update({
+        collection: "people",
+        id: "one",
+        changes: { name: "Ada" },
+      })
+      await context.delete({
+        collection: "people",
+        id: "one",
+      })
+    })
+    assert.deepEqual(
+      calls.map(([method]) => method),
+      ["create", "readOne", "readMany", "update", "delete"],
+    )
+  } finally {
+    await database.close()
+  }
+})
