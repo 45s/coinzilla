@@ -696,7 +696,7 @@ async function makeStoreWithPriorResolvedAction() {
   return store
 }
 
-test("rejects an action ID already present in durable resolution history", async () => {
+test("rejects a legacy action ID without replay-safe metadata", async () => {
   const store = await makeStoreWithPriorResolvedAction()
   let auditCalls = 0
   const result = await runOfflineAccountBlockerResolution({
