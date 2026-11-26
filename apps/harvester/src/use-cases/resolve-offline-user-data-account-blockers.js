@@ -310,7 +310,7 @@ function validateResolutionRequest({
       resolutionReason.trim() !== resolutionReason ||
       resolutionReason.length < 8 ||
       resolutionReason.length > 512 ||
-      /[\\u0000-\\u001F\\u007F]/.test(resolutionReason)) {
+      /[\u0000-\u001F\u007F]/.test(resolutionReason)) {
     throw new TypeError("Offline account resolution requires authenticated operator identity, unique action ID, resolution reason, and causeFixed=true")
   }
 }
