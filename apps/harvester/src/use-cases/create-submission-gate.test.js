@@ -91,6 +91,45 @@ test("market-owned volatility protection permits explicitly purposed RS recovery
   assert.deepEqual(result, { allowed: true }, "The shared volatility gate must retain the explicit recovery-SELL exception.")
 })
 
+test("market-scoped strategy safety pause blocks only its symbol and preserves the recovery SELL exception", () => {
+  const dependencies = createDependencies()
+  dependencies.state.shutdownBuyGate = false
+  dependencies.state.paused.add("DOGEUSDT")
+  dependencies.state.durablePausedMarkets = new Set(["DOGEUSDT"])
+  dependencies.state.prices.set("BTCUSDT", {
+    price: "100",
+    timestamp: 1,
+  })
+  dependencies.canTrade = () => true
+  dependencies.isStopping = () => false
+  const gate = createSubmissionGate(dependencies)
+
+  const blockedBuy = gate({
+    order: createOrder({ side: "BUY" }),
+    purpose: "STANDING_BUY",
+  })
+  const blockedOrdinarySell = gate({
+    order: createOrder({ side: "SELL" }),
+    purpose: "STANDING_SELL",
+  })
+  const recoverySell = gate({
+    order: createOrder({ side: "SELL" }),
+    purpose: "RECOVERY_SELL",
+  })
+  const unrelatedMarketBuy = gate({
+    order: {
+      ...createOrder({ side: "BUY" }),
+      market: { symbol: "BTCUSDT" },
+    },
+    purpose: "STANDING_BUY",
+  })
+
+  assert.equal(blockedBuy.reason, "MARKET_PAUSED")
+  assert.equal(blockedOrdinarySell.reason, "MARKET_PAUSED")
+  assert.deepEqual(recoverySell, { allowed: true })
+  assert.deepEqual(unrelatedMarketBuy, { allowed: true })
+})
+
 test("blocks every BUY at the final submission gate after shutdown", () => {
   const gate = createSubmissionGate(createDependencies())
   const result = gate({
@@ -291,20 +330,40 @@ test("an account safety blocker overrides every order path, including shutdown r
     blockerId: "account-blocker-1",
   })
   const gate = createSubmissionGate(dependencies)
-  const result = gate({
-    order: createOrder({ side: "SELL" }),
-    purpose: "RECOVERY_SELL",
-  })
+  const cases = [
+    {
+      side: "BUY",
+      purpose: "STANDING_BUY",
+    },
+    {
+      side: "BUY",
+      purpose: "RECOVERY_SELL",
+    },
+    {
+      side: "SELL",
+      purpose: "STANDING_BUY",
+    },
+    {
+      side: "SELL",
+      purpose: "RECOVERY_SELL",
+    },
+  ]
 
-  assert.equal(result.allowed, false)
-  assert.equal(result.reason, "ACCOUNT_SAFETY_BLOCKER_ACTIVE")
-  assert.deepEqual(result.details, {
-    symbol: "DOGEUSDT",
-    blockerReason: "RECOVERY_SELLER_UNEXPECTED_CONDITION",
-    blockerId: "account-blocker-1",
-  })
+  for (const { side, purpose } of cases) {
+    const result = gate({
+      order: createOrder({ side }),
+      purpose,
+    })
+
+    assert.equal(result.allowed, false, `${side}/${purpose} must remain blocked`)
+    assert.equal(result.reason, "ACCOUNT_SAFETY_BLOCKER_ACTIVE")
+    assert.deepEqual(result.details, {
+      symbol: "DOGEUSDT",
+      blockerReason: "RECOVERY_SELLER_UNEXPECTED_CONDITION",
+      blockerId: "account-blocker-1",
+    })
+  }
 })
-
 
 test("blocks a BUY when a durable account-scoped safety blocker is active", () => {
   const dependencies = createDependencies()
