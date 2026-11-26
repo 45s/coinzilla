@@ -327,6 +327,9 @@ commandName: "hello" })
   const { minWireVersion, maxWireVersion } = validateWireVersion({ hello })
   const { topology, writablePrimary } = validateTopology({ hello,
 replicaSet })
+  if (topology === "sharded") {
+    throw new Error("MongoDB sharded topology is not supported")
+  }
   const mechanism = await authenticateIfConfigured({
     transport,
     hello,
@@ -344,7 +347,7 @@ replicaSet })
     primary: writablePrimary ? null : hello.primary,
     sessionsSupported: Number.isFinite(hello.logicalSessionTimeoutMinutes)
       && hello.logicalSessionTimeoutMinutes > 0,
-    transactionSupported: topology !== "standalone"
+    transactionSupported: topology === "replicaSet"
       && Number.isFinite(hello.logicalSessionTimeoutMinutes)
       && hello.logicalSessionTimeoutMinutes > 0,
     authenticationMechanism: mechanism,
