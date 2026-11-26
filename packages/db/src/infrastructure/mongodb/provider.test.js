@@ -680,6 +680,6 @@ test("MongoDB directConnection rejects a replica-set secondary instead of enabli
     }),
   })
 
-  await assert.rejects(provider.connect(), /directConnection.*secondary/i)
+  await assert.rejects(provider.connect(), /directConnection.*writable.*primary/i)
   assert.equal(transports[0].closed, true)
 })
