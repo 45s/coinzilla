@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url"
 import { createScenarioRunnerHost } from "./create-scenario-runner-host.js"
 import { createProcessScenarioAdapter } from "../scenario-runner/create-process-scenario-adapter.js"
 const TEST_WORKER_PATH = fileURLToPath(new URL(
-  "../../../test/scenarios/recovery-seller/rs-runtime-worker-fixture.js",
+  "../scenario-runner/scenario-worker-runtime-acceptance-fixture.js",
   import.meta.url,
 ))
 
