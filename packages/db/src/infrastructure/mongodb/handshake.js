@@ -86,7 +86,7 @@ export function parseMongoConnectionString(connectionString) {
     seenOptions.add(key)
   }
   const databaseName = decodeURIComponent(url.pathname.slice(1)) || "admin"
-  if (/[\\/\\\\."$*<>:|?]/u.test(databaseName)) {
+  if (/[\\/\\\\."$*<>:|?]/u.test(databaseName) || databaseName.includes("\0")) {
     throw new TypeError("MongoDB database name contains an unsupported character")
   }
   if (parseBooleanOption(url.searchParams.get("loadBalanced"), "loadBalanced")) {
@@ -102,9 +102,6 @@ export function parseMongoConnectionString(connectionString) {
     throw new TypeError("MongoDB retryable writes are not supported")
   }
   const authSource = url.searchParams.get("authSource") ?? databaseName
-  if (url.searchParams.has("tls") && url.searchParams.has("ssl")) {
-    throw new TypeError("MongoDB URI must not specify both tls and ssl")
-  }
   const tlsValue = url.searchParams.get("tls") ?? url.searchParams.get("ssl")
   const userInfo = authority.includes("@") ? authority.slice(0, authority.lastIndexOf("@")) : null
   const username = url.username === "" ? undefined : decodeURIComponent(url.username)
@@ -234,6 +231,7 @@ export async function performMongoHandshake({
     || minWireVersion < 0
     || maxWireVersion < 0
     || maxWireVersion < MIN_SUPPORTED_WIRE_VERSION
+    || maxWireVersion > MAX_SUPPORTED_WIRE_VERSION
     || minWireVersion > MAX_SUPPORTED_WIRE_VERSION
     || maxWireVersion < minWireVersion) {
     throw new Error(
