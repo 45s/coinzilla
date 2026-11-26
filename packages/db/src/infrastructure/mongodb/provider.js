@@ -521,9 +521,6 @@ function assertTransactionCanStart({ state, transactionScope, work }) {
   if (transactionScope.getStore()) {
     throw new DatabaseTransactionUnsupportedError({ capability: "nestedTransactions" })
   }
-  if (state.lifecycle !== "connected") {
-    throw new Error("MongoDB provider must be connected before starting a transaction")
-  }
   if (!state.handshake?.transactionSupported) {
     throw new DatabaseTransactionUnsupportedError()
   }
