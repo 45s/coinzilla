@@ -410,6 +410,73 @@ test("MongoDB provider aborts failed transactions and preserves callback failure
 
 
 
+test("MongoDB ignores abort errors and preserves the original callback failure", async () => {
+  const callbackError = new Error("callback failed")
+  const abortError = new Error("abort connection failed")
+  const { provider, calls } = createProviderHarness({
+    topology: "replicaSet",
+    transactionSupported: true,
+    commandHandler: async (body) => {
+      if (body.abortTransaction === 1) throw abortError
+      return { ok: 1, n: 1 }
+    },
+  })
+  const database = createDatabase({ provider })
+  await database.connect()
+
+  try {
+    await assert.rejects(
+      database.transaction(async (transaction) => {
+        await transaction.create({
+          collection: "people",
+          record: { id: "abort-error" },
+        })
+        throw callbackError
+      }),
+      (error) => error === callbackError,
+    )
+    assert.equal(calls.filter((body) => body.abortTransaction === 1).length, 1)
+  } finally {
+    await database.close()
+  }
+})
+
+test("MongoDB retries a retryable abort once and preserves the callback failure", async () => {
+  const callbackError = new Error("callback failed")
+  let abortAttempts = 0
+  const { provider } = createProviderHarness({
+    topology: "replicaSet",
+    transactionSupported: true,
+    commandHandler: async (body) => {
+      if (body.abortTransaction === 1) {
+        abortAttempts += 1
+        if (abortAttempts === 1) {
+          throw Object.assign(new Error("abort reply lost"), { outcomeUnknown: true })
+        }
+      }
+      return { ok: 1, n: 1 }
+    },
+  })
+  const database = createDatabase({ provider })
+  await database.connect()
+
+  try {
+    await assert.rejects(
+      database.transaction(async (transaction) => {
+        await transaction.create({
+          collection: "people",
+          record: { id: "abort-retry" },
+        })
+        throw callbackError
+      }),
+      (error) => error === callbackError,
+    )
+    assert.equal(abortAttempts, 2)
+  } finally {
+    await database.close()
+  }
+})
+
 test("MongoDB provider waits for in-flight standalone CRUD before closing its socket", async () => {
   let releaseWrite
   let markWriteStarted

@@ -359,6 +359,18 @@ test("MongoDB transport marks interrupted non-transactional writes as outcome-un
   )
   await unsentCommit.transport.close()
 
+  const abort = createFakeTransport()
+  await abort.transport.connect()
+  await assert.rejects(
+    abort.transport.command({
+      body: { abortTransaction: 1 },
+      operation: "abort",
+      timeoutMS: 5,
+    }),
+    (error) => error.outcomeUnknown === true,
+  )
+  await abort.transport.close()
+
 })
 
 test("MongoDB transport rejects timed-out requests and releases their correlation entries", async () => {
