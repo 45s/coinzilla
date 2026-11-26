@@ -79,6 +79,21 @@ const invalidCapabilities = [
     },
     {
       transactions: {
+        callbackMode: "asynchronous",
+        nestedTransactions: true,
+        multiDocument: false,
+      },
+      queries: {
+        equalityFilters: true,
+        sorting: true,
+        pagination: true,
+      },
+      storage: {
+        modes: ["file"],
+      },
+    },
+    {
+      transactions: {
         callbackMode: "synchronous",
         nestedTransactions: false,
       multiDocument: true,
