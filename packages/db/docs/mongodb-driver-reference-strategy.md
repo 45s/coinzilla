@@ -56,6 +56,12 @@ The Coinzilla decoder previously routed BSON type `0x11` through `Buffer.readBig
 
 A second review found that Node's `Buffer.from(value, "base64")` silently ignores invalid trailing characters. That behavior could allow a malformed SCRAM server-final signature such as a valid proof followed by punctuation to decode to the expected bytes. A test-first regression was committed in `32dad94bfaab85e559cb6a34cb97b2802b8a3afe`; the local fix now validates the Base64 alphabet, padding shape and canonical round-trip before the existing constant-time comparison. This is protocol-input hardening, not copied upstream code.
 
+### Commit and abort retry semantics
+
+The pinned Transactions Specification treats both `commitTransaction` and `abortTransaction` as retryable write commands. Commit retries must preserve the same logical session and transaction number; retryable-write labels and `MaxTimeMSExpired` are treated as ambiguous commit results. Abort is best-effort: retry once for a retryable error, then ignore abort failures so they do not replace the original callback/commit error. The official Node.js driver implements this in `src/sessions.ts` at the pinned driver commit.
+
+The provider now retries commit for `RetryableWriteError`, `MaxTimeMSExpired`, write-concern timeout and sent-request uncertainty. Abort is retried once for retryable/sent-request errors and its final failure is ignored. Regression coverage was added in `592ce58725469cc4c9ca770369e498e8bc9dd59a`.
+
 ### Sharded transaction recoveryToken
 
 The MongoDB [Transactions Specification at commit `2f6258c99955394d05babb85e3d3599c2addb02c`](https://github.com/mongodb/specifications/blob/2f6258c99955394d05babb85e3d3599c2addb02c/source/transactions/transactions.md#recoverytoken-field) requires drivers to track the latest `recoveryToken` returned by successful commands in a sharded transaction and append it to subsequent `commitTransaction` and `abortTransaction` commands. The pinned official Node.js driver stores this token on the transaction and forwards it from both commands in `src/sessions.ts`.

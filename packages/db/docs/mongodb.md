@@ -74,7 +74,7 @@ On supported replica-set and sharded deployments:
 2. The first database command starts a snapshot transaction.
 3. Every callback operation uses that session and transaction number with autocommit: false.
 4. On sharded deployments, every successful transaction command must return a recovery token; the provider tracks the latest token and forwards it with commit or abort.
-5. A callback failure triggers abort. If abort also fails, both errors are preserved.
+5. A callback failure triggers a best-effort abort. Abort is retried once for retryable failures; any final abort error is ignored so it cannot replace the original callback or commit error.
 6. A successful callback commits with majority write concern and a bounded 10-second write-concern timeout. A commit frame rejected before dispatch is reported as a provider failure, not an unknown outcome; if a prior attempt may have reached the server, later failures cannot erase that ambiguity.
 7. Commit attempts are bounded. If the final result cannot be confirmed, DatabaseTransactionOutcomeUnknownError is thrown.
 

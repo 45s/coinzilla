@@ -34,6 +34,7 @@ const MONGO_CAPABILITIES = Object.freeze({
 })
 const MAX_PRIMARY_REDIRECTS = 3
 const MAX_COMMIT_ATTEMPTS = 3
+const MAX_ABORT_ATTEMPTS = 2
 
 function parsePrimaryAddress(address) {
   if (typeof address !== "string" || address.trim() === "") {
@@ -254,10 +255,18 @@ function hasErrorLabel(response, label) {
 }
 
 function hasAmbiguousWriteConcern(response) {
-  const error = response?.writeConcernError
+  const error = response?.writeConcernError ?? response
   return error?.code === 64
     || error?.codeName === "WriteConcernTimeout"
     || error?.errInfo?.wtimeout === true
+}
+
+function isRetryableTransactionError(error) {
+  return error?.outcomeUnknown === true
+    || hasErrorLabel(error, "RetryableWriteError")
+    || hasAmbiguousWriteConcern(error)
+    || error?.code === 50
+    || error?.codeName === "MaxTimeMSExpired"
 }
 
 function createServerCommandError(response) {
@@ -306,6 +315,9 @@ async function commitMongoTransaction({ transport, session }) {
       const error = createServerCommandError(serverFailure)
       if (hasAmbiguousWriteConcern(response)
         || hasErrorLabel(response, "UnknownTransactionCommitResult")
+        || hasErrorLabel(response, "RetryableWriteError")
+        || response?.code === 50
+        || response?.codeName === "MaxTimeMSExpired"
         || ambiguous) {
         ambiguous = true
         lastError = error
@@ -350,9 +362,23 @@ async function abortMongoTransaction({ transport, session }) {
   if (session.recoveryToken !== undefined) {
     body.recoveryToken = session.recoveryToken
   }
-  const response = await transport.command({ body })
-  if (Number(response?.ok) !== 1) {
-    throw createServerCommandError(response)
+  for (let attempt = 0; attempt < MAX_ABORT_ATTEMPTS; attempt += 1) {
+    try {
+      const response = await transport.command({
+        body,
+        operation: "abort",
+      })
+      if (Number(response?.ok) === 1 && !response.writeConcernError) {
+        return
+      }
+      if (attempt + 1 >= MAX_ABORT_ATTEMPTS || !isRetryableTransactionError(response)) {
+        return
+      }
+    } catch (error) {
+      if (attempt + 1 >= MAX_ABORT_ATTEMPTS || !isRetryableTransactionError(error)) {
+        return
+      }
+    }
   }
 }
 
@@ -440,18 +466,10 @@ function createTransactionRunner({ state, randomBytes }) {
           : new DatabaseProviderError({ operation: "transaction", cause: error })
       }
       if (session.started) {
-        try {
-          await abortMongoTransaction({
-            transport: state.transport,
-            session,
-          })
-        } catch (abortError) {
-          throw new AggregateError(
-            [error, abortError],
-            "MongoDB transaction failed and abort also failed",
-            { cause: error },
-          )
-        }
+        await abortMongoTransaction({
+          transport: state.transport,
+          session,
+        })
       }
       throw error
     }
@@ -466,20 +484,10 @@ function createTransactionRunner({ state, randomBytes }) {
         if (error instanceof DatabaseTransactionOutcomeUnknownError) {
           throw error
         }
-        try {
-          await abortMongoTransaction({
-            transport: state.transport,
-            session,
-          })
-        } catch (abortError) {
-          if (abortError?.code !== 251 && abortError?.codeName !== "NoSuchTransaction") {
-            throw new AggregateError(
-              [error, abortError],
-              "MongoDB commit failed and abort also failed",
-              { cause: error },
-            )
-          }
-        }
+        await abortMongoTransaction({
+          transport: state.transport,
+          session,
+        })
         throw error
       }
     }

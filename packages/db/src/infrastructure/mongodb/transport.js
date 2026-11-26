@@ -48,6 +48,7 @@ function isWriteOperation(operation) {
     || operation === "update"
     || operation === "delete"
     || operation === "commit"
+    || operation === "abort"
 }
 
 /**
