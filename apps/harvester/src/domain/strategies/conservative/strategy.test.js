@@ -402,7 +402,10 @@ test("blocks the next BUY while the recovery SELL acknowledgement is pending or 
         market,
         side: "SELL",
         status,
-        remainingQuantity: new Quantity({ amount: "99", asset: baseAsset }),
+        remainingQuantity: new Quantity({
+          amount: "99",
+          asset: baseAsset,
+        }),
       }],
       lastBuyPrice: "0.1",
     })

@@ -239,9 +239,18 @@ test("persists Conservative recovery SELL ownership through the strict operation
     market,
     side: "SELL",
     type: "LIMIT_MAKER",
-    limitPrice: new Money({ amount: "0.101", asset: quoteAsset }),
-    originalQuantity: new Quantity({ amount: "100", asset: baseAsset }),
-    executedQuantity: new Quantity({ amount: "0", asset: baseAsset }),
+    limitPrice: new Money({
+      amount: "0.101",
+      asset: quoteAsset,
+    }),
+    originalQuantity: new Quantity({
+      amount: "100",
+      asset: baseAsset,
+    }),
+    executedQuantity: new Quantity({
+      amount: "0",
+      asset: baseAsset,
+    }),
     status: "PENDING",
   })
   const ownership = {
@@ -299,9 +308,18 @@ test("persists a Recovery Seller recovery SELL intent with its independent Posit
     market,
     side: "SELL",
     type: "LIMIT_MAKER",
-    limitPrice: new Money({ amount: "0.101", asset: quoteAsset }),
-    originalQuantity: new Quantity({ amount: "100", asset: baseAsset }),
-    executedQuantity: new Quantity({ amount: "0", asset: baseAsset }),
+    limitPrice: new Money({
+      amount: "0.101",
+      asset: quoteAsset,
+    }),
+    originalQuantity: new Quantity({
+      amount: "100",
+      asset: baseAsset,
+    }),
+    executedQuantity: new Quantity({
+      amount: "0",
+      asset: baseAsset,
+    }),
     status: "PENDING",
   })
   const ownership = {
