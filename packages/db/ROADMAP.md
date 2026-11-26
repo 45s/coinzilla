@@ -10,7 +10,7 @@ owner: db
 
 The accepted architecture is recorded in [ADR-0001](./docs/decisions/0001-provider-neutral-record-crud-api.md); see the [local documentation index](./docs/README.md).
 
-`@coinzilla/db` provides a provider-neutral record CRUD and transaction API. Node.js built-in `node:sqlite` is the first concrete provider. The package owns generic persistence infrastructure contracts only; application domains own their business entities, schemas and repository interfaces.
+`@coinzilla/db` provides a provider-neutral record CRUD and transaction API. Node.js built-in `node:sqlite` and the dependency-free MongoDB wire-protocol adapter are concrete providers. The package owns generic persistence infrastructure contracts only; application domains own their business entities, schemas and repository interfaces.
 
 ## Dependency-free MongoDB provider — #1865
 
@@ -28,7 +28,7 @@ The provider is implemented as an infrastructure adapter under src/infrastructur
 
 The public CRUD API remains provider-independent. MongoDB collections, BSON, commands, sessions, cursors, sockets and native errors remain inside infrastructure. No MongoDB driver, BSON package or other external runtime dependency is added.
 
-**Remaining acceptance work:** complete adversarial protocol/authentication and lifecycle review; ensure in-flight CRUD drains during close; register the shared provider-conformance suite against deterministic provider fixtures; verify MongoDB command semantics against supported real-server versions/topologies; finish capability/error/API documentation and run local package checks where execution is available. CI is not a reason to pause implementation, but no test or workflow result may be reported without evidence on the exact PR head.
+**Remaining acceptance work:** complete the final adversarial protocol/authentication and lifecycle review; run package tests, coverage and lint on the exact PR head when a runnable checkout is available; and verify command semantics against real MongoDB server versions, topologies and authentication modes. In-flight CRUD now participates in close-time draining, and the shared provider-conformance suite runs against a deterministic MongoDB protocol fixture. No live-server result is claimed. CI remains deferred as requested and must not pause implementation.
 
 Supported protocol generations, topology/authentication limits, BSON subset, transaction guarantees and explicit exclusions are documented in [MongoDB provider support and limitations](./docs/mongodb.md). The roadmap remains in progress until the implementation PR is merged and all required validation passes on its exact final head.
 
