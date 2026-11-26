@@ -10,6 +10,10 @@ const triggerDigest = "a".repeat(64)
 const blockerId = createHash("sha256")
   .update(["ACCOUNT", "", "ACCOUNTING_INTEGRITY_FAILURE", triggerDigest].join("\0"))
   .digest("hex")
+const secondTriggerDigest = "c".repeat(64)
+const secondBlockerId = createHash("sha256")
+  .update(["ACCOUNT", "", "ACCOUNTING_INTEGRITY_FAILURE", secondTriggerDigest].join("\0"))
+  .digest("hex")
 const configuredMarkets = ["BTCUSDT", "ETHUSDT"]
 const defaultResolutionReason = "Confirmed the account-wide data integrity cause is fixed."
 
@@ -148,6 +152,24 @@ function makeStore() {
       }
     },
   }
+}
+
+function makeMultiBlockerStore() {
+  const store = makeStore()
+  store.records.push(record({
+    sequence: store.records.length,
+    factType: "SAFETY_BLOCKER_RAISED",
+    data: {
+      blockerId: secondBlockerId,
+      producer: "USER_DATA_EVENT_HANDLER",
+      scope: "ACCOUNT",
+      symbol: null,
+      reason: "ACCOUNTING_INTEGRITY_FAILURE",
+      evidenceDigest: secondTriggerDigest,
+    },
+    factId: `safety-blocker-raised:${secondBlockerId}`,
+  }))
+  return store
 }
 
 function readyAudit(ids = [blockerId]) {
@@ -427,4 +449,81 @@ test("does not resolve Recovery Seller STOP when a user-data ACCOUNT blocker is 
     false,
     "Recovery Seller STOP must never receive a user-data resolution fact"
   )
+})
+
+test("retries a partially appended multi-blocker action and accepts exact duplicate replay", async () => {
+  const store = makeMultiBlockerStore()
+  const blockerIds = [blockerId, secondBlockerId].sort()
+  const audit = readyAudit(blockerIds)
+  const originalAppend = store.append
+  let appendCalls = 0
+  store.append = async (fact) => {
+    appendCalls += 1
+    if (appendCalls === 2) {
+      return {
+        ok: false,
+        errors: [new Error("injected second blocker append failure")],
+      }
+    }
+    return originalAppend(fact)
+  }
+
+  const firstAttempt = await resolveUserDataAccountBlockers(makeResolutionOptions({
+    store,
+    audit,
+    actionId: "action-partial-retry-001",
+    blockerIds,
+  }))
+  assert.equal(firstAttempt.ok, false, "A partial durable append must not be reported as complete")
+  assert.equal(
+    store.records.filter((record) => record.factType === "SAFETY_BLOCKER_RESOLVED").length,
+    1,
+    "The first blocker fact remains durable while the second append is rejected",
+  )
+
+  const retry = await resolveUserDataAccountBlockers(makeResolutionOptions({
+    store,
+    audit,
+    actionId: "action-partial-retry-001",
+    blockerIds,
+  }))
+  assert.equal(retry.ok, true, retry.errors?.map(({ message }) => message).join("; "))
+  assert.equal(retry.data.durableReadbackVerified, true)
+  assert.equal(retry.data.idempotentReplay, false)
+  assert.equal(
+    store.records.filter((record) => record.factType === "SAFETY_BLOCKER_RESOLVED").length,
+    2,
+    "The retry appends only the blocker that was not durably resolved",
+  )
+
+  const recordsAfterRetry = store.records.length
+  const duplicate = await resolveUserDataAccountBlockers(makeResolutionOptions({
+    store,
+    audit,
+    actionId: "action-partial-retry-001",
+    blockerIds,
+  }))
+  assert.equal(duplicate.ok, true, duplicate.errors?.map(({ message }) => message).join("; "))
+  assert.equal(duplicate.data.idempotentReplay, true)
+  assert.equal(store.records.length, recordsAfterRetry, "An exact duplicate request must not append additional facts")
+})
+
+test("rejects reuse of an action ID with a different resolution reason", async () => {
+  const store = makeStore()
+  const first = await resolveUserDataAccountBlockers(makeResolutionOptions({
+    store,
+    audit: readyAudit(),
+    actionId: "action-reason-reuse-001",
+  }))
+  assert.equal(first.ok, true, first.errors?.map(({ message }) => message).join("; "))
+  const recordsAfterFirst = store.records.length
+
+  const replay = await resolveUserDataAccountBlockers(makeResolutionOptions({
+    store,
+    audit: readyAudit(),
+    actionId: "action-reason-reuse-001",
+    resolutionReason: "The operator now supplies a different reason.",
+  }))
+  assert.equal(replay.ok, false, "The same action ID must not be rebound to another resolution reason")
+  assert.equal(store.records.length, recordsAfterFirst)
 })
