@@ -159,3 +159,34 @@ executedQuantity: "0" }) })
   assert.deepEqual(calls.broker, [])
   assert.deepEqual(calls.pauses, [])
 })
+
+
+test("rejects a terminal order without a broker order ID before reading fill history", async () => {
+  const { workflow, calls } = makeWorkflow()
+  const order = { ...makeOrder(), brokerOrderId: undefined }
+
+  const result = await workflow({ order })
+
+  assert.equal(result.ok, false, "A terminal order without exchange identity must fail closed.")
+  assert.equal(result.failure.category, "OWNERSHIP_INTEGRITY")
+  assert.equal(result.failure.stage, "TERMINAL_ORDER_ID")
+  assert.equal(calls.broker.length, 0, "REST fill history must not be queried without a broker order ID.")
+  assert.equal(calls.pauses.length, 1, "The affected market must be paused for a missing broker order ID.")
+  assert.equal(calls.pauses[0].reason, "TERMINAL_ORDER_MISSING_BROKER_ID")
+  assert.deepEqual(calls.applied, [], "No fill may be applied without a canonical broker order identity.")
+})
+
+test("rejects a terminal order with a whitespace broker order ID before reading fill history", async () => {
+  const { workflow, calls } = makeWorkflow()
+  const order = { ...makeOrder(), brokerOrderId: "   " }
+
+  const result = await workflow({ order })
+
+  assert.equal(result.ok, false, "Whitespace-only exchange identity must fail closed.")
+  assert.equal(result.failure.category, "OWNERSHIP_INTEGRITY")
+  assert.equal(result.failure.stage, "TERMINAL_ORDER_ID")
+  assert.equal(calls.broker.length, 0, "REST fill history must not be queried with a blank broker order ID.")
+  assert.equal(calls.pauses.length, 1, "The affected market must be paused for a blank broker order ID.")
+  assert.equal(calls.pauses[0].reason, "TERMINAL_ORDER_MISSING_BROKER_ID")
+  assert.deepEqual(calls.applied, [], "No fill may be applied without a canonical broker order identity.")
+})
