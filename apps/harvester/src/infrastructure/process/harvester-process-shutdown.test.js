@@ -188,3 +188,93 @@ test("exits the child process only after Journal shutdown and real process-lock 
     })
   }
 })
+
+function createDurabilityFailureChildSource({
+  lockModuleUrl,
+  shutdownModuleUrl,
+  stopModuleUrl,
+} = {}) {
+  return `
+    import { acquireHarvesterProcessLock } from ${JSON.stringify(lockModuleUrl)}
+    import { createRuntimeShutdownHandler } from ${JSON.stringify(shutdownModuleUrl)}
+    import { createHarvesterStop } from ${JSON.stringify(stopModuleUrl)}
+
+    const lock = await acquireHarvesterProcessLock({
+      directory: process.env.HARVESTER_TEST_LOCK_DIRECTORY,
+      token: "durability-failure-child",
+    })
+    if (lock.ok !== true) {
+      throw lock.errors?.[0] ?? new Error("Child process could not acquire its process lock.")
+    }
+
+    const stop = createHarvesterStop({
+      userDataState: { shutdownRequested: false, ready: true, status: "READY" },
+      logger: { system: () => {}, error: () => {} },
+      runtimeSessionId: "durability-failure-session",
+      operatorControlLifecycle: { stop: async () => {} },
+      stopRuntime: async ({ beforeSharedServicesStop }) => {
+        await beforeSharedServicesStop()
+        return { ok: true, status: "STOPPED" }
+      },
+      operationalStateStore: {},
+      recordProcessStopped: async () => ({
+        ok: true,
+        data: { durable: false },
+        errors: [new Error("durable acknowledgement missing")],
+      }),
+    })
+
+    const handler = createRuntimeShutdownHandler({
+      runtime: { stop },
+      logger: { error: () => {} },
+      eventPublisher: { publish: () => ({ ok: true }) },
+      eventBus: { flush: async () => ({ ok: true }) },
+      journalService: { close: async () => ({ ok: true }) },
+      processLock: lock,
+      closeObservability: async () => {
+        process.stdout.write("UNSAFE_CLEANUP_CALLED\\n")
+        return []
+      },
+      closeLogger: async () => {},
+      logTelegramNotificationSummary: () => {},
+    })
+
+    await handler("SIGTERM")
+    process.stdout.write("SHUTDOWN_ATTEMPT_RETURNED\\n")
+  `
+}
+
+test("retains the real process lock when durable PROCESS_STOPPED acknowledgement fails", {
+  timeout: 10_000,
+}, async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-process-stop-durability-"))
+  const lockPath = path.join(directory, ".harvester-trading.lock")
+  const source = createDurabilityFailureChildSource({
+    lockModuleUrl: new URL("../process-lock/acquire-harvester-process-lock.js", import.meta.url).href,
+    shutdownModuleUrl: new URL("./harvester-process-shutdown.js", import.meta.url).href,
+    stopModuleUrl: new URL("../../bootstrap/create-harvester-stop.js", import.meta.url).href,
+  })
+  const { child, closed, getOutput } = startShutdownChild({
+    directory,
+    source,
+  })
+
+  try {
+    const exit = await closed
+    const output = getOutput()
+    assert.equal(exit.code, 1, `A failed durable process-stop acknowledgement must fail the child; stderr: ${output.stderr}`)
+    assert.equal(exit.signal, null, "The child must exit naturally after the failed shutdown attempt.")
+    assert.equal(output.stdout.trim(), "SHUTDOWN_ATTEMPT_RETURNED", "The outer shutdown handler must return without claiming cleanup.")
+    assert.ok(!output.stdout.includes("UNSAFE_CLEANUP_CALLED"), "Cleanup must not run when durable PROCESS_STOPPED is unconfirmed.")
+    const retainedLock = await readFile(lockPath, "utf8")
+    assert.ok(retainedLock.length > 0, "The real process-lock file must remain present after unproven shutdown.")
+  } finally {
+    if (child.exitCode === null && child.signalCode === null) {
+      child.kill("SIGKILL")
+    }
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
+  }
+})

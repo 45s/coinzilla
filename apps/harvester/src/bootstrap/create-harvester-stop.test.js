@@ -237,3 +237,51 @@ test("allows a later shutdown attempt after an earlier strategy-safety failure",
     "Operator control must stop exactly once, after the successful safety attempt.",
   )
 })
+
+test("does not report shutdown complete when PROCESS_STOPPED lacks durable acknowledgement", async () => {
+  const calls = []
+  const shutdownPhases = []
+  const dependencies = createStopDependencies({
+    calls,
+    recordProcessStoppedOperation: async () => ({
+      ok: true,
+      data: {
+        durable: false,
+      },
+      errors: [new Error("Operational State Store durability was not confirmed.")],
+    }),
+  })
+  dependencies.logger = {
+    system: (phase) => shutdownPhases.push(phase),
+  }
+
+  await assert.rejects(
+    createHarvesterStop(dependencies)(),
+    /clean process-stop boundary was not durable/,
+    "A successful append response without durable acknowledgement must not complete shutdown.",
+  )
+
+  assert.equal(
+    dependencies.userDataState.status,
+    "SHUTDOWN_INCOMPLETE",
+    "The process must remain explicitly incomplete when durable STOPPED evidence is absent.",
+  )
+  assert.deepEqual(
+    calls,
+    ["runtime-stop-start", "process-stop-record"],
+    "The failed durability barrier must not be reported as a completed shutdown.",
+  )
+  assert.ok(
+    shutdownPhases.some(({ shutdownPhase, phaseStatus }) =>
+      shutdownPhase === "PROCESS_STOP_DURABILITY" && phaseStatus === "FAILED"
+    ),
+    "Shutdown diagnostics must identify the failed PROCESS_STOPPED durability phase.",
+  )
+  assert.equal(
+    shutdownPhases.some(({ shutdownPhase, phaseStatus }) =>
+      shutdownPhase === "SHUTDOWN_COMPLETED" && phaseStatus === "COMPLETED"
+    ),
+    false,
+    "Missing durable process-stop evidence must never emit SHUTDOWN_COMPLETED.",
+  )
+})
