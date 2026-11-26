@@ -131,7 +131,11 @@ function validateMarketAuditEvidence({ symbol, audit, accountSnapshotSourceTime 
 function validateMarketAudit({ symbol, result, accountSnapshotSourceTime }) {
   const reconciliation = result?.data?.reconciliation
   const audit = reconciliation?.audit
-  if (!isMarketAuditReady({ result, reconciliation, audit })) {
+  if (!isMarketAuditReady({
+    result,
+    reconciliation,
+    audit,
+  })) {
     const cause = result?.errors?.[0]
     throw new Error(
       `${symbol}: ${cause?.message ?? "account-wide reconciliation did not prove READY"}`,
