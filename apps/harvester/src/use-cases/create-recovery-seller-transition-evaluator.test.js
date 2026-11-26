@@ -257,7 +257,8 @@ test("allows an eligible first SELL while account admission blocks new BUYs", as
     pairConfig: {},
   })
 
-  assert.equal(result.ok, true)
+  assert.equal(result.ok, true,
+    "The transition must return a successful result when the eligible SELL is submitted under account STOP.")
   assert.equal(submitted.action.side, "SELL",
     "A latched STOP must not prevent an otherwise eligible first recovery SELL.")
 })
