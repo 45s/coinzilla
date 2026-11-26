@@ -324,6 +324,8 @@ function validateExchangeEnvelope({ payload, request }) {
 }
 
 /** Signed and unsigned REST transport for the official Bitunix USDT Futures API. */
+// Keep a stable, non-reversible Map identity without retaining the API key itself
+// for the lifetime of the process-wide shared rate-limiter registry.
 function createRateLimiterKey({ apiKey }) {
   return createHash("sha256").update(apiKey).digest("hex")
 }
