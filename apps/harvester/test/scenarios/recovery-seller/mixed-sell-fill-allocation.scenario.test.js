@@ -222,9 +222,18 @@ function createMultiFillAccountingScenarioFixture() {
     clientOrderId: "rs-multi-fill-buy-client",
     market: scenarioMarket,
     side: "BUY",
-    price: new Money({ amount: "2", asset: scenarioQuoteAsset }),
-    quantity: new Quantity({ amount: "5.01", asset: scenarioBaseAsset }),
-    quoteQuantity: new Money({ amount: "10.02", asset: scenarioQuoteAsset }),
+    price: new Money({
+        amount: "2",
+        asset: scenarioQuoteAsset,
+      }),
+    quantity: new Quantity({
+        amount: "5.01",
+        asset: scenarioBaseAsset,
+      }),
+    quoteQuantity: new Money({
+        amount: "10.02",
+        asset: scenarioQuoteAsset,
+      }),
     commissions: [],
     commissionStatus: "COMPLETE",
   })
@@ -239,9 +248,18 @@ function createMultiFillAccountingScenarioFixture() {
     market: scenarioMarket,
     side: "SELL",
     type: "LIMIT_MAKER",
-    limitPrice: new Money({ amount: "2", asset: scenarioQuoteAsset }),
-    originalQuantity: new Quantity({ amount: "5.01", asset: scenarioBaseAsset }),
-    executedQuantity: new Quantity({ amount: "0", asset: scenarioBaseAsset }),
+    limitPrice: new Money({
+      amount: "2",
+      asset: scenarioQuoteAsset,
+    }),
+    originalQuantity: new Quantity({
+      amount: "5.01",
+      asset: scenarioBaseAsset,
+    }),
+    executedQuantity: new Quantity({
+      amount: "0",
+      asset: scenarioBaseAsset,
+    }),
     status: "OPEN",
     createdAt: 10,
     acknowledgedAt: 11,
@@ -255,7 +273,10 @@ function createMultiFillAccountingScenarioFixture() {
     type: "LIMIT_MAKER",
     limitPrice: openSellOrder.limitPrice,
     originalQuantity: openSellOrder.originalQuantity,
-    executedQuantity: new Quantity({ amount: "5.01", asset: scenarioBaseAsset }),
+    executedQuantity: new Quantity({
+      amount: "5.01",
+      asset: scenarioBaseAsset,
+    }),
     status: "FILLED",
     createdAt: 10,
     acknowledgedAt: 11,
@@ -287,11 +308,23 @@ function createMultiFillAccountingScenarioFixture() {
       clientOrderId: openSellOrder.clientOrderId,
       market: scenarioMarket,
       side: "SELL",
-      price: new Money({ amount: "2.1", asset: scenarioQuoteAsset }),
-      quantity: new Quantity({ amount: "2.5", asset: scenarioBaseAsset }),
-      quoteQuantity: new Money({ amount: "5.25", asset: scenarioQuoteAsset }),
+      price: new Money({
+        amount: "2.1",
+        asset: scenarioQuoteAsset,
+      }),
+      quantity: new Quantity({
+        amount: "2.5",
+        asset: scenarioBaseAsset,
+      }),
+      quoteQuantity: new Money({
+        amount: "5.25",
+        asset: scenarioQuoteAsset,
+      }),
       commissions: [new Commission({
-        amount: new Money({ amount: "0.001", asset: scenarioQuoteAsset }),
+        amount: new Money({
+          amount: "0.001",
+          asset: scenarioQuoteAsset,
+        }),
       })],
       commissionStatus: "COMPLETE",
       executedAt: 12,
@@ -303,10 +336,19 @@ function createMultiFillAccountingScenarioFixture() {
       market: scenarioMarket,
       side: "SELL",
       price: new Money({ amount: "2.1", asset: scenarioQuoteAsset }),
-      quantity: new Quantity({ amount: "2.51", asset: scenarioBaseAsset }),
-      quoteQuantity: new Money({ amount: "5.271", asset: scenarioQuoteAsset }),
+      quantity: new Quantity({
+        amount: "2.51",
+        asset: scenarioBaseAsset,
+      }),
+      quoteQuantity: new Money({
+        amount: "5.271",
+        asset: scenarioQuoteAsset,
+      }),
       commissions: [new Commission({
-        amount: new Money({ amount: "0.002", asset: scenarioQuoteAsset }),
+        amount: new Money({
+          amount: "0.002",
+          asset: scenarioQuoteAsset,
+        }),
       })],
       commissionStatus: "COMPLETE",
       executedAt: 13,
@@ -331,13 +373,13 @@ function createMultiFillAccountingScenarioFixture() {
     orderRegistry: openOrderRegistry,
   })
   for (const allocation of canonicalFillAllocations) {
-    const staged = stageMixedSellFillAllocation({
+    const { applied, reconciliation: nextReconciliation } = stageMixedSellFillAllocation({
       reconciliation,
       allocation,
     })
-    assert.equal(staged.applied, true,
+    assert.equal(applied, true,
       "Each distinct canonical partial SELL Fill must be staged exactly once before terminal reconciliation.")
-    reconciliation = staged.reconciliation
+    reconciliation = nextReconciliation
   }
   let durableCommitCount = 0
   const workflow = createRecoverySellerAccountingWorkflow({
@@ -345,12 +387,18 @@ function createMultiFillAccountingScenarioFixture() {
     initialOrderRegistry: openOrderRegistry,
     initialLegacyPositions: [{
       market: scenarioMarket,
-      position: createLegacyPosition({ invested: "100", quantity: "50" }),
+      position: createLegacyPosition({
+        invested: "100",
+        quantity: "50",
+      }),
       accounting: createLegacyPositionAccounting(),
     }],
     onOperationalStateRecoverySellerMixedSellReconciled: async () => {
       durableCommitCount += 1
-      return { ok: true, data: { durable: true } }
+      return {
+        ok: true,
+        data: { durable: true },
+      }
     },
   })
   return {
@@ -406,9 +454,11 @@ test("RS-006-003-A: multiple partial SELL fills are accumulated and reconciled e
     marketId: fixture.market.id,
   }).remainingQuantity, "49.99",
   "Only the 0.01-unit legacy allocation from the second partial Fill may debit legacy inventory.")
-  assert.equal(fixture.workflow.getPortfolio().appliedFillIds.filter((fillId) =>
-    fixture.canonicalFills.some((fill) => fill.id === fillId)).length, 2,
-  "Both distinct canonical partial SELL Fill identities must be applied exactly once.")
+  const canonicalFillIds = new Set(fixture.canonicalFills.map(({ id }) => id))
+  const appliedSellFillCount = fixture.workflow.getPortfolio().appliedFillIds
+    .filter((fillId) => canonicalFillIds.has(fillId)).length
+  assert.equal(appliedSellFillCount, 2,
+    "Both distinct canonical partial SELL Fill identities must be applied exactly once.")
   assert.equal(fixture.workflow.getOrderRegistry().getActiveOrders().length, 0,
     "The shared SELL reservation may be released only after the two projections commit.")
   assert.equal(fixture.durableCommitCount(), 1,

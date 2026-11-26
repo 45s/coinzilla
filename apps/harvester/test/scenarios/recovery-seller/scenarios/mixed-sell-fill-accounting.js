@@ -31,8 +31,18 @@ export const recoverySellerMixedSellFillAccountingScenarios = Object.freeze([
         purpose: "RECOVERY_SELL",
       },
       partialFills: [
-        { tradeId: "rs-multi-fill-sell-trade-1", quantity: "2.5", quoteQuantity: "5.25", quoteCommission: "0.001" },
-        { tradeId: "rs-multi-fill-sell-trade-2", quantity: "2.51", quoteQuantity: "5.25", quoteCommission: "0.002" },
+        {
+          tradeId: "rs-multi-fill-sell-trade-1",
+          quantity: "2.5",
+          quoteQuantity: "5.25",
+          quoteCommission: "0.001",
+        },
+        {
+          tradeId: "rs-multi-fill-sell-trade-2",
+          quantity: "2.51",
+          quoteQuantity: "5.271",
+          quoteCommission: "0.002",
+        },
       ],
       allocations: {
         recoveryQuantity: "5",
@@ -63,13 +73,19 @@ export const recoverySellerMixedSellFillAccountingScenarios = Object.freeze([
       id: "RS-006-003-A",
       description: "two distinct partial SELL Fills are accumulated and committed from one complete terminal history",
       status: "TEST-MAPPED",
-      test: { file: testFile, title: multiFillTestTitle },
+      test: {
+        file: testFile,
+        title: multiFillTestTitle,
+      },
       evidence: null,
     }, {
       id: "RS-006-003-B",
       description: "replaying the same two-Fill terminal mixed-SELL boundary is an exact no-op in both projections",
       status: "TEST-MAPPED",
-      test: { file: testFile, title: replayTestTitle },
+      test: {
+        file: testFile,
+        title: replayTestTitle,
+      },
       evidence: null,
     }],
     implementation: [
@@ -78,7 +94,10 @@ export const recoverySellerMixedSellFillAccountingScenarios = Object.freeze([
       "apps/harvester/src/domain/strategies/recovery-seller/mixed-sell-fill-accounting.js",
       "apps/harvester/src/use-cases/create-recovery-seller-accounting-workflow.js",
     ],
-    test: { file: testFile, title: multiFillTestTitle },
+    test: {
+      file: testFile,
+      title: multiFillTestTitle,
+    },
     status: "TEST-MAPPED",
     evidence: null,
   }),
