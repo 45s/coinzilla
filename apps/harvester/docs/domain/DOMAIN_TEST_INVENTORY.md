@@ -384,8 +384,7 @@ The separate initiative adds four package-level scenario files; it does not repl
 
 The scenario catalog is the single repository-wide human-readable behavior index. Issue #1780 owns the detailed RS matrix and exact-head evidence. No RS row is COVERED until its complete requirement is proved by new scenario evidence, merged to `develop`, and required CI is verified on the exact merged head.
 
-**Open contract discrepancies:** (1) STOP is described as terminal/no-reset, but a pure state resolver and durable resolution use case exist even though the operator facade exposes read-only status only; (2) the config currently sets `enabled: true`, while specification §15 says false by default; (3) third-asset fee quote valuation has no approved authoritative runtime source. Keep affected rows BLOCKED rather than inferring a resolution.
-
+**Open contract/status notes:** (1) the owner-approved STOP decision (2026-11-24) is investment-only: STOP blocks additional BUY spending; eligible recovery SELL and existing-order reconciliation/accounting continue. Evidence-backed authorized resolution requires cause correction, authoritative reconciliation, verified accounting/reservations and durable acknowledgement; no automatic clear or self-resume. The operator facade still lacks the authorized resolution command, so RS-009 implementation/scenario proof remains MISSING. (2) RS enabled-by-default is owner-approved in #1713 / merged PR #1711; specification §15 is aligned. (3) third-asset fee quote valuation remains deferred because no approved authoritative runtime source exists.
 
 ### 2026-11-26 — RS-002 pending BUY commitment scenario mappings
 
