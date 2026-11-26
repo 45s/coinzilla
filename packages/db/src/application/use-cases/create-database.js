@@ -153,12 +153,14 @@ function runDatabaseOperation({ database, transactionScope, operation, input }) 
       return context[operation](input)
     })
   }
-  return database.execute({ operation, input })
+  return database.execute({ operation,
+input })
 }
 
 function invokeTransactionCallback({ work, transaction, transactionScope }) {
   const context = createTransactionFacade(transaction)
-  const scope = { context, active: true }
+  const scope = { context,
+active: true }
   try {
     const result = transactionScope.run(scope, () => work(context))
     if (result && typeof result.then === "function") {
@@ -224,13 +226,21 @@ function createProviderNeutralFacade({ database, provider }) {
   })
   return Object.freeze({
     connect: database.connect,
-    close: createCloseMethod({ database, transactionScope }),
-    transaction: createTransactionMethod({ database, capabilities, transactionScope }),
-    create: (input) => runOperation({ operation: "create", input }),
-    readOne: (input) => runOperation({ operation: "readOne", input }),
-    readMany: (input) => runOperation({ operation: "readMany", input }),
-    update: (input) => runOperation({ operation: "update", input }),
-    delete: (input) => runOperation({ operation: "delete", input }),
+    close: createCloseMethod({ database,
+transactionScope }),
+    transaction: createTransactionMethod({ database,
+capabilities,
+transactionScope }),
+    create: (input) => runOperation({ operation: "create",
+input }),
+    readOne: (input) => runOperation({ operation: "readOne",
+input }),
+    readMany: (input) => runOperation({ operation: "readMany",
+input }),
+    update: (input) => runOperation({ operation: "update",
+input }),
+    delete: (input) => runOperation({ operation: "delete",
+input }),
     capabilities,
     get state() {
       return database.state

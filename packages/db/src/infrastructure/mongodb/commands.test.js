@@ -479,15 +479,19 @@ cursorsKilled: [12] },
 
 test("MongoDB readMany cleans up the replacement cursor when a later batch cannot be decoded", async () => {
   const stub = createCommandStub([
-    { ok: 1, cursor: { id: 12, firstBatch: [] } },
+    { ok: 1,
+cursor: { id: 12,
+firstBatch: [] } },
     {
       ok: 1,
       cursor: {
         id: 99,
-        nextBatch: [{ _id: 42, data: {} }],
+        nextBatch: [{ _id: 42,
+data: {} }],
       },
     },
-    { ok: 1, cursorsKilled: [99] },
+    { ok: 1,
+cursorsKilled: [99] },
   ])
   const operations = createMongoRecordOperations({
     command: stub.command,
@@ -656,11 +660,13 @@ cursorsKilled: [12] },
 })
 test("MongoDB record operations reject invalid factory configuration", () => {
   assert.throws(
-    () => createMongoRecordOperations({ command: null, databaseName: "app" }),
+    () => createMongoRecordOperations({ command: null,
+databaseName: "app" }),
     /command function/,
   )
   assert.throws(
-    () => createMongoRecordOperations({ command: async () => ({ ok: 1 }), databaseName: "" }),
+    () => createMongoRecordOperations({ command: async () => ({ ok: 1 }),
+databaseName: "" }),
     /database name/,
   )
 })
@@ -672,7 +678,8 @@ test("MongoDB record decoding rejects missing, malformed, and non-canonical enco
       ok: 1,
       cursor: {
         id: 0,
-        firstBatch: [{ _id: "one", data: { [key]: "one" } }],
+        firstBatch: [{ _id: "one",
+data: { [key]: "one" } }],
       },
     }])
     const operations = createMongoRecordOperations({
@@ -680,7 +687,8 @@ test("MongoDB record decoding rejects missing, malformed, and non-canonical enco
       databaseName: "app",
     })
     await assert.rejects(
-      operations.readOne({ collection: "people", id: "one" }),
+      operations.readOne({ collection: "people",
+id: "one" }),
       (error) => error instanceof DatabaseProviderError
         && error.cause?.message.includes("encoded MongoDB user key"),
     )
@@ -703,7 +711,8 @@ test("MongoDB record decoding rejects mismatched stored identifiers", async () =
     databaseName: "app",
   })
   await assert.rejects(
-    operations.readOne({ collection: "people", id: "envelope-id" }),
+    operations.readOne({ collection: "people",
+id: "envelope-id" }),
     (error) => error instanceof DatabaseProviderError
       && error.cause?.message.includes("does not match its document envelope"),
   )
@@ -734,7 +743,9 @@ test("MongoDB write concern timeouts preserve ambiguous write outcomes", async (
 
 test("MongoDB cursor cleanup preserves the original read failure when killCursors fails", async () => {
   const stub = createCommandStub([
-    { ok: 1, cursor: { id: 12, firstBatch: "malformed" } },
+    { ok: 1,
+cursor: { id: 12,
+firstBatch: "malformed" } },
     new Error("killCursors failed"),
   ])
   const operations = createMongoRecordOperations({

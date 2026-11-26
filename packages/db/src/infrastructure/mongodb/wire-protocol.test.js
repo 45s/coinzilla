@@ -270,7 +270,8 @@ test("MongoDB OP_MSG decoder rejects malformed document sequence boundaries and 
 test("MongoDB OP_MSG decoder rejects unsupported flags and malformed body sections", () => {
   const body = Buffer.concat([Buffer.from([0]), encodeBsonDocument({ ok: 1 })])
   assert.throws(
-    () => decodeOpMsg(createFrame({ payload: body, flags: 0x80000000 })),
+    () => decodeOpMsg(createFrame({ payload: body,
+flags: 0x80000000 })),
     /unsupported flag bits/,
   )
   assert.throws(

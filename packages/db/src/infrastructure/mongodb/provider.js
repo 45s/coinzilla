@@ -277,7 +277,8 @@ async function sendSessionCommand({
   timeoutMS,
   operation,
 }) {
-  const sessionBody = createSessionCommandBody({ body, session })
+  const sessionBody = createSessionCommandBody({ body,
+session })
   const response = await transport.command({
     body: sessionBody,
     sequences,
@@ -285,7 +286,8 @@ async function sendSessionCommand({
     operation,
     transaction: true,
   })
-  refreshSessionRecoveryToken({ response, session })
+  refreshSessionRecoveryToken({ response,
+session })
   assertSessionCommandSucceeded({ response })
   return response
 }
@@ -489,7 +491,8 @@ async function abortMongoTransaction({ transport, session }) {
       } else {
         delete body.recoveryToken
       }
-      const response = await transport.command({ body, operation: "abort" })
+      const response = await transport.command({ body,
+operation: "abort" })
       if (session.topology === "sharded"
         && Number(response?.ok) === 1
         && isPlainDocument(response.recoveryToken)) {
@@ -498,11 +501,13 @@ async function abortMongoTransaction({ transport, session }) {
       if (isAbortCommandSuccessful({ response })) {
         return
       }
-      if (!shouldRetryAbort({ error: response, attempt })) {
+      if (!shouldRetryAbort({ error: response,
+attempt })) {
         return
       }
     } catch (error) {
-      if (!shouldRetryAbort({ error, attempt })) {
+      if (!shouldRetryAbort({ error,
+attempt })) {
         return
       }
     }

@@ -11,9 +11,11 @@ import {
 
 test("database errors preserve stable codes, contexts, and causes", () => {
   const cause = new Error("underlying failure")
-  const conflict = new DatabaseConflictError({ collection: "people", cause })
+  const conflict = new DatabaseConflictError({ collection: "people",
+cause })
   assert.equal(conflict.code, "DB_RECORD_CONFLICT")
-  assert.deepEqual(conflict.context, { collection: "people", operation: "create" })
+  assert.deepEqual(conflict.context, { collection: "people",
+operation: "create" })
   assert.equal(conflict.cause, cause)
 
   const providerWithoutCollection = new DatabaseProviderError({

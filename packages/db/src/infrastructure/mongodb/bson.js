@@ -312,13 +312,21 @@ function readDocumentBounds({ buffer, state, depth }) {
   if (depth > MAX_BSON_NESTING_DEPTH) {
     throw new TypeError("BSON document nesting depth exceeds the supported limit")
   }
-  assertRange({ buffer, offset: state.offset, length: 4, end: state.end, label: "document length" })
+  assertRange({ buffer,
+offset: state.offset,
+length: 4,
+end: state.end,
+label: "document length" })
   const start = state.offset
   const length = buffer.readInt32LE(start)
   if (length < 5 || length > MAX_BSON_DOCUMENT_SIZE) {
     throw new TypeError("Invalid BSON document length")
   }
-  assertRange({ buffer, offset: start, length, end: state.end, label: "document" })
+  assertRange({ buffer,
+offset: start,
+length,
+end: state.end,
+label: "document" })
   const end = start + length
   if (buffer[end - 1] !== 0) {
     throw new TypeError("BSON document is missing its terminator")
@@ -327,17 +335,28 @@ function readDocumentBounds({ buffer, state, depth }) {
 }
 
 function readDocument({ buffer, state, asArray = false, depth = 0 }) {
-  const { end } = readDocumentBounds({ buffer, state, depth })
+  const { end } = readDocumentBounds({ buffer,
+state,
+depth })
   const document = {}
   const arrayValues = []
   state.offset += 4
-  const childState = { offset: state.offset, end: end - 1 }
+  const childState = { offset: state.offset,
+end: end - 1 }
   while (childState.offset < childState.end) {
     const type = buffer[childState.offset]
     childState.offset += 1
-    const key = readCString({ buffer, state: childState })
-    const value = readValue({ buffer, state: childState, type, depth })
-    appendDecodedDocumentValue({ document, arrayValues, asArray, key, value })
+    const key = readCString({ buffer,
+state: childState })
+    const value = readValue({ buffer,
+state: childState,
+type,
+depth })
+    appendDecodedDocumentValue({ document,
+arrayValues,
+asArray,
+key,
+value })
   }
   if (childState.offset !== end - 1) {
     throw new TypeError("BSON document elements exceed the declared length")
@@ -371,35 +390,56 @@ label: "uint64" })
 }
 
 function readDoubleValue({ buffer, state }) {
-  assertRange({ buffer, offset: state.offset, length: 8, end: state.end, label: "double" })
+  assertRange({ buffer,
+offset: state.offset,
+length: 8,
+end: state.end,
+label: "double" })
   const value = buffer.readDoubleLE(state.offset)
   state.offset += 8
   return value
 }
 
 function readBinaryValue({ buffer, state }) {
-  assertRange({ buffer, offset: state.offset, length: 5, end: state.end, label: "binary header" })
+  assertRange({ buffer,
+offset: state.offset,
+length: 5,
+end: state.end,
+label: "binary header" })
   const length = buffer.readInt32LE(state.offset)
   const subtype = buffer[state.offset + 4]
   state.offset += 5
   if (length < 0 || ![0, 4].includes(subtype)) {
     throw new TypeError("Unsupported BSON binary length or subtype")
   }
-  assertRange({ buffer, offset: state.offset, length, end: state.end, label: "binary value" })
+  assertRange({ buffer,
+offset: state.offset,
+length,
+end: state.end,
+label: "binary value" })
   const bytes = Buffer.from(buffer.subarray(state.offset, state.offset + length))
   state.offset += length
-  return subtype === 0 ? bytes : new BsonBinary({ bytes, subtype })
+  return subtype === 0 ? bytes : new BsonBinary({ bytes,
+subtype })
 }
 
 function readObjectId({ buffer, state }) {
-  assertRange({ buffer, offset: state.offset, length: 12, end: state.end, label: "ObjectId" })
+  assertRange({ buffer,
+offset: state.offset,
+length: 12,
+end: state.end,
+label: "ObjectId" })
   const value = buffer.toString("hex", state.offset, state.offset + 12)
   state.offset += 12
   return value
 }
 
 function readBoolean({ buffer, state }) {
-  assertRange({ buffer, offset: state.offset, length: 1, end: state.end, label: "boolean" })
+  assertRange({ buffer,
+offset: state.offset,
+length: 1,
+end: state.end,
+label: "boolean" })
   const value = buffer[state.offset]
   state.offset += 1
   if (value !== 0 && value !== 1) {
@@ -409,7 +449,11 @@ function readBoolean({ buffer, state }) {
 }
 
 function readInt32({ buffer, state }) {
-  assertRange({ buffer, offset: state.offset, length: 4, end: state.end, label: "int32" })
+  assertRange({ buffer,
+offset: state.offset,
+length: 4,
+end: state.end,
+label: "int32" })
   const value = buffer.readInt32LE(state.offset)
   state.offset += 4
   return value
@@ -418,30 +462,44 @@ function readInt32({ buffer, state }) {
 function readValue({ buffer, state, type, depth }) {
   switch (type) {
     case 0x01:
-      return readDoubleValue({ buffer, state })
+      return readDoubleValue({ buffer,
+state })
     case 0x02:
-      return readString({ buffer, state })
+      return readString({ buffer,
+state })
     case 0x03:
-      return readDocument({ buffer, state, depth: depth + 1 })
+      return readDocument({ buffer,
+state,
+depth: depth + 1 })
     case 0x04:
-      return readDocument({ buffer, state, asArray: true, depth: depth + 1 })
+      return readDocument({ buffer,
+state,
+asArray: true,
+depth: depth + 1 })
     case 0x05:
-      return readBinaryValue({ buffer, state })
+      return readBinaryValue({ buffer,
+state })
     case 0x07:
-      return readObjectId({ buffer, state })
+      return readObjectId({ buffer,
+state })
     case 0x08:
-      return readBoolean({ buffer, state })
+      return readBoolean({ buffer,
+state })
     case 0x09:
-      return new Date(readInt64({ buffer, state }))
+      return new Date(readInt64({ buffer,
+state }))
     case 0x0A:
       return null
     case 0x10:
-      return readInt32({ buffer, state })
+      return readInt32({ buffer,
+state })
     case 0x11:
       // BSON Timestamp is an unsigned 64-bit value, unlike BSON int64 and Date.
-      return readUInt64({ buffer, state })
+      return readUInt64({ buffer,
+state })
     case 0x12:
-      return readInt64({ buffer, state })
+      return readInt64({ buffer,
+state })
     default:
       throw new TypeError(`Unsupported BSON element type 0x${type.toString(16)}`)
   }
