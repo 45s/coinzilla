@@ -293,13 +293,19 @@ function collectShutdownErrorEvidence({ error, seen = new Set() } = {}) {
   ].filter(Boolean).join(" ")
 }
 
-function assertAdaShutdownOutcome({ replay, thirdBuy, shutdownError }) {
+function assertAdaShutdownOutcome({
+    replay,
+    thirdBuy,
+    shutdownError,
+  }) {
   assert.ok(
     replay.confirmedCanceledOrders.some((order) => order.clientOrderId === thirdBuy.clientOrderId),
     "shutdown must cancel the still-open next BUY without completing the below-target recovery cycle",
   )
   assert.ok(shutdownError instanceof Error, "shutdown must fail closed while recovery SELL coverage is unproven")
-  const evidence = collectShutdownErrorEvidence({ error: shutdownError })
+  const evidence = collectShutdownErrorEvidence({
+    error: shutdownError,
+  })
   assert.match(evidence, /CONSERVATIVE_SHUTDOWN_SAFETY_UNPROVEN/)
   assert.match(evidence, /RECOVERY_SELL_COVERAGE_UNVERIFIED/)
   assert.match(evidence, /SHUTDOWN_RECOVERY_REPLACEMENT_NOT_SUBMITTED/)

@@ -550,7 +550,10 @@ async function preparePendingSubmission({ context, candidate } = {}) {
   if (postRegistrationResult) {
     return postRegistrationResult
   }
-  return persistPreparedSubmission({ context, candidate: submissionCandidate })
+  return persistPreparedSubmission({
+    context,
+    candidate: submissionCandidate,
+  })
 }
 
 function classifyBrokerSubmissionFailure({ pendingOrder, brokerResult } = {}) {

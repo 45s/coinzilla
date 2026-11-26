@@ -767,8 +767,16 @@ function createRecoverySellIntentFailureHarness() {
     onDurableSubmissionIntent: async ({ order }) => {
       calls.push(`intent:${order.side}`)
       return order.side === "SELL"
-        ? { ok: false, errors: [failure] }
-        : { ok: true, data: { durable: true } }
+        ? {
+          ok: false,
+          errors: [failure],
+        }
+        : {
+          ok: true,
+          data: {
+            durable: true,
+          },
+        }
     },
     onDurableSubmissionOutcome: async () => {
       assert.fail("A rejected intent must not produce a durable submission outcome")
@@ -1373,8 +1381,16 @@ function createConservativeBuyDurableFactHarness() {
     },
     onPendingOrder: async () => ({ ownership: conservativeOwnership }),
     onDurableSubmissionIntent: async ({ purpose, ownership }) => {
-      durableFacts.push({ purpose, ownership })
-      return { ok: true, data: { durable: true } }
+      durableFacts.push({
+        purpose,
+        ownership,
+      })
+      return {
+        ok: true,
+        data: {
+          durable: true,
+        },
+      }
     },
     onDurableSubmissionOutcome: async ({ purpose, ownership }) => {
       durableFacts.push({ purpose, ownership })
@@ -1400,7 +1416,10 @@ test("persists the registered CG strategy purpose for an ordinary Conservative B
   assert.deepEqual(
     harness.durableFacts,
     [
-      { purpose: "CONSERVATIVE_BUY", ownership: harness.conservativeOwnership },
+      {
+        purpose: "CONSERVATIVE_BUY",
+        ownership: harness.conservativeOwnership,
+      },
       { purpose: "CONSERVATIVE_BUY", ownership: harness.conservativeOwnership },
     ],
   )
