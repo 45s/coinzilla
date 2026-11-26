@@ -133,6 +133,12 @@ test("MongoDB handshake rejects unsupported requested and server mechanisms", as
 })
 
 test("MongoDB handshake selects a server-supported SCRAM mechanism", async () => {
+  const baseHello = {
+    ok: 1,
+    minWireVersion: 13,
+    maxWireVersion: 25,
+    isWritablePrimary: true,
+  }
   for (const supported of [["SCRAM-SHA-1"], []]) {
     const commands = []
     const transport = {
