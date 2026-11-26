@@ -1,3 +1,5 @@
+import { TextDecoder } from "node:util"
+
 import { DatabaseConflictError, DatabaseProviderError } from "../../domain/errors/database-errors.js"
 import {
   normalizeReadQuery,
@@ -37,9 +39,18 @@ function decodeUserKey(key) {
   }
   const encoded = key.slice(USER_KEY_PREFIX.length)
   try {
-    return Buffer.from(encoded, "base64url").toString("utf8")
-  } catch {
-    return key
+    if (!/^[A-Za-z0-9_-]*$/u.test(encoded)) {
+      throw new TypeError("MongoDB user key is not valid base64url")
+    }
+    const bytes = Buffer.from(encoded, "base64url")
+    if (bytes.toString("base64url") !== encoded) {
+      throw new TypeError("MongoDB user key is not canonical base64url")
+    }
+    return new TextDecoder("utf-8", { fatal: true }).decode(bytes)
+  } catch (error) {
+    throw new TypeError("MongoDB returned an invalid encoded MongoDB user key", {
+      cause: error,
+    })
   }
 }
 
