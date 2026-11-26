@@ -476,6 +476,31 @@ cursorsKilled: [12] },
 })
 
 
+test("MongoDB readMany cleans up the replacement cursor when a later batch cannot be decoded", async () => {
+  const stub = createCommandStub([
+    { ok: 1, cursor: { id: 12, firstBatch: [] } },
+    {
+      ok: 1,
+      cursor: {
+        id: 99,
+        nextBatch: [{ _id: 42, data: {} }],
+      },
+    },
+    { ok: 1, cursorsKilled: [99] },
+  ])
+  const operations = createMongoRecordOperations({
+    command: stub.command,
+    databaseName: "app",
+  })
+
+  await assert.rejects(
+    operations.readMany({ collection: "people" }),
+    /record identifier/i,
+  )
+  assert.equal(stub.calls[2].killCursors, "coinzilla_cGVvcGxl")
+  assert.deepEqual(stub.calls[2].cursors, [99])
+})
+
 test("MongoDB record serialization limits surface as input TypeErrors rather than provider failures", async () => {
   const command = async ({ body, sequences }) => {
     encodeOpMsg({ requestId: 1,
