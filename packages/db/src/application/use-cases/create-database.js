@@ -2,7 +2,6 @@ import { AsyncLocalStorage } from "node:async_hooks"
 
 import { createDatabaseEntity } from "../../domain/entities/database.js"
 import {
-  DatabaseProviderError,
   DatabaseTransactionUnsupportedError,
 } from "../../domain/errors/database-errors.js"
 
