@@ -29,8 +29,6 @@ This roadmap tracks work owned by `@coinzilla/brokers`. Historical entries may r
 
 Consolidate every Bitunix script under `scripts/bitunix/` with one CLI entry point, `run-healthcheck.js`. The default remains a read-only health check with sanitized report publishing; `--local` runs local-only diagnostics; `--place-order` runs the read-only health checks first and, only when healthy, performs the already guarded fixed HYPEUSDT attempt inside the same report-branch workflow. The sanitized outcome is published and the checkout returns to `develop`. Pure supporting functions live in `helpers/` with colocated tests. The mandatory workflow document is maintained under `docs/BITUNIX_WORKFLOW.md`. This is a tooling/layout change, not a provider capability or production-readiness change.
 
-Consolidate every Bitunix script under `scripts/bitunix/` with one CLI entry point, `run-healthcheck.js`. The default remains a read-only health check with sanitized report publishing; `--local` runs local-only diagnostics; `--place-order` runs the read-only health checks first and, only when healthy, performs the already guarded fixed HYPEUSDT attempt inside the same report-branch workflow. The sanitized outcome is published and the checkout returns to `develop`. Pure supporting functions live in `helpers/` with colocated tests. The mandatory workflow document is maintained under `docs/BITUNIX_WORKFLOW.md`. This is a tooling/layout change, not a provider capability or production-readiness change.
-
 
 
 ## Executable CLI source identity — #1631
