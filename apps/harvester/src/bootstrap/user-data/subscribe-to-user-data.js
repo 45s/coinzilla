@@ -369,6 +369,7 @@ export async function subscribeToUserData({
   onEvent, onObservation, onStatus, onSubscriptionEstablished,
   publishAccountSnapshot, publishOpenOrdersSnapshot, getAccountSnapshot,
   getAccountSafetyBlocker,
+  getAccountReadinessSnapshot,
   resumeDeferredStrategyEvaluations,
   deferTradingActivation = false,
 } = {}) {
