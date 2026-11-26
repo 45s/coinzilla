@@ -340,8 +340,7 @@ async function verifySorting(database) {
   )
 }
 
-async function createScalarSortRecords(database) {
-  const records = [
+const SCALAR_SORT_RECORDS = [
     {
       id: "missing",
     },
@@ -399,7 +398,8 @@ async function createScalarSortRecords(database) {
     },
   ]
 
-  for (const record of records) {
+async function createScalarSortRecords(database) {
+  for (const record of SCALAR_SORT_RECORDS) {
     await database.create({
       collection: "sort-types",
       record,
