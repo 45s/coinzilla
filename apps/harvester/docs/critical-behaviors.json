@@ -1158,6 +1158,51 @@
         "Market-scoped ownership and strategy pauses remain scoped to the affected symbol; ADR-0008's Recovery Seller SELL exception never bypasses an account blocker.",
         "External open orders are never adopted or cancelled by this gate; IGNORE and BLOCK retain their ADR-0004 per-market semantics."
       ]
+    },
+    {
+      "id": "ACCOUNT_SAFETY_BLOCKER_RESOLUTION",
+      "title": "User-data ACCOUNT blocker provenance and fail-closed operator resolution",
+      "sourceModules": [
+        "src/infrastructure/operational-state/helpers/validate-operational-state-lifecycle-facts.js",
+        "src/use-cases/record-safety-control-facts.js",
+        "src/use-cases/resolve-user-data-account-blockers.js",
+        "src/use-cases/resolve-user-data-account-blockers.helpers.js"
+      ],
+      "integrationRequired": false,
+      "tests": [
+        {
+          "path": "src/use-cases/record-user-data-blocker-producer.test.js",
+          "name": "records the user-data producer on newly raised sticky blockers",
+          "kind": "normal"
+        },
+        {
+          "path": "src/use-cases/resolve-user-data-account-blockers.test.js",
+          "name": "durably resolves account blockers after complete account audit and readback",
+          "kind": "normal"
+        },
+        {
+          "path": "src/use-cases/resolve-user-data-account-blockers.test.js",
+          "name": "fails closed for cause-not-fixed and incomplete account audit",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/resolve-user-data-account-blockers.test.js",
+          "name": "requires exact user-data blocker origin and full blocker set",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/resolve-user-data-account-blockers.test.js",
+          "name": "requires audited markets to equal configured markets exactly",
+          "kind": "failure"
+        }
+      ],
+      "runtimeStatus": "offline-only",
+      "limitation": "The use-case is not yet wired to a production operator command or authoritative account-wide audit adapter; it never reopens trading.",
+      "invariants": [
+        "Persist producer provenance for user-data blockers; do not resolve legacy or unknown-origin ACCOUNT blockers.",
+        "Resolve only the exact active user-data ACCOUNT blocker set after an authoritative audit of every configured market, all orders/fills/balances and consistent accounting with zero discrepancies.",
+        "Commit resolution facts durably and verify projection/readback; remain BLOCKED until controlled restart and fresh authoritative account snapshot. Never reset Recovery Seller STOP through this path."
+      ]
     }
   ],
   "coverageBaseline": {
