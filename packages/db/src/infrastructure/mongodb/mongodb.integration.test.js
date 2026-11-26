@@ -105,7 +105,7 @@ if (connectionString) {
     ),
   })
 
-  test("MongoDB replica-set transactions roll back writes atomically", async (context) => {
+  test("MongoDB multi-document transactions roll back writes atomically", async (context) => {
     const databaseName = databaseNameForKey(randomUUID(), parsed)
     const database = createDatabase({
       provider: createMongoProvider({
@@ -148,7 +148,7 @@ if (connectionString) {
     }
   })
 
-  test("MongoDB replica-set transactions commit multiple records atomically", async (context) => {
+  test("MongoDB multi-document transactions commit multiple records atomically", async (context) => {
     const databaseName = databaseNameForKey(randomUUID(), parsed)
     const database = createDatabase({
       provider: createMongoProvider({
