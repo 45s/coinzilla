@@ -270,8 +270,13 @@ function isSameResolutionMetadata({ existing, expected }) {
 }
 
 function isExactSafetyBlockerResolution({ existing, expected }) {
-  return isSameResolutionBase({ existing, expected }) &&
-    isSameResolutionMetadata({ existing, expected })
+  return isSameResolutionBase({
+    existing,
+    expected,
+  }) && isSameResolutionMetadata({
+    existing,
+    expected,
+  })
 }
 
 async function readRaisedSafetyBlockerContext({ operationalStateStore, blockerId, evidenceDigest }) {
