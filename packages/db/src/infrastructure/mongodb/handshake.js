@@ -55,6 +55,9 @@ export function parseMongoConnectionString(connectionString) {
   if (url.hash !== "") {
     throw new TypeError("MongoDB URI fragments are not supported")
   }
+  if (url.username === "" && url.password !== "") {
+    throw new TypeError("MongoDB URI password requires a username")
+  }
   const supportedOptions = new Set([
     "authSource",
     "tls",
@@ -80,8 +83,8 @@ export function parseMongoConnectionString(connectionString) {
     seenOptions.add(key)
   }
   const databaseName = decodeURIComponent(url.pathname.slice(1)) || "admin"
-  if (databaseName.includes("/")) {
-    throw new TypeError("MongoDB URI must contain one database name")
+  if (/[\\/\\\\."$*<>:|?]/u.test(databaseName)) {
+    throw new TypeError("MongoDB database name contains an unsupported character")
   }
   if (parseBooleanOption(url.searchParams.get("loadBalanced"), "loadBalanced")) {
     throw new TypeError("MongoDB load-balanced topology is not supported")
