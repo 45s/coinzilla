@@ -441,6 +441,55 @@ test("MongoDB ignores abort errors and preserves the original callback failure",
   }
 })
 
+test("MongoDB sharded abort retries with the latest recovery token", async () => {
+  const recoveryTokens = [
+    { shard: "shard-1", generation: 1 },
+    { shard: "shard-2", generation: 2 },
+    { shard: "shard-3", generation: 3 },
+  ]
+  const abortTokens = []
+  const callbackError = new Error("callback failed")
+  const { provider } = createProviderHarness({
+    topology: "sharded",
+    transactionSupported: true,
+    commandHandler: async (body) => {
+      if (body.insert) return { ok: 1, n: 1, recoveryToken: recoveryTokens[0] }
+      if (body.abortTransaction === 1) {
+        abortTokens.push(body.recoveryToken)
+        if (abortTokens.length === 1) {
+          return {
+            ok: 1,
+            writeConcernError: { code: 64, errmsg: "write concern timed out" },
+            recoveryToken: recoveryTokens[1],
+          }
+        }
+        return { ok: 1, recoveryToken: recoveryTokens[2] }
+      }
+      return { ok: 1 }
+    },
+  })
+  const database = createDatabase({ provider })
+  await database.connect()
+
+  try {
+    await assert.rejects(
+      database.transaction(async (transaction) => {
+        await transaction.create({
+          collection: "people",
+          record: { id: "sharded-abort-retry" },
+        })
+        throw callbackError
+      }),
+      (error) => error === callbackError,
+    )
+    assert.equal(abortTokens.length, 2)
+    assert.deepEqual(abortTokens[0], recoveryTokens[0])
+    assert.deepEqual(abortTokens[1], recoveryTokens[1])
+  } finally {
+    await database.close()
+  }
+})
+
 test("MongoDB retries a retryable abort once and preserves the callback failure", async () => {
   const callbackError = new Error("callback failed")
   let abortAttempts = 0
