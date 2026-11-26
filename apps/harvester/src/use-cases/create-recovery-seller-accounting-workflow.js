@@ -443,13 +443,6 @@ function publishTerminalMixedSellAccounting({
   result,
   eligible,
 }) {
-  state.portfolio = result.accounting.portfolio
-  state.legacyPositions = result.nextLegacyPositions
-  state.orderRegistry = registryUpdate.registry
-  const reservation = state.recoverySellerSellReservations.get(ownership.cycleId)
-  if (reservation?.clientOrderId === terminalRegisteredOrder.clientOrderId) {
-    state.recoverySellerSellReservations.delete(ownership.cycleId)
-  }
   const submittedCycleState = state.recoverySellerCycleStates.get(terminalRegisteredOrder.market.id)
   if (!submittedCycleState) {
     throw new RecoverySellerAccountingError({
@@ -472,6 +465,13 @@ function publishTerminalMixedSellAccounting({
     reconciliationComplete: true,
     profitabilityEligible: eligible,
   })
+  state.portfolio = result.accounting.portfolio
+  state.legacyPositions = result.nextLegacyPositions
+  state.orderRegistry = registryUpdate.registry
+  const reservation = state.recoverySellerSellReservations.get(ownership.cycleId)
+  if (reservation?.clientOrderId === terminalRegisteredOrder.clientOrderId) {
+    state.recoverySellerSellReservations.delete(ownership.cycleId)
+  }
   const cycleOutcome = Object.freeze({
     ...reconciledCycleState,
     marketId: terminalRegisteredOrder.market.id,
