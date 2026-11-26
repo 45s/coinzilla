@@ -21,4 +21,4 @@ This file is a navigation pointer, not a current implementation roadmap or runti
 
 ## Historical discussion
 
-The full source discussion, approved architecture direction, source observations, and implementation decomposition are preserved in the [dated architecture archive](../../../../docs/archive/domain-roadmap-history-2026-11-26.md#strategy-extensibility-architecture-discussion).
+The full source discussion, approved architecture direction, source observations, and implementation decomposition are preserved in the [dated architecture archive](../../../../docs/archive/roadmap-history-2026-11-26.md#strategy-extensibility-architecture-discussion).
