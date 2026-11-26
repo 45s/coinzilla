@@ -170,15 +170,26 @@ function createParticipantWaitPromise({
     operation = Promise.reject(reason)
   }
   const operationPromise = Promise.resolve(operation).then(
-    (value) => ({ status: "fulfilled", value }),
-    (reason) => ({ status: "rejected", reason }),
+    (value) => {
+      if (activeParticipantWaits.get(strategyId) === pendingOperation) {
+        activeParticipantWaits.delete(strategyId)
+      }
+      return {
+        status: "fulfilled",
+        value,
+      }
+    },
+    (reason) => {
+      if (activeParticipantWaits.get(strategyId) === pendingOperation) {
+        activeParticipantWaits.delete(strategyId)
+      }
+      return {
+        status: "rejected",
+        reason,
+      }
+    },
   )
   pendingOperation.operationPromise = operationPromise
-  operationPromise.then(() => {
-    if (activeParticipantWaits.get(strategyId)?.operationPromise === operationPromise) {
-      activeParticipantWaits.delete(strategyId)
-    }
-  })
   return operationPromise
 }
 
