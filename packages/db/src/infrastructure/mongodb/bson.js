@@ -29,10 +29,13 @@ function assertDocument(value, ancestors) {
 }
 
 function encodeCString(value) {
-  if (typeof value !== "string" || value.includes("\0")) {
+  if (typeof value !== "string" || value.includes("\\0")) {
     throw new TypeError("BSON document keys must be strings without null bytes")
   }
-  return Buffer.from(value + "\0", "utf8")
+  if (!value.isWellFormed()) {
+    throw new TypeError("BSON document keys must contain valid Unicode")
+  }
+  return Buffer.from(value + "\\0", "utf8")
 }
 
 function encodeString(value) {
