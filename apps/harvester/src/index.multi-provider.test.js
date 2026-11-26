@@ -132,6 +132,7 @@ function createMainProviderAccountStarter({
         stopped.push(input.providerIdentity.providerInstanceId)
         return {
           ok: true,
+          status: "STOPPED",
         }
       },
     }

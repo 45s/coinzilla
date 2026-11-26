@@ -1,5 +1,5 @@
 import { requireNonEmptyString } from "../operational-state-canonical.js"
-import { validateRecoverySellerSubmissionOwnership } from "../../../domain/orders/recovery-seller-submission-ownership.js"
+import { validateStrategySubmissionOwnership } from "../../../domain/orders/recovery-seller-submission-ownership.js"
 import { MAX_FACT_ID_LENGTH } from "./operational-state-fact-schema.js"
 import {
   isCanonicalDecimalString,
@@ -49,7 +49,7 @@ function validateDurableOrderOwnership({ canonicalData, context } = {}) {
       }
     : undefined
   try {
-    validateRecoverySellerSubmissionOwnership({
+    validateStrategySubmissionOwnership({
       order: { side: canonicalData.side },
       purpose: canonicalData.purpose ?? null,
       ownership,

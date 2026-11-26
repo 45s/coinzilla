@@ -377,7 +377,9 @@ async function deferRegisteredSubmission({ context, candidate, errors, reason } 
       purpose,
       ...getOwnershipMetadata({ ownership }),
       registered: true,
-      reason: reason ?? "DURABLE_SUBMISSION_INTENT_NOT_COMMITTED",
+      reason: reason ?? "ORDER_INTENT_NOT_DURABLE",
+      errors,
+      error: errors?.[0],
     })
     return toResult({
       errors: errors?.length
@@ -431,50 +433,56 @@ async function getPostRegistrationSubmissionDeferral({ context, candidate } = {}
   }
 }
 
-async function preparePendingSubmission({ context, candidate } = {}) {
-  const { pendingOrder, purpose, ownership } = candidate
-  const initialDeferral = context.getSubmissionDeferral({
-    order: pendingOrder,
-    purpose,
-    ...getOwnershipMetadata({ ownership }),
-  })
-  if (initialDeferral) {
-    return deferUnregisteredSubmission({
-      context,
-      candidate,
-      deferral: initialDeferral,
-    })
+function hasConflictingSubmissionOwnership({ candidate, registeredOwnership } = {}) {
+  if (candidate === undefined || registeredOwnership === undefined) {
+    return false
   }
-  const pendingResult = context.onPendingOrder({
-    order: pendingOrder,
-    purpose,
-    ...getOwnershipMetadata({ ownership }),
-  })
-  if (pendingResult && typeof pendingResult.then === "function") {
-    await pendingResult
+  return ["strategyId", "positionId", "purpose", "cycleId"].some((field) =>
+    candidate[field] !== undefined && candidate[field] !== registeredOwnership[field])
+}
+
+function createSubmissionCandidateWithRegisteredOwnership({ candidate, registeredOwnership } = {}) {
+  if (registeredOwnership === undefined) {
+    return candidate
   }
+  return Object.freeze({
+    ...candidate,
+    purpose: candidate.purpose ?? registeredOwnership.purpose,
+    ownership: registeredOwnership,
+  })
+}
+
+async function handlePostRegistrationDeferral({ context, candidate } = {}) {
   const postRegistration = await getPostRegistrationSubmissionDeferral({
     context,
     candidate,
   })
   if (postRegistration.error) {
-    return toResult({ error: postRegistration.error })
-  }
-  if (postRegistration.deferral) {
-    await context.onSubmissionDeferred({
-      order: pendingOrder,
-      purpose,
-      ...getOwnershipMetadata({ ownership }),
-      registered: true,
-      ...postRegistration.deferral,
-    })
     return toResult({
-      data: {
-        deferred: true,
-        ...postRegistration.deferral,
-      },
+      error: postRegistration.error,
     })
   }
+  if (!postRegistration.deferral) {
+    return null
+  }
+  await context.onSubmissionDeferred({
+    order: candidate.pendingOrder,
+    purpose: candidate.purpose,
+    ...getOwnershipMetadata({
+      ownership: candidate.ownership,
+    }),
+    registered: true,
+    ...postRegistration.deferral,
+  })
+  return toResult({
+    data: {
+      deferred: true,
+      ...postRegistration.deferral,
+    },
+  })
+}
+
+async function persistPreparedSubmission({ context, candidate } = {}) {
   if (context.onDurableSubmissionIntent) {
     const durableIntent = await persistDurableSubmissionIntent({
       context,
@@ -488,7 +496,64 @@ async function preparePendingSubmission({ context, candidate } = {}) {
       })
     }
   }
-  return toResult({ data: { ready: true } })
+  return toResult({
+    data: {
+      ready: true,
+      candidate,
+    },
+  })
+}
+
+async function preparePendingSubmission({ context, candidate } = {}) {
+  const initialDeferral = context.getSubmissionDeferral({
+    order: candidate.pendingOrder,
+    purpose: candidate.purpose,
+    ...getOwnershipMetadata({
+      ownership: candidate.ownership,
+    }),
+  })
+  if (initialDeferral) {
+    return deferUnregisteredSubmission({
+      context,
+      candidate,
+      deferral: initialDeferral,
+    })
+  }
+  const registration = await context.onPendingOrder({
+    order: candidate.pendingOrder,
+    purpose: candidate.purpose,
+    ...getOwnershipMetadata({
+      ownership: candidate.ownership,
+    }),
+  })
+  const registeredOwnership = registration?.ownership
+  const submissionCandidate = createSubmissionCandidateWithRegisteredOwnership({
+    candidate,
+    registeredOwnership,
+  })
+  if (hasConflictingSubmissionOwnership({
+    candidate: candidate.ownership,
+    registeredOwnership,
+  })) {
+    const error = new TypeError("Pending order registration returned conflicting strategy ownership")
+    return deferRegisteredSubmission({
+      context,
+      candidate: submissionCandidate,
+      errors: [error],
+      reason: "SUBMISSION_OWNERSHIP_CONFLICT",
+    })
+  }
+  const postRegistrationResult = await handlePostRegistrationDeferral({
+    context,
+    candidate: submissionCandidate,
+  })
+  if (postRegistrationResult) {
+    return postRegistrationResult
+  }
+  return persistPreparedSubmission({
+    context,
+    candidate: submissionCandidate,
+  })
 }
 
 function classifyBrokerSubmissionFailure({ pendingOrder, brokerResult } = {}) {
@@ -713,7 +778,7 @@ async function executePendingOrders({ context, pendingOrders } = {}) {
     }
     const submitted = await submitBrokerOrder({
       context,
-      candidate,
+      candidate: prepared.data?.candidate ?? candidate,
     })
     if (!submitted.ok) {return submitted}
     if (submitted.data?.deferred) {

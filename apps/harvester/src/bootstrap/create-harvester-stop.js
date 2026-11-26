@@ -1,10 +1,14 @@
 import { performance } from "node:perf_hooks"
 
+const DEFAULT_PROCESS_STOP_DURABILITY_TIMEOUT_MS = 30_000
+
 function createShutdownPhaseLogger({ logger, runtimeSessionId, shutdownRequestedAt } = {}) {
   const shutdownCorrelationId = runtimeSessionId ?? null
   return ({ phase, status, startedAt, failureReason } = {}) => {
     const observedAt = performance.now()
-    const write = typeof logger.system === "function" ? logger.system.bind(logger) : logger.info?.bind(logger)
+    const write = typeof logger?.system === "function"
+      ? logger.system.bind(logger)
+      : logger?.info?.bind(logger)
     write?.({
       message: `Harvester shutdown phase ${status.toLowerCase()}`,
       shutdownPhase: phase,
@@ -49,11 +53,33 @@ function assertDurableProcessStop(stopped) {
   throw new Error(`Harvester shutdown completed but its clean process-stop boundary was not durable: ${stopped?.errors?.[0]?.message ?? "durable acknowledgement missing"}`)
 }
 
+function createProcessStopDurabilityError({
+  code,
+  status,
+  timeoutMs,
+  startedAt,
+  now,
+} = {}) {
+  const pending = status === "TIMED_OUT" || status === "PENDING"
+  const error = new Error(
+    status === "PENDING"
+      ? "A previous durable PROCESS_STOPPED append is still pending"
+      : "Durable PROCESS_STOPPED append exceeded its configured deadline",
+  )
+  error.code = code
+  error.phase = "PROCESS_STOP_DURABILITY"
+  error.status = status
+  error.pendingOperation = pending
+  error.timeoutMs = timeoutMs
+  error.elapsedMs = Math.max(0, now() - startedAt)
+  return error
+}
+
 function logDurableProcessStopFailure({ error, userDataState, logShutdownPhase, startedAt } = {}) {
   userDataState.status = "SHUTDOWN_INCOMPLETE"
   logShutdownPhase({
     phase: "PROCESS_STOP_DURABILITY",
-    status: "FAILED",
+    status: error?.status ?? "FAILED",
     startedAt,
     failureReason: error?.recoveryFailure?.stage ?? error?.code ?? error?.name ?? "PROCESS_STOP_DURABILITY_FAILED",
   })
@@ -64,24 +90,111 @@ function logDurableProcessStopFailure({ error, userDataState, logShutdownPhase, 
   })
 }
 
-async function recordDurableProcessStop({
+function startProcessStopAppend({
   operationalStateStore,
   recordProcessStopped,
-  userDataState,
-  logShutdownPhase,
+  pendingProcessStopOperation,
+  controller,
+  startedAt,
+  timeoutMs,
 } = {}) {
-  const startedAt = performance.now()
-  logShutdownPhase({
-    phase: "PROCESS_STOP_DURABILITY",
-    status: "STARTED",
-  })
-  try {
-    const stopped = await recordProcessStopped({
+  const operationPromise = Promise.resolve()
+    .then(() => recordProcessStopped({
       operationalStateStore,
       reason: "SHUTDOWN_COMPLETED",
       clean: true,
+      signal: controller.signal,
+    }))
+    .then(
+      (value) => ({
+        status: "fulfilled",
+        value,
+      }),
+      (reason) => ({
+        status: "rejected",
+        reason,
+      }),
+    )
+  pendingProcessStopOperation.current = {
+    operationPromise,
+    startedAt,
+    timeoutMs,
+  }
+  operationPromise.then(() => {
+    if (pendingProcessStopOperation.current?.operationPromise === operationPromise) {
+      pendingProcessStopOperation.current = null
+    }
+  })
+  return operationPromise
+}
+
+function createProcessStopTimeout({
+  setTimeoutFn,
+  timeoutMs,
+  startedAt,
+  controller,
+} = {}) {
+  const state = {
+    error: null,
+    handle: undefined,
+  }
+  const promise = new Promise((resolve) => {
+    state.handle = setTimeoutFn({
+      phase: "PROCESS_STOP_DURABILITY",
+      timeoutMs,
+      callback: () => {
+        state.error = createProcessStopDurabilityError({
+          code: "PROCESS_STOP_DURABILITY_TIMEOUT",
+          status: "TIMED_OUT",
+          timeoutMs,
+          startedAt,
+          now: () => performance.now(),
+        })
+        controller.abort(state.error)
+        resolve({
+          status: "timed_out",
+          reason: state.error,
+        })
+      },
     })
-    assertDurableProcessStop(stopped)
+  })
+  return {
+    promise,
+    state,
+  }
+}
+
+function assertNoPendingProcessStop({ pendingProcessStopOperation, now } = {}) {
+  const pending = pendingProcessStopOperation.current
+  if (!pending) {
+    return
+  }
+  throw createProcessStopDurabilityError({
+    code: "PROCESS_STOP_DURABILITY_STILL_RUNNING",
+    status: "PENDING",
+    timeoutMs: pending.timeoutMs,
+    startedAt: pending.startedAt,
+    now,
+  })
+}
+
+async function awaitDurableProcessStop({
+  operationPromise,
+  timeout,
+  userDataState,
+  logShutdownPhase,
+  startedAt,
+  clearTimeoutFn,
+} = {}) {
+  try {
+    const outcome = await Promise.race([operationPromise, timeout.promise])
+    if (timeout.state.error) {
+      throw timeout.state.error
+    }
+    if (outcome.status !== "fulfilled") {
+      throw outcome.reason
+    }
+    assertDurableProcessStop(outcome.value)
     logShutdownPhase({
       phase: "PROCESS_STOP_DURABILITY",
       status: "COMPLETED",
@@ -95,7 +208,103 @@ async function recordDurableProcessStop({
       startedAt,
     })
     throw error
+  } finally {
+    if (timeout.state.handle !== undefined) {
+      clearTimeoutFn(timeout.state.handle)
+    }
   }
+}
+
+async function recordDurableProcessStop({
+  operationalStateStore,
+  recordProcessStopped,
+  userDataState,
+  logShutdownPhase,
+  pendingProcessStopOperation,
+  processStopDurabilityTimeoutMs = DEFAULT_PROCESS_STOP_DURABILITY_TIMEOUT_MS,
+  setTimeoutFn = ({ callback, timeoutMs }) => setTimeout(callback, timeoutMs),
+  clearTimeoutFn = (handle) => clearTimeout(handle),
+} = {}) {
+  const startedAt = performance.now()
+  assertNoPendingProcessStop({
+    pendingProcessStopOperation,
+    now: () => performance.now(),
+  })
+  logShutdownPhase({
+    phase: "PROCESS_STOP_DURABILITY",
+    status: "STARTED",
+  })
+  const controller = new AbortController()
+  const operationPromise = startProcessStopAppend({
+    operationalStateStore,
+    recordProcessStopped,
+    pendingProcessStopOperation,
+    controller,
+    startedAt,
+    timeoutMs: processStopDurabilityTimeoutMs,
+  })
+  const timeout = createProcessStopTimeout({
+    setTimeoutFn,
+    timeoutMs: processStopDurabilityTimeoutMs,
+    startedAt,
+    controller,
+  })
+  await awaitDurableProcessStop({
+    operationPromise,
+    timeout,
+    userDataState,
+    logShutdownPhase,
+    startedAt,
+    clearTimeoutFn,
+  })
+}
+
+function createBeforeSharedServicesStop({ operatorControlLifecycle, logShutdownPhase } = {}) {
+  return async function beforeSharedServicesStop() {
+    const operatorStopError = await stopOperatorControl({
+      operatorControlLifecycle,
+      logShutdownPhase,
+    })
+    return operatorStopError ? [operatorStopError] : []
+  }
+}
+
+async function stopRuntimeAndRecordProcessStop({
+  stopRuntime,
+  shutdownRequestedAt,
+  beforeSharedServicesStop,
+  operationalStateStore,
+  recordProcessStopped,
+  userDataState,
+  logShutdownPhase,
+  pendingProcessStopOperation,
+  processStopDurabilityTimeoutMs,
+  setTimeoutFn,
+  clearTimeoutFn,
+} = {}) {
+  const runtimeResult = await stopRuntime({
+    requestedAt: shutdownRequestedAt,
+    requestLogged: true,
+    stopStateEstablishedLogged: true,
+    beforeSharedServicesStop,
+  })
+  if (runtimeResult?.ok !== true || runtimeResult.status !== "STOPPED") {
+    userDataState.status = "SHUTDOWN_INCOMPLETE"
+    throw runtimeResult?.errors?.[0] ?? new Error("Runtime shutdown did not return an explicit STOPPED confirmation")
+  }
+  if (!operationalStateStore) {
+    return
+  }
+  await recordDurableProcessStop({
+    operationalStateStore,
+    recordProcessStopped,
+    userDataState,
+    logShutdownPhase,
+    pendingProcessStopOperation,
+    processStopDurabilityTimeoutMs,
+    setTimeoutFn,
+    clearTimeoutFn,
+  })
 }
 
 async function executeShutdown({
@@ -106,6 +315,10 @@ async function executeShutdown({
   stopRuntime,
   operationalStateStore,
   recordProcessStopped,
+  pendingProcessStopOperation,
+  processStopDurabilityTimeoutMs,
+  setTimeoutFn,
+  clearTimeoutFn,
 } = {}) {
   const shutdownRequestedAt = performance.now()
   const logShutdownPhase = createShutdownPhaseLogger({
@@ -115,49 +328,51 @@ async function executeShutdown({
   })
   userDataState.shutdownRequested = true
   userDataState.ready = false
-  logShutdownPhase({ phase: "SHUTDOWN_REQUESTED",
-                     status: "COMPLETED" })
+  logShutdownPhase({
+    phase: "SHUTDOWN_REQUESTED",
+    status: "COMPLETED",
+  })
   logShutdownPhase({
     phase: "STOP_STATE_ESTABLISHED",
     status: "COMPLETED",
     startedAt: shutdownRequestedAt,
   })
-  const beforeSharedServicesStop = async () => {
-    const operatorStopError = await stopOperatorControl({
+  await stopRuntimeAndRecordProcessStop({
+    stopRuntime,
+    shutdownRequestedAt,
+    beforeSharedServicesStop: createBeforeSharedServicesStop({
       operatorControlLifecycle,
       logShutdownPhase,
-    })
-    return operatorStopError ? [operatorStopError] : []
-  }
-  const runtimeResult = await stopRuntime({
-    requestedAt: shutdownRequestedAt,
-    requestLogged: true,
-    stopStateEstablishedLogged: true,
-    beforeSharedServicesStop,
+    }),
+    operationalStateStore,
+    recordProcessStopped,
+    userDataState,
+    logShutdownPhase,
+    pendingProcessStopOperation,
+    processStopDurabilityTimeoutMs,
+    setTimeoutFn,
+    clearTimeoutFn,
   })
-  if (runtimeResult?.ok === false) {
-    throw runtimeResult.errors?.[0] ?? new Error("Runtime shutdown did not prove strategy safety")
-  }
-  if (operationalStateStore) {
-    await recordDurableProcessStop({
-      operationalStateStore,
-      recordProcessStopped,
-      userDataState,
-      logShutdownPhase,
-    })
-  }
   logShutdownPhase({
     phase: "SHUTDOWN_COMPLETED",
     status: "COMPLETED",
     startedAt: shutdownRequestedAt,
   })
+  return {
+    ok: true,
+    status: "STOPPED",
+  }
 }
 
 export function createHarvesterStop(dependencies = {}) {
   let stopPromise
+  const pendingProcessStopOperation = { current: null }
   const stop = () => {
     if (!stopPromise) {
-      stopPromise = executeShutdown(dependencies).catch((error) => {
+      stopPromise = executeShutdown({
+        ...dependencies,
+        pendingProcessStopOperation,
+      }).catch((error) => {
         stopPromise = undefined
         throw error
       })

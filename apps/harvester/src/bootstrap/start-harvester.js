@@ -1858,6 +1858,9 @@ function createHarvesterRuntimeStop({ startup,
   })
   const stopRuntimeAndMarkMarketDataStopped = async (...args) => {
     const runtimeResult = await stopRuntime(...args)
+    if (runtimeResult?.ok !== true || runtimeResult.status !== "STOPPED") {
+      throw new Error("Runtime shutdown did not return an explicit STOPPED confirmation")
+    }
     marketDataLifecycle.markStopped()
     return runtimeResult
   }

@@ -145,6 +145,21 @@ A price-filter or fee-valuation failure is not dust; it is a blocked/unsafe deci
 
 ## 5. SELL order lifecycle
 
+### Shared CG/RS submission ownership and durable intent
+
+The shared submission-intent use case must validate the originating strategy rather than treating every `RECOVERY_SELL` as a Recovery Seller order. Purpose and strategy identity are separate, explicit facts:
+
+| Originating strategy | Allowed recovery purpose | Required ownership |
+| --- | --- | --- |
+| `CG_coinGrabber` | `RECOVERY_SELL` (SELL only) | `strategyId`, non-empty `positionId`; no RS `cycleId` |
+| `RS_recoverySeller` | `RECOVERY_BUY` (BUY only), `RECOVERY_SELL` (SELL only) | `strategyId`, non-empty `positionId`, non-empty `cycleId` |
+
+The durable intent stores the canonical order's market/provider/account identity, client order ID, side/type, exact decimal price/quantity, purpose, and the normalized originating strategy/Position identity. The Conservative registration boundary supplies its immutable ownership record to the executor; ordinary CG BUY intents persist `CONSERVATIVE_BUY`, while the recovery SELL persists `RECOVERY_SELL`. The operational-state fact schema validates both strategy and purpose, including the absence of an RS cycle ID on CG records. Regression coverage exercises CG and RS SELL intents/outcomes, CG BUY intents, cross-strategy rejection, missing ownership, wrong-side/purpose combinations, and CG/RS cycle-identity separation. RS cycle identity is stored only for RS. Shared infrastructure must never rewrite CG as RS or infer ownership from a symbol, client-order-ID prefix, broker order ID, or a matching purpose string. Submission outcomes apply the same strategy/Position/cycle schema, so the acknowledged order cannot silently lose or change its origin.
+
+Validation is fail-closed: a recovery purpose requires explicit ownership; strategy and purpose must be a supported combination; purpose must match the canonical order side; Position identity is mandatory; RS cycle identity is mandatory and CG cycle identity is forbidden. Missing, malformed, unknown-strategy, mismatched-purpose, wrong-side, and cross-strategy metadata is rejected before durable append or broker placement. An ordinary purpose-null order may be unowned only when no ownership object is supplied.
+
+The Conservative order-registration callback returns its immutable CG ownership record to the shared executor. The executor carries that same record into durable submission intent, outcome, deferral and failure callbacks; it must not reconstruct or relabel strategy ownership downstream. If durable intent validation or append fails, remove the local unsubmitted PENDING registration, latch the market's `ORDER_INTENT_NOT_DURABLE` safety pause, and stop the ordered decision batch before any sibling action is registered or submitted. A later market tick must not create a fresh client order ID while that pause remains active. Before a new recovery SELL decision, sum the exact remaining quantities of every owned PENDING, OPEN, PARTIALLY_FILLED, and UNKNOWN SELL for the market. The aggregate must not exceed net sellable Position inventory after actual base-asset commissions and `keepQuantity`; missing/invalid remaining quantities or an excess reservation fail closed and pause the market. An UNKNOWN order remains reserved until canonical client-order-ID reconciliation proves its terminal state. A durable intent must be committed before the broker placement side effect. If intent persistence fails, remove the local unsubmitted PENDING registration, retain the market safety pause, and do not call the broker. A PENDING lifecycle log is not an exchange acknowledgement. A transport timeout or ambiguous broker outcome remains UNKNOWN under the original client order identity; reconcile that identity and complete canonical order/fill history before any retry or replacement. See the [Recovery Seller Domain Specification](recovery-seller-domain-specification.md) for RS cycle ownership and lifecycle rules.
+
 ### Partial SELL with no new BUY
 
 When an acknowledged SELL is OPEN or PARTIALLY_FILLED and no new BUY fill has occurred:
@@ -326,6 +341,11 @@ flowchart TD
 **Change control:** Amend this document only when the owner explicitly changes a rule. Update implementation, tests, reference documents, and GitHub records to conform. Never create a competing Conservative rule definition.
 
 ## 10. Conservative graceful shutdown — protect trading before stopping services
+### Bounded strategy-participant outcomes
+
+The shared application shutdown coordinator gives every registered strategy participant a bounded `waitUntilSafe` deadline (default 120,000 ms; tests may inject a deterministic timer). Each participant receives an AbortSignal. A deadline produces a participant-specific `TIMED_OUT` blocker with strategy ID, operation, configured timeout and the latest safety snapshot. Rejection, explicit unsafe result, invalidated safety marker and timeout are failures, never success. The coordinator observes late settlement/rejection of the original promise and does not let it become an unhandled rejection.
+
+A timeout does not prove safety and does not authorize teardown. The shutdown handler must retain market/user-data/operator/broker services required for reconciliation, keep the process lock, and report `SHUTDOWN_INCOMPLETE`; a later attempt must re-evaluate current authoritative state. Participants must check the supplied signal between awaited stages and stop advancing their safety proof after abort. The Conservative participant checks the signal before and after each owned-order reconciliation/cancellation, user-data drain, recovery reconciliation, coverage audit and Journal flush; an in-flight read may settle late, but no subsequent stage or safe audit may proceed. A timed-out operation that cannot be cancelled remains an unresolved operation and must never publish a safe marker or authorize STOPPED.
 
 This contract applies to the Conservative strategy only. Every other strategy must own a separate shutdown policy and safety participant. The application-level shutdown coordinator must not contain Conservative-specific order or accounting rules.
 

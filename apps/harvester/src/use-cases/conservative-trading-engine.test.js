@@ -370,6 +370,7 @@ function createHarnessBrokerState({ options } = {}) {
     getMarketMetadataOverride: options.getMarketMetadata,
     suppliedMarketMetadata: options.marketMetadata,
     marketMetadata,
+    providerIdentity: options.providerIdentity,
     ...getHarnessBrokerFailureOptions({ options }),
     ...getHarnessBrokerCancellationOptions({ options }),
     ...getHarnessBrokerOrderOptions({ options }),
@@ -395,6 +396,8 @@ function createHarnessEngineCoreOptions({ options, brokerState } = {}) {
     isMarketPriceFresh: options.isMarketPriceFresh,
     isMarketBookFresh: options.isMarketBookFresh,
     getVolatilityData: options.getVolatilityData,
+    onOperationalStateSubmissionIntent: options.onOperationalStateSubmissionIntent,
+    onOperationalStateSubmissionOutcome: options.onOperationalStateSubmissionOutcome,
     onOperationalStateCancellationIntent: options.onOperationalStateCancellationIntent,
     onOperationalStateCancellationOutcome: options.onOperationalStateCancellationOutcome,
     onOperationalStateStrategyMarketPaused: options.onOperationalStateStrategyMarketPaused,
@@ -1064,7 +1067,7 @@ function assertPublishedOrderSubmissionLifecycle({ harness, events, timeline, li
   assert.deepEqual(timeline, [
     "event:strategy.decision",
     "event:order.submission_requested",
-    "log:SUBMITTED",
+    "log:PENDING",
     "broker.placeOrder",
     "event:order.submitted",
     "log:ACCEPTED",
@@ -1093,9 +1096,9 @@ function assertPublishedOrderSubmissionLifecycle({ harness, events, timeline, li
   assert.match(clientOrderId, /^h-[0-9a-f]{22}-1$/)
   assert.equal(events[2].data.status, "OPEN")
   assert.equal(events[2].data.brokerOrderId, `broker-${clientOrderId}`)
-  assert.deepEqual(lifecycleLogs.map(({ lifecycleStatus }) => lifecycleStatus), ["SUBMITTED", "ACCEPTED"])
+  assert.deepEqual(lifecycleLogs.map(({ lifecycleStatus }) => lifecycleStatus), ["PENDING", "ACCEPTED"])
   assert.equal(lifecycleLogs[0].strategyId, StrategyId.COIN_GRABBER)
-  assert.equal(lifecycleLogs[0].brokerOrderId, undefined, "SUBMITTED must describe the durable intent before broker acknowledgement assigns an exchange order ID.")
+  assert.equal(lifecycleLogs[0].brokerOrderId, undefined, "PENDING must describe local order registration before durable intent and broker acknowledgement are confirmed.")
   assert.equal(lifecycleLogs[0].clientOrderId, clientOrderId, "The pending lifecycle record must retain the client order identity.")
   assert.equal(lifecycleLogs[1].brokerOrderId, `broker-${clientOrderId}`, "ACCEPTED must carry the exchange-assigned broker order identity.")
 }
@@ -11889,4 +11892,61 @@ test("failed owned BUY cancellation leaves the emergency BUY gate active and rep
   assert.equal(harness.engine.getOperatorBuyPauseState().pausedMarkets.includes("DOGEUSDT"), true, "A failed cancellation must never roll back the market BUY gate.")
   assert.equal(harness.engine.getActiveOrders().some((order) => order.side === "BUY"), true, "The unresolved owned BUY must remain visible for reconciliation.")
   assert.equal(harness.pauses.length, 0, "The emergency BUY-only pause must not convert an unresolved cancellation into a broad strategy pause.")
+})
+
+
+test("pauses a market after durable submission-intent failure so repeated ticks cannot create new order IDs", async () => {
+  const intentFailure = Object.assign(new TypeError("Recovery submission ownership does not match the originating strategy"), {
+    code: "SUBMISSION_OWNERSHIP_INVALID",
+  })
+  let intentCalls = 0
+  let brokerCalls = 0
+  const harness = await createHarness({
+    providerIdentity: {
+      providerInstanceId: "binanceTestnet",
+      providerType: "binance",
+      accountId: "binance-primary",
+    },
+    onOperationalStateSubmissionIntent: async () => {
+      intentCalls += 1
+      return {
+        ok: false,
+        errors: [intentFailure],
+      }
+    },
+    onOperationalStateSubmissionOutcome: async () => ({
+      ok: true,
+      data: {
+        durable: true,
+      },
+    }),
+    onPlaceOrderStarted: () => { brokerCalls += 1 },
+  })
+
+  const first = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: {
+      symbol: "DOGEUSDT",
+      price: "100",
+      timestamp: 1,
+    },
+  })
+
+  assert.equal(first.ok, false, "A rejected durable intent must fail the strategy decision.")
+  assert.ok(harness.pauses.includes("ORDER_INTENT_NOT_DURABLE"), "The affected market must be safety-paused after durable intent failure.")
+  assert.equal(harness.engine.getOrders().length, 0, "The local unsubmitted PENDING order must be removed.")
+  assert.equal(brokerCalls, 0, "The broker must not receive an order whose durable intent was rejected.")
+
+  const second = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: {
+      symbol: "DOGEUSDT",
+      price: "100.01",
+      timestamp: 2,
+    },
+  })
+
+  assert.equal(second.ok, true, "A later market tick must be safely deferred by the latched market pause.")
+  assert.equal(intentCalls, 1, "The paused market must not generate another durable intent with a new client order ID.")
+  assert.equal(brokerCalls, 0, "No repeated broker placement may occur while the intent failure pause remains active.")
 })

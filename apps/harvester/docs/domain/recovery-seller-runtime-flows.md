@@ -4,7 +4,7 @@ status: active
 type: architecture
 owner: harvester
 created: 2026-11-25
-last_verified: 2026-11-25
+last_verified: 2026-11-26
 source_commit: ebeaf346fbaa44ae75ba6fd9256bfdd1ba01d765
 ---
 
@@ -96,7 +96,7 @@ flowchart TD
     F --> G["RS dispatch skipped"]
     E -- "No" --> H{"Trading unavailable or market paused?"}
     H -- "Yes" --> I["Shared evaluator applies readiness/deferred gates"]
-    H -- "No" --> J{"Active BUY eligible for trailing replacement?"}
+    H -- "No" --> J{"CG-owned active BUY eligible for trailing replacement?"}
     J -- "Yes" --> K["Preflight / cancel / reconcile / replacement"]
     K --> L["Latest evaluator after successful replacement"]
     J -- "No" --> M["Latest evaluator"]
@@ -106,7 +106,7 @@ flowchart TD
     N --> O["RS runtime evaluator"]
 ```
 
-The trailing-BUY path is not a separate RS engine. If it performs a replacement, it returns to the latest-transition evaluator after cancellation/reconciliation; its `preflightOnly` validation pass does not dispatch RS.
+The trailing-BUY path is not a separate RS engine. The shared market-price dispatcher checks canonical OrderRegistry ownership and invokes this CG-specific path only for a Coin Grabber-owned BUY. An RS-owned BUY bypasses CG pair configuration and trailing repricing, then proceeds to the latest-transition evaluator for RS dispatch. If a CG replacement runs, it returns to the latest-transition evaluator after cancellation/reconciliation; its `preflightOnly` validation pass does not dispatch RS.
 
 ### 3.3 User-data entry and the important non-trigger
 
