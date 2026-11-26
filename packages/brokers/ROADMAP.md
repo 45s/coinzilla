@@ -1,6 +1,6 @@
 # Brokers package roadmap
 
-**Owner:** `@coinzilla/brokers`  
+**Owner:** `@coinzilla/brokers`
 **Last reviewed:** 2026-11-26
 
 > Detailed delivery history and implementation evidence from the previous roadmap are preserved in [Brokers roadmap history](../../docs/archive/roadmap-history-2026-11-26.md#brokers-roadmap). This page is the active priority index only.
