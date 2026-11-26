@@ -261,7 +261,10 @@ async function commitMongoTransaction({ transport, session }) {
   let lastError
   for (let attempt = 0; attempt < MAX_COMMIT_ATTEMPTS; attempt += 1) {
     try {
-      const response = await transport.command({ body })
+      const response = await transport.command({
+        body,
+        operation: "commit",
+      })
       if (Number(response?.ok) === 1 && !response.writeConcernError) {
         return
       }
@@ -283,6 +286,12 @@ async function commitMongoTransaction({ transport, session }) {
     } catch (error) {
       if (error instanceof DatabaseProviderError) {
         throw error
+      }
+      if (!ambiguous && error?.outcomeUnknown === false) {
+        throw new DatabaseProviderError({
+          operation: "transaction",
+          cause: error,
+        })
       }
       // Once a commit request may have reached the server, a later error such
       // as NoSuchTransaction cannot prove whether the earlier commit succeeded.

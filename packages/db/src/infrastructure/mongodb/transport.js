@@ -44,7 +44,10 @@ function createRequestError(message, cause, outcomeUnknown = false) {
 }
 
 function isWriteOperation(operation) {
-  return operation === "create" || operation === "update" || operation === "delete"
+  return operation === "create"
+    || operation === "update"
+    || operation === "delete"
+    || operation === "commit"
 }
 
 /**
@@ -260,16 +263,26 @@ export function createMongoTransport({
     transaction = false,
   } = {}) {
     if (state !== "connected" || !socket) {
-      return Promise.reject(new Error("MongoDB transport is not connected"))
+      return Promise.reject(createRequestError(
+        "MongoDB transport is not connected",
+        undefined,
+        false,
+      ))
     }
     if (typeof transaction !== "boolean") {
-      return Promise.reject(new TypeError("MongoDB transaction command flag must be a boolean"))
+      const error = new TypeError("MongoDB transaction command flag must be a boolean")
+      error.outcomeUnknown = false
+      return Promise.reject(error)
     }
     if (!Number.isSafeInteger(timeoutMS) || timeoutMS < 1) {
-      return Promise.reject(new TypeError("MongoDB command timeout must be a positive safe integer"))
+      const error = new TypeError("MongoDB command timeout must be a positive safe integer")
+      error.outcomeUnknown = false
+      return Promise.reject(error)
     }
     if (pending.size >= MAX_PENDING_REQUESTS) {
-      return Promise.reject(new Error("MongoDB transport has reached its pending request limit"))
+      const error = new Error("MongoDB transport has reached its pending request limit")
+      error.outcomeUnknown = false
+      return Promise.reject(error)
     }
     const requestId = nextRequestId
     nextRequestId = nextRequestId >= 0x7fffffff ? 1 : nextRequestId + 1
@@ -281,10 +294,13 @@ export function createMongoTransport({
         sequences,
       })
     } catch (error) {
+      error.outcomeUnknown = false
       return Promise.reject(error)
     }
     if ((socket.writableLength ?? 0) + frame.length > MAX_SOCKET_BUFFERED_BYTES) {
-      return Promise.reject(new Error("MongoDB transport write buffer limit exceeded"))
+      const error = new Error("MongoDB transport write buffer limit exceeded")
+      error.outcomeUnknown = false
+      return Promise.reject(error)
     }
 
     return new Promise((resolve, reject) => {
