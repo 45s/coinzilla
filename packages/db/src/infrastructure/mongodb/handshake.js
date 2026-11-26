@@ -42,7 +42,7 @@ function assertMongoConnectionString({ connectionString }) {
 }
 
 function extractSingleSeedAuthority({ connectionString }) {
-  const authority = connectionString.slice("mongodb://".length).split(/[/?#]/, 1)[0]
+  const [authority] = connectionString.slice("mongodb://".length).split(/[/?#]/, 1)
   const hostList = authority.slice(authority.lastIndexOf("@") + 1)
   if (hostList.includes(",")) {
     throw new TypeError("MongoDB URI must specify a single seed host")
