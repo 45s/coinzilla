@@ -306,7 +306,10 @@ test("allows durable blocker resolution after a clean process stop", async () =>
 
 test("fails closed when durable resolution append fails", async () => {
   const store = makeStore()
-  store.append = async () => ({ ok: false, errors: [new Error("append failed")] })
+  store.append = async () => ({
+    ok: false,
+    errors: [new Error("append failed")],
+  })
   const result = await resolveUserDataAccountBlockers(makeResolutionOptions({
     store,
     audit: readyAudit(),
@@ -317,7 +320,10 @@ test("fails closed when durable resolution append fails", async () => {
 
 test("fails closed when append does not confirm durable commitment", async () => {
   const store = makeStore()
-  store.append = async () => ({ ok: true, data: { durable: false } })
+  store.append = async () => ({
+    ok: true,
+    data: { durable: false },
+  })
   const result = await resolveUserDataAccountBlockers(makeResolutionOptions({
     store,
     audit: readyAudit(),
@@ -333,7 +339,10 @@ test("fails closed when durable resolution readback fails", async () => {
   store.readAll = async () => {
     readCount += 1
     if (readCount === 3) {
-      return { ok: false, errors: [new Error("readback failed")] }
+      return {
+        ok: false,
+        errors: [new Error("readback failed")],
+      }
     }
     return originalReadAll()
   }
