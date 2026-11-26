@@ -100,6 +100,9 @@ function assertProviderOptions(options) {
   if ((/[\\/\\\\."$*<>:|?]/u.test(options.databaseName) || options.databaseName.includes("\0"))) {
     throw new TypeError("MongoDB provider databaseName contains an unsupported character")
   }
+  if (Buffer.byteLength(options.databaseName, "utf8") > 63) {
+    throw new TypeError("MongoDB provider databaseName must not exceed the portable 63-byte limit")
+  }
   if (options.username !== undefined && (typeof options.username !== "string" || options.username.length === 0)) {
     throw new TypeError("MongoDB provider username must be a non-empty string")
   }
@@ -120,6 +123,12 @@ function assertProviderOptions(options) {
   }
   if (options.authSource !== undefined && (typeof options.authSource !== "string" || options.authSource.trim() === "")) {
     throw new TypeError("MongoDB provider authSource must be a non-empty string")
+  }
+  if (options.authSource !== undefined
+    && (/[\\/\\\\."$*<>:|?]/u.test(options.authSource)
+      || options.authSource.includes("\0")
+      || Buffer.byteLength(options.authSource, "utf8") > 63)) {
+    throw new TypeError("MongoDB provider authSource must be a valid database name of at most 63 bytes")
   }
   if (options.authMechanism !== undefined && !["SCRAM-SHA-256", "SCRAM-SHA-1"].includes(options.authMechanism)) {
     throw new TypeError("MongoDB provider authMechanism must be SCRAM-SHA-256 or SCRAM-SHA-1")
