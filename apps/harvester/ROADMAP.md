@@ -2306,6 +2306,19 @@ The detailed evidence, implementation commits, CI state and remaining unknowns a
 - The persistence contract and audit report are updated. No TESTNET/LIVE writes, production restarts, account mutations or historical-row repairs were performed.
 - Issue #1851 remains open only for the unavailable original SQLite rows and exact conflicting price pair; regression fixture prices and prior-order IDs are explicitly synthetic, not recovered production facts. Do not infer the per-symbol old-row/new-row pairing.
 
+## 2026-11-25 — #1763 Phase 5 Conservative SELL accounting
+
+- PR #1844 adds `src/use-cases/conservative-sell-accounting-scenario.test.js`: canonical BUY plus three SELL fills applied through production `updateTradingAccounting`, real Portfolio/Position and RecoveryLedger, explicit commission-aware decimal oracles, duplicate/conflict/valuation-failure atomicity.
+- The composed completion case feeds the exact post-fill projections into the real recovery-completion policy and proves remaining inventory, full BUY cost basis, actual net proceeds, realized profit, and configured keep quantity plus validated dust allocation.
+- Current `develop` already contains `recovery-completion.dust.test.js`; the PR does not duplicate its pure-policy cases. Synchronized head `2c91dbb530f8993833b8980b3710e82ea9abc403` passed all six required workflows.
+- Test/documentation only; no production behavior or exchange state changed. PR #1844 remains open for owner review.
+
+## 2026-11-25 — #1763 Phase 6 initial strategy scenario
+
+- Added `src/use-cases/conservative-initial-buy-scenario.test.js`, composing initial BUY policy, canonical BUY Fill, production accounting, Portfolio/Position, RecoveryLedger and the real Conservative evaluator.
+- Verifies exact initial BUY intent, commission-adjusted active inventory (`99.9` DOGE) and cost basis (`10.03` USDT), then exact ordered recovery SELL (`99.8` at `0.101`, required net `10.04`) and next standing BUY (`100` at `0.099`).
+- Existing strategy unit tests cover policy decisions from separately applied projections; this scenario closes the Fill-to-accounting-to-policy composition gap. Synchronized head `84c9d7e2c176c17c794bf0f741e33d7fd56d5459` passed all six required workflows. Test-only; no production behavior changed.
+
 ## Strategy-neutral Scenario Runner — Issue #1836 / PR #1837
 
 Active and incomplete in draft [PR #1837](https://github.com/45s/coinzilla/pull/1837). The Harvester-side architecture note is [Scenario Runner architecture](docs/features/scenario-runner-architecture.md); Dashboard owns the specification and phased plan.
