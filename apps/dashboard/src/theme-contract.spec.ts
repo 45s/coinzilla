@@ -28,6 +28,12 @@ describe('dashboard theme surface contract', () => {
     expect(lightSystem).toContain('color-scheme: light;');
   });
 
+  it('keeps native select controls readable in the selected palette', () => {
+    expect(dashboardStyles).toContain('html[data-theme]:not([data-theme="current"]) select,');
+    expect(dashboardStyles).toContain('background: var(--control-bg);');
+    expect(dashboardStyles).toContain('color: var(--text);');
+  });
+
   it('applies shared panel surfaces to GitHub PR summaries and tables', () => {
     expect(dashboardStyles).toContain('html[data-theme]:not([data-theme="current"]) .summary-strip');
     expect(dashboardStyles).toContain('html[data-theme]:not([data-theme="current"]) .table-scroll');
