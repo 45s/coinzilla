@@ -1125,7 +1125,6 @@ function createRuntimeScenarioTerminalSellResult({
   terminalOrder,
   result,
   eventResult,
-  eventState,
   stagedSellFills,
 }) {
   return {
@@ -1388,7 +1387,6 @@ async function reconcileRuntimeScenarioTerminalSell({
     terminalOrder,
     result: terminalAccountingResult,
     eventResult,
-    eventState,
     stagedSellFills,
   })
 }
