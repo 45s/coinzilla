@@ -61,7 +61,7 @@ function awaitWithShutdownSignal({ operation, signal } = {}) {
 }
 
 function getAbortStageStatus(signal) {
-  return signal?.reason?.code === "STRATEGY_SHUTDOWN_PARTICIPANT_TIMEOUT"
+  return signal?.reason?.code === "STRATEGY_SHUTDOWN_PARTICIPANT_TIMED_OUT"
     ? "TIMED_OUT"
     : "ABORTED"
 }
