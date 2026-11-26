@@ -463,3 +463,37 @@ test("Recovery Seller STOP status query still enforces operator authorization", 
   assert.equal(result.errors[0].code, "OPERATOR_UNAUTHORIZED", "The STOP status query must preserve the standard authorization error.")
   assert.equal(operator.resolveRecoverySellerStop, undefined, "No operator-facing STOP resolution method may exist.")
 })
+
+
+test("account blocker resolution requires an authorized actor and explicit cause-fixed confirmation", async () => {
+  let readCount = 0
+  const operationalStateStore = {
+    append: async () => ({
+      ok: true,
+      data: { durable: true },
+    }),
+    readAll: async () => {
+      readCount += 1
+      throw new Error("Resolver must not read the store before operator confirmation.")
+    },
+  }
+  const operator = createHarvesterOperator({
+    operationalStateStore,
+    reconcileAccount: async () => ({
+      ok: true,
+      data: {},
+    }),
+    configuredMarkets: ["BTCUSDT"],
+  })
+
+  assert.equal(typeof operator.resolveAccountBlockers, "function")
+  const result = await operator.resolveAccountBlockers({
+    actor,
+    requestId: "telegram:resolution:3001",
+    causeFixed: false,
+  })
+
+  assert.equal(result.ok, false)
+  assert.equal(result.errors[0].code, "OPERATOR_CAUSE_NOT_CONFIRMED")
+  assert.equal(readCount, 0, "Resolution must not begin before explicit cause-fixed confirmation.")
+})
