@@ -4,6 +4,7 @@ import os from "node:os"
 import path from "node:path"
 import test from "node:test"
 import { createFileOperationalStateStore } from "../infrastructure/operational-state/create-file-store.js"
+import { authenticateLocalOperator } from "../infrastructure/security/local-operator-identity.js"
 import {
   recordSafetyBlockerRaised,
   recordSafetyBlockerResolved,
@@ -100,12 +101,23 @@ test("refuses to resolve an absent safety blocker or accept an implicit restart 
     evidenceDigest: "e".repeat(64),
   })
   assert.equal(raised.ok, true, "The account-level blocker fixture must be recorded.")
+  const operatorId = "operator-7"
+  const actionId = "action-reused-evidence-001"
+  const operatorIdentity = authenticateLocalOperator({
+    operatorId,
+    getUserInfo: () => ({ username: operatorId }),
+  })
   const reusedEvidence = await recordSafetyBlockerResolved({
     operationalStateStore,
     blockerId: raised.data.record.data.blockerId,
-    resolvedBy: "operator:trader",
+    resolvedBy: `operator:${operatorId}:${actionId}`,
     resolution: "OPERATOR_ACTION",
     evidenceDigest: "e".repeat(64),
+    operatorIdentity,
+    operatorId,
+    actionId,
+    resolutionReason: "Verified the root cause was fixed.",
+    actionBlockerIds: [raised.data.record.data.blockerId],
   })
   assert.equal(reusedEvidence.ok, false, "The triggering evidence digest cannot also serve as independent resolution proof.")
   const implicit = await recordSafetyBlockerResolved({
@@ -134,4 +146,47 @@ symbol: "BTCUSDT",
 reason: "FILL_RECONCILIATION_FAILED",
   })
   assert.equal(result.ok, false, "Safety recorders must never initialize a missing ledger.")
+})
+test("persists authenticated operator metadata and accepts an exact action replay", async (t) => {
+  const operationalStateStore = await createStore(t)
+  const raised = await recordSafetyBlockerRaised({
+    operationalStateStore,
+    scope: "ACCOUNT",
+    symbol: null,
+    reason: "ACCOUNTING_INTEGRITY_FAILURE",
+    evidenceDigest: "a".repeat(64),
+  })
+  assert.equal(raised.ok, true)
+  const blockerId = raised.data.record.data.blockerId
+  const operatorId = "operator-7"
+  const actionId = "action-metadata-001"
+  const resolutionReason = "Verified the account-wide root cause was fixed."
+  const operatorIdentity = authenticateLocalOperator({
+    operatorId,
+    getUserInfo: () => ({ username: operatorId }),
+  })
+  const resolution = {
+    operationalStateStore,
+    blockerId,
+    resolvedBy: `operator:${operatorId}:${actionId}`,
+    resolution: "OPERATOR_ACTION",
+    evidenceDigest: "b".repeat(64),
+    operatorIdentity,
+    operatorId,
+    actionId,
+    resolutionReason,
+    actionBlockerIds: [blockerId],
+  }
+
+  const first = await recordSafetyBlockerResolved(resolution)
+  assert.equal(first.ok, true, first.errors?.map(({ message }) => message).join("; "))
+  assert.equal(first.data.record.data.operatorId, operatorId)
+  assert.equal(first.data.record.data.operatorAuthMethod, "OS_ACCOUNT")
+  assert.equal(first.data.record.data.actionId, actionId)
+  assert.equal(first.data.record.data.resolutionReason, resolutionReason)
+  assert.deepEqual(first.data.record.data.actionBlockerIds, [blockerId])
+
+  const duplicate = await recordSafetyBlockerResolved(resolution)
+  assert.equal(duplicate.ok, true)
+  assert.equal(duplicate.data.duplicate, true, "An exact operator action replay must be idempotent")
 })
