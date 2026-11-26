@@ -3,7 +3,7 @@
 **Scope:** current Harvester priorities only. Issue threads own task details and status; domain specifications and ADRs own behavior.
 **Last reviewed:** 2026-11-26
 
-> The pre-cleanup roadmap snapshot, including historical delivery notes and older plans, is preserved in [ROADMAP_HISTORY_2026-11-26](../../docs/archive/roadmap-history-2026-11-26.md#harvester-roadmap). Earlier extracted history remains in [ROADMAP_HISTORY](docs/audits/ROADMAP_HISTORY.md).
+> The pre-cleanup roadmap snapshot, including historical delivery notes and older plans, is preserved in [ROADMAP_HISTORY_2026-11-26](../../docs/archive/domain-roadmap-history-2026-11-26.md#harvester-roadmap). Earlier extracted history remains in [ROADMAP_HISTORY](docs/audits/ROADMAP_HISTORY.md).
 
 ## Current safety and correctness priorities
 
