@@ -142,13 +142,23 @@ function updateStageDiagnostics({
 }
 
 async function runStage({ stage, operation, signal, symbol = "*", stageDiagnostics } = {}) {
-  updateStageDiagnostics({ stageDiagnostics, symbol, stage, status: "STARTED" })
+  updateStageDiagnostics({
+    stageDiagnostics,
+    symbol,
+    stage,
+    status: "STARTED",
+  })
   try {
     throwIfShutdownAborted(signal)
     const result = await awaitWithShutdownSignal({ operation, signal })
     throwIfShutdownAborted(signal)
     if (result?.ok === true) {
-      updateStageDiagnostics({ stageDiagnostics, symbol, stage, status: "COMPLETED" })
+      updateStageDiagnostics({
+    stageDiagnostics,
+    symbol,
+    stage,
+    status: "COMPLETED",
+  })
       return []
     }
     const errors = Array.isArray(result?.errors) ? result.errors : []
@@ -191,7 +201,12 @@ async function drainUserData({
   stageDiagnostics,
 } = {}) {
   const stage = "USER_DATA_DRAIN"
-  updateStageDiagnostics({ stageDiagnostics, symbol, stage, status: "STARTED" })
+  updateStageDiagnostics({
+    stageDiagnostics,
+    symbol,
+    stage,
+    status: "STARTED",
+  })
   try {
     throwIfShutdownAborted(signal)
     const result = await awaitWithShutdownSignal({ operation: drainUserDataEvents, signal })
@@ -205,7 +220,13 @@ async function drainUserData({
         errors = [resultError]
       }
       const failure = errors[0] ?? new Error("USER_DATA_DRAIN returned an unsuccessful result")
-      updateStageDiagnostics({ stageDiagnostics, symbol, stage, status: "FAILED", error: failure })
+      updateStageDiagnostics({
+    stageDiagnostics,
+    symbol,
+    stage,
+    status: "FAILED",
+    error: failure,
+  })
       if (errors.length > 0) {
         return errors.map((error) => createStageBlocker({
           stage: "USER_DATA_DRAIN",
@@ -214,7 +235,12 @@ async function drainUserData({
       }
       return ["USER_DATA_DRAIN:UNCONFIRMED"]
     }
-    updateStageDiagnostics({ stageDiagnostics, symbol, stage, status: "COMPLETED" })
+    updateStageDiagnostics({
+    stageDiagnostics,
+    symbol,
+    stage,
+    status: "COMPLETED",
+  })
     return []
   } catch (error) {
     updateStageDiagnostics({
