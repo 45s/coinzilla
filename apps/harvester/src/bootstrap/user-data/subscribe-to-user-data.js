@@ -249,11 +249,16 @@ function assertAccountRecoveryPreflight({
     return
   }
   const readiness = getAccountReadinessSnapshot?.()
-  if (!hasDurableAccountPreflight(readiness) || !hasCleanOpenOrdersPreflight(readiness)) {
+  const accountPreflightReady = hasDurableAccountPreflight(readiness)
+  const openOrdersPreflightReady = hasCleanOpenOrdersPreflight(readiness)
+  if (!accountPreflightReady || !openOrdersPreflightReady) {
     throw new HarvesterUserDataStartupUnsafeError({
       tradingModeLabel,
       code: "ACCOUNT_RECOVERY_FRESH_PREFLIGHT_REQUIRED",
       message: "Post-resolution restart requires a fresh durable account snapshot and a clean account-wide open-order PREFLIGHT audit",
+      accountPreflightReady,
+      openOrdersPreflightReady,
+      openOrdersReadiness: readiness?.openOrders?.preflight?.readiness ?? null,
       status: state.status,
     })
   }
