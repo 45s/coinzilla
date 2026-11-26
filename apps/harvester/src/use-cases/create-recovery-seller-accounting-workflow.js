@@ -23,6 +23,7 @@ import { calculateRecoverySellerProfitability } from "../domain/strategies/recov
 import {
   createRecoverySellerCycleState,
   recordRecoverySellerCycleSellSubmission,
+  reconcileRecoverySellerCycleSell,
 } from "../domain/strategies/recovery-seller/cycle-state.js"
 
 import {
@@ -449,15 +450,35 @@ function publishTerminalMixedSellAccounting({
   if (reservation?.clientOrderId === terminalRegisteredOrder.clientOrderId) {
     state.recoverySellerSellReservations.delete(ownership.cycleId)
   }
+  const submittedCycleState = state.recoverySellerCycleStates.get(terminalRegisteredOrder.market.id)
+  if (!submittedCycleState) {
+    throw new RecoverySellerAccountingError({
+      code: RECOVERY_SELLER_ACCOUNTING_ERROR_CODES.ACCOUNTING_NOT_COMMITTED,
+      message: "Recovery Seller terminal mixed-SELL accounting requires its canonical submitted cycle state",
+      context: {
+        marketId: terminalRegisteredOrder.market.id,
+        cycleId: ownership.cycleId,
+        sellOrderClientId: terminalRegisteredOrder.clientOrderId,
+      },
+    })
+  }
+  const reconciledCycleState = reconcileRecoverySellerCycleSell({
+    state: submittedCycleState,
+    orderIdentity: {
+      clientOrderId: terminalRegisteredOrder.clientOrderId,
+      brokerOrderId: terminalRegisteredOrder.brokerOrderId ?? undefined,
+    },
+    terminalOrderStatus: terminalRegisteredOrder.status,
+    reconciliationComplete: true,
+    profitabilityEligible: eligible,
+  })
   const cycleOutcome = Object.freeze({
+    ...reconciledCycleState,
     marketId: terminalRegisteredOrder.market.id,
-    cycleId: ownership.cycleId,
-    positionId: ownership.positionId,
     sellOrderClientId: terminalRegisteredOrder.clientOrderId,
     sellOrderBrokerOrderId: terminalRegisteredOrder.brokerOrderId,
     appliedFillIds: Object.freeze(canonicalFills.map((fill) => fill.id).sort()),
-    status: eligible ? "CLOSED" : "UNRESOLVED",
-    eligible,
+    eligible: reconciledCycleState.profitabilityEligible,
   })
   state.recoverySellerCycleOutcomes.set(ownership.cycleId, cycleOutcome)
   state.recoverySellerCycleStates.set(terminalRegisteredOrder.market.id, cycleOutcome)

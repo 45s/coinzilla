@@ -2,7 +2,7 @@
 
 ## Recovery Seller terminal SELL lifecycle — issue #1842
 
-The current production-flow audit found that terminal mixed-SELL accounting still publishes a profitability-only `CLOSED` outcome and does not durably latch global STOP after a reconciled FILLED SELL misses its approved profit threshold. Regression coverage for terminal status, canonical cycle-state fields and under-target STOP is being added in [PR #1837](https://github.com/45s/coinzilla/pull/1837). Until the implementation and focused regressions are verified, do not register or enable a production RS scenario adapter. Non-FILLED terminal SELLs must remain `UNRESOLVED`; only a fully reconciled profitable `FILLED` SELL may close a cycle.
+Fixed in [PR #1837](https://github.com/45s/coinzilla/pull/1837): terminal mixed-SELL accounting now delegates cycle publication to the canonical `reconcileRecoverySellerCycleSell` domain transition, preserving sole-SELL identity, terminal status, reconciliation and profitability fields. CANCELED/REJECTED/EXPIRED outcomes remain `UNRESOLVED` even when profitability is positive. A reconciled FILLED SELL that misses the approved profit threshold now latches the durable account-wide STOP before the order-event transition is reported successful. Regression coverage was added for all three non-FILLED terminal statuses, under-target FILLED outcomes, canonical state publication and durable STOP. These tests still require focused execution evidence before the fix is considered verified. Do not register or enable a production RS scenario adapter until the full lifecycle and isolation gates are proven.
 
 ## Relational trading-history startup failure — issue #1854
 

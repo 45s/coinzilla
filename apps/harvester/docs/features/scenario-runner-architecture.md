@@ -187,3 +187,18 @@ This is **Node/application-level defense in depth**, not an OS security boundary
 `scenario-runner-process-acceptance.test.js` constructs the actual host and process adapter with a test-only scenario registration and a simulated launcher attestation. The child worker is a test-only bootstrap kept inside the adapter's allowlisted worker directory; it imports the existing ZRO runtime-dispatch fixture, which composes production runtime dispatch/accounting/authorization/submission with run-local simulated broker and operational-state ports. The test asserts the `Starting → Running → Completed` lifecycle order and the production-dispatch/simulated-broker trace. It is included in the configured Harvester targeted suite. Its test-only bootstrap is `src/infrastructure/scenario-runner/scenario-worker-runtime-acceptance-fixture.js`, which imports `test/scenarios/recovery-seller/rs-runtime-worker-fixture.js`; neither file is registered in the production worker catalogue.
 
 This proves the host-to-process simulation composition for the test fixture only. The attestation is simulated and does not apply or prove an OS sandbox. The worker bootstrap and ZRO fixture are not registered in the production worker catalogue or public scenario registry; this is not the full production RS adapter. The production host remains fail-closed pending the independent RS lifecycle correction in issue #1842 and a trusted OS-level launcher.
+
+
+## Recovery Seller terminal cycle-state correction — 2026-11-26
+
+Terminal mixed-SELL accounting now publishes the canonical domain cycle state through
+`reconcileRecoverySellerCycleSell`, rather than constructing an application-only status object.
+The published state retains `sellOrderIdentity`, `terminalOrderStatus`,
+`terminalReconciled` and `profitabilityEligible`. A non-FILLED terminal SELL remains
+`UNRESOLVED` regardless of positive partial-fill profitability. A FILLED terminal SELL
+whose realized profitability is ineligible must durably latch the global Recovery Seller
+STOP in the order-event workflow before the transition returns success. Regression tests
+cover these cases; focused test execution is still pending.
+
+This correction does not complete the production scenario adapter or establish OS-level
+worker isolation. Those remain separate fail-closed gates.
