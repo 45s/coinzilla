@@ -79,7 +79,7 @@ function quoteArrayNumbers({ text, startIndex }) {
   let index = startIndex
   let depth = 0
   let cursor = startIndex
-  let output = ""
+  const output = []
   while (index < text.length) {
     const character = text[index]
     if (character === '"') {
@@ -99,7 +99,7 @@ function quoteArrayNumbers({ text, startIndex }) {
       index += 1
       if (depth === 0) {
         return {
-          output: output + text.slice(cursor, index),
+          output: output.join("") + text.slice(cursor, index),
           index,
         }
       }
@@ -111,7 +111,7 @@ function quoteArrayNumbers({ text, startIndex }) {
         startIndex: index,
       })
       if (numberEnd > index) {
-        output += text.slice(cursor, index) + JSON.stringify(text.slice(index, numberEnd))
+        output.push(text.slice(cursor, index), JSON.stringify(text.slice(index, numberEnd)))
         cursor = numberEnd
         index = numberEnd
         continue
@@ -120,7 +120,7 @@ function quoteArrayNumbers({ text, startIndex }) {
     index += 1
   }
   return {
-    output: output + text.slice(cursor),
+    output: output.join("") + text.slice(cursor),
     index: text.length,
   }
 }
@@ -138,7 +138,7 @@ export function quoteDepthLevelNumbers({ text } = {}) {
   }
   let index = 0
   let cursor = 0
-  let output = ""
+  const output = []
   while (index < text.length) {
     if (text[index] !== '"') {
       index += 1
@@ -173,9 +173,9 @@ export function quoteDepthLevelNumbers({ text } = {}) {
       text,
       startIndex: valueIndex,
     })
-    output += text.slice(cursor, valueIndex) + quoted.output
+    output.push(text.slice(cursor, valueIndex), quoted.output)
     cursor = quoted.index
     index = quoted.index
   }
-  return output + text.slice(cursor)
+  return output.join("") + text.slice(cursor)
 }
