@@ -577,7 +577,7 @@ async function runTransactionCallback({
     }
     return result
   } catch (error) {
-    await handleTransactionCallbackFailure({
+    return handleTransactionCallbackFailure({
       error,
       transactionOperations,
       command,
