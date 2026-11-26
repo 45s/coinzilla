@@ -342,6 +342,12 @@ flowchart TD
 **Change control:** Amend this document only when the owner explicitly changes a rule. Update implementation, tests, reference documents, and GitHub records to conform. Never create a competing Conservative rule definition.
 
 ## 10. Conservative graceful shutdown — protect trading before stopping services
+### Bounded strategy-participant outcomes
+
+The shared application shutdown coordinator gives every registered strategy participant a bounded `waitUntilSafe` deadline (default 120,000 ms; tests may inject a deterministic timer). Each participant receives an AbortSignal. A deadline produces a participant-specific `TIMED_OUT` blocker with strategy ID, operation, configured timeout and the latest safety snapshot. Rejection, explicit unsafe result, invalidated safety marker and timeout are failures, never success. The coordinator observes late settlement/rejection of the original promise and does not let it become an unhandled rejection.
+
+A timeout does not prove safety and does not authorize teardown. The shutdown handler must retain market/user-data/operator/broker services required for reconciliation, keep the process lock, and report `SHUTDOWN_INCOMPLETE`; a later attempt must re-evaluate current authoritative state. Participants must check the supplied signal between awaited stages and stop advancing their safety proof after abort. A timed-out operation that cannot be cancelled remains an unresolved operation and must never publish a safe marker or authorize STOPPED.
+
 
 This contract applies to the Conservative strategy only. Every other strategy must own a separate shutdown policy and safety participant. The application-level shutdown coordinator must not contain Conservative-specific order or accounting rules.
 

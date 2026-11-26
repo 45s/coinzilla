@@ -1,4 +1,4 @@
-function createStrategyBlocker({ participant, error, reason } = {}) {
+function createStrategyBlocker({ participant, error, reason, status } = {}) {
   let safetySnapshot
   try {
     safetySnapshot = participant.getSafetySnapshot?.() ?? null
@@ -8,7 +8,10 @@ function createStrategyBlocker({ participant, error, reason } = {}) {
 
   return Object.freeze({
     strategyId: participant.strategyId,
+    status: status ?? (error?.code === "STRATEGY_SHUTDOWN_PARTICIPANT_TIMEOUT" ? "TIMED_OUT" : "FAILED"),
     reason: reason ?? error?.code ?? "STRATEGY_SAFETY_UNPROVEN",
+    operation: error?.operation ?? "waitUntilSafe",
+    timeoutMs: error?.timeoutMs,
     message: error?.message ?? "Strategy did not prove shutdown safety",
     safetySnapshot,
     markets: error?.shutdownDiagnostics?.markets ?? safetySnapshot?.markets ?? [],
@@ -107,22 +110,93 @@ function beginShutdownParticipants({ registeredParticipants, shutdownState } = {
   return { ok: true }
 }
 
-async function waitForStrategyShutdownParticipants({ registeredParticipants, beginShutdown, isSafeToShutdown, getSafetySnapshot, signal } = {}) {
+async function waitForParticipantWithDeadline({
+  participant,
+  signal,
+  timeoutMs,
+  setTimeoutFn,
+  clearTimeoutFn,
+} = {}) {
+  if (signal?.aborted) {
+    throw signal.reason ?? new Error("Strategy shutdown was aborted")
+  }
+  const participantController = new AbortController()
+  const forwardAbort = () => {
+    participantController.abort(signal.reason ?? new Error("Strategy shutdown was aborted"))
+  }
+  signal?.addEventListener("abort", forwardAbort, { once: true })
+
+  let timeoutHandle
+  const participantResult = Promise.resolve()
+    .then(() => participant.waitUntilSafe({ signal: participantController.signal }))
+    .then(
+      (value) => ({ status: "fulfilled", value }),
+      (reason) => ({ status: "rejected", reason }),
+    )
+  const timeoutResult = new Promise((resolve) => {
+    timeoutHandle = setTimeoutFn(() => {
+      const error = Object.assign(
+        new Error(`Strategy shutdown participant ${participant.strategyId} did not settle within ${timeoutMs}ms`),
+        {
+          code: "STRATEGY_SHUTDOWN_PARTICIPANT_TIMEOUT",
+          strategyId: participant.strategyId,
+          operation: "waitUntilSafe",
+          timeoutMs,
+        },
+      )
+      participantController.abort(error)
+      resolve({ status: "timed_out", reason: error })
+    }, timeoutMs)
+  })
+  const abortResult = signal
+    ? new Promise((resolve) => {
+      signal.addEventListener("abort", () => resolve({
+        status: "aborted",
+        reason: signal.reason ?? new Error("Strategy shutdown was aborted"),
+      }), { once: true })
+    })
+    : new Promise(() => {})
+
+  const outcome = await Promise.race([participantResult, timeoutResult, abortResult])
+  clearTimeoutFn(timeoutHandle)
+  signal?.removeEventListener("abort", forwardAbort)
+
+  if (outcome.status === "timed_out" || outcome.status === "aborted" || outcome.status === "rejected") {
+    throw outcome.reason
+  }
+  if (outcome.value?.ok !== true) {
+    throw outcome.value?.errors?.[0] ?? new Error("Strategy returned an unsuccessful safety result")
+  }
+  if (participant.isSafeToShutdown() !== true) {
+    throw new Error("Strategy safety marker was invalidated before the shared shutdown barrier")
+  }
+  return outcome.value
+}
+
+async function waitForStrategyShutdownParticipants({
+  registeredParticipants,
+  beginShutdown,
+  isSafeToShutdown,
+  getSafetySnapshot,
+  signal,
+  timeoutMs,
+  setTimeoutFn,
+  clearTimeoutFn,
+} = {}) {
   beginShutdown()
   if (signal?.aborted) {
     throw signal.reason ?? new Error("Strategy shutdown was aborted")
   }
 
-  const results = await Promise.allSettled(registeredParticipants.map(async (participant) => {
-    const result = await participant.waitUntilSafe({ signal })
-    if (result?.ok !== true) {
-      throw result?.errors?.[0] ?? new Error("Strategy returned an unsuccessful safety result")
-    }
-    if (participant.isSafeToShutdown() !== true) {
-      throw new Error("Strategy safety marker was invalidated before the shared shutdown barrier")
-    }
-    return result
-  }))
+  const results = await Promise.allSettled(registeredParticipants.map((participant) =>
+    waitForParticipantWithDeadline({
+      participant,
+      signal,
+      timeoutMs,
+      setTimeoutFn,
+      clearTimeoutFn,
+    })
+  ))
 
   const blockers = []
   const errors = []
@@ -166,7 +240,18 @@ async function waitForStrategyShutdownParticipants({ registeredParticipants, beg
   }
 }
 
-export function createStrategyShutdownCoordinator({ participants = [] } = {}) {
+export function createStrategyShutdownCoordinator({
+  participants = [],
+  timeoutMs = 120_000,
+  setTimeoutFn = setTimeout,
+  clearTimeoutFn = clearTimeout,
+} = {}) {
+  if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0) {
+    throw new TypeError("Strategy shutdown participant timeoutMs must be a positive safe integer")
+  }
+  if (typeof setTimeoutFn !== "function" || typeof clearTimeoutFn !== "function") {
+    throw new TypeError("Strategy shutdown deadline requires setTimeoutFn and clearTimeoutFn functions")
+  }
   const registeredParticipants = Object.freeze(participants.map(validateParticipant))
   const strategyIds = registeredParticipants.map(({ strategyId }) => strategyId)
   if (new Set(strategyIds).size !== strategyIds.length) {
@@ -198,6 +283,9 @@ export function createStrategyShutdownCoordinator({ participants = [] } = {}) {
     isSafeToShutdown,
     getSafetySnapshot,
     signal,
+    timeoutMs,
+    setTimeoutFn,
+    clearTimeoutFn,
   })
 
   return Object.freeze({

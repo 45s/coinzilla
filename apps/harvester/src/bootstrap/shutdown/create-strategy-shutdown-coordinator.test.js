@@ -165,3 +165,53 @@ test("an empty participant list is safe at the coordinator level", () => {
     "The empty coordinator must expose an empty safety snapshot.",
   )
 })
+
+
+test("returns a participant-specific timeout blocker and aborts its safety signal", async () => {
+  let observedSignal
+  let waitStarted = false
+  const coordinator = createStrategyShutdownCoordinator({
+    timeoutMs: 25,
+    setTimeoutFn: (callback) => {
+      callback()
+      return "fake-deadline"
+    },
+    clearTimeoutFn: () => {},
+    participants: [{
+      strategyId: "CONSERVATIVE",
+      beginShutdown() {},
+      waitUntilSafe: ({ signal }) => {
+        waitStarted = true
+        observedSignal = signal
+        return new Promise(() => {})
+      },
+      isSafeToShutdown: () => false,
+      getSafetySnapshot: () => ({
+        markets: [{ symbol: "DOGEUSDT", blockers: ["ORDER_RECONCILIATION_PENDING"] }],
+      }),
+    }],
+  })
+
+  await assert.rejects(coordinator.waitUntilSafe(), (error) => {
+    assert.equal(error.code, "STRATEGY_SHUTDOWN_SAFETY_UNPROVEN", "A timed-out participant must fail the shared safety barrier.")
+    const blocker = error.shutdownDiagnostics.strategyBlockers[0]
+    assert.equal(blocker.strategyId, "CONSERVATIVE", "Timeout diagnostics must identify the exact strategy participant.")
+    assert.equal(blocker.status, "TIMED_OUT", "A deadline must be an explicit terminal timeout result, never a safe result.")
+    assert.equal(blocker.operation, "waitUntilSafe", "Timeout diagnostics must identify the awaited participant operation.")
+    assert.equal(blocker.timeoutMs, 25, "Timeout diagnostics must retain the configured deadline.")
+    assert.equal(blocker.safetySnapshot.markets[0].symbol, "DOGEUSDT", "Timeout diagnostics must retain the participant's market blocker snapshot.")
+    return true
+  }, "A participant that never settles must not leave the shared shutdown promise pending indefinitely.")
+
+  assert.equal(waitStarted, true, "The coordinator must start the participant safety operation before applying its deadline.")
+  assert.equal(observedSignal.aborted, true, "The participant's cancellation signal must be aborted when its deadline expires.")
+  assert.equal(coordinator.isSafeToShutdown(), false, "A timed-out participant must never be considered safe.")
+})
+
+test("rejects an invalid participant deadline instead of silently disabling bounded shutdown", () => {
+  assert.throws(
+    () => createStrategyShutdownCoordinator({ timeoutMs: 0 }),
+    /positive safe integer/,
+    "The shared shutdown coordinator must require an explicit positive deadline.",
+  )
+})
