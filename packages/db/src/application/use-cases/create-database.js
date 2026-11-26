@@ -1,3 +1,5 @@
+import { AsyncLocalStorage } from "node:async_hooks"
+
 import { createDatabaseEntity } from "../../domain/entities/database.js"
 import { DatabaseTransactionUnsupportedError } from "../../domain/errors/database-errors.js"
 
@@ -123,8 +125,13 @@ function isAsyncFunction(callback) {
 
 function createProviderNeutralFacade({ database, provider }) {
   const capabilities = createCapabilitiesSnapshot(provider.capabilities)
+  const transactionScope = new AsyncLocalStorage()
 
   function runOperation({ operation, input }) {
+    const activeTransaction = transactionScope.getStore()
+    if (activeTransaction) {
+      return activeTransaction[operation](input)
+    }
     if (READ_ONLY_OPERATIONS.has(operation)) {
       return database.readTransaction((transaction) => {
         const context = createTransactionFacade(transaction)
@@ -136,8 +143,16 @@ function createProviderNeutralFacade({ database, provider }) {
 
   return Object.freeze({
     connect: database.connect,
-    close: database.close,
+    close() {
+      if (transactionScope.getStore()) {
+        throw new Error("Cannot close a database from inside its transaction callback")
+      }
+      return database.close()
+    },
     transaction(work) {
+      if (transactionScope.getStore()) {
+        throw new Error("Nested database transactions are not supported")
+      }
       if (typeof work !== "function") {
         throw new TypeError("A transaction callback is required")
       }
@@ -148,7 +163,8 @@ function createProviderNeutralFacade({ database, provider }) {
         if (capabilities.transactions.callbackMode === "synchronous" && isAsyncFunction(work)) {
           throw new TypeError("Synchronous database provider transaction callbacks must be synchronous")
         }
-        return work(createTransactionFacade(transaction))
+        const context = createTransactionFacade(transaction)
+        return transactionScope.run(context, () => work(context))
       })
     },
     create: (input) => runOperation({
