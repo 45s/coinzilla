@@ -185,8 +185,9 @@ test("MongoDB transport close rejects an in-progress connection attempt", async 
     socketFactory: () => socket,
   })
   const connecting = transport.connect()
+  const rejected = assert.rejects(connecting, /closed/i)
   await transport.close()
-  await assert.rejects(connecting, /closed/i)
+  await rejected
   assert.equal(socket.destroyed, true)
   assert.equal(transport.state, "closed")
 })
