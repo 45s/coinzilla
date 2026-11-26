@@ -127,6 +127,9 @@ function createShutdown(input = {}) {
     logger,
     getTradingEngine,
     strategyShutdownCoordinator,
+    phaseTimeoutMs,
+    setTimeoutFn,
+    clearTimeoutFn,
   } = {
     ...createShutdownDefaults(),
     ...input,
@@ -146,6 +149,9 @@ function createShutdown(input = {}) {
     tradingEnabled,
     strategyShutdownParticipants: participants,
     strategyShutdownCoordinator,
+    phaseTimeoutMs,
+    setTimeoutFn,
+    clearTimeoutFn,
     getTradingEngine,
     subscriptions,
     bookSubscriptions,
@@ -161,6 +167,54 @@ function createShutdown(input = {}) {
     calls,
   }
 }
+test("bounds a pending CLOSING audit phase and retains shared services", async () => {
+  const calls = []
+  let resolveAudit
+  let markAuditStarted
+  let closingAuditDeadline
+  const auditStarted = new Promise((resolve) => {
+    markAuditStarted = resolve
+  })
+  const pendingAudit = new Promise((resolve) => {
+    resolveAudit = resolve
+  })
+  const fixture = createShutdown({
+    calls,
+    publishAccountSnapshot: async () => {
+      markAuditStarted()
+      return pendingAudit
+    },
+    phaseTimeoutMs: 25,
+    setTimeoutFn: (callback, timeoutMs, phase) => {
+      if (phase === "CLOSING_ACCOUNT_AUDIT") {
+        closingAuditDeadline = callback
+      }
+      return `fake-deadline:${phase}`
+    },
+    clearTimeoutFn: () => {},
+  })
+  const stopPromise = fixture.stop()
+
+  try {
+    await auditStarted
+    assert.equal(typeof closingAuditDeadline, "function", "The CLOSING account audit must have an explicit deadline.")
+    closingAuditDeadline()
+    await assert.rejects(
+      stopPromise,
+      (error) => error.code === "SHUTDOWN_PHASE_TIMEOUT"
+        && error.phase === "CLOSING_ACCOUNT_AUDIT",
+      "A timed-out CLOSING audit must produce an explicit bounded failure.",
+    )
+    assert.equal(calls.includes("market-intake-stop"), false, "Market feeds must remain active when the CLOSING audit is incomplete.")
+    assert.equal(calls.includes("user-data-stop"), false, "User-data intake must remain active when the CLOSING audit is incomplete.")
+    assert.equal(calls.includes("broker-disconnect"), false, "The broker must remain connected when the CLOSING audit is incomplete.")
+    assert.equal(fixture.state.status, "SHUTDOWN_INCOMPLETE", "A timed-out shutdown phase must never report STOPPED.")
+  } finally {
+    resolveAudit?.({ ok: true })
+    await stopPromise.catch(() => {})
+  }
+})
+
 test("activates strategy gates before shutdown context creation can fail", async () => {
   const calls = []
   const failure = new Error("Trading engine context is unavailable")

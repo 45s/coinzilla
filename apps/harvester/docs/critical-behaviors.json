@@ -803,6 +803,11 @@
           "path": "src/bootstrap/shutdown/create-strategy-shutdown-coordinator.test.js",
           "name": "bounds repeated successful safety proofs when the marker remains invalidated",
           "kind": "failure"
+        },
+        {
+          "path": "src/bootstrap/shutdown/create-shutdown-handler.test.js",
+          "name": "bounds a pending CLOSING audit phase and retains shared services",
+          "kind": "failure"
         }
       ],
       "runtimeStatus": "active",
