@@ -12,9 +12,9 @@ function createJsonDigest(value) {
 }
 
 function createScenarioIdentity({
-      strategyId,
-      scenarioId,
-    }) {
+  strategyId,
+  scenarioId,
+}) {
   return `${strategyId}/${scenarioId}`
 }
 
@@ -48,9 +48,9 @@ function collectMissingReplayProvenance({ identity, replayProvenance, sourceRevi
 }
 
 function normalizeReplayProvenance({
-      replayProvenance,
-      sourceRevision,
-    }) {
+  replayProvenance,
+  sourceRevision,
+}) {
   const identity = replayProvenance?.identity ?? {}
   const missing = collectMissingReplayProvenance({
     identity,
@@ -72,37 +72,52 @@ function normalizeReplayProvenance({
   }
 }
 
+function appendUnverifiedProvenanceReasons({ missing, provenance, unavailableReason }) {
+  if (provenance?.verified !== true) {
+    missing.push(...(provenance?.missing ?? [unavailableReason]))
+  }
+}
+
+function hasMatchingReplayInput({ original }) {
+  const originalInput = original.replayInput ?? original.input
+  return Boolean(original.inputSha256) &&
+    createJsonDigest(originalInput) === original.inputSha256
+}
+
+function hasMatchingReplayScenarioIdentity({ original }) {
+  const scenarioIdentity = createScenarioIdentity({
+    strategyId: original.strategyId,
+    scenarioId: original.scenarioId,
+  })
+  return original.scenarioIdentity === scenarioIdentity
+}
+
 function collectReplayBlockReasons({ original, context }) {
   const missing = []
   const originalProvenance = original.replayProvenance
   const activeProvenance = context.replayProvenance
-  if (originalProvenance?.verified !== true) {
-    missing.push(...(originalProvenance?.missing ?? ["original run provenance is unavailable"]))
-  }
-  if (activeProvenance?.verified !== true) {
-    missing.push(...(activeProvenance?.missing ?? ["active runtime provenance is unavailable"]))
-  }
-  const provenanceDiffers = JSON.stringify(originalProvenance?.identity) !==
-    JSON.stringify(activeProvenance?.identity)
-  if (provenanceDiffers) {
+  appendUnverifiedProvenanceReasons({
+    missing,
+    provenance: originalProvenance,
+    unavailableReason: "original run provenance is unavailable",
+  })
+  appendUnverifiedProvenanceReasons({
+    missing,
+    provenance: activeProvenance,
+    unavailableReason: "active runtime provenance is unavailable",
+  })
+  if (JSON.stringify(originalProvenance?.identity) !==
+      JSON.stringify(activeProvenance?.identity)) {
     missing.push("active source/build/runtime/registry provenance differs from the original run")
   }
-  const originalInput = original.replayInput ?? original.input
-  const inputIdentityMatches = original.inputSha256 &&
-    createJsonDigest(originalInput) === original.inputSha256
-  if (!inputIdentityMatches) {
+  if (!hasMatchingReplayInput({ original })) {
     missing.push("original scenario input identity cannot be verified")
   }
-  const originalScenarioIdentity = createScenarioIdentity({
-    strategyId: original.strategyId,
-    scenarioId: original.scenarioId,
-  })
-  if (original.scenarioIdentity !== originalScenarioIdentity) {
+  if (!hasMatchingReplayScenarioIdentity({ original })) {
     missing.push("original strategy/scenario identity cannot be verified")
   }
   return missing
 }
-
 function createReplayBlockDiagnostic({ original, context }) {
   const missing = collectReplayBlockReasons({
     original,
@@ -1046,7 +1061,10 @@ function createRunnerContext({
   return {
     adapters: createAdapterMap({ adapters }),
     sourceRevision,
-    replayProvenance: normalizeReplayProvenance({ replayProvenance, sourceRevision }),
+    replayProvenance: normalizeReplayProvenance({
+      replayProvenance,
+      sourceRevision,
+    }),
     canExecuteScenario,
     validateScenarioInput,
     records: new Map(),
