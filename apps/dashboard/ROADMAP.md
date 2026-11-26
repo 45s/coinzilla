@@ -1,6 +1,6 @@
 # Dashboard application roadmap
 
-**Owner:** Dashboard application  
+**Owner:** Dashboard application
 **Tracking:** [Issue #1623](https://github.com/45s/coinzilla/issues/1623)
 
 ## Active dashboard priorities
