@@ -1,6 +1,6 @@
 # Startup readiness diagnostics — issue #1860
 
-**Status:** implementation in progress on `feat/harvester/issue-1860-startup-readiness-diagnostics`.
+**Status:** implementation committed on `feat/harvester/issue-1860-startup-readiness-diagnostics`; exact-head automated verification is pending.
 
 This document records the source-verified design and traceability for the startup readiness report. It does not define a new trading-state authority, strategy rule, restart-restoration mechanism, or operator authorization policy.
 
@@ -189,3 +189,18 @@ Broker connection is measured around the existing `connectBroker` call. A failed
 
 
 The connection check reports the measured handshake duration and any provider-supplied timeout/error code; it does not claim an application-level timeout where the existing BrokerPort connection contract does not define one.
+
+
+## Final implementation contract
+
+- The same immutable, read-only report builder is used by startup and authorized operator queries. It performs no broker calls, persistence, order actions or readiness-state mutation.
+- Global runtime blockers (provider identity/capabilities, durable account and open-order PREFLIGHT, account-scoped safety, user-data safety and process continuity) prevent trading activation.
+- Market-local blockers remain scoped to their market. The runtime may remain available while a market waits for a fresh accepted book or candle history; that market's evaluator stays deferred. This permits a late first book/candle event to recover the market without restarting the whole process.
+- The report's aggregate `status` and `tradingGateOpen` are deliberately separate. A report can show no market ready while the global user-data gate is open; that does not permit strategy evaluation. Each market must first pass its own metadata, fresh-price, required LIMIT_MAKER book and configured volatility-history gates.
+- The evaluator uses the same engine-owned metadata, freshness functions, candle-history snapshot and volatility-protection state as the report. It records deferred markets and resumes only through the existing book/candle event paths. Shutdown recovery-only evaluation keeps its existing exception.
+- `userDataState.ready` remains the sole global trading gate. `tradingActivationDeferred` only prevents status callbacks from bypassing the startup continuation. `startupComplete` is lifecycle evidence and is set only after market-data startup succeeds; recovery remains pending before that point.
+- A deferred `startMarketData()` call runs the same market lifecycle, report and activation sequence before marking startup complete. Failed startup leaves the global gate closed.
+- The root command `npm run harvester` starts the existing application. Authorized Telegram status/markets pages expose the report and accepted book freshness; no standalone CLI or server is added.
+- Prior-process evidence remains observation-only; no automatic restart restoration is claimed or performed.
+
+The branch includes focused regressions for status-event bypass, deferred market-data startup, book/volatility evaluation gates, operator diagnostics and report scope. Exact-head test and CI results are pending.

@@ -207,6 +207,42 @@ test("starts an RS-only provider account without a Conservative execution route"
   }
 })
 
+test("keeps startup incomplete and the user-data gate closed until deferred market-data startup succeeds", async () => {
+  const { directory, store } = await createRsOnlyOperationalStateStore()
+  const calls = []
+  const broker = createRsOnlyStartupBroker({ calls })
+  let result
+  try {
+    result = await startHarvesterForTest({
+      loadConfig: async () => createRsOnlyStartupConfig(),
+      env: binanceEnv,
+      brokerAdapterFactory: () => broker,
+      operationalStateStore: store,
+      executionSymbols: ["LINEAUSDT"],
+      executionRoutes: [{
+        strategyId: "RS_recoverySeller",
+        symbol: "LINEAUSDT",
+      }],
+      marketDataSymbols: ["LINEAUSDT"],
+      deferMarketDataStart: true,
+      evaluateRecoverySellerTransition: async () => ({
+        ok: true,
+        data: { skipped: true },
+      }),
+      logger: { info() {}, error() {} },
+    })
+
+    assert.equal(result.userDataReady, false, "User-data PREFLIGHT must not open trading while market-data startup is deferred.")
+    assert.equal(calls.includes("subscribe:LINEAUSDT"), false, "The deferred market-data lifecycle must not start before its explicit continuation.")
+    await result.startMarketData()
+    assert.equal(result.userDataReady, true, "The existing trading gate may open only after market-data startup and readiness audit succeed.")
+    assert.ok(calls.includes("subscribe:LINEAUSDT"), "The explicit continuation must start the configured market-data subscription.")
+  } finally {
+    await result?.stop()
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
 test("starts market-owned volatility history for an RS-only market when market config enables it", async () => {
   const { directory, store } = await createRsOnlyOperationalStateStore()
   const calls = []

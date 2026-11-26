@@ -262,14 +262,21 @@ function createDeferredTradingActivation({
         tradingModeLabel,
         getAccountSafetyBlocker,
       })
-      activateTradingEngine({
-        state,
-        logger,
-        tradingModeLabel,
-        enabledSymbols,
-        getAccountSnapshot,
-        resumeDeferredStrategyEvaluations,
-      })
+      try {
+        activateTradingEngine({
+          state,
+          logger,
+          tradingModeLabel,
+          enabledSymbols,
+          getAccountSnapshot,
+          resumeDeferredStrategyEvaluations,
+        })
+      } catch (error) {
+        state.ready = false
+        state.tradingActivationDeferred = true
+        state.status = "STARTUP_READINESS_AUDIT_PENDING"
+        throw error
+      }
       activated = true
       return Object.freeze({ activated: true, alreadyActivated: false })
     },

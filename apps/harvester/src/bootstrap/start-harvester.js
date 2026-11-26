@@ -1864,6 +1864,7 @@ function createHarvesterRuntimeResult({
   resources,
   stop,
   marketDataLifecycle,
+  completeStartup,
 } = {}) {
   const { identity } = portfolio.accountRuntime
   const marketData = resolveHarvesterRuntimeMarketDataMetadata({ startup })
@@ -1908,7 +1909,14 @@ function createHarvesterRuntimeResult({
     },
     getVolatilityData: ({ symbol } = {}) => resources.candleHistoryService.getSnapshot({ symbol }),
     getVolatilityProtectionState: ({ symbol } = {}) => resources.tradingEngine?.getVolatilityProtectionState({ symbol }),
-    startMarketData: marketDataLifecycle.start,
+    startMarketData: async () => {
+      const result = await marketDataLifecycle.start()
+      if (result?.ok === false) {
+        throw result.errors?.[0] ?? new Error("Harvester market-data startup failed")
+      }
+      completeStartup()
+      return result
+    },
     stopMarketData: marketDataLifecycle.stop,
     connected: true,
     stop,
@@ -2049,11 +2057,19 @@ export async function startHarvester(options = {}) {
     portfolio,
     ...components,
   })
-  components.resources.userDataState.startupComplete = true
-  startPendingUserDataRecovery({
-    userDataState: components.resources.userDataState,
-    startUserDataRecovery: components.recoveryRuntime.startUserDataRecovery,
-  })
+  const completeStartup = () => {
+    if (components.resources.userDataState.startupComplete) {
+      return
+    }
+    components.resources.userDataState.startupComplete = true
+    startPendingUserDataRecovery({
+      userDataState: components.resources.userDataState,
+      startUserDataRecovery: components.recoveryRuntime.startUserDataRecovery,
+    })
+  }
+  if (!startup.deferMarketDataStart) {
+    completeStartup()
+  }
   const stop = createHarvesterRuntimeStop({
     startup,
     resources: components.resources,
@@ -2067,6 +2083,7 @@ export async function startHarvester(options = {}) {
     resources: components.resources,
     stop,
     marketDataLifecycle: components.marketDataLifecycle,
+    completeStartup,
   })
 }
 function resolveStrategyMarketDataPairs({

@@ -43,7 +43,18 @@ function canEvaluateShutdownRecoveryThroughManagedPause({ state, symbol, shutdow
 }
 
 function getEvaluationGateResult({ dependencies, symbol, shutdownRecoveryOnly } = {}) {
-  const { state, hasBlockingOpenOrdersForSymbol, isStopping, canTrade, isMarketPriceFresh } = dependencies
+  const {
+    state,
+    hasBlockingOpenOrdersForSymbol,
+    isStopping,
+    canTrade,
+    isMarketPriceFresh,
+    isMarketBookFresh,
+    getCurrentMarketMetadata,
+    getVolatilityData,
+    isVolatilityProtectionEnabledForSymbol,
+    pairs,
+  } = dependencies
   if (state.shutdownBuyGate === true && !shutdownRecoveryOnly) {
     return toResult({
       data: {
@@ -81,6 +92,46 @@ function getEvaluationGateResult({ dependencies, symbol, shutdownRecoveryOnly } 
   if (!isMarketPriceFresh(marketPrice)) {
     return toResult({ data: { skipped: true,
       reason: "STALE_MARKET_PRICE" } })
+  }
+  if (!shutdownRecoveryOnly) {
+    const metadata = typeof getCurrentMarketMetadata === "function"
+      ? getCurrentMarketMetadata({ symbol })
+      : null
+    if (!metadata?.market) {
+      state.deferredEvaluations.add(symbol)
+      return toResult({ data: { deferred: true, reason: "MARKET_METADATA_UNAVAILABLE" } })
+    }
+    const orderType = metadata.orderType ?? pairs?.[symbol]?.orderType ?? "LIMIT_MAKER"
+    if (orderType === "LIMIT_MAKER") {
+      const marketBook = state.books.get(symbol)
+      if (!marketBook || typeof isMarketBookFresh !== "function" || !isMarketBookFresh(marketBook)) {
+        state.deferredEvaluations.add(symbol)
+        return toResult({
+          data: {
+            deferred: true,
+            reason: marketBook ? "MARKET_BOOK_STALE" : "MARKET_BOOK_UNAVAILABLE",
+          },
+        })
+      }
+    }
+    if (isVolatilityProtectionEnabledForSymbol?.(symbol) === true) {
+      const snapshot = getVolatilityData?.({ symbol })
+      const status = snapshot?.ok === true ? snapshot.data?.status : null
+      const protection = state.volatilityProtection?.get(symbol)
+      const volatilityReady = status?.isReady === true &&
+        status.isFresh === true &&
+        Array.isArray(status.blockers) &&
+        status.blockers.length === 0 &&
+        Number.isSafeInteger(status.historyCount) &&
+        Number.isSafeInteger(status.requiredHistoryCount) &&
+        status.historyCount >= status.requiredHistoryCount &&
+        protection !== null &&
+        typeof protection === "object"
+      if (!volatilityReady) {
+        state.deferredEvaluations.add(symbol)
+        return toResult({ data: { deferred: true, reason: "VOLATILITY_PROTECTION_NOT_READY" } })
+      }
+    }
   }
   return { marketPrice }
 }
