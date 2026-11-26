@@ -1254,7 +1254,7 @@
         },
         {
           "path": "src/use-cases/resolve-offline-user-data-account-blockers.test.js",
-          "name": "rejects an unclean latest stop even when an earlier clean stop exists",
+          "name": "rejects an unclean process stop before running market audits",
           "kind": "failure"
         },
         {
