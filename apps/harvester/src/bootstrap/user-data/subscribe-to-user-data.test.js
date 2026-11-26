@@ -16,7 +16,7 @@ const createState = (overrides = {}) => ({
   ...overrides,
 })
 
-const createFixture = ({ tradingEnabled = false, tradingMode = "testnet", state = createState(), subscribe, onEvent = () => {}, onObservation = () => {}, publishAccountSnapshot, publishOpenOrdersSnapshot, getAccountSafetyBlocker, deferTradingActivation = false, logger = {} } = {}) => {
+const createFixture = ({ tradingEnabled = false, tradingMode = "testnet", state = createState(), subscribe, onEvent = () => {}, onObservation = () => {}, publishAccountSnapshot, publishOpenOrdersSnapshot, getAccountSafetyBlocker, deferTradingActivation = false, resumeDeferredStrategyEvaluations, logger = {} } = {}) => {
   const calls = []
   const events = []
   const subscription = { disconnect: async () => calls.push("disconnect") }
@@ -51,7 +51,7 @@ data: subscription }
     getAccountSnapshot: () => ({ sourceTime: 100 }),
     getAccountSafetyBlocker,
     deferTradingActivation,
-    resumeDeferredStrategyEvaluations: () => calls.push("resume"),
+    resumeDeferredStrategyEvaluations: resumeDeferredStrategyEvaluations ?? (() => calls.push("resume")),
   })
   return { result,
 state,
@@ -268,6 +268,35 @@ deferTradingActivation: true })
 
   assert.equal(fixture.state.ready, true, "The existing user-data readiness flag remains the authoritative trading gate after activation.")
   assert.deepEqual(fixture.calls, ["subscribe", "account:PREFLIGHT", "orders:PREFLIGHT", "resume"], "Deferred strategy evaluations must resume only after explicit activation.")
+})
+
+
+test("waits for deferred strategy replay before completing trading activation", async () => {
+  let releaseReplay
+  let replayStarted = false
+  let activationCompleted = false
+  const replay = new Promise((resolve) => { releaseReplay = resolve })
+  const fixture = createFixture({
+    tradingEnabled: true,
+    deferTradingActivation: true,
+    resumeDeferredStrategyEvaluations: async () => {
+      replayStarted = true
+      await replay
+    },
+  })
+  const setup = await fixture.result
+  const activation = setup.activateTrading().then(() => {
+    activationCompleted = true
+  })
+
+  await Promise.resolve()
+  assert.equal(replayStarted, true, "Activation must begin draining deferred strategy evaluations.")
+  assert.equal(activationCompleted, false, "Startup activation must not complete while deferred evaluation replay is still running.")
+  assert.equal(fixture.state.ready, true, "The authoritative gate opens only after readiness checks have passed.")
+
+  releaseReplay()
+  await activation
+  assert.equal(activationCompleted, true, "Activation completes after the deferred evaluation queue has drained.")
 })
 
 test("revalidates user-data safety before deferred trading activation", async () => {
