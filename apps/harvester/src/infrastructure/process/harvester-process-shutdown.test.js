@@ -403,7 +403,7 @@ test("bounds a hung EventBus flush and retains the process lock without overlapp
     const retry = handler("SIGTERM")
     pendingFlush.release()
     await retry
-    assert.equal(flushCalls, 1, "A retry must await the original pending flush instead of starting a concurrent one.")
+    assert.equal(pendingFlush.getCalls(), 1, "A retry must await the original pending flush instead of starting a concurrent one.")
     assert.deepEqual(
       calls,
       ["observability-close", "logger-close", "process-lock-release"],

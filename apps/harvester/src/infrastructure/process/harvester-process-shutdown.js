@@ -551,7 +551,7 @@ async function runPostStopCleanup({
   if (!deliveryComplete) {
     return false
   }
-  return runObservabilityCleanupSteps({
+  const observabilityComplete = await runObservabilityCleanupSteps({
     shutdownState,
     journalService,
     eventBus,
@@ -564,8 +564,17 @@ async function runPostStopCleanup({
     setTimeoutFn,
     clearTimeoutFn,
   })
+  if (!observabilityComplete) {
+    return false
+  }
+  return runProcessLockReleaseStep({
+    shutdownState,
+    processLock,
+    cleanupTimeoutMs,
+    setTimeoutFn,
+    clearTimeoutFn,
+  })
 }
-
 async function runRuntimeShutdown(dependencies = {}) {
   const {
     runtime,
@@ -600,7 +609,7 @@ async function runRuntimeShutdown(dependencies = {}) {
       shutdownComplete: false,
     }
   }
-  const cleanupComplete = await runPostStopCleanup({
+  const shutdownComplete = await runPostStopCleanup({
     shutdownState,
     eventPublisher,
     reason,
@@ -617,22 +626,9 @@ async function runRuntimeShutdown(dependencies = {}) {
     setTimeoutFn,
     clearTimeoutFn,
   })
-  if (!cleanupComplete) {
-    return {
-      runtimeStopped: true,
-      shutdownComplete: false,
-    }
-  }
-  const lockReleased = await runProcessLockReleaseStep({
-    shutdownState,
-    processLock,
-    cleanupTimeoutMs,
-    setTimeoutFn,
-    clearTimeoutFn,
-  })
   return {
     runtimeStopped: true,
-    shutdownComplete: lockReleased,
+    shutdownComplete,
   }
 }
 /**

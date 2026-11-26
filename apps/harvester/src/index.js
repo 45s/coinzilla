@@ -142,6 +142,31 @@ async function closeEventBus({ eventBus } = {}) {
   }
 }
 
+function getProcessLockRetentionError({
+  allowProcessLockRelease,
+  journalClosed,
+  eventBusClosed,
+  tradingHistoryApiClosed,
+  databaseClosed,
+}) {
+  if (!allowProcessLockRelease) {
+    return new Error("Harvester trading process lock retained because runtime shutdown was not confirmed")
+  }
+  if (!journalClosed) {
+    return new Error("Harvester trading process lock retained because Journal shutdown was not confirmed")
+  }
+  if (!eventBusClosed) {
+    return new Error("Harvester trading process lock retained because EventBus shutdown was not confirmed")
+  }
+  if (!tradingHistoryApiClosed) {
+    return new Error("Harvester trading process lock retained because trading-history API shutdown was not confirmed")
+  }
+  if (!databaseClosed) {
+    return new Error("Harvester trading process lock retained because persistence shutdown was not confirmed")
+  }
+  return null
+}
+
 async function releaseProcessLock({
   processLock,
   allowProcessLockRelease,
@@ -153,24 +178,16 @@ async function releaseProcessLock({
   if (!processLock) {
     return []
   }
-
-  if (!allowProcessLockRelease || !journalClosed || !eventBusClosed ||
-      !tradingHistoryApiClosed || !databaseClosed) {
-    let reason = "Harvester trading process lock retained because cleanup was not confirmed"
-    if (!allowProcessLockRelease) {
-      reason = "Harvester trading process lock retained because runtime shutdown was not confirmed"
-    } else if (!journalClosed) {
-      reason = "Harvester trading process lock retained because Journal shutdown was not confirmed"
-    } else if (!eventBusClosed) {
-      reason = "Harvester trading process lock retained because EventBus shutdown was not confirmed"
-    } else if (!tradingHistoryApiClosed) {
-      reason = "Harvester trading process lock retained because trading-history API shutdown was not confirmed"
-    } else if (!databaseClosed) {
-      reason = "Harvester trading process lock retained because persistence shutdown was not confirmed"
-    }
-    return [new Error(reason)]
+  const retentionError = getProcessLockRetentionError({
+    allowProcessLockRelease,
+    journalClosed,
+    eventBusClosed,
+    tradingHistoryApiClosed,
+    databaseClosed,
+  })
+  if (retentionError) {
+    return [retentionError]
   }
-
   try {
     const result = await processLock.release()
     if (result?.ok === true) {
@@ -184,7 +201,6 @@ async function releaseProcessLock({
     return [error]
   }
 }
-
 function reportObservabilityCleanupErrors({ errors, logger } = {}) {
   if (errors.length === 0) {
     return
