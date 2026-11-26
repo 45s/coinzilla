@@ -669,3 +669,31 @@ test("MongoDB transport closes idle and connecting sockets and rejects factory f
   )
 })
 
+test("MongoDB transport accepts coalesced TCP chunks containing multiple valid frames", async () => {
+  const requests = []
+  const payload = "x".repeat(12 * 1024 * 1024)
+  const { transport } = createFakeTransport({
+    respond: (socket, request) => {
+      requests.push(request)
+      if (requests.length === 4) {
+        const frames = requests.map((item) => encodeOpMsg({
+          requestId: 500 + item.requestId,
+          responseTo: item.requestId,
+          body: { ok: 1, payload },
+        }))
+        const chunk = Buffer.concat(frames)
+        assert.ok(chunk.length > 48 * 1024 * 1024)
+        socket.emit("data", chunk)
+      }
+    },
+  })
+
+  await transport.connect()
+  const results = await Promise.all(Array.from({ length: 4 }, () => (
+    transport.command({ body: { ping: 1 } })
+  )))
+  assert.equal(results.length, 4)
+  assert.ok(results.every((result) => result.payload.length === payload.length))
+  assert.equal(transport.pendingRequestCount, 0)
+  await transport.close()
+})
