@@ -564,7 +564,7 @@ test("fails closed before teardown when composed Journal durability cannot be pr
     await assert.rejects(runtime.stop())
     assert.ok(calls.includes("journal-flush-failed"), "The injected Journal durability failure must be observed.")
     for (const symbol of ["BTCUSDT", "ETHUSDT"]) {
-      assert.equal(calls.includes("unsubscribe:" + symbol), false, "A market feed must remain connected after failed Journal durability.")
+      assert.equal(calls.includes(`unsubscribe:${symbol}`), false, "A market feed must remain connected after failed Journal durability.")
     }
     assert.equal(calls.includes("unsubscribe:user-data"), false, "User-data intake must remain connected after failed Journal durability.")
     assert.equal(calls.includes("disconnect"), false, "The broker must remain connected after failed Journal durability.")
