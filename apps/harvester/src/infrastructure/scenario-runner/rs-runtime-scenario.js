@@ -746,6 +746,7 @@ async function reconcileRuntimeScenarioPartialSell({ runtime, execution, effecti
       amount: quoteQuantity,
       asset: runtime.quoteAsset,
     }),
+    executedAt: terminalOrder.completedAt,
     commissions: [],
     commissionStatus: "COMPLETE",
   })
