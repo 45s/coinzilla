@@ -394,6 +394,11 @@ function registerMarketPriceSubscription({ data,
   })
 }
 
+function resetMarketPriceIntakeState({ marketPriceIntake, symbol } = {}) {
+  const intakeState = resetMarketPriceIntakeState({ marketPriceIntake, symbol })
+  return intakeState
+}
+
 async function subscribeToMarketPrice({
   broker,
   providerInstanceId,

@@ -157,3 +157,6 @@ The user-data startup sequence is split into explicit read-only PREFLIGHT, tradi
 ## Authoritative user-data recovery
 
 The recovery-generation transition now clears `streamUnsafe` and `requiresReconciliation` only for a matching, acknowledged authoritative `reconciled` subscription generation. A transport-level `recovered` event, stale generation, accounting failure or retryable recovery failure cannot clear the application reconciliation gate.
+
+
+Market-price subscription setup now delegates the per-symbol intake reset to a small helper. The subscription lifecycle remains responsible for installing the handler, awaiting the broker acknowledgement and registering the subscription; readiness still requires an actual accepted price event or initial seed.
