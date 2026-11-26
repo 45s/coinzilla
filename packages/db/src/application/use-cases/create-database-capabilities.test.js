@@ -308,7 +308,7 @@ id: "inside" })
         /Cannot close a database from inside its transaction callback/,
       )
     })
-    await assert.rejects(nestedTransaction, /Nested database transactions are not supported/)
+    await assert.rejects(nestedTransaction, /Nested transactions are not supported/)
 
     assert.deepEqual(calls, {
       transactionCreate: 1,
