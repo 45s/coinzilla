@@ -673,13 +673,17 @@ test("MongoDB transport accepts coalesced TCP chunks containing multiple valid f
   const requests = []
   const payload = "x".repeat(12 * 1024 * 1024)
   const { transport } = createFakeTransport({
-    respond: (socket, request) => {
+    respond: (...argumentsList) => {
+      const [socket, request] = argumentsList
       requests.push(request)
       if (requests.length === 4) {
         const frames = requests.map((item) => encodeOpMsg({
           requestId: 500 + item.requestId,
           responseTo: item.requestId,
-          body: { ok: 1, payload },
+          body: {
+            ok: 1,
+            payload,
+          },
         }))
         const chunk = Buffer.concat(frames)
         assert.ok(chunk.length > 48 * 1024 * 1024)
