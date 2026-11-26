@@ -167,13 +167,14 @@ async function commitMongoTransaction({ transport, session }) {
         return
       }
       const error = createServerCommandError(response)
-      if (!hasErrorLabel(response, "UnknownTransactionCommitResult")) {
+      if (response?.writeConcernError || hasErrorLabel(response, "UnknownTransactionCommitResult")) {
+        lastError = error
+      } else {
         throw new DatabaseProviderError({
           operation: "transaction",
           cause: error,
         })
       }
-      lastError = error
     } catch (error) {
       if (error instanceof DatabaseProviderError) {
         throw error
