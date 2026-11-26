@@ -7,15 +7,16 @@ function createStrategyBlocker({ participant, error, reason, status } = {}) {
   } catch {
     safetySnapshot = null
   }
+  const blockerReason = reason ?? error?.code ?? "STRATEGY_SAFETY_UNPROVEN"
 
   return Object.freeze({
     strategyId: participant.strategyId,
     status: status ?? (error?.code === "STRATEGY_SHUTDOWN_PARTICIPANT_TIMEOUT"
       ? "TIMED_OUT"
-      : (error?.code?.includes("UNPROVEN") || reason === "STRATEGY_SAFETY_MARKER_INVALIDATED"
+      : (error?.code?.includes("UNPROVEN") || blockerReason === "STRATEGY_SAFETY_MARKER_INVALIDATED"
         ? "BLOCKED"
         : "FAILED")),
-    reason: reason ?? error?.code ?? "STRATEGY_SAFETY_UNPROVEN",
+    reason: blockerReason,
     operation: error?.operation ?? "waitUntilSafe",
     ...(error?.timeoutMs === undefined ? {} : { timeoutMs: error.timeoutMs }),
     message: error?.message ?? "Strategy did not prove shutdown safety",
