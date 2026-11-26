@@ -219,10 +219,11 @@ test("SCRAM rejects unsupported mechanisms, malformed salt, and unsafe iteration
     /unsupported.*mechanism/i,
   )
 
+  const nonce = Buffer.from("nonce").toString("base64")
   for (const serverFirst of [
-    "r=nonce-server,s=not-base64!,i=4096",
-    "r=nonce-server,s=c2FsdA==,i=1",
-    "r=nonce-server,s=c2FsdA==,i=1000001",
+    `r=${nonce}servernonce,s=not-base64!,i=4096`,
+    `r=${nonce}servernonce,s=c2FsdA==,i=1`,
+    `r=${nonce}servernonce,s=c2FsdA==,i=1000001`,
   ]) {
     const server = createScramServer({
       username: "alice",
@@ -276,10 +277,11 @@ test("SCRAM rejects non-ASCII/control credentials and invalid random sources", a
 })
 
 test("SCRAM rejects malformed server attributes, mandatory extensions, and changed conversation IDs", async () => {
+  const nonce = Buffer.from("nonce").toString("base64")
   for (const serverFirst of [
-    "r=nonce-server,s=c2FsdA==,i=4096,m=unsupported",
-    "r=nonce-server,r=again,s=c2FsdA==,i=4096",
-    "r=nonce-server,s=,i=4096",
+    `r=${nonce}servernonce,s=c2FsdA==,i=4096,m=unsupported`,
+    `r=${nonce}servernonce,r=again,s=c2FsdA==,i=4096`,
+    `r=${nonce}servernonce,s=,i=4096`,
   ]) {
     const server = createScramServer({
       username: "alice",
@@ -331,7 +333,7 @@ test("SCRAM validates response shape and bounds server continuation rounds", asy
           ok: 1,
           conversationId: 1,
           done: false,
-          payload: Buffer.from("r=nonce-server,s=c2FsdA==,i=4096"),
+          payload: Buffer.from(`r=${Buffer.from("nonce").toString("base64")}servernonce,s=c2FsdA==,i=4096`),
         }
       }
       rounds += 1
