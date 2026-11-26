@@ -8,6 +8,7 @@ import {
 import { runOfflineAccountBlockerResolution } from "./resolve-offline-user-data-account-blockers.js"
 import { resolveUserDataAccountBlockers } from "./resolve-user-data-account-blockers.js"
 import { authenticateLocalOperator } from "../infrastructure/security/local-operator-identity.js"
+import { runOfflineMarketRecovery } from "../../scripts/recovery-market-context.js"
 
 const runtimeSessionId = "operator-recovery-session"
 const fingerprint = "f".repeat(64)
@@ -17,6 +18,13 @@ const blockerId = createHash("sha256")
   .update(["ACCOUNT", "", "ACCOUNTING_INTEGRITY_FAILURE", triggerDigest].join("\0"))
   .digest("hex")
 const resolutionReason = "Confirmed the account-wide data integrity cause is fixed."
+
+async function runOfflineAccountBlockerResolutionWithAdapter(options = {}) {
+  return runOfflineAccountBlockerResolution({
+    ...options,
+    reconcileMarket: options.reconcileMarket ?? runOfflineMarketRecovery,
+  })
+}
 
 function createOperatorIdentity(operatorId = "operator-7") {
   return authenticateLocalOperator({
@@ -399,7 +407,7 @@ test("parses explicit offline account blocker resolution confirmation", () => {
 
 test("runs the production offline account/order/fill audit for every configured market", async () => {
   let accountAudit
-  const result = await runOfflineAccountBlockerResolution({
+  const result = await runOfflineAccountBlockerResolutionWithAdapter({
     context: makeContext(),
     operationalStateStore: makeStore(),
     operatorId: "operator-7",
@@ -435,7 +443,7 @@ test("runs the production offline account/order/fill audit for every configured 
 
 test("fails closed if any configured market is not fully reconciled", async () => {
   let resolutionCalled = false
-  const result = await runOfflineAccountBlockerResolution({
+  const result = await runOfflineAccountBlockerResolutionWithAdapter({
     context: makeContext(),
     operationalStateStore: makeStore(),
     operatorId: "operator-7",
@@ -465,7 +473,7 @@ test("fails closed if any configured market is not fully reconciled", async () =
 
 test("rejects exchange fills that are not durably represented in the Journal", async () => {
   let resolutionCalled = false
-  const result = await runOfflineAccountBlockerResolution({
+  const result = await runOfflineAccountBlockerResolutionWithAdapter({
     context: makeContext(),
     operationalStateStore: makeStore(),
     operatorId: "operator-7",
@@ -493,7 +501,7 @@ test("rejects exchange fills that are not durably represented in the Journal", a
 
 test("requires clean process stop before offline resolution", async () => {
   let resolutionCalled = false
-  const result = await runOfflineAccountBlockerResolution({
+  const result = await runOfflineAccountBlockerResolutionWithAdapter({
     context: makeContext(),
     operationalStateStore: makeStore({ stopped: false }),
     operatorId: "operator-7",
@@ -701,7 +709,7 @@ async function makeStoreWithPriorResolvedAction() {
 test("rejects a legacy action ID without replay-safe metadata", async () => {
   const store = await makeStoreWithPriorResolvedAction()
   let auditCalls = 0
-  const result = await runOfflineAccountBlockerResolution({
+  const result = await runOfflineAccountBlockerResolutionWithAdapter({
     context: makeContext(),
     operationalStateStore: store,
     operatorId: "operator-7",
@@ -742,7 +750,7 @@ test("rejects an unclean process stop before running market audits", async () =>
     },
   })
   let auditCalls = 0
-  const result = await runOfflineAccountBlockerResolution({
+  const result = await runOfflineAccountBlockerResolutionWithAdapter({
     context: makeContext(),
     operationalStateStore: store,
     operatorId: "operator-7",
@@ -838,7 +846,7 @@ function makeAuditFailureScenarios() {
 }
 async function runAuditFailureScenario({ scenario, index }) {
   let resolutionCalled = false
-  const result = await runOfflineAccountBlockerResolution({
+  const result = await runOfflineAccountBlockerResolutionWithAdapter({
     context: makeContext(),
     operationalStateStore: makeStore(),
     operatorId: "operator-7",
@@ -884,7 +892,7 @@ test("rejects missing configured-market evidence before running any market audit
   const context = makeContext()
   delete context.marketsEvidence.ETHUSDT
   let auditCalls = 0
-  const result = await runOfflineAccountBlockerResolution({
+  const result = await runOfflineAccountBlockerResolutionWithAdapter({
     context,
     operationalStateStore: makeStore(),
     operatorId: "operator-7",
@@ -905,7 +913,7 @@ test("rejects missing configured-market evidence before running any market audit
 test("rejects mismatched runtime session and configured-market baseline", async () => {
   const sessionMismatch = makeContext()
   sessionMismatch.runtimeSessionId = "different-runtime-session"
-  const sessionResult = await runOfflineAccountBlockerResolution({
+  const sessionResult = await runOfflineAccountBlockerResolutionWithAdapter({
     context: sessionMismatch,
     operationalStateStore: makeStore(),
     operatorId: "operator-7",
@@ -918,7 +926,7 @@ test("rejects mismatched runtime session and configured-market baseline", async 
 
   const marketMismatch = makeContext()
   marketMismatch.configuredMarkets = ["BTCUSDT"]
-  const marketResult = await runOfflineAccountBlockerResolution({
+  const marketResult = await runOfflineAccountBlockerResolutionWithAdapter({
     context: marketMismatch,
     operationalStateStore: makeStore(),
     operatorId: "operator-7",
@@ -950,7 +958,7 @@ test("rejects ACCOUNT blockers without verified user-data producer provenance", 
     },
   })
   let auditCalls = 0
-  const result = await runOfflineAccountBlockerResolution({
+  const result = await runOfflineAccountBlockerResolutionWithAdapter({
     context: makeContext(),
     operationalStateStore: store,
     operatorId: "operator-7",
@@ -974,7 +982,7 @@ test("fails closed on account balance discrepancies before resolution", async ()
   usdt.free = "99"
   usdt.total = "99"
   let resolutionCalled = false
-  const result = await runOfflineAccountBlockerResolution({
+  const result = await runOfflineAccountBlockerResolutionWithAdapter({
     context,
     operationalStateStore: makeStore(),
     operatorId: "operator-7",
@@ -1043,7 +1051,7 @@ test("authenticates the operator against the current OS account before reading e
 
 test("rejects a caller-forged operator identity object", async () => {
   let marketAuditCalled = false
-  const result = await runOfflineAccountBlockerResolution({
+  const result = await runOfflineAccountBlockerResolutionWithAdapter({
     context: makeContext(),
     operationalStateStore: makeStore(),
     operatorId: "operator-7",
@@ -1061,4 +1069,11 @@ test("rejects a caller-forged operator identity object", async () => {
   })
   assert.equal(result.ok, false)
   assert.equal(marketAuditCalled, false, "A caller-forged identity must be rejected before exchange evidence reconciliation.")
+})
+
+test("requires the production offline market audit adapter to be injected", async () => {
+  const result = await runOfflineAccountBlockerResolution({})
+
+  assert.equal(result.ok, false, "The use case must not import or silently select a script adapter")
+  assert.match(result.errors[0].message, /requires an injected offline market audit adapter/)
 })
