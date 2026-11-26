@@ -6,10 +6,13 @@ import { createMongoRecordOperations } from "./commands.js"
 
 function createCommandStub(responses = []) {
   const calls = []
+  const sequences = []
   return {
     calls,
-    async command({ body }) {
+    sequences,
+    async command({ body, sequences: documentSequences = [] }) {
       calls.push(body)
+      sequences.push(documentSequences)
       const response = responses.shift()
       if (response instanceof Error) {
         throw response
@@ -38,8 +41,10 @@ test("MongoDB create isolates collection records and returns the provider-neutra
     record,
   )
   assert.match(stub.calls[0].insert, /^coinzilla_/)
-  assert.equal(stub.calls[0].documents[0]._id, "person-1")
-  assert.notDeepEqual(stub.calls[0].documents[0].data, record)
+  assert.equal(stub.calls[0].documents, undefined)
+  assert.equal(stub.sequences[0][0].identifier, "documents")
+  assert.equal(stub.sequences[0][0].documents[0]._id, "person-1")
+  assert.notDeepEqual(stub.sequences[0][0].documents[0].data, record)
   assert.equal(stub.calls[0].$db, "app")
 })
 
