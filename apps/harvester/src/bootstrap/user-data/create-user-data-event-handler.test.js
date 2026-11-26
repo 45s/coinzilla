@@ -422,6 +422,42 @@ data: { durable: true } }
   assert.equal(getHarvesterAccountSafetyBlocker({ userDataState: state })?.scope, "ACCOUNT", "The live submission gate must see the account blocker while the user-data state is unsafe.")
 })
 
+
+test("persists an account-scoped blocker for terminal accounting failure without a market symbol", async () => {
+  const blockers = []
+  const engine = {
+    processUserDataEvent: async () => ({
+      ok: false,
+      failure: {
+        category: "ACCOUNTING_INTEGRITY",
+        stage: "FILL_ACCOUNTING",
+        retryable: false,
+      },
+      errors: [new Error("terminal accounting failure")],
+    }),
+    getOrders: () => [],
+  }
+  const { handler, state } = createHandler({
+    engine,
+    onSafetyBlockerRaised: async (blocker) => {
+      blockers.push(blocker)
+      return {
+        ok: true,
+        data: { durable: true },
+      }
+    },
+  })
+
+  handler({ event: makeUnownedExecutionEvent() })
+  await state.eventQueue
+
+  assert.equal(blockers.length, 1, "A terminal accounting failure must append one sticky blocker.")
+  assert.equal(blockers[0].scope, "ACCOUNT", "A terminal accounting failure without market identity must be account-scoped.")
+  assert.equal(blockers[0].symbol, null, "The account blocker must not invent a market symbol.")
+  assert.equal(blockers[0].reason, "FILL_ACCOUNTING", "The durable blocker must preserve the terminal accounting failure stage.")
+  assert.equal(getHarvesterAccountSafetyBlocker({ userDataState: state })?.scope, "ACCOUNT", "The live gate must observe the terminal accounting blocker.")
+})
+
 test("keeps the account gate closed while account blocker persistence is pending and after it fails", async () => {
   let resolvePersistence
   let signalPersistenceStarted
