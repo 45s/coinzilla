@@ -1690,6 +1690,24 @@
       }
     },
     {
+      "path": "src/infrastructure/operational-state/helpers/validate-operational-state-lifecycle-facts.js",
+      "baseline": {
+        "lines": 86.72,
+        "branches": 82.8,
+        "functions": 100
+      },
+      "minimum": {
+        "lines": 85,
+        "branches": 80,
+        "functions": 95
+      },
+      "latestObserved": {
+        "lines": 86.72,
+        "branches": 82.8,
+        "functions": 100
+      }
+    },
+    {
       "path": "src/infrastructure/operational-state/helpers/validate-operational-state-order-facts.js",
       "baseline": {
         "lines": 100,
@@ -1974,6 +1992,24 @@
       "latestObserved": {
         "lines": 87.44,
         "branches": 90.53,
+        "functions": 100
+      }
+    },
+    {
+      "path": "src/use-cases/record-safety-control-facts.js",
+      "baseline": {
+        "lines": 86.6,
+        "branches": 72.92,
+        "functions": 100
+      },
+      "minimum": {
+        "lines": 85,
+        "branches": 70,
+        "functions": 95
+      },
+      "latestObserved": {
+        "lines": 86.6,
+        "branches": 72.92,
         "functions": 100
       }
     },
