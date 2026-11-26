@@ -980,3 +980,26 @@ test("normalizes a non-Error abort reason before starting shutdown safety", asyn
     "An already-aborted participant must not begin reconciliation or release shared services.",
   )
 })
+
+
+test("preserves an Error abort reason before starting shutdown safety", async () => {
+  const calls = []
+  const participant = createParticipant({
+    engine: createFakeEngine({ calls }),
+    calls,
+  })
+  const controller = new AbortController()
+  const abortReason = new Error("operator shutdown deadline elapsed")
+  controller.abort(abortReason)
+
+  await assert.rejects(
+    participant.waitUntilSafe({ signal: controller.signal }),
+    (error) => error === abortReason,
+    "An Error abort reason must be propagated without wrapping or replacing its cause.",
+  )
+  assert.deepEqual(
+    calls,
+    [],
+    "An already-aborted participant must not start any shutdown reconciliation work.",
+  )
+})
