@@ -22,7 +22,7 @@ const COMMON_ORDER_FIELDS = {
 function makeSubmissionIntent(overrides = {}) {
   const clientOrderId = "client-order-1"
   const purpose = overrides.purpose ?? null
-  const ownership = purpose === "RECOVERY_SELL"
+  const ownership = purpose === "RECOVERY_SELL" && overrides.strategyId === undefined
     ? { strategyId: StrategyId.COIN_GRABBER, positionId: "position:cg:test" }
     : {}
   return {
@@ -43,7 +43,7 @@ function makeSubmissionIntent(overrides = {}) {
 function makeSubmissionOutcome(overrides = {}) {
   const clientOrderId = "client-order-1"
   const purpose = overrides.purpose ?? null
-  const ownership = purpose === "RECOVERY_SELL"
+  const ownership = purpose === "RECOVERY_SELL" && overrides.strategyId === undefined
     ? { strategyId: StrategyId.COIN_GRABBER, positionId: "position:cg:test" }
     : {}
   return {
@@ -55,7 +55,8 @@ function makeSubmissionOutcome(overrides = {}) {
       price: "100",
       quantity: "2",
       executedQuantity: "0",
-      purpose: null,
+      purpose,
+      ...ownership,
       outcome: "REJECTED",
       brokerOrderId: null,
       status: "PENDING",
