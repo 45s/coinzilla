@@ -334,7 +334,10 @@ test("MongoDB provider rejects invalid operation callbacks and unsupported opera
 
 const transactionDocument = {
   _id: "transaction-record",
-  data: { name: "Ada" },
+  data: {
+    __coinzilla_key_aWQ: "transaction-record",
+    __coinzilla_key_bmFtZQ: "Ada",
+  },
 }
 
 test("MongoDB transaction facade tracks every CRUD operation", async () => {
