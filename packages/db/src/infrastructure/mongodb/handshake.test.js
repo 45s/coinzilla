@@ -115,7 +115,10 @@ test("MongoDB handshake validates requested mechanisms and selects server-suppor
 
   const unsupportedByServer = {
     async command() {
-      return { ...baseHello, saslSupportedMechs: ["SCRAM-SHA-1"] }
+      return {
+          ...baseHello,
+          saslSupportedMechs: ["SCRAM-SHA-1"],
+        }
     },
   }
   await assert.rejects(
@@ -134,9 +137,15 @@ test("MongoDB handshake validates requested mechanisms and selects server-suppor
       async command({ body }) {
         commands.push(body)
         if (body.hello) {
-          return { ...baseHello, saslSupportedMechs: supported }
+          return {
+            ...baseHello,
+            saslSupportedMechs: supported,
+          }
         }
-        return { ok: 0, errmsg: "authentication failed" }
+        return {
+          ok: 0,
+          errmsg: "authentication failed",
+        }
       },
     }
     await assert.rejects(
