@@ -165,6 +165,44 @@ test("MongoDB provider aborts failed transactions and preserves callback failure
 })
 
 
+
+test("MongoDB provider waits for in-flight standalone CRUD before closing its socket", async () => {
+  let releaseWrite
+  let markWriteStarted
+  const writeStarted = new Promise((resolve) => {
+    markWriteStarted = resolve
+  })
+  const writeGate = new Promise((resolve) => {
+    releaseWrite = resolve
+  })
+  const { provider, transports } = createProviderHarness({
+    commandHandler: async (body) => {
+      if (body.insert === "coinzilla_cGVvcGxl") {
+        markWriteStarted()
+        await writeGate
+      }
+      return { ok: 1, n: 1 }
+    },
+  })
+  const database = createDatabase({ provider })
+  await database.connect()
+
+  const creating = database.create({
+    collection: "people",
+    record: { id: "in-flight-crud" },
+  })
+  await writeStarted
+  const closing = database.close()
+
+  assert.equal(database.state, "closing")
+  assert.equal(transports[0].closed, false)
+  releaseWrite()
+  await Promise.all([creating, closing])
+
+  assert.equal(transports[0].closed, true)
+  assert.equal(database.state, "closed")
+})
+
 test("MongoDB provider isolates concurrent transactions and drains them before close", async () => {
   let releaseWrite
   let markWriteStarted
