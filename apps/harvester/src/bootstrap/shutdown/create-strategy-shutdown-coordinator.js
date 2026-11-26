@@ -1,3 +1,5 @@
+const MAX_PARTICIPANT_SAFETY_REPROOFS = 3
+
 function createStrategyBlocker({ participant, error, reason, status } = {}) {
   let safetySnapshot
   try {
@@ -172,7 +174,29 @@ async function waitForParticipantWithDeadline({
     if (outcome.status !== "fulfilled" || outcome.value?.ok !== true) {
       break
     }
-    if (participant.isSafeToShutdown() === true) {
+    let participantIsSafe
+    try {
+      participantIsSafe = participant.isSafeToShutdown() === true
+    } catch (error) {
+      outcome = { status: "rejected", reason: error }
+      break
+    }
+    if (participantIsSafe) {
+      break
+    }
+    if (reproofCount >= MAX_PARTICIPANT_SAFETY_REPROOFS) {
+      outcome = {
+        status: "rejected",
+        reason: Object.assign(
+          new Error("Strategy safety marker remained invalid after bounded reproof attempts"),
+          {
+            code: "STRATEGY_SAFETY_MARKER_INVALIDATED",
+            strategyId: participant.strategyId,
+            operation: "waitUntilSafe",
+            reproofCount,
+          },
+        ),
+      }
       break
     }
     reproofCount += 1
