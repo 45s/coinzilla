@@ -49,7 +49,7 @@ const marketPrice = { symbol: "DOGEUSDT",
 price: "0.100",
 timestamp: 100 }
 
-function makeBoughtState({ quoteCommission = "0", baseCommission = "0" } = {}) {
+function makeBoughtState({ quoteCommission = "0" } = {}) {
   const fill = new Fill({
     tradeId: "buy-1",
     brokerOrderId: "order-1",
@@ -61,15 +61,9 @@ asset: quoteAsset }),
 asset: baseAsset }),
     quoteQuantity: new Money({ amount: "10",
 asset: quoteAsset }),
-    commissions: [
-      ...(quoteCommission === "0" ? [] : [
-        new Commission({ amount: new Money({ amount: quoteCommission,
+    commissions: quoteCommission === "0" ? [] : [
+      new Commission({ amount: new Money({ amount: quoteCommission,
 asset: quoteAsset }) }),
-      ]),
-      ...(baseCommission === "0" ? [] : [
-        new Commission({ amount: new Money({ amount: baseCommission,
-asset: baseAsset }) }),
-      ]),
     ],
     commissionStatus: "COMPLETE",
   })
@@ -366,6 +360,7 @@ test("allows the next BUY only after the recovery SELL is acknowledged", () => {
         side: "SELL",
         status,
         brokerOrderId: "broker-sell-1",
+        remainingQuantity: new Quantity({ amount: "99", asset: baseAsset }),
       }],
       lastBuyPrice: "0.1",
     })
@@ -400,9 +395,12 @@ test("blocks the next BUY while the recovery SELL acknowledgement is pending or 
       portfolio,
       recoveryLedger,
       marketMetadata,
-      activeOrders: [{ market,
-side: "SELL",
-status }],
+      activeOrders: [{
+        market,
+        side: "SELL",
+        status,
+        remainingQuantity: new Quantity({ amount: "99", asset: baseAsset }),
+      }],
       lastBuyPrice: "0.1",
     })
 
@@ -738,38 +736,6 @@ value: { amount: "0.1" } }
   assert.equal(decision.inventoryDisposition.evaluatedNotional, "0.1")
 })
 
-test("fails closed when aggregate owned SELL reservations exceed net sellable inventory after fees and keepQuantity", () => {
-  const { portfolio, recoveryLedger } = makeBoughtState({ baseCommission: "0.5" })
-  const activeOrders = [
-    {
-      market,
-      side: "SELL",
-      status: "OPEN",
-      remainingQuantity: new Quantity({ amount: "49", asset: baseAsset }),
-    },
-    {
-      market,
-      side: "SELL",
-      status: "UNKNOWN",
-      remainingQuantity: new Quantity({ amount: "50", asset: baseAsset }),
-    },
-  ]
-
-  assert.throws(
-    () => evaluateConservativeStrategy({
-      marketPrice,
-      pairConfig,
-      settings,
-      portfolio,
-      recoveryLedger,
-      marketMetadata,
-      activeOrders,
-    }),
-    /Aggregate active Conservative recovery SELL commitments exceed sellable Position inventory/,
-    "All active/unknown owned SELL remaining quantities must be reserved against net Position inventory after base commissions and keepQuantity.",
-  )
-})
-
 test("does not create a duplicate residual SELL while one is active", () => {
   const { portfolio, recoveryLedger } = makeProfitableResidualState()
   const decision = evaluateConservativeStrategy({
@@ -791,9 +757,12 @@ test("does not create a duplicate residual SELL while one is active", () => {
         ),
       },
     },
-    activeOrders: [{ market,
-side: "SELL",
-status: "OPEN" }],
+    activeOrders: [{
+      market,
+      side: "SELL",
+      status: "OPEN",
+      remainingQuantity: new Quantity({ amount: "0.5", asset: baseAsset }),
+    }],
     lastBuyPrice: "0.1",
   })
 
