@@ -54,6 +54,22 @@ sequenceCalls,
 transports }
 }
 
+function createPrimaryDiscoveryTransport({ options, attempts }) {
+  const transport = {
+    options,
+    closed: false,
+    async connect() {},
+    async command() {
+      return { ok: 1 }
+    },
+    async close() {
+      this.closed = true
+    },
+  }
+  attempts.push(transport)
+  return transport
+}
+
 function createPrimaryDiscoveryHarness({
   primaryResponses,
   host = "seed",
@@ -66,21 +82,10 @@ function createPrimaryDiscoveryHarness({
     host,
     port,
     directConnection,
-    transportFactory: (options) => {
-      const transport = {
-        options,
-        closed: false,
-        async connect() {},
-        async command() {
-          return { ok: 1 }
-        },
-        async close() {
-          this.closed = true
-        },
-      }
-      attempts.push(transport)
-      return transport
-    },
+    transportFactory: (options) => createPrimaryDiscoveryTransport({
+      options,
+      attempts,
+    }),
     handshake: async () => {
       const index = Math.min(responseIndex, primaryResponses.length - 1)
       responseIndex += 1
@@ -92,6 +97,8 @@ function createPrimaryDiscoveryHarness({
     attempts,
   }
 }
+
+function noOperation() {}
 
 function assertMongoProviderOptionRejected({ options, expected }) {
   assert.throws(
@@ -193,7 +200,10 @@ test("MongoDB provider parses IPv6 and hostname primary redirects", async () => 
         topology: "replicaSet",
         primary: "primary.example",
       },
-      { topology: "replicaSet", primary: null },
+      {
+        topology: "replicaSet",
+        primary: null,
+      },
     ],
   })
   await hostname.provider.connect()
@@ -202,7 +212,7 @@ test("MongoDB provider parses IPv6 and hostname primary redirects", async () => 
   await hostname.provider.close()
 })
 
-test("MongoDB provider rejects malformed and looping replica-set primary addresses", async () => {
+test("MongoDB provider rejects malformed replica-set primary addresses", async () => {
   const invalidPrimaries = [
     {
       primary: 42,
@@ -242,7 +252,9 @@ test("MongoDB provider rejects malformed and looping replica-set primary address
         && invalid.expected.test(error.cause?.message ?? ""),
     )
   }
+})
 
+test("MongoDB provider rejects looping replica-set primary addresses", async () => {
   const redirectLoop = createPrimaryDiscoveryHarness({
     primaryResponses: [
       {
@@ -269,6 +281,7 @@ test("MongoDB provider rejects malformed and looping replica-set primary address
       && /exceeded the redirect limit/.test(error.cause?.message ?? ""),
   )
 })
+
 
 test("MongoDB provider coalesces connects and makes close idempotent", async () => {
   const harness = createProviderHarness()
@@ -312,12 +325,10 @@ test("MongoDB provider rejects invalid operation callbacks and unsupported opera
     harness.provider.execute({ operation: "unknown" }),
     /Unsupported MongoDB CRUD operation/,
   )
-  await harness.provider.withTransaction(async () => {
-    await assert.rejects(
-      harness.provider.withTransaction(() => {}),
-      DatabaseTransactionUnsupportedError,
-    )
-  })
+  await assert.rejects(
+    harness.provider.withTransaction(() => harness.provider.withTransaction(noOperation)),
+    DatabaseTransactionUnsupportedError,
+  )
   await harness.provider.close()
 })
 
