@@ -912,3 +912,30 @@ test("renders recovery SELL cancellation requests in the requested compact conso
   )
   output.destroy()
 })
+
+test("compacts rejected lifecycle lines and retains the rejection reason", () => {
+  const output = new PassThrough()
+  let written = ""
+  output.on("data", (chunk) => { written += chunk.toString() })
+  const transport = createHarvesterConsoleTransport({ output, color: false })
+  transport.write({
+    timestamp: "2026-11-26T21:45:17",
+    level: "info",
+    method: "info",
+    data: {
+      message: "Order lifecycle",
+      orderLifecycle: true,
+      strategyId: "CG_coinGrabber",
+      lifecycleStatus: "REJECTED",
+      brokerOrderId: "3215105",
+      symbol: "LINKUSDT",
+      side: "BUY",
+      quantity: "2",
+      price: "9.244",
+      detail: "Insufficient quote balance",
+    },
+  })
+  assert.match(written, /🟡 CG REJECTED LINKUSDT BUY 2 @ 9\.244 \| Insufficient quote balance/)
+  assert.doesNotMatch(written, /#3215105/)
+  output.destroy()
+})
