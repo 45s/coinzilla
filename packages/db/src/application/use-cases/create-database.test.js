@@ -469,13 +469,16 @@ test("provider-neutral facade rejects transactions from an expired callback scop
   await database.connect()
   let lateTransaction
 
-  try {
-    await database.transaction(() => {
-      queueMicrotask(() => {
-        lateTransaction = database.transaction(() => {})
-      })
+  function emptyTransaction() {}
+
+  function scheduleLateTransaction() {
+    queueMicrotask(() => {
+      lateTransaction = database.transaction(emptyTransaction)
     })
-    await new Promise((resolve) => queueMicrotask(resolve))
+  }
+
+  try {
+    await database.transaction(scheduleLateTransaction)
     await assert.rejects(
       lateTransaction,
       /transaction callback has already completed/,
