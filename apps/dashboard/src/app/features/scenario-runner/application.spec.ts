@@ -211,3 +211,26 @@ describe('framework-independent Scenario Runner application', () => {
     expect(gateway.submit).not.toHaveBeenCalled();
   });
 });
+
+
+  it('replays a terminal run through the gateway and refreshes the replay record', async () => {
+    const replayRecord = run({
+      runId: 'run-2',
+      replayOfRunId: 'run-1',
+      status: 'Starting',
+      output: null,
+    });
+    gateway.replay = vi.fn().mockResolvedValue(replayRecord);
+    gateway.getRun = vi.fn().mockResolvedValue(run({
+      runId: 'run-2',
+      replayOfRunId: 'run-1',
+      status: 'Completed',
+    }));
+
+    const snapshot = await application.replayRun({ runId: 'run-1' });
+
+    expect(gateway.replay).toHaveBeenCalledWith('run-1');
+    expect(gateway.getRun).toHaveBeenCalledWith('run-2');
+    expect(snapshot.run.runId).toBe('run-2');
+    expect(snapshot.run.replayOfRunId).toBe('run-1');
+  });
