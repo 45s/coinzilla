@@ -560,10 +560,7 @@ function createWorkerExecutor({
       terminationGraceMs,
       maxOutputBytes,
       onReady: () => {
-        if (!confirmWorkerReadiness({
-          signal,
-          onStarted,
-        })) {
+        if (signal?.aborted) {
           return
         }
         dispatchScenarioExecution({
