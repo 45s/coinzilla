@@ -134,3 +134,8 @@ The report distinguishes the full startup boundary from later operator reads. St
 ## Structured startup diagnostics
 
 Startup readiness blocks now use a Harvester-owned `SystemCustomError` with a stable code and flat, sanitized context. User-data unsafe and reconciliation failures also retain stable codes. The terminal logger emits the check's expected condition, observed evidence, source, severity, possible causes, recovery outcome and operator action without exposing credentials or account identifiers.
+
+
+## Verification correction
+
+The user-data startup assertions now distinguish the stable structured error codes for unsafe initial events and unsafe deferred activation. A status-handler callback cannot reopen the existing readiness gate while the startup audit is pending.

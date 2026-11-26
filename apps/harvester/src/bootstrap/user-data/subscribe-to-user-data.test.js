@@ -276,7 +276,7 @@ test("revalidates user-data safety before deferred trading activation", async ()
 
   await assert.rejects(
     setup.activateTrading(),
-    /Cannot enable Conservative trading after an unowned or invalid user-data event/,
+    (error) => error.code === "HARVESTER_USER_DATA_STARTUP_UNSAFE",
     "An unsafe event received after PREFLIGHT must prevent the delayed activation.",
   )
   assert.equal(fixture.state.ready, false, "A failed activation revalidation must leave the authoritative trading gate closed.")

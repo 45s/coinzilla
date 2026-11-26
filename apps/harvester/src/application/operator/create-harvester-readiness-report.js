@@ -785,7 +785,6 @@ function createMarketRouteCheck({ market, input, routeRequired, bookRequired, ru
 }
 
 function createMarketPriceCheck({ market, input, routeRequired, runtime, observedAt } = {}) {
-  const price = input.price ?? {}
   if (!input.price && runtime.startupBoundary !== true) {
     return createMarketCheck({
       id: "market.price",

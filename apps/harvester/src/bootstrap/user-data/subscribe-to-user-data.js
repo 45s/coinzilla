@@ -249,9 +249,12 @@ export async function subscribeToUserData({
     return userDataSubscription
   }
   if (state.accountingFailed) {
-    throw new Error(
-      "Cannot enable Conservative trading after an unowned or invalid user-data event before order ownership was initialized",
-    )
+    throw new HarvesterUserDataStartupUnsafeError({
+      tradingModeLabel,
+      code: "HARVESTER_USER_DATA_STARTUP_UNSAFE",
+      message: "Cannot enable Conservative trading after an unowned or invalid user-data event before order ownership was initialized",
+      status: state.status,
+    })
   }
 
   await publishOpenOrdersSnapshot({ phase: "PREFLIGHT" })
