@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { parseTelegramOperatorCommand } from "./commands.js"
+import { getInvalidCommandUsage, parseTelegramOperatorCommand } from "./commands.js"
 
 test("parses supported read-only, entry, market and emergency BUY commands", () => {
   const scenarios = [
@@ -79,4 +79,33 @@ test("maps persistent keyboard labels to the same read and control actions", () 
       "Persistent keyboard labels must preserve the established Command Center action mapping.",
     )
   }
+})
+
+
+test("requires explicit cause-fixed confirmation for account blocker resolution", () => {
+  assert.deepEqual(
+    parseTelegramOperatorCommand("/resolveaccountblockers cause-fixed"),
+    {
+      type: "RESOLVE_ACCOUNT_BLOCKERS",
+      causeFixed: true,
+    },
+  )
+  assert.deepEqual(
+    parseTelegramOperatorCommand("/resolveaccountblockers"),
+    {
+      type: "INVALID",
+      command: "RESOLVEACCOUNTBLOCKERS",
+    },
+  )
+  assert.deepEqual(
+    parseTelegramOperatorCommand("/resolveaccountblockers maybe"),
+    {
+      type: "INVALID",
+      command: "RESOLVEACCOUNTBLOCKERS",
+    },
+  )
+  assert.match(
+    getInvalidCommandUsage("RESOLVEACCOUNTBLOCKERS"),
+    /cause-fixed/,
+  )
 })
