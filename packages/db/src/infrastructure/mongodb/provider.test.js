@@ -458,7 +458,7 @@ function createConformanceMongoServer(store) {
           const typeKey = sortKey.includes("SortType")
           const fieldPath = typeKey
             ? expression?.$switch?.branches?.[0]?.case?.$in?.[0]?.$type
-            : expression?.$ifNull?.[0]
+            : expression?.$cond?.[2]?.$ifNull?.[0]
           const field = typeof fieldPath === "string" ? fieldPath.slice("$data.".length) : null
           const leftValue = field ? left.data[field] : undefined
           const rightValue = field ? right.data[field] : undefined
