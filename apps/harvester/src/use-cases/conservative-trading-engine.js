@@ -1472,7 +1472,7 @@ error })
       order,
       ownership: state.registry.getOwnership({ clientOrderId: order.clientOrderId }),
       status: "PENDING",
-      detail: "Local PENDING registration; durable intent and broker placement are not yet confirmed",
+      detail: "Local PENDING registration; Operational State Store intent and broker placement are not yet confirmed",
     })
     return { ownership }
   }

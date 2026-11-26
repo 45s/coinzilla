@@ -742,7 +742,7 @@ test("durably journals the submission intent before broker placement and labels 
   const pendingLifecycle = lifecycleLogs.find((entry) => entry.orderStatus === "PENDING")
   assert.ok(pendingLifecycle, "The local registry event must be visible as PENDING before broker placement.")
   assert.equal(pendingLifecycle.lifecycleStatus, "PENDING", "A local PENDING record must not be mislabeled as SUBMITTED.")
-  assert.match(pendingLifecycle.detail, /durable intent and broker placement are not yet confirmed/)
+  assert.match(pendingLifecycle.detail, /Operational State Store intent and broker placement are not yet confirmed/)
   assert.equal(lifecycleLogs.some((entry) => entry.lifecycleStatus === "SUBMITTED" && entry.orderStatus === "PENDING"), false)
 })
 
