@@ -147,7 +147,6 @@ function encodeCollectionName(collection, databaseName) {
 
 function createSortMetadataValue(value) {
   let rank
-  let sortValue = value
   if (value === null) {
     rank = 0
   } else if (value === false) {
@@ -160,9 +159,8 @@ function createSortMetadataValue(value) {
     rank = 4
   } else {
     rank = 5
-    sortValue = JSON.stringify(value)
   }
-  return { rank, value: sortValue }
+  return { rank }
 }
 
 function createStoredDocument(record) {
@@ -229,7 +227,7 @@ function createSortStages(sort) {
     const valueKey = `__coinzillaSortValue${index}`
     const metadataPath = `$sortData.${encodeUserKey(field)}`
     additions[typeKey] = { $ifNull: [`${metadataPath}.rank`, 0] }
-    additions[valueKey] = { $ifNull: [`${metadataPath}.value`, null] }
+    additions[valueKey] = { $ifNull: [`$data.${encodeUserKey(field)}`, null] }
     const sortDirection = direction === "asc" ? 1 : -1
     ordering[typeKey] = sortDirection
     ordering[valueKey] = sortDirection
