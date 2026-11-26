@@ -37,7 +37,7 @@ test("OP_MSG preserves response correlation, flags, and document sequences", () 
 
   assert.equal(decoded.responseTo, 17)
   assert.equal(decoded.flags, 2)
-  assert.deepEqual(decoded.sequences, {
+  assert.deepEqual({ ...decoded.sequences }, {
     documents: [{ _id: "one" }, { _id: "two" }],
   })
 })
@@ -149,7 +149,10 @@ test("OP_MSG sequence identifiers cannot mutate the sequence map prototype", () 
 
   assert.equal(Object.getPrototypeOf(decoded.sequences), null)
   assert.equal(Object.hasOwn(decoded.sequences, "__proto__"), true)
-  assert.deepEqual(decoded.sequences.__proto__, [{ value: "safe" }])
+  assert.deepEqual(
+    Object.getOwnPropertyDescriptor(decoded.sequences, "__proto__")?.value,
+    [{ value: "safe" }],
+  )
 })
 
 test("OP_MSG rejects malformed sequence lengths and invalid request options", () => {

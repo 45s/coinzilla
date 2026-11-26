@@ -72,9 +72,9 @@ A test-first regression in `275afc016924f005a2b71eaba748672465e75bb5` covers tok
 
 The provider previously retried every thrown commit error as ambiguous, even when the transport could prove that the commit frame was never accepted for sending (for example, a synchronous socket-write rejection or a local write-buffer limit). That could report `DatabaseTransactionOutcomeUnknownError` when the commit was definitely not sent. A regression was committed first in `94f24123ddfac6156f12c61e07b624d6f8bafc83`. Commit requests now carry an explicit `commit` operation classification through the transport: timeouts/interruption after dispatch remain ambiguous, while pre-dispatch failures are marked `outcomeUnknown: false` and surface as provider failures without retrying. If an earlier attempt was ambiguous, a later definitely-unsent retry still cannot resolve that earlier attempt, so the final result remains unknown.
 
-### Default TCP transport import
+### Default TCP transport test
 
-The transport's default non-TLS socket path called `net.createConnection` without importing Node's `node:net` module. Fake-socket tests masked the runtime failure. A real local TCP regression test was committed first in `dd30009426f46bd118eb3bb849dc05015ab25bb8`; the transport now imports `node:net` explicitly. TLS continues to use Node's built-in `node:tls`. No external dependency is introduced.
+A real local TCP-server regression test was added to exercise the default non-TLS socket path rather than only injected fake sockets. The original transport already imported Node's `node:net`; the follow-up implementation patch accidentally added a duplicate import, which caused an ESM syntax error. The duplicate was removed, and the real TCP test is retained. This is a test-hardening correction, not a pre-existing missing-import defect.
 
 ### OP_MSG sequence map key safety
 
