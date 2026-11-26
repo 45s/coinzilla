@@ -334,3 +334,34 @@ test("read transactions fall back to the required write transaction port for leg
     await database.close()
   }
 })
+
+
+test("provider CRUD operations are tracked so close waits before releasing the provider", async () => {
+  let finishOperation
+  let providerClosed = false
+  const capabilities = {
+    transactions: { callbackMode: "asynchronous", nestedTransactions: false, multiDocument: false },
+    queries: { equalityFilters: true, sorting: true, pagination: true },
+    storage: { modes: ["server"] },
+  }
+  const provider = {
+    capabilities,
+    connect() {},
+    close() { providerClosed = true },
+    withTransaction(work) { return work({ create() {}, readOne() {}, readMany() {}, update() {}, delete() {} }) },
+    withReadTransaction(work) { return work({ create() {}, readOne() {}, readMany() {}, update() {}, delete() {} }) },
+    execute() { return new Promise((resolve) => { finishOperation = resolve }) },
+  }
+  const database = createDatabase({ provider })
+  await database.connect()
+
+  const operation = database.create({ collection: "people", record: { id: "pending" } })
+  const closing = database.close()
+  assert.equal(database.state, "closing")
+  assert.equal(providerClosed, false)
+  finishOperation({ id: "pending" })
+  assert.deepEqual(await operation, { id: "pending" })
+  await closing
+  assert.equal(providerClosed, true)
+  assert.equal(database.state, "closed")
+})
