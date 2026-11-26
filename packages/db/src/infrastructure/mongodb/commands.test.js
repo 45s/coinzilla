@@ -134,6 +134,26 @@ test("MongoDB readMany drains every cursor batch", async () => {
   assert.equal(stub.calls[1].getMore, 12)
 })
 
+
+test("MongoDB readMany kills an open cursor after a failed getMore response", async () => {
+  const stub = createCommandStub([
+    { ok: 1, cursor: { id: 12, firstBatch: [] } },
+    { ok: 1, cursor: { id: 12 } },
+    { ok: 1, cursorsUnknown: [] },
+  ])
+  const operations = createMongoRecordOperations({
+    command: stub.command,
+    databaseName: "app",
+  })
+
+  await assert.rejects(
+    operations.readMany({ collection: "people" }),
+    /getMore response omitted cursor.nextBatch/,
+  )
+  assert.equal(stub.calls[2].killCursors.startsWith("coinzilla_"), true)
+  assert.deepEqual(stub.calls[2].cursors, [12])
+})
+
 test("MongoDB update and delete preserve missing-record result semantics", async () => {
   const stub = createCommandStub([
     { ok: 1, value: null },
