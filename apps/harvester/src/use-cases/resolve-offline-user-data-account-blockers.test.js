@@ -917,3 +917,28 @@ test("rejects ACCOUNT blockers without verified user-data producer provenance", 
   assert.equal(result.ok, false, "only explicitly tagged user-data ACCOUNT blockers may be resolved")
   assert.equal(auditCalls, 0, "unknown blocker provenance must be rejected before market reconciliation")
 })
+
+test("fails closed on account balance discrepancies before resolution", async () => {
+  const context = makeContext()
+  const usdt = context.exchange.currentAccountSnapshot.balances.find(({ asset }) => asset === "USDT")
+  usdt.free = "99"
+  usdt.total = "99"
+  let resolutionCalled = false
+  const result = await runOfflineAccountBlockerResolution({
+    context,
+    operationalStateStore: makeStore(),
+    operatorId: "operator-7",
+    actionId: "action-unique-034",
+    causeFixed: true,
+    resolveBlockers: async () => {
+      resolutionCalled = true
+      return {
+        ok: true,
+        data: {},
+      }
+    },
+  })
+
+  assert.equal(result.ok, false, "account balance mismatch against Journal must fail closed")
+  assert.equal(resolutionCalled, false, "balance discrepancy must be rejected before resolution append")
+})

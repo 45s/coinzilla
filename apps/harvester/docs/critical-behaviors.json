@@ -1291,6 +1291,16 @@
           "path": "src/use-cases/resolve-user-data-account-blockers.test.js",
           "name": "fails closed when durable resolution readback fails",
           "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/resolve-offline-user-data-account-blockers.test.js",
+          "name": "fails closed on account balance discrepancies before resolution",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/resolve-user-data-account-blockers.test.js",
+          "name": "does not resolve Recovery Seller STOP when a user-data ACCOUNT blocker is present",
+          "kind": "failure"
         }
       ],
       "runtimeStatus": "offline-only",

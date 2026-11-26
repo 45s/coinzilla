@@ -353,3 +353,51 @@ test("fails closed when durable resolution readback fails", async () => {
   }))
   assert.equal(result.ok, false, "resolution requires successful durable projection/readback")
 })
+
+test("does not resolve Recovery Seller STOP when a user-data ACCOUNT blocker is present", async () => {
+  const store = makeStore()
+  const recoverySellerEvidenceDigest = "b".repeat(64)
+  const recoverySellerBlockerId = createHash("sha256")
+    .update([
+      "ACCOUNT",
+      "",
+      "RECOVERY_SELLER_UNEXPECTED_CONDITION",
+      recoverySellerEvidenceDigest,
+    ].join("\0"))
+    .digest("hex")
+  store.records.push(record({
+    sequence: 6,
+    factType: "SAFETY_BLOCKER_RAISED",
+    data: {
+      blockerId: recoverySellerBlockerId,
+      producer: "RECOVERY_SELLER",
+      scope: "ACCOUNT",
+      symbol: null,
+      reason: "RECOVERY_SELLER_UNEXPECTED_CONDITION",
+      evidenceDigest: recoverySellerEvidenceDigest,
+    },
+    factId: `safety-blocker-raised:${recoverySellerBlockerId}`,
+  }))
+  const stopped = await recordProcessStopped({
+    operationalStateStore: store,
+    reason: "OPERATOR_SHUTDOWN",
+    clean: true,
+  })
+  assert.equal(stopped.ok, true, "test store must represent a cleanly stopped session")
+  const recordsBeforeResolution = store.records.length
+
+  const result = await resolveUserDataAccountBlockers(makeResolutionOptions({
+    store,
+    audit: readyAudit(),
+    actionId: "action-unique-011",
+  }))
+
+  assert.equal(result.ok, false, "mixed Recovery Seller and user-data ACCOUNT blockers must remain fail-closed")
+  assert.match(result.errors[0].message, /verified user-data producer provenance/, "Recovery Seller STOP must be rejected by producer isolation")
+  assert.equal(store.records.length, recordsBeforeResolution, "rejected mixed blocker set must append no resolution facts")
+  assert.equal(
+    store.records.some((fact) => fact.factType === "SAFETY_BLOCKER_RESOLVED" && fact.data.blockerId === recoverySellerBlockerId),
+    false,
+    "Recovery Seller STOP must never receive a user-data resolution fact"
+  )
+})
