@@ -1473,6 +1473,7 @@ error })
       ownership: state.registry.getOwnership({ clientOrderId: order.clientOrderId }),
       status: "SUBMITTED",
     })
+    return { ownership }
   }
 }
 
