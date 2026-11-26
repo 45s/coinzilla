@@ -249,6 +249,17 @@ function authenticateCommandOperator({ parsed, getUserInfo, writeError }) {
   }
 }
 
+async function executeAuthenticatedCommand(options) {
+  try {
+    const summary = await executeRecoveryCommand(options)
+    options.writeOutput(JSON.stringify(summary, null, 2))
+    return summary.ok && summary.data.durableReadbackVerified === true ? 0 : 1
+  } catch (error) {
+    options.writeError(error.message)
+    return 1
+  }
+}
+
 export async function runRecoveryAccountBlockerCommand({
   args = process.argv.slice(2),
   env = process.env,
@@ -264,11 +275,17 @@ export async function runRecoveryAccountBlockerCommand({
   runResolution = runOfflineAccountBlockerResolution,
 } = {}) {
   writeOutput(createRecoveryIdentity({ env }))
-  const parsed = parseCommandArguments({ args, writeError })
+  const parsed = parseCommandArguments({
+    args,
+    writeError,
+  })
   if (!parsed) {
     return 1
   }
-  const earlyExit = getCommandEarlyExit({ parsed, writeOutput })
+  const earlyExit = getCommandEarlyExit({
+    parsed,
+    writeOutput,
+  })
   if (earlyExit !== undefined) {
     return earlyExit
   }
@@ -280,22 +297,17 @@ export async function runRecoveryAccountBlockerCommand({
   if (!operatorIdentity) {
     return 1
   }
-  try {
-    const summary = await executeRecoveryCommand({
-      parsed,
-      operatorIdentity,
-      cwd,
-      env,
-      readContext,
-      createStore,
-      runResolution,
-    })
-    writeOutput(JSON.stringify(summary, null, 2))
-    return summary.ok && summary.data.durableReadbackVerified === true ? 0 : 1
-  } catch (error) {
-    writeError(error.message)
-    return 1
-  }
+  return executeAuthenticatedCommand({
+    parsed,
+    operatorIdentity,
+    cwd,
+    env,
+    readContext,
+    createStore,
+    runResolution,
+    writeOutput,
+    writeError,
+  })
 }
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   process.exitCode = await runRecoveryAccountBlockerCommand()
