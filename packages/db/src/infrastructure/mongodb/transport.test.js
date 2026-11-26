@@ -214,8 +214,8 @@ test("MongoDB transport fails closed when socket writes fail", async () => {
   }
 
   await assert.rejects(
-    transport.command({ body: { ping: 1 } }),
-    /connection closed before command completed/,
+    transport.command({ body: { insert: "records" }, operation: "create" }),
+    (error) => error.outcomeUnknown === true,
   )
   assert.equal(transport.state, "closed")
   assert.equal(transport.pendingRequestCount, 0)
@@ -261,6 +261,46 @@ test("MongoDB transport handles socket end and idempotent close", async () => {
   await transport.close()
   await transport.close()
   assert.equal(transport.state, "closed")
+})
+
+
+test("MongoDB transport marks interrupted non-transactional writes as outcome-unknown only", async () => {
+  const write = createFakeTransport()
+  await write.transport.connect()
+  await assert.rejects(
+    write.transport.command({
+      body: { insert: "records" },
+      operation: "create",
+      timeoutMS: 5,
+    }),
+    (error) => error.outcomeUnknown === true,
+  )
+  await write.transport.close()
+
+  const read = createFakeTransport()
+  await read.transport.connect()
+  await assert.rejects(
+    read.transport.command({
+      body: { find: "records" },
+      operation: "readMany",
+      timeoutMS: 5,
+    }),
+    (error) => error.outcomeUnknown === false,
+  )
+  await read.transport.close()
+
+  const transactionWrite = createFakeTransport()
+  await transactionWrite.transport.connect()
+  await assert.rejects(
+    transactionWrite.transport.command({
+      body: { insert: "records" },
+      operation: "create",
+      transaction: true,
+      timeoutMS: 5,
+    }),
+    (error) => error.outcomeUnknown === false,
+  )
+  await transactionWrite.transport.close()
 })
 
 test("MongoDB transport rejects timed-out requests and releases their correlation entries", async () => {
