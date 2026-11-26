@@ -60,7 +60,7 @@ A second review found that Node's `Buffer.from(value, "base64")` silently ignore
 
 The pinned Transactions Specification treats both `commitTransaction` and `abortTransaction` as retryable write commands. Commit retries must preserve the same logical session and transaction number; retryable-write labels and `MaxTimeMSExpired` are treated as ambiguous commit results. Abort is best-effort: retry once for a retryable error, then ignore abort failures so they do not replace the original callback/commit error. The official Node.js driver implements this in `src/sessions.ts` at the pinned driver commit.
 
-The provider now retries commit for `RetryableWriteError`, `MaxTimeMSExpired`, write-concern timeout and sent-request uncertainty. Abort is retried once for retryable/sent-request errors and its final failure is ignored. Regression coverage was added in `592ce58725469cc4c9ca770369e498e8bc9dd59a`.
+The provider now retries commit for `RetryableWriteError`, `MaxTimeMSExpired`, write-concern timeout and sent-request uncertainty. Abort is retried once for retryable/sent-request errors and its final failure is ignored. Regression coverage was added in `592ce58725469cc4c9ca770369e498e8bc9dd59a`. Sharded abort retries also refresh the request token from each successful response; regression `ab89ef95b57249a383cd14ffbc98a1907a1a8d59` verifies the second abort uses the newer token.
 
 ### Sharded transaction recoveryToken
 

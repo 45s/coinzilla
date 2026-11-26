@@ -364,10 +364,20 @@ async function abortMongoTransaction({ transport, session }) {
   }
   for (let attempt = 0; attempt < MAX_ABORT_ATTEMPTS; attempt += 1) {
     try {
+      if (session.recoveryToken !== undefined) {
+        body.recoveryToken = session.recoveryToken
+      } else {
+        delete body.recoveryToken
+      }
       const response = await transport.command({
         body,
         operation: "abort",
       })
+      if (session.topology === "sharded"
+        && Number(response?.ok) === 1
+        && isPlainDocument(response.recoveryToken)) {
+        session.recoveryToken = response.recoveryToken
+      }
       if (Number(response?.ok) === 1 && !response.writeConcernError) {
         return
       }
