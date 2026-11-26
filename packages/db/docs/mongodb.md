@@ -126,3 +126,15 @@ A test suite using fake transports does not prove compatibility with a live Mong
 ## Official driver reference
 
 The implementation may consult and selectively adapt small, proven parts of the official MongoDB Node.js driver, but it does not vendor or recreate that driver. The pinned source baseline, component-by-component mapping, dependency analysis, mandatory porting workflow and Apache-2.0 attribution requirements are documented in [the official-driver reference and selective-port strategy](./mongodb-driver-reference-strategy.md). This package remains Node.js-built-ins-only; the official driver's `bson`, SASL preparation and connection-string dependencies must not be added as runtime dependencies.
+
+
+### Automated real-server integration
+
+The pull-request workflow `.github/workflows/mongodb-integration.yml` starts disposable MongoDB 8.0 containers and runs the real-server suite in two independent environments:
+
+- **Authenticated standalone:** verifies URI credentials, SCRAM authentication, CRUD/query behavior and lifecycle cleanup. Multi-document transaction checks are expected to be unsupported and are skipped by the suite.
+- **Replica set:** initializes a single-node replica set and verifies CRUD/query behavior plus transaction commit and abort against a real transaction-capable server.
+
+Both jobs use isolated generated databases and remove their containers even after failure. The integration credentials are test-only values created inside the disposable container.
+
+Sharded/mongos integration, TLS certificate validation against a real server, and other MongoDB server major versions are not covered by this workflow. Those scenarios remain unverified; the wire-version gate alone is not evidence of real-server compatibility.
