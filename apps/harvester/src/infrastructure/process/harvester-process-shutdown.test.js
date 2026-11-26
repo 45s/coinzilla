@@ -34,6 +34,7 @@ function createShutdownChildSource({ lockModuleUrl, shutdownModuleUrl } = {}) {
         stop: async () => ({
         ok: true,
         status: "STOPPED",
+        data: { durableProcessStopAcknowledged: true },
       }),
       },
       logger: {
@@ -290,6 +291,177 @@ test("retains the real process lock when durable PROCESS_STOPPED acknowledgement
   }
 })
 
+test("requires a Journal-backed STOPPED event when PROCESS_STOPPED was not durably recorded", async () => {
+  const calls = []
+  const previousExitCode = process.exitCode
+  process.exitCode = 0
+  try {
+    const handler = createRuntimeShutdownHandler({
+      runtime: {
+        stop: async () => ({
+          ok: true,
+          status: "STOPPED",
+          data: { durableProcessStopAcknowledged: false },
+        }),
+      },
+      logger: { error: () => calls.push("log-error") },
+      eventPublisher: {
+        publish: () => {
+          calls.push("publish-stopped")
+          return { ok: true }
+        },
+      },
+      eventBus: {
+        flush: async () => {
+          calls.push("event-bus-flush")
+          return { ok: true }
+        },
+      },
+      telegramNotifications: {
+        close: async () => calls.push("telegram-close"),
+      },
+      journalService: {
+        status: { enabled: true },
+        close: async () => ({ ok: true, closed: true, durable: true }),
+      },
+      processLock: {
+        release: async () => {
+          calls.push("process-lock-release")
+          return { ok: true }
+        },
+      },
+      closeObservability: async () => {
+        calls.push("observability-close")
+        return []
+      },
+      closeLogger: async () => calls.push("logger-close"),
+      logTelegramNotificationSummary: () => {},
+    })
+
+    await handler("SIGTERM")
+
+    assert.equal(process.exitCode, 0)
+    assert.ok(calls.includes("publish-stopped"))
+    assert.ok(calls.includes("event-bus-flush"))
+    assert.ok(calls.includes("observability-close"))
+    assert.ok(calls.includes("process-lock-release"))
+  } finally {
+    process.exitCode = previousExitCode
+  }
+})
+
+test("retains the process lock when the Journal-backed STOPPED acknowledgement is unavailable", async () => {
+  const calls = []
+  const previousExitCode = process.exitCode
+  process.exitCode = 0
+  try {
+    const handler = createRuntimeShutdownHandler({
+      runtime: {
+        stop: async () => ({
+          ok: true,
+          status: "STOPPED",
+          data: { durableProcessStopAcknowledged: false },
+        }),
+      },
+      logger: { error: () => calls.push("log-error") },
+      eventPublisher: {
+        publish: () => {
+          calls.push("publish-stopped")
+          return { ok: false, errors: [new Error("STOPPED event rejected")] }
+        },
+      },
+      eventBus: {
+        flush: async () => {
+          calls.push("event-bus-flush")
+          return { ok: true }
+        },
+      },
+      journalService: {
+        status: { enabled: true },
+        close: async () => ({ ok: true, closed: true, durable: true }),
+      },
+      processLock: {
+        release: async () => {
+          calls.push("process-lock-release")
+          return { ok: true }
+        },
+      },
+      closeObservability: async () => {
+        calls.push("observability-close")
+        return []
+      },
+      closeLogger: async () => calls.push("logger-close"),
+      logTelegramNotificationSummary: () => {},
+    })
+
+    await handler("SIGTERM")
+
+    assert.equal(process.exitCode, 1)
+    assert.ok(calls.includes("publish-stopped"))
+    assert.ok(!calls.includes("event-bus-flush"))
+    assert.ok(!calls.includes("observability-close"))
+    assert.ok(!calls.includes("process-lock-release"))
+  } finally {
+    process.exitCode = previousExitCode
+  }
+})
+
+test("fails closed when neither durable PROCESS_STOPPED nor an enabled Journal is available", async () => {
+  const calls = []
+  const previousExitCode = process.exitCode
+  process.exitCode = 0
+  try {
+    const handler = createRuntimeShutdownHandler({
+      runtime: {
+        stop: async () => ({
+          ok: true,
+          status: "STOPPED",
+          data: { durableProcessStopAcknowledged: false },
+        }),
+      },
+      logger: { error: () => calls.push("log-error") },
+      eventPublisher: {
+        publish: () => {
+          calls.push("publish-stopped")
+          return { ok: true }
+        },
+      },
+      eventBus: {
+        flush: async () => {
+          calls.push("event-bus-flush")
+          return { ok: true }
+        },
+      },
+      journalService: {
+        status: { enabled: false },
+        close: async () => ({ ok: true, closed: true, disabled: true }),
+      },
+      processLock: {
+        release: async () => {
+          calls.push("process-lock-release")
+          return { ok: true }
+        },
+      },
+      closeObservability: async () => {
+        calls.push("observability-close")
+        return []
+      },
+      closeLogger: async () => calls.push("logger-close"),
+      logTelegramNotificationSummary: () => {},
+    })
+
+    await handler("SIGTERM")
+
+    assert.equal(process.exitCode, 1)
+    assert.ok(!calls.includes("publish-stopped"))
+    assert.ok(!calls.includes("event-bus-flush"))
+    assert.ok(!calls.includes("observability-close"))
+    assert.ok(!calls.includes("process-lock-release"))
+  } finally {
+    process.exitCode = previousExitCode
+  }
+})
+
 test("retains all shared resources and the process lock when the final EventBus flush fails", async () => {
   const calls = []
   const previousExitCode = process.exitCode
@@ -299,6 +471,7 @@ test("retains all shared resources and the process lock when the final EventBus 
       stop: async () => ({
         ok: true,
         status: "STOPPED",
+        data: { durableProcessStopAcknowledged: true },
       }),
     },
     logger: {

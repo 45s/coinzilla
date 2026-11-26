@@ -71,8 +71,9 @@ test("stops operator control only after the runtime confirms strategy safety", a
     },
   })
 
-  await createHarvesterStop(dependencies)()
+  const result = await createHarvesterStop(dependencies)()
 
+  assert.equal(result.data.durableProcessStopAcknowledged, true)
   assert.deepEqual(
     calls,
     [
@@ -84,6 +85,19 @@ test("stops operator control only after the runtime confirms strategy safety", a
     ],
     "Inbound operator control must remain available until the strategy coordinator has proven safety, then stop before shared broker cleanup.",
   )
+})
+
+test("reports when PROCESS_STOPPED durability is unavailable because the Operational State Store is absent", async () => {
+  const calls = []
+  const dependencies = createStopDependencies({ calls })
+  dependencies.operationalStateStore = null
+
+  const result = await createHarvesterStop(dependencies)()
+
+  assert.equal(result.ok, true)
+  assert.equal(result.status, "STOPPED")
+  assert.equal(result.data.durableProcessStopAcknowledged, false)
+  assert.ok(!calls.includes("process-stop-record"))
 })
 
 test("does not record PROCESS_STOPPED when runtime stop omits an explicit terminal outcome", async () => {
