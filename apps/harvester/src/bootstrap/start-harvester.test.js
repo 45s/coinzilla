@@ -1797,12 +1797,79 @@ async function createPersistedAccountStopForRestart({ directory, store } = {}) {
   return restartStore
 }
 
-test("rejects unresolved account blockers before the first process start for every recovery configuration", async (t) => {
+async function seedAccountBlocker({ store, config = appConfig, includeProcessHistory = false } = {}) {
+  if (includeProcessHistory) {
+    const baseline = await recordConfigurationBaseline({
+      operationalStateStore: store,
+      appConfig: config,
+    })
+    assert.equal(baseline.ok, true, baseline.errors?.[0]?.message)
+    const started = await recordProcessStarted({
+      operationalStateStore: store,
+      configurationFingerprint: baseline.data.fingerprint,
+      strategyName: baseline.data.strategyName,
+      markets: baseline.data.markets,
+      tradingEnabled: true,
+    })
+    assert.equal(started.ok, true, started.errors?.[0]?.message)
+  }
+
+  const raised = await recordSafetyBlockerRaised({
+    operationalStateStore: store,
+    scope: "ACCOUNT",
+    symbol: null,
+    reason: "ACCOUNT_RECONCILIATION_REQUIRED",
+    evidenceDigest: "a".repeat(64),
+  })
+  assert.equal(raised.ok, true, raised.errors?.[0]?.message)
+
+  if (includeProcessHistory) {
+    const stopped = await recordProcessStopped({
+      operationalStateStore: store,
+      reason: "TEST_CLEAN_STOP_WITH_ACCOUNT_BLOCKER",
+      clean: true,
+    })
+    assert.equal(stopped.ok, true, stopped.errors?.[0]?.message)
+  }
+}
+
+async function assertStartupRejectedBeforeBroker({ scenario, store } = {}) {
+  const calls = []
+  let runtime
+  let startupError
+  try {
+    runtime = await startHarvesterForTest({
+      loadConfig: async () => scenario.config,
+      env: binanceEnv,
+      brokerAdapterFactory: () => scenario.createBroker(calls),
+      operationalStateStore: store,
+      ...scenario.startupOptions,
+      logger: {
+        info() {},
+        warn() {},
+        error() {},
+      },
+    })
+  } catch (error) {
+    startupError = error
+  }
+
+  try {
+    assert.ok(startupError, `${scenario.name}: startup must reject an unresolved ACCOUNT blocker before broker connection.`)
+    assert.match(startupError.message, scenario.errorPattern)
+    assert.equal(calls.length, 0, `${scenario.name}: startup must reject before broker connection or market-data subscription.`)
+  } finally {
+    await runtime?.stop()
+  }
+}
+
+test("rejects an unprojectable account-blocker ledger before broker connection for every recovery configuration", async (t) => {
   const scenarios = [
     {
       name: "Conservative-only with recovery disabled",
       config: appConfig,
       createBroker: (calls) => createBroker(calls),
+      errorPattern: /Safety-blocker fact is outside an active process session/i,
     },
     {
       name: "Recovery Seller enabled",
@@ -1820,54 +1887,48 @@ test("rejects unresolved account blockers before the first process start for eve
           data: { skipped: true },
         }),
       },
+      errorPattern: /Safety-blocker fact is outside an active process session/i,
     },
   ]
 
   for (const scenario of scenarios) {
-    await t.test(scenario.name, async () => {
+    await t.test(scenario.name, async (subtest) => {
       const { directory, store } = await createRsOnlyOperationalStateStore()
-      const calls = []
-      let runtime
-      try {
-        const blocker = await recordSafetyBlockerRaised({
-          operationalStateStore: store,
-          scope: "ACCOUNT",
-          symbol: null,
-          reason: "ACCOUNT_RECONCILIATION_REQUIRED",
-          evidenceDigest: "a".repeat(64),
-        })
-        assert.equal(blocker.ok, true, blocker.errors?.[0]?.message)
-
-        let startupError
-        try {
-          runtime = await startHarvesterForTest({
-            loadConfig: async () => scenario.config,
-            env: binanceEnv,
-            brokerAdapterFactory: () => scenario.createBroker(calls),
-            operationalStateStore: store,
-            ...scenario.startupOptions,
-            logger: {
-              info() {},
-              warn() {},
-              error() {},
-            },
-          })
-        } catch (error) {
-          startupError = error
-        }
-
-        assert.ok(startupError, "Startup must reject an unresolved ACCOUNT blocker even when no PROCESS_STARTED fact exists.")
-        assert.match(startupError.message, /unresolved account-scoped safety blocker/i)
-        assert.equal(calls.length, 0, "Startup must reject before connecting the broker or subscribing to market data.")
-      } finally {
-        await runtime?.stop()
-        await rm(directory, {
-          recursive: true,
-          force: true,
-        })
-      }
+      subtest.after(() => rm(directory, {
+        recursive: true,
+        force: true,
+      }))
+      await seedAccountBlocker({ store })
+      await assertStartupRejectedBeforeBroker({ scenario, store })
     })
   }
+})
+
+test("rejects a durable unresolved account blocker in Conservative-only mode when CG recovery is disabled", async (t) => {
+  const { directory, store } = await createRsOnlyOperationalStateStore()
+  t.after(() => rm(directory, {
+    recursive: true,
+    force: true,
+  }))
+  await seedAccountBlocker({
+    store,
+    config: appConfig,
+    includeProcessHistory: true,
+  })
+  const restartStore = createFileOperationalStateStore({
+    directory,
+    runtimeSessionId: "cg-only-startup-next-session",
+  })
+
+  await assertStartupRejectedBeforeBroker({
+    scenario: {
+      name: "Conservative-only with recovery disabled",
+      config: appConfig,
+      createBroker: (calls) => createBroker(calls),
+      errorPattern: /unresolved account-scoped safety blocker/i,
+    },
+    store: restartStore,
+  })
 })
 
 test("restores a persisted account STOP and keeps a restarted account observation-only", async () => {
