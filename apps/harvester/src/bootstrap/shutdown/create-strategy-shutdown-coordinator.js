@@ -1,123 +1,231 @@
-const MAX_PARTICIPANT_SAFETY_PROOF_ATTEMPTS = 2
+const DEFAULT_STRATEGY_SHUTDOWN_TIMEOUT_MS = 120_000
+const MAX_STRATEGY_SHUTDOWN_SAFETY_PROOF_ATTEMPTS = 2
 
-function createStrategyBlocker({ participant, error, reason, status } = {}) {
-  let safetySnapshot
-  try {
-    safetySnapshot = participant.getSafetySnapshot?.() ?? null
-  } catch {
-    safetySnapshot = null
+function getParticipantSnapshot(participant) {
+  if (typeof participant.getSafetySnapshot !== "function") {
+    return undefined
   }
-  const blockerReason = reason ?? error?.code ?? "STRATEGY_SAFETY_UNPROVEN"
+  try {
+    return participant.getSafetySnapshot()
+  } catch (error) {
+    return Object.freeze({
+      status: "UNKNOWN",
+      error: Object.freeze({
+        name: error?.name ?? "Error",
+        message: error?.message ?? String(error),
+        code: error?.code,
+      }),
+    })
+  }
+}
 
+function getPendingParticipantWait(activeParticipantWaits, strategyId, now) {
+  const pending = activeParticipantWaits.get(strategyId)
+  if (!pending) {
+    return undefined
+  }
   return Object.freeze({
-    strategyId: participant.strategyId,
-    status: status ?? (error?.code === "STRATEGY_SHUTDOWN_PARTICIPANT_TIMEOUT"
-      ? "TIMED_OUT"
-      : (error?.code?.includes("UNPROVEN") ||
-        blockerReason === "STRATEGY_SAFETY_MARKER_INVALIDATED" ||
-        blockerReason.startsWith("SHUTDOWN_SAFETY_REEVALUATION_LIMIT_EXCEEDED")
-        ? "BLOCKED"
-        : "FAILED")),
-    reason: blockerReason,
-    operation: error?.operation ?? "waitUntilSafe",
-    ...(error?.timeoutMs === undefined ? {} : { timeoutMs: error.timeoutMs }),
-    message: error?.message ?? "Strategy did not prove shutdown safety",
-    safetySnapshot,
-    markets: error?.shutdownDiagnostics?.markets ?? safetySnapshot?.markets ?? [],
+    strategyId,
+    status: "PENDING",
+    operation: "waitUntilSafe",
+    pendingOperation: true,
+    startedAt: pending.startedAt,
+    timeoutMs: pending.timeoutMs,
+    elapsedMs: Math.max(0, now() - pending.startedAt),
   })
 }
 
-function createStrategyShutdownError({ blockers, errors = [] } = {}) {
-  let causes = errors
-  if (causes.length === 0) {
-    causes = blockers.map((blocker) =>
-      new Error(`${blocker.strategyId}: ${blocker.message}`))
-  }
-
-  const blockerSummary = blockers.map(({ strategyId, reason, message }) =>
-    `${strategyId} [${reason}]: ${message}`).join("; ")
-  const errorMessage = blockerSummary
-    ? `Harvester shutdown was incomplete: strategy shutdown safety could not be proven: ${blockerSummary}`
-    : "Harvester shutdown was incomplete: strategy shutdown safety could not be proven"
-  const error = new AggregateError(causes, errorMessage)
-
-  error.code = "STRATEGY_SHUTDOWN_SAFETY_UNPROVEN"
+function createStrategyShutdownError({
+  message,
+  code,
+  strategyBlockers,
+  pendingOperations = [],
+  shutdownRequestedAt,
+  now,
+} = {}) {
+  const error = new Error(message)
+  error.code = code
+  error.strategyBlockers = strategyBlockers
   error.shutdownDiagnostics = Object.freeze({
-    strategyBlockers: Object.freeze(blockers),
+    shutdownRequestedAt,
+    elapsedMs: shutdownRequestedAt === null ? 0 : Math.max(0, now() - shutdownRequestedAt),
+    strategyBlockers,
+    pendingOperations,
   })
   return error
 }
 
-function validateParticipant(participant) {
-  const valid = typeof participant?.strategyId === "string" &&
-    participant.strategyId.trim() &&
-    typeof participant.beginShutdown === "function" &&
-    typeof participant.waitUntilSafe === "function" &&
-    typeof participant.isSafeToShutdown === "function"
-
-  if (!valid) {
-    throw new TypeError(
-      "A strategy shutdown participant requires strategyId, beginShutdown(), waitUntilSafe(), and isSafeToShutdown()",
-    )
+function resolveStrategyBlockerStatus({ error, reason, status } = {}) {
+  if (status) {
+    return status
   }
-  return participant
+  if (error?.status) {
+    return error.status
+  }
+  if (reason === "STRATEGY_SHUTDOWN_SAFETY_UNPROVEN" ||
+    reason.startsWith("SHUTDOWN_SAFETY_REEVALUATION_LIMIT_EXCEEDED")) {
+    return "BLOCKED"
+  }
+  return "FAILED"
 }
 
-function getParticipantSnapshot(participant) {
-  let safe
-  try {
-    safe = participant.isSafeToShutdown() === true
-  } catch {
-    safe = false
-  }
-
-  let snapshot
-  try {
-    snapshot = participant.getSafetySnapshot?.()
-  } catch {
-    snapshot = null
-  }
-
+function createStrategyBlocker({ participant, error, reason, status } = {}) {
+  const strategyId = participant?.strategyId ?? "UNKNOWN_STRATEGY"
+  const blockerReason = reason ?? error?.code ?? "STRATEGY_SHUTDOWN_PARTICIPANT_FAILED"
+  const safetySnapshot = getParticipantSnapshot(participant)
   return Object.freeze({
-    strategyId: participant.strategyId,
-    status: safe ? "COMPLETED" : "BLOCKED",
-    safe,
-    ...(snapshot === undefined ? {} : { snapshot }),
+    strategyId,
+    status: resolveStrategyBlockerStatus({
+      error,
+      reason: blockerReason,
+      status,
+    }),
+    reason: blockerReason,
+    message: error?.message ?? "Strategy shutdown participant did not prove safety",
+    operation: error?.operation ?? "waitUntilSafe",
+    pendingOperation: error?.pendingOperation === true,
+    timeoutMs: error?.timeoutMs,
+    elapsedMs: error?.elapsedMs,
+    safetySnapshot,
+    markets: safetySnapshot?.markets ?? [],
   })
 }
 
-/**
- * Application-level coordinator. It knows only the participant contract;
- * trading safety and market rules remain owned by each strategy.
- */
-function beginShutdownParticipants({ registeredParticipants, shutdownState } = {}) {
-  if (shutdownState.started) {
-    return { ok: true }
-  }
-  shutdownState.started = true
-  const failures = []
+function createParticipantTimeoutError({ participant, timeoutMs, now, startedAt } = {}) {
+  const error = new Error("Strategy shutdown participant exceeded its safety deadline")
+  error.code = "STRATEGY_SHUTDOWN_PARTICIPANT_TIMED_OUT"
+  error.status = "TIMED_OUT"
+  error.operation = "waitUntilSafe"
+  error.pendingOperation = true
+  error.strategyId = participant.strategyId
+  error.timeoutMs = timeoutMs
+  error.elapsedMs = Math.max(0, now() - startedAt)
+  return error
+}
 
-  for (const participant of registeredParticipants) {
-    try {
-      participant.beginShutdown()
-    } catch (error) {
-      failures.push({ participant,
-        error })
-    }
-  }
+function createPendingParticipantWaitError({ participant, pending, now } = {}) {
+  const error = new Error("A previous strategy shutdown participant safety operation is still pending")
+  error.code = "STRATEGY_SHUTDOWN_PARTICIPANT_STILL_RUNNING"
+  error.status = "PENDING"
+  error.operation = "waitUntilSafe"
+  error.pendingOperation = true
+  error.strategyId = participant.strategyId
+  error.timeoutMs = pending.timeoutMs
+  error.elapsedMs = Math.max(0, now() - pending.startedAt)
+  return error
+}
 
-  if (failures.length > 0) {
-    shutdownState.started = false
-    throw createStrategyShutdownError({
-      blockers: failures.map(({ participant, error }) => createStrategyBlocker({
-        participant,
-        error,
-      })),
-      errors: failures.map(({ error }) => error),
+function createParticipantResultError({ participant, result } = {}) {
+  const cause = result?.errors?.[0]
+  const error = new Error(
+    cause?.message ?? "Strategy shutdown participant did not confirm safe shutdown",
+    cause ? { cause } : undefined,
+  )
+  error.code = "STRATEGY_SHUTDOWN_SAFETY_UNPROVEN"
+  error.status = "BLOCKED"
+  error.operation = "waitUntilSafe"
+  error.strategyId = participant.strategyId
+  return error
+}
+
+function createSafetyReevaluationLimitError({ participant, attempts } = {}) {
+  const error = new Error("Strategy shutdown safety evidence remained invalidated after bounded re-evaluation")
+  error.code = `SHUTDOWN_SAFETY_REEVALUATION_LIMIT_EXCEEDED:${MAX_STRATEGY_SHUTDOWN_SAFETY_PROOF_ATTEMPTS}`
+  error.status = "BLOCKED"
+  error.operation = "isSafeToShutdown"
+  error.strategyId = participant.strategyId
+  error.safetyProofAttempts = attempts
+  return error
+}
+
+function createParticipantWaitPromise({
+  participant,
+  participantController,
+  activeParticipantWaits,
+  timeoutMs,
+  now,
+} = {}) {
+  const strategyId = participant.strategyId
+  const pending = activeParticipantWaits.get(strategyId)
+  if (pending) {
+    throw createPendingParticipantWaitError({
+      participant,
+      pending,
+      now,
     })
   }
+  const startedAt = now()
+  const operationPromise = Promise.resolve()
+    .then(() => participant.waitUntilSafe({ signal: participantController.signal }))
+    .then(
+      (value) => ({ status: "fulfilled", value }),
+      (reason) => ({ status: "rejected", reason }),
+    )
+  activeParticipantWaits.set(strategyId, {
+    operationPromise,
+    startedAt,
+    timeoutMs,
+  })
+  operationPromise.then(() => {
+    if (activeParticipantWaits.get(strategyId)?.operationPromise === operationPromise) {
+      activeParticipantWaits.delete(strategyId)
+    }
+  })
+  return operationPromise
+}
 
-  return { ok: true }
+function createParticipantTimeoutPromise({
+  participant,
+  participantController,
+  timeoutMs,
+  setTimeoutFn,
+  now,
+  startedAt,
+} = {}) {
+  let timeoutHandle
+  const promise = new Promise((resolve) => {
+    timeoutHandle = setTimeoutFn(() => {
+      const reason = createParticipantTimeoutError({
+        participant,
+        timeoutMs,
+        now,
+        startedAt,
+      })
+      participantController.abort(reason)
+      resolve({
+        status: "timed_out",
+        reason,
+      })
+    }, timeoutMs)
+  })
+  return {
+    promise,
+    timeoutHandle,
+  }
+}
+
+function createParticipantAbortPromise({ signal, participantController } = {}) {
+  let removeAbortListener = () => {}
+  const promise = new Promise((resolve) => {
+    const onAbort = () => {
+      const reason = signal?.reason ?? new Error("Strategy shutdown safety was aborted")
+      participantController.abort(reason)
+      resolve({
+        status: "aborted",
+        reason,
+      })
+    }
+    if (signal?.aborted) {
+      onAbort()
+      return
+    }
+    signal?.addEventListener("abort", onAbort, { once: true })
+    removeAbortListener = () => signal?.removeEventListener("abort", onAbort)
+  })
+  return {
+    promise,
+    removeAbortListener,
+  }
 }
 
 async function waitForParticipantWithDeadline({
@@ -126,228 +234,240 @@ async function waitForParticipantWithDeadline({
   timeoutMs,
   setTimeoutFn,
   clearTimeoutFn,
+  activeParticipantWaits,
+  now,
 } = {}) {
   if (signal?.aborted) {
-    throw signal.reason ?? new Error("Strategy shutdown was aborted")
+    throw signal.reason ?? new Error("Strategy shutdown safety was aborted")
   }
-  const participantController = new AbortController()
-  const forwardAbort = () => {
-    participantController.abort(signal.reason ?? new Error("Strategy shutdown was aborted"))
-  }
-  signal?.addEventListener("abort", forwardAbort, { once: true })
-
-  let timeoutHandle
-  let resolveAbort
-  let safetyProofAttempts = 0
-  const timeoutResult = new Promise((resolve) => {
-    timeoutHandle = setTimeoutFn(() => {
-      const error = Object.assign(
-        new Error(`Strategy shutdown participant ${participant.strategyId} did not settle within ${timeoutMs}ms`),
-        {
-          code: "STRATEGY_SHUTDOWN_PARTICIPANT_TIMEOUT",
-          strategyId: participant.strategyId,
-          operation: "waitUntilSafe",
-          timeoutMs,
-          safetyProofAttempts,
-        },
-      )
-      participantController.abort(error)
-      resolve({ status: "timed_out", reason: error })
-    }, timeoutMs)
-  })
-  const abortResult = signal
-    ? new Promise((resolve) => {
-      resolveAbort = () => resolve({
-        status: "aborted",
-        reason: signal.reason ?? new Error("Strategy shutdown was aborted"),
-      })
-      signal.addEventListener("abort", resolveAbort, { once: true })
+  const pending = activeParticipantWaits.get(participant.strategyId)
+  if (pending) {
+    throw createPendingParticipantWaitError({
+      participant,
+      pending,
+      now,
     })
-    : new Promise(() => {})
-
-  let outcome
-  while (true) {
-    const participantResult = Promise.resolve()
-      .then(() => participant.waitUntilSafe({ signal: participantController.signal }))
-      .then(
-        (value) => ({ status: "fulfilled", value }),
-        (reason) => ({ status: "rejected", reason }),
-      )
-    outcome = await Promise.race([participantResult, timeoutResult, abortResult])
-    if (outcome.status === "fulfilled" &&
-        (signal?.aborted || participantController.signal.aborted)) {
-      const abortReason = signal?.reason ?? participantController.signal.reason ??
-        new Error("Strategy shutdown participant was aborted")
-      outcome = abortReason.code === "STRATEGY_SHUTDOWN_PARTICIPANT_TIMEOUT"
-        ? { status: "timed_out", reason: abortReason }
-        : { status: "aborted", reason: abortReason }
-      break
-    }
-    if (outcome.status !== "fulfilled" || outcome.value?.ok !== true) {
-      break
-    }
-    let participantIsSafe
-    try {
-      participantIsSafe = participant.isSafeToShutdown() === true
-    } catch (error) {
-      outcome = { status: "rejected", reason: error }
-      break
-    }
-    safetyProofAttempts += 1
-    if (participantIsSafe) {
-      break
-    }
-    if (safetyProofAttempts >= MAX_PARTICIPANT_SAFETY_PROOF_ATTEMPTS) {
-      outcome = {
-        status: "rejected",
-        reason: Object.assign(
-          new Error("Strategy safety marker remained invalid after the bounded safety proof attempts"),
-          {
-            code: `SHUTDOWN_SAFETY_REEVALUATION_LIMIT_EXCEEDED:${safetyProofAttempts}`,
-            strategyId: participant.strategyId,
-            operation: "waitUntilSafe",
-            safetyProofAttempts,
-          },
-        ),
+  }
+  const startedAt = now()
+  const participantController = new AbortController()
+  const timeout = createParticipantTimeoutPromise({
+    participant,
+    participantController,
+    timeoutMs,
+    setTimeoutFn,
+    now,
+    startedAt,
+  })
+  const abort = createParticipantAbortPromise({
+    signal,
+    participantController,
+  })
+  let safetyProofAttempts = 0
+  try {
+    while (true) {
+      const participantPromise = createParticipantWaitPromise({
+        participant,
+        participantController,
+        activeParticipantWaits,
+        timeoutMs,
+        now,
+      })
+      const outcome = await Promise.race([
+        participantPromise,
+        timeout.promise,
+        abort.promise,
+      ])
+      if (outcome.status !== "fulfilled") {
+        throw outcome.reason
       }
-      break
+      if (outcome.value?.ok !== true) {
+        throw createParticipantResultError({
+          participant,
+          result: outcome.value,
+        })
+      }
+      safetyProofAttempts += 1
+      let safe
+      try {
+        safe = participant.isSafeToShutdown() === true
+      } catch (error) {
+        error.code ??= "STRATEGY_SHUTDOWN_SAFETY_CHECK_FAILED"
+        error.status ??= "FAILED"
+        error.operation ??= "isSafeToShutdown"
+        throw error
+      }
+      if (safe) {
+        return outcome.value
+      }
+      if (safetyProofAttempts >= MAX_STRATEGY_SHUTDOWN_SAFETY_PROOF_ATTEMPTS) {
+        throw createSafetyReevaluationLimitError({
+          participant,
+          attempts: safetyProofAttempts,
+        })
+      }
     }
+  } finally {
+    if (timeout.timeoutHandle !== undefined) {
+      clearTimeoutFn(timeout.timeoutHandle)
+    }
+    abort.removeAbortListener()
   }
-  clearTimeoutFn(timeoutHandle)
-  signal?.removeEventListener("abort", forwardAbort)
-  if (resolveAbort) {
-    signal?.removeEventListener("abort", resolveAbort)
-  }
+}
 
-  if (outcome.status === "timed_out" || outcome.status === "aborted" || outcome.status === "rejected") {
-    throw outcome.reason
-  }
-  if (outcome.value?.ok !== true) {
-    throw outcome.value?.errors?.[0] ?? new Error("Strategy returned an unsuccessful safety result")
-  }
-  if (participant.isSafeToShutdown() !== true) {
-    throw Object.assign(
-      new Error("Strategy safety marker was invalidated before the shared shutdown barrier"),
-      { code: "STRATEGY_SAFETY_MARKER_INVALIDATED", operation: "waitUntilSafe" },
-    )
-  }
-  return outcome.value
+function getPendingParticipantOperations(activeParticipantWaits, now) {
+  return Object.freeze(
+    [...activeParticipantWaits.entries()].map(([strategyId]) =>
+      getPendingParticipantWait(activeParticipantWaits, strategyId, now)),
+  )
 }
 
 async function waitForStrategyShutdownParticipants({
-  registeredParticipants,
-  beginShutdown,
-  isSafeToShutdown,
-  getSafetySnapshot,
+  participants,
   signal,
   timeoutMs,
   setTimeoutFn,
   clearTimeoutFn,
+  activeParticipantWaits,
+  shutdownRequestedAt,
+  now,
 } = {}) {
-  beginShutdown()
-  if (signal?.aborted) {
-    throw signal.reason ?? new Error("Strategy shutdown was aborted")
-  }
-
-  const results = await Promise.allSettled(registeredParticipants.map((participant) =>
+  const results = await Promise.allSettled(participants.map((participant) =>
     waitForParticipantWithDeadline({
       participant,
       signal,
       timeoutMs,
       setTimeoutFn,
       clearTimeoutFn,
-    })
-  ))
-
-  const blockers = []
-  const errors = []
-  for (const [index, result] of results.entries()) {
-    if (result.status !== "rejected") {
-      continue
+      activeParticipantWaits,
+      now,
+    })))
+  const strategyBlockers = results.flatMap((result, index) => {
+    if (result.status === "fulfilled") {
+      return []
     }
-    const participant = registeredParticipants[index]
-    errors.push(result.reason)
-    blockers.push(createStrategyBlocker({
-      participant,
+    return [createStrategyBlocker({
+      participant: participants[index],
       error: result.reason,
-    }))
+    })]
+  })
+  if (strategyBlockers.length > 0) {
+    throw createStrategyShutdownError({
+      message: "Strategy shutdown safety could not be proven for every enabled strategy",
+      code: "STRATEGY_SHUTDOWN_SAFETY_UNPROVEN",
+      strategyBlockers,
+      pendingOperations: getPendingParticipantOperations(activeParticipantWaits, now),
+      shutdownRequestedAt,
+      now,
+    })
   }
-
-  if (!isSafeToShutdown()) {
-    for (const participant of registeredParticipants) {
-      if (participant.isSafeToShutdown() === true) {
-        continue
-      }
-      if (blockers.some((blocker) => blocker.strategyId === participant.strategyId)) {
-        continue
-      }
-      blockers.push(createStrategyBlocker({
-        participant,
-        reason: "STRATEGY_SAFETY_MARKER_INVALIDATED",
-      }))
-    }
-  }
-
-  if (blockers.length > 0) {
-    throw createStrategyShutdownError({ blockers,
-      errors })
-  }
-
-  return {
-    ok: true,
-    data: {
-      strategies: getSafetySnapshot(),
-    },
-  }
+  return results.map((result) => result.value)
 }
 
 export function createStrategyShutdownCoordinator({
   participants = [],
-  timeoutMs = 120_000,
+  timeoutMs = DEFAULT_STRATEGY_SHUTDOWN_TIMEOUT_MS,
+  now = Date.now,
   setTimeoutFn = setTimeout,
   clearTimeoutFn = clearTimeout,
 } = {}) {
-  if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0) {
-    throw new TypeError("Strategy shutdown participant timeoutMs must be a positive safe integer")
+  if (!Array.isArray(participants)) {
+    throw new TypeError("Strategy shutdown participants must be an array")
   }
-  if (typeof setTimeoutFn !== "function" || typeof clearTimeoutFn !== "function") {
-    throw new TypeError("Strategy shutdown deadline requires setTimeoutFn and clearTimeoutFn functions")
+  if (participants.some((participant) =>
+    !participant ||
+    typeof participant.strategyId !== "string" ||
+    participant.strategyId.trim().length === 0 ||
+    typeof participant.beginShutdown !== "function" ||
+    typeof participant.waitUntilSafe !== "function" ||
+    typeof participant.isSafeToShutdown !== "function")) {
+    throw new TypeError("Every strategy shutdown participant must expose identity and lifecycle operations")
   }
-  const registeredParticipants = Object.freeze(participants.map(validateParticipant))
-  const strategyIds = registeredParticipants.map(({ strategyId }) => strategyId)
+  const strategyIds = participants.map((participant) => participant.strategyId)
   if (new Set(strategyIds).size !== strategyIds.length) {
     throw new TypeError("Strategy shutdown participant strategyId values must be unique")
   }
+  if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0) {
+    throw new TypeError("Strategy shutdown timeoutMs must be a positive safe integer")
+  }
+  const activeParticipantWaits = new Map()
+  let shutdownRequestedAt = null
+  let beginPromise = null
 
-  const shutdownState = { started: false }
-
-  const getSafetySnapshot = () => Object.freeze(
-    registeredParticipants.map(getParticipantSnapshot),
-  )
-
-  const isSafeToShutdown = () => registeredParticipants.every((participant) => {
-    try {
-      return participant.isSafeToShutdown() === true
-    } catch {
-      return false
+  const beginShutdown = () => {
+    if (beginPromise) {
+      return beginPromise
     }
-  })
+    shutdownRequestedAt = now()
+    beginPromise = Promise.allSettled(participants.map((participant) =>
+      Promise.resolve().then(() => participant.beginShutdown())))
+      .then((results) => {
+        const strategyBlockers = results.flatMap((result, index) => {
+          if (result.status === "fulfilled") {
+            return []
+          }
+          return [createStrategyBlocker({
+            participant: participants[index],
+            error: result.reason,
+            reason: "STRATEGY_SHUTDOWN_BEGIN_FAILED",
+          })]
+        })
+        if (strategyBlockers.length > 0) {
+          throw createStrategyShutdownError({
+            message: "Strategy shutdown could not begin for every enabled strategy",
+            code: "STRATEGY_SHUTDOWN_BEGIN_FAILED",
+            strategyBlockers,
+            pendingOperations: getPendingParticipantOperations(activeParticipantWaits, now),
+            shutdownRequestedAt,
+            now,
+          })
+        }
+        return {
+          ok: true,
+        }
+      })
+    return beginPromise
+  }
 
-  const beginShutdown = () => beginShutdownParticipants({
-    registeredParticipants,
-    shutdownState,
-  })
+  const waitUntilSafe = async ({ signal } = {}) => {
+    await beginShutdown()
+    return waitForStrategyShutdownParticipants({
+      participants,
+      signal,
+      timeoutMs,
+      setTimeoutFn,
+      clearTimeoutFn,
+      activeParticipantWaits,
+      shutdownRequestedAt,
+      now,
+    })
+  }
 
-  const waitUntilSafe = ({ signal } = {}) => waitForStrategyShutdownParticipants({
-    registeredParticipants,
-    beginShutdown,
-    isSafeToShutdown,
-    getSafetySnapshot,
-    signal,
-    timeoutMs,
-    setTimeoutFn,
-    clearTimeoutFn,
-  })
+  const isSafeToShutdown = () => activeParticipantWaits.size === 0 &&
+    participants.every((participant) => {
+      try {
+        return participant.isSafeToShutdown() === true
+      } catch {
+        return false
+      }
+    })
+
+  const getSafetySnapshot = () => Object.freeze(participants.map((participant) => {
+    const snapshot = getParticipantSnapshot(participant)
+    const pending = getPendingParticipantWait(activeParticipantWaits, participant.strategyId, now)
+    if (!pending) {
+      return snapshot
+    }
+    return Object.freeze({
+      ...(snapshot && typeof snapshot === "object" ? snapshot : {}),
+      strategyId: participant.strategyId,
+      status: "PENDING",
+      pendingOperation: true,
+      operation: pending.operation,
+      startedAt: pending.startedAt,
+      timeoutMs: pending.timeoutMs,
+      elapsedMs: pending.elapsedMs,
+    })
+  }))
 
   return Object.freeze({
     beginShutdown,
