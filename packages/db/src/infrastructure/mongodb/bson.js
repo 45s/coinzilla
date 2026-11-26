@@ -4,6 +4,17 @@ const INT32_MAX = 2 ** 31 - 1
 const INT64_MIN = -(2n ** 63n)
 const INT64_MAX = (2n ** 63n) - 1n
 
+export class BsonBinary {
+  constructor(bytes, subtype = 0) {
+    if (!Buffer.isBuffer(bytes) || !Number.isInteger(subtype) || subtype < 0 || subtype > 255) {
+      throw new TypeError("BSON binary requires a Buffer and an unsigned byte subtype")
+    }
+    this.bytes = Buffer.from(bytes)
+    this.subtype = subtype
+    Object.freeze(this)
+  }
+}
+
 function assertDocument(value, ancestors) {
   if (value === null || typeof value !== "object" || Array.isArray(value) || Buffer.isBuffer(value) || value instanceof Date) {
     throw new TypeError("BSON documents must be plain objects")
@@ -72,11 +83,12 @@ function encodeElement(value, ancestors) {
   if (typeof value === "bigint") {
     return { type: 0x12, bytes: encodeInt64(value) }
   }
-  if (Buffer.isBuffer(value)) {
-    const bytes = Buffer.allocUnsafe(5 + value.length)
-    bytes.writeInt32LE(value.length, 0)
-    bytes[4] = 0
-    value.copy(bytes, 5)
+  if (Buffer.isBuffer(value) || value instanceof BsonBinary) {
+    const binary = value instanceof BsonBinary ? value : new BsonBinary(value)
+    const bytes = Buffer.allocUnsafe(5 + binary.bytes.length)
+    bytes.writeInt32LE(binary.bytes.length, 0)
+    bytes[4] = binary.subtype
+    binary.bytes.copy(bytes, 5)
     return { type: 0x05, bytes }
   }
   if (value instanceof Date) {
@@ -267,13 +279,13 @@ function readValue(buffer, state, type) {
     const length = buffer.readInt32LE(state.offset)
     const subtype = buffer[state.offset + 4]
     state.offset += 5
-    if (length < 0 || subtype !== 0) {
-      throw new TypeError("Only generic BSON binary subtype 0 is supported")
+    if (length < 0) {
+      throw new TypeError("Invalid BSON binary length")
     }
     assertRange(buffer, state.offset, length, state.end, "binary value")
-    const value = Buffer.from(buffer.subarray(state.offset, state.offset + length))
+    const bytes = Buffer.from(buffer.subarray(state.offset, state.offset + length))
     state.offset += length
-    return value
+    return subtype === 0 ? bytes : new BsonBinary(bytes, subtype)
   }
   if (type === 0x07) {
     assertRange(buffer, state.offset, 12, state.end, "ObjectId")
