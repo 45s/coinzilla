@@ -12,6 +12,8 @@
 - **StarAdmin dashboard redesign — PR #1873 / Issue #1872:** warm light default theme, preserved selectable themes, contextual Brokers/Bots navigation, compact GitHub PR labels with direct assignment controls, persistent refresh action and light native dropdown options. Presentation-only; no API or trading behavior changes.
 - **Contextual navigation refinement — PR #1877 / Issue #1877:** keep the five-item persistent sidebar; reduce Brokers to Markets / Orders / History, with Open Orders / Exchanges nested under Orders and Fills / Commissions under History. Keep the Bots tabs Operators / Orders / Positions / Portfolio. Preserve all existing pages.
 
+- **Theme surface contrast regression — Issue #1876:** ensure shared feature surfaces, controls and tables resolve the selected palette's semantic tokens, including System mode in both OS color schemes.
+
 ## Canonical sources
 
 - Dashboard behavior and setup: [README](./README.md)
