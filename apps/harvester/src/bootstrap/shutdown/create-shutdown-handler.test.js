@@ -189,7 +189,7 @@ test("bounds a pending CLOSING audit phase and retains shared services", async (
     },
     phaseTimeoutMs: 25,
     setTimeoutFn: (callback, timeoutMs, phase) => {
-      if (phase === "CLOSING_ACCOUNT_AUDIT") {
+      if (phase === "CLOSING_AUDIT") {
         closingAuditDeadline = callback
         closingAuditTimeoutMs = timeoutMs
       }
@@ -208,14 +208,14 @@ test("bounds a pending CLOSING audit phase and retains shared services", async (
     await assert.rejects(
       stopPromise,
       (error) => error.code === "SHUTDOWN_PHASE_TIMEOUT"
-        && error.phase === "CLOSING_ACCOUNT_AUDIT",
+        && error.phase === "CLOSING_AUDIT",
       "A timed-out CLOSING audit must produce an explicit bounded failure.",
     )
     retryStopPromise = fixture.stop()
     await assert.rejects(
       retryStopPromise,
       (error) => error.code === "SHUTDOWN_PHASE_STILL_RUNNING"
-        && error.phase === "CLOSING_ACCOUNT_AUDIT"
+        && error.phase === "CLOSING_AUDIT"
         && error.status === "PENDING",
       "A retry must not overlap the still-pending CLOSING audit operation.",
     )
