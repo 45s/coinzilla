@@ -10,8 +10,8 @@ This is the entry point for Harvester-specific documentation. Repository-wide ru
 
 ## Start here
 
-- [Repository test scenario catalog](../../../docs/testing/SCENARIO_CATALOG.md)
-- [Recovery Seller scenario testing playbook](domain/recovery-seller-scenario-testing.md) — implementation contract for RS scenario design, registry, test mapping, evidence and coverage gaps. — cross-workspace human-readable scenarios with business inputs/outputs, subcases, implementation links, and named test mappings. RS entries intentionally start without scenario-coverage credit from existing tests; see [#1780](https://github.com/45s/coinzilla/issues/1780).
+- [Repository test scenario catalog](../../../docs/testing/SCENARIO_CATALOG.md) — cross-workspace human-readable scenarios with business inputs/outputs, subcases, implementation links, and named test mappings.
+- [Recovery Seller scenario testing playbook](domain/recovery-seller-scenario-testing.md) — implementation contract for RS scenario design, registry, test mapping, evidence and coverage gaps. RS entries intentionally start without scenario-coverage credit from existing tests; see [#1780](https://github.com/45s/coinzilla/issues/1780).
 
 - [Application configuration and Telegram notification profiles](../README.md#configuration) — the named `appConfig` export composed from named modules, including `config/operator-control.js` and `config/notifications-tg-profiles.js`; profile behavior, event overrides, and environment-only credentials.
 - [Repository Configuration Standard](../../../docs/engineering/CONFIGURATION_STANDARD.md) — shared ownership, validation, defaults, environment access, secrets and migration rules.
@@ -43,10 +43,14 @@ The focused Harvester Targeted Tests suite runs both reliability-guard regressio
 
 Shared deterministic broker/runtime fixtures live in `test/bootstrap/start-harvester-test-support.js`. The floors are derived from the exact `develop` source baseline, not arbitrary package-wide averages. The contract validator rejects an empty coverage matrix and any critical source module without a measured floor. The inventory is a traceability and regression gate, not a substitute for passing tests, runtime evidence, or exchange acceptance. The persistence entry explicitly records that runtime restart restoration remains offline-only/disabled pending issue #654; this initiative does not enable replay or restoration. See the dated [Harvester reliability baseline report](./RELIABILITY_BASELINE_2026-11-21.md) for the coverage provenance, current runtime scope, test evidence, and unresolved audit questions.
 
+## Reliability engineering
+
+- [Harvester Reliability Engineering Baseline](audits/reports/2026-11-26_harvester-reliability-engineering-baseline.md) — source-backed baseline, active incident evidence, fault-domain model, audit gaps and next verification steps; tracked by [issue #1639](https://github.com/45s/coinzilla/issues/1639). The report is dated evidence, not a runtime behavior contract.
+
 ## Current architecture and domain contracts
 
 - [Application architecture](architecture.md) and [architecture index](architecture/README.md)
-- [Strategy extensibility architecture roadmap](architecture/strategy-extensibility-audit-roadmap.md) — S-1/S-2 boundary decisions and S-4 CG/RS runtime-composition evidence are complete; S-3 future-strategy onboarding template remains.
+- [Strategy extensibility architecture discussion](architecture/strategy-extensibility-audit-roadmap.md) — historical pointer only; the owner-approved direction was implemented in merged PRs #1476 and #1515, and issue #1475 is closed. The full discussion is preserved in the dated archive; use the current Harvester and Recovery Seller roadmaps for active priorities.
 - [SQLite integration blueprint](persistence/sqlite-integration-blueprint.md) — historical source-verified design/audit snapshot; current implementation is governed by the Harvester persistence README.
 - [Harvester ordinary persistence](persistence/README.md) — current relational orders/fills, live-fill, startup history-sync, backup and full JSON export commands and safety contract.
 - [Trading-history persistence roadmap](persistence/trading-history-roadmap.md) — completed Phases 1–3 and planned attribution, analytics and remaining operational hardening.
@@ -71,7 +75,7 @@ Shared deterministic broker/runtime fixtures live in `test/bootstrap/start-harve
 - [Multi-provider execution routing](infrastructure/execution-routing.md) — exact strategy/market execution routes, independent market-data source selection, provenance, and no-fallback safety rules.
 - [Trading strategies overview](trading-strategies.md) — Conservative rules remain in the canonical specification; Aggressive material is exploratory discussion, not an approved executable contract
 - [Recovery Seller Domain Specification](domain/recovery-seller-domain-specification.md) — draft RS accounting, legacy authorization, independent profitability gates, and concurrent CG/RS invariants
-- [Recovery Seller Implementation Roadmap](domain/recovery-seller-implementation-roadmap.md) — six delivery phases from Conservative source audit to concurrent integration and offline lifecycle proof
+- [Recovery Seller Implementation Roadmap](domain/recovery-seller-implementation-roadmap.md) — RS-1–RS-5 implementation and offline acceptance are complete; the roadmap tracks remaining scenario-coverage, terminal-SELL/STOP and operator-resolution gates. It does not authorize exchange sessions.
 
 ## Operations and safety
 
@@ -123,7 +127,3 @@ Historical reports are snapshots, not current implementation authority. Use thei
 - Preserve historical evidence, timestamps, source commit SHAs and uncertainty during migrations.
 
 **Scenario Runner:** [Architecture](features/scenario-runner-architecture.md) documents the Harvester-side process worker, simulation boundary, replay provenance and fail-closed isolation contract. The production RS adapter and trusted OS sandbox remain incomplete; this is not authorization for exchange execution.
-
-## Reliability engineering
-
-- [Harvester Reliability Engineering Baseline](audits/reports/2026-11-26_harvester-reliability-engineering-baseline.md) — source-backed baseline, active incident evidence, fault-domain model, audit gaps and next verification steps; tracked by [issue #1639](https://github.com/45s/coinzilla).

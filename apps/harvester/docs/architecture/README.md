@@ -2,7 +2,7 @@
 
 - [Application architecture](../architecture.md) — current application boundaries, dependency direction, use cases and composition.
 - [Live Bots operator snapshots](../api/trading-history-api.md#live-bots-operator-snapshots) — application-owned invalidation events, read-model snapshots, revision ordering, and the read-only Dashboard stream.
-- [Strategy extensibility architecture discussion and audit roadmap](strategy-extensibility-audit-roadmap.md) — preserved discussion, current source observations, proposed shared-runtime direction, configuration ownership, open decisions and S-1 through S-4 roadmap.
+- [Strategy extensibility architecture discussion](strategy-extensibility-audit-roadmap.md) — historical pointer only; the owner-approved direction is implemented, issue #1475 is closed, and the full discussion is preserved in the dated archive. Use the current Harvester and Recovery Seller roadmaps for active priorities.
 - [Workflow decomposition and pipeline migration plan](../plans/WORKFLOW_PIPELINE_MIGRATION.md) — proposed application-layer composition guidance and a narrow first implementation slice; not a runtime contract.
 - [Operator control](../operator-control/README.md) — transport-independent operator pause contract, Telegram Command Center and current implementation status.
 - [Telegram Command Center runbook](../operations/telegram-command-center.md) — menu, inline navigation, confirmations, authorization and troubleshooting.
