@@ -1,4 +1,6 @@
 import assert from "node:assert/strict"
+import { execFileSync } from "node:child_process"
+import { resolve } from "node:path"
 import test from "node:test"
 import { EventBus } from "@coinzilla/event-bus"
 import { startTradingHistoryApi } from "./start-trading-history-api.js"
@@ -202,6 +204,58 @@ test("records the exact build revision on Scenario Runner records", async () => 
 
   assert.equal(blocked.sourceRevision, sourceRevision,
     "The API composition root must stamp every run with the exact source revision supplied by the deployment.")
+  await service.close()
+  await eventBus.close()
+})
+
+
+test("derives the source revision from a clean Git checkout when build metadata is absent", async (t) => {
+  const repositoryRoot = resolve(process.cwd(), "../..")
+  const expectedRevision = execFileSync("git", [
+    "-C", repositoryRoot, "rev-parse", "--verify", "HEAD",
+  ], {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "ignore"],
+  }).trim()
+  const worktreeStatus = execFileSync("git", [
+    "-C", repositoryRoot, "status", "--porcelain", "--untracked-files=all",
+  ], {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "ignore"],
+  }).trim()
+  if (worktreeStatus) {
+    t.skip("A dirty checkout must not claim that HEAD identifies the running source tree.")
+    return
+  }
+
+  const database = createDatabase()
+  const eventBus = new EventBus()
+  let serverInput
+  const service = await startTradingHistoryApi({
+    database,
+    eventBus,
+    env: {
+      TRADING_MODE: "testnet",
+    },
+    logger: {
+      info() {},
+    },
+    startServer: async (input) => {
+      serverInput = input
+      return {
+        address: { address: "127.0.0.1", port: 4201 },
+        close: async () => {},
+      }
+    },
+  })
+  const blocked = serverInput.scenarioRunner.submit({
+    strategyId: "RS",
+    scenarioId: "not-registered",
+    input: {},
+  })
+
+  assert.equal(blocked.sourceRevision, expectedRevision,
+    "A clean source checkout must stamp runs with the exact checked-out commit.")
   await service.close()
   await eventBus.close()
 })
