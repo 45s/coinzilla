@@ -403,11 +403,10 @@ function createConformanceMongoServer(store) {
 
   function scalarRank(value) {
     if (value === undefined || value === null) return 0
-    if (value === false) return 1
-    if (value === true) return 2
-    if (typeof value === "number") return 3
-    if (typeof value === "string") return 4
-    return 5
+    if (typeof value === "boolean") return 1
+    if (typeof value === "number") return 2
+    if (typeof value === "string") return 3
+    return 4
   }
 
   function compareScalar(left, right) {
@@ -417,6 +416,7 @@ function createConformanceMongoServer(store) {
     if (typeof left === "number" || typeof left === "string") {
       return left < right ? -1 : left > right ? 1 : 0
     }
+    if (typeof left === "boolean") return Number(left) - Number(right)
     return 0
   }
 
@@ -455,19 +455,16 @@ function createConformanceMongoServer(store) {
       documents.sort((left, right) => {
         for (const [sortKey, direction] of sortFields) {
           const expression = additions[sortKey]
-          const fieldPath = expression?.$ifNull?.[0]
-          const [root, field, property] = typeof fieldPath === "string"
-            ? fieldPath.slice(1).split(".")
-            : []
-          const fallback = expression?.$ifNull?.[1]
-          const readSortValue = (document) => {
-            if (root === "sortData") return document.sortData[field]?.[property] ?? fallback
-            if (root === "data") return document.data[field] ?? fallback
-            return undefined
-          }
-          const leftValue = readSortValue(left)
-          const rightValue = readSortValue(right)
-          const comparison = compareScalar(leftValue, rightValue)
+          const typeKey = sortKey.includes("SortType")
+          const fieldPath = typeKey
+            ? expression?.$switch?.branches?.[0]?.case?.$in?.[0]?.$type
+            : expression?.$ifNull?.[0]
+          const field = typeof fieldPath === "string" ? fieldPath.slice("$data.".length) : null
+          const leftValue = field ? left.data[field] : undefined
+          const rightValue = field ? right.data[field] : undefined
+          const comparison = typeKey
+            ? scalarRank(leftValue) - scalarRank(rightValue)
+            : compareScalar(leftValue, rightValue)
           if (comparison !== 0) return comparison * direction
         }
         return left._id < right._id ? -1 : left._id > right._id ? 1 : 0
