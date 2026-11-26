@@ -1,6 +1,5 @@
 import assert from "node:assert/strict"
 import { createHash, randomUUID } from "node:crypto"
-import { basename } from "node:path"
 import test from "node:test"
 
 import {
