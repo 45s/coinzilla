@@ -1505,7 +1505,10 @@ function createPartialSellAssertions({ output, expected }) {
       actual: output.terminalSell?.cycleState?.profitabilityEligible,
       expected: expected.profitabilityEligible,
     }),
-    ...createPartialSellSafetyAssertions({ output, expected }),
+    ...createPartialSellSafetyAssertions({
+      output,
+      expected,
+    }),
   ]
 }
 

@@ -157,7 +157,10 @@ async function reconcileRecoverySellerTerminalSell({
     order,
     canonicalFills,
   })
-  const failure = resolveRecoverySellerTerminalFailure({ order, result })
+  const failure = resolveRecoverySellerTerminalFailure({
+    order,
+    result,
+  })
   if (failure) {
     return pauseAndLatchRecoverySellerTerminalFailure({
       pause,

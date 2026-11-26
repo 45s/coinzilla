@@ -1297,7 +1297,12 @@ function createRejectedRecoverySellerOrderEventFixture() {
       return toResult({ data: { durable: true } })
     },
   })
-  return { terminalOrder, workflow, calls, mixedSellReconciliations }
+  return {
+    terminalOrder,
+    workflow,
+    calls,
+    mixedSellReconciliations,
+  }
 }
 
 test("routes a zero-fill REJECTED RS SELL through terminal mixed accounting without cycle completion", async () => {
