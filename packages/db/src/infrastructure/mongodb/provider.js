@@ -183,7 +183,7 @@ function createTransactionCommand({ transport, session }) {
   const runSessionCommand = ({ body, sequences, timeoutMS }) => {
     const operation = queue.then(() => {
       if (firstError) throw firstError
-      return sendSessionCommand({ body, sequences, timeoutMS })
+      return sendSessionCommand({ body, sequences, timeoutMS, operation })
     })
     operation.catch(() => {})
     queue = operation.catch((error) => {
