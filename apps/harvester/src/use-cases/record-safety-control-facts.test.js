@@ -130,6 +130,40 @@ test("refuses to resolve an absent safety blocker or accept an implicit restart 
   assert.equal(implicit.ok, false, "A process restart must never be accepted as a blocker-resolution action.")
 })
 
+test("requires structured user-data action metadata even when its reason matches Recovery Seller STOP", async (t) => {
+  const operationalStateStore = await createStore(t)
+  const raised = await recordSafetyBlockerRaised({
+    operationalStateStore,
+    producer: "USER_DATA_EVENT_HANDLER",
+    scope: "ACCOUNT",
+    reason: "RECOVERY_SELLER_UNEXPECTED_CONDITION",
+    evidenceDigest: "a".repeat(64),
+  })
+  assert.equal(raised.ok, true, "The user-data producer may record a distinct account blocker with this reason")
+  const { blockerId } = raised.data.record.data
+  const operatorId = "operator-7"
+  const actionId = "reason-collision-001"
+  const operatorIdentity = authenticateLocalOperator({
+    operatorId,
+    getUserInfo: () => ({ username: operatorId }),
+  })
+  const resolved = await recordSafetyBlockerResolved({
+    operationalStateStore,
+    blockerId,
+    resolvedBy: `operator:${operatorId}:${actionId}`,
+    resolution: "OPERATOR_ACTION",
+    evidenceDigest: "b".repeat(64),
+    operatorIdentity,
+    operatorId,
+    actionId,
+    resolutionReason: "Reviewed user-data evidence and confirmed the cause is fixed.",
+    actionBlockerIds: [blockerId],
+  })
+
+  assert.equal(resolved.ok, true, "Producer ownership must take precedence over a colliding reason string")
+  assert.equal(resolved.data.record.data.operatorAuthMethod, "OS_ACCOUNT")
+})
+
 test("does not initialize a missing Operational State Store for safety controls", async (t) => {
   const directory = path.join(os.tmpdir(), `harvester-safety-recorders-missing-${  process.pid  }-${  Date.now()}`)
   t.after(() => rm(directory, { recursive: true,
