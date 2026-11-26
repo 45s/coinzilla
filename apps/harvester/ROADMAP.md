@@ -211,7 +211,7 @@ Complete in merged [PR #1741](https://github.com/45s/coinzilla/pull/1741), merge
 
 **Historical baseline:** merged [PR #1793](https://github.com/45s/coinzilla/pull/1793) provides the earlier four-file scenario suite with deliberately PARTIAL evidence across RS-003 through RS-007. The consolidated registry and playbook in #1852 extend that baseline; existing production/runtime tests are not credited as scenario coverage merely because they exist.
 
-**Current consolidated review target:** [PR #1852](https://github.com/45s/coinzilla/pull/1852), branch `feat/harvester/rs-scenario-suite-current-develop`. Former Draft [PR #1823](https://github.com/45s/coinzilla/pull/1823) was closed unmerged on 2026-11-26 after verifying 40/40 changed paths transferred to #1852. Its unique authorizer scenarios RS-002-006-B and RS-002-020-B, docs, agent guidance, inventory and scenario catalog are retained in the consolidated branch. No direct develop/main update or PR merge was performed.
+**Merged consolidated scenario registry:** [PR #1852](https://github.com/45s/coinzilla/pull/1852) merged into `develop` at `ef5f5e25b0994f244eb6b29b62f5d48235df4544`; all six required workflows passed on exact PR head `6770c6b66bec01f9746db720be3d80416795d837`. Former Draft [PR #1823](https://github.com/45s/coinzilla/pull/1823) was closed unmerged after verifying 40/40 changed paths transferred to #1852. Its unique authorizer scenarios RS-002-006-B and RS-002-020-B, docs, agent guidance, inventory and scenario catalog are retained in the merged test-only registry. This does not provide a production runtime catalogue or full RS adapter.
 
 **Transferred suite:** immutable registry and validation, distinct DOMAIN/APPLICATION runners, RS-001 authorization/custody, RS-002 BUY accounting, RS-003 mixed-SELL planning/fill allocation, RS-004 profitability, shared-account reservation/volatility cases, and dedicated scenario test files. The two transferred application authorizer cases are mapped and included in the targeted-test list.
 
@@ -2359,7 +2359,7 @@ The application runner now retains its execution slot and history record when an
 - The runner preserves the original validated execution input for the worker while public run snapshots and history remain recursively redacted.
 - Scenario Runner REST errors now preserve explicit 4xx/capacity outcomes, classify unexpected failures as HTTP 500, return a generic browser-safe message and log only safe error metadata.
 - Exact-head targeted Harvester tests, workspace unit tests, test coverage and Repository Quality passed at implementation checkpoint `8dadd5bab3686e91621934557e7ffda83849bbe5`; External Documentation Links was still running at the time of this note.
-- Remaining release gates are unchanged: no production OS sandbox launcher is wired, no full production RS flow is registered, run history is in-memory, exact-revision replay/debug provenance is incomplete, and end-to-end acceptance is outstanding. PR #1837 remains Draft and unmerged.
+- Remaining release gates: no production OS sandbox launcher is wired; no full production RS flow is registered; the merged RS test registry still needs a production-safe catalogue/export boundary; same-revision replay is implemented but historical code/artifact reconstruction and full provenance remain incomplete; and end-to-end acceptance is outstanding. In-memory run history is accepted for this MVP and is not a blocker. PR #1837 remains Draft and unmerged.
 ### Registry, replay and isolation synchronization — 2026-11-26
 
 - RS scenario registry and mapped scenario records are now merged into `develop` by [PR #1852](https://github.com/45s/coinzilla/pull/1852), merge commit `ef5f5e25b0994f244eb6b29b62f5d48235df4544`; all six required workflows passed on exact PR head `6770c6b66bec01f9746db720be3d80416795d837`. This is a test-only registry and does not make its scenarios production-executable.
@@ -2367,7 +2367,7 @@ The application runner now retains its execution slot and history record when an
 - Same-revision replay now records source SHA and replay ancestry, exposes a replay endpoint/UI action, reuses original recorded input, and blocks when the original SHA is unknown or does not match the active revision. It does not fetch historical commits or restore runs after restart.
 - Node-level worker guards and a real child-worker acceptance fixture cover selected dangerous module imports, global network APIs, standard filesystem mutation APIs, writable file handles and secret-environment non-inheritance. These controls are not an OS sandbox and do not prove filesystem-read, native-code, direct-syscall or network-namespace isolation.
 - In-memory run history is accepted for the MVP and is not a blocker. The production RS adapter, safe registry integration, trusted OS-level sandbox and full end-to-end host-to-simulation acceptance remain incomplete.
-- PR #1837 is being synchronized against current `develop`; exact-head CI must run after the merge checkpoint. Keep the PR Draft and keep the host fail-closed.
+- PR #1837 is synchronized against current `develop` (0 commits behind); exact-head CI must pass after the latest worker lifecycle and cleanup changes. Keep the PR Draft and keep the host fail-closed.
 
 ## Conservative executable scenario tooling — issue #1797
 

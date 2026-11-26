@@ -43,7 +43,7 @@ These are planning areas, not commitments to bypass backend ownership or existin
 
 ## Strategy-neutral Scenario Runner — issue #1836
 
-Open Draft [PR #1837](https://github.com/45s/coinzilla/pull/1837) carries the Dashboard presentation and Harvester execution foundation. The PR branch is being synchronized with current `develop` after merged PRs #1852 and #1798. The merged RS registry (#1852) is a test-only source of scenario definitions and evidence; the production runner must not misrepresent it as an executable runtime catalogue.
+Open Draft [PR #1837](https://github.com/45s/coinzilla/pull/1837) carries the Dashboard presentation and Harvester execution foundation. The PR branch is synchronized with current `develop` after merged PRs #1852 and #1798. The merged RS registry (#1852) is a test-only source of scenario definitions and evidence; the production runner must not misrepresent it as an executable runtime catalogue.
 
 Implemented on the task branch: generic run lifecycle/API, process worker adapter and cooperative cancellation/cleanup, Dashboard trace/debug UI, source-revision provenance, same-revision replay with explicit blocking when provenance is unknown/mismatched, and Node-level worker API guards. The worker guards are defense-in-depth, not OS isolation. Run history remains in-memory by accepted MVP decision.
 

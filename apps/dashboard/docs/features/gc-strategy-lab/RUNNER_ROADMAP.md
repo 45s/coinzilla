@@ -77,7 +77,7 @@ The Harvester lifecycle now keeps a run in `Cancelling` until the adapter execut
 
 ## Dashboard integration corrections
 
-The current Dashboard integration is a local-development client for the Harvester REST/WS adapter. The history action loads a prior run's recorded inputs; it is not original-revision replay. The debug JSON display is a selectable-text fallback, and clipboard success is shown only after the clipboard promise resolves. Recursive redaction currently covers API/access/private keys, secrets, passwords/passphrases, tokens, credentials, authorization/bearer values, cookies, sessions, JWTs and signatures; this does not establish complete package provenance or replace a full security review. The implementation remains incomplete until persistent bounded history, exact-revision replay, complete provenance/evidence, and the remaining MVP acceptance gates are implemented and verified.
+The current Dashboard integration is a local-development client for the Harvester REST/WS adapter. History browsing loads a prior run's recorded inputs; the separate same-revision replay action creates a linked run only when the original and active full source SHAs match, and blocks when provenance is unknown or mismatched. It does not fetch historical commits or reconstruct original dependencies/effective configuration/events. The debug JSON display is a selectable-text fallback, and clipboard success is shown only after the clipboard promise resolves. Recursive redaction currently covers API/access/private keys, secrets, passwords/passphrases, tokens, credentials, authorization/bearer values, cookies, sessions, JWTs and signatures; this does not establish complete package provenance or replace a full security review. In-memory history is accepted for this MVP. Remaining gates are full replay provenance, production RS flow, a production-safe catalogue/export boundary, OS isolation and end-to-end acceptance.
 
 ## Workflow-policy correction — 2026-11-25
 
@@ -87,7 +87,7 @@ A cross-document audit found that the Dashboard agent instructions still require
 
 - Task branch: `docs/dashboard/gc-strategy-lab-spec`.
 - The task branch is synchronized with current `develop` (0 commits behind); exact head and CI evidence are maintained in [issue #1836](https://github.com/45s/coinzilla/issues/1836) and [PR #1837](https://github.com/45s/coinzilla/pull/1837).
-- PR #1837 remains Draft and unmerged. The full approved MVP is not complete; all previously listed isolation, production-flow, persistence, replay, trace/report, configuration and E2E gates remain applicable.
+- PR #1837 remains Draft and unmerged. The full approved MVP is not complete; production-flow, production-safe catalogue, OS isolation, replay provenance, trace/report, configuration and E2E gates remain applicable. Durable history is deferred and is not an MVP blocker.
 - Do not claim CI success from a superseded head; all required checks must pass on the final exact head.
 
 ## Strategy-neutral Harvester registration — 2026-11-25
