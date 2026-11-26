@@ -1,184 +1,199 @@
 import { readFile } from "node:fs/promises"
+import os from "node:os"
 import path from "node:path"
-import { pathToFileURL } from "node:url"
-import { defaultLogger } from "@coinzilla/utils"
-import { createFileOperationalStateStore } from "../src/infrastructure/operational-state/create-file-store.js"
-import { resolveOperationalStateDirectory } from "../src/infrastructure/operational-state/resolve-directory.js"
+import { fileURLToPath } from "node:url"
+import { captureBuildMetadata } from "@coinzilla/utils"
+import packageMetadata from "../package.json" with { type: "json" }
+import { authenticateLocalOperator, LOCAL_OPERATOR_ID_PATTERN } from "../src/infrastructure/security/local-operator-identity.js"
+import { createOperationalStateStore } from "../src/infrastructure/operational-state/create-operational-state-store.js"
 import { runOfflineAccountBlockerResolution } from "../src/use-cases/resolve-offline-user-data-account-blockers.js"
 
-const HELP = `Usage:
-  node apps/harvester/scripts/recovery-account-blockers.js --context <account-evidence.json> --operator-id <id> --action-id <unique-id> --cause-fixed
+const PACKAGE_DIRECTORY = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 
-Options:
-  --context <path>    Shared account evidence plus per-market coverage/trade-history evidence (required)
-  --operator-id <id>  Operator identity recorded in the durable resolution fact (required)
-  --action-id <id>    Unique operator action ID for idempotent audit correlation (required)
-  --cause-fixed       Explicitly attest that the underlying account cause has been fixed (required)
-  --help              Show this help
+const HELP = [
+  "Usage: node scripts/recovery-account-blockers.js --context <path> --operator-id <current-os-user> --action-id <unique-id> --resolution-reason <text> --cause-fixed",
+  "",
+  "The operator ID must exactly match the authenticated operating-system account.",
+  "The context file must contain one independently reviewed, complete offline account evidence bundle.",
+  "The action ID is unique and may only be replayed with the same operator, reason, blocker set and evidence.",
+  "This command is offline-only. It does not call an exchange or mutate account balances or orders.",
+  "",
+  "Options:",
+  "  --context <path>             Reviewed account evidence bundle (JSON).",
+  "  --operator-id <id>           Authenticated local operating-system account name.",
+  "  --action-id <id>             Unique idempotency key for this resolution action.",
+  "  --resolution-reason <text>   Operator's explicit explanation of why the cause is fixed.",
+  "  --cause-fixed                Explicitly acknowledge that the underlying cause is fixed.",
+  "  --version                    Print application/build identity and exit.",
+  "  --help                       Print this help and exit.",
+].join("\n")
 
-The command requires the matching Harvester process to be cleanly stopped and an existing
-Operational State Store. It runs the production offline account/order/fill audit for every
-configured market, then appends durable resolution facts and verifies readback. It does not
-connect to an exchange, place/cancel/replace orders, restart Harvester, clear runtime flags,
-or reopen trading. After success, perform a controlled restart and require a fresh authoritative
-account snapshot before trading admission can reopen.
-`
+const VALUE_ARGUMENT_KEYS = new Set([
+  "--context",
+  "--operator-id",
+  "--action-id",
+  "--resolution-reason",
+])
 
-const VALUE_ARGUMENT_KEYS = Object.freeze({
-  "--context": "contextPath",
-  "--operator-id": "operatorId",
-  "--action-id": "actionId",
-})
-
-function consumeArgument({ args, index, parsed }) {
-  const argument = args[index]
-  if (argument === "--help") {
-    parsed.help = true
-    return index
-  }
-  if (argument === "--cause-fixed") {
-    if (parsed.causeFixed) {
-      throw new Error("--cause-fixed must not be repeated")
-    }
-    parsed.causeFixed = true
-    return index
-  }
-  const key = VALUE_ARGUMENT_KEYS[argument]
-  if (!key) {
-    throw new Error(`Unknown account blocker recovery argument: ${argument}`)
-  }
-  const value = args[index + 1]
-  if (!value || value.startsWith("--")) {
-    throw new Error(`${argument} requires a value`)
-  }
-  if (parsed[key] !== undefined) {
-    throw new Error(`${argument} must not be repeated`)
-  }
-  parsed[key] = value
-  return index + 1
+function createRecoveryIdentity({ env = process.env } = {}) {
+  const metadata = captureBuildMetadata({
+    application: "harvester-account-blocker-recovery",
+    version: packageMetadata.version,
+    cwd: PACKAGE_DIRECTORY,
+    env,
+  })
+  const { source } = metadata
+  return [
+    `${metadata.application} ${metadata.version}`,
+    `commit ${source.commit ?? "unknown"}`,
+    `worktree ${source.workingTree}`,
+    `node ${process.version}`,
+  ].join(" | ")
 }
 
 function validateParsedArguments(parsed) {
-  if (parsed.help) {
-    return
-  }
-  if (!parsed.contextPath) {
-    throw new Error("--context is required")
-  }
-  if (!parsed.operatorId || !/^[A-Za-z0-9][A-Za-z0-9._:@-]{2,127}$/.test(parsed.operatorId)) {
-    throw new Error("--operator-id must be 3-128 canonical characters")
-  }
-  if (!parsed.actionId || !/^[A-Za-z0-9][A-Za-z0-9._:@-]{7,127}$/.test(parsed.actionId)) {
-    throw new Error("--action-id must be a unique 8-128 character token")
-  }
-  if (parsed.causeFixed !== true) {
-    throw new Error("--cause-fixed is required to confirm the underlying cause is fixed")
+  if (typeof parsed.contextPath !== "string" || parsed.contextPath.trim() === "" ||
+      !LOCAL_OPERATOR_ID_PATTERN.test(parsed.operatorId ?? "") ||
+      typeof parsed.actionId !== "string" ||
+      !/^[A-Za-z0-9][A-Za-z0-9._:@-]{7,127}$/.test(parsed.actionId) ||
+      typeof parsed.resolutionReason !== "string" ||
+      parsed.resolutionReason.trim() !== parsed.resolutionReason ||
+      parsed.resolutionReason.length < 8 ||
+      parsed.resolutionReason.length > 512 ||
+      /[\\u0000-\\u001F\\u007F]/.test(parsed.resolutionReason) ||
+      parsed.causeFixed !== true) {
+    throw new TypeError("Account-blocker recovery requires context, authenticated operator, unique action ID, resolution reason, and --cause-fixed")
   }
 }
 
+/**
+ * @param {string[]} args
+ * @returns {{contextPath?: string, operatorId?: string, actionId?: string, resolutionReason?: string, causeFixed: boolean, help: boolean, version: boolean}}
+ */
 export function parseRecoveryAccountBlockerArguments(args = []) {
-  if (!Array.isArray(args)) {
-    throw new TypeError("CLI arguments must be an array")
-  }
   const parsed = {
     contextPath: undefined,
     operatorId: undefined,
     actionId: undefined,
+    resolutionReason: undefined,
     causeFixed: false,
     help: false,
+    version: false,
   }
   for (let index = 0; index < args.length; index += 1) {
-    index = consumeArgument({
-      args,
-      index,
-      parsed,
-    })
-  }
-  validateParsedArguments(parsed)
-  return Object.freeze(parsed)
-}
-function createResolutionStore({ context, env }) {
-  if (typeof context.runtimeSessionId !== "string" || !context.runtimeSessionId.trim()) {
-    throw new Error("Account evidence bundle requires the stopped runtimeSessionId")
-  }
-  let directory
-  try {
-    directory = resolveOperationalStateDirectory({ env })
-  } catch (cause) {
-    throw new Error("Account blocker resolution requires a valid OPERATIONAL_STATE_DIRECTORY", { cause })
-  }
-  return createFileOperationalStateStore({
-    directory,
-    runtimeSessionId: context.runtimeSessionId,
-  })
-}
-
-function summarizeResult(result) {
-  if (result?.ok !== true) {
-    return {
-      ok: false,
-      errors: (result?.errors ?? [new Error("Offline account blocker resolution failed")]).map((error) => ({
-        code: error?.code,
-        message: error?.message ?? String(error),
-      })),
+    const argument = args[index]
+    if (argument === "--help" || argument === "-h") {
+      parsed.help = true
+      continue
+    }
+    if (argument === "--version") {
+      parsed.version = true
+      continue
+    }
+    if (argument === "--cause-fixed") {
+      parsed.causeFixed = true
+      continue
+    }
+    if (!VALUE_ARGUMENT_KEYS.has(argument)) {
+      throw new TypeError(`Unknown recovery argument: ${argument}`)
+    }
+    const value = args[index + 1]
+    if (typeof value !== "string" || value.trim() === "" || value.startsWith("--")) {
+      throw new TypeError(`Recovery argument ${argument} requires a value`)
+    }
+    index += 1
+    if (argument === "--context") {
+      parsed.contextPath = value
+    } else if (argument === "--operator-id") {
+      parsed.operatorId = value
+    } else if (argument === "--action-id") {
+      parsed.actionId = value
+    } else if (argument === "--resolution-reason") {
+      parsed.resolutionReason = value
     }
   }
-  return {
-    ok: true,
-    data: {
-      resolvedBlockerIds: result.data.resolvedBlockerIds,
-      evidenceDigest: result.data.evidenceDigest,
-      durableReadbackVerified: result.data.durableReadbackVerified,
-      readiness: result.data.readiness,
-      requiresControlledRestart: result.data.requiresControlledRestart,
-      runtimeStateReset: result.data.runtimeStateReset,
-      recoverySellerStopReset: result.data.recoverySellerStopReset,
-    },
+  if (parsed.version && args.length !== 1) {
+    throw new TypeError("--version must be used by itself")
   }
+  if (!parsed.help && !parsed.version) {
+    validateParsedArguments(parsed)
+  }
+  return parsed
 }
 
+async function readContextFile({ filePath }) {
+  const content = await readFile(path.resolve(filePath), "utf8")
+  return JSON.parse(content)
+}
+
+/**
+ * Run the offline-only account blocker recovery command.
+ *
+ * @param {object} options
+ * @returns {Promise<number>} Process exit code.
+ */
 export async function runRecoveryAccountBlockerCommand({
   args = process.argv.slice(2),
   env = process.env,
-  cwd = process.cwd(),
-  readContext = readFile,
-  writeOutput = (value) => process.stdout.write(`${value}\n`),
-  writeError = (value) => defaultLogger.error({
-    message: "Offline account blocker recovery CLI failed",
-    error: value,
-  }),
-  createStore = createResolutionStore,
+  getUserInfo = os.userInfo,
+  readContext = readContextFile,
+  createStore = ({ env: storeEnv } = {}) => createOperationalStateStore({ env: storeEnv }),
   runResolution = runOfflineAccountBlockerResolution,
+  writeOutput = (message) => process.stdout.write(`${message}\n`),
+  writeError = (message) => process.stderr.write(`${message}\n`),
 } = {}) {
+  writeOutput(createRecoveryIdentity({ env }))
+  let parsed
   try {
-    const parsed = parseRecoveryAccountBlockerArguments(args)
-    if (parsed.help) {
-      writeOutput(HELP)
-      return 0
-    }
-    const contextPath = path.resolve(cwd, parsed.contextPath)
-    const context = JSON.parse(await readContext(contextPath, "utf8"))
-    const operationalStateStore = createStore({
-      context,
-      env,
-    })
-    const result = await runResolution({
-      context,
-      operationalStateStore,
-      operatorId: parsed.operatorId,
-      actionId: parsed.actionId,
-      causeFixed: parsed.causeFixed,
-    })
-    const summary = summarizeResult(result)
-    writeOutput(JSON.stringify(summary, null, 2))
-    return summary.ok && summary.data.durableReadbackVerified === true ? 0 : 1
+    parsed = parseRecoveryAccountBlockerArguments(args)
   } catch (error) {
-    writeError(error)
+    writeError(error.message)
+    return 1
+  }
+  if (parsed.version) {
+    return 0
+  }
+  if (parsed.help) {
+    writeOutput(HELP)
+    return 0
+  }
+
+  let operatorIdentity
+  try {
+    operatorIdentity = authenticateLocalOperator({
+      operatorId: parsed.operatorId,
+      getUserInfo,
+    })
+  } catch (error) {
+    writeError(error.message)
+    return 1
+  }
+
+  try {
+    const context = await readContext({
+      filePath: parsed.contextPath,
+    })
+    const store = await createStore({ env })
+    const result = await runResolution({
+      ...parsed,
+      operatorIdentity,
+      context,
+      operationalStateStore: store,
+    })
+    if (result?.ok !== true) {
+      const error = result?.errors?.[0] ?? new Error("Account-blocker recovery was not durably confirmed")
+      writeError(error.message)
+      return 1
+    }
+    writeOutput(`Resolved ACCOUNT blockers: ${result.data.resolvedBlockerIds.join(", ")}`)
+    writeOutput(`Resolution action: ${parsed.actionId}; evidence: ${result.data.evidenceDigest}`)
+    return 0
+  } catch (error) {
+    writeError(error.message)
     return 1
   }
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const exitCode = await runRecoveryAccountBlockerCommand()
-  process.exitCode = exitCode
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  process.exitCode = await runRecoveryAccountBlockerCommand()
 }
