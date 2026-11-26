@@ -11,6 +11,7 @@ import { createMongoProvider } from "./provider.js"
 function createProviderHarness({ topology = "standalone", transactionSupported = false, commandHandler } = {}) {
   const calls = []
   const transports = []
+  let randomValue = 0
   const provider = createMongoProvider({
     uri: "mongodb://localhost:27017/app",
     transportFactory: (options) => {
@@ -40,7 +41,7 @@ function createProviderHarness({ topology = "standalone", transactionSupported =
       sessionsSupported: transactionSupported,
       primary: null,
     }),
-    randomBytes: (length) => Buffer.alloc(length, 7),
+    randomBytes: (length) => Buffer.alloc(length, ++randomValue),
   })
   return { provider, calls, transports }
 }
