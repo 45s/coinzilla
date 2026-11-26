@@ -176,7 +176,7 @@ name: "Ada" },
     assert.ok(insert.lsid)
     assert.equal(insert.autocommit, false)
     assert.equal(insert.startTransaction, true)
-    assert.equal(insert.txnNumber, 1)
+    assert.equal(insert.txnNumber, 1n)
     assert.equal(insert.lsid.id.subtype, 4)
     assert.deepEqual(commit.lsid, insert.lsid)
     assert.equal(commit.txnNumber, insert.txnNumber)
