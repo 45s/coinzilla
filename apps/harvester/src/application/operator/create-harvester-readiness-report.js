@@ -408,8 +408,8 @@ function createAccountPreflightCheck({ inputs, runtime, observedAt } = {}) {
 }
 
 function isExternalOrderOnlyAudit({ openOrders } = {}) {
-  const symbols = openOrderState.unownedSymbols
-  const reasons = openOrderState.blockReasons
+  const symbols = openOrders.unownedSymbols
+  const reasons = openOrders.blockReasons
   if (!Array.isArray(symbols) || symbols.length === 0 || !Array.isArray(reasons) || reasons.length === 0) {
     return false
   }
@@ -528,31 +528,46 @@ function createAccountSafetyCheck({ inputs, runtime, observedAt } = {}) {
 
 function getUserDataSafetyFacts({ runtime, inputs } = {}) {
   const userData = inputs.userData ?? {}
-  const userDataStatus = userData.status ?? runtime.userData?.status ?? "UNKNOWN"
+  const runtimeUserData = runtime.userData ?? {}
+  const evidenceAvailable = Boolean(inputs.userData)
+  const userDataStatus = userData.status ?? runtimeUserData.status ?? "UNKNOWN"
   const normalizedStatus = normalizeUserDataStatus(userDataStatus)
   const reconciliationRequired = userData.requiresReconciliation === true ||
-    (userDataStatus === "AUTHORITATIVE_RECONCILIATION_REQUIRED" && userData.preflightComplete !== true)
+    runtimeUserData.requiresReconciliation === true ||
+    userDataStatus === "AUTHORITATIVE_RECONCILIATION_REQUIRED"
   const unsafe = userData.accountingFailed === true ||
+    runtimeUserData.accountingFailed === true ||
     userData.streamUnsafe === true ||
+    runtimeUserData.streamUnsafe === true ||
     userData.pendingRecovery === true ||
+    runtimeUserData.pendingRecovery === true ||
     userData.safetyHaltRequired === true ||
+    runtimeUserData.safetyHaltRequired === true ||
     userData.retryableRecoveryFailure === true ||
+    runtimeUserData.retryableRecoveryFailure === true ||
     reconciliationRequired ||
     UNSAFE_USER_DATA_STATUSES.has(normalizedStatus)
   const activationReady = runtime.tradingEnabled !== true ||
-    runtime.userData?.ready === true ||
+    runtimeUserData.ready === true ||
     runtime.startupBoundary === true
-  const ready = userData.subscriptionEstablished === true &&
-    userData.preflightComplete === true &&
-    !unsafe &&
-    activationReady
+  const ready = evidenceAvailable
+    ? userData.subscriptionEstablished === true && userData.preflightComplete === true && !unsafe && activationReady
+    : runtime.startupBoundary !== true && runtime.tradingEnabled === true && runtimeUserData.ready === true && !unsafe
   let status = "BLOCKED"
   let code = "USER_DATA_PREFLIGHT_INCOMPLETE"
   let message = "User-data subscription or authoritative PREFLIGHT reconciliation evidence is incomplete."
-  if (ready) {
+  if (!evidenceAvailable && runtime.startupBoundary !== true && runtime.tradingEnabled !== true) {
+    status = "NOT_APPLICABLE"
+    code = "USER_DATA_NOT_REQUIRED"
+    message = "Trading is disabled; the user-data trading gate is not required for this operator snapshot."
+  } else if (ready && evidenceAvailable) {
     status = "PASS"
     code = "USER_DATA_PREFLIGHT_COMPLETE"
     message = "User-data subscription, account PREFLIGHT and queued-event reconciliation are complete."
+  } else if (ready) {
+    status = "PASS"
+    code = "USER_DATA_GATE_OPEN"
+    message = "The existing user-data trading-readiness gate is open."
   } else if (reconciliationRequired) {
     code = "AUTHORITATIVE_RECONCILIATION_REQUIRED"
     message = "User-data recovery or reconciliation remains unresolved."
@@ -560,41 +575,41 @@ function getUserDataSafetyFacts({ runtime, inputs } = {}) {
     code = "USER_DATA_RECONCILIATION_UNSAFE"
     message = "User-data synchronization or accounting state is unsafe."
   } else if (runtime.tradingEnabled === true &&
-      runtime.userData?.ready !== true &&
+      runtimeUserData.ready !== true &&
       runtime.startupBoundary !== true) {
     code = "USER_DATA_NOT_READY"
     message = "The existing user-data trading-readiness gate is closed."
   }
   return {
     userData,
+    runtimeUserData,
+    evidenceAvailable,
     userDataStatus,
     status,
     code,
     message,
   }
 }
-
 function createUserDataDetails({ facts, runtime, observedAt } = {}) {
-  const { userData, userDataStatus } = facts
-  const lastStatusEventAt = userData.lastStatusEventAt ?? runtime.userData?.lastEventAt
+  const { userData, runtimeUserData, evidenceAvailable, userDataStatus } = facts
+  const lastStatusEventAt = userData.lastStatusEventAt ?? runtimeUserData.lastEventAt
   return {
-    subscriptionEstablished: userData.subscriptionEstablished === true,
-    preflightComplete: userData.preflightComplete === true,
-    ready: runtime.userData?.ready === true,
+    subscriptionEstablished: evidenceAvailable ? userData.subscriptionEstablished === true : null,
+    preflightComplete: evidenceAvailable ? userData.preflightComplete === true : null,
+    ready: runtimeUserData.ready === true,
     activationDeferred: userData.tradingActivationDeferred === true,
-    activationPending: runtime.startupBoundary === true && runtime.userData?.ready !== true,
+    activationPending: runtime.startupBoundary === true && runtimeUserData.ready !== true,
     status: userDataStatus,
-    requiresReconciliation: userData.requiresReconciliation === true,
-    accountingFailed: userData.accountingFailed === true,
-    streamUnsafe: userData.streamUnsafe === true,
-    pendingRecovery: userData.pendingRecovery === true,
-    safetyHaltRequired: userData.safetyHaltRequired === true,
-    retryableRecoveryFailure: userData.retryableRecoveryFailure === true,
+    requiresReconciliation: userData.requiresReconciliation === true || runtimeUserData.requiresReconciliation === true,
+    accountingFailed: userData.accountingFailed === true || runtimeUserData.accountingFailed === true,
+    streamUnsafe: userData.streamUnsafe === true || runtimeUserData.streamUnsafe === true,
+    pendingRecovery: userData.pendingRecovery === true || runtimeUserData.pendingRecovery === true,
+    safetyHaltRequired: userData.safetyHaltRequired === true || runtimeUserData.safetyHaltRequired === true,
+    retryableRecoveryFailure: userData.retryableRecoveryFailure === true || runtimeUserData.retryableRecoveryFailure === true,
     lastStatusEventAt: isTimestamp(lastStatusEventAt) ? lastStatusEventAt : null,
     lastStatusEventAgeMs: ageMs({ observedAt, timestamp: lastStatusEventAt }),
   }
 }
-
 function createUserDataCheck({ runtime, inputs, observedAt } = {}) {
   const facts = getUserDataSafetyFacts({ runtime, inputs })
   return createCheck({
@@ -603,9 +618,14 @@ function createUserDataCheck({ runtime, inputs, observedAt } = {}) {
     status: facts.status,
     code: facts.code,
     message: facts.message,
-    expected: "An established stream, completed authoritative PREFLIGHT reconciliation and no recovery/accounting blockers.",
+    expected: facts.evidenceAvailable
+      ? "An established stream, completed authoritative PREFLIGHT reconciliation and no recovery/accounting blockers."
+      : "The existing userDataState.ready gate remains open; startup-only reconciliation provenance is not rechecked by this operator read.",
     remediation: "Restore user-data delivery, complete authoritative account/open-order reconciliation and verify queued events are drained.",
     observedAt,
+    sourceOfTruth: facts.evidenceAvailable
+      ? undefined
+      : "Existing userDataState.ready gate; startup reconciliation provenance is not included in this operator read",
     details: createUserDataDetails({ facts, runtime, observedAt }),
   })
 }
@@ -972,6 +992,17 @@ function createMarketVolatilityCheck({ market, input, runtime, observedAt } = {}
       remediation: "Inspect startup diagnostics for the authoritative candle-history result.",
       observedAt,
       blocksTrading: false,
+    })
+  }
+  if (!volatility && runtime.startupBoundary === true) {
+    return createMarketCheck({
+      id: "market.volatility",
+      status: "BLOCKED",
+      code: "VOLATILITY_REQUIREMENT_UNKNOWN",
+      message: "The startup snapshot does not identify whether volatility protection is required for this market.",
+      expected: "The effective market configuration explicitly identifies volatility protection as enabled or disabled.",
+      remediation: "Restore the market configuration and candle-history service snapshot; do not assume unavailable protection is disabled.",
+      observedAt,
     })
   }
   if (volatility?.enabled !== true) {

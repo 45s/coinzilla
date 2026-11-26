@@ -124,3 +124,8 @@ Each report check now carries a stable code, source-of-truth description, expect
 ## Operator read-model boundary
 
 The startup boundary requires the full source-backed evidence set. A later operator query does not pretend that startup-only evidence (process continuity, PREFLIGHT durability, first-event provenance, or broker capability inspection) was rechecked if the source snapshot does not include it; those checks are explicitly `NOT_APPLICABLE` with their source limitation. Live engine blockers and the existing user-data readiness flag remain authoritative for current market/account admission.
+
+
+## Operator read-model evidence
+
+The report distinguishes the full startup boundary from later operator reads. Startup-only checks remain blocking when their required inputs are missing during startup. Outside startup, unavailable startup-only provenance is reported as `NOT_APPLICABLE`, while the existing user-data gate and engine-provided market blockers remain authoritative for live trading admission.

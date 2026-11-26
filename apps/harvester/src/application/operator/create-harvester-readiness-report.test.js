@@ -8,7 +8,7 @@ const identity = Object.freeze({ providerInstanceId: "binanceTestnet", providerT
 function createInputs() {
   return {
     observedAt: 20000,
-    runtime: { runtimeState: "STARTING", tradingEnabled: true, tradingMode: "testnet", broker: "binance", stopping: false, startupComplete: false, userData: { ready: false, status: "PREFLIGHT_COMPLETE", lastEventAt: 19990, ageMs: 10 } },
+    runtime: { runtimeState: "STARTING", startupBoundary: true, tradingEnabled: true, tradingMode: "testnet", broker: "binance", stopping: false, startupComplete: false, userData: { ready: false, status: "PREFLIGHT_COMPLETE", lastEventAt: 19990, ageMs: 10 } },
     readinessInputs: {
       configuration: { validated: true, enabledMarkets: ["BTCUSDT", "ETHUSDT"] },
       broker: { connected: true, identity, capabilities: { validated: true, missing: [] } },
@@ -16,7 +16,7 @@ function createInputs() {
       userData: { subscriptionEstablished: true, preflightComplete: true, requiresReconciliation: false, accountingFailed: false, streamUnsafe: false, pendingRecovery: false, safetyHaltRequired: false },
       processContinuity: { storeConfigured: true, previousProcessStarted: false, restorationEnabled: false },
       markets: {
-        BTCUSDT: { route: { expected: identity, actual: identity, priceSubscriptionReady: true, bookSubscriptionReady: true }, price: { valid: true, fresh: true, timestamp: 19999, source: "INITIAL_SEED", websocketEventReceived: false }, book: { required: true, fresh: true, timestamp: 19998, eventReceived: true }, volatility: { enabled: true, snapshot: { ok: true, data: { status: { isReady: true, isFresh: true, blockers: [], historyCount: 100, requiredHistoryCount: 74, lastEventAt: 19999, observedAt: 20000 } } } }, externalOrdersPolicy: "IGNORE", unownedOrderObserved: false },
+        BTCUSDT: { route: { expected: identity, actual: identity, priceSubscriptionReady: true, bookSubscriptionReady: true }, price: { valid: true, fresh: true, timestamp: 19999, source: "INITIAL_SEED", websocketEventReceived: false, freshnessThresholdMs: 5000 }, book: { required: true, fresh: true, timestamp: 19998, eventReceived: true, freshnessThresholdMs: 5000 }, volatility: { enabled: true, snapshot: { ok: true, data: { status: { isReady: true, isFresh: true, blockers: [], historyCount: 100, requiredHistoryCount: 74, lastEventAt: 19999, freshnessThresholdMs: 65000, observedAt: 20000 } } } }, externalOrdersPolicy: "IGNORE", unownedOrderObserved: false },
         ETHUSDT: { route: { expected: identity, actual: identity, priceSubscriptionReady: true, bookSubscriptionReady: true }, price: { valid: true, fresh: true, timestamp: 19999, source: "WEBSOCKET", websocketEventReceived: true }, book: { required: true, fresh: true, timestamp: 19998, eventReceived: true }, volatility: { enabled: false, snapshot: null }, externalOrdersPolicy: "IGNORE", unownedOrderObserved: false },
       },
     },
