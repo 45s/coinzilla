@@ -1525,3 +1525,12 @@ test("Conservative and RS accounting workflows can share one serialized account 
     "1",
   )
 })
+
+
+test("RS-008-018-B: concurrent same-market CG and RS fills retain independent Positions", async () => {
+  await assertConcurrentStrategyAccounting({
+    recoveryMarket: market,
+    conservativeMarket: market,
+    scenario: "RS-008-018-B",
+  })
+})

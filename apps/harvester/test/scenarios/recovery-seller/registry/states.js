@@ -1,0 +1,7 @@
+export const RS_CYCLE_STATE_IDS = Object.freeze([
+  "ACCUMULATING",
+  "SELL_SUBMITTED",
+  "RECONCILIATION_REQUIRED",
+  "UNRESOLVED",
+  "CLOSED",
+])
