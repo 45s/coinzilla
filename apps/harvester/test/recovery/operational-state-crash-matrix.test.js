@@ -229,7 +229,7 @@ async function recordCrashBoundaryIntentAndAcknowledgement({ directory, store })
     clientOrderId: pending.clientOrderId,
     brokerOrderId: "broker-crash-matrix-buy-1",
     side: "BUY",
-    quantity: "0.02",
+    quantity: "0.05",
     price: "100",
     status: "OPEN",
     executedQuantity: "0",
