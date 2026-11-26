@@ -111,8 +111,8 @@ export function createMongoTransport({
     try {
       response = decodeOpMsg(message)
     } catch (error) {
-      socket?.destroy()
       failConnection(error)
+      socket?.destroy()
       return
     }
 
@@ -135,13 +135,13 @@ export function createMongoTransport({
       return
     }
     if (!Buffer.isBuffer(chunk)) {
-      socket?.destroy()
       failConnection(new TypeError("MongoDB socket emitted non-buffer data"))
+      socket?.destroy()
       return
     }
     if (receiveBuffer.length + chunk.length > MAX_WIRE_MESSAGE_SIZE) {
-      socket?.destroy()
       failConnection(new TypeError("MongoDB receive buffer exceeds the 48 MiB message limit"))
+      socket?.destroy()
       return
     }
     receiveBuffer = receiveBuffer.length === 0
@@ -150,8 +150,8 @@ export function createMongoTransport({
     while (receiveBuffer.length >= 4) {
       const length = receiveBuffer.readInt32LE(0)
       if (length < 26 || length > MAX_WIRE_MESSAGE_SIZE) {
-        socket?.destroy()
         failConnection(new TypeError("MongoDB server sent an invalid wire frame length"))
+        socket?.destroy()
         return
       }
       if (receiveBuffer.length < length) {
@@ -205,8 +205,8 @@ export function createMongoTransport({
         connectReject = null
       }
       const onError = (error) => {
-        socket?.destroy()
         failConnection(error)
+        socket?.destroy()
       }
       const onClose = () => {
         failConnection(new Error("MongoDB socket closed"))
@@ -219,8 +219,8 @@ export function createMongoTransport({
       socket.on("end", onClose)
       socket.on("close", onClose)
       connectTimer = setTimeout(() => {
-        socket?.destroy()
         failConnection(new Error("MongoDB connection timed out"))
+        socket?.destroy()
       }, connectTimeoutMS)
     })
     return connectPromise
