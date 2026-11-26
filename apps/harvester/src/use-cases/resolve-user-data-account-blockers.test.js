@@ -482,7 +482,7 @@ test("retries a partially appended multi-blocker action and accepts exact duplic
   }))
   assert.equal(firstAttempt.ok, false, "A partial durable append must not be reported as complete")
   assert.equal(
-    store.records.filter((record) => record.factType === "SAFETY_BLOCKER_RESOLVED").length,
+    store.records.filter((fact) => fact.factType === "SAFETY_BLOCKER_RESOLVED").length,
     1,
     "The first blocker fact remains durable while the second append is rejected",
   )
@@ -497,7 +497,7 @@ test("retries a partially appended multi-blocker action and accepts exact duplic
   assert.equal(retry.data.durableReadbackVerified, true)
   assert.equal(retry.data.idempotentReplay, false)
   assert.equal(
-    store.records.filter((record) => record.factType === "SAFETY_BLOCKER_RESOLVED").length,
+    store.records.filter((fact) => fact.factType === "SAFETY_BLOCKER_RESOLVED").length,
     2,
     "The retry appends only the blocker that was not durably resolved",
   )
