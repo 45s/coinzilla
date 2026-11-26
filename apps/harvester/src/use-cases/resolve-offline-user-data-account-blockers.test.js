@@ -7,6 +7,7 @@ import {
 } from "../../scripts/recovery-account-blockers.js"
 import { runOfflineAccountBlockerResolution } from "./resolve-offline-user-data-account-blockers.js"
 import { resolveUserDataAccountBlockers } from "./resolve-user-data-account-blockers.js"
+import { authenticateLocalOperator } from "../infrastructure/security/local-operator-identity.js"
 
 const runtimeSessionId = "operator-recovery-session"
 const fingerprint = "f".repeat(64)
@@ -15,6 +16,14 @@ const configuredMarkets = ["BTCUSDT", "ETHUSDT"]
 const blockerId = createHash("sha256")
   .update(["ACCOUNT", "", "ACCOUNTING_INTEGRITY_FAILURE", triggerDigest].join("\0"))
   .digest("hex")
+const resolutionReason = "Confirmed the account-wide data integrity cause is fixed."
+
+function createOperatorIdentity(operatorId = "operator-7") {
+  return authenticateLocalOperator({
+    operatorId,
+    getUserInfo: () => ({ username: operatorId }),
+  })
+}
 
 function fact({ sequence, factType, data, factId = `${factType}:${sequence}` }) {
   return {
@@ -369,6 +378,8 @@ test("parses explicit offline account blocker resolution confirmation", () => {
     "operator-7",
     "--action-id",
     "action-unique-001",
+    "--resolution-reason",
+    resolutionReason,
     "--cause-fixed",
   ])
   assert.equal(parsed.causeFixed, true)
@@ -381,7 +392,9 @@ test("parses explicit offline account blocker resolution confirmation", () => {
     "operator-7",
     "--action-id",
     "action-unique-001",
-  ]), /--cause-fixed is required/)
+    "--resolution-reason",
+    resolutionReason,
+  ]), /--cause-fixed/
 })
 
 test("runs the production offline account/order/fill audit for every configured market", async () => {
@@ -390,6 +403,8 @@ test("runs the production offline account/order/fill audit for every configured 
     context: makeContext(),
     operationalStateStore: makeStore(),
     operatorId: "operator-7",
+    operatorIdentity: createOperatorIdentity(),
+    resolutionReason,
     actionId: "action-unique-002",
     causeFixed: true,
     resolveBlockers: async (request) => {
@@ -424,6 +439,8 @@ test("fails closed if any configured market is not fully reconciled", async () =
     context: makeContext(),
     operationalStateStore: makeStore(),
     operatorId: "operator-7",
+    operatorIdentity: createOperatorIdentity(),
+    resolutionReason,
     actionId: "action-unique-003",
     causeFixed: true,
     reconcileMarket: async ({ context }) => {
@@ -452,6 +469,8 @@ test("rejects exchange fills that are not durably represented in the Journal", a
     context: makeContext(),
     operationalStateStore: makeStore(),
     operatorId: "operator-7",
+    operatorIdentity: createOperatorIdentity(),
+    resolutionReason,
     actionId: "action-unique-011",
     causeFixed: true,
     reconcileMarket: async ({ context }) => {
@@ -478,6 +497,8 @@ test("requires clean process stop before offline resolution", async () => {
     context: makeContext(),
     operationalStateStore: makeStore({ stopped: false }),
     operatorId: "operator-7",
+    operatorIdentity: createOperatorIdentity(),
+    resolutionReason,
     actionId: "action-unique-004",
     causeFixed: true,
     resolveBlockers: async () => {
@@ -525,6 +546,8 @@ test("durably resolves after clean stop and leaves readiness blocked for restart
       data: audit,
     }),
     operatorId: "operator-7",
+    operatorIdentity: createOperatorIdentity(),
+    resolutionReason,
     actionId: "action-unique-005",
     causeFixed: true,
     configuredMarkets,
@@ -548,9 +571,12 @@ test("CLI reports durable resolution while explicitly keeping trading blocked", 
       "operator-7",
       "--action-id",
       "action-unique-009",
+      "--resolution-reason",
+      resolutionReason,
       "--cause-fixed",
     ],
     cwd: "/tmp",
+    getUserInfo: () => ({ username: "operator-7" }),
     readContext: async () => JSON.stringify(makeContext()),
     createStore: () => makeStore(),
     runResolution: async () => ({
@@ -571,7 +597,7 @@ test("CLI reports durable resolution while explicitly keeping trading blocked", 
 
   assert.equal(exitCode, 0)
   assert.equal(errors.length, 0)
-  const summary = JSON.parse(output[0])
+  const summary = JSON.parse(output[1])
   assert.equal(summary.ok, true)
   assert.equal(summary.data.readiness, "BLOCKED")
   assert.equal(summary.data.requiresControlledRestart, true)
@@ -589,6 +615,8 @@ test("CLI returns nonzero when durable resolution is not confirmed", async () =>
       "operator-7",
       "--action-id",
       "action-unique-010",
+      "--resolution-reason",
+      resolutionReason,
       "--cause-fixed",
     ],
     readContext: async () => JSON.stringify(makeContext()),
@@ -602,7 +630,7 @@ test("CLI returns nonzero when durable resolution is not confirmed", async () =>
   })
 
   assert.equal(exitCode, 1)
-  assert.equal(errors.length, 0)
+  assert.equal(errors.length, 1)
 })
 
 function makePriorResolvedActionRecords() {
@@ -669,6 +697,8 @@ test("rejects an action ID already present in durable resolution history", async
     context: makeContext(),
     operationalStateStore: store,
     operatorId: "operator-7",
+    operatorIdentity: createOperatorIdentity(),
+    resolutionReason,
     actionId: "action-unique-012",
     causeFixed: true,
     reconcileMarket: async () => {
@@ -708,6 +738,8 @@ test("rejects an unclean process stop before running market audits", async () =>
     context: makeContext(),
     operationalStateStore: store,
     operatorId: "operator-7",
+    operatorIdentity: createOperatorIdentity(),
+    resolutionReason,
     actionId: "action-unique-013",
     causeFixed: true,
     reconcileMarket: async () => {
@@ -802,6 +834,8 @@ async function runAuditFailureScenario({ scenario, index }) {
     context: makeContext(),
     operationalStateStore: makeStore(),
     operatorId: "operator-7",
+    operatorIdentity: createOperatorIdentity(),
+    resolutionReason,
     actionId: `action-unique-${String(index + 20).padStart(3, "0")}`,
     causeFixed: true,
     reconcileMarket: async ({ context }) => {
@@ -846,6 +880,8 @@ test("rejects missing configured-market evidence before running any market audit
     context,
     operationalStateStore: makeStore(),
     operatorId: "operator-7",
+    operatorIdentity: createOperatorIdentity(),
+    resolutionReason,
     actionId: "action-unique-030",
     causeFixed: true,
     reconcileMarket: async () => {
@@ -865,6 +901,8 @@ test("rejects mismatched runtime session and configured-market baseline", async 
     context: sessionMismatch,
     operationalStateStore: makeStore(),
     operatorId: "operator-7",
+    operatorIdentity: createOperatorIdentity(),
+    resolutionReason,
     actionId: "action-unique-031",
     causeFixed: true,
   })
@@ -876,6 +914,8 @@ test("rejects mismatched runtime session and configured-market baseline", async 
     context: marketMismatch,
     operationalStateStore: makeStore(),
     operatorId: "operator-7",
+    operatorIdentity: createOperatorIdentity(),
+    resolutionReason,
     actionId: "action-unique-032",
     causeFixed: true,
   })
@@ -906,6 +946,8 @@ test("rejects ACCOUNT blockers without verified user-data producer provenance", 
     context: makeContext(),
     operationalStateStore: store,
     operatorId: "operator-7",
+    operatorIdentity: createOperatorIdentity(),
+    resolutionReason,
     actionId: "action-unique-033",
     causeFixed: true,
     reconcileMarket: async () => {
@@ -928,6 +970,8 @@ test("fails closed on account balance discrepancies before resolution", async ()
     context,
     operationalStateStore: makeStore(),
     operatorId: "operator-7",
+    operatorIdentity: createOperatorIdentity(),
+    resolutionReason,
     actionId: "action-unique-034",
     causeFixed: true,
     resolveBlockers: async () => {
