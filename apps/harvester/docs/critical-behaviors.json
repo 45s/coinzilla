@@ -1173,7 +1173,8 @@
         "src/use-cases/record-safety-control-facts.js",
         "src/use-cases/resolve-offline-user-data-account-blockers.js",
         "src/use-cases/resolve-user-data-account-blockers.helpers.js",
-        "src/use-cases/resolve-user-data-account-blockers.js"
+        "src/use-cases/resolve-user-data-account-blockers.js",
+        "src/infrastructure/security/local-operator-identity.js"
       ],
       "integrationRequired": false,
       "tests": [
@@ -1249,7 +1250,7 @@
         },
         {
           "path": "src/use-cases/resolve-offline-user-data-account-blockers.test.js",
-          "name": "rejects an action ID already present in durable resolution history",
+          "name": "rejects a legacy action ID without replay-safe metadata",
           "kind": "failure"
         },
         {
@@ -1301,14 +1302,46 @@
           "path": "src/use-cases/resolve-user-data-account-blockers.test.js",
           "name": "does not resolve Recovery Seller STOP when a user-data ACCOUNT blocker is present",
           "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/resolve-user-data-account-blockers.test.js",
+          "name": "retries a partially appended multi-blocker action and accepts exact duplicate replay",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/resolve-user-data-account-blockers.test.js",
+          "name": "rejects reuse of an action ID with a different resolution reason",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/record-safety-control-facts.test.js",
+          "name": "persists authenticated operator metadata and accepts an exact action replay",
+          "kind": "normal"
+        },
+        {
+          "path": "src/use-cases/resolve-offline-user-data-account-blockers.test.js",
+          "name": "rejects a caller-forged operator identity object",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/resolve-offline-user-data-account-blockers.test.js",
+          "name": "prints application identity for --version without reading recovery evidence",
+          "kind": "normal"
+        },
+        {
+          "path": "src/use-cases/resolve-offline-user-data-account-blockers.test.js",
+          "name": "authenticates the operator against the current OS account before reading evidence",
+          "kind": "failure"
         }
       ],
       "runtimeStatus": "offline-only",
-      "limitation": "Offline CLI is wired to the existing production per-market account/order/fill reconciliation and a durable Operational State Store. It requires operator-prepared authoritative evidence and remains offline-only; the controlled restart plus fresh-snapshot admission matrix is still a separate acceptance gate.",
+      "limitation": "Offline CLI uses local OS-account authentication, not enterprise SSO, and requires operator-prepared evidence; it cannot independently prove exchange-export provenance. Controlled restart plus fresh-snapshot admission remains a separate acceptance gate.",
       "invariants": [
         "Persist producer provenance for user-data blockers; do not resolve legacy or unknown-origin ACCOUNT blockers.",
         "Resolve only the exact active user-data ACCOUNT blocker set after an authoritative audit of every configured market, all orders/fills/balances and consistent accounting with zero discrepancies.",
-        "Commit resolution facts durably and verify projection/readback; remain BLOCKED until controlled restart and fresh authoritative account snapshot. Never reset Recovery Seller STOP through this path."
+        "Commit resolution facts durably and verify projection/readback; remain BLOCKED until controlled restart and fresh authoritative account snapshot. Never reset Recovery Seller STOP through this path.",
+        "Authenticate the operator against the executing OS account and persist operator ID, authentication method, action ID, reason, exact target blocker set, and evidence digest in every OPERATOR_ACTION fact.",
+        "Allow retries only for the exact same operator/action/reason/blocker-set/evidence tuple; resume partial multi-blocker appends and verify exact per-blocker durable readback."
       ]
     }
   ],
