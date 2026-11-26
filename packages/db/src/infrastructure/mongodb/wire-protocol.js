@@ -115,8 +115,7 @@ function readSequence({ buffer, state }) {
 documents }
 }
 
-/** Decode one complete MongoDB OP_MSG frame. */
-export function decodeOpMsg(message) {
+function validateOpMsgFrame({ message }) {
   if (!Buffer.isBuffer(message) || message.length < HEADER_SIZE + 10) {
     throw new TypeError("MongoDB OP_MSG frame is truncated")
   }
@@ -135,8 +134,15 @@ export function decodeOpMsg(message) {
   if ((flags & ~SUPPORTED_FLAGS) !== 0) {
     throw new TypeError("MongoDB OP_MSG contains unsupported flag bits")
   }
-  const state = { offset: 20,
-end: message.length }
+  return {
+    requestId: message.readInt32LE(4),
+    responseTo: message.readInt32LE(8),
+    flags,
+    state: { offset: 20, end: message.length },
+  }
+}
+
+function decodeOpMsgSections({ message, state }) {
   let body
   const sequences = Object.create(null)
   while (state.offset < state.end) {
@@ -163,8 +169,7 @@ end: message.length }
       if (body === undefined) {
         throw new TypeError("MongoDB OP_MSG body section must precede document sequences")
       }
-      const sequence = readSequence({ buffer: message,
-state })
+      const sequence = readSequence({ buffer: message, state })
       if (Object.hasOwn(sequences, sequence.identifier)) {
         throw new TypeError("MongoDB OP_MSG contains a duplicate sequence identifier")
       }
@@ -173,19 +178,25 @@ state })
     }
     throw new TypeError(`Unsupported MongoDB OP_MSG section kind ${kind}`)
   }
+  return { body, sequences }
+}
+
+/** Decode one complete MongoDB OP_MSG frame. */
+export function decodeOpMsg(message) {
+  const frame = validateOpMsgFrame({ message })
+  validateMessageIdentifier({ value: frame.requestId, label: "requestId" })
+  validateMessageIdentifier({ value: frame.responseTo, label: "responseTo" })
+  const { body, sequences } = decodeOpMsgSections({
+    message,
+    state: frame.state,
+  })
   if (body === undefined) {
     throw new TypeError("MongoDB OP_MSG is missing its body section")
   }
-  const requestId = message.readInt32LE(4)
-  const responseTo = message.readInt32LE(8)
-  validateMessageIdentifier({ value: requestId,
-label: "requestId" })
-  validateMessageIdentifier({ value: responseTo,
-label: "responseTo" })
   return {
-    requestId,
-    responseTo,
-    flags,
+    requestId: frame.requestId,
+    responseTo: frame.responseTo,
+    flags: frame.flags,
     body,
     sequences,
   }
