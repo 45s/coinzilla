@@ -1,7 +1,10 @@
 import assert from "node:assert/strict"
 import { createHash } from "node:crypto"
 import test from "node:test"
-import { parseRecoveryAccountBlockerArguments } from "./recovery-account-blockers.js"
+import {
+  parseRecoveryAccountBlockerArguments,
+  runRecoveryAccountBlockerCommand,
+} from "./recovery-account-blockers.js"
 import { runOfflineAccountBlockerResolution } from "./recovery-account-blockers-context.js"
 import { resolveUserDataAccountBlockers } from "../src/use-cases/resolve-user-data-account-blockers.js"
 
@@ -361,4 +364,73 @@ test("durably resolves after clean stop and leaves readiness blocked for restart
   assert.equal(result.data.durableReadbackVerified, true)
   assert.equal(result.data.readiness, "BLOCKED")
   assert.equal(result.data.requiresControlledRestart, true)
+})
+
+
+test("CLI reports durable resolution while explicitly keeping trading blocked", async () => {
+  const output = []
+  const errors = []
+  const exitCode = await runRecoveryAccountBlockerCommand({
+    args: [
+      "--context",
+      "account-evidence.json",
+      "--operator-id",
+      "operator-7",
+      "--action-id",
+      "action-unique-009",
+      "--cause-fixed",
+    ],
+    cwd: "/tmp",
+    readContext: async () => JSON.stringify(makeContext()),
+    createStore: () => makeStore(),
+    runResolution: async () => ({
+      ok: true,
+      data: {
+        resolvedBlockerIds: [blockerId],
+        evidenceDigest: "d".repeat(64),
+        durableReadbackVerified: true,
+        readiness: "BLOCKED",
+        requiresControlledRestart: true,
+        runtimeStateReset: false,
+        recoverySellerStopReset: false,
+      },
+    }),
+    writeOutput: (value) => output.push(value),
+    writeError: (value) => errors.push(value),
+  })
+
+  assert.equal(exitCode, 0)
+  assert.equal(errors.length, 0)
+  const summary = JSON.parse(output[0])
+  assert.equal(summary.ok, true)
+  assert.equal(summary.data.readiness, "BLOCKED")
+  assert.equal(summary.data.requiresControlledRestart, true)
+  assert.equal(summary.data.runtimeStateReset, false)
+  assert.equal(summary.data.recoverySellerStopReset, false)
+})
+
+test("CLI returns nonzero when durable resolution is not confirmed", async () => {
+  const errors = []
+  const exitCode = await runRecoveryAccountBlockerCommand({
+    args: [
+      "--context",
+      "account-evidence.json",
+      "--operator-id",
+      "operator-7",
+      "--action-id",
+      "action-unique-010",
+      "--cause-fixed",
+    ],
+    readContext: async () => JSON.stringify(makeContext()),
+    createStore: () => makeStore(),
+    runResolution: async () => ({
+      ok: false,
+      errors: [new Error("audit incomplete")],
+    }),
+    writeOutput: () => {},
+    writeError: (value) => errors.push(value),
+  })
+
+  assert.equal(exitCode, 1)
+  assert.equal(errors.length, 0)
 })
