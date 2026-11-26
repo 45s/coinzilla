@@ -125,6 +125,12 @@ function createProviderNeutralFacade({ database, provider }) {
   const capabilities = createCapabilitiesSnapshot(provider.capabilities)
 
   function runOperation({ operation, input }) {
+    if (READ_ONLY_OPERATIONS.has(operation)) {
+      return database.readTransaction((transaction) => {
+        const context = createTransactionFacade(transaction)
+        return context[operation](input)
+      })
+    }
     return database.execute({ operation, input })
   }
 
