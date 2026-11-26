@@ -242,7 +242,7 @@ function logPhaseOperationFailure({ error, phase, startedAt, now, logPhase } = {
   })
 }
 
-async function runPhase({
+async function executePhaseOperation({
   pendingPhaseOperations,
   phaseTimeoutMs,
   now,
@@ -254,7 +254,12 @@ async function runPhase({
   isFailure = isPhaseFailureResult,
   timeoutMs = phaseTimeoutMs,
 } = {}) {
-  assertNoPendingPhaseOperation({ pendingPhaseOperations, phase, now, logPhase })
+  assertNoPendingPhaseOperation({
+    pendingPhaseOperations,
+    phase,
+    now,
+    logPhase,
+  })
   const startedAt = now()
   const controller = new AbortController()
   const timeout = createPhaseTimeout({
@@ -291,7 +296,13 @@ async function runPhase({
       logPhase,
     })
   } catch (error) {
-    logPhaseOperationFailure({ error, phase, startedAt, now, logPhase })
+    logPhaseOperationFailure({
+      error,
+      phase,
+      startedAt,
+      now,
+      logPhase,
+    })
     throw error
   } finally {
     if (timeout.timeoutHandle !== undefined) {
@@ -301,7 +312,7 @@ async function runPhase({
 }
 
 function createRunPhase(dependencies = {}) {
-  return (options = {}) => runPhase({
+  return (options = {}) => executePhaseOperation({
     ...dependencies,
     ...options,
   })

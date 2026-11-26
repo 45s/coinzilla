@@ -273,7 +273,7 @@ async function assertAdaDuplicateFillIsIdempotent({ replay, replacementSell, eve
   assert.equal(replay.receivedLifecycleEvents.length, eventCount)
 }
 
-function collectShutdownErrorEvidence(error, seen = new Set()) {
+function collectShutdownErrorEvidence({ error, seen = new Set() } = {}) {
   if (!(error instanceof Error) || seen.has(error)) {
     return ""
   }
@@ -289,7 +289,7 @@ function collectShutdownErrorEvidence(error, seen = new Set()) {
     error.message,
     error.code,
     diagnosticText,
-    ...nested.map((item) => collectShutdownErrorEvidence(item, seen)),
+    ...nested.map((item) => collectShutdownErrorEvidence({ error: item, seen })),
   ].filter(Boolean).join(" ")
 }
 
@@ -299,7 +299,7 @@ function assertAdaShutdownOutcome({ replay, thirdBuy, shutdownError }) {
     "shutdown must cancel the still-open next BUY without completing the below-target recovery cycle",
   )
   assert.ok(shutdownError instanceof Error, "shutdown must fail closed while recovery SELL coverage is unproven")
-  const evidence = collectShutdownErrorEvidence(shutdownError)
+  const evidence = collectShutdownErrorEvidence({ error: shutdownError })
   assert.match(evidence, /CONSERVATIVE_SHUTDOWN_SAFETY_UNPROVEN/)
   assert.match(evidence, /RECOVERY_SELL_COVERAGE_UNVERIFIED/)
   assert.match(evidence, /SHUTDOWN_RECOVERY_REPLACEMENT_NOT_SUBMITTED/)

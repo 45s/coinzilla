@@ -556,7 +556,6 @@ test("drains market work after safety is proven and before Binance disconnects",
     strategyId: "CONSERVATIVE",
     calls,
   })
-  let marketTaskDrained = false
   let bookTaskDrained = false
   const marketTask = {
     then(resolve) {
@@ -666,6 +665,14 @@ function createMarketDrainTask({ onDrain } = {}) {
   }
 }
 
+async function assertShutdownFailurePreservesStrategyBlocker({ fixture, failure } = {}) {
+  await assert.rejects(fixture.stop(), (error) => {
+    assert.equal(error.code, "STRATEGY_SHUTDOWN_SAFETY_UNPROVEN")
+    assert.ok(error.shutdownDiagnostics.strategyBlockers.some(({ message }) => message === failure.message))
+    return true
+  })
+}
+
 test("keeps user-data and broker services alive when post-market-drain safety cannot be proven", async () => {
   const calls = []
   let safe = false
@@ -698,7 +705,6 @@ test("keeps user-data and broker services alive when post-market-drain safety ca
     ["DOGEUSDT", {
       latestWebSocketPriceTask: createMarketDrainTask({
         onDrain: () => {
-          marketTaskDrained = true
           safe = false
         },
       }),
@@ -710,11 +716,7 @@ test("keeps user-data and broker services alive when post-market-drain safety ca
     marketPriceIntake,
   })
 
-  await assert.rejects(fixture.stop(), (error) => {
-    assert.equal(error.code, "STRATEGY_SHUTDOWN_SAFETY_UNPROVEN", "An unproven final strategy state must retain the coordinator's safety failure classification.")
-    assert.ok(error.shutdownDiagnostics.strategyBlockers.some(({ message }) => message === failure.message), "The original market-recovery blocker must remain available to the caller.")
-    return true
-  }, "A failed final safety proof must reject shutdown with its original blocker.")
+  await assertShutdownFailurePreservesStrategyBlocker({ fixture, failure })
 
   assert.equal(safetyChecks, 2, "Shutdown must repeat the strategy proof after quiescing and draining accepted market work.")
   assert.equal(calls.includes("market-intake-stop"), false, "Market subscriptions must remain connected when the post-drain safety proof fails.")

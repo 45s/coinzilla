@@ -116,7 +116,12 @@ function getSafetySnapshotMarkets(safetySnapshot) {
   return safetySnapshot?.markets ?? []
 }
 
-function createStrategyBlocker({ participant, error, reason, status } = {}) {
+function createStrategyBlocker({
+  participant,
+  error,
+  reason,
+  status,
+} = {}) {
   const strategyId = getStrategyBlockerIdentity(participant)
   const blockerReason = getStrategyBlockerReason({ reason, error })
   const safetySnapshot = getParticipantSnapshot(participant)
@@ -719,7 +724,14 @@ export function createStrategyShutdownCoordinator({
       now,
       beginShutdown,
     }),
-    isSafeToShutdown: createSafetyPredicate({ participants, state }),
-    getSafetySnapshot: createSafetySnapshotGetter({ participants, state, now }),
+    isSafeToShutdown: createSafetyPredicate({
+      participants,
+      state,
+    }),
+    getSafetySnapshot: createSafetySnapshotGetter({
+      participants,
+      state,
+      now,
+    }),
   })
 }
