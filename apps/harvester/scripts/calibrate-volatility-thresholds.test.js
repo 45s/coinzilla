@@ -324,9 +324,18 @@ test("replays multiple symbols independently through the offline calibration CLI
   const directory = mkdtempSync(join(tmpdir(), "harvester-multi-symbol-volatility-"))
   const outputPath = join(directory, "multi-symbol-calibration-report.json")
   const inputs = [
-    { symbol: "BTCUSDT", spikeAt: 120 },
-    { symbol: "ETHUSDT", spikeAt: 150 },
-    { symbol: "SOLUSDT", spikeAt: -1 },
+    {
+      symbol: "BTCUSDT",
+      spikeAt: 120,
+    },
+    {
+      symbol: "ETHUSDT",
+      spikeAt: 150,
+    },
+    {
+      symbol: "SOLUSDT",
+      spikeAt: -1,
+    },
   ]
   const inputPaths = []
 
