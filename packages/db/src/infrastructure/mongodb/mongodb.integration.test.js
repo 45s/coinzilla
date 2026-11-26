@@ -86,17 +86,17 @@ async function dropDatabase({ databaseName, parsed }) {
         authMechanism: parsed.authMechanism,
         replicaSet: parsed.replicaSet,
       })
-      const { redirect } = await dropDatabaseOnCurrentServer({
+      const { redirect: nextPrimary } = await dropDatabaseOnCurrentServer({
         transport,
         databaseName,
         handshake,
       })
-      if (!redirect) {
+      if (!nextPrimary) {
         return
       }
       await transport.close()
       transport = null
-      ;({ host, port } = redirect)
+      ;({ host, port } = nextPrimary)
     }
     throw new Error("MongoDB integration cleanup exceeded replica-set primary redirects")
   } finally {
