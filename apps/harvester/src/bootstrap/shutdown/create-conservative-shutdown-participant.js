@@ -134,7 +134,7 @@ function updateStageDiagnostics({
       : previous.lastSuccessfulStep ?? null,
     currentOperation: status === "COMPLETED" ? null : stage,
     operationStatus: status,
-    lastError: status === "FAILED" || status === "ABORTED"
+    lastError: ["FAILED", "BLOCKED", "ABORTED", "TIMED_OUT"].includes(status)
       ? errorDetails
       : null,
   }))
