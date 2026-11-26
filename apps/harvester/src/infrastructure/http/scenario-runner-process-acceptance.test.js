@@ -11,7 +11,7 @@ const TEST_WORKER_PATH = fileURLToPath(new URL(
 
 function createTestSandboxLauncher() {
   // Test-only attestation exercises the host gate; it does not apply an OS sandbox.
-  // The adapter validates its production worker path; this test launcher substitutes only the child entrypoint.
+  // The test worker remains inside the adapter's allowlisted worker directory.
   const launcher = ({ workerPath, env, execArgv, stdio }) => fork(workerPath, [], {
     env,
     execArgv,
