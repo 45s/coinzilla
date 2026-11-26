@@ -130,8 +130,13 @@ export function validateSafetyBlockerRaisedFact({ factType, canonicalData, factI
   if (Object.keys(canonicalData).some((key) => !allowedFields.has(key))) {
     throw new TypeError("Safety-blocker fact contains unsupported fields")
   }
-  if (canonicalData.producer !== undefined && canonicalData.producer !== "USER_DATA_EVENT_HANDLER") {
+  if (canonicalData.producer !== undefined &&
+      !["USER_DATA_EVENT_HANDLER", "RECOVERY_SELLER_STOP_WORKFLOW"].includes(canonicalData.producer)) {
     throw new TypeError("Safety-blocker producer must identify a supported producer")
+  }
+  if (canonicalData.producer === "RECOVERY_SELLER_STOP_WORKFLOW" &&
+      canonicalData.reason !== "RECOVERY_SELLER_UNEXPECTED_CONDITION") {
+    throw new TypeError("Recovery Seller STOP producer may emit only its dedicated blocker reason")
   }
   validateSafetyBlockerScope({ canonicalData })
   const reason = requireNonEmptyString({ value: canonicalData.reason,

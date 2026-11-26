@@ -178,8 +178,11 @@ export function getActiveAccountResolutionBlockers(projection) {
   const blockers = (projection.stickySafetyBlockers ?? [])
     .filter(({ scope }) => scope === "ACCOUNT")
     .map((blocker) => ({ ...blocker }))
-  if (blockers.some(({ producer }) => producer !== "USER_DATA_EVENT_HANDLER")) {
-    throw new Error("An active ACCOUNT blocker has no verified user-data producer provenance")
+  if (blockers.some(({ producer, reason }) =>
+    producer !== "USER_DATA_EVENT_HANDLER" ||
+    reason === "RECOVERY_SELLER_UNEXPECTED_CONDITION"
+  )) {
+    throw new Error("An active ACCOUNT blocker has no verified user-data producer provenance or belongs to Recovery Seller STOP")
   }
   return blockers
 }

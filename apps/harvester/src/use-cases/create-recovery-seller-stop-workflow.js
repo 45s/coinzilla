@@ -112,6 +112,7 @@ async function persistRecoverySellerBlocker({
   })
   return recordSafetyBlockerRaised({
     operationalStateStore,
+    producer: "RECOVERY_SELLER_STOP_WORKFLOW",
     scope: "ACCOUNT",
     reason: RECOVERY_SELLER_STOP_REASON,
     evidenceDigest,

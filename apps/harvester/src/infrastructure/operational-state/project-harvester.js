@@ -538,6 +538,38 @@ function handleSafetyBlockerRaisedFact({ record, state }) {
   })
 }
 
+function hasStructuredOperatorActionMetadata(data) {
+  return [
+    data.operatorId,
+    data.operatorAuthMethod,
+    data.actionId,
+    data.resolutionReason,
+    data.actionBlockerIds,
+  ].some((value) => value !== undefined)
+}
+
+function validateSafetyBlockerResolutionOwnership({ raisedBlocker, resolution }) {
+  const isRecoverySellerStop = raisedBlocker.reason === "RECOVERY_SELLER_UNEXPECTED_CONDITION"
+  const hasOperatorMetadata = hasStructuredOperatorActionMetadata(resolution)
+  if (isRecoverySellerStop) {
+    if (resolution.resolution !== "OPERATOR_ACTION" || hasOperatorMetadata) {
+      throw new Error("Recovery Seller STOP must remain exclusively owned by its operator-action resolver")
+    }
+    return
+  }
+  if (raisedBlocker.scope === "ACCOUNT") {
+    if (raisedBlocker.producer !== "USER_DATA_EVENT_HANDLER" ||
+        resolution.resolution !== "OPERATOR_ACTION" ||
+        !hasOperatorMetadata) {
+      throw new Error("Account-wide user-data blockers require structured operator-action resolution metadata")
+    }
+    return
+  }
+  if (resolution.resolution === "OPERATOR_ACTION") {
+    throw new Error("Operator-action resolution is restricted to account-wide user-data blockers and Recovery Seller STOP")
+  }
+}
+
 function handleSafetyBlockerResolvedFact({ record, state }) {
   requireKnownOperationalSession({
     record,
@@ -548,6 +580,10 @@ function handleSafetyBlockerResolvedFact({ record, state }) {
   if (!raisedBlocker) {
     throw new Error("Safety blocker resolution has no preceding active raised fact")
   }
+  validateSafetyBlockerResolutionOwnership({
+    raisedBlocker,
+    resolution: record.data,
+  })
   if (
     raisedBlocker.evidenceDigest === record.data.evidenceDigest ||
     (

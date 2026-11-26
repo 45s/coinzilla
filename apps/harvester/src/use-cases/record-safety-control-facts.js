@@ -73,8 +73,12 @@ function validateSafetyBlockerRaisedData({ producer, scope, symbol, reason, evid
       (scope === "MARKET" && (typeof symbol !== "string" || !/^[A-Z0-9]{3,30}$/.test(symbol)))) {
     throw new TypeError("Safety blocker symbol must be null for ACCOUNT scope or canonical for MARKET scope")
   }
-  if (producer !== undefined && producer !== "USER_DATA_EVENT_HANDLER") {
+  if (producer !== undefined &&
+      !["USER_DATA_EVENT_HANDLER", "RECOVERY_SELLER_STOP_WORKFLOW"].includes(producer)) {
     throw new TypeError("Safety blocker producer must identify a supported producer")
+  }
+  if (producer === "RECOVERY_SELLER_STOP_WORKFLOW" && reason !== "RECOVERY_SELLER_UNEXPECTED_CONDITION") {
+    throw new TypeError("Recovery Seller STOP producer may emit only its dedicated blocker reason")
   }
   if (typeof reason !== "string" || !/^[A-Z][A-Z0-9_]{1,127}$/.test(reason) ||
       typeof evidenceDigest !== "string" || !/^[a-f0-9]{64}$/.test(evidenceDigest)) {
@@ -202,6 +206,21 @@ function validateSafetyBlockerResolutionBase({ blockerId, resolvedBy, resolution
 
 function validateSafetyBlockerResolution(options) {
   validateSafetyBlockerResolutionBase(options)
+  if (isRecoverySellerStopBlocker(options.raisedFact)) {
+    if (options.resolution !== "OPERATOR_ACTION") {
+      throw new TypeError("Recovery Seller STOP must remain exclusively owned by its operator-action resolver")
+    }
+    validateRecoverySellerStopAction(options)
+    return
+  }
+  if (options.raisedFact?.data?.scope === "ACCOUNT") {
+    if (options.resolution !== "OPERATOR_ACTION" ||
+        options.raisedFact.data.producer !== "USER_DATA_EVENT_HANDLER") {
+      throw new TypeError("Account-wide user-data blockers require authenticated structured operator-action resolution")
+    }
+    validateOperatorActionMetadata(options)
+    return
+  }
   if (options.resolution === "AUTHORITATIVE_RECONCILIATION") {
     const hasOperatorMetadata = [
       options.operatorIdentity,
@@ -215,11 +234,7 @@ function validateSafetyBlockerResolution(options) {
     }
     return
   }
-  if (isRecoverySellerStopBlocker(options.raisedFact)) {
-    validateRecoverySellerStopAction(options)
-    return
-  }
-  validateOperatorActionMetadata(options)
+  throw new TypeError("Operator-action resolution is restricted to account-wide user-data blockers and Recovery Seller STOP")
 }
 
 function sameActionBlockerIds({ left, right }) {
