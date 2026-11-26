@@ -29,9 +29,6 @@ class MongoCommandError extends Error {
     this.outcomeUnknown = response.outcomeUnknown === true
   }
 
-  hasErrorLabel(label) {
-    return this.errorLabels.includes(label)
-  }
 }
 
 function encodeUserKey(key) {
