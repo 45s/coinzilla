@@ -1214,3 +1214,62 @@ test("fails closed for a registered order owned by an unsupported strategy", asy
   assert.deepEqual(calls.accounting, [], "An unsupported strategy fill must not mutate Conservative accounting.")
   assert.equal(calls.pauses[0]?.reason, "EXECUTION_ACCOUNTING_FAILED", "Unsupported attribution must fail closed.")
 })
+
+test("routes a zero-fill REJECTED RS SELL through terminal mixed accounting without cycle completion", async () => {
+  const previousOrder = makeOrder({
+    side: "SELL",
+    status: "OPEN",
+    quantity: "1",
+    executedQuantity: "0",
+    clientOrderId: "h-dogeusdt-rs-sell-rejected-1",
+    brokerOrderId: "broker-rs-sell-rejected-1",
+  })
+  const terminalOrder = makeOrder({
+    side: "SELL",
+    status: "REJECTED",
+    quantity: "1",
+    executedQuantity: "0",
+    clientOrderId: previousOrder.clientOrderId,
+    brokerOrderId: previousOrder.brokerOrderId,
+  })
+  const registry = createLifecycleRegistry({
+    currentOrder: previousOrder,
+    ownership: {
+      clientOrderId: previousOrder.clientOrderId,
+      strategyId: StrategyId.RECOVERY_SELLER,
+      positionId: "doge-recovery-seller-position",
+      purpose: "RECOVERY_SELL",
+      cycleId: "doge-recovery-seller-cycle-rejected-1",
+    },
+  })
+  const mixedSellReconciliations = []
+  const { workflow, calls } = makeWorkflow({
+    registry,
+    terminalFills: [],
+    reconcileRecoverySellerMixedSell: async (input) => {
+      mixedSellReconciliations.push(input)
+      return toResult({
+        data: {
+          reconciled: true,
+          profitability: {
+            eligible: false,
+          },
+        },
+      })
+    },
+  })
+  const result = await workflow.processUserDataEventTransition({
+    event: {
+      eventType: "executionReport",
+      executedOrder: terminalOrder,
+    },
+  })
+
+  assert.equal(result.ok, true, "A zero-fill REJECTED RS SELL must be a reconciled terminal lifecycle event.")
+  assert.equal(mixedSellReconciliations.length, 1)
+  assert.deepEqual(mixedSellReconciliations[0].canonicalFills, [])
+  assert.deepEqual(calls.completedCycles, [],
+    "A REJECTED SELL must never complete the Recovery Seller cycle.")
+  assert.deepEqual(calls.sellFills, [],
+    "A zero-fill REJECTED SELL must not stage a fabricated execution Fill.")
+})

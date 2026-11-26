@@ -1462,6 +1462,77 @@ for (const terminalOrderStatus of ["CANCELED", "EXPIRED"]) {
   })
 }
 
+test("commits a zero-fill REJECTED Recovery Seller SELL as reconciled UNRESOLVED", async () => {
+  const context = makeContext({
+    terminalOrderStatus: "REJECTED",
+    executedQuantity: "0",
+  })
+  const durableFacts = []
+  const workflow = makeWorkflow({
+    context,
+    onOperationalStateRecoverySellerMixedSellReconciled: async (fact) => {
+      durableFacts.push(fact)
+      return {
+        ok: true,
+        data: {
+          durable: true,
+        },
+      }
+    },
+  })
+  const openOrder = context.openRegistry.getOrder({
+    clientOrderId: "rs-sell-1",
+  })
+  const reservation = await reserveRecoverySellerSell({
+    workflow,
+    openOrder,
+  })
+  assert.equal(reservation.ok, true, reservation.errors?.[0]?.message)
+
+  const result = await reconcileTerminalMixedSell({
+    workflow,
+    context,
+  })
+  assert.equal(result.ok, true, result.errors?.[0]?.message)
+  assert.equal(result.data.applied, true,
+    "The terminal lifecycle transition must commit even though there are no fill projections.")
+  assert.equal(result.data.accountingApplied, false,
+    "A zero-fill REJECTED order must not claim that Portfolio or legacy fill accounting changed.")
+  assert.equal(result.data.duplicate, false)
+  assert.equal(result.data.profitability, undefined)
+
+  const cycleState = workflow.getCycleStateForMarket({
+    marketId: market.id,
+  })
+  assert.equal(cycleState.status, "UNRESOLVED")
+  assert.equal(cycleState.terminalOrderStatus, "REJECTED")
+  assert.equal(cycleState.terminalReconciled, true)
+  assert.equal(cycleState.profitabilityEligible, false)
+  assert.equal(workflow.getReservedSellCycle({
+    cycleId: "rs-cycle-1",
+  }), undefined)
+  assert.equal(workflow.getOrderRegistry().getOrder({
+    clientOrderId: "rs-sell-1",
+  }).status, "REJECTED")
+  assert.deepEqual(workflow.getPortfolio(), context.portfolio)
+  assert.deepEqual(workflow.getLegacyPosition({
+    marketId: market.id,
+  }), context.legacyPosition)
+  assert.equal(durableFacts.length, 1)
+  assert.equal(durableFacts[0].accountingApplied, false)
+  assert.deepEqual(durableFacts[0].canonicalFills, [])
+
+  const duplicate = await reconcileTerminalMixedSell({
+    workflow,
+    context,
+  })
+  assert.equal(duplicate.ok, true, duplicate.errors?.[0]?.message)
+  assert.equal(duplicate.data.applied, false)
+  assert.equal(duplicate.data.duplicate, true)
+  assert.equal(durableFacts.length, 1,
+    "Replaying the zero-fill terminal boundary must not append a second durable fact.")
+})
+
 test("keeps a FILLED but under-target Recovery Seller SELL unresolved", async () => {
   const context = makeContext()
   const workflow = makeWorkflow({ context })

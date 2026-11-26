@@ -235,6 +235,11 @@ is released. Broker, fill-history, STOP persistence and clock inputs remain run-
 simulation boundaries; this does not establish live exchange integration or OS-level
 process isolation.
 
+A zero-fill terminal `REJECTED` SELL is also reconciled as `UNRESOLVED`: the
+terminal order and cycle boundary are committed, the reservation is released,
+and no Portfolio/legacy fill mutation or cycle completion is claimed. Duplicate
+replay of that zero-fill terminal boundary is idempotent.
+
 ## Exact replay provenance gate — 2026-11-26
 
 A matching commit SHA alone is not sufficient for exact replay. Each run now records an

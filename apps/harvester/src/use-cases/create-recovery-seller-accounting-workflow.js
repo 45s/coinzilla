@@ -323,6 +323,13 @@ function resolveTerminalMixedSellOrder({ state, terminalOrder } = {}) {
   }
 }
 
+function isZeroFillRejectedTerminalMixedSell({ terminalOrder, canonicalFills, canonicalFillAllocations }) {
+  return terminalOrder.status === "REJECTED" &&
+    terminalOrder.executedQuantity.amount === "0" &&
+    canonicalFills.length === 0 &&
+    canonicalFillAllocations.length === 0
+}
+
 function calculateTerminalMixedSellAccounting({
   state,
   registryUpdate,
@@ -387,6 +394,7 @@ async function persistTerminalMixedSellAccountingBoundary({
   ownership,
   canonicalFills,
   eligible,
+  accountingApplied = true,
 }) {
   if (typeof callback !== "function") {
     throw new RecoverySellerAccountingError({
@@ -405,7 +413,7 @@ async function persistTerminalMixedSellAccountingBoundary({
       terminalOrder,
       ownership,
       canonicalFills,
-      accountingApplied: true,
+      accountingApplied,
       eligible,
     })
   } catch (cause) {
@@ -462,6 +470,8 @@ function publishTerminalMixedSellAccounting({
   state.recoverySellerCycleStates.set(terminalRegisteredOrder.market.id, cycleOutcome)
   return Object.freeze({
     ...result.accounting,
+    applied: true,
+    accountingApplied: result.accounting.applied === true,
     orderRegistry: state.orderRegistry,
     profitability: result.profitability,
   })
@@ -472,12 +482,21 @@ function resolveDuplicateTerminalMixedSellAccounting({
   ownership,
   terminalRegisteredOrder,
   canonicalFills,
+  canonicalFillAllocations,
   result,
 }) {
-  if (result.accounting.duplicate !== true) {
+  const zeroFillRejected = isZeroFillRejectedTerminalMixedSell({
+    terminalOrder: terminalRegisteredOrder,
+    canonicalFills,
+    canonicalFillAllocations,
+  })
+  if (result.accounting.duplicate !== true && !zeroFillRejected) {
     return undefined
   }
   const priorOutcome = state.recoverySellerCycleOutcomes.get(ownership.cycleId)
+  if (zeroFillRejected && !priorOutcome) {
+    return undefined
+  }
   const replayFillIds = canonicalFills.map((fill) => fill.id).sort()
   const priorFillIds = priorOutcome?.appliedFillIds ?? []
   const sameCommittedBoundary =
@@ -497,6 +516,9 @@ function resolveDuplicateTerminalMixedSellAccounting({
   }
   return Object.freeze({
     ...result.accounting,
+    applied: false,
+    duplicate: true,
+    accountingApplied: false,
     orderRegistry: state.orderRegistry,
     profitability: result.profitability,
   })
@@ -603,7 +625,12 @@ async function reconcileTerminalMixedSellTransition({
   if (prepared.duplicateResult) {
     return prepared.duplicateResult
   }
-  if (prepared.result.accounting.applied !== true) {
+  const zeroFillRejected = isZeroFillRejectedTerminalMixedSell({
+    terminalOrder: prepared.terminalRegisteredOrder,
+    canonicalFills,
+    canonicalFillAllocations,
+  })
+  if (prepared.result.accounting.applied !== true && !zeroFillRejected) {
     throw new RecoverySellerAccountingError({
       code: RECOVERY_SELLER_ACCOUNTING_ERROR_CODES.ACCOUNTING_NOT_COMMITTED,
       message: "Recovery Seller terminal mixed-SELL accounting did not commit; the sole-SELL reservation remains active",
@@ -621,6 +648,7 @@ async function reconcileTerminalMixedSellTransition({
     ownership: prepared.ownership,
     canonicalFills,
     eligible,
+    accountingApplied: prepared.result.accounting.applied === true,
   })
   return publishTerminalMixedSellAccounting({
     state,
