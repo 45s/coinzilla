@@ -680,3 +680,111 @@ test("rejects an unclean latest stop even when an earlier clean stop exists", as
   assert.match(result.errors[0].message, /cleanly stopped/)
   assert.equal(auditCalls, 0)
 })
+
+test("fails closed for incomplete or contradictory market audit evidence", async () => {
+  const scenarios = [
+    { name: "incomplete trade history", mutate: (audit) => { audit.tradeHistory.complete = false } },
+    { name: "unresolved owned-order fills", mutate: (audit) => { audit.tradeHistory.reconciledOwnedOrderFills = 1 } },
+    { name: "unowned external open orders", mutate: (audit) => { audit.unownedOpenOrders = [{ symbol: "BTCUSDT", brokerOrderId: "external-1" }] } },
+    { name: "blocked market", mutate: (audit) => { audit.blockedMarkets = ["BTCUSDT"] } },
+    { name: "stale account snapshot", mutate: (audit) => { audit.sourceTime += 1 } },
+    { name: "missing balance coverage", mutate: (audit) => { audit.balancesChecked = 0 } },
+    { name: "missing owned-order reconciliation count", mutate: (audit, reconciliation) => { delete reconciliation.orderReconciliation.reconciledOrders } },
+    { name: "skipped account audit", mutate: (audit) => { audit.skipped = true } },
+    { name: "target market blocked", mutate: (audit) => { audit.targetMarketBlocked = true } },
+  ]
+
+  for (const [index, scenario] of scenarios.entries()) {
+    let resolutionCalled = false
+    const result = await runOfflineAccountBlockerResolution({
+      context: makeContext(),
+      operationalStateStore: makeStore(),
+      operatorId: "operator-7",
+      actionId: `action-unique-${String(index + 20).padStart(3, "0")}`,
+      causeFixed: true,
+      reconcileMarket: async ({ context }) => {
+        const reconciliation = readyMarketAudit(context.symbol)
+        scenario.mutate(reconciliation.data.reconciliation.audit, reconciliation.data.reconciliation)
+        return reconciliation
+      },
+      resolveBlockers: async () => {
+        resolutionCalled = true
+        return { ok: true, data: {} }
+      },
+    })
+
+    assert.equal(result.ok, false, `${scenario.name} must fail closed before resolution`)
+    assert.equal(resolutionCalled, false, `${scenario.name} must not append resolution facts`)
+  }
+})
+
+test("rejects missing configured-market evidence before running any market audit", async () => {
+  const context = makeContext()
+  delete context.marketsEvidence.ETHUSDT
+  let auditCalls = 0
+  const result = await runOfflineAccountBlockerResolution({
+    context,
+    operationalStateStore: makeStore(),
+    operatorId: "operator-7",
+    actionId: "action-unique-030",
+    causeFixed: true,
+    reconcileMarket: async () => {
+      auditCalls += 1
+      return readyMarketAudit("BTCUSDT")
+    },
+  })
+
+  assert.equal(result.ok, false, "every configured market must have reviewed coverage and trade history")
+  assert.equal(auditCalls, 0, "incomplete market evidence must be rejected before reconciliation")
+})
+
+test("rejects mismatched runtime session and configured-market baseline", async () => {
+  const sessionMismatch = makeContext()
+  sessionMismatch.runtimeSessionId = "different-runtime-session"
+  const sessionResult = await runOfflineAccountBlockerResolution({
+    context: sessionMismatch,
+    operationalStateStore: makeStore(),
+    operatorId: "operator-7",
+    actionId: "action-unique-031",
+    causeFixed: true,
+  })
+  assert.equal(sessionResult.ok, false, "evidence must match the exact durable process session")
+
+  const marketMismatch = makeContext()
+  marketMismatch.configuredMarkets = ["BTCUSDT"]
+  const marketResult = await runOfflineAccountBlockerResolution({
+    context: marketMismatch,
+    operationalStateStore: makeStore(),
+    operatorId: "operator-7",
+    actionId: "action-unique-032",
+    causeFixed: true,
+  })
+  assert.equal(marketResult.ok, false, "evidence cannot narrow the durable configured-market universe")
+})
+
+test("rejects ACCOUNT blockers without verified user-data producer provenance", async () => {
+  const store = makeStore()
+  const read = await store.readAll()
+  const records = read.data.records.map((record) => record.factType === "SAFETY_BLOCKER_RAISED"
+    ? { ...record, data: { ...record.data, producer: "RECOVERY_SELLER" } }
+    : record)
+  store.readAll = async () => ({
+    ok: true,
+    data: { ...read.data, records },
+  })
+  let auditCalls = 0
+  const result = await runOfflineAccountBlockerResolution({
+    context: makeContext(),
+    operationalStateStore: store,
+    operatorId: "operator-7",
+    actionId: "action-unique-033",
+    causeFixed: true,
+    reconcileMarket: async () => {
+      auditCalls += 1
+      return readyMarketAudit("BTCUSDT")
+    },
+  })
+
+  assert.equal(result.ok, false, "only explicitly tagged user-data ACCOUNT blockers may be resolved")
+  assert.equal(auditCalls, 0, "unknown blocker provenance must be rejected before market reconciliation")
+})

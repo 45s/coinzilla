@@ -1256,10 +1256,45 @@
           "path": "src/use-cases/resolve-offline-user-data-account-blockers.test.js",
           "name": "rejects an unclean latest stop even when an earlier clean stop exists",
           "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/resolve-offline-user-data-account-blockers.test.js",
+          "name": "fails closed for incomplete or contradictory market audit evidence",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/resolve-offline-user-data-account-blockers.test.js",
+          "name": "rejects missing configured-market evidence before running any market audit",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/resolve-offline-user-data-account-blockers.test.js",
+          "name": "rejects mismatched runtime session and configured-market baseline",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/resolve-offline-user-data-account-blockers.test.js",
+          "name": "rejects ACCOUNT blockers without verified user-data producer provenance",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/resolve-user-data-account-blockers.test.js",
+          "name": "fails closed when durable resolution append fails",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/resolve-user-data-account-blockers.test.js",
+          "name": "fails closed when append does not confirm durable commitment",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/resolve-user-data-account-blockers.test.js",
+          "name": "fails closed when durable resolution readback fails",
+          "kind": "failure"
         }
       ],
       "runtimeStatus": "offline-only",
-      "limitation": "The use-case is not yet wired to a production operator command or authoritative account-wide audit adapter; it never reopens trading.",
+      "limitation": "Offline CLI is wired to the existing production per-market account/order/fill reconciliation and a durable Operational State Store. It requires operator-prepared authoritative evidence and remains offline-only; the controlled restart plus fresh-snapshot admission matrix is still a separate acceptance gate.",
       "invariants": [
         "Persist producer provenance for user-data blockers; do not resolve legacy or unknown-origin ACCOUNT blockers.",
         "Resolve only the exact active user-data ACCOUNT blocker set after an authoritative audit of every configured market, all orders/fills/balances and consistent accounting with zero discrepancies.",
