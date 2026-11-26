@@ -135,3 +135,5 @@ The worker dispatcher validates the typed execution envelope and resolves a stra
 ## Worker startup and truthful lifecycle state — 2026-11-26
 
 `Starting` covers worker creation and verification of the simulation-only isolation boundary. The runner publishes `Running` only after the strategy adapter explicitly signals readiness through `onStarted`, after its isolated worker has been created and its required sandbox profile has been verified. The process adapter invokes this callback after the trusted launcher returns a child process and before dispatching the scenario request. An adapter that returns a result without signaling readiness fails closed; startup failures never produce a false `Running` transition.
+
+All host-level strategy adapters, including non-process test adapters, must obey the same readiness contract. Adapter fixtures signal `onStarted` only when their simulated worker boundary is ready; a completed promise without that signal is a failed execution, not a successful run.

@@ -451,7 +451,10 @@ test("host discovers strategy registrations without an RS-specific catalog branc
     strategyId: "GRID",
     executionMode: "simulation-only",
     osSandboxVerified: true,
-    execute: async () => ({ output: { strategy: "GRID" } }),
+    execute: async ({ onStarted }) => {
+      onStarted()
+      return { output: { strategy: "GRID" } }
+    },
     cancel: async () => true,
   }
   const host = createScenarioRunnerHost({
@@ -541,7 +544,8 @@ test("host snapshots adapter capabilities and execute function", async () => {
     strategyId: "GRID",
     executionMode: "simulation-only",
     osSandboxVerified: true,
-    execute: async () => {
+    execute: async ({ onStarted }) => {
+      onStarted()
       originalExecutions += 1
       return { output: { source: "original" } }
     },
