@@ -102,6 +102,12 @@ function assertProviderOptions(options) {
   if (options.username !== undefined && typeof options.password !== "string") {
     throw new TypeError("MongoDB provider password must be a string when username is configured")
   }
+  if (options.username === undefined && options.password !== undefined) {
+    throw new TypeError("MongoDB provider password requires a username")
+  }
+  if (options.username === undefined && options.authMechanism !== undefined) {
+    throw new TypeError("MongoDB provider authMechanism requires a username")
+  }
   if (typeof options.directConnection !== "boolean") {
     throw new TypeError("MongoDB provider directConnection must be a boolean")
   }
@@ -414,7 +420,10 @@ async function connectToPrimary({ state, transportFactory, handshake }) {
       authMechanism: state.options.authMechanism,
       replicaSet: state.options.replicaSet,
     })
-    if (!result.primary || result.topology !== "replicaSet" || state.options.directConnection) {
+    if (result.primary && result.topology === "replicaSet" && state.options.directConnection) {
+      throw new Error("MongoDB directConnection target is not the writable replica-set primary")
+    }
+    if (!result.primary || result.topology !== "replicaSet") {
       state.handshake = result
       return
     }
@@ -437,7 +446,7 @@ async function connectToPrimary({ state, transportFactory, handshake }) {
  * Multi-document transactions are available only when the connected topology
  * supports logical sessions and transaction semantics.
  *
- * @param {{uri?: string, connectionString?: string, host?: string, port?: number, databaseName?: string, username?: string, password?: string, authSource?: string, authMechanism?: string, replicaSet?: string, tls?: boolean|object, connectTimeoutMS?: number, socketTimeoutMS?: number, transportFactory?: Function, handshake?: Function, randomBytes?: Function}} options
+ * @param {{uri?: string, connectionString?: string, host?: string, port?: number, databaseName?: string, username?: string, password?: string, authSource?: string, authMechanism?: string, replicaSet?: string, directConnection?: boolean, tls?: boolean|object, connectTimeoutMS?: number, socketTimeoutMS?: number, transportFactory?: Function, handshake?: Function, randomBytes?: Function}} options
  * @returns {import("../../application/ports/database-provider.js").DatabaseProvider}
  */
 export function createMongoProvider(options = {}) {
