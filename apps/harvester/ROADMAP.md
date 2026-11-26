@@ -2423,3 +2423,4 @@ Implemented on [PR #1861](https://github.com/45s/coinzilla/pull/1861): a shared 
 
 The branch has been synchronized with current `develop`. Exact-head Harvester tests, coverage, lint and required workflows remain the completion gate.
 The readiness report, market prerequisites and operator query projection were decomposed into focused functions to satisfy the repository's strict complexity and function-size rules without weakening lint policy.
+Per-market book freshness, metadata and volatility remain enforced at the final engine submission boundary; the operator readiness projection reports those blockers without masking the engine's precise submission/replacement diagnostics.
