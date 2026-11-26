@@ -147,3 +147,5 @@ The Scenario Runner REST boundary preserves explicit client validation and capac
 The HTTP adapter assigns malformed submission identity errors an explicit 400/code contract. Unexpected exceptions are logged with stable component/error metadata, while their raw message and internal paths remain server-side and are not copied into response bodies or structured log fields.
 
 The readiness-failure transition is a named application helper so the lifecycle path stays within the repository's strict function-length limit. API response selection is likewise handled by a dedicated error-message resolver rather than nested conditional expressions.
+
+Terminal execution outcome mapping is kept separate from timeout/cleanup coordination: ordinary completion, cancellation, adapter errors, invalid results and missing readiness each have an explicit status transition, while timeout and unconfirmed-cleanup handling retain their dedicated paths.

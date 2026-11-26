@@ -324,25 +324,8 @@ function failUnstartedExecution({ context, record }) {
   })
 }
 
-async function finishExecution({ context, record, adapter, result }) {
-  if (result.kind === "timeout") {
-    const cleanupFailure = await finishTimedOutExecution({
-      context,
-      record,
-      adapter,
-    })
-    if (cleanupFailure) {
-      return cleanupFailure
-    }
-  } else if (result.kind === "error" && result.error?.cleanupConfirmed === false) {
-    return finishUnconfirmedCleanup({
-      context,
-      record,
-      error: result.error,
-      cancellationRequested: record.status === SCENARIO_RUN_STATUS.CANCELLING,
-      status: SCENARIO_RUN_STATUS.FAILED,
-    })
-  } else if (record.status === SCENARIO_RUN_STATUS.CANCELLING || result.kind === "cancelled") {
+function finishExecutionResult({ context, record, result }) {
+  if (record.status === SCENARIO_RUN_STATUS.CANCELLING || result.kind === "cancelled") {
     transitionRun({
       record,
       status: SCENARIO_RUN_STATUS.CANCELLED,
@@ -377,6 +360,33 @@ async function finishExecution({ context, record, adapter, result }) {
       status: SCENARIO_RUN_STATUS.COMPLETED,
       now: context.now,
       onUpdate: context.onUpdate,
+    })
+  }
+}
+
+async function finishExecution({ context, record, adapter, result }) {
+  if (result.kind === "timeout") {
+    const cleanupFailure = await finishTimedOutExecution({
+      context,
+      record,
+      adapter,
+    })
+    if (cleanupFailure) {
+      return cleanupFailure
+    }
+  } else if (result.kind === "error" && result.error?.cleanupConfirmed === false) {
+    return finishUnconfirmedCleanup({
+      context,
+      record,
+      error: result.error,
+      cancellationRequested: record.status === SCENARIO_RUN_STATUS.CANCELLING,
+      status: SCENARIO_RUN_STATUS.FAILED,
+    })
+  } else {
+    finishExecutionResult({
+      context,
+      record,
+      result,
     })
   }
   context.executions.delete(record.runId)
