@@ -16,7 +16,7 @@ import { runDatabaseProviderConformanceTests } from "../../../test-support/provi
 
 const connectionString = process.env.MONGODB_URI
 
-function databaseNameForKey(storageKey, parsed) {
+function databaseNameForKey({ storageKey, parsed }) {
   const prefix = parsed.databaseName
     .replace(/[^a-zA-Z0-9_-]/g, "_")
     .slice(0, 24) || "coinzilla"
@@ -45,7 +45,7 @@ port: 27017 }
     }
 }
 
-async function dropDatabase(databaseName, parsed) {
+async function dropDatabase({ databaseName, parsed }) {
   let {host} = parsed
   let {port} = parsed
   let transport
@@ -97,17 +97,17 @@ if (connectionString) {
     createDatabase: ({ storageKey }) => createDatabase({
       provider: createMongoProvider({
         uri: connectionString,
-        databaseName: databaseNameForKey(storageKey, parsed),
+        databaseName: databaseNameForKey({ storageKey, parsed }),
       }),
     }),
-    cleanupStorage: ({ storageKey }) => dropDatabase(
-      databaseNameForKey(storageKey, parsed),
+    cleanupStorage: ({ storageKey }) => dropDatabase({
+      databaseName: databaseNameForKey({ storageKey, parsed }),
       parsed,
-    ),
+    }),
   })
 
   test("MongoDB multi-document transactions roll back writes atomically", async (context) => {
-    const databaseName = databaseNameForKey(randomUUID(), parsed)
+    const databaseName = databaseNameForKey({ storageKey: randomUUID(), parsed })
     const database = createDatabase({
       provider: createMongoProvider({
         uri: connectionString,
@@ -145,12 +145,12 @@ if (connectionString) {
       )
     } finally {
       await database.close()
-      await dropDatabase(databaseName, parsed)
+      await dropDatabase({ databaseName, parsed })
     }
   })
 
   test("MongoDB multi-document transactions commit multiple records atomically", async (context) => {
-    const databaseName = databaseNameForKey(randomUUID(), parsed)
+    const databaseName = databaseNameForKey({ storageKey: randomUUID(), parsed })
     const database = createDatabase({
       provider: createMongoProvider({
         uri: connectionString,
@@ -192,7 +192,7 @@ value: 2 },
       }
     } finally {
       await database.close()
-      await dropDatabase(databaseName, parsed)
+      await dropDatabase({ databaseName, parsed })
     }
   })
 
