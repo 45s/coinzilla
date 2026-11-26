@@ -170,7 +170,6 @@ await database.transaction(async (transaction) => {
 })
 ```
 
-
 For SQLite, a Promise-returning callback is rejected and its deferred write does not escape the rollback:
 
 ```js
