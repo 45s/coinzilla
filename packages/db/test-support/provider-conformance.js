@@ -5,7 +5,11 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import test from "node:test"
 
-import { DatabaseConflictError, DatabaseProviderError } from "../src/index.js"
+import {
+  DatabaseConflictError,
+  DatabaseProviderError,
+  DatabaseTransactionUnsupportedError,
+} from "../src/index.js"
 
 async function withConnectedDatabase({ database, callback }) {
   await database.connect()
@@ -730,8 +734,9 @@ async function verifyNestedTransactionUnsupportedAsynchronous({
         collection: "people",
         record: nestedRecord,
       })),
-      (error) => error instanceof DatabaseProviderError,
-      "A provider declaring nestedTransactions=false must reject nested transaction work with the shared provider error",
+      (error) => error instanceof DatabaseTransactionUnsupportedError
+        && error.context?.capability === "nestedTransactions",
+      "A provider declaring nestedTransactions=false must reject nested work with the shared transaction-unsupported error",
     )
   })
 }
@@ -756,8 +761,9 @@ async function verifyNestedTransactionUnsupportedSynchronous({
   })
   await Promise.resolve()
   assert.ok(
-    nestedError instanceof DatabaseProviderError,
-    "A synchronous provider declaring nestedTransactions=false must reject nested transaction work with the shared provider error",
+    nestedError instanceof DatabaseTransactionUnsupportedError
+      && nestedError.context?.capability === "nestedTransactions",
+    "A synchronous provider declaring nestedTransactions=false must reject nested work with the shared transaction-unsupported error",
   )
 }
 
