@@ -53,8 +53,10 @@ function validateTransactionCapabilities({ transactions }) {
 
   const hasCompatibleNesting = transactions?.callbackMode !== "synchronous"
     || transactions?.nestedTransactions !== true
+  const hasCompatibleMultiDocument = transactions?.nestedTransactions !== true
+    || transactions?.multiDocument !== false
 
-  if (!transactions || typeof transactions !== "object" || !hasValidCallbackMode || !hasNestedTransactionDeclaration || !hasMultiDocumentDeclaration || !hasCompatibleNesting) {
+  if (!transactions || typeof transactions !== "object" || !hasValidCallbackMode || !hasNestedTransactionDeclaration || !hasMultiDocumentDeclaration || !hasCompatibleNesting || !hasCompatibleMultiDocument) {
     throw new TypeError("Provider transaction capabilities must declare callbackMode, nestedTransactions and multiDocument")
   }
 }
