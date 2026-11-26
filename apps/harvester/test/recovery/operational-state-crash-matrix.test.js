@@ -5,6 +5,7 @@ import os from "node:os"
 import path from "node:path"
 import test from "node:test"
 import { Asset, CanonicalOrder, Fill, Market, Money, Quantity } from "@coinzilla/entities"
+import { createPositionId } from "../../src/domain/portfolio/position.js"
 import { Portfolio } from "../../src/domain/portfolio/portfolio.js"
 import { RecoveryLedger } from "../../src/domain/strategies/conservative/recovery-ledger.js"
 import { createFileOperationalStateStore } from "../../src/infrastructure/operational-state/create-file-store.js"
@@ -140,9 +141,17 @@ const persistOrder = async ({ store, clientOrderId, side, quantity, price, purpo
 side,
 quantity,
 price })
+  const ownership = purpose === "RECOVERY_SELL"
+    ? {
+        strategyId: StrategyId.COIN_GRABBER,
+        positionId: createPositionId({ marketId: market.id, strategyId: StrategyId.COIN_GRABBER }),
+        purpose,
+      }
+    : undefined
   const intent = await recordOrderSubmissionIntent({ operationalStateStore: store,
 order: pending,
-purpose })
+purpose,
+ownership })
   assert.equal(intent.ok, true, intent.errors?.map(({ message }) => message).join("; "))
   const acknowledged = acknowledge({ clientOrderId,
 side,
@@ -154,6 +163,7 @@ purpose })
     order: acknowledged,
     outcome: "ACKNOWLEDGED",
     purpose,
+    ownership,
   })
   assert.equal(outcome.ok, true, outcome.errors?.map(({ message }) => message).join("; "))
   return acknowledged
