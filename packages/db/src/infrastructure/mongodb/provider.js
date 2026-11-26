@@ -535,10 +535,12 @@ async function handleTransactionCallbackFailure({
   if (transactionError === command.failure()) {
     transactionError = transactionError?.code === 11000 || transactionError?.code === 11001
       ? new DatabaseConflictError({ cause: transactionError })
-      : new DatabaseProviderError({ operation: "transaction", cause: transactionError })
+      : new DatabaseProviderError({ operation: "transaction",
+cause: transactionError })
   }
   if (session.started) {
-    await abortMongoTransaction({ transport: state.transport, session })
+    await abortMongoTransaction({ transport: state.transport,
+session })
   }
   throw transactionError
 }
@@ -578,25 +580,32 @@ async function commitStartedTransaction({ session, state }) {
     return
   }
   try {
-    await commitMongoTransaction({ transport: state.transport, session })
+    await commitMongoTransaction({ transport: state.transport,
+session })
   } catch (error) {
     if (error instanceof DatabaseTransactionOutcomeUnknownError) {
       throw error
     }
-    await abortMongoTransaction({ transport: state.transport, session })
+    await abortMongoTransaction({ transport: state.transport,
+session })
     throw error
   }
 }
 
 async function runMongoTransaction({ state, randomBytes, transactionScope, work }) {
-  assertTransactionCanStart({ state, transactionScope, work })
-  const session = createSession({ state, randomBytes })
-  const command = createTransactionCommand({ transport: state.transport, session })
+  assertTransactionCanStart({ state,
+transactionScope,
+work })
+  const session = createSession({ state,
+randomBytes })
+  const command = createTransactionCommand({ transport: state.transport,
+session })
   const operations = createMongoRecordOperations({
     command,
     databaseName: state.options.databaseName,
   })
-  const transactionOperations = createTrackedTransactionOperations({ operations, command })
+  const transactionOperations = createTrackedTransactionOperations({ operations,
+command })
   const result = await runTransactionCallback({
     transactionScope,
     session,
@@ -605,7 +614,8 @@ async function runMongoTransaction({ state, randomBytes, transactionScope, work 
     command,
     state,
   })
-  await commitStartedTransaction({ session, state })
+  await commitStartedTransaction({ session,
+state })
   return result
 }
 
