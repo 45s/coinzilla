@@ -162,6 +162,53 @@ test("MongoDB provider aborts failed transactions and preserves callback failure
   }
 })
 
+
+test("MongoDB provider isolates concurrent transactions and drains them before close", async () => {
+  let releaseWrite
+  let markWriteStarted
+  const writeStarted = new Promise((resolve) => {
+    markWriteStarted = resolve
+  })
+  const writeGate = new Promise((resolve) => {
+    releaseWrite = resolve
+  })
+  const { provider, calls, transports } = createProviderHarness({
+    topology: "replicaSet",
+    transactionSupported: true,
+    commandHandler: async (body) => {
+      if (body.insert === "coinzilla_cGVvcGxl") {
+        markWriteStarted()
+        await writeGate
+      }
+      return { ok: 1, n: 1 }
+    },
+  })
+  const database = createDatabase({ provider })
+  await database.connect()
+
+  const first = database.transaction((transaction) => transaction.create({
+    collection: "people",
+    record: { id: "concurrent-1" },
+  }))
+  await writeStarted
+  const second = database.transaction((transaction) => transaction.create({
+    collection: "people",
+    record: { id: "concurrent-2" },
+  }))
+  const closing = database.close()
+
+  assert.equal(database.state, "closing")
+  assert.equal(transports[0].closed, false)
+  releaseWrite()
+  await Promise.all([first, second, closing])
+
+  const inserts = calls.filter((body) => body.insert === "coinzilla_cGVvcGxl")
+  assert.equal(inserts.length, 2)
+  assert.notDeepEqual(inserts[0].lsid, inserts[1].lsid)
+  assert.equal(transports[0].closed, true)
+  assert.equal(database.state, "closed")
+})
+
 test("MongoDB provider follows replica-set primary discovery and closes the seed socket", async () => {
   const hosts = []
   const transports = []
