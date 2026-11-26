@@ -41,7 +41,6 @@ These are planning areas, not commitments to bypass backend ownership or existin
 - Keep mock/demo fixtures clearly separated from production API models.
 - Update this roadmap when the issue scope or delivered milestone changes. Do not use it as a chronological task log.
 
-
 ## Strategy-neutral Scenario Runner — issue #1836
 
 Open Draft [PR #1837](https://github.com/45s/coinzilla/pull/1837) carries the Dashboard and Harvester runner implementation. Current exact head `144ddbacb95739c93ac4964630fcb78e37482c41` is 173 commits ahead / 0 behind `develop`. On that head, Repository Quality, Harvester Targeted Tests, Unit Tests and Test Coverage failed; Dependency Audit passed; External Documentation Links failed (advisory). Keep Draft until exact-head failures are resolved. Dashboard remains a presentation adapter; runner contracts, validation, orchestration, trace and debug-package construction belong in framework-independent layers. The MVP is not complete and must not enable real exchange access or executable RS scenarios until OS isolation, replay/configuration, complete evidence and reconnect/history acceptance pass.
