@@ -9,6 +9,7 @@
 
 | Priority / area | Canonical issue | Current status |
 | --- | --- | --- |
+| Shutdown cleanup deadlines and process-lock release | [#1186](https://github.com/45s/coinzilla/issues/1186), [#1479](https://github.com/45s/coinzilla/issues/1479) | Implementation in progress: bounded outer cleanup, single-flight retries, and lock release only after logger/resource cleanup; historical process-exit and lock-release evidence remains separate. |
 | Conservative ownership and shutdown incident | [#1856](https://github.com/45s/coinzilla/issues/1856) | Fix merged in [PR #1858](https://github.com/45s/coinzilla/pull/1858). Issue remains open for historical exchange-identity and original-runtime evidence; do not claim the old run's final STOP/process/lock outcome without its evidence. |
 | Conservative exhaustive scenario coverage | [#1763](https://github.com/45s/coinzilla/issues/1763) | Active source-mapped scenario matrix and exact-head evidence. |
 | Recovery Seller terminal SELL acceptance | [#1842](https://github.com/45s/coinzilla/issues/1842) | Non-FILLED terminal SELL STOP fix merged in [PR #1875](https://github.com/45s/coinzilla/pull/1875). Its merge-commit coverage run exposed an uncovered missing-broker-ID guard in terminal fill reconciliation; this test-only follow-up covers absent and whitespace-only IDs without changing runtime behavior. |
