@@ -336,7 +336,7 @@ test("MongoDB TLS transport waits for secureConnect rather than plain connect", 
   })
 
   await transport.connect()
-  assert.equal(socketOptions.tls, true)
+  assert.deepEqual(socketOptions.tls, { rejectUnauthorized: true })
   assert.equal(transport.state, "connected")
   await transport.close()
 })
