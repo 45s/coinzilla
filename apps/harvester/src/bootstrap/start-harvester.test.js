@@ -4,7 +4,7 @@ import * as shared from "../../test/bootstrap/start-harvester-test-support.js"
 import { StrategyId } from "../domain/strategies/strategy-ids.js"
 import { createHarvesterStartupContext } from "./start-harvester.js"
 
-const { Balance, CanonicalOrder, Fill, Money, Quantity, TradingRules, multiplyDecimal, waitForTestSignal, appConfig, createMarketMetadata, createOpenOrderSnapshot, createBinanceCapabilities, createBroker, createRecoverySellerStopWorkflow, recordConfigurationBaseline, recordProcessStarted, recordProcessStopped, makeVolatilityReadyBroker, binanceEnv, startHarvesterForTest, createFill } = shared
+const { Balance, CanonicalOrder, Fill, Money, Quantity, TradingRules, multiplyDecimal, waitForTestSignal, appConfig, createMarketMetadata, createOpenOrderSnapshot, createBinanceCapabilities, createBroker, createRecoverySellerStopWorkflow, recordConfigurationBaseline, recordProcessStarted, recordProcessStopped, makeVolatilityReadyBroker, createTwoMarketStartupConfig, binanceEnv, startHarvesterForTest, createFill } = shared
 const { mkdtemp, rm, os, path, createFileOperationalStateStore } = shared
 const test = (...args) => nodeTest(`[start-harvester.test.js] ${args[0]}`, ...args.slice(1))
 
@@ -386,6 +386,197 @@ test("captures the CLOSING account-wide open-order set before broker disconnect 
   assert.equal(calls.includes("cancel-order"), false, "The external recovery SELL must remain untouched.")
   assert.ok(fixture.getOpenOrderReads() >= 2, "The runtime must perform the startup audit and a separate CLOSING read.")
   assert.ok(calls.lastIndexOf(`open-orders:${fixture.getOpenOrderReads()}:account`) < calls.indexOf("disconnect"))
+})
+
+
+function createTwoMarketShutdownEventPublisher({ calls, publishedEvents } = {}) {
+  let lastPublishedEvent
+  let failNextFlush = false
+  return {
+    publish(event) {
+      publishedEvents.push(event)
+      lastPublishedEvent = event
+      if (event.name === "account.open_orders_captured" && event.data.phase === "CLOSING") {
+        calls.push("closing-open-orders")
+      }
+      if (event.name === "account.snapshot_captured" && event.data.phase === "CLOSING") {
+        calls.push("closing-balances")
+      }
+      return { ok: true }
+    },
+    failNextFlush() {
+      failNextFlush = true
+    },
+    flush: async () => {
+      if (failNextFlush) {
+        failNextFlush = false
+        calls.push("journal-flush-failed")
+        return {
+          ok: false,
+          durable: false,
+          errors: [new Error("Journal fsync failed")],
+        }
+      }
+      calls.push(["flush", lastPublishedEvent?.name ?? "undefined", lastPublishedEvent?.data?.phase ?? ""].join(":"))
+      return {
+        ok: true,
+        durable: true,
+      }
+    },
+  }
+}
+
+function createTwoMarketShutdownLogger({ calls, infoRecords } = {}) {
+  return {
+    info(record) {
+      infoRecords.push(record)
+      if (record.message === "Conservative market is safe to shut down") {
+        calls.push(["safe", record.symbol].join(":"))
+      }
+    },
+    error(record) {
+      infoRecords.push(record)
+    },
+  }
+}
+
+function assertShutdownBarrierBeforeMarketStop({ calls, barrier, firstMarketFeedStopIndex, message } = {}) {
+  const barrierIndex = calls.indexOf(barrier)
+  assert.ok(barrierIndex >= 0 && barrierIndex < firstMarketFeedStopIndex, message)
+}
+
+function assertTwoMarketShutdownAcceptance({ calls, infoRecords, publishedEvents, stopResult, processHistory }) {
+  assert.equal(stopResult.ok, true, "The composed runtime must complete every required teardown phase.")
+  assert.equal(stopResult.status, "STOPPED", "The composed runtime must return the explicit STOPPED outcome.")
+  const safeSymbols = [...new Set(infoRecords
+    .filter((record) => record.message === "Conservative market is safe to shut down")
+    .map((record) => record.symbol))].sort()
+  assert.deepEqual(safeSymbols, ["BTCUSDT", "ETHUSDT"], "Every enabled market must independently prove shutdown safety.")
+
+  const marketFeedStopIndexes = ["BTCUSDT", "ETHUSDT"].map((symbol) => calls.indexOf(["unsubscribe", symbol].join(":")))
+  assert.ok(marketFeedStopIndexes.every((index) => index >= 0), "Every enabled market feed must be stopped.")
+  const firstMarketFeedStopIndex = Math.min(...marketFeedStopIndexes)
+  for (const symbol of ["BTCUSDT", "ETHUSDT"]) {
+    assert.ok(calls.indexOf(["safe", symbol].join(":")) < firstMarketFeedStopIndex, "Every market must be safe before any market feed is stopped.")
+  }
+
+  const closingOpenOrders = publishedEvents.find((event) => event.name === "account.open_orders_captured" && event.data.phase === "CLOSING")
+  const closingBalances = publishedEvents.find((event) => event.name === "account.snapshot_captured" && event.data.phase === "CLOSING")
+  assert.ok(closingOpenOrders && closingBalances, "The composed runtime must publish both CLOSING account audits.")
+  assert.ok(publishedEvents.indexOf(closingOpenOrders) < publishedEvents.indexOf(closingBalances), "CLOSING open orders must precede CLOSING balances.")
+  assertShutdownBarrierBeforeMarketStop({
+    calls,
+    barrier: "flush:account.open_orders_captured:CLOSING",
+    firstMarketFeedStopIndex,
+    message: "The CLOSING open-order durability barrier must precede market teardown.",
+  })
+  assertShutdownBarrierBeforeMarketStop({
+    calls,
+    barrier: "flush:account.snapshot_captured:CLOSING",
+    firstMarketFeedStopIndex,
+    message: "The CLOSING balance durability barrier must precede market teardown.",
+  })
+
+  const userDataStopIndex = calls.indexOf("unsubscribe:user-data")
+  const brokerDisconnectIndex = calls.indexOf("disconnect")
+  assert.ok(marketFeedStopIndexes.every((index) => index < userDataStopIndex), "All market feeds must stop before shared user-data intake.")
+  assert.ok(userDataStopIndex >= 0 && userDataStopIndex < brokerDisconnectIndex, "User-data intake must stop before broker disconnect.")
+  assert.equal(processHistory.ok, true, "The durable process-state history must remain readable.")
+  assert.equal(processHistory.data.records.filter((record) => record.factType === "PROCESS_STOPPED").length, 1, "Successful teardown must append exactly one durable PROCESS_STOPPED fact.")
+}
+
+test("proves shutdown safety independently for every enabled market in the composed runtime", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-multimarket-shutdown-"))
+  const operationalStateStore = createFileOperationalStateStore({
+    directory,
+    runtimeSessionId: "multimarket-shutdown-acceptance",
+  })
+  const initialized = await operationalStateStore.initialize()
+  assert.equal(initialized.ok, true, "The durable process-state fixture must initialize.")
+  const calls = []
+  const publishedEvents = []
+  const infoRecords = []
+  const eventPublisher = createTwoMarketShutdownEventPublisher({
+    calls,
+    publishedEvents,
+  })
+  const broker = makeVolatilityReadyBroker(createBroker(calls), ["BTCUSDT", "ETHUSDT"])
+
+  try {
+    const runtime = await startHarvesterForTest({
+      loadConfig: async () => createTwoMarketStartupConfig(),
+      env: binanceEnv,
+      operationalStateStore,
+      brokerAdapterFactory: () => broker,
+      eventPublisher,
+      logger: createTwoMarketShutdownLogger({
+        calls,
+        infoRecords,
+      }),
+    })
+    const stopResult = await runtime.stop()
+    const processHistory = await operationalStateStore.readAll()
+    assertTwoMarketShutdownAcceptance({
+      calls,
+      infoRecords,
+      publishedEvents,
+      stopResult,
+      processHistory,
+    })
+  } finally {
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
+  }
+})
+
+test("fails closed before teardown when composed Journal durability cannot be proven", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-multimarket-journal-failure-"))
+  const operationalStateStore = createFileOperationalStateStore({
+    directory,
+    runtimeSessionId: "multimarket-journal-failure",
+  })
+  const initialized = await operationalStateStore.initialize()
+  assert.equal(initialized.ok, true, "The durable process-state fixture must initialize.")
+  const calls = []
+  const publishedEvents = []
+  const infoRecords = []
+  const eventPublisher = createTwoMarketShutdownEventPublisher({
+    calls,
+    publishedEvents,
+  })
+  const broker = makeVolatilityReadyBroker(createBroker(calls), ["BTCUSDT", "ETHUSDT"])
+
+  try {
+    const runtime = await startHarvesterForTest({
+      loadConfig: async () => createTwoMarketStartupConfig(),
+      env: binanceEnv,
+      operationalStateStore,
+      brokerAdapterFactory: () => broker,
+      eventPublisher,
+      logger: createTwoMarketShutdownLogger({
+        calls,
+        infoRecords,
+      }),
+    })
+    eventPublisher.failNextFlush()
+    await assert.rejects(runtime.stop())
+    assert.ok(calls.includes("journal-flush-failed"), "The injected Journal durability failure must be observed.")
+    for (const symbol of ["BTCUSDT", "ETHUSDT"]) {
+      assert.equal(calls.includes(`unsubscribe:${symbol}`), false, "A market feed must remain connected after failed Journal durability.")
+    }
+    assert.equal(calls.includes("unsubscribe:user-data"), false, "User-data intake must remain connected after failed Journal durability.")
+    assert.equal(calls.includes("disconnect"), false, "The broker must remain connected after failed Journal durability.")
+    const processHistory = await operationalStateStore.readAll()
+    assert.equal(processHistory.ok, true, "The durable process-state history must remain readable.")
+    assert.equal(processHistory.data.records.some((record) => record.factType === "PROCESS_STOPPED"), false, "Failed shutdown must never append PROCESS_STOPPED.")
+  } finally {
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
+  }
 })
 
 test("blocks trading after execution accounting failure", async () => {
