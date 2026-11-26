@@ -6,8 +6,8 @@ The shutdown-handler regression fixture declares the market-task drain latch in 
 
 - CI follow-up: lifecycle test doubles now return the explicit `{ ok: true, status: "STOPPED" }` runtime-stop contract; ADA replay assertions retain the existing AggregateError contract emitted by the runtime shutdown boundary. No production shutdown behavior was relaxed.
 
-Tracking issue: [#1856](https://github.com/45s/coinzilla/issues/1856)  
-Implementation PR: [#1858](https://github.com/45s/coinzilla/pull/1858)  
+Tracking issue: [#1856](https://github.com/45s/coinzilla/issues/1856)
+Implementation PR: [#1858](https://github.com/45s/coinzilla/pull/1858)
 Feature branch: `fix/harvester/incident-1856-ownership-shutdown-safety`
 
 ### Confirmed source findings
@@ -2399,6 +2399,5 @@ Open Draft [PR #1837](https://github.com/45s/coinzilla/pull/1837) has current ex
 The scenario-definition and reporting workstream is tracked separately from the active domain-test implementation in [#1763](https://github.com/45s/coinzilla/issues/1763). Child issue [#1797](https://github.com/45s/coinzilla/issues/1797) owns the stable `CON-*` inventory, validated registry, mapped-test runner, and JSON reports. The existing Harvester Targeted Tests workflow runs the suite conditionally when related paths change and uploads its reports. It reuses `docs/critical-behaviors.json` and the repository scenario methodology; it does not duplicate critical-behavior ownership or change production trading behavior.
 
 The initial inventory contains 18 scenarios across 16 categories: 15 TEST-MAPPED, one PARTIAL configuration scenario, one MISSING startup-history-gate scenario (CON-PERSIST-003), and one UNSUPPORTED runtime-restoration scenario. TEST-MAPPED is a mapping state, not proof of assertion-level coverage. Runtime restoration remains unsupported by the active Conservative specification.
-
 
 Forensic update from the full 2026-11-26 trace: the nine local SELL IDs and exactly-once duplicate DOGE fill are classified in issue #1856. None of those nine SELL attempts reached broker placement.
