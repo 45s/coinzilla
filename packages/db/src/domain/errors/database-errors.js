@@ -29,3 +29,33 @@ export class DatabaseProviderError extends SystemCustomError {
     })
   }
 }
+
+export class DatabaseTransactionUnsupportedError extends SystemCustomError {
+  constructor({ topology, cause } = {}) {
+    const context = {
+      operation: "transaction",
+    }
+    if (topology !== undefined) {
+      context.topology = topology
+    }
+
+    super("Database provider does not support multi-document transactions", {
+      code: "DB_TRANSACTION_UNSUPPORTED",
+      context,
+      cause,
+    })
+  }
+}
+
+export class DatabaseTransactionOutcomeUnknownError extends SystemCustomError {
+  constructor({ cause } = {}) {
+    super("Database transaction outcome is unknown", {
+      code: "DB_TRANSACTION_OUTCOME_UNKNOWN",
+      context: {
+        operation: "commit",
+        outcome: "unknown",
+      },
+      cause,
+    })
+  }
+}
