@@ -135,9 +135,13 @@ export async function readVerifiedAccountResolutionProjection(store) {
 }
 
 export function getActiveAccountResolutionBlockers(projection) {
-  return (projection.stickySafetyBlockers ?? [])
+  const blockers = (projection.stickySafetyBlockers ?? [])
     .filter(({ scope }) => scope === "ACCOUNT")
     .map((blocker) => ({ ...blocker }))
+  if (blockers.some(({ producer }) => producer !== "USER_DATA_EVENT_HANDLER")) {
+    throw new Error("An active ACCOUNT blocker has no verified user-data producer provenance")
+  }
+  return blockers
 }
 
 export function createAccountResolutionEvidenceDigest({ operatorId, actionId, audit }) {
