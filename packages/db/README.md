@@ -199,6 +199,7 @@ assert.equal(
 - `DatabaseConflictError` identifies a duplicate record identifier. Its stable code is `DB_RECORD_CONFLICT`.
 - `DatabaseProviderError` identifies an underlying provider operation failure. Its stable code is `DB_PROVIDER_OPERATION_FAILED`; the original provider failure is preserved as `cause`.
 - `DatabaseTransactionUnsupportedError` identifies a provider/topology that cannot guarantee the requested multi-document transaction (`DB_TRANSACTION_UNSUPPORTED`).
+- `DatabaseOperationOutcomeUnknownError` identifies a non-transactional write sent to the server whose response was lost (`DB_OPERATION_OUTCOME_UNKNOWN`); read/reconcile the record before retrying.
 - `DatabaseTransactionOutcomeUnknownError` identifies a commit whose final outcome could not be confirmed (`DB_TRANSACTION_OUTCOME_UNKNOWN`); reconcile before retrying application work.
 - Invalid collection names, identifiers, records and queries throw `TypeError`.
 - Missing records are ordinary results (`null` or `false`), not exceptions.
@@ -259,7 +260,7 @@ The adapter uses Node.js built-ins only (`node:net`, `node:tls`, `node:crypto`, 
 - Standalone servers, replica sets and sharded clusters reached through a single seed. Replica-set primary redirection is followed; this is not a full topology monitor or failover-aware connection pool.
 - Optional unauthenticated connections, SCRAM-SHA-256 and legacy SCRAM-SHA-1. SCRAM-SHA-256 currently accepts printable ASCII passwords only because complete Unicode SASLprep tables are not available in Node built-ins; unsupported input is rejected rather than prepared incorrectly.
 - TCP and TLS. TLS validation follows Node.js defaults unless explicit TLS options are supplied.
-- JSON record CRUD, exact scalar equality filters, portable scalar sorting, offset/limit pagination, and provider-neutral error mapping.
+- JSON record CRUD, exact scalar equality filters, portable JSON value sorting, offset/limit pagination, and provider-neutral error mapping.
 - A single multiplexed socket per provider instance, with bounded pending-request and message sizes. This is not a connection pool.
 
 **Transactions and capability behavior**
@@ -268,7 +269,7 @@ The MongoDB provider declares `transactions.multiDocument: "topology-dependent"`
 
 MongoDB read transaction callbacks are limited to one logical read operation; `readMany` may drain multiple internal cursor batches. They do not provide a multi-query snapshot on standalone servers. MongoDB transaction callbacks are asynchronous: await every CRUD operation on the supplied transaction object. Do not start unawaited writes and allow the callback to return, because commit follows callback completion. SQLite callbacks remain synchronous and reject async work.
 
-If commit cannot be confirmed after bounded retries, the provider throws `DatabaseTransactionOutcomeUnknownError`. This means the caller must reconcile the outcome; it must not assume rollback and blindly replay non-idempotent work. Ordinary interrupted CRUD operations are not automatically replayed. A lost connection is surfaced as a provider failure; automatic topology monitoring, reconnect and transparent operation retry are not implemented.
+If commit cannot be confirmed after bounded retries, the provider throws `DatabaseTransactionOutcomeUnknownError`. This means the caller must reconcile the outcome; it must not assume rollback and blindly replay non-idempotent work. Ordinary interrupted CRUD operations are not automatically replayed. If a non-transactional write was sent but its response was lost, the provider throws `DatabaseOperationOutcomeUnknownError`; reads and commands known not to have been sent remain ordinary provider failures. Reconcile before retrying. Automatic topology monitoring, reconnect and transparent operation retry are not implemented.
 
 **Explicit exclusions**
 
@@ -308,7 +309,7 @@ runDatabaseProviderConformanceTests({
 
 The example is illustrative; no PostgreSQL provider is included. The factory receives a unique `storageKey` and one declared `storageMode`. The suite runs the contract against every mode in `database.capabilities.storage.modes`, using an isolated key for each test. For `file` and `server` modes it reuses the same key across a new connection to verify persistence; the reconnect test is explicitly skipped for `memory` mode. SQLite maps `memory` to `:memory:` and `file` to the isolated temporary file path. For server-backed providers, supply the optional `cleanupStorage({ storageKey, storageMode })` callback to drop the temporary database or namespace after all connections for that test have closed. The callback runs once per isolated key, including after both connections in the persistence test; `close()` should close the connection, not destroy the store before reconnect verification. The suite removes its local temporary directory automatically. Providers must not silently skip a declared storage mode or a supported contract.
 
-The suite verifies CRUD and collection isolation, duplicate handling, every declared storage mode, each declared query capability, portable scalar sorting, missing-record results, transaction commit/rollback, declared nested-transaction behavior, the synchronous/asynchronous callback mode, immutable capability snapshots, lifecycle closure, close-time draining of active asynchronous transactions, cleanup-hook invocation, and persistence across a new connection where storage is persistent. Query cases are skipped with a reason only when the provider declares the corresponding capability unavailable. The in-memory reconnect-persistence case is skipped because that storage mode is explicitly ephemeral. Add provider-specific lifecycle, lock/concurrency and cleanup tests where the generic contract cannot express the provider's operational guarantees.
+The suite verifies CRUD and collection isolation, duplicate handling, every declared storage mode, each declared query capability, portable scalar sorting, missing-record results, transaction commit/rollback, declared nested-transaction behavior, the synchronous/asynchronous callback mode, immutable capability snapshots, lifecycle closure, close-time draining of active CRUD operations and transactions, cleanup-hook invocation, and persistence across a new connection where storage is persistent. Query cases are skipped with a reason only when the provider declares the corresponding capability unavailable. The in-memory reconnect-persistence case is skipped because that storage mode is explicitly ephemeral. Add provider-specific lifecycle, lock/concurrency and cleanup tests where the generic contract cannot express the provider's operational guarantees.
 
 ## Provider composition
 
