@@ -5,6 +5,7 @@ import path from "node:path"
 import test from "node:test"
 import { createFileOperationalStateStore } from "../infrastructure/operational-state/create-file-store.js"
 import { createRecoverySellerStopWorkflow } from "./create-recovery-seller-stop-workflow.js"
+import { recordSafetyBlockerRaised } from "./record-safety-control-facts.js"
 
 async function createStore(t) {
   const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-rs-stop-workflow-"))
@@ -238,4 +239,23 @@ test("closes account admission before awaiting durable STOP persistence", async 
     read.data.records.filter((record) => record.factType === "SAFETY_BLOCKER_RAISED").length,
     1,
   )
+})
+
+test("does not restore Recovery Seller STOP from a user-data blocker with the same reason", async (t) => {
+  const operationalStateStore = await createStore(t)
+  const raised = await recordSafetyBlockerRaised({
+    operationalStateStore,
+    producer: "USER_DATA_EVENT_HANDLER",
+    scope: "ACCOUNT",
+    reason: "RECOVERY_SELLER_UNEXPECTED_CONDITION",
+    evidenceDigest: "a".repeat(64),
+  })
+  assert.equal(raised.ok, true, "The user-data blocker fixture must be durably recorded")
+
+  const created = await createRecoverySellerStopWorkflow({ operationalStateStore })
+
+  assert.equal(created.ok, true, created.errors?.[0]?.message)
+  assert.equal(created.data.getStopState().status, "CLEAR", "Recovery Seller STOP restoration must use producer provenance")
+  assert.equal(created.data.isAccountAdmissionBlocked(), false, "A user-data blocker is owned by the account admission workflow")
+  assert.equal(created.data.getBlockerId(), null, "The Recovery Seller workflow must not claim the user-data blocker")
 })
