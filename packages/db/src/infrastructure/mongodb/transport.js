@@ -185,11 +185,6 @@ response: response.body })
       this.socket?.destroy()
       return
     }
-    if (this.receiveBuffer.length + chunk.length > MAX_WIRE_MESSAGE_SIZE) {
-      this.failConnection({ error: new TypeError("MongoDB receive buffer exceeds the 48 MiB message limit") })
-      this.socket?.destroy()
-      return
-    }
     this.receiveBuffer = this.receiveBuffer.length === 0
       ? Buffer.from(chunk)
       : Buffer.concat([this.receiveBuffer, chunk])
