@@ -39,10 +39,10 @@ asset: baseAsset }),
   })
 }
 
-function makeFill({ tradeId, quantity = "1", executedAt = 10, clientOrderId = "h-dogeusdt-order-1" } = {}) {
+function makeFill({ tradeId, quantity = "1", executedAt = 10, clientOrderId = "h-dogeusdt-order-1", brokerOrderId = "broker-order-1" } = {}) {
   return new Fill({
     tradeId: String(tradeId),
-    brokerOrderId: "broker-order-1",
+    brokerOrderId,
     clientOrderId,
     market,
     side: "BUY",
@@ -61,13 +61,14 @@ asset: quoteAsset }),
   })
 }
 
-function makeWorkflow({ fills = [], processedFills = [], brokerResult, applyResult = toResult({ data: { applied: true } }) } = {}) {
+function makeWorkflow({ fills = [], processedFills = [], brokerResult, brokerError, applyResult = toResult({ data: { applied: true } }), onTerminalOrderReconciled } = {}) {
   const calls = { broker: [],
 pauses: [],
 applied: [] }
   const broker = {
     getFills: async (args) => {
       calls.broker.push(args)
+      if (brokerError) throw brokerError
       return brokerResult ?? toResult({ data: fills })
     },
   }
@@ -79,6 +80,7 @@ applied: [] }
       calls.applied.push(args)
       return applyResult
     },
+    onTerminalOrderReconciled,
   })
   return { workflow,
 calls }
@@ -197,4 +199,110 @@ test("rejects a terminal order with a whitespace broker order ID before reading 
   assert.equal(calls.pauses.length, 1, "The affected market must be paused for a blank broker order ID.")
   assert.equal(calls.pauses[0].reason, "TERMINAL_ORDER_MISSING_BROKER_ID")
   assert.deepEqual(calls.applied, [], "No fill may be applied without a canonical broker order identity.")
+})
+
+test("pauses when broker fill history omits an explicit success flag", async () => {
+  const { workflow, calls } = makeWorkflow({ brokerResult: { data: [] } })
+
+  const result = await workflow({ order: makeOrder() })
+
+  assert.equal(result.ok, false)
+  assert.equal(result.failure.stage, "TERMINAL_FILL_HISTORY_RESPONSE")
+  assert.equal(calls.pauses[0].reason, "TERMINAL_ORDER_FILL_HISTORY_INVALID")
+})
+
+test("pauses when broker fill history contains malformed execution records", async () => {
+  const { workflow, calls } = makeWorkflow({
+    brokerResult: { ok: true, data: [{}] },
+  })
+
+  const result = await workflow({ order: makeOrder() })
+
+  assert.equal(result.ok, false)
+  assert.equal(result.failure.stage, "TERMINAL_FILL_HISTORY_SHAPE")
+  assert.equal(calls.pauses[0].reason, "TERMINAL_ORDER_FILL_HISTORY_INVALID")
+})
+
+test("rejects a stream fill that does not belong to the terminal canonical order", async () => {
+  const { workflow, calls } = makeWorkflow()
+
+  const result = await workflow({
+    order: makeOrder(),
+    eventFill: makeFill({ tradeId: "9", brokerOrderId: "different-order" }),
+  })
+
+  assert.equal(result.ok, false)
+  assert.equal(result.failure.stage, "TERMINAL_FILL_IDENTITY")
+  assert.equal(calls.pauses[0].reason, "TERMINAL_ORDER_FILL_IDENTITY_MISMATCH")
+})
+
+test("rejects conflicting duplicate stream facts for the same fill ID", async () => {
+  const { workflow, calls } = makeWorkflow({
+    processedFills: [makeFill({ tradeId: "7", quantity: "0.5" })],
+  })
+
+  const result = await workflow({
+    order: makeOrder(),
+    eventFill: makeFill({ tradeId: "7", quantity: "1" }),
+  })
+
+  assert.equal(result.ok, false)
+  assert.equal(result.failure.stage, "TERMINAL_FILL_DUPLICATE")
+  assert.equal(calls.pauses[0].reason, "TERMINAL_ORDER_FILL_CONFLICTING_DUPLICATE")
+})
+
+test("rejects mismatched REST fill identity when no canonical stream fill exists", async () => {
+  const { workflow, calls } = makeWorkflow({
+    fills: [makeFill({ tradeId: "8", clientOrderId: "unrelated-order" })],
+  })
+
+  const result = await workflow({ order: makeOrder() })
+
+  assert.equal(result.ok, false)
+  assert.equal(result.failure.stage, "TERMINAL_REST_FILL_IDENTITY")
+  assert.equal(calls.pauses[0].reason, "TERMINAL_ORDER_FILL_IDENTITY_MISMATCH")
+})
+
+test("rejects conflicting duplicate REST fill facts for the same fill ID", async () => {
+  const { workflow, calls } = makeWorkflow({
+    fills: [
+      makeFill({ tradeId: "11", quantity: "0.5" }),
+      makeFill({ tradeId: "11", quantity: "1" }),
+    ],
+  })
+
+  const result = await workflow({ order: makeOrder() })
+
+  assert.equal(result.ok, false)
+  assert.equal(result.failure.stage, "TERMINAL_REST_FILL_DUPLICATE")
+  assert.equal(calls.pauses[0].reason, "TERMINAL_ORDER_FILL_CONFLICTING_DUPLICATE")
+})
+
+test("rejects FILLED status when executed quantity is less than original quantity", async () => {
+  const { workflow, calls } = makeWorkflow({
+    fills: [makeFill({ tradeId: "12", quantity: "1" })],
+  })
+
+  const result = await workflow({
+    order: makeOrder({ quantity: "2", executedQuantity: "1" }),
+  })
+
+  assert.equal(result.ok, false)
+  assert.equal(result.failure.stage, "TERMINAL_ORDER_STATUS")
+  assert.equal(calls.pauses[0].reason, "TERMINAL_ORDER_STATUS_QUANTITY_CONFLICT")
+})
+
+test("propagates a failed terminal-order reconciliation acknowledgement", async () => {
+  const { workflow, calls } = makeWorkflow({
+    fills: [makeFill({ tradeId: "13" })],
+    onTerminalOrderReconciled: async () => toResult({
+      errors: [new Error("terminal order reconciliation was not persisted")],
+    }),
+  })
+
+  const result = await workflow({ order: makeOrder() })
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /not persisted/)
+  assert.equal(calls.applied.length, 1)
 })
