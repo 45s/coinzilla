@@ -16,8 +16,8 @@ function createInputs() {
       userData: { subscriptionEstablished: true, preflightComplete: true, requiresReconciliation: false, accountingFailed: false, streamUnsafe: false, pendingRecovery: false, safetyHaltRequired: false },
       processContinuity: { storeConfigured: true, previousProcessStarted: false, restorationEnabled: false },
       markets: {
-        BTCUSDT: { route: { expected: identity, actual: identity, priceSubscriptionReady: true, bookSubscriptionReady: true }, price: { valid: true, fresh: true, timestamp: 19999, source: "INITIAL_SEED", websocketEventReceived: false }, book: { required: true, fresh: true, timestamp: 19998 }, volatility: { enabled: true, snapshot: { ok: true, data: { status: { isReady: true, isFresh: true, blockers: [], historyCount: 100, requiredHistoryCount: 74, lastEventAt: 19999, observedAt: 20000 } } } }, externalOrdersPolicy: "IGNORE", unownedOrderObserved: false },
-        ETHUSDT: { route: { expected: identity, actual: identity, priceSubscriptionReady: true, bookSubscriptionReady: true }, price: { valid: true, fresh: true, timestamp: 19999, source: "WEBSOCKET", websocketEventReceived: true }, book: { required: true, fresh: true, timestamp: 19998 }, volatility: { enabled: false, snapshot: null }, externalOrdersPolicy: "IGNORE", unownedOrderObserved: false },
+        BTCUSDT: { route: { expected: identity, actual: identity, priceSubscriptionReady: true, bookSubscriptionReady: true }, price: { valid: true, fresh: true, timestamp: 19999, source: "INITIAL_SEED", websocketEventReceived: false }, book: { required: true, fresh: true, timestamp: 19998, eventReceived: true }, volatility: { enabled: true, snapshot: { ok: true, data: { status: { isReady: true, isFresh: true, blockers: [], historyCount: 100, requiredHistoryCount: 74, lastEventAt: 19999, observedAt: 20000 } } } }, externalOrdersPolicy: "IGNORE", unownedOrderObserved: false },
+        ETHUSDT: { route: { expected: identity, actual: identity, priceSubscriptionReady: true, bookSubscriptionReady: true }, price: { valid: true, fresh: true, timestamp: 19999, source: "WEBSOCKET", websocketEventReceived: true }, book: { required: true, fresh: true, timestamp: 19998, eventReceived: true }, volatility: { enabled: false, snapshot: null }, externalOrdersPolicy: "IGNORE", unownedOrderObserved: false },
       },
     },
     markets: [
@@ -57,6 +57,7 @@ test("fails closed for route mismatch, stale price, missing first book and unava
   inputs.readinessInputs.markets.BTCUSDT.route.actual = { providerInstanceId: "wrong-provider", providerType: "binance", environment: "testnet" }
   inputs.readinessInputs.markets.BTCUSDT.price.fresh = false
   inputs.readinessInputs.markets.BTCUSDT.book.fresh = false
+  inputs.readinessInputs.markets.BTCUSDT.book.eventReceived = false
   inputs.readinessInputs.markets.BTCUSDT.volatility.snapshot = { ok: true, data: { status: { isReady: false, isFresh: false, blockers: ["AWAITING_LIVE_DATA"], historyCount: 20, requiredHistoryCount: 74 } } }
   inputs.markets[0].priceFresh = false
   inputs.markets[0].bookFresh = false
@@ -72,6 +73,7 @@ test("fails closed for route mismatch, stale price, missing first book and unava
 test("reports prior-process observation-only state and never claims restoration", () => {
   const inputs = createInputs()
   inputs.readinessInputs.processContinuity = { storeConfigured: true, previousProcessStarted: true, restorationEnabled: false }
+  inputs.runtime.tradingEnabled = false
   const report = createHarvesterReadinessReport(inputs)
   assert.equal(report.status, "BLOCKED", "A prior process with restoration disabled must not be described as healthy.")
   assert.equal(report.checks.find(({ id }) => id === "process.restoration").status, "BLOCKED", "Disabled restoration after a prior process must be explicit.")

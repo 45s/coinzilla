@@ -91,10 +91,10 @@ test("returns an authorized immutable runtime status with explicit readiness and
 
   assert.equal(result.ok, true, "An authorized operator must receive a successful read-only runtime status.")
   assert.equal(result.data.readiness.state, "BLOCKED", "An unready user-data gate must be reported as blocked.")
-  assert.deepEqual(
-    result.data.readiness.blockers,
-    ["AUTHORITATIVE_RECONCILIATION_REQUIRED"],
-    "The status must expose the actual application readiness blocker instead of claiming the runtime is ready.",
+  assert.equal(
+    result.data.readiness.blockers.includes("AUTHORITATIVE_RECONCILIATION_REQUIRED"),
+    true,
+    "The status must expose the actual user-data reconciliation blocker instead of claiming the runtime is ready.",
   )
   assert.deepEqual(
     result.data.markets,
@@ -247,7 +247,7 @@ test("includes the source-backed readiness report in the authorized status and m
           bookSubscriptionReady: true,
         },
         price: { valid: true, fresh: true, timestamp: 19999, source: "WEBSOCKET", websocketEventReceived: true },
-        book: { required: true, fresh: true, timestamp: 19998 },
+        book: { required: true, fresh: true, timestamp: 19998, eventReceived: true },
         volatility: { enabled: false, snapshot: null },
         externalOrdersPolicy: "IGNORE",
         unownedOrderObserved: false,

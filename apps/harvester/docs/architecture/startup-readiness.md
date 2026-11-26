@@ -77,3 +77,8 @@ The first regression slice specifies the source-backed report contract, the auth
 The first production slice now contains the pure readiness projection used by both startup and the authorized operator read model. It derives global account/runtime checks and per-market route, price, book, metadata, volatility and existing engine-blocker results from supplied snapshots. It is immutable, does not call the broker, does not persist facts, and never opens the existing trading gate.
 
 Startup wiring and the operator projection remain in progress. Required checks with missing evidence fail closed at their declared runtime or market scope. External-order-only account audit classifications remain warnings; the existing per-symbol policy and engine blocker determine market impact.
+
+
+## Implementation checkpoint — authorized operator read model
+
+The existing authorized status and market queries now consume the same immutable readiness report used by startup. The report is exposed as readinessReport; per-market readiness and blockers are projected from that report rather than recomputed independently. Existing operator authorization remains the gate for reading it.
