@@ -48,8 +48,8 @@ async function resolveAccountBlockerOffline({ directory, blockerId } = {}) {
     directory,
     runtimeSessionId: "account-blocker-offline-resolution-session",
   })
-  const initialized = await offlineStore.initialize()
-  assert.equal(initialized.ok, true, initialized.errors?.[0]?.message)
+  const existingHistory = await offlineStore.readAll()
+  assert.equal(existingHistory.ok, true, existingHistory.errors?.[0]?.message)
   const operatorId = "operator-7"
   const actionId = "account-recovery-action-001"
   const operatorIdentity = authenticateLocalOperator({
