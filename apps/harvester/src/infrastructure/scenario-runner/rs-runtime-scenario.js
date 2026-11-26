@@ -27,6 +27,7 @@ import {
   createLegacyPositionAccounting,
 } from "../../domain/strategies/recovery-seller/legacy-position.js"
 import { createRecoverySellerRuntimeDispatch } from "../../bootstrap/create-recovery-seller-runtime-dispatch.js"
+import { resolveHarvesterOptions } from "../../bootstrap/config/resolve-harvester-options.js"
 import { createRecoverySellerAccountingWorkflow } from "../../use-cases/create-recovery-seller-accounting-workflow.js"
 import { createRecoverySellerActionAuthorizer } from "../../use-cases/create-recovery-seller-action-authorizer.js"
 import { createRecoverySellerOrderSubmitter } from "../../use-cases/create-recovery-seller-order-submitter.js"
@@ -34,45 +35,166 @@ import { createRecoverySellerStopWorkflow } from "../../use-cases/create-recover
 import { makeOrderEventWorkflow } from "../../use-cases/order-event-workflow.js"
 import { recordOrderSubmissionIntent } from "../../use-cases/record-order-submission-intent.js"
 import { recordOrderSubmissionOutcome } from "../../use-cases/record-order-submission-outcome.js"
-const RUNTIME_PAIR_CONFIG = Object.freeze({
-  enabled: true,
-  investment: 100,
-  orderQuantity: 5,
-  sellQuantity: 50,
-  minProfit: 0.01,
-  priceStepPercent: 0.05,
-  makerPercent: 0,
-  takerPercent: 0,
-  thirdAssetFeeQuoteValue: "0",
-  legacyPosition: Object.freeze({
-    invested: 100,
-    quantity: 50,
-  }),
-})
-const RUNTIME_PAIR_CONFIGS = Object.freeze({
-  ZROUSDT: RUNTIME_PAIR_CONFIG,
-})
-
 const RUNTIME_FIXTURE = Object.freeze({
-  name: "Production Recovery Seller SELL dispatch fixture",
+  name: "Validated Recovery Seller runtime scenario fixture",
   inputSchema: Object.freeze({
     type: "object",
-    required: ["marketPrice"],
+    required: [
+      "marketPrice", "symbol", "baseAssetCode", "quoteAssetCode", "venue",
+      "initialBuyPrice", "quoteBalanceFree", "priceIncrement", "quantityIncrement",
+      "minQuantity", "minNotional", "investment", "orderQuantity", "sellQuantity",
+      "keepQuantity", "minProfit", "priceStepPercent", "makerPercent", "takerPercent",
+      "thirdAssetFeeQuoteValue", "pricePrecision", "quantityPrecision",
+      "legacyInvested", "legacyQuantity", "enableVolatilityProtection", "externalOrdersPolicy",
+    ],
     additionalProperties: false,
     properties: Object.freeze({
-      marketPrice: Object.freeze({
-        type: "string",
-        pattern: "^(?:0|[1-9][0-9]*)(?:[.][0-9]+)?$",
-        exclusiveMinimum: "0",
-        description: "Positive simulated ZRO/USDT market price in USDT.",
-      }),
+      marketPrice: Object.freeze({ type: "string", pattern: "^(?:0|[1-9][0-9]*)(?:[.][0-9]+)?$", exclusiveMinimum: "0" }),
+      symbol: Object.freeze({ type: "string", pattern: "^[A-Z0-9]{3,20}$" }),
+      baseAssetCode: Object.freeze({ type: "string", pattern: "^[A-Z0-9]{2,10}$" }),
+      quoteAssetCode: Object.freeze({ type: "string", pattern: "^[A-Z0-9]{2,10}$" }),
+      venue: Object.freeze({ type: "string", pattern: "^[a-z0-9_-]{2,32}$" }),
+      initialBuyPrice: Object.freeze({ type: "string", pattern: "^(?:0|[1-9][0-9]*)(?:[.][0-9]+)?$", exclusiveMinimum: "0" }),
+      quoteBalanceFree: Object.freeze({ type: "string", pattern: "^(?:0|[1-9][0-9]*)(?:[.][0-9]+)?$", exclusiveMinimum: "0" }),
+      priceIncrement: Object.freeze({ type: "string", pattern: "^(?:0|[1-9][0-9]*)(?:[.][0-9]+)?$", exclusiveMinimum: "0" }),
+      quantityIncrement: Object.freeze({ type: "string", pattern: "^(?:0|[1-9][0-9]*)(?:[.][0-9]+)?$", exclusiveMinimum: "0" }),
+      minQuantity: Object.freeze({ type: "string", pattern: "^(?:0|[1-9][0-9]*)(?:[.][0-9]+)?$", exclusiveMinimum: "0" }),
+      minNotional: Object.freeze({ type: "string", pattern: "^(?:0|[1-9][0-9]*)(?:[.][0-9]+)?$", exclusiveMinimum: "0" }),
+      investment: Object.freeze({ type: "number" }),
+      orderQuantity: Object.freeze({ type: "number" }),
+      sellQuantity: Object.freeze({ type: "number" }),
+      keepQuantity: Object.freeze({ type: "number" }),
+      minProfit: Object.freeze({ type: "number" }),
+      priceStepPercent: Object.freeze({ type: "number" }),
+      makerPercent: Object.freeze({ type: "number" }),
+      takerPercent: Object.freeze({ type: "number" }),
+      thirdAssetFeeQuoteValue: Object.freeze({ type: "string", pattern: "^(?:0|[1-9][0-9]*)(?:[.][0-9]+)?$" }),
+      pricePrecision: Object.freeze({ type: "number" }),
+      quantityPrecision: Object.freeze({ type: "number" }),
+      legacyInvested: Object.freeze({ type: "number" }),
+      legacyQuantity: Object.freeze({ type: "number" }),
+      enableVolatilityProtection: Object.freeze({ type: "boolean" }),
+      externalOrdersPolicy: Object.freeze({ type: "string", pattern: "^(?:BLOCK|IGNORE)$" }),
     }),
   }),
   input: Object.freeze({
     marketPrice: "12.3",
+    symbol: runtime.market.symbol,
+    baseAssetCode: "ZRO",
+    quoteAssetCode: "USDT",
+    venue: "binance",
+    initialBuyPrice: "2",
+    quoteBalanceFree: "1000",
+    priceIncrement: "0.001",
+    quantityIncrement: "0.01",
+    minQuantity: "0.01",
+    minNotional: "5",
+    investment: 100,
+    orderQuantity: 5,
+    sellQuantity: 50,
+    keepQuantity: 1,
+    minProfit: 0.2,
+    priceStepPercent: 0.05,
+    makerPercent: 0,
+    takerPercent: 0,
+    thirdAssetFeeQuoteValue: "0",
+    pricePrecision: 3,
+    quantityPrecision: 2,
+    legacyInvested: 100,
+    legacyQuantity: 50,
+    enableVolatilityProtection: false,
+    externalOrdersPolicy: "BLOCK",
   }),
 })
 
+function assertRuntimeScenarioConfig({ input }) {
+  if (input.symbol !== `${input.baseAssetCode}${input.quoteAssetCode}`) {
+    throw new TypeError("Scenario symbol must match its base and quote asset codes")
+  }
+  const numericFields = [
+    ["investment", false], ["orderQuantity", false], ["sellQuantity", false],
+    ["keepQuantity", true], ["minProfit", true], ["priceStepPercent", false],
+    ["makerPercent", true], ["takerPercent", true], ["pricePrecision", true],
+    ["quantityPrecision", true], ["legacyInvested", false], ["legacyQuantity", false],
+  ]
+  for (const [field, allowZero] of numericFields) {
+    const value = input[field]
+    if (!Number.isFinite(value) || value < 0 || (!allowZero && value === 0)) {
+      throw new RangeError(`Scenario configuration field ${field} must be ${allowZero ? "non-negative" : "greater than zero"}`)
+    }
+  }
+  if (!Number.isInteger(input.pricePrecision) || !Number.isInteger(input.quantityPrecision) ||
+      input.pricePrecision > 12 || input.quantityPrecision > 12) {
+    throw new RangeError("Scenario market precision must be an integer between 0 and 12")
+  }
+}
+
+async function resolveRuntimeScenarioConfiguration({ input }) {
+  assertRuntimeScenarioConfig({ input })
+  const pair = {
+    enabled: true,
+    tradingEnvironment: "TESTNET",
+    enableVolatilityProtection: input.enableVolatilityProtection,
+    externalOrdersPolicy: input.externalOrdersPolicy,
+    investment: input.investment,
+    orderQuantity: input.orderQuantity,
+    sellQuantity: input.sellQuantity,
+    keepQuantity: input.keepQuantity,
+    minProfit: input.minProfit,
+    priceStepPercent: input.priceStepPercent,
+    makerPercent: input.makerPercent,
+    takerPercent: input.takerPercent,
+    thirdAssetFeeQuoteValue: input.thirdAssetFeeQuoteValue,
+    pricePrecision: input.pricePrecision,
+    quantityPrecision: input.quantityPrecision,
+    legacyPosition: {
+      invested: input.legacyInvested,
+      quantity: input.legacyQuantity,
+    },
+  }
+  const appConfig = {
+    strategies: {
+      CG_coinGrabber: {
+        enabled: true,
+        settings: {
+          conservative: { enabled: true },
+          aggressive: { enabled: false },
+        },
+        pairs: {},
+      },
+      RS_recoverySeller: {
+        enabled: true,
+        pairs: {
+          [input.symbol]: pair,
+        },
+      },
+    },
+  }
+  const resolved = await resolveHarvesterOptions({
+    appConfig,
+    env: {
+      NODE_ENV: "test",
+      TRADING_MODE: "TESTNET",
+    },
+    executionRoutes: [{
+      strategyId: StrategyId.RECOVERY_SELLER,
+      symbol: input.symbol,
+    }],
+    eventPublisher: {
+      publish: () => ({ ok: true }),
+    },
+    logger: {},
+  })
+  const recoverySellerPairs = resolved.recoverySellerPairs
+  const pairConfig = recoverySellerPairs[input.symbol]
+  if (!pairConfig) {
+    throw new Error(`Validated Recovery Seller configuration is unavailable for ${input.symbol}`)
+  }
+  return {
+    recoverySellerPairs,
+    pairConfig,
+  }
+}
 
 function validateScenarioInput({ schema, defaults, input }) {
   if (input !== undefined && (!input || typeof input !== "object" || Array.isArray(input))) {
@@ -167,18 +289,18 @@ function createRuntimeScenarioStore() {
   }
 }
 
-function createRuntimeScenarioMarket() {
+function createRuntimeScenarioMarket({ venue, symbol, baseAssetCode, quoteAssetCode }) {
   const baseAsset = new Asset({
-    id: "binance:ZRO",
-    code: "ZRO",
+    id: `${venue}:${baseAssetCode}`,
+    code: baseAssetCode,
   })
   const quoteAsset = new Asset({
-    id: "binance:USDT",
-    code: "USDT",
+    id: `${venue}:${quoteAssetCode}`,
+    code: quoteAssetCode,
   })
   const market = new Market({
-    venue: "binance",
-    symbol: "ZROUSDT",
+    venue,
+    symbol,
     baseAsset,
     quoteAsset,
   })
@@ -189,47 +311,19 @@ function createRuntimeScenarioMarket() {
   }
 }
 
-function createRuntimeScenarioMarketMetadata({ market, baseAsset, quoteAsset }) {
+function createRuntimeScenarioMarketMetadata({ market, baseAsset, quoteAsset, input }) {
   return {
     market,
     orderType: "LIMIT_MAKER",
     supportedOrderTypes: ["LIMIT_MAKER", "LIMIT"],
-    source: "deterministic-simulation-fixture",
+    source: "validated-scenario-market-metadata",
     tradingRules: new TradingRules({
       market,
       constraints: [
-        {
-          type: "PRICE_INCREMENT",
-          status: "SUPPORTED",
-          value: new Money({
-            amount: "0.001",
-            asset: quoteAsset,
-          }),
-        },
-        {
-          type: "QUANTITY_INCREMENT",
-          status: "SUPPORTED",
-          value: new Quantity({
-            amount: "0.01",
-            asset: baseAsset,
-          }),
-        },
-        {
-          type: "MIN_QUANTITY",
-          status: "SUPPORTED",
-          value: new Quantity({
-            amount: "0.01",
-            asset: baseAsset,
-          }),
-        },
-        {
-          type: "MIN_NOTIONAL",
-          status: "SUPPORTED",
-          value: new Money({
-            amount: "5",
-            asset: quoteAsset,
-          }),
-        },
+        { type: "PRICE_INCREMENT", status: "SUPPORTED", value: new Money({ amount: input.priceIncrement, asset: quoteAsset }) },
+        { type: "QUANTITY_INCREMENT", status: "SUPPORTED", value: new Quantity({ amount: input.quantityIncrement, asset: baseAsset }) },
+        { type: "MIN_QUANTITY", status: "SUPPORTED", value: new Quantity({ amount: input.minQuantity, asset: baseAsset }) },
+        { type: "MIN_NOTIONAL", status: "SUPPORTED", value: new Money({ amount: input.minNotional, asset: quoteAsset }) },
       ],
     }),
   }
@@ -241,42 +335,27 @@ function createRuntimeScenarioAccountSnapshot({
   buyQuantity,
   legacyQuantity,
   buyQuoteQuantity,
+  quoteBalanceFree,
 }) {
   const totalBaseQuantity = addDecimal({
     left: buyQuantity,
     right: legacyQuantity,
   })
-  const totalQuoteCashFlow = buyQuoteQuantity
   return new AccountSnapshot({
     balances: [
       new Balance({
-        free: new Quantity({
-          amount: totalBaseQuantity,
-          asset: baseAsset,
-        }),
-        locked: new Quantity({
-          amount: "0",
-          asset: baseAsset,
-        }),
+        free: new Quantity({ amount: totalBaseQuantity, asset: baseAsset }),
+        locked: new Quantity({ amount: "0", asset: baseAsset }),
       }),
       new Balance({
-        free: new Quantity({
-          amount: "1000",
-          asset: quoteAsset,
-        }),
-        locked: new Quantity({
-          amount: "0",
-          asset: quoteAsset,
-        }),
+        free: new Quantity({ amount: quoteBalanceFree, asset: quoteAsset }),
+        locked: new Quantity({ amount: "0", asset: quoteAsset }),
       }),
     ],
     sourceTime: 1,
     quoteCashFlowBaseline: [{
       assetId: quoteAsset.id,
-      amount: subtractDecimal({
-        left: "0",
-        right: totalQuoteCashFlow,
-      }),
+      amount: subtractDecimal({ left: "0", right: buyQuoteQuantity }),
     }],
     portfolioBaseQuantityBaseline: [{
       assetId: baseAsset.id,
@@ -423,10 +502,11 @@ async function createRuntimeScenarioWorkflow({
   baseAsset,
   quoteAsset,
   pairConfig,
+  initialBuyPrice,
   operationalStateStore,
 }) {
   const buyQuantity = String(pairConfig.orderQuantity)
-  const buyPrice = "2"
+  const buyPrice = initialBuyPrice
   const buyQuoteQuantity = multiplyDecimal({
     left: buyPrice,
     right: buyQuantity,
@@ -576,7 +656,12 @@ function createRuntimeScenarioSubmitter({
   })
 }
 
-function createRuntimeScenarioAuthorizer({ workflow, stopWorkflow, accountSnapshot }) {
+function createRuntimeScenarioAuthorizer({
+  workflow,
+  stopWorkflow,
+  accountSnapshot,
+  recoverySellerPairs,
+}) {
   const state = {
     get registry() {
       return workflow.getOrderRegistry()
@@ -584,7 +669,7 @@ function createRuntimeScenarioAuthorizer({ workflow, stopWorkflow, accountSnapsh
   }
   return createRecoverySellerActionAuthorizer({
     state,
-    recoverySellerPairs: RUNTIME_PAIR_CONFIGS,
+    recoverySellerPairs,
     recoverySellerStopWorkflow: stopWorkflow,
     getPortfolio: () => workflow.getPortfolio(),
     getAccountSnapshot: () => accountSnapshot,
@@ -608,18 +693,26 @@ function toScenarioOrder({ order }) {
   }
 }
 
-async function createRuntimeScenarioState({ market, baseAsset, quoteAsset }) {
+async function createRuntimeScenarioState({
+  market,
+  baseAsset,
+  quoteAsset,
+  pairConfig,
+  effectiveInput,
+}) {
   const operationalStateStore = createRuntimeScenarioStore()
   const marketMetadata = createRuntimeScenarioMarketMetadata({
     market,
     baseAsset,
     quoteAsset,
+    input: effectiveInput,
   })
   const seed = await createRuntimeScenarioWorkflow({
     market,
     baseAsset,
     quoteAsset,
-    pairConfig: RUNTIME_PAIR_CONFIG,
+    pairConfig,
+    initialBuyPrice: effectiveInput.initialBuyPrice,
     operationalStateStore,
   })
   const accountSnapshot = createRuntimeScenarioAccountSnapshot({
@@ -628,6 +721,7 @@ async function createRuntimeScenarioState({ market, baseAsset, quoteAsset }) {
     buyQuantity: seed.buyQuantity,
     legacyQuantity: seed.legacyQuantity,
     buyQuoteQuantity: seed.buyQuoteQuantity,
+    quoteBalanceFree: effectiveInput.quoteBalanceFree,
   })
   return {
     operationalStateStore,
@@ -643,6 +737,7 @@ async function createRuntimeScenarioExecutionPorts({
   market,
   baseAsset,
   quoteAsset,
+  recoverySellerPairs,
   seed,
   accountSnapshot,
   operationalStateStore,
@@ -668,11 +763,12 @@ async function createRuntimeScenarioExecutionPorts({
     workflow: seed.workflow,
     stopWorkflow,
     accountSnapshot,
+    recoverySellerPairs,
   })
   const dispatch = createRecoverySellerRuntimeDispatch({
     recoverySellerWorkflow: seed.workflow,
     recoverySellerStopWorkflow: stopWorkflow,
-    recoverySellerPairs: RUNTIME_PAIR_CONFIGS,
+    recoverySellerPairs,
     getRecoverySellerMarketMetadata: async () => marketMetadata,
     getAccountSnapshot: async () => accountSnapshot,
   })
@@ -684,12 +780,22 @@ async function createRuntimeScenarioExecutionPorts({
   }
 }
 
-async function createRuntimeScenarioContext({ runId, scenarioId }) {
-  const { baseAsset, quoteAsset, market } = createRuntimeScenarioMarket()
+async function createRuntimeScenarioContext({ runId, scenarioId, effectiveInput }) {
+  const { recoverySellerPairs, pairConfig } = await resolveRuntimeScenarioConfiguration({
+    input: effectiveInput,
+  })
+  const { baseAsset, quoteAsset, market } = createRuntimeScenarioMarket({
+    venue: effectiveInput.venue,
+    symbol: effectiveInput.symbol,
+    baseAssetCode: effectiveInput.baseAssetCode,
+    quoteAssetCode: effectiveInput.quoteAssetCode,
+  })
   const state = await createRuntimeScenarioState({
     market,
     baseAsset,
     quoteAsset,
+    pairConfig,
+    effectiveInput,
   })
   const ports = await createRuntimeScenarioExecutionPorts({
     runId,
@@ -697,15 +803,51 @@ async function createRuntimeScenarioContext({ runId, scenarioId }) {
     market,
     baseAsset,
     quoteAsset,
+    recoverySellerPairs,
     ...state,
   })
   return {
     market,
     baseAsset,
     quoteAsset,
-    pairConfig: RUNTIME_PAIR_CONFIG,
+    pairConfig,
+    recoverySellerPairs,
     ...state,
     ...ports,
+  }
+}
+
+async function executeRuntimeScenarioDispatch({ runtime, effectiveInput, expectRejection = false }) {
+  let submittedAction
+  const symbol = runtime.market.symbol
+  const dispatchResult = await runtime.dispatch({
+    symbol,
+    state: {
+      prices: new Map([[symbol, {
+        symbol,
+        price: effectiveInput.marketPrice,
+      }]]),
+      paused: new Set(),
+      durablePausedMarkets: new Set(),
+      operatorPausedMarkets: new Set(),
+    },
+    isMarketPriceFresh: () => true,
+    isStopping: () => false,
+    hasBlockingOpenOrdersForSymbol: () => false,
+    authorizeRecoverySellerAction: runtime.authorize,
+    submitRecoverySellerOrder: async (submission) => {
+      const { action } = submission
+      submittedAction = action
+      return runtime.submitter(submission)
+    },
+  })
+  if (dispatchResult?.ok !== true && !expectRejection) {
+    throw dispatchResult?.errors?.[0] ?? new Error("Production Recovery Seller runtime evaluation failed")
+  }
+  return {
+    data: dispatchResult?.data ?? {},
+    submittedAction,
+    submissionRejected: dispatchResult?.ok !== true,
   }
 }
 
@@ -714,7 +856,7 @@ async function executeRuntimeScenarioDispatch({ runtime, effectiveInput, expectR
   const dispatchResult = await runtime.dispatch({
     symbol: "ZROUSDT",
     state: {
-      prices: new Map([["ZROUSDT", {
+      prices: new Map([[runtime.market.symbol, {
         symbol: "ZROUSDT",
         price: effectiveInput.marketPrice,
       }]]),
@@ -1271,7 +1413,7 @@ function createRuntimeScenarioTrace({ runtime, effectiveInput, output, assertion
     {
       id: "input-1",
       kind: "input",
-      label: "Simulated ZROUSDT market price",
+      label: `Simulated ${runtime.market.symbol} market price`,
       inputs: effectiveInput,
       source: "deterministic-simulation-fixture",
     },
@@ -1334,6 +1476,7 @@ async function executeRuntimeScenario({ runId, scenarioId, effectiveInput, signa
   const runtime = await createRuntimeScenarioContext({
     runId,
     scenarioId,
+    effectiveInput,
   })
   const expectRejection = scenarioId === "RS-RUNTIME-SELL-REJECTION-001"
   const execution = await executeRuntimeScenarioDispatch({
