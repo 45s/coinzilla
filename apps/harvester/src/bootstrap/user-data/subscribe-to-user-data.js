@@ -222,9 +222,12 @@ function hasDurableAccountPreflight(readiness) {
   const { preflight, currentAccount } = readiness ?? {}
   return preflight?.completed === true &&
     preflight.durable === true &&
-    preflight.sourceTime !== null &&
-    preflight.sourceTime === currentAccount?.sourceTime &&
-    preflight.balanceCount === currentAccount?.balanceCount
+    Number.isSafeInteger(preflight.sourceTime) &&
+    Number.isSafeInteger(currentAccount?.sourceTime) &&
+    preflight.sourceTime === currentAccount.sourceTime &&
+    Number.isSafeInteger(preflight.balanceCount) &&
+    Number.isSafeInteger(currentAccount?.balanceCount) &&
+    preflight.balanceCount === currentAccount.balanceCount
 }
 
 function hasCleanOpenOrdersPreflight(readiness) {
@@ -358,6 +361,38 @@ alreadyActivated: false })
   })
 }
 
+async function createAndInitializeUserDataSubscription({
+  broker,
+  brokerName,
+  eventPublisher,
+  logger,
+  state,
+  enabledSymbols,
+  trackedOrders,
+  onEvent,
+  onObservation,
+  onStatus,
+  onSubscriptionEstablished,
+  publishAccountSnapshot,
+} = {}) {
+  logUserDataSubscriptionStarting(logger)
+  const userDataSubscription = await createUserDataSubscription({
+    broker,
+    brokerName,
+    eventPublisher,
+    symbols: enabledSymbols,
+    trackedOrders,
+    onEvent,
+    onObservation,
+    onStatus,
+  })
+  onSubscriptionEstablished?.(userDataSubscription)
+  logUserDataSubscriptionEstablished(logger)
+  markUserDataReconciliationRequired(state)
+  await publishInitialAccountSnapshot({ state, publishAccountSnapshot })
+  return userDataSubscription
+}
+
 /**
  * Subscribe to broker user-data delivery and complete the authoritative account audit gate.
  * The caller owns failure cleanup; this module owns subscription evidence and
@@ -375,22 +410,20 @@ export async function subscribeToUserData({
 } = {}) {
   const tradingModeLabel = tradingMode === "live" ? "LIVE" : "TESTNET"
   state.tradingActivationDeferred = deferTradingActivation === true
-  logUserDataSubscriptionStarting(logger)
-  const userDataSubscription = await createUserDataSubscription({
+  const userDataSubscription = await createAndInitializeUserDataSubscription({
     broker,
     brokerName,
     eventPublisher,
-    symbols: enabledSymbols,
+    logger,
+    state,
+    enabledSymbols,
     trackedOrders,
     onEvent,
     onObservation,
     onStatus,
+    onSubscriptionEstablished,
+    publishAccountSnapshot,
   })
-  onSubscriptionEstablished?.(userDataSubscription)
-  logUserDataSubscriptionEstablished(logger)
-  markUserDataReconciliationRequired(state)
-  await publishInitialAccountSnapshot({ state,
-publishAccountSnapshot })
   await completeUserDataPreflight({
     state,
     tradingEnabled,
