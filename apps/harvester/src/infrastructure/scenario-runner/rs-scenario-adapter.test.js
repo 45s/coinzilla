@@ -42,7 +42,7 @@ test("RS helper catalog labels the merged test-only registry candidate as prelim
   assert.equal(scenario.status, "PRELIMINARY", "the merged test-only registry is not a production runtime catalogue")
   assert.equal(scenario.executionStatus, "PRELIMINARY", "helper-only execution must be labelled preliminary")
   assert.equal(scenario.executable, false, "helper-only execution must not be advertised as a full scenario")
-  assert.ok(scenario.readinessReasons.some((reason) => reason.includes("merged test-only RS scenario registry in PR #1852")))
+  assert.ok(scenario.readinessReasons.some((reason) => reason.includes("PR #1852 are merged, but remain test-only")))
   assert.ok(scenario.readinessReasons.some((reason) => reason.includes("full Recovery Seller strategy lifecycle")))
 })
 
