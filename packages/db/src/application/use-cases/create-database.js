@@ -1,7 +1,10 @@
 import { AsyncLocalStorage } from "node:async_hooks"
 
 import { createDatabaseEntity } from "../../domain/entities/database.js"
-import { DatabaseTransactionUnsupportedError } from "../../domain/errors/database-errors.js"
+import {
+  DatabaseProviderError,
+  DatabaseTransactionUnsupportedError,
+} from "../../domain/errors/database-errors.js"
 
 const REQUIRED_PROVIDER_METHODS = Object.freeze([
   "connect",
@@ -144,6 +147,24 @@ function createProviderNeutralFacade({ database, provider }) {
     return database.execute({ operation, input })
   }
 
+  function invokeTransactionCallback(work, transaction) {
+    const context = createTransactionFacade(transaction)
+    const scope = { context, active: true }
+    try {
+      const result = transactionScope.run(scope, () => work(context))
+      if (result && typeof result.then === "function") {
+        return Promise.resolve(result).finally(() => {
+          scope.active = false
+        })
+      }
+      scope.active = false
+      return result
+    } catch (error) {
+      scope.active = false
+      throw error
+    }
+  }
+
   return Object.freeze({
     connect: database.connect,
     close() {
@@ -153,37 +174,35 @@ function createProviderNeutralFacade({ database, provider }) {
       return database.close()
     },
     transaction(work) {
-      const activeScope = transactionScope.getStore()
-      if (activeScope) {
-        throw new Error(activeScope.active
-          ? "Nested database transactions are not supported"
-          : "Database transaction callback has already completed")
-      }
       if (typeof work !== "function") {
         throw new TypeError("A transaction callback is required")
       }
+      const activeScope = transactionScope.getStore()
+      if (activeScope) {
+        if (!activeScope.active) {
+          return Promise.reject(new Error("Database transaction callback has already completed"))
+        }
+        if (!capabilities.transactions.nestedTransactions) {
+          return Promise.reject(new DatabaseProviderError({
+            operation: "transaction",
+            cause: new Error("Nested database transactions are not supported by this provider"),
+          }))
+        }
+        return database.transaction((transaction) => {
+          if (capabilities.transactions.callbackMode === "synchronous" && isAsyncFunction(work)) {
+            throw new TypeError("Synchronous database provider transaction callbacks must be synchronous")
+          }
+          return invokeTransactionCallback(work, transaction)
+        })
+      }
       if (!capabilities.transactions.multiDocument) {
-        throw new DatabaseTransactionUnsupportedError()
+        return Promise.reject(new DatabaseTransactionUnsupportedError())
       }
       return database.transaction((transaction) => {
         if (capabilities.transactions.callbackMode === "synchronous" && isAsyncFunction(work)) {
           throw new TypeError("Synchronous database provider transaction callbacks must be synchronous")
         }
-        const context = createTransactionFacade(transaction)
-        const scope = { context, active: true }
-        try {
-          const result = transactionScope.run(scope, () => work(context))
-          if (result && typeof result.then === "function") {
-            return Promise.resolve(result).finally(() => {
-              scope.active = false
-            })
-          }
-          scope.active = false
-          return result
-        } catch (error) {
-          scope.active = false
-          throw error
-        }
+        return invokeTransactionCallback(work, transaction)
       })
     },
     create: (input) => runOperation({
