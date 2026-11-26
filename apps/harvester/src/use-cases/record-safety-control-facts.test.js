@@ -130,7 +130,7 @@ test("refuses to resolve an absent safety blocker or accept an implicit restart 
   assert.equal(implicit.ok, false, "A process restart must never be accepted as a blocker-resolution action.")
 })
 
-test("requires structured user-data action metadata even when its reason matches Recovery Seller STOP", async (t) => {
+test("rejects user-data resolution when its reason is reserved for Recovery Seller STOP", async (t) => {
   const operationalStateStore = await createStore(t)
   const raised = await recordSafetyBlockerRaised({
     operationalStateStore,
@@ -139,7 +139,7 @@ test("requires structured user-data action metadata even when its reason matches
     reason: "RECOVERY_SELLER_UNEXPECTED_CONDITION",
     evidenceDigest: "a".repeat(64),
   })
-  assert.equal(raised.ok, true, "The user-data producer may record a distinct account blocker with this reason")
+  assert.equal(raised.ok, true, "The test must persist the ambiguous producer/reason combination")
   const { blockerId } = raised.data.record.data
   const operatorId = "operator-7"
   const actionId = "reason-collision-001"
@@ -160,8 +160,10 @@ test("requires structured user-data action metadata even when its reason matches
     actionBlockerIds: [blockerId],
   })
 
-  assert.equal(resolved.ok, true, "Producer ownership must take precedence over a colliding reason string")
-  assert.equal(resolved.data.record.data.operatorAuthMethod, "OS_ACCOUNT")
+  assert.equal(resolved.ok, false, "Ambiguous producer/reason combinations must not be resolved")
+  assert.match(resolved.errors[0].message, /ambiguous producer provenance/)
+  const read = await operationalStateStore.readAll()
+  assert.equal(read.data.records.filter((entry) => entry.factType === "SAFETY_BLOCKER_RESOLVED").length, 0)
 })
 
 test("does not initialize a missing Operational State Store for safety controls", async (t) => {
