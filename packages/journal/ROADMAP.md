@@ -1,6 +1,6 @@
 # Journal roadmap
 
-**Owner:** `@coinzilla/journal`  
+**Owner:** `@coinzilla/journal`
 **Last reviewed:** 2026-11-26
 
 > The previous roadmap, including detailed phased delivery, completed work, test-first evidence and validation checkpoints, is preserved in [Journal roadmap history](../../docs/archive/roadmap-history-2026-11-26.md#journal-roadmap).
