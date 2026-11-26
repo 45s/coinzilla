@@ -65,7 +65,7 @@ describe('GitHubPullRequestsComponent', () => {
     assignment?.click();
     fixture.detectChanges();
 
-    expect(assignment?.getAttribute('aria-pressed')).toBe('true');
+    expect(root.querySelector('.assignment-chip')?.getAttribute('aria-pressed')).toBe('true');
     expect(root.textContent).toContain('Codex');
     expect(JSON.parse(window.localStorage.getItem('coinzilla.dashboard.github-pr-labels.v1') ?? '{}').assignments)
       .toEqual({ '45s/coinzilla#1824': [expect.any(String)] });
