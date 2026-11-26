@@ -482,7 +482,7 @@ async function persistOpenOwnedOrder({ store, clientOrderId, quantity }) {
   assert.equal(intent.ok, true, intent.errors?.map(({ message }) => message).join("; "))
   const acknowledged = makeOrder({
     clientOrderId,
-    brokerOrderId: \`broker-\${clientOrderId}\`,
+    brokerOrderId: `broker-${clientOrderId}`,
     side: "BUY",
     quantity,
     price: "100",
