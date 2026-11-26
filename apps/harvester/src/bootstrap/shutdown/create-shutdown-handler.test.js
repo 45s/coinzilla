@@ -167,7 +167,11 @@ function createShutdown(input = {}) {
     calls,
   }
 }
-async function waitForAuditStartOrShutdownFailure({ auditStarted, stopPromise, diagnostic } = {}) {
+async function waitForAuditStartOrShutdownFailure({
+  auditStarted,
+  stopPromise,
+  diagnostic,
+} = {}) {
   let auditStartTimeout
   diagnostic("CLOSING audit diagnostic: entering wait")
   const outcome = await Promise.race([
