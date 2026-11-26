@@ -777,3 +777,40 @@ test("rejects an action ID already present in durable resolution history", async
   assert.match(result.errors[0].message, /action ID has already been used/)
   assert.equal(auditCalls, 0)
 })
+
+test("rejects an unclean latest stop even when an earlier clean stop exists", async () => {
+  const store = makeStore()
+  const read = await store.readAll()
+  const records = [...read.data.records, fact({
+    sequence: 7,
+    factType: "PROCESS_STOPPED",
+    data: {
+      reason: "ABNORMAL_TERMINATION",
+      clean: false,
+    },
+    factId: `process-stopped-unclean:${runtimeSessionId}`,
+  })]
+  store.readAll = async () => ({
+    ok: true,
+    data: {
+      ...read.data,
+      records,
+    },
+  })
+  let auditCalls = 0
+  const result = await runOfflineAccountBlockerResolution({
+    context: makeContext(),
+    operationalStateStore: store,
+    operatorId: "operator-7",
+    actionId: "action-unique-013",
+    causeFixed: true,
+    reconcileMarket: async () => {
+      auditCalls += 1
+      return readyMarketAudit("BTCUSDT")
+    },
+  })
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /cleanly stopped/)
+  assert.equal(auditCalls, 0)
+})
