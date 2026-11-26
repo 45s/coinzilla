@@ -533,3 +533,72 @@ test("provider-neutral facade rejects async callbacks for synchronous providers"
     await database.close()
   }
 })
+
+test("provider-neutral transaction facade forwards every CRUD method", async () => {
+  const calls = []
+  const transaction = {
+    create(input) {
+      calls.push(["create", input])
+    },
+    readOne(input) {
+      calls.push(["readOne", input])
+    },
+    readMany(input) {
+      calls.push(["readMany", input])
+    },
+    update(input) {
+      calls.push(["update", input])
+    },
+    delete(input) {
+      calls.push(["delete", input])
+    },
+  }
+  const provider = {
+    capabilities: {
+      transactions: {
+        callbackMode: "asynchronous",
+        nestedTransactions: false,
+        multiDocument: true,
+      },
+      queries: {
+        equalityFilters: true,
+        sorting: true,
+        pagination: true,
+      },
+      storage: {
+        modes: ["memory"],
+      },
+    },
+    connect() {},
+    close() {},
+    withTransaction(work) {
+      return work(transaction)
+    },
+    withReadTransaction(work) {
+      return work(transaction)
+    },
+    execute() {},
+  }
+  const database = createDatabase({ provider })
+  await database.connect()
+
+  try {
+    await database.transaction(async (context) => {
+      await context.create({ collection: "people", record: { id: "one" } })
+      await context.readOne({ collection: "people", id: "one" })
+      await context.readMany({ collection: "people" })
+      await context.update({
+        collection: "people",
+        id: "one",
+        changes: { name: "Ada" },
+      })
+      await context.delete({ collection: "people", id: "one" })
+    })
+    assert.deepEqual(
+      calls.map(([method]) => method),
+      ["create", "readOne", "readMany", "update", "delete"],
+    )
+  } finally {
+    await database.close()
+  }
+})
