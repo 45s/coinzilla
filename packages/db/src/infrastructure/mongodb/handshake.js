@@ -217,7 +217,9 @@ export async function performMongoHandshake({
   if (replicaSet && hello.setName !== replicaSet) {
     throw new Error(`MongoDB server belongs to replica set ${hello.setName ?? "unknown"}, expected ${replicaSet}`)
   }
-  const writablePrimary = hello.isWritablePrimary === true || hello.ismaster === true
+  const writablePrimary = typeof hello.isWritablePrimary === "boolean"
+    ? hello.isWritablePrimary
+    : hello.ismaster === true
   if (!writablePrimary && typeof hello.primary !== "string") {
     throw new Error("MongoDB topology did not identify a writable primary")
   }
