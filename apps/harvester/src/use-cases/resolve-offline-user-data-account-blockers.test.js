@@ -612,6 +612,7 @@ test("CLI reports durable resolution while explicitly keeping trading blocked", 
 
 test("CLI returns nonzero when durable resolution is not confirmed", async () => {
   const errors = []
+  const output = []
   const exitCode = await runRecoveryAccountBlockerCommand({
     args: [
       "--context",
@@ -631,7 +632,7 @@ test("CLI returns nonzero when durable resolution is not confirmed", async () =>
       ok: false,
       errors: [new Error("audit incomplete")],
     }),
-    writeOutput: () => {},
+    writeOutput: (value) => output.push(value),
     writeError: (value) => errors.push(value),
   })
 
