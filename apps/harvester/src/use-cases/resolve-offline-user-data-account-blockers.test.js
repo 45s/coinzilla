@@ -258,34 +258,7 @@ function makeExchangeEvidence() {
   }
 }
 
-function makeMarketInputs() {
-  return [
-    {
-      venue: "BINANCE",
-      symbol: "BTCUSDT",
-      baseAsset: {
-        id: "binance:BTC",
-        code: "BTC",
-      },
-      quoteAsset: {
-        id: "binance:USDT",
-        code: "USDT",
-      },
-    },
-    {
-      venue: "BINANCE",
-      symbol: "ETHUSDT",
-      baseAsset: {
-        id: "binance:ETH",
-        code: "ETH",
-      },
-      quoteAsset: {
-        id: "binance:USDT",
-        code: "USDT",
-      },
-    },
-  ]
-}
+
 
 function makeSnapshotBalances() {
   return [

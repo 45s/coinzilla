@@ -121,13 +121,6 @@ function hasCompleteMarketTradeHistory({ tradeHistory, symbol }) {
     tradeHistory.reconciledOwnedOrderFills === 0
 }
 
-function hasNoUnresolvedOrders(audit) {
-  return Array.isArray(audit.unownedOpenOrders) &&
-    audit.unownedOpenOrders.length === 0 &&
-    Array.isArray(audit.blockedMarkets) &&
-    audit.blockedMarkets.length === 0
-}
-
 function hasNoUnownedOpenOrders(audit) {
   return Array.isArray(audit.unownedOpenOrders) &&
     audit.unownedOpenOrders.length === 0
