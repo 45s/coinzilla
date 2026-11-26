@@ -821,40 +821,6 @@ async function createRuntimeScenarioContext({ runId, scenarioId, effectiveInput 
 
 async function executeRuntimeScenarioDispatch({ runtime, effectiveInput, expectRejection = false }) {
   let submittedAction
-  const symbol = runtime.market.symbol
-  const dispatchResult = await runtime.dispatch({
-    symbol,
-    state: {
-      prices: new Map([[symbol, {
-        symbol,
-        price: effectiveInput.marketPrice,
-      }]]),
-      paused: new Set(),
-      durablePausedMarkets: new Set(),
-      operatorPausedMarkets: new Set(),
-    },
-    isMarketPriceFresh: () => true,
-    isStopping: () => false,
-    hasBlockingOpenOrdersForSymbol: () => false,
-    authorizeRecoverySellerAction: runtime.authorize,
-    submitRecoverySellerOrder: async (submission) => {
-      const { action } = submission
-      submittedAction = action
-      return runtime.submitter(submission)
-    },
-  })
-  if (dispatchResult?.ok !== true && !expectRejection) {
-    throw dispatchResult?.errors?.[0] ?? new Error("Production Recovery Seller runtime evaluation failed")
-  }
-  return {
-    data: dispatchResult?.data ?? {},
-    submittedAction,
-    submissionRejected: dispatchResult?.ok !== true,
-  }
-}
-
-async function executeRuntimeScenarioDispatch({ runtime, effectiveInput, expectRejection = false }) {
-  let submittedAction
   const dispatchResult = await runtime.dispatch({
     symbol: runtime.market.symbol,
     state: {
