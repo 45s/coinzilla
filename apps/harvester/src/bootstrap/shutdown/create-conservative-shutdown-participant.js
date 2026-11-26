@@ -1107,6 +1107,38 @@ function createWaitUntilSafe({
   }
 }
 
+function createConservativeSafetySnapshot({ engine, stageDiagnostics } = {}) {
+  const snapshot = engine.getShutdownSafetySnapshot()
+  const orders = typeof engine.getOrders === "function" ? engine.getOrders() : []
+  return Object.freeze({
+    ...snapshot,
+    markets: Object.freeze(snapshot.markets.map((market) => {
+      const marketStages = stageDiagnostics.get(market.symbol) ?? {}
+      const globalStages = stageDiagnostics.get("*") ?? {}
+      const pendingOrders = orders
+        .filter((order) =>
+          order.market?.symbol === market.symbol &&
+          ["PENDING", "UNKNOWN", "OPEN", "PARTIALLY_FILLED", "NEW", "PARTIAL"].includes(order.status))
+        .map((order) => Object.freeze({
+          clientOrderId: order.clientOrderId,
+          brokerOrderId: order.brokerOrderId ?? null,
+          side: order.side,
+          status: order.status,
+          remainingQuantity: order.remainingQuantity?.amount ?? null,
+        }))
+      return Object.freeze({
+        ...market,
+        lastSuccessfulStep: marketStages.lastSuccessfulStep ?? globalStages.lastSuccessfulStep ?? null,
+        currentOperation: marketStages.currentOperation ?? globalStages.currentOperation ?? null,
+        operationStatus: marketStages.operationStatus ?? globalStages.operationStatus ?? null,
+        missingEvidence: Object.freeze([...market.blockers]),
+        pendingOrders: Object.freeze(pendingOrders),
+        nestedError: marketStages.lastError ?? globalStages.lastError ?? null,
+      })
+    })),
+  })
+}
+
 export function createConservativeShutdownParticipant({
   engine,
   eventPublisher,
@@ -1117,59 +1149,23 @@ export function createConservativeShutdownParticipant({
   if (!engine) {
     throw new TypeError("Conservative shutdown participant requires its trading engine")
   }
-
   const stageDiagnostics = new Map()
-  const beginShutdown = () => engine.beginShutdown()
-
-  const waitUntilSafe = createWaitUntilSafe({
-    engine,
-    eventPublisher,
-    drainUserDataEvents,
-    getShutdownBlockers,
-    logger,
-    stageDiagnostics,
-  })
-
-  const isSafeToShutdown = () => engine.getShutdownSafetySnapshot().markets
-    .every((market) => market.status === "SAFE_TO_SHUTDOWN")
-
-  const getSafetySnapshot = () => {
-    const snapshot = engine.getShutdownSafetySnapshot()
-    const orders = typeof engine.getOrders === "function" ? engine.getOrders() : []
-    return Object.freeze({
-      ...snapshot,
-      markets: Object.freeze(snapshot.markets.map((market) => {
-        const marketStages = stageDiagnostics.get(market.symbol) ?? {}
-        const globalStages = stageDiagnostics.get("*") ?? {}
-        const pendingOrders = orders
-          .filter((order) =>
-            order.market?.symbol === market.symbol &&
-            ["PENDING", "UNKNOWN", "OPEN", "PARTIALLY_FILLED", "NEW", "PARTIAL"].includes(order.status))
-          .map((order) => Object.freeze({
-            clientOrderId: order.clientOrderId,
-            brokerOrderId: order.brokerOrderId ?? null,
-            side: order.side,
-            status: order.status,
-            remainingQuantity: order.remainingQuantity?.amount ?? null,
-          }))
-        return Object.freeze({
-          ...market,
-          lastSuccessfulStep: marketStages.lastSuccessfulStep ?? globalStages.lastSuccessfulStep ?? null,
-          currentOperation: marketStages.currentOperation ?? globalStages.currentOperation ?? null,
-          operationStatus: marketStages.operationStatus ?? globalStages.operationStatus ?? null,
-          missingEvidence: Object.freeze([...market.blockers]),
-          pendingOrders: Object.freeze(pendingOrders),
-          nestedError: marketStages.lastError ?? globalStages.lastError ?? null,
-        })
-      })),
-    })
-  }
-
   return Object.freeze({
     strategyId: StrategyId.COIN_GRABBER,
-    beginShutdown,
-    waitUntilSafe,
-    isSafeToShutdown,
-    getSafetySnapshot,
+    beginShutdown: () => engine.beginShutdown(),
+    waitUntilSafe: createWaitUntilSafe({
+      engine,
+      eventPublisher,
+      drainUserDataEvents,
+      getShutdownBlockers,
+      logger,
+      stageDiagnostics,
+    }),
+    isSafeToShutdown: () => engine.getShutdownSafetySnapshot().markets
+      .every((market) => market.status === "SAFE_TO_SHUTDOWN"),
+    getSafetySnapshot: () => createConservativeSafetySnapshot({
+      engine,
+      stageDiagnostics,
+    }),
   })
 }
