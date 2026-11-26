@@ -442,29 +442,8 @@ function publishTerminalMixedSellAccounting({
   canonicalFills,
   result,
   eligible,
+  reconciledCycleState,
 }) {
-  const submittedCycleState = state.recoverySellerCycleStates.get(terminalRegisteredOrder.market.id)
-  if (!submittedCycleState) {
-    throw new RecoverySellerAccountingError({
-      code: RECOVERY_SELLER_ACCOUNTING_ERROR_CODES.ACCOUNTING_NOT_COMMITTED,
-      message: "Recovery Seller terminal mixed-SELL accounting requires its canonical submitted cycle state",
-      context: {
-        marketId: terminalRegisteredOrder.market.id,
-        cycleId: ownership.cycleId,
-        sellOrderClientId: terminalRegisteredOrder.clientOrderId,
-      },
-    })
-  }
-  const reconciledCycleState = reconcileRecoverySellerCycleSell({
-    state: submittedCycleState,
-    orderIdentity: {
-      clientOrderId: terminalRegisteredOrder.clientOrderId,
-      brokerOrderId: terminalRegisteredOrder.brokerOrderId ?? undefined,
-    },
-    terminalOrderStatus: terminalRegisteredOrder.status,
-    reconciliationComplete: true,
-    profitabilityEligible: eligible,
-  })
   state.portfolio = result.accounting.portfolio
   state.legacyPositions = result.nextLegacyPositions
   state.orderRegistry = registryUpdate.registry
@@ -556,12 +535,45 @@ function prepareTerminalMixedSellTransition({
     canonicalFills,
     result,
   })
+  if (duplicateResult) {
+    return {
+      registryUpdate,
+      terminalRegisteredOrder,
+      result,
+      ownership,
+      duplicateResult,
+    }
+  }
+  const submittedCycleState = state.recoverySellerCycleStates.get(terminalRegisteredOrder.market.id)
+  if (!submittedCycleState) {
+    throw new RecoverySellerAccountingError({
+      code: RECOVERY_SELLER_ACCOUNTING_ERROR_CODES.ACCOUNTING_NOT_COMMITTED,
+      message: "Recovery Seller terminal mixed-SELL accounting requires its canonical submitted cycle state",
+      context: {
+        marketId: terminalRegisteredOrder.market.id,
+        cycleId: ownership.cycleId,
+        sellOrderClientId: terminalRegisteredOrder.clientOrderId,
+      },
+    })
+  }
+  const eligible = result.profitability?.eligible === true
+  const reconciledCycleState = reconcileRecoverySellerCycleSell({
+    state: submittedCycleState,
+    orderIdentity: {
+      clientOrderId: terminalRegisteredOrder.clientOrderId,
+      brokerOrderId: terminalRegisteredOrder.brokerOrderId ?? undefined,
+    },
+    terminalOrderStatus: terminalRegisteredOrder.status,
+    reconciliationComplete: true,
+    profitabilityEligible: eligible,
+  })
   return {
     registryUpdate,
     terminalRegisteredOrder,
     result,
     ownership,
     duplicateResult,
+    reconciledCycleState,
   }
 }
 
@@ -612,6 +624,7 @@ async function reconcileTerminalMixedSellTransition({
     canonicalFills,
     result: prepared.result,
     eligible,
+    reconciledCycleState: prepared.reconciledCycleState,
   })
 }
 
