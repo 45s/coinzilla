@@ -1,7 +1,5 @@
 import { installScenarioWorkerGuards } from "./scenario-worker-guards.js"
 
-installScenarioWorkerGuards()
-
 const [
   { createScenarioWorkerMessageHandler },
   { createScenarioWorkerDispatcher },
@@ -11,6 +9,10 @@ const [
   import("./scenario-worker-dispatch.js"),
   import("./scenario-worker-adapters.js"),
 ])
+
+// Load trusted production adapters before restricting module resolution.
+// The guards remain active before the worker accepts or executes any run request.
+installScenarioWorkerGuards()
 const dispatchScenarioWorkerRequest = createScenarioWorkerDispatcher({
   adapters: SCENARIO_WORKER_ADAPTERS,
 })
