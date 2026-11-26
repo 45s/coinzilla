@@ -358,7 +358,7 @@ Keep GitHub data usable. Explain that custom label metadata could not be loaded 
 - [ ] Draft PRs are distinguishable.
 - [ ] Relative timestamps update locally without GitHub polling.
 - [ ] Exact commit timestamp is accessible.
-- [ ] Loading, empty, error, stale, partial and rate-limit states are distinct.
+- [ ] Loading, empty, error, stale, partial and rate-limit states are distinct.\n- [ ] Label definitions use compact inline name/color/delete controls; PR assignments are direct clickable chips without an expandable editor.\n- [ ] A refresh action remains visible while the user scrolls the PR list.
 
 ### Custom labels
 

@@ -12,10 +12,11 @@ import type { TradingHistoryResource } from './features/trading-history/api';
 import { ScenarioRunnerComponent } from './features/scenario-runner/page';
 
 type DashboardPage = 'overview' | 'operator' | 'bots' | 'markets' | 'exchanges' | 'open-orders' | 'github-prs' | 'scenario-runner' | TradingHistoryResource;
-type DashboardTheme = 'current' | 'midnight' | 'light' | 'oled' | 'green' | 'arctic' | 'warm' | 'system';
+type DashboardTheme = 'staradmin' | 'current' | 'midnight' | 'light' | 'oled' | 'green' | 'arctic' | 'warm' | 'system';
 
 const THEME_STORAGE_KEY = 'coinzilla.dashboard.theme';
 const THEMES: readonly { value: DashboardTheme; label: string }[] = [
+  { value: 'staradmin', label: 'StarAdmin · Warm Light' },
   { value: 'current', label: 'Current · Emerald' },
   { value: 'midnight', label: 'Midnight Terminal' },
   { value: 'light', label: 'Clean Light' },
@@ -29,14 +30,14 @@ const THEMES: readonly { value: DashboardTheme; label: string }[] = [
 export function readSavedDashboardTheme(
   storage: Pick<Storage, 'getItem'> | null | undefined,
 ): DashboardTheme {
-  if (!storage) return 'current';
+  if (!storage) return 'staradmin';
   try {
     const saved = storage.getItem(THEME_STORAGE_KEY);
     return THEMES.some((theme) => theme.value === saved)
       ? (saved as DashboardTheme)
-      : 'current';
+      : 'staradmin';
   } catch {
-    return 'current';
+    return 'staradmin';
   }
 }
 
@@ -50,26 +51,44 @@ export function readSavedDashboardTheme(
 })
 export class AppComponent {
   readonly navigationItems = [
-    { label: 'Overview', icon: '◫', page: 'overview' as const, enabled: true },
-    { label: 'Bots', icon: '◉', page: 'bots' as const, enabled: true },
-    { label: 'Operator', icon: '⌘', page: 'operator' as const, enabled: true },
-    { label: 'Orders', icon: '⇄', page: 'orders' as const, enabled: true },
-    { label: 'Fills', icon: '⌁', page: 'fills' as const, enabled: true },
-    { label: 'Commissions', icon: '◷', page: 'commissions' as const, enabled: true },
-    { label: 'Markets', icon: '⌖', page: 'markets' as const, enabled: true },
-    { label: 'Exchanges', icon: '⇄', page: 'exchanges' as const, enabled: true },
-    { label: 'Open Orders', icon: '↗', page: 'open-orders' as const, enabled: true },
-    { label: 'GitHub PRs', icon: '⑂', page: 'github-prs' as const, enabled: true },
-    { label: 'Scenario Runner', icon: '▶', page: 'scenario-runner' as const, enabled: true },
-    { label: 'Positions', icon: '▤', page: null, enabled: false },
-    { label: 'Diagnostics', icon: '⌘', page: null, enabled: false },
+    { label: 'Overview', icon: '◫', section: 'overview' as const, page: 'overview' as const },
+    { label: 'Bots', icon: '◉', section: 'bots' as const, page: 'bots' as const },
+    { label: 'Brokers', icon: '⇄', section: 'brokers' as const, page: 'markets' as const },
+    { label: 'GitHub', icon: '⑂', section: 'github' as const, page: 'github-prs' as const },
+    { label: 'Scenario Runner', icon: '▶', section: 'scenario-runner' as const, page: 'scenario-runner' as const },
   ] as const;
+  readonly sectionNavigationItems = computed(() => {
+    const section = this.activeSection();
+    if (section === 'brokers') {
+      return [
+        { label: 'Markets', page: 'markets' as const, enabled: true },
+        { label: 'Orders', page: 'orders' as const, enabled: true },
+        { label: 'Fills', page: 'fills' as const, enabled: true },
+        { label: 'Commissions', page: 'commissions' as const, enabled: true },
+        { label: 'Open Orders', page: 'open-orders' as const, enabled: true },
+        { label: 'Exchanges', page: 'exchanges' as const, enabled: true },
+        { label: 'History', page: null, enabled: false },
+      ];
+    }
+    if (section === 'bots') {
+      return [
+        { label: 'Operators', page: 'operator' as const, enabled: true },
+        { label: 'Orders', page: 'orders' as const, enabled: true },
+        { label: 'Positions', page: null, enabled: false },
+        { label: 'Portfolio', page: 'bots' as const, enabled: true },
+      ];
+    }
+    return [];
+  });
 
   readonly themeOptions = THEMES;
   readonly theme = signal<DashboardTheme>('current');
   readonly activePage = signal<DashboardPage>('overview');
+  readonly activeSection = signal<'overview' | 'bots' | 'brokers' | 'github' | 'scenario-runner'>('overview');
   readonly activeLabel = computed(() =>
-    this.navigationItems.find((item) => item.page === this.activePage())?.label ?? 'Overview',
+    this.sectionNavigationItems().find((item) => item.page === this.activePage())?.label
+      ?? this.navigationItems.find((item) => item.page === this.activePage())?.label
+      ?? 'Overview',
   );
   readonly historyResource = computed<TradingHistoryResource>(() => {
     const page = this.activePage();
@@ -107,7 +126,19 @@ export class AppComponent {
     }
   }
 
-  selectPage(page: DashboardPage | null): void {
-    if (page) this.activePage.set(page);
+  selectSection(section: 'overview' | 'bots' | 'brokers' | 'github' | 'scenario-runner'): void {
+    this.activeSection.set(section);
+    const pageBySection = {
+      overview: 'overview',
+      bots: 'bots',
+      brokers: 'markets',
+      github: 'github-prs',
+      'scenario-runner': 'scenario-runner',
+    } as const;
+    this.activePage.set(pageBySection[section]);
+  }
+
+  selectSubPage(page: DashboardPage): void {
+    this.activePage.set(page);
   }
 }

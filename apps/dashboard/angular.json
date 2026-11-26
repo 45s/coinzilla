@@ -23,7 +23,8 @@
               }
             ],
             "styles": [
-              "src/styles.css"
+              "src/styles.css",
+              "src/themes/staradmin.css"
             ]
           },
           "configurations": {

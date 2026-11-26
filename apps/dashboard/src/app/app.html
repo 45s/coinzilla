@@ -1,6 +1,6 @@
 <div class="app-shell">
   <aside class="sidebar">
-    <a class="brand" href="#overview" aria-label="Coinzilla dashboard home" (click)="selectPage('overview')">
+    <a class="brand" href="#overview" aria-label="Coinzilla dashboard home" (click)="selectSection('overview')">
       <span class="brand-mark">C</span>
       <span class="brand-copy">
         <strong>coinzilla</strong>
@@ -10,25 +10,17 @@
 
     <div class="workspace-label">WORKSPACE</div>
     <nav class="primary-nav" aria-label="Main navigation">
-      @for (item of navigationItems; track item.label) {
-        @if (item.enabled) {
-          <button
-            type="button"
-            class="nav-item"
-            [class.active]="activePage() === item.page"
-            [attr.aria-current]="activePage() === item.page ? 'page' : null"
-            (click)="selectPage(item.page)"
-          >
-            <span class="nav-icon" aria-hidden="true">{{ item.icon }}</span>
-            <span>{{ item.label }}</span>
-          </button>
-        } @else {
-          <span class="nav-item disabled" aria-disabled="true" [attr.title]="item.label + ' is not connected yet'">
-            <span class="nav-icon" aria-hidden="true">{{ item.icon }}</span>
-            <span>{{ item.label }}</span>
-            <span class="nav-soon">SOON</span>
-          </span>
-        }
+      @for (item of navigationItems; track item.section) {
+        <button
+          type="button"
+          class="nav-item"
+          [class.active]="activeSection() === item.section"
+          [attr.aria-current]="activeSection() === item.section ? 'page' : null"
+          (click)="selectSection(item.section)"
+        >
+          <span class="nav-icon" aria-hidden="true">{{ item.icon }}</span>
+          <span>{{ item.label }}</span>
+        </button>
       }
     </nav>
 
@@ -92,6 +84,25 @@
       </div>
     </header>
 
+    @if (sectionNavigationItems().length > 0) {
+      <nav class="section-nav" [attr.aria-label]="activeSection() === 'brokers' ? 'Brokers navigation' : 'Bots navigation'">
+        @for (item of sectionNavigationItems(); track item.label) {
+          @if (item.enabled && item.page) {
+            <button
+              type="button"
+              class="section-nav-item"
+              [class.active]="activePage() === item.page"
+              [attr.aria-current]="activePage() === item.page ? 'page' : null"
+              (click)="selectSubPage(item.page)"
+            >{{ item.label }}</button>
+          } @else {
+            <span class="section-nav-item disabled" aria-disabled="true">
+              {{ item.label }} <small>SOON</small>
+            </span>
+          }
+        }
+      </nav>
+    }
     <section class="page-content">
       @if (activePage() === 'overview') {
         <app-overview />
