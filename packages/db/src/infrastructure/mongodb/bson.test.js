@@ -65,7 +65,7 @@ test("BSON rejects unsupported values, invalid document keys, and cyclic documen
   for (const document of [
     { value: undefined },
     { value: Number.NaN },
-    { "invalid.key": true },
+    { "invalid\\u0000key": true },
     circular,
   ]) {
     assert.throws(
