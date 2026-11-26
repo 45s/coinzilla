@@ -3,6 +3,7 @@ import { createHash } from "node:crypto"
 import test from "node:test"
 import { resolveUserDataAccountBlockers } from "./resolve-user-data-account-blockers.js"
 import { recordProcessStopped } from "./record-process-stopped.js"
+import { authenticateLocalOperator } from "../infrastructure/security/local-operator-identity.js"
 
 const sessionId = "operator-resolution-test-session"
 const triggerDigest = "a".repeat(64)
@@ -10,6 +11,7 @@ const blockerId = createHash("sha256")
   .update(["ACCOUNT", "", "ACCOUNTING_INTEGRITY_FAILURE", triggerDigest].join("\0"))
   .digest("hex")
 const configuredMarkets = ["BTCUSDT", "ETHUSDT"]
+const defaultResolutionReason = "Confirmed the account-wide data integrity cause is fixed."
 
 function record({ sequence, factType, data, factId = `${factType}:${sequence}` }) {
   return {
@@ -173,19 +175,44 @@ function readyAudit(ids = [blockerId]) {
   }
 }
 
-function makeResolutionOptions({ store, audit, actionId, causeFixed = true }) {
+function createOperatorIdentity(operatorId = "operator-7") {
+  return authenticateLocalOperator({
+    operatorId,
+    getUserInfo: () => ({ username: operatorId }),
+  })
+}
+
+function makeResolutionOptions({
+  store,
+  audit,
+  actionId,
+  causeFixed = true,
+  operatorId = "operator-7",
+  resolutionReason = defaultResolutionReason,
+  blockerIds = audit?.blockerIds ?? [blockerId],
+  operatorIdentity = createOperatorIdentity(operatorId),
+}) {
   return {
     operationalStateStore: store,
     reconcileAccount: async ({ scope, blockerIds: ids }) => {
       assert.equal(scope, "ACCOUNT")
-      assert.deepEqual(ids, [blockerId])
+      assert.deepEqual(ids, blockerIds)
       return {
         ok: true,
-        data: audit,
+        data: {
+          ...audit,
+          operatorId,
+          operatorAuthMethod: operatorIdentity.authMethod,
+          actionId,
+          resolutionReason,
+          actionBlockerIds: [...blockerIds],
+        },
       }
     },
-    operatorId: "operator-7",
+    operatorId,
+    operatorIdentity,
     actionId,
+    resolutionReason,
     causeFixed,
     configuredMarkets,
   }
