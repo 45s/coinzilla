@@ -1,5 +1,6 @@
 import assert from "node:assert/strict"
 import { EventEmitter } from "node:events"
+import net from "node:net"
 import test from "node:test"
 
 import { encodeOpMsg, decodeOpMsg } from "./wire-protocol.js"
@@ -51,6 +52,48 @@ function createFakeTransport({ respond, timeoutMS = 100 } = {}) {
     },
   }
 }
+
+test("MongoDB transport opens a real TCP socket without a custom socket factory", async () => {
+  const server = net.createServer((socket) => {
+    let buffer = Buffer.alloc(0)
+    socket.on("data", (chunk) => {
+      buffer = Buffer.concat([buffer, chunk])
+      if (buffer.length < 4) return
+      const messageLength = buffer.readInt32LE(0)
+      if (buffer.length < messageLength) return
+      const request = decodeOpMsg(buffer.subarray(0, messageLength))
+      buffer = buffer.subarray(messageLength)
+      socket.write(encodeOpMsg({
+        requestId: 91,
+        responseTo: request.requestId,
+        body: { ok: 1 },
+      }))
+    })
+  })
+  await new Promise((resolve, reject) => {
+    server.once("error", reject)
+    server.listen(0, "127.0.0.1", resolve)
+  })
+  const address = server.address()
+  assert.equal(typeof address, "object")
+  const transport = createMongoTransport({
+    host: "127.0.0.1",
+    port: address.port,
+    connectTimeoutMS: 1000,
+    socketTimeoutMS: 1000,
+  })
+
+  try {
+    await transport.connect()
+    assert.deepEqual(
+      await transport.command({ body: { ping: 1, $db: "admin" } }),
+      { ok: 1 },
+    )
+  } finally {
+    await transport.close()
+    await new Promise((resolve) => server.close(resolve))
+  }
+})
 
 test("MongoDB transport correlates concurrent OP_MSG replies by responseTo", async () => {
   const pending = []
