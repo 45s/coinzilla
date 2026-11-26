@@ -2031,7 +2031,7 @@ test("fails closed when an unknown recovery event has no source classification",
   assert.match(result.errors[0].message, /unknown Harvester recovery event/)
 })
 
-function createExecutionSafetyProjectionRecords() {
+function createExecutionSafetyMarket() {
   const baseAsset = new Asset({
     id: "asset:DOGE",
     code: "DOGE",
@@ -2046,7 +2046,15 @@ function createExecutionSafetyProjectionRecords() {
     baseAsset,
     quoteAsset,
   })
-  const order = new CanonicalOrder({
+  return {
+    baseAsset,
+    quoteAsset,
+    market,
+  }
+}
+
+function createExecutionSafetyOrder({ market, quoteAsset, baseAsset }) {
+  return new CanonicalOrder({
     clientOrderId: "harvester-client-1",
     brokerOrderId: "broker-order-1",
     market,
@@ -2069,7 +2077,10 @@ function createExecutionSafetyProjectionRecords() {
     acknowledgedAt: 1,
     updatedAt: 2,
   })
-  const fillRecord = new Fill({
+}
+
+function createExecutionSafetyFill({ market, quoteAsset, baseAsset }) {
+  return new Fill({
     tradeId: "trade-1",
     brokerOrderId: "broker-order-1",
     clientOrderId: "harvester-client-1",
@@ -2092,6 +2103,12 @@ function createExecutionSafetyProjectionRecords() {
     commissions: [],
     commissionStatus: "COMPLETE",
   })
+}
+
+function createExecutionSafetyProjectionRecords() {
+  const marketContext = createExecutionSafetyMarket()
+  const order = createExecutionSafetyOrder(marketContext)
+  const fillRecord = createExecutionSafetyFill(marketContext)
   const facts = [
     ["execution.unowned_order", mapExecutionUnownedOrderData({ order })],
     ["execution.invalid_fill", mapExecutionInvalidFillData({

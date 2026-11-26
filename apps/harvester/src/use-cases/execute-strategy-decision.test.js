@@ -110,8 +110,10 @@ test("registers a pending order before reporting a thrown submission as unknown"
     onAcknowledgedOrder: async () => {},
     onSubmissionFailure: async ({ outcome }) => calls.push(outcome),
   })
-  const result = await execute({ decision,
-marketMetadata })
+  const result = await execute({
+      decision,
+      marketMetadata,
+    })
   assert.equal(result.ok, false)
   assert.match(calls[0], /^h-[0-9a-f]{22}-1$/)
   assert.equal(calls[1], "UNKNOWN")
@@ -126,8 +128,10 @@ data: {} }) },
     onAcknowledgedOrder: async () => {},
     onSubmissionFailure: async ({ outcome }) => failures.push(outcome),
   })
-  const result = await execute({ decision,
-marketMetadata })
+  const result = await execute({
+      decision,
+      marketMetadata,
+    })
   assert.equal(result.ok, false)
   assert.deepEqual(failures, ["UNKNOWN"])
 })
@@ -165,8 +169,10 @@ data: makeAcknowledgement(order) }) },
     onAcknowledgedOrder: async () => { throw new Error("registry conflict") },
     onSubmissionFailure: async ({ outcome }) => outcomes.push(outcome),
   })
-  const result = await execute({ decision,
-marketMetadata })
+  const result = await execute({
+      decision,
+      marketMetadata,
+    })
   assert.equal(result.ok, false)
   assert.deepEqual(outcomes, ["UNKNOWN"])
 })
@@ -187,8 +193,10 @@ data: makeAcknowledgement(order) }
     })
     return {
       run: async () => {
-        const result = await execute({ decision,
-marketMetadata })
+        const result = await execute({
+      decision,
+      marketMetadata,
+    })
         assert.equal(result.ok, true)
         return submittedOrder.clientOrderId
       },
@@ -287,8 +295,10 @@ test("returns a structured submission deferral reason and details without regist
     onSubmissionDeferred: async (context) => deferredCallbacks.push(context),
   })
 
-  const result = await execute({ decision,
-marketMetadata })
+  const result = await execute({
+      decision,
+      marketMetadata,
+    })
 
   assert.equal(result.ok, true, "A valid safety deferral is a successful execution result, not a broker failure.")
   assert.equal(result.data.deferred, true, "The result must explicitly identify that broker submission was deferred.")
@@ -339,8 +349,10 @@ details })
     },
   })
 
-  const result = await execute({ decision,
-marketMetadata })
+  const result = await execute({
+      decision,
+      marketMetadata,
+    })
 
   assert.equal(result.ok, true, "A final readiness deferral must remain a successful, explicitly classified result.")
   assert.equal(result.data.deferred, true, "The final readiness check must report a deferred submission.")
@@ -428,8 +440,10 @@ test("cleans up PENDING when the final submission gate returns an invalid struct
     onSubmissionFailure: async () => {},
   })
 
-  const result = await execute({ decision,
-marketMetadata })
+  const result = await execute({
+      decision,
+      marketMetadata,
+    })
 
   assert.equal(result.ok, false, "A malformed structured gate response must remain an explicit execution error.")
   assert.match(result.errors[0].message, /non-empty reason/, "The error must identify the invalid structured gate contract.")
@@ -548,8 +562,10 @@ details: deferral.details }),
       },
     })
 
-    const result = await execute({ decision,
-marketMetadata })
+    const result = await execute({
+      decision,
+      marketMetadata,
+    })
 
     assert.equal(result.ok, true, `${deferral.reason  } must be a successful, explicitly classified deferral.`)
     assert.equal(result.data.deferred, true, `${deferral.reason  } must mark the strategy intent as deferred.`)
@@ -604,8 +620,10 @@ data: { durable: true } }
     onSubmissionFailure: async () => assert.fail("unexpected submission failure while recording a durable order intent"),
   })
 
-  const result = await execute({ decision,
-marketMetadata })
+  const result = await execute({
+      decision,
+      marketMetadata,
+    })
 
   assert.equal(result.ok, true, "A strategy order with a durably recorded intent should proceed to broker submission.")
   assert.equal(calls[0].stage, "durable-intent", "The durable order intent must be acknowledged before the broker can receive a placement request.")
@@ -709,8 +727,10 @@ data: makeAcknowledgement(order) }
     onSubmissionFailure: async () => {},
   })
 
-  const result = await execute({ decision,
-marketMetadata })
+  const result = await execute({
+      decision,
+      marketMetadata,
+    })
 
   assert.equal(result.ok, false, "A failed durable intent append must fail the strategy submission workflow.")
   assert.equal(brokerCalls, 0, "No broker placement may occur unless the immutable order intent was durably acknowledged first.")
@@ -824,8 +844,10 @@ data: { durable: true } }),
     onSubmissionFailure: async ({ outcome }) => failureOutcomes.push(outcome),
   })
 
-  const result = await execute({ decision,
-marketMetadata })
+  const result = await execute({
+      decision,
+      marketMetadata,
+    })
 
   assert.equal(result.ok, false, "A broker acknowledgement without a durable outcome must fail the submission workflow.")
   assert.equal(acknowledged, false, "In-memory order acknowledgement must not advance before its durable outcome.")
@@ -860,8 +882,10 @@ data: { durable: true } }
     onSubmissionFailure: async ({ outcome }) => failureOutcomes.push(outcome),
   })
 
-  const result = await execute({ decision,
-marketMetadata })
+  const result = await execute({
+      decision,
+      marketMetadata,
+    })
 
   assert.equal(result.ok, false, "A definite post-only rejection must remain a failed submission.")
   assert.deepEqual(durableOutcomes, ["REJECTED"], "The durable outcome must preserve a broker-confirmed definite rejection.")

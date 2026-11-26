@@ -223,7 +223,11 @@ function assertNoPendingPhaseOperation({ pendingPhaseOperations, phase, now, log
   if (!existing) {
     return
   }
-  const error = createPendingPhaseError({ phase, pending: existing, now })
+  const error = createPendingPhaseError({
+    phase,
+    pending: existing,
+    now,
+  })
   logPhase({
     phase,
     status: "PENDING",
@@ -270,7 +274,10 @@ async function executePhaseOperation({
     now,
     setTimeoutFn,
   })
-  const operationPromise = createPhaseOperationPromise({ operation, controller })
+  const operationPromise = createPhaseOperationPromise({
+    operation,
+    controller,
+  })
   trackPendingPhaseOperation({
     pendingPhaseOperations,
     phase,

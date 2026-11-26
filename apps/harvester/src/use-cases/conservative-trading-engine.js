@@ -1501,7 +1501,11 @@ function createPendingOrderLifecycleHandler({ state, publishDurableIntent, pause
       state.completedRecoverySellSymbols.delete(order.market.symbol)
       state.completedRecoverySellOrdersBySymbol.delete(order.market.symbol)
     }
-    const normalizedOwnership = resolvePendingOrderOwnership({ order, purpose, ownership })
+    const normalizedOwnership = resolvePendingOrderOwnership({
+      order,
+      purpose,
+      ownership,
+    })
     const registeredOwnership = registerPendingOrderOwnership({
       state,
       order,

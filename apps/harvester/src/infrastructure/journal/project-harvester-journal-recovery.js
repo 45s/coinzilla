@@ -968,7 +968,10 @@ function resolveFillOrder({ fill, state }) {
     clientOrderId,
     eventName: EVENT.FILL_APPLIED,
   })
-  assertAppliedFillProvenanceMatchesOrder({ fill, order })
+  assertAppliedFillProvenanceMatchesOrder({
+    fill,
+    order,
+  })
   if (order.submissionOutcome === "REJECTED") {
     throw new Error(`Applied fill references a definitively rejected submission: ${fill.fillId}`)
   }
