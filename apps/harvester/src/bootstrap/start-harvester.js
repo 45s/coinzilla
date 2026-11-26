@@ -96,6 +96,18 @@ function assertOperationalStateProjection({ existingProjection } = {}) {
   throw new Error(`Harvester cannot restart from an unprojectable Operational State Store history: ${cause.message ?? String(cause)}`, { cause })
 }
 
+function assertNoUnresolvedAccountSafetyBlockers({ projection } = {}) {
+  const blockers = (projection?.data?.stickySafetyBlockers ?? [])
+    .filter((blocker) => blocker.scope === "ACCOUNT")
+  if (blockers.length === 0) {
+    return
+  }
+  const reasons = [...new Set(blockers.map((blocker) => blocker.reason))].join(", ")
+  throw new Error(
+    `Harvester cannot start with ${blockers.length} unresolved account-scoped safety blocker(s): ${reasons}`,
+  )
+}
+
 async function readVerifiedOperationalStateHistory({ operationalStateStore } = {}) {
   const existingFacts = await operationalStateStore.readAll()
   assertVerifiedOperationalStateHistory({ existingFacts })
@@ -151,15 +163,10 @@ async function verifyOperationalStateStore({ operationalStateStore,
     })
     return { previousProcessStarted }
   }
-  const existingFacts = await operationalStateStore.readAll()
-  if (existingFacts?.ok !== true ||
-      existingFacts.data?.durableWriteSupported !== true ||
-      !Array.isArray(existingFacts.data.records)) {
-    const cause = existingFacts?.errors?.[0] ?? new Error("Operational State Store history could not be read and verified")
-    throw new Error(`Harvester cannot determine prior process state from the verified Operational State Store: ${cause.message ?? String(cause)}`, { cause })
-  }
+  const history = await readVerifiedOperationalStateHistory({ operationalStateStore })
+  assertNoUnresolvedAccountSafetyBlockers({ projection: history.projection })
   return {
-    previousProcessStarted: existingFacts.data.records.some((record) => record.factType === "PROCESS_STARTED"),
+    previousProcessStarted: history.records.some((record) => record.factType === "PROCESS_STARTED"),
   }
 }
 
