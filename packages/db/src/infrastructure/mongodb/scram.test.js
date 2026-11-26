@@ -11,36 +11,62 @@ function parseAttributes(value) {
   }))
 }
 
-function createServerFinal({ password, username, authMessage, salt, iterations, mechanism }) {
+function createServerFinal({
+  password,
+  username,
+  authMessage,
+  salt,
+  iterations,
+  mechanism,
+  clientProof,
+}) {
   const passwordDigest = mechanism === "SCRAM-SHA-1"
     ? createHash("md5").update(`${username}:mongo:${password}`).digest("hex")
-    : password.normalize("NFKC")
+    : password
   const hash = mechanism === "SCRAM-SHA-1" ? "sha1" : "sha256"
   const length = mechanism === "SCRAM-SHA-1" ? 20 : 32
   const saltedPassword = pbkdf2Sync(passwordDigest, salt, iterations, length, hash)
+  const clientKey = createHmac(hash, saltedPassword).update("Client Key").digest()
+  const storedKey = createHash(hash).update(clientKey).digest()
+  const clientSignature = createHmac(hash, storedKey).update(authMessage).digest()
+  const recoveredClientKey = Buffer.alloc(clientProof.length)
+  for (let index = 0; index < clientProof.length; index += 1) {
+    recoveredClientKey[index] = clientProof[index] ^ clientSignature[index]
+  }
+  assert.deepEqual(recoveredClientKey, clientKey, "SCRAM client proof must be valid")
+
   const serverKey = createHmac(hash, saltedPassword).update("Server Key").digest()
   return createHmac(hash, serverKey).update(authMessage).digest("base64")
 }
 
-function createScramServer({ password, username, mechanism = "SCRAM-SHA-256", tamperSignature = false }) {
+function createScramServer({
+  password,
+  username,
+  mechanism = "SCRAM-SHA-256",
+  tamperSignature = false,
+  startResponse = {},
+  continueResponse = {},
+  serverFirst = null,
+}) {
   let clientFirstBare
-  let serverFirst
-  let authMessage
+  let challenge
   const salt = Buffer.from("test-salt")
   const iterations = 4096
+  const conversationId = 7
 
   return {
     async command({ body }) {
       if (body.saslStart === 1) {
-        const clientFirst = body.payload.toString("utf8")
-        clientFirstBare = clientFirst.slice(3)
+        clientFirstBare = body.payload.toString("utf8").slice(3)
         const attributes = parseAttributes(clientFirstBare)
-        serverFirst = `r=${attributes.r}servernonce,s=${salt.toString("base64")},i=${iterations}`
+        challenge = serverFirst
+          ?? `r=${attributes.r}servernonce,s=${salt.toString("base64")},i=${iterations}`
         return {
           ok: 1,
-          conversationId: 7,
+          conversationId,
           done: false,
-          payload: Buffer.from(serverFirst),
+          payload: Buffer.from(challenge),
+          ...startResponse,
         }
       }
 
@@ -48,7 +74,8 @@ function createScramServer({ password, username, mechanism = "SCRAM-SHA-256", ta
         const clientFinal = body.payload.toString("utf8")
         const proofSeparator = clientFinal.lastIndexOf(",p=")
         const clientFinalWithoutProof = clientFinal.slice(0, proofSeparator)
-        authMessage = `${clientFirstBare},${serverFirst},${clientFinalWithoutProof}`
+        const proof = Buffer.from(clientFinal.slice(proofSeparator + 3), "base64")
+        const authMessage = `${clientFirstBare},${challenge},${clientFinalWithoutProof}`
         const signature = createServerFinal({
           password,
           username,
@@ -56,12 +83,14 @@ function createScramServer({ password, username, mechanism = "SCRAM-SHA-256", ta
           salt,
           iterations,
           mechanism,
+          clientProof: proof,
         })
         return {
           ok: 1,
-          conversationId: 7,
+          conversationId,
           done: true,
           payload: Buffer.from(`v=${tamperSignature ? "AAAA" : signature}`),
+          ...continueResponse,
         }
       }
 
@@ -70,14 +99,15 @@ function createScramServer({ password, username, mechanism = "SCRAM-SHA-256", ta
   }
 }
 
-test("SCRAM-SHA-256 authenticates and verifies the server signature", async () => {
-  const command = createScramServer({
+test("SCRAM-SHA-256 validates the client proof and server signature", async () => {
+  const server = createScramServer({
     username: "alice",
     password: "correct horse battery staple",
   })
+  const command = server.command.bind(server)
 
   await authenticateMongoScram({
-    command: command.command,
+    command,
     username: "alice",
     password: "correct horse battery staple",
     authSource: "admin",
@@ -86,15 +116,15 @@ test("SCRAM-SHA-256 authenticates and verifies the server signature", async () =
   })
 })
 
-test("SCRAM-SHA-1 uses MongoDB's legacy password digest", async () => {
-  const command = createScramServer({
+test("SCRAM-SHA-1 uses MongoDB's legacy password digest and proof", async () => {
+  const server = createScramServer({
     username: "alice",
     password: "legacy-password",
     mechanism: "SCRAM-SHA-1",
   })
 
   await authenticateMongoScram({
-    command: command.command,
+    command: server.command,
     username: "alice",
     password: "legacy-password",
     authSource: "admin",
@@ -103,25 +133,32 @@ test("SCRAM-SHA-1 uses MongoDB's legacy password digest", async () => {
   })
 })
 
+test("SCRAM escapes username separators and uses the selected authentication database", async () => {
+  const server = createScramServer({
+    username: "alice,admin=1",
+    password: "secret",
+  })
+  const originalCommand = server.command.bind(server)
+  let firstMessage
 
-test("SCRAM-SHA-256 rejects passwords outside its documented printable-ASCII subset", async () => {
-  const command = createScramServer({
-    username: "alice",
-    password: "pässword",
+  await authenticateMongoScram({
+    command: async (input) => {
+      assert.equal(input.body.$db, "security")
+      if (input.body.saslStart === 1) {
+        firstMessage = input.body.payload.toString("utf8")
+      }
+      return originalCommand(input)
+    },
+    username: "alice,admin=1",
+    password: "secret",
+    authSource: "security",
+    randomBytes: () => Buffer.from("client-nonce"),
   })
 
-  await assert.rejects(
-    authenticateMongoScram({
-      command: command.command,
-      username: "alice",
-      password: "pässword",
-      randomBytes: () => Buffer.from("client-nonce"),
-    }),
-    /printable ASCII only/,
-  )
+  assert.match(firstMessage, /^n,,n=alice=2Cadmin=3D1,r=/)
 })
 
-test("SCRAM rejects an invalid server signature and malformed nonce", async () => {
+test("SCRAM rejects server errors, invalid signatures, and malformed nonces", async () => {
   const invalidSignature = createScramServer({
     username: "alice",
     password: "secret",
@@ -137,16 +174,11 @@ test("SCRAM rejects an invalid server signature and malformed nonce", async () =
     /server signature/i,
   )
 
-  const malformedNonce = {
-    async command() {
-      return {
-        ok: 1,
-        conversationId: 1,
-        done: false,
-        payload: Buffer.from("r=wrong,s=c2FsdA==,i=4096"),
-      }
-    },
-  }
+  const malformedNonce = createScramServer({
+    username: "alice",
+    password: "secret",
+    serverFirst: "r=wrong,s=c2FsdA==,i=4096",
+  })
   await assert.rejects(
     authenticateMongoScram({
       command: malformedNonce.command,
@@ -156,9 +188,27 @@ test("SCRAM rejects an invalid server signature and malformed nonce", async () =
     }),
     /nonce/i,
   )
+
+  const serverError = {
+    async command() {
+      return {
+        ok: 0,
+        errmsg: "authentication failed",
+        code: 18,
+      }
+    },
+  }
+  await assert.rejects(
+    authenticateMongoScram({
+      command: serverError.command,
+      username: "alice",
+      password: "secret",
+    }),
+    /authentication failed/,
+  )
 })
 
-test("SCRAM rejects unsupported mechanisms and unsafe iteration counts", async () => {
+test("SCRAM rejects unsupported mechanisms, malformed salt, and unsafe iteration counts", async () => {
   await assert.rejects(
     authenticateMongoScram({
       command: async () => ({ ok: 1 }),
@@ -169,29 +219,29 @@ test("SCRAM rejects unsupported mechanisms and unsafe iteration counts", async (
     /unsupported.*mechanism/i,
   )
 
-  const weakIterations = {
-    async command() {
-      return {
-        ok: 1,
-        conversationId: 1,
-        done: false,
-        payload: Buffer.from("r=nonce-server,s=c2FsdA==,i=1"),
-      }
-    },
-  }
-  await assert.rejects(
-    authenticateMongoScram({
-      command: weakIterations.command,
+  for (const serverFirst of [
+    "r=nonce-server,s=not-base64!,i=4096",
+    "r=nonce-server,s=c2FsdA==,i=1",
+    "r=nonce-server,s=c2FsdA==,i=1000001",
+  ]) {
+    const server = createScramServer({
       username: "alice",
       password: "secret",
-      randomBytes: () => Buffer.from("nonce"),
-    }),
-    /iteration/i,
-  )
+      serverFirst,
+    })
+    await assert.rejects(
+      authenticateMongoScram({
+        command: server.command,
+        username: "alice",
+        password: "secret",
+        randomBytes: () => Buffer.from("nonce"),
+      }),
+      /salt|iteration/i,
+    )
+  }
 })
 
-
-test("SCRAM-SHA-256 rejects passwords outside the explicitly supported SASLprep subset", async () => {
+test("SCRAM rejects non-ASCII/control credentials and invalid random sources", async () => {
   for (const password of ["pässword", "password\u0001"]) {
     const server = createScramServer({ username: "alice", password })
     await assert.rejects(
@@ -202,7 +252,105 @@ test("SCRAM-SHA-256 rejects passwords outside the explicitly supported SASLprep 
         mechanism: "SCRAM-SHA-256",
         randomBytes: () => Buffer.from("nonce"),
       }),
-      /ASCII|SASLprep|prohibited/i,
+      /printable ASCII only/,
     )
   }
+
+  await assert.rejects(
+    authenticateMongoScram({
+      command: async () => ({ ok: 1 }),
+      username: "alíce",
+      password: "secret",
+    }),
+    /non-empty username/,
+  )
+  await assert.rejects(
+    authenticateMongoScram({
+      command: async () => ({ ok: 1 }),
+      username: "alice",
+      password: "secret",
+      randomBytes: () => Buffer.from("short"),
+    }),
+    /random source/,
+  )
+})
+
+test("SCRAM rejects malformed server attributes, mandatory extensions, and changed conversation IDs", async () => {
+  for (const serverFirst of [
+    "r=nonce-server,s=c2FsdA==,i=4096,m=unsupported",
+    "r=nonce-server,r=again,s=c2FsdA==,i=4096",
+    "r=nonce-server,s=,i=4096",
+  ]) {
+    const server = createScramServer({
+      username: "alice",
+      password: "secret",
+      serverFirst,
+    })
+    await assert.rejects(
+      authenticateMongoScram({
+        command: server.command,
+        username: "alice",
+        password: "secret",
+        randomBytes: () => Buffer.from("nonce"),
+      }),
+      /mandatory extension|duplicate attribute|invalid salt/i,
+    )
+  }
+
+  const changedConversation = createScramServer({
+    username: "alice",
+    password: "secret",
+    continueResponse: { conversationId: 8 },
+  })
+  await assert.rejects(
+    authenticateMongoScram({
+      command: changedConversation.command,
+      username: "alice",
+      password: "secret",
+      randomBytes: () => Buffer.from("nonce"),
+    }),
+    /conversation identifier changed/,
+  )
+})
+
+test("SCRAM validates response shape and bounds server continuation rounds", async () => {
+  await assert.rejects(
+    authenticateMongoScram({
+      command: async () => ({ ok: 1, conversationId: 1, payload: Buffer.alloc(0) }),
+      username: "alice",
+      password: "secret",
+    }),
+    /completion flag/,
+  )
+
+  let rounds = 0
+  const endlessServer = {
+    async command({ body }) {
+      if (body.saslStart === 1) {
+        return {
+          ok: 1,
+          conversationId: 1,
+          done: false,
+          payload: Buffer.from("r=nonce-server,s=c2FsdA==,i=4096"),
+        }
+      }
+      rounds += 1
+      return {
+        ok: 1,
+        conversationId: 1,
+        done: false,
+        payload: Buffer.alloc(0),
+      }
+    },
+  }
+  await assert.rejects(
+    authenticateMongoScram({
+      command: endlessServer.command,
+      username: "alice",
+      password: "secret",
+      randomBytes: () => Buffer.from("nonce"),
+    }),
+    /continuation rounds/,
+  )
+  assert.equal(rounds, 3)
 })
