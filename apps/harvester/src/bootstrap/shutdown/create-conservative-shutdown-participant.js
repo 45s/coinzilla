@@ -247,7 +247,10 @@ function resolveUserDataDrainResult({ result, stage, symbol, stageDiagnostics } 
     error: errors[0] ?? new Error("USER_DATA_DRAIN returned an unsuccessful result"),
   })
   return errors.length > 0
-    ? errors.map((error) => createStageBlocker({ stage, error }))
+    ? errors.map((error) => createStageBlocker({
+      stage,
+      error,
+    }))
     : ["USER_DATA_DRAIN:UNCONFIRMED"]
 }
 
@@ -263,7 +266,10 @@ function resolveUserDataDrainError({ error, signal, symbol, stageDiagnostics } =
   if (signal?.aborted) {
     throw signal.reason ?? error
   }
-  return [createStageBlocker({ stage, error })]
+  return [createStageBlocker({
+    stage,
+    error,
+  })]
 }
 
 async function drainUserData({
