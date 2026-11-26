@@ -6,11 +6,11 @@ In review in [PR #1849](https://github.com/45s/coinzilla/pull/1849). The 2026-11
 
 ## Trading-history WebSocket large-frame crash — issue #1826
 
-**Complete in merged [PR #1830](https://github.com/45s/coinzilla/pull/1830)**, merge commit `1a91d3a5360403b22fa6c3402cb9811d36796ae8`. All six required workflows passed on exact head `0c79e83ec787351666da2c070f8e53f4466eeacf`. The implementation provides RFC 6455 7-bit/16-bit/64-bit server framing, a 1 MiB complete-message cap, a 2 MiB per-client buffered-write cap, and client-local cleanup for serialization/encoding/write failures. Issue #1826 is closed. No trading or exchange-write behavior changed.
+Complete in merged [PR #1830](https://github.com/45s/coinzilla/pull/1830), merge commit `1a91d3a5360403b22fa6c3402cb9811d36796ae8`. All six required workflows passed on exact head `0c79e83ec787351666da2c070f8e53f4466eeacf`. The implementation provides RFC 6455 7-bit/16-bit/64-bit server framing, a 1 MiB complete-message cap, a 2 MiB per-client buffered-write cap, and client-local cleanup for serialization/encoding/write failures. Issue #1826 is closed. No trading or exchange-write behavior changed.
 
 ## P0 Conservative recovery SELL idempotency — issue #1827
 
-**Implementation complete in merged [PR #1831](https://github.com/45s/coinzilla/pull/1831)**, merge commit `c9ba1326f301ab4804b2929aff4b9d0b1f1496f1`. All six required workflows passed on exact head `dce0c6bf9ce8a0574243824840ff9c4f6b19b229`. Issue #1827 remains open for historical incident evidence and root-cause classification.
+Implementation complete in merged [PR #1831](https://github.com/45s/coinzilla/pull/1831), merge commit `c9ba1326f301ab4804b2929aff4b9d0b1f1496f1`. All six required workflows passed on exact head `dce0c6bf9ce8a0574243824840ff9c4f6b19b229`. Issue #1827 remains open for historical incident evidence and root-cause classification.
 
 - The final submission gate mirrors the existing Conservative active-SELL ownership predicate.
   Any active COIN_GRABBER-owned SELL for the same market reserves its single Position, including
@@ -172,7 +172,7 @@ Do not claim 100% correctness from line/branch coverage. Completion means every 
 
 ## Read-only Operational State diagnostics (#1740)
 
-**Complete in merged [PR #1741](https://github.com/45s/coinzilla/pull/1741)**, merge commit `516c3669e76e1b7927a143a433144b8f1e77cbe1`. All six required workflows passed on exact head `a8659cd54c424b75020949284d638e930c6d5833`. The read-only `pnpm run operational-state:diagnose` verifies facts/manifest streams with the production store reader and independently reports offline recovery-projection results. It prints safe fact-type/candidate summaries and source identity; it never initializes, repairs, truncates or mutates the ledger, connects to Binance, or enables process-restart restoration. Issue #1740 is closed.
+Complete in merged [PR #1741](https://github.com/45s/coinzilla/pull/1741), merge commit `516c3669e76e1b7927a143a433144b8f1e77cbe1`. All six required workflows passed on exact head `a8659cd54c424b75020949284d638e930c6d5833`. The read-only `pnpm run operational-state:diagnose` verifies facts/manifest streams with the production store reader and independently reports offline recovery-projection results. It prints safe fact-type/candidate summaries and source identity; it never initializes, repairs, truncates or mutates the ledger, connects to Binance, or enables process-restart restoration. Issue #1740 is closed.
 
 ## Recovery Seller domain scenario coverage — issue #1780
 
@@ -258,7 +258,7 @@ Do not claim 100% correctness from line/branch coverage. Completion means every 
 
 ## Trading-history real-time notifications (#1643)
 
-**Complete in merged [PR #1641](https://github.com/45s/coinzilla/pull/1641)**, merge commit `a86b8c95d8ec900c7053355424cbcc344b616e0a`. All required checks passed on exact head `c60a850d847bba6aae1e7fdcdc2439ff4e2603eb`; the advisory External Documentation Links workflow also passed; issue #1643 is closed. Order/fill history observers publish resource-only invalidations only after relational upserts succeed. Notifications remain best-effort and in-memory; REST snapshots remain authoritative, with reconnect resynchronization.
+Complete in merged [PR #1641](https://github.com/45s/coinzilla/pull/1641), merge commit `a86b8c95d8ec900c7053355424cbcc344b616e0a`. All required checks passed on exact head `c60a850d847bba6aae1e7fdcdc2439ff4e2603eb`; the advisory External Documentation Links workflow also passed; issue #1643 is closed. Order/fill history observers publish resource-only invalidations only after relational upserts succeed. Notifications remain best-effort and in-memory; REST snapshots remain authoritative, with reconnect resynchronization.
 
 ## Critical trading reliability initiative (#1639)
 
