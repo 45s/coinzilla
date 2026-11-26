@@ -119,6 +119,8 @@ test("clears RS STOP only after explicit operator evidence is durably recorded",
     read.data.records.filter((record) => record.factType === "SAFETY_BLOCKER_RESOLVED").length,
     1,
   )
+  const raisedRecord = read.data.records.find((entry) => entry.factType === "SAFETY_BLOCKER_RAISED")
+  assert.equal(raisedRecord.data.producer, "RECOVERY_SELLER_STOP_WORKFLOW")
 })
 
 test("keeps account admission blocked when durable STOP resolution persistence fails", async (t) => {

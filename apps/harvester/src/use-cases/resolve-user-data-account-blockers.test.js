@@ -291,7 +291,7 @@ test("requires exact user-data blocker origin and full blocker set", async () =>
   const wrongOrigin = readyAudit()
   wrongOrigin.blockerOrigins = [{
     blockerId,
-    producer: "RECOVERY_SELLER",
+    producer: "RECOVERY_SELLER_STOP_WORKFLOW",
   }]
   const wrongOriginResult = await resolveUserDataAccountBlockers(makeResolutionOptions({
     store,

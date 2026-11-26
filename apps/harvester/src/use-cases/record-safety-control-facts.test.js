@@ -190,3 +190,37 @@ test("persists authenticated operator metadata and accepts an exact action repla
   assert.equal(duplicate.ok, true)
   assert.equal(duplicate.data.duplicate, true, "An exact operator action replay must be idempotent")
 })
+
+test("requires structured operator action before resolving user-data ACCOUNT blockers", async (t) => {
+  const operationalStateStore = await createStore(t)
+  const raised = await recordSafetyBlockerRaised({
+    operationalStateStore,
+    producer: "USER_DATA_EVENT_HANDLER",
+    scope: "ACCOUNT",
+    reason: "ACCOUNTING_INTEGRITY_FAILURE",
+    evidenceDigest: "a".repeat(64),
+  })
+  assert.equal(raised.ok, true)
+  const blockerId = raised.data.record.data.blockerId
+  const reconciliation = await recordSafetyBlockerResolved({
+    operationalStateStore,
+    blockerId,
+    resolvedBy: "reconciliation:legacy-account-audit",
+    resolution: "AUTHORITATIVE_RECONCILIATION",
+    evidenceDigest: "b".repeat(64),
+  })
+  const legacyOperatorAction = await recordSafetyBlockerResolved({
+    operationalStateStore,
+    blockerId,
+    resolvedBy: "operator:legacy-account-action",
+    resolution: "OPERATOR_ACTION",
+    evidenceDigest: "c".repeat(64),
+  })
+
+  assert.equal(reconciliation.ok, false)
+  assert.equal(legacyOperatorAction.ok, false)
+  assert.match(reconciliation.errors[0].message, /authenticated structured operator-action resolution/)
+  assert.match(legacyOperatorAction.errors[0].message, /authenticated OS identity and unique action ID/)
+  const read = await operationalStateStore.readAll()
+  assert.equal(read.data.records.filter((entry) => entry.factType === "SAFETY_BLOCKER_RESOLVED").length, 0)
+})
