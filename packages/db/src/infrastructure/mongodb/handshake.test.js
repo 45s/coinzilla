@@ -335,7 +335,7 @@ test("MongoDB handshake rejects server wire versions newer than the implemented 
       },
       databaseName: "app",
     }),
-    /wire protocol version range 25-26 is not supported/i,
+    /wire protocol version range 26-27 is not supported/i,
   )
 })
 

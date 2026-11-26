@@ -35,7 +35,7 @@ export function parseMongoConnectionString(connectionString) {
   }
   const normalizedConnectionString = connectionString.toLowerCase()
   if (normalizedConnectionString.startsWith("mongodb+srv://")) {
-    throw new TypeError("MongoDB SRV discovery is not supported; provide a mongodb:// seed URI")
+    throw new TypeError("mongodb+srv:// discovery is not supported; provide a mongodb:// seed URI")
   }
   if (!normalizedConnectionString.startsWith("mongodb://")) {
     throw new TypeError("MongoDB connection string must use mongodb://")
@@ -73,7 +73,7 @@ export function parseMongoConnectionString(connectionString) {
     "directConnection",
   ])
   if (url.searchParams.has("tls") && url.searchParams.has("ssl")) {
-    throw new TypeError("MongoDB URI must use tls or ssl, not both")
+    throw new TypeError("MongoDB URI cannot specify both tls and ssl")
   }
   const seenOptions = new Set()
   for (const key of url.searchParams.keys()) {
@@ -168,7 +168,7 @@ function selectAuthenticationMechanism({ requested, supported }) {
       throw new TypeError(`Unsupported MongoDB authentication mechanism: ${requested}`)
     }
     if (supported.length > 0 && !supported.includes(requested)) {
-      throw new Error(`MongoDB server does not support authentication mechanism ${requested}`)
+      throw new Error(`MongoDB server does not support ${requested} authentication`)
     }
     return requested
   }
@@ -240,13 +240,13 @@ export async function performMongoHandshake({
 
   const topology = detectTopology(hello)
   if (replicaSet && hello.setName !== replicaSet) {
-    throw new Error(`MongoDB server belongs to replica set ${hello.setName ?? "unknown"}, expected ${replicaSet}`)
+    throw new Error(`MongoDB server does not match requested replica set: expected ${replicaSet}, received ${hello.setName ?? "unknown"}`)
   }
   const writablePrimary = typeof hello.isWritablePrimary === "boolean"
     ? hello.isWritablePrimary
     : hello.ismaster === true
   if (!writablePrimary && typeof hello.primary !== "string") {
-    throw new Error("MongoDB topology did not identify a writable primary")
+    throw new Error("MongoDB topology did not advertise a writable primary")
   }
 
   let mechanism

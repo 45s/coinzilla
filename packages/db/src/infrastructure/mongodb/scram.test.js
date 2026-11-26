@@ -112,7 +112,7 @@ test("SCRAM-SHA-256 validates the client proof and server signature", async () =
     password: "correct horse battery staple",
     authSource: "admin",
     mechanism: "SCRAM-SHA-256",
-    randomBytes: () => Buffer.from("client-nonce"),
+    randomBytes: (length) => Buffer.alloc(length, 1),
   })
 })
 
@@ -129,7 +129,7 @@ test("SCRAM-SHA-1 uses MongoDB's legacy password digest and proof", async () => 
     password: "legacy-password",
     authSource: "admin",
     mechanism: "SCRAM-SHA-1",
-    randomBytes: () => Buffer.from("client-nonce"),
+    randomBytes: (length) => Buffer.alloc(length, 1),
   })
 })
 
@@ -152,7 +152,7 @@ test("SCRAM escapes username separators and uses the selected authentication dat
     username: "alice,admin=1",
     password: "secret",
     authSource: "security",
-    randomBytes: () => Buffer.from("client-nonce"),
+    randomBytes: (length) => Buffer.alloc(length, 1),
   })
 
   assert.match(firstMessage, /^n,,n=alice=2Cadmin=3D1,r=/)
@@ -169,7 +169,7 @@ test("SCRAM rejects server errors, invalid signatures, and malformed nonces", as
       command: invalidSignature.command,
       username: "alice",
       password: "secret",
-      randomBytes: () => Buffer.from("nonce"),
+      randomBytes: (length) => Buffer.alloc(length, 1),
     }),
     /server signature/i,
   )
@@ -184,7 +184,7 @@ test("SCRAM rejects server errors, invalid signatures, and malformed nonces", as
       command: malformedNonce.command,
       username: "alice",
       password: "secret",
-      randomBytes: () => Buffer.from("nonce"),
+      randomBytes: (length) => Buffer.alloc(length, 1),
     }),
     /nonce/i,
   )
@@ -219,7 +219,7 @@ test("SCRAM rejects unsupported mechanisms, malformed salt, and unsafe iteration
     /unsupported.*mechanism/i,
   )
 
-  const nonce = Buffer.from("nonce").toString("base64")
+  const nonce = Buffer.alloc(24, 1).toString("base64")
   for (const serverFirst of [
     `r=${nonce}servernonce,s=not-base64!,i=4096`,
     `r=${nonce}servernonce,s=c2FsdA==,i=1`,
@@ -235,7 +235,7 @@ test("SCRAM rejects unsupported mechanisms, malformed salt, and unsafe iteration
         command: server.command,
         username: "alice",
         password: "secret",
-        randomBytes: () => Buffer.from("nonce"),
+        randomBytes: (length) => Buffer.alloc(length, 1),
       }),
       /salt|iteration/i,
     )
@@ -251,7 +251,7 @@ test("SCRAM rejects non-ASCII/control credentials and invalid random sources", a
         username: "alice",
         password,
         mechanism: "SCRAM-SHA-256",
-        randomBytes: () => Buffer.from("nonce"),
+        randomBytes: (length) => Buffer.alloc(length, 1),
       }),
       /printable ASCII only/,
     )
@@ -277,7 +277,7 @@ test("SCRAM rejects non-ASCII/control credentials and invalid random sources", a
 })
 
 test("SCRAM rejects malformed server attributes, mandatory extensions, and changed conversation IDs", async () => {
-  const nonce = Buffer.from("nonce").toString("base64")
+  const nonce = Buffer.alloc(24, 1).toString("base64")
   for (const serverFirst of [
     `r=${nonce}servernonce,s=c2FsdA==,i=4096,m=unsupported`,
     `r=${nonce}servernonce,r=again,s=c2FsdA==,i=4096`,
@@ -293,7 +293,7 @@ test("SCRAM rejects malformed server attributes, mandatory extensions, and chang
         command: server.command,
         username: "alice",
         password: "secret",
-        randomBytes: () => Buffer.from("nonce"),
+        randomBytes: (length) => Buffer.alloc(length, 1),
       }),
       /mandatory extension|duplicate attribute|invalid salt/i,
     )
@@ -309,7 +309,7 @@ test("SCRAM rejects malformed server attributes, mandatory extensions, and chang
       command: changedConversation.command,
       username: "alice",
       password: "secret",
-      randomBytes: () => Buffer.from("nonce"),
+      randomBytes: (length) => Buffer.alloc(length, 1),
     }),
     /conversation identifier changed/,
   )
@@ -350,7 +350,7 @@ test("SCRAM validates response shape and bounds server continuation rounds", asy
       command: endlessServer.command,
       username: "alice",
       password: "secret",
-      randomBytes: () => Buffer.from("nonce"),
+      randomBytes: (length) => Buffer.alloc(length, 1),
     }),
     /continuation rounds/,
   )
