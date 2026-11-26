@@ -698,12 +698,7 @@ async function runTrackedOperation({ state, work }) {
   if (state.lifecycle !== "connected") {
     throw new Error("MongoDB provider must be connected before starting work")
   }
-  let operation
-  try {
-    operation = Promise.resolve(work())
-  } catch (error) {
-    operation = Promise.reject(error)
-  }
+  const operation = Promise.resolve().then(work)
   state.activeOperations.add(operation)
   try {
     return await operation
