@@ -663,7 +663,7 @@
         },
         {
           "path": "test/recovery/operational-state-crash-matrix.test.js",
-          "name": "reopens the real append-only ledger after intent, acknowledgement, and fill crash boundaries",
+          "name": "reopens the real append-only ledger across partial/final fills, duplicate delivery, and two unclean process restarts",
           "kind": "integration"
         },
         {
@@ -705,6 +705,11 @@
           "path": "src/infrastructure/operational-state/operational-state-record-validation.test.js",
           "name": "rejects malformed record envelopes, sequence chains, digests and payloads",
           "kind": "failure"
+        },
+        {
+          "path": "test/recovery/operational-state-crash-matrix.test.js",
+          "name": "replays a fill that races an uncertain cancellation without losing execution evidence",
+          "kind": "integration"
         }
       ],
       "runtimeStatus": "offline-only",
@@ -1118,6 +1123,31 @@
           "path": "src/bootstrap/start-harvester.test.js",
           "name": "restores a persisted account STOP and keeps a restarted account observation-only",
           "kind": "integration"
+        },
+        {
+          "path": "src/bootstrap/start-harvester.test.js",
+          "name": "rejects an unprojectable account-blocker ledger before broker connection for every recovery configuration",
+          "kind": "integration"
+        },
+        {
+          "path": "src/bootstrap/start-harvester.test.js",
+          "name": "rejects a durable unresolved account blocker in Conservative-only mode when CG recovery is disabled",
+          "kind": "integration"
+        },
+        {
+          "path": "src/use-cases/create-recovery-seller-stop-workflow.test.js",
+          "name": "keeps account admission blocked when durable STOP resolution persistence fails",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/conservative-trading-engine.test.js",
+          "name": "rechecks a newly raised account blocker after durable intent and before broker submission",
+          "kind": "integration"
+        },
+        {
+          "path": "src/use-cases/create-submission-gate.test.js",
+          "name": "market-scoped strategy safety pause blocks only its symbol and preserves the recovery SELL exception",
+          "kind": "normal"
         }
       ],
       "runtimeStatus": "active",

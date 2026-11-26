@@ -121,6 +121,48 @@ test("clears RS STOP only after explicit operator evidence is durably recorded",
   )
 })
 
+test("keeps account admission blocked when durable STOP resolution persistence fails", async (t) => {
+  const operationalStateStore = await createStore(t)
+  let failResolution = false
+  const guardedStore = {
+    append: async (record) => {
+      if (failResolution && record.factType === "SAFETY_BLOCKER_RESOLVED") {
+        return {
+          ok: false,
+          errors: [new Error("durable resolution unavailable")],
+        }
+      }
+      return operationalStateStore.append(record)
+    },
+    readAll: operationalStateStore.readAll.bind(operationalStateStore),
+    verify: operationalStateStore.verify.bind(operationalStateStore),
+  }
+  const created = await createRecoverySellerStopWorkflow({
+    operationalStateStore: guardedStore,
+  })
+  assert.equal(created.ok, true, created.errors?.[0]?.message)
+  const workflow = created.data
+  const latched = await workflow.latch({
+    explanation: "The RS BUY acknowledgement is unresolved",
+  })
+  assert.equal(latched.ok, true, latched.errors?.[0]?.message)
+  const blockerId = workflow.getBlockerId()
+
+  failResolution = true
+  const result = await workflow.resolve(validResolutionEvidence())
+  const read = await operationalStateStore.readAll()
+
+  assert.equal(result.ok, false)
+  assert.equal(workflow.getStopState().status, "STOPPED")
+  assert.equal(workflow.isAccountAdmissionBlocked(), true)
+  assert.equal(workflow.getBlockerId(), blockerId)
+  assert.equal(
+    read.data.records.filter((record) => record.factType === "SAFETY_BLOCKER_RESOLVED").length,
+    0,
+  )
+})
+
+
 test("keeps RS STOP clear when its blocker cannot be durably persisted", async () => {
   const store = {
     append: async () => ({
@@ -149,10 +191,17 @@ test("keeps RS STOP clear when its blocker cannot be durably persisted", async (
 test("closes account admission before awaiting durable STOP persistence", async (t) => {
   const operationalStateStore = await createStore(t)
   const append = operationalStateStore.append.bind(operationalStateStore)
-  let finishAppend
+  const finishAppends = []
+  let appendCount = 0
+  let markAppendStarted
+  const appendStarted = new Promise((resolve) => {
+    markAppendStarted = resolve
+  })
   const delayedStore = {
     append: (record) => new Promise((resolve) => {
-      finishAppend = () => append(record).then(resolve)
+      appendCount += 1
+      finishAppends.push(() => append(record).then(resolve))
+      markAppendStarted()
     }),
     readAll: operationalStateStore.readAll.bind(operationalStateStore),
   }
@@ -165,14 +214,26 @@ test("closes account admission before awaiting durable STOP persistence", async 
   const pending = workflow.latch({
     explanation: "The RS submission outcome is not yet durable",
   })
+  const duplicatePending = workflow.latch({
+    explanation: "A concurrent caller cannot create a second account STOP",
+  })
 
   assert.equal(workflow.isAccountAdmissionBlocked(), true)
   assert.equal(workflow.getStopState().status, "CLEAR")
-  assert.equal(typeof finishAppend, "function")
-  await finishAppend()
-  const result = await pending
+  await appendStarted
+  await new Promise((resolve) => setImmediate(resolve))
+  assert.equal(appendCount, 1)
+  await Promise.all(finishAppends.map((finish) => finish()))
+  const [result, duplicateResult] = await Promise.all([pending, duplicatePending])
 
   assert.equal(result.ok, true, result.errors?.[0]?.message)
+  assert.equal(duplicateResult.ok, true, duplicateResult.errors?.[0]?.message)
   assert.equal(workflow.getStopState().status, "STOPPED")
   assert.equal(workflow.isAccountAdmissionBlocked(), true)
+  assert.equal(workflow.getBlockerId(), result.data.blockerId)
+  const read = await operationalStateStore.readAll()
+  assert.equal(
+    read.data.records.filter((record) => record.factType === "SAFETY_BLOCKER_RAISED").length,
+    1,
+  )
 })

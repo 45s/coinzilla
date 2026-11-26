@@ -1451,7 +1451,7 @@ The package entries below make the repository-wide scope visible, but their exac
 
 **Scope controls:** market-scoped blockers affect only their symbol. ADR-0008's Recovery Seller SELL exception applies only to its market-level strategy pause and is subordinate to any account-scoped blocker. An audit `readiness: BLOCKED` classification is not itself a global stop.
 
-**Coverage:** `create-recovery-seller-stop-workflow.test.js`, `create-submission-gate.test.js`, and `subscribe-to-user-data.test.js`.
+**Coverage:** `create-recovery-seller-stop-workflow.test.js`, `create-submission-gate.test.js`, `subscribe-to-user-data.test.js`, and `start-harvester.test.js` (including `rejects an unprojectable account-blocker ledger before broker connection for every recovery configuration` and `rejects a durable unresolved account blocker in Conservative-only mode when CG recovery is disabled`), plus `conservative-trading-engine.test.js` (`rechecks a newly raised account blocker after durable intent and before broker submission`) and `create-submission-gate.test.js` (`market-scoped strategy safety pause blocks only its symbol and preserves the recovery SELL exception`).
 
 ### Conservative executable scenario matrix
 
