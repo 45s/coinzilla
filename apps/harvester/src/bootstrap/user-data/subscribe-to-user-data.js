@@ -389,7 +389,10 @@ async function createAndInitializeUserDataSubscription({
   onSubscriptionEstablished?.(userDataSubscription)
   logUserDataSubscriptionEstablished(logger)
   markUserDataReconciliationRequired(state)
-  await publishInitialAccountSnapshot({ state, publishAccountSnapshot })
+  await publishInitialAccountSnapshot({
+    state,
+    publishAccountSnapshot,
+  })
   return userDataSubscription
 }
 

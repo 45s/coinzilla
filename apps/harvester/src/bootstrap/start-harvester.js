@@ -145,7 +145,10 @@ function getLatestResolvedUserDataAccountBlockerIndex(records) {
   const accountBlockerIds = getUserDataAccountBlockerIds(records)
   let latestResolutionIndex = -1
   for (const [index, record] of records.entries()) {
-    if (isStructuredUserDataAccountResolution({ record, accountBlockerIds })) {
+    if (isStructuredUserDataAccountResolution({
+      record,
+      accountBlockerIds,
+    })) {
       latestResolutionIndex = index
     }
   }
