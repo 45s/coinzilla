@@ -146,7 +146,8 @@ operation: "recordSafetyBlockerRaised" })
  * independent reconciliation evidence. Restart alone is never a resolution.
  */
 function isRecoverySellerStopBlocker(raisedFact) {
-  return raisedFact?.data?.reason === "RECOVERY_SELLER_UNEXPECTED_CONDITION"
+  return raisedFact?.data?.producer === "RECOVERY_SELLER_STOP_WORKFLOW" &&
+    raisedFact?.data?.reason === "RECOVERY_SELLER_UNEXPECTED_CONDITION"
 }
 
 function validateOperatorActionIdentity({ operatorIdentity, operatorId, actionId, resolvedBy }) {
