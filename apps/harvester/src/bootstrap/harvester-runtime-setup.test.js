@@ -68,7 +68,10 @@ test("logs an unsuccessful deferred replay result without throwing", async () =>
   const errors = []
   const result = await resumeHarvesterDeferredStrategyEvaluations({
     tradingEngine: {
-      resumeDeferredEvaluations: async () => ({ ok: false, errors: [failure] }),
+      resumeDeferredEvaluations: async () => ({
+        ok: false,
+        errors: [failure],
+      }),
     },
     userDataState: {
       ready: true,
