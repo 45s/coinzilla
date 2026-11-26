@@ -117,19 +117,12 @@ function verifyServerSignature({ payload, expectedSignature }) {
  * Authenticate a MongoDB connection using SCRAM-SHA-256 or SCRAM-SHA-1.
  * The command callback accepts the provider's ordinary command input object.
  */
-export async function authenticateMongoScram({
-  command,
-  username,
-  password,
-  authSource = "admin",
-  mechanism = "SCRAM-SHA-256",
-  randomBytes = nativeRandomBytes,
-} = {}) {
+function validateScramOptions({ command, username, password, authSource, mechanism }) {
   if (typeof command !== "function") {
     throw new TypeError("MongoDB SCRAM command callback is required")
   }
   if (typeof username !== "string" || username.length === 0
-    || !/^[\x20-\x7e]+$/.test(username)
+    || !/^[\\x20-\\x7e]+$/.test(username)
     || typeof password !== "string") {
     throw new TypeError("MongoDB SCRAM requires a non-empty username and string password")
   }
@@ -139,15 +132,20 @@ export async function authenticateMongoScram({
   if (typeof authSource !== "string" || authSource.trim() === "") {
     throw new TypeError("MongoDB authentication source must be a non-empty string")
   }
+}
 
+function createClientFirstMessage({ username, randomBytes }) {
   const nonceBytes = randomBytes(24)
   if (!Buffer.isBuffer(nonceBytes) || nonceBytes.length !== 24) {
     throw new TypeError("MongoDB SCRAM random source must return the requested number of bytes")
   }
   const nonce = nonceBytes.toString("base64")
   const clientFirstBare = `n=${escapeUsername(username)},r=${nonce}`
-  const clientFirst = `n,,${clientFirstBare}`
-  const startResponse = await command({
+  return { nonce, clientFirstBare, clientFirst: `n,,${clientFirstBare}` }
+}
+
+async function startScramConversation({ command, mechanism, authSource, clientFirst }) {
+  const response = await command({
     body: {
       saslStart: 1,
       mechanism,
@@ -157,45 +155,50 @@ export async function authenticateMongoScram({
       $db: authSource,
     },
   })
-  assertCommandSucceeded({ response: startResponse,
-stage: "start" })
-  if (startResponse.done) {
+  assertCommandSucceeded({ response, stage: "start" })
+  if (response.done) {
     throw new Error("MongoDB SCRAM server completed authentication before client proof")
   }
+  return response
+}
 
-  const serverFirst = startResponse.payload.toString("utf8")
-  const serverAttributes = parseAttributes(serverFirst)
-  if (serverAttributes.has("m")) {
+function parseServerFirstMessage({ payload, nonce }) {
+  const serverFirst = payload.toString("utf8")
+  const attributes = parseAttributes(serverFirst)
+  if (attributes.has("m")) {
     throw new Error("MongoDB SCRAM server requested an unsupported mandatory extension")
   }
-  const serverNonce = serverAttributes.get("r")
+  const serverNonce = attributes.get("r")
   if (typeof serverNonce !== "string" || !serverNonce.startsWith(nonce) || serverNonce.length <= nonce.length) {
     throw new Error("MongoDB SCRAM server nonce does not extend the client nonce")
   }
-  const saltValue = serverAttributes.get("s")
+  const saltValue = attributes.get("s")
   const salt = Buffer.from(saltValue ?? "", "base64")
   const canonicalSalt = salt.toString("base64").replace(/=+$/, "")
   if (!saltValue || salt.length === 0 || salt.length > 1024 || canonicalSalt !== saltValue.replace(/=+$/, "")) {
     throw new Error("MongoDB SCRAM server supplied an invalid salt")
   }
-  const iterations = Number(serverAttributes.get("i"))
+  const iterations = Number(attributes.get("i"))
   if (!Number.isSafeInteger(iterations)
     || iterations < MINIMUM_ITERATIONS
     || iterations > MAXIMUM_ITERATIONS) {
     throw new Error("MongoDB SCRAM iteration count is outside the supported safe range")
   }
+  return { serverFirst, serverNonce, salt, iterations }
+}
 
-  const passwordDigest = createPasswordDigest({
-    username,
-    password,
-    mechanism,
-  })
-  const material = deriveScramMaterial({
-    passwordDigest,
-    salt,
-    iterations,
-    mechanism,
-  })
+function createClientProof({
+  username,
+  password,
+  mechanism,
+  clientFirstBare,
+  serverFirst,
+  serverNonce,
+  salt,
+  iterations,
+}) {
+  const passwordDigest = createPasswordDigest({ username, password, mechanism })
+  const material = deriveScramMaterial({ passwordDigest, salt, iterations, mechanism })
   const clientFinalWithoutProof = `c=biws,r=${serverNonce}`
   const authMessage = `${clientFirstBare},${serverFirst},${clientFinalWithoutProof}`
   const clientSignature = createHmac(material.hash, material.storedKey)
@@ -208,41 +211,98 @@ stage: "start" })
   const serverSignature = createHmac(material.hash, material.serverKey)
     .update(authMessage, "utf8")
     .digest()
-  const clientFinal = `${clientFinalWithoutProof},p=${proof.toString("base64")}`
+  return {
+    clientFinal: `${clientFinalWithoutProof},p=${proof.toString("base64")}`,
+    serverSignature,
+  }
+}
 
-  let continueResponse = await command({
+async function continueScramConversation({
+  command,
+  authSource,
+  conversationId,
+  payload,
+  stage,
+}) {
+  const response = await command({
     body: {
       saslContinue: 1,
-      conversationId: startResponse.conversationId,
-      payload: Buffer.from(clientFinal, "utf8"),
+      conversationId,
+      payload,
       $db: authSource,
     },
   })
-  assertCommandSucceeded(continueResponse, "continue")
-  if (continueResponse.conversationId !== startResponse.conversationId) {
+  assertCommandSucceeded({ response, stage })
+  if (response.conversationId !== conversationId) {
     throw new Error("MongoDB SCRAM conversation identifier changed during authentication")
   }
+  return response
+}
+
+async function finishScramConversation({ command, startResponse, clientFinal, authSource }) {
+  let response = await continueScramConversation({
+    command,
+    authSource,
+    conversationId: startResponse.conversationId,
+    payload: Buffer.from(clientFinal, "utf8"),
+    stage: "continue",
+  })
   let finalRounds = 0
-  while (!continueResponse.done) {
+  while (!response.done) {
     finalRounds += 1
     if (finalRounds > 2) {
       throw new Error("MongoDB SCRAM server exceeded the supported continuation rounds")
     }
-    continueResponse = await command({
-      body: {
-        saslContinue: 1,
-        conversationId: startResponse.conversationId,
-        payload: Buffer.alloc(0),
-        $db: authSource,
-      },
+    response = await continueScramConversation({
+      command,
+      authSource,
+      conversationId: startResponse.conversationId,
+      payload: Buffer.alloc(0),
+      stage: "finalize",
     })
-    assertCommandSucceeded(continueResponse, "finalize")
-    if (continueResponse.conversationId !== startResponse.conversationId) {
-      throw new Error("MongoDB SCRAM conversation identifier changed during authentication")
-    }
   }
+  return response
+}
+
+/**
+ * Authenticate a MongoDB connection using SCRAM-SHA-256 or SCRAM-SHA-1.
+ * The command callback accepts the provider's ordinary command input object.
+ */
+export async function authenticateMongoScram({
+  command,
+  username,
+  password,
+  authSource = "admin",
+  mechanism = "SCRAM-SHA-256",
+  randomBytes = nativeRandomBytes,
+} = {}) {
+  validateScramOptions({ command, username, password, authSource, mechanism })
+  const clientFirst = createClientFirstMessage({ username, randomBytes })
+  const startResponse = await startScramConversation({
+    command,
+    mechanism,
+    authSource,
+    clientFirst: clientFirst.clientFirst,
+  })
+  const serverFirst = parseServerFirstMessage({
+    payload: startResponse.payload,
+    nonce: clientFirst.nonce,
+  })
+  const proof = createClientProof({
+    username,
+    password,
+    mechanism,
+    clientFirstBare: clientFirst.clientFirstBare,
+    ...serverFirst,
+  })
+  const finalResponse = await finishScramConversation({
+    command,
+    startResponse,
+    clientFinal: proof.clientFinal,
+    authSource,
+  })
   verifyServerSignature({
-    payload: continueResponse.payload,
-    expectedSignature: serverSignature,
+    payload: finalResponse.payload,
+    expectedSignature: proof.serverSignature,
   })
 }
