@@ -6,6 +6,8 @@ import {
 } from "../broker/cleanup-broker.js"
 import { createStrategyShutdownCoordinator } from "./create-strategy-shutdown-coordinator.js"
 
+const DEFAULT_SHUTDOWN_PHASE_TIMEOUT_MS = 30_000
+
 function logSystem({ logger, ...data }) {
   if (typeof logger?.system === "function") {
     logger.system(data)
@@ -55,9 +57,41 @@ function getSafeFailureReason(error) {
     "UNKNOWN"
 }
 
-function createPhaseRunner({ logger, now, shutdownRequestedAt, shutdownCorrelationId }) {
+function createPhaseTimeoutError({ phase, timeoutMs, elapsedMs } = {}) {
+  const error = new Error("Shutdown phase exceeded its configured deadline while the operation remained pending")
+  error.code = "SHUTDOWN_PHASE_TIMEOUT"
+  error.phase = phase
+  error.status = "TIMED_OUT"
+  error.pendingOperation = true
+  error.timeoutMs = timeoutMs
+  error.elapsedMs = elapsedMs
+  return error
+}
+
+function createPendingPhaseError({ phase, pending, now } = {}) {
+  const error = new Error("A previous shutdown phase operation is still pending")
+  error.code = "SHUTDOWN_PHASE_STILL_RUNNING"
+  error.phase = phase
+  error.status = "PENDING"
+  error.pendingOperation = true
+  error.timeoutMs = pending.timeoutMs
+  error.elapsedMs = Math.max(0, now() - pending.startedAt)
+  return error
+}
+
+function createPhaseRunner({
+  logger,
+  now,
+  shutdownRequestedAt,
+  shutdownCorrelationId,
+  phaseTimeoutMs = DEFAULT_SHUTDOWN_PHASE_TIMEOUT_MS,
+  setTimeoutFn = ({ callback, timeoutMs }) => setTimeout(callback, timeoutMs),
+  clearTimeoutFn = (handle) => clearTimeout(handle),
+  pendingPhaseOperations = new Map(),
+} = {}) {
   const logPhase = ({ phase, status, durationMs, failureReason } = {}) => {
-    logSystem({ logger,
+    logSystem({
+      logger,
       message: `Harvester shutdown phase ${status.toLowerCase()}`,
       shutdownPhase: phase,
       phaseStatus: status,
@@ -81,37 +115,122 @@ function createPhaseRunner({ logger, now, shutdownRequestedAt, shutdownCorrelati
     return candidates.find((candidate) => typeof candidate === "string" && candidate.length > 0) ??
       "PHASE_RESULT_FAILED"
   }
-
-  const runPhase = async ({ phase, operation, isFailure = isPhaseFailure }) => {
+  const getPendingOperationsSnapshot = () => Object.freeze(
+    [...pendingPhaseOperations.entries()].map(([phase, pending]) => Object.freeze({
+      phase,
+      status: "PENDING",
+      pendingOperation: true,
+      startedAt: pending.startedAt,
+      timeoutMs: pending.timeoutMs,
+      elapsedMs: Math.max(0, now() - pending.startedAt),
+    })),
+  )
+  const runPhase = async ({
+    phase,
+    operation,
+    isFailure = isPhaseFailure,
+    timeoutMs = phaseTimeoutMs,
+  } = {}) => {
+    const existing = pendingPhaseOperations.get(phase)
+    if (existing) {
+      const error = createPendingPhaseError({
+        phase,
+        pending: existing,
+        now,
+      })
+      logPhase({
+        phase,
+        status: "PENDING",
+        durationMs: error.elapsedMs,
+        failureReason: error.code,
+      })
+      throw error
+    }
     const startedAt = now()
+    const controller = new AbortController()
+    let timeoutHandle
+    const timeoutPromise = timeoutMs === null
+      ? null
+      : new Promise((resolve) => {
+        timeoutHandle = setTimeoutFn({
+          phase,
+          timeoutMs,
+          callback: () => {
+            const error = createPhaseTimeoutError({
+              phase,
+              timeoutMs,
+              elapsedMs: Math.max(0, now() - startedAt),
+            })
+            controller.abort(error)
+            resolve({
+              status: "timed_out",
+              error,
+            })
+          },
+        })
+      })
+    const operationPromise = Promise.resolve()
+      .then(() => operation({ signal: controller.signal }))
+      .then(
+        (value) => ({ status: "fulfilled", value }),
+        (reason) => ({ status: "rejected", reason }),
+      )
+    pendingPhaseOperations.set(phase, {
+      operationPromise,
+      startedAt,
+      timeoutMs,
+    })
+    operationPromise.then(() => {
+      if (pendingPhaseOperations.get(phase)?.operationPromise === operationPromise) {
+        pendingPhaseOperations.delete(phase)
+      }
+    })
     logPhase({
       phase,
       status: "STARTED",
     })
     try {
-      const result = await operation()
-      const failed = isFailure(result)
+      const outcome = timeoutPromise
+        ? await Promise.race([operationPromise, timeoutPromise])
+        : await operationPromise
+      if (outcome.status === "timed_out") {
+        throw outcome.error
+      }
+      if (outcome.status === "rejected") {
+        throw outcome.reason
+      }
+      const failed = isFailure(outcome.value)
       logPhase({
         phase,
         status: failed ? "FAILED" : "COMPLETED",
         durationMs: Math.max(0, now() - startedAt),
-        ...(failed ? { failureReason: getPhaseFailureReason(result) } : {}),
+        ...(failed ? { failureReason: getPhaseFailureReason(outcome.value) } : {}),
       })
-      return result
+      return outcome.value
     } catch (error) {
+      const status = error?.code === "SHUTDOWN_PHASE_TIMEOUT"
+        ? "TIMED_OUT"
+        : error?.code === "SHUTDOWN_PHASE_STILL_RUNNING"
+          ? "PENDING"
+          : "FAILED"
       logPhase({
         phase,
-        status: "FAILED",
+        status,
         durationMs: Math.max(0, now() - startedAt),
         failureReason: getSafeFailureReason(error),
       })
       throw error
+    } finally {
+      if (timeoutHandle !== undefined) {
+        clearTimeoutFn(timeoutHandle)
+      }
     }
   }
   return {
     logPhase,
     isPhaseFailure,
     runPhase,
+    getPendingOperationsSnapshot,
   }
 }
 
@@ -123,12 +242,14 @@ async function runShutdownPhaseSafely({ context, phaseRunner, logShutdownFailure
     message,
     auditReason,
     isFailure,
+    timeoutMs,
   } = options
   try {
     const result = await phaseRunner.runPhase({
       phase,
       operation,
       isFailure,
+      timeoutMs,
     })
     const failed = isFailure
       ? isFailure(result)
@@ -598,6 +719,7 @@ function createShutdownDiagnostics({ context, cleanupErrors }) {
     strategyBlockers: context.strategyShutdownError?.shutdownDiagnostics?.strategyBlockers ??
       Object.freeze([]),
     strategySafety: context.strategyShutdownCoordinator?.getSafetySnapshot?.() ?? Object.freeze([]),
+    pendingOperations: context.phaseRunner?.getPendingOperationsSnapshot?.() ?? Object.freeze([]),
   })
 }
 
@@ -652,7 +774,16 @@ async function flushShutdownJournal(context) {
   if (typeof context.eventPublisher?.flush !== "function") {
     throw new Error("Shutdown Journal durability cannot be proven because EventPublisher.flush is unavailable")
   }
-  const result = await context.eventPublisher.flush()
+  const result = await context.failureRecorder.runPhaseSafely({
+    phase: "JOURNAL_FLUSH",
+    operation: () => context.eventPublisher.flush(),
+    stage: "JOURNAL_FLUSH",
+    message: "Shutdown Journal durability could not be proven",
+    auditReason: "JOURNAL_NOT_DURABLE",
+  })
+  if (result?.ok === false) {
+    throw result.errors?.[0] ?? new Error("Shutdown Journal durability was not proven")
+  }
   if (result?.ok !== true || result?.durable !== true) {
     throw result?.errors?.[0] ?? new Error("Shutdown Journal durability was not proven")
   }
@@ -668,6 +799,7 @@ async function proveStrategySafety(context) {
   const result = await context.failureRecorder.runPhaseSafely({
     phase: "STRATEGY_SHUTDOWN_SAFETY",
     operation: () => context.strategyShutdownCoordinator.waitUntilSafe(),
+    timeoutMs: null,
     stage: "STRATEGY_SHUTDOWN_SAFETY",
     message: "Strategy shutdown safety could not be proven",
     auditReason: "STRATEGY_SHUTDOWN_SAFETY_UNPROVEN",
@@ -834,12 +966,25 @@ function establishShutdownState({
   return shutdownStartedFromStatus
 }
 
-function createShutdownPhaseRunner([logger, now, shutdownRequestedAt, shutdownCorrelationId]) {
+function createShutdownPhaseRunner({
+  logger,
+  now,
+  shutdownRequestedAt,
+  shutdownCorrelationId,
+  phaseTimeoutMs,
+  setTimeoutFn,
+  clearTimeoutFn,
+  pendingPhaseOperations,
+} = {}) {
   return createPhaseRunner({
     logger,
     now,
     shutdownRequestedAt,
     shutdownCorrelationId,
+    phaseTimeoutMs,
+    setTimeoutFn,
+    clearTimeoutFn,
+    pendingPhaseOperations,
   })
 }
 
@@ -850,6 +995,7 @@ function createShutdownRequestContext({
   runtimeSessionId,
   strategyShutdownCoordinator,
   stopOptions,
+  pendingPhaseOperations,
 } = {}) {
   const {
     requestedAt,
@@ -859,7 +1005,16 @@ function createShutdownRequestContext({
     beforeSharedServicesStop,
   } = stopOptions
   const shutdownRequestedAt = requestedAt ?? now(), shutdownCorrelationId = runtimeSessionId ?? null
-  const phaseRunner = createShutdownPhaseRunner([options.logger, now, shutdownRequestedAt, shutdownCorrelationId])
+  const phaseRunner = createShutdownPhaseRunner({
+    logger: options.logger,
+    now,
+    shutdownRequestedAt,
+    shutdownCorrelationId,
+    phaseTimeoutMs: options.phaseTimeoutMs ?? DEFAULT_SHUTDOWN_PHASE_TIMEOUT_MS,
+    setTimeoutFn: options.setTimeoutFn,
+    clearTimeoutFn: options.clearTimeoutFn,
+    pendingPhaseOperations,
+  })
   if (!requestLogged) {
     phaseRunner.logPhase({
       phase: "SHUTDOWN_REQUESTED",
@@ -915,7 +1070,7 @@ function reportShutdownFailure({ error, context, state, options, phaseRunner, sh
     strategyBlockers: error.shutdownDiagnostics?.strategyBlockers ?? diagnostics.strategyBlockers,
   }
   options.logger?.error?.({
-    message: "Shutdown safety or durability was not proven; required runtime services remain connected",
+    message: "Shutdown incomplete; STOPPED was not recorded and remaining runtime services are retained",
     ...error.shutdownDiagnostics,
   })
   phaseRunner.logPhase({
@@ -927,7 +1082,15 @@ function reportShutdownFailure({ error, context, state, options, phaseRunner, sh
   throw error
 }
 
-function reportShutdownSetupFailure({ error, state, options, now, runtimeSessionId, strategyShutdownCoordinator } = {}) {
+function reportShutdownSetupFailure({
+  error,
+  state,
+  options,
+  now,
+  runtimeSessionId,
+  strategyShutdownCoordinator,
+  pendingPhaseOperations,
+} = {}) {
   const shutdownStartedFromStatus = state.status
   state.stopped = true
   state.ready = false
@@ -937,6 +1100,10 @@ function reportShutdownSetupFailure({ error, state, options, now, runtimeSession
     now,
     shutdownRequestedAt,
     shutdownCorrelationId: runtimeSessionId ?? null,
+    phaseTimeoutMs: options.phaseTimeoutMs ?? DEFAULT_SHUTDOWN_PHASE_TIMEOUT_MS,
+    setTimeoutFn: options.setTimeoutFn,
+    clearTimeoutFn: options.clearTimeoutFn,
+    pendingPhaseOperations,
   })
   return reportShutdownFailure({
     error,
@@ -960,6 +1127,7 @@ function reportShutdownSetupFailure({ error, state, options, now, runtimeSession
 
 function createStopHandler({ options, state, now, runtimeSessionId, strategyShutdownCoordinator } = {}) {
   let shutdownPromise
+  const pendingPhaseOperations = new Map()
   return function stop(stopOptions = {}) {
     if (shutdownPromise) {
       return shutdownPromise
@@ -973,6 +1141,7 @@ function createStopHandler({ options, state, now, runtimeSessionId, strategyShut
         runtimeSessionId,
         strategyShutdownCoordinator,
         stopOptions,
+        pendingPhaseOperations,
       })
       shutdownPromise = runShutdownLifecycle(context).catch((error) => {
         shutdownPromise = undefined
@@ -996,6 +1165,7 @@ function createStopHandler({ options, state, now, runtimeSessionId, strategyShut
           now,
           runtimeSessionId,
           strategyShutdownCoordinator,
+          pendingPhaseOperations,
         })
       })
     }
