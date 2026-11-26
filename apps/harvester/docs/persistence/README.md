@@ -16,6 +16,22 @@ Merged [PR #1650](https://github.com/45s/coinzilla/pull/1650) adds the versioned
 
 **Relational implementation:** Phases 1/2 are complete in merged [PR #1555](https://github.com/45s/coinzilla/pull/1555); Phase 3 is complete in merged [PR #1557](https://github.com/45s/coinzilla/pull/1557). The merged implementation and its documented coverage limitations are described below.
 
+## Relational history startup failure diagnostics — issue #1854
+
+Harvester prepares the legacy order-history store and the relational `orders`/`fills` projection during startup. If relational migration/setup fails, the current compatibility behavior retains legacy order history but leaves `relationalDatabase` unavailable. In that degraded state, exchange-history synchronization and the local trading-history API are skipped; this is not a successful relational-history startup and must not be mistaken for an empty history result.
+
+The relational preparation failure is logged once at its owning fallback boundary. The diagnostic includes the original error object (so the logger can retain its cause/stack), concrete error message, stable error code/name, and the typed error's safe scalar context/stage when present. A SQLite migration error may identify a failed constraint or migration operation. Do not copy secrets, raw environment dumps, database contents, or private account data into an issue.
+
+**Operator response:**
+
+1. Keep the Harvester process and existing database intact; do not delete, reset, or replace the SQLite file to make startup pass.
+2. Record the exact persistence error code, message, stage/context, and cause from the session logs. Preserve the reported migration backup filenames where present, but do not overwrite the original database.
+3. Treat relational history and the trading-history API as unavailable until a healthy relational database is confirmed. The legacy order-history fallback does not provide the relational orders/fills API.
+4. Follow the [Trading-history API local run instructions](../api/trading-history-api.md#start-locally); the API defaults to loopback port 4201 and versioned `/api/v1/trading/*` routes, not port 3000 or `/api/trading-history`.
+5. If a migration reports duplicate or contradictory exchange identities, preserve the fail-closed behavior. Do not merge, rewrite, or delete order/fill rows without a separately verified reconciliation plan and backup.
+
+The exact cause of an individual startup failure must be established from that run's original diagnostic; a synthetic duplicate-identity migration failure is not proof that another database failed for the same reason.
+
 ## 0. Export the complete SQLite database as JSON
 
 Use the read-only maintenance command when you need to inspect every stored record outside the database viewer.

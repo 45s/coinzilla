@@ -1,5 +1,36 @@
 # Harvester Roadmap
 
+## Relational trading-history startup failure — issue #1854
+
+In progress in [PR #1855](https://github.com/45s/coinzilla/pull/1855), branch
+`fix/harvester/1854-trading-history-persistence-startup`.
+
+The 2026-11-26 operator run retained legacy order history but reported relational trading-history
+persistence unavailable, skipped exchange-history synchronization, and did not start the local
+trading-history API. Source confirms that the API requires
+`resources.orderHistoryPersistence.relationalDatabase`; the current compatibility fallback leaves
+that field null after a relational setup/migration failure.
+
+- The exact cause in the operator's database remains **unconfirmed**; the supplied startup log
+  contained only a generic error code/name and did not include the original SQLite cause.
+- A deterministic offline regression reproduces a v5 migration failure when two legacy rows have
+  distinct client IDs but duplicate market-scoped exchange order IDs. GitHub Actions RED was
+  observed on test-only head
+  `bc292dbcee1a5bd9426e14b9b893c0adb3fe0bed`: 31 passed / 1 expected failure because the
+  structured failure log omitted the original error object and concrete message. This proves the
+  diagnostic gap and one migration-failure class; it does **not** prove the operator's database
+  contains that duplicate.
+- The implementation now includes the original error object, message, stable code/name and safe
+  typed context/stage in the relational fallback log. Existing fail-closed migration behavior is
+  preserved; no automatic row merge, deletion, repair, database reset, or exchange operation is
+  introduced.
+- The local API contract is loopback port 4201 with versioned `/api/v1/trading/orders` and
+  `/api/v1/trading/fills` routes. The API cannot start while relational persistence is unavailable.
+- Persistence/API operational docs now explain the degraded startup state and provide Bash DOGEUSDT
+  history commands without requiring `jq`.
+
+The diagnostic regression is verified GREEN by the Harvester Targeted Tests workflow. The exact operator-database failure remains unconfirmed until its original migration cause is available; decide any data-specific correction only from that evidence. Keep TESTNET/LIVE exchange writes, account mutation, bot restarts, and destructive database repair out of this task.
+
 ## Binance historical order identity collisions — issue #1851
 
 Complete in merged [PR #1849](https://github.com/45s/coinzilla/pull/1849); all six required workflows passed on exact PR head `7c8763d3153eb7ea4c5c9a929ea78eab33ea2f9d`. The 2026-11-25 TESTNET startup history scan failed independently for ZROUSDT and DOGEUSDT with immutable-price conflicts while records shared client IDs but carried exchange order IDs 661748 and 1193792. Source inspection confirmed the canonical identity and relational uniqueness constraint were clientOrderId-based. Binance permits clientOrderId reuse after the previous order is FILLED; pending identities remain market-scoped because the REST documentation does not specify cross-symbol client-ID uniqueness. The corrected model keys exchange-identified orders by provider/account/environment/market/exchangeOrderId and links fills by that same identity. Migration v5 preserves old row IDs and foreign-key links, verifies a pre-migration backup, and fails closed on duplicate exchange identities. Same-order immutable price conflicts remain fatal and any failed history page keeps coverage incomplete. The sanitized report is [2026-11-25 ZRO/DOGE order-history identity investigation](./docs/audits/reports/2026-11-25_binance-order-history-identity-conflicts.md). The exact old SQLite row broker IDs/prices were not present in recovered logs or Library files; regression prices are synthetic, so the per-symbol original row pairing remains explicitly unproven.
