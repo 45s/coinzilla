@@ -124,88 +124,152 @@ function makeRecords({ stopped = true } = {}) {
     ...(stopped ? [makeStoppedFact()] : []),
   ]
 }
-function makeContext() {
-  const marketInputs = [
+function makeMarketInputs() {
+  return [
     {
       venue: "BINANCE",
       symbol: "BTCUSDT",
-      baseAsset: { id: "binance:BTC", code: "BTC" },
-      quoteAsset: { id: "binance:USDT", code: "USDT" },
+      baseAsset: {
+        id: "binance:BTC",
+        code: "BTC",
+      },
+      quoteAsset: {
+        id: "binance:USDT",
+        code: "USDT",
+      },
     },
     {
       venue: "BINANCE",
       symbol: "ETHUSDT",
-      baseAsset: { id: "binance:ETH", code: "ETH" },
-      quoteAsset: { id: "binance:USDT", code: "USDT" },
+      baseAsset: {
+        id: "binance:ETH",
+        code: "ETH",
+      },
+      quoteAsset: {
+        id: "binance:USDT",
+        code: "USDT",
+      },
     },
   ]
-  const balances = [
-    { asset: "BTC", free: "0", locked: "0", total: "0" },
-    { asset: "ETH", free: "0", locked: "0", total: "0" },
-    { asset: "USDT", free: "100", locked: "0", total: "100" },
+}
+
+function makeBalanceRecords() {
+  return [
+    {
+      asset: "BTC",
+      free: "0",
+      locked: "0",
+      total: "0",
+    },
+    {
+      asset: "ETH",
+      free: "0",
+      locked: "0",
+      total: "0",
+    },
+    {
+      asset: "USDT",
+      free: "100",
+      locked: "0",
+      total: "100",
+    },
   ]
-  const marketsEvidence = Object.fromEntries(configuredMarkets.map((symbol) => [symbol, {
-    coverage: {
-      coveredFromTime: 100,
-      verifiedAt: 200,
-      evidenceDigest: "c".repeat(64),
-      verifiedBy: "operator-7",
+}
+
+function makeJournalRecords({ balances }) {
+  return [
+    {
+      position: { fileName: "offline-session" },
+      payload: {
+        source: "harvester",
+        name: "account.snapshot_captured",
+        data: {
+          phase: "PREFLIGHT",
+          sourceTime: 100,
+          auditStatus: "COMPLETE",
+          auditReasons: [],
+          balances,
+        },
+      },
     },
-    tradeHistory: {
-      historyStartTime: 100,
-      historyScope: "MARKET",
-      marketsQueried: [symbol],
-      historyPagesComplete: true,
-      marketHistoryPagesComplete: true,
-      marketUniverseComplete: false,
-      fills: [],
+    {
+      position: { fileName: "offline-session" },
+      payload: {
+        source: "harvester",
+        name: "harvester.started",
+        data: {
+          tradingEnabled: true,
+        },
+      },
     },
-  }]))
+  ]
+}
+
+function makeMarketsEvidence() {
+  return Object.fromEntries(configuredMarkets.map((symbol) => [
+    symbol,
+    {
+      coverage: {
+        coveredFromTime: 100,
+        verifiedAt: 200,
+        evidenceDigest: "c".repeat(64),
+        verifiedBy: "operator-7",
+      },
+      tradeHistory: {
+        historyStartTime: 100,
+        historyScope: "MARKET",
+        marketsQueried: [symbol],
+        historyPagesComplete: true,
+        marketHistoryPagesComplete: true,
+        marketUniverseComplete: false,
+        fills: [],
+      },
+    },
+  ]))
+}
+
+function makeExchangeEvidence() {
   return {
-    runtimeSessionId,
-    configuredMarkets,
-    journalRecords: [
-      {
-        position: { fileName: "offline-session" },
-        payload: {
-          source: "harvester",
-          name: "account.snapshot_captured",
-          data: {
-            phase: "PREFLIGHT",
-            sourceTime: 100,
-            auditStatus: "COMPLETE",
-            auditReasons: [],
-            balances,
-          },
+    currentAccountSnapshot: {
+      sourceTime: 1_700_000_000_000,
+      balances: [
+        {
+          assetId: "binance:BTC",
+          asset: "BTC",
+          free: "0",
+          locked: "0",
         },
-      },
-      {
-        position: { fileName: "offline-session" },
-        payload: {
-          source: "harvester",
-          name: "harvester.started",
-          data: { tradingEnabled: true },
+        {
+          assetId: "binance:ETH",
+          asset: "ETH",
+          free: "0",
+          locked: "0",
         },
-      },
-    ],
-    markets: marketInputs,
-    assets: [],
-    marketsEvidence,
-    exchange: {
-      currentAccountSnapshot: {
-        sourceTime: 300,
-        balances: [
-          { assetId: "binance:BTC", asset: "BTC", free: "0", locked: "0" },
-          { assetId: "binance:ETH", asset: "ETH", free: "0", locked: "0" },
-          { assetId: "binance:USDT", asset: "USDT", free: "100", locked: "0" },
-        ],
-      },
-      openOrders: [],
-      ownedOrderHistory: [],
+        {
+          assetId: "binance:USDT",
+          asset: "USDT",
+          free: "100",
+          locked: "0",
+        },
+      ],
     },
+    openOrders: [],
+    ownedOrderHistory: [],
   }
 }
 
+function makeContext() {
+  const balances = makeBalanceRecords()
+  return {
+    runtimeSessionId,
+    configuredMarkets,
+    journalRecords: makeJournalRecords({ balances }),
+    markets: makeMarketInputs(),
+    assets: [],
+    marketsEvidence: makeMarketsEvidence(),
+    exchange: makeExchangeEvidence(),
+  }
+}
 function readyMarketAudit(symbol) {
   return {
     ok: true,
