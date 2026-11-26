@@ -104,7 +104,8 @@ socketTimeoutMS })
 
   function rejectPending(error) {
     for (const [requestId, entry] of pending) {
-      settleRequest({ requestId, error: createRequestError({
+      settleRequest({ requestId,
+error: createRequestError({
         message: error.message,
         cause: error.cause ?? error,
         outcomeUnknown: entry.sent && !entry.transaction && isWriteOperation(entry.operation),
@@ -120,9 +121,11 @@ socketTimeoutMS })
     clearTimeout(connectTimer)
     connectTimer = null
     state = "closed"
-    rejectPending(createRequestError({ message: "MongoDB connection closed before command completed", cause: error }))
+    rejectPending(createRequestError({ message: "MongoDB connection closed before command completed",
+cause: error }))
     if (wasConnecting && connectReject) {
-      connectReject(createRequestError({ message: "MongoDB connection failed", cause: error }))
+      connectReject(createRequestError({ message: "MongoDB connection failed",
+cause: error }))
     }
     connectResolve = null
     connectReject = null
@@ -154,7 +157,8 @@ socketTimeoutMS })
       })
       return
     }
-    settleRequest({ requestId: response.responseTo, response: response.body })
+    settleRequest({ requestId: response.responseTo,
+response: response.body })
   }
 
   function handleData(chunk) {
@@ -331,14 +335,16 @@ sent: false }
         entry.sent = true
         socket.write(frame, (error) => {
           if (error) {
-            failConnection(createRequestError({ message: "MongoDB socket write failed", cause: error }))
+            failConnection(createRequestError({ message: "MongoDB socket write failed",
+cause: error }))
             socket?.destroy()
           }
         })
       } catch (error) {
         // A synchronous write throw means the frame was not accepted by the socket.
         entry.sent = false
-        failConnection(createRequestError({ message: "MongoDB socket write failed", cause: error }))
+        failConnection(createRequestError({ message: "MongoDB socket write failed",
+cause: error }))
         socket?.destroy()
       }
     })
