@@ -82,8 +82,6 @@ export function createRestSignature(options = {}) {
     bodyIsSerialized: options.bodyIsSerialized,
   })
   const payload = `${nonce}${timestamp}${apiKey}${query}${body}`
-  // Bitunix requires this double-SHA256 construction for request authentication.
-  // This is a protocol signature, not password storage; changing it breaks API auth.
   const digest = createHash("sha256").update(payload).digest("hex")
   return createHash("sha256").update(`${digest}${signingSecret}`).digest("hex")
 }
