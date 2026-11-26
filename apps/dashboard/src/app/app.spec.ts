@@ -251,10 +251,19 @@ describe('AppComponent', () => {
     fixture.detectChanges();
 
     let tabs = Array.from(root.querySelectorAll('.section-nav-item'));
-    expect(tabs.map((tab) => tab.textContent?.trim())).toEqual([
-      'Markets', 'Orders', 'Fills', 'Commissions', 'Open Orders', 'Exchanges', 'History SOON',
-    ]);
-    expect(tabs.at(-1)?.getAttribute('aria-disabled')).toBe('true');
+    expect(tabs.map((tab) => tab.textContent?.trim())).toEqual(['Markets', 'Orders', 'History']);
+
+    const ordersTab = tabs.find((tab) => tab.textContent?.trim() === 'Orders') as HTMLButtonElement;
+    ordersTab.click();
+    fixture.detectChanges();
+    let secondaryTabs = Array.from(root.querySelectorAll('.context-subnav-item'));
+    expect(secondaryTabs.map((tab) => tab.textContent?.trim())).toEqual(['Orders', 'Open Orders', 'Exchanges']);
+
+    const historyTab = tabs.find((tab) => tab.textContent?.trim() === 'History') as HTMLButtonElement;
+    historyTab.click();
+    fixture.detectChanges();
+    secondaryTabs = Array.from(root.querySelectorAll('.context-subnav-item'));
+    expect(secondaryTabs.map((tab) => tab.textContent?.trim())).toEqual(['Fills', 'Commissions']);
 
     const botsButton = Array.from(root.querySelectorAll('button.nav-item'))
       .find((button) => button.textContent?.includes('Bots')) as HTMLButtonElement;
@@ -265,6 +274,7 @@ describe('AppComponent', () => {
       'Operators', 'Orders', 'Positions SOON', 'Portfolio',
     ]);
     expect(tabs[2]?.getAttribute('aria-disabled')).toBe('true');
+    expect(root.querySelectorAll('.context-subnav-item')).toHaveLength(0);
 
     fixture.destroy();
   });
