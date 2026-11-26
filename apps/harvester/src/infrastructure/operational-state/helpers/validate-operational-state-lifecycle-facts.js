@@ -204,7 +204,7 @@ export function validateSafetyBlockerResolvedFact({ factType, canonicalData, fac
       canonicalData.resolvedBy !== expectedResolvedBy ||
       !Array.isArray(canonicalData.actionBlockerIds) ||
       canonicalData.actionBlockerIds.length === 0 ||
-      canonicalData.actionBlockerIds.length > 64 ||
+      canonicalData.actionBlockerIds.length > 256 ||
       canonicalData.actionBlockerIds.some((blockerId) =>
         typeof blockerId !== "string" || !SHA256_PATTERN.test(blockerId)
       ) ||
