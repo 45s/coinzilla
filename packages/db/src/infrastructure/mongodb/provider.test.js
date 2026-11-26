@@ -640,6 +640,7 @@ test("MongoDB commit treats an explicit write concern rejection as a confirmed p
       (error) => error.code === "DB_PROVIDER_OPERATION_FAILED",
     )
     assert.equal(calls.filter((body) => body.commitTransaction === 1).length, 1)
+    assert.equal(calls.filter((body) => body.abortTransaction === 1).length, 1)
   } finally {
     await database.close()
   }
