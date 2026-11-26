@@ -147,6 +147,7 @@ function activateTradingEngine({
   getAccountSnapshot,
   resumeDeferredStrategyEvaluations,
 }) {
+  state.tradingActivationDeferred = false
   logSystem({
     logger,
     message: `Conservative ${tradingModeLabel} startup checks passed; current account audit is complete`,
@@ -199,6 +200,7 @@ export async function subscribeToUserData({
   deferTradingActivation = false,
 } = {}) {
   const tradingModeLabel = tradingMode === "live" ? "LIVE" : "TESTNET"
+  state.tradingActivationDeferred = deferTradingActivation === true
   logUserDataSubscriptionStarting(logger)
 
   const userDataSubscription = await createUserDataSubscription({

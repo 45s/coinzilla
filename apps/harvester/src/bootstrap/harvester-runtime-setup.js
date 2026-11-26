@@ -6,6 +6,7 @@ export function createHarvesterUserDataState() {
     marketIntakeStopped: false,
     ready: false,
     preflightComplete: false,
+    tradingActivationDeferred: false,
     initialAccountSnapshotReady: false,
     requiresReconciliation: false,
     streamUnsafe: false,

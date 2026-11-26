@@ -17,6 +17,7 @@ const createState = (overrides = {}) => ({
   lastReportedRecoveredGeneration: -1,
   startupComplete: true,
   pendingRecovery: false,
+  tradingActivationDeferred: false,
   initialAccountSnapshotReady: true,
   ...overrides,
 })
@@ -49,6 +50,27 @@ events,
 logs,
 actions }
 }
+
+test("does not let an early stream status bypass the deferred startup readiness audit", () => {
+  const { handler, state, actions } = createHandler({
+    state: createState({
+      tradingActivationDeferred: true,
+      initialAccountSnapshotReady: true,
+      ready: false,
+    }),
+  })
+  handler({ type: "connected" })
+
+  assert.equal(state.ready, false, "A connected stream must not open the existing trading gate while startup readiness is deferred.")
+  assert.equal(state.status, "STARTUP_READINESS_AUDIT_PENDING", "The status must explain why readiness remains closed.")
+  assert.equal(actions.resumptions, 0, "Deferred strategy evaluations must not resume before the startup report passes.")
+
+  state.tradingActivationDeferred = false
+  handler({ type: "connected" })
+  assert.equal(state.ready, true, "The existing user-data readiness gate may open after the explicit startup activation boundary.")
+  assert.equal(actions.resumptions, 1, "Deferred strategy evaluations may resume only after explicit activation.")
+})
+
 
 test("a transport disconnect invalidates recovery generation and closes readiness", () => {
   const { handler, state, events } = createHandler()

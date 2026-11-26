@@ -376,6 +376,11 @@ status })
     state.status = "EXECUTION_ACCOUNTING_FAILED"
     return
   }
+  if (state.tradingActivationDeferred === true) {
+    state.ready = false
+    state.status = "STARTUP_READINESS_AUDIT_PENDING"
+    return
+  }
   if (state.initialAccountSnapshotReady && tradingEnabled) {
     state.ready = true
     state.status = "READY"

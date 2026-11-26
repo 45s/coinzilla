@@ -104,3 +104,8 @@ The configured Harvester regression matrix now includes the immutable report, au
 ## Implementation checkpoint — source-backed readiness inputs
 
 The startup composition now derives market route expectations from the configured per-symbol market-data provider identity (no fallback to the execution broker identity), checks the actual application-owned `BROKER_PORT_METHODS` contract, and includes the existing account-scoped safety-blocker projection. Price/book evidence carries the source-owned 5-second threshold; candle freshness is supplied by the candle-history service rather than duplicated in the report.
+
+
+## Deferred user-data readiness
+
+The existing `userDataState.ready` remains the only global trading gate. While the startup report is pending, the user-data status observer is prevented from reopening that gate on an early `connected` status. The explicit post-report activation continuation revalidates the existing reconciliation/account safety conditions, clears the temporary lifecycle deferral flag, and opens the same gate. This prevents asynchronous status callbacks from bypassing the startup boundary without adding a second readiness authority.
