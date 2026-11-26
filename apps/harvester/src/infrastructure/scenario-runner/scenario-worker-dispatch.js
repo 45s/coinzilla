@@ -32,6 +32,9 @@ export function createScenarioWorkerDispatcher({ adapters } = {}) {
     if (!execute) {
       throw new Error(`No isolated worker adapter is registered for strategy "${request.strategyId}"`)
     }
-    return execute({ ...request, signal })
+    return execute({
+      ...request,
+      signal,
+    })
   }
 }

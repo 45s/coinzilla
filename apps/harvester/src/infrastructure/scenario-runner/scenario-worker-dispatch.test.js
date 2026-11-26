@@ -22,7 +22,10 @@ test("worker dispatcher routes by registered strategy without strategy-specific 
     }],
   })
   const controller = new AbortController()
-  const result = await dispatch({ request, signal: controller.signal })
+  const result = await dispatch({
+    request,
+    signal: controller.signal,
+  })
   assert.deepEqual(result, { output: "simulated" }, "the registered strategy adapter result must be returned")
   assert.equal(received.strategyId, "example", "dispatch must preserve strategy identity")
   assert.equal(received.scenarioId, "scenario-1", "dispatch must preserve scenario identity")
@@ -32,7 +35,9 @@ test("worker dispatcher routes by registered strategy without strategy-specific 
 test("worker dispatcher rejects unknown strategies instead of falling back", async () => {
   const dispatch = createScenarioWorkerDispatcher({ adapters: [] })
   await assert.rejects(
-    dispatch({ request }),
+    dispatch({
+      request,
+    }),
     /No isolated worker adapter is registered/,
     "unknown strategy IDs must never select an implicit adapter",
   )
@@ -50,12 +55,22 @@ test("worker dispatcher validates requests before adapter execution", async () =
     }],
   })
   await assert.rejects(
-    dispatch({ request: { ...request, type: "cancel" } }),
+    dispatch({
+      request: {
+        ...request,
+        type: "cancel",
+      },
+    }),
     /request type must be execute/,
     "non-execution messages must not reach strategy adapters",
   )
   await assert.rejects(
-    dispatch({ request: { ...request, runId: " " } }),
+    dispatch({
+      request: {
+        ...request,
+        runId: " ",
+      },
+    }),
     /requires run, strategy and scenario identity/,
     "blank run identity must be rejected before dispatch",
   )
@@ -66,14 +81,21 @@ test("worker dispatcher rejects duplicate or malformed adapter registrations", (
   const execute = async () => ({})
   assert.throws(
     () => createScenarioWorkerDispatcher({ adapters: [
-      { strategyId: "example", execute },
+      {
+        strategyId: "example",
+        execute,
+      },
       { strategyId: "example", execute },
     ] }),
     /Duplicate scenario worker adapter/,
     "ambiguous strategy registration must fail during worker initialization",
   )
   assert.throws(
-    () => createScenarioWorkerDispatcher({ adapters: [{ strategyId: "example" }] }),
+    () => createScenarioWorkerDispatcher({
+      adapters: [{
+        strategyId: "example",
+      }],
+    }),
     /requires a strategy ID and execute function/,
     "incomplete adapter registration must fail during worker initialization",
   )
@@ -93,7 +115,10 @@ test("worker dispatcher rejects execution after cancellation before invoking an 
   const controller = new AbortController()
   controller.abort()
   await assert.rejects(
-    dispatch({ request, signal: controller.signal }),
+    dispatch({
+      request,
+      signal: controller.signal,
+    }),
     /cancelled/,
     "an already-aborted worker must not start strategy execution",
   )
