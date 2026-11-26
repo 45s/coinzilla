@@ -21,6 +21,7 @@ const SQLITE_CAPABILITIES = Object.freeze({
   transactions: Object.freeze({
     callbackMode: "synchronous",
     nestedTransactions: false,
+    multiDocument: true,
   }),
   queries: Object.freeze({
     equalityFilters: true,
@@ -346,6 +347,11 @@ function createProviderDatabase({ filename, timeout }) {
       state,
       work,
       intent: "read",
+    }),
+    execute: ({ operation, input }) => runProviderTransaction({
+      state,
+      work: (transaction) => transaction[operation](input),
+      intent: operation === "readOne" || operation === "readMany" ? "read" : "write",
     }),
   }
 }
