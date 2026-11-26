@@ -491,7 +491,13 @@ function validateSubmission({ submission }) {
   const { strategyId, scenarioId, input = null } = submission ?? {}
   if (typeof strategyId !== "string" || !strategyId.trim() ||
       typeof scenarioId !== "string" || !scenarioId.trim()) {
-    throw new TypeError("Scenario Runner submission requires strategy and scenario IDs")
+    throw Object.assign(
+      new TypeError("Scenario Runner submission requires strategy and scenario IDs"),
+      {
+        status: 400,
+        code: "SCENARIO_RUNNER_SUBMISSION_INVALID",
+      },
+    )
   }
   return {
     strategyId,

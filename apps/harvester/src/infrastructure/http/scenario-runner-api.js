@@ -33,11 +33,33 @@ function isAllowedBrowserOrigin({ request }) {
   )
 }
 
-function resolveErrorCode({ error }) {
+function resolveErrorStatus({ error }) {
+  const status = error?.status
+  if (Number.isSafeInteger(status) && status >= 400 && status <= 599) {
+    return status
+  }
+  return 500
+}
+
+function resolveErrorCode({ error, status }) {
   if (typeof error?.code === "string" && error.code.trim()) {
     return error.code
   }
-  return "SCENARIO_RUNNER_REQUEST_INVALID"
+  return status >= 500
+    ? "SCENARIO_RUNNER_INTERNAL_ERROR"
+    : "SCENARIO_RUNNER_REQUEST_INVALID"
+}
+
+function logScenarioRunnerFailure({ logger, error }) {
+  try {
+    logger?.error?.({
+      message: "Scenario Runner API request failed",
+      errorName: error?.name ?? "Error",
+      errorCode: error?.code ?? "SCENARIO_RUNNER_INTERNAL_ERROR",
+    })
+  } catch {
+    // Logging must not interrupt the API response.
+  }
 }
 
 function sendError({ response, status, code, message }) {
@@ -237,7 +259,7 @@ async function handleRunRoute({ request, response, pathname, runner }) {
 }
 
 
-async function handleScenarioRunnerRoutes({ request, response, pathname, runner, catalog }) {
+async function handleScenarioRunnerRoutes({ request, response, pathname, runner, catalog, logger }) {
   try {
     if (handleMethod({
       request,
@@ -258,11 +280,23 @@ async function handleScenarioRunnerRoutes({ request, response, pathname, runner,
     }
     handleUnknownRoute({ response })
   } catch (error) {
+    const status = resolveErrorStatus({ error })
+    if (status >= 500) {
+      logScenarioRunnerFailure({
+        logger,
+        error,
+      })
+    }
     sendError({
       response,
-      status: Number.isSafeInteger(error?.status) ? error.status : 400,
-      code: resolveErrorCode({ error }),
-      message: error instanceof Error ? error.message : "Scenario Runner request failed.",
+      status,
+      code: resolveErrorCode({
+        error,
+        status,
+      }),
+      message: status >= 500
+        ? "Scenario Runner request failed."
+        : error instanceof Error ? error.message : "Scenario Runner request is invalid.",
     })
   }
   return true
@@ -274,6 +308,7 @@ export async function handleScenarioRunnerRequest({
   pathname,
   runner,
   catalog = [],
+  logger,
 } = {}) {
   if (!pathname.startsWith(API_PREFIX)) {
     return false
@@ -306,5 +341,6 @@ export async function handleScenarioRunnerRequest({
     pathname,
     runner,
     catalog,
+    logger,
   })
 }

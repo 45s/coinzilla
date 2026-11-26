@@ -636,6 +636,7 @@ test("Scenario Runner API sanitizes unexpected internal failures as server error
     throw new Error("internal worker path /srv/private/scenario-worker.js")
   }
   const response = responseRecorder()
+  const loggedErrors = []
 
   await handleScenarioRunnerRequest({
     request: createRequest({
@@ -650,6 +651,9 @@ test("Scenario Runner API sanitizes unexpected internal failures as server error
     response,
     pathname: "/api/v1/scenario-runner/runs",
     runner,
+    logger: {
+      error: (entry) => loggedErrors.push(entry),
+    },
   })
 
   const body = JSON.parse(response.body)
@@ -659,6 +663,11 @@ test("Scenario Runner API sanitizes unexpected internal failures as server error
   assert.equal(body.error.message, "Scenario Runner request failed.")
   assert.equal(response.body.includes("/srv/private"), false,
     "Internal paths and error details must not be exposed to browser clients.")
+  assert.equal(loggedErrors.length, 1,
+    "Unexpected failures must remain observable to the server operator.")
+  assert.equal(loggedErrors[0].message, "Scenario Runner API request failed")
+  assert.equal(Object.hasOwn(loggedErrors[0], "errorMessage"), false,
+    "Internal error messages must not be copied into structured API logs.")
 })
 
 test("Scenario Runner API identifies malformed runner submissions as client errors", async () => {

@@ -400,6 +400,7 @@ async function handleEarlyRequestRoutes({
     pathname: url.pathname,
     runner: scenarioRunner,
     catalog: scenarioRunnerCatalog,
+    logger,
   })) {
     return true
   }

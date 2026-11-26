@@ -143,3 +143,5 @@ The runner captures the original validated execution input before deleting its p
 ## REST error classification — 2026-11-26
 
 The Scenario Runner REST boundary preserves explicit client validation and capacity statuses. Unexpected runner or infrastructure exceptions are logged server-side and returned as HTTP 500 with a stable internal-error code and a generic message; implementation details and internal paths are not exposed to browser callers.
+
+The HTTP adapter assigns malformed submission identity errors an explicit 400/code contract. Unexpected exceptions are logged with stable component/error metadata, while their raw message and internal paths remain server-side and are not copied into response bodies or structured log fields.
