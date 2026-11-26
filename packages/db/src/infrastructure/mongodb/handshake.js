@@ -100,11 +100,25 @@ export function parseMongoConnectionString(connectionString) {
   }
   const authSource = url.searchParams.get("authSource") ?? databaseName
   const tlsValue = url.searchParams.get("tls") ?? url.searchParams.get("ssl")
+  const userInfo = authority.includes("@") ? authority.slice(0, authority.lastIndexOf("@")) : null
+  const username = url.username === "" ? undefined : decodeURIComponent(url.username)
+  const hasPasswordSeparator = userInfo?.includes(":") ?? false
+  const password = hasPasswordSeparator ? decodeURIComponent(url.password) : undefined
+  if (userInfo !== null && username === undefined) {
+    throw new TypeError("MongoDB URI password requires a username")
+  }
+  if (username !== undefined && password === undefined) {
+    throw new TypeError("MongoDB URI username requires a password")
+  }
+  const host = url.hostname.startsWith("[") ? url.hostname.slice(1, -1) : url.hostname
+  if (host === "") {
+    throw new TypeError("MongoDB URI requires a host")
+  }
   return {
-    host: url.hostname.startsWith("[") ? url.hostname.slice(1, -1) : url.hostname,
+    host,
     port: url.port === "" ? 27017 : Number(url.port),
-    username: url.username === "" ? undefined : decodeURIComponent(url.username),
-    password: url.password === "" ? undefined : decodeURIComponent(url.password),
+    username,
+    password,
     databaseName,
     authSource,
     authMechanism: url.searchParams.get("authMechanism") ?? undefined,
@@ -209,7 +223,6 @@ export async function performMongoHandshake({
   if (!Number.isSafeInteger(minWireVersion)
     || !Number.isSafeInteger(maxWireVersion)
     || maxWireVersion < MIN_SUPPORTED_WIRE_VERSION
-    || maxWireVersion > MAX_SUPPORTED_WIRE_VERSION
     || minWireVersion > MAX_SUPPORTED_WIRE_VERSION
     || maxWireVersion < minWireVersion) {
     throw new Error(
