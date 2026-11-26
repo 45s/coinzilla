@@ -10,15 +10,7 @@ import {
 const USER_KEY_PREFIX = "__coinzilla_key_"
 const CURSOR_BATCH_SIZE = 1_000
 const MONGO_COLLECTION_PREFIX = "coinzilla_"
-const SCALAR_SORT_RANK = [
-  { case: { $in: ["$$fieldType", ["missing", "null"]] }, then: 0 },
-  {
-    case: { $eq: ["$$fieldType", "bool"] },
-    then: { $cond: [{ $eq: ["$$fieldValue", false] }, 1, 2] },
-  },
-  { case: { $in: ["$$fieldType", ["int", "long", "double", "decimal"]] }, then: 3 },
-  { case: { $eq: ["$$fieldType", "string"] }, then: 4 },
-]
+
 
 class MongoCommandError extends Error {
   constructor(response) {
@@ -142,10 +134,35 @@ function encodeCollectionName(collection, databaseName) {
   return encoded
 }
 
+function createSortMetadataValue(value) {
+  let rank
+  let sortValue = value
+  if (value === null) {
+    rank = 0
+  } else if (value === false) {
+    rank = 1
+  } else if (value === true) {
+    rank = 2
+  } else if (typeof value === "number") {
+    rank = 3
+  } else if (typeof value === "string") {
+    rank = 4
+  } else {
+    rank = 5
+    sortValue = JSON.stringify(value)
+  }
+  return { rank, value: sortValue }
+}
+
 function createStoredDocument(record) {
+  const sortData = {}
+  for (const [field, value] of Object.entries(record)) {
+    sortData[encodeUserKey(field)] = createSortMetadataValue(value)
+  }
   return {
     _id: record.id,
     data: encodeUserValue(record),
+    sortData,
   }
 }
 
@@ -188,22 +205,9 @@ function createSortStages(sort) {
     const { field, direction } = sort[index]
     const typeKey = `__coinzillaSortType${index}`
     const valueKey = `__coinzillaSortValue${index}`
-    const fieldPath = `$data.${encodeUserKey(field)}`
-    additions[typeKey] = {
-      $let: {
-        vars: {
-          fieldType: { $type: fieldPath },
-          fieldValue: fieldPath,
-        },
-        in: {
-          $switch: {
-            branches: SCALAR_SORT_RANK,
-            default: 5,
-          },
-        },
-      },
-    }
-    additions[valueKey] = fieldPath
+    const metadataPath = `$sortData.${encodeUserKey(field)}`
+    additions[typeKey] = { $ifNull: [`${metadataPath}.rank`, 0] }
+    additions[valueKey] = { $ifNull: [`${metadataPath}.value`, null] }
     const sortDirection = direction === "asc" ? 1 : -1
     ordering[typeKey] = sortDirection
     ordering[valueKey] = sortDirection
@@ -379,7 +383,9 @@ function createMongoRecordOperations({ command, databaseName }) {
     const mongoCollection = encodeCollectionName(collection, databaseName)
     const set = {}
     for (const [field, value] of Object.entries(snapshot)) {
-      set[`data.${encodeUserKey(field)}`] = encodeUserValue(value)
+      const encodedKey = encodeUserKey(field)
+      set[`data.${encodedKey}`] = encodeUserValue(value)
+      set[`sortData.${encodedKey}`] = createSortMetadataValue(value)
     }
     const response = await runMongoCommand({
       command,
