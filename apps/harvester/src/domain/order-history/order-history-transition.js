@@ -12,13 +12,43 @@ const STATUS_PRIORITY = Object.freeze({
   FILLED: 5,
 })
 
-function integrityError({ field, current } = {}) {
-  throw new OrderHistoryIntegrityError({
+function isSafeConflictValue(value) {
+  return (
+    (typeof value === "string" && value.length <= 128) ||
+    (typeof value === "number" && Number.isFinite(value)) ||
+    typeof value === "boolean"
+  )
+}
+
+function integrityError({ field, current, candidate } = {}) {
+  const context = {
     field,
     providerInstanceId: current.providerInstanceId,
+    providerType: current.providerType,
     accountId: current.accountId,
+    environment: current.environment,
+    marketId: current.market?.id ?? candidate?.market?.id,
+    symbol: current.symbol ?? candidate?.symbol,
     clientOrderId: current.clientOrderId,
-  })
+    brokerOrderId: candidate?.brokerOrderId ?? current.brokerOrderId,
+    existingBrokerOrderId: current.brokerOrderId,
+    incomingBrokerOrderId: candidate?.brokerOrderId,
+    existingSource: current.lastSourceEventSource,
+    incomingSource: candidate?.lastSourceEventSource,
+    reconciliationDecision: "rejected",
+    recoverable: false,
+  }
+  if (candidate !== undefined) {
+    const existingValue = current[field]
+    const incomingValue = candidate[field]
+    if (isSafeConflictValue(existingValue)) {
+      context.existingValue = existingValue
+    }
+    if (isSafeConflictValue(incomingValue)) {
+      context.incomingValue = incomingValue
+    }
+  }
+  throw new OrderHistoryIntegrityError(context)
 }
 
 function assertEqualField({ current, candidate, field } = {}) {
@@ -26,24 +56,77 @@ function assertEqualField({ current, candidate, field } = {}) {
     integrityError({
       field,
       current,
+      candidate,
     })
   }
 }
 
 function assertOptionalEqualField({ current, candidate, field } = {}) {
+  const currentValue = current[field]
+  const candidateValue = candidate[field]
   if (
-    current[field] !== undefined &&
-    candidate[field] !== undefined &&
-    current[field] !== candidate[field]
+    currentValue !== undefined &&
+    currentValue !== null &&
+    candidateValue !== undefined &&
+    candidateValue !== null &&
+    currentValue !== candidateValue
   ) {
     integrityError({
       field,
       current,
+      candidate,
     })
   }
 }
 
-function assertImmutableOrderFacts({ current, candidate } = {}) {
+function assertOptionalEqualDecimalField({ current, candidate, field } = {}) {
+  const currentValue = current[field]
+  const candidateValue = candidate[field]
+  if (
+    currentValue !== undefined &&
+    currentValue !== null &&
+    candidateValue !== undefined &&
+    candidateValue !== null &&
+    compareDecimal({
+      left: currentValue,
+      right: candidateValue,
+    }) !== 0
+  ) {
+    integrityError({
+      field,
+      current,
+      candidate,
+    })
+  }
+}
+
+function assertEqualDecimalField({ current, candidate, field } = {}) {
+  if (compareDecimal({
+    left: current[field],
+    right: candidate[field],
+  }) !== 0) {
+    integrityError({
+      field,
+      current,
+      candidate,
+    })
+  }
+}
+
+function preserveEquivalentDecimalRepresentation({ current, candidate, merged, field } = {}) {
+  if (
+    current[field] !== undefined &&
+    candidate[field] !== undefined &&
+    compareDecimal({
+      left: current[field],
+      right: candidate[field],
+    }) === 0
+  ) {
+    merged[field] = current[field]
+  }
+}
+
+function assertOrderIdentityFields({ current, candidate } = {}) {
   for (const field of [
     "environment",
     "providerInstanceId",
@@ -53,7 +136,6 @@ function assertImmutableOrderFacts({ current, candidate } = {}) {
     "symbol",
     "side",
     "type",
-    "originalQuantity",
   ]) {
     assertEqualField({
       current,
@@ -65,28 +147,32 @@ function assertImmutableOrderFacts({ current, candidate } = {}) {
     integrityError({
       field: "market",
       current,
+      candidate,
     })
   }
-  assertOptionalEqualField({
+}
+
+function assertImmutableOrderFinancialFacts({ current, candidate } = {}) {
+  assertEqualDecimalField({
+    current,
+    candidate,
+    field: "originalQuantity",
+  })
+  assertOptionalEqualDecimalField({
     current,
     candidate,
     field: "price",
   })
-  assertOptionalEqualField({
-    current,
-    candidate,
-    field: "brokerOrderId",
-  })
-  assertOptionalEqualField({
-    current,
-    candidate,
-    field: "createdAt",
-  })
-  assertOptionalEqualField({
-    current,
-    candidate,
-    field: "acknowledgedAt",
-  })
+}
+
+function assertOptionalOrderFacts({ current, candidate } = {}) {
+  for (const field of ["brokerOrderId", "createdAt", "acknowledgedAt"]) {
+    assertOptionalEqualField({
+      current,
+      candidate,
+      field,
+    })
+  }
   if (
     current.ownership !== undefined &&
     candidate.ownership !== undefined &&
@@ -95,8 +181,24 @@ function assertImmutableOrderFacts({ current, candidate } = {}) {
     integrityError({
       field: "ownership",
       current,
+      candidate,
     })
   }
+}
+
+function assertImmutableOrderFacts({ current, candidate } = {}) {
+  assertOrderIdentityFields({
+    current,
+    candidate,
+  })
+  assertImmutableOrderFinancialFacts({
+    current,
+    candidate,
+  })
+  assertOptionalOrderFacts({
+    current,
+    candidate,
+  })
 }
 
 function isStaleOrderHistoryUpdate({ current, candidate } = {}) {
@@ -129,29 +231,38 @@ function isDuplicateSourceEvent({ current, candidate } = {}) {
     return false
   }
   if (
-    current.executedQuantity !== candidate.executedQuantity ||
+    compareDecimal({
+      left: current.executedQuantity,
+      right: candidate.executedQuantity,
+    }) !== 0 ||
+    compareDecimal({
+      left: current.remainingQuantity,
+      right: candidate.remainingQuantity,
+    }) !== 0 ||
     current.status !== candidate.status
   ) {
     integrityError({
       field: "sourceEventId",
       current,
+      candidate,
     })
   }
   return true
 }
 
 function preserveCumulativeQuoteQuantity({ current, candidate, merged } = {}) {
-  if (
-    current.cumulativeQuoteQuantity === undefined ||
-    candidate.cumulativeQuoteQuantity === undefined
-  ) {
+  if (candidate.cumulativeQuoteQuantity === undefined) {
+    merged.cumulativeQuoteQuantity = current.cumulativeQuoteQuantity
+    return
+  }
+  if (current.cumulativeQuoteQuantity === undefined) {
     return
   }
   const comparison = compareDecimal({
     left: candidate.cumulativeQuoteQuantity,
     right: current.cumulativeQuoteQuantity,
   })
-  if (comparison < 0) {
+  if (comparison <= 0) {
     merged.cumulativeQuoteQuantity = current.cumulativeQuoteQuantity
   }
 }
@@ -162,6 +273,8 @@ function createMergedOrderHistoryRecord({ current, candidate } = {}) {
     ...candidate,
     brokerOrderId: candidate.brokerOrderId ?? current.brokerOrderId,
     ownership: candidate.ownership ?? current.ownership,
+    originalQuantity: candidate.originalQuantity ?? current.originalQuantity,
+    price: candidate.price ?? current.price,
     createdAt: current.createdAt ?? candidate.createdAt,
     acknowledgedAt: current.acknowledgedAt ?? candidate.acknowledgedAt,
     firstSeenAt: current.firstSeenAt,
@@ -169,6 +282,19 @@ function createMergedOrderHistoryRecord({ current, candidate } = {}) {
     lastSeenAt: candidate.lastSeenAt > current.lastSeenAt
       ? candidate.lastSeenAt
       : current.lastSeenAt,
+  }
+  for (const field of [
+    "originalQuantity",
+    "price",
+    "executedQuantity",
+    "remainingQuantity",
+  ]) {
+    preserveEquivalentDecimalRepresentation({
+      current,
+      candidate,
+      merged,
+      field,
+    })
   }
   preserveCumulativeQuoteQuantity({
     current,

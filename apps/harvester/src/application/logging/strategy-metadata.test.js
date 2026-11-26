@@ -8,7 +8,7 @@ import { appConfig } from "../../../config/index.js"
 const expectedStrategyMetadata = Object.freeze({
   [StrategyId.COIN_GRABBER]: Object.freeze({
     displayName: "Coin Grabber",
-    logMarker: "🪙 CG",
+    logMarker: "🟡 CG",
   }),
   [StrategyId.RECOVERY_SELLER]: Object.freeze({
     displayName: "Recovery Seller",

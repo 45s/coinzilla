@@ -150,12 +150,12 @@ test("renders Portfolio Stats as a concise readable summary instead of JSON", ()
   const line = written.trim()
   assert.match(
     line,
-    /^12:00:00 🪙 CG PORTFOLIO/,
+    /^12:00:00 🟡 CG PORTFOLIO/,
     "Console timestamps must use the same compact 24-hour local-time format as order lifecycle records.",
   )
   assert.match(
     line,
-    /🪙 CG PORTFOLIO DOGEUSDT: amount: 3\.4 \| earned: 3\.4 \| spent: 0 \| net: 0\.020$/,
+    /🟡 CG PORTFOLIO DOGEUSDT: amount: 3\.4 \| earned: 3\.4 \| spent: 0 \| net: 0\.020$/,
     "The operator console must show total coins, retained coins earned from completed cycles, current-cycle spent value, and cumulative net quote cash flow.",
   )
   assert.doesNotMatch(
@@ -555,73 +555,83 @@ force: true });
   }
 });
 
+async function writeHarvesterLogSession({ directory, processIdentity, index }) {
+  const logger = createLogger()
+  const logging = await configureHarvesterLogging({
+    logger,
+    directory,
+    processIdentity,
+  })
+  const debugEntry = {
+    timestamp: processIdentity.startedAt,
+    level: "debug",
+    method: "debug",
+    data: { message: `session diagnostic ${index + 1}` },
+  }
+  await logger.transports.get("harvester-debug-file").write(debugEntry)
+  await logger.transports.get("harvester-trace-file").write({
+    ...debugEntry,
+    level: "trace",
+    method: "trace",
+  })
+  await logging.close()
+  assert.deepEqual([...logger.transports.keys()], ["console"])
+}
+
+async function assertHarvesterLogSessionHistory({ directory, sessionIdentities }) {
+  const debugPath = path.join(directory, "cumulative", "harvester.log")
+  const tracePath = path.join(directory, "cumulative", "trace.log")
+  const readEntries = async (filePath) => (await readFile(filePath, "utf8"))
+    .trim().split("\n").map((line) => JSON.parse(line))
+  const debugEntries = await readEntries(debugPath)
+  const traceEntries = await readEntries(tracePath)
+  const expectedMessages = ["session diagnostic 1", "session diagnostic 2"]
+  assert.deepEqual(debugEntries.map(({ data }) => data.message), expectedMessages)
+  assert.deepEqual(traceEntries.map(({ data }) => data.message), expectedMessages)
+
+  for (const processIdentity of sessionIdentities) {
+    const sessionPaths = createHarvesterLogSessionPaths({
+      directory,
+      ...processIdentity,
+    })
+    const debugLines = (await readFile(sessionPaths.debug, "utf8")).trim().split("\n")
+    const traceLines = (await readFile(sessionPaths.trace, "utf8")).trim().split("\n")
+    assert.equal(debugLines.length, 1)
+    assert.equal(traceLines.length, 1)
+  }
+}
+
 test("appends cumulative files while isolating and flushing consecutive process sessions", async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-log-restarts-"));
+  const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-log-restarts-"))
   const sessionIdentities = [
-    { startedAt: "2026-11-09T12:00:00.000Z",
-runtimeSessionId: "first-run" },
-    { startedAt: "2026-11-09T12:01:00.000Z",
-runtimeSessionId: "second-run" },
-  ];
+    {
+      startedAt: "2026-11-09T12:00:00.000Z",
+      runtimeSessionId: "first-run",
+    },
+    {
+      startedAt: "2026-11-09T12:01:00.000Z",
+      runtimeSessionId: "second-run",
+    },
+  ]
   try {
     for (const [index, processIdentity] of sessionIdentities.entries()) {
-      const logger = createLogger();
-      const logging = await configureHarvesterLogging({
-        logger,
+      await writeHarvesterLogSession({
         directory,
         processIdentity,
-      });
-      const debugEntry = {
-        timestamp: processIdentity.startedAt,
-        level: "debug",
-        method: "debug",
-        data: { message: `session diagnostic ${  index + 1}` },
-      };
-      const traceEntry = { ...debugEntry,
-level: "trace",
-method: "trace" };
-      await logger.transports.get("harvester-debug-file").write(debugEntry);
-      await logger.transports.get("harvester-trace-file").write(traceEntry);
-      await logging.close();
-      assert.deepEqual(
-        [...logger.transports.keys()],
-        ["console"],
-        "graceful logging shutdown must unregister both structured file transports and retain the console transport",
-      );
+        index,
+      })
     }
-
-    const cumulativeDebugEntries = (await readFile(path.join(directory, "cumulative", "harvester.log"), "utf8"))
-      .trim().split("\n").map((line) => JSON.parse(line));
-    const cumulativeTraceEntries = (await readFile(path.join(directory, "cumulative", "trace.log"), "utf8"))
-      .trim().split("\n").map((line) => JSON.parse(line));
-    assert.deepEqual(
-      cumulativeDebugEntries.map(({ data }) => data.message),
-      ["session diagnostic 1", "session diagnostic 2"],
-      "cumulative DEBUG history must append in order across process restarts",
-    );
-    assert.deepEqual(
-      cumulativeTraceEntries.map(({ data }) => data.message),
-      ["session diagnostic 1", "session diagnostic 2"],
-      "cumulative TRACE history must append in order across process restarts",
-    );
-
-    for (const processIdentity of sessionIdentities) {
-      const paths = createHarvesterLogSessionPaths({
-        directory,
-        startedAt: processIdentity.startedAt,
-        runtimeSessionId: processIdentity.runtimeSessionId,
-      });
-      const debugEntries = (await readFile(paths.debug, "utf8")).trim().split("\n");
-      const traceEntries = (await readFile(paths.trace, "utf8")).trim().split("\n");
-      assert.equal(debugEntries.length, 1, "each DEBUG session file must contain only its own process entries");
-      assert.equal(traceEntries.length, 1, "each TRACE session file must contain only its own process entries");
-    }
+    await assertHarvesterLogSessionHistory({
+      directory,
+      sessionIdentities,
+    })
   } finally {
-    await rm(directory, { recursive: true,
-force: true });
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
   }
-});
-
+})
 
 test("closes the already-open DEBUG streams when TRACE session creation fails", async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-logs-partial-"));
@@ -694,17 +704,7 @@ test("retains the market symbol and source filter types in compact fatal console
   output.destroy()
 })
 
-test("keeps strategy-owned order facts on compact single-space lifecycle lines", () => {
-  const output = new PassThrough()
-  let written = ""
-  output.on("data", (chunk) => {
-    written += chunk.toString()
-  })
-  const transport = createHarvesterConsoleTransport({
-    output,
-    color: false,
-  })
-
+function writeStrategyOrderLifecycleFacts(transport) {
   transport.write({
     timestamp: "2026-11-15T19:14:52",
     level: "info",
@@ -740,32 +740,33 @@ test("keeps strategy-owned order facts on compact single-space lifecycle lines",
       detail: "Executed: 20 | Cancelled: 29.90",
     },
   })
+}
 
+function assertStrategyOrderLifecycleLines(written) {
   const lines = written.trimEnd().split("\n")
-  assert.equal(
-    lines.length,
-    2,
-    "A cancellation result and its exact executed/cancelled quantities must share one terminal line.",
-  )
-  assert.ok(
-    lines.every((line) => line.length < 130),
-    "Order lifecycle records must stay compact rather than reserving large fixed-width terminal columns.",
-  )
+  assert.equal(lines.length, 2)
+  assert.ok(lines.every((line) => line.length < 130))
   assert.equal(
     lines[0],
-    "19:14:52 🪙 CG SUBMITTED #pending ZROUSDT SELL 4.98 @ 1.393 h-325e71ba16494aeb875e6e-3",
-    "A pending submission must use single-space columns and append its raw client order ID on the same line without a verbose label.",
+    "19:14:52 🟡 CG SUBMITTED #pending ZROUSDT SELL 4.98 @ 1.393 h-325e71ba16494aeb875e6e-3",
   )
-  assert.doesNotMatch(
-    lines[0],
-    /\\| Client:|Client order ID:/,
-    "The pending client ID must be printed without a space-consuming explanatory label.",
-  )
+  assert.doesNotMatch(lines[0], /\\| Client:|Client order ID:/)
   assert.equal(
     lines[1],
     "19:14:53 🔴 RS CANCELLED #1341115 ADAUSDT SELL 49.90 @ 0.15410 | Executed: 20 | Cancelled: 29.90",
-    "The cancellation line must use compact single-space columns and retain its exact cancellation outcome without a second detail line.",
   )
+}
+
+test("keeps strategy-owned order facts on compact single-space lifecycle lines", () => {
+  const output = new PassThrough()
+  let written = ""
+  output.on("data", (chunk) => { written += chunk.toString() })
+  const transport = createHarvesterConsoleTransport({
+    output,
+    color: false,
+  })
+  writeStrategyOrderLifecycleFacts(transport)
+  assertStrategyOrderLifecycleLines(written)
   output.destroy()
 })
 
@@ -799,7 +800,7 @@ test("prints strategy markers with one separator and omits the decorative SYS ma
 
   assert.match(
     written,
-    /🪙 CG Market price evaluated/,
+    /🟡 CG Market price evaluated/,
     "Strategy-owned records must show the icon and strategy label separated by exactly one space.",
   )
   assert.match(
@@ -840,7 +841,7 @@ test("does not suppress identical messages from different strategies", () => {
     })
   }
   assert.equal((written.match(/Strategy transition evaluated/g) ?? []).length, 2)
-  assert.match(written, /🪙 CG Strategy transition evaluated/)
+  assert.match(written, /🟡 CG Strategy transition evaluated/)
   assert.match(written, /🔴 RS Strategy transition evaluated/)
   output.destroy()
 })
@@ -906,7 +907,7 @@ test("renders recovery SELL cancellation requests in the requested compact conso
 
   assert.equal(
     written.trim(),
-    "04:30:15 🪙 CG recovery SELL cancellation requested: DOGEUSDT, reason BUY_FILLED_RECALCULATE_RECOVERY_SELL",
+    "04:30:15 🟡 CG recovery SELL cancellation requested: DOGEUSDT, reason BUY_FILLED_RECALCULATE_RECOVERY_SELL",
     "the recovery SELL cancellation console line must match the requested concise operator format",
   )
   output.destroy()

@@ -3,7 +3,6 @@ import {
   OrderHistoryIntegrityError,
   OrderHistoryValidationError,
 } from "../../domain/order-history/order-history-errors.js"
-import { createOrderHistoryId } from "../../domain/order-history/order-history-record.js"
 import { OrderHistoryPersistenceError } from "./order-history-persistence-error.js"
 
 function requireString({ value, field } = {}) {
@@ -284,32 +283,62 @@ function mapFillEvent({ fill, sourceEvent, environment, ingestionSource = "live_
 }
 
 function findOrderReference({ transaction, fill } = {}) {
-  if (fill.client_order_id === null) {
+  if (fill.exchange_order_id === null) {
     return undefined
   }
-  const id = createOrderHistoryId({
-    environment: fill.environment,
-    providerInstanceId: fill.provider_instance_id,
-    providerType: fill.provider_type,
-    accountId: fill.account_id,
-    clientOrderId: fill.client_order_id,
-  })
-  return transaction.prepare(
-    "SELECT id, market_id, exchange_order_id, strategy_id, position_id, cycle_id FROM orders WHERE id = ?",
-  ).get(id)
+  const matches = transaction.prepare(`
+    SELECT id, market_id, exchange_order_id, client_order_id, strategy_id, position_id, cycle_id
+    FROM orders
+    WHERE environment = ? AND provider_instance_id = ? AND provider_type = ?
+      AND account_id = ? AND market_id = ? AND exchange_order_id = ?
+    LIMIT 2
+  `).all(
+    fill.environment,
+    fill.provider_instance_id,
+    fill.provider_type,
+    fill.account_id,
+    fill.market_id,
+    fill.exchange_order_id,
+  )
+  if (matches.length > 1) {
+    throw new OrderHistoryIntegrityError({
+      field: "fill.exchangeOrderIdentityAmbiguous",
+      providerInstanceId: fill.provider_instance_id,
+      accountId: fill.account_id,
+      clientOrderId: fill.client_order_id,
+      brokerOrderId: fill.exchange_order_id,
+      symbol: fill.symbol,
+      marketId: fill.market_id,
+    })
+  }
+  const [order] = matches
+  if (order !== undefined) {
+    assertOrderReferenceMatches({
+      order,
+      fill,
+    })
+  }
+  return order
 }
 
 function assertOrderReferenceMatches({ order, fill } = {}) {
   if (order && (
     order.market_id !== fill.market_id ||
     (order.exchange_order_id !== null &&
-      order.exchange_order_id !== fill.exchange_order_id)
+      fill.exchange_order_id !== null &&
+      order.exchange_order_id !== fill.exchange_order_id) ||
+    (order.client_order_id !== null &&
+      fill.client_order_id !== null &&
+      order.client_order_id !== fill.client_order_id)
   )) {
     throw new OrderHistoryIntegrityError({
       field: "fill.orderIdentity",
       providerInstanceId: fill.provider_instance_id,
       accountId: fill.account_id,
       clientOrderId: fill.client_order_id ?? undefined,
+      brokerOrderId: fill.exchange_order_id ?? undefined,
+      symbol: fill.symbol,
+      marketId: fill.market_id,
     })
   }
 }
@@ -353,8 +382,44 @@ function readExistingCommissions({ transaction, fillId } = {}) {
   `).all(fillId)
 }
 
+function decimalFactsMatch({ left, right } = {}) {
+  const leftMissing = left === undefined || left === null
+  const rightMissing = right === undefined || right === null
+  if (leftMissing || rightMissing) {
+    return leftMissing && rightMissing
+  }
+  return compareDecimal({
+    left,
+    right,
+  }) === 0
+}
+
 function commissionFactsMatch({ existing, candidate } = {}) {
-  return JSON.stringify(existing) === JSON.stringify(candidate)
+  if (existing.length !== candidate.length) {
+    return false
+  }
+  for (let index = 0; index < existing.length; index += 1) {
+    const commission = existing[index]
+    const incoming = candidate[index]
+    if (
+      commission.ordinal !== incoming.ordinal ||
+      commission.asset_id !== incoming.asset_id ||
+      commission.asset_code !== incoming.asset_code ||
+      !decimalFactsMatch({
+        left: commission.amount,
+        right: incoming.amount,
+      }) ||
+      !decimalFactsMatch({
+        left: commission.quote_value_amount,
+        right: incoming.quote_value_amount,
+      }) ||
+      commission.quote_value_asset_id !== incoming.quote_value_asset_id ||
+      commission.quote_value_asset_code !== incoming.quote_value_asset_code
+    ) {
+      return false
+    }
+  }
+  return true
 }
 
 function assertDuplicateMatches({ transaction, existing, candidate } = {}) {
@@ -380,7 +445,17 @@ function assertDuplicateMatches({ transaction, existing, candidate } = {}) {
     existing.client_order_id === null ||
     candidate.client_order_id === null ||
     existing.client_order_id === candidate.client_order_id
-  const factsMatch = columns.every((column) => existing[column] === candidate[column]) &&
+  const decimalColumns = new Set([
+    "execution_price",
+    "executed_base_quantity",
+    "executed_quote_quantity",
+  ])
+  const factsMatch = columns.every((column) => decimalColumns.has(column)
+    ? decimalFactsMatch({
+        left: existing[column],
+        right: candidate[column],
+      })
+    : existing[column] === candidate[column]) &&
     clientOrderIdentityMatches
   const commissionsMatch = commissionFactsMatch({
     existing: readExistingCommissions({

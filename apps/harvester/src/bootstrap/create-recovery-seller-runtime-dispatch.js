@@ -63,14 +63,14 @@ export function createRecoverySellerRuntimeDispatch(dependencies = {}) {
   } = dependencies
   assertRuntimeDispatchDependencies(dependencies)
   return (input = {}) => {
-    const authorizeAction = async ({ action, snapshot } = {}) => {
+    const authorizeAction = async ({ action, snapshot, input: transitionInput } = {}) => {
       if (typeof input.authorizeRecoverySellerAction !== "function") {
         return latchMissingActionAuthorizer({ recoverySellerStopWorkflow })
       }
       return input.authorizeRecoverySellerAction({
         action,
         snapshot,
-        input,
+        input: transitionInput,
       })
     }
     const evaluator = createRecoverySellerRuntimeEvaluator({
