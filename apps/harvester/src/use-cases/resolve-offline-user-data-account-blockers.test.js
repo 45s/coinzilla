@@ -532,6 +532,11 @@ test("durably resolves after clean stop and leaves readiness blocked for restart
     unresolvedExternalOrders: 0,
     balanceDiscrepancies: 0,
     blockerIds: [blockerId],
+    actionBlockerIds: [blockerId],
+    operatorId: "operator-7",
+    operatorAuthMethod: "OS_ACCOUNT",
+    actionId: "action-unique-005",
+    resolutionReason,
     blockerOrigins: [{
       blockerId,
       producer: "USER_DATA_EVENT_HANDLER",
