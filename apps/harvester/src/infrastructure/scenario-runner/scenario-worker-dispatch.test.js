@@ -85,7 +85,10 @@ test("worker dispatcher rejects duplicate or malformed adapter registrations", (
         strategyId: "example",
         execute,
       },
-      { strategyId: "example", execute },
+      {
+        strategyId: "example",
+        execute,
+      },
     ] }),
     /Duplicate scenario worker adapter/,
     "ambiguous strategy registration must fail during worker initialization",
