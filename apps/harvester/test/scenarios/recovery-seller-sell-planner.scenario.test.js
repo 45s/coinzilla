@@ -524,7 +524,7 @@ test("a smaller verified Spot remainder is the only legacy quantity added to the
     spotTotalQuantity: "1.005",
     quantityStepSize: "0.001",
   })
-  const result = evaluateRecoverySellerSellDecision({
+  evaluateRecoverySellerSellDecision({
     pairConfig,
     marketMetadata: scenario.marketMetadata,
     cycleState: scenario.cycleState,
