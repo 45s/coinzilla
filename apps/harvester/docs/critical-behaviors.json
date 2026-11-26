@@ -1128,6 +1128,11 @@
           "path": "src/bootstrap/start-harvester.test.js",
           "name": "rejects a durable unresolved account blocker in Conservative-only mode when CG recovery is disabled",
           "kind": "integration"
+        },
+        {
+          "path": "src/use-cases/create-recovery-seller-stop-workflow.test.js",
+          "name": "keeps account admission blocked when durable STOP resolution persistence fails",
+          "kind": "failure"
         }
       ],
       "runtimeStatus": "active",

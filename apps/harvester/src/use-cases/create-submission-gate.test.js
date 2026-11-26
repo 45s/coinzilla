@@ -291,18 +291,27 @@ test("an account safety blocker overrides every order path, including shutdown r
     blockerId: "account-blocker-1",
   })
   const gate = createSubmissionGate(dependencies)
-  const result = gate({
-    order: createOrder({ side: "SELL" }),
-    purpose: "RECOVERY_SELL",
-  })
+  const cases = [
+    { side: "BUY", purpose: "STANDING_BUY" },
+    { side: "BUY", purpose: "RECOVERY_SELL" },
+    { side: "SELL", purpose: "STANDING_BUY" },
+    { side: "SELL", purpose: "RECOVERY_SELL" },
+  ]
 
-  assert.equal(result.allowed, false)
-  assert.equal(result.reason, "ACCOUNT_SAFETY_BLOCKER_ACTIVE")
-  assert.deepEqual(result.details, {
-    symbol: "DOGEUSDT",
-    blockerReason: "RECOVERY_SELLER_UNEXPECTED_CONDITION",
-    blockerId: "account-blocker-1",
-  })
+  for (const { side, purpose } of cases) {
+    const result = gate({
+      order: createOrder({ side }),
+      purpose,
+    })
+
+    assert.equal(result.allowed, false, `${side}/${purpose} must remain blocked`)
+    assert.equal(result.reason, "ACCOUNT_SAFETY_BLOCKER_ACTIVE")
+    assert.deepEqual(result.details, {
+      symbol: "DOGEUSDT",
+      blockerReason: "RECOVERY_SELLER_UNEXPECTED_CONDITION",
+      blockerId: "account-blocker-1",
+    })
+  }
 })
 
 
