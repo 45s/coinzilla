@@ -156,7 +156,8 @@
       "test/scenarios/recovery-seller/authorization-custody.scenario.test.js",
       "test/scenarios/recovery-seller/buy-accounting.scenario.test.js",
       "test/scenarios/recovery-seller/mixed-sell-planning.scenario.test.js",
-      "test/scenarios/recovery-seller/mixed-sell-fill-allocation.scenario.test.js"
+      "test/scenarios/recovery-seller/mixed-sell-fill-allocation.scenario.test.js",
+      "src/use-cases/create-recovery-seller-action-authorizer.test.js"
     ]
   },
   "scripts": {
