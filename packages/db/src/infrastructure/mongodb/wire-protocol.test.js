@@ -121,7 +121,7 @@ documents: [{ _id: "one" }] }],
       sequenceSection,
       Buffer.from([0]),
       encodeBsonDocument({ insert: "records" }),
-    ]) }),
+    ]) })),
     /body section must precede/,
   )
 
