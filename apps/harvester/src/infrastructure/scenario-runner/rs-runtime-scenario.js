@@ -3,6 +3,7 @@ import {
   Asset,
   Balance,
   CanonicalOrder,
+  Commission,
   Fill,
   Market,
   Money,
@@ -292,7 +293,7 @@ function validateScenarioInput({ schema, defaults, input }) {
 
 const RUNTIME_SCENARIO_READINESS_REASONS = Object.freeze([
   "Scenario infrastructure uses a run-local simulated broker and in-memory operational store; it does not prove durable production account or STOP state.",
-  "An under-target FILLED SELL STOP runtime scenario and general infrastructure-failure scenarios are not yet composed into this adapter.",
+  "General infrastructure-failure scenarios are not yet composed into this adapter.",
   "No trusted OS-level sandbox launcher is available; the host must continue to fail closed.",
 ])
 
@@ -322,6 +323,17 @@ export const RECOVERY_SELLER_RUNTIME_SCENARIOS = Object.freeze([
   Object.freeze({
     id: "RS-RUNTIME-SELL-PARTIAL-CANCEL-001",
     name: "Production Recovery Seller runtime reconciles a profitable partial CANCELED SELL",
+    layer: "APPLICATION",
+    status: "PARTIAL",
+    executionStatus: "PRELIMINARY",
+    executable: false,
+    readinessReasons: RUNTIME_SCENARIO_READINESS_REASONS,
+    inputSchema: RUNTIME_FIXTURE.inputSchema,
+    input: RUNTIME_FIXTURE.input,
+  }),
+  Object.freeze({
+    id: "RS-RUNTIME-SELL-FILLED-UNDER-TARGET-001",
+    name: "Production Recovery Seller runtime reconciles an under-target fully FILLED SELL and latches STOP",
     layer: "APPLICATION",
     status: "PARTIAL",
     executionStatus: "PRELIMINARY",
@@ -995,6 +1007,30 @@ function createRuntimeScenarioPartialSellOrder({ runtime, openOrder, partialQuan
   })
 }
 
+function createRuntimeScenarioFilledSellOrder({ runtime, openOrder }) {
+  return new CanonicalOrder({
+    clientOrderId: openOrder.clientOrderId,
+    brokerOrderId: openOrder.brokerOrderId,
+    providerInstanceId: openOrder.providerInstanceId,
+    providerType: openOrder.providerType,
+    accountId: openOrder.accountId,
+    market: openOrder.market,
+    side: openOrder.side,
+    type: openOrder.type,
+    limitPrice: openOrder.limitPrice,
+    originalQuantity: openOrder.originalQuantity,
+    executedQuantity: new Quantity({
+      amount: openOrder.originalQuantity.amount,
+      asset: runtime.baseAsset,
+    }),
+    status: "FILLED",
+    createdAt: openOrder.createdAt,
+    acknowledgedAt: openOrder.acknowledgedAt,
+    updatedAt: openOrder.updatedAt + 1,
+    completedAt: openOrder.updatedAt + 2,
+  })
+}
+
 function createRuntimeScenarioPartialSellFill({ runtime, terminalOrder, partialQuantity, sellPrice }) {
   const quoteQuantity = multiplyDecimal({
     left: partialQuantity,
@@ -1024,7 +1060,45 @@ function createRuntimeScenarioPartialSellFill({ runtime, terminalOrder, partialQ
   })
 }
 
-function createRuntimeScenarioPartialSellResult({
+function createRuntimeScenarioFilledSellFill({ runtime, terminalOrder }) {
+  const executedQuantity = terminalOrder.executedQuantity.amount
+  const sellPrice = terminalOrder.limitPrice.amount
+  const quoteQuantity = multiplyDecimal({
+    left: executedQuantity,
+    right: sellPrice,
+  })
+  return new Fill({
+    tradeId: "rs-scenario-filled-sell-fill-1",
+    brokerOrderId: terminalOrder.brokerOrderId,
+    clientOrderId: terminalOrder.clientOrderId,
+    market: runtime.market,
+    side: "SELL",
+    price: new Money({
+      amount: sellPrice,
+      asset: runtime.quoteAsset,
+    }),
+    quantity: new Quantity({
+      amount: executedQuantity,
+      asset: runtime.baseAsset,
+    }),
+    quoteQuantity: new Money({
+      amount: quoteQuantity,
+      asset: runtime.quoteAsset,
+    }),
+    executedAt: terminalOrder.completedAt,
+    commissions: [
+      new Commission({
+        amount: new Money({
+          amount: "600",
+          asset: runtime.quoteAsset,
+        }),
+      }),
+    ],
+    commissionStatus: "COMPLETE",
+  })
+}
+
+function createRuntimeScenarioTerminalSellResult({
   runtime,
   terminalOrder,
   result,
@@ -1072,6 +1146,7 @@ function createRuntimeScenarioMixedSellReconciler({
   runtime,
   state,
   setTerminalAccountingResult,
+  fullCycle = false,
 }) {
   return async ({ order: reconciledOrder, canonicalFills }) => {
     const currentOpenOrder = state.registry.getOrder({
@@ -1085,8 +1160,8 @@ function createRuntimeScenarioMixedSellReconciler({
       createMixedSellFillAllocation({
         fill: canonicalFill,
         orderRegistry: state.registry,
-        recoveryQuantity: "2.49",
-        legacyQuantity: "0.01",
+        recoveryQuantity: fullCycle ? runtime.seed.buyQuantity : "2.49",
+        legacyQuantity: fullCycle ? runtime.seed.legacyQuantity : "0.01",
       }))
     for (const allocation of allocations) {
       ({ reconciliation } = stageMixedSellFillAllocation({
@@ -1208,7 +1283,7 @@ function createRuntimeScenarioOrderEventWorkflow({
     }),
   })
 }
-function assertRuntimeScenarioPartialSellReconciled({ eventResult, terminalAccountingResult, runtime }) {
+function assertRuntimeScenarioTerminalSellReconciled({ eventResult, terminalAccountingResult, runtime }) {
   const stopPersisted = runtime.operationalStateStore.getRecords().some((fact) =>
     fact.factType === "SAFETY_BLOCKER_RAISED" && fact.data?.scope === "ACCOUNT")
   if (eventResult?.ok === false && terminalAccountingResult?.ok === true && stopPersisted) {
@@ -1216,20 +1291,20 @@ function assertRuntimeScenarioPartialSellReconciled({ eventResult, terminalAccou
   }
   throw eventResult?.errors?.[0] ??
     terminalAccountingResult?.errors?.[0] ??
-    new Error("Production Recovery Seller partial terminal SELL did not fail closed with a durable account STOP")
+    new Error("Production Recovery Seller terminal SELL did not fail closed with a durable account STOP")
 }
 
 function resolveSubmittedRuntimeSellOrder({ runtime, execution }) {
   const [submittedOrder] = execution.data.submittedOrders ?? []
   if (!submittedOrder) {
-    throw new Error("Partial SELL scenario requires the production runtime to acknowledge its SELL order")
+    throw new Error("Terminal SELL scenario requires the production runtime to acknowledge its SELL order")
   }
   const orderRegistry = runtime.seed.workflow.getOrderRegistry()
   const openOrder = orderRegistry.getOrder({
     clientOrderId: submittedOrder.clientOrderId,
   })
   if (!openOrder) {
-    throw new Error("Partial SELL scenario cannot find its acknowledged canonical SELL order")
+    throw new Error("Terminal SELL scenario cannot find its acknowledged canonical SELL order")
   }
   return {
     orderRegistry,
@@ -1237,7 +1312,7 @@ function resolveSubmittedRuntimeSellOrder({ runtime, execution }) {
   }
 }
 
-async function processRuntimeScenarioPartialSellEvent({ eventWorkflow, terminalOrder, fill }) {
+async function processRuntimeScenarioTerminalSellEvent({ eventWorkflow, terminalOrder, fill }) {
   return eventWorkflow.processUserDataEventTransition({
     event: {
       eventType: "executionReport",
@@ -1245,6 +1320,55 @@ async function processRuntimeScenarioPartialSellEvent({ eventWorkflow, terminalO
       executedOrder: terminalOrder,
       fill,
     },
+  })
+}
+
+async function reconcileRuntimeScenarioTerminalSell({
+  runtime,
+  orderRegistry,
+  terminalOrder,
+  fill,
+  fullCycle = false,
+}) {
+  const stagedSellFills = []
+  const pauses = []
+  let terminalAccountingResult
+  const eventState = createRuntimeScenarioEventState({
+    orderRegistry,
+  })
+  const reconcileRecoverySellerMixedSell = createRuntimeScenarioMixedSellReconciler({
+    runtime,
+    state: eventState,
+    fullCycle,
+    setTerminalAccountingResult: (result) => {
+      terminalAccountingResult = result
+    },
+  })
+  const eventWorkflow = createRuntimeScenarioOrderEventWorkflow({
+    runtime,
+    eventState,
+    fill,
+    stagedSellFills,
+    pauses,
+    reconcileRecoverySellerMixedSell,
+  })
+  const eventResult = await processRuntimeScenarioTerminalSellEvent({
+    eventWorkflow,
+    terminalOrder,
+    fill,
+  })
+  assertRuntimeScenarioTerminalSellReconciled({
+    eventResult,
+    terminalAccountingResult,
+    runtime,
+  })
+  return createRuntimeScenarioTerminalSellResult({
+    runtime,
+    terminalOrder,
+    result: terminalAccountingResult,
+    eventResult,
+    eventState,
+    stagedSellFills,
   })
 }
 
@@ -1265,44 +1389,33 @@ async function reconcileRuntimeScenarioPartialSell({ runtime, execution }) {
     partialQuantity,
     sellPrice: openOrder.limitPrice.amount,
   })
-  const stagedSellFills = []
-  const pauses = []
-  let terminalAccountingResult
-  const eventState = createRuntimeScenarioEventState({
+  return reconcileRuntimeScenarioTerminalSell({
+    runtime,
     orderRegistry,
-  })
-  const reconcileRecoverySellerMixedSell = createRuntimeScenarioMixedSellReconciler({
-    runtime,
-    state: eventState,
-    setTerminalAccountingResult: (result) => {
-      terminalAccountingResult = result
-    },
-  })
-  const eventWorkflow = createRuntimeScenarioOrderEventWorkflow({
-    runtime,
-    eventState,
-    fill,
-    stagedSellFills,
-    pauses,
-    reconcileRecoverySellerMixedSell,
-  })
-  const eventResult = await processRuntimeScenarioPartialSellEvent({
-    eventWorkflow,
     terminalOrder,
     fill,
   })
-  assertRuntimeScenarioPartialSellReconciled({
-    eventResult,
-    terminalAccountingResult,
+}
+
+async function reconcileRuntimeScenarioFilledSell({ runtime, execution }) {
+  const { orderRegistry, openOrder } = resolveSubmittedRuntimeSellOrder({
     runtime,
+    execution,
   })
-  return createRuntimeScenarioPartialSellResult({
+  const terminalOrder = createRuntimeScenarioFilledSellOrder({
+    runtime,
+    openOrder,
+  })
+  const fill = createRuntimeScenarioFilledSellFill({
     runtime,
     terminalOrder,
-    result: terminalAccountingResult,
-    eventResult,
-    eventState,
-    stagedSellFills,
+  })
+  return reconcileRuntimeScenarioTerminalSell({
+    runtime,
+    orderRegistry,
+    terminalOrder,
+    fill,
+    fullCycle: true,
   })
 }
 function createRuntimeScenarioOutput({ runtime, data, submittedAction, submissionRejected = false, terminalSell = null }) {
@@ -1351,6 +1464,24 @@ function createRuntimeScenarioExpected({ seed, pairConfig, scenarioId }) {
       submittedOrderCount: 0,
       stopFactAppended: true,
       reservationRetained: true,
+    }
+  }
+  if (scenarioId === "RS-RUNTIME-SELL-FILLED-UNDER-TARGET-001") {
+    return {
+      decisionOutcome: "SUBMIT",
+      actionSide: "SELL",
+      actionQuantity: addDecimal({
+        left: seed.buyQuantity,
+        right: String(pairConfig.sellQuantity),
+      }),
+      submittedOrderCount: 1,
+      terminalOrderStatus: "FILLED",
+      terminalCycleStatus: "UNRESOLVED",
+      terminalReconciled: true,
+      profitabilityEligible: false,
+      reservationReleased: true,
+      stopFactAppended: true,
+      eventWorkflowFailedClosed: true,
     }
   }
   if (scenarioId === "RS-RUNTIME-SELL-PARTIAL-CANCEL-001") {
@@ -1441,7 +1572,7 @@ function createSubmittedSellAssertions({ output, expected }) {
 function createPartialSellSafetyAssertions({ output, expected }) {
   return [
     createAssertion({
-      name: "production order-event workflow fails closed after terminal partial SELL",
+      name: "production order-event workflow fails closed after terminal SELL",
       actual: output.terminalSell?.eventWorkflowFailedClosed,
       expected: expected.eventWorkflowFailedClosed,
     }),
@@ -1451,7 +1582,7 @@ function createPartialSellSafetyAssertions({ output, expected }) {
       expected: expected.stopFactAppended,
     }),
     createAssertion({
-      name: "partial terminal SELL releases the terminal order reservation after fill reconciliation",
+      name: "terminal SELL releases the terminal order reservation after fill reconciliation",
       actual: output.reservedSellCycle === null,
       expected: expected.reservationReleased,
     }),
@@ -1481,17 +1612,17 @@ function createPartialSellAssertions({ output, expected }) {
       expected: expected.submittedOrderCount,
     }),
     createAssertion({
-      name: "partial terminal SELL preserves the broker terminal status",
+      name: "terminal SELL preserves the broker terminal status",
       actual: output.terminalSell?.orderStatus,
       expected: expected.terminalOrderStatus,
     }),
     createAssertion({
-      name: "partial terminal SELL leaves the cycle unresolved",
+      name: "terminal SELL leaves the cycle unresolved",
       actual: output.terminalSell?.cycleState?.status,
       expected: expected.terminalCycleStatus,
     }),
     createAssertion({
-      name: "partial terminal SELL is completely reconciled",
+      name: "terminal SELL is completely reconciled",
       actual: output.terminalSell?.cycleState?.terminalReconciled,
       expected: expected.terminalReconciled,
     }),
@@ -1501,7 +1632,7 @@ function createPartialSellAssertions({ output, expected }) {
       expected: 1,
     }),
     createAssertion({
-      name: "partial terminal SELL retains profitability without closing the cycle",
+      name: "terminal SELL preserves its profitability result without closing an unresolved cycle",
       actual: output.terminalSell?.cycleState?.profitabilityEligible,
       expected: expected.profitabilityEligible,
     }),
@@ -1591,7 +1722,7 @@ function createRuntimeScenarioTerminalTraceStep({ output }) {
   return {
     id: "terminal-1",
     kind: "order-lifecycle",
-    label: "Reconcile a profitable partial CANCELED SELL through production order-event and accounting workflows",
+    label: "Reconcile a terminal SELL through production order-event and accounting workflows",
     inputs: {
       orderStatus: output.terminalSell.orderStatus,
       executedQuantity: output.terminalSell.executedQuantity,
@@ -1686,12 +1817,18 @@ async function executeRuntimeScenario({ runId, scenarioId, effectiveInput, signa
   if (signal?.aborted) {
     throw new Error("Scenario worker was cancelled")
   }
-  const terminalSell = scenarioId === "RS-RUNTIME-SELL-PARTIAL-CANCEL-001"
-    ? await reconcileRuntimeScenarioPartialSell({
-        runtime,
-        execution,
-      })
-    : null
+  let terminalSell = null
+  if (scenarioId === "RS-RUNTIME-SELL-PARTIAL-CANCEL-001") {
+    terminalSell = await reconcileRuntimeScenarioPartialSell({
+      runtime,
+      execution,
+    })
+  } else if (scenarioId === "RS-RUNTIME-SELL-FILLED-UNDER-TARGET-001") {
+    terminalSell = await reconcileRuntimeScenarioFilledSell({
+      runtime,
+      execution,
+    })
+  }
   return {
     runtime,
     execution,

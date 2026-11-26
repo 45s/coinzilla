@@ -270,6 +270,8 @@ or worker-only sandbox. A test-only launcher may exercise the worker protocol, b
 does not change production readiness.
 
 
-## Under-target FILLED SELL runtime scenario — in progress
+## Under-target FILLED SELL runtime scenario — implementation in PR #1887
 
-The next production-flow scenario exercises a fully FILLED canonical SELL whose actual quote-asset commission leaves realized profitability below the configured absolute quote-asset target. It must run through the production user-data event transition and mixed-SELL accounting workflow, reconcile the complete fill exactly once, leave the cycle UNRESOLVED, durably latch account-wide STOP, and fail the terminal event closed. This scenario is not considered implemented or verified until its test-first RED/GREEN cycle and exact-head CI evidence are recorded.
+The runtime catalogue now includes `RS-RUNTIME-SELL-FILLED-UNDER-TARGET-001`. It submits through the production RS dispatch/authorizer/submitter, then drives a fully FILLED canonical SELL through `processUserDataEventTransition`, terminal-fill reconciliation and mixed-SELL accounting. The deterministic run-local fixture supplies a quote-asset commission large enough to make the realized independent profitability gates fail. The expected outcome is a completely reconciled canonical fill staged exactly once, an UNRESOLVED cycle, a durable account-wide STOP, a failed terminal event and a released terminal-order reservation.
+
+This proves the adverse FILLED runtime path only against simulated broker and in-memory operational-state ports. It does not prove durable production STOP persistence, live exchange behavior or OS isolation. The scenario remains PARTIAL/non-executable until trusted OS-level isolation and attestation are verified; general infrastructure-failure scenarios remain outstanding.

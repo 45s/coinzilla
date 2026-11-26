@@ -4,7 +4,7 @@
 
 ## Current status — 2026-11-26
 
-The Scenario Runner foundation is merged, but production execution remains fail-closed. The current catalogue is not executable without a trusted OS sandbox and matching attestation; remaining user-data event-transition, under-target FILLED STOP, infrastructure-failure, complete replay-provenance and acceptance coverage is tracked below. The merged foundation is not production readiness.
+The Scenario Runner foundation is merged, but production execution remains fail-closed. PR #1887 adds a production-flow runtime scenario for an under-target fully FILLED SELL, including full terminal-fill reconciliation and durable simulated account STOP. The catalogue remains non-executable without a trusted OS sandbox and matching attestation; general infrastructure-failure, complete replay-provenance and end-to-end acceptance coverage remain outstanding.
 
 ## Approved branch-only refactoring and agent preflight
 
@@ -69,7 +69,7 @@ Read repository-root `AGENTS.md` and every applicable nested `AGENTS.md` before 
 - [x] Adapter promise rejections are normalized into terminal failure results. If worker cleanup cannot be confirmed, the runner retains the execution slot, reports the cleanup failure, and rejects shutdown rather than silently releasing capacity.
 - [x] Local REST run/catalog/history/status/cancel routes and WebSocket lifecycle hints.
 - [x] Framework-independent Dashboard application orchestration for catalog/history, executable-scenario gating, JSON/schema validation, submit/refresh/cancel/history retrieval, trace graph and debug-package preparation; Angular is limited to presentation state and transport adaptation.
-- [ ] A supported production runtime catalogue/export boundary (separate from the merged test-only PR #1852 registry), additional source-mapped executable scenarios, production configuration readiness, schema-driven config/Playground, complete original-revision replay, complete report provenance, resource/concurrency limits and end-to-end OS isolation remain incomplete. In-memory run history is accepted for this MVP.
+- [ ] The supported production runtime catalogue/export boundary remains separate from the merged test-only PR #1852 registry. The RS catalogue now includes authorized submission, rejected submission, profitable partial CANCELED reconciliation and under-target fully FILLED STOP runtime scenarios; all remain PARTIAL/non-executable without trusted OS isolation. General infrastructure-failure coverage, production configuration readiness, schema-driven config/Playground, complete original-revision replay, complete report provenance, resource/concurrency limits and end-to-end OS isolation remain incomplete. In-memory run history is accepted for this MVP.
 
 ## Execution-first/no-fake-blocker commitment
 
