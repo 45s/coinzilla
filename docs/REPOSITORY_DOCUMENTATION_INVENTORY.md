@@ -30,11 +30,11 @@ The initial cleanup targeted these oversized active documents:
 - [Harvester roadmap](../apps/harvester/ROADMAP.md): current safety/correctness priorities only.
 - [This inventory](REPOSITORY_DOCUMENTATION_INVENTORY.md): current canonical map and audit baseline only.
 
-The original contents are preserved in the dated snapshots linked above. No source code, domain specification, ADR, or audit evidence was deleted or rewritten in this pass.
+The original contents are preserved in the consolidated dated archive linked above. No source code, domain specification, ADR, or audit evidence was deleted or rewritten in this pass.
 
 ## Next audit tasks
 
-1. Review found 17 active roadmap/planning documents (excluding archived audit/history files): 11 were reduced to concise owner/status indexes. Retain the five specialized plans while their work remains active: [Scenario Runner](../apps/dashboard/docs/features/gc-strategy-lab/RUNNER_ROADMAP.md), [Bitunix Spot](../packages/brokers/docs/ROADMAP.md), [recovery seller implementation](../apps/harvester/docs/domain/recovery-seller-implementation-roadmap.md), [trading history](../apps/harvester/docs/persistence/trading-history-roadmap.md), and [indicators](../packages/indicators/ROADMAP.md). These are scoped implementation plans, not duplicate package-wide roadmaps. The completed strategy-extensibility discussion is now a short historical pointer; its full text is in the consolidated archive.
+1. Review found 17 active roadmap/planning documents (excluding archived audit/history files): 11 were reduced to concise owner/status indexes. Retain the five specialized plans while their work remains active: [Scenario Runner](../apps/dashboard/docs/features/gc-strategy-lab/RUNNER_ROADMAP.md), [Bitunix Spot](../packages/brokers/docs/ROADMAP.md), [recovery seller implementation](../apps/harvester/docs/domain/recovery-seller-implementation-roadmap.md), [trading history](../apps/harvester/docs/persistence/trading-history-roadmap.md), and [indicators](../packages/indicators/ROADMAP.md). These are scoped implementation plans, not duplicate package-wide roadmaps. The completed strategy-extensibility discussion is now a short historical pointer; its full text is in the [consolidated archive](archive/roadmap-history-2026-11-26.md#strategy-extensibility-architecture-discussion).
 2. Reviewed root and scoped `AGENTS.md` files: local files primarily contain domain boundaries and safety constraints; no exact duplicate paragraphs were found against the root. Keep scoped rules local and avoid removing domain safety text merely to reduce length.
 3. Large audit/session/history documents remain evidence-bearing records. Retain source commit, limitations, and unique evidence; consolidate only demonstrably duplicated summaries after checking inbound references. The repository-engineering audit brief and audit report have different purposes and are not interchangeable.
 4. Check inbound links before any later file deletion or rename; update the inventory only after the tree and link checks pass.
@@ -47,27 +47,25 @@ The original contents are preserved in the dated snapshots linked above. No sour
 - **Archive** completed plans and historical snapshots when provenance or evidence is useful.
 - **Delete** only when the content is redundant, superseded, has no unique evidence, and all inbound references have been checked.
 
-
 ## Package roadmap consolidation — 2026-11-26
 
-The second cleanup pass reduced four high-volume package roadmaps to active priority indexes and preserved their complete prior contents as dated snapshots:
+The second cleanup pass reduced four high-volume package roadmaps to active priority indexes and preserved their complete prior contents in the consolidated dated archive:
 
-- [Brokers roadmap history](archive/roadmap-history-2026-11-26.md#root-roadmap) — prior 250 KB roadmap.
-- [Journal roadmap history](archive/roadmap-history-2026-11-26.md#root-roadmap) — prior 48 KB roadmap.
-- [Event Bus roadmap history](archive/roadmap-history-2026-11-26.md#root-roadmap) — prior 27 KB roadmap.
-- [Utils roadmap history](archive/roadmap-history-2026-11-26.md#root-roadmap) — prior 21 KB roadmap.
+- [Brokers roadmap history](archive/roadmap-history-2026-11-26.md#brokers-roadmap) — prior 250 KB roadmap.
+- [Journal roadmap history](archive/roadmap-history-2026-11-26.md#journal-roadmap) — prior 48 KB roadmap.
+- [Event Bus roadmap history](archive/roadmap-history-2026-11-26.md#event-bus-roadmap) — prior 27 KB roadmap.
+- [Utils roadmap history](archive/roadmap-history-2026-11-26.md#utils-roadmap) — prior 21 KB roadmap.
 
-No package source, public API, tests, README, domain specification, or ADR was changed. Active pages now point to canonical API/readme/source and issues; detailed delivery evidence remains in the snapshots. These snapshots are archival provenance, not current instructions or status authority.
-
+No package source, public API, tests, README, domain specification, or ADR was changed. Active pages now point to canonical API/readme/source and issues; detailed delivery evidence remains in the archive. It is provenance, not current instructions or status authority.
 
 ## Roadmap consolidation — 2026-11-26
 
-Additional active roadmap pages were reduced to concise owner/status/next-action indexes; full prior contents were preserved as dated sibling snapshots:
+Additional active roadmap pages were reduced to concise owner/status/next-action indexes; full prior contents were preserved in the consolidated archive:
 
-- [Dashboard roadmap history](archive/roadmap-history-2026-11-26.md#root-roadmap) — feature-specific Scenario Runner decisions remain in its dedicated roadmap.
-- [Database roadmap history](archive/roadmap-history-2026-11-26.md#root-roadmap) — completed infrastructure delivery and provider-neutral contract notes.
-- [Entities roadmap history](archive/roadmap-history-2026-11-26.md#root-roadmap) — detailed FR contract execution notes.
-- [Notifiers roadmap history](archive/roadmap-history-2026-11-26.md#root-roadmap) — completed phases and validation records.
-- [Harvester Journal integration history](archive/roadmap-history-2026-11-26.md#root-roadmap) — staged PR-by-PR integration evidence; Step 8 closeout remains open.
+- [Dashboard roadmap history](archive/roadmap-history-2026-11-26.md#dashboard-roadmap) — feature-specific Scenario Runner decisions remain in its dedicated roadmap.
+- [Database roadmap history](archive/roadmap-history-2026-11-26.md#database-roadmap) — completed infrastructure delivery and provider-neutral contract notes.
+- [Entities roadmap history](archive/roadmap-history-2026-11-26.md#entities-roadmap) — detailed FR contract execution notes.
+- [Notifiers roadmap history](archive/roadmap-history-2026-11-26.md#notifiers-roadmap) — completed phases and validation records.
+- [Harvester Journal integration history](archive/roadmap-history-2026-11-26.md#harvester-journal-integration) — staged PR-by-PR integration evidence; Step 8 closeout remains open.
 
-The active pages now point to canonical READMEs, contracts, tests, issues, or feature roadmaps instead of repeating completed phase histories. These consolidated archives preserve provenance but are not current task-status authority. The cleanup PR branch currently has 215 Markdown files: the 214-file `develop` tree plus one consolidated archive bundle.
+The active pages now point to canonical READMEs, contracts, tests, issues, or feature roadmaps instead of repeating completed phase histories. The consolidated archive preserves provenance but is not current task-status authority. The cleanup PR branch currently has 215 Markdown files: the 214-file `develop` tree plus one consolidated archive bundle.
