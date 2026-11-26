@@ -211,11 +211,12 @@ function scheduleQueuedRuns({ context }) {
 
 function createCleanupFailureDiagnostic({ error, cancellationRequested, timedOut = false }) {
   const cleanupMessage = error instanceof Error ? error.message : "Unknown cleanup error."
-  const reason = cancellationRequested
-    ? "Scenario cancellation was requested"
-    : timedOut
-      ? "Scenario execution exceeded its time limit"
-      : "Scenario execution failed"
+  let reason = "Scenario execution failed"
+  if (cancellationRequested) {
+    reason = "Scenario cancellation was requested"
+  } else if (timedOut) {
+    reason = "Scenario execution exceeded its time limit"
+  }
   return `${reason}; worker cleanup could not be confirmed: ${cleanupMessage}`
 }
 

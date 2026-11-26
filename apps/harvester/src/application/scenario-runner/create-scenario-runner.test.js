@@ -191,6 +191,7 @@ test("runner waits for forced adapter cleanup when cancellation does not settle 
       ...adapter,
       cancel: async ({ reason }) => {
         cancellationReason = reason
+        return true
       },
     }],
     createRunId: () => "run-cancel-timeout",
