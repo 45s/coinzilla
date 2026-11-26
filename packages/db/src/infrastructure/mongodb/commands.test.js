@@ -46,14 +46,7 @@ test("MongoDB create isolates collection records and returns the provider-neutra
   assert.equal(stub.sequences[0][0].identifier, "documents")
   assert.equal(stub.sequences[0][0].documents[0]._id, "person-1")
   assert.notDeepEqual(stub.sequences[0][0].documents[0].data, record)
-  assert.deepEqual(stub.sequences[0][0].documents[0].sortData.__coinzilla_key_aWQ, {
-    rank: 4,
-    value: "person-1",
-  })
-  assert.deepEqual(stub.sequences[0][0].documents[0].sortData.__coinzilla_key_cHJvZmlsZQ, {
-    rank: 5,
-    value: JSON.stringify(record.profile),
-  })
+  assert.equal(stub.sequences[0][0].documents[0].sortData, undefined)
   assert.equal(stub.calls[0].$db, "app")
 })
 
