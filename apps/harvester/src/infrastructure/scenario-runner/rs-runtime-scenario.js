@@ -261,7 +261,7 @@ async function resolveRuntimeScenarioConfiguration({ input }) {
     },
     logger: {},
   })
-  const recoverySellerPairs = resolved.recoverySellerPairs
+  const { recoverySellerPairs } = resolved
   const pairConfig = recoverySellerPairs[input.symbol]
   if (!pairConfig) {
     throw new Error(`Validated Recovery Seller configuration is unavailable for ${input.symbol}`)
