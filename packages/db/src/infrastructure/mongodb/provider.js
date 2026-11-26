@@ -97,7 +97,7 @@ function assertProviderOptions(options) {
   if (typeof options.databaseName !== "string" || options.databaseName.trim() === "") {
     throw new TypeError("MongoDB provider databaseName must be a non-empty string")
   }
-  if ((/[\\/\\\\."$*<>:|?]/u.test(options.databaseName) || options.databaseName.includes("\0"))) {
+  if (/[\\/\\\\."$*<>:|?]/u.test(options.databaseName) || options.databaseName.includes("\0")) {
     throw new TypeError("MongoDB provider databaseName contains an unsupported character")
   }
   if (Buffer.byteLength(options.databaseName, "utf8") > 63) {
