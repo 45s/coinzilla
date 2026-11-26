@@ -45,6 +45,8 @@ Shared deterministic broker/runtime fixtures live in `test/bootstrap/start-harve
 
 ## Reliability engineering
 
+- [Harvester Reliability Engineering Baseline](audits/reports/2026-11-26_harvester-reliability-engineering-baseline.md) — source-backed baseline and open verification work for issue #1639.
+
 - [Harvester Reliability Engineering Baseline](audits/reports/2026-11-26_harvester-reliability-engineering-baseline.md) — source-backed baseline, active incident evidence, fault-domain model, audit gaps and next verification steps; tracked by [issue #1639](https://github.com/45s/coinzilla/issues/1639). The report is dated evidence, not a runtime behavior contract.
 
 ## Current architecture and domain contracts
