@@ -253,7 +253,7 @@ function createSession({ state, randomBytes }) {
   }
 }
 
-function hasErrorLabel(response, label) {
+function hasErrorLabel({ response, label }) {
   return Array.isArray(response?.errorLabels) && response.errorLabels.includes(label)
 }
 
@@ -266,7 +266,7 @@ function hasAmbiguousWriteConcern(response) {
 
 function isRetryableTransactionError(error) {
   return error?.outcomeUnknown === true
-    || hasErrorLabel(error, "RetryableWriteError")
+    || hasErrorLabel({ response: error, label: "RetryableWriteError" })
     || hasAmbiguousWriteConcern(error)
     || error?.code === 50
     || error?.codeName === "MaxTimeMSExpired"
@@ -319,8 +319,8 @@ errorLabels: response.errorLabels }
         : response
       const error = createServerCommandError(serverFailure)
       if (hasAmbiguousWriteConcern(response)
-        || hasErrorLabel(response, "UnknownTransactionCommitResult")
-        || hasErrorLabel(response, "RetryableWriteError")
+        || hasErrorLabel({ response, label: "UnknownTransactionCommitResult" })
+        || hasErrorLabel({ response, label: "RetryableWriteError" })
         || response?.code === 50
         || response?.codeName === "MaxTimeMSExpired"
         || ambiguous) {
@@ -525,7 +525,7 @@ function createProviderState(options) {
   }
 }
 
-async function runTrackedOperation(state, work) {
+async function runTrackedOperation({ state, work }) {
   if (state.lifecycle !== "connected") {
     throw new Error("MongoDB provider must be connected before starting work")
   }
@@ -710,13 +710,13 @@ export function createMongoProvider(options = {}) {
     if (typeof work !== "function") {
       throw new TypeError("A MongoDB read transaction callback is required")
     }
-    return runTrackedOperation(state, async () => {
+    return runTrackedOperation({ state, work: async () => {
       const operations = createMongoRecordOperations({
         command: (commandInput) => state.transport.command(commandInput),
         databaseName: state.options.databaseName,
       })
       let readOperationPromise = null
-      function invokeRead(method, input) {
+      function invokeRead({ method, input }) {
         if (readOperationPromise) {
           return Promise.resolve(readOperationPromise).then(() => {
             throw new Error("MongoDB read transaction supports one provider-neutral read operation")
@@ -730,10 +730,10 @@ export function createMongoProvider(options = {}) {
           throw new Error("MongoDB read transaction cannot execute mutations")
         },
         readOne(input) {
-          return invokeRead("readOne", input)
+          return invokeRead({ method: "readOne", input })
         },
         readMany(input) {
-          return invokeRead("readMany", input)
+          return invokeRead({ method: "readMany", input })
         },
         update() {
           throw new Error("MongoDB read transaction cannot execute mutations")
@@ -752,11 +752,11 @@ export function createMongoProvider(options = {}) {
         await readOperationPromise?.catch(() => {})
         throw error
       }
-    })
+    } })
   }
 
   async function execute({ operation, input }) {
-    return runTrackedOperation(state, async () => {
+    return runTrackedOperation({ state, work: async () => {
       if (!CRUD_OPERATIONS.includes(operation)) {
         throw new TypeError(`Unsupported MongoDB CRUD operation: ${operation}`)
       }
@@ -765,13 +765,13 @@ export function createMongoProvider(options = {}) {
         databaseName: state.options.databaseName,
       })
       return operations[operation](input)
-    })
+    } })
   }
 
   return Object.freeze({
     connect,
     close,
-    withTransaction: (work) => runTrackedOperation(state, () => runTransaction(work)),
+    withTransaction: (work) => runTrackedOperation({ state, work: () => runTransaction(work) }),
     withReadTransaction,
     execute,
     capabilities: MONGO_CAPABILITIES,
