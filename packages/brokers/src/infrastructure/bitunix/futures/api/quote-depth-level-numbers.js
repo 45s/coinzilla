@@ -52,7 +52,7 @@ function readJsonIntegerEnd({ text, startIndex }) {
   if (text[index] === "0") {
     return index + 1
   }
-  if (text[index] < "1" || text[index] > "9") {
+  if (!(text[index] >= "1" && text[index] <= "9")) {
     return null
   }
   return readDigitsEnd({

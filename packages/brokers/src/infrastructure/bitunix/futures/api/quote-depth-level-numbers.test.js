@@ -32,7 +32,7 @@ test("quoteDepthLevelNumbers preserves JSON number token text and leaves malform
   assert.equal(parsed.asks[0][0], "-0.25")
   assert.equal(parsed.asks[0][1], "1.2e+30")
   assert.equal(parsed.asks[1][0], "3E-8")
-  for (const number of ["01", "-01", "1.", ".1", "1e", "1e+", "--1", "1.2.3"]) {
+  for (const number of ["01", "-01", "-", "-e", "+1", "1.", ".1", "1e", "1e+", "--1", "1.2.3"]) {
     const malformed = `{"asks":[[${number},2]],"bids":[]}`
     assert.throws(() => JSON.parse(quoteDepthLevelNumbers({ text: malformed })), SyntaxError, number)
   }
