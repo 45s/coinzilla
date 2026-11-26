@@ -48,7 +48,7 @@ label: "responseTo" })
     throw new TypeError("MongoDB OP_MSG contains unsupported flag bits")
   }
   if (!Array.isArray(sequences)) {
-    throw new TypeError("MongoDB OP_MSG sequences must be an array")
+    throw new TypeError("MongoDB OP_MSG sequence documents must be an array")
   }
   const bodySection = Buffer.concat([
     Buffer.from([0]),
@@ -164,11 +164,11 @@ function decodeOpMsgSections({ message, state }) {
       continue
     }
     if (kind === 1) {
+      const sequence = readSequence({ buffer: message,
+state })
       if (body === undefined) {
         throw new TypeError("MongoDB OP_MSG body section must precede document sequences")
       }
-      const sequence = readSequence({ buffer: message,
-state })
       if (Object.hasOwn(sequences, sequence.identifier)) {
         throw new TypeError("MongoDB OP_MSG contains a duplicate sequence identifier")
       }
