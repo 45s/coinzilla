@@ -978,3 +978,8 @@ test("keeps every shared service alive and reports incomplete shutdown when a st
   assert.equal(calls.includes("user-data-stop"), false, "User-data intake must remain connected while strategy safety is unproven.")
   assert.equal(calls.includes("broker-disconnect"), false, "The broker must remain connected while strategy safety is unproven.")
 })
+
+
+nodeTest.after(() => {
+  console.log("Shutdown test active resources:", process.getActiveResourcesInfo())
+})
