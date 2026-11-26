@@ -170,6 +170,7 @@ function createShutdown(input = {}) {
 test("bounds a pending CLOSING audit phase and retains shared services", async () => {
   const calls = []
   let resolveAudit
+  let auditCalls = 0
   let markAuditStarted
   let closingAuditDeadline
   let closingAuditTimeoutMs
@@ -182,6 +183,7 @@ test("bounds a pending CLOSING audit phase and retains shared services", async (
   const fixture = createShutdown({
     calls,
     publishAccountSnapshot: async () => {
+      auditCalls += 1
       markAuditStarted()
       return pendingAudit
     },
@@ -196,6 +198,7 @@ test("bounds a pending CLOSING audit phase and retains shared services", async (
     clearTimeoutFn: () => {},
   })
   const stopPromise = fixture.stop()
+  let retryStopPromise
 
   try {
     await auditStarted
@@ -208,13 +211,25 @@ test("bounds a pending CLOSING audit phase and retains shared services", async (
         && error.phase === "CLOSING_ACCOUNT_AUDIT",
       "A timed-out CLOSING audit must produce an explicit bounded failure.",
     )
+    retryStopPromise = fixture.stop()
+    await assert.rejects(
+      retryStopPromise,
+      (error) => error.code === "SHUTDOWN_PHASE_STILL_RUNNING"
+        && error.phase === "CLOSING_ACCOUNT_AUDIT"
+        && error.status === "PENDING",
+      "A retry must not overlap the still-pending CLOSING audit operation.",
+    )
+    assert.equal(auditCalls, 1, "A retry must not start a second CLOSING audit while the first is pending.")
     assert.equal(calls.includes("market-intake-stop"), false, "Market feeds must remain active when the CLOSING audit is incomplete.")
     assert.equal(calls.includes("user-data-stop"), false, "User-data intake must remain active when the CLOSING audit is incomplete.")
     assert.equal(calls.includes("broker-disconnect"), false, "The broker must remain connected when the CLOSING audit is incomplete.")
     assert.equal(fixture.state.status, "SHUTDOWN_INCOMPLETE", "A timed-out shutdown phase must never report STOPPED.")
   } finally {
     resolveAudit?.({ ok: true })
-    await stopPromise.catch(() => {})
+    await Promise.all([
+      stopPromise.catch(() => {}),
+      retryStopPromise?.catch(() => {}),
+    ])
   }
 })
 
