@@ -13,3 +13,6 @@ node_modules
 /logs_bot-free-roll/
 /apps/harvester/logs/harvester.log
 /apps/harvester/logs/harvester-trace.log
+
+# Generated Conservative scenario reports
+/apps/harvester/reports/conservative-scenarios/

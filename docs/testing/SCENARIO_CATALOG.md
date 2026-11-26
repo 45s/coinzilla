@@ -1043,3 +1043,9 @@ The package entries below make the repository-wide scope visible, but their exac
 **Scope controls:** market-scoped blockers affect only their symbol. ADR-0008's Recovery Seller SELL exception applies only to its market-level strategy pause and is subordinate to any account-scoped blocker. An audit `readiness: BLOCKED` classification is not itself a global stop.
 
 **Coverage:** `create-recovery-seller-stop-workflow.test.js`, `create-submission-gate.test.js`, and `subscribe-to-user-data.test.js`.
+
+### Conservative executable scenario matrix
+
+The executable definitions are maintained in `apps/harvester/test/scenarios/conservative/`; shared tooling is under `apps/harvester/test/scenarios/shared/`. The registry reuses `apps/harvester/docs/critical-behaviors.json` for critical behavior ownership and named test evidence. Run with `pnpm --filter @coinzilla/harvester scenarios:conservative`. Generated inventory, execution and coverage reports are written to `apps/harvester/reports/conservative-scenarios/` and uploaded by the conditional scenario step in the existing Harvester Targeted Tests workflow.
+
+The initial inventory contains 18 scenarios across 16 categories: 15 TEST-MAPPED, one PARTIAL, one MISSING (CON-PERSIST-003 startup history gate), and one UNSUPPORTED (runtime restoration). TEST-MAPPED means a named test is linked, not that the business outcome has been verified. Runtime restoration remains outside the active Conservative specification. Unmapped-test analysis is limited to named tests in the critical behavior registry.

@@ -2315,3 +2315,9 @@ Open Draft [PR #1798](https://github.com/45s/coinzilla/pull/1798) has current he
 ## Strategy-neutral production-flow Scenario Runner — issue #1836
 
 Open Draft [PR #1837](https://github.com/45s/coinzilla/pull/1837) has current exact head `d93898e4099654cfe2a87aa599c1b9d59f6ec921`, 194 commits ahead / 0 behind current `develop` (`b69b32ce438a56de84bb51eaa16cce87be253c95`). All six required workflows passed on that exact head. The runner remains Draft because acceptance is incomplete: trusted OS-level isolation, full production-flow scenarios, configuration/market metadata, exact-revision replay, complete execution trace/assertions/report, bounded history and reconnect/missed-update recovery. Do not enable real broker/exchange access or claim executable RS coverage. No live operations, credentials, production account state or production persistence.
+
+## Conservative executable scenario tooling — issue #1797
+
+The scenario-definition and reporting workstream is tracked separately from the active domain-test implementation in [#1763](https://github.com/45s/coinzilla/issues/1763). Child issue [#1797](https://github.com/45s/coinzilla/issues/1797) owns the stable `CON-*` inventory, validated registry, mapped-test runner, and JSON reports. The existing Harvester Targeted Tests workflow runs the suite conditionally when related paths change and uploads its reports. It reuses `docs/critical-behaviors.json` and the repository scenario methodology; it does not duplicate critical-behavior ownership or change production trading behavior.
+
+The initial inventory contains 18 scenarios across 16 categories: 15 TEST-MAPPED, one PARTIAL configuration scenario, one MISSING startup-history-gate scenario (CON-PERSIST-003), and one UNSUPPORTED runtime-restoration scenario. TEST-MAPPED is a mapping state, not proof of assertion-level coverage. Runtime restoration remains unsupported by the active Conservative specification.
