@@ -1,6 +1,10 @@
 import { TextDecoder } from "node:util"
 
-import { DatabaseConflictError, DatabaseProviderError } from "../../domain/errors/database-errors.js"
+import {
+  DatabaseConflictError,
+  DatabaseOperationOutcomeUnknownError,
+  DatabaseProviderError,
+} from "../../domain/errors/database-errors.js"
 import {
   normalizeReadQuery,
   serializeChanges,
@@ -88,8 +92,16 @@ function decodeUserValue(value) {
 function mapMongoError({ error, operation, collection }) {
   if (error instanceof TypeError
     || error instanceof DatabaseConflictError
+    || error instanceof DatabaseOperationOutcomeUnknownError
     || error instanceof DatabaseProviderError) {
     return error
+  }
+  if (error?.outcomeUnknown && ["create", "update", "delete"].includes(operation)) {
+    return new DatabaseOperationOutcomeUnknownError({
+      operation,
+      collection,
+      cause: error,
+    })
   }
   if (error?.code === 11000 || error?.code === 11001) {
     return new DatabaseConflictError({
