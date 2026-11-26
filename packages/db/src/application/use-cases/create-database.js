@@ -8,7 +8,6 @@ const REQUIRED_PROVIDER_METHODS = Object.freeze([
 ])
 const REQUIRED_DATABASE_PROVIDER_METHODS = Object.freeze([
   ...REQUIRED_PROVIDER_METHODS,
-  "withReadTransaction",
   "execute",
 ])
 const CRUD_METHODS = Object.freeze([
