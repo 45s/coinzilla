@@ -1,6 +1,6 @@
 const MAX_BSON_DOCUMENT_SIZE = 16 * 1024 * 1024
 const MAX_BSON_NESTING_DEPTH = 100
-const INT32_MIN = -2 ** 31
+const INT32_MIN = -(2 ** 31)
 const INT32_MAX = 2 ** 31 - 1
 const INT64_MIN = -(2n ** 63n)
 const INT64_MAX = (2n ** 63n) - 1n
