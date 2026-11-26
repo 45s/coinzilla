@@ -25,12 +25,12 @@ function assertWorkerExecutionStarted({
   expectedExecuteMessage,
   result,
 }) {
-  assertWorkerExecutionStarted({
-    started,
-    messages,
-    expectedExecuteMessage,
-    result,
-  })
+  assert.equal(started, true,
+    "The process adapter must signal Running only after the worker confirms execution has started.")
+  assert.deepEqual(messages, [expectedExecuteMessage],
+    "The parent must dispatch exactly once and only after readiness is confirmed.")
+  assert.deepEqual(result, { ready: true },
+    "The adapter must return the result produced after the readiness handshake.")
 }
 
 const TEST_SANDBOX_PROFILE = Object.freeze({
@@ -511,10 +511,10 @@ test("process adapter waits for an explicit worker-ready handshake before dispat
   })
   const result = await execution
 
-  assert.equal(started, true,
-    "The process adapter must signal Running only after the worker confirms execution has started.")
-  assert.deepEqual(messages, [expectedExecuteMessage],
-    "The parent must dispatch exactly once and only after readiness is confirmed.")
-  assert.deepEqual(result, { ready: true },
-    "The adapter must return the result produced after the readiness handshake.")
+  assertWorkerExecutionStarted({
+    started,
+    messages,
+    expectedExecuteMessage,
+    result,
+  })
 })
