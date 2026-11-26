@@ -82,7 +82,7 @@ An unknown commit outcome is not a rollback. Application code must reconcile the
 ## Lifecycle and failure behavior
 
 - The provider has a single-use lifecycle, consistent with the composed database facade. Create a new provider/database instance after closing.
-- The transport bounds message size, pending requests and queued socket bytes; replies are correlated by request ID.
+- The transport bounds message size, pending requests and queued socket bytes; replies are correlated by request ID. OP_MSG response document-sequence maps use a null prototype so server-supplied identifiers such as `__proto__` remain ordinary keys.
 - Malformed frames or socket errors fail the connection and reject pending commands.
 - Per-command timeouts reject that command. They do not replay the command.
 - Provider-neutral database shutdown waits for active transactions and in-flight CRUD operations before closing the transport.

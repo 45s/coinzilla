@@ -131,7 +131,7 @@ export function decodeOpMsg(message) {
   }
   const state = { offset: 20, end: message.length }
   let body
-  const sequences = {}
+  const sequences = Object.create(null)
   while (state.offset < state.end) {
     const kind = message[state.offset]
     state.offset += 1

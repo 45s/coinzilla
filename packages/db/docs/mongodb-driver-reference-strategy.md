@@ -56,6 +56,10 @@ The Coinzilla decoder previously routed BSON type `0x11` through `Buffer.readBig
 
 A second review found that Node's `Buffer.from(value, "base64")` silently ignores invalid trailing characters. That behavior could allow a malformed SCRAM server-final signature such as a valid proof followed by punctuation to decode to the expected bytes. A test-first regression was committed in `32dad94bfaab85e559cb6a34cb97b2802b8a3afe`; the local fix now validates the Base64 alphabet, padding shape and canonical round-trip before the existing constant-time comparison. This is protocol-input hardening, not copied upstream code.
 
+### OP_MSG sequence map key safety
+
+A review of `decodeOpMsg` found that response document-sequence identifiers are server-controlled cstrings. Storing them in a normal `{}` object makes the valid identifier `__proto__` invoke the legacy prototype setter instead of creating an own key, silently changing the map's prototype and dropping the sequence entry. A test-first regression was committed in `30cb243927dfd8b172b2a6edeebe431c94201ff9`. The decoder now uses a null-prototype map so all sequence identifiers remain ordinary own keys. This is a local parser-hardening fix; no upstream code was copied.
+
 ## Porting workflow — required for every candidate
 
 1. **Name the concrete gap.** Identify the current Coinzilla function, its public contract, observed defect or missing edge case, and a regression test that demonstrates the requirement. Do not port code merely because the official driver has it.
