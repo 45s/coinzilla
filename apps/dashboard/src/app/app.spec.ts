@@ -228,7 +228,7 @@ describe('AppComponent', () => {
     fixture.destroy();
   });
 
-  it('offers the existing theme plus six palettes and persists the selected theme', async () => {
+  it('offers the StarAdmin palette alongside existing themes and persists the selected theme', async () => {
     window.localStorage.removeItem('coinzilla.dashboard.theme');
     await TestBed.configureTestingModule({
       imports: [AppComponent],
@@ -239,9 +239,9 @@ describe('AppComponent', () => {
     fixture.detectChanges();
 
     const select = fixture.nativeElement.querySelector('select[aria-label="Dashboard theme"]') as HTMLSelectElement;
-    expect(select.options.length).toBe(8);
+    expect(select.options.length, 'The theme picker must retain all existing themes and add StarAdmin.').toBe(9);
     expect(Array.from(select.options).map((option) => option.value)).toEqual([
-      'current', 'midnight', 'light', 'oled', 'green', 'arctic', 'warm', 'system',
+      'staradmin', 'current', 'midnight', 'light', 'oled', 'green', 'arctic', 'warm', 'system',
     ]);
 
     select.value = 'light';
@@ -255,16 +255,16 @@ describe('AppComponent', () => {
     window.localStorage.removeItem('coinzilla.dashboard.theme');
   });
 
-  it('reads a previously saved theme during component initialization', () => {
+  it('defaults to StarAdmin and reads a previously saved theme during component initialization', () => {
     window.localStorage.setItem('coinzilla.dashboard.theme', 'light');
     expect(readSavedDashboardTheme(window.localStorage)).toBe('light');
-    expect(readSavedDashboardTheme(undefined)).toBe('current');
+    expect(readSavedDashboardTheme(undefined), 'A fresh Dashboard install must use the new StarAdmin design.').toBe('staradmin');
     expect(readSavedDashboardTheme({
       getItem: () => 'not-a-theme',
-    })).toBe('current');
+    }), 'An invalid saved theme must safely fall back to StarAdmin.').toBe('staradmin');
     expect(readSavedDashboardTheme({
       getItem: () => { throw new Error('storage unavailable'); },
-    })).toBe('current');
+    }), 'Unavailable browser storage must safely fall back to StarAdmin.').toBe('staradmin');
     window.localStorage.removeItem('coinzilla.dashboard.theme');
   });
 });
