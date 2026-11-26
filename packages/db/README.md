@@ -255,7 +255,7 @@ The adapter uses Node.js built-ins only (`node:net`, `node:tls`, `node:crypto`, 
 **Supported protocol and deployment scope**
 
 - OP_MSG wire protocol with server wire-version overlap in the range 13–25 (MongoDB 5.0–8.0 protocol generations).
-- Standalone servers, replica sets and sharded clusters reached through a single seed. Replica-set primary redirection is followed; this is not a full topology monitor or failover-aware connection pool.
+- Standalone servers and replica sets reached through a single seed. The handshake rejects mongos/sharded topology. Replica-set primary redirection is followed; this is not a full topology monitor or failover-aware connection pool.
 - Optional unauthenticated connections, SCRAM-SHA-256 and legacy SCRAM-SHA-1. SCRAM-SHA-256 currently accepts printable ASCII passwords only because complete Unicode SASLprep tables are not available in Node built-ins; unsupported input is rejected rather than prepared incorrectly.
 - TCP and TLS. TLS validation follows Node.js defaults unless explicit TLS options are supplied.
 - JSON record CRUD, exact scalar equality filters, portable JSON value sorting, offset/limit pagination, and provider-neutral error mapping.
@@ -263,7 +263,7 @@ The adapter uses Node.js built-ins only (`node:net`, `node:tls`, `node:crypto`, 
 
 **Transactions and capability behavior**
 
-The MongoDB provider declares `transactions.multiDocument: "topology-dependent"`. Standalone servers do not support multi-document transactions; `database.transaction(work)` rejects with `DatabaseTransactionUnsupportedError` before invoking the callback. Replica sets and sharded clusters require logical-session support from the server. The adapter uses one logical session and transaction number for callback operations, starts a snapshot transaction on the first command, and commits with majority write concern.
+The MongoDB provider declares `transactions.multiDocument: "topology-dependent"`. Standalone servers do not support multi-document transactions; `database.transaction(work)` rejects with `DatabaseTransactionUnsupportedError` before invoking the callback. Only replica sets with logical-session support are transaction-capable. Mongos/sharded servers are rejected during handshake. The adapter uses one logical session and transaction number for callback operations, starts a snapshot transaction on the first command, and commits with majority write concern.
 
 MongoDB read transaction callbacks are limited to one logical read operation; `readMany` may drain multiple internal cursor batches. They do not provide a multi-query snapshot on standalone servers. MongoDB transaction callbacks are asynchronous: await every CRUD operation on the supplied transaction object. Do not start unawaited writes and allow the callback to return, because commit follows callback completion. SQLite callbacks remain synchronous and reject async work.
 
