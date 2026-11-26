@@ -175,7 +175,9 @@ test("MongoDB transport handles fragmented frames without losing bytes", async (
   })
 
   await transport.connect()
-  assert.deepEqual(await transport.command({ body: { ping: 1 } }), { ok: 1 })
+  assert.deepEqual(await transport.command({
+      body: { ping: 1 },
+    }), { ok: 1 })
   await transport.close()
 })
 
@@ -264,10 +266,13 @@ timeoutMS: 0 }),
   )
   socket.writableLength = 0
 
-  const requests = Array.from({ length: 128 }, () => transport.command({
-    body: { ping: 1 },
-    timeoutMS: 1_000,
-  }))
+  const requests = Array.from(
+    { length: 128 },
+    () => transport.command({
+      body: { ping: 1 },
+      timeoutMS: 1_000,
+    }),
+  )
   assert.equal(transport.pendingRequestCount, 128)
   await assert.rejects(
     transport.command({ body: { ping: 1 } }),
@@ -497,13 +502,49 @@ test("MongoDB transport enforces the queued write-buffer bound before writing", 
 })
 test("MongoDB transport validates options and command arguments", async () => {
   const invalidOptions = [
-    { options: { host: "" }, expected: /host/ },
-    { options: { host: " localhost" }, expected: /host/ },
-    { options: { host: "localhost", port: 0 }, expected: /port/ },
-    { options: { host: "localhost", connectTimeoutMS: 0 }, expected: /connectTimeoutMS/ },
-    { options: { host: "localhost", socketTimeoutMS: 0 }, expected: /socketTimeoutMS/ },
-    { options: { host: "localhost", tls: true }, expected: /TLS options/ },
-    { options: { host: "localhost", socketFactory: "invalid" }, expected: /socketFactory/ },
+    {
+      options: { host: "" },
+      expected: /host/,
+    },
+    {
+      options: { host: " localhost" },
+      expected: /host/,
+    },
+    {
+      options: {
+        host: "localhost",
+        port: 0,
+      },
+      expected: /port/,
+    },
+    {
+      options: {
+        host: "localhost",
+        connectTimeoutMS: 0,
+      },
+      expected: /connectTimeoutMS/,
+    },
+    {
+      options: {
+        host: "localhost",
+        socketTimeoutMS: 0,
+      },
+      expected: /socketTimeoutMS/,
+    },
+    {
+      options: {
+        host: "localhost",
+        tls: true,
+      },
+      expected: /TLS options/,
+    },
+    {
+      options: {
+        host: "localhost",
+        socketFactory: "invalid",
+      },
+      expected: /socketFactory/,
+    },
   ]
   for (const invalid of invalidOptions) {
     assert.throws(() => createMongoTransport(invalid.options), invalid.expected)
@@ -512,11 +553,17 @@ test("MongoDB transport validates options and command arguments", async () => {
   const fake = createFakeTransport()
   await fake.transport.connect()
   await assert.rejects(
-    fake.transport.command({ body: { ping: 1 }, transaction: "false" }),
+    fake.transport.command({
+      body: { ping: 1 },
+      transaction: "false",
+    }),
     /transaction command flag/,
   )
   await assert.rejects(
-    fake.transport.command({ body: { ping: 1 }, timeoutMS: 0 }),
+    fake.transport.command({
+      body: { ping: 1 },
+      timeoutMS: 0,
+    }),
     /command timeout/,
   )
   await assert.rejects(
