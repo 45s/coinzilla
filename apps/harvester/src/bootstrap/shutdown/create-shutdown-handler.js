@@ -939,6 +939,13 @@ async function runShutdownLifecycle(context) {
     context,
     cleanupErrors: buildCleanupErrors(context),
   })
+  if (context.state.status !== "STOPPED") {
+    throw new Error("Harvester shutdown did not reach the STOPPED terminal state")
+  }
+  return {
+    ok: true,
+    status: "STOPPED",
+  }
 }
 
 /**
