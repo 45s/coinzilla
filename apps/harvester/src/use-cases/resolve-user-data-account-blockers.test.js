@@ -265,3 +265,17 @@ test("requires audited markets to equal configured markets exactly", async () =>
   assert.equal(result.ok, false)
   assert.equal(store.records.length, 6)
 })
+
+
+test("refuses to resolve account blockers without durable producer provenance", async () => {
+  const store = makeStore()
+  delete store.records[5].data.producer
+  const result = await resolveUserDataAccountBlockers(makeResolutionOptions({
+    store,
+    audit: readyAudit(),
+    actionId: "action-unique-007",
+  }))
+
+  assert.equal(result.ok, false)
+  assert.equal(store.records.length, 6)
+})
