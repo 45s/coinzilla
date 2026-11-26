@@ -921,7 +921,7 @@ test("does not advance to BUY cancellation or recovery proof after a participant
   assert.equal(pendingSnapshot.lastSuccessfulStep, "USER_DATA_DRAIN", "The timeout snapshot must identify the last completed safety step.")
   assert.equal(pendingSnapshot.pendingOrders[0].clientOrderId, "h-0123456789abcdef012345-18", "The timeout snapshot must identify the exact pending client order.")
   assert.equal(pendingSnapshot.pendingOrders[0].remainingQuantity, "398")
-  assert.deepEqual(pendingSnapshot.missingEvidence, ["SHUTDOWN_SAFETY_NOT_PROVEN"])
+  assert.deepEqual(pendingSnapshot.missingEvidence, ["LATE_ORDER_EXECUTION_EVIDENCE"])
 
   controller.abort(new Error("participant deadline elapsed"))
   releaseReconciliation()
