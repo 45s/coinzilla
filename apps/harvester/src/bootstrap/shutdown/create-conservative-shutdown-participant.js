@@ -452,59 +452,39 @@ async function reconcileOwnedOrders({
   signal,
   stageDiagnostics,
 } = {}) {
-  await collectStageBlockers({
-    blockers,
-    reconciliationBlockers,
-    stage: "OWNED_ORDER_RECONCILIATION",
-    operation: () => engine.reconcileOwnedOrders({ symbol }),
-    signal,
-    symbol,
-    stageDiagnostics,
-  })
-  await collectDrainBlockers({
-    blockers,
-    reconciliationBlockers,
-    drainUserDataEvents,
-    signal,
-    symbol,
-    stageDiagnostics,
-  })
-
-  await collectStageBlockers({
-    blockers,
-    reconciliationBlockers,
-    stage: "OWNED_BUY_CANCELLATION",
-    operation: () => engine.cancelOwnedBuyOrdersForShutdown({ symbol }),
-    signal,
-    symbol,
-    stageDiagnostics,
-  })
-  await collectDrainBlockers({
-    blockers,
-    reconciliationBlockers,
-    drainUserDataEvents,
-    signal,
-    symbol,
-    stageDiagnostics,
-  })
-
-  await collectStageBlockers({
-    blockers,
-    reconciliationBlockers,
-    stage: "FINAL_OWNED_ORDER_RECONCILIATION",
-    operation: () => engine.reconcileOwnedOrders({ symbol }),
-    signal,
-    symbol,
-    stageDiagnostics,
-  })
-  await collectDrainBlockers({
-    blockers,
-    reconciliationBlockers,
-    drainUserDataEvents,
-    signal,
-    symbol,
-    stageDiagnostics,
-  })
+  const stages = [
+    {
+      stage: "OWNED_ORDER_RECONCILIATION",
+      operation: () => engine.reconcileOwnedOrders({ symbol }),
+    },
+    {
+      stage: "OWNED_BUY_CANCELLATION",
+      operation: () => engine.cancelOwnedBuyOrdersForShutdown({ symbol }),
+    },
+    {
+      stage: "FINAL_OWNED_ORDER_RECONCILIATION",
+      operation: () => engine.reconcileOwnedOrders({ symbol }),
+    },
+  ]
+  for (const { stage, operation } of stages) {
+    await collectStageBlockers({
+      blockers,
+      reconciliationBlockers,
+      stage,
+      operation,
+      signal,
+      symbol,
+      stageDiagnostics,
+    })
+    await collectDrainBlockers({
+      blockers,
+      reconciliationBlockers,
+      drainUserDataEvents,
+      signal,
+      symbol,
+      stageDiagnostics,
+    })
+  }
 }
 
 async function reconcileRecoverySells({
