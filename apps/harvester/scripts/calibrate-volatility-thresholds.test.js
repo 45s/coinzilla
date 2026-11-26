@@ -115,6 +115,50 @@ test("normalizes Binance Spot archive microsecond timestamps to milliseconds", (
   assert.equal(parsed.candles[0].closeTime, 1_735_689_659_999, "Microsecond close time must normalize to the exact millisecond candle boundary.")
 })
 
+test("joins adjacent monthly Spot archives across the 2025 timestamp-unit boundary", () => {
+  const pre2025OpenTime = Date.parse("2024-12-31T23:59:00.000Z")
+  const post2025OpenTime = Date.parse("2025-01-01T00:00:00.000Z")
+  const pre2025 = parseBinanceSpotKlineCsv({
+    symbol: "BTCUSDT",
+    sourceFile: "BTCUSDT-1m-2024-12.csv",
+    content: [
+      "open_time,open,high,low,close,volume,close_time,quote_volume,trades,taker_base,taker_quote,ignore",
+      makeKlineRow({
+        openTime: pre2025OpenTime,
+        closeTime: pre2025OpenTime + INTERVAL_MS - 1,
+      }),
+    ].join("\n"),
+  })
+  const post2025OpenTimeMicros = post2025OpenTime * 1_000
+  const post2025 = parseBinanceSpotKlineCsv({
+    symbol: "BTCUSDT",
+    sourceFile: "BTCUSDT-1m-2025-01.csv",
+    content: makeKlineRow({
+      openTime: post2025OpenTimeMicros,
+      closeTime: post2025OpenTimeMicros + (INTERVAL_MS - 1) * 1_000,
+    }),
+  })
+
+  assert.equal(pre2025.timestampUnit, "milliseconds")
+  assert.equal(post2025.timestampUnit, "microseconds")
+
+  const merged = mergeAndValidateCandles({
+    symbol: "BTCUSDT",
+    candleGroups: [post2025, pre2025],
+  })
+
+  assert.deepEqual(
+    merged.map(({ openTime }) => openTime),
+    [pre2025OpenTime, post2025OpenTime],
+    "Adjacent monthly archive files must remain contiguous after timestamp normalization.",
+  )
+  assert.equal(
+    merged[1].closeTime,
+    post2025OpenTime + INTERVAL_MS - 1,
+    "The microsecond close time must normalize to the exact millisecond candle boundary.",
+  )
+})
+
 test("merges chronological files and removes identical overlapping candle facts", () => {
   const firstOpenTime = 1_700_000_040_000
   const first = {
