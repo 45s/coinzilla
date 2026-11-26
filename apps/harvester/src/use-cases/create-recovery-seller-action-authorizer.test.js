@@ -77,6 +77,7 @@ function createAuthorizer({
   actionOverride = action,
   snapshotOverride = snapshot,
   portfolioOverride,
+  investment = 100,
 } = {}) {
   let latchCount = 0
   const state = createAuthorizerState({ activeOrders })
@@ -98,7 +99,7 @@ function createAuthorizer({
   const authorize = createRecoverySellerActionAuthorizer({
     state,
     recoverySellerPairs: {
-      [symbol]: { investment: 100 },
+      [symbol]: { investment },
     },
     recoverySellerStopWorkflow,
     getPortfolio: () => portfolio,
@@ -306,4 +307,30 @@ test("RS-002-020-B: counts an owned pending BUY commitment exactly once at the p
   assert.equal(result.ok, true, "An owned pending RS commitment must be a valid account allocation input.")
   assert.equal(result.data.allowed, true, "20 spent + 60 pending commitment + 20 new action must be accepted at exact 100 investment equality, proving the pending commitment is counted once.")
   assert.equal(runtime.getLatchCount(), 0, "Exact cap equality must not latch STOP.")
+
+  const belowCapRuntime = createAuthorizer({
+    quoteBalance: "1000",
+    investment: 99,
+    activeOrders: [pendingRecoveryBuy],
+    actionOverride: {
+      side: "BUY",
+      quantity: "2",
+      price: "10",
+      positionId: "rs-position-1",
+    },
+    snapshotOverride: {
+      planInput: {
+        recoveryQuantity: "0",
+        verifiedUnreservedLegacyQuantity: "0",
+        recoveryCostBasis: "20",
+      },
+      cumulativeNetSellProceeds: "0",
+    },
+  })
+  const belowCapResult = await belowCapRuntime.authorize()
+
+  assert.equal(belowCapResult.ok, true, "A below-cap allocation is a normal deferral, not an accounting error.")
+  assert.equal(belowCapResult.data.skipped, true, "20 spent + 60 pending + 20 proposed must exceed a 99 pair cap.")
+  assert.equal(belowCapResult.data.reason, "PAIR_INVESTMENT_LIMIT", "The pending commitment must be included once; omitting it would incorrectly allow the proposed BUY.")
+  assert.equal(belowCapRuntime.getLatchCount(), 0, "A pair investment limit deferral must not latch STOP.")
 })
