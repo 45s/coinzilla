@@ -8,6 +8,10 @@ const authenticatedLocalOperatorIdentities = new WeakSet()
  * Authenticate an operator against the operating-system account running this
  * offline recovery command. A plain CLI-supplied identifier is never trusted.
  */
+/**
+ * The returned principal is trusted only by reference: its private WeakSet
+ * membership prevents callers from forging authentication by copying fields.
+ */
 export function authenticateLocalOperator({
   operatorId,
   getUserInfo = userInfo,
