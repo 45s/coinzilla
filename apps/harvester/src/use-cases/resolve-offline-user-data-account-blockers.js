@@ -128,12 +128,21 @@ function hasNoUnresolvedOrders(audit) {
     audit.blockedMarkets.length === 0
 }
 
-function isMarketAuditReady({
-    result,
-    reconciliation,
-    audit,
-    symbol,
-  }) {
+function hasNoUnownedOpenOrders(audit) {
+  return Array.isArray(audit.unownedOpenOrders) &&
+    audit.unownedOpenOrders.length === 0
+}
+
+function hasNoBlockedMarkets(audit) {
+  return Array.isArray(audit.blockedMarkets) &&
+    audit.blockedMarkets.length === 0
+}
+
+function hasCompleteOwnedOrderReconciliation(reconciliation) {
+  return Number.isSafeInteger(reconciliation.orderReconciliation?.reconciledOrders)
+}
+
+function isMarketAuditReady({ result, reconciliation, audit, symbol }) {
   return result?.ok === true &&
     reconciliation?.ready === true &&
     reconciliation.status === "READY" &&
@@ -143,11 +152,16 @@ function isMarketAuditReady({
       tradeHistory: audit.tradeHistory,
       symbol,
     }) &&
-    hasNoUnresolvedOrders(audit) &&
-    Number.isSafeInteger(reconciliation.orderReconciliation?.reconciledOrders)
+    hasNoUnownedOpenOrders(audit) &&
+    hasNoBlockedMarkets(audit) &&
+    hasCompleteOwnedOrderReconciliation(reconciliation)
 }
 
-function validateMarketAuditEvidence({ symbol, audit, accountSnapshotSourceTime }) {
+function validateMarketAuditEvidence({
+  symbol,
+  audit,
+  accountSnapshotSourceTime,
+}) {
   if (audit.sourceTime !== accountSnapshotSourceTime ||
       !Number.isSafeInteger(audit.balancesChecked) ||
       audit.balancesChecked <= 0 ||
@@ -159,7 +173,11 @@ function validateMarketAuditEvidence({ symbol, audit, accountSnapshotSourceTime 
   }
 }
 
-function validateMarketAudit({ symbol, result, accountSnapshotSourceTime }) {
+function validateMarketAudit({
+  symbol,
+  result,
+  accountSnapshotSourceTime,
+}) {
   const reconciliation = result?.data?.reconciliation
   const audit = reconciliation?.audit
   if (!isMarketAuditReady({
