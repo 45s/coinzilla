@@ -235,6 +235,38 @@ test("production RS accounting durably stops after a fully FILLED SELL misses th
     "Canonical terminal accounting releases the completed order reservation while account STOP remains active.")
 })
 
+test("production RS runtime fails closed when account STOP persistence fails after an under-target FILLED SELL", async () => {
+  const result = await executeRecoverySellerRuntimeScenario({
+    runId: "run-rs-runtime-filled-stop-persistence-failure",
+    scenarioId: "RS-RUNTIME-SELL-STOP-PERSISTENCE-FAILURE-001",
+    input: {
+      marketPrice: "12.3",
+    },
+  })
+
+  assert.equal(result.passed, true, JSON.stringify(result.assertions))
+  assert.equal(result.output.terminalSell.orderStatus, "FILLED",
+    "The broker terminal state must remain FILLED even when STOP persistence fails.")
+  assert.equal(result.output.terminalSell.cycleState.status, "UNRESOLVED",
+    "The under-target cycle must remain unresolved.")
+  assert.equal(result.output.terminalSell.cycleState.terminalReconciled, true,
+    "Canonical terminal accounting must complete before the STOP persistence failure is handled.")
+  assert.equal(result.output.terminalSell.profitabilityEligible, false,
+    "The realized profitability gates must remain failed.")
+  assert.equal(result.output.terminalSell.stopFactAppended, false,
+    "The simulated operational store must not claim a STOP fact was persisted.")
+  assert.equal(result.output.terminalSell.stopPersistenceFailed, true,
+    "The production workflow must surface that durable account STOP could not be confirmed.")
+  assert.equal(result.output.terminalSell.marketPaused, true,
+    "The affected market must still be paused after STOP persistence fails.")
+  assert.ok(result.output.terminalSell.pauseReasons.includes("RS_TERMINAL_SELL_PROFITABILITY_STOP"),
+    "The failure path must retain the canonical under-target FILLED SELL STOP reason.")
+  assert.equal(result.output.terminalSell.eventWorkflowFailedClosed, true,
+    "The terminal event must fail closed when account STOP persistence is unavailable.")
+  assert.equal(result.output.reservedSellCycle, null,
+    "The terminal reservation may be released only after canonical accounting has committed.")
+})
+
 test("production RS registry exposes the runtime scenario and keeps the helper-only mapping preliminary", () => {
   const catalog = getRecoverySellerRunnerCatalog()
   assert.deepEqual(catalog.map((scenario) => scenario.id), [
