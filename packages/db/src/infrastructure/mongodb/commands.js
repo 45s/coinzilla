@@ -469,16 +469,15 @@ data: 1 } })
   return pipeline
 }
 
-async function readMongoCursorRecords({
+async function readMongoFirstBatch({
   command,
   databaseName,
   collection,
   mongoCollection,
   cursor,
 }) {
-  let firstBatch
   try {
-    firstBatch = requireFirstBatch({
+    return requireFirstBatch({
       cursor,
       operation: "readMany",
       collection,
@@ -495,6 +494,22 @@ async function readMongoCursorRecords({
     })
     throw error
   }
+}
+
+async function readMongoCursorRecords({
+  command,
+  databaseName,
+  collection,
+  mongoCollection,
+  cursor,
+}) {
+  const firstBatch = await readMongoFirstBatch({
+    command,
+    databaseName,
+    collection,
+    mongoCollection,
+    cursor,
+  })
   let cursorId = cursor.id
   const records = []
   try {
