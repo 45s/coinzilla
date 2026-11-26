@@ -209,6 +209,7 @@ export async function performMongoHandshake({
   if (!Number.isSafeInteger(minWireVersion)
     || !Number.isSafeInteger(maxWireVersion)
     || maxWireVersion < MIN_SUPPORTED_WIRE_VERSION
+    || maxWireVersion > MAX_SUPPORTED_WIRE_VERSION
     || minWireVersion > MAX_SUPPORTED_WIRE_VERSION
     || maxWireVersion < minWireVersion) {
     throw new Error(
