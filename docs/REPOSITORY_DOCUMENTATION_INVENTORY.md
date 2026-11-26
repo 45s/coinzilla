@@ -5,7 +5,7 @@
 **Tracked Markdown files:** 213 at this tree snapshot.
 **Policy:** [Documentation Governance](DOCUMENTATION_GOVERNANCE.md).
 
-> The previous detailed inventory and dated recursive checkpoints are preserved in [REPOSITORY_DOCUMENTATION_INVENTORY_2026-11-26](archive/inventories/REPOSITORY_DOCUMENTATION_INVENTORY_2026-11-26.md). This page is the current entry point; counts must be refreshed from the recursive Git tree when the inventory is audited again.
+> The previous detailed inventory and dated recursive checkpoints are preserved in [REPOSITORY_DOCUMENTATION_INVENTORY_2026-11-26](REPOSITORY_DOCUMENTATION_INVENTORY_HISTORY_2026-11-26.md). This page is the current entry point; counts must be refreshed from the recursive Git tree when the inventory is audited again.
 
 ## Canonical sources by information type
 
@@ -52,9 +52,9 @@ The original contents are preserved in the dated snapshots linked above. No sour
 
 The second cleanup pass reduced four high-volume package roadmaps to active priority indexes and preserved their complete prior contents as dated snapshots:
 
-- [Brokers roadmap history](archive/roadmaps/BROKERS_ROADMAP_HISTORY_2026-11-26.md) — prior 250 KB roadmap.
-- [Journal roadmap history](archive/roadmaps/JOURNAL_ROADMAP_HISTORY_2026-11-26.md) — prior 48 KB roadmap.
-- [Event Bus roadmap history](archive/roadmaps/EVENT_BUS_ROADMAP_HISTORY_2026-11-26.md) — prior 27 KB roadmap.
-- [Utils roadmap history](archive/roadmaps/UTILS_ROADMAP_HISTORY_2026-11-26.md) — prior 21 KB roadmap.
+- [Brokers roadmap history](../packages/brokers/ROADMAP_HISTORY_2026-11-26.md) — prior 250 KB roadmap.
+- [Journal roadmap history](../packages/journal/ROADMAP_HISTORY_2026-11-26.md) — prior 48 KB roadmap.
+- [Event Bus roadmap history](../packages/event-bus/ROADMAP_HISTORY_2026-11-26.md) — prior 27 KB roadmap.
+- [Utils roadmap history](../packages/utils/ROADMAP_HISTORY_2026-11-26.md) — prior 21 KB roadmap.
 
 No package source, public API, tests, README, domain specification, or ADR was changed. Active pages now point to canonical API/readme/source and issues; detailed delivery evidence remains in the snapshots. These snapshots are archival provenance, not current instructions or status authority.
