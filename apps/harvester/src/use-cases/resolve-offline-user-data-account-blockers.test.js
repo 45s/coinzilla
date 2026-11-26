@@ -125,39 +125,80 @@ function makeRecords({ stopped = true } = {}) {
   ]
 }
 function makeContext() {
-  const marketsEvidence = Object.fromEntries(configuredMarkets.map((symbol) => [
-    symbol,
+  const marketInputs = [
     {
-      coverage: {
-        coveredFromTime: 1_699_000_000_000,
-        verifiedAt: 1_699_999_999_900,
-        evidenceDigest: "c".repeat(64),
-        verifiedBy: "operator-7",
-      },
-      tradeHistory: {
-        historyStartTime: 1_699_000_000_000,
-        historyScope: "MARKET",
-        marketsQueried: [symbol],
-        historyPagesComplete: true,
-        marketUniverseComplete: false,
-        fills: [],
-      },
+      venue: "BINANCE",
+      symbol: "BTCUSDT",
+      baseAsset: { id: "binance:BTC", code: "BTC" },
+      quoteAsset: { id: "binance:USDT", code: "USDT" },
     },
-  ]))
+    {
+      venue: "BINANCE",
+      symbol: "ETHUSDT",
+      baseAsset: { id: "binance:ETH", code: "ETH" },
+      quoteAsset: { id: "binance:USDT", code: "USDT" },
+    },
+  ]
+  const balances = [
+    { asset: "BTC", free: "0", locked: "0", total: "0" },
+    { asset: "ETH", free: "0", locked: "0", total: "0" },
+    { asset: "USDT", free: "100", locked: "0", total: "100" },
+  ]
+  const marketsEvidence = Object.fromEntries(configuredMarkets.map((symbol) => [symbol, {
+    coverage: {
+      coveredFromTime: 100,
+      verifiedAt: 200,
+      evidenceDigest: "c".repeat(64),
+      verifiedBy: "operator-7",
+    },
+    tradeHistory: {
+      historyStartTime: 100,
+      historyScope: "MARKET",
+      marketsQueried: [symbol],
+      historyPagesComplete: true,
+      marketHistoryPagesComplete: true,
+      marketUniverseComplete: false,
+      fills: [],
+    },
+  }]))
   return {
     runtimeSessionId,
     configuredMarkets,
-    journalRecords: [],
-    markets: configuredMarkets.map((symbol) => ({
-      venue: "binance",
-      symbol,
-    })),
+    journalRecords: [
+      {
+        position: { fileName: "offline-session" },
+        payload: {
+          source: "harvester",
+          name: "account.snapshot_captured",
+          data: {
+            phase: "PREFLIGHT",
+            sourceTime: 100,
+            auditStatus: "COMPLETE",
+            auditReasons: [],
+            balances,
+          },
+        },
+      },
+      {
+        position: { fileName: "offline-session" },
+        payload: {
+          source: "harvester",
+          name: "harvester.started",
+          data: { tradingEnabled: true },
+        },
+      },
+    ],
+    markets: marketInputs,
     assets: [],
     marketsEvidence,
     exchange: {
       currentAccountSnapshot: {
-        sourceTime: 1_700_000_000_000,
-        balances: [],
+        sourceTime: 300,
+        balances: [
+          { assetId: "binance:BTC", asset: "BTC", free: "0", locked: "0" },
+          { assetId: "binance:ETH", asset: "ETH", free: "0", locked: "0" },
+          { assetId: "binance:USDT", asset: "USDT", free: "100", locked: "0" },
+        ],
       },
       openOrders: [],
       ownedOrderHistory: [],
@@ -274,26 +315,20 @@ test("parses explicit offline account blocker resolution confirmation", () => {
   ]), /--cause-fixed is required/)
 })
 
-test("audits every configured market before recording account blocker resolution", async () => {
-  const reconciledSymbols = []
-  let resolutionRequest
+test("runs the production offline account/order/fill audit for every configured market", async () => {
+  let accountAudit
   const result = await runOfflineAccountBlockerResolution({
     context: makeContext(),
     operationalStateStore: makeStore(),
     operatorId: "operator-7",
     actionId: "action-unique-002",
     causeFixed: true,
-    reconcileMarket: async ({ context }) => {
-      reconciledSymbols.push(context.symbol)
-      const audit = readyMarketAudit(context.symbol)
-      return audit
-    },
     resolveBlockers: async (request) => {
-      resolutionRequest = request
+      accountAudit = await request.reconcileAccount()
       return {
         ok: true,
         data: {
-          resolvedBlockerIds: request.reconcileAccount && [blockerId],
+          resolvedBlockerIds: accountAudit.data.blockerIds,
           durableReadbackVerified: true,
           readiness: "BLOCKED",
         },
@@ -301,10 +336,17 @@ test("audits every configured market before recording account blocker resolution
     },
   })
 
-  assert.equal(result.ok, true)
-  assert.deepEqual(reconciledSymbols, configuredMarkets)
-  assert.deepEqual(resolutionRequest.configuredMarkets, configuredMarkets)
-  assert.equal(typeof resolutionRequest.reconcileAccount, "function")
+  assert.equal(result.ok, true, result.errors?.map(({ message }) => message).join("; "))
+  assert.deepEqual(accountAudit.data.auditedMarkets, configuredMarkets)
+  assert.equal(accountAudit.data.marketAudits.length, configuredMarkets.length)
+  assert.deepEqual(
+    accountAudit.data.marketAudits.map(({ symbol }) => symbol),
+    configuredMarkets,
+  )
+  assert.equal(accountAudit.data.openOrdersReconciled, true)
+  assert.equal(accountAudit.data.fillsReconciled, true)
+  assert.equal(accountAudit.data.balancesReconciled, true)
+  assert.equal(accountAudit.data.accountingConsistent, true)
 })
 
 test("fails closed if any configured market is not fully reconciled", async () => {
