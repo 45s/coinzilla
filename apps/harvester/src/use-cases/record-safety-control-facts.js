@@ -189,94 +189,89 @@ function validateRecoverySellerStopAction({ resolvedBy, operatorIdentity, operat
   }
 }
 
-function validateSafetyBlockerResolution({
-  blockerId,
-  resolvedBy,
-  resolution,
-  evidenceDigest,
-  raisedFact,
-  operatorIdentity,
-  operatorId,
-  actionId,
-  resolutionReason,
-  actionBlockerIds,
-}) {
-  if (typeof blockerId !== "string" || !/^[a-f0-9]{64}$/.test(blockerId) ||
-      typeof resolvedBy !== "string" || !resolvedBy.trim() || resolvedBy !== resolvedBy.trim() ||
-      !["AUTHORITATIVE_RECONCILIATION", "OPERATOR_ACTION"].includes(resolution) ||
-      typeof evidenceDigest !== "string" || !/^[a-f0-9]{64}$/.test(evidenceDigest)) {
+function validateSafetyBlockerResolutionBase({ blockerId, resolvedBy, resolution, evidenceDigest }) {
+  const validBlockerId = typeof blockerId === "string" && /^[a-f0-9]{64}$/.test(blockerId)
+  const validActor = typeof resolvedBy === "string" &&
+    resolvedBy.trim() !== "" &&
+    resolvedBy === resolvedBy.trim()
+  const validResolution = ["AUTHORITATIVE_RECONCILIATION", "OPERATOR_ACTION"].includes(resolution)
+  const validEvidence = typeof evidenceDigest === "string" && /^[a-f0-9]{64}$/.test(evidenceDigest)
+  if (!validBlockerId || !validActor || !validResolution || !validEvidence) {
     throw new TypeError("Safety blocker resolution requires blocker identity, actor, explicit resolution, and SHA-256 evidence")
   }
-  if (resolution === "AUTHORITATIVE_RECONCILIATION") {
-    if (operatorIdentity !== undefined ||
-        operatorId !== undefined ||
-        actionId !== undefined ||
-        resolutionReason !== undefined ||
-        actionBlockerIds !== undefined) {
+}
+
+function validateSafetyBlockerResolution(options) {
+  validateSafetyBlockerResolutionBase(options)
+  if (options.resolution === "AUTHORITATIVE_RECONCILIATION") {
+    const hasOperatorMetadata = [
+      options.operatorIdentity,
+      options.operatorId,
+      options.actionId,
+      options.resolutionReason,
+      options.actionBlockerIds,
+    ].some((value) => value !== undefined)
+    if (hasOperatorMetadata) {
       throw new TypeError("Authoritative reconciliation facts must not contain operator-action metadata")
     }
     return
   }
-  if (isRecoverySellerStopBlocker(raisedFact)) {
-    validateRecoverySellerStopAction({
-      resolvedBy,
-      operatorIdentity,
-      operatorId,
-      actionId,
-      resolutionReason,
-      actionBlockerIds,
-    })
+  if (isRecoverySellerStopBlocker(options.raisedFact)) {
+    validateRecoverySellerStopAction(options)
     return
   }
-  validateOperatorActionMetadata({
-    blockerId,
-    resolvedBy,
-    operatorIdentity,
-    operatorId,
-    actionId,
-    resolutionReason,
-    actionBlockerIds,
-  })
+  validateOperatorActionMetadata(options)
 }
 
 function sameActionBlockerIds({ left, right }) {
   return Array.isArray(left) &&
     Array.isArray(right) &&
     left.length === right.length &&
-    left.every((blockerId, index) => blockerId === right[index])
+    left.join("|") === right.join("|")
 }
 
 function isSameOperatorActionMetadata({ existing, expected }) {
-  return existing?.operatorId === expected.operatorId &&
+  const sameIdentity = existing?.operatorId === expected.operatorId &&
     existing?.operatorAuthMethod === expected.operatorAuthMethod &&
-    existing?.actionId === expected.actionId &&
-    existing?.resolutionReason === expected.resolutionReason &&
-    existing?.evidenceDigest === expected.evidenceDigest &&
+    existing?.actionId === expected.actionId
+  const sameReasonAndEvidence = existing?.resolutionReason === expected.resolutionReason &&
+    existing?.evidenceDigest === expected.evidenceDigest
+  return sameIdentity &&
+    sameReasonAndEvidence &&
     sameActionBlockerIds({
       left: existing?.actionBlockerIds,
       right: expected.actionBlockerIds,
     })
 }
 
-function isExactSafetyBlockerResolution({ existing, expected }) {
-  const sameBase = existing?.blockerId === expected.blockerId &&
+function hasNoOperatorActionMetadata(existing) {
+  return existing?.actionBlockerIds === undefined &&
+    existing?.actionId === undefined &&
+    existing?.operatorId === undefined &&
+    existing?.operatorAuthMethod === undefined &&
+    existing?.resolutionReason === undefined
+}
+
+function isSameResolutionBase({ existing, expected }) {
+  return existing?.blockerId === expected.blockerId &&
     existing?.resolvedBy === expected.resolvedBy &&
     existing?.resolution === expected.resolution &&
     existing?.evidenceDigest === expected.evidenceDigest
-  if (!sameBase) {
-    return false
-  }
+}
+
+function isSameResolutionMetadata({ existing, expected }) {
   if (expected.actionBlockerIds === undefined) {
-    return existing?.actionBlockerIds === undefined &&
-      existing?.actionId === undefined &&
-      existing?.operatorId === undefined &&
-      existing?.operatorAuthMethod === undefined &&
-      existing?.resolutionReason === undefined
+    return hasNoOperatorActionMetadata(existing)
   }
   return isSameOperatorActionMetadata({
     existing,
     expected,
   })
+}
+
+function isExactSafetyBlockerResolution({ existing, expected }) {
+  return isSameResolutionBase({ existing, expected }) &&
+    isSameResolutionMetadata({ existing, expected })
 }
 
 async function readRaisedSafetyBlockerContext({ operationalStateStore, blockerId, evidenceDigest }) {
@@ -377,19 +372,47 @@ function createExpectedResolution({
   }
 }
 
-export async function recordSafetyBlockerResolved({
+async function persistSafetyBlockerResolution({
   operationalStateStore,
-  blockerId,
-  resolvedBy,
-  resolution,
-  evidenceDigest,
-  operatorIdentity,
-  operatorId,
-  actionId,
-  resolutionReason,
-  actionBlockerIds,
-} = {}) {
+  context,
+  options,
+}) {
+  validateSafetyBlockerResolution({
+    ...options,
+    raisedFact: context.raisedFact,
+  })
+  const expectedResolution = createExpectedResolution(options)
+  const existing = findExistingBlockerResolution({
+    records: context.records,
+    expectedResolution,
+  })
+  if (existing) {
+    return toResult({
+      data: {
+        durable: true,
+        duplicate: true,
+        record: existing,
+      },
+    })
+  }
+  validateActionIdReuse({
+    records: context.records,
+    expectedResolution,
+  })
+  return appendDurably({
+    operationalStateStore,
+    operation: "Safety blocker resolution",
+    fact: {
+      factId: `safety-blocker-resolved:${options.blockerId}`,
+      factType: "SAFETY_BLOCKER_RESOLVED",
+      data: expectedResolution,
+    },
+  })
+}
+
+export async function recordSafetyBlockerResolved(options = {}) {
   try {
+    const { operationalStateStore, blockerId, evidenceDigest } = options
     requireStore({
       operationalStateStore,
       operation: "recordSafetyBlockerResolved",
@@ -403,54 +426,10 @@ export async function recordSafetyBlockerResolved({
     if (context?.ok === false) {
       return context
     }
-    validateSafetyBlockerResolution({
-      blockerId,
-      resolvedBy,
-      resolution,
-      evidenceDigest,
-      raisedFact: context.raisedFact,
-      operatorIdentity,
-      operatorId,
-      actionId,
-      resolutionReason,
-      actionBlockerIds,
-    })
-    const expectedResolution = createExpectedResolution({
-      blockerId,
-      resolvedBy,
-      resolution,
-      evidenceDigest,
-      operatorIdentity,
-      operatorId,
-      actionId,
-      resolutionReason,
-      actionBlockerIds,
-    })
-    const existing = findExistingBlockerResolution({
-      records: context.records,
-      expectedResolution,
-    })
-    if (existing) {
-      return toResult({
-        data: {
-          durable: true,
-          duplicate: true,
-          record: existing,
-        },
-      })
-    }
-    validateActionIdReuse({
-      records: context.records,
-      expectedResolution,
-    })
-    return await appendDurably({
+    return await persistSafetyBlockerResolution({
       operationalStateStore,
-      operation: "Safety blocker resolution",
-      fact: {
-        factId: `safety-blocker-resolved:${blockerId}`,
-        factType: "SAFETY_BLOCKER_RESOLVED",
-        data: expectedResolution,
-      },
+      context,
+      options,
     })
   } catch (error) {
     return toResult({ error })
