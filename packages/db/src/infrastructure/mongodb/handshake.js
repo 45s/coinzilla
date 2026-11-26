@@ -33,10 +33,11 @@ export function parseMongoConnectionString(connectionString) {
   if (typeof connectionString !== "string" || connectionString.trim() === "") {
     throw new TypeError("MongoDB connection string must be a non-empty string")
   }
-  if (/^mongodb\\+srv:\\/\\//i.test(connectionString)) {
+  const normalizedConnectionString = connectionString.toLowerCase()
+  if (normalizedConnectionString.startsWith("mongodb+srv://")) {
     throw new TypeError("MongoDB SRV discovery is not supported; provide a mongodb:// seed URI")
   }
-  if (!/^mongodb:\\/\\//i.test(connectionString)) {
+  if (!normalizedConnectionString.startsWith("mongodb://")) {
     throw new TypeError("MongoDB connection string must use mongodb://")
   }
   const authority = connectionString.slice("mongodb://".length).split(/[/?#]/, 1)[0]
@@ -70,7 +71,7 @@ export function parseMongoConnectionString(connectionString) {
   const authSource = url.searchParams.get("authSource") ?? databaseName
   const tlsValue = url.searchParams.get("tls") ?? url.searchParams.get("ssl")
   return {
-    host: url.hostname.replace(/^\\[|\\]$/g, ""),
+    host: url.hostname.startsWith("[") ? url.hostname.slice(1, -1) : url.hostname,
     port: url.port === "" ? 27017 : Number(url.port),
     username: url.username === "" ? undefined : decodeURIComponent(url.username),
     password: url.password === "" ? undefined : decodeURIComponent(url.password),
