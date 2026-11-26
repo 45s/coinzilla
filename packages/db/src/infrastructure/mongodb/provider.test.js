@@ -656,3 +656,30 @@ test("MongoDB preserves an ambiguous commit outcome after a lost reply and a lat
     await database.close()
   }
 })
+
+
+test("MongoDB directConnection rejects a replica-set secondary instead of enabling unsupported writes", async () => {
+  const transports = []
+  const provider = createMongoProvider({
+    uri: "mongodb://secondary:27017/app?directConnection=true",
+    transportFactory: () => {
+      const transport = {
+        closed: false,
+        async connect() {},
+        async command() { return { ok: 1 } },
+        async close() { this.closed = true },
+      }
+      transports.push(transport)
+      return transport
+    },
+    handshake: async () => ({
+      topology: "replicaSet",
+      primary: "primary.example:27017",
+      transactionSupported: true,
+      sessionsSupported: true,
+    }),
+  })
+
+  await assert.rejects(provider.connect(), /directConnection.*secondary/i)
+  assert.equal(transports[0].closed, true)
+})
