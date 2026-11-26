@@ -332,6 +332,7 @@ function publishStoppedLifecycleEvent({
   shutdownState,
   eventPublisher,
   journalService,
+  eventBus,
   reason,
   logger,
   durableProcessStopAcknowledged,
@@ -341,7 +342,9 @@ function publishStoppedLifecycleEvent({
   }
   const publisherAvailable = typeof eventPublisher?.publish === "function"
   const journalAvailable = journalService?.status?.enabled === true
-  if (durableProcessStopAcknowledged !== true && (!publisherAvailable || !journalAvailable)) {
+  const journalFlushAvailable = typeof eventBus?.flush === "function"
+  if (durableProcessStopAcknowledged !== true &&
+      (!publisherAvailable || !journalAvailable || !journalFlushAvailable)) {
     return {
       ok: false,
       error: new Error(
@@ -350,30 +353,43 @@ function publishStoppedLifecycleEvent({
     }
   }
   if (!publisherAvailable) {
-    logger?.warn?.({
-      message: "Durable PROCESS_STOPPED was confirmed, but the STOPPED notification publisher is unavailable.",
-    })
+    try {
+      logger?.warn?.({
+        message: "Durable PROCESS_STOPPED was confirmed, but the STOPPED notification publisher is unavailable.",
+      })
+    } catch {
+      // A diagnostic failure cannot invalidate the durable PROCESS_STOPPED acknowledgement.
+    }
     shutdownState.set("stopped-event", { status: "completed" })
     return { ok: true }
   }
-  const publication = publishLifecycleEvent({
-    eventPublisher,
-    eventName: HARVESTER_EVENT_NAMES.STOPPED,
-    dataResult: mapHarvesterStoppedData({
-      reason,
-      outcome: "success",
-    }),
-  })
+  let publication
+  try {
+    publication = publishLifecycleEvent({
+      eventPublisher,
+      eventName: HARVESTER_EVENT_NAMES.STOPPED,
+      dataResult: mapHarvesterStoppedData({
+        reason,
+        outcome: "success",
+      }),
+    })
+  } catch (error) {
+    publication = { ok: false, errors: [error] }
+  }
   if (publication?.ok !== true) {
     const error = publication?.errors?.[0] ??
       new Error("STOPPED lifecycle event publication was not confirmed")
     if (durableProcessStopAcknowledged !== true) {
       return { ok: false, error }
     }
-    logger?.warn?.({
-      message: "Durable PROCESS_STOPPED was confirmed, but the non-durable STOPPED notification was rejected.",
-      errors: publication?.errors,
-    })
+    try {
+      logger?.warn?.({
+        message: "Durable PROCESS_STOPPED was confirmed, but the non-durable STOPPED notification was rejected.",
+        errors: publication?.errors,
+      })
+    } catch {
+      // A diagnostic failure cannot invalidate the durable PROCESS_STOPPED acknowledgement.
+    }
   }
   shutdownState.set("stopped-event", { status: "completed" })
   return { ok: true }
@@ -564,6 +580,7 @@ async function runPostStopCleanup({
     shutdownState,
     eventPublisher,
     journalService,
+    eventBus,
     reason,
     logger,
     durableProcessStopAcknowledged:

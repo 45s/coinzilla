@@ -34,6 +34,7 @@ function createShutdownChildSource({ lockModuleUrl, shutdownModuleUrl } = {}) {
         stop: async () => ({
         ok: true,
         status: "STOPPED",
+       data: { durableProcessStopAcknowledged: true },
         data: { durableProcessStopAcknowledged: true },
       }),
       },
@@ -301,6 +302,7 @@ test("requires a Journal-backed STOPPED event when PROCESS_STOPPED was not durab
         stop: async () => ({
           ok: true,
           status: "STOPPED",
+         data: { durableProcessStopAcknowledged: true },
           data: { durableProcessStopAcknowledged: false },
         }),
       },
@@ -350,6 +352,56 @@ test("requires a Journal-backed STOPPED event when PROCESS_STOPPED was not durab
   }
 })
 
+test("fails closed when Journal-backed STOPPED evidence cannot be flushed", async () => {
+  const calls = []
+  const previousExitCode = process.exitCode
+  process.exitCode = 0
+  try {
+    const handler = createRuntimeShutdownHandler({
+      runtime: {
+        stop: async () => ({
+          ok: true,
+          status: "STOPPED",
+          data: { durableProcessStopAcknowledged: false },
+        }),
+      },
+      logger: { error: () => calls.push("log-error") },
+      eventPublisher: {
+        publish: () => {
+          calls.push("publish-stopped")
+          return { ok: true }
+        },
+      },
+      eventBus: {},
+      journalService: {
+        status: { enabled: true },
+        close: async () => ({ ok: true, closed: true, durable: true }),
+      },
+      processLock: {
+        release: async () => {
+          calls.push("process-lock-release")
+          return { ok: true }
+        },
+      },
+      closeObservability: async () => {
+        calls.push("observability-close")
+        return []
+      },
+      closeLogger: async () => calls.push("logger-close"),
+      logTelegramNotificationSummary: () => {},
+    })
+
+    await handler("SIGTERM")
+
+    assert.equal(process.exitCode, 1)
+    assert.ok(!calls.includes("event-bus-flush"))
+    assert.ok(!calls.includes("observability-close"))
+    assert.ok(!calls.includes("process-lock-release"))
+  } finally {
+    process.exitCode = previousExitCode
+  }
+})
+
 test("retains the process lock when the Journal-backed STOPPED acknowledgement is unavailable", async () => {
   const calls = []
   const previousExitCode = process.exitCode
@@ -360,6 +412,7 @@ test("retains the process lock when the Journal-backed STOPPED acknowledgement i
         stop: async () => ({
           ok: true,
           status: "STOPPED",
+         data: { durableProcessStopAcknowledged: true },
           data: { durableProcessStopAcknowledged: false },
         }),
       },
@@ -416,6 +469,7 @@ test("fails closed when neither durable PROCESS_STOPPED nor an enabled Journal i
         stop: async () => ({
           ok: true,
           status: "STOPPED",
+         data: { durableProcessStopAcknowledged: true },
           data: { durableProcessStopAcknowledged: false },
         }),
       },
@@ -471,6 +525,7 @@ test("retains all shared resources and the process lock when the final EventBus 
       stop: async () => ({
         ok: true,
         status: "STOPPED",
+       data: { durableProcessStopAcknowledged: true },
         data: { durableProcessStopAcknowledged: true },
       }),
     },
@@ -541,6 +596,7 @@ test("bounds a hung EventBus flush and retains the process lock without overlapp
       stop: async () => ({
         ok: true,
         status: "STOPPED",
+      data: { durableProcessStopAcknowledged: true },
       }),
     },
     logger: {
@@ -599,6 +655,7 @@ test("retains the process lock when observability cleanup exceeds its deadline",
       stop: async () => ({
         ok: true,
         status: "STOPPED",
+      data: { durableProcessStopAcknowledged: true },
       }),
     },
     logger: {
@@ -643,6 +700,7 @@ test("retains the process lock when process logger close fails", async () => {
       stop: async () => ({
         ok: true,
         status: "STOPPED",
+      data: { durableProcessStopAcknowledged: true },
       }),
     },
     logger: {
@@ -690,6 +748,7 @@ test("retains the process lock when release acknowledgement is ambiguous", async
       stop: async () => ({
         ok: true,
         status: "STOPPED",
+      data: { durableProcessStopAcknowledged: true },
       }),
     },
     logger: {
