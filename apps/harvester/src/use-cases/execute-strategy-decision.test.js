@@ -1394,7 +1394,12 @@ function createConservativeBuyDurableFactHarness() {
     },
     onDurableSubmissionOutcome: async ({ purpose, ownership }) => {
       durableFacts.push({ purpose, ownership })
-      return { ok: true, data: { durable: true } }
+      return {
+        ok: true,
+        data: {
+          durable: true,
+        },
+      }
     },
     onAcknowledgedOrder: async () => {},
     onSubmissionFailure: async () => assert.fail("unexpected failure while persisting a Conservative BUY"),
@@ -1420,7 +1425,10 @@ test("persists the registered CG strategy purpose for an ordinary Conservative B
         purpose: "CONSERVATIVE_BUY",
         ownership: harness.conservativeOwnership,
       },
-      { purpose: "CONSERVATIVE_BUY", ownership: harness.conservativeOwnership },
+      {
+        purpose: "CONSERVATIVE_BUY",
+        ownership: harness.conservativeOwnership,
+      },
     ],
   )
 })

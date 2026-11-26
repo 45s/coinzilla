@@ -558,7 +558,6 @@ test("drains market work after safety is proven and before Binance disconnects",
   })
   let marketTaskDrained = false
   let bookTaskDrained = false
-  let marketTaskDrained = false
   const marketTask = {
     then(resolve) {
       if (!marketTaskDrained) {

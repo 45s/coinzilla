@@ -255,14 +255,25 @@ function createTrackedPhaseOperation({
   now,
   setTimeoutFn,
 } = {}) {
-  const { timeout, operationPromise } = createTrackedPhaseOperation({
-    pendingPhaseOperations,
+  const controller = new AbortController()
+  const timeout = createPhaseTimeout({
     phase,
-    operation,
     timeoutMs,
     startedAt,
+    controller,
     now,
     setTimeoutFn,
+  })
+  const operationPromise = createPhaseOperationPromise({
+    operation,
+    controller,
+  })
+  trackPendingPhaseOperation({
+    pendingPhaseOperations,
+    phase,
+    operationPromise,
+    startedAt,
+    timeoutMs,
   })
   return {
     timeout,
@@ -289,25 +300,14 @@ async function executePhaseOperation({
     logPhase,
   })
   const startedAt = now()
-  const controller = new AbortController()
-  const timeout = createPhaseTimeout({
-    phase,
-    timeoutMs,
-    startedAt,
-    controller,
-    now,
-    setTimeoutFn,
-  })
-  const operationPromise = createPhaseOperationPromise({
-    operation,
-    controller,
-  })
-  trackPendingPhaseOperation({
+  const { timeout, operationPromise } = createTrackedPhaseOperation({
     pendingPhaseOperations,
     phase,
-    operationPromise,
-    startedAt,
+    operation,
     timeoutMs,
+    startedAt,
+    now,
+    setTimeoutFn,
   })
   logPhase({
     phase,

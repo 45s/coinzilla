@@ -1162,7 +1162,13 @@ test("acquires the process lock before starting Journal and releases it after cl
           connected: true,
           tradingEnabled: false,
           subscriptions: [],
-          stop: async () => { sequence.push("runtime-stop"); return { ok: true, status: "STOPPED" } },
+          stop: async () => {
+            sequence.push("runtime-stop")
+            return {
+              ok: true,
+              status: "STOPPED",
+            }
+          },
         }
       },
       registerSignalHandler: (...signalHandlerArguments) => {
