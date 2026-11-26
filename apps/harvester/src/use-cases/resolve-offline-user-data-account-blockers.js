@@ -8,13 +8,13 @@ function sameStringSet({ left, right }) {
     [...left].sort().join("|") === [...right].sort().join("|")
 }
 
-function getLatestFact(records, factType) {
+function getLatestFact({ records, factType }) {
   return [...records].reverse().find((record) => record.factType === factType)
 }
 
 function validateStoppedSession({ records, runtimeSessionId }) {
-  const started = getLatestFact(records, "PROCESS_STARTED")
-  const baseline = getLatestFact(records, "CONFIGURATION_BASELINE")
+  const started = getLatestFact({ records, factType: "PROCESS_STARTED" })
+  const baseline = getLatestFact({ records, factType: "CONFIGURATION_BASELINE" })
   if (!started ||
       !baseline ||
       started.runtimeSessionId !== runtimeSessionId ||
@@ -217,9 +217,10 @@ async function readVerifiedOperationalProjection(operationalStateStore) {
   if (projection?.ok !== true) {
     throw projection?.errors?.[0] ?? new Error("Operational State projection failed")
   }
+  const { data } = projection
   return {
     records: result.data.records,
-    projection: projection.data,
+    projection: data,
   }
 }
 
@@ -257,46 +258,55 @@ async function resolveAuditedAccountBlockers({
  * Run the existing production account/order/fill audit for every configured
  * market against one shared account snapshot and order evidence bundle.
  */
-export async function runOfflineAccountBlockerResolution({
-  context,
-  operationalStateStore,
-  operatorId,
-  actionId,
-  causeFixed,
-  reconcileMarket = runOfflineMarketRecovery,
-  resolveBlockers = resolveUserDataAccountBlockers,
-} = {}) {
+async function runResolutionWorkflow(options) {
+  const {
+    context,
+    operationalStateStore,
+    operatorId,
+    actionId,
+    causeFixed,
+    reconcileMarket,
+    resolveBlockers,
+  } = options
+  validateResolutionRequest({
+    operatorId,
+    actionId,
+    causeFixed,
+  })
+  const state = await readVerifiedOperationalProjection(operationalStateStore)
+  const configuredMarkets = validateStoppedSession({
+    records: state.records,
+    runtimeSessionId: context.runtimeSessionId,
+  })
+  validateEvidenceContext({
+    context,
+    configuredMarkets,
+  })
+  const blockers = getActiveUserDataAccountBlockers(state.projection)
+  const marketAudits = await auditAllConfiguredMarkets({
+    context,
+    configuredMarkets,
+    reconcileMarket,
+  })
+  return resolveAuditedAccountBlockers({
+    operationalStateStore,
+    context,
+    operatorId,
+    actionId,
+    causeFixed,
+    configuredMarkets,
+    blockers,
+    marketAudits,
+    resolveBlockers,
+  })
+}
+
+export async function runOfflineAccountBlockerResolution(options = {}) {
   try {
-    validateResolutionRequest({
-      operatorId,
-      actionId,
-      causeFixed,
-    })
-    const state = await readVerifiedOperationalProjection(operationalStateStore)
-    const configuredMarkets = validateStoppedSession({
-      records: state.records,
-      runtimeSessionId: context.runtimeSessionId,
-    })
-    validateEvidenceContext({
-      context,
-      configuredMarkets,
-    })
-    const blockers = getActiveUserDataAccountBlockers(state.projection)
-    const marketAudits = await auditAllConfiguredMarkets({
-      context,
-      configuredMarkets,
-      reconcileMarket,
-    })
-    return await resolveAuditedAccountBlockers({
-      operationalStateStore,
-      context,
-      operatorId,
-      actionId,
-      causeFixed,
-      configuredMarkets,
-      blockers,
-      marketAudits,
-      resolveBlockers,
+    return await runResolutionWorkflow({
+      ...options,
+      reconcileMarket: options.reconcileMarket ?? runOfflineMarketRecovery,
+      resolveBlockers: options.resolveBlockers ?? resolveUserDataAccountBlockers,
     })
   } catch (error) {
     return toResult({ error })
