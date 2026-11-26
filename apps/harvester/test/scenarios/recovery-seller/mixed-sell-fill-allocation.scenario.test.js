@@ -216,7 +216,11 @@ function createMultiFillScenarioMarket() {
     baseAsset,
     quoteAsset,
   })
-  return { baseAsset, quoteAsset, market }
+  return {
+    baseAsset,
+    quoteAsset,
+    market,
+  }
 }
 
 function createMultiFillScenarioBuyPortfolio({ market, baseAsset, quoteAsset }) {
@@ -248,8 +252,8 @@ function createMultiFillScenarioBuyPortfolio({ market, baseAsset, quoteAsset }) 
   }).portfolio
 }
 
-function createMultiFillScenarioOrders({ market, baseAsset, quoteAsset }) {
-  const openSellOrder = new CanonicalOrder({
+function createMultiFillOpenSellOrder({ market, baseAsset, quoteAsset }) {
+  return new CanonicalOrder({
     clientOrderId: "rs-multi-fill-sell-client",
     brokerOrderId: "rs-multi-fill-sell-order",
     market,
@@ -272,10 +276,13 @@ function createMultiFillScenarioOrders({ market, baseAsset, quoteAsset }) {
     acknowledgedAt: 11,
     updatedAt: 11,
   })
-  const terminalSellOrder = new CanonicalOrder({
+}
+
+function createMultiFillTerminalSellOrder({ openSellOrder, baseAsset }) {
+  return new CanonicalOrder({
     clientOrderId: openSellOrder.clientOrderId,
     brokerOrderId: openSellOrder.brokerOrderId,
-    market,
+    market: openSellOrder.market,
     side: "SELL",
     type: "LIMIT_MAKER",
     limitPrice: openSellOrder.limitPrice,
@@ -290,7 +297,10 @@ function createMultiFillScenarioOrders({ market, baseAsset, quoteAsset }) {
     updatedAt: 12,
     completedAt: 12,
   })
-  const ownership = createOrderOwnership({
+}
+
+function createMultiFillScenarioOwnership({ openSellOrder }) {
+  return createOrderOwnership({
     ownership: {
       strategyId: StrategyId.RECOVERY_SELLER,
       positionId: multiFillScenarioPositionId,
@@ -300,6 +310,19 @@ function createMultiFillScenarioOrders({ market, baseAsset, quoteAsset }) {
     clientOrderId: openSellOrder.clientOrderId,
     brokerOrderId: openSellOrder.brokerOrderId,
   })
+}
+
+function createMultiFillScenarioOrders({ market, baseAsset, quoteAsset }) {
+  const openSellOrder = createMultiFillOpenSellOrder({
+    market,
+    baseAsset,
+    quoteAsset,
+  })
+  const terminalSellOrder = createMultiFillTerminalSellOrder({
+    openSellOrder,
+    baseAsset,
+  })
+  const ownership = createMultiFillScenarioOwnership({ openSellOrder })
   const openOrderRegistry = new OrderRegistry({
     orders: [openSellOrder],
     ownerships: [ownership],
