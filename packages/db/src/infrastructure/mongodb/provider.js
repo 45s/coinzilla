@@ -96,6 +96,9 @@ function assertProviderOptions(options) {
   if (typeof options.databaseName !== "string" || options.databaseName.trim() === "") {
     throw new TypeError("MongoDB provider databaseName must be a non-empty string")
   }
+  if (/[\\/\\\\."$*<>:|?\\0]/u.test(options.databaseName)) {
+    throw new TypeError("MongoDB provider databaseName contains an unsupported character")
+  }
   if (options.username !== undefined && (typeof options.username !== "string" || options.username.length === 0)) {
     throw new TypeError("MongoDB provider username must be a non-empty string")
   }
