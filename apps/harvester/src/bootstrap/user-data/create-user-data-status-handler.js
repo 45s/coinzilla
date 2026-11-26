@@ -5,6 +5,15 @@ import {
   mapBrokerStatusChangedData,
 } from "../../application/events/lifecycle-event-dtos.js"
 
+const UNSAFE_CONNECTION_STATUSES = new Set([
+  "connectionClosed",
+  "recovering",
+  "recovered",
+  "recoveryFailed",
+  "terminated",
+  "rpcError",
+])
+
 function logSystem({ logger, ...data }) {
   if (typeof logger?.system === "function") {
     logger.system(data)

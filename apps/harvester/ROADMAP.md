@@ -2348,3 +2348,6 @@ The initial inventory contains 18 scenarios across 16 categories: 15 TEST-MAPPED
 
 
 The startup readiness projection now distinguishes an incomplete authoritative PREFLIGHT from the intentionally deferred trading-gate activation: a completed PREFLIGHT no longer remains blocked solely because the subscription state keeps its reconciliation latch set until activation. Unsafe stream, accounting, recovery and safety-halt facts still block.
+
+
+Restored the explicit unsafe user-data connection-status classification consumed by the status handler; connection closure, recovery transitions, termination and RPC errors continue to invalidate user-data readiness.
