@@ -739,7 +739,7 @@ test("RS-006-015-A: conflicting canonical SELL Fill replay is rejected without c
     stageCount: 1,
   })
   const originalReconciliation = fixture.reconciliation
-  const originalFill = fixture.canonicalFills[0]
+  const [originalFill] = fixture.canonicalFills
   const conflictingFill = new Fill({
     tradeId: originalFill.tradeId,
     brokerOrderId: originalFill.brokerOrderId,
