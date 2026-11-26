@@ -114,6 +114,29 @@ async function pauseAndLatchRecoverySellerTerminalFailure({
   return toResult({ error: failure })
 }
 
+function resolveRecoverySellerTerminalFailure({ order, result } = {}) {
+  if (result?.ok !== true) {
+    return {
+      reason: "RS_TERMINAL_MIXED_SELL_RECONCILIATION_FAILED",
+      error: result?.errors?.[0] ??
+        new Error("Recovery Seller terminal mixed-SELL reconciliation failed"),
+    }
+  }
+  if (order.status !== "FILLED") {
+    return {
+      reason: "RS_TERMINAL_SELL_NOT_FILLED_STOP",
+      error: new Error(`Recovery Seller terminal SELL ended as ${order.status}; the cycle remains unresolved`),
+    }
+  }
+  if (result.data?.profitability?.eligible !== true) {
+    return {
+      reason: "RS_TERMINAL_SELL_PROFITABILITY_STOP",
+      error: new Error("Recovery Seller FILLED SELL did not meet the approved realized-profitability threshold"),
+    }
+  }
+  return null
+}
+
 async function reconcileRecoverySellerTerminalSell({
   order,
   canonicalFills,
@@ -134,28 +157,19 @@ async function reconcileRecoverySellerTerminalSell({
     order,
     canonicalFills,
   })
-  if (result?.ok === true &&
-      order.status === "FILLED" &&
-      result.data?.profitability?.eligible !== true) {
+  const failure = resolveRecoverySellerTerminalFailure({
+    order,
+    result,
+  })
+  if (failure) {
     return pauseAndLatchRecoverySellerTerminalFailure({
       pause,
       latchRecoverySellerStop,
       order,
-      reason: "RS_TERMINAL_SELL_PROFITABILITY_STOP",
-      error: new Error("Recovery Seller FILLED SELL did not meet the approved realized-profitability threshold"),
+      ...failure,
     })
   }
-  if (result?.ok === true) {
-    return result
-  }
-  return pauseAndLatchRecoverySellerTerminalFailure({
-    pause,
-    latchRecoverySellerStop,
-    order,
-    reason: "RS_TERMINAL_MIXED_SELL_RECONCILIATION_FAILED",
-    error: result?.errors?.[0] ??
-      new Error("Recovery Seller terminal mixed-SELL reconciliation failed"),
-  })
+  return result
 }
 
 function createRecoverySellerTerminalOrderReconciler({
