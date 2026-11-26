@@ -306,7 +306,7 @@ function createSession({ state, randomBytes }) {
   state.nextTransactionNumber += 1n
   return {
     lsid: {
-      id: new BsonBinary(randomBytes(16), 4),
+      id: new BsonBinary({ bytes: randomBytes(16), subtype: 4 }),
     },
     txnNumber: state.nextTransactionNumber,
     topology: state.handshake?.topology,
@@ -342,70 +342,72 @@ function createServerCommandError(response) {
   return error
 }
 
-async function commitMongoTransaction({ transport, session }) {
-  const body = {
+function createCommitCommand({ session }) {
+  return {
     commitTransaction: 1,
     lsid: session.lsid,
     txnNumber: session.txnNumber,
     autocommit: false,
-    writeConcern: { w: "majority",
-wtimeout: 10000 },
+    writeConcern: { w: "majority", wtimeout: 10000 },
     $db: "admin",
   }
+}
+
+function refreshRecoveryToken({ response, session }) {
+  if (session.topology === "sharded"
+    && Number(response?.ok) === 1
+    && isPlainDocument(response.recoveryToken)) {
+    session.recoveryToken = response.recoveryToken
+  }
+}
+
+function isAmbiguousCommitResponse({ response }) {
+  return hasAmbiguousWriteConcern(response)
+    || hasErrorLabel({ response, label: "UnknownTransactionCommitResult" })
+    || hasErrorLabel({ response, label: "RetryableWriteError" })
+    || response?.code === 50
+    || response?.codeName === "MaxTimeMSExpired"
+}
+
+async function sendCommitAttempt({ transport, session, body }) {
   if (session.recoveryToken !== undefined) {
     body.recoveryToken = session.recoveryToken
+  } else {
+    delete body.recoveryToken
   }
+  const response = await transport.command({ body, operation: "commit" })
+  refreshRecoveryToken({ response, session })
+  if (Number(response?.ok) === 1 && !response.writeConcernError) {
+    return { committed: true }
+  }
+  const serverFailure = response?.writeConcernError
+    ? { ...response.writeConcernError, errorLabels: response.errorLabels }
+    : response
+  const error = createServerCommandError(serverFailure)
+  if (isAmbiguousCommitResponse({ response })) {
+    return { committed: false, error }
+  }
+  throw new DatabaseProviderError({ operation: "transaction", cause: error })
+}
+
+async function commitMongoTransaction({ transport, session }) {
+  const body = createCommitCommand({ session })
   let ambiguous = false
   let lastError
   for (let attempt = 0; attempt < MAX_COMMIT_ATTEMPTS; attempt += 1) {
     try {
-      if (session.recoveryToken !== undefined) {
-        body.recoveryToken = session.recoveryToken
-      } else {
-        delete body.recoveryToken
-      }
-      const response = await transport.command({
-        body,
-        operation: "commit",
-      })
-      if (session.topology === "sharded"
-        && Number(response?.ok) === 1
-        && isPlainDocument(response.recoveryToken)) {
-        session.recoveryToken = response.recoveryToken
-      }
-      if (Number(response?.ok) === 1 && !response.writeConcernError) {
+      const result = await sendCommitAttempt({ transport, session, body })
+      if (result.committed) {
         return
       }
-      const serverFailure = response?.writeConcernError
-        ? { ...response.writeConcernError,
-errorLabels: response.errorLabels }
-        : response
-      const error = createServerCommandError(serverFailure)
-      if (hasAmbiguousWriteConcern(response)
-        || hasErrorLabel({ response,
-label: "UnknownTransactionCommitResult" })
-        || hasErrorLabel({ response,
-label: "RetryableWriteError" })
-        || response?.code === 50
-        || response?.codeName === "MaxTimeMSExpired"
-        || ambiguous) {
-        ambiguous = true
-        lastError = error
-      } else {
-        throw new DatabaseProviderError({
-          operation: "transaction",
-          cause: error,
-        })
-      }
+      ambiguous = true
+      lastError = result.error
     } catch (error) {
       if (error instanceof DatabaseProviderError) {
         throw error
       }
       if (!ambiguous && error?.outcomeUnknown === false) {
-        throw new DatabaseProviderError({
-          operation: "transaction",
-          cause: error,
-        })
+        throw new DatabaseProviderError({ operation: "transaction", cause: error })
       }
       // Once a commit request may have reached the server, a later error such
       // as NoSuchTransaction cannot prove whether the earlier commit succeeded.
@@ -416,9 +418,7 @@ label: "RetryableWriteError" })
       await delay(20 * (attempt + 1))
     }
   }
-  throw new DatabaseTransactionOutcomeUnknownError({
-    cause: lastError,
-  })
+  throw new DatabaseTransactionOutcomeUnknownError({ cause: lastError })
 }
 
 async function abortMongoTransaction({ transport, session }) {
