@@ -39,7 +39,7 @@ function createContext({ orderRegistry, reconcileTerminalMixedSell } = {}) {
         }),
       },
       recoverySellerWorkflow: { reconcileTerminalMixedSell },
-      recoverySellerStopWorkflow: { latch: noOperation },
+      recoverySellerStopWorkflow: { latch: async () => ({ ok: true, data: { durable: true } }) },
       eventPublisher: { publish: noOperation },
       isStopping: () => false,
       logger: {},
@@ -114,7 +114,7 @@ test("wires terminal RS SELL reconciliation to the mixed ownership accounting wo
 
   const result = await context.reconcileTerminalOrderFills({ order: terminalOrder })
 
-  assert.equal(result.ok, true, result.errors?.[0]?.message)
+  assert.equal(result.ok, false, "A non-FILLED terminal Recovery Seller SELL must fail closed after STOP.")
   assert.equal(reconciled?.order?.clientOrderId, terminalOrder.clientOrderId)
   assert.deepEqual(reconciled?.canonicalFills, [])
 })

@@ -425,3 +425,6 @@ The initial inventory has 15 TEST-MAPPED, one PARTIAL, one MISSING (CON-PERSIST-
 - The zero-fill REJECTED SELL regression verifies the same fail-closed transition without fabricating an execution fill.
 - Fully FILLED profitable SELL behavior remains the success path; under-target FILLED SELLs retain their distinct profitability STOP.
 - This application-boundary coverage supplements the Recovery Seller domain specification; it does not count as the independent from-scratch scenario suite tracked by #1780.
+
+
+- Runtime scenario coverage for profitable partial CANCELED Recovery Seller SELL now asserts canonical fill accounting followed by failed terminal transition, durable account-scope STOP, unresolved cycle, and retained SELL reservation. This is intentionally fail-closed; a profitable partial fill does not authorize cycle completion.

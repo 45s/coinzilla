@@ -53,3 +53,6 @@ Current scenarios use simulated infrastructure and run-local state. No real brok
 - Follow accepted Harvester ADRs and architecture/domain documents for decisions and contracts.
 - Keep detailed implementation plans in the owning issue or scoped plan; this page is only the active priority index.
 - Never use this roadmap as authority for strategy rules, API contracts, or acceptance evidence.
+
+
+- Recovery Seller non-FILLED terminal SELLs now require a durable account STOP after canonical fill reconciliation. Partial CANCELED/EXPIRED and zero-fill REJECTED outcomes must remain unresolved and retain the sole-SELL reservation; profitability of partial proceeds does not relax the STOP requirement.
