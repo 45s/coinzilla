@@ -289,7 +289,10 @@ function collectShutdownErrorEvidence({ error, seen = new Set() } = {}) {
     error.message,
     error.code,
     diagnosticText,
-    ...nested.map((item) => collectShutdownErrorEvidence({ error: item, seen })),
+    ...nested.map((item) => collectShutdownErrorEvidence({
+      error: item,
+      seen,
+    })),
   ].filter(Boolean).join(" ")
 }
 

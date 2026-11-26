@@ -480,7 +480,13 @@ test("publishes process started and stopped events for Binance trading startup",
       debug() {} },
   })
 
-  await assertProcessLifecycleEvents({ result, eventBus, events, handlers, subscription })
+  await assertProcessLifecycleEvents({
+    result,
+    eventBus,
+    events,
+    handlers,
+    subscription,
+  })
 })
 
 test("does not publish STOPPED when runtime.stop rejects", async () => {

@@ -196,7 +196,7 @@ function createParticipantWaitPromise({
   timeoutMs,
   now,
 } = {}) {
-  const strategyId = participant.strategyId
+  const { strategyId } = participant
   const pending = activeParticipantWaits.get(strategyId)
   if (pending) {
     throw createPendingParticipantWaitError({

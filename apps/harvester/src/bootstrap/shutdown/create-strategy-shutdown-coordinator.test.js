@@ -197,7 +197,7 @@ test("returns a participant-specific timeout blocker and aborts its safety signa
 
   await assert.rejects(coordinator.waitUntilSafe(), (error) => {
     assert.equal(error.code, "STRATEGY_SHUTDOWN_SAFETY_UNPROVEN", "A timed-out participant must fail the shared safety barrier.")
-    const blocker = error.shutdownDiagnostics.strategyBlockers[0]
+    const [blocker] = error.shutdownDiagnostics.strategyBlockers
     assert.equal(blocker.strategyId, "CONSERVATIVE", "Timeout diagnostics must identify the exact strategy participant.")
     assert.equal(blocker.status, "TIMED_OUT", "A deadline must be an explicit terminal timeout result, never a safe result.")
     assert.equal(blocker.operation, "waitUntilSafe", "Timeout diagnostics must identify the awaited participant operation.")
@@ -280,7 +280,7 @@ test("does not overlap a retry with a timed-out participant operation that ignor
       coordinator.waitUntilSafe(),
       (error) => {
         assert.equal(error.code, "STRATEGY_SHUTDOWN_SAFETY_UNPROVEN")
-        const blocker = error.shutdownDiagnostics.strategyBlockers[0]
+        const [blocker] = error.shutdownDiagnostics.strategyBlockers
         assert.equal(blocker.reason, "STRATEGY_SHUTDOWN_PARTICIPANT_STILL_RUNNING")
         assert.equal(blocker.status, "PENDING")
         return true
@@ -374,7 +374,7 @@ test("bounds repeated successful safety proofs when the marker remains invalidat
     coordinator.waitUntilSafe(),
     (error) => {
       assert.equal(error.code, "STRATEGY_SHUTDOWN_SAFETY_UNPROVEN", "Repeated invalidation must fail the shared safety barrier.")
-      const blocker = error.shutdownDiagnostics.strategyBlockers[0]
+      const [blocker] = error.shutdownDiagnostics.strategyBlockers
       assert.equal(blocker.reason, "SHUTDOWN_SAFETY_REEVALUATION_LIMIT_EXCEEDED:2", "The blocker must expose the bounded reproof limit.")
       assert.equal(blocker.status, "BLOCKED", "Exhausting the reproof limit must remain an explicit unsafe outcome.")
       return true

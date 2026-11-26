@@ -1393,7 +1393,10 @@ function createConservativeBuyDurableFactHarness() {
       }
     },
     onDurableSubmissionOutcome: async ({ purpose, ownership }) => {
-      durableFacts.push({ purpose, ownership })
+      durableFacts.push({
+        purpose,
+        ownership,
+      })
       return {
         ok: true,
         data: {
