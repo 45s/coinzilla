@@ -165,7 +165,103 @@ test("MongoDB provider uses one logical session across replica-set transaction c
     assert.deepEqual(commit.lsid, insert.lsid)
     assert.equal(commit.txnNumber, insert.txnNumber)
     assert.equal(commit.autocommit, false)
-    assert.deepEqual(commit.writeConcern, { w: "majority" })
+    assert.deepEqual(commit.writeConcern, { w: "majority", wtimeout: 10000 })
+  } finally {
+    await database.close()
+  }
+})
+
+test("MongoDB sharded transactions forward the latest recovery token on commit", async () => {
+  const recoveryTokens = [
+    { shard: "shard-1", generation: 1 },
+    { shard: "shard-2", generation: 2 },
+  ]
+  let insertCount = 0
+  const { provider, calls } = createProviderHarness({
+    topology: "sharded",
+    transactionSupported: true,
+    commandHandler: async (body) => {
+      if (body.insert) {
+        insertCount += 1
+        return { ok: 1, n: 1, recoveryToken: recoveryTokens[insertCount - 1] }
+      }
+      return { ok: 1, n: 1 }
+    },
+  })
+  const database = createDatabase({ provider })
+  await database.connect()
+
+  try {
+    await database.transaction(async (transaction) => {
+      await transaction.create({
+        collection: "people",
+        record: { id: "sharded-1" },
+      })
+      await transaction.create({
+        collection: "people",
+        record: { id: "sharded-2" },
+      })
+    })
+    const commit = calls.find((body) => body.commitTransaction === 1)
+    assert.deepEqual(commit.recoveryToken, recoveryTokens[1])
+    assert.deepEqual(commit.writeConcern, { w: "majority", wtimeout: 10000 })
+  } finally {
+    await database.close()
+  }
+})
+
+test("MongoDB sharded transaction abort forwards the latest recovery token", async () => {
+  const recoveryToken = { shard: "shard-1", generation: 3 }
+  const callbackError = new Error("abort requested")
+  const { provider, calls } = createProviderHarness({
+    topology: "sharded",
+    transactionSupported: true,
+    commandHandler: async (body) => {
+      if (body.insert) return { ok: 1, n: 1, recoveryToken }
+      return { ok: 1 }
+    },
+  })
+  const database = createDatabase({ provider })
+  await database.connect()
+
+  try {
+    await assert.rejects(
+      database.transaction(async (transaction) => {
+        await transaction.create({
+          collection: "people",
+          record: { id: "sharded-abort" },
+        })
+        throw callbackError
+      }),
+      (error) => error === callbackError,
+    )
+    const abort = calls.find((body) => body.abortTransaction === 1)
+    assert.deepEqual(abort.recoveryToken, recoveryToken)
+  } finally {
+    await database.close()
+  }
+})
+
+test("MongoDB sharded transactions fail closed when a successful response omits recoveryToken", async () => {
+  const { provider, calls } = createProviderHarness({
+    topology: "sharded",
+    transactionSupported: true,
+    commandHandler: async (body) => body.insert
+      ? { ok: 1, n: 1 }
+      : { ok: 1 },
+  })
+  const database = createDatabase({ provider })
+  await database.connect()
+
+  try {
+    await assert.rejects(
+      database.transaction((transaction) => transaction.create({
+        collection: "people",
+        record: { id: "missing-recovery-token" },
+      })),
+      /recoveryToken/,
+    )
+    assert.equal(calls.some((body) => body.commitTransaction === 1), false)
   } finally {
     await database.close()
   }
