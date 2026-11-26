@@ -2124,7 +2124,7 @@ function createOperatorMarketSnapshotFacts({
   pairConfig,
   getCurrentMarketMetadata,
   isMarketPriceFresh,
-  isMarketBookFresh,
+  isMarketBookFresh = () => false,
   hasBlockingOpenOrdersForSymbol,
   isVolatilityProtectionEnabledForSymbol,
 }) {

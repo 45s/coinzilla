@@ -5,8 +5,8 @@ const UNSAFE_USER_DATA_STATUSES = new Set([
   "TERMINATED",
   "RPCERROR",
   "EXECUTIONNORMALIZATIONFAILED",
-  "INVALID_EVENT",
-  "EXECUTION_ACCOUNTING_FAILED",
+  "INVALIDEVENT",
+  "EXECUTIONACCOUNTINGFAILED",
 ])
 
 function freezeValue(value) {
@@ -87,7 +87,7 @@ function createRuntimeChecks({ runtime, inputs, observedAt }) {
   const preflight = account.preflight ?? {}
   const openOrders = account.openOrders ?? {}
   const unsafeStatus = UNSAFE_USER_DATA_STATUSES.has(
-    String(userData.status ?? runtime.userData?.status ?? "").replaceAll(/[^a-zA-Z_]/g, "").toUpperCase(),
+    String(userData.status ?? runtime.userData?.status ?? "").replaceAll(/[^a-zA-Z]/g, "").toUpperCase(),
   )
   const reconciliationRequired = userData.requiresReconciliation === true ||
     (userData.status === "AUTHORITATIVE_RECONCILIATION_REQUIRED" && userData.preflightComplete !== true)
@@ -581,11 +581,15 @@ export function createHarvesterReadinessReport({
     }))
   }
   if (readinessInputs.startupFailure) {
+    const candidateCode = String(readinessInputs.startupFailure.code ?? "")
+    const safeCode = /^[A-Z0-9_]{1,80}$/.test(candidateCode)
+      ? candidateCode
+      : "HARVESTER_STARTUP_FAILED"
     runtimeChecks.push(createCheck({
       id: "startup.failure",
       scope: "RUNTIME",
       status: "BLOCKED",
-      code: readinessInputs.startupFailure.code ?? "HARVESTER_STARTUP_FAILED",
+      code: safeCode,
       message: `The ${readinessInputs.startupFailure.component ?? "startup"} stage failed before readiness could be established.`,
       remediation: "Resolve the original startup failure shown in the preceding Harvester diagnostic and retry startup.",
       details: { component: readinessInputs.startupFailure.component ?? "UNKNOWN" },

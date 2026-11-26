@@ -10906,6 +10906,36 @@ test("exposes a serialized immutable operator market snapshot with current price
 })
 
 
+test("includes the accepted first order-book event and freshness in operator market snapshots", async () => {
+  const harness = await createHarness({
+    initialBook: true,
+    isMarketBookFresh: () => true,
+  })
+  const snapshotResult = await harness.engine.getOperatorMarketSnapshots()
+  const marketSnapshot = snapshotResult.data.markets.find(({ symbol }) => symbol === "DOGEUSDT")
+
+  assert.equal(snapshotResult.ok, true, "The operator snapshot must remain a successful read-only query.")
+  assert.equal(marketSnapshot.bookRequired, true, "The default LIMIT_MAKER order path must declare its book dependency.")
+  assert.equal(marketSnapshot.bookFresh, true, "A fresh accepted book event must be reflected in the snapshot.")
+  assert.equal(marketSnapshot.bookTimestamp, 1, "The snapshot must preserve the first accepted book event timestamp.")
+  assert.equal(marketSnapshot.blockers.includes("MARKET_BOOK_UNAVAILABLE"), false, "An accepted initial book event must clear the missing-book blocker.")
+  assert.equal(marketSnapshot.blockers.includes("MARKET_BOOK_STALE"), false, "A fresh initial book event must not be reported as stale.")
+})
+
+test("reports a missing first order-book event as a market-local blocker", async () => {
+  const harness = await createHarness({
+    isMarketBookFresh: () => false,
+  })
+  const snapshotResult = await harness.engine.getOperatorMarketSnapshots()
+  const marketSnapshot = snapshotResult.data.markets.find(({ symbol }) => symbol === "DOGEUSDT")
+
+  assert.equal(marketSnapshot.bookRequired, true, "The default LIMIT_MAKER order path must require an order book.")
+  assert.equal(marketSnapshot.bookFresh, false, "No first book event must remain unavailable.")
+  assert.equal(marketSnapshot.bookTimestamp, null, "Missing book evidence must not fabricate a timestamp.")
+  assert.equal(marketSnapshot.blockers.includes("MARKET_BOOK_UNAVAILABLE"), true, "The missing book must be exposed as a market-local engine blocker.")
+})
+
+
 test("rejects a negative-zero market-book timestamp", () => {
   assert.throws(
     () => createMarketBook({

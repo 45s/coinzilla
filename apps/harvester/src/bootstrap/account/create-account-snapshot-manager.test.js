@@ -162,6 +162,12 @@ test("captures configured-asset balances and durably publishes the account audit
   assert.equal(fixture.publishedEvents[0].data.phase, "PREFLIGHT", "The account audit event must retain its requested lifecycle phase.")
   assert.equal(fixture.publishedEvents[0].data.balances.length, 2, "The audit must include both configured market assets.")
   assert.equal(fixture.getFlushCount(), 1, "The account audit must be durably flushed before the call resolves.")
+  assert.deepEqual(fixture.manager.getReadinessSnapshot().preflight, {
+    completed: true,
+    durable: true,
+    sourceTime: 100,
+    balanceCount: 2,
+  }, "The readiness source must expose the completed durable PREFLIGHT boundary without exposing balances.")
 })
 
 
@@ -529,6 +535,12 @@ test("records unowned open orders as blocked without adopting them", async () =>
   assert.equal(fixture.publishedEvents[0].data.readiness, "BLOCKED", "An unowned open order must be recorded as blocked in the audit event.")
   assert.deepEqual(fixture.manager.getAccountSnapshot(), undefined, "An open-order audit must not manufacture an account balance snapshot.")
   assert.equal(fixture.getFlushCount(), 1, "The open-order audit must be durably flushed before startup continues.")
+  const readiness = fixture.manager.getReadinessSnapshot()
+  assert.equal(readiness.openOrders.completed, true, "The report source must expose the completed open-order audit.")
+  assert.equal(readiness.openOrders.durable, true, "The report source must expose the existing durability acknowledgement.")
+  assert.equal(readiness.openOrders.orderCount, 1, "The report source must expose a count, not raw order records.")
+  assert.deepEqual(readiness.openOrders.unownedSymbols, ["BTCUSDT"], "The report source must expose only affected symbols.")
+  assert.equal(JSON.stringify(readiness.openOrders).includes("manual-order-1"), false, "The report source must not expose external order identifiers.")
 })
 
 

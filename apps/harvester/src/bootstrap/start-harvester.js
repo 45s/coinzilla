@@ -631,7 +631,7 @@ function createHarvesterBrokerCapabilitySnapshot({ broker, tradingEnabled } = {}
     "subscribeForCandles",
   ]
   if (tradingEnabled) {
-    required.push("getPrices", "subscribeForBookTicker", "createOrder", "cancelOrder")
+    required.push("getPrices", "subscribeForBookTicker", "createCanonicalOrder", "cancelOrder")
   }
   const missing = required.filter((method) => typeof broker?.[method] !== "function")
   return Object.freeze({
@@ -1186,7 +1186,8 @@ function logHarvesterReadinessCheck({ logger, check, symbol } = {}) {
 }
 
 function logHarvesterReadinessReport({ logger, report } = {}) {
-  logger.system?.({
+  const summaryWriter = logger.system ?? logger.info
+  summaryWriter?.call(logger, {
     message: "[HARVESTER] Startup readiness audit",
     component: "harvester-startup-readiness",
     observedAt: report.observedAt,
@@ -1205,7 +1206,7 @@ function logHarvesterReadinessReport({ logger, report } = {}) {
       warnings: market.warnings,
     })
   }
-  logger.system?.({
+  summaryWriter?.call(logger, {
     message: `[HEALTH] Result: ${report.status}`,
     component: "harvester-startup-readiness",
     summary: report.summary,
@@ -1246,14 +1247,14 @@ async function runHarvesterStartupReadinessAudit({
   return report
 }
 
-function createStartupReadinessBlockedError({ report } = {}) {
+function createStartupReadinessBlockedError({ report, blockers = report.runtimeBlockers } = {}) {
   const error = new Error(
-    `Harvester startup readiness blocked: ${report.runtimeBlockers.join(", ")}`,
+    `Harvester startup readiness blocked: ${blockers.join(", ")}`,
   )
   error.name = "HarvesterStartupReadinessBlockedError"
   error.code = "HARVESTER_STARTUP_READINESS_BLOCKED"
   error.context = Object.freeze({
-    blockers: Object.freeze([...report.runtimeBlockers]),
+    blockers: Object.freeze([...blockers]),
   })
   return error
 }
@@ -1392,8 +1393,14 @@ async function startHarvesterMarketServices({ startup,
     accountSnapshots,
   })
   if (startup.tradingEnabled === true) {
-    if (report.runtimeBlockers.length > 0 || typeof resources.activateTrading !== "function") {
+    if (report.runtimeBlockers.length > 0) {
       throw createStartupReadinessBlockedError({ report })
+    }
+    if (typeof resources.activateTrading !== "function") {
+      throw createStartupReadinessBlockedError({
+        report,
+        blockers: ["TRADING_ACTIVATION_UNAVAILABLE"],
+      })
     }
     await resources.activateTrading()
     resources.lastReportedUserDataReady = resources.userDataState.ready

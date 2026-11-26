@@ -94,3 +94,8 @@ Accepted WebSocket price/book events are distinguished from subscription acknowl
 ## Implementation checkpoint — engine book evidence and operator projection
 
 The engine's existing operator market snapshot now includes order type, whether a book is required, book timestamp/freshness and the existing book blocker. The authorized status and market queries consume the immutable readiness report and expose the same per-market readiness/blocker projection; they no longer calculate a separate readiness interpretation.
+
+
+## Test coverage checkpoint
+
+The configured Harvester regression matrix now includes the immutable report, authorized operator read-model and deferred user-data activation suites. Existing account-snapshot, market-subscription, engine and startup suites also cover durable audit summaries, first accepted market-data events, book freshness and startup gate ordering. No LIVE or TESTNET account is used by these tests.
