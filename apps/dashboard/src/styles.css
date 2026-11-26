@@ -414,3 +414,299 @@ html[data-theme="current"] a:focus-visible {
 html[data-theme="current"] ::selection {
   background: rgba(101, 214, 173, 0.28);
 }
+
+
+/* StarAdmin-inspired warm light palette. Existing palettes remain selectable. */
+html[data-theme="staradmin"] {
+  color-scheme: light;
+  --page-bg: #f2f3f5;
+  --sidebar-bg: #ffffff;
+  --topbar-bg: rgba(255, 255, 255, 0.96);
+  --surface-bg: #ffffff;
+  --panel-bg: #ffffff;
+  --raised-bg: #f7f7f8;
+  --control-bg: #ffffff;
+  --line: #e3e4e8;
+  --border: #e3e4e8;
+  --surface: #ffffff;
+  --surface-raised: #f6f6f7;
+  --muted: #777983;
+  --text: #24242d;
+  --text-soft: #555762;
+  --accent: #f29f67;
+  --accent-strong: #e9864b;
+  --accent-blue: #3b8ff3;
+  --accent-teal: #34b1aa;
+  --accent-yellow: #e0b50f;
+  background: var(--page-bg);
+  color: var(--text);
+}
+
+html[data-theme="staradmin"] body {
+  background: var(--page-bg);
+  color: var(--text);
+}
+
+html[data-theme="staradmin"] .sidebar {
+  background: #ffffff;
+  border-right-color: #e7e7ea;
+  box-shadow: 4px 0 18px rgba(30, 30, 44, 0.025);
+}
+
+html[data-theme="staradmin"] .brand-mark {
+  border-radius: 10px;
+  background: #1e1e2c;
+  color: #f29f67;
+}
+
+html[data-theme="staradmin"] .brand-copy strong {
+  color: #1e1e2c;
+}
+
+html[data-theme="staradmin"] .brand-copy small,
+html[data-theme="staradmin"] .workspace-label,
+html[data-theme="staradmin"] .sidebar-footer {
+  color: #92939a;
+}
+
+html[data-theme="staradmin"] .nav-item {
+  color: #555762;
+}
+
+html[data-theme="staradmin"] .nav-icon {
+  color: #777983;
+}
+
+html[data-theme="staradmin"] .nav-item.active {
+  border-color: transparent;
+  border-radius: 0 22px 22px 0;
+  background: #fff0e6;
+  color: #b85e2c;
+}
+
+html[data-theme="staradmin"] .nav-item.active .nav-icon {
+  color: #e9864b;
+}
+
+html[data-theme="staradmin"] .nav-item:focus-visible {
+  outline-color: #f29f67;
+}
+
+html[data-theme="staradmin"] .sidebar-status {
+  border-color: #1e1e2c;
+  background: #1e1e2c;
+  color: #ffffff;
+}
+
+html[data-theme="staradmin"] .sidebar-status strong {
+  color: #ffffff;
+}
+
+html[data-theme="staradmin"] .sidebar-status small {
+  color: #b7b7c1;
+}
+
+html[data-theme="staradmin"] .sidebar-footer span {
+  color: #f29f67;
+}
+
+html[data-theme="staradmin"] .main-panel {
+  background: #f2f3f5;
+}
+
+html[data-theme="staradmin"] .topbar {
+  border-bottom-color: #e5e5e8;
+  background: var(--topbar-bg);
+}
+
+html[data-theme="staradmin"] .breadcrumb {
+  color: #85868d;
+}
+
+html[data-theme="staradmin"] .breadcrumb strong {
+  color: #24242d;
+}
+
+html[data-theme="staradmin"] .breadcrumb-separator {
+  color: #c4c4c9;
+}
+
+html[data-theme="staradmin"] .demo-pill,
+html[data-theme="staradmin"] .demo-pill.persisted-pill {
+  border-color: #f6d5c0;
+  background: #fff2e9;
+  color: #b85e2c;
+}
+
+html[data-theme="staradmin"] .demo-pill span {
+  background: #f29f67;
+}
+
+html[data-theme="staradmin"] .environment-pill {
+  border-color: #dedee3;
+  background: #f5f5f7;
+  color: #555762;
+}
+
+html[data-theme="staradmin"] .avatar {
+  border-color: #1e1e2c;
+  background: #1e1e2c;
+  color: #ffffff;
+}
+
+html[data-theme="staradmin"] .page-content {
+  color: #24242d;
+}
+
+html[data-theme="staradmin"] .page-footer {
+  color: #85868d;
+}
+
+/* Shared feature surfaces use the same neutral, readable card treatment. */
+html[data-theme="staradmin"] .metric-card,
+html[data-theme="staradmin"] .panel,
+html[data-theme="staradmin"] .connection-panel,
+html[data-theme="staradmin"] .filter-panel,
+html[data-theme="staradmin"] .records-panel,
+html[data-theme="staradmin"] .details-panel,
+html[data-theme="staradmin"] .state-panel,
+html[data-theme="staradmin"] .screener-table-panel,
+html[data-theme="staradmin"] .filter-workspace,
+html[data-theme="staradmin"] .label-manager,
+html[data-theme="staradmin"] .command-panel,
+html[data-theme="staradmin"] .snapshot-card,
+html[data-theme="staradmin"] .market-control-row,
+html[data-theme="staradmin"] .operator-connection,
+html[data-theme="staradmin"] .exchange-card,
+html[data-theme="staradmin"] .provider-group,
+html[data-theme="staradmin"] .summary-strip,
+html[data-theme="staradmin"] .table-scroll,
+html[data-theme="staradmin"] .trace-node,
+html[data-theme="staradmin"] .run-summary,
+html[data-theme="staradmin"] .raw-order-details {
+  border-color: #e3e4e8;
+  background: #ffffff;
+  color: #24242d;
+}
+
+html[data-theme="staradmin"] .health-panel {
+  border-color: #1e1e2c;
+  background: #1e1e2c;
+  color: #ffffff;
+}
+
+html[data-theme="staradmin"] .health-panel .panel-heading h2,
+html[data-theme="staradmin"] .health-panel .service-copy strong {
+  color: #ffffff;
+}
+
+html[data-theme="staradmin"] .health-panel .panel-heading p,
+html[data-theme="staradmin"] .health-panel .service-copy small,
+html[data-theme="staradmin"] .health-panel .health-note p {
+  color: #c0c0ca;
+}
+
+html[data-theme="staradmin"] .health-panel .service-row {
+  border-color: #41414d;
+}
+
+html[data-theme="staradmin"] .health-panel .service-state {
+  color: #34b1aa;
+}
+
+html[data-theme="staradmin"] .health-panel .service-state.idle {
+  color: #f29f67;
+}
+
+html[data-theme="staradmin"] .health-panel .health-note {
+  border-color: #41414d;
+  background: #292936;
+}
+
+html[data-theme="staradmin"] .page-heading h1,
+html[data-theme="staradmin"] h1,
+html[data-theme="staradmin"] h2,
+html[data-theme="staradmin"] h3,
+html[data-theme="staradmin"] .metric-value,
+html[data-theme="staradmin"] .panel-heading h2,
+html[data-theme="staradmin"] .service-copy strong,
+html[data-theme="staradmin"] .market-cell,
+html[data-theme="staradmin"] .pair-symbol {
+  color: #24242d;
+}
+
+html[data-theme="staradmin"] .eyebrow,
+html[data-theme="staradmin"] .market-label-editor summary {
+  color: #e9864b;
+}
+
+html[data-theme="staradmin"] input:not([type="checkbox"]):not([type="color"]),
+html[data-theme="staradmin"] select,
+html[data-theme="staradmin"] textarea {
+  border-color: #dfe0e5;
+  background: #ffffff;
+  color: #24242d;
+}
+
+html[data-theme="staradmin"] button:focus-visible,
+html[data-theme="staradmin"] a:focus-visible,
+html[data-theme="staradmin"] input:focus-visible,
+html[data-theme="staradmin"] select:focus-visible,
+html[data-theme="staradmin"] textarea:focus-visible {
+  outline-color: #f29f67;
+}
+
+html[data-theme="staradmin"] .refresh-button,
+html[data-theme="staradmin"] .details-button,
+html[data-theme="staradmin"] .preset-controls button,
+html[data-theme="staradmin"] .label-create button,
+html[data-theme="staradmin"] .connection-controls button,
+html[data-theme="staradmin"] .apply-button {
+  border-color: #f2c4a6;
+  background: #fff0e6;
+  color: #b85e2c;
+}
+
+html[data-theme="staradmin"] .connection-controls button,
+html[data-theme="staradmin"] .apply-button {
+  border-color: #e9864b;
+  background: #f29f67;
+  color: #1e1e2c;
+}
+
+html[data-theme="staradmin"] .chart-line,
+html[data-theme="staradmin"] .chart-point,
+html[data-theme="staradmin"] .metric-change.positive {
+  stroke: #34b1aa;
+  color: #218f89;
+}
+
+html[data-theme="staradmin"] .chart-point {
+  fill: #ffffff;
+}
+
+html[data-theme="staradmin"] .chart-grid {
+  stroke: #e5e5e9;
+}
+
+html[data-theme="staradmin"] .chart-summary strong {
+  color: #1e1e2c;
+}
+
+html[data-theme="staradmin"] .chart-summary > span,
+html[data-theme="staradmin"] .pnl-value,
+html[data-theme="staradmin"] .pnl-change,
+html[data-theme="staradmin"] .side-pill,
+html[data-theme="staradmin"] .side-tag {
+  color: #218f89;
+}
+
+html[data-theme="staradmin"] .favorite-row {
+  background: #fff8e5;
+}
+
+html[data-theme="staradmin"] .theme-picker select {
+  border-color: #dedee3;
+  background: #ffffff;
+  color: #24242d;
+}
