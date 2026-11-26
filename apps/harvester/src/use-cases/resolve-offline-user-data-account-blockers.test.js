@@ -26,8 +26,8 @@ function fact({ sequence, factType, data, factId = `${factType}:${sequence}` }) 
   }
 }
 
-function makeRecords({ stopped = true } = {}) {
-  const records = [
+function makeSessionFacts() {
+  return [
     fact({
       sequence: 0,
       factType: "LEDGER_INITIALIZED",
@@ -56,6 +56,11 @@ function makeRecords({ stopped = true } = {}) {
       },
       factId: `process-started:${runtimeSessionId}`,
     }),
+  ]
+}
+
+function makePreflightFacts() {
+  return [
     fact({
       sequence: 3,
       factType: "ACCOUNT_SNAPSHOT_CAPTURED",
@@ -80,34 +85,45 @@ function makeRecords({ stopped = true } = {}) {
         blockReasons: [],
       },
     }),
-    fact({
-      sequence: 5,
-      factType: "SAFETY_BLOCKER_RAISED",
-      data: {
-        blockerId,
-        producer: "USER_DATA_EVENT_HANDLER",
-        scope: "ACCOUNT",
-        symbol: null,
-        reason: "ACCOUNTING_INTEGRITY_FAILURE",
-        evidenceDigest: triggerDigest,
-      },
-      factId: `safety-blocker-raised:${blockerId}`,
-    }),
   ]
-  if (stopped) {
-    records.push(fact({
-      sequence: 6,
-      factType: "PROCESS_STOPPED",
-      data: {
-        reason: "OPERATOR_SHUTDOWN",
-        clean: true,
-      },
-      factId: `process-stopped:${runtimeSessionId}`,
-    }))
-  }
-  return records
 }
 
+function makeBlockerFact() {
+  return fact({
+    sequence: 5,
+    factType: "SAFETY_BLOCKER_RAISED",
+    data: {
+      blockerId,
+      producer: "USER_DATA_EVENT_HANDLER",
+      scope: "ACCOUNT",
+      symbol: null,
+      reason: "ACCOUNTING_INTEGRITY_FAILURE",
+      evidenceDigest: triggerDigest,
+    },
+    factId: `safety-blocker-raised:${blockerId}`,
+  })
+}
+
+function makeStoppedFact() {
+  return fact({
+    sequence: 6,
+    factType: "PROCESS_STOPPED",
+    data: {
+      reason: "OPERATOR_SHUTDOWN",
+      clean: true,
+    },
+    factId: `process-stopped:${runtimeSessionId}`,
+  })
+}
+
+function makeRecords({ stopped = true } = {}) {
+  return [
+    ...makeSessionFacts(),
+    ...makePreflightFacts(),
+    makeBlockerFact(),
+    ...(stopped ? [makeStoppedFact()] : []),
+  ]
+}
 function makeContext() {
   const marketsEvidence = Object.fromEntries(configuredMarkets.map((symbol) => [
     symbol,
@@ -297,7 +313,10 @@ test("fails closed if any configured market is not fully reconciled", async () =
     },
     resolveBlockers: async () => {
       resolutionCalled = true
-      return { ok: true, data: {} }
+      return {
+        ok: true,
+        data: {},
+      }
     },
   })
 
