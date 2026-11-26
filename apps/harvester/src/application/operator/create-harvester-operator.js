@@ -1,4 +1,6 @@
 import { authorizeOperatorActor } from "./authorize-operator-actor.js"
+import { toResult } from "@coinzilla/utils"
+import { resolveUserDataAccountBlockers } from "../../use-cases/resolve-user-data-account-blockers.js"
 import { HARVESTER_EVENT_NAMES } from "../events/event-names.js"
 import { publishLifecycleEvent } from "../events/publish-lifecycle-event.js"
 import {
@@ -77,6 +79,38 @@ function createOperatorBuyControls({ engine, operationalStateStore, eventPublish
   }
 }
 
+function createResolveAccountBlockers({
+  operationalStateStore,
+  reconcileAccount,
+  configuredMarkets,
+} = {}) {
+  return async ({ actor, requestId, causeFixed } = {}) => {
+    try {
+      const authorizedActor = authorizeOperatorActor({ actor })
+      if (typeof requestId !== "string" || requestId.trim() === "" || requestId.length > 256) {
+        const error = new TypeError("Operator requestId must be a non-empty string of at most 256 characters")
+        error.code = "INVALID_OPERATOR_REQUEST_ID"
+        throw error
+      }
+      if (causeFixed !== true) {
+        const error = new TypeError("Operator must explicitly confirm causeFixed=true")
+        error.code = "OPERATOR_CAUSE_NOT_CONFIRMED"
+        throw error
+      }
+      return await resolveUserDataAccountBlockers({
+        operationalStateStore,
+        reconcileAccount,
+        operatorId: authorizedActor.id,
+        actionId: requestId.trim(),
+        causeFixed,
+        configuredMarkets,
+      })
+    } catch (error) {
+      return toResult({ error })
+    }
+  }
+}
+
 function createReadRecoverySellerStopState({ recoverySellerStopWorkflow }) {
   return async ({ actor } = {}) => {
     try {
@@ -120,6 +154,8 @@ export function createHarvesterOperator({
   getAccountSnapshot,
   getOpenOrders,
   recoverySellerStopWorkflow,
+  reconcileAccount,
+  configuredMarkets,
 } = {}) {
   const {
     pauseBuys,
@@ -139,7 +175,14 @@ export function createHarvesterOperator({
     pauseAllBuys,
     resumeAllBuys,
   }
-  if (getRuntimeSnapshot !== undefined) {
+  if (typeof reconcileAccount === "function" && Array.isArray(configuredMarkets) && configuredMarkets.length > 0) {
+    operator.resolveAccountBlockers = createResolveAccountBlockers({
+      operationalStateStore,
+      reconcileAccount,
+      configuredMarkets,
+    })
+  }
+    if (getRuntimeSnapshot !== undefined) {
     const readState = createReadOperatorState({ engine,
       getRuntimeSnapshot })
     operator.getStatus = readState.getStatus
