@@ -375,7 +375,8 @@ async function readNextMongoBatch({
 async function createRecord({ command, databaseName, collection, record }) {
   validateCollectionName(collection)
   const snapshot = JSON.parse(serializeRecord(record))
-  const mongoCollection = encodeCollectionName({ collection, databaseName })
+  const mongoCollection = encodeCollectionName({ collection,
+databaseName })
   await runMongoCommand({
     command,
     operation: "create",
@@ -396,7 +397,8 @@ async function createRecord({ command, databaseName, collection, record }) {
 async function readOneRecord({ command, databaseName, collection, id }) {
   validateCollectionName(collection)
   validateRecordIdentifier(id)
-  const mongoCollection = encodeCollectionName({ collection, databaseName })
+  const mongoCollection = encodeCollectionName({ collection,
+databaseName })
   const response = await runMongoCommand({
     command,
     operation: "readOne",
@@ -405,7 +407,8 @@ async function readOneRecord({ command, databaseName, collection, id }) {
       find: mongoCollection,
       filter: { _id: id },
       collation: { locale: "simple" },
-      projection: { _id: 1, data: 1 },
+      projection: { _id: 1,
+data: 1 },
       limit: 1,
       singleBatch: true,
       $db: databaseName,
@@ -445,7 +448,9 @@ async function readOneRecord({ command, databaseName, collection, id }) {
     operation: "readOne",
   })
   const document = firstBatch[0]
-  return document ? decodeStoredRecord({ document, operation: "readOne", collection }) : null
+  return document ? decodeStoredRecord({ document,
+operation: "readOne",
+collection }) : null
 }
 
 function createReadPipeline({ query }) {
@@ -460,7 +465,8 @@ function createReadPipeline({ query }) {
   if (normalizedQuery.limit !== undefined) {
     pipeline.push({ $limit: normalizedQuery.limit })
   }
-  pipeline.push({ $project: { _id: 1, data: 1 } })
+  pipeline.push({ $project: { _id: 1,
+data: 1 } })
   return pipeline
 }
 
@@ -524,7 +530,8 @@ async function readMongoCursorRecords({
 
 async function readManyRecords({ command, databaseName, collection, query }) {
   validateCollectionName(collection)
-  const mongoCollection = encodeCollectionName({ collection, databaseName })
+  const mongoCollection = encodeCollectionName({ collection,
+databaseName })
   const response = await runMongoCommand({
     command,
     operation: "readMany",
@@ -557,9 +564,13 @@ async function updateRecord({ command, databaseName, collection, id, changes }) 
   validateRecordIdentifier(id)
   const snapshot = JSON.parse(serializeChanges(changes))
   if (Object.keys(snapshot).length === 0) {
-    return readOneRecord({ command, databaseName, collection, id })
+    return readOneRecord({ command,
+databaseName,
+collection,
+id })
   }
-  const mongoCollection = encodeCollectionName({ collection, databaseName })
+  const mongoCollection = encodeCollectionName({ collection,
+databaseName })
   const set = {}
   for (const [field, value] of Object.entries(snapshot)) {
     const encodedKey = encodeUserKey(field)
@@ -576,7 +587,8 @@ async function updateRecord({ command, databaseName, collection, id, changes }) 
       collation: { locale: "simple" },
       new: true,
       upsert: false,
-      fields: { _id: 1, data: 1 },
+      fields: { _id: 1,
+data: 1 },
       $db: databaseName,
     },
   })
@@ -590,14 +602,16 @@ async function updateRecord({ command, databaseName, collection, id, changes }) 
 async function deleteRecord({ command, databaseName, collection, id }) {
   validateCollectionName(collection)
   validateRecordIdentifier(id)
-  const mongoCollection = encodeCollectionName({ collection, databaseName })
+  const mongoCollection = encodeCollectionName({ collection,
+databaseName })
   const response = await runMongoCommand({
     command,
     operation: "delete",
     collection,
     body: {
       delete: mongoCollection,
-      deletes: [{ q: { _id: id }, limit: 1 }],
+      deletes: [{ q: { _id: id },
+limit: 1 }],
       collation: { locale: "simple" },
       ordered: true,
       $db: databaseName,
@@ -614,11 +628,21 @@ function createMongoRecordOperations({ command, databaseName }) {
     throw new TypeError("MongoDB database name must be a non-empty string")
   }
   return Object.freeze({
-    create: (input) => createRecord({ command, databaseName, ...input }),
-    readOne: (input) => readOneRecord({ command, databaseName, ...input }),
-    readMany: (input) => readManyRecords({ command, databaseName, ...input }),
-    update: (input) => updateRecord({ command, databaseName, ...input }),
-    delete: (input) => deleteRecord({ command, databaseName, ...input }),
+    create: (input) => createRecord({ command,
+databaseName,
+...input }),
+    readOne: (input) => readOneRecord({ command,
+databaseName,
+...input }),
+    readMany: (input) => readManyRecords({ command,
+databaseName,
+...input }),
+    update: (input) => updateRecord({ command,
+databaseName,
+...input }),
+    delete: (input) => deleteRecord({ command,
+databaseName,
+...input }),
   })
 }
 
