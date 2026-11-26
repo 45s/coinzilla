@@ -527,3 +527,31 @@ test("MongoDB updates store only changed encoded user data", async () => {
     "data.__coinzilla_key_bmFtZQ": "Ada",
   })
 })
+
+
+test("MongoDB readMany kills an outstanding cursor when the first batch is malformed", async () => {
+  const stub = createCommandStub([
+    {
+      ok: 1,
+      cursor: {
+        id: 12,
+        firstBatch: [{
+          _id: "envelope-id",
+          data: { __coinzilla_key_aWQ: "different-id" },
+        }],
+      },
+    },
+    { ok: 1, cursorsKilled: [12] },
+  ])
+  const operations = createMongoRecordOperations({
+    command: stub.command,
+    databaseName: "app",
+  })
+
+  await assert.rejects(
+    operations.readMany({ collection: "people" }),
+    DatabaseProviderError,
+  )
+  assert.equal(stub.calls[1].killCursors, "coinzilla_cGVvcGxl")
+  assert.deepEqual(stub.calls[1].cursors, [12])
+})
