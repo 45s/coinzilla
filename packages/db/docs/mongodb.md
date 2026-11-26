@@ -78,6 +78,22 @@ On supported replica-set and sharded deployments:
 6. A successful callback commits with majority write concern and a bounded 10-second write-concern timeout. A commit frame rejected before dispatch is reported as a provider failure, not an unknown outcome; if a prior attempt may have reached the server, later failures cannot erase that ambiguity.
 7. Commit attempts are bounded. If the final result cannot be confirmed, DatabaseTransactionOutcomeUnknownError is thrown.
 
+### Commit result handling
+
+```mermaid
+flowchart TD
+  A[Callback completes] --> B[Send commit with majority write concern]
+  B --> C{Commit result}
+  C -->|Confirmed success| D[Return callback result]
+  C -->|Definitely not sent| E[Return provider failure]
+  C -->|Definite server rejection| E
+  C -->|May have reached server| F[Retry same commit within the bound]
+  F --> G{Retry result}
+  G -->|Confirmed success| D
+  G -->|Still ambiguous or NoSuchTransaction| H[DatabaseTransactionOutcomeUnknownError]
+  G -->|Retry not sent after earlier ambiguous attempt| H
+```
+
 An unknown commit outcome is not a rollback. Application code must reconcile the affected records/state before deciding whether to retry. The provider never automatically replays a transaction callback. A non-transactional create/update/delete whose request was sent but whose response is lost raises `DatabaseOperationOutcomeUnknownError`; the provider does not replay the write. A read timeout or a write rejected before it is sent remains a `DatabaseProviderError`.
 
 ## Lifecycle and failure behavior

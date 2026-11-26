@@ -97,6 +97,22 @@ Prioritize review in this order, based on risk and the current implementation:
 
 This is a review order, not a commitment to import upstream modules. Existing code may already be simpler and correct; retain it when tests and specification evidence support it.
 
+### Selective-port decision flow
+
+```mermaid
+flowchart TD
+  A[Find a concrete Database API gap] --> B[Read MongoDB specification and pinned driver source]
+  B --> C{Can a minimal built-in-only adaptation solve it?}
+  C -->|No| D[Use upstream as reference only]
+  C -->|Yes| E[Add a focused regression test first]
+  E --> F[Observe the expected failure]
+  F --> G[Adapt the smallest implementation unit]
+  G --> H[Run focused and package tests]
+  H --> I[Verify DDD boundaries and no new runtime dependencies]
+  I --> J[Record exact source provenance and license]
+  J --> K[Update capability and support documentation]
+```
+
 ## Explicit non-goals
 
 - Do not vendor the entire official driver or its `src/`, `test/`, build system, public types or package structure.

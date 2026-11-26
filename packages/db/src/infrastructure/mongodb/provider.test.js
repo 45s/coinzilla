@@ -259,7 +259,14 @@ test("MongoDB sharded transactions fail closed when a successful response omits 
         collection: "people",
         record: { id: "missing-recovery-token" },
       })),
-      /recoveryToken/,
+      (error) => {
+        let current = error
+        while (current) {
+          if (current.message?.includes("recoveryToken")) return true
+          current = current.cause
+        }
+        return false
+      },
     )
     assert.equal(calls.some((body) => body.commitTransaction === 1), false)
   } finally {
