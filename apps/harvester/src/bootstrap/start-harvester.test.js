@@ -72,8 +72,14 @@ async function resolveAccountBlockerOffline({ directory, blockerId } = {}) {
 }
 
 async function createResolvedAccountBlockerRestartStore({ directory, store, config } = {}) {
-  const blockerId = await seedAccountBlockerRestartSession({ store, config })
-  await resolveAccountBlockerOffline({ directory, blockerId })
+  const blockerId = await seedAccountBlockerRestartSession({
+    store,
+    config,
+  })
+  await resolveAccountBlockerOffline({
+    directory,
+    blockerId,
+  })
   return {
     restartStore: createFileOperationalStateStore({
       directory,
