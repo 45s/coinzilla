@@ -95,7 +95,10 @@ function isCurrentReconciledSubscription({ state, status }) {
 }
 
 function isRestoredSubscription({ state, status }) {
-  return isCurrentReconciledSubscription({ state, status }) &&
+  return isCurrentReconciledSubscription({
+    state,
+    status,
+  }) &&
     state.lastAcknowledgedRecoveryGeneration === state.recoveryGeneration &&
     !state.accountingFailed &&
     (!state.retryableRecoveryFailure ||
@@ -336,10 +339,16 @@ function updateRecoveryGeneration({ state, status, diagnosticOnlyRpcError }) {
   if (diagnosticOnlyRpcError) {
     return
   }
-  if (isCurrentReconciledSubscription({ state, status })) {
+  if (isCurrentReconciledSubscription({
+    state,
+    status,
+  })) {
     state.streamUnsafe = false
   }
-  if (isRestoredSubscription({ state, status })) {
+  if (isRestoredSubscription({
+    state,
+    status,
+  })) {
     state.requiresReconciliation = false
   }
   if (INVALIDATING_USER_DATA_STATUSES.has(status.type)) {

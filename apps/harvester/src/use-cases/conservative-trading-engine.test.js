@@ -10353,7 +10353,7 @@ test("volatility data unavailable blocks new strategy orders without using the g
 
   assert.equal(result.ok, true)
   assert.equal(result.data.deferred, true, "Configured volatility history must defer evaluation until its required data is ready.")
-  assert.equal(result.data.reason, "VOLATILITY_PROTECTION_NOT_READY")
+  assert.equal(result.data.reason, "VOLATILITY_DATA_UNAVAILABLE")
   assert.deepEqual(harness.orders, [], "Missing volatility history must fail closed before broker submission.")
   assert.deepEqual(harness.pauses, [], "Volatility protection must remain separate from the full accounting safety pause.")
 })

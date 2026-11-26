@@ -265,6 +265,7 @@ function createOrdinaryTradeState() {
     accountSnapshotCalls: 0,
     openOrderSnapshotCalls: 0,
     userDataErrors: [],
+    readinessLogs: [],
     orderSequence: 0,
     lastOrder: undefined,
     canonicalOrders: new Map(),
@@ -422,7 +423,8 @@ function createOrdinaryTradeStartOptions({ appConfig, broker, state } = {}) {
     now: () => 10,
     logger: {
       debug() {},
-      info() {},
+      info(...args) { state.readinessLogs.push(["info", ...args]) },
+      system(...args) { state.readinessLogs.push(["system", ...args]) },
       warn(...args) { state.userDataErrors.push(args) },
       error(...args) { state.userDataErrors.push(args) },
     },
@@ -495,7 +497,18 @@ function assertOrdinaryTradeStartup({ context, broker, state, market } = {}) {
       stack: entry.error?.stack,
     })),
   }))
-  assert.ok(broker.lastOrder, 'the startup ticker seed should be evaluated after volatility history becomes ready')
+  const readinessDiagnostics = JSON.stringify({
+    readinessLogs: state.readinessLogs,
+    errors: state.userDataErrors.map(([entry]) => ({
+      message: entry?.message,
+      code: entry?.code,
+      error: entry?.error?.message,
+    })),
+  })
+  assert.ok(
+    broker.lastOrder,
+    `the startup ticker seed should be evaluated after volatility history becomes ready; diagnostics: ${readinessDiagnostics}`,
+  )
   assert.equal(state.accountSnapshotCalls, 1)
   assert.equal(state.openOrderSnapshotCalls, 1)
   assert.equal(typeof state.onPrice, 'function')

@@ -4,6 +4,14 @@ import * as shared from "./start-harvester-test-support.js"
 
 const { waitForTestSignal, appConfig, createBroker, binanceEnv, startHarvesterForTest, createFill } = shared
 const test = (...args) => nodeTest(`[user-data-event-reconciliation.test.js] ${args[0]}`, ...args.slice(1))
+const RECOVERY_RECONCILED_STATUS = Object.freeze({
+  type: "reconciled",
+  subscriptionId: 17,
+  recoveryGeneration: 1,
+  recoveryRequired: false,
+  reconciliationRequired: false,
+})
+
 function createRecoveryModeObservationFixture({ broker }) {
   const {getAccountSnapshot} = broker
   let accountReads = 0
@@ -40,13 +48,7 @@ function createRecoveryModeObservationFixture({ broker }) {
       data: {
         ...result.data,
         acknowledgeRecovery: () => {
-          handlers.onStatus({
-            type: "reconciled",
-              subscriptionId: 17,
-              recoveryGeneration: 1,
-            recoveryRequired: false,
-            reconciliationRequired: false,
-          })
+          handlers.onStatus({ ...RECOVERY_RECONCILED_STATUS })
           resolveRecoveryAcknowledged()
           return true
         },
