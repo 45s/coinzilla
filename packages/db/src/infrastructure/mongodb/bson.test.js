@@ -171,7 +171,10 @@ test("BSON enforces the 16 MiB document limit and rejects trailing input bytes",
 
 
 function rawBsonDocument(elements) {
-  const size = 5 + elements.reduce((total, element) => total + element.length, 0)
+  let size = 5
+  for (const element of elements) {
+    size += element.length
+  }
   const document = Buffer.alloc(size)
   document.writeInt32LE(size, 0)
   let offset = 4
@@ -222,20 +225,20 @@ test("BSON timestamps preserve the full unsigned 64-bit range", () => {
 })
 
 test("BSON decoder rejects duplicate keys, invalid array indexes, and unsupported types", () => {
-  const int32 = (key, value) => {
+  const int32 = ({ key, value }) => {
     const payload = Buffer.alloc(4)
     payload.writeInt32LE(value)
     return Buffer.concat([Buffer.from([0x10]), Buffer.from(`${key}\0`), payload])
   }
   assert.throws(
     () => decodeBsonDocument(rawBsonDocument([
-      int32("duplicate", 1),
-      int32("duplicate", 2),
+      int32({ key: "duplicate", value: 1 }),
+      int32({ key: "duplicate", value: 2 }),
     ])),
     /duplicate key/,
   )
 
-  const invalidArray = rawBsonDocument([int32("1", 1)])
+  const invalidArray = rawBsonDocument([int32({ key: "1", value: 1 })])
   const arrayElement = Buffer.concat([
     Buffer.from([0x04]),
     Buffer.from("values\0"),
