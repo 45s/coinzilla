@@ -24,6 +24,7 @@ function validateReconciliationDependencies(options) {
       typeof accountSnapshotManager?.getReadinessSnapshot !== "function" ||
       typeof options.getRuntimeSnapshot !== "function" ||
       typeof options.getMarketSnapshots !== "function" ||
+      typeof options.hasCanonicalOwnershipReconciliation !== "function" ||
       typeof options.getPortfolio !== "function" ||
       !orderHistoryPersistence?.orderRepository ||
       !orderHistoryPersistence?.fillRepository ||
@@ -174,7 +175,7 @@ export function createAuthoritativeAccountBlockerReconciliation(options = {}) {
 
   return async ({ blockerIds, operatorId, actionId } = {}) => {
     try {
-      if (!sameStringSet(blockerIds, blockerIds) ||
+      if (!Array.isArray(blockerIds) ||
           blockerIds.length === 0 ||
           typeof operatorId !== "string" ||
           typeof actionId !== "string") {
