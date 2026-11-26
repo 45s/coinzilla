@@ -175,6 +175,53 @@ test("provider capability declarations support the documented storage modes", ()
   )
 })
 
+
+test("provider-neutral reads and writes use their distinct execution boundaries", async () => {
+  const provider = createProvider({
+    capabilities: {
+      transactions: {
+        callbackMode: "synchronous",
+        nestedTransactions: false,
+        multiDocument: true,
+      },
+      queries: {
+        equalityFilters: true,
+        sorting: true,
+        pagination: true,
+      },
+      storage: {
+        modes: ["memory"],
+      },
+    },
+  })
+  let readTransactions = 0
+  let singleOperations = 0
+  const withReadTransaction = provider.withReadTransaction.bind(provider)
+  const execute = provider.execute.bind(provider)
+  provider.withReadTransaction = (work) => {
+    readTransactions += 1
+    return withReadTransaction(work)
+  }
+  provider.execute = (input) => {
+    singleOperations += 1
+    return execute(input)
+  }
+  const database = createDatabase({ provider })
+  await database.connect()
+
+  try {
+    await database.readOne({ collection: "people", id: "one" })
+    await database.create({
+      collection: "people",
+      record: { id: "one" },
+    })
+    assert.equal(readTransactions, 1)
+    assert.equal(singleOperations, 1)
+  } finally {
+    await database.close()
+  }
+})
+
 test("provider composition requires atomic single-operation execution", () => {
   const provider = createProvider({
     capabilities: {
