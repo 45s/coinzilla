@@ -78,9 +78,6 @@ function assertCommandSucceeded({ response, stage }) {
 }
 
 function decodeBase64(value) {
-  if (typeof value !== "string") {
-    throw new TypeError("MongoDB SCRAM server signature must be base64 text")
-  }
   const unpadded = value.replace(/=+$/u, "")
   const padding = value.length - unpadded.length
   if (!/^[A-Za-z0-9+/]*$/u.test(unpadded)
