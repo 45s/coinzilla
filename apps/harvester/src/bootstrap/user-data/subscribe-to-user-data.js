@@ -196,6 +196,7 @@ export async function subscribeToUserData({
   publishAccountSnapshot, publishOpenOrdersSnapshot, getAccountSnapshot,
   getAccountSafetyBlocker,
   resumeDeferredStrategyEvaluations,
+  deferTradingActivation = false,
 } = {}) {
   const tradingModeLabel = tradingMode === "live" ? "LIVE" : "TESTNET"
   logUserDataSubscriptionStarting(logger)
@@ -222,6 +223,8 @@ export async function subscribeToUserData({
 
   if (!tradingEnabled) {
     await publishOpenOrdersSnapshot({ phase: "PREFLIGHT" })
+    await waitForUserDataEventQueue({ state })
+    state.preflightComplete = true
     return userDataSubscription
   }
   if (state.accountingFailed) {
@@ -235,6 +238,34 @@ export async function subscribeToUserData({
   assertTradingStartupSafety({ state,
 tradingModeLabel,
 getAccountSafetyBlocker })
+  state.preflightComplete = true
+
+  if (deferTradingActivation) {
+    let activated = false
+    return Object.freeze({
+      subscription: userDataSubscription,
+      activateTrading: async () => {
+        if (activated) {
+          return Object.freeze({ activated: true, alreadyActivated: true })
+        }
+        await waitForUserDataEventQueue({ state })
+        assertTradingStartupSafety({ state,
+tradingModeLabel,
+getAccountSafetyBlocker })
+        activateTradingEngine({
+          state,
+          logger,
+          tradingModeLabel,
+          enabledSymbols,
+          getAccountSnapshot,
+          resumeDeferredStrategyEvaluations,
+        })
+        activated = true
+        return Object.freeze({ activated: true, alreadyActivated: false })
+      },
+    })
+  }
+
   activateTradingEngine({
     state,
     logger,

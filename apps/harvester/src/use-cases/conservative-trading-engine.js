@@ -1964,6 +1964,9 @@ function createOperatorMarketBlockers({
   metadata,
   marketPrice,
   priceFresh,
+  marketBook,
+  bookRequired,
+  bookFresh,
   safetyPaused,
   operatorPaused,
   operatorBuyPaused,
@@ -1985,6 +1988,11 @@ function createOperatorMarketBlockers({
     blockers.push("MARKET_PRICE_UNAVAILABLE")
   } else if (!priceFresh) {
     blockers.push("MARKET_PRICE_STALE")
+  }
+  if (bookRequired && !marketBook) {
+    blockers.push("MARKET_BOOK_UNAVAILABLE")
+  } else if (bookRequired && !bookFresh) {
+    blockers.push("MARKET_BOOK_STALE")
   }
   if (safetyPaused) {
     blockers.push("STRATEGY_SAFETY_PAUSED")
@@ -2047,6 +2055,9 @@ function createOperatorMarketSnapshotBlockers({
     metadata,
     marketPrice,
     priceFresh,
+    marketBook,
+    bookRequired,
+    bookFresh,
     safetyPaused,
     operatorPaused,
     operatorBuyPaused,
@@ -2104,12 +2115,17 @@ function createOperatorMarketSnapshotFacts({
   pairConfig,
   getCurrentMarketMetadata,
   isMarketPriceFresh,
+  isMarketBookFresh,
   hasBlockingOpenOrdersForSymbol,
   isVolatilityProtectionEnabledForSymbol,
 }) {
   const metadata = getCurrentMarketMetadata({ symbol })
   const marketPrice = state.prices.get(symbol)
   const priceFresh = marketPrice ? isMarketPriceFresh(marketPrice) : false
+  const marketBook = state.books.get(symbol)
+  const bookFresh = marketBook ? isMarketBookFresh(marketBook) : false
+  const orderType = metadata?.orderType ?? pairConfig.orderType ?? "LIMIT_MAKER"
+  const bookRequired = orderType === "LIMIT_MAKER"
   const operatorPaused = state.operatorPausedMarkets.has(symbol)
   const operatorBuyPaused = isOperatorBuyPauseActive({
     state,
@@ -2171,6 +2187,10 @@ function createOperatorMarketSnapshot(options) {
     latestPrice: facts.marketPrice?.price ?? null,
     priceTimestamp: facts.marketPrice?.timestamp ?? null,
     priceFresh: facts.priceFresh,
+    orderType: facts.metadata?.orderType ?? pairConfig.orderType ?? "LIMIT_MAKER",
+    bookRequired: facts.bookRequired,
+    bookTimestamp: facts.marketBook?.timestamp ?? null,
+    bookFresh: facts.bookFresh,
     operatorPaused: facts.operatorPaused,
     operatorBuysPaused: facts.operatorBuyPaused,
     safetyPaused: facts.safetyPaused,
@@ -2203,6 +2223,7 @@ function createOperatorMarketSnapshotsGetter({
           pairConfig,
           getCurrentMarketMetadata,
           isMarketPriceFresh,
+          isMarketBookFresh,
           hasBlockingOpenOrdersForSymbol,
           isVolatilityProtectionEnabledForSymbol,
         })
@@ -2918,6 +2939,7 @@ function createConservativeEngineRuntimeOperations({ context } = {}) {
     runTransition: context.runTransition,
     getCurrentMarketMetadata: context.getCurrentMarketMetadata,
     isMarketPriceFresh: dependencies.isMarketPriceFresh,
+    isMarketBookFresh: dependencies.isMarketBookFresh,
     hasBlockingOpenOrdersForSymbol: context.hasBlockingOpenOrdersForSymbol,
     isVolatilityProtectionEnabledForSymbol: context.isVolatilityProtectionEnabledForSymbol,
   })

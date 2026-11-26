@@ -82,3 +82,10 @@ Startup wiring and the operator projection remain in progress. Required checks w
 ## Implementation checkpoint — authorized operator read model
 
 The existing authorized status and market queries now consume the same immutable readiness report used by startup. The report is exposed as readinessReport; per-market readiness and blockers are projected from that report rather than recomputed independently. Existing operator authorization remains the gate for reading it.
+
+
+## Implementation checkpoint — startup boundary and market evidence
+
+Startup now retains the existing user-data readiness flag as the only global trading gate. The PREFLIGHT snapshot and queued-event drain complete first; the gate is then deliberately left closed while market price, order-book and candle services initialize. One immutable report is logged from those live snapshots before the existing gate is opened. The activation continuation revalidates user-data safety immediately before setting the existing ready flag and resuming deferred evaluations.
+
+Accepted WebSocket price/book events are distinguished from subscription acknowledgements; initial price seeds are reported separately. The engine operator snapshot now exposes book freshness and the existing LIMIT_MAKER book blocker. The account snapshot manager exposes safe audit summaries only; no order identifiers, balances or account IDs are included in diagnostics. Restoration remains disabled, and prior-process evidence keeps the runtime observation-only.

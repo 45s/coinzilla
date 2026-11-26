@@ -338,7 +338,8 @@ function createMarketReadiness({ market, input = {}, runtime, observedAt }) {
   const expectedIdentity = route.expected
   const priceIdentity = route.priceSourceIdentity ?? route.actual
   const bookIdentity = route.bookSourceIdentity ?? route.actual
-  const bookRequired = input.book?.required ?? market.bookRequired ?? market.orderType !== "LIMIT"
+  const bookRequired = runtime.tradingEnabled === true &&
+    (input.book?.required ?? market.bookRequired ?? market.orderType !== "LIMIT")
   const routeRequired = input.route?.required !== false
   const routeMatches = !routeRequired || (
     identitiesMatch(expectedIdentity, priceIdentity) &&
@@ -352,7 +353,11 @@ function createMarketReadiness({ market, input = {}, runtime, observedAt }) {
   checks.push(createMarketCheck({
     id: "market.route",
     status: routeStatus,
-    code: routeStatus === "BLOCKED" ? "MARKET_DATA_ROUTE_NOT_VERIFIED" : "MARKET_DATA_ROUTE_VERIFIED",
+    code: routeStatus === "BLOCKED"
+      ? "MARKET_DATA_ROUTE_NOT_VERIFIED"
+      : routeStatus === "NOT_APPLICABLE"
+        ? "MARKET_DATA_ROUTE_NOT_REQUIRED"
+        : "MARKET_DATA_ROUTE_VERIFIED",
     message: routeStatus === "BLOCKED"
       ? "Market-data subscription or provider/account/environment identity is missing or mismatched."
       : routeStatus === "PASS"
@@ -380,10 +385,14 @@ function createMarketReadiness({ market, input = {}, runtime, observedAt }) {
   checks.push(createMarketCheck({
     id: "market.price",
     status: priceStatus,
-    code: priceReady ? "MARKET_PRICE_READY" : "MARKET_PRICE_NOT_READY",
-    message: priceReady
-      ? "A valid fresh price is available from the initial seed or an accepted WebSocket event."
-      : "No valid fresh market price is confirmed; a subscription acknowledgement alone is insufficient.",
+    code: priceStatus === "NOT_APPLICABLE"
+      ? "MARKET_PRICE_NOT_REQUIRED"
+      : priceReady ? "MARKET_PRICE_READY" : "MARKET_PRICE_NOT_READY",
+    message: priceStatus === "NOT_APPLICABLE"
+      ? "Market-data intake is intentionally suppressed by the configured external-order policy."
+      : priceReady
+        ? "A valid fresh price is available from the initial seed or an accepted WebSocket event."
+        : "No valid fresh market price is confirmed; a subscription acknowledgement alone is insufficient.",
     remediation: "Verify the configured market-data route and wait for a valid fresh WebSocket event or the existing initial-price seed.",
     details: {
       source: priceSource,
@@ -558,6 +567,30 @@ export function createHarvesterReadinessReport({
   observedAt = runtime.observedAt ?? Date.now(),
 } = {}) {
   const runtimeChecks = createRuntimeChecks({ runtime, inputs: readinessInputs, observedAt })
+  if (readinessInputs.marketSnapshotAvailable === false ||
+      (Array.isArray(readinessInputs.configuration?.enabledMarkets) &&
+       readinessInputs.configuration.enabledMarkets.length > 0 && markets.length === 0)) {
+    runtimeChecks.push(createCheck({
+      id: "engine.market-snapshots",
+      scope: "RUNTIME",
+      status: "BLOCKED",
+      code: "ENGINE_MARKET_SNAPSHOT_UNAVAILABLE",
+      message: "The engine did not provide the configured per-market readiness snapshots.",
+      remediation: "Inspect engine startup and market snapshot diagnostics; trading activation remains closed.",
+      details: { configuredMarketCount: readinessInputs.configuration?.enabledMarkets?.length ?? null },
+    }))
+  }
+  if (readinessInputs.startupFailure) {
+    runtimeChecks.push(createCheck({
+      id: "startup.failure",
+      scope: "RUNTIME",
+      status: "BLOCKED",
+      code: readinessInputs.startupFailure.code ?? "HARVESTER_STARTUP_FAILED",
+      message: `The ${readinessInputs.startupFailure.component ?? "startup"} stage failed before readiness could be established.`,
+      remediation: "Resolve the original startup failure shown in the preceding Harvester diagnostic and retry startup.",
+      details: { component: readinessInputs.startupFailure.component ?? "UNKNOWN" },
+    }))
+  }
   const runtimeBlockers = runtimeChecks
     .filter(({ status, blocksTrading }) => status === "BLOCKED" && blocksTrading)
     .map(({ code }) => code)

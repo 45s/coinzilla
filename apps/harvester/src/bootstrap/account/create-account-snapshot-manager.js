@@ -332,6 +332,9 @@ function createInitialAccountSnapshotManagerState() {
     commissionBaselineAssetCodesById: new Map(),
     unownedOpenOrderSymbols: new Set(),
     lastOpenOrdersObservedAt: undefined,
+    lastOpenOrdersAudit: undefined,
+    preflightOpenOrdersAudit: undefined,
+    preflightAuditCompleted: false,
     pendingExternalOrderVersions: new Map(),
     externalOrderObservationSequence: 0,
   }
@@ -871,6 +874,19 @@ async function publishOpenOrdersSnapshot({ context, options }) {
     context,
     classification: snapshot.classification,
   })
+  const auditSummary = Object.freeze({
+    phase: options.phase,
+    observedAt: snapshot.dataResult.data.observedAt,
+    orderCount: orders.length,
+    readiness: snapshot.classification.readiness,
+    blockReasons: Object.freeze([...snapshot.classification.blockReasons]),
+    unownedSymbols: Object.freeze([...context.state.unownedOpenOrderSymbols].sort()),
+    durable: true,
+  })
+  context.state.lastOpenOrdersAudit = auditSummary
+  if (options.phase === "PREFLIGHT") {
+    context.state.preflightOpenOrdersAudit = auditSummary
+  }
   logOpenOrdersSnapshot({
     context,
     phase: options.phase,
@@ -994,6 +1010,9 @@ async function publishAccountSnapshot({ context, options }) {
     runtimeSessionId: context.runtimeSessionId,
     monotonicNow: context.monotonicNow,
   })
+  if (options.phase === "PREFLIGHT") {
+    context.state.preflightAuditCompleted = true
+  }
   logSystem({ logger: context.logger,
     message: "Account snapshot captured and durably journaled",
     phase: options.phase,
@@ -1332,6 +1351,33 @@ export function createAccountSnapshotManager(options = {}) {
 
   return Object.freeze({
     getAccountSnapshot: () => state.accountSnapshot,
+    getReadinessSnapshot: () => {
+      const accountSnapshot = state.accountSnapshot
+      const openOrdersAudit = state.lastOpenOrdersAudit
+      return Object.freeze({
+        preflight: Object.freeze({
+          completed: state.preflightAuditCompleted === true,
+          durable: state.preflightAuditCompleted === true,
+          sourceTime: state.preflightSourceTime ?? null,
+          balanceCount: state.preflightBalancesByCode.size,
+        }),
+        openOrders: Object.freeze({
+          completed: openOrdersAudit !== undefined,
+          durable: openOrdersAudit?.durable === true,
+          phase: openOrdersAudit?.phase ?? null,
+          observedAt: openOrdersAudit?.observedAt ?? null,
+          orderCount: openOrdersAudit?.orderCount ?? null,
+          readiness: openOrdersAudit?.readiness ?? "UNKNOWN",
+          blockReasons: openOrdersAudit?.blockReasons ?? [],
+          unownedSymbols: openOrdersAudit?.unownedSymbols ?? [],
+          preflight: state.preflightOpenOrdersAudit ?? null,
+        }),
+        currentAccount: Object.freeze({
+          sourceTime: accountSnapshot?.sourceTime ?? null,
+          balanceCount: accountSnapshot?.balances?.length ?? null,
+        }),
+      })
+    },
     hasUnownedOpenOrdersForSymbol: ({ symbol } = {}) =>
       typeof symbol === "string" && (
         state.unownedOpenOrderSymbols.has(symbol) ||
