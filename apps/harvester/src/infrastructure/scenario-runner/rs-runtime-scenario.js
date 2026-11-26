@@ -791,6 +791,7 @@ function createRuntimeScenarioPartialSellFill({ runtime, terminalOrder, partialQ
       amount: quoteQuantity,
       asset: runtime.quoteAsset,
     }),
+    executedAt: terminalOrder.completedAt,
     commissions: [],
     commissionStatus: "COMPLETE",
   })
