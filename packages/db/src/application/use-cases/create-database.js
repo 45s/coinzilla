@@ -43,20 +43,32 @@ function createTransactionFacade(transaction) {
   })
 }
 
-function validateTransactionCapabilities({ transactions }) {
-  const hasValidCallbackMode = ["synchronous", "asynchronous"].includes(
-    transactions?.callbackMode,
-  )
-  const hasNestedTransactionDeclaration = typeof transactions?.nestedTransactions === "boolean"
-  const hasMultiDocumentDeclaration = typeof transactions?.multiDocument === "boolean"
+function hasValidTransactionCallbackMode({ transactions }) {
+  return ["synchronous", "asynchronous"].includes(transactions?.callbackMode)
+}
+
+function hasValidTransactionDeclarations({ transactions }) {
+  const hasNested = typeof transactions?.nestedTransactions === "boolean"
+  const hasMultiDocument = typeof transactions?.multiDocument === "boolean"
     || transactions?.multiDocument === "topology-dependent"
+  return hasNested && hasMultiDocument
+}
 
-  const hasCompatibleNesting = transactions?.callbackMode !== "synchronous"
-    || transactions?.nestedTransactions !== true
-  const hasCompatibleMultiDocument = transactions?.nestedTransactions !== true
-    || transactions?.multiDocument !== false
+function hasCompatibleTransactionDeclarations({ transactions }) {
+  const synchronousNesting = transactions?.callbackMode === "synchronous"
+    && transactions?.nestedTransactions === true
+  const nestedWithoutMultiDocument = transactions?.nestedTransactions === true
+    && transactions?.multiDocument === false
+  return !synchronousNesting && !nestedWithoutMultiDocument
+}
 
-  if (!transactions || typeof transactions !== "object" || !hasValidCallbackMode || !hasNestedTransactionDeclaration || !hasMultiDocumentDeclaration || !hasCompatibleNesting || !hasCompatibleMultiDocument) {
+function validateTransactionCapabilities({ transactions }) {
+  const isObject = transactions !== null && typeof transactions === "object"
+  const isValid = isObject
+    && hasValidTransactionCallbackMode({ transactions })
+    && hasValidTransactionDeclarations({ transactions })
+    && hasCompatibleTransactionDeclarations({ transactions })
+  if (!isValid) {
     throw new TypeError("Provider transaction capabilities must declare callbackMode, nestedTransactions and multiDocument")
   }
 }
@@ -127,108 +139,98 @@ function isAsyncFunction(callback) {
   return callback.constructor?.name === "AsyncFunction"
 }
 
+function runDatabaseOperation({ database, transactionScope, operation, input }) {
+  const activeScope = transactionScope.getStore()
+  if (activeScope) {
+    if (!activeScope.active) {
+      throw new Error("Database transaction callback has already completed")
+    }
+    return activeScope.context[operation](input)
+  }
+  if (READ_ONLY_OPERATIONS.has(operation)) {
+    return database.readTransaction((transaction) => {
+      const context = createTransactionFacade(transaction)
+      return context[operation](input)
+    })
+  }
+  return database.execute({ operation, input })
+}
+
+function invokeTransactionCallback({ work, transaction, transactionScope }) {
+  const context = createTransactionFacade(transaction)
+  const scope = { context, active: true }
+  try {
+    const result = transactionScope.run(scope, () => work(context))
+    if (result && typeof result.then === "function") {
+      return Promise.resolve(result).finally(() => {
+        scope.active = false
+      })
+    }
+    scope.active = false
+    return result
+  } catch (error) {
+    scope.active = false
+    throw error
+  }
+}
+
+function createCloseMethod({ database, transactionScope }) {
+  return function close() {
+    if (transactionScope.getStore()?.active) {
+      throw new Error("Cannot close a database from inside its transaction callback")
+    }
+    return database.close()
+  }
+}
+
+function createTransactionMethod({ database, capabilities, transactionScope }) {
+  return function transaction(work) {
+    if (typeof work !== "function") {
+      throw new TypeError("A transaction callback is required")
+    }
+    const activeScope = transactionScope.getStore()
+    if (activeScope && !activeScope.active) {
+      return Promise.reject(new Error("Database transaction callback has already completed"))
+    }
+    if (activeScope && !capabilities.transactions.nestedTransactions) {
+      return Promise.reject(new DatabaseTransactionUnsupportedError({
+        capability: "nestedTransactions",
+      }))
+    }
+    if (!activeScope && !capabilities.transactions.multiDocument) {
+      return Promise.reject(new DatabaseTransactionUnsupportedError())
+    }
+    return database.transaction((transactionContext) => {
+      if (capabilities.transactions.callbackMode === "synchronous" && isAsyncFunction(work)) {
+        throw new TypeError("Synchronous database provider transaction callbacks must be synchronous")
+      }
+      return invokeTransactionCallback({
+        work,
+        transaction: transactionContext,
+        transactionScope,
+      })
+    })
+  }
+}
+
 function createProviderNeutralFacade({ database, provider }) {
   const capabilities = createCapabilitiesSnapshot(provider.capabilities)
   const transactionScope = new AsyncLocalStorage()
-
-  function runOperation({ operation, input }) {
-    const activeScope = transactionScope.getStore()
-    if (activeScope) {
-      if (!activeScope.active) {
-        throw new Error("Database transaction callback has already completed")
-      }
-      return activeScope.context[operation](input)
-    }
-    if (READ_ONLY_OPERATIONS.has(operation)) {
-      return database.readTransaction((transaction) => {
-        const context = createTransactionFacade(transaction)
-        return context[operation](input)
-      })
-    }
-    return database.execute({ operation,
-input })
-  }
-
-  function invokeTransactionCallback({ work, transaction }) {
-    const context = createTransactionFacade(transaction)
-    const scope = { context,
-active: true }
-    try {
-      const result = transactionScope.run(scope, () => work(context))
-      if (result && typeof result.then === "function") {
-        return Promise.resolve(result).finally(() => {
-          scope.active = false
-        })
-      }
-      scope.active = false
-      return result
-    } catch (error) {
-      scope.active = false
-      throw error
-    }
-  }
-
+  const runOperation = ({ operation, input }) => runDatabaseOperation({
+    database,
+    transactionScope,
+    operation,
+    input,
+  })
   return Object.freeze({
     connect: database.connect,
-    close() {
-      if (transactionScope.getStore()?.active) {
-        throw new Error("Cannot close a database from inside its transaction callback")
-      }
-      return database.close()
-    },
-    transaction(work) {
-      if (typeof work !== "function") {
-        throw new TypeError("A transaction callback is required")
-      }
-      const activeScope = transactionScope.getStore()
-      if (activeScope) {
-        if (!activeScope.active) {
-          return Promise.reject(new Error("Database transaction callback has already completed"))
-        }
-        if (!capabilities.transactions.nestedTransactions) {
-          return Promise.reject(new DatabaseTransactionUnsupportedError({
-            capability: "nestedTransactions",
-          }))
-        }
-        return database.transaction((transaction) => {
-          if (capabilities.transactions.callbackMode === "synchronous" && isAsyncFunction(work)) {
-            throw new TypeError("Synchronous database provider transaction callbacks must be synchronous")
-          }
-          return invokeTransactionCallback({ work,
-transaction })
-        })
-      }
-      if (!capabilities.transactions.multiDocument) {
-        return Promise.reject(new DatabaseTransactionUnsupportedError())
-      }
-      return database.transaction((transaction) => {
-        if (capabilities.transactions.callbackMode === "synchronous" && isAsyncFunction(work)) {
-          throw new TypeError("Synchronous database provider transaction callbacks must be synchronous")
-        }
-        return invokeTransactionCallback({ work,
-transaction })
-      })
-    },
-    create: (input) => runOperation({
-      operation: "create",
-      input,
-    }),
-    readOne: (input) => runOperation({
-      operation: "readOne",
-      input,
-    }),
-    readMany: (input) => runOperation({
-      operation: "readMany",
-      input,
-    }),
-    update: (input) => runOperation({
-      operation: "update",
-      input,
-    }),
-    delete: (input) => runOperation({
-      operation: "delete",
-      input,
-    }),
+    close: createCloseMethod({ database, transactionScope }),
+    transaction: createTransactionMethod({ database, capabilities, transactionScope }),
+    create: (input) => runOperation({ operation: "create", input }),
+    readOne: (input) => runOperation({ operation: "readOne", input }),
+    readMany: (input) => runOperation({ operation: "readMany", input }),
+    update: (input) => runOperation({ operation: "update", input }),
+    delete: (input) => runOperation({ operation: "delete", input }),
     capabilities,
     get state() {
       return database.state
