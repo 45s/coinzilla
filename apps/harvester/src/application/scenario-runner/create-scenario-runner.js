@@ -11,12 +11,14 @@ function createJsonDigest(value) {
   return createHash("sha256").update(JSON.stringify(value)).digest("hex")
 }
 
-function createScenarioIdentity({ strategyId, scenarioId }) {
+function createScenarioIdentity({
+      strategyId,
+      scenarioId,
+    }) {
   return `${strategyId}/${scenarioId}`
 }
 
-function normalizeReplayProvenance({ replayProvenance, sourceRevision }) {
-  const identity = replayProvenance?.identity ?? {}
+function collectMissingReplayProvenance({ identity, replayProvenance, sourceRevision }) {
   const missing = new Set(replayProvenance?.missing ?? [])
   const requiredHashes = [
     ["sourceCommitSha", /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/i],
@@ -31,7 +33,9 @@ function normalizeReplayProvenance({ replayProvenance, sourceRevision }) {
       missing.add(`verified ${field} is unavailable`)
     }
   }
-  if (typeof identity.runtimeIdentity !== "string" || !identity.runtimeIdentity.trim()) {
+  const missingRuntimeIdentity = typeof identity.runtimeIdentity !== "string" ||
+    !identity.runtimeIdentity.trim()
+  if (missingRuntimeIdentity) {
     missing.add("runtime identity is unavailable")
   }
   if (replayProvenance?.verified !== true) {
@@ -40,6 +44,19 @@ function normalizeReplayProvenance({ replayProvenance, sourceRevision }) {
   if (sourceRevision && identity.sourceCommitSha !== sourceRevision) {
     missing.add("active source commit does not match the recorded source revision")
   }
+  return missing
+}
+
+function normalizeReplayProvenance({
+      replayProvenance,
+      sourceRevision,
+    }) {
+  const identity = replayProvenance?.identity ?? {}
+  const missing = collectMissingReplayProvenance({
+    identity,
+    replayProvenance,
+    sourceRevision,
+  })
   return {
     verified: missing.size === 0,
     missing: [...missing],
@@ -55,28 +72,42 @@ function normalizeReplayProvenance({ replayProvenance, sourceRevision }) {
   }
 }
 
-function createReplayBlockDiagnostic({ original, context }) {
+function collectReplayBlockReasons({ original, context }) {
   const missing = []
-  if (original.replayProvenance?.verified !== true) {
-    missing.push(...(original.replayProvenance?.missing ?? ["original run provenance is unavailable"]))
+  const originalProvenance = original.replayProvenance
+  const activeProvenance = context.replayProvenance
+  if (originalProvenance?.verified !== true) {
+    missing.push(...(originalProvenance?.missing ?? ["original run provenance is unavailable"]))
   }
-  if (context.replayProvenance?.verified !== true) {
-    missing.push(...(context.replayProvenance?.missing ?? ["active runtime provenance is unavailable"]))
+  if (activeProvenance?.verified !== true) {
+    missing.push(...(activeProvenance?.missing ?? ["active runtime provenance is unavailable"]))
   }
-  if (JSON.stringify(original.replayProvenance?.identity) !==
-      JSON.stringify(context.replayProvenance?.identity)) {
+  const provenanceDiffers = JSON.stringify(originalProvenance?.identity) !==
+    JSON.stringify(activeProvenance?.identity)
+  if (provenanceDiffers) {
     missing.push("active source/build/runtime/registry provenance differs from the original run")
   }
   const originalInput = original.replayInput ?? original.input
-  if (!original.inputSha256 || createJsonDigest(originalInput) !== original.inputSha256) {
+  const inputIdentityMatches = original.inputSha256 &&
+    createJsonDigest(originalInput) === original.inputSha256
+  if (!inputIdentityMatches) {
     missing.push("original scenario input identity cannot be verified")
   }
-  if (original.scenarioIdentity !== createScenarioIdentity({
+  const originalScenarioIdentity = createScenarioIdentity({
     strategyId: original.strategyId,
     scenarioId: original.scenarioId,
-  })) {
+  })
+  if (original.scenarioIdentity !== originalScenarioIdentity) {
     missing.push("original strategy/scenario identity cannot be verified")
   }
+  return missing
+}
+
+function createReplayBlockDiagnostic({ original, context }) {
+  const missing = collectReplayBlockReasons({
+    original,
+    context,
+  })
   return missing.length
     ? `Exact replay is blocked because provenance is incomplete or mismatched: ${[...new Set(missing)].join("; ")}.`
     : null
@@ -158,7 +189,10 @@ function createBlockedRecord({
     runId,
     strategyId,
     scenarioId,
-    scenarioIdentity: createScenarioIdentity({ strategyId, scenarioId }),
+    scenarioIdentity: createScenarioIdentity({
+      strategyId,
+      scenarioId,
+    }),
     inputSha256: createJsonDigest(input),
     replayProvenance: replayProvenance === null ? null : structuredClone(replayProvenance),
     sourceRevision,
@@ -193,7 +227,10 @@ function createRecord({
     runId,
     strategyId,
     scenarioId,
-    scenarioIdentity: createScenarioIdentity({ strategyId, scenarioId }),
+    scenarioIdentity: createScenarioIdentity({
+      strategyId,
+      scenarioId,
+    }),
     inputSha256: createJsonDigest(input),
     replayProvenance: structuredClone(replayProvenance),
     sourceRevision,
