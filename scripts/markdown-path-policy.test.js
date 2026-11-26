@@ -20,6 +20,7 @@ test("classifies explicit historical evidence and audit snapshots", () => {
     "apps/harvester/docs/DDD_CLEAN_ARCHITECTURE_AUDIT.md",
     "apps/harvester/docs/DOMAIN_FIRST_DELIVERY_PLAN.md",
     "docs/audits/repository-engineering-audit.md",
+    "docs/archive/roadmap-history-2026-11-26.md",
     "docs/ai-agent/repository-engineering-audit.md",
   ]
 
