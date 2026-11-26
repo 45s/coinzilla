@@ -185,8 +185,7 @@ export function validateSafetyBlockerResolvedFact({ factType, canonicalData, fac
     canonicalData.actionBlockerIds,
   ]
   if (canonicalData.resolution === "AUTHORITATIVE_RECONCILIATION") {
-    if (!canonicalData.resolvedBy.startsWith("reconciliation:") ||
-        operatorFields.some((value) => value !== undefined)) {
+    if (operatorFields.some((value) => value !== undefined)) {
       throw new TypeError("Authoritative reconciliation facts must not contain operator-action metadata")
     }
     return
