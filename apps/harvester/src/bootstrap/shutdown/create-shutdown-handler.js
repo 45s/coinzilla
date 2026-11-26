@@ -246,6 +246,30 @@ function logPhaseOperationFailure({ error, phase, startedAt, now, logPhase } = {
   })
 }
 
+function createTrackedPhaseOperation({
+  pendingPhaseOperations,
+  phase,
+  operation,
+  timeoutMs,
+  startedAt,
+  now,
+  setTimeoutFn,
+} = {}) {
+  const { timeout, operationPromise } = createTrackedPhaseOperation({
+    pendingPhaseOperations,
+    phase,
+    operation,
+    timeoutMs,
+    startedAt,
+    now,
+    setTimeoutFn,
+  })
+  return {
+    timeout,
+    operationPromise,
+  }
+}
+
 async function executePhaseOperation({
   pendingPhaseOperations,
   phaseTimeoutMs,

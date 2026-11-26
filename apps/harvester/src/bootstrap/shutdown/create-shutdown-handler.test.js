@@ -558,6 +558,7 @@ test("drains market work after safety is proven and before Binance disconnects",
   })
   let marketTaskDrained = false
   let bookTaskDrained = false
+  let marketTaskDrained = false
   const marketTask = {
     then(resolve) {
       if (!marketTaskDrained) {
@@ -716,7 +717,10 @@ test("keeps user-data and broker services alive when post-market-drain safety ca
     marketPriceIntake,
   })
 
-  await assertShutdownFailurePreservesStrategyBlocker({ fixture, failure })
+  await assertShutdownFailurePreservesStrategyBlocker({
+    fixture,
+    failure,
+  })
 
   assert.equal(safetyChecks, 2, "Shutdown must repeat the strategy proof after quiescing and draining accepted market work.")
   assert.equal(calls.includes("market-intake-stop"), false, "Market subscriptions must remain connected when the post-drain safety proof fails.")

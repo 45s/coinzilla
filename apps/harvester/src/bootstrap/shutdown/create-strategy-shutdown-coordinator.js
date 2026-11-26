@@ -123,7 +123,10 @@ function createStrategyBlocker({
   status,
 } = {}) {
   const strategyId = getStrategyBlockerIdentity(participant)
-  const blockerReason = getStrategyBlockerReason({ reason, error })
+  const blockerReason = getStrategyBlockerReason({
+    reason,
+    error,
+  })
   const safetySnapshot = getParticipantSnapshot(participant)
   const errorDetails = getStrategyBlockerErrorDetails(error)
   return Object.freeze({

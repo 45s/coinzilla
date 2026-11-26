@@ -948,6 +948,9 @@ test("does not advance to BUY cancellation or recovery proof after a participant
   releaseReconciliation()
   await reconciliationFinished
   const abortedSnapshot = participant.getSafetySnapshot().markets.find(({ symbol }) => symbol === "DOGEUSDT")
-  assertAbortedReconciliationSnapshot({ snapshot: abortedSnapshot, calls })
+  assertAbortedReconciliationSnapshot({
+    snapshot: abortedSnapshot,
+    calls,
+  })
   assert.equal(participant.isSafeToShutdown(), false, "An aborted participant must not publish successful safety.")
 })
