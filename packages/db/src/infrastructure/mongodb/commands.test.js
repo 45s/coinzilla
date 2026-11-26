@@ -506,3 +506,30 @@ test("MongoDB reads reject malformed encoded user field names", async () => {
       && /invalid encoded MongoDB user key/i.test(error.cause.message),
   )
 })
+
+
+test("MongoDB updates refresh stored scalar sort metadata", async () => {
+  const stub = createCommandStub([{
+    ok: 1,
+    value: {
+      _id: "person-1",
+      data: {
+        __coinzilla_key_aWQ: "person-1",
+        __coinzilla_key_bmFtZQ: "Ada",
+      },
+    },
+  }])
+  const operations = createMongoRecordOperations({
+    command: stub.command,
+    databaseName: "app",
+  })
+
+  await operations.update({
+    collection: "people",
+    id: "person-1",
+    changes: { name: "Ada" },
+  })
+
+  assert.equal(stub.calls[0].update.$set["sortData.__coinzilla_key_bmFtZQ.rank"], 4)
+  assert.equal(stub.calls[0].update.$set["sortData.__coinzilla_key_bmFtZQ.value"], "Ada")
+})
