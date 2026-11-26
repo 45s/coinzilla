@@ -1,7 +1,7 @@
 import test from "node:test"
 import assert from "node:assert/strict"
 import { StrategyId } from "../strategies/strategy-ids.js"
-import { validateRecoverySellerSubmissionOwnership } from "./recovery-seller-submission-ownership.js"
+import { validateStrategySubmissionOwnership } from "./recovery-seller-submission-ownership.js"
 
 const recoverySellerOwnership = Object.freeze({
   strategyId: StrategyId.RECOVERY_SELLER,
@@ -12,7 +12,7 @@ const recoverySellerOwnership = Object.freeze({
 const recoverySellerSellOrder = Object.freeze({ side: "SELL" })
 
 test("returns immutable ownership for a matching Recovery Seller submission", () => {
-  const ownership = validateRecoverySellerSubmissionOwnership({
+  const ownership = validateStrategySubmissionOwnership({
     order: recoverySellerSellOrder,
     purpose: "RECOVERY_SELL",
     ownership: recoverySellerOwnership,
@@ -36,7 +36,7 @@ test("returns immutable ownership for a matching Recovery Seller submission", ()
 
 test("rejects ownership metadata from a strategy outside the supported CG and RS strategies", () => {
   assert.throws(
-    () => validateRecoverySellerSubmissionOwnership({
+    () => validateStrategySubmissionOwnership({
       order: recoverySellerSellOrder,
       purpose: "RECOVERY_SELL",
       ownership: {
@@ -51,7 +51,7 @@ test("rejects ownership metadata from a strategy outside the supported CG and RS
 
 test("rejects ownership metadata for a different submission purpose", () => {
   assert.throws(
-    () => validateRecoverySellerSubmissionOwnership({
+    () => validateStrategySubmissionOwnership({
       order: recoverySellerSellOrder,
       purpose: "RECOVERY_SELL",
       ownership: {
@@ -66,7 +66,7 @@ test("rejects ownership metadata for a different submission purpose", () => {
 
 test("rejects Recovery Seller ownership metadata for an unowned submission", () => {
   assert.throws(
-    () => validateRecoverySellerSubmissionOwnership({
+    () => validateStrategySubmissionOwnership({
       purpose: null,
       ownership: recoverySellerOwnership,
     }),
@@ -83,7 +83,7 @@ const conservativeOwnership = Object.freeze({
 })
 
 test("accepts a Conservative recovery SELL with exact CG Position ownership and no RS cycle identity", () => {
-  const ownership = validateRecoverySellerSubmissionOwnership({
+  const ownership = validateStrategySubmissionOwnership({
     order: recoverySellerSellOrder,
     purpose: "RECOVERY_SELL",
     ownership: conservativeOwnership,
@@ -102,7 +102,7 @@ test("accepts a Conservative recovery SELL with exact CG Position ownership and 
 
 test("rejects a recovery SELL when strategy ownership is missing", () => {
   assert.throws(
-    () => validateRecoverySellerSubmissionOwnership({
+    () => validateStrategySubmissionOwnership({
       order: recoverySellerSellOrder,
       purpose: "RECOVERY_SELL",
     }),
@@ -113,7 +113,7 @@ test("rejects a recovery SELL when strategy ownership is missing", () => {
 
 test("rejects Conservative ownership when it carries an RS-only cycle identity", () => {
   assert.throws(
-    () => validateRecoverySellerSubmissionOwnership({
+    () => validateStrategySubmissionOwnership({
       order: recoverySellerSellOrder,
       purpose: "RECOVERY_SELL",
       ownership: {
@@ -129,7 +129,7 @@ test("rejects Conservative ownership when it carries an RS-only cycle identity",
 
 test("rejects a CG owner using the Recovery Seller BUY purpose", () => {
   assert.throws(
-    () => validateRecoverySellerSubmissionOwnership({
+    () => validateStrategySubmissionOwnership({
       order: {
         ...recoverySellerSellOrder,
         side: "BUY",
@@ -147,7 +147,7 @@ test("rejects a CG owner using the Recovery Seller BUY purpose", () => {
 
 test("rejects an RS owner using a Conservative-only purpose", () => {
   assert.throws(
-    () => validateRecoverySellerSubmissionOwnership({
+    () => validateStrategySubmissionOwnership({
       order: {
         ...recoverySellerSellOrder,
         side: "BUY",

@@ -85,7 +85,7 @@ function normalizeSubmissionOwnership({ order, purpose, ownership } = {}) {
  * @param {object} [input.ownership] Strategy ownership metadata.
  * @returns {object|undefined} Normalized ownership fields for durable facts.
  */
-export function validateRecoverySellerSubmissionOwnership({ order, purpose, ownership } = {}) {
+export function validateStrategySubmissionOwnership({ order, purpose, ownership } = {}) {
   if (purpose === null) {
     if (ownership !== undefined) {
       throw new TypeError("Unowned order submissions cannot persist strategy ownership")
@@ -98,3 +98,7 @@ export function validateRecoverySellerSubmissionOwnership({ order, purpose, owne
     ownership,
   })
 }
+
+
+// Compatibility alias for Recovery Seller accounting callers during migration.
+export const validateRecoverySellerSubmissionOwnership = validateStrategySubmissionOwnership

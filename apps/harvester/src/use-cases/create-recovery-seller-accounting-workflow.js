@@ -12,7 +12,7 @@ import {
 import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { createPositionId } from "../domain/portfolio/position.js"
 import { OrderRegistry } from "../domain/orders/order-registry.js"
-import { validateRecoverySellerSubmissionOwnership } from "../domain/orders/recovery-seller-submission-ownership.js"
+import { validateStrategySubmissionOwnership } from "../domain/orders/recovery-seller-submission-ownership.js"
 import { StrategyId } from "../domain/strategies/strategy-ids.js"
 import {
   RECOVERY_SELLER_ACCOUNTING_ERROR_CODES,
@@ -694,7 +694,7 @@ function reserveRecoverySellerSellCycleTransition({
   if (!(order instanceof CanonicalOrder) || order.side !== "SELL") {
     throw new TypeError("Recovery Seller cycle reservation requires a canonical SELL order")
   }
-  const normalizedOwnership = validateRecoverySellerSubmissionOwnership({
+  const normalizedOwnership = validateStrategySubmissionOwnership({
     order,
     purpose: "RECOVERY_SELL",
     ownership,
