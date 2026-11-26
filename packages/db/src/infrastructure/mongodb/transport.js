@@ -219,12 +219,16 @@ export function createMongoTransport({
       const onClose = () => {
         failConnection(new Error("MongoDB socket closed"))
       }
+      const onEnd = () => {
+        failConnection(new Error("MongoDB socket ended"))
+        socket?.destroy()
+      }
       const connectEvent = tlsOptions ? "secureConnect" : "connect"
       socket.setNoDelay?.(true)
       socket.on(connectEvent, onConnected)
       socket.on("data", handleData)
       socket.on("error", onError)
-      socket.on("end", onClose)
+      socket.on("end", onEnd)
       socket.on("close", onClose)
       connectTimer = setTimeout(() => {
         failConnection(new Error("MongoDB connection timed out"))
