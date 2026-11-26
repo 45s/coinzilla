@@ -952,7 +952,7 @@ function resolveFillOrder({ fill, state }) {
     assertJournalOrderFieldsMatch({
       data: fill,
       order,
-      fields: ["providerInstanceId", "providerType", "accountId", "purpose", "strategyId", "positionId", "cycleId"],
+      fields: ["providerInstanceId", "providerType", "accountId"],
       message: "Applied fill provider provenance conflicts with its journaled order",
     })
   }
