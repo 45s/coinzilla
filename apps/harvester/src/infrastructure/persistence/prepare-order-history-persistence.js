@@ -17,15 +17,31 @@ import { createRuntimeErrorObserver } from "./create-runtime-error-observer.js"
 import { HARVESTER_RELATIONAL_MIGRATIONS } from "./relational-migrations.js"
 import { assertHarvesterDatabaseIsolation } from "./resolve-harvester-database-filename.js"
 
+function createPreparationFailureLogDetails({ error, relational } = {}) {
+  const details = {
+    message: relational
+      ? "Relational trading history is unavailable; legacy order history remains active"
+      : "Order history persistence is unavailable",
+    error,
+    errorName: error?.name ?? "Error",
+    errorCode: error?.code ?? "HARVESTER_ORDER_HISTORY_PERSISTENCE_FAILED",
+    errorMessage: error?.message ?? String(error),
+  }
+  if (error?.context !== undefined) {
+    details.errorContext = error.context
+  }
+  if (error?.context?.stage !== undefined) {
+    details.errorStage = error.context.stage
+  }
+  return details
+}
+
 function logPreparationFailure({ logger, error, relational = false } = {}) {
   try {
-    logger?.error?.({
-      message: relational
-        ? "Relational trading history is unavailable; legacy order history remains active"
-        : "Order history persistence is unavailable",
-      errorName: error?.name ?? "Error",
-      errorCode: error?.code ?? "HARVESTER_ORDER_HISTORY_PERSISTENCE_FAILED",
-    })
+    logger?.error?.(createPreparationFailureLogDetails({
+      error,
+      relational,
+    }))
   } catch {
     // Optional persistence diagnostics must not prevent Harvester startup.
   }

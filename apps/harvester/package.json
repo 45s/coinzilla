@@ -154,6 +154,12 @@
       "src/bootstrap/subscriptions/subscribe-to-market-data.test.js",
       "src/use-cases/conservative-initial-buy-scenario.test.js",
       "src/use-cases/conservative-sell-accounting-scenario.test.js",
+      "test/scenarios/recovery-seller/registry-and-runner.scenario.test.js",
+      "test/scenarios/recovery-seller/authorization-custody.scenario.test.js",
+      "test/scenarios/recovery-seller/buy-accounting.scenario.test.js",
+      "test/scenarios/recovery-seller/mixed-sell-planning.scenario.test.js",
+      "test/scenarios/recovery-seller/mixed-sell-fill-allocation.scenario.test.js",
+      "src/use-cases/create-recovery-seller-action-authorizer.test.js",
       "src/application/scenario-runner/create-scenario-runner.test.js",
       "src/infrastructure/scenario-runner/create-process-scenario-adapter.test.js",
       "src/infrastructure/scenario-runner/scenario-worker-message-handler.test.js",
@@ -190,6 +196,7 @@
     "operational-state:diagnose": "node scripts/diagnose-operational-state.js",
     "operational-state:reset:dev": "node --env-file=.env.development scripts/reset-operational-state.js",
     "archive:push": "node --env-file=.env.development scripts/archive-testnet-session.js",
-    "archive:debug": "node --env-file=.env.development scripts/archive-debug-session.js"
+    "archive:debug": "node --env-file=.env.development scripts/archive-debug-session.js",
+    "scenarios:conservative": "node scripts/run-conservative-scenarios.js"
   }
 }

@@ -2310,3 +2310,42 @@ test("promotes a pending order and links its earlier exchange-identified fill", 
     }),
   })
 })
+
+test("reports the original relational migration failure while retaining legacy persistence", async (t) => {
+  const context = await createTestContext({ t })
+  const firstLegacyRecord = createLegacyRecord({
+    clientOrderId: "legacy-order-first",
+  })
+  const secondLegacyRecord = createLegacyRecord({
+    clientOrderId: "legacy-order-second",
+  })
+  await seedLegacyRecord({
+    filename: context.filename,
+    record: firstLegacyRecord,
+  })
+  await seedLegacyRecord({
+    filename: context.filename,
+    record: secondLegacyRecord,
+  })
+
+  const logEntries = []
+  const persistence = await prepareOrderHistoryPersistence({
+    tradingMode: "testnet",
+    env: {
+      HARVESTER_DATABASE_DIRECTORY: context.directory,
+    },
+    eventBus: context.eventBus,
+    logger: {
+      error: (entry) => logEntries.push(entry),
+    },
+  })
+  context.setPersistence(persistence)
+
+  assert.ok(persistence, "A relational migration failure must preserve the existing legacy order-history persistence.")
+  assert.equal(persistence.relationalDatabase, null, "A failed relational migration must not expose a partially migrated database.")
+  assert.ok(persistence.relationalError instanceof Error, "The degraded persistence result must retain the original migration error.")
+  assert.equal(logEntries.length, 1, "The relational fallback decision must emit one actionable failure record.")
+  assert.equal(logEntries[0].error, persistence.relationalError, "The structured log must preserve the original migration error object and cause chain.")
+  assert.equal(logEntries[0].errorMessage, persistence.relationalError.message, "The log must expose the concrete migration failure message.")
+  assert.equal(logEntries[0].errorCode, persistence.relationalError.code, "The log must preserve the stable migration error code.")
+})

@@ -77,6 +77,7 @@ function createAuthorizer({
   actionOverride = action,
   snapshotOverride = snapshot,
   portfolioOverride,
+  investment = 100,
 } = {}) {
   let latchCount = 0
   const state = createAuthorizerState({ activeOrders })
@@ -98,7 +99,7 @@ function createAuthorizer({
   const authorize = createRecoverySellerActionAuthorizer({
     state,
     recoverySellerPairs: {
-      [symbol]: { investment: 100 },
+      [symbol]: { investment },
     },
     recoverySellerStopWorkflow,
     getPortfolio: () => portfolio,
@@ -248,4 +249,88 @@ test("latches STOP rather than double-selling base reserved by a same-market CG 
 
   assert.equal(result.ok, false, "An RS SELL that overlaps a CG-reserved base quantity must fail closed.")
   assert.equal(runtime.getLatchCount(), 1, "An attempted cross-strategy double-sell must latch durable account-wide STOP.")
+})
+
+
+test("RS-002-006-B: keeps the unfilled portion of a partially filled RS BUY reserved in account allocation", async () => {
+  const partiallyFilledRecoveryBuy = makeActiveOrder({
+    clientOrderId: "rs-partially-filled-buy",
+    side: "BUY",
+    remainingQuantity: "6",
+    limitPrice: "10",
+  })
+  partiallyFilledRecoveryBuy.status = "PARTIALLY_FILLED"
+  partiallyFilledRecoveryBuy.strategyId = StrategyId.RECOVERY_SELLER
+
+  const runtime = createAuthorizer({
+    quoteBalance: "65",
+    activeOrders: [partiallyFilledRecoveryBuy],
+  })
+  const result = await runtime.authorize()
+
+  assert.equal(result.ok, true, "A valid partially filled RS BUY must remain a normal account commitment.")
+  assert.equal(result.data.skipped, true, "The new action must defer when the 60-unit unfilled RS commitment leaves only 5 quote units available.")
+  assert.equal(result.data.reason, "INSUFFICIENT_QUOTE_BALANCE", "The application allocator must report the remaining partial-order commitment as the exact deferral cause.")
+  assert.equal(runtime.getLatchCount(), 0, "A valid partial-order reservation must not latch STOP.")
+})
+
+test("RS-002-020-B: counts an owned pending BUY commitment exactly once at the pair investment cap", async () => {
+  const pendingRecoveryBuy = makeActiveOrder({
+    clientOrderId: "rs-pending-buy-at-cap",
+    side: "BUY",
+    remainingQuantity: "6",
+    limitPrice: "10",
+  })
+  pendingRecoveryBuy.status = "PARTIALLY_FILLED"
+  pendingRecoveryBuy.strategyId = StrategyId.RECOVERY_SELLER
+
+  const runtime = createAuthorizer({
+    quoteBalance: "1000",
+    activeOrders: [pendingRecoveryBuy],
+    actionOverride: {
+      side: "BUY",
+      quantity: "2",
+      price: "10",
+      positionId: "rs-position-1",
+    },
+    snapshotOverride: {
+      planInput: {
+        recoveryQuantity: "0",
+        verifiedUnreservedLegacyQuantity: "0",
+        recoveryCostBasis: "20",
+      },
+      cumulativeNetSellProceeds: "0",
+    },
+  })
+  const result = await runtime.authorize()
+
+  assert.equal(result.ok, true, "An owned pending RS commitment must be a valid account allocation input.")
+  assert.equal(result.data.allowed, true, "20 spent + 60 pending commitment + 20 new action must be accepted at exact 100 investment equality, proving the pending commitment is counted once.")
+  assert.equal(runtime.getLatchCount(), 0, "Exact cap equality must not latch STOP.")
+
+  const belowCapRuntime = createAuthorizer({
+    quoteBalance: "1000",
+    investment: 99,
+    activeOrders: [pendingRecoveryBuy],
+    actionOverride: {
+      side: "BUY",
+      quantity: "2",
+      price: "10",
+      positionId: "rs-position-1",
+    },
+    snapshotOverride: {
+      planInput: {
+        recoveryQuantity: "0",
+        verifiedUnreservedLegacyQuantity: "0",
+        recoveryCostBasis: "20",
+      },
+      cumulativeNetSellProceeds: "0",
+    },
+  })
+  const belowCapResult = await belowCapRuntime.authorize()
+
+  assert.equal(belowCapResult.ok, true, "A below-cap allocation is a normal deferral, not an accounting error.")
+  assert.equal(belowCapResult.data.skipped, true, "20 spent + 60 pending + 20 proposed must exceed a 99 pair cap.")
+  assert.equal(belowCapResult.data.reason, "PAIR_INVESTMENT_LIMIT", "The pending commitment must be included once; omitting it would incorrectly allow the proposed BUY.")
+  assert.equal(belowCapRuntime.getLatchCount(), 0, "A pair investment limit deferral must not latch STOP.")
 })

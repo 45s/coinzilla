@@ -1,0 +1,794 @@
+import test from "node:test"
+import assert from "node:assert/strict"
+import { addDecimal } from "@coinzilla/utils"
+import {
+  Asset,
+  CanonicalOrder,
+  Commission,
+  Fill,
+  Market,
+  Money,
+  Quantity,
+} from "@coinzilla/entities"
+import { OrderRegistry } from "../../../src/domain/orders/order-registry.js"
+import { StrategyId } from "../../../src/domain/strategies/strategy-ids.js"
+import { createMixedSellFillAllocation } from "../../../src/domain/strategies/recovery-seller/mixed-sell-fill-allocation.js"
+import { recoverySellerScenarioRegistry } from "./registry/index.js"
+import { recoverySellerMixedSellPlanningScenarios } from "./scenarios/mixed-sell-planning.js"
+import { runRecoverySellerDomainScenario } from "./runners/run-domain-scenario.js"
+import { Portfolio } from "../../../src/domain/portfolio/portfolio.js"
+import { createOrderOwnership } from "../../../src/domain/orders/order-ownership.js"
+import {
+  createLegacyPosition,
+  createLegacyPositionAccounting,
+} from "../../../src/domain/strategies/recovery-seller/legacy-position.js"
+import {
+  createMixedSellFillReconciliation,
+  stageMixedSellFillAllocation,
+} from "../../../src/domain/strategies/recovery-seller/mixed-sell-fill-reconciliation.js"
+import { createRecoverySellerAccountingWorkflow } from "../../../src/use-cases/create-recovery-seller-accounting-workflow.js"
+
+function createMarket({ input }) {
+  const baseAsset = new Asset({
+    id: input.baseAssetId,
+    code: input.baseAssetCode,
+  })
+  const quoteAsset = new Asset({
+    id: input.quoteAssetId,
+    code: input.quoteAssetCode,
+  })
+  const market = new Market({
+    venue: input.venue,
+    symbol: input.marketSymbol,
+    baseAsset,
+    quoteAsset,
+  })
+  return {
+    baseAsset,
+    quoteAsset,
+    market,
+  }
+}
+
+function createRegisteredSellOrder({ input, marketData }) {
+  return new CanonicalOrder({
+    clientOrderId: input.clientOrderId,
+    brokerOrderId: input.brokerOrderId,
+    market: marketData.market,
+    side: "SELL",
+    type: "LIMIT",
+    limitPrice: new Money({
+      amount: input.price,
+      asset: marketData.quoteAsset,
+    }),
+    originalQuantity: new Quantity({
+      amount: input.fillQuantity,
+      asset: marketData.baseAsset,
+    }),
+    executedQuantity: new Quantity({
+      amount: input.fillQuantity,
+      asset: marketData.baseAsset,
+    }),
+    status: "FILLED",
+    createdAt: 1,
+    acknowledgedAt: 2,
+    updatedAt: 3,
+    completedAt: 3,
+  })
+}
+
+function createOrderRegistry({ input, order }) {
+  return new OrderRegistry({
+    orders: [order],
+    ownerships: [{
+      clientOrderId: input.clientOrderId,
+      strategyId: StrategyId.RECOVERY_SELLER,
+      positionId: input.positionId,
+      purpose: "RECOVERY_SELL",
+      cycleId: input.cycleId,
+    }],
+  })
+}
+
+function createCanonicalSellFill({ input, marketData }) {
+  return new Fill({
+    tradeId: input.tradeId,
+    brokerOrderId: input.brokerOrderId,
+    clientOrderId: input.clientOrderId,
+    market: marketData.market,
+    side: "SELL",
+    price: new Money({
+      amount: input.price,
+      asset: marketData.quoteAsset,
+    }),
+    quantity: new Quantity({
+      amount: input.fillQuantity,
+      asset: marketData.baseAsset,
+    }),
+    quoteQuantity: new Money({
+      amount: input.quoteProceeds,
+      asset: marketData.quoteAsset,
+    }),
+    liquidityRole: "MAKER",
+    executedAt: 4,
+    commissions: [
+      new Commission({
+        amount: new Money({
+          amount: input.quoteCommission,
+          asset: marketData.quoteAsset,
+        }),
+      }),
+    ],
+    commissionStatus: "COMPLETE",
+  })
+}
+
+function createMixedSellAllocationFixture({ input }) {
+  const marketData = createMarket({ input })
+  const order = createRegisteredSellOrder({
+    input,
+    marketData,
+  })
+  const orderRegistry = createOrderRegistry({
+    input,
+    order,
+  })
+  const fill = createCanonicalSellFill({
+    input,
+    marketData,
+  })
+  const allocation = createMixedSellFillAllocation({
+    fill,
+    orderRegistry,
+    recoveryQuantity: input.recoveryQuantity,
+    legacyQuantity: input.legacyQuantity,
+  })
+  return {
+    fill,
+    allocation,
+  }
+}
+
+function evaluateMixedSellFillAllocation({ input }) {
+  const { fill, allocation } = createMixedSellAllocationFixture({ input })
+  const [recoveryCommission] = allocation.recovery.commissions
+  const [legacyCommission] = allocation.legacy.commissions
+  return {
+    fillIdentityPreserved: allocation.fillId === fill.id,
+    orderOwnership: {
+      strategyId: allocation.orderOwnership.strategyId,
+      positionId: allocation.orderOwnership.positionId,
+      purpose: allocation.orderOwnership.purpose,
+      cycleId: allocation.orderOwnership.cycleId,
+    },
+    recovery: allocation.recovery,
+    legacy: allocation.legacy,
+    baseQuantityConserved: addDecimal({
+      left: allocation.recovery.grossBaseQuantity,
+      right: allocation.legacy.grossBaseQuantity,
+    }) === fill.quantity.amount,
+    quoteProceedsConserved: addDecimal({
+      left: allocation.recovery.quoteProceeds,
+      right: allocation.legacy.quoteProceeds,
+    }) === fill.quoteQuantity.amount,
+    quoteCommissionConserved: addDecimal({
+      left: recoveryCommission.amount,
+      right: legacyCommission.amount,
+    }) === input.quoteCommission,
+  }
+}
+
+test("RS-003-008: one canonical SELL Fill is split exactly between recovery and legacy with quantity conservation", async () => {
+  const scenario = recoverySellerMixedSellPlanningScenarios.find((item) => item.id === "RS-003-008")
+  assert.ok(scenario,
+    "RS-003-008 must exist as a declarative exact recovery/legacy allocation scenario.")
+  assert.ok(recoverySellerScenarioRegistry.includes(scenario),
+    "The shared RS registry must include RS-003-008.")
+  const result = await runRecoverySellerDomainScenario({
+    scenario,
+    handlers: {
+      "allocate-mixed-sell-fill": ({ input }) => evaluateMixedSellFillAllocation({ input }),
+    },
+  })
+  assert.deepEqual(
+    result.results[0],
+    scenario.then,
+    "The canonical Fill allocation must preserve both exact ownership slices and all conservation identities.",
+  )
+})
+
+
+const multiFillScenarioPositionId = "rs-multi-fill-position"
+const multiFillScenarioCycleId = "rs-multi-fill-cycle"
+
+function createMultiFillScenarioMarket() {
+  const baseAsset = new Asset({
+    id: "binance:ZRO",
+    code: "ZRO",
+  })
+  const quoteAsset = new Asset({
+    id: "binance:USDT",
+    code: "USDT",
+  })
+  const market = new Market({
+    venue: "binance",
+    symbol: "ZROUSDT",
+    baseAsset,
+    quoteAsset,
+  })
+  return {
+    baseAsset,
+    quoteAsset,
+    market,
+  }
+}
+
+function createMultiFillScenarioBuyPortfolio({ market, baseAsset, quoteAsset }) {
+  const buyFill = new Fill({
+    tradeId: "rs-multi-fill-buy-trade",
+    brokerOrderId: "rs-multi-fill-buy-order",
+    clientOrderId: "rs-multi-fill-buy-client",
+    market,
+    side: "BUY",
+    price: new Money({
+      amount: "2",
+      asset: quoteAsset,
+    }),
+    quantity: new Quantity({
+      amount: "5.01",
+      asset: baseAsset,
+    }),
+    quoteQuantity: new Money({
+      amount: "10.02",
+      asset: quoteAsset,
+    }),
+    commissions: [],
+    commissionStatus: "COMPLETE",
+  })
+  return new Portfolio().applyFill({
+    fill: buyFill,
+    positionId: multiFillScenarioPositionId,
+    strategyId: StrategyId.RECOVERY_SELLER,
+  }).portfolio
+}
+
+function createMultiFillOpenSellOrder({ market, baseAsset, quoteAsset }) {
+  return new CanonicalOrder({
+    clientOrderId: "rs-multi-fill-sell-client",
+    brokerOrderId: "rs-multi-fill-sell-order",
+    market,
+    side: "SELL",
+    type: "LIMIT_MAKER",
+    limitPrice: new Money({
+      amount: "2",
+      asset: quoteAsset,
+    }),
+    originalQuantity: new Quantity({
+      amount: "5.01",
+      asset: baseAsset,
+    }),
+    executedQuantity: new Quantity({
+      amount: "0",
+      asset: baseAsset,
+    }),
+    status: "OPEN",
+    createdAt: 10,
+    acknowledgedAt: 11,
+    updatedAt: 11,
+  })
+}
+
+function createMultiFillTerminalSellOrder({ openSellOrder, baseAsset }) {
+  return new CanonicalOrder({
+    clientOrderId: openSellOrder.clientOrderId,
+    brokerOrderId: openSellOrder.brokerOrderId,
+    market: openSellOrder.market,
+    side: "SELL",
+    type: "LIMIT_MAKER",
+    limitPrice: openSellOrder.limitPrice,
+    originalQuantity: openSellOrder.originalQuantity,
+    executedQuantity: new Quantity({
+      amount: "5.01",
+      asset: baseAsset,
+    }),
+    status: "FILLED",
+    createdAt: 10,
+    acknowledgedAt: 11,
+    updatedAt: 12,
+    completedAt: 12,
+  })
+}
+
+function createMultiFillScenarioOwnership({ openSellOrder }) {
+  return createOrderOwnership({
+    ownership: {
+      strategyId: StrategyId.RECOVERY_SELLER,
+      positionId: multiFillScenarioPositionId,
+      purpose: "RECOVERY_SELL",
+      cycleId: multiFillScenarioCycleId,
+    },
+    clientOrderId: openSellOrder.clientOrderId,
+    brokerOrderId: openSellOrder.brokerOrderId,
+  })
+}
+
+function createMultiFillScenarioOrders({ market, baseAsset, quoteAsset }) {
+  const openSellOrder = createMultiFillOpenSellOrder({
+    market,
+    baseAsset,
+    quoteAsset,
+  })
+  const terminalSellOrder = createMultiFillTerminalSellOrder({
+    openSellOrder,
+    baseAsset,
+  })
+  const ownership = createMultiFillScenarioOwnership({ openSellOrder })
+  const openOrderRegistry = new OrderRegistry({
+    orders: [openSellOrder],
+    ownerships: [ownership],
+  })
+  const terminalOrderRegistry = new OrderRegistry({
+    orders: [terminalSellOrder],
+    ownerships: [ownership],
+  })
+  return {
+    openSellOrder,
+    terminalSellOrder,
+    ownership,
+    openOrderRegistry,
+    terminalOrderRegistry,
+  }
+}
+
+function createMultiFillScenarioFills({ market, baseAsset, quoteAsset, openSellOrder }) {
+  return [
+    new Fill({
+      tradeId: "rs-multi-fill-sell-trade-1",
+      brokerOrderId: openSellOrder.brokerOrderId,
+      clientOrderId: openSellOrder.clientOrderId,
+      market,
+      side: "SELL",
+      price: new Money({
+        amount: "2.1",
+        asset: quoteAsset,
+      }),
+      quantity: new Quantity({
+        amount: "2.5",
+        asset: baseAsset,
+      }),
+      quoteQuantity: new Money({
+        amount: "5.25",
+        asset: quoteAsset,
+      }),
+      commissions: [new Commission({
+        amount: new Money({
+          amount: "0.001",
+          asset: quoteAsset,
+        }),
+      })],
+      commissionStatus: "COMPLETE",
+      executedAt: 12,
+    }),
+    new Fill({
+      tradeId: "rs-multi-fill-sell-trade-2",
+      brokerOrderId: openSellOrder.brokerOrderId,
+      clientOrderId: openSellOrder.clientOrderId,
+      market,
+      side: "SELL",
+      price: new Money({
+        amount: "2.1",
+        asset: quoteAsset,
+      }),
+      quantity: new Quantity({
+        amount: "2.51",
+        asset: baseAsset,
+      }),
+      quoteQuantity: new Money({
+        amount: "5.271",
+        asset: quoteAsset,
+      }),
+      commissions: [new Commission({
+        amount: new Money({
+          amount: "0.002",
+          asset: quoteAsset,
+        }),
+      })],
+      commissionStatus: "COMPLETE",
+      executedAt: 13,
+    }),
+  ]
+}
+
+function createMultiFillScenarioAllocations({ canonicalFills, terminalOrderRegistry }) {
+  return [
+    createMixedSellFillAllocation({
+      fill: canonicalFills[0],
+      orderRegistry: terminalOrderRegistry,
+      recoveryQuantity: "2.5",
+      legacyQuantity: "0",
+    }),
+    createMixedSellFillAllocation({
+      fill: canonicalFills[1],
+      orderRegistry: terminalOrderRegistry,
+      recoveryQuantity: "2.5",
+      legacyQuantity: "0.01",
+    }),
+  ]
+}
+
+function createMultiFillScenarioReconciliation({
+  openSellOrder,
+  openOrderRegistry,
+  canonicalFillAllocations,
+  stageCount,
+}) {
+  let reconciliation = createMixedSellFillReconciliation({
+    order: openSellOrder,
+    orderRegistry: openOrderRegistry,
+  })
+  for (const allocation of canonicalFillAllocations.slice(0, stageCount)) {
+    const { applied, reconciliation: nextReconciliation } = stageMixedSellFillAllocation({
+      reconciliation,
+      allocation,
+    })
+    assert.equal(applied, true,
+      "Each distinct canonical partial SELL Fill must be staged exactly once before terminal reconciliation.")
+    reconciliation = nextReconciliation
+  }
+  return reconciliation
+}
+
+function createMultiFillScenarioWorkflow({ initialPortfolio, openOrderRegistry, market, failDurableCommit }) {
+  let durableCommitCount = 0
+  const workflow = createRecoverySellerAccountingWorkflow({
+    initialPortfolio,
+    initialOrderRegistry: openOrderRegistry,
+    initialLegacyPositions: [{
+      market,
+      position: createLegacyPosition({
+        invested: "100",
+        quantity: "50",
+      }),
+      accounting: createLegacyPositionAccounting(),
+    }],
+    onOperationalStateRecoverySellerMixedSellReconciled: async () => {
+      durableCommitCount += 1
+      if (failDurableCommit) {
+        return {
+          ok: false,
+          errors: [new Error("durable terminal reconciliation append failed")],
+        }
+      }
+      return {
+        ok: true,
+        data: { durable: true },
+      }
+    },
+  })
+  return {
+    workflow,
+    durableCommitCount: () => durableCommitCount,
+  }
+}
+
+function createMultiFillAccountingScenarioFixture({ stageCount = 2, failDurableCommit = false } = {}) {
+  const assets = createMultiFillScenarioMarket()
+  const initialPortfolio = createMultiFillScenarioBuyPortfolio(assets)
+  const orders = createMultiFillScenarioOrders(assets)
+  const canonicalFills = createMultiFillScenarioFills({
+    ...assets,
+    openSellOrder: orders.openSellOrder,
+  })
+  const canonicalFillAllocations = createMultiFillScenarioAllocations({
+    canonicalFills,
+    terminalOrderRegistry: orders.terminalOrderRegistry,
+  })
+  const reconciliation = createMultiFillScenarioReconciliation({
+    openSellOrder: orders.openSellOrder,
+    openOrderRegistry: orders.openOrderRegistry,
+    canonicalFillAllocations,
+    stageCount,
+  })
+  const workflowState = createMultiFillScenarioWorkflow({
+    initialPortfolio,
+    openOrderRegistry: orders.openOrderRegistry,
+    market: assets.market,
+    failDurableCommit,
+  })
+  return {
+    canonicalFills,
+    canonicalFillAllocations,
+    durableCommitCount: workflowState.durableCommitCount,
+    market: assets.market,
+    ...orders,
+    reconciliation,
+    workflow: workflowState.workflow,
+  }
+}
+
+async function commitMultiFillAccountingScenario(fixture) {
+  const reservation = await fixture.workflow.reserveSellCycle({
+    order: fixture.openSellOrder,
+    ownership: fixture.ownership,
+    durableIntent: true,
+  })
+  assert.equal(reservation.ok, true,
+    reservation.errors?.[0]?.message ?? "The sole mixed SELL must be durably reserved before reconciliation.")
+  return fixture.workflow.reconcileTerminalMixedSell({
+    reconciliation: fixture.reconciliation,
+    terminalOrder: fixture.terminalSellOrder,
+    canonicalFills: fixture.canonicalFills,
+    canonicalFillAllocations: fixture.canonicalFillAllocations,
+    minProfit: "0.2",
+  })
+}
+
+test("RS-006-003-A: multiple partial SELL fills are accumulated and reconciled exactly", async () => {
+  const fixture = createMultiFillAccountingScenarioFixture()
+  const result = await commitMultiFillAccountingScenario(fixture)
+
+  assert.equal(result.ok, true,
+    result.errors?.[0]?.message ?? "The complete canonical partial-fill history must reconcile successfully.")
+  assert.equal(result.data.applied, true,
+    "The terminal reconciliation must commit both strategy accounting projections from the complete canonical Fill set.")
+  assert.equal(result.data.profitability.eligible, true,
+    "Recovery, legacy and combined profitability must pass using the accumulated net proceeds.")
+  assert.equal(addDecimal({
+    left: result.data.profitability.recovery.netQuoteProceeds,
+    right: result.data.profitability.legacy.netQuoteProceeds,
+  }), "10.518",
+  "Both partial fills must contribute gross proceeds less their actual quote commissions exactly once.")
+  assert.equal(fixture.workflow.getPortfolio().getPosition({
+    positionId: multiFillScenarioPositionId,
+  }).baseQuantity.amount, "0.01",
+  "The accumulated recovery allocation must debit exactly 5 base units from the 5.01-unit recovery Position.")
+  assert.equal(fixture.workflow.getLegacyPosition({
+    marketId: fixture.market.id,
+  }).remainingQuantity, "49.99",
+  "Only the 0.01-unit legacy allocation from the second partial Fill may debit legacy inventory.")
+  const canonicalFillIds = new Set(fixture.canonicalFills.map(({ id }) => id))
+  const appliedSellFillCount = fixture.workflow.getPortfolio().appliedFillIds
+    .filter((fillId) => canonicalFillIds.has(fillId)).length
+  assert.equal(appliedSellFillCount, 2,
+    "Both distinct canonical partial SELL Fill identities must be applied exactly once.")
+  assert.equal(fixture.workflow.getOrderRegistry().getActiveOrders().length, 0,
+    "The shared SELL reservation may be released only after the two projections commit.")
+  assert.equal(fixture.durableCommitCount(), 1,
+    "The durable mixed-SELL reconciliation boundary must be acknowledged once for the complete Fill set.")
+})
+
+test("RS-006-003-B: duplicate terminal mixed-SELL replay is an exact no-op", async () => {
+  const fixture = createMultiFillAccountingScenarioFixture()
+  const first = await commitMultiFillAccountingScenario(fixture)
+  assert.equal(first.ok, true,
+    first.errors?.[0]?.message ?? "The initial complete partial-fill history must commit.")
+  const portfolioAfterFirst = fixture.workflow.getPortfolio()
+  const legacyPositionAfterFirst = fixture.workflow.getLegacyPosition({ marketId: fixture.market.id })
+  const legacyAccountingAfterFirst = fixture.workflow.getLegacyAccounting({ marketId: fixture.market.id })
+  const registryAfterFirst = fixture.workflow.getOrderRegistry()
+
+  const replay = await fixture.workflow.reconcileTerminalMixedSell({
+    reconciliation: fixture.reconciliation,
+    terminalOrder: fixture.terminalSellOrder,
+    canonicalFills: fixture.canonicalFills,
+    canonicalFillAllocations: fixture.canonicalFillAllocations,
+    minProfit: "0.2",
+  })
+
+  assert.equal(replay.ok, true,
+    replay.errors?.[0]?.message ?? "An identical terminal mixed-SELL replay must be accepted as an exact duplicate.")
+  assert.equal(replay.data.duplicate, true,
+    "The replay must be identified as a duplicate rather than applying either projection again.")
+  assert.strictEqual(fixture.workflow.getPortfolio(), portfolioAfterFirst,
+    "Duplicate replay must preserve the exact shared Portfolio snapshot.")
+  assert.strictEqual(fixture.workflow.getLegacyPosition({ marketId: fixture.market.id }), legacyPositionAfterFirst,
+    "Duplicate replay must preserve the exact legacy Position snapshot.")
+  assert.strictEqual(fixture.workflow.getLegacyAccounting({ marketId: fixture.market.id }), legacyAccountingAfterFirst,
+    "Duplicate replay must preserve the exact legacy P&L snapshot.")
+  assert.strictEqual(fixture.workflow.getOrderRegistry(), registryAfterFirst,
+    "Duplicate replay must not release or recreate the terminal order reservation.")
+  assert.equal(fixture.durableCommitCount(), 1,
+    "Duplicate replay must not append a second durable terminal reconciliation fact.")
+})
+
+
+test("RS-006-012-A: failed durable terminal fact append leaves both accounting projections and SELL reservation unchanged", async () => {
+  const fixture = createMultiFillAccountingScenarioFixture({
+    failDurableCommit: true,
+  })
+  const reservation = await fixture.workflow.reserveSellCycle({
+    order: fixture.openSellOrder,
+    ownership: fixture.ownership,
+    durableIntent: true,
+  })
+  assert.equal(reservation.ok, true)
+  const portfolioBefore = fixture.workflow.getPortfolio()
+  const legacyPositionBefore = fixture.workflow.getLegacyPosition({ marketId: fixture.market.id })
+  const legacyAccountingBefore = fixture.workflow.getLegacyAccounting({ marketId: fixture.market.id })
+  const registryBefore = fixture.workflow.getOrderRegistry()
+
+  const result = await fixture.workflow.reconcileTerminalMixedSell({
+    reconciliation: fixture.reconciliation,
+    terminalOrder: fixture.terminalSellOrder,
+    canonicalFills: fixture.canonicalFills,
+    canonicalFillAllocations: fixture.canonicalFillAllocations,
+    minProfit: "0.2",
+  })
+
+  assert.equal(result.ok, false,
+    "A failed durable terminal fact append must abort both accounting projections.")
+  assert.strictEqual(fixture.workflow.getPortfolio(), portfolioBefore,
+    "The recovery Portfolio must remain unpublished after the durable append fails.")
+  assert.strictEqual(fixture.workflow.getLegacyPosition({ marketId: fixture.market.id }), legacyPositionBefore,
+    "The legacy Position must remain unpublished after the durable append fails.")
+  assert.strictEqual(fixture.workflow.getLegacyAccounting({ marketId: fixture.market.id }), legacyAccountingBefore,
+    "The legacy P&L projection must remain unpublished after the durable append fails.")
+  assert.strictEqual(fixture.workflow.getOrderRegistry(), registryBefore,
+    "The terminal OrderRegistry projection must not publish after the durable append fails.")
+  assert.equal(fixture.workflow.getOrderRegistry().getActiveOrders().length, 1,
+    "The unresolved SELL must continue reserving its remaining base quantity.")
+  assert.equal(fixture.workflow.getReservedSellCycle({
+    cycleId: multiFillScenarioCycleId,
+  }).clientOrderId, fixture.openSellOrder.clientOrderId,
+  "The cycle SELL reservation must remain held until durable accounting commits.")
+  assert.equal(fixture.durableCommitCount(), 1,
+    "The failed durable boundary must be attempted once and must not be retried implicitly.")
+})
+
+test("RS-006-016-A: incomplete canonical SELL fill history keeps both projections and reservation unchanged", async () => {
+  const fixture = createMultiFillAccountingScenarioFixture({
+    stageCount: 1,
+  })
+  const reservation = await fixture.workflow.reserveSellCycle({
+    order: fixture.openSellOrder,
+    ownership: fixture.ownership,
+    durableIntent: true,
+  })
+  assert.equal(reservation.ok, true)
+  const portfolioBefore = fixture.workflow.getPortfolio()
+  const legacyPositionBefore = fixture.workflow.getLegacyPosition({ marketId: fixture.market.id })
+  const legacyAccountingBefore = fixture.workflow.getLegacyAccounting({ marketId: fixture.market.id })
+  const registryBefore = fixture.workflow.getOrderRegistry()
+
+  const result = await fixture.workflow.reconcileTerminalMixedSell({
+    reconciliation: fixture.reconciliation,
+    terminalOrder: fixture.terminalSellOrder,
+    canonicalFills: fixture.canonicalFills.slice(0, 1),
+    canonicalFillAllocations: fixture.canonicalFillAllocations.slice(0, 1),
+    minProfit: "0.2",
+  })
+
+  assert.equal(result.ok, false,
+    "A terminal SELL cannot reconcile when canonical history covers only part of executed quantity.")
+  assert.strictEqual(fixture.workflow.getPortfolio(), portfolioBefore,
+    "Incomplete terminal history must not publish recovery accounting.")
+  assert.strictEqual(fixture.workflow.getLegacyPosition({ marketId: fixture.market.id }), legacyPositionBefore,
+    "Incomplete terminal history must not publish legacy inventory accounting.")
+  assert.strictEqual(fixture.workflow.getLegacyAccounting({ marketId: fixture.market.id }), legacyAccountingBefore,
+    "Incomplete terminal history must not publish legacy P&L.")
+  assert.strictEqual(fixture.workflow.getOrderRegistry(), registryBefore,
+    "Incomplete terminal history must not replace the active OrderRegistry projection.")
+  assert.equal(fixture.workflow.getOrderRegistry().getActiveOrders().length, 1,
+    "The SELL reservation must remain active until complete terminal Fill history is available.")
+  assert.equal(fixture.durableCommitCount(), 0,
+    "Incomplete terminal history must be rejected before the durable reconciliation append.")
+})
+
+test("RS-006-018-A: confirmed mixed SELL fills are committed even when realized profitability misses minProfit", async () => {
+  const fixture = createMultiFillAccountingScenarioFixture()
+  const reservation = await fixture.workflow.reserveSellCycle({
+    order: fixture.openSellOrder,
+    ownership: fixture.ownership,
+    durableIntent: true,
+  })
+  assert.equal(reservation.ok, true)
+
+  const result = await fixture.workflow.reconcileTerminalMixedSell({
+    reconciliation: fixture.reconciliation,
+    terminalOrder: fixture.terminalSellOrder,
+    canonicalFills: fixture.canonicalFills,
+    canonicalFillAllocations: fixture.canonicalFillAllocations,
+    minProfit: "100",
+  })
+
+  assert.equal(result.ok, true,
+    result.errors?.[0]?.message ?? "Confirmed exchange execution facts must still be accounted after a profitability miss.")
+  assert.equal(result.data.applied, true,
+    "A profitability miss must not discard confirmed recovery or legacy execution facts.")
+  assert.equal(result.data.profitability.eligible, false,
+    "The mixed SELL must remain ineligible when realized net profit is below minProfit.")
+  assert.equal(fixture.workflow.getPortfolio().getPosition({
+    positionId: multiFillScenarioPositionId,
+  }).baseQuantity.amount, "0.01",
+  "Confirmed recovery base debit must be committed even though the profitability gate failed.")
+  assert.equal(fixture.workflow.getLegacyPosition({
+    marketId: fixture.market.id,
+  }).remainingQuantity, "49.99",
+  "Confirmed legacy base debit must be committed even though the profitability gate failed.")
+  assert.equal(fixture.workflow.getOrderRegistry().getActiveOrders().length, 0,
+    "A fully reconciled terminal order releases its reservation after actual fills are committed.")
+  assert.equal(fixture.durableCommitCount(), 1,
+    "The actual terminal Fill boundary must be durably recorded once despite the profitability miss.")
+})
+
+
+test("RS-006-014-A: identical canonical SELL Fill replay from REST and stream stages once", () => {
+  const fixture = createMultiFillAccountingScenarioFixture({
+    stageCount: 1,
+  })
+  const originalReconciliation = fixture.reconciliation
+  const duplicate = stageMixedSellFillAllocation({
+    reconciliation: originalReconciliation,
+    allocation: fixture.canonicalFillAllocations[0],
+  })
+
+  assert.equal(duplicate.applied, false,
+    "The second delivery of the same canonical Fill must not stage another execution.")
+  assert.equal(duplicate.duplicate, true,
+    "An identical REST/stream Fill delivery must be classified as an exact duplicate.")
+  assert.strictEqual(duplicate.reconciliation, originalReconciliation,
+    "Duplicate delivery must preserve the immutable staging snapshot.")
+  assert.equal(duplicate.reconciliation.stagedFillCount, 1,
+    "The canonical Fill must be represented once in the staged history.")
+  assert.equal(duplicate.reconciliation.stagedQuantity, "2.5",
+    "Duplicate delivery must not inflate the staged base quantity.")
+})
+
+test("RS-006-015-A: conflicting canonical SELL Fill replay is rejected without changing staged history", () => {
+  const fixture = createMultiFillAccountingScenarioFixture({
+    stageCount: 1,
+  })
+  const originalReconciliation = fixture.reconciliation
+  const [originalFill] = fixture.canonicalFills
+  const conflictingFill = new Fill({
+    tradeId: originalFill.tradeId,
+    brokerOrderId: originalFill.brokerOrderId,
+    clientOrderId: originalFill.clientOrderId,
+    market: originalFill.market,
+    side: "SELL",
+    price: new Money({
+      amount: "2.1",
+      asset: originalFill.market.quoteAsset,
+    }),
+    quantity: new Quantity({
+      amount: "2.49",
+      asset: originalFill.market.baseAsset,
+    }),
+    quoteQuantity: new Money({
+      amount: "5.229",
+      asset: originalFill.market.quoteAsset,
+    }),
+    commissions: [new Commission({
+      amount: new Money({
+        amount: "0.001",
+        asset: originalFill.market.quoteAsset,
+      }),
+    })],
+    commissionStatus: "COMPLETE",
+    executedAt: 12,
+  })
+  const conflictingAllocation = createMixedSellFillAllocation({
+    fill: conflictingFill,
+    orderRegistry: new OrderRegistry({
+      orders: [fixture.terminalSellOrder],
+      ownerships: [fixture.ownership],
+    }),
+    recoveryQuantity: "2.49",
+    legacyQuantity: "0",
+  })
+
+  assert.throws(
+    () => stageMixedSellFillAllocation({
+      reconciliation: originalReconciliation,
+      allocation: conflictingAllocation,
+    }),
+    (error) => error.code === "RS_MIXED_SELL_RECONCILIATION_ALLOCATION_CONFLICT",
+    "A repeated Fill identity with different execution facts must fail closed as a conflict.",
+  )
+  assert.strictEqual(fixture.reconciliation, originalReconciliation,
+    "Conflicting replay must not replace the immutable reconciliation snapshot.")
+  assert.equal(fixture.reconciliation.stagedFillCount, 1,
+    "Conflicting replay must not alter the already accepted staged Fill set.")
+  assert.equal(fixture.reconciliation.stagedQuantity, "2.5",
+    "Conflicting replay must not change the accepted staged quantity.")
+})
