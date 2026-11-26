@@ -177,6 +177,7 @@ test("fails closed when audit does not identify user-data blockers or omits one 
     operatorId: "operator-7",
     actionId: "action-unique-005",
     causeFixed: true,
+    configuredMarkets: ["BTCUSDT", "ETHUSDT"],
   })
   assert.equal(missingBlocker.ok, false)
   assert.equal(store.records.length, 6)
