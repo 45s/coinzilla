@@ -5,7 +5,6 @@ import {
   Asset,
   CanonicalOrder,
   Commission,
-  Commission,
   Fill,
   Market,
   Money,
@@ -305,7 +304,7 @@ function createMultiFillAccountingScenarioFixture() {
       side: "SELL",
       price: new Money({ amount: "2.1", asset: scenarioQuoteAsset }),
       quantity: new Quantity({ amount: "2.51", asset: scenarioBaseAsset }),
-      quoteQuantity: new Money({ amount: "5.25", asset: scenarioQuoteAsset }),
+      quoteQuantity: new Money({ amount: "5.271", asset: scenarioQuoteAsset }),
       commissions: [new Commission({
         amount: new Money({ amount: "0.002", asset: scenarioQuoteAsset }),
       })],
@@ -397,7 +396,7 @@ test("RS-006-003-A: multiple partial SELL fills are accumulated and reconciled e
   assert.equal(addDecimal({
     left: result.data.profitability.recovery.netQuoteProceeds,
     right: result.data.profitability.legacy.netQuoteProceeds,
-  }), "10.497",
+  }), "10.518",
   "Both partial fills must contribute gross proceeds less their actual quote commissions exactly once.")
   assert.equal(fixture.workflow.getPortfolio().getPosition({
     positionId: multiFillScenarioPositionId,

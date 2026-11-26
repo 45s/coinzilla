@@ -48,7 +48,7 @@ export const recoverySellerMixedSellFillAccountingScenarios = Object.freeze([
       canonicalFillCount: 2,
       recoveryBaseDebit: "5",
       legacyBaseDebit: "0.01",
-      totalNetQuoteProceeds: "10.497",
+      totalNetQuoteProceeds: "10.518",
       profitabilityEligible: true,
       sellReservationReleasedAfterCommit: true,
     },
