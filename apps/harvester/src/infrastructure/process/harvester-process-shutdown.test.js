@@ -136,7 +136,7 @@ test("exits the child process only after Journal shutdown and real process-lock 
   try {
     const exit = await new Promise((resolve, reject) => {
       child.once("error", reject)
-      child.once("exit", (code, signal) => resolve({ code, signal }))
+      child.once("close", (code, signal) => resolve({ code, signal }))
     })
     assert.equal(exit.code, 0, `The child must exit successfully after shutdown; stderr: ${stderr}`)
     assert.equal(exit.signal, null, "The child must exit naturally rather than being killed by a signal.")
