@@ -54,6 +54,41 @@ sequenceCalls,
 transports }
 }
 
+function assertMongoProviderOptionRejected({ options, expected }) {
+  assert.throws(
+    () => createMongoProvider({ host: "localhost", ...options }),
+    expected,
+  )
+}
+
+test("MongoDB provider validates connection and injected dependency options", () => {
+  const invalidOptions = [
+    { options: { host: "" }, expected: /host/ },
+    { options: { port: 0 }, expected: /port/ },
+    { options: { databaseName: "" }, expected: /databaseName/ },
+    { options: { databaseName: "bad$name" }, expected: /unsupported character/ },
+    { options: { databaseName: "x".repeat(64) }, expected: /63-byte/ },
+    { options: { username: "" }, expected: /username/ },
+    { options: { username: "álîçé", password: "secret" }, expected: /username/ },
+    { options: { username: "alice" }, expected: /password/ },
+    { options: { password: "secret" }, expected: /requires a username/ },
+    { options: { authMechanism: "PLAIN" }, expected: /requires a username/ },
+    { options: { directConnection: "true" }, expected: /directConnection/ },
+    { options: { replicaSet: "" }, expected: /replicaSet/ },
+    { options: { username: "alice", password: "secret", authMechanism: "PLAIN" }, expected: /authMechanism/ },
+    { options: { authSource: "bad$name" }, expected: /authSource/ },
+    { options: { connectTimeoutMS: 0 }, expected: /connectTimeoutMS/ },
+    { options: { socketTimeoutMS: Number.POSITIVE_INFINITY }, expected: /socketTimeoutMS/ },
+    { options: { tls: [] }, expected: /TLS options/ },
+    { options: { transportFactory: "not-a-function" }, expected: /transportFactory/ },
+    { options: { handshake: "not-a-function" }, expected: /handshake/ },
+    { options: { randomBytes: "not-a-function" }, expected: /randomBytes/ },
+  ]
+  for (const invalidOption of invalidOptions) {
+    assertMongoProviderOptionRejected(invalidOption)
+  }
+})
+
 test("MongoDB provider is usable through createDatabase on standalone servers", async () => {
   const { provider, calls, transports } = createProviderHarness()
   const database = createDatabase({ provider })
