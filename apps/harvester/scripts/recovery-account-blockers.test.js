@@ -3,6 +3,7 @@ import { createHash } from "node:crypto"
 import test from "node:test"
 import { parseRecoveryAccountBlockerArguments } from "./recovery-account-blockers.js"
 import { runOfflineAccountBlockerResolution } from "./recovery-account-blockers-context.js"
+import { resolveUserDataAccountBlockers } from "../src/use-cases/resolve-user-data-account-blockers.js"
 
 const runtimeSessionId = "operator-recovery-session"
 const fingerprint = "f".repeat(64)
@@ -178,6 +179,33 @@ function readyMarketAudit() {
   }
 }
 
+function makeWritableStore() {
+  const records = makeRecords()
+  return {
+    runtimeSessionId,
+    readAll: async () => ({
+      ok: true,
+      data: {
+        records: [...records],
+        durableWriteSupported: true,
+        lastCommittedSequence: String(records.length - 1),
+        lastCommittedDigest: "b".repeat(64),
+      },
+    }),
+    append: async (newFact) => {
+      records.push({
+        ...newFact,
+        sequence: String(records.length),
+        runtimeSessionId,
+      })
+      return {
+        ok: true,
+        data: { durable: true },
+      }
+    },
+  }
+}
+
 function makeStore({ stopped = true } = {}) {
   const records = makeRecords({ stopped })
   return {
@@ -290,4 +318,47 @@ test("requires clean process stop before offline resolution", async () => {
 
   assert.equal(result.ok, false)
   assert.equal(resolutionCalled, false)
+})
+
+
+test("durably resolves after clean stop and leaves readiness blocked for restart", async () => {
+  const store = makeWritableStore()
+  const audit = {
+    status: "READY",
+    scope: "ACCOUNT",
+    source: "AUTHORITATIVE_ACCOUNT_RECONCILIATION",
+    allConfiguredMarketsAudited: true,
+    auditedMarkets: configuredMarkets,
+    openOrdersReconciled: true,
+    fillsReconciled: true,
+    balancesReconciled: true,
+    accountingConsistent: true,
+    unresolvedOwnedOrders: 0,
+    unresolvedOwnedFills: 0,
+    unresolvedExternalOrders: 0,
+    balanceDiscrepancies: 0,
+    blockerIds: [blockerId],
+    blockerOrigins: [{
+      blockerId,
+      producer: "USER_DATA_EVENT_HANDLER",
+    }],
+    reconciliationId: "offline-resolution-action-005",
+    capturedAt: "2026-11-26T18:00:00.000Z",
+  }
+  const result = await resolveUserDataAccountBlockers({
+    operationalStateStore: store,
+    reconcileAccount: async () => ({
+      ok: true,
+      data: audit,
+    }),
+    operatorId: "operator-7",
+    actionId: "action-unique-005",
+    causeFixed: true,
+    configuredMarkets,
+  })
+
+  assert.equal(result.ok, true, result.errors?.map(({ message }) => message).join("; "))
+  assert.equal(result.data.durableReadbackVerified, true)
+  assert.equal(result.data.readiness, "BLOCKED")
+  assert.equal(result.data.requiresControlledRestart, true)
 })
