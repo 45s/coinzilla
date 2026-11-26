@@ -177,8 +177,10 @@ function readStoredDocument(document) {
   if (!record || typeof record !== "object" || Array.isArray(record)) {
     throw new TypeError("MongoDB returned a malformed stored record")
   }
-  validateRecordIdentifier(record.id)
-  return record
+  if (record.id !== document._id) {
+    throw new TypeError("MongoDB stored record identifier does not match its document envelope")
+  }
+  return JSON.parse(serializeRecord(record))
 }
 
 function decodeStoredRecord({ document, operation, collection }) {
