@@ -1901,7 +1901,7 @@ resources }),
   }
 }
 
-async async function connectHarvesterRuntimeComponents({ startup, resources, failureSnapshotReader } = {}) {
+async function connectHarvesterRuntimeComponents({ startup, resources, failureSnapshotReader } = {}) {
   try {
     await connectHarvesterRuntimeBroker({ startup, resources })
   } catch (startupError) {

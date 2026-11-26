@@ -443,7 +443,7 @@ test("logs concise user-data stream lifecycle transitions once and suppresses du
     ],
     "Only genuine disconnect, reconnect, reconnected, and restored transitions must be logged; duplicate status deliveries must not repeat them.",
   )
-}))
+})
 
 test("logs user-data transport errors once with their original error context", () => {
   const { handler, logs } = createHandler()

@@ -1133,21 +1133,29 @@ function arrayOrEmpty(value) {
   return Array.isArray(value) ? value : []
 }
 
+function nullableValueOrNull(value) {
+  return value ?? null
+}
+
+function getVolatilityProtectionMode({ market } = {}) {
+  return market.volatilityProtection?.mode ?? null
+}
+
 function createVolatilityDetails({ market, snapshotStatus, observedAt } = {}) {
+  const status = snapshotStatus ?? {}
   return {
     enabled: true,
-    isReady: snapshotStatus?.isReady === true,
-    isFresh: snapshotStatus?.isFresh === true,
-    subscriptionReady: snapshotStatus?.subscriptionReady === true,
-    historyCount: safeIntegerOrNull(snapshotStatus?.historyCount),
-    requiredHistoryCount: safeIntegerOrNull(snapshotStatus?.requiredHistoryCount),
-    lastEventAt: timestampOrNull(snapshotStatus?.lastEventAt),
-    lastEventAgeMs: ageMs({ observedAt,
-timestamp: snapshotStatus?.lastEventAt }),
-    freshnessThresholdMs: snapshotStatus?.freshnessThresholdMs ?? null,
-    reason: snapshotStatus?.reason ?? null,
-    blockers: arrayOrEmpty(snapshotStatus?.blockers),
-    protectionMode: market.volatilityProtection?.mode ?? null,
+    isReady: status.isReady === true,
+    isFresh: status.isFresh === true,
+    subscriptionReady: status.subscriptionReady === true,
+    historyCount: safeIntegerOrNull(status.historyCount),
+    requiredHistoryCount: safeIntegerOrNull(status.requiredHistoryCount),
+    lastEventAt: timestampOrNull(status.lastEventAt),
+    lastEventAgeMs: ageMs({ observedAt, timestamp: status.lastEventAt }),
+    freshnessThresholdMs: nullableValueOrNull(status.freshnessThresholdMs),
+    reason: nullableValueOrNull(status.reason),
+    blockers: arrayOrEmpty(status.blockers),
+    protectionMode: getVolatilityProtectionMode({ market }),
   }
 }
 

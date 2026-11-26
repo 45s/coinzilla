@@ -120,19 +120,8 @@ function getMarketBookGateResult({ dependencies, symbol, metadata } = {}) {
   })
 }
 
-function getMarketVolatilityGateResult({ dependencies, symbol } = {}) {
-  const {
-    state,
-    getVolatilityData,
-    isVolatilityProtectionEnabledForSymbol,
-  } = dependencies
-  if (isVolatilityProtectionEnabledForSymbol?.(symbol) !== true) {
-    return null
-  }
-  const snapshot = getVolatilityData?.({ symbol })
-  const status = snapshot?.ok === true ? snapshot.data?.status : null
-  const protection = state.volatilityProtection?.get(symbol)
-  const volatilityReady = status?.isReady === true &&
+function hasReadyVolatilityProtection({ status, protection } = {}) {
+  return status?.isReady === true &&
     status.isFresh === true &&
     Array.isArray(status.blockers) &&
     status.blockers.length === 0 &&
@@ -141,12 +130,21 @@ function getMarketVolatilityGateResult({ dependencies, symbol } = {}) {
     status.historyCount >= status.requiredHistoryCount &&
     protection !== null &&
     typeof protection === "object"
-  if (volatilityReady) {
+}
+
+function getMarketVolatilityGateResult({ dependencies, symbol } = {}) {
+  const { state, getVolatilityData, isVolatilityProtectionEnabledForSymbol } = dependencies
+  if (isVolatilityProtectionEnabledForSymbol?.(symbol) !== true) {
+    return null
+  }
+  const snapshot = getVolatilityData?.({ symbol })
+  const status = snapshot?.ok === true ? snapshot.data?.status : null
+  const protection = state.volatilityProtection?.get(symbol)
+  if (hasReadyVolatilityProtection({ status, protection })) {
     return null
   }
   state.deferredEvaluations.add(symbol)
-  return toResult({ data: { deferred: true,
-reason: "VOLATILITY_PROTECTION_NOT_READY" } })
+  return toResult({ data: { deferred: true, reason: "VOLATILITY_PROTECTION_NOT_READY" } })
 }
 
 function getMarketPrerequisiteGateResult({ dependencies, symbol } = {}) {

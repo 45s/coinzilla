@@ -77,7 +77,7 @@ test("reads a status page through the authorized read-only application query", a
   assert.match(page.text, /Trading gate: CLOSED/)
   assert.match(page.text, /ACCOUNT_PREFLIGHT_NOT_DURABLE/)
   assert.deepEqual(page.keyboard, { page: "status" })
-}))
+})
 
 test("renders source-backed market readiness and accepted book freshness", async () => {
   const fixture = createPageDependencies({
