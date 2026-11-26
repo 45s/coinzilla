@@ -112,7 +112,10 @@ test("keeps default Conservative restart observation-only when prior process his
     runtimeSessionId: "prior-trading-session",
     priorAppConfig: appConfig,
   })
-  const restartStore = await createRestartStore({ directory, runtimeSessionId: "default-observation-only-restart" })
+  const restartStore = await createRestartStore({
+    directory,
+    runtimeSessionId: "default-observation-only-restart",
+  })
   const tracked = instrumentStoreReadAll(restartStore)
   const calls = []
   let brokerFactoryCalls = 0
@@ -170,7 +173,10 @@ test("rejects recovery-enabled restart before broker connection when prior proce
     runtimeSessionId: "prior-unclean-recovery-session",
     priorAppConfig: config,
   })
-  const restartStore = await createRestartStore({ directory, runtimeSessionId: "recovery-unclean-restart" })
+  const restartStore = await createRestartStore({
+    directory,
+    runtimeSessionId: "recovery-unclean-restart",
+  })
   let brokerFactoryCalls = 0
   await assert.rejects(
     startHarvesterForTest({
@@ -200,7 +206,10 @@ test("allows a clean observation-only restart without enabling trading", async (
     directory,
     config,
   })
-  const restartStore = await createRestartStore({ directory, runtimeSessionId: "clean-observation-only-restart" })
+  const restartStore = await createRestartStore({
+    directory,
+    runtimeSessionId: "clean-observation-only-restart",
+  })
   const tracked = instrumentStoreReadAll(restartStore)
   let brokerFactoryCalls = 0
   const calls = []
