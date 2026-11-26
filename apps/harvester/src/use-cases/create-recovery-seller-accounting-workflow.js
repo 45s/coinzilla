@@ -441,7 +441,6 @@ function publishTerminalMixedSellAccounting({
   ownership,
   canonicalFills,
   result,
-  eligible,
   reconciledCycleState,
 }) {
   state.portfolio = result.accounting.portfolio
@@ -623,7 +622,6 @@ async function reconcileTerminalMixedSellTransition({
     ownership: prepared.ownership,
     canonicalFills,
     result: prepared.result,
-    eligible,
     reconciledCycleState: prepared.reconciledCycleState,
   })
 }
