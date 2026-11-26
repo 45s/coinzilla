@@ -147,6 +147,50 @@ if (connectionString) {
       await dropDatabase(databaseName, parsed)
     }
   })
+
+  test("MongoDB replica-set transactions commit multiple records atomically", async (context) => {
+    const databaseName = databaseNameForKey(randomUUID(), parsed)
+    const database = createDatabase({
+      provider: createMongoProvider({
+        uri: connectionString,
+        databaseName,
+      }),
+    })
+    await database.connect()
+    try {
+      try {
+        const result = await database.transaction(async (transaction) => {
+          await transaction.create({
+            collection: "transaction-commit",
+            record: { id: "commit-one", value: 1 },
+          })
+          await transaction.create({
+            collection: "transaction-commit",
+            record: { id: "commit-two", value: 2 },
+          })
+          return "committed"
+        })
+        assert.equal(result, "committed")
+        assert.deepEqual(
+          await database.readMany({ collection: "transaction-commit" }),
+          [
+            { id: "commit-one", value: 1 },
+            { id: "commit-two", value: 2 },
+          ],
+        )
+      } catch (error) {
+        if (error instanceof DatabaseTransactionUnsupportedError) {
+          context.skip("Configured MongoDB topology does not support multi-document transactions")
+          return
+        }
+        throw error
+      }
+    } finally {
+      await database.close()
+      await dropDatabase(databaseName, parsed)
+    }
+  })
+
 } else {
   test("MongoDB integration suite requires MONGODB_URI", {
     skip: "Set MONGODB_URI to run native MongoDB provider integration and conformance tests",
