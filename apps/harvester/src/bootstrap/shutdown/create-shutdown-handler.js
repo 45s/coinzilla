@@ -174,8 +174,14 @@ function createPhaseRunner({
     const operationPromise = Promise.resolve()
       .then(() => operation({ signal: controller.signal }))
       .then(
-        (value) => ({ status: "fulfilled", value }),
-        (reason) => ({ status: "rejected", reason }),
+        (value) => ({
+          status: "fulfilled",
+          value,
+        }),
+        (reason) => ({
+          status: "rejected",
+          reason,
+        }),
       )
     pendingPhaseOperations.set(phase, {
       operationPromise,
@@ -213,11 +219,12 @@ function createPhaseRunner({
       })
       return outcome.value
     } catch (error) {
-      const status = error?.code === "SHUTDOWN_PHASE_TIMEOUT"
-        ? "TIMED_OUT"
-        : error?.code === "SHUTDOWN_PHASE_STILL_RUNNING"
-          ? "PENDING"
-          : "FAILED"
+      let status = "FAILED"
+      if (error?.code === "SHUTDOWN_PHASE_TIMEOUT") {
+        status = "TIMED_OUT"
+      } else if (error?.code === "SHUTDOWN_PHASE_STILL_RUNNING") {
+        status = "PENDING"
+      }
       logPhase({
         phase,
         status,
