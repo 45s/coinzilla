@@ -16,7 +16,7 @@
  * @property {(work: (transaction: unknown) => unknown) => Promise<unknown>|unknown} [withReadTransaction]
  *
  * @typedef {object} DatabaseCapabilities
- * @property {{callbackMode: "synchronous"|"asynchronous", nestedTransactions: boolean, multiDocument: boolean}} transactions
+ * @property {{callbackMode: "synchronous"|"asynchronous", nestedTransactions: boolean, multiDocument: boolean|"topology-dependent"}} transactions
  * @property {{equalityFilters: boolean, sorting: boolean, pagination: boolean}} queries
  * @property {{modes: Array<"file"|"memory"|"server">}} storage
  *
