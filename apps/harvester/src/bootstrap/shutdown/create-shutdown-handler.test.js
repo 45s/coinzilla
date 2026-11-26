@@ -639,6 +639,15 @@ test("drains accepted market work and re-proves safety before stopping user-data
   assert.equal(fixture.state.status, "STOPPED", "Shutdown may reach STOPPED only after the post-market-drain safety proof succeeds.")
 })
 
+function createMarketDrainTask({ onDrain } = {}) {
+  return {
+    then(resolve) {
+      onDrain()
+      resolve()
+    },
+  }
+}
+
 test("keeps user-data and broker services alive when post-market-drain safety cannot be proven", async () => {
   const calls = []
   let safe = false
@@ -669,15 +678,12 @@ test("keeps user-data and broker services alive when post-market-drain safety ca
   let marketTaskDrained = false
   const marketPriceIntake = new Map([
     ["DOGEUSDT", {
-      latestWebSocketPriceTask: {
-        then(resolve) {
-          if (!marketTaskDrained) {
-            marketTaskDrained = true
-            safe = false
-          }
-          resolve()
+      latestWebSocketPriceTask: createMarketDrainTask({
+        onDrain: () => {
+          marketTaskDrained = true
+          safe = false
         },
-      },
+      }),
     }],
   ])
   const fixture = createShutdown({

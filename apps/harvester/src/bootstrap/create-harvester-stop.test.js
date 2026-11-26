@@ -128,6 +128,19 @@ test("keeps operator control and process-stop facts alive when runtime safety ca
 })
 
 
+async function settleProcessStopAttempt({ resolveProcessStop, firstStop, retryStop } = {}) {
+  resolveProcessStop?.({
+    ok: true,
+    data: {
+      durable: true,
+    },
+  })
+  await Promise.all([
+    firstStop.catch(() => {}),
+    retryStop?.catch(() => {}),
+  ])
+}
+
 test("bounds pending durable PROCESS_STOPPED and prevents overlapping retries", async () => {
   const calls = []
   let resolveProcessStop
@@ -180,16 +193,11 @@ test("bounds pending durable PROCESS_STOPPED and prevents overlapping retries", 
     )
     assert.equal(calls.filter((call) => call === "process-stop-record").length, 1, "The same process-stop fact must not be appended concurrently.")
   } finally {
-    resolveProcessStop?.({
-      ok: true,
-      data: {
-        durable: true,
-      },
+    await settleProcessStopAttempt({
+      resolveProcessStop,
+      firstStop,
+      retryStop,
     })
-    await Promise.all([
-      firstStop.catch(() => {}),
-      retryStop?.catch(() => {}),
-    ])
   }
 })
 

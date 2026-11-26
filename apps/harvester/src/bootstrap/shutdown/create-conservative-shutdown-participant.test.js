@@ -880,6 +880,25 @@ test("waits for the serialized engine shutdown barrier before cancelling owned B
 })
 
 
+function assertPendingReconciliationSnapshot(snapshot) {
+  assert.equal(snapshot.currentOperation, "OWNED_ORDER_RECONCILIATION")
+  assert.equal(snapshot.lastSuccessfulStep, "USER_DATA_DRAIN")
+  assert.equal(snapshot.pendingOrders[0].clientOrderId, "h-0123456789abcdef012345-18")
+  assert.equal(snapshot.pendingOrders[0].remainingQuantity, "398")
+  assert.deepEqual(snapshot.missingEvidence, ["LATE_ORDER_EXECUTION_EVIDENCE"])
+}
+
+function assertAbortedReconciliationSnapshot({ snapshot, calls } = {}) {
+  assert.equal(snapshot.operationStatus, "ABORTED")
+  assert.equal(snapshot.nestedError.message, "participant deadline elapsed")
+  assert.equal(calls.some((call) => call.startsWith("reconcile-finish:")), true)
+  assert.equal(
+    calls.some((call) => call.startsWith("cancel:DOGEUSDT") || call.startsWith("cancel:SOLUSDT")),
+    false,
+  )
+  assert.equal(calls.some((call) => call.startsWith("recovery:")), false)
+}
+
 test("does not advance to BUY cancellation or recovery proof after a participant deadline abort", async () => {
   const calls = []
   const engine = createFakeEngine({ calls })
@@ -921,11 +940,7 @@ test("does not advance to BUY cancellation or recovery proof after a participant
   const safety = participant.waitUntilSafe({ signal: controller.signal })
   await reconciliationStarted
   const pendingSnapshot = participant.getSafetySnapshot().markets.find(({ symbol }) => symbol === "DOGEUSDT")
-  assert.equal(pendingSnapshot.currentOperation, "OWNED_ORDER_RECONCILIATION", "The timeout snapshot must identify the exact pending stage.")
-  assert.equal(pendingSnapshot.lastSuccessfulStep, "USER_DATA_DRAIN", "The timeout snapshot must identify the last completed safety step.")
-  assert.equal(pendingSnapshot.pendingOrders[0].clientOrderId, "h-0123456789abcdef012345-18", "The timeout snapshot must identify the exact pending client order.")
-  assert.equal(pendingSnapshot.pendingOrders[0].remainingQuantity, "398")
-  assert.deepEqual(pendingSnapshot.missingEvidence, ["LATE_ORDER_EXECUTION_EVIDENCE"])
+  assertPendingReconciliationSnapshot(pendingSnapshot)
 
   controller.abort(new Error("participant deadline elapsed"))
 
@@ -933,10 +948,6 @@ test("does not advance to BUY cancellation or recovery proof after a participant
   releaseReconciliation()
   await reconciliationFinished
   const abortedSnapshot = participant.getSafetySnapshot().markets.find(({ symbol }) => symbol === "DOGEUSDT")
-  assert.equal(abortedSnapshot.operationStatus, "ABORTED")
-  assert.equal(abortedSnapshot.nestedError.message, "participant deadline elapsed")
-  assert.equal(calls.some((call) => call.startsWith("reconcile-finish:")), true, "The in-flight read may settle after abort, but its result must not advance the safety proof.")
-  assert.equal(calls.some((call) => call.startsWith("cancel:DOGEUSDT") || call.startsWith("cancel:SOLUSDT")), false, "No later per-market BUY cancellation stage may start after abort.")
-  assert.equal(calls.some((call) => call.startsWith("recovery:")), false, "No recovery SELL planning or coverage stage may start after abort.")
+  assertAbortedReconciliationSnapshot({ snapshot: abortedSnapshot, calls })
   assert.equal(participant.isSafeToShutdown(), false, "An aborted participant must not publish successful safety.")
 })
