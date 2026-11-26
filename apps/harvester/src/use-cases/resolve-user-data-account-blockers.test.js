@@ -254,8 +254,14 @@ test("durably resolves account blockers after complete account audit and readbac
   assert.equal(result.data.requiresControlledRestart, true)
   assert.equal(result.data.runtimeStateReset, false)
   assert.equal(result.data.recoverySellerStopReset, false)
+  assert.equal(result.data.idempotentReplay, false)
   assert.equal(store.records.at(-1).factType, "SAFETY_BLOCKER_RESOLVED")
   assert.equal(store.records.at(-1).data.resolvedBy, "operator:operator-7:action-unique-001")
+  assert.equal(store.records.at(-1).data.operatorId, "operator-7")
+  assert.equal(store.records.at(-1).data.operatorAuthMethod, "OS_ACCOUNT")
+  assert.equal(store.records.at(-1).data.actionId, "action-unique-001")
+  assert.equal(store.records.at(-1).data.resolutionReason, defaultResolutionReason)
+  assert.deepEqual(store.records.at(-1).data.actionBlockerIds, [blockerId])
 })
 
 test("fails closed for cause-not-fixed and incomplete account audit", async () => {
