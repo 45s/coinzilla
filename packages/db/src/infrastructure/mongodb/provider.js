@@ -182,16 +182,21 @@ function createTransactionCommand({ transport, session }) {
     return response
   }
 
-  const runSessionCommand = ({ body, sequences, timeoutMS, operation }) => {
-    const operation = queue.then(() => {
+  const runSessionCommand = ({ body, sequences, timeoutMS, operation: operationName }) => {
+    const queuedOperation = queue.then(() => {
       if (firstError) throw firstError
-      return sendSessionCommand({ body, sequences, timeoutMS, operation })
+      return sendSessionCommand({
+        body,
+        sequences,
+        timeoutMS,
+        operation: operationName,
+      })
     })
-    operation.catch(() => {})
-    queue = operation.catch((error) => {
+    queuedOperation.catch(() => {})
+    queue = queuedOperation.catch((error) => {
       firstError ??= error
     })
-    return operation
+    return queuedOperation
   }
 
   runSessionCommand.drain = async () => {
