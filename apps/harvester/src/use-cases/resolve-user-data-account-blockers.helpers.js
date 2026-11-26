@@ -113,7 +113,7 @@ function validateAuditBlockers({ audit, blockerIds }) {
       new Set(origins.map(({ blockerId }) => blockerId)).size !== blockerIds.length ||
       [...origins.map(({ blockerId }) => blockerId)].sort().join("|") !== [...blockerIds].sort().join("|") ||
       origins.some(({ producer }) => producer !== "USER_DATA_EVENT_HANDLER")) {
-    throw new Error("Account-wide audit must cover exactly the active user-data ACCOUNT blockers")
+    throw new Error("Account-wide audit must cover exactly the original user-data ACCOUNT blocker action set")
   }
 }
 
@@ -245,6 +245,7 @@ export function getAccountResolutionTargetBlockers({
     .sort((left, right) => left.blockerId.localeCompare(right.blockerId))
   const resolvedFacts = records.filter((record) => record.factType === "SAFETY_BLOCKER_RESOLVED")
   const legacyActionFact = resolvedFacts.find((record) =>
+    record.data?.resolution === "OPERATOR_ACTION" &&
     typeof record.data?.resolvedBy === "string" &&
     record.data.resolvedBy.endsWith(`:${actionId}`) &&
     record.data.actionId === undefined
