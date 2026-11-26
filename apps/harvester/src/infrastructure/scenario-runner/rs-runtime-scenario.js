@@ -1074,7 +1074,7 @@ function createRuntimeScenarioMixedSellReconciler({
     })
     let reconciliation = createMixedSellFillReconciliation({
       order: currentOpenOrder,
-      orderRegistry,
+      orderRegistry: state.registry,
     })
     const allocations = canonicalFills.map((canonicalFill) =>
       createMixedSellFillAllocation({
