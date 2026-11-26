@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import rawDashboardStyles from './styles.css?raw';
 
-const dashboardStyles = JSON.stringify(rawDashboardStyles) ?? '';
+const dashboardStyles = String((rawDashboardStyles as unknown as { default?: string }).default ?? rawDashboardStyles);
 
 describe('dashboard theme surface contract', () => {
   it('maps feature surface aliases to the active palette tokens', () => {
