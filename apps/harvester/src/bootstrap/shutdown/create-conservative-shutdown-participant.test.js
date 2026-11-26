@@ -888,11 +888,16 @@ test("does not advance to BUY cancellation or recovery proof after a participant
   const calls = []
   const engine = createFakeEngine({ calls })
   let releaseReconciliation
+  let markReconciliationStarted
   const reconciliation = new Promise((resolve) => {
     releaseReconciliation = resolve
   })
+  const reconciliationStarted = new Promise((resolve) => {
+    markReconciliationStarted = resolve
+  })
   engine.reconcileOwnedOrders = async ({ symbol }) => {
     calls.push(`reconcile-start:${symbol}`)
+    markReconciliationStarted()
     await reconciliation
     calls.push(`reconcile-finish:${symbol}`)
     return { ok: true }
@@ -902,8 +907,7 @@ test("does not advance to BUY cancellation or recovery proof after a participant
 
   participant.beginShutdown()
   const safety = participant.waitUntilSafe({ signal: controller.signal })
-  await Promise.resolve()
-  await Promise.resolve()
+  await reconciliationStarted
   controller.abort(new Error("participant deadline elapsed"))
   releaseReconciliation()
 
