@@ -318,8 +318,8 @@ test("publishes validated config, broker/subscription lifecycle and meaningful r
     HARVESTER_EVENT_NAMES.BROKER_SUBSCRIPTION_ESTABLISHED,
     HARVESTER_EVENT_NAMES.ACCOUNT_SNAPSHOT_CAPTURED,
     HARVESTER_EVENT_NAMES.ACCOUNT_OPEN_ORDERS_CAPTURED,
-    HARVESTER_EVENT_NAMES.USER_DATA_READINESS_CHANGED,
     HARVESTER_EVENT_NAMES.BROKER_SUBSCRIPTION_ESTABLISHED,
+    HARVESTER_EVENT_NAMES.USER_DATA_READINESS_CHANGED,
   ])
   const configValidatedData = eventPublisher.events[0].data
   assert.deepEqual(configValidatedData.enabledMarkets, ["BTCUSDT"])
@@ -336,14 +336,14 @@ test("publishes validated config, broker/subscription lifecycle and meaningful r
   assert.equal(eventPublisher.events[5].name, HARVESTER_EVENT_NAMES.ACCOUNT_OPEN_ORDERS_CAPTURED)
   assert.deepEqual(eventPublisher.events[6].data, {
     broker: "binance",
-    ready: true,
-    status: "READY",
-    trigger: "startup-preflight-completed",
+    stream: "market-price",
+    market: "BTCUSDT",
   })
   assert.deepEqual(eventPublisher.events[7].data, {
     broker: "binance",
-    stream: "market-price",
-    market: "BTCUSDT",
+    ready: true,
+    status: "READY",
+    trigger: "startup-preflight-completed",
   })
   assert.equal(runtime.tradingMode, "testnet")
   assert.equal(runtime.tradingEnabled, true)
@@ -432,18 +432,16 @@ test("publishes market-price subscription failure and broker disconnect outcome"
     HARVESTER_EVENT_NAMES.BROKER_SUBSCRIPTION_ESTABLISHED,
     HARVESTER_EVENT_NAMES.ACCOUNT_SNAPSHOT_CAPTURED,
     HARVESTER_EVENT_NAMES.ACCOUNT_OPEN_ORDERS_CAPTURED,
-    HARVESTER_EVENT_NAMES.USER_DATA_READINESS_CHANGED,
     HARVESTER_EVENT_NAMES.BROKER_SUBSCRIPTION_FAILED,
     HARVESTER_EVENT_NAMES.BROKER_DISCONNECTED,
   ])
-  assert.deepEqual(eventPublisher.events[6].data, {
-    broker: "binance",
-    ready: true,
-    status: "READY",
-    trigger: "startup-preflight-completed",
-  })
-  assert.equal(eventPublisher.events[7].data.stream, "market-price")
-  assert.equal(eventPublisher.events[7].data.market, "BTCUSDT")
+  assert.equal(
+    eventPublisher.events.some((event) => event.name === HARVESTER_EVENT_NAMES.USER_DATA_READINESS_CHANGED),
+    false,
+    "A failed market-data startup must not publish a ready user-data gate.",
+  )
+  assert.equal(eventPublisher.events[6].data.stream, "market-price")
+  assert.equal(eventPublisher.events[6].data.market, "BTCUSDT")
 })
 
 

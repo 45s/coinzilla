@@ -264,6 +264,11 @@ for (const scenario of evaluationOnlyScenarios) {
       true,
       `The accepted price must still reach normal strategy evaluation when ${scenario.name}.`,
     )
+    assert.equal(
+      harness.state.deferredEvaluations.has("DOGEUSDT"),
+      scenario.canTrade === false,
+      "Only a globally closed trading-readiness gate should queue the accepted price for replay.",
+    )
   })
 }
 
