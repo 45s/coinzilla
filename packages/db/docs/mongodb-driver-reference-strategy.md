@@ -1,10 +1,10 @@
 # Official MongoDB Node.js driver: reference and selective-port strategy
 
-**Status:** Approved implementation strategy for issue [#1865](https://github.com/45s/coinzilla/issues/1865) and PR [#1868](https://github.com/45s/coinzilla/pull/1868).  
-**Assessment date:** 2026-11-26  
-**Reference repository:** [mongodb/node-mongodb-native](https://github.com/mongodb/node-mongodb-native)  
-**Reference version inspected:** `mongodb@7.9.1`  
-**Reference commit inspected:** [`2ed780df2a57884c3fa597da9ebbb6256ae0a5ea`](https://github.com/mongodb/node-mongodb-native/commit/2ed780df2a57884c3fa597da9ebbb6256ae0a5ea)  
+**Status:** Approved implementation strategy for issue [#1865](https://github.com/45s/coinzilla/issues/1865) and PR [#1868](https://github.com/45s/coinzilla/pull/1868).
+**Assessment date:** 2026-11-26
+**Reference repository:** [mongodb/node-mongodb-native](https://github.com/mongodb/node-mongodb-native)
+**Reference version inspected:** `mongodb@7.9.1`
+**Reference commit inspected:** [`2ed780df2a57884c3fa597da9ebbb6256ae0a5ea`](https://github.com/mongodb/node-mongodb-native/commit/2ed780df2a57884c3fa597da9ebbb6256ae0a5ea)
 **License:** Apache License 2.0
 
 ## Decision
@@ -40,8 +40,6 @@ The exact dependency versions below are resolved by the driver's [pinned `packag
 | `mongodb-connection-string-url` | `7.0.2` | Apache-2.0 | `whatwg-url@14.2.0` (MIT) → `tr46@5.1.1` (MIT) and `webidl-conversions@7.0.0` (BSD-2-Clause); `tr46` uses `punycode@2.3.1` (MIT) |
 
 The lockfile also contains `@types/whatwg-url` for type tooling; it is not a runtime dependency. Optional peer integrations are not part of this locked runtime closure. All packages in the table remain excluded from Coinzilla's runtime dependency graph.
-
-
 
 The official driver also contains substantial functionality that this provider intentionally does not promise: public MongoClient/Db/Collection/Cursor APIs, connection pooling, server discovery and monitoring, broad authentication integrations, compression, change streams, GridFS, client-side encryption, retryable writes and compatibility paths for features outside our declared support matrix.
 
