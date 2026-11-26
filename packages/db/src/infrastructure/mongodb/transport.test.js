@@ -96,6 +96,45 @@ test("MongoDB transport handles fragmented frames without losing bytes", async (
   await transport.close()
 })
 
+
+test("MongoDB transport enforces the connection timeout and destroys stalled sockets", async () => {
+  class StalledSocket extends EventEmitter {
+    destroyed = false
+
+    setNoDelay() {}
+
+    destroy() {
+      this.destroyed = true
+      this.emit("close")
+    }
+  }
+  const socket = new StalledSocket()
+  const transport = createMongoTransport({
+    host: "localhost",
+    port: 27017,
+    connectTimeoutMS: 5,
+    socketTimeoutMS: 100,
+    socketFactory: () => socket,
+  })
+
+  await assert.rejects(transport.connect(), /connection timed out/i)
+  assert.equal(socket.destroyed, true)
+  assert.equal(transport.state, "closed")
+})
+
+test("MongoDB transport preserves socket errors and rejects every outstanding request", async () => {
+  const { transport, socket } = createFakeTransport()
+  await transport.connect()
+  const first = transport.command({ body: { ping: 1 } })
+  const second = transport.command({ body: { ping: 1 } })
+  socket.emit("error", new Error("network reset"))
+
+  const results = await Promise.allSettled([first, second])
+  assert.equal(results.every((result) => result.status === "rejected"), true)
+  assert.equal(transport.pendingRequestCount, 0)
+  assert.equal(transport.state, "closed")
+})
+
 test("MongoDB transport rejects timed-out requests and releases their correlation entries", async () => {
   const { transport } = createFakeTransport({ timeoutMS: 10 })
   await transport.connect()
