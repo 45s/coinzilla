@@ -6,7 +6,7 @@ const INT64_MAX = (2n ** 63n) - 1n
 
 export class BsonBinary {
   constructor(bytes, subtype = 0) {
-    if (!Buffer.isBuffer(bytes) || !Number.isInteger(subtype) || subtype < 0 || subtype > 255) {
+    if (!Buffer.isBuffer(bytes) || ![0, 4].includes(subtype)) {
       throw new TypeError("BSON binary requires a Buffer and an unsigned byte subtype")
     }
     this.bytes = Buffer.from(bytes)
@@ -36,6 +36,9 @@ function encodeCString(value) {
 }
 
 function encodeString(value) {
+  if (!value.isWellFormed()) {
+    throw new TypeError("BSON strings must contain valid Unicode")
+  }
   const bytes = Buffer.from(value, "utf8")
   const result = Buffer.allocUnsafe(4 + bytes.length + 1)
   result.writeInt32LE(bytes.length + 1, 0)
@@ -188,7 +191,11 @@ function readCString(buffer, state) {
   if (end < 0 || end >= state.end) {
     throw new TypeError("Invalid BSON cstring")
   }
-  const value = buffer.toString("utf8", state.offset, end)
+  const bytes = buffer.subarray(state.offset, end)
+  const value = bytes.toString("utf8")
+  if (!Buffer.from(value, "utf8").equals(bytes)) {
+    throw new TypeError("BSON cstring contains invalid UTF-8")
+  }
   state.offset = end + 1
   return value
 }
@@ -204,7 +211,11 @@ function readString(buffer, state) {
   if (buffer[state.offset + length - 1] !== 0) {
     throw new TypeError("BSON string is missing its terminator")
   }
-  const value = buffer.toString("utf8", state.offset, state.offset + length - 1)
+  const bytes = buffer.subarray(state.offset, state.offset + length - 1)
+  const value = bytes.toString("utf8")
+  if (!Buffer.from(value, "utf8").equals(bytes)) {
+    throw new TypeError("BSON string contains invalid UTF-8")
+  }
   state.offset += length
   return value
 }
@@ -279,8 +290,8 @@ function readValue(buffer, state, type) {
     const length = buffer.readInt32LE(state.offset)
     const subtype = buffer[state.offset + 4]
     state.offset += 5
-    if (length < 0) {
-      throw new TypeError("Invalid BSON binary length")
+    if (length < 0 || ![0, 4].includes(subtype)) {
+      throw new TypeError("Unsupported BSON binary length or subtype")
     }
     assertRange(buffer, state.offset, length, state.end, "binary value")
     const bytes = Buffer.from(buffer.subarray(state.offset, state.offset + length))
