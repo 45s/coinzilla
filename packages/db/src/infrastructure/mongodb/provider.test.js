@@ -11,6 +11,7 @@ import { runDatabaseProviderConformanceTests } from "../../../test-support/provi
 
 function createProviderHarness({ topology = "standalone", transactionSupported = false, commandHandler } = {}) {
   const calls = []
+  const sequenceCalls = []
   const transports = []
   let randomValue = 0
   const provider = createMongoProvider({
@@ -25,8 +26,9 @@ function createProviderHarness({ topology = "standalone", transactionSupported =
         },
         async command(input) {
           calls.push(input.body)
+          sequenceCalls.push(input.sequences ?? [])
           return commandHandler
-            ? commandHandler(input.body, calls.length)
+            ? commandHandler(input.body, calls.length, input.sequences ?? [])
             : { ok: 1, n: 1 }
         },
         async close() {
@@ -44,7 +46,7 @@ function createProviderHarness({ topology = "standalone", transactionSupported =
     }),
     randomBytes: (length) => Buffer.alloc(length, ++randomValue),
   })
-  return { provider, calls, transports }
+  return { provider, calls, sequenceCalls, transports }
 }
 
 test("MongoDB provider is usable through createDatabase on standalone servers", async () => {
@@ -418,19 +420,20 @@ function createConformanceMongoServer(store) {
     return 0
   }
 
-  return async function command(body) {
+  return async function command(body, sequences = []) {
     const collection = body.insert ?? body.find ?? body.aggregate ?? body.findAndModify ?? body.delete
     const records = store.get(collection) ?? new Map()
     store.set(collection, records)
 
     if (body.insert) {
-      for (const document of body.documents) {
+      const documents = sequences.find((sequence) => sequence.identifier === "documents")?.documents ?? body.documents ?? []
+      for (const document of documents) {
         if (records.has(document._id)) {
           return { ok: 1, n: 0, writeErrors: [{ code: 11000, errmsg: "duplicate key" }] }
         }
         records.set(document._id, structuredClone(document))
       }
-      return { ok: 1, n: body.documents.length }
+      return { ok: 1, n: documents.length }
     }
 
     if (body.find) {
@@ -504,7 +507,7 @@ runDatabaseProviderConformanceTests({
         databaseName: "conformance",
         transportFactory: () => ({
           async connect() {},
-          command: ({ body }) => command(body),
+          command: ({ body, sequences }) => command(body, sequences),
           async close() {},
         }),
         handshake: async () => ({
@@ -533,9 +536,9 @@ test("MongoDB transactions serialize commands and wait for all transaction CRUD 
       if (body.insert) {
         activeCommands += 1
         maximumConcurrentCommands = Math.max(maximumConcurrentCommands, activeCommands)
-        events.push(`insert-start:${body.documents[0]._id}`)
+        events.push(`insert-start:${sequences[0].documents[0]._id}`)
         await new Promise((resolve) => setTimeout(resolve, 5))
-        events.push(`insert-end:${body.documents[0]._id}`)
+        events.push(`insert-end:${sequences[0].documents[0]._id}`)
         activeCommands -= 1
         return { ok: 1, n: 1 }
       }
