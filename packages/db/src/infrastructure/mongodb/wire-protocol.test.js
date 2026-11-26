@@ -67,7 +67,7 @@ test("OP_MSG rejects truncated, oversized, and unsupported messages", () => {
 
 
 
-function createFrame(payload, flags = 0) {
+function createFrame({ payload, flags = 0 }) {
   const message = Buffer.alloc(20 + payload.length)
   message.writeInt32LE(message.length, 0)
   message.writeInt32LE(1, 4)
@@ -97,11 +97,11 @@ test("OP_MSG rejects invalid identifiers, duplicate sections, and unsupported re
   assert.throws(() => decodeOpMsg(checksum), /checksums/)
 
   assert.throws(
-    () => decodeOpMsg(createFrame(Buffer.concat([bodySection, bodySection]))),
+    () => decodeOpMsg(createFrame({ payload: Buffer.concat([bodySection, bodySection]) })),
     /exactly one body section/,
   )
   assert.throws(
-    () => decodeOpMsg(createFrame(Buffer.from([2, 0, 0, 0, 0, 0]))),
+    () => decodeOpMsg(createFrame({ payload: Buffer.from([2, 0, 0, 0, 0, 0]) })),
     /section kind/,
   )
 })
@@ -117,11 +117,11 @@ documents: [{ _id: "one" }] }],
   const sequenceSection = withSequence.subarray(21 + bodyLength)
 
   assert.throws(
-    () => decodeOpMsg(createFrame(Buffer.concat([
+    () => decodeOpMsg(createFrame({ payload: Buffer.concat([
       sequenceSection,
       Buffer.from([0]),
       encodeBsonDocument({ insert: "records" }),
-    ]))),
+    ]) }),
     /body section must precede/,
   )
 
