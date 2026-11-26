@@ -4,7 +4,7 @@
 
 createMongoProvider(options) is an infrastructure adapter for the provider-neutral createDatabase({ provider }) API. All MongoDB-specific behavior is confined to src/infrastructure/mongodb/: connection URI parsing, TCP/TLS transport, OP_MSG framing, BSON, hello negotiation, SCRAM, commands, sessions and topology facts.
 
-The public API remains record-oriented. It does not expose MongoDB collections, BSON values, cursors, sessions, command documents, sockets or server errors. MongoDB records are stored in provider-owned collections with an encoded collection namespace and an internal document envelope. User keys are encoded so user-controlled keys cannot collide with the envelope or become MongoDB operator paths.
+The public API remains record-oriented. It does not expose MongoDB collections, BSON values, cursors, sessions, command documents, sockets or server errors. MongoDB records are stored in provider-owned collections with an encoded collection namespace and an internal document envelope. Inserts use OP_MSG document sequences so a near-limit BSON record does not also have to fit inside the command body. User keys are encoded so user-controlled keys cannot collide with the envelope or become MongoDB operator paths.
 
 ## Support matrix
 
@@ -46,7 +46,7 @@ Explicit options override URI values. Supported URI options are authSource, tls 
 
 The public record contract remains JSON-only. The codec supports strings, finite numbers, booleans, null, nested plain documents, dense arrays and the internal binary/date/signed-int64 forms. Document nesting is limited to 100 levels. ObjectId values decode to their hexadecimal string representation. The provider rejects malformed lengths, truncated values, unsupported BSON element types, sparse arrays, accessors, non-plain objects, circular structures and documents above the 16 MiB BSON limit.
 
-MongoDB document keys are not stored verbatim: keys are encoded with a reserved provider prefix and base64url representation. This protects user keys that begin with $ or contain dots from MongoDB field-path/operator interpretation. The collection name is encoded independently to isolate each logical collection. The provider stores the record's public id in MongoDB's internal _id and hides the storage envelope on reads.
+Database names and authentication source names are validated against portable MongoDB naming rules and limited to 63 UTF-8 bytes. The encoded database-plus-collection namespace is limited to 255 bytes. MongoDB document keys are not stored verbatim: keys are encoded with a reserved provider prefix and base64url representation. This protects user keys that begin with $ or contain dots from MongoDB field-path/operator interpretation. The collection name is encoded independently to isolate each logical collection. The provider stores the record's public id in MongoDB's internal _id and hides the storage envelope on reads.
 
 ## Query semantics
 
