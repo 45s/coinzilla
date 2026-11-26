@@ -10,7 +10,7 @@ owner: db
 
 The accepted architecture is recorded in [ADR-0001](./docs/decisions/0001-provider-neutral-record-crud-api.md); see the [local documentation index](./docs/README.md).
 
-`@coinzilla/db` provides a provider-neutral record CRUD and transaction API. Node.js built-in `node:sqlite` is the first concrete provider. The package owns generic persistence infrastructure contracts only; application domains own their business entities, schemas and repository interfaces.
+`@coinzilla/db` provides a provider-neutral record CRUD and transaction API. Node.js built-in `node:sqlite` is the first concrete provider; the dependency-free MongoDB infrastructure adapter is being completed under issue #1865. The package owns generic persistence infrastructure contracts only; application domains own their business entities, schemas and repository interfaces.
 
 ## Dependency-free MongoDB provider — #1865
 
@@ -40,7 +40,7 @@ Supported protocol generations, topology/authentication limits, BSON subset, tra
 
 ### Audit conclusion
 
-The current provider-neutral architecture is a suitable foundation. The public `createDatabase({ provider })` facade, asynchronous provider transaction contract, immutable capability declarations, and reusable provider-conformance suite allow MongoDB to be added as an infrastructure adapter without redesigning consumer-facing CRUD.
+The accepted provider-neutral architecture has enabled MongoDB to be implemented as an infrastructure adapter. The public `createDatabase({ provider })` facade, asynchronous provider transaction contract, immutable capability declarations, and reusable provider-conformance suite keep MongoDB details out of consumer-facing CRUD without redesigning application APIs.
 
 Relevant existing contracts and implementation:
 
@@ -180,7 +180,7 @@ The following core delivery steps were completed by merged PR #1353:
 
 - No ORM, query builder, schema generator or universal SQL abstraction.
 - No trading, Harvester, Journal, Operational State Store, order, fill, execution or portfolio entities/repositories/schemas.
-- No speculative PostgreSQL or MongoDB adapter implementation.
+- No speculative PostgreSQL adapter implementation. MongoDB is the scoped, approved additional provider under issue #1865; do not expand it beyond the documented Database API contract.
 - No consumer integration in this task. A real application's repository contract remains owned by that application's bounded context and its roadmap.
 
 ## Provider-neutral API contract
