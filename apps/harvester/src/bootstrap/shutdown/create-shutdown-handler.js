@@ -763,19 +763,23 @@ async function disconnectBroker(context) {
   })
 }
 
-function createShutdownDiagnostics({ context, cleanupErrors }) {
-  return Object.freeze({
-    previousStatus: context.shutdownStartedFromStatus ?? null,
-    shutdownCorrelationId: context.shutdownCorrelationId,
-    auditReasons: Object.freeze([...context.auditReasons]),
-    recoverySellReconciliation: context.recoverySellReconciliation?.ok === true
-      ? Object.freeze({
-        ok: true,
-        reconciledSymbols: context.recoverySellReconciliation.data?.reconciledSymbols ?? [],
-      })
-      : Object.freeze({ ok: false }),
+function createRecoverySellDiagnostics(context) {
+  const reconciliation = context.recoverySellReconciliation
+  const recoverySellReconciliation = reconciliation?.ok === true
+    ? Object.freeze({
+      ok: true,
+      reconciledSymbols: reconciliation.data?.reconciledSymbols ?? [],
+    })
+    : Object.freeze({ ok: false })
+  return {
+    recoverySellReconciliation,
     recoverySellFindings: Object.freeze(context.recoverySellFindings.map((finding) =>
       Object.freeze({ ...finding }))),
+  }
+}
+
+function createStageFailureDiagnostics(context) {
+  return {
     failureReasons: Object.freeze(context.stageFailures.flatMap((entry) =>
       entry.errors.map((error) => error.failureStage ?? error.code ?? error.name))),
     stageFailures: Object.freeze(context.stageFailures.map((failure) => Object.freeze({
@@ -783,28 +787,43 @@ function createShutdownDiagnostics({ context, cleanupErrors }) {
       failure: failure.failure ? Object.freeze({ ...failure.failure }) : null,
       errors: Object.freeze(failure.errors.map((error) => Object.freeze({ ...error }))),
     }))),
+  }
+}
+
+function createUserDataShutdownDiagnostics(state) {
+  const retryableFailure = state.retryableRecoveryFailure
+  return Object.freeze({
+    accountingFailed: state.accountingFailed === true,
+    requiresReconciliation: state.requiresReconciliation === true,
+    safetyHaltRequired: state.safetyHaltRequired === true,
+    retryableRecoveryFailure: retryableFailure
+      ? Object.freeze({
+        generation: retryableFailure.generation,
+        category: retryableFailure.category,
+        stage: retryableFailure.stage,
+        retryable: retryableFailure.retryable,
+      })
+      : null,
+    recoveryGeneration: Number.isSafeInteger(state.recoveryGeneration)
+      ? state.recoveryGeneration
+      : null,
+    lastAcknowledgedRecoveryGeneration: Number.isSafeInteger(state.lastAcknowledgedRecoveryGeneration)
+      ? state.lastAcknowledgedRecoveryGeneration
+      : null,
+  })
+}
+
+function createShutdownDiagnostics({ context, cleanupErrors }) {
+  return Object.freeze({
+    previousStatus: context.shutdownStartedFromStatus ?? null,
+    shutdownCorrelationId: context.shutdownCorrelationId,
+    auditReasons: Object.freeze([...context.auditReasons]),
+    ...createRecoverySellDiagnostics(context),
+    ...createStageFailureDiagnostics(context),
     cleanupFailures: Object.freeze(cleanupErrors.map((error) => Object.freeze(
       summarizeShutdownError({ error }),
     ))),
-    userData: Object.freeze({
-      accountingFailed: context.state.accountingFailed === true,
-      requiresReconciliation: context.state.requiresReconciliation === true,
-      safetyHaltRequired: context.state.safetyHaltRequired === true,
-      retryableRecoveryFailure: context.state.retryableRecoveryFailure
-        ? Object.freeze({
-          generation: context.state.retryableRecoveryFailure.generation,
-          category: context.state.retryableRecoveryFailure.category,
-          stage: context.state.retryableRecoveryFailure.stage,
-          retryable: context.state.retryableRecoveryFailure.retryable,
-        })
-        : null,
-      recoveryGeneration: Number.isSafeInteger(context.state.recoveryGeneration)
-        ? context.state.recoveryGeneration
-        : null,
-      lastAcknowledgedRecoveryGeneration: Number.isSafeInteger(context.state.lastAcknowledgedRecoveryGeneration)
-        ? context.state.lastAcknowledgedRecoveryGeneration
-        : null,
-    }),
+    userData: createUserDataShutdownDiagnostics(context.state),
     unresolvedOrders: Object.freeze(context.unresolvedOrders.map((order) =>
       Object.freeze(summarizeUnresolvedOrder(order)))),
     strategyBlockers: context.strategyShutdownError?.shutdownDiagnostics?.strategyBlockers ??
@@ -813,7 +832,6 @@ function createShutdownDiagnostics({ context, cleanupErrors }) {
     pendingOperations: context.phaseRunner?.getPendingOperationsSnapshot?.() ?? Object.freeze([]),
   })
 }
-
 function buildCleanupErrors(context) {
   const shutdownAuditFailed = context.tradingEnabled && context.auditReasons.length > 0
   const auditError = shutdownAuditFailed
@@ -1086,49 +1104,17 @@ function createShutdownPhaseRunner({
   })
 }
 
-function createShutdownRequestContext({
+function createShutdownRuntimeContext({
   options,
-  state,
   now,
   runtimeSessionId,
   strategyShutdownCoordinator,
-  stopOptions,
-  pendingPhaseOperations,
+  preShutdownErrors,
+  shutdownStartedFromStatus,
+  beforeSharedServicesStop,
+  shutdownRequestedAt,
+  phaseRunner,
 } = {}) {
-  const {
-    requestedAt,
-    requestLogged = false,
-    stopStateEstablishedLogged = false,
-    preShutdownErrors = [],
-    beforeSharedServicesStop,
-  } = stopOptions
-  const shutdownRequestedAt = requestedAt ?? now(), shutdownCorrelationId = runtimeSessionId ?? null
-  const phaseRunner = createShutdownPhaseRunner({
-    logger: options.logger,
-    now,
-    shutdownRequestedAt,
-    shutdownCorrelationId,
-    phaseTimeoutMs: options.phaseTimeoutMs ?? DEFAULT_SHUTDOWN_PHASE_TIMEOUT_MS,
-    setTimeoutFn: options.setTimeoutFn,
-    clearTimeoutFn: options.clearTimeoutFn,
-    pendingPhaseOperations,
-  })
-  if (!requestLogged) {
-    phaseRunner.logPhase({
-      phase: "SHUTDOWN_REQUESTED",
-      status: "COMPLETED",
-      durationMs: 0,
-    })
-  }
-
-  const shutdownStartedFromStatus = establishShutdownState({
-    state,
-    phaseRunner,
-    shutdownRequestedAt,
-    stopStateEstablishedLogged,
-    now,
-  })
-
   const context = createShutdownContext({
     options: {
       ...options,
@@ -1148,13 +1134,68 @@ function createShutdownRequestContext({
     context,
     phaseRunner,
   })
+  return context
+}
+
+function createShutdownRequestContext({
+  options,
+  state,
+  now,
+  runtimeSessionId,
+  strategyShutdownCoordinator,
+  stopOptions,
+  pendingPhaseOperations,
+} = {}) {
+  const {
+    requestedAt,
+    requestLogged = false,
+    stopStateEstablishedLogged = false,
+    preShutdownErrors = [],
+    beforeSharedServicesStop,
+  } = stopOptions
+  const shutdownRequestedAt = requestedAt ?? now()
+  const shutdownCorrelationId = runtimeSessionId ?? null
+  const phaseRunner = createShutdownPhaseRunner({
+    logger: options.logger,
+    now,
+    shutdownRequestedAt,
+    shutdownCorrelationId,
+    phaseTimeoutMs: options.phaseTimeoutMs ?? DEFAULT_SHUTDOWN_PHASE_TIMEOUT_MS,
+    setTimeoutFn: options.setTimeoutFn,
+    clearTimeoutFn: options.clearTimeoutFn,
+    pendingPhaseOperations,
+  })
+  if (!requestLogged) {
+    phaseRunner.logPhase({
+      phase: "SHUTDOWN_REQUESTED",
+      status: "COMPLETED",
+      durationMs: 0,
+    })
+  }
+  const shutdownStartedFromStatus = establishShutdownState({
+    state,
+    phaseRunner,
+    shutdownRequestedAt,
+    stopStateEstablishedLogged,
+    now,
+  })
+  const context = createShutdownRuntimeContext({
+    options,
+    now,
+    runtimeSessionId,
+    strategyShutdownCoordinator,
+    preShutdownErrors,
+    shutdownStartedFromStatus,
+    beforeSharedServicesStop,
+    shutdownRequestedAt,
+    phaseRunner,
+  })
   return {
     context,
     phaseRunner,
     shutdownRequestedAt,
   }
 }
-
 function reportShutdownFailure({ error, context, state, options, phaseRunner, shutdownRequestedAt, now } = {}) {
   context.strategyShutdownError = error
   state.status = "SHUTDOWN_INCOMPLETE"
