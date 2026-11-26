@@ -99,3 +99,8 @@ The engine's existing operator market snapshot now includes order type, whether 
 ## Test coverage checkpoint
 
 The configured Harvester regression matrix now includes the immutable report, authorized operator read-model and deferred user-data activation suites. Existing account-snapshot, market-subscription, engine and startup suites also cover durable audit summaries, first accepted market-data events, book freshness and startup gate ordering. No LIVE or TESTNET account is used by these tests.
+
+
+## Implementation checkpoint — source-backed readiness inputs
+
+The startup composition now derives market route expectations from the configured per-symbol market-data provider identity (no fallback to the execution broker identity), checks the actual application-owned `BROKER_PORT_METHODS` contract, and includes the existing account-scoped safety-blocker projection. Price/book evidence carries the source-owned 5-second threshold; candle freshness is supplied by the candle-history service rather than duplicated in the report.

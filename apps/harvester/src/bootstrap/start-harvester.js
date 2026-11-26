@@ -1,4 +1,5 @@
-import { isMarketDataFresh } from "../domain/market/is-market-data-fresh.js"
+import { isMarketDataFresh, MARKET_DATA_MAX_AGE_MS } from "../domain/market/is-market-data-fresh.js"
+import { BROKER_PORT_METHODS } from "../application/ports/broker.port.js"
 import { defaultLogger, toResult } from "@coinzilla/utils"
 import { StrategyId } from "../domain/strategies/strategy-ids.js"
 import { createStrategyLogger } from "../application/logging/create-strategy-logger.js"
@@ -620,19 +621,8 @@ async function createHarvesterRuntimeResources({ startup } = {}) {
   return resources
 }
 
-function createHarvesterBrokerCapabilitySnapshot({ broker, tradingEnabled } = {}) {
-  const required = [
-    "getSymbolFilters",
-    "getAccountSnapshot",
-    "getOpenOrders",
-    "subscribeForUserData",
-    "subscribeForPrices",
-    "getCandles",
-    "subscribeForCandles",
-  ]
-  if (tradingEnabled) {
-    required.push("getPrices", "subscribeForBookTicker", "createCanonicalOrder", "cancelOrder")
-  }
+function createHarvesterBrokerCapabilitySnapshot({ broker } = {}) {
+  const required = [...BROKER_PORT_METHODS]
   const missing = required.filter((method) => typeof broker?.[method] !== "function")
   return Object.freeze({
     validated: Boolean(broker) && missing.length === 0,
@@ -641,72 +631,110 @@ function createHarvesterBrokerCapabilitySnapshot({ broker, tradingEnabled } = {}
   })
 }
 
+function createMarketReadinessInput({ symbol, pairConfig, startup, resources, account, accountSnapshotManager } = {}) {
+  const intake = resources.marketPriceIntake.get(symbol) ?? {}
+  const externalOrdersPolicy = pairConfig.externalOrdersPolicy ?? "IGNORE"
+  const unownedOrderObserved = account.openOrders?.unownedSymbols?.includes(symbol) === true ||
+    accountSnapshotManager?.hasUnownedOpenOrdersForSymbol({ symbol }) === true
+  const routeRequired = !(unownedOrderObserved && externalOrdersPolicy === "BLOCK")
+  const volatilityEnabled = pairConfig.enableVolatilityProtection !== false
+  let volatilitySnapshot = null
+  if (volatilityEnabled) {
+    try {
+      volatilitySnapshot = resources.candleHistoryService.getSnapshot({ symbol })
+    } catch {
+      volatilitySnapshot = { ok: false }
+    }
+  }
+  let priceSource = "UNKNOWN"
+  if (intake.hasFreshWebSocketPrice === true) {
+    priceSource = "WEBSOCKET"
+  } else if (intake.initialPriceSeeded === true) {
+    priceSource = "INITIAL_SEED"
+  }
+  return [symbol, {
+    route: {
+      required: routeRequired,
+      expected: startup.marketDataProviderIdentities?.[symbol] ?? null,
+      priceSourceIdentity: intake.marketPriceSourceIdentity ?? null,
+      bookSourceIdentity: intake.bookSourceIdentity ?? null,
+      priceSubscriptionReady: intake.marketPriceSubscriptionReady === true,
+      bookSubscriptionReady: intake.bookSubscriptionReady === true,
+    },
+    price: {
+      source: priceSource,
+      websocketEventReceived: intake.hasFreshWebSocketPrice === true,
+      freshnessThresholdMs: MARKET_DATA_MAX_AGE_MS,
+    },
+    book: {
+      eventReceived: intake.hasFreshWebSocketBook === true,
+      freshnessThresholdMs: MARKET_DATA_MAX_AGE_MS,
+    },
+    volatility: {
+      enabled: volatilityEnabled,
+      snapshot: volatilitySnapshot,
+    },
+    externalOrdersPolicy,
+    unownedOrderObserved,
+  }]
+}
+
+function createHarvesterMarketReadinessInputs({ startup, resources, account, accountSnapshotManager } = {}) {
+  const entries = Object.entries(startup.pairs ?? {})
+  return Object.fromEntries(entries.map(([symbol, pairConfig]) =>
+    createMarketReadinessInput({
+      symbol,
+      pairConfig,
+      startup,
+      resources,
+      account,
+      accountSnapshotManager,
+    })))
+}
+
 function createHarvesterReadinessInputs({ startup, portfolio, resources } = {}) {
   const accountSnapshotManager = startup.accountSnapshotManagerRef.current
   const account = accountSnapshotManager?.getReadinessSnapshot?.() ?? {}
   const accountIdentity = portfolio.accountRuntime.identity
-  const markets = Object.fromEntries(Object.entries(startup.pairs ?? {}).map(([symbol, pairConfig]) => {
-    const intake = resources.marketPriceIntake.get(symbol) ?? {}
-    const externalOrdersPolicy = pairConfig.externalOrdersPolicy ?? "IGNORE"
-    const unownedOrderObserved = account.openOrders?.unownedSymbols?.includes(symbol) === true ||
-      accountSnapshotManager?.hasUnownedOpenOrdersForSymbol({ symbol }) === true
-    const routeRequired = !(unownedOrderObserved && externalOrdersPolicy === "BLOCK")
-    const volatilityEnabled = pairConfig.enableVolatilityProtection !== false
-    let volatilitySnapshot = null
-    if (volatilityEnabled) {
-      try {
-        volatilitySnapshot = resources.candleHistoryService.getSnapshot({ symbol })
-      } catch {
-        volatilitySnapshot = { ok: false }
-      }
-    }
-    return [symbol, {
-      route: {
-        required: routeRequired,
-        expected: startup.marketDataProviderIdentities?.[symbol] ?? accountIdentity,
-        priceSourceIdentity: intake.marketPriceSourceIdentity ?? null,
-        bookSourceIdentity: intake.bookSourceIdentity ?? null,
-        priceSubscriptionReady: intake.marketPriceSubscriptionReady === true,
-        bookSubscriptionReady: intake.bookSubscriptionReady === true,
-      },
-      price: {
-        source: intake.hasFreshWebSocketPrice === true
-          ? "WEBSOCKET"
-          : intake.initialPriceSeeded === true
-            ? "INITIAL_SEED"
-            : "UNKNOWN",
-        websocketEventReceived: intake.hasFreshWebSocketPrice === true,
-      },
-      book: {
-        eventReceived: intake.hasFreshWebSocketBook === true,
-      },
-      volatility: {
-        enabled: volatilityEnabled,
-        snapshot: volatilitySnapshot,
-      },
-      externalOrdersPolicy,
-      unownedOrderObserved,
-    }]
-  }))
+  const safetyBlocker = getHarvesterAccountSafetyBlocker({
+    userDataState: resources.userDataState,
+    recoverySellerStopWorkflow: startup.recoverySellerStopWorkflow,
+  })
+  const enabledMarkets = startup.enabledSymbols ?? Object.keys(startup.pairs ?? {})
+  const markets = createHarvesterMarketReadinessInputs({
+    startup,
+    resources,
+    account,
+    accountSnapshotManager,
+  })
   const subscription = resources.userDataSubscription
   return Object.freeze({
     configuration: Object.freeze({
       validated: true,
-      enabledMarkets: Object.freeze([...(startup.enabledSymbols ?? Object.keys(startup.pairs ?? {}))]),
+      enabledMarkets: Object.freeze([...enabledMarkets]),
     }),
     broker: Object.freeze({
       connected: Boolean(resources.broker),
       identity: accountIdentity,
       capabilities: createHarvesterBrokerCapabilitySnapshot({
         broker: resources.broker,
-        tradingEnabled: startup.tradingEnabled,
       }),
     }),
     account,
+    accountSafety: Object.freeze({
+      blocker: safetyBlocker
+        ? Object.freeze({
+          scope: safetyBlocker.scope ?? null,
+          reason: safetyBlocker.reason ?? null,
+          blockerId: safetyBlocker.blockerId ?? null,
+        })
+        : null,
+    }),
     userData: Object.freeze({
       subscriptionEstablished: typeof subscription?.disconnect === "function" ||
         typeof subscription?.unsubscribe === "function",
       preflightComplete: resources.userDataState.preflightComplete === true,
+      tradingActivationDeferred: resources.userDataState.tradingActivationDeferred === true,
       requiresReconciliation: resources.userDataState.requiresReconciliation === true,
       accountingFailed: resources.userDataState.accountingFailed === true,
       streamUnsafe: resources.userDataState.streamUnsafe === true,
