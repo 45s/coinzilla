@@ -72,6 +72,10 @@ A test-first regression in `275afc016924f005a2b71eaba748672465e75bb5` covers tok
 
 The provider previously retried every thrown commit error as ambiguous, even when the transport could prove that the commit frame was never accepted for sending (for example, a synchronous socket-write rejection or a local write-buffer limit). That could report `DatabaseTransactionOutcomeUnknownError` when the commit was definitely not sent. A regression was committed first in `94f24123ddfac6156f12c61e07b624d6f8bafc83`. Commit requests now carry an explicit `commit` operation classification through the transport: timeouts/interruption after dispatch remain ambiguous, while pre-dispatch failures are marked `outcomeUnknown: false` and surface as provider failures without retrying. If an earlier attempt was ambiguous, a later definitely-unsent retry still cannot resolve that earlier attempt, so the final result remains unknown.
 
+### Default TCP transport import
+
+The transport's default non-TLS socket path called `net.createConnection` without importing Node's `node:net` module. Fake-socket tests masked the runtime failure. A real local TCP regression test was committed first in `dd30009426f46bd118eb3bb849dc05015ab25bb8`; the transport now imports `node:net` explicitly. TLS continues to use Node's built-in `node:tls`. No external dependency is introduced.
+
 ### OP_MSG sequence map key safety
 
 A review of `decodeOpMsg` found that response document-sequence identifiers are server-controlled cstrings. Storing them in a normal `{}` object makes the valid identifier `__proto__` invoke the legacy prototype setter instead of creating an own key, silently changing the map's prototype and dropping the sequence entry. A test-first regression was committed in `30cb243927dfd8b172b2a6edeebe431c94201ff9`. The decoder now uses a null-prototype map so all sequence identifiers remain ordinary own keys. This is a local parser-hardening fix; no upstream code was copied.
