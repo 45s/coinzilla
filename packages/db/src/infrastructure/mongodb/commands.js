@@ -464,27 +464,13 @@ function createReadPipeline({ query }) {
   return pipeline
 }
 
-async function readManyRecords({ command, databaseName, collection, query }) {
-  validateCollectionName(collection)
-  const mongoCollection = encodeCollectionName({ collection, databaseName })
-  const response = await runMongoCommand({
-    command,
-    operation: "readMany",
-    collection,
-    body: {
-      aggregate: mongoCollection,
-      pipeline: createReadPipeline({ query }),
-      cursor: { batchSize: CURSOR_BATCH_SIZE },
-      collation: { locale: "simple" },
-      $db: databaseName,
-    },
-  })
-  const cursor = requireMongoCursor({
-    response,
-    operation: "readMany",
-    collection,
-    serverOperation: "aggregate",
-  })
+async function readMongoCursorRecords({
+  command,
+  databaseName,
+  collection,
+  mongoCollection,
+  cursor,
+}) {
   let firstBatch
   try {
     firstBatch = requireFirstBatch({
@@ -534,6 +520,36 @@ async function readManyRecords({ command, databaseName, collection, query }) {
     })
     throw error
   }
+}
+
+async function readManyRecords({ command, databaseName, collection, query }) {
+  validateCollectionName(collection)
+  const mongoCollection = encodeCollectionName({ collection, databaseName })
+  const response = await runMongoCommand({
+    command,
+    operation: "readMany",
+    collection,
+    body: {
+      aggregate: mongoCollection,
+      pipeline: createReadPipeline({ query }),
+      cursor: { batchSize: CURSOR_BATCH_SIZE },
+      collation: { locale: "simple" },
+      $db: databaseName,
+    },
+  })
+  const cursor = requireMongoCursor({
+    response,
+    operation: "readMany",
+    collection,
+    serverOperation: "aggregate",
+  })
+  return readMongoCursorRecords({
+    command,
+    databaseName,
+    collection,
+    mongoCollection,
+    cursor,
+  })
 }
 
 async function updateRecord({ command, databaseName, collection, id, changes }) {
