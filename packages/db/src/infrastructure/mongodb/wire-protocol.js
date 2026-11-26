@@ -39,7 +39,7 @@ function encodeDocumentSequence({ identifier, documents }) {
 }
 
 /** Encode a MongoDB OP_MSG request or response. */
-export function encodeOpMsg({ requestId, responseTo = 0, flags = 0, body, sequences = [] }) {
+export function encodeOpMsg({ requestId, responseTo = 0, flags = 0, body, sequences = [], maxMessageSize = MAX_WIRE_MESSAGE_SIZE }) {
   validateMessageIdentifier({ value: requestId,
 label: "requestId" })
   validateMessageIdentifier({ value: responseTo,
@@ -57,7 +57,7 @@ label: "responseTo" })
   const sequenceSections = sequences.map(encodeDocumentSequence)
   const payload = Buffer.concat([bodySection, ...sequenceSections])
   const length = HEADER_SIZE + 4 + payload.length
-  if (length > MAX_WIRE_MESSAGE_SIZE) {
+  if (length > maxMessageSize) {
     throw new TypeError("MongoDB wire message exceeds the 48 MiB message limit")
   }
   const message = Buffer.allocUnsafe(length)
@@ -108,15 +108,12 @@ function readSequence({ buffer, state }) {
     documents.push(document)
     state.offset += documentLength
   }
-  if (state.offset !== end) {
-    throw new TypeError("MongoDB document sequence length mismatch")
-  }
   return { identifier,
 documents }
 }
 
 function validateOpMsgFrame({ message }) {
-  if (!Buffer.isBuffer(message) || message.length < HEADER_SIZE + 10) {
+  if (!Buffer.isBuffer(message) || message.length < HEADER_SIZE + 1) {
     throw new TypeError("MongoDB OP_MSG frame is truncated")
   }
   const length = message.readInt32LE(0)
@@ -195,9 +192,6 @@ label: "responseTo" })
     message,
     state: frame.state,
   })
-  if (body === undefined) {
-    throw new TypeError("MongoDB OP_MSG is missing its body section")
-  }
   return {
     requestId: frame.requestId,
     responseTo: frame.responseTo,
