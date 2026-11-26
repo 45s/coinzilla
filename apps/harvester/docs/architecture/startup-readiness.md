@@ -183,3 +183,6 @@ Historical retrieval, historical validation, buffered-event replay, live open-ca
 ## Broker connection evidence
 
 Broker connection diagnostics measure the existing `connectBroker` handshake using the injected startup clock and preserve a sanitized failure code if connection fails. The capability check distinguishes the structural `BROKER_PORT_METHODS` contract from additional exchange capability requirements explicitly configured through the existing provider connection path; no unconfigured exchange permission is claimed.
+
+
+Broker connection is measured around the existing `connectBroker` call. A failed handshake is reported through the integrated startup audit before the original connection error is rethrown; candle-history service construction is separately diagnosed and does not rewrite a successful broker connection as failed.

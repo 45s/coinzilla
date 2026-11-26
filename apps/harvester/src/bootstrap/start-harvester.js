@@ -623,17 +623,6 @@ async function connectHarvesterRuntimeBroker({ startup, resources } = {}) {
       requiredExchangeCapabilities: Object.freeze([...(startup.requiredCapabilities ?? [])]),
       exchangeCapabilitiesValidated: (startup.requiredCapabilities ?? []).length > 0,
     })
-    resources.candleHistoryService = createHarvesterCandleHistoryService({
-      createCandleHistoryService,
-      broker: resources.broker,
-      logger: startup.logger,
-      now: startup.now,
-      getTradingEngine: () => resources.tradingEngine,
-      getMarketDataBroker: startup.getMarketDataBroker,
-      marketDataSources: startup.marketDataSources,
-      marketDataProviderTypes: startup.marketDataProviderTypes,
-      marketDataProviderIdentities: startup.marketDataProviderIdentities,
-    })
   } catch (error) {
     const failedAt = startup.now()
     resources.brokerConnection = Object.freeze({
@@ -1941,6 +1930,20 @@ function ensureHarvesterMarketDataProviderIdentities({ startup, portfolio }) {
   ))
 }
 
+function initializeHarvesterCandleHistoryService({ startup, resources }) {
+  resources.candleHistoryService = createHarvesterCandleHistoryService({
+    createCandleHistoryService,
+    broker: resources.broker,
+    logger: startup.logger,
+    now: startup.now,
+    getTradingEngine: () => resources.tradingEngine,
+    getMarketDataBroker: startup.getMarketDataBroker,
+    marketDataSources: startup.marketDataSources,
+    marketDataProviderTypes: startup.marketDataProviderTypes,
+    marketDataProviderIdentities: startup.marketDataProviderIdentities,
+  })
+}
+
 function createHarvesterStartupFailureSnapshotReader({ startup, portfolio, resources }) {
   return {
     getOperatorRuntimeSnapshot: ({ startupBoundary = false } = {}) => getHarvesterOperatorRuntimeSnapshot({
@@ -1958,21 +1961,34 @@ function createHarvesterStartupFailureSnapshotReader({ startup, portfolio, resou
 
 async function createHarvesterRuntimeComponents({ startup, portfolio }) {
   const resources = createHarvesterRuntimeResources()
+  const failureSnapshotReader = createHarvesterStartupFailureSnapshotReader({
+    startup,
+    portfolio,
+    resources,
+  })
   try {
     await connectHarvesterRuntimeBroker({ startup, resources })
   } catch (startupError) {
-    const accountSnapshots = createHarvesterStartupFailureSnapshotReader({
-      startup,
-      portfolio,
-      resources,
-    })
     await reportHarvesterStartupFailure({
       startup,
       resources,
-      accountSnapshots,
+      accountSnapshots: failureSnapshotReader,
       startupError,
       component: "BROKER",
       fallbackCode: "BROKER_CONNECTION_FAILED",
+    })
+    throw startupError
+  }
+  try {
+    initializeHarvesterCandleHistoryService({ startup, resources })
+  } catch (startupError) {
+    await reportHarvesterStartupFailure({
+      startup,
+      resources,
+      accountSnapshots: failureSnapshotReader,
+      startupError,
+      component: "CANDLE_HISTORY",
+      fallbackCode: "CANDLE_HISTORY_SERVICE_INIT_FAILED",
     })
     throw startupError
   }

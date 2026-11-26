@@ -118,6 +118,49 @@ test("composes the default market-price error handler with resolved RS ownership
   }
 })
 
+test("reports broker connection failure before rethrowing the original startup error", async () => {
+  const { directory, store } = await createRsOnlyOperationalStateStore()
+  const broker = createRsOnlyStartupBroker({ calls: [] })
+  const connectionFailure = new Error("fake broker connection failure")
+  broker.connect = async () => {
+    throw connectionFailure
+  }
+  const healthRecords = []
+  try {
+    await assert.rejects(
+      startHarvesterForTest({
+        loadConfig: async () => createRsOnlyStartupConfig(),
+        env: binanceEnv,
+        brokerAdapterFactory: () => broker,
+        operationalStateStore: store,
+        executionSymbols: ["LINEAUSDT"],
+        executionRoutes: [{
+          strategyId: "RS_recoverySeller",
+          symbol: "LINEAUSDT",
+        }],
+        marketDataSymbols: ["LINEAUSDT"],
+        logger: {
+          info: (record) => healthRecords.push(record),
+          error: (record) => healthRecords.push(record),
+          system: (record) => healthRecords.push(record),
+        },
+      }),
+      (error) => error === connectionFailure,
+    )
+    assert.ok(
+      healthRecords.some((record) => record.code === "BROKER_NOT_CONNECTED"),
+      "The startup audit must log a specific broker connection failure before aborting.",
+    )
+    assert.ok(
+      healthRecords.some((record) => record.message?.includes("Startup Preflight Summary")),
+      "The startup audit must log its terminal summary when broker connection fails.",
+    )
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
+
 test("starts an RS-only provider account without a Conservative execution route", async () => {
   const { directory, store } = await createRsOnlyOperationalStateStore()
   const calls = []

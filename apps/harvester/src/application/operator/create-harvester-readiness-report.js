@@ -239,7 +239,8 @@ function createBrokerConnectionCheck({ inputs, runtime, observedAt } = {}) {
       blocksTrading: false,
     })
   }
-  const connected = broker.connected === true
+  const connection = broker?.connection ?? {}
+  const connected = broker?.connected === true
   let status = "BLOCKED"
   let code = "BROKER_NOT_CONNECTED"
   let message = "The execution BrokerPort connection is not confirmed."
@@ -254,14 +255,28 @@ function createBrokerConnectionCheck({ inputs, runtime, observedAt } = {}) {
     status,
     code,
     message,
-    expected: "The configured execution BrokerPort is connected.",
+    expected: "The configured execution BrokerPort connection handshake completes within its configured timeout.",
     remediation: "Verify broker connectivity and inspect the original sanitized connection error.",
     observedAt,
+    possibleCauses: connected ? [] : [
+      "The provider adapter or exchange endpoint rejected the connection handshake.",
+      "The network path or exchange API may be unavailable or timing out.",
+    ],
     details: {
       connected,
-      identity: safeIdentity(broker.identity),
+      identity: safeIdentity(broker?.identity),
+      startedAt: connection.startedAt ?? null,
+      connectedAt: connection.connectedAt ?? null,
+      elapsedMs: Number.isFinite(connection.elapsedMs) ? connection.elapsedMs : null,
+      errorCode: connection.errorCode ?? null,
     },
   })
+}
+function getExchangeCapabilityValidationStatus({ required, validated }) {
+  if (required.length === 0) {
+    return "NOT_CONFIGURED"
+  }
+  return validated ? "PASS" : "FAIL"
 }
 
 function createBrokerCapabilitiesCheck({ inputs, runtime, observedAt } = {}) {
@@ -279,15 +294,23 @@ function createBrokerCapabilitiesCheck({ inputs, runtime, observedAt } = {}) {
       blocksTrading: false,
     })
   }
-  const missing = Array.isArray(capabilities.missing) ? capabilities.missing : null
-  const complete = capabilities.validated === true && Array.isArray(missing) && missing.length === 0
+  const missing = Array.isArray(capabilities?.missing) ? capabilities.missing : null
+  const exchangeRequired = Array.isArray(capabilities?.exchangeRequired)
+    ? capabilities.exchangeRequired
+    : []
+  const exchangeValidated = capabilities?.exchangeValidated === true
+  const exchangeComplete = exchangeRequired.length === 0 || exchangeValidated
+  const complete = capabilities?.validated === true &&
+    Array.isArray(missing) &&
+    missing.length === 0 &&
+    exchangeComplete
   let status = "BLOCKED"
   let code = "BROKER_CAPABILITIES_INCOMPLETE"
-  let message = "One or more required BrokerPort methods are missing or could not be verified."
+  let message = "One or more required BrokerPort methods or configured provider capabilities are unavailable."
   if (complete) {
     status = "PASS"
     code = "BROKER_CAPABILITIES_VERIFIED"
-    message = "The application-owned BrokerPort method surface is available."
+    message = "The BrokerPort contract and configured provider capability requirements are available."
   }
   return createCheck({
     id: "broker.capabilities",
@@ -295,23 +318,21 @@ function createBrokerCapabilitiesCheck({ inputs, runtime, observedAt } = {}) {
     status,
     code,
     message,
-    expected: "Every method declared by BROKER_PORT_METHODS is available.",
-    remediation: "Use a broker adapter implementing the application-owned BrokerPort contract.",
+    expected: "Every method declared by BROKER_PORT_METHODS and every explicitly configured provider capability is available.",
+    remediation: "Use a broker adapter implementing the application-owned BrokerPort contract and configure only supported provider capabilities.",
     observedAt,
     details: {
-      required: Array.isArray(capabilities.required) ? capabilities.required : [],
+      required: Array.isArray(capabilities?.required) ? capabilities.required : [],
       missing,
       exchangeRequired,
-      exchangeValidation: exchangeRequired.length === 0
-        ? "NOT_CONFIGURED"
-        : exchangeValidated
-          ? "PASS"
-          : "FAIL",
+      exchangeValidation: getExchangeCapabilityValidationStatus({
+        required: exchangeRequired,
+        validated: exchangeValidated,
+      }),
       validationScope: "Structural BrokerPort methods and only explicitly configured provider capabilities; no broader exchange permissions are inferred.",
     },
   })
 }
-
 function createProcessRestorationCheck({ inputs, runtime, observedAt } = {}) {
   const continuity = inputs.processContinuity
   if (!continuity && runtime.startupBoundary !== true) {

@@ -72,6 +72,26 @@ test("reports measured broker connection latency and configured exchange capabil
 })
 
 
+test("reports measured broker connection latency and configured exchange capability evidence", () => {
+  const inputs = createInputs()
+  inputs.readinessInputs.broker.connection = {
+    startedAt: 19_900,
+    connectedAt: 19_950,
+    elapsedMs: 50,
+    errorCode: null,
+  }
+  inputs.readinessInputs.broker.capabilities.exchangeRequired = ["ORDER_READ"]
+  inputs.readinessInputs.broker.capabilities.exchangeValidated = true
+  const report = createHarvesterReadinessReport(inputs)
+  const connection = report.checks.find(({ id }) => id === "broker.connection")
+  const capabilities = report.checks.find(({ id }) => id === "broker.capabilities")
+
+  assert.equal(connection.observed.elapsedMs, 50, "Connection latency must come from the measured startup handshake.")
+  assert.equal(connection.observed.connectedAt, 19_950, "The report must expose the observed connection timestamp.")
+  assert.equal(capabilities.observed.exchangeValidation, "PASS", "Configured provider capability requirements must be reported separately from structural BrokerPort methods.")
+})
+
+
 test("account-scoped safety blockers block globally while non-account blockers remain scoped warnings", () => {
   const accountInputs = createInputs()
   accountInputs.readinessInputs.accountSafety = {
