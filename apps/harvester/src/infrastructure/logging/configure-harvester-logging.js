@@ -80,6 +80,21 @@ function formatOrderLifecycleConsoleLine({ timestamp, data } = {}) {
     .filter((segment) => segment.length > 0 && segment !== `Client order ID: ${clientOrderId}`)
     .join(" | ")
 
+  if (data.lifecycleStatus === "REJECTED") {
+    return [
+      time,
+      ...(strategy ? [strategy] : []),
+      status,
+      symbol,
+      side,
+      quantity,
+      "@",
+      price,
+      detail ? "|" : "",
+      detail,
+    ].filter(Boolean).join(" ")
+  }
+
   return [
     time,
     ...(strategy ? [strategy] : []),
@@ -404,7 +419,7 @@ function createPortfolioStatsConsoleLine({ time, strategyPrefix, details } = {})
 function formatStartupConsoleMessage(message) {
   const subscriptionMatch = /^Connected; subscribed to (\d+) enabled market\(s\)\. (.+)$/.exec(message)
   if (subscriptionMatch) {
-    return `Binance market-data stream connected; active market subscriptions: ${subscriptionMatch[1]}. ${subscriptionMatch[2]}`
+    return `Binance market-data stream connected; subscriptions: ${subscriptionMatch[1]}.`
   }
 
   const modeMatch = /^Connected; Binance trading mode is (.+)\.$/.exec(message)
@@ -412,7 +427,7 @@ function formatStartupConsoleMessage(message) {
     return `Binance market-data stream connected; Binance trading mode is ${modeMatch[1]}.`
   }
 
-  return message
+  return message.replace(/Operational State Store/g, "OSS")
 }
 
 function writeStandardConsoleRecord({ output, color, timestamp, level, method, summary, strategyId } = {}) {
