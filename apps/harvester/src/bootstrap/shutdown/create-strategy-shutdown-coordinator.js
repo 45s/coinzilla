@@ -155,17 +155,25 @@ function createParticipantWaitPromise({
     })
   }
   const startedAt = now()
-  const operationPromise = Promise.resolve()
-    .then(() => participant.waitUntilSafe({ signal: participantController.signal }))
-    .then(
-      (value) => ({ status: "fulfilled", value }),
-      (reason) => ({ status: "rejected", reason }),
-    )
-  activeParticipantWaits.set(strategyId, {
-    operationPromise,
+  const pendingOperation = {
+    operationPromise: null,
     startedAt,
     timeoutMs,
-  })
+  }
+  activeParticipantWaits.set(strategyId, pendingOperation)
+  let operation
+  try {
+    operation = participant.waitUntilSafe({
+      signal: participantController.signal,
+    })
+  } catch (reason) {
+    operation = Promise.reject(reason)
+  }
+  const operationPromise = Promise.resolve(operation).then(
+    (value) => ({ status: "fulfilled", value }),
+    (reason) => ({ status: "rejected", reason }),
+  )
+  pendingOperation.operationPromise = operationPromise
   operationPromise.then(() => {
     if (activeParticipantWaits.get(strategyId)?.operationPromise === operationPromise) {
       activeParticipantWaits.delete(strategyId)
@@ -360,7 +368,99 @@ async function waitForStrategyShutdownParticipants({
       now,
     })
   }
-  return results.map((result) => result.value)
+  return {
+    ok: true,
+    participants: results.map((result) => result.value),
+  }
+}
+
+function resolveBeginShutdownResults({
+  results,
+  participants,
+  activeParticipantWaits,
+  shutdownRequestedAt,
+  now,
+} = {}) {
+  const strategyBlockers = results.flatMap((result, index) => {
+    if (result.status === "fulfilled") {
+      return []
+    }
+    return [createStrategyBlocker({
+      participant: participants[index],
+      error: result.reason,
+      reason: "STRATEGY_SHUTDOWN_BEGIN_FAILED",
+    })]
+  })
+  if (strategyBlockers.length > 0) {
+    throw createStrategyShutdownError({
+      message: "Strategy shutdown could not begin for every enabled strategy",
+      code: "STRATEGY_SHUTDOWN_BEGIN_FAILED",
+      strategyBlockers,
+      pendingOperations: getPendingParticipantOperations(activeParticipantWaits, now),
+      shutdownRequestedAt,
+      now,
+    })
+  }
+  return { ok: true }
+}
+
+function createBeginShutdownOperation({
+  participants,
+  activeParticipantWaits,
+  shutdownRequestedAt,
+  now,
+} = {}) {
+  const immediateResults = participants.map((participant) => {
+    try {
+      return {
+        status: "fulfilled",
+        value: participant.beginShutdown(),
+      }
+    } catch (reason) {
+      return {
+        status: "rejected",
+        reason,
+      }
+    }
+  })
+  const hasPendingBegin = immediateResults.some((result) =>
+    result.status === "fulfilled" &&
+    result.value !== null &&
+    typeof result.value === "object" &&
+    typeof result.value.then === "function")
+  if (!hasPendingBegin) {
+    try {
+      return {
+        completed: true,
+        promise: Promise.resolve(resolveBeginShutdownResults({
+          results: immediateResults,
+          participants,
+          activeParticipantWaits,
+          shutdownRequestedAt,
+          now,
+        })),
+      }
+    } catch (error) {
+      return {
+        completed: true,
+        error,
+        promise: Promise.reject(error),
+      }
+    }
+  }
+  const promise = Promise.allSettled(immediateResults.map((result) =>
+    result.status === "fulfilled" ? result.value : Promise.reject(result.reason)))
+    .then((results) => resolveBeginShutdownResults({
+      results,
+      participants,
+      activeParticipantWaits,
+      shutdownRequestedAt,
+      now,
+    }))
+  return {
+    completed: false,
+    promise,
+  }
 }
 
 export function createStrategyShutdownCoordinator({
@@ -392,44 +492,46 @@ export function createStrategyShutdownCoordinator({
   const activeParticipantWaits = new Map()
   let shutdownRequestedAt = null
   let beginPromise = null
+  let beginCompleted = false
+  let beginError = null
 
   const beginShutdown = () => {
     if (beginPromise) {
       return beginPromise
     }
     shutdownRequestedAt = now()
-    beginPromise = Promise.allSettled(participants.map((participant) =>
-      Promise.resolve().then(() => participant.beginShutdown())))
-      .then((results) => {
-        const strategyBlockers = results.flatMap((result, index) => {
-          if (result.status === "fulfilled") {
-            return []
-          }
-          return [createStrategyBlocker({
-            participant: participants[index],
-            error: result.reason,
-            reason: "STRATEGY_SHUTDOWN_BEGIN_FAILED",
-          })]
-        })
-        if (strategyBlockers.length > 0) {
-          throw createStrategyShutdownError({
-            message: "Strategy shutdown could not begin for every enabled strategy",
-            code: "STRATEGY_SHUTDOWN_BEGIN_FAILED",
-            strategyBlockers,
-            pendingOperations: getPendingParticipantOperations(activeParticipantWaits, now),
-            shutdownRequestedAt,
-            now,
-          })
-        }
-        return {
-          ok: true,
-        }
-      })
+    const operation = createBeginShutdownOperation({
+      participants,
+      activeParticipantWaits,
+      shutdownRequestedAt,
+      now,
+    })
+    beginPromise = operation.promise
+    beginCompleted = operation.completed
+    beginError = operation.error ?? null
+    if (!beginCompleted) {
+      beginPromise.then(
+        () => {
+          beginCompleted = true
+        },
+        (error) => {
+          beginCompleted = true
+          beginError = error
+        },
+      )
+    }
+    beginPromise.catch(() => {})
     return beginPromise
   }
 
   const waitUntilSafe = async ({ signal } = {}) => {
-    await beginShutdown()
+    const pendingBegin = beginShutdown()
+    if (!beginCompleted) {
+      await pendingBegin
+    }
+    if (beginError) {
+      throw beginError
+    }
     return waitForStrategyShutdownParticipants({
       participants,
       signal,
