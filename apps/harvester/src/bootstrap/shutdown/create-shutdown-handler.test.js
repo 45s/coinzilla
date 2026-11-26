@@ -167,6 +167,38 @@ function createShutdown(input = {}) {
     calls,
   }
 }
+async function assertClosingAuditTimeout({
+  fixture,
+  calls,
+  auditStarted,
+  getClosingAuditDeadline,
+  getClosingAuditTimeoutMs,
+  getAuditCalls,
+  stopPromise,
+} = {}) {
+  await auditStarted
+  assert.equal(typeof getClosingAuditDeadline(), "function")
+  assert.equal(getClosingAuditTimeoutMs(), 25)
+  getClosingAuditDeadline()
+  await assert.rejects(
+    stopPromise,
+    (error) => error.code === "SHUTDOWN_PHASE_TIMEOUT" && error.phase === "CLOSING_AUDIT",
+  )
+  const retryStopPromise = fixture.stop()
+  await assert.rejects(
+    retryStopPromise,
+    (error) => error.code === "SHUTDOWN_PHASE_STILL_RUNNING"
+      && error.phase === "CLOSING_AUDIT"
+      && error.status === "PENDING",
+  )
+  assert.equal(getAuditCalls(), 1)
+  assert.equal(calls.includes("market-intake-stop"), false)
+  assert.equal(calls.includes("user-data-stop"), false)
+  assert.equal(calls.includes("broker-disconnect"), false)
+  assert.equal(fixture.state.status, "SHUTDOWN_INCOMPLETE")
+  return retryStopPromise
+}
+
 test("bounds a pending CLOSING audit phase and retains shared services", async () => {
   const calls = []
   let resolveAudit
@@ -211,29 +243,15 @@ test("bounds a pending CLOSING audit phase and retains shared services", async (
   let retryStopPromise
 
   try {
-    await auditStarted
-    assert.equal(typeof closingAuditDeadline, "function", "The CLOSING account audit must have an explicit deadline.")
-    assert.equal(closingAuditTimeoutMs, 25, "The CLOSING audit deadline must use the configured bounded timeout.")
-    closingAuditDeadline()
-    await assert.rejects(
+    retryStopPromise = await assertClosingAuditTimeout({
+      fixture,
+      calls,
+      auditStarted,
+      getClosingAuditDeadline: () => closingAuditDeadline,
+      getClosingAuditTimeoutMs: () => closingAuditTimeoutMs,
+      getAuditCalls: () => auditCalls,
       stopPromise,
-      (error) => error.code === "SHUTDOWN_PHASE_TIMEOUT"
-        && error.phase === "CLOSING_AUDIT",
-      "A timed-out CLOSING audit must produce an explicit bounded failure.",
-    )
-    retryStopPromise = fixture.stop()
-    await assert.rejects(
-      retryStopPromise,
-      (error) => error.code === "SHUTDOWN_PHASE_STILL_RUNNING"
-        && error.phase === "CLOSING_AUDIT"
-        && error.status === "PENDING",
-      "A retry must not overlap the still-pending CLOSING audit operation.",
-    )
-    assert.equal(auditCalls, 1, "A retry must not start a second CLOSING audit while the first is pending.")
-    assert.equal(calls.includes("market-intake-stop"), false, "Market feeds must remain active when the CLOSING audit is incomplete.")
-    assert.equal(calls.includes("user-data-stop"), false, "User-data intake must remain active when the CLOSING audit is incomplete.")
-    assert.equal(calls.includes("broker-disconnect"), false, "The broker must remain connected when the CLOSING audit is incomplete.")
-    assert.equal(fixture.state.status, "SHUTDOWN_INCOMPLETE", "A timed-out shutdown phase must never report STOPPED.")
+    })
   } finally {
     resolveAudit?.({ ok: true })
     await Promise.all([
