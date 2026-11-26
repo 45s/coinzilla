@@ -105,6 +105,7 @@ async function runMongoCommand({ command, body, sequences, operation, collection
         ...body,
         $db: body.$db,
       },
+      sequences,
     })
     if (!response || Number(response.ok) !== 1) {
       throw new MongoCommandError(response ?? {})
