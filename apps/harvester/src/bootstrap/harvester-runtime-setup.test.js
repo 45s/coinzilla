@@ -13,7 +13,10 @@ test("returns and awaits the deferred engine evaluation result", async () => {
       resumeDeferredEvaluations: async () => {
         replayStarted = true
         await replay
-        return { ok: true, data: { resumed: 1 } }
+        return {
+          ok: true,
+          data: { resumed: 1 },
+        }
       },
     },
     userDataState: {
@@ -39,7 +42,10 @@ test("skips deferred replay while the user-data gate is closed", async () => {
     tradingEngine: {
       resumeDeferredEvaluations: async () => {
         called = true
-        return { ok: true, data: { resumed: 1 } }
+        return {
+          ok: true,
+          data: { resumed: 1 },
+        }
       },
     },
     userDataState: {
@@ -51,7 +57,10 @@ test("skips deferred replay while the user-data gate is closed", async () => {
   })
 
   assert.equal(called, false)
-  assert.equal(result, undefined)
+  assert.deepEqual(result, {
+    ok: true,
+    data: { skipped: true },
+  })
 })
 
 test("logs an unsuccessful deferred replay result without throwing", async () => {
@@ -66,7 +75,9 @@ test("logs an unsuccessful deferred replay result without throwing", async () =>
       stopped: false,
       shutdownRequested: false,
     },
-    logger: { error: (entry) => errors.push(entry) },
+    logger: {
+      error: (entry) => errors.push(entry),
+    },
   })
 
   assert.equal(result.ok, false)
@@ -79,7 +90,9 @@ test("catches unexpected deferred replay exceptions and returns a failure result
   const errors = []
   const result = await resumeHarvesterDeferredStrategyEvaluations({
     tradingEngine: {
-      resumeDeferredEvaluations: async () => { throw failure },
+      resumeDeferredEvaluations: async () => {
+        throw failure
+      },
     },
     userDataState: {
       ready: true,

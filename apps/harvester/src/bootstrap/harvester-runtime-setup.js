@@ -66,7 +66,10 @@ export async function resumeHarvesterDeferredStrategyEvaluations({
   logger,
 } = {}) {
   if (!tradingEngine || !userDataState.ready || userDataState.stopped || userDataState.shutdownRequested) {
-    return
+    return {
+      ok: true,
+      data: { skipped: true },
+    }
   }
   try {
     const result = await tradingEngine.resumeDeferredEvaluations()
@@ -82,7 +85,10 @@ export async function resumeHarvesterDeferredStrategyEvaluations({
       message: "deferred strategy evaluation failed",
       error,
     })
-    return { ok: false, errors: [error] }
+    return {
+      ok: false,
+      errors: [error],
+    }
   }
 }
 
