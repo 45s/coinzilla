@@ -216,7 +216,7 @@ function validateScenarioInput({ schema, defaults, input }) {
 
 const RUNTIME_SCENARIO_READINESS_REASONS = Object.freeze([
   "Scenario infrastructure uses a run-local simulated broker and in-memory operational store; it does not prove durable production account or STOP state.",
-  "Full user-data event transition dispatch, an under-target FILLED SELL STOP runtime scenario and general infrastructure-failure scenarios are not yet composed into this adapter.",
+  "An under-target FILLED SELL STOP runtime scenario and general infrastructure-failure scenarios are not yet composed into this adapter.",
   "No trusted OS-level sandbox launcher is available; the host must continue to fail closed.",
 ])
 
@@ -1075,7 +1075,13 @@ function createRuntimeScenarioOrderEventWorkflow({
     isStopping: () => false,
     onUnownedExternalOrderObserved: () => {},
     reconcileRecoverySellerMixedSell,
-    latchRecoverySellerStop: async (input) => runtime.stopWorkflow.latch(input),
+    latchRecoverySellerStop: async ({ order, reason, error }) => runtime.stopWorkflow.latch({
+      explanation: `Scenario Runner terminal reconciliation failed: ${reason}: ${error?.message ?? "unknown"}`,
+      orderIdentity: {
+        clientOrderId: order.clientOrderId,
+        ...(order.brokerOrderId ? { brokerOrderId: order.brokerOrderId } : {}),
+      },
+    }),
   })
 }
 
@@ -1444,8 +1450,10 @@ function createRuntimeScenarioTerminalTraceStep({ output }) {
       cycleStatus: output.terminalSell.cycleState?.status,
       terminalReconciled: output.terminalSell.cycleState?.terminalReconciled,
       profitabilityEligible: output.terminalSell.profitabilityEligible,
+      eventFillStaged: output.terminalSell.eventFillStaged,
+      eventWorkflowReconciled: output.terminalSell.eventWorkflowReconciled,
     },
-    source: "makeOrderEventWorkflow.reconcileTerminalOrderFills → createRecoverySellerAccountingWorkflow.reconcileTerminalMixedSell",
+    source: "makeOrderEventWorkflow.processUserDataEventTransition → createRecoverySellerAccountingWorkflow.reconcileTerminalMixedSell",
   }
 }
 
