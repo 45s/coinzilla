@@ -172,47 +172,26 @@ Do not claim 100% correctness from line/branch coverage. Completion means every 
 - **In progress in [PR #1741](https://github.com/45s/coinzilla/pull/1741):** add `pnpm run operational-state:diagnose` to verify the existing facts/manifest streams with the production store reader, then independently report the offline recovery-projection result.
 - The command is read-only, prints a safe fact-type/candidate summary and exact source identity, and never initializes, repairs, truncates, or mutates the ledger. It does not connect to Binance or enable process-restart restoration.
 
-## Recovery Seller domain scenario coverage — issue #1780
+## Recovery Seller domain scenario testing — issue #1780
 
-**Purpose:** independently prove RS business behavior from the approved domain contract. This is a test-evidence workstream, not a new trading-policy or runtime-activation task. Shared scenario methodology is owned by [#1779](https://github.com/45s/coinzilla/issues/1779) and merged in [PR #1795](https://github.com/45s/coinzilla/pull/1795). The repository-wide human-readable index is [SCENARIO_CATALOG.md](../../docs/testing/SCENARIO_CATALOG.md); #1780 owns the detailed RS matrix and evidence.
+**Purpose:** deliver a from-scratch, source-grounded RS scenario suite. This is a test-evidence workstream, not a trading-policy, configuration, activation or exchange-operation task. The shared strategy-neutral method is [DOMAIN_SCENARIO_TESTING.md](../../docs/testing/DOMAIN_SCENARIO_TESTING.md); the [RS Scenario Testing Playbook](./docs/domain/recovery-seller-scenario-testing.md) owns RS authoring rules; [issue #1780](https://github.com/45s/coinzilla/issues/1780) owns the detailed matrix and evidence; the [Repository Scenario Catalog](../../docs/testing/SCENARIO_CATALOG.md) is the navigation index.
 
-**Merged scenario baseline:** [PR #1793](https://github.com/45s/coinzilla/pull/1793) is merged. Its four scenario files provide initial, deliberately PARTIAL evidence across RS-003 through RS-007; they do not complete any family.
+**Current consolidated review target:** [PR #1852](https://github.com/45s/coinzilla/pull/1852), branch `feat/harvester/rs-scenario-suite-current-develop`. The original [PR #1823](https://github.com/45s/coinzilla/pull/1823) was the source of the expanded registry/playbook work but diverged heavily from current `develop`. Its unique authorizer scenarios RS-002-006-B and RS-002-020-B, owner-approved STOP contract updates, agent guidance, domain inventory and scenario catalog have been transferred to #1852. #1823 remains open until exact-head verification and transfer parity are confirmed; do not merge or close it prematurely.
 
-**Agent playbook:** [PR #1810](https://github.com/45s/coinzilla/pull/1810) is open for review and defines the complete scenario registry, case schemas, worked examples and seven-PR implementation sequence.
+**Transferred suite:** immutable registry and validation, distinct DOMAIN/APPLICATION runners, RS-001 authorization/custody, RS-002 BUY accounting, RS-003 mixed-SELL planning/fill allocation, RS-004 profitability, shared-account reservation/volatility cases, and five dedicated scenario test files. The two unique application authorizer cases are also mapped and included in the targeted-test list. Existing production/runtime tests are not credited as scenario coverage merely because they exist.
 
-**Current application prerequisite:** [PR #1815](https://github.com/45s/coinzilla/pull/1815) addresses #1809 with a real workflow-to-default-SELL-evaluator regression. The test-first RED failure was observed on `65761e992c86e2fd59bdc0811ab8737dbf3c6a31`; the composed regression cases passed Harvester Targeted Tests on `23dbbe303221ea49820eeb9820323512b2fe38df`. The final PR head still requires exact-head CI verification.
+**Current family disposition — no overclaim:**
 
-**New files in the current slice:**
+- **RS-001 — PARTIAL:** 14 registered cases; declared legacy basis and verified Spot custody are separated. Snapshot freshness cases remain blocked because no authoritative freshness marker exists.
+- **RS-002 — PARTIAL:** all 20 reserved business-matrix IDs are represented; 15 are TEST-MAPPED and five remain PARTIAL. The two transferred authorizer cases cover remaining partial BUY commitments and exact investment-cap equality. Third-asset valuation, full order-event/partial-fill lifecycle and other listed application boundaries remain incomplete.
+- **RS-003 — PARTIAL:** additive mixed-SELL planning and allocation cases are registered, including focused precision and filter fail-closed cases. Full custody/workflow composition, multi-fill/commission permutations, broader TradingRules, durability and dust boundaries remain incomplete.
+- **RS-004 — PARTIAL:** profitability scenarios cover independent recovery/legacy/combined gates and recovery-only behavior; the full adverse matrix remains incomplete.
+- **RS-005/006/007 — PARTIAL:** one-SELL lifecycle, atomic mixed-SELL accounting and unknown-outcome behavior still need broader application-level lifecycle, reconciliation and durable failure evidence.
+- **RS-008 — PARTIAL:** volatility and shared account reservation cases include independent CG/RS Positions and seeded-reservation runtime gates. Concurrent newly-created SELL/base intents, cross-asset atomic reservation and broader failure interleavings remain missing.
+- **RS-009 — SPECIFIED, implementation/scenario proof MISSING:** owner-approved STOP is investment-only. STOP blocks additional BUY spending; eligible recovery SELL and existing-order reconciliation/accounting continue. Authorized resolution requires cause correction, authoritative reconciliation, verified accounting/reservations and durable acknowledgement; no automatic clear or self-resume.
+- **RS-010 — UNSUPPORTED/BLOCKED:** restart/replay remains deferred; reliable third-asset commission quote valuation has no approved authoritative source.
 
-- `test/scenarios/recovery-seller-sell-planner.scenario.test.js` — five application-composed planner cases for canonical BUY-derived recovery quantity, verified Spot legacy availability, the specification ZRO proceeds oracle, account SELL reservation blocking, exchange-filter STOP and no-submission behavior.
-- `test/scenarios/recovery-seller-profitability.scenario.test.js` — four named cases for both cross-subsidy directions, exact threshold equality, and recovery-only profitability.
-- `test/scenarios/recovery-seller-mixed-sell-accounting.scenario.test.js` — six named cases for a supplied canonical DOGE Fill split, exact allocation sum, domain projection commit, replay no-op, one failure-atomicity boundary, and staged duplicate/conflict handling.
-- `test/scenarios/recovery-seller-cycle-lifecycle.scenario.test.js` — two explicit cases plus three loop-generated terminal-status cases for unknown identity retention, terminal unsuccessful outcomes, and conflicting client identity rejection.
-
-**Evidence limits:** these are new domain-level scenario files, but not all are end-to-end business scenarios. RS-003's DOGE price/proceeds/commission are synthetic test fixture values; only the 400 + 1 additive quantity example is specification-illustrative. The supplied-Fill allocation test does not prove the planner derives its target from verified custody. The cycle lifecycle tests exercise pure cycle-state transitions, not broker submitter call counts, durable reservation retention, or application STOP side effects. The accounting test proves one-Fill domain projection atomicity, not multi-Fill REST/stream reconciliation or a durable database transaction barrier.
-
-**Scenario status:**
-
-- RS-001 legacy basis/Spot custody — MISSING.
-- RS-002 confirmed BUY/net-fee accounting — MISSING.
-- RS-003 additive mixed SELL allocation — PARTIAL.
-- RS-004 independent profitability — PARTIAL.
-- RS-005 one SELL lifecycle — PARTIAL.
-- RS-006 exact-once/domain projection atomicity — PARTIAL.
-- RS-007 unknown outcome/no blind retry — PARTIAL (state-level only; application no-retry not proved).
-- RS-008 CG/RS shared resources — MISSING.
-- RS-009 STOP — BLOCKED pending resolution of the domain STOP-clear helper/use-case versus terminal-STOP contract.
-- RS-010 restart/replay — UNSUPPORTED; third-asset fee valuation — BLOCKED pending approved source.
-
-**Contract discrepancies to resolve before affected scenarios are encoded:**
-
-1. STOP: specification/#1780 call STOP terminal and say no clear/reset path, but `resolveRecoverySellerStopState` and `resolveRecoverySellerStop` implement an evidence-backed operator resolution. The operator facade currently exposes read-only status only. Do not claim either an exposed operator reset or absence of an internal resolution use case.
-2. Default enabled state: current config sets `RS_RECOVERY_SELLER_CONFIG.enabled: true`, while specification §15 says keep it false by default; the specification's earlier text and implementation roadmap say enabled by default. Keep this as a documentation/owner-decision blocker; this scenario PR must not change configuration.
-3. Third-asset commission valuation: calculation examples exist, but the authoritative runtime quote valuation source remains unresolved/deferred.
-
-**RS-003 workflow-to-evaluator defect — implementation in [PR #1815](https://github.com/45s/coinzilla/pull/1815):** the accounting workflow previously emitted an accumulating cycle state without the canonical domain invariants, so the default SELL evaluator stopped before planning. The fix constructs workflow snapshots from the canonical cycle-state factory, preserves the sole SELL identity for submitted cycles, and keeps unresolved outcomes unresolved. Three new application-composed cases use the real accounting workflow and default SELL evaluator: eligible mixed SELL submission for exactly `1.01 ZRO`, missing verified Spot custody with zero submissions, and existing-order/STOP/pause/incomplete-reconciliation precedence. These cases pass the Harvester Targeted Tests on the recorded test head; the final PR head and merge are still pending.
-
-**Next P0 work:** follow PR 1 in the [RS Scenario Testing Playbook — PR #1810](https://github.com/45s/coinzilla/pull/1810): implement the scenario registry/schema/traceability and thin runner. Then continue the prescribed RS-001/002, RS-003/004, RS-005/007, RS-006, RS-008 and RS-009 slices. Remaining RS-003 gaps include cross-market reservations, legacy exhaustion, multi-fill/commission permutations and durable submission/reconciliation boundaries. No exchange operations or runtime activation are authorized by #1780.
+**Verification boundary:** the former #1852 head `d2a8a3b09adfb9a23f62aeec83ba853b7817806b` had all six required workflows passing. The branch has since been synchronized with current `develop` and received additional test/documentation transfers. Those earlier results do not verify the new exact head; fresh exact-head CI is required. All scenario statuses remain at most TEST-MAPPED/PARTIAL until the exact evidence required by the playbook is recorded. No exchange operations, broker mutations or TESTNET/LIVE session are authorized by #1780.
 
 ## Recovery Seller activation — 2026-11-22
 
