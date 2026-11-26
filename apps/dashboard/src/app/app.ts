@@ -63,11 +63,7 @@ export class AppComponent {
       return [
         { label: 'Markets', page: 'markets' as const, enabled: true },
         { label: 'Orders', page: 'orders' as const, enabled: true },
-        { label: 'Fills', page: 'fills' as const, enabled: true },
-        { label: 'Commissions', page: 'commissions' as const, enabled: true },
-        { label: 'Open Orders', page: 'open-orders' as const, enabled: true },
-        { label: 'Exchanges', page: 'exchanges' as const, enabled: true },
-        { label: 'History', page: null, enabled: false },
+        { label: 'History', page: 'fills' as const, enabled: true },
       ];
     }
     if (section === 'bots') {
@@ -80,13 +76,33 @@ export class AppComponent {
     }
     return [];
   });
+  readonly secondaryNavigationItems = computed(() => {
+    if (this.activeSection() !== 'brokers') return [];
+
+    const page = this.activePage();
+    if (page === 'orders' || page === 'open-orders' || page === 'exchanges') {
+      return [
+        { label: 'Orders', page: 'orders' as const },
+        { label: 'Open Orders', page: 'open-orders' as const },
+        { label: 'Exchanges', page: 'exchanges' as const },
+      ];
+    }
+    if (page === 'fills' || page === 'commissions') {
+      return [
+        { label: 'Fills', page: 'fills' as const },
+        { label: 'Commissions', page: 'commissions' as const },
+      ];
+    }
+    return [];
+  });
 
   readonly themeOptions = THEMES;
   readonly theme = signal<DashboardTheme>('current');
   readonly activePage = signal<DashboardPage>('overview');
   readonly activeSection = signal<'overview' | 'bots' | 'brokers' | 'github' | 'scenario-runner'>('overview');
   readonly activeLabel = computed(() =>
-    this.sectionNavigationItems().find((item) => item.page === this.activePage())?.label
+    this.secondaryNavigationItems().find((item) => item.page === this.activePage())?.label
+      ?? this.sectionNavigationItems().find((item) => item.page === this.activePage())?.label
       ?? this.navigationItems.find((item) => item.page === this.activePage())?.label
       ?? 'Overview',
   );
@@ -136,6 +152,15 @@ export class AppComponent {
       'scenario-runner': 'scenario-runner',
     } as const;
     this.activePage.set(pageBySection[section]);
+  }
+
+  isPrimaryTabActive(item: { label: string; page: DashboardPage | null }): boolean {
+    const page = this.activePage();
+    if (this.activeSection() === 'brokers') {
+      if (item.label === 'Orders') return page === 'orders' || page === 'open-orders' || page === 'exchanges';
+      if (item.label === 'History') return page === 'fills' || page === 'commissions';
+    }
+    return item.page === page;
   }
 
   selectSubPage(page: DashboardPage): void {
