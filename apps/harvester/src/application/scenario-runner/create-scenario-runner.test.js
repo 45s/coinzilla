@@ -6,7 +6,10 @@ import { SCENARIO_RUN_STATUS } from "../../domain/scenario-runner/run-status.js"
 function createAdapter(execute = async () => ({ output: "result" })) {
   return Object.freeze({
     strategyId: "example",
-    execute,
+    execute: (execution) => {
+      execution.onStarted()
+      return execute(execution)
+    },
     cancel: async () => true,
   })
 }
@@ -21,7 +24,7 @@ test("runner creates isolated run records and completes through a strategy adapt
     scenarioId: "scenario-1",
     input: { value: 1 },
   })
-  assert.equal(accepted.status, SCENARIO_RUN_STATUS.RUNNING)
+  assert.equal(accepted.status, SCENARIO_RUN_STATUS.STARTING)
   assert.ok(accepted.transitions.some((transition) => transition.status === SCENARIO_RUN_STATUS.ACCEPTED))
   const result = await runner.waitForRun("run-1")
   assert.equal(result.status, SCENARIO_RUN_STATUS.COMPLETED)
@@ -274,7 +277,7 @@ test("runner retains a blocked run when the bounded queue is full", async () => 
     scenarioId: "overflow",
   })
 
-  assert.equal(active.status, SCENARIO_RUN_STATUS.RUNNING,
+  assert.equal(active.status, SCENARIO_RUN_STATUS.STARTING,
     "The first run must occupy the only worker slot.")
   assert.equal(blocked.status, SCENARIO_RUN_STATUS.BLOCKED,
     "A submission beyond queue capacity must be explicitly blocked.")
@@ -318,7 +321,7 @@ test("runner rejects new submissions when bounded history is occupied by active 
   "A full history containing only active runs must reject without returning an unpersisted run ID.")
   assert.equal(runner.listRuns().length, 1,
     "Rejecting at the history limit must not exceed the configured record bound.")
-  assert.equal(runner.getRun(active.runId)?.status, SCENARIO_RUN_STATUS.RUNNING,
+  assert.equal(runner.getRun(active.runId)?.status, SCENARIO_RUN_STATUS.STARTING,
     "Capacity rejection must leave the existing active run unchanged.")
 
   await runner.close()
@@ -357,8 +360,8 @@ test("runner queues excess runs and starts them FIFO when worker slots free", as
     strategyId: "example",
     scenarioId: "third",
   })
-  assert.equal(first.status, SCENARIO_RUN_STATUS.RUNNING)
-  assert.equal(second.status, SCENARIO_RUN_STATUS.RUNNING)
+  assert.equal(first.status, SCENARIO_RUN_STATUS.STARTING)
+  assert.equal(second.status, SCENARIO_RUN_STATUS.STARTING)
   assert.equal(third.status, SCENARIO_RUN_STATUS.QUEUED)
   const thirdCompletion = runner.waitForRun(third.runId)
   await new Promise((resolve) => setImmediate(resolve))
@@ -569,4 +572,26 @@ test("runner remains Starting until the adapter confirms its isolated worker is 
   assert.equal(result.status, SCENARIO_RUN_STATUS.COMPLETED)
   assert.ok(result.transitions.some((item) => item.status === SCENARIO_RUN_STATUS.RUNNING),
     "The runner must publish Running after the adapter confirms worker readiness.")
+})
+
+test("runner fails closed when an adapter completes without confirming worker readiness", async () => {
+  const runner = createScenarioRunner({
+    adapters: [{
+      strategyId: "example",
+      execute: async () => ({ output: "must not be accepted" }),
+      cancel: async () => true,
+    }],
+    createRunId: () => "run-missing-startup-signal",
+  })
+
+  const accepted = runner.submit({
+    strategyId: "example",
+    scenarioId: "missing-startup-signal",
+  })
+  const result = await runner.waitForRun(accepted.runId)
+
+  assert.equal(result.status, SCENARIO_RUN_STATUS.FAILED,
+    "An adapter result without an explicit worker-readiness signal must not be reported as a successful run.")
+  assert.match(result.diagnostics[0], /without confirming isolated worker readiness/,
+    "The failed run must explain that worker readiness was not confirmed.")
 })

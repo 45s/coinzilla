@@ -44,11 +44,16 @@ test("process adapter returns a helper result from a test-only child launcher", 
     strategyId: "RS",
     spawnSandboxedWorker: createSimulatedSandboxLauncher(),
   })
+  let workerStarted = false
   const result = await adapter.execute({
     runId: "run-worker-1",
     scenarioId: "RS-004-011",
     input: null,
+    onStarted: () => {
+      workerStarted = true
+    },
   })
+  assert.equal(workerStarted, true, "The process adapter must signal readiness after creating its sandboxed worker.")
   assert.equal(result.passed, true)
   assert.equal(result.runId, "run-worker-1")
 })

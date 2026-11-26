@@ -459,7 +459,7 @@ function createWorkerExecutor({
   children,
   osSandboxVerified,
 }) {
-  return async function execute({ runId, scenarioId, input, signal } = {}) {
+  return async function execute({ runId, scenarioId, input, signal, onStarted } = {}) {
     if (!osSandboxVerified) {
       throw new Error("OS-level sandbox isolation has not been verified for the process scenario adapter")
     }
@@ -484,6 +484,9 @@ function createWorkerExecutor({
       terminationGraceMs,
       maxOutputBytes,
     })
+    if (typeof onStarted === "function") {
+      onStarted()
+    }
     try {
       child.send({
         type: "execute",

@@ -208,13 +208,16 @@ test("host exposes an executable scenario only when its strategy adapter is regi
     strategyId: "RS",
     executionMode: "simulation-only",
     osSandboxVerified: true,
-    execute: async () => ({
-      trace: [{
+    execute: async ({ onStarted }) => {
+      onStarted()
+      return {
+        trace: [{
         id: "decision",
         kind: "decision",
         label: "Production decision",
-      }],
-    }),
+        }],
+      }
+    },
     cancel: async () => true,
   }
   const host = createScenarioRunnerHost({

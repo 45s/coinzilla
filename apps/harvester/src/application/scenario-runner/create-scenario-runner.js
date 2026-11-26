@@ -114,7 +114,7 @@ function createRecord({ runId, strategyId, scenarioId, input, now }) {
   return record
 }
 
-function createExecutionRace({ adapter, record, controller, timeoutMs }) {
+function createExecutionRace({ adapter, record, controller, timeoutMs, onStarted }) {
   let timer
   const executionInput = structuredClone(record.executionInput ?? record.input)
   const execution = Promise.resolve().then(() => adapter.execute({
@@ -122,6 +122,7 @@ function createExecutionRace({ adapter, record, controller, timeoutMs }) {
     scenarioId: record.scenarioId,
     input: executionInput,
     signal: controller.signal,
+    onStarted,
   }))
   const executionResult = execution.then(
     (output) => ({
@@ -346,6 +347,14 @@ async function finishExecution({ context, record, adapter, result }) {
       onUpdate: context.onUpdate,
       diagnostic: result.error instanceof Error ? result.error.message : "Scenario execution failed.",
     })
+  } else if (record.status === SCENARIO_RUN_STATUS.STARTING) {
+    transitionRun({
+      record,
+      status: SCENARIO_RUN_STATUS.FAILED,
+      now: context.now,
+      onUpdate: context.onUpdate,
+      diagnostic: "Strategy adapter completed without confirming isolated worker readiness.",
+    })
   } else if (!result.output || typeof result.output !== "object") {
     transitionRun({
       record,
@@ -376,28 +385,32 @@ async function finishExecution({ context, record, adapter, result }) {
 
 function startExecution({ context, record, adapter }) {
   const controller = new AbortController()
-  const race = createExecutionRace({
-    adapter,
-    record,
-    controller,
-    timeoutMs: context.timeoutMs,
-  })
-  delete record.executionInput
   context.executions.set(record.runId, {
     controller,
     adapter,
   })
+  delete record.executionInput
   transitionRun({
     record,
     status: SCENARIO_RUN_STATUS.STARTING,
     now: context.now,
     onUpdate: context.onUpdate,
   })
-  transitionRun({
+  const race = createExecutionRace({
+    adapter,
     record,
-    status: SCENARIO_RUN_STATUS.RUNNING,
-    now: context.now,
-    onUpdate: context.onUpdate,
+    controller,
+    timeoutMs: context.timeoutMs,
+    onStarted: () => {
+      if (record.status === SCENARIO_RUN_STATUS.STARTING && !controller.signal.aborted) {
+        transitionRun({
+          record,
+          status: SCENARIO_RUN_STATUS.RUNNING,
+          now: context.now,
+          onUpdate: context.onUpdate,
+        })
+      }
+    },
   })
   const completion = race.promise.then((result) => finishExecution({
     context,
