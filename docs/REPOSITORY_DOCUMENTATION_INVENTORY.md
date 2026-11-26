@@ -5,7 +5,7 @@
 **Tracked Markdown files:** 213 at this tree snapshot.
 **Policy:** [Documentation Governance](DOCUMENTATION_GOVERNANCE.md).
 
-> The previous detailed inventory and dated recursive checkpoints are preserved in [REPOSITORY_DOCUMENTATION_INVENTORY_2026-11-26](REPOSITORY_DOCUMENTATION_INVENTORY_HISTORY_2026-11-26.md). This page is the current entry point; counts must be refreshed from the recursive Git tree when the inventory is audited again.
+> The previous detailed inventory and dated recursive checkpoints are preserved in [REPOSITORY_DOCUMENTATION_INVENTORY_2026-11-26](archive/roadmap-history-2026-11-26.md#inventory). This page is the current entry point; counts must be refreshed from the recursive Git tree when the inventory is audited again.
 
 ## Canonical sources by information type
 
@@ -52,10 +52,10 @@ The original contents are preserved in the dated snapshots linked above. No sour
 
 The second cleanup pass reduced four high-volume package roadmaps to active priority indexes and preserved their complete prior contents as dated snapshots:
 
-- [Brokers roadmap history](../packages/brokers/ROADMAP_HISTORY_2026-11-26.md) — prior 250 KB roadmap.
-- [Journal roadmap history](../packages/journal/ROADMAP_HISTORY_2026-11-26.md) — prior 48 KB roadmap.
-- [Event Bus roadmap history](../packages/event-bus/ROADMAP_HISTORY_2026-11-26.md) — prior 27 KB roadmap.
-- [Utils roadmap history](../packages/utils/ROADMAP_HISTORY_2026-11-26.md) — prior 21 KB roadmap.
+- [Brokers roadmap history](archive/roadmap-history-2026-11-26.md#root-roadmap) — prior 250 KB roadmap.
+- [Journal roadmap history](archive/roadmap-history-2026-11-26.md#root-roadmap) — prior 48 KB roadmap.
+- [Event Bus roadmap history](archive/roadmap-history-2026-11-26.md#root-roadmap) — prior 27 KB roadmap.
+- [Utils roadmap history](archive/roadmap-history-2026-11-26.md#root-roadmap) — prior 21 KB roadmap.
 
 No package source, public API, tests, README, domain specification, or ADR was changed. Active pages now point to canonical API/readme/source and issues; detailed delivery evidence remains in the snapshots. These snapshots are archival provenance, not current instructions or status authority.
 
@@ -64,10 +64,10 @@ No package source, public API, tests, README, domain specification, or ADR was c
 
 Additional active roadmap pages were reduced to concise owner/status/next-action indexes; full prior contents were preserved as dated sibling snapshots:
 
-- [Dashboard roadmap history](../apps/dashboard/ROADMAP_HISTORY_2026-11-26.md) — feature-specific Scenario Runner decisions remain in its dedicated roadmap.
-- [Database roadmap history](../packages/db/ROADMAP_HISTORY_2026-11-26.md) — completed infrastructure delivery and provider-neutral contract notes.
-- [Entities roadmap history](../packages/entities/ROADMAP_HISTORY_2026-11-26.md) — detailed FR contract execution notes.
-- [Notifiers roadmap history](../packages/notifiers/ROADMAP_HISTORY_2026-11-26.md) — completed phases and validation records.
-- [Harvester Journal integration history](../apps/harvester/docs/JOURNAL_INTEGRATION_ROADMAP_HISTORY_2026-11-26.md) — staged PR-by-PR integration evidence; Step 8 closeout remains open.
+- [Dashboard roadmap history](archive/roadmap-history-2026-11-26.md#root-roadmap) — feature-specific Scenario Runner decisions remain in its dedicated roadmap.
+- [Database roadmap history](archive/roadmap-history-2026-11-26.md#root-roadmap) — completed infrastructure delivery and provider-neutral contract notes.
+- [Entities roadmap history](archive/roadmap-history-2026-11-26.md#root-roadmap) — detailed FR contract execution notes.
+- [Notifiers roadmap history](archive/roadmap-history-2026-11-26.md#root-roadmap) — completed phases and validation records.
+- [Harvester Journal integration history](archive/roadmap-history-2026-11-26.md#root-roadmap) — staged PR-by-PR integration evidence; Step 8 closeout remains open.
 
 The active pages now point to canonical READMEs, contracts, tests, issues, or feature roadmaps instead of repeating completed phase histories. These snapshots preserve provenance but are not current task-status authority.
