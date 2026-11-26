@@ -1,5 +1,5 @@
 function isWhitespace({ character }) {
-  return character === " " || character === "\\t" || character === "\\n" || character === "\\r"
+  return character === " " || character === "\t" || character === "\n" || character === "\r"
 }
 
 function skipWhitespace({ text, startIndex }) {
@@ -17,7 +17,7 @@ function findStringEnd({ text, startIndex }) {
     const character = text[index]
     if (escaped) {
       escaped = false
-    } else if (character === "\\\\") {
+    } else if (character === "\\") {
       escaped = true
     } else if (character === '"') {
       return index + 1

@@ -49,9 +49,10 @@ test("quoteDepthLevelNumbers ignores numeric text in strings and escaped quotes"
 })
 
 test("quoteDepthLevelNumbers handles deeply nested arrays and large depth payloads", () => {
-  const levels = Array.from({ length: 20_000 }, (_, index) => (
-    `[${index}.000000000000000001,1e-8]`
-  )).join(",")
+  const levels = []
+  for (let index = 0; index < 20_000; index += 1) {
+    levels.push(`[${index}.000000000000000001,1e-8]`)
+  }
   const source = `{"asks":[${levels}],"bids":[[[[-2.5E+3]]]]}`
   const parsed = JSON.parse(quoteDepthLevelNumbers({ text: source }))
 
