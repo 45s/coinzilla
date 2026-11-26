@@ -205,6 +205,20 @@ The startup exchange-history synchronizer deliberately logs and returns when rel
 
 The engine object may be activated before user-data readiness is established, but its `canTrade` gate remains closed until the user-data and account-integrity checks succeed. Logs must keep the audit classification (`readiness`, `blockReasons`, `symbols`) separate from engine activation and actual per-market trading readiness. A successful audit capture with `readiness=BLOCKED` must not be relabeled `READY`; an allowed startup under `ignore` must not be misreported as an ignored required gate.
 
+## Shutdown lifecycle milestones
+
+These milestones are separate and must not be collapsed into one generic `STOPPED` log:
+
+1. **Strategy safety completed** — every registered strategy participant returns `COMPLETED` and its safety marker remains valid. This proves only that the strategy's current owned orders, fills, commissions and recovery coverage are safe to stop managing.
+2. **Durable CLOSING** — after strategy proof and market-intake quiescence, the account-wide closing snapshot and CLOSING audit are durably written. Failure prevents shared-service teardown.
+3. **Runtime shutdown completed** — required market/user-data intake and broker teardown phases complete, final reconciliation/Journal barriers pass, and the runtime shutdown handler reaches `RUNTIME_SHUTDOWN_COMPLETED`.
+4. **Durable PROCESS_STOPPED** — only after the runtime stop returns confirmed success does the outer Harvester stop append the `PROCESS_STOPPED` Operational State Store fact. If this append is not confirmed, the outer stop reports `SHUTDOWN_INCOMPLETE`; it must not publish a successful process-stop result or release the process lock.
+5. **STOPPED lifecycle event and Journal close** — after the durable process-stop fact, the process shutdown handler publishes the `STOPPED` lifecycle event, flushes the EventBus, closes the Journal and other observability services, then attempts process-lock release. Journal close failure retains the lock.
+6. **Process-lock release** — a successful release is a separate cleanup result; it is not proof that the OS process has exited.
+7. **OS process exit** — occurs only after the outer shutdown handler returns and the process event loop exits. No missing trace record, missing console line, or missing STOPPED event proves that the OS process exited.
+
+The runtime's timeout/blocked/failed participant diagnostics include the strategy ID, participant operation, configured deadline, market, current operation, last successful step, missing evidence, active/pending owned order identities and nested error summary. A timed-out operation remains unresolved; the participant's AbortSignal prevents it from advancing later stages or publishing a new safe marker after the deadline.
+
 ## Strategy-owned normal shutdown
 
 > **Owner-approved shutdown contract — [issue #1186](https://github.com/45s/coinzilla/issues/1186):** This section records the required Conservative shutdown sequence. The canonical rules are defined in [the Conservative specification](./domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md#10-conservative-graceful-shutdown--protect-trading-before-stopping-services). Safety is state-driven: evaluate immediately after authoritative reconciliation; there is no arbitrary wait or quiet-period timer.
