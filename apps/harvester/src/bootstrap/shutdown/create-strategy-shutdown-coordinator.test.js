@@ -383,3 +383,39 @@ test("bounds repeated successful safety proofs when the marker remains invalidat
   )
   assert.equal(waitCalls, 2, "The coordinator must allow only two complete safety proofs before failing closed.")
 })
+
+
+test("reports empty markets when a failed participant omits its optional safety snapshot", async () => {
+  const failure = Object.assign(new Error("Recovery evidence is unavailable"), {
+    code: "RECOVERY_EVIDENCE_UNAVAILABLE",
+  })
+  const coordinator = createStrategyShutdownCoordinator({
+    participants: [{
+      strategyId: "CONSERVATIVE",
+      beginShutdown() {},
+      waitUntilSafe: async () => ({
+        ok: false,
+        errors: [failure],
+      }),
+      isSafeToShutdown: () => false,
+    }],
+  })
+
+  await assert.rejects(
+    coordinator.waitUntilSafe(),
+    (error) => {
+      assert.equal(error.code, "STRATEGY_SHUTDOWN_SAFETY_UNPROVEN")
+      const [blocker] = error.shutdownDiagnostics.strategyBlockers
+      assert.equal(blocker.safetySnapshot, undefined)
+      assert.deepEqual(blocker.markets, [])
+      assert.deepEqual(blocker.cause, {
+        name: "Error",
+        code: failure.code,
+        message: failure.message,
+        errors: [],
+      })
+      return true
+    },
+    "A missing optional snapshot must not hide the strategy failure or fabricate market blockers.",
+  )
+})
