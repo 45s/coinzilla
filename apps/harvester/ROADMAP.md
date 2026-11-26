@@ -686,6 +686,7 @@ The Command Center roadmap is complete; this section is intentionally a pointer 
 7. [x] Correct the candle-stream freshness window to one interval plus five seconds, add quiet-stream regressions, and synchronize the contract/docs — merged [PR #1049](https://github.com/45s/coinzilla/pull/1049). Initial ratio-threshold validation against representative offline history remains open.
 8. [x] Synchronize living documentation and roadmaps with merged implementation and remaining calibration work.
 9. [x] Add the local-only offline calibration CLI, exact runtime metric/state replay, CSV validation and candidate-threshold options — merged [PR #1046](https://github.com/45s/coinzilla/pull/1046) at `6d103fb044939f9bab9cde766a548957f3948f4e`; all required exact-head checks passed.
+10. [x] Add deterministic three-symbol synthetic CLI regression proving per-market report/state isolation — PR #1871. This is regression evidence only, not historical threshold acceptance.
 10. [ ] Run the analyzer against representative multi-symbol historical data, review threshold trade-offs and accept or revise the provisional values. This is not complete until real archive data has been analyzed.
 
 ---
@@ -2494,14 +2495,3 @@ The branch has been synchronized with current `develop`. Exact-head Harvester te
 The readiness report, market prerequisites and operator query projection were decomposed into focused functions to satisfy the repository's strict complexity and function-size rules without weakening lint policy.
 Accepted market-price events received while the global gate is closed are retained without running or consuming the strategy transition, then replayed through the engine's existing deferred-evaluation queue after activation; startup awaits replay completion, and market-local pause state is not broadened into a global replay.
 Per-market book freshness, metadata and volatility remain enforced at the final engine submission boundary; the operator readiness projection reports those blockers without masking the engine's precise submission/replacement diagnostics.
-
-## Reliability engineering baseline — issue #1639
-
-A source-backed reliability baseline was recorded on 2026-11-26 in [the Harvester Reliability Engineering Baseline](docs/audits/reports/2026-11-26_harvester-reliability-engineering-baseline.md). The assessment confirms existing critical-behavior and module-coverage enforcement and records two active high-risk verification items:
-
-- PR #1858: Harvester Targeted Tests failed on the inspected head; `create-shutdown-handler.test.js` timed out after 300.10 seconds. Root cause remains unconfirmed. Do not weaken the test or timeout; reproduce and isolate the pending operation.
-- PR #1861: readiness report/startup composition requires independent review. Its associated workflows reported `action_required`, not passing checks. Verify authoritative state ownership and avoid parallel readiness/orchestration authorities.
-
-The umbrella execution plan, fault-domain model, failure-contract schema, state-transition requirements, finding schema, gates and R0–R6 roadmap are recorded in [issue #1639](https://github.com/45s/coinzilla/issues/1639).
-
-**Current phase: R0 — baseline and incident triage.** No coverage percentages or branch-protection guarantees are claimed until measured/verified on an exact current develop SHA. No LIVE exchange mutations are authorized.
