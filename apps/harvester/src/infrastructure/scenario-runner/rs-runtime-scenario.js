@@ -909,8 +909,8 @@ function assertRuntimeScenarioPartialSellReconciled({ eventResult, terminalAccou
     new Error("Production Recovery Seller order-event reconciliation failed")
 }
 
-async function reconcileRuntimeScenarioPartialSell({ runtime, execution }) {
-  const submittedOrder = execution.data.submittedOrders?.[0]
+function resolveSubmittedRuntimeSellOrder({ runtime, execution }) {
+  const [submittedOrder] = execution.data.submittedOrders ?? []
   if (!submittedOrder) {
     throw new Error("Partial SELL scenario requires the production runtime to acknowledge its SELL order")
   }
@@ -921,6 +921,17 @@ async function reconcileRuntimeScenarioPartialSell({ runtime, execution }) {
   if (!openOrder) {
     throw new Error("Partial SELL scenario cannot find its acknowledged canonical SELL order")
   }
+  return {
+    orderRegistry,
+    openOrder,
+  }
+}
+
+async function reconcileRuntimeScenarioPartialSell({ runtime, execution }) {
+  const { orderRegistry, openOrder } = resolveSubmittedRuntimeSellOrder({
+    runtime,
+    execution,
+  })
   const partialQuantity = "2.5"
   const terminalOrder = createRuntimeScenarioPartialSellOrder({
     runtime,
