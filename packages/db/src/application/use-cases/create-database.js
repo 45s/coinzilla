@@ -202,7 +202,7 @@ function createProviderNeutralFacade({ database, provider }) {
         if (capabilities.transactions.callbackMode === "synchronous" && isAsyncFunction(work)) {
           throw new TypeError("Synchronous database provider transaction callbacks must be synchronous")
         }
-        return invokeTransactionCallback(work, transaction)
+        return invokeTransactionCallback({ work, transaction })
       })
     },
     create: (input) => runOperation({
