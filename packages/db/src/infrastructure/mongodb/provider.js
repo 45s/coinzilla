@@ -521,7 +521,6 @@ export function createMongoProvider(options = {}) {
     connect,
     close,
     withTransaction: runTransaction,
-    withReadTransaction: runTransaction,
     execute,
     capabilities: MONGO_CAPABILITIES,
   })
