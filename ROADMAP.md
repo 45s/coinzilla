@@ -4,7 +4,7 @@
 **Last reviewed:** 2026-11-26
 **Current branch:** `develop`
 
-> This page is an index, not a second task tracker. The full pre-cleanup roadmap was preserved at [ROOT_ROADMAP_HISTORY_2026-11-26](docs/archive/roadmaps/ROOT_ROADMAP_HISTORY_2026-11-26.md).
+> This page is an index, not a second task tracker. The full pre-cleanup roadmap was preserved at [ROOT_ROADMAP_HISTORY_2026-11-26](ROADMAP_HISTORY_2026-11-26.md).
 
 ## Active cross-workspace priorities
 
