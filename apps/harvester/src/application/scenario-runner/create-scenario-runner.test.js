@@ -595,3 +595,71 @@ test("runner fails closed when an adapter completes without confirming worker re
   assert.match(result.diagnostics[0], /without confirming isolated worker readiness/,
     "The failed run must explain that worker readiness was not confirmed.")
 })
+
+
+test("runner records the exact source revision and replays the original scenario input on that revision", async () => {
+  const receivedInputs = []
+  let runSequence = 0
+  const sourceRevision = "a".repeat(40)
+  const adapter = {
+    strategyId: "example",
+    execute: ({ input, onStarted }) => {
+      onStarted()
+      receivedInputs.push(structuredClone(input))
+      return { output: { received: input } }
+    },
+    cancel: async () => true,
+  }
+  const runner = createScenarioRunner({
+    adapters: [adapter],
+    sourceRevision,
+    createRunId: () => `run-replay-${++runSequence}`,
+  })
+  const original = runner.submit({
+    strategyId: "example",
+    scenarioId: "scenario-original",
+    input: { market: "ZROUSDT", investment: "100" },
+  })
+  const completedOriginal = await runner.waitForRun(original.runId)
+
+  assert.equal(completedOriginal.sourceRevision, sourceRevision,
+    "Every run must record the exact source revision supplied by its owning runtime.")
+  const replay = runner.replay(original.runId)
+  const completedReplay = await runner.waitForRun(replay.runId)
+
+  assert.equal(completedReplay.status, SCENARIO_RUN_STATUS.COMPLETED,
+    "A replay may execute only when the original source revision matches the active runtime revision.")
+  assert.equal(completedReplay.replayOfRunId, original.runId,
+    "A replay must retain an explicit link to its original run.")
+  assert.equal(completedReplay.sourceRevision, sourceRevision,
+    "A replay must preserve the original exact source revision.")
+  assert.deepEqual(completedReplay.input, completedOriginal.input,
+    "A replay must reuse the original validated input snapshot rather than current scenario defaults.")
+  assert.deepEqual(receivedInputs, [
+    { market: "ZROUSDT", investment: "100" },
+    { market: "ZROUSDT", investment: "100" },
+  ], "The adapter must receive the same original input for the initial run and its replay.")
+})
+
+test("runner blocks exact replay when the source revision is unknown", async () => {
+  const runner = createScenarioRunner({
+    adapters: [createAdapter()],
+    createRunId: (() => {
+      let sequence = 0
+      return () => `run-unknown-revision-${++sequence}`
+    })(),
+  })
+  const original = runner.submit({
+    strategyId: "example",
+    scenarioId: "scenario-original",
+    input: { value: "original" },
+  })
+  await runner.waitForRun(original.runId)
+
+  const replay = runner.replay(original.runId)
+
+  assert.equal(replay.status, SCENARIO_RUN_STATUS.BLOCKED,
+    "The runner must not silently replay with current code when the original source revision is unknown.")
+  assert.match(replay.diagnostics[0], /source revision.*unknown/i,
+    "A blocked replay must explain that exact source provenance is unavailable.")
+})
