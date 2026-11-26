@@ -1064,10 +1064,15 @@ function reportShutdownFailure({ error, context, state, options, phaseRunner, sh
     context,
     cleanupErrors: [error],
   })
+  const errorDiagnostics = error.shutdownDiagnostics ?? {}
   error.shutdownDiagnostics = {
     ...diagnostics,
-    ...(error.shutdownDiagnostics ?? {}),
-    strategyBlockers: error.shutdownDiagnostics?.strategyBlockers ?? diagnostics.strategyBlockers,
+    ...errorDiagnostics,
+    strategyBlockers: errorDiagnostics.strategyBlockers ?? diagnostics.strategyBlockers,
+    pendingOperations: [
+      ...(diagnostics.pendingOperations ?? []),
+      ...(errorDiagnostics.pendingOperations ?? []),
+    ],
   }
   options.logger?.error?.({
     message: "Shutdown incomplete; STOPPED was not recorded and remaining runtime services are retained",
