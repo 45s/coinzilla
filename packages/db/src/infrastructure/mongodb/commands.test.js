@@ -214,7 +214,7 @@ test("MongoDB delete reports successful single-record deletion", async () => {
 
 test("MongoDB rejects malformed cursor responses rather than returning empty results", async () => {
   const readOne = createMongoRecordOperations({
-    command: async () => ({ ok: 1, cursor: {} }),
+    command: async () => ({ ok: 1, cursor: { id: 0 } }),
     databaseName: "app",
   })
   const readMany = createMongoRecordOperations({
@@ -294,6 +294,31 @@ test("MongoDB readMany accepts BSON int64 cursor ids and validates getMore repla
   )
   assert.equal(stub.calls[1].getMore, 12n)
   assert.deepEqual(stub.calls[2].cursors, [12n])
+})
+
+
+test("MongoDB cleans up cursors when initial read batches are malformed", async () => {
+  const readOneStub = createCommandStub([
+    { ok: 1, cursor: { id: 17, firstBatch: null } },
+    { ok: 1, cursorsKilled: [17] },
+  ])
+  const readManyStub = createCommandStub([
+    { ok: 1, cursor: { id: 18, firstBatch: null } },
+    { ok: 1, cursorsKilled: [18] },
+  ])
+  const readOne = createMongoRecordOperations({
+    command: readOneStub.command,
+    databaseName: "app",
+  })
+  const readMany = createMongoRecordOperations({
+    command: readManyStub.command,
+    databaseName: "app",
+  })
+
+  await assert.rejects(readOne.readOne({ collection: "people", id: "one" }))
+  await assert.rejects(readMany.readMany({ collection: "people" }))
+  assert.deepEqual(readOneStub.calls[1].cursors, [17])
+  assert.deepEqual(readManyStub.calls[1].cursors, [18])
 })
 
 test("MongoDB readMany drains every cursor batch", async () => {
