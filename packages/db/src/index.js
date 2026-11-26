@@ -3,6 +3,7 @@ export { createSqliteDatabase, restoreSqliteDatabase } from "./sqlite-database.j
 export { createSqliteProvider } from "./infrastructure/sqlite/provider.js"
 export {
   DatabaseConflictError,
+  DatabaseOperationOutcomeUnknownError,
   DatabaseProviderError,
   DatabaseTransactionOutcomeUnknownError,
   DatabaseTransactionUnsupportedError,
