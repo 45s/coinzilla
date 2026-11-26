@@ -453,6 +453,7 @@ function createRuntimeScenarioReconciliationRecorder({ operationalStateStore }) 
     ownership: cycleOwnership,
     canonicalFills,
     eligible,
+    accountingApplied,
   }) => operationalStateStore.append({
     factId: `rs-mixed-sell-reconciled-${terminalOrder.clientOrderId}`,
     factType: "RECOVERY_SELLER_MIXED_SELL_RECONCILED",
@@ -465,6 +466,7 @@ function createRuntimeScenarioReconciliationRecorder({ operationalStateStore }) 
       terminalOrderStatus: terminalOrder.status,
       fillIds: canonicalFills.map((fillItem) => fillItem.id),
       profitabilityEligible: eligible,
+      accountingApplied,
     },
   })
 }
