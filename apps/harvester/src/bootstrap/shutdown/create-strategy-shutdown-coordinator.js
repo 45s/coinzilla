@@ -13,7 +13,9 @@ function createStrategyBlocker({ participant, error, reason, status } = {}) {
     strategyId: participant.strategyId,
     status: status ?? (error?.code === "STRATEGY_SHUTDOWN_PARTICIPANT_TIMEOUT"
       ? "TIMED_OUT"
-      : (error?.code?.includes("UNPROVEN") || blockerReason === "STRATEGY_SAFETY_MARKER_INVALIDATED"
+      : (error?.code?.includes("UNPROVEN") ||
+        blockerReason === "STRATEGY_SAFETY_MARKER_INVALIDATED" ||
+        blockerReason.startsWith("SHUTDOWN_SAFETY_REEVALUATION_LIMIT_EXCEEDED")
         ? "BLOCKED"
         : "FAILED")),
     reason: blockerReason,
