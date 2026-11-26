@@ -78,6 +78,15 @@ function validateApiDependencies({ database, eventBus, environment }) {
   }
 }
 
+function resolveScenarioRunnerSourceRevision({ env } = {}) {
+  const sourceRevision = env.COINZILLA_SOURCE_REVISION
+  if (typeof sourceRevision !== "string" ||
+      !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/i.test(sourceRevision)) {
+    return null
+  }
+  return sourceRevision.toLowerCase()
+}
+
 function createQueryFacade({ database }) {
   const repository = createTradingHistoryQueryRepository({ database })
   return createTradingHistoryQueries({ repository })
@@ -137,7 +146,10 @@ export async function startTradingHistoryApi({
     environment: configuration.environment,
   })
   const queries = createQueryFacade({ database })
-  const runnerHost = createScenarioRunnerHost({ eventBus })
+  const runnerHost = createScenarioRunnerHost({
+    eventBus,
+    sourceRevision: resolveScenarioRunnerSourceRevision({ env }),
+  })
   const server = await openApiServer({
     startServer,
     configuration,

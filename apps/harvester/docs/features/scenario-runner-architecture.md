@@ -167,3 +167,8 @@ The current implementation deliberately does not perform arbitrary Git checkout 
 ## Replay REST command
 
 `POST /api/v1/scenario-runner/runs/{runId}/replay` requests an original-revision replay. Harvester validates that the original run is terminal and that its full source SHA matches the active runtime source SHA, then submits the original recorded input snapshot through the normal validation/execution pipeline. A successful accepted replay returns `202` with a new run record linked by `replayOfRunId`; a provenance/safety block returns `409` with the authoritative `Blocked` record and diagnostic. Missing original runs return `404`. If replay is not composed, the API returns `503`; it never falls back to current scenario defaults or current code without matching provenance.
+
+
+### Runtime source revision injection
+
+The Harvester API composition root reads the non-secret build metadata variable `COINZILLA_SOURCE_REVISION`. Only a full 40- or 64-character hexadecimal Git commit SHA is accepted; malformed or absent metadata is treated as unknown and disables replay. Release/build automation should set this variable to the exact source commit used to produce the running artifact. The runner does not infer a branch name or moving tag as a revision.
