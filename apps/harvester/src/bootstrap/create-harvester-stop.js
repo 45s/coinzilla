@@ -108,7 +108,7 @@ async function recordDurableProcessStop({
       status: "PENDING",
       timeoutMs: existing.timeoutMs,
       startedAt: existing.startedAt,
-      now: performance.now,
+      now: () => performance.now(),
     })
   }
   logShutdownPhase({
@@ -148,7 +148,7 @@ async function recordDurableProcessStop({
           status: "TIMED_OUT",
           timeoutMs: processStopDurabilityTimeoutMs,
           startedAt,
-          now: performance.now,
+          now: () => performance.now(),
         })
         controller.abort(error)
         resolve({
