@@ -84,7 +84,7 @@ The methods have consistent provider-neutral results:
 - A collection name is a non-empty string without surrounding whitespace.
 - Every record is a plain JSON object with its own non-empty string `id`.
 - Identifiers are unique inside a collection. Different collections may use the same identifier.
-- Records support nested JSON objects and arrays. Values must be JSON-safe: no `undefined`, functions, symbols, `BigInt`, non-finite numbers, class instances, accessors, sparse arrays, or circular references.
+- Records support nested JSON objects and arrays. Values must be JSON-safe: no `undefined`, functions, symbols, `BigInt`, non-finite numbers, class instances, accessors, sparse arrays, or circular references. Collection names, identifiers, object keys and string values must contain well-formed Unicode.
 - The `id` cannot be changed by `update`.
 - Updates are shallow merges. Existing fields not included in `changes` remain unchanged.
 
@@ -150,9 +150,26 @@ await database.transaction((transaction) => {
 })
 ```
 
-A thrown error rolls back the complete transaction. SQLite transaction callbacks must be synchronous because Node's built-in SQLite API is synchronous; an async callback or a returned Promise is rejected. Transaction handles, prepared statements and iterators are invalidated immediately after either COMMIT or ROLLBACK; do not retain them or use them after the callback returns. Do not use `await`, network calls, timers, or unrelated asynchronous work inside a SQLite transaction.
+A thrown error rolls back the complete transaction. Transaction callback mode is provider-specific and is declared in `database.capabilities`. SQLite transaction callbacks must be synchronous because Node's built-in SQLite API is synchronous; an async callback or a returned Promise is rejected. MongoDB transaction callbacks are asynchronous and must await their CRUD operations. Transaction handles, prepared statements and iterators are invalidated immediately after either COMMIT or ROLLBACK; do not retain them or use them after the callback returns. Do not use `await`, network calls, timers, or unrelated asynchronous work inside a SQLite transaction.
 
 For the provider-neutral SQLite facade, an async-function callback is rejected before its body runs. If a non-async callback returns a Promise or thenable, SQLite rolls back and invalidates the transaction handle and prepared statements before deferred continuations can use them. Such a continuation cannot perform work outside the failed transaction. The low-level `createSqliteDatabase` transaction handle follows the same rollback rule.
+
+MongoDB transaction callbacks are asynchronous. Use an async callback and await every operation; the provider serializes session commands and drains pending work before commit. A synchronous callback that starts an asynchronous CRUD operation is rejected and the transaction is aborted. For example:
+
+```js
+await database.transaction(async (transaction) => {
+  await transaction.create({
+    collection: "accounts",
+    record: { id: "account-3", balance: 100 },
+  })
+  await transaction.update({
+    collection: "accounts",
+    id: "account-3",
+    changes: { status: "active" },
+  })
+})
+```
+
 
 For example, a Promise-returning callback is rejected and its deferred write does not escape the rollback:
 
