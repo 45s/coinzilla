@@ -1,7 +1,11 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
-import { DatabaseConflictError, DatabaseProviderError } from "../../domain/errors/database-errors.js"
+import {
+  DatabaseConflictError,
+  DatabaseOperationOutcomeUnknownError,
+  DatabaseProviderError,
+} from "../../domain/errors/database-errors.js"
 import { createMongoRecordOperations } from "./commands.js"
 import { encodeOpMsg } from "./wire-protocol.js"
 
