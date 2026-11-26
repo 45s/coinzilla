@@ -3,6 +3,7 @@ import { projectHarvesterOperationalState } from "../infrastructure/operational-
 import { resolveUserDataAccountBlockers } from "./resolve-user-data-account-blockers.js"
 import { getAccountResolutionTargetBlockers } from "./resolve-user-data-account-blockers.helpers.js"
 import {
+  hasControlCharacters,
   isAuthenticatedLocalOperatorIdentity,
   LOCAL_OPERATOR_ID_PATTERN,
 } from "../infrastructure/security/local-operator-identity.js"
@@ -310,7 +311,7 @@ function validateResolutionRequest({
       resolutionReason.trim() !== resolutionReason ||
       resolutionReason.length < 8 ||
       resolutionReason.length > 512 ||
-      /[\u0000-\u001F\u007F]/.test(resolutionReason)) {
+      hasControlCharacters(resolutionReason)) {
     throw new TypeError("Offline account resolution requires authenticated operator identity, unique action ID, resolution reason, and causeFixed=true")
   }
 }
