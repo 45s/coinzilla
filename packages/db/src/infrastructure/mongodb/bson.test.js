@@ -105,6 +105,70 @@ test("BSON rejects documents deeper than the supported nesting limit", () => {
   )
 })
 
+
+test("BSON rejects invalid booleans, sparse arrays, accessors, and unsupported binary subtypes", () => {
+  const invalidBoolean = encodeBsonDocument({ active: true })
+  invalidBoolean[12] = 2
+
+  assert.throws(() => decodeBsonDocument(invalidBoolean), /Invalid BSON boolean/)
+
+  const sparse = []
+  sparse.length = 2
+  sparse[1] = "value"
+  assert.throws(() => encodeBsonDocument({ values: sparse }), /must not be sparse/)
+
+  const accessor = {}
+  Object.defineProperty(accessor, "value", {
+    enumerable: true,
+    get() {
+      return "not a data property"
+    },
+  })
+  assert.throws(() => encodeBsonDocument(accessor), /data properties/)
+
+  assert.throws(
+    () => new BsonBinary(Buffer.from([1]), 4),
+    /exactly 16 bytes/,
+  )
+  assert.throws(
+    () => new BsonBinary(Buffer.from([1]), 2),
+    /subtype/,
+  )
+})
+
+test("BSON rejects unsupported object prototypes, symbol keys, invalid dates, and oversized integers", () => {
+  assert.throws(
+    () => encodeBsonDocument(Object.create({ inherited: true })),
+    /plain objects/,
+  )
+  assert.throws(
+    () => encodeBsonDocument({ [Symbol("key")]: "value" }),
+    /keys must be strings/,
+  )
+  assert.throws(
+    () => encodeBsonDocument({ date: new Date(Number.NaN) }),
+    /valid/,
+  )
+  assert.throws(
+    () => encodeBsonDocument({ value: 2n ** 63n }),
+    /signed 64-bit range/,
+  )
+})
+
+test("BSON enforces the 16 MiB document limit and rejects trailing input bytes", () => {
+  const oversized = { value: "x".repeat(16 * 1024 * 1024) }
+  assert.throws(
+    () => encodeBsonDocument(oversized),
+    /16 MiB/,
+  )
+
+  const encoded = encodeBsonDocument({ value: "ok" })
+  assert.throws(
+    () => decodeBsonDocument(Buffer.concat([encoded, Buffer.from([0])])),
+    /trailing bytes/,
+  )
+})
+
 test("BSON decoder rejects truncated documents and inconsistent declared lengths", () => {
   const encoded = encodeBsonDocument({ value: "valid" })
 
