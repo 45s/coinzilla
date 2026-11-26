@@ -63,11 +63,11 @@ async function dropDatabase(databaseName, parsed) {
         databaseName,
         username: parsed.username,
         password: parsed.password,
-        authSource: parsed.authSource,
+        authSource: parsed.authSource ?? databaseName,
         authMechanism: parsed.authMechanism,
         replicaSet: parsed.replicaSet,
       })
-      if (!handshake.primary || handshake.topology !== "replicaSet" || parsed.directConnection) {
+      if (!handshake.primary || handshake.topology !== "replicaSet") {
         const response = await transport.command({
           body: {
             dropDatabase: 1,
