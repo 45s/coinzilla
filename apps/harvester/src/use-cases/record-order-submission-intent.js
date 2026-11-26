@@ -2,7 +2,7 @@ import { CanonicalOrder } from "@coinzilla/entities"
 import { toResult } from "@coinzilla/utils"
 import { validateRecoverySellerSubmissionOwnership } from "../domain/orders/recovery-seller-submission-ownership.js"
 
-const SUPPORTED_PURPOSES = new Set([null, "RECOVERY_BUY", "RECOVERY_SELL"])
+const SUPPORTED_PURPOSES = new Set([null, "CONSERVATIVE_BUY", "CONSERVATIVE_SELL", "RECOVERY_BUY", "RECOVERY_SELL"])
 
 function validateCanonicalMarketIdentity({ market }) {
   const requiredMarketValues = [
