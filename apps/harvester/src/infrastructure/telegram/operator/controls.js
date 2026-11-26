@@ -24,7 +24,11 @@ function recordControlFailure({ result, method, symbol, interaction, diagnostics
   })
 }
 
-function buildControlFailureMessage({ code, action, symbol, interaction }) {
+function buildControlFailureMessage({ code, action, symbol, interaction, result }) {
+  if (action === TELEGRAM_OPERATOR_ACTIONS.RESOLVE_ACCOUNT_BLOCKERS) {
+    const error = result?.errors?.[0] ?? result?.error
+    return `Account blocker resolution failed closed: ${error?.message ?? code ?? "audit was not accepted"}. Trading remains blocked; no runtime state was reset.`
+  }
   if (code === "INVALID_OPERATOR_MARKET") {
     return `Unknown configured market: ${symbol}.`
   }
@@ -51,6 +55,7 @@ export function buildControlFailureReply(options) {
     action: options.action,
     symbol: options.symbol,
     interaction: options.interaction,
+    result: options.result,
   })
 }
 
@@ -140,8 +145,22 @@ export function buildLegacyControlSuccessReply({ action,
   return `${action.startsWith(TELEGRAM_OPERATOR_ACTIONS.RESUME) ? "Resume" : "Pause"} was not acknowledged; check Harvester logs and retry.`
 }
 
+export function buildAccountBlockerResolutionSuccessReply({ action, result, interaction } = {}) {
+  if (action !== TELEGRAM_OPERATOR_ACTIONS.RESOLVE_ACCOUNT_BLOCKERS ||
+      result.data?.durableReadbackVerified !== true ||
+      result.data?.readiness !== "BLOCKED") {
+    return undefined
+  }
+  interaction.applicationOperationCompleted = true
+  interaction.stateChanged = true
+  const count = result.data.resolvedBlockerIds?.length ?? 0
+  return `Recorded durable resolution for ${count} user-data ACCOUNT blocker(s). Trading remains BLOCKED until controlled restart and a fresh authoritative account snapshot. Recovery Seller STOP was not changed.`
+}
+
 export function buildControlSuccessReply(options) {
-  return buildBuyControlSuccessReply(options) ?? buildLegacyControlSuccessReply(options)
+  return buildAccountBlockerResolutionSuccessReply(options) ??
+    buildBuyControlSuccessReply(options) ??
+    buildLegacyControlSuccessReply(options)
 }
 
 export function buildControlReply(options) {
@@ -158,6 +177,7 @@ const OPERATOR_CONTROL_METHODS = Object.freeze({
   [TELEGRAM_OPERATOR_ACTIONS.RESUME_BUYS]: "resumeBuys",
   [TELEGRAM_OPERATOR_ACTIONS.PAUSE_ALL_BUYS]: "pauseAllBuys",
   [TELEGRAM_OPERATOR_ACTIONS.RESUME_ALL_BUYS]: "resumeAllBuys",
+  [TELEGRAM_OPERATOR_ACTIONS.RESOLVE_ACCOUNT_BLOCKERS]: "resolveAccountBlockers",
 })
 
 function reportUnavailableOperatorControl({ action, symbol, method, interaction, diagnostics }) {
@@ -176,7 +196,7 @@ function reportUnavailableOperatorControl({ action, symbol, method, interaction,
   }
 }
 
-async function callOperatorControl({ method, symbol, userId, requestId, operator, diagnostics, interaction }) {
+async function callOperatorControl({ method, symbol, userId, requestId, causeFixed, operator, diagnostics, interaction }) {
   try {
     return await operator[method]({
       actor: {
@@ -185,6 +205,7 @@ async function callOperatorControl({ method, symbol, userId, requestId, operator
       },
       requestId,
       symbol,
+      causeFixed,
     })
   } catch (error) {
     diagnostics.fail({
@@ -207,7 +228,9 @@ function logOperatorControlCompletion({ action, interaction, startedAt, logStage
     level: "info",
     fields: {
       durationMs: Date.now() - startedAt,
-      result: action.startsWith(TELEGRAM_OPERATOR_ACTIONS.PAUSE) ? "PAUSED" : "RESUME_PROCESSED",
+      result: action === TELEGRAM_OPERATOR_ACTIONS.RESOLVE_ACCOUNT_BLOCKERS
+        ? "ACCOUNT_BLOCKERS_RESOLVED"
+        : action.startsWith(TELEGRAM_OPERATOR_ACTIONS.PAUSE) ? "PAUSED" : "RESUME_PROCESSED",
     },
   })
 }
@@ -218,6 +241,7 @@ async function invokeOperatorControl(options) {
     symbol,
     userId,
     requestId,
+    causeFixed,
     interaction,
     operator,
     diagnostics,
@@ -248,6 +272,7 @@ async function invokeOperatorControl(options) {
     symbol,
     userId,
     requestId,
+    causeFixed,
     operator,
     diagnostics,
     interaction,
@@ -277,6 +302,7 @@ export async function executeTelegramOperatorControl({
   symbol,
   userId,
   requestId,
+  causeFixed,
   chatId,
   messageId,
   signal,
@@ -293,6 +319,7 @@ export async function executeTelegramOperatorControl({
     symbol,
     userId,
     requestId,
+    causeFixed,
     interaction,
     operator,
     diagnostics,
