@@ -257,7 +257,7 @@ If commit cannot be confirmed after bounded retries, the provider throws `Databa
 
 No SRV/multi-seed discovery, connection pooling, topology monitoring/failover, non-primary read preference routing, retryable writes, compression, legacy OP_QUERY, change streams, GridFS, client-side encryption, or arbitrary BSON types are promised. The codec supports the JSON record contract and the additional binary/date/integer forms required internally by the protocol. Unsupported BSON types and malformed frames fail explicitly. See [MongoDB provider support and limitations](./docs/mongodb.md) for the exact matrix and operational notes.
 
-The default package tests use deterministic fake transports and do not require MongoDB credentials or a running server. A real-server conformance run is opt-in and must use an isolated test database; no live MongoDB integration result is claimed by the unit tests.
+The default package tests use deterministic fake transports and do not require MongoDB credentials or a running server. To run the opt-in real-server conformance suite, set MONGODB_URI and run `pnpm --filter @coinzilla/db test`. It creates and drops uniquely named disposable databases; the test account needs create/drop database permissions. Use a dedicated test cluster, never production data. Unit tests alone do not claim live-server compatibility.
 
 ## Provider conformance tests
 
