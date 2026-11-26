@@ -12,6 +12,16 @@ The accepted architecture is recorded in [ADR-0001](./docs/decisions/0001-provid
 
 `@coinzilla/db` provides a provider-neutral record CRUD and transaction API. Node.js built-in `node:sqlite` is the first concrete provider; the dependency-free MongoDB infrastructure adapter is being completed under issue #1865. The package owns generic persistence infrastructure contracts only; application domains own their business entities, schemas and repository interfaces.
 
+## Official MongoDB driver reference strategy — #1865
+
+**Decision recorded:** use the official MongoDB Node.js driver as a pinned source-level reference and selectively port/adapt small, proven implementation units where that is safer than independent reinvention. Do not vendor the complete driver or its public API. The adapter remains Node.js-built-ins-only and must preserve the provider-neutral Database API and infrastructure boundary.
+
+- Reference: [mongodb/node-mongodb-native](https://github.com/mongodb/node-mongodb-native), inspected version `mongodb@7.9.1`, commit [`2ed780df2a57884c3fa597da9ebbb6256ae0a5ea`](https://github.com/mongodb/node-mongodb-native/commit/2ed780df2a57884c3fa597da9ebbb6256ae0a5ea), Apache-2.0.
+- Its runtime dependencies include `@mongodb-js/saslprep`, `bson` and `mongodb-connection-string-url`; none may be introduced into this package. Copying it wholesale would violate our dependency and scope constraints.
+- The component mapping, pinned upstream paths, review order, mandatory RED/GREEN workflow, non-goals and Apache-2.0 attribution ledger are maintained in [Official MongoDB driver reference and selective-port strategy](./docs/mongodb-driver-reference-strategy.md).
+- Selective source adaptation is permitted only when a concrete defect/requirement and regression test justify it. Every adapted unit must record exact upstream file/commit, license, local destination and modifications; preserve notices and mark changed files. Specs remain normative.
+- No upstream implementation has been copied by this documentation decision. The attribution ledger currently has no entries.
+
 ## Dependency-free MongoDB provider — #1865
 
 **Status: In progress.** Implementation PR [#1868](https://github.com/45s/coinzilla/pull/1868) targets `develop`; assessment and original scope are recorded in [PR #1866](https://github.com/45s/coinzilla/pull/1866).

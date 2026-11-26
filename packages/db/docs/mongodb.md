@@ -97,3 +97,8 @@ MONGODB_URI='mongodb://test-user:test-password@localhost:27017/admin?authSource=
 The integration suite creates a distinct database name for each test from the configured URI database name and an opaque test key, then drops only that generated database after the provider connection closes. The test account therefore needs permission to create and drop databases. Use a dedicated disposable MongoDB instance or test cluster, not a production database. The integration suite checks the shared CRUD/query/lifecycle contract and attempts transaction rollback; standalone topologies skip transaction verification explicitly. The deterministic unit tests remain offline and credential-free.
 
 A test suite using fake transports does not prove compatibility with a live MongoDB server. Record the exact server version, topology and authentication mode whenever real-server conformance is run.
+
+
+## Official driver reference
+
+The implementation may consult and selectively adapt small, proven parts of the official MongoDB Node.js driver, but it does not vendor or recreate that driver. The pinned source baseline, component-by-component mapping, dependency analysis, mandatory porting workflow and Apache-2.0 attribution requirements are documented in [the official-driver reference and selective-port strategy](./mongodb-driver-reference-strategy.md). This package remains Node.js-built-ins-only; the official driver's `bson`, SASL preparation and connection-string dependencies must not be added as runtime dependencies.
