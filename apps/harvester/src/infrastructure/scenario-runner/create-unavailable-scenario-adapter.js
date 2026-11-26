@@ -17,5 +17,9 @@ export function createUnavailableScenarioAdapter({
       ok: false,
       errors: [new Error(reason)],
     }),
+    cancel: async () => ({
+      ok: false,
+      errors: [new Error(reason)],
+    }),
   })
 }
