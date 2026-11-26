@@ -231,6 +231,8 @@ n: 1 }])
 id: "person-1" }),
     true,
   )
+  assert.deepEqual(stub.calls[0].deletes[0].collation, { locale: "simple" })
+  assert.equal(Object.hasOwn(stub.calls[0], "collation"), false)
 })
 
 test("MongoDB rejects malformed cursor responses rather than returning empty results", async () => {
