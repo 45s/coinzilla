@@ -1332,6 +1332,46 @@
           "path": "src/use-cases/resolve-user-data-account-blockers.test.js",
           "name": "retries a partially appended multi-blocker action and accepts exact duplicate replay",
           "kind": "failure"
+        },
+        {
+          "path": "src/infrastructure/security/local-operator-identity.test.js",
+          "name": "authenticates only the exact current operating-system account",
+          "kind": "normal"
+        },
+        {
+          "path": "src/infrastructure/security/local-operator-identity.test.js",
+          "name": "rejects invalid identities, OS lookup failures, and account mismatches",
+          "kind": "failure"
+        },
+        {
+          "path": "src/infrastructure/security/local-operator-identity.test.js",
+          "name": "does not trust copied, caller-created, or primitive identity values",
+          "kind": "failure"
+        },
+        {
+          "path": "src/infrastructure/security/local-operator-identity.test.js",
+          "name": "detects C0 and DEL control characters without rejecting printable text",
+          "kind": "normal"
+        },
+        {
+          "path": "src/infrastructure/operational-state/project-harvester-operational-state.test.js",
+          "name": "requires structured operator action for user-data ACCOUNT blocker resolution",
+          "kind": "failure"
+        },
+        {
+          "path": "src/infrastructure/operational-state/project-harvester-operational-state.test.js",
+          "name": "keeps Recovery Seller STOP exclusive to its dedicated legacy operator action",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/record-safety-control-facts.test.js",
+          "name": "requires structured operator action before resolving user-data ACCOUNT blockers",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/create-recovery-seller-stop-workflow.test.js",
+          "name": "clears RS STOP only after explicit operator evidence is durably recorded",
+          "kind": "normal"
         }
       ],
       "runtimeStatus": "offline-only",
@@ -1341,7 +1381,9 @@
         "Resolve only the exact active user-data ACCOUNT blocker set after an authoritative audit of every configured market, all orders/fills/balances and consistent accounting with zero discrepancies.",
         "Commit resolution facts durably and verify projection/readback; remain BLOCKED until controlled restart and fresh authoritative account snapshot. Never reset Recovery Seller STOP through this path.",
         "Authenticate the operator against the executing OS account and persist operator ID, authentication method, action ID, reason, exact target blocker set, and evidence digest in every OPERATOR_ACTION fact.",
-        "Allow retries only for the exact same operator/action/reason/blocker-set/evidence tuple; resume partial multi-blocker appends and verify exact per-blocker durable readback."
+        "Allow retries only for the exact same operator/action/reason/blocker-set/evidence tuple; resume partial multi-blocker appends and verify exact per-blocker durable readback.",
+        "User-data ACCOUNT blockers cannot be resolved by generic reconciliation or legacy operator-action facts; the verified projector enforces structured operator metadata against the original raised producer.",
+        "Recovery Seller STOP uses the RECOVERY_SELLER_STOP_WORKFLOW producer and remains exclusively owned by its dedicated operator-action resolver."
       ]
     }
   ],
@@ -2007,6 +2049,24 @@
         "lines": 76.81,
         "branches": 81.08,
         "functions": 90
+      }
+    },
+    {
+      "path": "src/infrastructure/security/local-operator-identity.js",
+      "baseline": {
+        "lines": 85.37,
+        "branches": 50,
+        "functions": 100
+      },
+      "minimum": {
+        "lines": 85,
+        "branches": 50,
+        "functions": 100
+      },
+      "latestObserved": {
+        "lines": 85.37,
+        "branches": 50,
+        "functions": 100
       }
     },
     {
