@@ -192,13 +192,13 @@ Consumers should branch on the public error class or stable code, not provider e
 
 ### Provider capabilities
 
-Read `database.capabilities` to inspect the provider-neutral capability declaration. The declaration is a frozen snapshot. SQLite reports synchronous callbacks, no nested transactions, file/memory storage and all three query capabilities. MongoDB reports asynchronous callbacks, no nested transactions, server storage and all three query capabilities. MongoDB multi-document transaction support is topology-dependent; standalone deployments reject transactions. The following transaction-callback and locking details are SQLite-specific:
+Read `database.capabilities` to inspect the provider-neutral capability declaration. The declaration is a frozen snapshot. SQLite reports synchronous callbacks, no nested transactions, multi-document transactions, file/memory storage and all three query capabilities. MongoDB reports asynchronous callbacks, no nested transactions, server storage and all three query capabilities. Its `transactions.multiDocument` capability is `"topology-dependent"`; standalone deployments reject multi-document transactions. The following transaction-callback and locking details are SQLite-specific:
 
 - Transaction callbacks are synchronous; nested transactions are not supported.
 - Exact equality filters, sorting and pagination are supported.
 - Storage modes are file-backed and in-memory.
 
-A provider passed to `createDatabase({ provider })` implements both `withTransaction(work)` and `withReadTransaction(work)`. Creates, updates, deletes and explicit `database.transaction(work)` callbacks use the write transaction path; `readOne` and `readMany` use the read transaction path. Providers preserve the same CRUD and transaction semantics across both paths while selecting appropriate locking behavior. SQLite uses `BEGIN IMMEDIATE` for writes and `BEGIN DEFERRED` for reads, allowing WAL readers to continue while another connection holds a write reservation. The legacy `adapter` lifecycle/SQL API remains compatible with adapters that only implement `withTransaction`.
+A provider passed to `createDatabase({ provider })` implements `execute({ operation, input })` for one atomic CRUD operation, `withReadTransaction(work)` for reads, and `withTransaction(work)` for explicit multi-operation transactions. Mutations use single-operation execution; SQLite implements each mutation inside its write transaction, while MongoDB uses its atomic single-document commands. `readOne` and `readMany` use the read transaction boundary. SQLite uses `BEGIN IMMEDIATE` for writes and `BEGIN DEFERRED` for reads, allowing WAL readers to continue while another connection holds a write reservation. The legacy `adapter` lifecycle/SQL API remains compatible with adapters that only implement `withTransaction`.
 
 A synchronous provider cannot declare `nestedTransactions: true`; the provider-neutral facade requires asynchronous callbacks to invoke nested transactions safely. The capability validator rejects that incompatible declaration at composition time.
 
@@ -232,7 +232,7 @@ try {
 }
 ```
 
-The URI parser deliberately accepts a single-seed `mongodb://` URI. `mongodb+srv://`, multi-host seed lists and DNS SRV discovery are rejected rather than silently reduced to one host. Credentials, database name, `authSource`, `authMechanism`, `replicaSet`, TLS and connection/socket timeouts can be supplied in the URI or as explicit provider options. Provider options override parsed URI values.
+The URI parser deliberately accepts a single-seed `mongodb://` URI. `mongodb+srv://`, multi-host seed lists and DNS SRV discovery are rejected rather than silently reduced to one host. Credentials, database name, `authSource`, `authMechanism`, `replicaSet`, `directConnection`, TLS and connection/socket timeouts can be supplied in the URI or as explicit provider options. `readPreference=primary` and `retryWrites=false` are the only accepted values for those URI options. Provider options override parsed URI values.
 
 The adapter uses Node.js built-ins only (`node:net`, `node:tls`, `node:crypto`, `node:buffer`, `node:async_hooks` and timers). It implements BSON and MongoDB OP_MSG internally; it does not add a runtime dependency.
 
@@ -249,13 +249,13 @@ The adapter uses Node.js built-ins only (`node:net`, `node:tls`, `node:crypto`, 
 
 The MongoDB provider declares `transactions.multiDocument: "topology-dependent"`. Standalone servers do not support multi-document transactions; `database.transaction(work)` rejects with `DatabaseTransactionUnsupportedError` before invoking the callback. Replica sets and sharded clusters require logical-session support from the server. The adapter uses one logical session and transaction number for callback operations, starts a snapshot transaction on the first command, and commits with majority write concern.
 
-MongoDB transaction callbacks are asynchronous: await every CRUD operation on the supplied transaction object. Do not start unawaited writes and allow the callback to return, because commit follows callback completion. SQLite callbacks remain synchronous and reject async work.
+MongoDB read transaction callbacks are limited to one logical read operation; `readMany` may drain multiple internal cursor batches. They do not provide a multi-query snapshot on standalone servers. MongoDB transaction callbacks are asynchronous: await every CRUD operation on the supplied transaction object. Do not start unawaited writes and allow the callback to return, because commit follows callback completion. SQLite callbacks remain synchronous and reject async work.
 
 If commit cannot be confirmed after bounded retries, the provider throws `DatabaseTransactionOutcomeUnknownError`. This means the caller must reconcile the outcome; it must not assume rollback and blindly replay non-idempotent work. Ordinary interrupted CRUD operations are not automatically replayed. A lost connection is surfaced as a provider failure; automatic topology monitoring, reconnect and transparent operation retry are not implemented.
 
 **Explicit exclusions**
 
-No SRV/multi-seed discovery, connection pooling, topology monitoring/failover, read preference routing, retryable writes, compression, legacy OP_QUERY, change streams, GridFS, client-side encryption, or arbitrary BSON types are promised. The codec supports the JSON record contract and the additional binary/date/integer forms required internally by the protocol. Unsupported BSON types and malformed frames fail explicitly. See [MongoDB provider support and limitations](./docs/mongodb.md) for the exact matrix and operational notes.
+No SRV/multi-seed discovery, connection pooling, topology monitoring/failover, non-primary read preference routing, retryable writes, compression, legacy OP_QUERY, change streams, GridFS, client-side encryption, or arbitrary BSON types are promised. The codec supports the JSON record contract and the additional binary/date/integer forms required internally by the protocol. Unsupported BSON types and malformed frames fail explicitly. See [MongoDB provider support and limitations](./docs/mongodb.md) for the exact matrix and operational notes.
 
 The default package tests use deterministic fake transports and do not require MongoDB credentials or a running server. A real-server conformance run is opt-in and must use an isolated test database; no live MongoDB integration result is claimed by the unit tests.
 
