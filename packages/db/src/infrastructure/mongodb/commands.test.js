@@ -46,6 +46,14 @@ test("MongoDB create isolates collection records and returns the provider-neutra
   assert.equal(stub.sequences[0][0].identifier, "documents")
   assert.equal(stub.sequences[0][0].documents[0]._id, "person-1")
   assert.notDeepEqual(stub.sequences[0][0].documents[0].data, record)
+  assert.deepEqual(stub.sequences[0][0].documents[0].sortData.__coinzilla_key_aWQ, {
+    rank: 4,
+    value: "person-1",
+  })
+  assert.deepEqual(stub.sequences[0][0].documents[0].sortData.__coinzilla_key_cHJvZmlsZQ, {
+    rank: 5,
+    value: JSON.stringify(record.profile),
+  })
   assert.equal(stub.calls[0].$db, "app")
 })
 
@@ -121,6 +129,92 @@ test("MongoDB readMany builds exact-null filters and portable sort pagination st
   })
   assert.deepEqual(pipeline.find((stage) => stage.$skip).$skip, 10)
   assert.deepEqual(pipeline.find((stage) => stage.$limit).$limit, 5)
+})
+
+
+test("MongoDB update refreshes portable sort metadata for changed JSON values", async () => {
+  const stub = createCommandStub([{
+    ok: 1,
+    value: {
+      data: {
+        id: "person-1",
+        rank: [1, 2],
+      },
+    },
+  }])
+  const operations = createMongoRecordOperations({
+    command: stub.command,
+    databaseName: "app",
+  })
+
+  assert.deepEqual(
+    await operations.update({
+      collection: "people",
+      id: "person-1",
+      changes: { rank: [1, 2] },
+    }),
+    { id: "person-1", rank: [1, 2] },
+  )
+  assert.deepEqual(
+    stub.calls[0].update.$set["sortData.__coinzilla_key_cmFuaw"],
+    { rank: 5, value: "[1,2]" },
+  )
+})
+
+test("MongoDB empty updates delegate to readOne without issuing a mutation", async () => {
+  const stub = createCommandStub([{
+    ok: 1,
+    cursor: { firstBatch: [{ data: { id: "person-1" } }] },
+  }])
+  const operations = createMongoRecordOperations({
+    command: stub.command,
+    databaseName: "app",
+  })
+
+  assert.deepEqual(
+    await operations.update({
+      collection: "people",
+      id: "person-1",
+      changes: {},
+    }),
+    { id: "person-1" },
+  )
+  assert.equal(stub.calls[0].find.startsWith("coinzilla_"), true)
+})
+
+test("MongoDB delete reports successful single-record deletion", async () => {
+  const stub = createCommandStub([{ ok: 1, n: 1 }])
+  const operations = createMongoRecordOperations({
+    command: stub.command,
+    databaseName: "app",
+  })
+
+  assert.equal(
+    await operations.delete({ collection: "people", id: "person-1" }),
+    true,
+  )
+})
+
+test("MongoDB rejects malformed cursor responses rather than returning empty results", async () => {
+  const readOne = createMongoRecordOperations({
+    command: async () => ({ ok: 1, cursor: {} }),
+    databaseName: "app",
+  })
+  const readMany = createMongoRecordOperations({
+    command: async () => ({ ok: 1, cursor: {} }),
+    databaseName: "app",
+  })
+
+  await assert.rejects(
+    readOne.readOne({ collection: "people", id: "person-1" }),
+    (error) => error instanceof DatabaseProviderError
+      && error.cause?.message.includes("cursor.firstBatch"),
+  )
+  await assert.rejects(
+    readMany.readMany({ collection: "people" }),
+    (error) => error instanceof DatabaseProviderError
+      && error.cause?.message.includes("cursor.firstBatch"),
+  )
 })
 
 test("MongoDB readMany drains every cursor batch", async () => {
