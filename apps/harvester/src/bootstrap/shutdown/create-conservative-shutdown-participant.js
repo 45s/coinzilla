@@ -393,7 +393,6 @@ async function reconcileRecoverySells({
   if (blockers.length > 0) {
     return
   }
-  throwIfShutdownAborted(signal)
 
   const recoveryBlockers = await runStage({
     stage: "RECOVERY_SELL_RECONCILIATION",
@@ -861,7 +860,23 @@ export function createConservativeShutdownParticipant({
 
   const waitUntilSafe = async ({ signal } = {}) => {
     if (typeof engine.waitForShutdownGate === "function") {
-      await engine.waitForShutdownGate()
+      const stage = "WAIT_FOR_SHUTDOWN_GATE"
+      updateStageDiagnostics({ stageDiagnostics, symbol: "*", stage, status: "STARTED" })
+      try {
+        throwIfShutdownAborted(signal)
+        await engine.waitForShutdownGate()
+        throwIfShutdownAborted(signal)
+        updateStageDiagnostics({ stageDiagnostics, symbol: "*", stage, status: "COMPLETED" })
+      } catch (error) {
+        updateStageDiagnostics({
+          stageDiagnostics,
+          symbol: "*",
+          stage,
+          status: signal?.aborted ? "ABORTED" : "FAILED",
+          error: signal?.reason ?? error,
+        })
+        throw error
+      }
     }
     throwIfShutdownAborted(signal)
     return waitForConservativeMarkets({
