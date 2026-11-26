@@ -320,9 +320,7 @@ force: true })
   }
 })
 
-test("replays multiple symbols independently through the offline calibration CLI", () => {
-  const directory = mkdtempSync(join(tmpdir(), "harvester-multi-symbol-volatility-"))
-  const outputPath = join(directory, "multi-symbol-calibration-report.json")
+function writeMultiSymbolArchiveInputs(directory) {
   const inputs = [
     {
       symbol: "BTCUSDT",
@@ -337,52 +335,56 @@ test("replays multiple symbols independently through the offline calibration CLI
       spikeAt: -1,
     },
   ]
-  const inputPaths = []
+  return inputs.map(({ symbol, spikeAt }) => {
+    const inputPath = join(directory, `${symbol}-1m-2023-11-01.csv`)
+    const candles = createCandleSeries({
+      count: 300,
+      spikeAt,
+      symbol,
+      firstOpenTime: Date.UTC(2023, 10, 1),
+    })
+    writeFileSync(inputPath, candles.map((candle) => makeKlineRow(candle)).join("\n"), "utf8")
+    return inputPath
+  })
+}
 
+function assertIndependentMultiSymbolReport(report) {
+  const markets = Object.fromEntries(report.markets.map((market) => [market.symbol, market]))
+  assert.deepEqual(
+    Object.keys(markets).sort(),
+    ["BTCUSDT", "ETHUSDT", "SOLUSDT"],
+    "The CLI must retain one independent report for every supplied symbol.",
+  )
+  assert.equal(report.files.length, 3, "Every symbol input must be represented in the reproducible source manifest.")
+  for (const symbol of ["BTCUSDT", "ETHUSDT", "SOLUSDT"]) {
+    assert.equal(markets[symbol].candleCount, 300, `${symbol} must retain its complete validated history.`)
+    assert.equal(markets[symbol].observationCount, 201, `${symbol} must use its own rolling 100-candle startup window.`)
+    assert.equal(
+      markets[symbol].ratioObservations + markets[symbol].unavailableObservations,
+      markets[symbol].observationCount,
+      `${symbol} observations must be classified independently.`,
+    )
+  }
+  assert.ok(markets.BTCUSDT.protectionEntries > 0, "BTCUSDT's volatility spike must enter protection.")
+  assert.ok(markets.ETHUSDT.protectionEntries > 0, "ETHUSDT's volatility spike must enter protection independently.")
+  assert.equal(markets.SOLUSDT.protectionEntries, 0, "A calm SOLUSDT history must not inherit another symbol's protection state.")
+  assert.ok(
+    report.files.every((file) => /^[a-f0-9]{64}$/.test(file.sha256)),
+    "Each synthetic archive-shaped input must still receive a reproducible SHA-256 source hash.",
+  )
+}
+
+test("replays multiple symbols independently through the offline calibration CLI", () => {
+  const directory = mkdtempSync(join(tmpdir(), "harvester-multi-symbol-volatility-"))
+  const outputPath = join(directory, "multi-symbol-calibration-report.json")
   try {
-    for (const { symbol, spikeAt } of inputs) {
-      const inputPath = join(directory, `${symbol}-1m-2023-11-01.csv`)
-      const candles = createCandleSeries({
-        count: 300,
-        spikeAt,
-        symbol,
-        firstOpenTime: Date.UTC(2023, 10, 1),
-      })
-      writeFileSync(inputPath, candles.map((candle) => makeKlineRow(candle)).join("\n"), "utf8")
-      inputPaths.push(inputPath)
-    }
-
+    const inputPaths = writeMultiSymbolArchiveInputs(directory)
     runCalibrationCli([
       ...inputPaths.flatMap((inputPath) => ["--input", inputPath]),
       "--output",
       outputPath,
     ])
-
-    const report = JSON.parse(readFileSync(outputPath, "utf8"))
-    const markets = Object.fromEntries(report.markets.map((market) => [market.symbol, market]))
-
-    assert.deepEqual(
-      Object.keys(markets).sort(),
-      ["BTCUSDT", "ETHUSDT", "SOLUSDT"],
-      "The CLI must retain one independent report for every supplied symbol.",
-    )
-    assert.equal(report.files.length, 3, "Every symbol input must be represented in the reproducible source manifest.")
-    for (const symbol of ["BTCUSDT", "ETHUSDT", "SOLUSDT"]) {
-      assert.equal(markets[symbol].candleCount, 300, `${symbol} must retain its complete validated history.`)
-      assert.equal(markets[symbol].observationCount, 201, `${symbol} must use its own rolling 100-candle startup window.`)
-      assert.equal(
-        markets[symbol].ratioObservations + markets[symbol].unavailableObservations,
-        markets[symbol].observationCount,
-        `${symbol} observations must be classified independently.`,
-      )
-    }
-    assert.ok(markets.BTCUSDT.protectionEntries > 0, "BTCUSDT's volatility spike must enter protection.")
-    assert.ok(markets.ETHUSDT.protectionEntries > 0, "ETHUSDT's volatility spike must enter protection independently.")
-    assert.equal(markets.SOLUSDT.protectionEntries, 0, "A calm SOLUSDT history must not inherit another symbol's protection state.")
-    assert.ok(
-      report.files.every((file) => /^[a-f0-9]{64}$/.test(file.sha256)),
-      "Each synthetic archive-shaped input must still receive a reproducible SHA-256 source hash.",
-    )
+    assertIndependentMultiSymbolReport(JSON.parse(readFileSync(outputPath, "utf8")))
   } finally {
     rmSync(directory, {
       recursive: true,
