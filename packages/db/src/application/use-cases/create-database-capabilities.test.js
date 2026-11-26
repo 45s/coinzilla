@@ -175,13 +175,13 @@ test("provider capability declarations support the documented storage modes", ()
   )
 })
 
-test("provider composition requires a read transaction operation", () => {
+test("provider composition requires atomic single-operation execution", () => {
   const provider = createProvider({
     capabilities: {
       transactions: {
         callbackMode: "synchronous",
         nestedTransactions: false,
-      multiDocument: true,
+        multiDocument: true,
       },
       queries: {
         equalityFilters: true,
@@ -193,14 +193,14 @@ test("provider composition requires a read transaction operation", () => {
       },
     },
   })
-  delete provider.withReadTransaction
+  delete provider.execute
 
   assert.throws(
     () => createDatabase({
       provider,
     }),
-    /withReadTransaction/,
-    "A provider-neutral database must expose an explicit read transaction operation",
+    /execute/,
+    "A provider-neutral database must expose atomic single-operation execution",
   )
 })
 
