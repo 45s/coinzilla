@@ -418,7 +418,7 @@ test("MongoDB transport marks interrupted non-transactional writes as outcome-un
     body: { abortTransaction: 1 },
     expectedOutcome: true,
   })
-}
+})
 
 test("MongoDB transport rejects timed-out requests and releases their correlation entries", async () => {
   const { transport } = createFakeTransport({ timeoutMS: 10 })
