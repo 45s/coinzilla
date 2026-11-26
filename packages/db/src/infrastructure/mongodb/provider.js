@@ -68,48 +68,76 @@ port: 27017 }
 port }
 }
 
-function resolveOptions(options) {
+function firstDefined({ primary, secondary, fallback }) {
+  if (primary !== undefined) {
+    return primary
+  }
+  if (secondary !== undefined) {
+    return secondary
+  }
+  return fallback
+}
+
+function resolveConnectionOptions({ options }) {
   const connectionString = options.uri ?? options.connectionString
-  const parsed = connectionString
-    ? parseMongoConnectionString(connectionString)
-    : {}
-  const tlsOption = options.tls === undefined ? parsed.tls : options.tls
-  const tlsOptions = tlsOption === true ? {} : tlsOption || null
+  return connectionString ? parseMongoConnectionString(connectionString) : {}
+}
+
+function resolveTlsOptions({ options, parsed }) {
+  const value = firstDefined({ primary: options.tls, secondary: parsed.tls })
+  if (value === true) {
+    return {}
+  }
+  return value || null
+}
+
+function resolveOptions(options) {
+  const parsed = resolveConnectionOptions({ options })
   return {
-    host: options.host ?? parsed.host,
-    port: options.port ?? parsed.port ?? 27017,
-    username: options.username ?? parsed.username,
-    password: options.password ?? parsed.password,
-    databaseName: options.databaseName ?? parsed.databaseName ?? "admin",
-    authSource: options.authSource ?? parsed.authSource ?? options.databaseName ?? "admin",
-    authMechanism: options.authMechanism ?? parsed.authMechanism,
-    replicaSet: options.replicaSet ?? parsed.replicaSet,
-    directConnection: options.directConnection ?? parsed.directConnection ?? false,
-    tlsOptions,
-    connectTimeoutMS: options.connectTimeoutMS ?? parsed.connectTimeoutMS ?? 10_000,
-    socketTimeoutMS: options.socketTimeoutMS ?? parsed.socketTimeoutMS ?? 30_000,
+    host: firstDefined({ primary: options.host, secondary: parsed.host }),
+    port: firstDefined({ primary: options.port, secondary: parsed.port, fallback: 27017 }),
+    username: firstDefined({ primary: options.username, secondary: parsed.username }),
+    password: firstDefined({ primary: options.password, secondary: parsed.password }),
+    databaseName: firstDefined({ primary: options.databaseName, secondary: parsed.databaseName, fallback: "admin" }),
+    authSource: firstDefined({
+      primary: options.authSource,
+      secondary: parsed.authSource,
+      fallback: options.databaseName ?? "admin",
+    }),
+    authMechanism: firstDefined({ primary: options.authMechanism, secondary: parsed.authMechanism }),
+    replicaSet: firstDefined({ primary: options.replicaSet, secondary: parsed.replicaSet }),
+    directConnection: firstDefined({ primary: options.directConnection, secondary: parsed.directConnection, fallback: false }),
+    tlsOptions: resolveTlsOptions({ options, parsed }),
+    connectTimeoutMS: firstDefined({ primary: options.connectTimeoutMS, secondary: parsed.connectTimeoutMS, fallback: 10_000 }),
+    socketTimeoutMS: firstDefined({ primary: options.socketTimeoutMS, secondary: parsed.socketTimeoutMS, fallback: 30_000 }),
   }
 }
 
-function assertProviderOptions(options) {
+function assertDatabaseName({ value, label, maximumBytes = 63 }) {
+  if (typeof value !== "string" || value.trim() === "" || !value.isWellFormed()) {
+    throw new TypeError(`MongoDB provider ${label} must be a non-empty string`)
+  }
+  if (/[\\/\\\\."$*<>:|?]/u.test(value) || value.includes("\0")) {
+    throw new TypeError(`MongoDB provider ${label} contains an unsupported character`)
+  }
+  if (Buffer.byteLength(value, "utf8") > maximumBytes) {
+    throw new TypeError(`MongoDB provider ${label} must not exceed the portable ${maximumBytes}-byte limit`)
+  }
+}
+
+function assertHostAndPort({ options }) {
   if (typeof options.host !== "string" || options.host.trim() === "") {
     throw new TypeError("MongoDB provider requires a host or mongodb:// URI")
   }
   if (!Number.isInteger(options.port) || options.port < 1 || options.port > 65535) {
     throw new TypeError("MongoDB provider port must be between 1 and 65535")
   }
-  if (typeof options.databaseName !== "string" || options.databaseName.trim() === "" || !options.databaseName.isWellFormed()) {
-    throw new TypeError("MongoDB provider databaseName must be a non-empty string")
-  }
-  if (/[\\/\\\\."$*<>:|?]/u.test(options.databaseName) || options.databaseName.includes("\0")) {
-    throw new TypeError("MongoDB provider databaseName contains an unsupported character")
-  }
-  if (Buffer.byteLength(options.databaseName, "utf8") > 63) {
-    throw new TypeError("MongoDB provider databaseName must not exceed the portable 63-byte limit")
-  }
+}
+
+function assertCredentials({ options }) {
   if (options.username !== undefined && (typeof options.username !== "string"
     || options.username.length === 0
-    || !/^[\x20-\x7e]+$/.test(options.username))) {
+    || !/^[\\x20-\\x7e]+$/.test(options.username))) {
     throw new TypeError("MongoDB provider username must be a non-empty string")
   }
   if (options.username !== undefined && typeof options.password !== "string") {
@@ -121,25 +149,24 @@ function assertProviderOptions(options) {
   if (options.username === undefined && options.authMechanism !== undefined) {
     throw new TypeError("MongoDB provider authMechanism requires a username")
   }
+}
+
+function assertConnectionPolicy({ options }) {
   if (typeof options.directConnection !== "boolean") {
     throw new TypeError("MongoDB provider directConnection must be a boolean")
   }
   if (options.replicaSet !== undefined && (typeof options.replicaSet !== "string" || options.replicaSet.trim() === "")) {
     throw new TypeError("MongoDB provider replicaSet must be a non-empty string")
   }
-  if (options.authSource !== undefined && (typeof options.authSource !== "string" || options.authSource.trim() === "")) {
-    throw new TypeError("MongoDB provider authSource must be a non-empty string")
-  }
-  if (options.authSource !== undefined
-    && (!options.authSource.isWellFormed()
-      || /[\\/\\\\."$*<>:|?]/u.test(options.authSource)
-      || options.authSource.includes("\0")
-      || Buffer.byteLength(options.authSource, "utf8") > 63)) {
-    throw new TypeError("MongoDB provider authSource must be a valid database name of at most 63 bytes")
-  }
   if (options.authMechanism !== undefined && !["SCRAM-SHA-256", "SCRAM-SHA-1"].includes(options.authMechanism)) {
     throw new TypeError("MongoDB provider authMechanism must be SCRAM-SHA-256 or SCRAM-SHA-1")
   }
+  if (options.authSource !== undefined) {
+    assertDatabaseName({ value: options.authSource, label: "authSource" })
+  }
+}
+
+function assertTimeouts({ options }) {
   for (const [name, value] of Object.entries({
     connectTimeoutMS: options.connectTimeoutMS,
     socketTimeoutMS: options.socketTimeoutMS,
@@ -148,9 +175,15 @@ function assertProviderOptions(options) {
       throw new TypeError(`MongoDB provider ${name} must be a positive safe integer`)
     }
   }
+}
+
+function assertTlsOptions({ options }) {
   if (options.tlsOptions !== null && (typeof options.tlsOptions !== "object" || Array.isArray(options.tlsOptions))) {
     throw new TypeError("MongoDB provider TLS options must be an object or disabled")
   }
+}
+
+function assertProviderFunctions({ options }) {
   for (const [name, value] of Object.entries({
     transportFactory: options.transportFactory,
     handshake: options.handshake,
@@ -160,6 +193,16 @@ function assertProviderOptions(options) {
       throw new TypeError(`MongoDB provider ${name} must be a function`)
     }
   }
+}
+
+function assertProviderOptions(options) {
+  assertHostAndPort({ options })
+  assertDatabaseName({ value: options.databaseName, label: "databaseName" })
+  assertCredentials({ options })
+  assertConnectionPolicy({ options })
+  assertTimeouts({ options })
+  assertTlsOptions({ options })
+  assertProviderFunctions({ options })
 }
 
 function createTransactionCommand({ transport, session }) {
