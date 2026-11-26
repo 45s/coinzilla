@@ -100,7 +100,7 @@ factId: "wrong-id",
     factType: "SAFETY_BLOCKER_RESOLVED",
 canonicalData: {
       blockerId,
-resolvedBy: "operator",
+resolvedBy: "operator:manual",
 resolution: "OPERATOR_ACTION",
 evidenceDigest: DIGEST,
     },

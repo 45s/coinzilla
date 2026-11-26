@@ -206,6 +206,83 @@ test("retains an unresolved account-scoped blocker as global evidence", () => {
   assert.equal(result.data.stickySafetyBlockers[0].symbol, null)
 })
 
+test("requires structured operator action for user-data ACCOUNT blocker resolution", () => {
+  const raisedBlocker = {
+    blockerId,
+    producer: "USER_DATA_EVENT_HANDLER",
+    scope: "ACCOUNT",
+    symbol: null,
+    reason: "ACCOUNTING_INTEGRITY_FAILURE",
+    evidenceDigest: blockerDigest,
+  }
+  const resolutions = [
+    {
+      blockerId,
+      resolvedBy: "reconciliation:legacy-account-audit",
+      resolution: "AUTHORITATIVE_RECONCILIATION",
+      evidenceDigest: "c".repeat(64),
+    },
+    {
+      blockerId,
+      resolvedBy: "operator:legacy-account-action",
+      resolution: "OPERATOR_ACTION",
+      evidenceDigest: "c".repeat(64),
+    },
+  ]
+  for (const resolution of resolutions) {
+    const result = projectHarvesterOperationalState({
+      records: [
+        record(0, "LEDGER_INITIALIZED", { schemaVersion: 1 }, "durable-facts:genesis"),
+        baseline(),
+        started(),
+        ...preflightFacts(),
+        record(5, "SAFETY_BLOCKER_RAISED", raisedBlocker, `safety-blocker-raised:${blockerId}`),
+        record(6, "SAFETY_BLOCKER_RESOLVED", resolution, `safety-blocker-resolved:${blockerId}`),
+      ],
+    })
+    assert.equal(result.ok, false, "An account blocker cannot be cleared through generic or legacy resolution facts.")
+  }
+})
+
+test("keeps Recovery Seller STOP exclusive to its dedicated legacy operator action", () => {
+  const raisedBlocker = {
+    blockerId,
+    producer: "RECOVERY_SELLER_STOP_WORKFLOW",
+    scope: "ACCOUNT",
+    symbol: null,
+    reason: "RECOVERY_SELLER_UNEXPECTED_CONDITION",
+    evidenceDigest: blockerDigest,
+  }
+  const legacyResolution = {
+    blockerId,
+    resolvedBy: "operator:operator-7:rs-stop-action-001",
+    resolution: "OPERATOR_ACTION",
+    evidenceDigest: "c".repeat(64),
+  }
+  const structuredResolution = {
+    ...legacyResolution,
+    operatorId: "operator-7",
+    operatorAuthMethod: "OS_ACCOUNT",
+    actionId: "rs-stop-action-001",
+    resolutionReason: "Attempted account-wide user-data resolution",
+    actionBlockerIds: [blockerId],
+  }
+  const recordsFor = (resolution) => [
+    record(0, "LEDGER_INITIALIZED", { schemaVersion: 1 }, "durable-facts:genesis"),
+    baseline(),
+    started(),
+    ...preflightFacts(),
+    record(5, "SAFETY_BLOCKER_RAISED", raisedBlocker, `safety-blocker-raised:${blockerId}`),
+    record(6, "SAFETY_BLOCKER_RESOLVED", resolution, `safety-blocker-resolved:${blockerId}`),
+  ]
+  const legacy = projectHarvesterOperationalState({ records: recordsFor(legacyResolution) })
+  const structured = projectHarvesterOperationalState({ records: recordsFor(structuredResolution) })
+
+  assert.equal(legacy.ok, true, legacy.errors?.map(({ message }) => message).join("; "))
+  assert.deepEqual(legacy.data.stickySafetyBlockers, [])
+  assert.equal(structured.ok, false, "The account-wide user-data resolver must not clear Recovery Seller STOP.")
+})
+
 test("fails closed for missing configuration baseline, orphan facts, or resolution without a raised blocker", () => {
   const noBaseline = projectHarvesterOperationalState({ records: [started()] })
   const orphan = projectHarvesterOperationalState({
