@@ -60,28 +60,19 @@ const snapshot = Object.freeze({
   lastBuyPrice: undefined,
 })
 
-function createRuntime({
-  stateOverrides = {},
-  stopStateOverride = stopState,
-  accountAdmissionBlocked = false,
-  isMarketPriceFresh = () => true,
-  isStopping = () => false,
-  hasBlockingOpenOrdersForSymbol = () => false,
-  recoverySellerPairs = { [symbol]: pairConfig },
-} = {}) {
-  let snapshotInput
-  let buyDecisionInput
-  const state = {
-    prices: new Map([[symbol, marketPrice]]),
-    paused: new Set(),
-    durablePausedMarkets: new Set(),
-    operatorPausedMarkets: new Set(),
-    ...stateOverrides,
-  }
-  const evaluate = createRecoverySellerRuntimeEvaluator({
+function createRuntimeEvaluator({
+  capture,
+  stopStateOverride,
+  accountAdmissionBlocked,
+  isMarketPriceFresh,
+  isStopping,
+  hasBlockingOpenOrdersForSymbol,
+  recoverySellerPairs,
+}) {
+  return createRecoverySellerRuntimeEvaluator({
     recoverySellerWorkflow: {
       getTransitionSnapshot: (input) => {
-        snapshotInput = input
+        capture.snapshotInput = input
         return Object.freeze({
           ...snapshot,
           stopState: input.stopState,
@@ -107,7 +98,7 @@ function createRuntime({
       data: Object.freeze({ submitted: true }),
     }),
     evaluateBuyDecision: (input) => {
-      buyDecisionInput = input
+      capture.buyDecisionInput = input
       return Object.freeze({
         decision: Object.freeze({
           outcome: "WAIT",
@@ -117,17 +108,41 @@ function createRuntime({
       })
     },
   })
-  return {
-    evaluate,
-    input: {
-      symbol,
-      state,
-    },
-    getSnapshotInput: () => snapshotInput,
-    getBuyDecisionInput: () => buyDecisionInput,
-  }
 }
 
+function createRuntime({
+  stateOverrides = {},
+  stopStateOverride = stopState,
+  accountAdmissionBlocked = false,
+  isMarketPriceFresh = () => true,
+  isStopping = () => false,
+  hasBlockingOpenOrdersForSymbol = () => false,
+  recoverySellerPairs = { [symbol]: pairConfig },
+} = {}) {
+  const capture = {}
+  const state = {
+    prices: new Map([[symbol, marketPrice]]),
+    paused: new Set(),
+    durablePausedMarkets: new Set(),
+    operatorPausedMarkets: new Set(),
+    ...stateOverrides,
+  }
+  const evaluate = createRuntimeEvaluator({
+    capture,
+    stopStateOverride,
+    accountAdmissionBlocked,
+    isMarketPriceFresh,
+    isStopping,
+    hasBlockingOpenOrdersForSymbol,
+    recoverySellerPairs,
+  })
+  return {
+    evaluate,
+    input: { symbol, state },
+    getSnapshotInput: () => capture.snapshotInput,
+    getBuyDecisionInput: () => capture.buyDecisionInput,
+  }
+}
 test("builds the runtime snapshot from canonical market, account and stop state", async () => {
   const runtime = createRuntime()
   const result = await runtime.evaluate(runtime.input)
