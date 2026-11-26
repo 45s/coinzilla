@@ -227,8 +227,13 @@ function createSortStages(sort) {
   ]
 }
 
+function isValidCursorId(cursorId) {
+  return (typeof cursorId === "number" && Number.isSafeInteger(cursorId) && cursorId >= 0)
+    || (typeof cursorId === "bigint" && cursorId >= 0n)
+}
+
 function isCursorExhausted(cursorId) {
-  return cursorId === undefined || cursorId === null || cursorId === 0 || cursorId === 0n
+  return cursorId === 0 || cursorId === 0n
 }
 
 function createMongoRecordOperations({ command, databaseName }) {
@@ -285,6 +290,29 @@ function createMongoRecordOperations({ command, databaseName }) {
         cause: new Error("MongoDB find response omitted cursor.firstBatch"),
       })
     }
+    if (!isValidCursorId(response.cursor.id)) {
+      throw new DatabaseProviderError({
+        operation: "readOne",
+        collection,
+        cause: new Error("MongoDB find response contained an invalid cursor id"),
+      })
+    }
+    if (!isCursorExhausted(response.cursor.id)) {
+      try {
+        await runMongoCommand({
+          command,
+          operation: "readOne",
+          collection,
+          body: {
+            killCursors: mongoCollection,
+            cursors: [response.cursor.id],
+            $db: databaseName,
+          },
+        })
+      } catch {
+        // Preserve the requested read result; connection cleanup owns any remaining cursor.
+      }
+    }
     const document = response.cursor.firstBatch[0]
     return document ? decodeStoredRecord({ document, operation: "readOne", collection }) : null
   }
@@ -326,6 +354,13 @@ function createMongoRecordOperations({ command, databaseName }) {
       })
     }
     let cursorId = cursor.id
+    if (!isValidCursorId(cursorId)) {
+      throw new DatabaseProviderError({
+        operation: "readMany",
+        collection,
+        cause: new Error("MongoDB aggregate response contained an invalid cursor id"),
+      })
+    }
     const records = []
     try {
       records.push(...cursor.firstBatch.map((document) => decodeStoredRecord({
@@ -350,6 +385,13 @@ function createMongoRecordOperations({ command, databaseName }) {
             operation: "readMany",
             collection,
             cause: new Error("MongoDB getMore response omitted cursor.nextBatch"),
+          })
+        }
+        if (!isValidCursorId(next.cursor.id)) {
+          throw new DatabaseProviderError({
+            operation: "readMany",
+            collection,
+            cause: new Error("MongoDB getMore response contained an invalid cursor id"),
           })
         }
         cursorId = next.cursor.id
