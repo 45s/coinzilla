@@ -196,7 +196,6 @@ async function assertClosingAuditTimeout({
   assert.equal(calls.includes("user-data-stop"), false)
   assert.equal(calls.includes("broker-disconnect"), false)
   assert.equal(fixture.state.status, "SHUTDOWN_INCOMPLETE")
-  return retryStopPromise
 }
 
 function createClosingAuditTimeoutFixture({ calls } = {}) {
@@ -259,10 +258,8 @@ test("bounds a pending CLOSING audit phase and retains shared services", async (
   const timeoutFixture = createClosingAuditTimeoutFixture({ calls })
   const { fixture, auditStarted } = timeoutFixture
   const stopPromise = fixture.stop()
-  let retryStopPromise
-
   try {
-    retryStopPromise = await assertClosingAuditTimeout({
+    await assertClosingAuditTimeout({
       fixture,
       calls,
       auditStarted,
@@ -274,10 +271,7 @@ test("bounds a pending CLOSING audit phase and retains shared services", async (
   } finally {
     timeoutFixture.resolveAudit()
     if (timeoutFixture.isClosingAuditStarted()) {
-      await Promise.all([
-        stopPromise.catch(() => {}),
-        retryStopPromise?.catch(() => {}),
-      ])
+      await stopPromise.catch(() => {})
     }
   }
 })
