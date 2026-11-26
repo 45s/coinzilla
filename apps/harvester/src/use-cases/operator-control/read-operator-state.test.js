@@ -8,8 +8,7 @@ const actor = Object.freeze({
   roles: Object.freeze(["trading-operator"]),
 })
 
-function createHarness({
-  runtimeSnapshot = {
+const DEFAULT_RUNTIME_SNAPSHOT = {
     observedAt: 2000,
     startedAt: 100,
     connected: true,
@@ -23,8 +22,9 @@ function createHarness({
       lastEventAt: 1500,
       ageMs: 500,
     },
-  },
-  markets = [
+  }
+
+const DEFAULT_MARKETS = [
     {
       symbol: "DOGEUSDT",
       enabled: true,
@@ -62,9 +62,12 @@ reason: "HIGH_VOLATILITY" },
       volatilityProtection: null,
       blockers: ["MARKET_DISABLED"],
     },
-  ],
-  marketResult = { ok: true,
-data: { markets } },
+  ]
+
+function createHarness({
+  runtimeSnapshot = DEFAULT_RUNTIME_SNAPSHOT,
+  markets = DEFAULT_MARKETS,
+  marketResult = { ok: true, data: { markets } },
 } = {}) {
   const calls = []
   const engine = {
@@ -224,8 +227,7 @@ blockers: "invalid" }] },
 })
 
 
-test("includes the source-backed readiness report in the authorized status and market read models", async () => {
-  const readinessInputs = {
+const COMPLETE_READINESS_INPUTS = {
     configuration: { validated: true,
 enabledMarkets: ["BTCUSDT"] },
     broker: {
@@ -288,8 +290,8 @@ snapshot: null },
       },
     },
   }
-  const { readState } = createHarness({
-    runtimeSnapshot: {
+
+const COMPLETE_RUNTIME_SNAPSHOT = {
       observedAt: 20000,
 startedAt: 100,
 connected: true,
@@ -302,9 +304,10 @@ startupComplete: true,
 status: "READY",
 lastEventAt: 19990,
 ageMs: 10 },
-      readinessInputs,
-    },
-    markets: [{
+      readinessInputs: COMPLETE_READINESS_INPUTS,
+    }
+
+const COMPLETE_READINESS_MARKETS = [{
       symbol: "BTCUSDT",
 enabled: true,
 marketMetadataReady: true,
@@ -316,12 +319,15 @@ bookTimestamp: 19998,
       bookFresh: true,
 volatilityProtection: null,
 blockers: [],
-    }],
-  })
+    }]
 
+test("includes the source-backed readiness report in the authorized status and market read models", async () => {
+  const { readState } = createHarness({
+    runtimeSnapshot: COMPLETE_RUNTIME_SNAPSHOT,
+    markets: COMPLETE_READINESS_MARKETS,
+  })
   const status = await readState.getStatus({ actor })
   const markets = await readState.getMarkets({ actor })
-
   assert.equal(status.ok, true, "An authorized status read must succeed with complete readiness evidence.")
   assert.equal(status.data.readinessReport.status, "HEALTHY", "The operator status must expose the consolidated source-backed readiness result used at startup.")
   assert.equal(status.data.readinessReport.markets[0].symbol, "BTCUSDT", "The consolidated report must retain per-market identity.")

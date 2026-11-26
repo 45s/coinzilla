@@ -7,8 +7,7 @@ const identity = Object.freeze({ providerInstanceId: "binanceTestnet",
 providerType: "binance",
 environment: "testnet" })
 
-function createInputs() {
-  return {
+const DEFAULT_READINESS_INPUTS = {
     observedAt: 20000,
     runtime: { runtimeState: "STARTING",
 startupBoundary: true,
@@ -121,6 +120,9 @@ volatilityProtection: null,
 blockers: [] },
     ],
   }
+
+function createInputs() {
+  return structuredClone(DEFAULT_READINESS_INPUTS)
 }
 
 test("reports healthy pre-trading readiness from actual component snapshots without opening the existing gate", () => {

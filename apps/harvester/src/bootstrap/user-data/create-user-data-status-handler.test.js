@@ -359,22 +359,21 @@ test("does not clear the application recovery gate for a different subscription 
 
 
 
-test("logs concise user-data stream lifecycle transitions once and suppresses duplicate notifications", () => {
-  const { handler, state, logs } = createHandler()
-  const disconnected = { type: "connectionClosed",
-reason: "connection_lost",
-recoveryRequired: true }
+function emitDuplicateUserDataLifecycleTransitions({ handler, state } = {}) {
+  const disconnected = {
+    type: "connectionClosed",
+    reason: "connection_lost",
+    recoveryRequired: true,
+  }
   handler(disconnected)
   handler(disconnected)
-  handler({ type: "terminated",
-reason: "connection_lost",
-recoveryRequired: true })
-  handler({ type: "recovering",
-attempt: 1,
-recoveryRequired: true })
-  handler({ type: "recovering",
-attempt: 1,
-recoveryRequired: true })
+  handler({
+    type: "terminated",
+    reason: "connection_lost",
+    recoveryRequired: true,
+  })
+  handler({ type: "recovering", attempt: 1, recoveryRequired: true })
+  handler({ type: "recovering", attempt: 1, recoveryRequired: true })
   const reconnected = {
     type: "recovered",
     attempt: 1,
@@ -395,40 +394,56 @@ recoveryRequired: true })
   }
   handler(restored)
   handler(restored)
+}
 
+function getUserDataLifecycleLogProjection({ logs } = {}) {
+  return logs.info.map(({ message, reason, attempt, subscriptionId, recoveryGeneration }) => ({
+    message,
+    reason,
+    attempt,
+    subscriptionId,
+    recoveryGeneration,
+  }))
+}
+
+test("logs concise user-data stream lifecycle transitions once and suppresses duplicate notifications", () => {
+  const { handler, state, logs } = createHandler()
+  emitDuplicateUserDataLifecycleTransitions({ handler, state })
   assert.deepEqual(
-    logs.info.map(({ message, reason, attempt, subscriptionId, recoveryGeneration }) => ({
-      message,
-reason,
-attempt,
-subscriptionId,
-recoveryGeneration,
-    })),
+    getUserDataLifecycleLogProjection({ logs }),
     [
-      { message: "User-data stream disconnected",
-reason: "connection_lost",
-attempt: undefined,
-subscriptionId: undefined,
-recoveryGeneration: undefined },
-      { message: "User-data stream reconnecting",
-reason: undefined,
-attempt: 1,
-subscriptionId: undefined,
-recoveryGeneration: undefined },
-      { message: "User-data stream reconnected",
-reason: undefined,
-attempt: 1,
-subscriptionId: 42,
-recoveryGeneration: 7 },
-      { message: "User-data stream subscription restored",
-reason: undefined,
-attempt: undefined,
-subscriptionId: 42,
-recoveryGeneration: 7 },
+      {
+        message: "User-data stream disconnected",
+        reason: "connection_lost",
+        attempt: undefined,
+        subscriptionId: undefined,
+        recoveryGeneration: undefined,
+      },
+      {
+        message: "User-data stream reconnecting",
+        reason: undefined,
+        attempt: 1,
+        subscriptionId: undefined,
+        recoveryGeneration: undefined,
+      },
+      {
+        message: "User-data stream reconnected",
+        reason: undefined,
+        attempt: 1,
+        subscriptionId: 42,
+        recoveryGeneration: 7,
+      },
+      {
+        message: "User-data stream subscription restored",
+        reason: undefined,
+        attempt: undefined,
+        subscriptionId: 42,
+        recoveryGeneration: 7,
+      },
     ],
     "Only genuine disconnect, reconnect, reconnected, and restored transitions must be logged; duplicate status deliveries must not repeat them.",
   )
-})
+}))
 
 test("logs user-data transport errors once with their original error context", () => {
   const { handler, logs } = createHandler()

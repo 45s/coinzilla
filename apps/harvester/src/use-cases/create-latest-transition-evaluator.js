@@ -42,26 +42,10 @@ function canEvaluateShutdownRecoveryThroughManagedPause({ state, symbol, shutdow
   })
 }
 
-function getEvaluationGateResult({ dependencies, symbol, shutdownRecoveryOnly } = {}) {
-  const {
-    state,
-    hasBlockingOpenOrdersForSymbol,
-    isStopping,
-    canTrade,
-    isMarketPriceFresh,
-    isMarketBookFresh,
-    getCurrentMarketMetadata,
-    getVolatilityData,
-    isVolatilityProtectionEnabledForSymbol,
-    pairs,
-  } = dependencies
+function getEvaluationEntryGateResult({ dependencies, symbol, shutdownRecoveryOnly } = {}) {
+  const { state, hasBlockingOpenOrdersForSymbol, isStopping, canTrade } = dependencies
   if (state.shutdownBuyGate === true && !shutdownRecoveryOnly) {
-    return toResult({
-      data: {
-        skipped: true,
-        reason: "CONSERVATIVE_SHUTDOWN_BUY_GATE_ACTIVE",
-      },
-    })
+    return toResult({ data: { skipped: true, reason: "CONSERVATIVE_SHUTDOWN_BUY_GATE_ACTIVE" } })
   }
   const recoveryManagedPause = canEvaluateShutdownRecoveryThroughManagedPause({
     state,
@@ -69,73 +53,130 @@ function getEvaluationGateResult({ dependencies, symbol, shutdownRecoveryOnly } 
     shutdownRecoveryOnly,
   })
   if (state.paused.has(symbol) && !recoveryManagedPause) {
-    return toResult({ data: { skipped: true,
-      reason: "PAIR_PAUSED" } })
+    return toResult({ data: { skipped: true, reason: "PAIR_PAUSED" } })
   }
   if (hasBlockingOpenOrdersForSymbol({ symbol })) {
     state.deferredEvaluations.add(symbol)
-    return toResult({ data: { skipped: true,
-      reason: "UNOWNED_OPEN_ORDER" } })
+    return toResult({ data: { skipped: true, reason: "UNOWNED_OPEN_ORDER" } })
   }
   if (shutdownRecoveryOnly && isStopping?.() !== true) {
     return toResult({ error: new Error("Shutdown recovery SELL evaluation requires the stopping state") })
   }
   if (!canTrade({ symbol }) && !shutdownRecoveryOnly) {
     state.deferredEvaluations.add(symbol)
-    return toResult({ data: { skipped: true,
-      reason: "TRADING_NOT_READY" } })
+    return toResult({ data: { skipped: true, reason: "TRADING_NOT_READY" } })
   }
   state.deferredEvaluations.delete(symbol)
+  return null
+}
+
+function getFreshMarketPriceGateResult({ dependencies, symbol } = {}) {
+  const { state, isMarketPriceFresh } = dependencies
   const marketPrice = state.prices.get(symbol)
-  if (!marketPrice) {return toResult({ data: { skipped: true,
-    reason: "NO_MARKET_PRICE" } })}
-  if (!isMarketPriceFresh(marketPrice)) {
-    return toResult({ data: { skipped: true,
-      reason: "STALE_MARKET_PRICE" } })
+  if (!marketPrice) {
+    return toResult({ data: { skipped: true, reason: "NO_MARKET_PRICE" } })
   }
-  if (!shutdownRecoveryOnly) {
-    const metadata = typeof getCurrentMarketMetadata === "function"
-      ? getCurrentMarketMetadata({ symbol })
-      : null
-    if (!metadata?.market) {
-      state.deferredEvaluations.add(symbol)
-      return toResult({ data: { deferred: true,
-reason: "MARKET_METADATA_UNAVAILABLE" } })
-    }
-    const orderType = metadata.orderType ?? pairs?.[symbol]?.orderType ?? "LIMIT_MAKER"
-    if (orderType === "LIMIT_MAKER") {
-      const marketBook = state.books.get(symbol)
-      if (!marketBook || typeof isMarketBookFresh !== "function" || !isMarketBookFresh(marketBook)) {
-        state.deferredEvaluations.add(symbol)
-        return toResult({
-          data: {
-            deferred: true,
-            reason: marketBook ? "MARKET_BOOK_STALE" : "MARKET_BOOK_UNAVAILABLE",
-          },
-        })
-      }
-    }
-    if (isVolatilityProtectionEnabledForSymbol?.(symbol) === true) {
-      const snapshot = getVolatilityData?.({ symbol })
-      const status = snapshot?.ok === true ? snapshot.data?.status : null
-      const protection = state.volatilityProtection?.get(symbol)
-      const volatilityReady = status?.isReady === true &&
-        status.isFresh === true &&
-        Array.isArray(status.blockers) &&
-        status.blockers.length === 0 &&
-        Number.isSafeInteger(status.historyCount) &&
-        Number.isSafeInteger(status.requiredHistoryCount) &&
-        status.historyCount >= status.requiredHistoryCount &&
-        protection !== null &&
-        typeof protection === "object"
-      if (!volatilityReady) {
-        state.deferredEvaluations.add(symbol)
-        return toResult({ data: { deferred: true,
-reason: "VOLATILITY_PROTECTION_NOT_READY" } })
-      }
-    }
+  if (!isMarketPriceFresh(marketPrice)) {
+    return toResult({ data: { skipped: true, reason: "STALE_MARKET_PRICE" } })
   }
   return { marketPrice }
+}
+
+function getMarketMetadataGateResult({ dependencies, symbol } = {}) {
+  const { state, getCurrentMarketMetadata } = dependencies
+  const metadata = typeof getCurrentMarketMetadata === "function"
+    ? getCurrentMarketMetadata({ symbol })
+    : null
+  if (metadata?.market) {
+    return { metadata }
+  }
+  state.deferredEvaluations.add(symbol)
+  return toResult({ data: { deferred: true, reason: "MARKET_METADATA_UNAVAILABLE" } })
+}
+
+function getMarketBookGateResult({ dependencies, symbol, metadata } = {}) {
+  const { state, isMarketBookFresh, pairs } = dependencies
+  const orderType = metadata.orderType ?? pairs?.[symbol]?.orderType ?? "LIMIT_MAKER"
+  if (orderType !== "LIMIT_MAKER") {
+    return null
+  }
+  const marketBook = state.books.get(symbol)
+  if (marketBook && typeof isMarketBookFresh === "function" && isMarketBookFresh(marketBook)) {
+    return null
+  }
+  state.deferredEvaluations.add(symbol)
+  return toResult({
+    data: {
+      deferred: true,
+      reason: marketBook ? "MARKET_BOOK_STALE" : "MARKET_BOOK_UNAVAILABLE",
+    },
+  })
+}
+
+function getMarketVolatilityGateResult({ dependencies, symbol } = {}) {
+  const {
+    state,
+    getVolatilityData,
+    isVolatilityProtectionEnabledForSymbol,
+  } = dependencies
+  if (isVolatilityProtectionEnabledForSymbol?.(symbol) !== true) {
+    return null
+  }
+  const snapshot = getVolatilityData?.({ symbol })
+  const status = snapshot?.ok === true ? snapshot.data?.status : null
+  const protection = state.volatilityProtection?.get(symbol)
+  const volatilityReady = status?.isReady === true &&
+    status.isFresh === true &&
+    Array.isArray(status.blockers) &&
+    status.blockers.length === 0 &&
+    Number.isSafeInteger(status.historyCount) &&
+    Number.isSafeInteger(status.requiredHistoryCount) &&
+    status.historyCount >= status.requiredHistoryCount &&
+    protection !== null &&
+    typeof protection === "object"
+  if (volatilityReady) {
+    return null
+  }
+  state.deferredEvaluations.add(symbol)
+  return toResult({ data: { deferred: true, reason: "VOLATILITY_PROTECTION_NOT_READY" } })
+}
+
+function getMarketPrerequisiteGateResult({ dependencies, symbol } = {}) {
+  const metadataResult = getMarketMetadataGateResult({ dependencies, symbol })
+  if (metadataResult?.ok === false || metadataResult?.data?.deferred) {
+    return metadataResult
+  }
+  const bookResult = getMarketBookGateResult({
+    dependencies,
+    symbol,
+    metadata: metadataResult.metadata,
+  })
+  if (bookResult) {
+    return bookResult
+  }
+  return getMarketVolatilityGateResult({ dependencies, symbol })
+}
+
+function getEvaluationGateResult({ dependencies, symbol, shutdownRecoveryOnly } = {}) {
+  const entryGateResult = getEvaluationEntryGateResult({
+    dependencies,
+    symbol,
+    shutdownRecoveryOnly,
+  })
+  if (entryGateResult) {
+    return entryGateResult
+  }
+  const priceGateResult = getFreshMarketPriceGateResult({ dependencies, symbol })
+  if (priceGateResult?.data || priceGateResult?.errors || priceGateResult?.error) {
+    return priceGateResult
+  }
+  if (!shutdownRecoveryOnly) {
+    const prerequisiteResult = getMarketPrerequisiteGateResult({ dependencies, symbol })
+    if (prerequisiteResult) {
+      return prerequisiteResult
+    }
+  }
+  return { marketPrice: priceGateResult.marketPrice }
 }
 
 function createEvaluationInputs({

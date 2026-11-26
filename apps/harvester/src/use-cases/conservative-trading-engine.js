@@ -2644,13 +2644,8 @@ function createEngineRecoverySellerActionAuthorizer({ context, dependencies } = 
   })
 }
 
-function createConservativeEngineEvaluationContext({ context } = {}) {
-  const { dependencies } = context
-  const authorizeRecoverySellerAction = createEngineRecoverySellerActionAuthorizer({
-    context,
-    dependencies,
-  })
-  context.evaluateLatestTransition = createLatestTransitionEvaluator({
+function createLatestTransitionEvaluatorDependencies({ context, dependencies, authorizeRecoverySellerAction } = {}) {
+  return {
     state: context.state,
     hasBlockingOpenOrdersForSymbol: context.hasBlockingOpenOrdersForSymbol,
     isStopping: dependencies.isStopping,
@@ -2686,7 +2681,22 @@ function createConservativeEngineEvaluationContext({ context } = {}) {
     submit: context.submit,
     setShutdownRecoverySubmissionAllowed: (value) => { context.shutdownRecoverySubmission.allowed = value },
     evaluateLatestTransition: (options) => context.evaluateLatestTransition(options),
+  }
+}
+
+function createConservativeEngineEvaluationContext({ context } = {}) {
+  const { dependencies } = context
+  const authorizeRecoverySellerAction = createEngineRecoverySellerActionAuthorizer({
+    context,
+    dependencies,
   })
+  context.evaluateLatestTransition = createLatestTransitionEvaluator(
+    createLatestTransitionEvaluatorDependencies({
+      context,
+      dependencies,
+      authorizeRecoverySellerAction,
+    }),
+  )
   const workflow = createShutdownRecoveryWorkflow({
     state: context.state,
     getCurrentMarketMetadata: context.getCurrentMarketMetadata,

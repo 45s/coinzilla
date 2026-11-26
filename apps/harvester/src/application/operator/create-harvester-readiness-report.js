@@ -280,6 +280,13 @@ function getExchangeCapabilityValidationStatus({ required, validated }) {
   return validated ? "PASS" : "FAIL"
 }
 
+function hasCompleteBrokerCapabilities({ capabilities, missing, exchangeRequired, exchangeValidated } = {}) {
+  return capabilities?.validated === true &&
+    Array.isArray(missing) &&
+    missing.length === 0 &&
+    (exchangeRequired.length === 0 || exchangeValidated)
+}
+
 function createBrokerCapabilitiesCheck({ inputs, runtime, observedAt } = {}) {
   const capabilities = inputs.broker?.capabilities
   if (!capabilities && runtime.startupBoundary !== true) {
@@ -300,19 +307,17 @@ function createBrokerCapabilitiesCheck({ inputs, runtime, observedAt } = {}) {
     ? capabilities.exchangeRequired
     : []
   const exchangeValidated = capabilities?.exchangeValidated === true
-  const exchangeComplete = exchangeRequired.length === 0 || exchangeValidated
-  const complete = capabilities?.validated === true &&
-    Array.isArray(missing) &&
-    missing.length === 0 &&
-    exchangeComplete
-  let status = "BLOCKED"
-  let code = "BROKER_CAPABILITIES_INCOMPLETE"
-  let message = "One or more required BrokerPort methods or configured provider capabilities are unavailable."
-  if (complete) {
-    status = "PASS"
-    code = "BROKER_CAPABILITIES_VERIFIED"
-    message = "The BrokerPort contract and configured provider capability requirements are available."
-  }
+  const complete = hasCompleteBrokerCapabilities({
+    capabilities,
+    missing,
+    exchangeRequired,
+    exchangeValidated,
+  })
+  const status = complete ? "PASS" : "BLOCKED"
+  const code = complete ? "BROKER_CAPABILITIES_VERIFIED" : "BROKER_CAPABILITIES_INCOMPLETE"
+  const message = complete
+    ? "The BrokerPort contract and configured provider capability requirements are available."
+    : "One or more required BrokerPort methods or configured provider capabilities are unavailable."
   return createCheck({
     id: "broker.capabilities",
     scope: "ACCOUNT",
@@ -334,6 +339,7 @@ function createBrokerCapabilitiesCheck({ inputs, runtime, observedAt } = {}) {
     },
   })
 }
+
 function createProcessRestorationCheck({ inputs, runtime, observedAt } = {}) {
   const continuity = inputs.processContinuity
   if (!continuity && runtime.startupBoundary !== true) {
@@ -445,6 +451,31 @@ function isExternalOrderOnlyAudit({ openOrders } = {}) {
   return reasons.every((reason) => String(reason).startsWith("UNOWNED_OPEN_ORDERS"))
 }
 
+function getOpenOrdersAuditOutcome({ openOrderState, complete, externalOrderOnly } = {}) {
+  if (complete && externalOrderOnly) {
+    return {
+      status: "WARNING",
+      code: "UNOWNED_EXTERNAL_ORDERS_OBSERVED",
+      message: "The account snapshot contains unowned external orders; existing per-market policy determines impact.",
+      blocksTrading: false,
+    }
+  }
+  if (complete && (openOrderState.blockReasons?.length ?? 0) === 0) {
+    return {
+      status: "PASS",
+      code: "ACCOUNT_OPEN_ORDERS_AUDITED",
+      message: "The account-wide open-order PREFLIGHT audit completed and was durably recorded.",
+      blocksTrading: false,
+    }
+  }
+  return {
+    status: "BLOCKED",
+    code: "ACCOUNT_OPEN_ORDERS_AUDIT_INCOMPLETE",
+    message: "The account-wide open-order audit is incomplete or contains an unresolved condition.",
+    blocksTrading: true,
+  }
+}
+
 function createOpenOrdersCheck({ inputs, runtime, observedAt } = {}) {
   const openOrders = inputs.account?.openOrders
   if (!openOrders && runtime.startupBoundary !== true) {
@@ -466,46 +497,57 @@ function createOpenOrdersCheck({ inputs, runtime, observedAt } = {}) {
     openOrderState.durable === true &&
     isTimestamp(openOrderState.observedAt) &&
     Number.isSafeInteger(openOrderState.orderCount)
-  let status = "BLOCKED"
-  let code = "ACCOUNT_OPEN_ORDERS_AUDIT_INCOMPLETE"
-  let message = "The account-wide open-order audit is incomplete or contains an unresolved condition."
-  let blocksTrading = true
-  if (complete && externalOrderOnly) {
-    status = "WARNING"
-    code = "UNOWNED_EXTERNAL_ORDERS_OBSERVED"
-    message = "The account snapshot contains unowned external orders; existing per-market policy determines impact."
-    blocksTrading = false
-  } else if (complete && (openOrderState.blockReasons?.length ?? 0) === 0) {
-    status = "PASS"
-    code = "ACCOUNT_OPEN_ORDERS_AUDITED"
-    message = "The account-wide open-order PREFLIGHT audit completed and was durably recorded."
-    blocksTrading = false
-  }
+  const outcome = getOpenOrdersAuditOutcome({
+    openOrderState,
+    complete,
+    externalOrderOnly,
+  })
   return createCheck({
     id: "account.open-orders",
     scope: "ACCOUNT",
-    status,
-    code,
-    message,
+    ...outcome,
     expected: "A complete, durable account-wide open-order snapshot with ownership classification.",
     remediation: externalOrderOnly
       ? "Review affected symbols and their externalOrdersPolicy; do not adopt, cancel or modify these orders automatically."
       : "Complete the approved account-wide open-order audit and resolve non-external-order reconciliation blockers.",
     observedAt,
-    blocksTrading,
     details: {
       completed: openOrderState.completed === true,
       durable: openOrderState.durable === true,
       phase: openOrderState.phase ?? null,
       observedAt: isTimestamp(openOrderState.observedAt) ? openOrderState.observedAt : null,
-      ageMs: ageMs({ observedAt,
-timestamp: openOrderState.observedAt }),
+      ageMs: ageMs({ observedAt, timestamp: openOrderState.observedAt }),
       orderCount: Number.isSafeInteger(openOrderState.orderCount) ? openOrderState.orderCount : null,
       unownedSymbols: Array.isArray(openOrderState.unownedSymbols) ? openOrderState.unownedSymbols : [],
       blockReasons: Array.isArray(openOrderState.blockReasons) ? openOrderState.blockReasons : [],
       externalOrderOnly,
     },
   })
+}
+
+function getAccountSafetyOutcome({ blocker, runtimeSafetyHalt } = {}) {
+  if (runtimeSafetyHalt || blocker?.scope === "ACCOUNT") {
+    return {
+      status: "BLOCKED",
+      code: blocker?.reason ?? "ACCOUNT_SAFETY_HALT_REQUIRED",
+      message: "An existing account-scoped safety blocker prohibits trading activation.",
+      blocksTrading: true,
+    }
+  }
+  if (blocker) {
+    return {
+      status: "WARNING",
+      code: blocker.reason ?? "NON_ACCOUNT_SAFETY_BLOCKER_ACTIVE",
+      message: "A non-account-scoped safety condition is active; its owning scope remains responsible for enforcement.",
+      blocksTrading: false,
+    }
+  }
+  return {
+    status: "PASS",
+    code: "ACCOUNT_SAFETY_CLEAR",
+    message: "No account-scoped safety blocker is active.",
+    blocksTrading: false,
+  }
 }
 
 function createAccountSafetyCheck({ inputs, runtime, observedAt } = {}) {
@@ -524,30 +566,13 @@ function createAccountSafetyCheck({ inputs, runtime, observedAt } = {}) {
       blocksTrading: false,
     })
   }
-  let status = "PASS"
-  let code = "ACCOUNT_SAFETY_CLEAR"
-  let message = "No account-scoped safety blocker is active."
-  let blocksTrading = false
-  if (runtimeSafetyHalt || blocker?.scope === "ACCOUNT") {
-    status = "BLOCKED"
-    code = blocker?.reason ?? "ACCOUNT_SAFETY_HALT_REQUIRED"
-    message = "An existing account-scoped safety blocker prohibits trading activation."
-    blocksTrading = true
-  } else if (blocker) {
-    status = "WARNING"
-    code = blocker.reason ?? "NON_ACCOUNT_SAFETY_BLOCKER_ACTIVE"
-    message = "A non-account-scoped safety condition is active; its owning scope remains responsible for enforcement."
-  }
   return createCheck({
     id: "account.safety-blocker",
     scope: "ACCOUNT",
-    status,
-    code,
-    message,
+    ...getAccountSafetyOutcome({ blocker, runtimeSafetyHalt }),
     expected: "No ACCOUNT-scoped safety blocker remains active.",
     remediation: "Resolve the existing safety blocker through its owning recovery or operator workflow.",
     observedAt,
-    blocksTrading,
     details: {
       scope: blocker?.scope ?? null,
       reason: blocker?.reason ?? null,
@@ -556,72 +581,133 @@ function createAccountSafetyCheck({ inputs, runtime, observedAt } = {}) {
   })
 }
 
+function isUserDataReconciliationRequired({ userData, runtimeUserData, userDataStatus } = {}) {
+  return userData.preflightComplete !== true && (
+    userData.requiresReconciliation === true ||
+    runtimeUserData.requiresReconciliation === true ||
+    userDataStatus === "AUTHORITATIVE_RECONCILIATION_REQUIRED"
+  )
+}
+
+function hasUnsafeUserDataState({ userData, runtimeUserData, reconciliationRequired, userDataStatus } = {}) {
+  const unsafeFacts = [
+    userData.accountingFailed === true,
+    runtimeUserData.accountingFailed === true,
+    userData.streamUnsafe === true,
+    runtimeUserData.streamUnsafe === true,
+    userData.pendingRecovery === true,
+    runtimeUserData.pendingRecovery === true,
+    userData.safetyHaltRequired === true,
+    runtimeUserData.safetyHaltRequired === true,
+    userData.retryableRecoveryFailure === true,
+    runtimeUserData.retryableRecoveryFailure === true,
+  ]
+  return unsafeFacts.some(Boolean) ||
+    reconciliationRequired ||
+    UNSAFE_USER_DATA_STATUSES.has(normalizeUserDataStatus(userDataStatus))
+}
+
+function isUserDataReadinessComplete({ evidenceAvailable, userData, runtime, runtimeUserData, unsafe } = {}) {
+  if (evidenceAvailable) {
+    return userData.subscriptionEstablished === true &&
+      userData.preflightComplete === true &&
+      !unsafe &&
+      (runtime.tradingEnabled !== true || runtimeUserData.ready === true || runtime.startupBoundary === true)
+  }
+  return runtime.startupBoundary !== true &&
+    runtime.tradingEnabled === true &&
+    runtimeUserData.ready === true &&
+    !unsafe
+}
+
+function getUserDataReadinessOutcome({ evidenceAvailable, runtime, runtimeUserData, ready, unsafe, reconciliationRequired } = {}) {
+  if (!evidenceAvailable && runtime.startupBoundary !== true && runtime.tradingEnabled !== true) {
+    return {
+      status: "NOT_APPLICABLE",
+      code: "USER_DATA_NOT_REQUIRED",
+      message: "Trading is disabled; the user-data trading gate is not required for this operator snapshot.",
+    }
+  }
+  if (ready) {
+    return evidenceAvailable
+      ? {
+        status: "PASS",
+        code: "USER_DATA_PREFLIGHT_COMPLETE",
+        message: "User-data subscription, account PREFLIGHT and queued-event reconciliation are complete.",
+      }
+      : {
+        status: "PASS",
+        code: "USER_DATA_GATE_OPEN",
+        message: "The existing user-data trading-readiness gate is open.",
+      }
+  }
+  if (reconciliationRequired) {
+    return {
+      status: "BLOCKED",
+      code: "AUTHORITATIVE_RECONCILIATION_REQUIRED",
+      message: "User-data recovery or reconciliation remains unresolved.",
+    }
+  }
+  if (unsafe) {
+    return {
+      status: "BLOCKED",
+      code: "USER_DATA_RECONCILIATION_UNSAFE",
+      message: "User-data synchronization or accounting state is unsafe.",
+    }
+  }
+  if (runtime.tradingEnabled === true && runtimeUserData.ready !== true && runtime.startupBoundary !== true) {
+    return {
+      status: "BLOCKED",
+      code: "USER_DATA_NOT_READY",
+      message: "The existing user-data trading-readiness gate is closed.",
+    }
+  }
+  return {
+    status: "BLOCKED",
+    code: "USER_DATA_PREFLIGHT_INCOMPLETE",
+    message: "User-data subscription or authoritative PREFLIGHT reconciliation evidence is incomplete.",
+  }
+}
+
 function getUserDataSafetyFacts({ runtime, inputs } = {}) {
   const userData = inputs.userData ?? {}
   const runtimeUserData = runtime.userData ?? {}
   const evidenceAvailable = Boolean(inputs.userData)
   const userDataStatus = userData.status ?? runtimeUserData.status ?? "UNKNOWN"
-  const normalizedStatus = normalizeUserDataStatus(userDataStatus)
-  const reconciliationRequired = userData.preflightComplete !== true && (
-    userData.requiresReconciliation === true ||
-    runtimeUserData.requiresReconciliation === true ||
-    userDataStatus === "AUTHORITATIVE_RECONCILIATION_REQUIRED"
-  )
-  const unsafe = userData.accountingFailed === true ||
-    runtimeUserData.accountingFailed === true ||
-    userData.streamUnsafe === true ||
-    runtimeUserData.streamUnsafe === true ||
-    userData.pendingRecovery === true ||
-    runtimeUserData.pendingRecovery === true ||
-    userData.safetyHaltRequired === true ||
-    runtimeUserData.safetyHaltRequired === true ||
-    userData.retryableRecoveryFailure === true ||
-    runtimeUserData.retryableRecoveryFailure === true ||
-    reconciliationRequired ||
-    UNSAFE_USER_DATA_STATUSES.has(normalizedStatus)
-  const activationReady = runtime.tradingEnabled !== true ||
-    runtimeUserData.ready === true ||
-    runtime.startupBoundary === true
-  const ready = evidenceAvailable
-    ? userData.subscriptionEstablished === true && userData.preflightComplete === true && !unsafe && activationReady
-    : runtime.startupBoundary !== true && runtime.tradingEnabled === true && runtimeUserData.ready === true && !unsafe
-  let status = "BLOCKED"
-  let code = "USER_DATA_PREFLIGHT_INCOMPLETE"
-  let message = "User-data subscription or authoritative PREFLIGHT reconciliation evidence is incomplete."
-  if (!evidenceAvailable && runtime.startupBoundary !== true && runtime.tradingEnabled !== true) {
-    status = "NOT_APPLICABLE"
-    code = "USER_DATA_NOT_REQUIRED"
-    message = "Trading is disabled; the user-data trading gate is not required for this operator snapshot."
-  } else if (ready && evidenceAvailable) {
-    status = "PASS"
-    code = "USER_DATA_PREFLIGHT_COMPLETE"
-    message = "User-data subscription, account PREFLIGHT and queued-event reconciliation are complete."
-  } else if (ready) {
-    status = "PASS"
-    code = "USER_DATA_GATE_OPEN"
-    message = "The existing user-data trading-readiness gate is open."
-  } else if (reconciliationRequired) {
-    code = "AUTHORITATIVE_RECONCILIATION_REQUIRED"
-    message = "User-data recovery or reconciliation remains unresolved."
-  } else if (unsafe) {
-    code = "USER_DATA_RECONCILIATION_UNSAFE"
-    message = "User-data synchronization or accounting state is unsafe."
-  } else if (runtime.tradingEnabled === true &&
-      runtimeUserData.ready !== true &&
-      runtime.startupBoundary !== true) {
-    code = "USER_DATA_NOT_READY"
-    message = "The existing user-data trading-readiness gate is closed."
-  }
+  const reconciliationRequired = isUserDataReconciliationRequired({
+    userData,
+    runtimeUserData,
+    userDataStatus,
+  })
+  const unsafe = hasUnsafeUserDataState({
+    userData,
+    runtimeUserData,
+    reconciliationRequired,
+    userDataStatus,
+  })
+  const ready = isUserDataReadinessComplete({
+    evidenceAvailable,
+    userData,
+    runtime,
+    runtimeUserData,
+    unsafe,
+  })
   return {
     userData,
     runtimeUserData,
     evidenceAvailable,
     userDataStatus,
-    status,
-    code,
-    message,
+    ...getUserDataReadinessOutcome({
+      evidenceAvailable,
+      runtime,
+      runtimeUserData,
+      ready,
+      unsafe,
+      reconciliationRequired,
+    }),
   }
 }
+
 function createUserDataDetails({ facts, runtime, observedAt } = {}) {
   const { userData, runtimeUserData, evidenceAvailable, userDataStatus } = facts
   const lastStatusEventAt = userData.lastStatusEventAt ?? runtimeUserData.lastEventAt
@@ -839,25 +925,50 @@ actual: bookIdentity }) &&
   })
 }
 
+function createMissingMarketPriceSnapshotCheck({ market, observedAt } = {}) {
+  return createMarketCheck({
+    id: "market.price",
+    status: "NOT_APPLICABLE",
+    code: "MARKET_PRICE_EVENT_NOT_IN_OPERATOR_SNAPSHOT",
+    message: "First-event provenance is not included in this operator snapshot; the engine's live freshness gate remains authoritative.",
+    expected: "Startup verifies an accepted first price event or initial seed before trading activation.",
+    remediation: "Inspect startup diagnostics for the authoritative first-price event result.",
+    observedAt,
+    blocksTrading: false,
+    sourceOfTruth: "Existing engine market-price freshness snapshot; first-event provenance is not included in this operator read",
+    details: {
+      fresh: market.priceFresh === true,
+      timestamp: isTimestamp(market.priceTimestamp) ? market.priceTimestamp : null,
+      ageMs: ageMs({ observedAt, timestamp: market.priceTimestamp }),
+    },
+  })
+}
+
+function getMarketPriceReadinessOutcome({ routeRequired, ready } = {}) {
+  if (!routeRequired) {
+    return {
+      status: "NOT_APPLICABLE",
+      code: "MARKET_PRICE_NOT_REQUIRED",
+      message: "Market-data intake is intentionally suppressed by external-order policy.",
+    }
+  }
+  if (ready) {
+    return {
+      status: "PASS",
+      code: "MARKET_PRICE_READY",
+      message: "A valid fresh price is available from an accepted WebSocket event or initial seed.",
+    }
+  }
+  return {
+    status: "BLOCKED",
+    code: "MARKET_PRICE_NOT_READY",
+    message: "No valid fresh market price is confirmed; subscription acknowledgement alone is insufficient.",
+  }
+}
+
 function createMarketPriceCheck({ market, input, routeRequired, runtime, observedAt } = {}) {
   if (!input.price && runtime.startupBoundary !== true) {
-    return createMarketCheck({
-      id: "market.price",
-      status: "NOT_APPLICABLE",
-      code: "MARKET_PRICE_EVENT_NOT_IN_OPERATOR_SNAPSHOT",
-      message: "First-event provenance is not included in this operator snapshot; the engine's live freshness gate remains authoritative.",
-      expected: "Startup verifies an accepted first price event or initial seed before trading activation.",
-      remediation: "Inspect startup diagnostics for the authoritative first-price event result.",
-      observedAt,
-      blocksTrading: false,
-      sourceOfTruth: "Existing engine market-price freshness snapshot; first-event provenance is not included in this operator read",
-      details: {
-        fresh: market.priceFresh === true,
-        timestamp: isTimestamp(market.priceTimestamp) ? market.priceTimestamp : null,
-        ageMs: ageMs({ observedAt,
-timestamp: market.priceTimestamp }),
-      },
-    })
+    return createMissingMarketPriceSnapshotCheck({ market, observedAt })
   }
   const route = input.route ?? {}
   const price = input.price ?? {}
@@ -868,23 +979,10 @@ timestamp: market.priceTimestamp }),
     isTimestamp(market.priceTimestamp) &&
     route.priceSubscriptionReady === true &&
     validSource
-  let status = "BLOCKED"
-  let code = "MARKET_PRICE_NOT_READY"
-  let message = "No valid fresh market price is confirmed; subscription acknowledgement alone is insufficient."
-  if (!routeRequired) {
-    status = "NOT_APPLICABLE"
-    code = "MARKET_PRICE_NOT_REQUIRED"
-    message = "Market-data intake is intentionally suppressed by external-order policy."
-  } else if (ready) {
-    status = "PASS"
-    code = "MARKET_PRICE_READY"
-    message = "A valid fresh price is available from an accepted WebSocket event or initial seed."
-  }
+  const outcome = getMarketPriceReadinessOutcome({ routeRequired, ready })
   return createMarketCheck({
     id: "market.price",
-    status,
-    code,
-    message,
+    ...outcome,
     expected: "A valid initial seed or accepted WebSocket price event within the existing market-data freshness window.",
     remediation: "Verify the configured market-data route and wait for a valid fresh WebSocket event or the existing initial-price seed.",
     observedAt,
@@ -897,8 +995,7 @@ timestamp: market.priceTimestamp }),
       subscriptionAcknowledged: route.priceSubscriptionReady === true,
       websocketEventReceived: eventReceived,
       timestamp: isTimestamp(market.priceTimestamp) ? market.priceTimestamp : null,
-      ageMs: ageMs({ observedAt,
-timestamp: market.priceTimestamp }),
+      ageMs: ageMs({ observedAt, timestamp: market.priceTimestamp }),
       freshnessThresholdMs: price.freshnessThresholdMs ?? null,
       fresh: market.priceFresh === true,
     },
@@ -1018,28 +1115,36 @@ function getVolatilityPossibleCauses({ snapshot, snapshotStatus } = {}) {
   return possibleCauses
 }
 
+function safeIntegerOrNull(value) {
+  return Number.isSafeInteger(value) ? value : null
+}
+
+function timestampOrNull(value) {
+  return isTimestamp(value) ? value : null
+}
+
+function arrayOrEmpty(value) {
+  return Array.isArray(value) ? value : []
+}
+
 function createVolatilityDetails({ market, snapshotStatus, observedAt } = {}) {
   return {
     enabled: true,
     isReady: snapshotStatus?.isReady === true,
     isFresh: snapshotStatus?.isFresh === true,
     subscriptionReady: snapshotStatus?.subscriptionReady === true,
-    historyCount: Number.isSafeInteger(snapshotStatus?.historyCount) ? snapshotStatus.historyCount : null,
-    requiredHistoryCount: Number.isSafeInteger(snapshotStatus?.requiredHistoryCount)
-      ? snapshotStatus.requiredHistoryCount
-      : null,
-    lastEventAt: isTimestamp(snapshotStatus?.lastEventAt) ? snapshotStatus.lastEventAt : null,
-    lastEventAgeMs: ageMs({ observedAt,
-timestamp: snapshotStatus?.lastEventAt }),
+    historyCount: safeIntegerOrNull(snapshotStatus?.historyCount),
+    requiredHistoryCount: safeIntegerOrNull(snapshotStatus?.requiredHistoryCount),
+    lastEventAt: timestampOrNull(snapshotStatus?.lastEventAt),
+    lastEventAgeMs: ageMs({ observedAt, timestamp: snapshotStatus?.lastEventAt }),
     freshnessThresholdMs: snapshotStatus?.freshnessThresholdMs ?? null,
     reason: snapshotStatus?.reason ?? null,
-    blockers: Array.isArray(snapshotStatus?.blockers) ? snapshotStatus.blockers : [],
+    blockers: arrayOrEmpty(snapshotStatus?.blockers),
     protectionMode: market.volatilityProtection?.mode ?? null,
   }
 }
 
-function createMarketVolatilityCheck({ market, input, runtime, observedAt } = {}) {
-  const {volatility} = input
+function createVolatilityApplicabilityCheck({ volatility, runtime, observedAt } = {}) {
   if (!volatility && runtime.startupBoundary !== true) {
     return createMarketCheck({
       id: "market.volatility",
@@ -1052,7 +1157,7 @@ function createMarketVolatilityCheck({ market, input, runtime, observedAt } = {}
       blocksTrading: false,
     })
   }
-  if (!volatility && runtime.startupBoundary === true) {
+  if (!volatility) {
     return createMarketCheck({
       id: "market.volatility",
       status: "BLOCKED",
@@ -1063,7 +1168,7 @@ function createMarketVolatilityCheck({ market, input, runtime, observedAt } = {}
       observedAt,
     })
   }
-  if (volatility?.enabled !== true) {
+  if (volatility.enabled !== true) {
     return createMarketCheck({
       id: "market.volatility",
       status: "NOT_APPLICABLE",
@@ -1077,33 +1182,38 @@ function createMarketVolatilityCheck({ market, input, runtime, observedAt } = {}
       },
     })
   }
-  const {snapshot} = volatility
-  const snapshotStatus = getVolatilitySnapshotStatus(snapshot)
-  const ready = isVolatilityProtectionReady({ market,
-snapshotStatus })
-  let status = "BLOCKED"
-  let code = "VOLATILITY_PROTECTION_NOT_READY"
-  let message = "Required candle history or live volatility protection is unavailable, stale or incomplete."
-  if (ready) {
-    status = "PASS"
-    code = "VOLATILITY_PROTECTION_READY"
-    message = "Required candle history and live volatility inputs are fresh; engine protection is initialized."
+  return null
+}
+
+function createMarketVolatilityCheck({ market, input, runtime, observedAt } = {}) {
+  const applicabilityCheck = createVolatilityApplicabilityCheck({
+    volatility: input.volatility,
+    runtime,
+    observedAt,
+  })
+  if (applicabilityCheck) {
+    return applicabilityCheck
   }
+  const snapshotStatus = getVolatilitySnapshotStatus(input.volatility.snapshot)
+  const ready = isVolatilityProtectionReady({ market, snapshotStatus })
   return createMarketCheck({
     id: "market.volatility",
-    status,
-    code,
-    message,
+    status: ready ? "PASS" : "BLOCKED",
+    code: ready ? "VOLATILITY_PROTECTION_READY" : "VOLATILITY_PROTECTION_NOT_READY",
+    message: ready
+      ? "Required candle history and live volatility inputs are fresh; engine protection is initialized."
+      : "Required candle history or live volatility protection is unavailable, stale or incomplete.",
     expected: "Required candle history is complete and the live 1-minute candle event is fresh within the service-owned threshold.",
     remediation: "Restore the configured candle-history route, obtain complete history and a fresh live candle event, then verify engine protection initialization.",
     observedAt,
-    possibleCauses: getVolatilityPossibleCauses({ snapshot,
-snapshotStatus }),
-    details: createVolatilityDetails({ market,
-snapshotStatus,
-observedAt }),
+    possibleCauses: getVolatilityPossibleCauses({
+      snapshot: input.volatility.snapshot,
+      snapshotStatus,
+    }),
+    details: createVolatilityDetails({ market, snapshotStatus, observedAt }),
   })
 }
+
 function createMarketEngineSafetyCheck({ market, engineBlockers, observedAt } = {}) {
   let status = "PASS"
   let code = "MARKET_ENGINE_SAFETY_CLEAR"
@@ -1138,69 +1248,63 @@ function getMarketBlockers({ checks, engineBlockers, startupBoundary } = {}) {
   return [...new Set([...engineBlockers, ...diagnosticBlockers])]
 }
 
+function createMarketReadinessChecks({ market, input, routeRequired, bookRequired, runtime, observedAt, engineBlockers } = {}) {
+  return [
+    createMarketRouteCheck({ market, input, routeRequired, bookRequired, runtime, observedAt }),
+    createMarketPriceCheck({ market, input, routeRequired, runtime, observedAt }),
+    createMarketBookCheck({ market, input, routeRequired, bookRequired, runtime, observedAt }),
+    createMarketMetadataCheck({ market, observedAt }),
+    createMarketVolatilityCheck({ market, input, runtime, observedAt }),
+    createMarketEngineSafetyCheck({ market, engineBlockers, observedAt }),
+  ]
+}
+
+function getMarketReadinessWarnings({ input } = {}) {
+  if (input.unownedOrderObserved === true && input.externalOrdersPolicy === "IGNORE") {
+    return ["EXTERNAL_ORDERS_IGNORED_BY_POLICY"]
+  }
+  return []
+}
+
+function resolveMarketReadinessState({ runtime, blockers } = {}) {
+  if (runtime.tradingEnabled !== true) {
+    return "OBSERVATION_ONLY"
+  }
+  return blockers.length > 0 ? "BLOCKED" : "READY"
+}
+
 function createMarketReadiness({ market, input = {}, runtime, observedAt } = {}) {
   if (market.enabled === false) {
-    return freezeValue(createDisabledMarketReport({ market,
-observedAt }))
+    return freezeValue(createDisabledMarketReport({ market, observedAt }))
   }
   const routeRequired = input.route?.required !== false
-  const bookRequired = getBookRequired({ market,
-input,
-runtime })
+  const bookRequired = getBookRequired({ market, input, runtime })
   const engineBlockers = Array.isArray(market.blockers) ? [...market.blockers] : []
-  if (runtime.tradingEnabled === true &&
-      runtime.userData?.ready !== true &&
-      runtime.startupBoundary !== true &&
-      !engineBlockers.includes("USER_DATA_NOT_READY")) {
+  const userDataNotReady = runtime.tradingEnabled === true &&
+    runtime.userData?.ready !== true &&
+    runtime.startupBoundary !== true
+  if (userDataNotReady && !engineBlockers.includes("USER_DATA_NOT_READY")) {
     engineBlockers.push("USER_DATA_NOT_READY")
   }
-  const checks = [
-    createMarketRouteCheck({ market,
-input,
-routeRequired,
-bookRequired,
-runtime,
-observedAt }),
-    createMarketPriceCheck({ market,
-input,
-routeRequired,
-runtime,
-observedAt }),
-    createMarketBookCheck({ market,
-input,
-routeRequired,
-bookRequired,
-runtime,
-observedAt }),
-    createMarketMetadataCheck({ market,
-observedAt }),
-    createMarketVolatilityCheck({ market,
-input,
-runtime,
-observedAt }),
-    createMarketEngineSafetyCheck({ market,
-engineBlockers,
-observedAt }),
-  ]
+  const checks = createMarketReadinessChecks({
+    market,
+    input,
+    routeRequired,
+    bookRequired,
+    runtime,
+    observedAt,
+    engineBlockers,
+  })
   const blockers = getMarketBlockers({
     checks,
     engineBlockers,
     startupBoundary: runtime.startupBoundary,
   })
-  const warnings = []
-  if (input.unownedOrderObserved === true && input.externalOrdersPolicy === "IGNORE") {
-    warnings.push("EXTERNAL_ORDERS_IGNORED_BY_POLICY")
-  }
-  let readiness = "READY"
-  if (runtime.tradingEnabled !== true) {
-    readiness = "OBSERVATION_ONLY"
-  } else if (blockers.length > 0) {
-    readiness = "BLOCKED"
-  }
+  const warnings = getMarketReadinessWarnings({ input })
   return freezeValue({
     symbol: market.symbol,
     enabled: true,
-    readiness,
+    readiness: resolveMarketReadinessState({ runtime, blockers }),
     blockers,
     warnings,
     checks,

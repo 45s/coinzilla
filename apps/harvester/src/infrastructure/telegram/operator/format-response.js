@@ -24,22 +24,32 @@ function appendStatusBlockers({ lines, blockers }) {
   }
 }
 
+function getReadinessMarketBlockerLabels({ report } = {}) {
+  return (report.marketBlockers ?? [])
+    .flatMap(({ symbol, blockers = [] }) => blockers.map((code) => `${symbol}:${code}`))
+}
+
+function appendReadinessMarketBlockers({ lines, report } = {}) {
+  const marketBlockers = getReadinessMarketBlockerLabels({ report })
+  if (marketBlockers.length > 0) {
+    lines.push(`Market blockers: ${marketBlockers.join(", ")}`)
+  }
+}
+
 function appendReadinessReport({ lines, report }) {
-  if (!report || typeof report !== "object") {return}
+  if (!report || typeof report !== "object") {
+    return
+  }
   lines.push(`Startup audit: ${String(report.status ?? "UNKNOWN")}`)
   lines.push(`Trading gate: ${report.tradingGateOpen === true ? "OPEN" : "CLOSED"}`)
-  const {summary} = report
-  if (summary) {
+  if (report.summary) {
+    const { summary } = report
     lines.push(`Markets ready: ${summary.readyMarkets ?? 0}/${summary.enabledMarkets ?? 0} (${summary.blockedMarkets ?? 0} blocked; ${summary.warnings ?? 0} warnings)`)
   }
   if (Array.isArray(report.runtimeBlockers) && report.runtimeBlockers.length > 0) {
     lines.push(`Startup blockers: ${report.runtimeBlockers.join(", ")}`)
   }
-  const marketBlockers = (report.marketBlockers ?? [])
-    .flatMap(({ symbol, blockers = [] }) => blockers.map((code) => `${symbol}:${code}`))
-  if (marketBlockers.length > 0) {
-    lines.push(`Market blockers: ${marketBlockers.join(", ")}`)
-  }
+  appendReadinessMarketBlockers({ lines, report })
   if (Array.isArray(report.warnings) && report.warnings.length > 0) {
     lines.push(`Warnings: ${report.warnings.join(", ")}`)
   }
@@ -70,31 +80,38 @@ function appendMarketBlockers({
   }
 }
 
-function appendMarketDetails({
-      lines,
-      market,
-    }) {
+function getMarketBookStatus({ market } = {}) {
+  if (market.bookRequired !== true) {
+    return "not required"
+  }
+  if (market.bookFresh === true) {
+    return "fresh"
+  }
+  return market.bookTimestamp !== null && market.bookTimestamp !== undefined
+    ? "stale"
+    : "unavailable"
+}
+
+function appendTelegramOperatorOrder({ lines, order } = {}) {
+  lines.push(`${String(order.ownership ?? "UNKNOWN")} ${String(order.symbol ?? "UNKNOWN")} ${String(order.side ?? "UNKNOWN")} — ${String(order.status ?? "UNKNOWN")}`)
+  lines.push(`Order: ${String(order.brokerOrderId ?? "unknown")} / client ${String(order.clientOrderId ?? "unknown")}`)
+  lines.push(`Price: ${String(order.price ?? "unknown")} | quantity: ${String(order.quantity ?? "unknown")} | filled: ${String(order.executedQuantity ?? "unknown")}`)
+}
+
+function appendMarketDetails({ lines, market }) {
   if (market.priceTimestamp !== null && market.priceTimestamp !== undefined) {
     lines.push(`Price updated: ${formatTimestamp(market.priceTimestamp)}`)
   }
-  const bookStatus = market.bookRequired !== true
-    ? "not required"
-    : market.bookFresh === true
-      ? "fresh"
-      : market.bookTimestamp !== null && market.bookTimestamp !== undefined
-        ? "stale"
-        : "unavailable"
-  lines.push(`Book: ${bookStatus}`)
+  lines.push(`Book: ${getMarketBookStatus({ market })}`)
   lines.push(`Operator pause: ${market.operatorPaused ? "ACTIVE" : "OFF"}`)
   lines.push(`BUY pause: ${market.operatorBuysPaused ? "ACTIVE" : "OFF"}`)
   lines.push(`Safety pause: ${market.safetyPaused ? "ACTIVE" : "OFF"}`)
   lines.push(`Recovery pause: ${market.recoveryManagedPaused ? "ACTIVE" : "OFF"}`)
   const volatilityLine = formatMarketVolatilityLine({ market })
-  if (volatilityLine) {lines.push(volatilityLine)}
-  appendMarketBlockers({
-    lines,
-    market,
-  })
+  if (volatilityLine) {
+    lines.push(volatilityLine)
+  }
+  appendMarketBlockers({ lines, market })
 }
 
 export function formatTelegramOperatorStatus({ status } = {}) {
@@ -183,20 +200,16 @@ export function formatTelegramOperatorOrders({ snapshot } = {}) {
     throw new TypeError("formatTelegramOperatorOrders requires an order snapshot")
   }
   const lines = ["Harvester orders"]
-  if (snapshot.orders.length === 0) { lines.push("No open orders reported.") }
+  if (snapshot.orders.length === 0) {
+    lines.push("No open orders reported.")
+  }
   for (const order of snapshot.orders) {
     lines.push("")
-    lines.push(`${String(order.ownership ?? "UNKNOWN")  } ${  String(order.symbol ?? "UNKNOWN") 
-      } ${  String(order.side ?? "UNKNOWN")  } — ${  String(order.status ?? "UNKNOWN")}`)
-    lines.push(`Order: ${  String(order.brokerOrderId ?? "unknown") 
-      } / client ${  String(order.clientOrderId ?? "unknown")}`)
-    lines.push(`Price: ${  String(order.price ?? "unknown") 
-      } | quantity: ${  String(order.quantity ?? "unknown") 
-      } | filled: ${  String(order.executedQuantity ?? "unknown")}`)
+    appendTelegramOperatorOrder({ lines, order })
   }
   lines.push(formatObservedAt(snapshot))
   const message = lines.join("\n")
-  return message.length <= 3900 ? message : `${message.slice(0, 3850)  }\n… additional orders omitted`
+  return message.length <= 3900 ? message : `${message.slice(0, 3850)}\n… additional orders omitted`
 }
 
 export function formatTelegramOperatorBalances({ snapshot } = {}) {
