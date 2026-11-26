@@ -292,9 +292,17 @@ function validateProjectionData({ projection, marketMetadata }) {
 }
 
 function assertRecoverySellerJournalReplayDeferred({ data }) {
-  const isRecoverySellerActivity = (item) =>
-    item.strategyId === StrategyId.RECOVERY_SELLER ||
-    ["RECOVERY_BUY", "RECOVERY_SELL"].includes(item.purpose)
+  const isRecoverySellerActivity = (item) => {
+    if (item.strategyId === StrategyId.RECOVERY_SELLER) {
+      return true
+    }
+    if (item.strategyId === StrategyId.COIN_GRABBER) {
+      return false
+    }
+    // Legacy/unknown strategy records using the shared recovery purpose are
+    // ambiguous. Keep them fail-closed rather than replaying them as CG.
+    return ["RECOVERY_BUY", "RECOVERY_SELL"].includes(item.purpose)
+  }
   const hasRecoverySellerOrders = data.orders.some(isRecoverySellerActivity)
   const hasRecoverySellerFills = data.fills.some(isRecoverySellerActivity)
   const lifecycle = data.recoverySellerLifecycle
