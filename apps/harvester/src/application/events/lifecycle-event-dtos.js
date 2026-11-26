@@ -603,10 +603,15 @@ export const mapOrderSubmissionRequestedData = (input = {}) =>
   mapData({
     input,
     operation: "Order-submission-requested event mapping",
-    mapper: ({ order }) => ({
+    mapper: ({ order, ownership }) => ({
       ...requireOrderFacts({ order }),
-      status: requireString({ value: order.status,
-        field: "order.status" }),
+      status: requireString({
+        value: order.status,
+        field: "order.status",
+      }),
+      ...(ownership === undefined
+        ? {}
+        : { ownership: mapOrderHistoryOwnership({ ownership }) }),
     }),
   })
 
