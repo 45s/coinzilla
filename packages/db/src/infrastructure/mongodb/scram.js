@@ -141,7 +141,9 @@ function createClientFirstMessage({ username, randomBytes }) {
   }
   const nonce = nonceBytes.toString("base64")
   const clientFirstBare = `n=${escapeUsername(username)},r=${nonce}`
-  return { nonce, clientFirstBare, clientFirst: `n,,${clientFirstBare}` }
+  return { nonce,
+clientFirstBare,
+clientFirst: `n,,${clientFirstBare}` }
 }
 
 async function startScramConversation({ command, mechanism, authSource, clientFirst }) {
@@ -155,7 +157,8 @@ async function startScramConversation({ command, mechanism, authSource, clientFi
       $db: authSource,
     },
   })
-  assertCommandSucceeded({ response, stage: "start" })
+  assertCommandSucceeded({ response,
+stage: "start" })
   if (response.done) {
     throw new Error("MongoDB SCRAM server completed authentication before client proof")
   }
@@ -184,7 +187,10 @@ function parseServerFirstMessage({ payload, nonce }) {
     || iterations > MAXIMUM_ITERATIONS) {
     throw new Error("MongoDB SCRAM iteration count is outside the supported safe range")
   }
-  return { serverFirst, serverNonce, salt, iterations }
+  return { serverFirst,
+serverNonce,
+salt,
+iterations }
 }
 
 function createClientProof({
@@ -197,8 +203,13 @@ function createClientProof({
   salt,
   iterations,
 }) {
-  const passwordDigest = createPasswordDigest({ username, password, mechanism })
-  const material = deriveScramMaterial({ passwordDigest, salt, iterations, mechanism })
+  const passwordDigest = createPasswordDigest({ username,
+password,
+mechanism })
+  const material = deriveScramMaterial({ passwordDigest,
+salt,
+iterations,
+mechanism })
   const clientFinalWithoutProof = `c=biws,r=${serverNonce}`
   const authMessage = `${clientFirstBare},${serverFirst},${clientFinalWithoutProof}`
   const clientSignature = createHmac(material.hash, material.storedKey)
@@ -232,7 +243,8 @@ async function continueScramConversation({
       $db: authSource,
     },
   })
-  assertCommandSucceeded({ response, stage })
+  assertCommandSucceeded({ response,
+stage })
   if (response.conversationId !== conversationId) {
     throw new Error("MongoDB SCRAM conversation identifier changed during authentication")
   }
@@ -276,8 +288,13 @@ export async function authenticateMongoScram({
   mechanism = "SCRAM-SHA-256",
   randomBytes = nativeRandomBytes,
 } = {}) {
-  validateScramOptions({ command, username, password, authSource, mechanism })
-  const clientFirst = createClientFirstMessage({ username, randomBytes })
+  validateScramOptions({ command,
+username,
+password,
+authSource,
+mechanism })
+  const clientFirst = createClientFirstMessage({ username,
+randomBytes })
   const startResponse = await startScramConversation({
     command,
     mechanism,

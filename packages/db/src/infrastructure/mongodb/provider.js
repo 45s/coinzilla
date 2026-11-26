@@ -306,7 +306,8 @@ function createSession({ state, randomBytes }) {
   state.nextTransactionNumber += 1n
   return {
     lsid: {
-      id: new BsonBinary({ bytes: randomBytes(16), subtype: 4 }),
+      id: new BsonBinary({ bytes: randomBytes(16),
+subtype: 4 }),
     },
     txnNumber: state.nextTransactionNumber,
     topology: state.handshake?.topology,
@@ -348,7 +349,8 @@ function createCommitCommand({ session }) {
     lsid: session.lsid,
     txnNumber: session.txnNumber,
     autocommit: false,
-    writeConcern: { w: "majority", wtimeout: 10000 },
+    writeConcern: { w: "majority",
+wtimeout: 10000 },
     $db: "admin",
   }
 }
@@ -363,8 +365,10 @@ function refreshRecoveryToken({ response, session }) {
 
 function isAmbiguousCommitResponse({ response }) {
   return hasAmbiguousWriteConcern(response)
-    || hasErrorLabel({ response, label: "UnknownTransactionCommitResult" })
-    || hasErrorLabel({ response, label: "RetryableWriteError" })
+    || hasErrorLabel({ response,
+label: "UnknownTransactionCommitResult" })
+    || hasErrorLabel({ response,
+label: "RetryableWriteError" })
     || response?.code === 50
     || response?.codeName === "MaxTimeMSExpired"
 }
@@ -375,19 +379,24 @@ async function sendCommitAttempt({ transport, session, body }) {
   } else {
     delete body.recoveryToken
   }
-  const response = await transport.command({ body, operation: "commit" })
-  refreshRecoveryToken({ response, session })
+  const response = await transport.command({ body,
+operation: "commit" })
+  refreshRecoveryToken({ response,
+session })
   if (Number(response?.ok) === 1 && !response.writeConcernError) {
     return { committed: true }
   }
   const serverFailure = response?.writeConcernError
-    ? { ...response.writeConcernError, errorLabels: response.errorLabels }
+    ? { ...response.writeConcernError,
+errorLabels: response.errorLabels }
     : response
   const error = createServerCommandError(serverFailure)
   if (isAmbiguousCommitResponse({ response })) {
-    return { committed: false, error }
+    return { committed: false,
+error }
   }
-  throw new DatabaseProviderError({ operation: "transaction", cause: error })
+  throw new DatabaseProviderError({ operation: "transaction",
+cause: error })
 }
 
 async function commitMongoTransaction({ transport, session }) {
@@ -396,7 +405,9 @@ async function commitMongoTransaction({ transport, session }) {
   let lastError
   for (let attempt = 0; attempt < MAX_COMMIT_ATTEMPTS; attempt += 1) {
     try {
-      const result = await sendCommitAttempt({ transport, session, body })
+      const result = await sendCommitAttempt({ transport,
+session,
+body })
       if (result.committed) {
         return
       }
@@ -407,7 +418,8 @@ async function commitMongoTransaction({ transport, session }) {
         throw error
       }
       if (!ambiguous && error?.outcomeUnknown === false) {
-        throw new DatabaseProviderError({ operation: "transaction", cause: error })
+        throw new DatabaseProviderError({ operation: "transaction",
+cause: error })
       }
       // Once a commit request may have reached the server, a later error such
       // as NoSuchTransaction cannot prove whether the earlier commit succeeded.
@@ -727,7 +739,9 @@ async function connectProvider({ state, transportFactory, handshake }) {
   state.lifecycle = "connecting"
   state.connectPromise = (async () => {
     try {
-      await connectToPrimary({ state, transportFactory, handshake })
+      await connectToPrimary({ state,
+transportFactory,
+handshake })
       state.lifecycle = "connected"
     } catch (error) {
       let connectionError = error
@@ -743,7 +757,8 @@ async function connectProvider({ state, transportFactory, handshake }) {
       state.transport = null
       state.handshake = null
       state.lifecycle = "idle"
-      throw new DatabaseProviderError({ operation: "connect", cause: connectionError })
+      throw new DatabaseProviderError({ operation: "connect",
+cause: connectionError })
     }
   })()
   try {
@@ -783,7 +798,8 @@ async function closeProvider({ state }) {
       state.lifecycle = "closed"
     } catch (error) {
       state.closePromise = null
-      throw new DatabaseProviderError({ operation: "close", cause: error })
+      throw new DatabaseProviderError({ operation: "close",
+cause: error })
     }
   })()
   await state.closePromise
@@ -793,7 +809,8 @@ async function runReadTransaction({ state, work }) {
   if (typeof work !== "function") {
     throw new TypeError("A MongoDB read transaction callback is required")
   }
-  return runTrackedOperation({ state, work: async () => {
+  return runTrackedOperation({ state,
+work: async () => {
     const operations = createMongoRecordOperations({
       command: (commandInput) => state.transport.command(commandInput),
       databaseName: state.options.databaseName,
@@ -813,10 +830,12 @@ async function runReadTransaction({ state, work }) {
         throw new Error("MongoDB read transaction cannot execute mutations")
       },
       readOne(input) {
-        return invokeRead({ method: "readOne", input })
+        return invokeRead({ method: "readOne",
+input })
       },
       readMany(input) {
-        return invokeRead({ method: "readMany", input })
+        return invokeRead({ method: "readMany",
+input })
       },
       update() {
         throw new Error("MongoDB read transaction cannot execute mutations")
@@ -839,7 +858,8 @@ async function runReadTransaction({ state, work }) {
 }
 
 async function executeProviderOperation({ state, operation, input }) {
-  return runTrackedOperation({ state, work: async () => {
+  return runTrackedOperation({ state,
+work: async () => {
     if (!CRUD_OPERATIONS.includes(operation)) {
       throw new TypeError(`Unsupported MongoDB CRUD operation: ${operation}`)
     }
@@ -869,16 +889,21 @@ export function createMongoProvider(options = {}) {
   const handshake = options.handshake ?? performMongoHandshake
   const randomBytes = options.randomBytes ?? nativeRandomBytes
   const state = createProviderState(resolvedOptions)
-  const runTransaction = createTransactionRunner({ state, randomBytes })
+  const runTransaction = createTransactionRunner({ state,
+randomBytes })
   return Object.freeze({
-    connect: () => connectProvider({ state, transportFactory, handshake }),
+    connect: () => connectProvider({ state,
+transportFactory,
+handshake }),
     close: () => closeProvider({ state }),
     withTransaction: (work) => runTrackedOperation({
       state,
       work: () => runTransaction(work),
     }),
-    withReadTransaction: (work) => runReadTransaction({ state, work }),
-    execute: (input) => executeProviderOperation({ state, ...input }),
+    withReadTransaction: (work) => runReadTransaction({ state,
+work }),
+    execute: (input) => executeProviderOperation({ state,
+...input }),
     capabilities: MONGO_CAPABILITIES,
   })
 }
