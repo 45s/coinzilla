@@ -9,7 +9,7 @@ import {
   Quantity,
   TradingRules,
 } from "@coinzilla/entities"
-import { addDecimal, compareDecimal, multiplyDecimal, subtractDecimal } from "@coinzilla/utils"
+import { addDecimal, compareDecimal, multiplyDecimal, subtractDecimal, toResult } from "@coinzilla/utils"
 import { validateScenarioInput as validateInput } from "../../application/scenario-runner/validate-scenario-input.js"
 import { AccountSnapshot } from "../../domain/account/account-snapshot.js"
 import { allocateOrderCommitments } from "../../domain/orders/allocate-order-commitments.js"
