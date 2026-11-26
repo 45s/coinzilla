@@ -13,7 +13,7 @@ Canonical repository-wide engineering guidance is linked below. Policy ownership
 - [Application handler template](APPLICATION_HANDLER_TEMPLATE.md) — dependency-injected orchestration and port-interaction tests
 - [Infrastructure adapter template](INFRASTRUCTURE_ADAPTER_TEMPLATE.md) — provider-port implementation, capability declaration and reusable contract tests
 - [AI task standards and verification guide](AI_TASK_COMPLIANCE_STANDARD.md) — relevant standards discovery and engineering verification
-- [Engineering standards and enforcement matrix](ENGINEERING_STANDARDS_MATRIX.md) — source-verified inventory and phase coordination for #1568
+- [Engineering standards and enforcement matrix](ENGINEERING_STANDARDS_MATRIX.md) — maintained standards index and evidence from the completed #1568 initiative
 - [Configuration standard](CONFIGURATION_STANDARD.md) — configuration ownership, validation, defaults, environment access, secrets and migration
 - [Shared utilities policy](SHARED_UTILITIES_POLICY.md)
 - [JavaScript and JSDoc standard](JAVASCRIPT_JSDOC_STANDARD.md)
