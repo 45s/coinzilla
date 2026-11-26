@@ -2,6 +2,7 @@
 
 This index groups substantial historical audit reports and findings registers. These records preserve conclusions at their stated observation time; they are not current implementation authority.
 
+- [Harvester runtime error investigation — 2026-11-26](2026-11-26_07-24-31_runtime-error-investigation.md) — supplied terminal/DEBUG/TRACE evidence, confirmed CG and RS routing defects, SQLite v5 identity mismatch, external-order safety, bookTicker validation and shutdown evidence boundaries.
 - [Conservative Strategy audit](AUDIT.md) — primary historical audit narrative and closure decision.
 - [Recovery Seller runtime audit — 2026-11-25](2026-11-25_17-15-00_recovery-seller-runtime-audit.md) — source-verified RS startup/event flow, STOP contract mismatch, terminal mixed-SELL lifecycle findings and exact source baseline.
 - [Audit findings register](AUDIT_FINDINGS.md) — finding-by-finding evidence, confidence and disposition.

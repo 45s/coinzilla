@@ -409,6 +409,30 @@ test("waits for required Journal readiness before starting Harvester", async () 
   assert.equal(result.journalService.status.state, "starting")
 })
 
+async function assertProcessLifecycleEvents({ result, eventBus, events, handlers, subscription } = {}) {
+  assert.ok(result)
+  await eventBus.flush()
+  assert.equal(events.length, 2)
+  assert.equal(events[0].name, HARVESTER_EVENT_NAMES.PROCESS_STARTED)
+  assert.equal(events[1].name, HARVESTER_EVENT_NAMES.STARTED)
+  assert.deepEqual(events[1].data, {
+    broker: "binance",
+    strategyMode: "conservative",
+    enabledMarkets: ["BTCUSDT"],
+    tradingEnabled: true,
+  })
+  await handlers.SIGTERM()
+  await eventBus.flush()
+  assert.equal(events.length, 3)
+  assert.equal(events[2].name, HARVESTER_EVENT_NAMES.STOPPED)
+  assert.deepEqual(events[2].data, {
+    reason: "SIGTERM",
+    outcome: "success",
+  })
+  subscription.subscription.unsubscribe()
+  await eventBus.close()
+}
+
 test("publishes process started and stopped events for Binance trading startup", async () => {
   const eventBus = new EventBus()
   const events = []
@@ -430,9 +454,22 @@ test("publishes process started and stopped events for Binance trading startup",
       tradingEnabled: true,
       strategyMode: "conservative",
       subscriptions: [],
-      appConfig: { strategies: { CG_coinGrabber: { pairs: { BTCUSDT: { enabled: true,
-                tradingEnvironment: "both" } } } } },
-      stop: async () => {},
+      appConfig: {
+        strategies: {
+          CG_coinGrabber: {
+            pairs: {
+              BTCUSDT: {
+                enabled: true,
+                tradingEnvironment: "both",
+              },
+            },
+          },
+        },
+      },
+      stop: async () => ({
+        ok: true,
+        status: "STOPPED",
+      }),
     }),
     registerSignalHandler: (...signalHandlerArguments) => {
       const [signal, handler] = signalHandlerArguments
@@ -443,27 +480,13 @@ test("publishes process started and stopped events for Binance trading startup",
       debug() {} },
   })
 
-  assert.ok(result)
-  await eventBus.flush()
-  assert.equal(events.length, 2, "trading startup must publish process-attempt and successful-runtime-start events")
-  assert.equal(events[0].name, HARVESTER_EVENT_NAMES.PROCESS_STARTED, "the process-attempt event must be first when Journal readiness is immediate")
-  assert.equal(events[1].name, HARVESTER_EVENT_NAMES.STARTED, "the successful-runtime-start event must remain distinct")
-  assert.deepEqual(events[1].data, {
-    broker: "binance",
-    strategyMode: "conservative",
-    enabledMarkets: ["BTCUSDT"],
-    tradingEnabled: true,
+  await assertProcessLifecycleEvents({
+    result,
+    eventBus,
+    events,
+    handlers,
+    subscription,
   })
-
-  await handlers.SIGTERM()
-  await eventBus.flush()
-  assert.equal(events.length, 3, "shutdown must retain both startup events and append one stopped event")
-  assert.equal(events[2].name, HARVESTER_EVENT_NAMES.STOPPED, "the stopped event must follow the process and runtime start events")
-  assert.deepEqual(events[2].data, { reason: "SIGTERM",
-    outcome: "success" })
-
-  subscription.subscription.unsubscribe()
-  await eventBus.close()
 })
 
 test("does not publish STOPPED when runtime.stop rejects", async () => {
@@ -578,7 +601,13 @@ test("publishes stopped before closing Journal, then closes EventBus", async () 
       tradingEnabled: false,
       strategyMode: "read-only",
       subscriptions: [],
-      stop: async () => { operations.push("runtime.stop") },
+      stop: async () => {
+        operations.push("runtime.stop")
+        return {
+          ok: true,
+          status: "STOPPED",
+        }
+      },
     }),
     registerSignalHandler: (...signalHandlerArguments) => {
       const [signal, handler] = signalHandlerArguments
@@ -630,7 +659,13 @@ test("continues EventBus cleanup when Journal close fails", async () => {
         tradingEnabled: false,
         strategyMode: "read-only",
         subscriptions: [],
-        stop: async () => { operations.push("runtime.stop") },
+        stop: async () => {
+        operations.push("runtime.stop")
+        return {
+          ok: true,
+          status: "STOPPED",
+        }
+      },
       }),
       registerSignalHandler: (...signalHandlerArguments) => {
         const [signal, handler] = signalHandlerArguments
@@ -680,7 +715,13 @@ test("reports EventBus timeout and preserves Journal close result", async () => 
         tradingEnabled: false,
         strategyMode: "read-only",
         subscriptions: [],
-        stop: async () => { operations.push("runtime.stop") },
+        stop: async () => {
+        operations.push("runtime.stop")
+        return {
+          ok: true,
+          status: "STOPPED",
+        }
+      },
       }),
       registerSignalHandler: (...signalHandlerArguments) => {
         const [signal, handler] = signalHandlerArguments
@@ -720,7 +761,14 @@ test("coalesces repeated shutdown signals into one cleanup operation", async () 
       tradingEnabled: false,
       strategyMode: "read-only",
       subscriptions: [],
-      stop: async () => { operations.push("runtime.stop"); await stopGate },
+      stop: async () => {
+        operations.push("runtime.stop")
+        await stopGate
+        return {
+          ok: true,
+          status: "STOPPED",
+        }
+      },
     }),
     registerSignalHandler: (...signalHandlerArguments) => {
       const [signal, handler] = signalHandlerArguments
@@ -792,7 +840,10 @@ test("writes and durably closes a JSONL session in the injected Journal director
         tradingEnabled: false,
         strategyMode: "read-only",
         subscriptions: [],
-        stop: async () => {},
+        stop: async () => ({
+        ok: true,
+        status: "STOPPED",
+      }),
       }),
       registerSignalHandler: (...signalHandlerArguments) => {
         const [signal, handler] = signalHandlerArguments
@@ -1040,8 +1091,13 @@ test("releases the trading process lock only after runtime and Journal shutdown"
       env: { NODE_ENV: "development" },
       acquireProcessLock: async () => ({
         ok: true,
-        release: async () => { sequence.push("lock-release"); return { ok: true,
-            released: true } },
+        release: async () => {
+          sequence.push("lock-release")
+          return {
+            ok: true,
+            released: true,
+          }
+        },
       }),
       createJournalService: () => ({
         ready: Promise.resolve({ ok: true }),
@@ -1057,7 +1113,13 @@ test("releases the trading process lock only after runtime and Journal shutdown"
         connected: true,
         tradingEnabled: true,
         subscriptions: [],
-        stop: async () => { sequence.push("runtime-stop"); return { ok: true } },
+        stop: async () => {
+          sequence.push("runtime-stop")
+          return {
+            ok: true,
+            status: "STOPPED",
+          }
+        },
       }),
       registerSignalHandler: (...signalHandlerArguments) => {
         const [signal, handler] = signalHandlerArguments
@@ -1106,7 +1168,13 @@ test("acquires the process lock before starting Journal and releases it after cl
           connected: true,
           tradingEnabled: false,
           subscriptions: [],
-          stop: async () => { sequence.push("runtime-stop"); return { ok: true } },
+          stop: async () => {
+            sequence.push("runtime-stop")
+            return {
+              ok: true,
+              status: "STOPPED",
+            }
+          },
         }
       },
       registerSignalHandler: (...signalHandlerArguments) => {
@@ -1283,8 +1351,10 @@ test("closes diagnostic log transports after runtime, Journal, and EventBus shut
   const handlers = {}
   await main({
     createEventBus: () => ({
-      publish: (event) => ({ ok: true,
-        event }),
+      publish: (event) => ({
+        ok: true,
+        event,
+      }),
       close: async () => { operations.push("eventBus.close"); return { ok: true } },
     }),
     createJournalService: () => ({
@@ -1292,7 +1362,13 @@ test("closes diagnostic log transports after runtime, Journal, and EventBus shut
     }),
     start: async () => ({
       connected: false,
-      stop: async () => { operations.push("runtime.stop") },
+      stop: async () => {
+        operations.push("runtime.stop")
+        return {
+          ok: true,
+          status: "STOPPED",
+        }
+      },
     }),
     registerSignalHandler: (...signalHandlerArguments) => {
       const [signal, handler] = signalHandlerArguments
@@ -1372,7 +1448,10 @@ const captureProcessProvenanceScenario = async () => {
         tradingEnabled: false,
         strategyMode: "read-only",
         subscriptions: [],
-        stop: async () => {},
+        stop: async () => ({
+        ok: true,
+        status: "STOPPED",
+      }),
       }
     },
     registerSignalHandler: () => {},
@@ -1446,7 +1525,10 @@ test("preserves terminal Journal write-failure classification at the Harvester c
         tradingEnabled: false,
         strategyMode: "read-only",
         subscriptions: [],
-        stop: async () => {},
+        stop: async () => ({
+        ok: true,
+        status: "STOPPED",
+      }),
       }
     },
     logger: { info() {},
@@ -1566,7 +1648,10 @@ test("requires Journal readiness and publishes process provenance before trading
         tradingEnabled: true,
         strategyMode: "conservative",
         subscriptions: [],
-        stop: async () => {},
+        stop: async () => ({
+        ok: true,
+        status: "STOPPED",
+      }),
       }
     },
     registerSignalHandler: () => {},

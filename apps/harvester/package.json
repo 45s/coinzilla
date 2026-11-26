@@ -166,7 +166,11 @@
       "src/infrastructure/scenario-runner/scenario-worker-dispatch.test.js",
       "src/infrastructure/scenario-runner/rs-scenario-adapter.test.js",
       "src/infrastructure/http/scenario-runner-api.test.js",
-      "src/infrastructure/http/scenario-runner-process-acceptance.test.js"
+      "src/infrastructure/http/scenario-runner-process-acceptance.test.js",
+      "src/domain/strategies/conservative/strategy.test.js",
+      "src/bootstrap/create-harvester-stop.test.js",
+      "src/bootstrap/shutdown/create-strategy-shutdown-coordinator.test.js",
+      "src/bootstrap/shutdown/create-shutdown-handler.test.js"
     ]
   },
   "scripts": {

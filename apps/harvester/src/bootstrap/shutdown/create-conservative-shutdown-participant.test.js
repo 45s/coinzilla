@@ -801,14 +801,10 @@ test("bounds repeated late-evidence safety re-evaluations and fails closed", asy
   const calls = []
   const engine = createFakeEngine({ calls })
   const getSnapshot = engine.getShutdownSafetySnapshot
-  const controller = new AbortController()
   let snapshotCalls = 0
   engine.getShutdownSafetySnapshot = () => {
     snapshotCalls += 1
     const snapshot = getSnapshot()
-    if (snapshotCalls === 3) {
-      controller.abort(new Error("Test stop after two complete safety passes"))
-    }
     return {
       ...snapshot,
       markets: snapshot.markets.map((market) => ({
@@ -825,7 +821,7 @@ test("bounds repeated late-evidence safety re-evaluations and fails closed", asy
 
   participant.beginShutdown()
   await assert.rejects(
-    participant.waitUntilSafe({ signal: controller.signal }),
+    participant.waitUntilSafe(),
     (error) => {
       const blockers = getMarketBlockersFromShutdownError({
         error,
@@ -881,4 +877,80 @@ test("waits for the serialized engine shutdown barrier before cancelling owned B
     calls.indexOf("shutdown-gate-ready") < calls.indexOf("cancel:all"),
     "The serialized shutdown barrier must finish before owned BUY cancellation begins.",
   )
+})
+
+
+function assertPendingReconciliationSnapshot(snapshot) {
+  assert.equal(snapshot.currentOperation, "OWNED_ORDER_RECONCILIATION")
+  assert.equal(snapshot.lastSuccessfulStep, "USER_DATA_DRAIN")
+  assert.equal(snapshot.pendingOrders[0].clientOrderId, "h-0123456789abcdef012345-18")
+  assert.equal(snapshot.pendingOrders[0].remainingQuantity, "398")
+  assert.deepEqual(snapshot.missingEvidence, ["LATE_ORDER_EXECUTION_EVIDENCE"])
+}
+
+function assertAbortedReconciliationSnapshot({ snapshot, calls } = {}) {
+  assert.equal(snapshot.operationStatus, "ABORTED")
+  assert.equal(snapshot.nestedError.message, "participant deadline elapsed")
+  assert.equal(calls.some((call) => call.startsWith("reconcile-finish:")), true)
+  assert.equal(
+    calls.some((call) => call.startsWith("cancel:DOGEUSDT") || call.startsWith("cancel:SOLUSDT")),
+    false,
+  )
+  assert.equal(calls.some((call) => call.startsWith("recovery:")), false)
+}
+
+test("does not advance to BUY cancellation or recovery proof after a participant deadline abort", async () => {
+  const calls = []
+  const engine = createFakeEngine({ calls })
+  let releaseReconciliation
+  let markReconciliationStarted
+  let markReconciliationFinished
+  const reconciliation = new Promise((resolve) => {
+    releaseReconciliation = resolve
+  })
+  const reconciliationStarted = new Promise((resolve) => {
+    markReconciliationStarted = resolve
+  })
+  const reconciliationFinished = new Promise((resolve) => {
+    markReconciliationFinished = resolve
+  })
+  engine.reconcileOwnedOrders = async ({ symbol }) => {
+    calls.push(`reconcile-start:${symbol}`)
+    markReconciliationStarted()
+    await reconciliation
+    calls.push(`reconcile-finish:${symbol}`)
+    markReconciliationFinished()
+    return { ok: true }
+  }
+  engine.getOrders = () => [{
+    market: { symbol: "DOGEUSDT" },
+    clientOrderId: "h-0123456789abcdef012345-18",
+    brokerOrderId: null,
+    side: "SELL",
+    status: "PENDING",
+    remainingQuantity: { amount: "398" },
+  }]
+  const participant = createParticipant({
+    engine,
+    calls,
+  })
+  const controller = new AbortController()
+
+  participant.beginShutdown()
+  const safety = participant.waitUntilSafe({ signal: controller.signal })
+  await reconciliationStarted
+  const pendingSnapshot = participant.getSafetySnapshot().markets.find(({ symbol }) => symbol === "DOGEUSDT")
+  assertPendingReconciliationSnapshot(pendingSnapshot)
+
+  controller.abort(new Error("participant deadline elapsed"))
+
+  await assert.rejects(safety, /participant deadline elapsed/)
+  releaseReconciliation()
+  await reconciliationFinished
+  const abortedSnapshot = participant.getSafetySnapshot().markets.find(({ symbol }) => symbol === "DOGEUSDT")
+  assertAbortedReconciliationSnapshot({
+    snapshot: abortedSnapshot,
+    calls,
+  })
+  assert.equal(participant.isSafeToShutdown(), false, "An aborted participant must not publish successful safety.")
 })

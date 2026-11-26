@@ -1,4 +1,5 @@
 import { toResult } from "@coinzilla/utils"
+import { StrategyId } from "../domain/strategies/strategy-ids.js"
 import { createMarketPrice } from "../domain/market-price.js"
 
 function createMarketPriceRefreshTimeoutError({ symbol, timeoutMs } = {}) {
@@ -313,8 +314,16 @@ function dispatchAcceptedMarketPriceTransition({
   const activeBuy = state.registry.getActiveOrders({
     marketId: metadata.market.id,
   }).find((order) => order.side === "BUY")
+  // Trailing-BUY repricing is a Coin Grabber workflow; RS owns a separate BUY evaluator.
+  const activeBuyOwnership = activeBuy
+    ? state.registry.getOwnership?.({
+      clientOrderId: activeBuy.clientOrderId,
+      brokerOrderId: activeBuy.brokerOrderId,
+      marketId: metadata.market.id,
+    })
+    : undefined
   if (
-    activeBuy &&
+    activeBuyOwnership?.strategyId === StrategyId.COIN_GRABBER &&
     state.trailingBuy.get(symbol) !== false &&
     !state.operatorPausedMarkets.has(symbol)
   ) {

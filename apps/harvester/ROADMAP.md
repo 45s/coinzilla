@@ -1,5 +1,58 @@
 # Harvester Roadmap
 
+The shutdown-handler regression fixture declares the market-task drain latch in the test that consumes it and removes the unused latch from the separate post-drain safety test; production shutdown behavior is unchanged.
+
+## Harvester Conservative ownership and shutdown incident — issue #1856
+
+- CI follow-up: lifecycle test doubles now return the explicit `{ ok: true, status: "STOPPED" }` runtime-stop contract; ADA replay assertions retain the existing AggregateError contract emitted by the runtime shutdown boundary. No production shutdown behavior was relaxed.
+
+Tracking issue: [#1856](https://github.com/45s/coinzilla/issues/1856)
+Implementation PR: [#1858](https://github.com/45s/coinzilla/pull/1858)
+Feature branch: `fix/harvester/incident-1856-ownership-shutdown-safety`
+
+### Confirmed source findings
+
+- The durable submission ownership validator was RS-only. It rejected valid CG Conservative recovery SELL ownership even though both strategies share submission-intent and order-registry infrastructure.
+- The local order-registration callback logged `SUBMITTED` while the canonical order was still `PENDING`, before the Operational State Store intent and broker placement were confirmed.
+- A failed durable submission intent removed its local PENDING registration but did not latch a market pause. Later market events could re-evaluate the same SELL decision and allocate fresh client order IDs.
+- Conservative strategy evaluation suppressed a new SELL when any active SELL existed, but did not verify aggregate remaining quantity of active owned SELL orders against net sellable Position inventory after base-asset commissions and `keepQuantity`.
+- The strategy shutdown coordinator did not retain timed-out participant wait promises. A later shutdown attempt could start a second `waitUntilSafe()` operation while the first remained unresolved.
+- The shutdown handler and outer `createHarvesterStop` boundary awaited asynchronous work without their own bounded deadlines. A pending CLOSING audit or durable `PROCESS_STOPPED` append could leave shutdown waiting indefinitely.
+
+- The shared market-price dispatcher selected any active BUY for Conservative CG trailing-BUY repricing without checking canonical strategy ownership. An RS-owned LINEAUSDT BUY therefore entered the CG path, where the RS-only symbol had no CG pair config and `evaluateTrailingBuyTrigger` dereferenced missing `priceStepPercent`.
+
+- Multi-provider shutdown now returns the same explicit `status: "STOPPED"` acknowledgement as single-provider shutdown, so the outer process boundary can safely publish STOPPED and release account locks.
+
+### Implementation recorded on PR #1858
+
+- Shared market-price dispatch now checks canonical OrderRegistry ownership and invokes the CG-specific trailing-BUY workflow only for CG-owned BUYs. RS-owned and unowned BUY events continue through the shared latest-transition evaluator without dereferencing CG-only pair configuration.
+- Shared ownership validation now covers CG Position-scoped ownership and RS Position/cycle-scoped ownership, including strategy, purpose, side and identity checks.
+- CG pending-order registration now preserves the originating Position identity and returns the exact registered ownership. Durable Journal `ORDER_SUBMISSION_REQUESTED` facts include that ownership; Operational State Store intent remains a separate durable boundary before broker placement.
+- Conflicting supplied ownership metadata is rejected before broker I/O. The registered ownership is used for subsequent durable intent/outcome processing.
+- Local order registration is reported as `PENDING`, not `SUBMITTED`. Failed durable intent handling removes the unsubmitted PENDING registration, emits the deferral, and latches the affected symbol with `ORDER_INTENT_NOT_DURABLE`; a regression proves a later tick does not allocate another client order ID or call the broker.
+- Conservative active SELL aggregation includes PENDING/UNKNOWN reservations and is checked against net sellable inventory after commissions and `keepQuantity`.
+- Strategy shutdown participant waits are single-flight. Timeout/abort retains the underlying operation in a shared pending map; retries cannot overlap it and safety cannot be reported while it remains pending.
+- Shutdown phases have bounded deadlines and abort signals. Pending phases are exposed in diagnostics and block overlapping retries.
+- Durable `PROCESS_STOPPED` has its own 30-second deadline and pending-append guard. Runtime completion, durable STOPPED, OS process exit and process-lock release remain distinct.
+- `JOURNAL_OPERATIONS.md` documents the separate Operational State Store, Journal, legacy order-history and relational trading-history responsibilities, startup audit/readiness distinction, shutdown phase deadlines and fail-closed durability behavior.
+
+### Verification status
+
+- RED evidence: [targeted run 45764611291](https://github.com/45s/coinzilla/actions/runs/45764611291) on test head `2937f1f` failed the new coordinator single-flight regression because a timed-out participant operation was not retained. The coordinator now tracks the active operation by strategy and reports a `PENDING` blocker.
+- The first CLOSING-audit timeout run failed in fixture setup because trading was enabled without a strategy participant; it did not reach the timeout assertion. The fixture now supplies an explicit safe participant.
+- Two Conservative shutdown safety tests failed during an intermediate refactor. That refactor was reverted; the original safety flow was restored, retaining only parameter-shape/formatting changes and removal of the redundant snapshot assignment.
+- Repository Quality failed strict lint on the earlier head. Formatting and function refactors are being completed; do not treat that earlier failure as evidence about the latest head.
+- The process-stop timeout regression, the corrected CLOSING-audit regression, the ownership conflict regression and the durable ownership DTO regression are now in the targeted suite. Exact latest-head test and lint outcomes remain unconfirmed until their workflows complete.
+
+### Evidence boundaries and remaining work
+
+- DOGE client IDs `...-12`, `...-14`, `...-18`, `...-20`, and `...-22` remain **UNKNOWN** until canonical client-order-ID exchange reconciliation establishes each outcome. The preserved incident trace does not prove acknowledgements, fills or cancellations for each ID.
+- The duplicate DOGE BUY trade event was applied once; its repeat was classified as duplicate with zero accounting delta. This supports idempotent duplicate-event handling for that trade, but does not prove exactly-once accounting for every fill/commission path.
+- `readiness=BLOCKED` was the captured unowned-order audit classification. With `externalOrdersPolicy: ignore`, those orders remain external and untouched; engine activation is distinct from the user-data `canTrade` gate. Complete, stale and incomplete account-wide snapshot readiness gates still require exact-head tests.
+- The relational trading-history warning is not evidence that Journal or Operational State Store durability failed. PR #1855 improves diagnostics; the exact operator database cause remains unconfirmed.
+- No source/test evidence establishes `DYNAMIC_PRICE_BAND` or `OPEN_ORDER_COUNT_PER_MARKET` as a cause of this incident.
+- Remaining work: complete exact-head offline CG/RS submission and persistence tests; exactly-once fill/commission accounting; DOGE ID reconciliation where historical evidence permits; startup readiness tests; shutdown integration/concurrency/restart tests; final lint/test verification; and issue/PR acceptance-checklist reconciliation. Do not treat the incident as operationally resolved.
+
 ## Scenario Runner / GC Strategy Lab — current status (2026-11-26)
 
 Implemented in [PR #1837](https://github.com/45s/coinzilla/pull/1837), which remains Draft and unmerged. Terminal mixed-SELL accounting now publishes the canonical cycle state via `reconcileRecoverySellerCycleSell`; profitable partial CANCELED/EXPIRED outcomes remain `UNRESOLVED`, and under-target FILLED SELL outcomes latch the durable account-wide STOP in the order-event workflow. Regression coverage was added for partial CANCELED/EXPIRED reconciliation, canonical state publication and under-target STOP. The canonical order contract prohibits non-zero execution on REJECTED orders; zero-fill REJECTED accounting remains fail-closed.
@@ -24,8 +77,9 @@ Fixed in [PR #1837](https://github.com/45s/coinzilla/pull/1837): terminal mixed-
 
 ## Relational trading-history startup failure — issue #1854
 
-In progress in [PR #1855](https://github.com/45s/coinzilla/pull/1855), branch
-`fix/harvester/1854-trading-history-persistence-startup`.
+Diagnostic implementation complete in merged [PR #1855](https://github.com/45s/coinzilla/pull/1855).
+The exact operator-database migration failure remains unconfirmed; the merged change improves the
+failure evidence and preserves fail-closed migration behavior.
 
 The 2026-11-26 operator run retained legacy order history but reported relational trading-history
 persistence unavailable, skipped exchange-history synchronization, and did not start the local
@@ -2398,6 +2452,8 @@ The application runner now retains its execution slot and history record when an
 The scenario-definition and reporting workstream is tracked separately from the active domain-test implementation in [#1763](https://github.com/45s/coinzilla/issues/1763). Child issue [#1797](https://github.com/45s/coinzilla/issues/1797) owns the stable `CON-*` inventory, validated registry, mapped-test runner, and JSON reports. The existing Harvester Targeted Tests workflow runs the suite conditionally when related paths change and uploads its reports. It reuses `docs/critical-behaviors.json` and the repository scenario methodology; it does not duplicate critical-behavior ownership or change production trading behavior.
 
 The initial inventory contains 18 scenarios across 16 categories: 15 TEST-MAPPED, one PARTIAL configuration scenario, one MISSING startup-history-gate scenario (CON-PERSIST-003), and one UNSUPPORTED runtime-restoration scenario. TEST-MAPPED is a mapping state, not proof of assertion-level coverage. Runtime restoration remains unsupported by the active Conservative specification.
+
+Forensic update from the full 2026-11-26 trace: the nine local SELL IDs and exactly-once duplicate DOGE fill are classified in issue #1856. None of those nine SELL attempts reached broker placement.
 
 ### 2026-11-26 — Worker protocol and regression corrections
 

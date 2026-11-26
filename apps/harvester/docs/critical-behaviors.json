@@ -87,17 +87,32 @@
         },
         {
           "path": "src/domain/orders/recovery-seller-submission-ownership.test.js",
-          "name": "rejects ownership metadata from a different strategy",
-          "kind": "failure"
-        },
-        {
-          "path": "src/domain/orders/recovery-seller-submission-ownership.test.js",
           "name": "rejects ownership metadata for a different submission purpose",
           "kind": "failure"
         },
         {
           "path": "src/domain/orders/recovery-seller-submission-ownership.test.js",
           "name": "rejects Recovery Seller ownership metadata for an unowned submission",
+          "kind": "failure"
+        },
+        {
+          "path": "src/domain/orders/recovery-seller-submission-ownership.test.js",
+          "name": "rejects ownership metadata from a strategy outside the supported CG and RS strategies",
+          "kind": "failure"
+        },
+        {
+          "path": "src/domain/orders/recovery-seller-submission-ownership.test.js",
+          "name": "rejects a CG owner using the Recovery Seller BUY purpose",
+          "kind": "failure"
+        },
+        {
+          "path": "src/domain/orders/recovery-seller-submission-ownership.test.js",
+          "name": "rejects an RS owner using a Conservative-only purpose",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/execute-strategy-decision.test.js",
+          "name": "does not submit a sibling BUY when the recovery SELL intent is not durable",
           "kind": "failure"
         }
       ],
@@ -777,6 +792,26 @@
         {
           "path": "src/bootstrap/shutdown/create-conservative-shutdown-participant.test.js",
           "name": "waits for the serialized engine shutdown barrier before cancelling owned BUYs",
+          "kind": "failure"
+        },
+        {
+          "path": "src/bootstrap/shutdown/create-strategy-shutdown-coordinator.test.js",
+          "name": "does not overlap a retry with a timed-out participant operation that ignores abort",
+          "kind": "failure"
+        },
+        {
+          "path": "src/bootstrap/shutdown/create-strategy-shutdown-coordinator.test.js",
+          "name": "bounds repeated successful safety proofs when the marker remains invalidated",
+          "kind": "failure"
+        },
+        {
+          "path": "src/bootstrap/shutdown/create-shutdown-handler.test.js",
+          "name": "bounds a pending CLOSING audit phase and retains shared services",
+          "kind": "failure"
+        },
+        {
+          "path": "src/bootstrap/create-harvester-stop.test.js",
+          "name": "bounds pending durable PROCESS_STOPPED and prevents overlapping retries",
           "kind": "failure"
         }
       ],

@@ -360,6 +360,10 @@ test("allows the next BUY only after the recovery SELL is acknowledged", () => {
         side: "SELL",
         status,
         brokerOrderId: "broker-sell-1",
+        remainingQuantity: new Quantity({
+          amount: "99",
+          asset: baseAsset,
+        }),
       }],
       lastBuyPrice: "0.1",
     })
@@ -394,9 +398,15 @@ test("blocks the next BUY while the recovery SELL acknowledgement is pending or 
       portfolio,
       recoveryLedger,
       marketMetadata,
-      activeOrders: [{ market,
-side: "SELL",
-status }],
+      activeOrders: [{
+        market,
+        side: "SELL",
+        status,
+        remainingQuantity: new Quantity({
+          amount: "99",
+          asset: baseAsset,
+        }),
+      }],
       lastBuyPrice: "0.1",
     })
 
@@ -753,9 +763,15 @@ test("does not create a duplicate residual SELL while one is active", () => {
         ),
       },
     },
-    activeOrders: [{ market,
-side: "SELL",
-status: "OPEN" }],
+    activeOrders: [{
+      market,
+      side: "SELL",
+      status: "OPEN",
+      remainingQuantity: new Quantity({
+          amount: "0.5",
+          asset: baseAsset,
+        }),
+    }],
     lastBuyPrice: "0.1",
   })
 

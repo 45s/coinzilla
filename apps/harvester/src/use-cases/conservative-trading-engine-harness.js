@@ -393,6 +393,7 @@ function createEmptyOpenOrdersHandler() {
 
 function createHarnessBrokerPort({ options, state } = {}) {
   return {
+    ...(options.providerIdentity ?? {}),
     getSymbolFilters: createSymbolFiltersHandler(options),
     placeOrder: createPlaceOrderHandler({ ...options,
       ...state }),

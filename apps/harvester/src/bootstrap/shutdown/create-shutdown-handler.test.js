@@ -2,6 +2,7 @@ import assert from "node:assert/strict"
 import nodeTest from "node:test"
 
 import { createShutdownHandler } from "./create-shutdown-handler.js"
+import { createStrategyShutdownCoordinator } from "./create-strategy-shutdown-coordinator.js"
 
 const test = (...args) => {
   const [name, ...testArgs] = args
@@ -125,6 +126,10 @@ function createShutdown(input = {}) {
     userDataSubscription,
     logger,
     getTradingEngine,
+    strategyShutdownCoordinator,
+    phaseTimeoutMs,
+    setTimeoutFn,
+    clearTimeoutFn,
   } = {
     ...createShutdownDefaults(),
     ...input,
@@ -143,6 +148,10 @@ function createShutdown(input = {}) {
     logger,
     tradingEnabled,
     strategyShutdownParticipants: participants,
+    strategyShutdownCoordinator,
+    phaseTimeoutMs,
+    setTimeoutFn,
+    clearTimeoutFn,
     getTradingEngine,
     subscriptions,
     bookSubscriptions,
@@ -158,6 +167,100 @@ function createShutdown(input = {}) {
     calls,
   }
 }
+async function assertClosingAuditTimeout({
+  fixture,
+  calls,
+  auditStarted,
+  getClosingAuditDeadline,
+  getClosingAuditTimeoutMs,
+  getAuditCalls,
+  stopPromise,
+} = {}) {
+  await auditStarted
+  assert.equal(typeof getClosingAuditDeadline(), "function")
+  assert.equal(getClosingAuditTimeoutMs(), 25)
+  getClosingAuditDeadline()
+  await assert.rejects(
+    stopPromise,
+    (error) => error.code === "SHUTDOWN_PHASE_TIMEOUT" && error.phase === "CLOSING_AUDIT",
+  )
+  const retryStopPromise = fixture.stop()
+  await assert.rejects(
+    retryStopPromise,
+    (error) => error.code === "SHUTDOWN_PHASE_STILL_RUNNING"
+      && error.phase === "CLOSING_AUDIT"
+      && error.status === "PENDING",
+  )
+  assert.equal(getAuditCalls(), 1)
+  assert.equal(calls.includes("market-intake-stop"), false)
+  assert.equal(calls.includes("user-data-stop"), false)
+  assert.equal(calls.includes("broker-disconnect"), false)
+  assert.equal(fixture.state.status, "SHUTDOWN_INCOMPLETE")
+  return retryStopPromise
+}
+
+test("bounds a pending CLOSING audit phase and retains shared services", async () => {
+  const calls = []
+  let resolveAudit
+  let auditCalls = 0
+  let markAuditStarted
+  let closingAuditDeadline
+  let closingAuditTimeoutMs
+  const auditStarted = new Promise((resolve) => {
+    markAuditStarted = resolve
+  })
+  const pendingAudit = new Promise((resolve) => {
+    resolveAudit = resolve
+  })
+  const strategyShutdownCoordinator = createStrategyShutdownCoordinator({
+    participants: [{
+      strategyId: "CONSERVATIVE",
+      beginShutdown() {},
+      waitUntilSafe: async () => ({ ok: true }),
+      isSafeToShutdown: () => true,
+      getSafetySnapshot: () => ({ markets: [] }),
+    }],
+  })
+  const fixture = createShutdown({
+    calls,
+    strategyShutdownCoordinator,
+    publishAccountSnapshot: async () => {
+      auditCalls += 1
+      markAuditStarted()
+      return pendingAudit
+    },
+    phaseTimeoutMs: 25,
+    setTimeoutFn: ({ callback, timeoutMs, phase }) => {
+      if (phase === "CLOSING_AUDIT") {
+        closingAuditDeadline = callback
+        closingAuditTimeoutMs = timeoutMs
+      }
+      return `fake-deadline:${phase}`
+    },
+    clearTimeoutFn: () => {},
+  })
+  const stopPromise = fixture.stop()
+  let retryStopPromise
+
+  try {
+    retryStopPromise = await assertClosingAuditTimeout({
+      fixture,
+      calls,
+      auditStarted,
+      getClosingAuditDeadline: () => closingAuditDeadline,
+      getClosingAuditTimeoutMs: () => closingAuditTimeoutMs,
+      getAuditCalls: () => auditCalls,
+      stopPromise,
+    })
+  } finally {
+    resolveAudit?.({ ok: true })
+    await Promise.all([
+      stopPromise.catch(() => {}),
+      retryStopPromise?.catch(() => {}),
+    ])
+  }
+})
+
 test("activates strategy gates before shutdown context creation can fail", async () => {
   const calls = []
   const failure = new Error("Trading engine context is unavailable")
@@ -202,13 +305,17 @@ test("activates every strategy gate before any shared service can stop", async (
     participants,
     calls,
   })
-  await fixture.stop({
+  const stopResult = await fixture.stop({
     beforeSharedServicesStop: async () => {
       calls.push("operator-control-stop")
       return []
     },
   })
 
+  assert.deepEqual(stopResult, {
+    ok: true,
+    status: "STOPPED",
+  }, "The shutdown handler must expose an explicit terminal outcome.")
   assert.deepEqual(calls.slice(0, 4), [
     "gate:CONSERVATIVE",
     "gate:RECOVERY_SELLER",
@@ -550,6 +657,23 @@ test("drains accepted market work and re-proves safety before stopping user-data
   assert.equal(fixture.state.status, "STOPPED", "Shutdown may reach STOPPED only after the post-market-drain safety proof succeeds.")
 })
 
+function createMarketDrainTask({ onDrain } = {}) {
+  return {
+    then(resolve) {
+      onDrain()
+      resolve()
+    },
+  }
+}
+
+async function assertShutdownFailurePreservesStrategyBlocker({ fixture, failure } = {}) {
+  await assert.rejects(fixture.stop(), (error) => {
+    assert.equal(error.code, "STRATEGY_SHUTDOWN_SAFETY_UNPROVEN")
+    assert.ok(error.shutdownDiagnostics.strategyBlockers.some(({ message }) => message === failure.message))
+    return true
+  })
+}
+
 test("keeps user-data and broker services alive when post-market-drain safety cannot be proven", async () => {
   const calls = []
   let safe = false
@@ -577,18 +701,13 @@ test("keeps user-data and broker services alive when post-market-drain safety ca
       blockers: safe ? [] : ["RECOVERY_SELL_COVERAGE_UNVERIFIED"],
     }),
   }
-  let marketTaskDrained = false
   const marketPriceIntake = new Map([
     ["DOGEUSDT", {
-      latestWebSocketPriceTask: {
-        then(resolve) {
-          if (!marketTaskDrained) {
-            marketTaskDrained = true
-            safe = false
-          }
-          resolve()
+      latestWebSocketPriceTask: createMarketDrainTask({
+        onDrain: () => {
+          safe = false
         },
-      },
+      }),
     }],
   ])
   const fixture = createShutdown({
@@ -597,11 +716,10 @@ test("keeps user-data and broker services alive when post-market-drain safety ca
     marketPriceIntake,
   })
 
-  await assert.rejects(fixture.stop(), (error) => {
-    assert.equal(error.code, "STRATEGY_SHUTDOWN_SAFETY_UNPROVEN", "An unproven final strategy state must retain the coordinator's safety failure classification.")
-    assert.ok(error.errors.includes(failure), "The original market-recovery blocker must remain available to the caller.")
-    return true
-  }, "A failed final safety proof must reject shutdown with its original blocker.")
+  await assertShutdownFailurePreservesStrategyBlocker({
+    fixture,
+    failure,
+  })
 
   assert.equal(safetyChecks, 2, "Shutdown must repeat the strategy proof after quiescing and draining accepted market work.")
   assert.equal(calls.includes("market-intake-stop"), false, "Market subscriptions must remain connected when the post-drain safety proof fails.")
@@ -815,4 +933,48 @@ test("fails closed when an accepted market callback resolves with an unsuccessfu
   assert.equal(calls.includes("broker-disconnect"), false, "The broker must remain connected while market work is unresolved.")
   assert.equal(fixture.state.marketIntakeStopped, false, "Market callback intake must resume after a failed pre-unsubscribe drain.")
   assert.equal(fixture.state.status, "SHUTDOWN_INCOMPLETE", "A failed market-work drain must never report STOPPED.")
+})
+
+
+test("keeps every shared service alive and reports incomplete shutdown when a strategy participant times out", async () => {
+  const calls = []
+  let observedSignal
+  const participant = {
+    strategyId: "CONSERVATIVE",
+    beginShutdown: () => calls.push("gate:CONSERVATIVE"),
+    waitUntilSafe: ({ signal }) => {
+      calls.push("wait:CONSERVATIVE")
+      observedSignal = signal
+      return new Promise(() => {})
+    },
+    isSafeToShutdown: () => false,
+    getSafetySnapshot: () => ({
+      markets: [{
+        symbol: "DOGEUSDT",
+        blockers: ["ORDER_RECONCILIATION_PENDING"],
+      }],
+    }),
+  }
+  const strategyShutdownCoordinator = createStrategyShutdownCoordinator({
+    participants: [participant],
+    timeoutMs: 10,
+  })
+  const fixture = createShutdown({
+    calls,
+    participants: [],
+    strategyShutdownCoordinator,
+  })
+
+  await assert.rejects(fixture.stop(), (error) => {
+    assert.equal(error.code, "STRATEGY_SHUTDOWN_SAFETY_UNPROVEN")
+    assert.equal(error.shutdownDiagnostics.strategyBlockers[0].status, "TIMED_OUT")
+    assert.equal(error.shutdownDiagnostics.strategyBlockers[0].strategyId, "CONSERVATIVE")
+    return true
+  })
+
+  assert.equal(observedSignal.aborted, true, "The timed-out participant must receive an aborted cancellation signal.")
+  assert.equal(fixture.state.status, "SHUTDOWN_INCOMPLETE", "A participant timeout must never report STOPPED.")
+  assert.equal(calls.includes("market-intake-stop"), false, "Market feeds must remain connected while strategy safety is unproven.")
+  assert.equal(calls.includes("user-data-stop"), false, "User-data intake must remain connected while strategy safety is unproven.")
+  assert.equal(calls.includes("broker-disconnect"), false, "The broker must remain connected while strategy safety is unproven.")
 })

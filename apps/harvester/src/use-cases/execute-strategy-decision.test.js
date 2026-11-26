@@ -73,8 +73,10 @@ data: makeAcknowledgement(order) } } },
     onAcknowledgedOrder: async ({ order }) => submitted.push(order),
     onSubmissionFailure: async () => assert.fail("unexpected submission failure"),
   })
-  const result = await execute({ decision,
-marketMetadata })
+  const result = await execute({
+      decision,
+      marketMetadata,
+    })
   assert.equal(result.ok, true)
   assert.equal(submitted.length, 1)
   assert.equal(submitted[0].status, "OPEN")
@@ -108,8 +110,10 @@ test("registers a pending order before reporting a thrown submission as unknown"
     onAcknowledgedOrder: async () => {},
     onSubmissionFailure: async ({ outcome }) => calls.push(outcome),
   })
-  const result = await execute({ decision,
-marketMetadata })
+  const result = await execute({
+      decision,
+      marketMetadata,
+    })
   assert.equal(result.ok, false)
   assert.match(calls[0], /^h-[0-9a-f]{22}-1$/)
   assert.equal(calls[1], "UNKNOWN")
@@ -124,8 +128,10 @@ data: {} }) },
     onAcknowledgedOrder: async () => {},
     onSubmissionFailure: async ({ outcome }) => failures.push(outcome),
   })
-  const result = await execute({ decision,
-marketMetadata })
+  const result = await execute({
+      decision,
+      marketMetadata,
+    })
   assert.equal(result.ok, false)
   assert.deepEqual(failures, ["UNKNOWN"])
 })
@@ -163,8 +169,10 @@ data: makeAcknowledgement(order) }) },
     onAcknowledgedOrder: async () => { throw new Error("registry conflict") },
     onSubmissionFailure: async ({ outcome }) => outcomes.push(outcome),
   })
-  const result = await execute({ decision,
-marketMetadata })
+  const result = await execute({
+      decision,
+      marketMetadata,
+    })
   assert.equal(result.ok, false)
   assert.deepEqual(outcomes, ["UNKNOWN"])
 })
@@ -185,8 +193,10 @@ data: makeAcknowledgement(order) }
     })
     return {
       run: async () => {
-        const result = await execute({ decision,
-marketMetadata })
+        const result = await execute({
+      decision,
+      marketMetadata,
+    })
         assert.equal(result.ok, true)
         return submittedOrder.clientOrderId
       },
@@ -285,8 +295,10 @@ test("returns a structured submission deferral reason and details without regist
     onSubmissionDeferred: async (context) => deferredCallbacks.push(context),
   })
 
-  const result = await execute({ decision,
-marketMetadata })
+  const result = await execute({
+      decision,
+      marketMetadata,
+    })
 
   assert.equal(result.ok, true, "A valid safety deferral is a successful execution result, not a broker failure.")
   assert.equal(result.data.deferred, true, "The result must explicitly identify that broker submission was deferred.")
@@ -337,8 +349,10 @@ details })
     },
   })
 
-  const result = await execute({ decision,
-marketMetadata })
+  const result = await execute({
+      decision,
+      marketMetadata,
+    })
 
   assert.equal(result.ok, true, "A final readiness deferral must remain a successful, explicitly classified result.")
   assert.equal(result.data.deferred, true, "The final readiness check must report a deferred submission.")
@@ -426,8 +440,10 @@ test("cleans up PENDING when the final submission gate returns an invalid struct
     onSubmissionFailure: async () => {},
   })
 
-  const result = await execute({ decision,
-marketMetadata })
+  const result = await execute({
+      decision,
+      marketMetadata,
+    })
 
   assert.equal(result.ok, false, "A malformed structured gate response must remain an explicit execution error.")
   assert.match(result.errors[0].message, /non-empty reason/, "The error must identify the invalid structured gate contract.")
@@ -546,8 +562,10 @@ details: deferral.details }),
       },
     })
 
-    const result = await execute({ decision,
-marketMetadata })
+    const result = await execute({
+      decision,
+      marketMetadata,
+    })
 
     assert.equal(result.ok, true, `${deferral.reason  } must be a successful, explicitly classified deferral.`)
     assert.equal(result.data.deferred, true, `${deferral.reason  } must mark the strategy intent as deferred.`)
@@ -602,8 +620,10 @@ data: { durable: true } }
     onSubmissionFailure: async () => assert.fail("unexpected submission failure while recording a durable order intent"),
   })
 
-  const result = await execute({ decision,
-marketMetadata })
+  const result = await execute({
+      decision,
+      marketMetadata,
+    })
 
   assert.equal(result.ok, true, "A strategy order with a durably recorded intent should proceed to broker submission.")
   assert.equal(calls[0].stage, "durable-intent", "The durable order intent must be acknowledged before the broker can receive a placement request.")
@@ -707,13 +727,106 @@ data: makeAcknowledgement(order) }
     onSubmissionFailure: async () => {},
   })
 
-  const result = await execute({ decision,
-marketMetadata })
+  const result = await execute({
+      decision,
+      marketMetadata,
+    })
 
   assert.equal(result.ok, false, "A failed durable intent append must fail the strategy submission workflow.")
   assert.equal(brokerCalls, 0, "No broker placement may occur unless the immutable order intent was durably acknowledged first.")
   assert.deepEqual(deferredRegistrations, [true], "A failed pre-broker durability barrier must remove the locally registered PENDING order.")
   assert.match(result.errors[0].message, /durable fact store unavailable/, "The durable-fact failure must remain actionable at the application boundary.")
+})
+
+
+function createRecoverySellIntentFailureHarness() {
+  const failure = new Error("Recovery SELL intent was not committed")
+  const calls = []
+  let brokerCalls = 0
+  const ownershipFor = (purpose) => ({
+    strategyId: StrategyId.COIN_GRABBER,
+    positionId: "position:cg:dogeusdt",
+    purpose,
+  })
+  const execute = makeExecuteStrategyDecision({
+    broker: {
+      providerInstanceId: "binanceTestnet",
+      providerType: "binance",
+      accountId: "binance-primary",
+      placeOrder: async ({ order }) => {
+        brokerCalls += 1
+        return {
+          ok: true,
+          data: makeAcknowledgement(order),
+        }
+      },
+    },
+    onPendingOrder: async ({ purpose }) => ({
+      ownership: ownershipFor(purpose),
+    }),
+    onDurableSubmissionIntent: async ({ order }) => {
+      calls.push(`intent:${order.side}`)
+      return order.side === "SELL"
+        ? {
+          ok: false,
+          errors: [failure],
+        }
+        : {
+          ok: true,
+          data: {
+            durable: true,
+          },
+        }
+    },
+    onDurableSubmissionOutcome: async () => {
+      assert.fail("A rejected intent must not produce a durable submission outcome")
+    },
+    onAcknowledgedOrder: async () => {},
+    onSubmissionFailure: async () => {
+      assert.fail("A rejected intent must not reach broker-submission failure handling")
+    },
+    onSubmissionDeferred: async ({ order }) => {
+      calls.push(`deferred:${order.side}`)
+    },
+  })
+  return {
+    execute,
+    calls,
+    getBrokerCalls: () => brokerCalls,
+  }
+}
+
+test("does not submit a sibling BUY when the recovery SELL intent is not durable", async () => {
+  const harness = createRecoverySellIntentFailureHarness()
+  const result = await harness.execute({
+    decision: {
+      strategy: "CONSERVATIVE",
+      actions: [
+        {
+          side: "SELL",
+          purpose: "RECOVERY_SELL",
+          strategyId: StrategyId.COIN_GRABBER,
+          positionId: "position:cg:dogeusdt",
+          type: "LIMIT_MAKER",
+          price: "0.099",
+          quantity: "100",
+        },
+        {
+          side: "BUY",
+          purpose: "CONSERVATIVE_BUY",
+          strategyId: StrategyId.COIN_GRABBER,
+          positionId: "position:cg:dogeusdt",
+          type: "LIMIT_MAKER",
+          price: "0.099",
+          quantity: "100",
+        },
+      ],
+    },
+    marketMetadata,
+  })
+  assert.equal(result.ok, false)
+  assert.deepEqual(harness.calls, ["intent:SELL", "deferred:SELL"])
+  assert.equal(harness.getBrokerCalls(), 0)
 })
 
 
@@ -739,8 +852,10 @@ data: { durable: true } }),
     onSubmissionFailure: async ({ outcome }) => failureOutcomes.push(outcome),
   })
 
-  const result = await execute({ decision,
-marketMetadata })
+  const result = await execute({
+      decision,
+      marketMetadata,
+    })
 
   assert.equal(result.ok, false, "A broker acknowledgement without a durable outcome must fail the submission workflow.")
   assert.equal(acknowledged, false, "In-memory order acknowledgement must not advance before its durable outcome.")
@@ -775,8 +890,10 @@ data: { durable: true } }
     onSubmissionFailure: async ({ outcome }) => failureOutcomes.push(outcome),
   })
 
-  const result = await execute({ decision,
-marketMetadata })
+  const result = await execute({
+      decision,
+      marketMetadata,
+    })
 
   assert.equal(result.ok, false, "A definite post-only rejection must remain a failed submission.")
   assert.deepEqual(durableOutcomes, ["REJECTED"], "The durable outcome must preserve a broker-confirmed definite rejection.")
@@ -1202,3 +1319,121 @@ test("fails closed before registration or broker I/O when durable provenance met
     }),
   }), /providerInstanceId, providerType and accountId/)
 })
+
+
+test("rejects conflicting registered ownership before broker submission", async () => {
+  const ownership = {
+    strategyId: StrategyId.RECOVERY_SELLER,
+    positionId: "rs-position-original",
+    purpose: "RECOVERY_BUY",
+    cycleId: "rs-cycle-1",
+  }
+  const conflictingOwnership = {
+    ...ownership,
+    positionId: "rs-position-conflict",
+  }
+  let brokerCalls = 0
+  let deferredSubmission
+  const execute = makeExecuteStrategyDecision({
+    broker: {
+      placeOrder: async () => {
+        brokerCalls += 1
+        return { ok: false }
+      },
+    },
+    onPendingOrder: async () => ({
+      ownership: conflictingOwnership,
+    }),
+    onAcknowledgedOrder: async () => {},
+    onSubmissionFailure: async () => {},
+    onSubmissionDeferred: async (details) => {
+      deferredSubmission = details
+    },
+  })
+  const result = await execute({
+    decision: createOwnedDecision({ ownership }),
+    marketMetadata,
+  })
+
+  assert.equal(result.ok, false)
+  assert.equal(brokerCalls, 0, "Conflicting ownership must never reach broker I/O.")
+  assert.equal(deferredSubmission.reason, "SUBMISSION_OWNERSHIP_CONFLICT")
+  assert.equal(deferredSubmission.registered, true)
+  assert.deepEqual(deferredSubmission.ownership, conflictingOwnership)
+})
+
+function createConservativeBuyDurableFactHarness() {
+  const durableFacts = []
+  const conservativeOwnership = Object.freeze({
+    strategyId: StrategyId.COIN_GRABBER,
+    positionId: "position:cg:dogeusdt",
+    purpose: "CONSERVATIVE_BUY",
+  })
+  const execute = makeExecuteStrategyDecision({
+    broker: {
+      providerInstanceId: "binanceTestnet",
+      providerType: "binance",
+      accountId: "binance-primary",
+      placeOrder: async ({ order }) => ({
+        ok: true,
+        data: makeAcknowledgement(order),
+      }),
+    },
+    onPendingOrder: async () => ({ ownership: conservativeOwnership }),
+    onDurableSubmissionIntent: async ({ purpose, ownership }) => {
+      durableFacts.push({
+        purpose,
+        ownership,
+      })
+      return {
+        ok: true,
+        data: {
+          durable: true,
+        },
+      }
+    },
+    onDurableSubmissionOutcome: async ({ purpose, ownership }) => {
+      durableFacts.push({
+        purpose,
+        ownership,
+      })
+      return {
+        ok: true,
+        data: {
+          durable: true,
+        },
+      }
+    },
+    onAcknowledgedOrder: async () => {},
+    onSubmissionFailure: async () => assert.fail("unexpected failure while persisting a Conservative BUY"),
+  })
+  return {
+    durableFacts,
+    conservativeOwnership,
+    execute,
+  }
+}
+
+test("persists the registered CG strategy purpose for an ordinary Conservative BUY", async () => {
+  const harness = createConservativeBuyDurableFactHarness()
+  const result = await harness.execute({
+    decision,
+    marketMetadata,
+  })
+  assert.equal(result.ok, true)
+  assert.deepEqual(
+    harness.durableFacts,
+    [
+      {
+        purpose: "CONSERVATIVE_BUY",
+        ownership: harness.conservativeOwnership,
+      },
+      {
+        purpose: "CONSERVATIVE_BUY",
+        ownership: harness.conservativeOwnership,
+      },
+    ],
+  )
+})
+
+
