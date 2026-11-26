@@ -441,12 +441,54 @@ function hasConflictingSubmissionOwnership({ candidate, registeredOwnership } = 
     candidate[field] !== undefined && candidate[field] !== registeredOwnership[field])
 }
 
+function createSubmissionCandidateWithRegisteredOwnership({ candidate, registeredOwnership } = {}) {
+  if (registeredOwnership === undefined) {
+    return candidate
+  }
+  return Object.freeze({
+    ...candidate,
+    purpose: candidate.purpose ?? registeredOwnership.purpose,
+    ownership: registeredOwnership,
+  })
+}
+
+async function handlePostRegistrationDeferral({ context, candidate } = {}) {
+  const postRegistration = await getPostRegistrationSubmissionDeferral({
+    context,
+    candidate,
+  })
+  if (postRegistration.error) {
+    return toResult({
+      error: postRegistration.error,
+    })
+  }
+  if (!postRegistration.deferral) {
+    return null
+  }
+  await context.onSubmissionDeferred({
+    order: candidate.pendingOrder,
+    purpose: candidate.purpose,
+    ...getOwnershipMetadata({
+      ownership: candidate.ownership,
+    }),
+    registered: true,
+    ...postRegistration.deferral,
+  })
+  return toResult({
+    data: {
+      deferred: true,
+      ...postRegistration.deferral,
+    },
+  })
+}
+
 async function preparePendingSubmission({ context, candidate } = {}) {
-  const { pendingOrder, purpose, ownership } = candidate
   const initialDeferral = context.getSubmissionDeferral({
-    order: pendingOrder,
-    purpose,
-    ...getOwnershipMetadata({ ownership }),
+    order: candidate.pendingOrder,
+    purpose: candidate.purpose,
+    ...getOwnershipMetadata({
+      ownership: candidate.ownership,
+    }),
   })
   if (initialDeferral) {
     return deferUnregisteredSubmission({
@@ -455,51 +497,36 @@ async function preparePendingSubmission({ context, candidate } = {}) {
       deferral: initialDeferral,
     })
   }
-  const pendingResult = context.onPendingOrder({
-    order: pendingOrder,
-    purpose,
-    ...getOwnershipMetadata({ ownership }),
+  const registration = await context.onPendingOrder({
+    order: candidate.pendingOrder,
+    purpose: candidate.purpose,
+    ...getOwnershipMetadata({
+      ownership: candidate.ownership,
+    }),
   })
-  const registration = pendingResult && typeof pendingResult.then === "function"
-    ? await pendingResult
-    : pendingResult
   const registeredOwnership = registration?.ownership
+  const submissionCandidate = createSubmissionCandidateWithRegisteredOwnership({
+    candidate,
+    registeredOwnership,
+  })
   if (hasConflictingSubmissionOwnership({
-    candidate: ownership,
+    candidate: candidate.ownership,
     registeredOwnership,
   })) {
-    throw new TypeError("Pending order registration returned conflicting strategy ownership")
-  }
-  const submissionCandidate = registeredOwnership === undefined
-    ? candidate
-    : Object.freeze({
-      ...candidate,
-      purpose: purpose ?? registeredOwnership.purpose,
-      ownership: registeredOwnership,
+    const error = new TypeError("Pending order registration returned conflicting strategy ownership")
+    return deferRegisteredSubmission({
+      context,
+      candidate: submissionCandidate,
+      errors: [error],
+      reason: "SUBMISSION_OWNERSHIP_CONFLICT",
     })
-  const submissionPurpose = submissionCandidate.purpose ?? null
-  const submissionOrder = submissionCandidate.pendingOrder
-  const postRegistration = await getPostRegistrationSubmissionDeferral({
+  }
+  const postRegistrationResult = await handlePostRegistrationDeferral({
     context,
     candidate: submissionCandidate,
   })
-  if (postRegistration.error) {
-    return toResult({ error: postRegistration.error })
-  }
-  if (postRegistration.deferral) {
-    await context.onSubmissionDeferred({
-      order: submissionOrder,
-      purpose: submissionPurpose,
-      ...getOwnershipMetadata({ ownership: submissionCandidate.ownership }),
-      registered: true,
-      ...postRegistration.deferral,
-    })
-    return toResult({
-      data: {
-        deferred: true,
-        ...postRegistration.deferral,
-      },
-    })
+  if (postRegistrationResult) {
+    return postRegistrationResult
   }
   if (context.onDurableSubmissionIntent) {
     const durableIntent = await persistDurableSubmissionIntent({
