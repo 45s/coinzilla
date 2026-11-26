@@ -524,8 +524,7 @@ function createSafetyBlockerCallback({ store,
   recordSafetyBlockerRaised,
   createHash: hashFactory } = {}) {
   return store
-    ? ({ producer,
-  scope,
+    ? ({ scope,
   symbol,
   reason,
   evidence }) => {
@@ -535,7 +534,7 @@ function createSafetyBlockerCallback({ store,
       const evidenceDigest = hashFactory("sha256").update(JSON.stringify(canonicalEvidence)).digest("hex")
       return recordSafetyBlockerRaised({
         operationalStateStore: store,
-        producer,
+        producer: "USER_DATA_EVENT_HANDLER",
         scope,
         symbol,
         reason,
