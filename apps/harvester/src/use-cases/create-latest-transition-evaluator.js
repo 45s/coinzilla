@@ -140,11 +140,13 @@ function getMarketVolatilityGateResult({ dependencies, symbol } = {}) {
   const snapshot = getVolatilityData?.({ symbol })
   const status = snapshot?.ok === true ? snapshot.data?.status : null
   const protection = state.volatilityProtection?.get(symbol)
-  if (hasReadyVolatilityProtection({ status, protection })) {
+  if (hasReadyVolatilityProtection({ status,
+protection })) {
     return null
   }
   state.deferredEvaluations.add(symbol)
-  return toResult({ data: { deferred: true, reason: "VOLATILITY_PROTECTION_NOT_READY" } })
+  return toResult({ data: { deferred: true,
+reason: "VOLATILITY_PROTECTION_NOT_READY" } })
 }
 
 function getMarketPrerequisiteGateResult({ dependencies, symbol } = {}) {

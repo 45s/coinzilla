@@ -631,7 +631,8 @@ async function connectHarvesterRuntimeBroker({ startup, resources } = {}) {
       connectedAt: null,
       failedAt,
       elapsedMs: Math.max(0, failedAt - startedAt),
-      errorCode: getSafeStartupErrorCode({ error, fallbackCode: "BROKER_CONNECTION_FAILED" }),
+      errorCode: getSafeStartupErrorCode({ error,
+fallbackCode: "BROKER_CONNECTION_FAILED" }),
       requiredExchangeCapabilities: Object.freeze([...(startup.requiredCapabilities ?? [])]),
       exchangeCapabilitiesValidated: false,
     })
@@ -1903,7 +1904,8 @@ resources }),
 
 async function connectHarvesterRuntimeComponents({ startup, resources, failureSnapshotReader } = {}) {
   try {
-    await connectHarvesterRuntimeBroker({ startup, resources })
+    await connectHarvesterRuntimeBroker({ startup,
+resources })
   } catch (startupError) {
     await reportHarvesterStartupFailure({
       startup,
@@ -1916,7 +1918,8 @@ async function connectHarvesterRuntimeComponents({ startup, resources, failureSn
     throw startupError
   }
   try {
-    initializeHarvesterCandleHistoryService({ startup, resources })
+    initializeHarvesterCandleHistoryService({ startup,
+resources })
   } catch (startupError) {
     await reportHarvesterStartupFailure({
       startup,

@@ -40,7 +40,8 @@ function createStatusPageOperator({ calls } = {}) {
             status: "DEGRADED",
             tradingGateOpen: false,
             runtimeBlockers: ["ACCOUNT_PREFLIGHT_NOT_DURABLE"],
-            marketBlockers: [{ symbol: "BTCUSDT", blockers: ["MARKET_BOOK_UNAVAILABLE"] }],
+            marketBlockers: [{ symbol: "BTCUSDT",
+blockers: ["MARKET_BOOK_UNAVAILABLE"] }],
             warnings: ["EXTERNAL_ORDERS_IGNORED_BY_POLICY"],
             summary: {
               readyMarkets: 1,

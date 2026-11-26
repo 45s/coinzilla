@@ -372,8 +372,12 @@ function emitDuplicateUserDataLifecycleTransitions({ handler, state } = {}) {
     reason: "connection_lost",
     recoveryRequired: true,
   })
-  handler({ type: "recovering", attempt: 1, recoveryRequired: true })
-  handler({ type: "recovering", attempt: 1, recoveryRequired: true })
+  handler({ type: "recovering",
+attempt: 1,
+recoveryRequired: true })
+  handler({ type: "recovering",
+attempt: 1,
+recoveryRequired: true })
   const reconnected = {
     type: "recovered",
     attempt: 1,
@@ -408,7 +412,8 @@ function getUserDataLifecycleLogProjection({ logs } = {}) {
 
 test("logs concise user-data stream lifecycle transitions once and suppresses duplicate notifications", () => {
   const { handler, state, logs } = createHandler()
-  emitDuplicateUserDataLifecycleTransitions({ handler, state })
+  emitDuplicateUserDataLifecycleTransitions({ handler,
+state })
   assert.deepEqual(
     getUserDataLifecycleLogProjection({ logs }),
     [
