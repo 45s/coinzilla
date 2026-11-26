@@ -160,7 +160,10 @@ function resolveStageResult({ stage, result, symbol, stageDiagnostics } = {}) {
     error: errors[0] ?? new Error(`${stage} returned an unsuccessful result`),
   })
   return errors.length > 0
-    ? errors.map((error) => createStageBlocker({ stage, error }))
+    ? errors.map((error) => createStageBlocker({
+      stage,
+      error,
+    }))
     : [`${stage}:UNCONFIRMED`]
 }
 
@@ -175,7 +178,10 @@ function resolveStageError({ stage, error, signal, symbol, stageDiagnostics } = 
   if (signal?.aborted) {
     throw signal.reason ?? error
   }
-  return [createStageBlocker({ stage, error })]
+  return [createStageBlocker({
+    stage,
+    error,
+  })]
 }
 
 async function runStage({
@@ -193,7 +199,10 @@ async function runStage({
   })
   try {
     throwIfShutdownAborted(signal)
-    const result = await awaitWithShutdownSignal({ operation, signal })
+    const result = await awaitWithShutdownSignal({
+      operation,
+      signal,
+    })
     throwIfShutdownAborted(signal)
     return resolveStageResult({
       stage,
