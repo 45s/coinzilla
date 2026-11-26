@@ -21,4 +21,4 @@ The staged integration through lifecycle/event publication, execution/accounting
 - Journal record contract: [Journal package README](../../../packages/journal/README.md)
 - Task status: GitHub Issues/PRs
 
-The full staged implementation plan and PR-by-PR evidence are preserved in [JOURNAL_INTEGRATION_ROADMAP_HISTORY_2026-11-26.md](./JOURNAL_INTEGRATION_ROADMAP_HISTORY_2026-11-26.md).
+The full staged implementation plan and PR-by-PR evidence are preserved in [JOURNAL_INTEGRATION_ROADMAP_HISTORY_2026-11-26.md](../../../docs/archive/roadmap-history-2026-11-26.md#harvester-journal-integration).
