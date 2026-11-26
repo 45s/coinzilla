@@ -10,6 +10,7 @@
 - Keep backend/API integration authoritative. Do not add UI-only pause state or call exchange APIs from the browser.
 
 - **StarAdmin dashboard redesign — PR #1873 / Issue #1872:** warm light default theme, preserved selectable themes, contextual Brokers/Bots navigation, compact GitHub PR labels with direct assignment controls, persistent refresh action and light native dropdown options. Presentation-only; no API or trading behavior changes.
+- **Contextual navigation refinement — PR #1877 / Issue #1877:** keep the five-item persistent sidebar; reduce Brokers to Markets / Orders / History, with Open Orders / Exchanges nested under Orders and Fills / Commissions under History. Keep the Bots tabs Operators / Orders / Positions / Portfolio. Preserve all existing pages.
 
 ## Canonical sources
 
