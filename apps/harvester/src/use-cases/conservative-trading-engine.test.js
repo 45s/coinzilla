@@ -370,6 +370,7 @@ function createHarnessBrokerState({ options } = {}) {
     getMarketMetadataOverride: options.getMarketMetadata,
     suppliedMarketMetadata: options.marketMetadata,
     marketMetadata,
+    providerIdentity: options.providerIdentity,
     ...getHarnessBrokerFailureOptions({ options }),
     ...getHarnessBrokerCancellationOptions({ options }),
     ...getHarnessBrokerOrderOptions({ options }),
