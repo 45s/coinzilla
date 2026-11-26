@@ -211,3 +211,75 @@ test("OP_MSG rejects unknown required flag bits", () => {
     /unsupported.*flag/i,
   )
 })
+test("MongoDB OP_MSG encoder rejects invalid sequences and configured size limits", () => {
+  assert.throws(
+    () => encodeOpMsg({
+      requestId: 1,
+      body: { ping: 1 },
+      sequences: "not-an-array",
+    }),
+    /documents must be an array/,
+  )
+  assert.throws(
+    () => encodeOpMsg({
+      requestId: 1,
+      body: { ping: 1 },
+      maxMessageSize: 25,
+    }),
+    /48 MiB message limit/,
+  )
+})
+
+test("MongoDB OP_MSG decoder rejects malformed document sequence boundaries and identifiers", () => {
+  assert.throws(
+    () => decodeOpMsg(createFrame({ payload: Buffer.from([1]) })),
+    /Truncated MongoDB document sequence size/,
+  )
+
+  const invalidIdentifier = Buffer.from([1, 7, 0, 0, 0, 0x61, 0x62, 0x63])
+  assert.throws(
+    () => decodeOpMsg(createFrame({ payload: invalidIdentifier })),
+    /Invalid MongoDB document sequence identifier/,
+  )
+
+  const invalidUtf8 = Buffer.from([1, 6, 0, 0, 0, 0xff, 0])
+  assert.throws(
+    () => decodeOpMsg(createFrame({ payload: invalidUtf8 })),
+    /invalid UTF-8/,
+  )
+
+  const emptyIdentifier = Buffer.from([1, 5, 0, 0, 0, 0])
+  assert.throws(
+    () => decodeOpMsg(createFrame({ payload: emptyIdentifier })),
+    /must not be empty/,
+  )
+
+  const truncatedDocument = Buffer.from([1, 7, 0, 0, 0, 0x78, 0, 0xaa])
+  assert.throws(
+    () => decodeOpMsg(createFrame({ payload: truncatedDocument })),
+    /Truncated BSON document/,
+  )
+
+  const invalidDocumentLength = Buffer.from([1, 10, 0, 0, 0, 0x78, 0, 4, 0, 0, 0])
+  assert.throws(
+    () => decodeOpMsg(createFrame({ payload: invalidDocumentLength })),
+    /Invalid BSON document/,
+  )
+})
+
+test("MongoDB OP_MSG decoder rejects unsupported flags and malformed body sections", () => {
+  const body = Buffer.concat([Buffer.from([0]), encodeBsonDocument({ ok: 1 })])
+  assert.throws(
+    () => decodeOpMsg(createFrame({ payload: body, flags: 0x80000000 })),
+    /unsupported flag bits/,
+  )
+  assert.throws(
+    () => decodeOpMsg(createFrame({ payload: Buffer.from([0, 0, 0, 0]) })),
+    /Truncated BSON body/,
+  )
+  assert.throws(
+    () => decodeOpMsg(createFrame({ payload: Buffer.from([0, 4, 0, 0, 0]) })),
+    /Invalid BSON body/,
+  )
+})
+
