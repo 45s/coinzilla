@@ -14,6 +14,27 @@ Start Harvester normally:
 pnpm --filter @coinzilla/harvester dev
 ```
 
+### Fetch one market's order and fill history from Bash
+
+The API does not use a `/api/trading-history` route and does not default to port 3000. With the default port, use these read-only requests from the repository root or `apps/harvester`:
+
+```sh
+# Default port is 4201; replace it if HARVESTER_API_PORT is configured differently.
+API_URL="http://127.0.0.1:4201"
+
+# Orders (including open, partially filled, filled, and terminal order records)
+curl --fail-with-body -sS "${API_URL}/api/v1/trading/orders?symbol=DOGEUSDT&limit=100" \
+  | node -e 'let s=""; process.stdin.on("data", d => s += d); process.stdin.on("end", () => console.log(JSON.stringify(JSON.parse(s), null, 2)))'
+
+# Executed trades/fills and their persisted commission facts
+curl --fail-with-body -sS "${API_URL}/api/v1/trading/fills?symbol=DOGEUSDT&limit=100" \
+  | node -e 'let s=""; process.stdin.on("data", d => s += d); process.stdin.on("end", () => console.log(JSON.stringify(JSON.parse(s), null, 2)))'
+```
+
+No `jq` dependency is required; Node.js formats the JSON. Each response is paginated (maximum `limit=100`); inspect `data.pagination.hasMore` and increment `offset` to retrieve later pages.
+
+The API starts only when the relational trading-history database is ready. If startup logs say relational persistence is unavailable or the API was not started, these requests cannot succeed: diagnose and resolve that persistence failure first. Do not interpret connection refusal as an empty DOGE history.
+
 The API starts with Harvester at `http://127.0.0.1:4201`. It uses Harvester's selected `TRADING_MODE` and `HARVESTER_DATABASE_DIRECTORY`; TESTNET and LIVE remain separate database files. No API token or Dashboard credential is needed.
 
 The `HARVESTER_API_PORT` setting can change the listener port. The host is fixed to `127.0.0.1`. The API starts only when the existing runtime and relational history persistence are available. Harvester closes the API listener before closing the shared database connection.
