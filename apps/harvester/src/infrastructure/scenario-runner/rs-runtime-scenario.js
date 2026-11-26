@@ -1545,6 +1545,51 @@ function createRuntimeScenarioOutput({
   }
 }
 
+function createRuntimeScenarioSellExpectedBase({ seed, pairConfig }) {
+  return {
+    decisionOutcome: "SUBMIT",
+    actionSide: "SELL",
+    actionQuantity: addDecimal({
+      left: seed.buyQuantity,
+      right: String(pairConfig.sellQuantity),
+    }),
+    submittedOrderCount: 1,
+    reservationMatchesSubmittedOrder: true,
+  }
+}
+
+function createRuntimeScenarioTerminalSellExpected({
+  seed,
+  pairConfig,
+  terminalOrderStatus,
+  profitabilityEligible,
+  stopFactAppended = true,
+  stopPersistenceFailure = false,
+}) {
+  const expected = {
+    ...createRuntimeScenarioSellExpectedBase({ seed, pairConfig }),
+    terminalOrderStatus,
+    terminalCycleStatus: "UNRESOLVED",
+    terminalReconciled: true,
+    profitabilityEligible,
+    reservationReleased: true,
+    stopFactAppended,
+    eventWorkflowFailedClosed: true,
+    marketPaused: true,
+    accountAdmissionBlocked: true,
+    buyAdmissionBlocked: true,
+  }
+  if (stopPersistenceFailure) {
+    Object.assign(expected, {
+      stopPersistenceFailed: true,
+      postFailureAdmissionBlocked: true,
+      postFailureSubmittedOrderCount: 0,
+      postFailureActionSubmitted: false,
+    })
+  }
+  return expected
+}
+
 function createRuntimeScenarioExpected({ seed, pairConfig, scenarioId }) {
   if (scenarioId === "RS-RUNTIME-STOP-BLOCK-BUY-ALLOW-SELL-001") {
     return {
@@ -1573,82 +1618,32 @@ function createRuntimeScenarioExpected({ seed, pairConfig, scenarioId }) {
     }
   }
   if (scenarioId === "RS-RUNTIME-SELL-STOP-PERSISTENCE-FAILURE-001") {
-    return {
-      decisionOutcome: "SUBMIT",
-      actionSide: "SELL",
-      actionQuantity: addDecimal({
-        left: seed.buyQuantity,
-        right: String(pairConfig.sellQuantity),
-      }),
-      submittedOrderCount: 1,
+    return createRuntimeScenarioTerminalSellExpected({
+      seed,
+      pairConfig,
       terminalOrderStatus: "FILLED",
-      terminalCycleStatus: "UNRESOLVED",
-      terminalReconciled: true,
       profitabilityEligible: false,
-      reservationReleased: true,
       stopFactAppended: false,
-      eventWorkflowFailedClosed: true,
-      marketPaused: true,
-      stopPersistenceFailed: true,
-      accountAdmissionBlocked: true,
-      buyAdmissionBlocked: true,
-      postFailureAdmissionBlocked: true,
-      postFailureSubmittedOrderCount: 0,
-      postFailureActionSubmitted: false,
-    }
+      stopPersistenceFailure: true,
+    })
   }
   if (scenarioId === "RS-RUNTIME-SELL-FILLED-UNDER-TARGET-001") {
-    return {
-      decisionOutcome: "SUBMIT",
-      actionSide: "SELL",
-      actionQuantity: addDecimal({
-        left: seed.buyQuantity,
-        right: String(pairConfig.sellQuantity),
-      }),
-      submittedOrderCount: 1,
+    return createRuntimeScenarioTerminalSellExpected({
+      seed,
+      pairConfig,
       terminalOrderStatus: "FILLED",
-      terminalCycleStatus: "UNRESOLVED",
-      terminalReconciled: true,
       profitabilityEligible: false,
-      reservationReleased: true,
-      stopFactAppended: true,
-      eventWorkflowFailedClosed: true,
-      marketPaused: true,
-      accountAdmissionBlocked: true,
-      buyAdmissionBlocked: true,
-    }
+    })
   }
   if (scenarioId === "RS-RUNTIME-SELL-PARTIAL-CANCEL-001") {
-    return {
-      decisionOutcome: "SUBMIT",
-      actionSide: "SELL",
-      actionQuantity: addDecimal({
-        left: seed.buyQuantity,
-        right: String(pairConfig.sellQuantity),
-      }),
-      submittedOrderCount: 1,
+    return createRuntimeScenarioTerminalSellExpected({
+      seed,
+      pairConfig,
       terminalOrderStatus: "CANCELED",
-      terminalCycleStatus: "UNRESOLVED",
-      terminalReconciled: true,
       profitabilityEligible: true,
-      reservationReleased: true,
-      stopFactAppended: true,
-      eventWorkflowFailedClosed: true,
-      marketPaused: true,
-      accountAdmissionBlocked: true,
-      buyAdmissionBlocked: true,
-    }
+    })
   }
-  return {
-    decisionOutcome: "SUBMIT",
-    actionSide: "SELL",
-    actionQuantity: addDecimal({
-      left: seed.buyQuantity,
-      right: String(pairConfig.sellQuantity),
-    }),
-    submittedOrderCount: 1,
-    reservationMatchesSubmittedOrder: true,
-  }
+  return createRuntimeScenarioSellExpectedBase({ seed, pairConfig })
 }
 
 function createRejectedSellAssertions({ output, expected }) {
@@ -2035,74 +2030,85 @@ function resolveRuntimeScenarioInput({ scenarioId, input, signal }) {
   }
 }
 
+async function executeRuntimeScenarioAdmission({ runtime, scenarioId, effectiveInput }) {
+  if (scenarioId !== "RS-RUNTIME-STOP-BLOCK-BUY-ALLOW-SELL-001") {
+    const execution = await executeRuntimeScenarioDispatch({
+      runtime,
+      effectiveInput,
+      expectRejection: scenarioId === "RS-RUNTIME-SELL-REJECTION-001",
+    })
+    return { execution, stopAdmissionChecks: null }
+  }
+  const stopResult = await runtime.stopWorkflow.latch({
+    explanation: "Scenario verifies that STOP blocks new BUY spending but permits an eligible first recovery SELL.",
+  })
+  if (stopResult?.ok !== true || stopResult.data?.durable !== true) {
+    throw stopResult?.errors?.[0] ?? new Error("Scenario STOP could not be persisted in the run-local store")
+  }
+  const execution = await executeRuntimeScenarioDispatch({
+    runtime,
+    effectiveInput,
+  })
+  const stopAdmissionChecks = {
+    sellActionSide: execution.submittedAction?.side ?? null,
+    stopStateStatus: (await runtime.stopWorkflow.getState()).status,
+    accountAdmissionBlocked: runtime.stopWorkflow.isAccountAdmissionBlocked(),
+    buyAdmissionBlocked: runtime.stopWorkflow.isAccountAdmissionBlocked(),
+  }
+  return { execution, stopAdmissionChecks }
+}
+
+async function executeRuntimeScenarioTerminalSell({ runtime, scenarioId, effectiveInput, execution }) {
+  if (scenarioId === "RS-RUNTIME-SELL-PARTIAL-CANCEL-001") {
+    return reconcileRuntimeScenarioPartialSell({ runtime, execution })
+  }
+  if (scenarioId === "RS-RUNTIME-SELL-FILLED-UNDER-TARGET-001") {
+    return reconcileRuntimeScenarioFilledSell({ runtime, execution })
+  }
+  if (scenarioId !== "RS-RUNTIME-SELL-STOP-PERSISTENCE-FAILURE-001") {
+    return null
+  }
+  const terminalSell = await reconcileRuntimeScenarioFilledSell({
+    runtime,
+    execution,
+    stopPersistenceFailure: true,
+  })
+  const followUp = await executeRuntimeScenarioDispatch({
+    runtime,
+    effectiveInput: {
+      ...effectiveInput,
+      marketPrice: "9",
+    },
+    expectBlocked: true,
+  })
+  return {
+    ...terminalSell,
+    postFailureAdmissionBlocked: runtime.stopWorkflow.isAccountAdmissionBlocked(),
+    postFailureSubmittedOrderCount: followUp.data.submittedOrders?.length ?? 0,
+    postFailureActionSubmitted: Boolean(followUp.submittedAction),
+  }
+}
+
 async function executeRuntimeScenario({ runId, scenarioId, effectiveInput, signal }) {
   const runtime = await createRuntimeScenarioContext({
     runId,
     scenarioId,
     effectiveInput,
   })
-  const expectRejection = scenarioId === "RS-RUNTIME-SELL-REJECTION-001"
-  let execution
-  let terminalSell = null
-  let stopAdmissionChecks = null
-  if (scenarioId === "RS-RUNTIME-STOP-BLOCK-BUY-ALLOW-SELL-001") {
-    const stopResult = await runtime.stopWorkflow.latch({
-      explanation: "Scenario verifies that STOP blocks new BUY spending but permits an eligible first recovery SELL.",
-    })
-    if (stopResult?.ok !== true || stopResult.data?.durable !== true) {
-      throw stopResult?.errors?.[0] ?? new Error("Scenario STOP could not be persisted in the run-local store")
-    }
-    execution = await executeRuntimeScenarioDispatch({
-      runtime,
-      effectiveInput,
-    })
-    stopAdmissionChecks = {
-      sellActionSide: execution.submittedAction?.side ?? null,
-      stopStateStatus: (await runtime.stopWorkflow.getState()).status,
-      accountAdmissionBlocked: runtime.stopWorkflow.isAccountAdmissionBlocked(),
-      buyAdmissionBlocked: runtime.stopWorkflow.isAccountAdmissionBlocked(),
-    }
-  } else {
-    execution = await executeRuntimeScenarioDispatch({
-      runtime,
-      effectiveInput,
-      expectRejection,
-    })
-  }
+  const { execution, stopAdmissionChecks } = await executeRuntimeScenarioAdmission({
+    runtime,
+    scenarioId,
+    effectiveInput,
+  })
   if (signal?.aborted) {
     throw new Error("Scenario worker was cancelled")
   }
-  if (scenarioId === "RS-RUNTIME-SELL-PARTIAL-CANCEL-001") {
-    terminalSell = await reconcileRuntimeScenarioPartialSell({
-      runtime,
-      execution,
-    })
-  } else if (scenarioId === "RS-RUNTIME-SELL-FILLED-UNDER-TARGET-001") {
-    terminalSell = await reconcileRuntimeScenarioFilledSell({
-      runtime,
-      execution,
-    })
-  } else if (scenarioId === "RS-RUNTIME-SELL-STOP-PERSISTENCE-FAILURE-001") {
-    terminalSell = await reconcileRuntimeScenarioFilledSell({
-      runtime,
-      execution,
-      stopPersistenceFailure: true,
-    })
-    const followUp = await executeRuntimeScenarioDispatch({
-      runtime,
-      effectiveInput: {
-        ...effectiveInput,
-        marketPrice: "9",
-      },
-      expectBlocked: true,
-    })
-    terminalSell = {
-      ...terminalSell,
-      postFailureAdmissionBlocked: runtime.stopWorkflow.isAccountAdmissionBlocked(),
-      postFailureSubmittedOrderCount: followUp.data.submittedOrders?.length ?? 0,
-      postFailureActionSubmitted: Boolean(followUp.submittedAction),
-    }
-  }
+  const terminalSell = await executeRuntimeScenarioTerminalSell({
+    runtime,
+    scenarioId,
+    effectiveInput,
+    execution,
+  })
   return {
     runtime,
     execution,
