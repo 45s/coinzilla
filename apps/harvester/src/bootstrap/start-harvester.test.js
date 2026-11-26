@@ -140,7 +140,9 @@ test("reports broker connection failure before rethrowing the original startup e
         }],
         marketDataSymbols: ["LINEAUSDT"],
         logger: {
+          debug: (record) => healthRecords.push(record),
           info: (record) => healthRecords.push(record),
+          warn: (record) => healthRecords.push(record),
           error: (record) => healthRecords.push(record),
           system: (record) => healthRecords.push(record),
         },

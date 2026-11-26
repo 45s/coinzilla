@@ -255,7 +255,7 @@ function createBrokerConnectionCheck({ inputs, runtime, observedAt } = {}) {
     status,
     code,
     message,
-    expected: "The configured execution BrokerPort connection handshake completes within its configured timeout.",
+    expected: "The configured execution BrokerPort connection handshake completes successfully.",
     remediation: "Verify broker connectivity and inspect the original sanitized connection error.",
     observedAt,
     possibleCauses: connected ? [] : [

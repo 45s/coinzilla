@@ -186,3 +186,6 @@ Broker connection diagnostics measure the existing `connectBroker` handshake usi
 
 
 Broker connection is measured around the existing `connectBroker` call. A failed handshake is reported through the integrated startup audit before the original connection error is rethrown; candle-history service construction is separately diagnosed and does not rewrite a successful broker connection as failed.
+
+
+The connection check reports the measured handshake duration and any provider-supplied timeout/error code; it does not claim an application-level timeout where the existing BrokerPort connection contract does not define one.
