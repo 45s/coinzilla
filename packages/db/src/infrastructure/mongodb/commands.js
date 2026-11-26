@@ -370,11 +370,7 @@ async function readNextMongoBatch({
   }
   return {
     cursorId: response.cursor.id,
-    records: decodeMongoBatch({
-      documents: response.cursor.nextBatch,
-      operation: "readMany",
-      collection,
-    }),
+    documents: response.cursor.nextBatch,
   }
 }
 
@@ -519,7 +515,11 @@ async function readMongoCursorRecords({
         cursorId,
       })
       cursorId = next.cursorId
-      records.push(...next.records)
+      records.push(...decodeMongoBatch({
+        documents: next.documents,
+        operation: "readMany",
+        collection,
+      }))
     }
     return records
   } catch (error) {
