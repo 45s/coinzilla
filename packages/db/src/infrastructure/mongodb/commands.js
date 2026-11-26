@@ -167,10 +167,18 @@ function createStoredDocument(record) {
 }
 
 function readStoredDocument(document) {
-  if (!document || typeof document !== "object" || !document.data || typeof document.data !== "object") {
+  if (!document || typeof document !== "object"
+    || !document.data || typeof document.data !== "object"
+    || Array.isArray(document.data) || Buffer.isBuffer(document.data)
+    || document.data instanceof Date) {
     throw new TypeError("MongoDB returned a malformed stored record")
   }
-  return decodeUserValue(document.data)
+  const record = decodeUserValue(document.data)
+  if (!record || typeof record !== "object" || Array.isArray(record)) {
+    throw new TypeError("MongoDB returned a malformed stored record")
+  }
+  validateRecordIdentifier(record.id)
+  return record
 }
 
 function decodeStoredRecord({ document, operation, collection }) {
