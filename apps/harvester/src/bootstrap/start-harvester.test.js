@@ -43,13 +43,7 @@ async function seedAccountBlockerRestartSession({ store, config } = {}) {
   return blockerId
 }
 
-async function resolveAccountBlockerOffline({ directory, blockerId } = {}) {
-  const offlineStore = createFileOperationalStateStore({
-    directory,
-    runtimeSessionId: "account-blocker-offline-resolution-session",
-  })
-  const existingHistory = await offlineStore.readAll()
-  assert.equal(existingHistory.ok, true, existingHistory.errors?.[0]?.message)
+async function resolveAccountBlockerOffline({ store, blockerId } = {}) {
   const operatorId = "operator-7"
   const actionId = "account-recovery-action-001"
   const operatorIdentity = authenticateLocalOperator({
@@ -57,7 +51,7 @@ async function resolveAccountBlockerOffline({ directory, blockerId } = {}) {
     getUserInfo: () => ({ username: operatorId }),
   })
   const resolved = await recordSafetyBlockerResolved({
-    operationalStateStore: offlineStore,
+    operationalStateStore: store,
     blockerId,
     resolvedBy: `operator:${operatorId}:${actionId}`,
     resolution: "OPERATOR_ACTION",
@@ -77,7 +71,7 @@ async function createResolvedAccountBlockerRestartStore({ directory, store, conf
     config,
   })
   await resolveAccountBlockerOffline({
-    directory,
+    store,
     blockerId,
   })
   return {
