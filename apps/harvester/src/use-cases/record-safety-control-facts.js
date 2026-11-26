@@ -88,7 +88,13 @@ export async function recordSafetyBlockerRaised({
   try {
     requireStore({ operationalStateStore,
 operation: "recordSafetyBlockerRaised" })
-    validateSafetyBlockerRaisedData({ producer, scope, symbol, reason, evidenceDigest })
+    validateSafetyBlockerRaisedData({
+      producer,
+      scope,
+      symbol,
+      reason,
+      evidenceDigest,
+    })
     const blockerId = createHash("sha256")
       .update([scope, symbol ?? "", reason, evidenceDigest].join("\0"))
       .digest("hex")
