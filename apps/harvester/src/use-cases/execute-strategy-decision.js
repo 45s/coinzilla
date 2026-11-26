@@ -482,6 +482,28 @@ async function handlePostRegistrationDeferral({ context, candidate } = {}) {
   })
 }
 
+async function persistPreparedSubmission({ context, candidate } = {}) {
+  if (context.onDurableSubmissionIntent) {
+    const durableIntent = await persistDurableSubmissionIntent({
+      context,
+      candidate,
+    })
+    if (!durableIntent.ok) {
+      return deferRegisteredSubmission({
+        context,
+        candidate,
+        errors: durableIntent.errors,
+      })
+    }
+  }
+  return toResult({
+    data: {
+      ready: true,
+      candidate,
+    },
+  })
+}
+
 async function preparePendingSubmission({ context, candidate } = {}) {
   const initialDeferral = context.getSubmissionDeferral({
     order: candidate.pendingOrder,
@@ -528,25 +550,7 @@ async function preparePendingSubmission({ context, candidate } = {}) {
   if (postRegistrationResult) {
     return postRegistrationResult
   }
-  if (context.onDurableSubmissionIntent) {
-    const durableIntent = await persistDurableSubmissionIntent({
-      context,
-      candidate: submissionCandidate,
-    })
-    if (!durableIntent.ok) {
-      return deferRegisteredSubmission({
-        context,
-        candidate: submissionCandidate,
-        errors: durableIntent.errors,
-      })
-    }
-  }
-  return toResult({
-    data: {
-      ready: true,
-      candidate: submissionCandidate,
-    },
-  })
+  return persistPreparedSubmission({ context, candidate: submissionCandidate })
 }
 
 function classifyBrokerSubmissionFailure({ pendingOrder, brokerResult } = {}) {

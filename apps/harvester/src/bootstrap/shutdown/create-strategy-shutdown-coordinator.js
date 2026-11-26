@@ -427,7 +427,11 @@ async function waitForParticipantWithDeadline({
 function getPendingParticipantOperations({ activeParticipantWaits, now } = {}) {
   return Object.freeze(
     [...activeParticipantWaits.keys()].map((strategyId) =>
-      getPendingParticipantWait({ activeParticipantWaits, strategyId, now })),
+      getPendingParticipantWait({
+        activeParticipantWaits,
+        strategyId,
+        now,
+      })),
   )
 }
 
@@ -465,7 +469,10 @@ async function waitForStrategyShutdownParticipants({
       message: "Harvester shutdown was incomplete: strategy shutdown safety could not be proven for every enabled strategy",
       code: "STRATEGY_SHUTDOWN_SAFETY_UNPROVEN",
       strategyBlockers,
-      pendingOperations: getPendingParticipantOperations({ activeParticipantWaits, now }),
+      pendingOperations: getPendingParticipantOperations({
+        activeParticipantWaits,
+        now,
+      }),
       shutdownRequestedAt,
       now,
     })
@@ -498,7 +505,10 @@ function resolveBeginShutdownResults({
       message: "Strategy shutdown could not begin for every enabled strategy",
       code: "STRATEGY_SHUTDOWN_BEGIN_FAILED",
       strategyBlockers,
-      pendingOperations: getPendingParticipantOperations({ activeParticipantWaits, now }),
+      pendingOperations: getPendingParticipantOperations({
+        activeParticipantWaits,
+        now,
+      }),
       shutdownRequestedAt,
       now,
     })
@@ -682,7 +692,10 @@ export function createStrategyShutdownCoordinator({
   setTimeoutFn = setTimeout,
   clearTimeoutFn = clearTimeout,
 } = {}) {
-  validateStrategyShutdownCoordinator({ participants, timeoutMs })
+  validateStrategyShutdownCoordinator({
+    participants,
+    timeoutMs,
+  })
   const state = {
     activeParticipantWaits: new Map(),
     shutdownRequestedAt: null,
@@ -690,7 +703,11 @@ export function createStrategyShutdownCoordinator({
     beginCompleted: false,
     beginError: null,
   }
-  const beginShutdown = createBeginShutdownHandler({ participants, state, now })
+  const beginShutdown = createBeginShutdownHandler({
+    participants,
+    state,
+    now,
+  })
   return Object.freeze({
     beginShutdown,
     waitUntilSafe: createWaitUntilSafeHandler({

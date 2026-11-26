@@ -1437,15 +1437,13 @@ function createOperatorBuyResumeHandler({ state, pairs, runTransition } = {}) {
   })
 }
 
-function createPendingOrderLifecycleHandler({ state, publishDurableIntent, pause, logger } = {}) {
-  return async ({ order, purpose, ownership } = {}) => {
-    if (order.side === "SELL") {
-      state.completedRecoverySellSymbols.delete(order.market.symbol)
-      state.completedRecoverySellOrdersBySymbol.delete(order.market.symbol)
-    }
-    const resolvedPurpose = ownership?.purpose ?? purpose ??
-      (order.side === "BUY" ? "CONSERVATIVE_BUY" : "CONSERVATIVE_SELL")
-    const ownershipInput = {
+function resolvePendingOrderOwnership({ order, purpose, ownership } = {}) {
+  const resolvedPurpose = ownership?.purpose ?? purpose ??
+    (order.side === "BUY" ? "CONSERVATIVE_BUY" : "CONSERVATIVE_SELL")
+  return validateStrategySubmissionOwnership({
+    order,
+    purpose: resolvedPurpose,
+    ownership: {
       strategyId: ownership?.strategyId ?? StrategyId.COIN_GRABBER,
       positionId: ownership?.positionId ?? createPositionId({
         marketId: order.market.id,
@@ -1453,42 +1451,76 @@ function createPendingOrderLifecycleHandler({ state, publishDurableIntent, pause
       }),
       purpose: resolvedPurpose,
       ...(ownership?.cycleId === undefined ? {} : { cycleId: ownership.cycleId }),
-    }
-    const normalizedOwnership = validateStrategySubmissionOwnership({
+    },
+  })
+}
+
+function registerPendingOrderOwnership({ state, order, normalizedOwnership } = {}) {
+  state.registry = state.registry.registerPending({
+    order,
+    ownership: normalizedOwnership,
+  }).registry
+  const registeredOwnership = state.registry.getOwnership({
+    clientOrderId: order.clientOrderId,
+  })
+  if (!registeredOwnership) {
+    throw new Error("Pending order registration did not retain its strategy ownership")
+  }
+  return registeredOwnership
+}
+
+async function persistPendingOrderIntent({
+  order,
+  registeredOwnership,
+  publishDurableIntent,
+  pause,
+} = {}) {
+  const persisted = await publishDurableIntent({
+    eventName: HARVESTER_EVENT_NAMES.ORDER_SUBMISSION_REQUESTED,
+    dataResult: mapOrderSubmissionRequestedData({
       order,
-      purpose: resolvedPurpose,
-      ownership: ownershipInput,
-    })
-    state.registry = state.registry.registerPending({
-      order,
-      ownership: normalizedOwnership,
-    }).registry
-    const registeredOwnership = state.registry.getOwnership({
-      clientOrderId: order.clientOrderId,
-    })
-    if (!registeredOwnership) {
-      throw new Error("Pending order registration did not retain its strategy ownership")
+      ownership: registeredOwnership,
+    }),
+  })
+  if (persisted.ok) {
+    return
+  }
+  const error = persisted.errors?.[0] ??
+    new Error("Order intent was not durably journaled; broker submission was not attempted")
+  await pause({
+    symbol: order.market.symbol,
+    reason: "ORDER_INTENT_NOT_DURABLE",
+    error,
+  })
+  throw error
+}
+
+function createPendingOrderLifecycleHandler({ state, publishDurableIntent, pause, logger } = {}) {
+  return async ({ order, purpose, ownership } = {}) => {
+    if (order.side === "SELL") {
+      state.completedRecoverySellSymbols.delete(order.market.symbol)
+      state.completedRecoverySellOrdersBySymbol.delete(order.market.symbol)
     }
-    const persisted = await publishDurableIntent({
-      eventName: HARVESTER_EVENT_NAMES.ORDER_SUBMISSION_REQUESTED,
-      dataResult: mapOrderSubmissionRequestedData({
+    const normalizedOwnership = resolvePendingOrderOwnership({ order, purpose, ownership })
+    const registeredOwnership = registerPendingOrderOwnership({
+      state,
+      order,
+      normalizedOwnership,
+    })
+    try {
+      await persistPendingOrderIntent({
         order,
-        ownership: registeredOwnership,
-      }),
-    })
-    if (!persisted.ok) {
+        registeredOwnership,
+        publishDurableIntent,
+        pause,
+      })
+    } catch (error) {
       const removal = state.registry.removePending({
         clientOrderId: order.clientOrderId,
       })
       if (removal.removed) {
         state.registry = removal.registry
       }
-      const error = persisted.errors?.[0] ?? new Error("Order intent was not durably journaled; broker submission was not attempted")
-      await pause({
-        symbol: order.market.symbol,
-        reason: "ORDER_INTENT_NOT_DURABLE",
-        error,
-      })
       throw error
     }
     logOrderLifecycle({
