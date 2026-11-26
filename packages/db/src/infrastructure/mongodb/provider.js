@@ -713,6 +713,144 @@ async function connectToPrimary({ state, transportFactory, handshake }) {
   throw new Error("MongoDB replica-set primary discovery exceeded the redirect limit")
 }
 
+async function connectProvider({ state, transportFactory, handshake }) {
+  if (state.lifecycle === "connected") {
+    return
+  }
+  if (state.lifecycle === "connecting") {
+    await state.connectPromise
+    return
+  }
+  if (state.lifecycle === "closing" || state.lifecycle === "closed") {
+    throw new Error(`Cannot connect MongoDB provider while ${state.lifecycle}`)
+  }
+  state.lifecycle = "connecting"
+  state.connectPromise = (async () => {
+    try {
+      await connectToPrimary({ state, transportFactory, handshake })
+      state.lifecycle = "connected"
+    } catch (error) {
+      let connectionError = error
+      try {
+        await state.transport?.close()
+      } catch (closeError) {
+        connectionError = new AggregateError(
+          [connectionError, closeError],
+          "MongoDB provider connection and cleanup failed",
+          { cause: connectionError },
+        )
+      }
+      state.transport = null
+      state.handshake = null
+      state.lifecycle = "idle"
+      throw new DatabaseProviderError({ operation: "connect", cause: connectionError })
+    }
+  })()
+  try {
+    await state.connectPromise
+  } finally {
+    state.connectPromise = null
+  }
+}
+
+async function closeProvider({ state }) {
+  if (state.lifecycle === "closed") {
+    return
+  }
+  if (state.lifecycle === "connecting") {
+    try {
+      await state.connectPromise
+    } catch {
+      state.lifecycle = "closed"
+      return
+    }
+  }
+  if (state.lifecycle === "idle") {
+    state.lifecycle = "closed"
+    return
+  }
+  if (state.lifecycle === "closing" && state.closePromise) {
+    await state.closePromise
+    return
+  }
+  state.lifecycle = "closing"
+  state.closePromise = (async () => {
+    await Promise.allSettled([...state.activeOperations])
+    try {
+      await state.transport?.close()
+      state.transport = null
+      state.handshake = null
+      state.lifecycle = "closed"
+    } catch (error) {
+      state.closePromise = null
+      throw new DatabaseProviderError({ operation: "close", cause: error })
+    }
+  })()
+  await state.closePromise
+}
+
+async function runReadTransaction({ state, work }) {
+  if (typeof work !== "function") {
+    throw new TypeError("A MongoDB read transaction callback is required")
+  }
+  return runTrackedOperation({ state, work: async () => {
+    const operations = createMongoRecordOperations({
+      command: (commandInput) => state.transport.command(commandInput),
+      databaseName: state.options.databaseName,
+    })
+    let readOperationPromise = null
+    const invokeRead = ({ method, input }) => {
+      if (readOperationPromise) {
+        return Promise.resolve(readOperationPromise).then(() => {
+          throw new Error("MongoDB read transaction supports one provider-neutral read operation")
+        })
+      }
+      readOperationPromise = operations[method](input)
+      return readOperationPromise
+    }
+    const readContext = Object.freeze({
+      create() {
+        throw new Error("MongoDB read transaction cannot execute mutations")
+      },
+      readOne(input) {
+        return invokeRead({ method: "readOne", input })
+      },
+      readMany(input) {
+        return invokeRead({ method: "readMany", input })
+      },
+      update() {
+        throw new Error("MongoDB read transaction cannot execute mutations")
+      },
+      delete() {
+        throw new Error("MongoDB read transaction cannot execute mutations")
+      },
+    })
+    try {
+      const result = await work(readContext)
+      if (readOperationPromise) {
+        await readOperationPromise
+      }
+      return result
+    } catch (error) {
+      await readOperationPromise?.catch(() => {})
+      throw error
+    }
+  } })
+}
+
+async function executeProviderOperation({ state, operation, input }) {
+  return runTrackedOperation({ state, work: async () => {
+    if (!CRUD_OPERATIONS.includes(operation)) {
+      throw new TypeError(`Unsupported MongoDB CRUD operation: ${operation}`)
+    }
+    const operations = createMongoRecordOperations({
+      command: (commandInput) => state.transport.command(commandInput),
+      databaseName: state.options.databaseName,
+    })
+    return operations[operation](input)
+  } })
+}
+
 /**
  * Create a dependency-free MongoDB implementation of the provider-neutral API.
  *
@@ -730,175 +868,17 @@ export function createMongoProvider(options = {}) {
   const transportFactory = options.transportFactory ?? createMongoTransport
   const handshake = options.handshake ?? performMongoHandshake
   const randomBytes = options.randomBytes ?? nativeRandomBytes
-  if (typeof transportFactory !== "function" || typeof handshake !== "function" || typeof randomBytes !== "function") {
-    throw new TypeError("MongoDB provider transport, handshake and random source must be functions")
-  }
-
   const state = createProviderState(resolvedOptions)
-  const runTransaction = createTransactionRunner({
-    state,
-    randomBytes,
-  })
-
-  async function connect() {
-    if (state.lifecycle === "connected") {
-      return
-    }
-    if (state.lifecycle === "connecting") {
-      await state.connectPromise
-      return
-    }
-    if (state.lifecycle === "closing" || state.lifecycle === "closed") {
-      throw new Error(`Cannot connect MongoDB provider while ${state.lifecycle}`)
-    }
-    state.lifecycle = "connecting"
-    state.connectPromise = (async () => {
-      try {
-        await connectToPrimary({
-          state,
-          transportFactory,
-          handshake,
-        })
-        state.lifecycle = "connected"
-      } catch (error) {
-        let connectionError = error
-        try {
-          await state.transport?.close()
-        } catch (closeError) {
-          connectionError = new AggregateError(
-            [connectionError, closeError],
-            "MongoDB provider connection and cleanup failed",
-            { cause: connectionError },
-          )
-        }
-        state.transport = null
-        state.handshake = null
-        state.lifecycle = "idle"
-        throw new DatabaseProviderError({
-          operation: "connect",
-          cause: connectionError,
-        })
-      }
-    })()
-    try {
-      await state.connectPromise
-    } finally {
-      state.connectPromise = null
-    }
-  }
-
-  async function close() {
-    if (state.lifecycle === "closed") {
-      return
-    }
-    if (state.lifecycle === "connecting") {
-      try {
-        await state.connectPromise
-      } catch {
-        state.lifecycle = "closed"
-        return
-      }
-    }
-    if (state.lifecycle === "idle") {
-      state.lifecycle = "closed"
-      return
-    }
-    if (state.lifecycle === "closing" && state.closePromise) {
-      await state.closePromise
-      return
-    }
-    state.lifecycle = "closing"
-    state.closePromise = (async () => {
-      await Promise.allSettled([...state.activeOperations])
-      try {
-        await state.transport?.close()
-        state.transport = null
-        state.handshake = null
-        state.lifecycle = "closed"
-      } catch (error) {
-        state.closePromise = null
-        throw new DatabaseProviderError({
-          operation: "close",
-          cause: error,
-        })
-      }
-    })()
-    await state.closePromise
-  }
-
-  async function withReadTransaction(work) {
-    if (typeof work !== "function") {
-      throw new TypeError("A MongoDB read transaction callback is required")
-    }
-    return runTrackedOperation({ state,
-work: async () => {
-      const operations = createMongoRecordOperations({
-        command: (commandInput) => state.transport.command(commandInput),
-        databaseName: state.options.databaseName,
-      })
-      let readOperationPromise = null
-      function invokeRead({ method, input }) {
-        if (readOperationPromise) {
-          return Promise.resolve(readOperationPromise).then(() => {
-            throw new Error("MongoDB read transaction supports one provider-neutral read operation")
-          })
-        }
-        readOperationPromise = operations[method](input)
-        return readOperationPromise
-      }
-      const readContext = Object.freeze({
-        create() {
-          throw new Error("MongoDB read transaction cannot execute mutations")
-        },
-        readOne(input) {
-          return invokeRead({ method: "readOne",
-input })
-        },
-        readMany(input) {
-          return invokeRead({ method: "readMany",
-input })
-        },
-        update() {
-          throw new Error("MongoDB read transaction cannot execute mutations")
-        },
-        delete() {
-          throw new Error("MongoDB read transaction cannot execute mutations")
-        },
-      })
-      try {
-        const result = await work(readContext)
-        if (readOperationPromise) {
-          await readOperationPromise
-        }
-        return result
-      } catch (error) {
-        await readOperationPromise?.catch(() => {})
-        throw error
-      }
-    } })
-  }
-
-  async function execute({ operation, input }) {
-    return runTrackedOperation({ state,
-work: async () => {
-      if (!CRUD_OPERATIONS.includes(operation)) {
-        throw new TypeError(`Unsupported MongoDB CRUD operation: ${operation}`)
-      }
-      const operations = createMongoRecordOperations({
-        command: (commandInput) => state.transport.command(commandInput),
-        databaseName: state.options.databaseName,
-      })
-      return operations[operation](input)
-    } })
-  }
-
+  const runTransaction = createTransactionRunner({ state, randomBytes })
   return Object.freeze({
-    connect,
-    close,
-    withTransaction: (work) => runTrackedOperation({ state,
-work: () => runTransaction(work) }),
-    withReadTransaction,
-    execute,
+    connect: () => connectProvider({ state, transportFactory, handshake }),
+    close: () => closeProvider({ state }),
+    withTransaction: (work) => runTrackedOperation({
+      state,
+      work: () => runTransaction(work),
+    }),
+    withReadTransaction: (work) => runReadTransaction({ state, work }),
+    execute: (input) => executeProviderOperation({ state, ...input }),
     capabilities: MONGO_CAPABILITIES,
   })
 }
