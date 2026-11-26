@@ -332,12 +332,13 @@ test("MongoDB provider rejects invalid operation callbacks and unsupported opera
   await harness.provider.close()
 })
 
+const transactionDocument = {
+  _id: "transaction-record",
+  data: { name: "Ada" },
+}
+
 test("MongoDB transaction facade tracks every CRUD operation", async () => {
   const commands = []
-  const document = {
-    _id: "transaction-record",
-    data: { name: "Ada" },
-  }
   const harness = createProviderHarness({
     transactionSupported: true,
     commandHandler: async (body) => {
@@ -347,7 +348,7 @@ test("MongoDB transaction facade tracks every CRUD operation", async () => {
           ok: 1,
           cursor: {
             id: 0,
-            firstBatch: [document],
+            firstBatch: [transactionDocument],
           },
         }
       }
@@ -364,7 +365,10 @@ test("MongoDB transaction facade tracks every CRUD operation", async () => {
     const result = await harness.provider.withTransaction(async (transaction) => {
       await transaction.create({
         collection: "people",
-        record: { id: "transaction-record", name: "Ada" },
+        record: {
+          id: "transaction-record",
+          name: "Ada",
+        },
       })
       const one = await transaction.readOne({
         collection: "people",
@@ -386,7 +390,10 @@ test("MongoDB transaction facade tracks every CRUD operation", async () => {
     })
 
     assert.equal(result.one.id, "transaction-record")
-    assert.deepEqual(result.many, [{ id: "transaction-record", name: "Ada" }])
+    assert.deepEqual(result.many, [{
+      id: "transaction-record",
+      name: "Ada",
+    }])
     assert.ok(commands.some((body) => body.insert))
     assert.ok(commands.some((body) => body.find))
     assert.ok(commands.some((body) => body.aggregate))
