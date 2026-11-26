@@ -31,7 +31,10 @@ function createShutdownChildSource({ lockModuleUrl, shutdownModuleUrl } = {}) {
     }
     const handler = createRuntimeShutdownHandler({
       runtime: {
-        stop: async () => ({ ok: true, status: "STOPPED" }),
+        stop: async () => ({
+        ok: true,
+        status: "STOPPED",
+      }),
       },
       logger: {
         error: (error) => {
@@ -347,7 +350,10 @@ test("bounds a hung EventBus flush and retains the process lock without overlapp
     cleanupTimeoutMs: 10,
     runtimeStopTimeoutMs: 100,
     runtime: {
-      stop: async () => ({ ok: true, status: "STOPPED" }),
+      stop: async () => ({
+        ok: true,
+        status: "STOPPED",
+      }),
     },
     logger: {
       system: () => {},
@@ -405,7 +411,10 @@ test("retains the process lock when observability cleanup exceeds its deadline",
     observabilityCleanupTimeoutMs: 10,
     runtimeStopTimeoutMs: 100,
     runtime: {
-      stop: async () => ({ ok: true, status: "STOPPED" }),
+      stop: async () => ({
+        ok: true,
+        status: "STOPPED",
+      }),
     },
     logger: {
       system: () => {},
@@ -446,7 +455,10 @@ test("retains the process lock when process logger close fails", async () => {
     observabilityCleanupTimeoutMs: 100,
     runtimeStopTimeoutMs: 100,
     runtime: {
-      stop: async () => ({ ok: true, status: "STOPPED" }),
+      stop: async () => ({
+        ok: true,
+        status: "STOPPED",
+      }),
     },
     logger: {
       system: () => {},
