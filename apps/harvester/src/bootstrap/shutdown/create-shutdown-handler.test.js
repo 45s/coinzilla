@@ -167,9 +167,9 @@ function createShutdown(input = {}) {
     calls,
   }
 }
-async function waitForAuditStartOrShutdownFailure({ auditStarted, stopPromise } = {}) {
+async function waitForAuditStartOrShutdownFailure({ auditStarted, stopPromise, diagnostic } = {}) {
   let auditStartTimeout
-  console.log("CLOSING audit diagnostic: entering wait")
+  diagnostic("CLOSING audit diagnostic: entering wait")
   const outcome = await Promise.race([
     auditStarted.then(() => ({ status: "audit-started" })),
     stopPromise.then(
@@ -178,7 +178,7 @@ async function waitForAuditStartOrShutdownFailure({ auditStarted, stopPromise } 
     ),
     new Promise((resolve) => {
       auditStartTimeout = setTimeout(() => {
-        console.log("CLOSING audit diagnostic: wait timer fired")
+        diagnostic("CLOSING audit diagnostic: wait timer fired")
         resolve({ status: "audit-start-timeout" })
       }, 100)
     }),
@@ -189,6 +189,7 @@ async function waitForAuditStartOrShutdownFailure({ auditStarted, stopPromise } 
 
 async function assertClosingAuditTimeout({
   fixture,
+  diagnostic,
   calls,
   auditStarted,
   getClosingAuditDeadline,
@@ -199,7 +200,9 @@ async function assertClosingAuditTimeout({
   const startOutcome = await waitForAuditStartOrShutdownFailure({
     auditStarted,
     stopPromise,
+    diagnostic,
   })
+  diagnostic(`CLOSING audit diagnostic: outcome ${startOutcome.status}`)
   assert.equal(
     startOutcome.status,
     "audit-started",
@@ -282,13 +285,13 @@ function createClosingAuditTimeoutFixture({ calls } = {}) {
   }
 }
 
-test("bounds a pending CLOSING audit phase and retains shared services", async () => {
+test("bounds a pending CLOSING audit phase and retains shared services", async (testContext) => {
   const calls = []
   const timeoutFixture = createClosingAuditTimeoutFixture({ calls })
   const { fixture, auditStarted } = timeoutFixture
-  console.log("CLOSING audit diagnostic: before stop")
+  testContext.diagnostic("CLOSING audit diagnostic: before stop")
   const stopPromise = fixture.stop()
-  console.log("CLOSING audit diagnostic: after stop")
+  testContext.diagnostic("CLOSING audit diagnostic: after stop")
   let retryStopPromise
 
   try {
@@ -296,6 +299,7 @@ test("bounds a pending CLOSING audit phase and retains shared services", async (
       fixture,
       calls,
       auditStarted,
+      diagnostic: testContext.diagnostic,
       getClosingAuditDeadline: timeoutFixture.getClosingAuditDeadline,
       getClosingAuditTimeoutMs: timeoutFixture.getClosingAuditTimeoutMs,
       getAuditCalls: timeoutFixture.getAuditCalls,
