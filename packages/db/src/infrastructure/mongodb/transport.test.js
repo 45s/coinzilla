@@ -226,6 +226,27 @@ test("MongoDB transport fails closed when socket writes fail", async () => {
   assert.equal(transport.pendingRequestCount, 0)
 })
 
+test("MongoDB transport does not mark a synchronously rejected write as outcome-unknown", async () => {
+  const fake = createFakeTransport()
+  const { transport } = fake
+  await transport.connect()
+  fake.socket.write = () => {
+    throw new Error("write rejected before send")
+  }
+
+  await assert.rejects(
+    transport.command({
+      body: { insert: "records" },
+      operation: "create",
+    }),
+    (error) => error.outcomeUnknown === false
+      && error.cause?.message === "write rejected before send",
+  )
+  assert.equal(transport.state, "closed")
+  assert.equal(transport.pendingRequestCount, 0)
+})
+
+
 test("MongoDB TLS transport waits for secureConnect rather than plain connect", async () => {
   class TlsSocket extends EventEmitter {
     setNoDelay() {}
