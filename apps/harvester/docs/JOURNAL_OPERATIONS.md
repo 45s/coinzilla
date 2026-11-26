@@ -246,6 +246,8 @@ The required order is:
 
 There are no arbitrary sleeps, 20-second delays, quiet periods or time-based guesses. If safety cannot be proven, fail closed: retain the connections and services needed for reconciliation/recovery, report the exact strategy, market and blockers, and do not report STOPPED.
 
+The composed-bootstrap acceptance regression in `src/bootstrap/start-harvester.test.js` exercises this sequence through `startHarvesterForTest` with two enabled Conservative markets. It checks that both markets independently emit safe evidence before either market feed is unsubscribed, the CLOSING open-order and balance barriers precede teardown, market feeds stop before user-data intake, broker disconnect is last, and a durable `PROCESS_STOPPED` fact exists after the runtime returns STOPPED. This is offline composition evidence only; it does not establish exchange-side outcomes or retroactively prove a historical process exit.
+
 ### Strategy and market safety markers
 
 Conservative tracks every configured market independently. A market is safe only when the BUY gate is active; no owned BUY is pending, open, partially filled or unknown; cancellation outcomes, fills and actual commissions are reconciled; no order/accounting transition remains ambiguous; recovery SELL coverage is authoritatively verified or no recovery obligation remains; and the Journal durability barrier succeeds.
