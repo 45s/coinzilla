@@ -149,6 +149,15 @@ expected: /randomBytes/ },
   }
 })
 
+test("MongoDB provider normalizes TLS enablement and disabled TLS options", () => {
+  assert.doesNotThrow(() => createMongoProvider({ host: "localhost", tls: true }))
+  assert.doesNotThrow(() => createMongoProvider({ host: "localhost", tls: false }))
+  assert.doesNotThrow(() => createMongoProvider({
+    host: "localhost",
+    tls: { rejectUnauthorized: false },
+  }))
+})
+
 test("MongoDB provider parses IPv6 and hostname primary redirects", async () => {
   const ipv6 = createPrimaryDiscoveryHarness({
     primaryResponses: [
@@ -177,6 +186,7 @@ test("MongoDB provider parses IPv6 and hostname primary redirects", async () => 
 
 test("MongoDB provider rejects malformed and looping replica-set primary addresses", async () => {
   const invalidPrimaries = [
+    { primary: 42, expected: /non-empty string/ },
     { primary: "[::1", expected: /IPv6 address is invalid/ },
     { primary: "[::1]:0", expected: /port is invalid/ },
     { primary: "localhost:65536", expected: /port is invalid/ },
@@ -266,6 +276,92 @@ test("MongoDB provider retries close after a transport cleanup failure", async (
   )
   await harness.provider.close()
   assert.equal(closeAttempts, 2)
+})
+
+test("MongoDB provider closes a transport after connection and handshake failure", async () => {
+  const handshakeFailure = new Error("handshake failed")
+  const closeFailure = new Error("cleanup failed")
+  const provider = createMongoProvider({
+    host: "localhost",
+    transportFactory: () => ({
+      async connect() {},
+      async command() {
+        return { ok: 1 }
+      },
+      async close() {
+        throw closeFailure
+      },
+    }),
+    handshake: async () => {
+      throw handshakeFailure
+    },
+  })
+  await assert.rejects(
+    provider.connect(),
+    (error) => error instanceof DatabaseProviderError
+      && error.cause instanceof AggregateError
+      && error.cause.errors.includes(handshakeFailure)
+      && error.cause.errors.includes(closeFailure),
+  )
+  await provider.close()
+})
+
+test("MongoDB provider close waits for an in-progress connection", async () => {
+  let releaseConnect
+  const connectGate = new Promise((resolve) => {
+    releaseConnect = resolve
+  })
+  let transport
+  const provider = createMongoProvider({
+    host: "localhost",
+    transportFactory: () => {
+      transport = {
+        closed: false,
+        async connect() {
+          await connectGate
+        },
+        async command() {
+          return { ok: 1 }
+        },
+        async close() {
+          this.closed = true
+        },
+      }
+      return transport
+    },
+    handshake: async () => ({
+      topology: "standalone",
+      transactionSupported: false,
+    }),
+  })
+  const connecting = provider.connect()
+  const closing = provider.close()
+  releaseConnect()
+  await Promise.all([connecting, closing])
+  assert.equal(transport.closed, true)
+  await assert.rejects(provider.connect(), /closed/)
+})
+
+test("MongoDB transaction command queue rejects commands after the first failure", async () => {
+  const harness = createProviderHarness({
+    topology: "replicaSet",
+    transactionSupported: true,
+    commandHandler: (body) => body.insert
+      ? { ok: 0, code: 123, errmsg: "first transaction command failed" }
+      : { ok: 1 },
+  })
+  await harness.provider.connect()
+  await assert.rejects(
+    harness.provider.withTransaction(async (transaction) => {
+      await Promise.all([
+        transaction.create({ collection: "people", record: { id: "one" } }),
+        transaction.create({ collection: "people", record: { id: "two" } }),
+      ])
+    }),
+    (error) => error instanceof DatabaseProviderError
+      && error.cause?.cause?.message.includes("first transaction command failed"),
+  )
+  await harness.provider.close()
 })
 
 test("MongoDB provider is usable through createDatabase on standalone servers", async () => {
