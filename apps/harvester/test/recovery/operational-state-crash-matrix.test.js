@@ -151,7 +151,10 @@ price })
   const ownership = ["CONSERVATIVE_BUY", "RECOVERY_SELL"].includes(purpose)
     ? {
         strategyId: StrategyId.COIN_GRABBER,
-        positionId: createPositionId({ marketId: market.id, strategyId: StrategyId.COIN_GRABBER }),
+        positionId: createPositionId({
+          marketId: market.id,
+          strategyId: StrategyId.COIN_GRABBER,
+        }),
         purpose,
       }
     : undefined
