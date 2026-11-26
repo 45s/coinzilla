@@ -954,3 +954,29 @@ test("does not advance to BUY cancellation or recovery proof after a participant
   })
   assert.equal(participant.isSafeToShutdown(), false, "An aborted participant must not publish successful safety.")
 })
+
+
+test("normalizes a non-Error abort reason before starting shutdown safety", async () => {
+  const calls = []
+  const participant = createParticipant({
+    engine: createFakeEngine({ calls }),
+    calls,
+  })
+  const controller = new AbortController()
+  controller.abort("operator shutdown cancelled")
+
+  await assert.rejects(
+    participant.waitUntilSafe({ signal: controller.signal }),
+    (error) => {
+      assert.equal(error.code, "SHUTDOWN_SAFETY_ABORTED")
+      assert.equal(error.cause, "operator shutdown cancelled")
+      return true
+    },
+    "A non-Error abort reason must become an actionable shutdown error.",
+  )
+  assert.deepEqual(
+    calls,
+    [],
+    "An already-aborted participant must not begin reconciliation or release shared services.",
+  )
+})
