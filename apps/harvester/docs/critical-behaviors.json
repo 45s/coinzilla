@@ -1133,6 +1133,11 @@
           "path": "src/use-cases/create-recovery-seller-stop-workflow.test.js",
           "name": "keeps account admission blocked when durable STOP resolution persistence fails",
           "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/conservative-trading-engine.test.js",
+          "name": "rechecks a newly raised account blocker after durable intent and before broker submission",
+          "kind": "integration"
         }
       ],
       "runtimeStatus": "active",
