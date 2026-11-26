@@ -200,6 +200,9 @@ function readyMarketAudit() {
 
 function makeWritableStore() {
   const records = makeRecords()
+  let lastCommittedDigest = createHash("sha256")
+    .update(JSON.stringify(records.at(-1)))
+    .digest("hex")
   return {
     runtimeSessionId,
     readAll: async () => ({
@@ -208,7 +211,7 @@ function makeWritableStore() {
         records: [...records],
         durableWriteSupported: true,
         lastCommittedSequence: String(records.length - 1),
-        lastCommittedDigest: "b".repeat(64),
+        lastCommittedDigest,
       },
     }),
     append: async (newFact) => {
@@ -217,6 +220,9 @@ function makeWritableStore() {
         sequence: String(records.length),
         runtimeSessionId,
       })
+      lastCommittedDigest = createHash("sha256")
+        .update(JSON.stringify(records.at(-1)))
+        .digest("hex")
       return {
         ok: true,
         data: { durable: true },
