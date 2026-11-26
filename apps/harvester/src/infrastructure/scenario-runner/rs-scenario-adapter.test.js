@@ -263,6 +263,14 @@ test("production RS runtime fails closed when account STOP persistence fails aft
     "The failure path must retain the canonical under-target FILLED SELL STOP reason.")
   assert.equal(result.output.terminalSell.eventWorkflowFailedClosed, true,
     "The terminal event must fail closed when account STOP persistence is unavailable.")
+  assert.equal(result.output.terminalSell.accountAdmissionBlocked, true,
+    "The STOP workflow must block account admission before attempting persistence.")
+  assert.equal(result.output.terminalSell.postFailureAdmissionBlocked, true,
+    "The production runtime must continue blocking account admission after persistence fails.")
+  assert.equal(result.output.terminalSell.postFailureSubmittedOrderCount, 0,
+    "The production runtime must submit no further orders while account STOP persistence is unresolved.")
+  assert.equal(result.output.terminalSell.postFailureActionSubmitted, false,
+    "The follow-up production dispatch must not create an order action.")
   assert.equal(result.output.reservedSellCycle, null,
     "The terminal reservation may be released only after canonical accounting has committed.")
 })
@@ -275,6 +283,7 @@ test("production RS registry exposes the runtime scenario and keeps the helper-o
     "RS-RUNTIME-SELL-REJECTION-001",
     "RS-RUNTIME-SELL-PARTIAL-CANCEL-001",
     "RS-RUNTIME-SELL-FILLED-UNDER-TARGET-001",
+    "RS-RUNTIME-SELL-STOP-PERSISTENCE-FAILURE-001",
   ])
   const runtimeScenario = catalog.find((scenario) => scenario.id === "RS-RUNTIME-SELL-SUBMISSION-001")
   assert.equal(runtimeScenario.executable, false)
@@ -292,6 +301,12 @@ test("production RS registry exposes the runtime scenario and keeps the helper-o
   assert.equal(underTargetScenario.status, "PARTIAL")
   assert.equal(underTargetScenario.executable, false,
     "A runtime scenario must remain non-executable until trusted OS isolation is verified.")
+  const stopFailureScenario = catalog.find((scenario) =>
+    scenario.id === "RS-RUNTIME-SELL-STOP-PERSISTENCE-FAILURE-001")
+  assert.ok(stopFailureScenario, "The STOP persistence-failure runtime scenario must be registered.")
+  assert.equal(stopFailureScenario.status, "PARTIAL")
+  assert.equal(stopFailureScenario.executable, false,
+    "Infrastructure-failure scenarios must remain non-executable until trusted OS isolation is verified.")
   assert.equal(catalog[0].executable, false)
   assert.equal(catalog[0].executionStatus, "PRELIMINARY")
 })

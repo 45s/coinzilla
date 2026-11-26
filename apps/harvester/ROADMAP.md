@@ -34,7 +34,7 @@ Foundation [PR #1837](https://github.com/45s/coinzilla/pull/1837) is merged. It 
 The current [Runner roadmap](../../apps/dashboard/docs/features/gc-strategy-lab/RUNNER_ROADMAP.md) remains the feature-specific plan. Keep execution blocked until:
 
 - production user-data event transition and terminal-fill reconciliation are exercised for profitable partial CANCELED and adverse fully FILLED SELLs in [PR #1887](https://github.com/45s/coinzilla/pull/1887);
-- the under-target FILLED SELL STOP runtime scenario is implemented in PR #1887; STOP-persistence failure coverage is being added to the same PR, while other infrastructure-failure scenarios remain outstanding;
+- under-target FILLED SELL STOP and STOP-persistence failure runtime scenarios are implemented in PR #1887; other infrastructure-failure scenarios remain outstanding;
 - a trusted OS-level sandbox and matching attestation are available and verified;
 - source/build/runtime/input replay provenance and exact-head checks are complete.
 

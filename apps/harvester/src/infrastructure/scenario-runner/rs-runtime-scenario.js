@@ -293,7 +293,7 @@ function validateScenarioInput({ schema, defaults, input }) {
 
 const RUNTIME_SCENARIO_READINESS_REASONS = Object.freeze([
   "Scenario infrastructure uses a run-local simulated broker and in-memory operational store; it does not prove durable production account or STOP state.",
-  "General infrastructure-failure scenarios are not yet composed into this adapter.",
+  "STOP-persistence failure is covered; additional infrastructure-failure scenarios remain incomplete.",
   "No trusted OS-level sandbox launcher is available; the host must continue to fail closed.",
 ])
 
@@ -342,6 +342,17 @@ export const RECOVERY_SELLER_RUNTIME_SCENARIOS = Object.freeze([
     inputSchema: RUNTIME_FIXTURE.inputSchema,
     input: RUNTIME_FIXTURE.input,
   }),
+  Object.freeze({
+    id: "RS-RUNTIME-SELL-STOP-PERSISTENCE-FAILURE-001",
+    name: "Production Recovery Seller fails closed when account STOP persistence fails after a FILLED SELL",
+    layer: "APPLICATION",
+    status: "PARTIAL",
+    executionStatus: "PRELIMINARY",
+    executable: false,
+    readinessReasons: RUNTIME_SCENARIO_READINESS_REASONS,
+    inputSchema: RUNTIME_FIXTURE.inputSchema,
+    input: RUNTIME_FIXTURE.input,
+  }),
 ])
 
 function createAssertion({ name, actual, expected }) {
@@ -354,10 +365,15 @@ function createAssertion({ name, actual, expected }) {
 }
 
 
-function createRuntimeScenarioStore() {
+function createRuntimeScenarioStore({ failStopPersistence = false } = {}) {
   const records = []
   return {
     append: async (fact) => {
+      if (failStopPersistence && fact.factType === "SAFETY_BLOCKER_RAISED") {
+        return toResult({
+          error: new Error("Simulated account STOP persistence failure"),
+        })
+      }
       records.push(fact)
       return {
         ok: true,
@@ -832,8 +848,11 @@ async function createRuntimeScenarioState({
   quoteAsset,
   pairConfig,
   effectiveInput,
+  scenarioId,
 }) {
-  const operationalStateStore = createRuntimeScenarioStore()
+  const operationalStateStore = createRuntimeScenarioStore({
+    failStopPersistence: scenarioId === "RS-RUNTIME-SELL-STOP-PERSISTENCE-FAILURE-001",
+  })
   const marketMetadata = createRuntimeScenarioMarketMetadata({
     market,
     baseAsset,
@@ -929,6 +948,7 @@ async function createRuntimeScenarioContext({ runId, scenarioId, effectiveInput 
     quoteAsset,
     pairConfig,
     effectiveInput,
+    scenarioId,
   })
   const ports = await createRuntimeScenarioExecutionPorts({
     runId,
@@ -950,7 +970,12 @@ async function createRuntimeScenarioContext({ runId, scenarioId, effectiveInput 
   }
 }
 
-async function executeRuntimeScenarioDispatch({ runtime, effectiveInput, expectRejection = false }) {
+async function executeRuntimeScenarioDispatch({
+  runtime,
+  effectiveInput,
+  expectRejection = false,
+  expectBlocked = false,
+}) {
   let submittedAction
   const dispatchResult = await runtime.dispatch({
     symbol: runtime.market.symbol,
@@ -973,7 +998,7 @@ async function executeRuntimeScenarioDispatch({ runtime, effectiveInput, expectR
       return runtime.submitter(submission)
     },
   })
-  if (dispatchResult?.ok !== true && !expectRejection) {
+  if (dispatchResult?.ok !== true && !expectRejection && !expectBlocked) {
     throw dispatchResult?.errors?.[0] ?? new Error("Production Recovery Seller runtime evaluation failed")
   }
   return {
@@ -1137,6 +1162,12 @@ function createRuntimeScenarioTerminalSellResult({
     pauseReasons: pauses.map((pause) => pause.reason),
     stopFactAppended: runtime.operationalStateStore.getRecords().some((fact) =>
       fact.factType === "SAFETY_BLOCKER_RAISED" && fact.data?.scope === "ACCOUNT"),
+    stopPersistenceFailed: pauses.some((pause) =>
+      pause.error?.message?.includes("global STOP could not be confirmed")),
+    accountAdmissionBlocked: runtime.stopWorkflow.isAccountAdmissionBlocked(),
+    postFailureAdmissionBlocked: false,
+    postFailureSubmittedOrderCount: 0,
+    postFailureActionSubmitted: false,
     eventFillStaged: stagedSellFills.length === 1,
     stagedSellFillCount: stagedSellFills.length,
     cycleState: runtime.seed.workflow.getCycleStateForMarket({
@@ -1306,10 +1337,17 @@ function createRuntimeScenarioOrderEventWorkflow({
     }),
   })
 }
-function assertRuntimeScenarioTerminalSellReconciled({ eventResult, terminalAccountingResult, runtime }) {
+function assertRuntimeScenarioTerminalSellReconciled({
+  eventResult,
+  terminalAccountingResult,
+  runtime,
+  expectedStopPersisted = true,
+}) {
   const stopPersisted = runtime.operationalStateStore.getRecords().some((fact) =>
     fact.factType === "SAFETY_BLOCKER_RAISED" && fact.data?.scope === "ACCOUNT")
-  if (eventResult?.ok === false && terminalAccountingResult?.ok === true && stopPersisted) {
+  if (eventResult?.ok === false &&
+      terminalAccountingResult?.ok === true &&
+      stopPersisted === expectedStopPersisted) {
     return
   }
   throw eventResult?.errors?.[0] ??
@@ -1352,6 +1390,7 @@ async function reconcileRuntimeScenarioTerminalSell({
   terminalOrder,
   fill,
   fullCycle = false,
+  expectedStopPersisted = true,
 }) {
   const stagedSellFills = []
   const pauses = []
@@ -1384,6 +1423,7 @@ async function reconcileRuntimeScenarioTerminalSell({
     eventResult,
     terminalAccountingResult,
     runtime,
+    expectedStopPersisted,
   })
   return createRuntimeScenarioTerminalSellResult({
     runtime,
@@ -1420,7 +1460,11 @@ async function reconcileRuntimeScenarioPartialSell({ runtime, execution }) {
   })
 }
 
-async function reconcileRuntimeScenarioFilledSell({ runtime, execution }) {
+async function reconcileRuntimeScenarioFilledSell({
+  runtime,
+  execution,
+  stopPersistenceFailure = false,
+}) {
   const { orderRegistry, openOrder } = resolveSubmittedRuntimeSellOrder({
     runtime,
     execution,
@@ -1439,6 +1483,7 @@ async function reconcileRuntimeScenarioFilledSell({ runtime, execution }) {
     terminalOrder,
     fill,
     fullCycle: true,
+    expectedStopPersisted: !stopPersistenceFailure,
   })
 }
 function createRuntimeScenarioOutput({ runtime, data, submittedAction, submissionRejected = false, terminalSell = null }) {
@@ -1489,6 +1534,30 @@ function createRuntimeScenarioExpected({ seed, pairConfig, scenarioId }) {
       reservationRetained: true,
     }
   }
+  if (scenarioId === "RS-RUNTIME-SELL-STOP-PERSISTENCE-FAILURE-001") {
+    return {
+      decisionOutcome: "SUBMIT",
+      actionSide: "SELL",
+      actionQuantity: addDecimal({
+        left: seed.buyQuantity,
+        right: String(pairConfig.sellQuantity),
+      }),
+      submittedOrderCount: 1,
+      terminalOrderStatus: "FILLED",
+      terminalCycleStatus: "UNRESOLVED",
+      terminalReconciled: true,
+      profitabilityEligible: false,
+      reservationReleased: true,
+      stopFactAppended: false,
+      eventWorkflowFailedClosed: true,
+      marketPaused: true,
+      stopPersistenceFailed: true,
+      accountAdmissionBlocked: true,
+      postFailureAdmissionBlocked: true,
+      postFailureSubmittedOrderCount: 0,
+      postFailureActionSubmitted: false,
+    }
+  }
   if (scenarioId === "RS-RUNTIME-SELL-FILLED-UNDER-TARGET-001") {
     return {
       decisionOutcome: "SUBMIT",
@@ -1506,6 +1575,7 @@ function createRuntimeScenarioExpected({ seed, pairConfig, scenarioId }) {
       stopFactAppended: true,
       eventWorkflowFailedClosed: true,
       marketPaused: true,
+      accountAdmissionBlocked: true,
     }
   }
   if (scenarioId === "RS-RUNTIME-SELL-PARTIAL-CANCEL-001") {
@@ -1525,6 +1595,7 @@ function createRuntimeScenarioExpected({ seed, pairConfig, scenarioId }) {
       stopFactAppended: true,
       eventWorkflowFailedClosed: true,
       marketPaused: true,
+      accountAdmissionBlocked: true,
     }
   }
   return {
@@ -1602,7 +1673,7 @@ function createPartialSellSafetyAssertions({ output, expected }) {
       expected: expected.eventWorkflowFailedClosed,
     }),
     createAssertion({
-      name: "production STOP workflow durably appends an account blocker",
+      name: "run-local STOP fact persistence matches the scenario outcome",
       actual: output.terminalSell?.stopFactAppended,
       expected: expected.stopFactAppended,
     }),
@@ -1612,9 +1683,42 @@ function createPartialSellSafetyAssertions({ output, expected }) {
       expected: expected.marketPaused,
     }),
     createAssertion({
+      name: "account admission remains blocked after terminal SELL STOP",
+      actual: output.terminalSell?.accountAdmissionBlocked,
+      expected: expected.accountAdmissionBlocked,
+    }),
+    createAssertion({
       name: "terminal SELL releases the terminal order reservation after fill reconciliation",
       actual: output.reservedSellCycle === null,
       expected: expected.reservationReleased,
+    }),
+  ]
+}
+
+function createStopPersistenceFailureAssertions({ output, expected }) {
+  if (expected.stopPersistenceFailed !== true) {
+    return []
+  }
+  return [
+    createAssertion({
+      name: "the terminal workflow reports that durable account STOP could not be confirmed",
+      actual: output.terminalSell?.stopPersistenceFailed,
+      expected: true,
+    }),
+    createAssertion({
+      name: "the production runtime blocks subsequent account admission",
+      actual: output.terminalSell?.postFailureAdmissionBlocked,
+      expected: true,
+    }),
+    createAssertion({
+      name: "the production runtime submits no follow-up order after STOP persistence fails",
+      actual: output.terminalSell?.postFailureSubmittedOrderCount,
+      expected: 0,
+    }),
+    createAssertion({
+      name: "the production runtime creates no follow-up order action",
+      actual: output.terminalSell?.postFailureActionSubmitted,
+      expected: false,
     }),
   ]
 }
@@ -1667,6 +1771,10 @@ function createPartialSellAssertions({ output, expected }) {
       expected: expected.profitabilityEligible,
     }),
     ...createPartialSellSafetyAssertions({
+      output,
+      expected,
+    }),
+    ...createStopPersistenceFailureAssertions({
       output,
       expected,
     }),
@@ -1763,6 +1871,10 @@ function createRuntimeScenarioTerminalTraceStep({ output }) {
       profitabilityEligible: output.terminalSell.profitabilityEligible,
       eventFillStaged: output.terminalSell.eventFillStaged,
       eventWorkflowFailedClosed: output.terminalSell.eventWorkflowFailedClosed,
+      stopPersistenceFailed: output.terminalSell.stopPersistenceFailed,
+      accountAdmissionBlocked: output.terminalSell.accountAdmissionBlocked,
+      marketPaused: output.terminalSell.marketPaused,
+      pauseReasons: output.terminalSell.pauseReasons,
     },
     source: "makeOrderEventWorkflow.processUserDataEventTransition → createRecoverySellerAccountingWorkflow.reconcileTerminalMixedSell",
   }
@@ -1858,6 +1970,23 @@ async function executeRuntimeScenario({ runId, scenarioId, effectiveInput, signa
       runtime,
       execution,
     })
+  } else if (scenarioId === "RS-RUNTIME-SELL-STOP-PERSISTENCE-FAILURE-001") {
+    terminalSell = await reconcileRuntimeScenarioFilledSell({
+      runtime,
+      execution,
+      stopPersistenceFailure: true,
+    })
+    const followUp = await executeRuntimeScenarioDispatch({
+      runtime,
+      effectiveInput,
+      expectBlocked: true,
+    })
+    terminalSell = {
+      ...terminalSell,
+      postFailureAdmissionBlocked: runtime.stopWorkflow.isAccountAdmissionBlocked(),
+      postFailureSubmittedOrderCount: followUp.data.submittedOrders?.length ?? 0,
+      postFailureActionSubmitted: Boolean(followUp.submittedAction),
+    }
   }
   return {
     runtime,

@@ -48,7 +48,10 @@ async function getRecoverySellerRuntimeSnapshot({
     getAccountSnapshot({ symbol }),
     recoverySellerStopWorkflow.getState(),
   ])
-  const strategyStopped = isStopping() === true || stopState?.status === "STOPPED"
+  const accountAdmissionBlocked = recoverySellerStopWorkflow.isAccountAdmissionBlocked?.() === true
+  const strategyStopped = isStopping() === true ||
+    stopState?.status === "STOPPED" ||
+    accountAdmissionBlocked
   const marketPaused = isMarketPaused({
     state,
     symbol,
