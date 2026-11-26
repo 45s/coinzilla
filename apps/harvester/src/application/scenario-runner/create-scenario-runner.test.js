@@ -533,3 +533,40 @@ test("runner releases retained capacity only after cleanup retry is confirmed", 
   assert.equal((await runner.waitForRun(second.runId)).status, SCENARIO_RUN_STATUS.COMPLETED)
   await runner.close()
 })
+
+test("runner remains Starting until the adapter confirms its isolated worker is ready", async () => {
+  let signalWorkerReady
+  const adapter = {
+    strategyId: "example",
+    execute: ({ onStarted }) => new Promise((resolve) => {
+      signalWorkerReady = () => {
+        onStarted()
+        resolve({ output: "worker result" })
+      }
+    }),
+    cancel: async () => true,
+  }
+  const runner = createScenarioRunner({
+    adapters: [adapter],
+    createRunId: () => "run-startup-handshake",
+  })
+
+  const accepted = runner.submit({
+    strategyId: "example",
+    scenarioId: "worker-startup",
+  })
+  await new Promise((resolve) => setImmediate(resolve))
+
+  assert.equal(runner.getRun(accepted.runId)?.status, SCENARIO_RUN_STATUS.STARTING,
+    "A run must remain Starting while its adapter is still preparing the isolated worker.")
+  assert.equal(runner.getRun(accepted.runId)?.transitions.some((item) =>
+    item.status === SCENARIO_RUN_STATUS.RUNNING), false,
+  "The runner must not publish Running before the adapter confirms worker readiness.")
+
+  signalWorkerReady()
+
+  const result = await runner.waitForRun(accepted.runId)
+  assert.equal(result.status, SCENARIO_RUN_STATUS.COMPLETED)
+  assert.ok(result.transitions.some((item) => item.status === SCENARIO_RUN_STATUS.RUNNING),
+    "The runner must publish Running after the adapter confirms worker readiness.")
+})

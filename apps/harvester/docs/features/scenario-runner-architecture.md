@@ -131,3 +131,7 @@ The application runner treats worker cleanup as confirmed only when the adapter'
 ## Strategy-neutral worker dispatch — 2026-11-26
 
 The worker dispatcher validates the typed execution envelope and resolves a strategy adapter from an explicit registry. It contains no strategy-specific ID branches; the worker composition module owns the current RS registration. Duplicate/malformed registrations, blank run/strategy/scenario identities and unknown strategy IDs fail closed before execution; the active AbortSignal is passed unchanged to the selected adapter. The dispatcher contract has focused registry/validation/cancellation tests; the message-handler cancellation test injects a registered dispatcher rather than depending on a global RS-specific function. Both suites are included in the configured Harvester targeted test suite. This composition change does not make the preliminary RS profitability helper an executable full-flow scenario.
+
+## Worker startup and truthful lifecycle state — 2026-11-26
+
+`Starting` covers worker creation and verification of the simulation-only isolation boundary. The runner must not publish `Running` merely because an execution promise was scheduled: the strategy adapter must explicitly signal readiness through the `onStarted` callback after its isolated worker has been created and its required sandbox profile has been verified. If startup fails before that signal, the run terminates as failed/blocked without a false `Running` transition.
