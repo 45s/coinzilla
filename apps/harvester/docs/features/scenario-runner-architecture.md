@@ -196,7 +196,6 @@ This is **Node/application-level defense in depth**, not an OS security boundary
 
 This proves the host-to-process simulation composition for the test fixture only. The attestation is simulated and does not apply or prove an OS sandbox. The worker bootstrap and ZRO fixture are not registered in the production worker catalogue or public scenario registry; this is not the full production RS adapter. The production host remains fail-closed pending the independent RS lifecycle correction in issue #1842 and a trusted OS-level launcher.
 
-
 ## Recovery Seller terminal cycle-state correction — 2026-11-26
 
 Terminal mixed-SELL accounting now publishes the canonical domain cycle state through
@@ -210,7 +209,6 @@ cover these cases; focused test execution is still pending.
 
 This correction does not complete the production scenario adapter or establish OS-level
 worker isolation. Those remain separate fail-closed gates.
-
 
 ## Production Recovery Seller scenario registry — 2026-11-26
 
@@ -237,7 +235,6 @@ is released. Broker, fill-history, STOP persistence and clock inputs remain run-
 simulation boundaries; this does not establish live exchange integration or OS-level
 process isolation.
 
-
 ## Exact replay provenance gate — 2026-11-26
 
 A matching commit SHA alone is not sufficient for exact replay. Each run now records an
@@ -248,7 +245,6 @@ active provenance are complete and identical. Missing build attestation, dirty s
 unknown tree/dependencies or a changed runtime/registry blocks replay with explicit
 missing-provenance diagnostics. The original unredacted input snapshot is retained
 internally for replay; exported run evidence remains redacted.
-
 
 ## Application composition and fail-closed process registration — 2026-11-26
 
