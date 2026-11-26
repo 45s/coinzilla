@@ -164,13 +164,17 @@ test("MongoDB URI parser rejects a password without a username", () => {
 test("MongoDB handshake rejects server wire versions newer than the implemented protocol ceiling", async () => {
   await assert.rejects(
     performMongoHandshake({
-      transport: createHandshakeTransport({
-        hello: {
-          minWireVersion: 25,
-          maxWireVersion: 26,
-          isWritablePrimary: true,
+      transport: {
+        async command() {
+          return {
+            ok: 1,
+            minWireVersion: 25,
+            maxWireVersion: 26,
+            isWritablePrimary: true,
+          }
         },
-      }),
+      },
+      databaseName: "app",
     }),
     /wire protocol version range 25-26 is not supported/i,
   )
