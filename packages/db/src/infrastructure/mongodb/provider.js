@@ -71,13 +71,14 @@ function resolveOptions(options) {
     : {}
   const tlsOption = options.tls === undefined ? parsed.tls : options.tls
   const tlsOptions = tlsOption === true ? {} : tlsOption || null
+  const databaseName = options.databaseName ?? parsed.databaseName ?? "admin"
   return {
     host: options.host ?? parsed.host,
     port: options.port ?? parsed.port ?? 27017,
     username: options.username ?? parsed.username,
     password: options.password ?? parsed.password,
-    databaseName: options.databaseName ?? parsed.databaseName ?? "admin",
-    authSource: options.authSource ?? parsed.authSource ?? options.databaseName ?? "admin",
+    databaseName,
+    authSource: options.authSource ?? parsed.authSource ?? databaseName,
     authMechanism: options.authMechanism ?? parsed.authMechanism,
     replicaSet: options.replicaSet ?? parsed.replicaSet,
     directConnection: options.directConnection ?? parsed.directConnection ?? false,

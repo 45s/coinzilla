@@ -101,7 +101,7 @@ export function parseMongoConnectionString(connectionString) {
   if (parseBooleanOption(url.searchParams.get("retryWrites"), "retryWrites")) {
     throw new TypeError("MongoDB retryable writes are not supported")
   }
-  const authSource = url.searchParams.get("authSource") ?? databaseName
+  const authSource = url.searchParams.get("authSource") ?? undefined
   const tlsValue = url.searchParams.get("tls") ?? url.searchParams.get("ssl")
   const userInfo = authority.includes("@") ? authority.slice(0, authority.lastIndexOf("@")) : null
   const username = url.username === "" ? undefined : decodeURIComponent(url.username)
