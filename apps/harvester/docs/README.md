@@ -71,7 +71,7 @@ Shared deterministic broker/runtime fixtures live in `test/bootstrap/start-harve
 - [Multi-provider execution routing](infrastructure/execution-routing.md) — exact strategy/market execution routes, independent market-data source selection, provenance, and no-fallback safety rules.
 - [Trading strategies overview](trading-strategies.md) — Conservative rules remain in the canonical specification; Aggressive material is exploratory discussion, not an approved executable contract
 - [Recovery Seller Domain Specification](domain/recovery-seller-domain-specification.md) — draft RS accounting, legacy authorization, independent profitability gates, and concurrent CG/RS invariants
-- [Recovery Seller Implementation Roadmap](domain/recovery-seller-implementation-roadmap.md) — six delivery phases from Conservative source audit to concurrent integration and offline lifecycle proof
+- [Recovery Seller Implementation Roadmap](domain/recovery-seller-implementation-roadmap.md) — RS-1–RS-5 implementation and offline acceptance are complete; the roadmap tracks remaining scenario-coverage, terminal-SELL/STOP and operator-resolution gates. It does not authorize exchange sessions.
 
 ## Operations and safety
 
