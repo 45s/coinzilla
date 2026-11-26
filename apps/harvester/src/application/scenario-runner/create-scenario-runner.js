@@ -194,7 +194,7 @@ function createRecord({
     strategyId,
     scenarioId,
     scenarioIdentity: createScenarioIdentity({ strategyId, scenarioId }),
-    inputSha256: input === null ? null : createJsonDigest(input),
+    inputSha256: createJsonDigest(input),
     replayProvenance: structuredClone(replayProvenance),
     sourceRevision,
     replayOfRunId,
