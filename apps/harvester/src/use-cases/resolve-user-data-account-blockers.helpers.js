@@ -45,7 +45,7 @@ export function validateAccountResolutionInput({
       !isText(resolutionReason) ||
       resolutionReason.length < 8 ||
       resolutionReason.length > 512 ||
-      /[\\u0000-\\u001F\\u007F]/.test(resolutionReason) ||
+      /[\u0000-\u001F\u007F]/.test(resolutionReason) ||
       causeFixed !== true) {
     throw new TypeError("Account-blocker resolution requires a unique action ID, resolution reason, and causeFixed=true")
   }
