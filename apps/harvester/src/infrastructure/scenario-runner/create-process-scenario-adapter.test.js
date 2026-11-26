@@ -489,16 +489,12 @@ test("process adapter waits for an explicit worker-ready handshake before dispat
     },
   })
 
-  assert.equal(started, false,
-    "The runner must remain Starting until the child confirms its worker bootstrap is ready.")
-  assert.deepEqual(messages, [],
-    "The parent must not dispatch scenario code before receiving the worker-ready handshake.")
+  assert.equal(started, false, "The runner stays Starting until worker readiness.")
+  assert.deepEqual(messages, [], "The parent sends no execute request before readiness.")
 
   child.emit("message", { type: "ready" })
-  assert.equal(started, false,
-    "Worker bootstrap readiness alone must not mark production execution as Running.")
-  assert.deepEqual(messages, [expectedExecuteMessage],
-    "The parent must dispatch once after bootstrap readiness without marking the run Running yet.")
+  assert.equal(started, false, "Bootstrap readiness must not mark execution as Running.")
+  assert.deepEqual(messages, [expectedExecuteMessage], "The parent dispatches exactly once after readiness.")
 
   child.emit("message", {
     type: "started",
