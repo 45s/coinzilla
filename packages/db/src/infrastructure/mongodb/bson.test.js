@@ -51,7 +51,8 @@ test("BSON supports binary values and dates for protocol-internal command docume
 
 
 test("BSON binary values preserve standard UUID subtype 4 for logical sessions", () => {
-  const binary = new BsonBinary({ bytes: Buffer.from("00112233445566778899aabbccddeeff", "hex"), subtype: 4 })
+  const binary = new BsonBinary({ bytes: Buffer.from("00112233445566778899aabbccddeeff", "hex"),
+subtype: 4 })
   const decoded = decodeBsonDocument(encodeBsonDocument({ id: binary }))
 
   assert.equal(decoded.id.subtype, 4)
@@ -127,11 +128,13 @@ test("BSON rejects invalid booleans, sparse arrays, accessors, and unsupported b
   assert.throws(() => encodeBsonDocument(accessor), /data properties/)
 
   assert.throws(
-    () => new BsonBinary({ bytes: Buffer.from([1]), subtype: 4 }),
+    () => new BsonBinary({ bytes: Buffer.from([1]),
+subtype: 4 }),
     /exactly 16 bytes/,
   )
   assert.throws(
-    () => new BsonBinary({ bytes: Buffer.from([1]), subtype: 2 }),
+    () => new BsonBinary({ bytes: Buffer.from([1]),
+subtype: 2 }),
     /subtype/,
   )
 })
@@ -232,13 +235,16 @@ test("BSON decoder rejects duplicate keys, invalid array indexes, and unsupporte
   }
   assert.throws(
     () => decodeBsonDocument(rawBsonDocument([
-      int32({ key: "duplicate", value: 1 }),
-      int32({ key: "duplicate", value: 2 }),
+      int32({ key: "duplicate",
+value: 1 }),
+      int32({ key: "duplicate",
+value: 2 }),
     ])),
     /duplicate key/,
   )
 
-  const invalidArray = rawBsonDocument([int32({ key: "1", value: 1 })])
+  const invalidArray = rawBsonDocument([int32({ key: "1",
+value: 1 })])
   const arrayElement = Buffer.concat([
     Buffer.from([0x04]),
     Buffer.from("values\0"),
