@@ -31,7 +31,7 @@ function escapeUsername(username) {
 }
 
 function prepareSha256Password(password) {
-  if (!/^[\\x20-\\x7e]*$/.test(password)) {
+  if (!/^[\x20-\x7e]*$/.test(password)) {
     throw new TypeError("MongoDB SCRAM-SHA-256 passwords must contain printable ASCII only")
   }
   return password
