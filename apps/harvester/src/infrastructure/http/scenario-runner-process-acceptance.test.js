@@ -73,7 +73,7 @@ test("host executes the test-only RS runtime fixture through a real process work
     })
     const result = await host.runner.waitForRun(accepted.runId)
 
-    assert.equal(result.status, "COMPLETED")
+    assert.equal(result.status, "Completed")
     assert.equal(result.output.source, "production-runtime-evaluator")
     assert.equal(result.output.fixtureId, "rs-runtime-sell-submission")
     assert.equal(result.output.passed, true)
@@ -83,8 +83,8 @@ test("host executes the test-only RS runtime fixture through a real process work
     assert.ok(result.output.trace.some((step) => step.kind === "simulated-broker"))
 
     const statuses = updates.map((event) => event.data.status)
-    assert.ok(statuses.indexOf("RUNNING") > statuses.indexOf("STARTING"))
-    assert.equal(statuses.at(-1), "COMPLETED")
+    assert.ok(statuses.indexOf("Running") > statuses.indexOf("Starting"))
+    assert.equal(statuses.at(-1), "Completed")
   } finally {
     await host.runner.close()
   }
