@@ -2066,6 +2066,24 @@
       }
     },
     {
+      "path": "src/use-cases/resolve-offline-user-data-account-blockers.js",
+      "baseline": {
+        "lines": 95.24,
+        "branches": 80.88,
+        "functions": 97.06
+      },
+      "minimum": {
+        "lines": 95,
+        "branches": 80,
+        "functions": 95
+      },
+      "latestObserved": {
+        "lines": 95.24,
+        "branches": 80.88,
+        "functions": 97.06
+      }
+    },
+    {
       "path": "src/use-cases/resolve-user-data-account-blockers.helpers.js",
       "baseline": {
         "lines": 89.81,
