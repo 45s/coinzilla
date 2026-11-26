@@ -1,9 +1,9 @@
 import { createHash } from "node:crypto"
 import { toResult } from "@coinzilla/utils"
+import { projectHarvesterOperationalState } from "../infrastructure/operational-state/project-harvester.js"
 import { recordSafetyBlockerResolved } from "./record-safety-control-facts.js"
 
 const isText = (value) => typeof value === "string" && value.trim() === value && value.length > 0
-const isDigest = (value) => typeof value === "string" && /^[a-f0-9]{64}$/.test(value)
 
 function canonicalize(value) {
   if (Array.isArray(value)) return value.map(canonicalize)
@@ -14,6 +14,7 @@ function canonicalize(value) {
 }
 
 function validateAccountAudit(audit, blockerIds) {
+  const origins = audit?.blockerOrigins
   if (audit?.status !== "READY" ||
       audit?.scope !== "ACCOUNT" ||
       audit?.source !== "AUTHORITATIVE_ACCOUNT_RECONCILIATION" ||
@@ -32,6 +33,10 @@ function validateAccountAudit(audit, blockerIds) {
       new Set(audit.auditedMarkets).size !== audit.auditedMarkets.length ||
       !Array.isArray(audit.blockerIds) ||
       [...audit.blockerIds].sort().join("\0") !== [...blockerIds].sort().join("\0") ||
+      !Array.isArray(origins) ||
+      origins.length !== blockerIds.length ||
+      origins.some(({ blockerId, producer }) =>
+        !blockerIds.includes(blockerId) || producer !== "USER_DATA_EVENT_HANDLER") ||
       !isText(audit.reconciliationId) ||
       !isText(audit.capturedAt) ||
       !Number.isFinite(Date.parse(audit.capturedAt))) {
@@ -39,30 +44,24 @@ function validateAccountAudit(audit, blockerIds) {
   }
 }
 
-async function readVerifiedRecords(store) {
+async function readVerifiedProjection(store) {
   const result = await store.readAll()
   if (result?.ok !== true ||
       result.data?.durableWriteSupported !== true ||
       !Array.isArray(result.data.records)) {
     throw result?.errors?.[0] ?? new Error("Account-blocker resolution requires a verified durable fact stream")
   }
-  return result.data.records
+  const projection = projectHarvesterOperationalState({ records: result.data.records })
+  if (projection?.ok !== true) {
+    throw projection?.errors?.[0] ?? new Error("Operational State projection failed")
+  }
+  return { records: result.data.records, projection: projection.data }
 }
 
-function getActiveAccountBlockers(records) {
-  const raised = new Map()
-  const resolved = new Set()
-  for (const record of records) {
-    if (record.factType === "SAFETY_BLOCKER_RAISED" && record.data?.scope === "ACCOUNT") {
-      raised.set(record.data.blockerId, record.data)
-    }
-    if (record.factType === "SAFETY_BLOCKER_RESOLVED") {
-      resolved.add(record.data?.blockerId)
-    }
-  }
-  return [...raised.entries()]
-    .filter(([blockerId]) => !resolved.has(blockerId))
-    .map(([blockerId, data]) => ({ blockerId, ...data }))
+function getActiveAccountBlockers(projection) {
+  return (projection.stickySafetyBlockers ?? [])
+    .filter(({ scope }) => scope === "ACCOUNT")
+    .map((blocker) => ({ ...blocker }))
 }
 
 /**
@@ -86,8 +85,8 @@ export async function resolveUserDataAccountBlockers({
     if (!isText(operatorId) || !isText(actionId) || causeFixed !== true) {
       throw new TypeError("Account-blocker resolution requires operator identity, unique action ID, and causeFixed=true")
     }
-    const initialRecords = await readVerifiedRecords(operationalStateStore)
-    const blockers = getActiveAccountBlockers(initialRecords)
+    const initial = await readVerifiedProjection(operationalStateStore)
+    const blockers = getActiveAccountBlockers(initial.projection)
     if (blockers.length === 0) {
       throw new Error("No active ACCOUNT safety blockers exist")
     }
@@ -133,8 +132,8 @@ export async function resolveUserDataAccountBlockers({
       }
     }
 
-    const readback = await readVerifiedRecords(operationalStateStore)
-    const remaining = getActiveAccountBlockers(readback)
+    const readback = await readVerifiedProjection(operationalStateStore)
+    const remaining = getActiveAccountBlockers(readback.projection)
     if (remaining.length !== 0) {
       return toResult({ error: new Error("Durable readback still contains unresolved ACCOUNT safety blockers") })
     }
