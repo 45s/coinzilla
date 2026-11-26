@@ -58,6 +58,7 @@ Health, trading enablement, operator authorization and restart-recovery permissi
 - No new Journal persistence barrier is introduced.
 - Existing PREFLIGHT, order-submission, cancellation, RECOVERY and CLOSING durability contracts remain authoritative.
 - Transport reconnection does not clear application reconciliation.
+- A fresh accepted market price received while the global trading gate is closed is queued for replay after the existing gate opens; a market-specific pause is not converted into a deferred global replay.
 - Price/book subscription acknowledgement is not live-data readiness.
 - Volatility inputs unavailable or invalid remain protected/blocked according to the existing volatility contract.
 - Existing shutdown cleanup remains the owner of subscription, operator and broker teardown.

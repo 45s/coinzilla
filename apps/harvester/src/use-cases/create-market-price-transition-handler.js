@@ -306,7 +306,11 @@ function dispatchAcceptedMarketPriceTransition({
       shutdownRecoveryOnly: true,
     })
   }
-  if (!canTrade({ symbol }) || state.paused.has(symbol)) {
+  if (!canTrade({ symbol })) {
+    state.deferredEvaluations.add(symbol)
+    return evaluateLatestTransition({ symbol })
+  }
+  if (state.paused.has(symbol)) {
     return evaluateLatestTransition({ symbol })
   }
 
