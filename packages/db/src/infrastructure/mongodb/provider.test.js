@@ -54,6 +54,42 @@ sequenceCalls,
 transports }
 }
 
+function createPrimaryDiscoveryHarness({
+  primaryResponses,
+  host = "seed",
+  port = 27017,
+  directConnection = false,
+}) {
+  const attempts = []
+  let responseIndex = 0
+  const provider = createMongoProvider({
+    host,
+    port,
+    directConnection,
+    transportFactory: (options) => {
+      const transport = {
+        options,
+        closed: false,
+        async connect() {},
+        async command() {
+          return { ok: 1 }
+        },
+        async close() {
+          this.closed = true
+        },
+      }
+      attempts.push(transport)
+      return transport
+    },
+    handshake: async () => {
+      const index = Math.min(responseIndex, primaryResponses.length - 1)
+      responseIndex += 1
+      return primaryResponses[index]
+    },
+  })
+  return { provider, attempts }
+}
+
 function assertMongoProviderOptionRejected({ options, expected }) {
   assert.throws(
     () => createMongoProvider({ host: "localhost",
@@ -111,6 +147,125 @@ expected: /randomBytes/ },
   for (const invalidOption of invalidOptions) {
     assertMongoProviderOptionRejected(invalidOption)
   }
+})
+
+test("MongoDB provider parses IPv6 and hostname primary redirects", async () => {
+  const ipv6 = createPrimaryDiscoveryHarness({
+    primaryResponses: [
+      { topology: "replicaSet", primary: "[::1]:27018" },
+      { topology: "replicaSet", primary: null },
+    ],
+  })
+  await ipv6.provider.connect()
+  assert.equal(ipv6.attempts.length, 2)
+  assert.equal(ipv6.attempts[0].closed, true)
+  assert.equal(ipv6.attempts[1].options.host, "::1")
+  assert.equal(ipv6.attempts[1].options.port, 27018)
+  await ipv6.provider.close()
+
+  const hostname = createPrimaryDiscoveryHarness({
+    primaryResponses: [
+      { topology: "replicaSet", primary: "primary.example" },
+      { topology: "replicaSet", primary: null },
+    ],
+  })
+  await hostname.provider.connect()
+  assert.equal(hostname.attempts[1].options.host, "primary.example")
+  assert.equal(hostname.attempts[1].options.port, 27017)
+  await hostname.provider.close()
+})
+
+test("MongoDB provider rejects malformed and looping replica-set primary addresses", async () => {
+  const invalidPrimaries = [
+    { primary: "[::1", expected: /IPv6 address is invalid/ },
+    { primary: "[::1]:0", expected: /port is invalid/ },
+    { primary: "localhost:65536", expected: /port is invalid/ },
+    { primary: "localhost:abc", expected: /port is invalid/ },
+    { primary: "seed:27017", expected: /current non-primary seed/ },
+  ]
+  for (const invalid of invalidPrimaries) {
+    const harness = createPrimaryDiscoveryHarness({
+      primaryResponses: [{ topology: "replicaSet", primary: invalid.primary }],
+    })
+    await assert.rejects(
+      harness.provider.connect(),
+      (error) => error instanceof DatabaseProviderError
+        && invalid.expected.test(error.cause?.message ?? ""),
+    )
+  }
+
+  const redirectLoop = createPrimaryDiscoveryHarness({
+    primaryResponses: [
+      { topology: "replicaSet", primary: "one.example:27017" },
+      { topology: "replicaSet", primary: "two.example:27017" },
+      { topology: "replicaSet", primary: "three.example:27017" },
+    ],
+  })
+  await assert.rejects(
+    redirectLoop.provider.connect(),
+    /exceeded the redirect limit/,
+  )
+})
+
+test("MongoDB provider coalesces connects and makes close idempotent", async () => {
+  const harness = createProviderHarness()
+  await Promise.all([
+    harness.provider.connect(),
+    harness.provider.connect(),
+  ])
+  assert.equal(harness.transports.length, 1)
+  await Promise.all([
+    harness.provider.close(),
+    harness.provider.close(),
+  ])
+  assert.equal(harness.transports[0].closed, true)
+  await assert.rejects(harness.provider.connect(), /closed/)
+})
+
+test("MongoDB provider rejects invalid operation callbacks and unsupported operations", async () => {
+  const harness = createProviderHarness({ transactionSupported: true })
+  await harness.provider.connect()
+  await assert.rejects(
+    harness.provider.withTransaction(null),
+    /transaction callback is required/,
+  )
+  await assert.rejects(
+    harness.provider.withReadTransaction(null),
+    /read transaction callback is required/,
+  )
+  await assert.rejects(
+    harness.provider.execute({ operation: "unknown" }),
+    /Unsupported MongoDB CRUD operation/,
+  )
+  await harness.provider.withTransaction(async () => {
+    await assert.rejects(
+      harness.provider.withTransaction(() => {}),
+      DatabaseTransactionUnsupportedError,
+    )
+  })
+  await harness.provider.close()
+})
+
+test("MongoDB provider retries close after a transport cleanup failure", async () => {
+  const harness = createProviderHarness()
+  await harness.provider.connect()
+  const transport = harness.transports[0]
+  const originalClose = transport.close.bind(transport)
+  let closeAttempts = 0
+  transport.close = async () => {
+    closeAttempts += 1
+    if (closeAttempts === 1) {
+      throw new Error("first close failed")
+    }
+    return originalClose()
+  }
+  await assert.rejects(
+    harness.provider.close(),
+    (error) => error instanceof DatabaseProviderError
+      && error.cause?.message === "first close failed",
+  )
+  await harness.provider.close()
+  assert.equal(closeAttempts, 2)
 })
 
 test("MongoDB provider is usable through createDatabase on standalone servers", async () => {
