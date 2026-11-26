@@ -63,6 +63,7 @@ const snapshot = Object.freeze({
 function createRuntime({
   stateOverrides = {},
   stopStateOverride = stopState,
+  accountAdmissionBlocked = false,
   isMarketPriceFresh = () => true,
   isStopping = () => false,
   hasBlockingOpenOrdersForSymbol = () => false,
@@ -91,6 +92,7 @@ function createRuntime({
     },
     recoverySellerStopWorkflow: {
       getState: () => stopStateOverride,
+      isAccountAdmissionBlocked: () => accountAdmissionBlocked,
     },
     recoverySellerPairs,
     getRecoverySellerMarketMetadata: async () => marketMetadata,
@@ -157,6 +159,23 @@ test("fails closed for stopped, paused or unreconciled runtime state", async () 
   assert.equal(snapshotInput.strategyStopped, true)
   assert.equal(snapshotInput.marketPaused, true)
   assert.equal(snapshotInput.reconciliationComplete, false)
+})
+
+test("blocks account admission while a STOP persistence attempt is unresolved", async () => {
+  const runtime = createRuntime({
+    accountAdmissionBlocked: true,
+    stopStateOverride: Object.freeze({
+      status: "RUNNING",
+      decision: null,
+    }),
+  })
+  const result = await runtime.evaluate(runtime.input)
+  const snapshotInput = runtime.getSnapshotInput()
+
+  assert.equal(result.ok, true, "A blocked runtime snapshot must remain a successful evaluation result.")
+  assert.equal(result.data.decision.outcome, "WAIT", "Account admission failure must not produce a trading action.")
+  assert.equal(snapshotInput.strategyStopped, true,
+    "The runtime evaluator must honor the in-memory account-admission gate before STOP persistence succeeds.")
 })
 
 test("skips evaluation when market price is missing or stale", async () => {
