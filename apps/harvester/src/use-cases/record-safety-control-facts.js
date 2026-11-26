@@ -166,7 +166,7 @@ function validateSafetyBlockerResolution({
       resolutionReason.trim() !== resolutionReason ||
       resolutionReason.length < 8 ||
       resolutionReason.length > 512 ||
-      /[\\u0000-\\u001F\\u007F]/.test(resolutionReason) ||
+      /[\u0000-\u001F\u007F]/.test(resolutionReason) ||
       resolvedBy !== expectedResolvedBy ||
       !Array.isArray(actionBlockerIds) ||
       actionBlockerIds.length === 0 ||
