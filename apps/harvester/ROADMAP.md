@@ -30,6 +30,9 @@ the durable runtime-evidence record; this entry tracks confirmed source findings
   operator-control stop and broker disconnect without a handler-owned phase deadline. A pending
   CLOSING audit can therefore leave the lifecycle waiting outside the bounded strategy coordinator.
   A deterministic deferred-promise regression now captures the CLOSING-audit timeout requirement.
+- The outer createHarvesterStop boundary also awaited durable PROCESS_STOPPED without a deadline.
+  A pending append could leave the process lock retained indefinitely after in-memory runtime shutdown.
+  A deferred-promise regression now requires a bounded durability outcome and blocks overlapping retries.
 
 ### Implementation recorded on PR #1858
 
