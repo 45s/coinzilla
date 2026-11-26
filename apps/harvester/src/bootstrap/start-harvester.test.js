@@ -389,7 +389,7 @@ test("captures the CLOSING account-wide open-order set before broker disconnect 
 })
 
 
-function createTwoMarketShutdownEventPublisher(calls, publishedEvents) {
+function createTwoMarketShutdownEventPublisher({ calls, publishedEvents } = {}) {
   let lastPublishedEvent
   return {
     publish(event) {
@@ -405,12 +405,15 @@ function createTwoMarketShutdownEventPublisher(calls, publishedEvents) {
     },
     flush: async () => {
       calls.push(["flush", lastPublishedEvent?.name ?? "undefined", lastPublishedEvent?.data?.phase ?? ""].join(":"))
-      return { ok: true, durable: true }
+      return {
+        ok: true,
+        durable: true,
+      }
     },
   }
 }
 
-function createTwoMarketShutdownLogger(calls, infoRecords) {
+function createTwoMarketShutdownLogger({ calls, infoRecords } = {}) {
   return {
     info(record) {
       infoRecords.push(record)
@@ -424,7 +427,7 @@ function createTwoMarketShutdownLogger(calls, infoRecords) {
   }
 }
 
-function assertShutdownBarrierBeforeMarketStop(calls, barrier, firstMarketFeedStopIndex, message) {
+function assertShutdownBarrierBeforeMarketStop({ calls, barrier, firstMarketFeedStopIndex, message } = {}) {
   const barrierIndex = calls.indexOf(barrier)
   assert.ok(barrierIndex >= 0 && barrierIndex < firstMarketFeedStopIndex, message)
 }
@@ -448,8 +451,18 @@ function assertTwoMarketShutdownAcceptance({ calls, infoRecords, publishedEvents
   const closingBalances = publishedEvents.find((event) => event.name === "account.snapshot_captured" && event.data.phase === "CLOSING")
   assert.ok(closingOpenOrders && closingBalances, "The composed runtime must publish both CLOSING account audits.")
   assert.ok(publishedEvents.indexOf(closingOpenOrders) < publishedEvents.indexOf(closingBalances), "CLOSING open orders must precede CLOSING balances.")
-  assertShutdownBarrierBeforeMarketStop(calls, "flush:account.open_orders_captured:CLOSING", firstMarketFeedStopIndex, "The CLOSING open-order durability barrier must precede market teardown.")
-  assertShutdownBarrierBeforeMarketStop(calls, "flush:account.snapshot_captured:CLOSING", firstMarketFeedStopIndex, "The CLOSING balance durability barrier must precede market teardown.")
+  assertShutdownBarrierBeforeMarketStop({
+    calls,
+    barrier: "flush:account.open_orders_captured:CLOSING",
+    firstMarketFeedStopIndex,
+    message: "The CLOSING open-order durability barrier must precede market teardown.",
+  })
+  assertShutdownBarrierBeforeMarketStop({
+    calls,
+    barrier: "flush:account.snapshot_captured:CLOSING",
+    firstMarketFeedStopIndex,
+    message: "The CLOSING balance durability barrier must precede market teardown.",
+  })
 
   const userDataStopIndex = calls.indexOf("unsubscribe:user-data")
   const brokerDisconnectIndex = calls.indexOf("disconnect")
@@ -470,7 +483,7 @@ test("proves shutdown safety independently for every enabled market in the compo
   const calls = []
   const publishedEvents = []
   const infoRecords = []
-  const eventPublisher = createTwoMarketShutdownEventPublisher(calls, publishedEvents)
+  const eventPublisher = createTwoMarketShutdownEventPublisher({ calls, publishedEvents })
   const broker = makeVolatilityReadyBroker(createBroker(calls), ["BTCUSDT", "ETHUSDT"])
 
   try {
@@ -480,11 +493,17 @@ test("proves shutdown safety independently for every enabled market in the compo
       operationalStateStore,
       brokerAdapterFactory: () => broker,
       eventPublisher,
-      logger: createTwoMarketShutdownLogger(calls, infoRecords),
+      logger: createTwoMarketShutdownLogger({ calls, infoRecords }),
     })
     const stopResult = await runtime.stop()
     const processHistory = await operationalStateStore.readAll()
-    assertTwoMarketShutdownAcceptance({ calls, infoRecords, publishedEvents, stopResult, processHistory })
+    assertTwoMarketShutdownAcceptance({
+      calls,
+      infoRecords,
+      publishedEvents,
+      stopResult,
+      processHistory,
+    })
   } finally {
     await rm(directory, { recursive: true, force: true })
   }
