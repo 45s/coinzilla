@@ -448,6 +448,34 @@ async function verifyScalarSortOrdering(database) {
   await verifyScalarSortDescending(database)
 }
 
+async function verifySortingAfterUpdate(database) {
+  await database.create({
+    collection: "people",
+    record: { id: "updated-rank", rank: 2 },
+  })
+  await database.create({
+    collection: "people",
+    record: { id: "stable-rank", rank: 1 },
+  })
+  await database.update({
+    collection: "people",
+    id: "updated-rank",
+    changes: { rank: 0 },
+  })
+
+  const records = await database.readMany({
+    collection: "people",
+    query: {
+      sort: [{ field: "rank", direction: "asc" }],
+    },
+  })
+  assert.deepEqual(
+    records.map((record) => record.id),
+    ["updated-rank", "stable-rank"],
+    "Sorting must observe the latest updated field value rather than stale derived metadata",
+  )
+}
+
 async function verifyPagination(database) {
   for (const record of [
     {
@@ -971,6 +999,11 @@ function registerQueryTests({ name, createDatabase, capabilities, storageMode, c
       description: "sorting uses portable JSON value ordering",
       capability: "sorting",
       verify: verifyScalarSortOrdering,
+    },
+    {
+      description: "sorting observes updated field values",
+      capability: "sorting",
+      verify: verifySortingAfterUpdate,
     },
     {
       description: "pagination applies limit and offset after sorting",
