@@ -174,6 +174,9 @@ async function flushJournal(eventPublisher, signal) {
       blockers: ["JOURNAL_NOT_DURABLE"],
     }
   } catch (error) {
+    if (signal?.aborted) {
+      throw signal.reason ?? error
+    }
     return {
       durable: false,
       blockers: [createStageBlocker({
@@ -250,6 +253,7 @@ async function reconcileOwnedOrders({
 
   await collectStageBlockers({
     blockers,
+    reconciliationBlockers,
     stage: "OWNED_BUY_CANCELLATION",
     operation: () => engine.cancelOwnedBuyOrdersForShutdown({ symbol }),
     signal,

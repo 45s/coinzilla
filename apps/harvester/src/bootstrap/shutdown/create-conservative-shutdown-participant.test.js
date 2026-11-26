@@ -882,3 +882,34 @@ test("waits for the serialized engine shutdown barrier before cancelling owned B
     "The serialized shutdown barrier must finish before owned BUY cancellation begins.",
   )
 })
+
+
+test("does not advance to BUY cancellation or recovery proof after a participant deadline abort", async () => {
+  const calls = []
+  const engine = createFakeEngine({ calls })
+  let releaseReconciliation
+  const reconciliation = new Promise((resolve) => {
+    releaseReconciliation = resolve
+  })
+  engine.reconcileOwnedOrders = async ({ symbol }) => {
+    calls.push(`reconcile-start:${symbol}`)
+    await reconciliation
+    calls.push(`reconcile-finish:${symbol}`)
+    return { ok: true }
+  }
+  const participant = createParticipant({ engine, calls })
+  const controller = new AbortController()
+
+  participant.beginShutdown()
+  const safety = participant.waitUntilSafe({ signal: controller.signal })
+  await Promise.resolve()
+  await Promise.resolve()
+  controller.abort(new Error("participant deadline elapsed"))
+  releaseReconciliation()
+
+  await assert.rejects(safety, /participant deadline elapsed/)
+  assert.equal(calls.some((call) => call.startsWith("reconcile-finish:")), true, "The in-flight read may settle after abort, but its result must not advance the safety proof.")
+  assert.equal(calls.some((call) => call.startsWith("cancel:DOGEUSDT") || call.startsWith("cancel:SOLUSDT")), false, "No later per-market BUY cancellation stage may start after abort.")
+  assert.equal(calls.some((call) => call.startsWith("recovery:")), false, "No recovery SELL planning or coverage stage may start after abort.")
+  assert.equal(participant.isSafeToShutdown(), false, "An aborted participant must not publish successful safety.")
+})
