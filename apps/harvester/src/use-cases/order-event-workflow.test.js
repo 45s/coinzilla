@@ -1022,7 +1022,14 @@ test("routes terminal RS SELL fill history through mixed accounting without Cons
     terminalFills: [fill],
     reconcileRecoverySellerMixedSell: async (input) => {
       mixedSellReconciliations.push(input)
-      return toResult({ data: { reconciled: true, profitability: { eligible: true } } })
+      return toResult({
+        data: {
+          reconciled: true,
+          profitability: {
+            eligible: true,
+          },
+        },
+      })
     },
   })
 
@@ -1041,7 +1048,7 @@ test("routes terminal RS SELL fill history through mixed accounting without Cons
   assert.deepEqual(calls.sellFills, [fill], "The terminal canonical fill must be staged exactly once.")
 })
 
-test("durably latches global RS STOP after a reconciled FILLED SELL misses profitability", async () => {
+function createUnderTargetRecoverySellerOrderEventFixture() {
   const terminalOrder = makeOrder({
     side: "SELL",
     status: "FILLED",
@@ -1085,7 +1092,15 @@ test("durably latches global RS STOP after a reconciled FILLED SELL misses profi
       })
     },
   })
+  return {
+    terminalOrder,
+    workflow,
+    calls,
+  }
+}
 
+test("durably latches global RS STOP after a reconciled FILLED SELL misses profitability", async () => {
+  const { terminalOrder, workflow, calls } = createUnderTargetRecoverySellerOrderEventFixture()
   const result = await workflow.processUserDataEventTransition({
     event: {
       eventType: "executionReport",
@@ -1104,7 +1119,6 @@ test("durably latches global RS STOP after a reconciled FILLED SELL misses profi
   assert.equal(calls.pauses[0].reason, "RS_TERMINAL_SELL_PROFITABILITY_STOP",
     "The affected market must also pause when the global STOP is latched.")
 })
-
 test("latches the durable global RS STOP when terminal mixed-SELL reconciliation is unavailable", async () => {
   const terminalOrder = makeOrder({
     side: "SELL",
