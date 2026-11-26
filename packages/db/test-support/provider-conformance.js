@@ -507,9 +507,18 @@ async function verifyMissingRecords(database) {
 
 async function verifyRollback(database) {
   const failure = new Error("abort the complete transaction")
-
-  await assert.rejects(
-    database.transaction((transaction) => {
+  const work = database.capabilities.transactions.callbackMode === "asynchronous"
+    ? async (transaction) => {
+      await transaction.create({
+        collection: "people",
+        record: {
+          id: "transaction-1",
+          name: "Uncommitted",
+        },
+      })
+      throw failure
+    }
+    : (transaction) => {
       transaction.create({
         collection: "people",
         record: {
@@ -518,7 +527,10 @@ async function verifyRollback(database) {
         },
       })
       throw failure
-    }),
+    }
+
+  await assert.rejects(
+    database.transaction(work),
     (error) => error === failure,
     "A failed transaction must preserve the original callback error",
   )
@@ -534,16 +546,28 @@ async function verifyRollback(database) {
 }
 
 async function verifyCommit(database) {
-  const result = await database.transaction((transaction) => {
-    transaction.create({
-      collection: "people",
-      record: {
-        id: "committed-1",
-        name: "Committed",
-      },
-    })
-    return "committed"
-  })
+  const work = database.capabilities.transactions.callbackMode === "asynchronous"
+    ? async (transaction) => {
+      await transaction.create({
+        collection: "people",
+        record: {
+          id: "committed-1",
+          name: "Committed",
+        },
+      })
+      return "committed"
+    }
+    : (transaction) => {
+      transaction.create({
+        collection: "people",
+        record: {
+          id: "committed-1",
+          name: "Committed",
+        },
+      })
+      return "committed"
+    }
+  const result = await database.transaction(work)
 
   assert.equal(
     result,
