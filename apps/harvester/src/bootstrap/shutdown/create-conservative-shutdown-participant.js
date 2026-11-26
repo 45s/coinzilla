@@ -990,14 +990,11 @@ function createSafetyReevaluationLimitFailures({ snapshot } = {}) {
     }))
 }
 
-async function waitForConservativeMarkets({
+async function prepareConservativeShutdown({
   engine,
-  eventPublisher,
   drainUserDataEvents,
-  getShutdownBlockers,
-  logger,
   signal,
-  stageDiagnostics = new Map(),
+  stageDiagnostics,
 } = {}) {
   throwIfShutdownAborted(signal)
   await runStage({
@@ -1014,17 +1011,27 @@ async function waitForConservativeMarkets({
     stageDiagnostics,
   })
   throwIfShutdownAborted(signal)
-  let snapshot = engine.getShutdownSafetySnapshot()
-  let safetyPassCount = 0
+  return initialDrainBlockers
+}
 
-  while (true) {
-    if (safetyPassCount >= MAX_CONSERVATIVE_SHUTDOWN_SAFETY_PASSES) {
-      throwForUnsafeConservativeMarkets({
-        failedMarkets: createSafetyReevaluationLimitFailures({ snapshot }),
-      })
-    }
+async function waitForConservativeMarkets({
+  engine,
+  eventPublisher,
+  drainUserDataEvents,
+  getShutdownBlockers,
+  logger,
+  signal,
+  stageDiagnostics = new Map(),
+} = {}) {
+  const initialDrainBlockers = await prepareConservativeShutdown({
+    engine,
+    drainUserDataEvents,
+    signal,
+    stageDiagnostics,
+  })
+  let snapshot = engine.getShutdownSafetySnapshot()
+  for (let pass = 0; pass < MAX_CONSERVATIVE_SHUTDOWN_SAFETY_PASSES; pass += 1) {
     throwIfShutdownAborted(signal)
-    safetyPassCount += 1
     snapshot = await secureUnsafeMarkets({
       engine,
       snapshot,
@@ -1047,6 +1054,9 @@ async function waitForConservativeMarkets({
       }
     }
   }
+  throwForUnsafeConservativeMarkets({
+    failedMarkets: createSafetyReevaluationLimitFailures({ snapshot }),
+  })
 }
 
 /**
