@@ -205,6 +205,9 @@ test("SCRAM rejects server errors, invalid signatures, and malformed nonces", as
     /nonce/i,
   )
 
+})
+
+test("SCRAM propagates server authentication errors", async () => {
   const serverError = {
     async command() {
       return {
