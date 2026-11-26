@@ -22,6 +22,10 @@ the durable runtime-evidence record; this entry tracks confirmed source findings
 - The shutdown coordinator previously awaited strategy participants without a participant-level
   deadline or an abort signal. A participant that never settled could leave shutdown waiting
   without a terminal participant result.
+- A participant timeout aborted its signal but did not retain the underlying wait promise. A later
+  shutdown attempt could start a second `waitUntilSafe()` operation while the timed-out operation
+  remained unresolved. A deferred-promise regression now captures this retry-overlap risk; its
+  exact-head RED result is pending.
 
 ### Implementation recorded on PR #1858
 
@@ -38,6 +42,9 @@ the durable runtime-evidence record; this entry tracks confirmed source findings
 - Adds bounded strategy-participant shutdown outcomes, cancellation signals, stage tracking,
   pending-order identities, last-successful-step diagnostics and a shutdown-handler integration
   regression for retained services.
+- Adds deterministic regression coverage that a failed recovery SELL durable-intent barrier
+  prevents its sibling BUY from reaching broker I/O. The strategy already emits SELL before BUY;
+  this is verification-only and does not change production behavior.
 - Documents the separate Operational State Store, Journal, legacy order-history and relational
   trading-history responsibilities, plus the startup open-order audit contract and shutdown
   milestones.
