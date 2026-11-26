@@ -273,15 +273,36 @@ async function assertAdaDuplicateFillIsIdempotent({ replay, replacementSell, eve
   assert.equal(replay.receivedLifecycleEvents.length, eventCount)
 }
 
+function collectShutdownErrorEvidence(error, seen = new Set()) {
+  if (!(error instanceof Error) || seen.has(error)) {
+    return ""
+  }
+  seen.add(error)
+  const diagnostics = error.shutdownDiagnostics
+  const diagnosticText = diagnostics === undefined ? "" : JSON.stringify(diagnostics)
+  const nested = [
+    ...(Array.isArray(error.errors) ? error.errors : []),
+    ...(error.cause instanceof Error ? [error.cause] : []),
+  ]
+  return [
+    error.name,
+    error.message,
+    error.code,
+    diagnosticText,
+    ...nested.map((item) => collectShutdownErrorEvidence(item, seen)),
+  ].filter(Boolean).join(" ")
+}
+
 function assertAdaShutdownOutcome({ replay, thirdBuy, shutdownError }) {
   assert.ok(
     replay.confirmedCanceledOrders.some((order) => order.clientOrderId === thirdBuy.clientOrderId),
     "shutdown must cancel the still-open next BUY without completing the below-target recovery cycle",
   )
-  assert.ok(shutdownError instanceof AggregateError, "shutdown must fail closed while recovery SELL coverage is unproven")
-  assert.match(shutdownError.message, /CONSERVATIVE_SHUTDOWN_SAFETY_UNPROVEN/)
-  assert.match(shutdownError.message, /RECOVERY_SELL_COVERAGE_UNVERIFIED/)
-  assert.match(shutdownError.message, /SHUTDOWN_RECOVERY_REPLACEMENT_NOT_SUBMITTED/)
+  assert.ok(shutdownError instanceof Error, "shutdown must fail closed while recovery SELL coverage is unproven")
+  const evidence = collectShutdownErrorEvidence(shutdownError)
+  assert.match(evidence, /CONSERVATIVE_SHUTDOWN_SAFETY_UNPROVEN/)
+  assert.match(evidence, /RECOVERY_SELL_COVERAGE_UNVERIFIED/)
+  assert.match(evidence, /SHUTDOWN_RECOVERY_REPLACEMENT_NOT_SUBMITTED/)
   assert.equal(
     replay.receivedLifecycleEvents.some(({ name }) => name === "recovery.cycle_completed"),
     false,

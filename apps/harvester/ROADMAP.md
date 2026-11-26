@@ -19,6 +19,8 @@ Feature branch: `fix/harvester/incident-1856-ownership-shutdown-safety`
 
 - The shared market-price dispatcher selected any active BUY for Conservative CG trailing-BUY repricing without checking canonical strategy ownership. An RS-owned LINEAUSDT BUY therefore entered the CG path, where the RS-only symbol had no CG pair config and `evaluateTrailingBuyTrigger` dereferenced missing `priceStepPercent`.
 
+- Multi-provider shutdown now returns the same explicit `status: "STOPPED"` acknowledgement as single-provider shutdown, so the outer process boundary can safely publish STOPPED and release account locks.
+
 ### Implementation recorded on PR #1858
 
 - Shared market-price dispatch now checks canonical OrderRegistry ownership and invokes the CG-specific trailing-BUY workflow only for CG-owned BUYs. RS-owned and unowned BUY events continue through the shared latest-transition evaluator without dereferencing CG-only pair configuration.
