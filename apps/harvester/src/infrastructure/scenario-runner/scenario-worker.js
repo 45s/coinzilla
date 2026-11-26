@@ -22,3 +22,4 @@ const handleWorkerMessage = createScenarioWorkerMessageHandler({
 })
 
 process.on("message", handleWorkerMessage)
+process.send?.({ type: "ready" })
