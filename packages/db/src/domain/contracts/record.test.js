@@ -271,3 +271,18 @@ test("read query validation rejects unsupported filters, sorts, and pagination",
     )
   }
 })
+
+
+test("record contracts reject ill-formed Unicode before provider serialization", () => {
+  const loneSurrogate = "\ud800"
+  assert.throws(() => validateCollectionName(`people${loneSurrogate}`), /well-formed Unicode/i)
+  assert.throws(() => validateRecordIdentifier(`id${loneSurrogate}`), /well-formed Unicode/i)
+  assert.throws(
+    () => serializeRecord({ id: "person-1", value: loneSurrogate }),
+    /well-formed Unicode/i,
+  )
+  assert.throws(
+    () => serializeRecord({ id: "person-1", [`bad${loneSurrogate}`]: "value" }),
+    /well-formed Unicode/i,
+  )
+})
