@@ -66,6 +66,9 @@ function assertCommandSucceeded(response, stage) {
   if (!Number.isInteger(response.conversationId)) {
     throw new Error("MongoDB SCRAM response omitted its conversation identifier")
   }
+  if (typeof response.done !== "boolean") {
+    throw new Error("MongoDB SCRAM response omitted its completion flag")
+  }
   if (!Buffer.isBuffer(response.payload)) {
     throw new Error("MongoDB SCRAM response payload must be binary")
   }
@@ -102,6 +105,7 @@ export async function authenticateMongoScram({
     throw new TypeError("MongoDB SCRAM command callback is required")
   }
   if (typeof username !== "string" || username.length === 0
+    || !/^[\\x20-\\x7e]+$/.test(username)
     || typeof password !== "string") {
     throw new TypeError("MongoDB SCRAM requires a non-empty username and string password")
   }
@@ -112,7 +116,11 @@ export async function authenticateMongoScram({
     throw new TypeError("MongoDB authentication source must be a non-empty string")
   }
 
-  const nonce = randomBytes(24).toString("base64")
+  const nonceBytes = randomBytes(24)
+  if (!Buffer.isBuffer(nonceBytes) || nonceBytes.length !== 24) {
+    throw new TypeError("MongoDB SCRAM random source must return the requested number of bytes")
+  }
+  const nonce = nonceBytes.toString("base64")
   const clientFirstBare = `n=${escapeUsername(username)},r=${nonce}`
   const clientFirst = `n,,${clientFirstBare}`
   const startResponse = await command({
@@ -186,6 +194,9 @@ export async function authenticateMongoScram({
     },
   })
   assertCommandSucceeded(continueResponse, "continue")
+  if (continueResponse.conversationId !== startResponse.conversationId) {
+    throw new Error("MongoDB SCRAM conversation identifier changed during authentication")
+  }
   let finalRounds = 0
   while (!continueResponse.done) {
     finalRounds += 1
@@ -201,6 +212,9 @@ export async function authenticateMongoScram({
       },
     })
     assertCommandSucceeded(continueResponse, "finalize")
+    if (continueResponse.conversationId !== startResponse.conversationId) {
+      throw new Error("MongoDB SCRAM conversation identifier changed during authentication")
+    }
   }
   verifyServerSignature({
     payload: continueResponse.payload,
