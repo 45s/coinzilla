@@ -278,9 +278,24 @@ test("keeps Recovery Seller STOP exclusive to its dedicated legacy operator acti
   const legacy = projectHarvesterOperationalState({ records: recordsFor(legacyResolution) })
   const structured = projectHarvesterOperationalState({ records: recordsFor(structuredResolution) })
 
+  const legacyUnattributedRecords = recordsFor(legacyResolution).map((entry) =>
+    entry.factType === "SAFETY_BLOCKER_RAISED"
+      ? {
+        ...entry,
+        data: {
+          ...entry.data,
+          producer: undefined,
+        },
+      }
+      : entry
+  )
+  const legacyUnattributed = projectHarvesterOperationalState({ records: legacyUnattributedRecords })
+
   assert.equal(legacy.ok, true, legacy.errors?.map(({ message }) => message).join("; "))
   assert.deepEqual(legacy.data.stickySafetyBlockers, [])
   assert.equal(structured.ok, false, "The account-wide user-data resolver must not clear Recovery Seller STOP.")
+  assert.equal(legacyUnattributed.ok, true, "Legacy untagged Recovery Seller STOP facts retain their dedicated resolver")
+  assert.deepEqual(legacyUnattributed.data.stickySafetyBlockers, [])
 })
 
 test("classifies Recovery Seller STOP by producer rather than a colliding reason string", () => {
