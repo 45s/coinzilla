@@ -39,7 +39,7 @@ export class DatabaseTransactionUnsupportedError extends SystemCustomError {
       context.topology = topology
     }
 
-    super("Database provider does not support multi-document transactions", {
+    super("Multi-document transactions are not supported by this database provider", {
       code: "DB_TRANSACTION_UNSUPPORTED",
       context,
       cause,
