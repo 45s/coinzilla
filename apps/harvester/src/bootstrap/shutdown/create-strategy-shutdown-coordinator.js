@@ -174,6 +174,15 @@ async function waitForParticipantWithDeadline({
         (reason) => ({ status: "rejected", reason }),
       )
     outcome = await Promise.race([participantResult, timeoutResult, abortResult])
+    if (outcome.status === "fulfilled" &&
+        (signal?.aborted || participantController.signal.aborted)) {
+      const abortReason = signal?.reason ?? participantController.signal.reason ??
+        new Error("Strategy shutdown participant was aborted")
+      outcome = abortReason.code === "STRATEGY_SHUTDOWN_PARTICIPANT_TIMEOUT"
+        ? { status: "timed_out", reason: abortReason }
+        : { status: "aborted", reason: abortReason }
+      break
+    }
     if (outcome.status !== "fulfilled" || outcome.value?.ok !== true) {
       break
     }
