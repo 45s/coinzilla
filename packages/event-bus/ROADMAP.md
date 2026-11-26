@@ -3,7 +3,7 @@
 **Owner:** `@coinzilla/event-bus`  
 **Last reviewed:** 2026-11-26
 
-> The previous detailed roadmap, including reliability matrix, engineering instructions, decision log, and validation history, is preserved in [Event Bus roadmap history](../../ROADMAP_HISTORY_2026-11-26.md).
+> The previous detailed roadmap, including reliability matrix, engineering instructions, decision log, and validation history, is preserved in [Event Bus roadmap history](../../docs/archive/domain-roadmap-history-2026-11-26.md#event-bus-roadmap).
 
 ## Current position
 
