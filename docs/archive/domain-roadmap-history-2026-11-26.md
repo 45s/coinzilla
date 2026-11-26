@@ -127,7 +127,7 @@ The diagnostic regression is verified GREEN by the Harvester Targeted Tests work
 
 ## Binance historical order identity collisions — issue #1851
 
-Complete in merged [PR #1849](https://github.com/45s/coinzilla/pull/1849); all six required workflows passed on exact PR head `7c8763d3153eb7ea4c5c9a929ea78eab33ea2f9d`. The 2026-11-25 TESTNET startup history scan failed independently for ZROUSDT and DOGEUSDT with immutable-price conflicts while records shared client IDs but carried exchange order IDs 661748 and 1193792. Source inspection confirmed the canonical identity and relational uniqueness constraint were clientOrderId-based. Binance permits clientOrderId reuse after the previous order is FILLED; pending identities remain market-scoped because the REST documentation does not specify cross-symbol client-ID uniqueness. The corrected model keys exchange-identified orders by provider/account/environment/market/exchangeOrderId and links fills by that same identity. Migration v5 preserves old row IDs and foreign-key links, verifies a pre-migration backup, and fails closed on duplicate exchange identities. Same-order immutable price conflicts remain fatal and any failed history page keeps coverage incomplete. The sanitized report is [2026-11-25 ZRO/DOGE order-history identity investigation](./docs/audits/reports/2026-11-25_binance-order-history-identity-conflicts.md). The exact old SQLite row broker IDs/prices were not present in recovered logs or Library files; regression prices are synthetic, so the per-symbol original row pairing remains explicitly unproven.
+Complete in merged [PR #1849](https://github.com/45s/coinzilla/pull/1849); all six required workflows passed on exact PR head `7c8763d3153eb7ea4c5c9a929ea78eab33ea2f9d`. The 2026-11-25 TESTNET startup history scan failed independently for ZROUSDT and DOGEUSDT with immutable-price conflicts while records shared client IDs but carried exchange order IDs 661748 and 1193792. Source inspection confirmed the canonical identity and relational uniqueness constraint were clientOrderId-based. Binance permits clientOrderId reuse after the previous order is FILLED; pending identities remain market-scoped because the REST documentation does not specify cross-symbol client-ID uniqueness. The corrected model keys exchange-identified orders by provider/account/environment/market/exchangeOrderId and links fills by that same identity. Migration v5 preserves old row IDs and foreign-key links, verifies a pre-migration backup, and fails closed on duplicate exchange identities. Same-order immutable price conflicts remain fatal and any failed history page keeps coverage incomplete. The sanitized report is [2026-11-25 ZRO/DOGE order-history identity investigation](../../apps/harvester/docs/audits/reports/2026-11-25_binance-order-history-identity-conflicts.md). The exact old SQLite row broker IDs/prices were not present in recovered logs or Library files; regression prices are synthetic, so the per-symbol original row pairing remains explicitly unproven.
 
 ## Trading-history WebSocket large-frame crash — issue #1826
 
@@ -189,7 +189,7 @@ The confirmed account-scoped admission bypass is fixed and integrated through [P
 
 ## Conservative trading correctness and exhaustive scenario coverage — issue #1763
 
-**Objective:** prove Conservative trading calculations, accounting, lifecycle transitions and safety decisions with source-mapped deterministic evidence. This complements (does not replace) focused unit tests and existing application/replay tests. The canonical [Conservative Domain Specification](./docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md) remains the sole behavior authority; the [scenario-test guide](./docs/domain/CONSERVATIVE_DOMAIN_SCENARIO_TESTS.md) defines authoring conventions; [issue #1763](https://github.com/45s/coinzilla/issues/1763) owns the exhaustive matrix and phase-by-phase evidence.
+**Objective:** prove Conservative trading calculations, accounting, lifecycle transitions and safety decisions with source-mapped deterministic evidence. This complements (does not replace) focused unit tests and existing application/replay tests. The canonical [Conservative Domain Specification](../../apps/harvester/docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md) remains the sole behavior authority; the [scenario-test guide](../../apps/harvester/docs/domain/CONSERVATIVE_DOMAIN_SCENARIO_TESTS.md) defines authoring conventions; [issue #1763](https://github.com/45s/coinzilla/issues/1763) owns the exhaustive matrix and phase-by-phase evidence.
 
 **Non-negotiable quality bar**
 
@@ -301,7 +301,7 @@ Complete in merged [PR #1741](https://github.com/45s/coinzilla/pull/1741), merge
 
 ## Recovery Seller domain scenario testing — issue #1780
 
-**Purpose:** deliver a from-scratch, source-grounded RS scenario suite. This is a test-evidence workstream, not a trading-policy, configuration, activation or exchange-operation task. The shared strategy-neutral method is [DOMAIN_SCENARIO_TESTING.md](../testing/DOMAIN_SCENARIO_TESTING.md); the [RS Scenario Testing Playbook](./docs/domain/recovery-seller-scenario-testing.md) owns RS authoring rules; [issue #1780](https://github.com/45s/coinzilla/issues/1780) owns the detailed RS-001…RS-010 matrix and evidence; the [Repository Scenario Catalog](../testing/SCENARIO_CATALOG.md) is the navigation index.
+**Purpose:** deliver a from-scratch, source-grounded RS scenario suite. This is a test-evidence workstream, not a trading-policy, configuration, activation or exchange-operation task. The shared strategy-neutral method is [DOMAIN_SCENARIO_TESTING.md](../testing/DOMAIN_SCENARIO_TESTING.md); the [RS Scenario Testing Playbook](../../apps/harvester/docs/domain/recovery-seller-scenario-testing.md) owns RS authoring rules; [issue #1780](https://github.com/45s/coinzilla/issues/1780) owns the detailed RS-001…RS-010 matrix and evidence; the [Repository Scenario Catalog](../testing/SCENARIO_CATALOG.md) is the navigation index.
 
 **Historical baseline:** merged [PR #1793](https://github.com/45s/coinzilla/pull/1793) provides the earlier four-file scenario suite with deliberately PARTIAL evidence across RS-003 through RS-007. The consolidated registry and playbook in #1852 extend that baseline; existing production/runtime tests are not credited as scenario coverage merely because they exist.
 
@@ -383,7 +383,7 @@ Complete in merged [PR #1641](https://github.com/45s/coinzilla/pull/1641), merge
 - **Status — IN PROGRESS.** The original source-backed critical-behavior inventory, ownership mappings, and measured coverage floors were completed in merged [PR #1697](https://github.com/45s/coinzilla/pull/1697): 15 critical behaviors and 39 production-module floors. This CLOSING open-order audit increment adds the 16th behavior and the 41st production-module coverage floor; exact-head coverage passed on [run #45012989393](https://github.com/45s/coinzilla/actions/runs/45012989393). The parent issue [#1639](https://github.com/45s/coinzilla/issues/1639) tracks the remaining runtime and failure-path evidence.
 - **Completed runtime replay — PR #1702:** merged partial BUY and partial recovery-SELL execution replay through `startHarvester()`. The replay preserves incremental fills, cumulative order quantities, actual commissions, Portfolio/RecoveryLedger alignment, and terminal recovery completion. Exact-head Harvester replay passed 6/6.
 - **Complete — issue #1707 / merged [PR #1708](https://github.com/45s/coinzilla/pull/1708), merge commit `39eec79531c46a93063be017b1d0173d02136545`.** The source fix applies a distinct earlier Fill against the current registered order without regressing canonical order state. All six required workflows passed on exact head `241b4a4bc44efaa1f04c2164e0aad0ded6418582`; issue #1707 is closed.
-- **Coverage baseline:** the exact `develop` production-source baseline at `7767ea8ce871b658a4bd68a03cc4c4999f582b49` was 90.35% lines / 83.22% branches / 96.00% functions. The latest 41-module PR-head measurement is [run #45012989393](https://github.com/45s/coinzilla/actions/runs/45012989393): 90.48% lines / 83.50% branches / 95.97% functions aggregate; all 41 critical-module floors passed. Per-module observations and floors remain in `critical-behaviors.json`; historical provenance is preserved in [RELIABILITY_BASELINE_2026-11-21.md](./docs/RELIABILITY_BASELINE_2026-11-21.md).
+- **Coverage baseline:** the exact `develop` production-source baseline at `7767ea8ce871b658a4bd68a03cc4c4999f582b49` was 90.35% lines / 83.22% branches / 96.00% functions. The latest 41-module PR-head measurement is [run #45012989393](https://github.com/45s/coinzilla/actions/runs/45012989393): 90.48% lines / 83.50% branches / 95.97% functions aggregate; all 41 critical-module floors passed. Per-module observations and floors remain in `critical-behaviors.json`; historical provenance is preserved in [RELIABILITY_BASELINE_2026-11-21.md](../../apps/harvester/docs/RELIABILITY_BASELINE_2026-11-21.md).
 - **Remaining next slices:** user-data disconnect/reconnect and queued-event draining; unresolved cancellation and shutdown durability failure paths; targeted branch-coverage improvements in Portfolio, operational-state projection, shutdown coordination, multi-lock orchestration, and the Conservative engine.
 - **Restart boundary:** durable-fact and crash-matrix evidence remains offline only. Default runtime restoration and Journal replay remain disabled under the independent [#654](https://github.com/45s/coinzilla/issues/654) acceptance gates.
 - **Operational boundary:** the Binance TESTNET runbook remains CLOSED / PAUSED. Offline engineering may continue; no TESTNET exchange writes or LIVE operation are authorized.
@@ -432,7 +432,7 @@ The ADA recovery lifecycle work below remains a separate active trading-safety o
 
 ## Persistence — provider-agnostic database integration (#1327)
 
-The [trading-history persistence roadmap](./docs/persistence/trading-history-roadmap.md) is the canonical phased plan for completed relational history and the remaining attribution, analytics and operational work. The persistence README remains the current implementation contract.
+The [trading-history persistence roadmap](../../apps/harvester/docs/persistence/trading-history-roadmap.md) is the canonical phased plan for completed relational history and the remaining attribution, analytics and operational work. The persistence README remains the current implementation contract.
 
 **Status:** The generic `@coinzilla/db` provider-neutral CRUD/query, lifecycle, transaction, SQLite provider, backup/restore primitives and conformance infrastructure are implemented and hardened. The package-specific DB ESLint cleanup is complete.
 
@@ -481,7 +481,7 @@ The temporary `harvester_processes` process-ID smoke-test row and its obsolete p
 
 ## Binance single-writer lock isolation — #1307
 
-- [x] **Complete — #1307 closed.** Host-shared Harvester process locks are scoped by Binance broker and explicit trading environment. TESTNET and LIVE can coexist; duplicate writers in one environment remain blocked across worktrees. Atomic exclusive creation, ownership-token release, conservative dead-PID recovery and lock retention on uncertain shutdown remain required. Current identity is broker + trading mode, not account ID; account-scoped lock identity is a separate multi-provider migration requirement. See [Journal Operations — Trading process ownership locks](./docs/JOURNAL_OPERATIONS.md#trading-process-ownership-locks), [issue #1307](https://github.com/45s/coinzilla/issues/1307), and the [multi-provider migration audit](../architecture/multi-provider-migration-plan.md).
+- [x] **Complete — #1307 closed.** Host-shared Harvester process locks are scoped by Binance broker and explicit trading environment. TESTNET and LIVE can coexist; duplicate writers in one environment remain blocked across worktrees. Atomic exclusive creation, ownership-token release, conservative dead-PID recovery and lock retention on uncertain shutdown remain required. Current identity is broker + trading mode, not account ID; account-scoped lock identity is a separate multi-provider migration requirement. See [Journal Operations — Trading process ownership locks](../../apps/harvester/docs/JOURNAL_OPERATIONS.md#trading-process-ownership-locks), [issue #1307](https://github.com/45s/coinzilla/issues/1307), and the [multi-provider migration audit](../architecture/multi-provider-migration-plan.md).
 
 ## Internal process entry-point refactor
 
@@ -489,11 +489,11 @@ The temporary `harvester_processes` process-ID smoke-test row and its obsolete p
 
 ## Current safety priorities — session audit findings
 
-The 2026-11-12/13 and 2026-11-13 LIVE session evidence is preserved in the [2026-11-12/13 audit](./docs/audits/sessions/AUDIT_SESSION_2026-11-12_19-27-13Z.md) and [2026-11-13 audit](./docs/audits/sessions/AUDIT_SESSION_2026-11-13_15-50-59Z.md). These findings are current safety priorities; historical reports remain immutable evidence. The 2026-11-17 TESTNET Conservative session is separately preserved in the [2026-11-17 audit](./docs/audits/sessions/AUDIT_SESSION_2026-11-17_08-48-56Z.md) and merged [PR #1358](https://github.com/45s/coinzilla/pull/1358); compliance and shutdown remain UNVERIFIED.
+The 2026-11-12/13 and 2026-11-13 LIVE session evidence is preserved in the [2026-11-12/13 audit](../../apps/harvester/docs/audits/sessions/AUDIT_SESSION_2026-11-12_19-27-13Z.md) and [2026-11-13 audit](../../apps/harvester/docs/audits/sessions/AUDIT_SESSION_2026-11-13_15-50-59Z.md). These findings are current safety priorities; historical reports remain immutable evidence. The 2026-11-17 TESTNET Conservative session is separately preserved in the [2026-11-17 audit](../../apps/harvester/docs/audits/sessions/AUDIT_SESSION_2026-11-17_08-48-56Z.md) and merged [PR #1358](https://github.com/45s/coinzilla/pull/1358); compliance and shutdown remain UNVERIFIED.
 
 ### P0 — Shutdown recovery coverage integrity
 
-- [x] **Prevent COMPLETE shutdown with stale recovery SELL coverage** — [#1097](https://github.com/45s/coinzilla/issues/1097), delivered in merged [PR #1120](https://github.com/45s/coinzilla/pull/1120), merge commit `3e21dd0c05f100d54c448ee1af2f7d1f86e920c8`. Shutdown defers recovery SELL replanning until BUY fills and accepted user-data events have drained, then validates owned SELL quantity and minimum proceeds using authoritative Position.spent plus confirmed RecoveryLedger.netSellProceeds (the legacy buyCost mirror is consistency-checked, never used as plan input). Replacement is SELL-only and cancellation must be confirmed first; unresolved outcomes remain incomplete. Deterministic regressions cover BUY fills across shutdown race windows, multiple/duplicate fills, replacement ordering, and unresolved lifecycle outcomes. All seven required workflows passed on exact PR head `3d5aee5ee978c43d2740dbd5c5d97d41d354319c`; the read-only TESTNET job was skipped. The separate 2026-11-13 session did not reproduce this race; see [audit finding F-048](./docs/audits/sessions/AUDIT_SESSION_2026-11-13_15-50-59Z.md#findings-and-dispositions).
+- [x] **Prevent COMPLETE shutdown with stale recovery SELL coverage** — [#1097](https://github.com/45s/coinzilla/issues/1097), delivered in merged [PR #1120](https://github.com/45s/coinzilla/pull/1120), merge commit `3e21dd0c05f100d54c448ee1af2f7d1f86e920c8`. Shutdown defers recovery SELL replanning until BUY fills and accepted user-data events have drained, then validates owned SELL quantity and minimum proceeds using authoritative Position.spent plus confirmed RecoveryLedger.netSellProceeds (the legacy buyCost mirror is consistency-checked, never used as plan input). Replacement is SELL-only and cancellation must be confirmed first; unresolved outcomes remain incomplete. Deterministic regressions cover BUY fills across shutdown race windows, multiple/duplicate fills, replacement ordering, and unresolved lifecycle outcomes. All seven required workflows passed on exact PR head `3d5aee5ee978c43d2740dbd5c5d97d41d354319c`; the read-only TESTNET job was skipped. The separate 2026-11-13 session did not reproduce this race; see [audit finding F-048](../../apps/harvester/docs/audits/sessions/AUDIT_SESSION_2026-11-13_15-50-59Z.md#findings-and-dispositions).
 
 ### P0 — Conservative ADA recovery lifecycle (#1359)
 
@@ -507,9 +507,9 @@ PR #1411 is merged and its scoped TESTNET configuration correction, ADA offline 
 
 ### P0 — User-data order-event integrity and shutdown recovery (#1132)
 
-- [x] **Fix the confirmed FILLED → zero-cumulative NEW/OPEN event-order failure.** Implemented and merged in [PR #1146](https://github.com/45s/coinzilla/pull/1146), merge commit `3438ed703e8997c872f65fa357faa6993e604dc4`. The registry classifies FILLED → OPEN/PARTIALLY_FILLED with non-increasing cumulative execution as stale regardless of timestamp. Regression coverage asserts older/equal/newer timestamp handling while preserving the strict monotonic quantity invariant. Exact-head Harvester tests passed 1,585/1,585; configured targeted tests, workspace package tests/coverage, syntax/lint/actionlint, external links and dependency audit passed. TESTNET integration was skipped. See [F-054](./docs/audits/reports/AUDIT_FINDINGS.md#f-054--late-new-execution-report-after-filled-order-causes-terminal-accounting-integrity-failure) and [session audit](./docs/audits/sessions/AUDIT_SESSION_2026-11-14_23-41-12Z.md). Exchange-side order/trade history remains outstanding.
+- [x] **Fix the confirmed FILLED → zero-cumulative NEW/OPEN event-order failure.** Implemented and merged in [PR #1146](https://github.com/45s/coinzilla/pull/1146), merge commit `3438ed703e8997c872f65fa357faa6993e604dc4`. The registry classifies FILLED → OPEN/PARTIALLY_FILLED with non-increasing cumulative execution as stale regardless of timestamp. Regression coverage asserts older/equal/newer timestamp handling while preserving the strict monotonic quantity invariant. Exact-head Harvester tests passed 1,585/1,585; configured targeted tests, workspace package tests/coverage, syntax/lint/actionlint, external links and dependency audit passed. TESTNET integration was skipped. See [F-054](../../apps/harvester/docs/audits/reports/AUDIT_FINDINGS.md#f-054--late-new-execution-report-after-filled-order-causes-terminal-accounting-integrity-failure) and [session audit](../../apps/harvester/docs/audits/sessions/AUDIT_SESSION_2026-11-14_23-41-12Z.md). Exchange-side order/trade history remains outstanding.
 - [x] **Preserve shutdown replacement failure diagnostics.** Implemented and merged in [PR #1148](https://github.com/45s/coinzilla/pull/1148), merge commit `a04aef010576e459896c2319ab4d1a8e02cfe761` (exact PR head `30fea2b9b9f141cefcb45c163f98c842688a69c5`). Harvester tests passed 1,595/1,595 and all six required checks passed. This fixes the confirmed observability gap only; it does not determine the failed replacement's broker/exchange outcome or underlying cause.
-- [ ] **Resolve shutdown recovery SELL replacement uncertainty.** The same session's shutdown replacement failed with SHUTDOWN_RECOVERY_REPLACEMENT_UNCONFIRMED; coverage required 4.98 ZRO and found 0 committed. Root cause and exchange-side outcome remain UNKNOWN. Correlate the exact replacement intent/acknowledgement/order lookup and final accounting before assigning cause. See [F-055](./docs/audits/reports/AUDIT_FINDINGS.md#f-055--shutdown-recovery-sell-replacement-unconfirmed-final-coverage-audit-fails) and [#1132](https://github.com/45s/coinzilla/issues/1132).
+- [ ] **Resolve shutdown recovery SELL replacement uncertainty.** The same session's shutdown replacement failed with SHUTDOWN_RECOVERY_REPLACEMENT_UNCONFIRMED; coverage required 4.98 ZRO and found 0 committed. Root cause and exchange-side outcome remain UNKNOWN. Correlate the exact replacement intent/acknowledgement/order lookup and final accounting before assigning cause. See [F-055](../../apps/harvester/docs/audits/reports/AUDIT_FINDINGS.md#f-055--shutdown-recovery-sell-replacement-unconfirmed-final-coverage-audit-fails) and [#1132](https://github.com/45s/coinzilla/issues/1132).
 - **Containment:** keep the existing fail-closed readiness, incomplete CLOSING and process-lock retention behavior. Do not resume TESTNET or weaken safety gates based on the balanced BUY snapshot alone. No TESTNET/LIVE operation is authorized by this roadmap update.
 
 ### P0 — Conservative shutdown priority (#1186)
@@ -532,8 +532,8 @@ PR #1411 is merged and its scoped TESTNET configuration correction, ADA offline 
 
 - [x] **Treat every startup open order as external regardless of client-ID prefix** — implemented and merged in [PR #1166](https://github.com/45s/coinzilla/pull/1166) for [#1157](https://github.com/45s/coinzilla/issues/1157). Every unmatched startup-snapshot order is external to the current process, including prior-process `h-` IDs; the configured per-market `IGNORE`/`BLOCK` policy applies uniformly. Startup orders are never adopted or modified. Later unmatched `h-` execution reports remain fail-closed. Exact-head workspace tests, coverage, syntax/lint, dependency audit, documentation links, and utility tests passed.
 
-- [x] **Effective runtime configuration integrity** — [#1101](https://github.com/45s/coinzilla/issues/1101), completed in merged [PR #1134](https://github.com/45s/coinzilla/pull/1134), merge commit `363c88447cb87708c51abb89e1dc06136d7a92dc`; related historical finding [F-046](./docs/audits/reports/AUDIT_FINDINGS.md#f-046--adafdusd-was-enabled-at-runtime-while-disabled-in-the-tracked-config). Startup durably records a SHA-256 fingerprint of validated strategy settings and correlates configuration/process-start facts by `runtimeSessionId`; the process-start Journal event carries commit, branch, working-tree and metadata-source provenance. The baseline now lists enabled markets only and fails closed when pair enablement is invalid or no markets are enabled. The `config.validated` event now carries the environment-filtered enabled-market set, explicit trading mode, and the SHA-256 fingerprint of the effective per-market strategy settings. The same fingerprinting helper is used by the optional durable Operational State Store baseline; when that store is enabled, startup verifies its fingerprint and market set match the resolved runtime selection before broker connection. Invalid, secret-bearing, or unrepresentable configuration fails closed. The no-enabled-market regression uses a configured-but-disabled pair, distinct from the separate no-pair-for-mode startup guard. The process-start Journal event supplies commit, branch, working-tree, metadata-source and runtime-session provenance; the config event remains best-effort and introduces no additional durability gate. Regressions cover disabled-pair exclusion, empty enabled-market rejection, per-market and trading-mode digest changes, missing/malformed evidence, dirty-worktree provenance, secret rejection, baseline/runtime parity, and startup Journal publication before broker activation plus reconnect readiness transitions; the lifecycle test verifies fingerprinted config evidence precedes subscriptions and reconnect recovery. All configuration-evidence regressions use offline stubs and perform no exchange writes. Historical override cause remains unresolved.
-- [x] **Same-symbol external-order isolation** — [#1102](https://github.com/45s/coinzilla/issues/1102), completed in merged [PR #1138](https://github.com/45s/coinzilla/pull/1138), merge commit `a64be005fb54c5c4721ba17b97ca0e9c1d4ee6dd`; related historical finding [F-047](./docs/audits/reports/AUDIT_FINDINGS.md#f-047--same-symbol-external-wldfdusd-orders-coexisted-with-strategy-orders). Startup/reconnect snapshots remain account-wide and durable; final submission checks use their symbol-scoped classification. Newly observed manual execution reports under `externalOrdersPolicy: "block"` now install a provisional same-symbol guard and request a fresh authoritative account-wide snapshot; only after its durable Journal barrier does the guard become the snapshot's confirmed external-order set or clear. External orders remain unowned and untouched, and the user-data readiness gate stays available to unrelated markets. PR #1121 already suppresses market feeds for policy-blocked symbols.
+- [x] **Effective runtime configuration integrity** — [#1101](https://github.com/45s/coinzilla/issues/1101), completed in merged [PR #1134](https://github.com/45s/coinzilla/pull/1134), merge commit `363c88447cb87708c51abb89e1dc06136d7a92dc`; related historical finding [F-046](../../apps/harvester/docs/audits/reports/AUDIT_FINDINGS.md#f-046--adafdusd-was-enabled-at-runtime-while-disabled-in-the-tracked-config). Startup durably records a SHA-256 fingerprint of validated strategy settings and correlates configuration/process-start facts by `runtimeSessionId`; the process-start Journal event carries commit, branch, working-tree and metadata-source provenance. The baseline now lists enabled markets only and fails closed when pair enablement is invalid or no markets are enabled. The `config.validated` event now carries the environment-filtered enabled-market set, explicit trading mode, and the SHA-256 fingerprint of the effective per-market strategy settings. The same fingerprinting helper is used by the optional durable Operational State Store baseline; when that store is enabled, startup verifies its fingerprint and market set match the resolved runtime selection before broker connection. Invalid, secret-bearing, or unrepresentable configuration fails closed. The no-enabled-market regression uses a configured-but-disabled pair, distinct from the separate no-pair-for-mode startup guard. The process-start Journal event supplies commit, branch, working-tree, metadata-source and runtime-session provenance; the config event remains best-effort and introduces no additional durability gate. Regressions cover disabled-pair exclusion, empty enabled-market rejection, per-market and trading-mode digest changes, missing/malformed evidence, dirty-worktree provenance, secret rejection, baseline/runtime parity, and startup Journal publication before broker activation plus reconnect readiness transitions; the lifecycle test verifies fingerprinted config evidence precedes subscriptions and reconnect recovery. All configuration-evidence regressions use offline stubs and perform no exchange writes. Historical override cause remains unresolved.
+- [x] **Same-symbol external-order isolation** — [#1102](https://github.com/45s/coinzilla/issues/1102), completed in merged [PR #1138](https://github.com/45s/coinzilla/pull/1138), merge commit `a64be005fb54c5c4721ba17b97ca0e9c1d4ee6dd`; related historical finding [F-047](../../apps/harvester/docs/audits/reports/AUDIT_FINDINGS.md#f-047--same-symbol-external-wldfdusd-orders-coexisted-with-strategy-orders). Startup/reconnect snapshots remain account-wide and durable; final submission checks use their symbol-scoped classification. Newly observed manual execution reports under `externalOrdersPolicy: "block"` now install a provisional same-symbol guard and request a fresh authoritative account-wide snapshot; only after its durable Journal barrier does the guard become the snapshot's confirmed external-order set or clear. External orders remain unowned and untouched, and the user-data readiness gate stays available to unrelated markets. PR #1121 already suppresses market feeds for policy-blocked symbols.
 
 ### P2 — Session evidence and operational observability
 
@@ -570,8 +570,8 @@ Remaining safety and observability follow-up #1105 remains open; #1103 is comple
 - **Goal:** progressively reduce explicitly authorized legacy Spot inventory through recovery cycles. Each cycle acquires recovery inventory and may sell it with the eligible configured legacy slice only when the independent recovery, applicable legacy and combined-cycle profitability gates all pass.
 - **Accepted input direction:** per-pair `sellQuantity` plus `legacyPosition.invested` and `legacyPosition.quantity`; RS calculates average historical cost itself. Example: 100 USDT / 50 ZRO = 2 USDT/ZRO. The full logical legacy quantity need not remain in Spot; EARN-held inventory is unavailable for Spot SELL until returned and authoritatively reconciled.
 - **Concurrent operation:** RS and CG may run at the same time, including on the same market when both are enabled. They use a shared Portfolio that supports multiple independent Positions per market, with stable strategy/Position ownership and centralized quote/base custody and reservations through the shared Trading Engine. Positions are independent accounting units, not separate wallets; aggregate spendable inventory remains bounded by authoritative exchange balances. No blanket strategy mutual-exclusion lock or mandatory handoff is allowed.
-- **Delivery order:** RS-1 Conservative source audit is complete (audit only; no code moved); RS-2a shared Portfolio/multi-Position foundation is complete in PR #1118; RS-2b accounting, verified custody, canonical mixed SELL allocation, terminal reconciliation, atomic dual projections, shared snapshot baselines and application-level reservation release/profitability integration are complete in PRs #1131, #1137, #1144, #1152, #1153, #1203, #1212, #1213, #1262 and #1276. RS-3 pure policy is complete in PR #1127: PR #1325 merged sticky STOP/lifecycle foundations; PR #1379 merged independent profitability gates and mixed-SELL planning; PR #1127 implements pair-configured `minProfit`, Conservative-compatible `LIMIT_MAKER`/`LIMIT` selection and fee reserves, and global STOP for supported exchange-filter violations. Exact implementation head `96315757e74a4851770716b04d8dae5cf9580ece` passed 13/13 RS evaluator tests, 2,101/2,101 Harvester tests, workspace tests/coverage, strict ESLint, syntax, actionlint and dependency audit. Post-fill adverse results and terminal partial/canceled outcomes remain fail-closed with terminal STOP; third-asset valuation is deferred and CC-operator has no reset/resume capability; see the [CG-to-RS policy blocker audit](./docs/domain/RECOVERY_SELLER_POLICY_BLOCKERS.md). RS-4 production dispatch and account-wide commitment authorization are implemented in PR #1515. Same-/different-market accounting concurrency, BUY-fill → runtime SELL → sole reservation/registration → duplicate-transition suppression, terminal mixed-SELL reconciliation, reservation release and next-cycle gating are covered by offline tests. The acceptance gate is open; RS is enabled by default and each market remains restricted by its own `tradingEnvironment`. Exact-head required CI is the final merge check. Shared-function extraction is not a standalone phase: extract only when RS has a concrete need, with characterization tests and CG regression coverage in the same change.
-- **Settled first-implementation contract:** `sellQuantity` is additive legacy quantity; original legacy average cost is calculated once and stays fixed while remaining legacy quantity decreases by the actual amount sold; smaller remainders may be sold when all gates pass; exchange-filter dust is retained and excluded from later RS calculations; recovery-only cycles continue after legacy exhaustion; operator configuration supplies historical basis/authorization before startup; Conservative BUY cadence, tranche sizing, investment-limit behavior and third-asset fee valuation are reused; budgets are independent per strategy and pair while actual balances/reservations remain shared; an investment limit blocks new BUYs but leaves existing recovery SELLs alive; advanced lifecycle controls are deferred under FITDIB. See the canonical [RS specification](./docs/domain/recovery-seller-domain-specification.md) and [implementation roadmap](./docs/domain/recovery-seller-implementation-roadmap.md).
+- **Delivery order:** RS-1 Conservative source audit is complete (audit only; no code moved); RS-2a shared Portfolio/multi-Position foundation is complete in PR #1118; RS-2b accounting, verified custody, canonical mixed SELL allocation, terminal reconciliation, atomic dual projections, shared snapshot baselines and application-level reservation release/profitability integration are complete in PRs #1131, #1137, #1144, #1152, #1153, #1203, #1212, #1213, #1262 and #1276. RS-3 pure policy is complete in PR #1127: PR #1325 merged sticky STOP/lifecycle foundations; PR #1379 merged independent profitability gates and mixed-SELL planning; PR #1127 implements pair-configured `minProfit`, Conservative-compatible `LIMIT_MAKER`/`LIMIT` selection and fee reserves, and global STOP for supported exchange-filter violations. Exact implementation head `96315757e74a4851770716b04d8dae5cf9580ece` passed 13/13 RS evaluator tests, 2,101/2,101 Harvester tests, workspace tests/coverage, strict ESLint, syntax, actionlint and dependency audit. Post-fill adverse results and terminal partial/canceled outcomes remain fail-closed with terminal STOP; third-asset valuation is deferred and CC-operator has no reset/resume capability; see the [CG-to-RS policy blocker audit](../../apps/harvester/docs/domain/RECOVERY_SELLER_POLICY_BLOCKERS.md). RS-4 production dispatch and account-wide commitment authorization are implemented in PR #1515. Same-/different-market accounting concurrency, BUY-fill → runtime SELL → sole reservation/registration → duplicate-transition suppression, terminal mixed-SELL reconciliation, reservation release and next-cycle gating are covered by offline tests. The acceptance gate is open; RS is enabled by default and each market remains restricted by its own `tradingEnvironment`. Exact-head required CI is the final merge check. Shared-function extraction is not a standalone phase: extract only when RS has a concrete need, with characterization tests and CG regression coverage in the same change.
+- **Settled first-implementation contract:** `sellQuantity` is additive legacy quantity; original legacy average cost is calculated once and stays fixed while remaining legacy quantity decreases by the actual amount sold; smaller remainders may be sold when all gates pass; exchange-filter dust is retained and excluded from later RS calculations; recovery-only cycles continue after legacy exhaustion; operator configuration supplies historical basis/authorization before startup; Conservative BUY cadence, tranche sizing, investment-limit behavior and third-asset fee valuation are reused; budgets are independent per strategy and pair while actual balances/reservations remain shared; an investment limit blocks new BUYs but leaves existing recovery SELLs alive; advanced lifecycle controls are deferred under FITDIB. See the canonical [RS specification](../../apps/harvester/docs/domain/recovery-seller-domain-specification.md) and [implementation roadmap](../../apps/harvester/docs/domain/recovery-seller-implementation-roadmap.md).
 - **Merged PR #1137 — first verified-Spot plumbing slice:** `AccountSnapshot` carries a separate additional tracked-base baseline, the snapshot manager accepts the independently sourced allocation, and the shared order allocator reconciles its delta and combined SELL reservations without inserting legacy quantity into Portfolio. This does not create the verified legacy custody source or mixed Fill allocation.
 - **Merged PR #1144 — immutable order ownership metadata:** extends `OrderRegistry` with immutable strategy/Position/purpose/cycle attribution, keyed by Harvester `clientOrderId` and linked to `brokerOrderId` after acknowledgement. It rejects conflicting owners and preserves attribution through broker updates and ambiguous lifecycle states. This is an in-memory registry contract only; it does not yet wire RS order submission, fill allocation, durable restart restoration, or executable RS behavior.
 - **Merged PR #1152 — verified legacy Spot allocation:** adds the pure calculation that subtracts every Portfolio Position's base quantity from the authoritative Spot total and caps the remainder at original/remaining legacy authorization. The snapshot manager supplies immutable canonical balances and Portfolio to the injectable source. This is not wired to RS runtime configuration and does not enable execution.
@@ -583,7 +583,7 @@ Remaining safety and observability follow-up #1105 remains open; #1103 is comple
 
 ## P0 — Telegram Command Center (CC) — COMPLETE
 
-The inbound Telegram Command Center is complete. It is a thin authorized adapter over Harvester application queries and commands; it does not own trading policy, persistence, startup policy or recovery. Delivered: commands/read-only queries (PRs #1079, #1081, #1086), inline navigation and confirmation (PR #1088), persistent keyboard (PR #1194), emergency BUY commands (PR #1267), and correlated interaction diagnostics/callback acknowledgement handling (PR #1215). Tracking issues #1201 and #1214 are closed as completed. Outbound Telegram notifications are separate from CC. See [operator-control documentation](./docs/operator-control/README.md) and [Telegram runbook](./docs/operations/telegram-command-center.md).
+The inbound Telegram Command Center is complete. It is a thin authorized adapter over Harvester application queries and commands; it does not own trading policy, persistence, startup policy or recovery. Delivered: commands/read-only queries (PRs #1079, #1081, #1086), inline navigation and confirmation (PR #1088), persistent keyboard (PR #1194), emergency BUY commands (PR #1267), and correlated interaction diagnostics/callback acknowledgement handling (PR #1215). Tracking issues #1201 and #1214 are closed as completed. Outbound Telegram notifications are separate from CC. See [operator-control documentation](../../apps/harvester/docs/operator-control/README.md) and [Telegram runbook](../../apps/harvester/docs/operations/telegram-command-center.md).
 
 ## P2 — Telegram operator adapter modularity (#1306) — COMPLETE
 
@@ -591,7 +591,7 @@ The inbound Telegram Command Center is complete. It is a thin authorized adapter
 
 ## P1 — Outbound Telegram notification icons
 
-**Status: [x] COMPLETE — merged in [PR #1099](https://github.com/45s/coinzilla/pull/1099) on 2026-11-13.** Apply the user's reviewed emoji choices to every producer-backed Harvester Telegram notification. The formatter must select order-failure icons from the mapped operation and side, and account-safety icons from the mapped category. Exact selected and retained icons are documented in [Architecture — operational notifications](./docs/architecture.md#operational-notifications).
+**Status: [x] COMPLETE — merged in [PR #1099](https://github.com/45s/coinzilla/pull/1099) on 2026-11-13.** Apply the user's reviewed emoji choices to every producer-backed Harvester Telegram notification. The formatter must select order-failure icons from the mapped operation and side, and account-safety icons from the mapped category. Exact selected and retained icons are documented in [Architecture — operational notifications](../../apps/harvester/docs/architecture.md#operational-notifications).
 
 - Keep the five notifications without a replacement selection on their existing icons; do not invent choices.
 - Exclude formatter-only successful submission/cancellation, broker-connected, and `order.filled` vocabulary because the current bridge has no producer mapping for them.
@@ -667,11 +667,11 @@ The current coverage workflow includes shared workspace dependencies, so it cann
 
 ## Operator control — Telegram Command Center
 
-The Command Center roadmap is complete; this section is intentionally a pointer to the single current contract. See [operator-control README](./docs/operator-control/README.md), [Telegram runbook](./docs/operations/telegram-command-center.md), and the completed [P0 roadmap entry](#docs/archive/domain-roadmap-history-2026-11-26.md). The adapter authenticates operators, forwards requests to application queries/use cases, and reports actual results. It does not implement trading, persistence, startup or recovery behavior.
+The Command Center roadmap is complete; this section is intentionally a pointer to the single current contract. See [operator-control README](../../apps/harvester/docs/operator-control/README.md), [Telegram runbook](../../apps/harvester/docs/operations/telegram-command-center.md), and the completed [P0 roadmap entry](#harvester-roadmap). The adapter authenticates operators, forwards requests to application queries/use cases, and reports actual results. It does not implement trading, persistence, startup or recovery behavior.
 
 ## High-volatility protection — issue #1016
 
-**Status: PROTECTION IMPLEMENTED; regression matrix, exact-head CI, candle-stream freshness correction (PR #1049), and local offline calibration CLI (PR #1046) are merged; representative historical threshold calibration remains open.** This is the immediate Harvester safety priority. The canonical behavior and delivery contract are in [Volatility Protection](./docs/volatility-protection.md).
+**Status: PROTECTION IMPLEMENTED; regression matrix, exact-head CI, candle-stream freshness correction (PR #1049), and local offline calibration CLI (PR #1046) are merged; representative historical threshold calibration remains open.** This is the immediate Harvester safety priority. The canonical behavior and delivery contract are in [Volatility Protection](../../apps/harvester/docs/volatility-protection.md).
 
 - Per-market protection; one volatile pair must not stop another.
 - Use completed 1-minute UTC candles, ATR(14) with Wilder smoothing, NATR, and a current/reference ratio against the previous 60 completed NATR observations.
@@ -712,7 +712,7 @@ The Command Center roadmap is complete; this section is intentionally a pointer 
 
 ## Submission deferral diagnostics — issue #1025
 
-**Status: IMPLEMENTED AND MERGED IN PR #1026 (2026-11-12).** The Conservative submission gate now preserves stable reasons and safe context when it intentionally withholds broker I/O. The operational reason catalogue and missing-order investigation procedure are maintained in [Submission deferrals and missing-order diagnostics](./docs/operations/submission-deferrals.md).
+**Status: IMPLEMENTED AND MERGED IN PR #1026 (2026-11-12).** The Conservative submission gate now preserves stable reasons and safe context when it intentionally withholds broker I/O. The operational reason catalogue and missing-order investigation procedure are maintained in [Submission deferrals and missing-order diagnostics](../../apps/harvester/docs/operations/submission-deferrals.md).
 
 - Preserve `ok` as execution-use-case success, not proof of broker submission; callers and logs distinguish `deferred`, `deferralReason`, and acknowledged `submittedOrders`.
 - Recheck all submission gates after durable PENDING registration; if readiness changes, remove the local PENDING record and do not call the broker.
@@ -832,7 +832,7 @@ Example: configured step `0.5%`, reference ATR `1.0%`, current ATR `1.5%`; coeff
 ### Delivery sequence
 
 1. **[x] Step 1 — Freeze the recovery contract (docs/design only; merged in PR #1003).**
-   - **Accepted:** [ADR-0001 — Application-owned durable facts for process-restart recovery](./docs/architecture/decisions/0001-application-owned-recovery-facts.md) defines the authoritative append-only fact stream, global sequence and committed-head integrity, minimum durable fact set, acknowledgement/failure boundary, candidate-state projection, closed readiness gate, external-order policy, and legacy Journal treatment.
+   - **Accepted:** [ADR-0001 — Application-owned durable facts for process-restart recovery](../../apps/harvester/docs/architecture/decisions/0001-application-owned-recovery-facts.md) defines the authoritative append-only fact stream, global sequence and committed-head integrity, minimum durable fact set, acknowledgement/failure boundary, candidate-state projection, closed readiness gate, external-order policy, and legacy Journal treatment.
    - **Authority boundary:** the Operational State Store port is the future restart-recovery authority; Journal remains a separate operational observer. Existing mandatory Journal PREFLIGHT/CLOSING and pre-side-effect order/cancel barriers remain unchanged until a separately audited migration. Domain code remains independent of Journal/EventBus/storage.
    - **State model:** persist immutable execution/order/cycle/control facts; derive Portfolio, Position, RecoveryLedger, active/free inventory, and reservations through the existing canonical accounting workflow rather than persisting competing mutable totals.
    - **Legacy boundary:** existing Journal sessions are forensic evidence, not automatically trusted complete history. A one-time baseline requires explicit operator-assisted reconciliation; unknown market-universe or retention coverage remains a hard blocker.
@@ -937,7 +937,7 @@ Example: configured step `0.5%`, reference ATR `1.0%`, current ATR `1.5%`; coeff
 
 **Tracking:** [issue #985](https://github.com/45s/coinzilla/issues/985).
 
-**Relevant code:** [conservative-trading-engine.js](./src/use-cases/conservative-trading-engine.js) (decision/order-intent gates); [create-account-snapshot-manager.js](./src/bootstrap/account/create-account-snapshot-manager.js) (authoritative account/open-order snapshot); [subscribe-to-user-data.js](./src/bootstrap/user-data/subscribe-to-user-data.js) (updates/reconnect). Inspect current tests before adding coverage.
+**Relevant code:** [conservative-trading-engine.js](../../apps/harvester/src/use-cases/conservative-trading-engine.js) (decision/order-intent gates); [create-account-snapshot-manager.js](../../apps/harvester/src/bootstrap/account/create-account-snapshot-manager.js) (authoritative account/open-order snapshot); [subscribe-to-user-data.js](../../apps/harvester/src/bootstrap/user-data/subscribe-to-user-data.js) (updates/reconnect). Inspect current tests before adding coverage.
 
 **Steps:**
 
@@ -948,7 +948,7 @@ Example: configured step `0.5%`, reference ATR `1.0%`, current ATR `1.5%`; coeff
 
 **Acceptance:** no conflicting same-symbol order can be submitted while an unowned order is open; external orders stay untouched/unowned; unrelated symbols remain independent; inability to establish current open-order state fails closed for that decision.
 
-**Session evidence (2026-11-12/13):** PREFLIGHT found four unowned WLDFDUSD BUY orders. The LIVE strategy still submitted and filled WLDFDUSD orders while those external orders remained open; all four were later reported cancelled as unowned events. This is consistent with the runtime IGNORE policy but confirms P0.1 is not yet implemented. No external fills or balance mismatch were observed. See [session audit F-047](./docs/audits/sessions/AUDIT_SESSION_2026-11-12_19-27-13Z.md).
+**Session evidence (2026-11-12/13):** PREFLIGHT found four unowned WLDFDUSD BUY orders. The LIVE strategy still submitted and filled WLDFDUSD orders while those external orders remained open; all four were later reported cancelled as unowned events. This is consistent with the runtime IGNORE policy but confirms P0.1 is not yet implemented. No external fills or balance mismatch were observed. See [session audit F-047](../../apps/harvester/docs/audits/sessions/AUDIT_SESSION_2026-11-12_19-27-13Z.md).
 
 ---
 
@@ -958,7 +958,7 @@ Example: configured step `0.5%`, reference ATR `1.0%`, current ATR `1.5%`; coeff
 
 **Tracking:** [#654](https://github.com/45s/coinzilla/issues/654), forensic finding F-039. Keep live-accounting correction and durable-recovery integration as separate PRs if their contracts differ.
 
-**Relevant code:** [position-accounting.js](./src/domain/portfolio/position-accounting.js) (Position cost/proceeds); [recovery-fill-accounting.js](./src/domain/strategies/conservative/recovery-fill-accounting.js); [lifecycle-event-dtos.js](./src/application/events/lifecycle-event-dtos.js) (safe DTO); [create-portfolio-workflow.js](./src/use-cases/create-portfolio-workflow.js) (live apply/restore); [create-account-snapshot-manager.js](./src/bootstrap/account/create-account-snapshot-manager.js) (fee-asset reconciliation).
+**Relevant code:** [position-accounting.js](../../apps/harvester/src/domain/portfolio/position-accounting.js) (Position cost/proceeds); [recovery-fill-accounting.js](../../apps/harvester/src/domain/strategies/conservative/recovery-fill-accounting.js); [lifecycle-event-dtos.js](../../apps/harvester/src/application/events/lifecycle-event-dtos.js) (safe DTO); [create-portfolio-workflow.js](../../apps/harvester/src/use-cases/create-portfolio-workflow.js) (live apply/restore); [create-account-snapshot-manager.js](../../apps/harvester/src/bootstrap/account/create-account-snapshot-manager.js) (fee-asset reconciliation).
 
 **Steps:**
 
@@ -985,9 +985,9 @@ Example: configured step `0.5%`, reference ATR `1.0%`, current ATR `1.5%`; coeff
 
 **Problem:** order status is not proof of financial recovery. Submitted, acknowledged, partial, canceled or UNKNOWN SELLs cannot complete a cycle. Cancellation can race with fills. A full SELL whose durable cycle outcome is missing can leave replay with stale cost basis or incorrect retained-inventory allocation. Preserve existing serialized transitions, fill reconciliation, minimum-profit checks, dust evidence and atomic Portfolio/RecoveryLedger completion; extend rather than replace them.
 
-**Tracking:** [#654](https://github.com/45s/coinzilla/issues/654), finding F-041; [#1097](https://github.com/45s/coinzilla/issues/1097) tracks the confirmed shutdown-race evidence from the 2026-11-12/13 LIVE session. Check the current [Domain Test Inventory](./docs/domain/DOMAIN_TEST_INVENTORY.md) before adding duplicate tests.
+**Tracking:** [#654](https://github.com/45s/coinzilla/issues/654), finding F-041; [#1097](https://github.com/45s/coinzilla/issues/1097) tracks the confirmed shutdown-race evidence from the 2026-11-12/13 LIVE session. Check the current [Domain Test Inventory](../../apps/harvester/docs/domain/DOMAIN_TEST_INVENTORY.md) before adding duplicate tests.
 
-**Relevant code:** [conservative-trading-engine.js](./src/use-cases/conservative-trading-engine.js); [recovery-completion.js](./src/domain/strategies/conservative/recovery-completion.js); [recovery-ledger.js](./src/domain/strategies/conservative/recovery-ledger.js); [recovery-sell-plan.js](./src/domain/strategies/conservative/recovery-sell-plan.js); [position-accounting.js](./src/domain/portfolio/position-accounting.js); recovery projector/Journal replay paths under #654.
+**Relevant code:** [conservative-trading-engine.js](../../apps/harvester/src/use-cases/conservative-trading-engine.js); [recovery-completion.js](../../apps/harvester/src/domain/strategies/conservative/recovery-completion.js); [recovery-ledger.js](../../apps/harvester/src/domain/strategies/conservative/recovery-ledger.js); [recovery-sell-plan.js](../../apps/harvester/src/domain/strategies/conservative/recovery-sell-plan.js); [position-accounting.js](../../apps/harvester/src/domain/portfolio/position-accounting.js); recovery projector/Journal replay paths under #654.
 
 **Steps:**
 
@@ -1004,7 +1004,7 @@ Example: configured step `0.5%`, reference ATR `1.0%`, current ATR `1.5%`; coeff
 
 **Acceptance:** completion requires reconciled canonical fills, sufficient net recovery/profit and exact active/free/dust allocation. Unresolved orders or missing cycle outcome block the next cycle. Retained inventory cannot be sold accidentally.
 
-**Session evidence (2026-11-12/13):** shutdown began at 03:51:04.844Z; 20 WLD and 30 ADA BUYs filled after the stopped flag was set. The stopping path skipped recovery-SELL recalculation, leaving the last-observed SELLs short by 20 WLD and 30 ADA. CLOSING still reported COMPLETE because open SELLs are allowed without checking their coverage against the final Position/RecoveryLedger. Add a deterministic offline regression for a BUY fill during shutdown's pre-cancellation reconciliation window, and require either a reconciled recovery SELL or an INCOMPLETE CLOSING audit. See [session audit F-045](./docs/audits/sessions/AUDIT_SESSION_2026-11-12_19-27-13Z.md).
+**Session evidence (2026-11-12/13):** shutdown began at 03:51:04.844Z; 20 WLD and 30 ADA BUYs filled after the stopped flag was set. The stopping path skipped recovery-SELL recalculation, leaving the last-observed SELLs short by 20 WLD and 30 ADA. CLOSING still reported COMPLETE because open SELLs are allowed without checking their coverage against the final Position/RecoveryLedger. Add a deterministic offline regression for a BUY fill during shutdown's pre-cancellation reconciliation window, and require either a reconciled recovery SELL or an INCOMPLETE CLOSING audit. See [session audit F-045](../../apps/harvester/docs/audits/sessions/AUDIT_SESSION_2026-11-12_19-27-13Z.md).
 
 ---
 
@@ -1012,7 +1012,7 @@ Example: configured step `0.5%`, reference ATR `1.0%`, current ATR `1.5%`; coeff
 
 **Problem:** after partial execution or filter changes, remaining quantity may fall below MIN_QTY/MIN_NOTIONAL although the original order was valid. Rebuilding the same invalid trailing BUY or recovery SELL repeatedly creates noise and can hide a lifecycle/accounting defect. Expected post-only rejection is not a fill and is not success.
 
-**Relevant code:** [recovery-sell-plan.js](./src/domain/strategies/conservative/recovery-sell-plan.js); [conservative-trading-engine.js](./src/use-cases/conservative-trading-engine.js); confirm current order-filter validator path before editing. Existing boundary work: [PR #929](https://github.com/45s/coinzilla/pull/929), [#930](https://github.com/45s/coinzilla/pull/930), [#932](https://github.com/45s/coinzilla/pull/932).
+**Relevant code:** [recovery-sell-plan.js](../../apps/harvester/src/domain/strategies/conservative/recovery-sell-plan.js); [conservative-trading-engine.js](../../apps/harvester/src/use-cases/conservative-trading-engine.js); confirm current order-filter validator path before editing. Existing boundary work: [PR #929](https://github.com/45s/coinzilla/pull/929), [#930](https://github.com/45s/coinzilla/pull/930), [#932](https://github.com/45s/coinzilla/pull/932).
 
 **Steps:**
 
@@ -1065,7 +1065,7 @@ Example: configured step `0.5%`, reference ATR `1.0%`, current ATR `1.5%`; coeff
 
 ### In progress — domain logic test quality initiative
 
-- [x] Establish the source-driven behavior-to-test inventory in [Domain Test Inventory](./docs/domain/DOMAIN_TEST_INVENTORY.md) — added and merged in PR #917.
+- [x] Establish the source-driven behavior-to-test inventory in [Domain Test Inventory](../../apps/harvester/docs/domain/DOMAIN_TEST_INVENTORY.md) — added and merged in PR #917.
 - [~] Strengthen Conservative decision tests around blocked recovery SELLs before changing policy implementation; follow strict RED → GREEN → REFACTOR.
 - [x] Conservative BUY-gating regression and correction merged in PR #917: a MAX_PRICE-blocked recovery SELL and PENDING/UNKNOWN recovery SELL prevent the next BUY; acknowledged OPEN/PARTIALLY_FILLED SELLs retain the approved coexistence behavior. Exact merged-head CI passed 872/872 Harvester tests and all required checks.
 - [x] Conservative investment-cap equality and immediately-below boundary matrix merged in [PR #922](https://github.com/45s/coinzilla/pull/922). Exact PR head `8e234e2c18cb98b4b8562c62ef05d9f20f852102` passed 872/872 Harvester tests; coverage was 75.94% lines, 79.26% branches and 74.88% functions. All required CI checks passed.
@@ -1140,7 +1140,7 @@ This section is the authoritative implementation order for current work. It supe
 
 ### IMPORTANT — improve correctness and operational confidence
 
-- [x] **PR #866 — Journal startup diagnostics and operator error vocabulary (merged 2026-11-09).** Preserve the Journal package's fail-closed exclusive lock behavior while exposing the stable Harvester diagnostic identifier (`ErrorJournal001`) for `JOURNAL_DIRECTORY_LOCKED`. The [Error Vocabulary](./docs/error-vocabulary.md) documents the exact stale-lock verification/removal procedure and is linked from the operations indexes; the original machine-readable error code and cause remain intact. Exact PR head `3bba286588c930c65e4f6cedff0e707371b79821` passed all six required workflows, including 858/858 Harvester tests. The read-only TESTNET integration was skipped; no exchange operation or acceptance is claimed. Automatic stale-lock takeover remains unsupported.
+- [x] **PR #866 — Journal startup diagnostics and operator error vocabulary (merged 2026-11-09).** Preserve the Journal package's fail-closed exclusive lock behavior while exposing the stable Harvester diagnostic identifier (`ErrorJournal001`) for `JOURNAL_DIRECTORY_LOCKED`. The [Error Vocabulary](../../apps/harvester/docs/error-vocabulary.md) documents the exact stale-lock verification/removal procedure and is linked from the operations indexes; the original machine-readable error code and cause remain intact. Exact PR head `3bba286588c930c65e4f6cedff0e707371b79821` passed all six required workflows, including 858/858 Harvester tests. The read-only TESTNET integration was skipped; no exchange operation or acceptance is claimed. Automatic stale-lock takeover remains unsupported.
 
 4. **Keep Journal evidence complete without expanding trading-blocking behavior.**
    - **Why:** investigation requires decision, request, broker acknowledgement, execution, fee and account evidence to be correlated. Missing fields make incident analysis guesswork, but optional diagnostics must not become new trading gates.
@@ -1195,7 +1195,7 @@ This section is the current operational status and supersedes older statements b
 - [~] **Paused — external environment restriction, not an application defect.** The hosted TESTNET validation attempt was rejected with HTTP 451 by Binance Spot API due to regional eligibility restrictions.
 - The operator cannot change location to work around this restriction. Do not ask them to do so, and do not repeatedly retry the same hosted TESTNET path.
 - No exchange acceptance is claimed. Keep TESTNET validation explicitly **UNVERIFIED / PAUSED** until an eligible, authorized environment is available.
-- [~] **Runbook/config pair-scope mismatch — separate hard blocker.** The committed CG pair map enables TESTNET LINKUSDT, ZROUSDT, DOGEUSDT and ADAUSDT, plus LIVE LINKFDUSD, ZROFDUSD and WLDFDUSD; the controlled runbook still describes only the earlier DOGEUSDT/ZROUSDT TESTNET plan. No replacement session scope is recorded. Preserve the old plan as historical evidence; do not alter pair configuration or use the runbook for execution until pair scope, quote-currency/fee assumptions, and order limits are explicitly reconciled. The standalone ZRO market-sell helper is hardcoded to ZROUSDT and the account-wide cancel helper has no interactive confirmation; neither is an approved cleanup path while the runbook is paused. See [the controlled TESTNET runbook](./docs/TESTNET_VALIDATION_RUNBOOK.md).
+- [~] **Runbook/config pair-scope mismatch — separate hard blocker.** The committed CG pair map enables TESTNET LINKUSDT, ZROUSDT, DOGEUSDT and ADAUSDT, plus LIVE LINKFDUSD, ZROFDUSD and WLDFDUSD; the controlled runbook still describes only the earlier DOGEUSDT/ZROUSDT TESTNET plan. No replacement session scope is recorded. Preserve the old plan as historical evidence; do not alter pair configuration or use the runbook for execution until pair scope, quote-currency/fee assumptions, and order limits are explicitly reconciled. The standalone ZRO market-sell helper is hardcoded to ZROUSDT and the account-wide cancel helper has no interactive confirmation; neither is an approved cleanup path while the runbook is paused. See [the controlled TESTNET runbook](../../apps/harvester/docs/TESTNET_VALIDATION_RUNBOOK.md).
 - Offline tests, source-level verification, and CI continue independently. This pause does not block code, documentation, or deterministic test work.
 - No live exchange operations, credentials, order submissions, cancellations, or account-setting changes are authorized by this pause note.
 
@@ -1233,7 +1233,7 @@ This section is the current operational status and supersedes older statements b
 - [ ] **#654 — process-restart reconciliation:** active forensic investigation; runtime implementation remains a separate DDD/TDD workstream and a blocker for unattended restarts. See F-031 and the current session report.
 - **Legacy application removal:** complete. No extraction, migration or maintenance work remains; keep its former implementation and terminology out of current Harvester documentation.
 
-> **Conservative Strategy authority:** [CONSERVATIVE_DOMAIN_SPECIFICATION.md](./docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md) is the sole authoritative rule definition. Roadmap items track implementation, evidence, and blockers only. Any older strategy-rule wording in historical sections is superseded and must not be used as current acceptance criteria. The canonical Mermaid flowchart is derived from the written specification and is not an independent authority.
+> **Conservative Strategy authority:** [CONSERVATIVE_DOMAIN_SPECIFICATION.md](../../apps/harvester/docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md) is the sole authoritative rule definition. Roadmap items track implementation, evidence, and blockers only. Any older strategy-rule wording in historical sections is superseded and must not be used as current acceptance criteria. The canonical Mermaid flowchart is derived from the written specification and is not an independent authority.
 
 **CURRENT DIRECTION — 2026-11-09: FORENSIC RESTART-RECOVERY PHASE.** The active task is to establish source/test evidence for #654, validate the retained PR #606 recovery helpers, document why current runtime wiring is absent, and resolve market-universe completeness and crash-consistency requirements. No application implementation or test changes are allowed in this phase.
 >
@@ -1261,7 +1261,7 @@ continues to own intent calculation and order economics, while the trading
 engine continues to own broker lifecycle and I/O.
 
 This is an internal organization change only. The canonical behavior contract
-remains [CONSERVATIVE_DOMAIN_SPECIFICATION.md](./docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md);
+remains [CONSERVATIVE_DOMAIN_SPECIFICATION.md](../../apps/harvester/docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md);
 no strategy behavior change or TESTNET acceptance is claimed. The focused
 tests and full Harvester suite still require execution on the exact PR head.
 
@@ -1288,7 +1288,7 @@ These items are intentionally recorded for future work. They are not current tra
 
 ## Current work selection
 
-- [x] Close the 2026-11-07/08 session follow-up: source-level findings are resolved by PRs [#653](https://github.com/45s/coinzilla/pull/653), [#663](https://github.com/45s/coinzilla/pull/663), [#664](https://github.com/45s/coinzilla/pull/664), [#669](https://github.com/45s/coinzilla/pull/669), [#670](https://github.com/45s/coinzilla/pull/670), and [#673](https://github.com/45s/coinzilla/pull/673). Tracking audit [#667](https://github.com/45s/coinzilla/issues/667) is closed; evidence: [AUDIT.md session report](./docs/audits/reports/AUDIT.md#2026-11-0708-binance-spot-testnet-session-audit--issue-667). TESTNET acceptance is separate and paused/unverified.
+- [x] Close the 2026-11-07/08 session follow-up: source-level findings are resolved by PRs [#653](https://github.com/45s/coinzilla/pull/653), [#663](https://github.com/45s/coinzilla/pull/663), [#664](https://github.com/45s/coinzilla/pull/664), [#669](https://github.com/45s/coinzilla/pull/669), [#670](https://github.com/45s/coinzilla/pull/670), and [#673](https://github.com/45s/coinzilla/pull/673). Tracking audit [#667](https://github.com/45s/coinzilla/issues/667) is closed; evidence: [AUDIT.md session report](../../apps/harvester/docs/audits/reports/AUDIT.md#2026-11-0708-binance-spot-testnet-session-audit--issue-667). TESTNET acceptance is separate and paused/unverified.
 - [x] Graceful shutdown: cancel acknowledged `CG_coinGrabber` BUY orders only, preserve all SELL orders, keep user-data intake active through cancellation/fill reconciliation, and retain the existing CLOSING audit/process-lock guarantees. Implemented and merged in [PR #663](https://github.com/45s/coinzilla/pull/663).
 - [x] Account-integrity safety halt: after an unowned/invalid execution or accounting failure closes global readiness, reconcile Harvester-owned order identities and cancel only acknowledged BUY orders; preserve SELLs and external orders; keep the gate closed if any cancellation/fill reconciliation is unresolved. Tracking incident [#667](https://github.com/45s/coinzilla/issues/667), implementation PR [#669](https://github.com/45s/coinzilla/pull/669).
 
@@ -1311,11 +1311,11 @@ Trading safety requirements remain in force: the operator selects TESTNET or LIV
 
 - [x] **#923 — Journal DTO compatibility:** implemented and merged in [PR #925](https://github.com/45s/coinzilla/pull/925). Non-negative safe-integer timestamps excluding negative zero, finite numeric diagnostics, structured mapper-failure reporting and no-publication-on-failure are enforced at the DTO boundary. Exact PR head `9329fe2dc2fb1af785548261f23dff4757e0282b` passed 875/875 Harvester tests; coverage was 75.62% lines, 78.94% branches and 74.95% functions. All six required checks passed; no TESTNET/LIVE activity occurred.
 
-Issue [#650](https://github.com/45s/coinzilla/issues/650) is active independently of TESTNET acceptance. Expand investigation evidence within the bounded, allowlisted, best-effort contract in [JOURNAL_EVIDENCE_CONTRACT.md](./docs/JOURNAL_EVIDENCE_CONTRACT.md). Keep Journal replay and process-restart recovery disabled unless separately requested.
+Issue [#650](https://github.com/45s/coinzilla/issues/650) is active independently of TESTNET acceptance. Expand investigation evidence within the bounded, allowlisted, best-effort contract in [JOURNAL_EVIDENCE_CONTRACT.md](../../apps/harvester/docs/JOURNAL_EVIDENCE_CONTRACT.md). Keep Journal replay and process-restart recovery disabled unless separately requested.
 
 ## Mission and delivery priority
 
-**Mandatory execution order:** follow [Trading First](./docs/TRADING_FIRST.md). The first deliverable is a working Conservative TESTNET trading loop. Journal, durable persistence, comprehensive restart recovery/reconciliation, operational hardening, and Aggressive are secondary; do not make them blockers for the first working cycle. Implement only the minimum safety needed for a controlled TESTNET order flow.
+**Mandatory execution order:** follow [Trading First](../../apps/harvester/docs/TRADING_FIRST.md). The first deliverable is a working Conservative TESTNET trading loop. Journal, durable persistence, comprehensive restart recovery/reconciliation, operational hardening, and Aggressive are secondary; do not make them blockers for the first working cycle. Implement only the minimum safety needed for a controlled TESTNET order flow.
 
 **First priority: implement Conservative and make Harvester execute a complete, safe, repeatable trading cycle.** The Harvester-owned Conservative Domain Specification is the source of truth. Implement the strategy through Harvester's own domain and application boundaries. Strategy availability is configured in `config/index.js` under `strategies`: Conservative is enabled and Aggressive remains disabled until Conservative is working end to end on TESTNET. Application-wide notification policy is a sibling `notifications` section and does not change strategy or exchange selection. Architecture expansion, optional features, and optimization come after that.
 
@@ -1414,9 +1414,9 @@ Work through these items in dependency order. Keep the scope limited to what is 
 ### P0.1 — Conservative strategy contract and implementation
 
 - [x] Select Conservative as the first executable strategy; Aggressive remains deferred.
-- [x] Establish one authoritative strategy contract: [CONSERVATIVE_DOMAIN_SPECIFICATION.md](./docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md).
+- [x] Establish one authoritative strategy contract: [CONSERVATIVE_DOMAIN_SPECIFICATION.md](../../apps/harvester/docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md).
 - [~] Align domain policy, application order lifecycle, configuration validation, and regression tests with that canonical contract.
-- [~] Complete documentation consolidation under [the Harvester documentation migration plan](./docs/plans/DOCUMENTATION_MIGRATION.md) and [repository-wide governance](../DOCUMENTATION_GOVERNANCE.md); preserve historical audit evidence and verify no active competing Conservative rule definitions remain. Tracking: [#795](https://github.com/45s/coinzilla/issues/795).
+- [~] Complete documentation consolidation under [the Harvester documentation migration plan](../../apps/harvester/docs/plans/DOCUMENTATION_MIGRATION.md) and [repository-wide governance](../DOCUMENTATION_GOVERNANCE.md); preserve historical audit evidence and verify no active competing Conservative rule definitions remain. Tracking: [#795](https://github.com/45s/coinzilla/issues/795).
 - [ ] Pass the focused regression matrix and all required exact-head CI checks before acceptance.
 - [ ] Keep PR #653 open and unmerged until acceptance criteria pass and the owner explicitly authorizes merging.
 
@@ -1509,7 +1509,7 @@ Work through these items in dependency order. Keep the scope limited to what is 
 
 Aggressive work must not delay P0. Start this phase only after Conservative has completed and passed the documented TESTNET end-to-end cycle.
 
-- [ ] Review the remaining Aggressive decisions in [Trading Strategies](./docs/trading-strategies.md), ask one plain-language product question at a time, and update the specification before implementing unresolved behavior.
+- [ ] Review the remaining Aggressive decisions in [Trading Strategies](../../apps/harvester/docs/trading-strategies.md), ask one plain-language product question at a time, and update the specification before implementing unresolved behavior.
 - [ ] Implement the Aggressive policy as plain pure domain functions that return order intents; do not copy broker/runtime code from another app.
 - [ ] Implement exactly one BUY grid per market, with all configured BUY levels placed together when the cycle starts.
 - [ ] Preserve the agreed grid math: lower BUY levels remain fixed percentages from the grid reference; upward repricing steps compound from the previous level and advance only by fully crossed steps.
@@ -1523,7 +1523,7 @@ Aggressive work must not delay P0. Start this phase only after Conservative has 
 
 ## P2 — Operational hardening and improvements
 
-- [ ] Complete the staged operational Journal integration described in [Journal Integration Roadmap](./docs/JOURNAL_INTEGRATION_ROADMAP.md). Optional operational evidence must not add blocking I/O to strategy evaluation, market processing, broker-event handling or fill accounting. Preserve the existing required broker-connected PREFLIGHT and pre-order/cancel durability barriers. Process-restart recovery is separate under [#654](https://github.com/45s/coinzilla/issues/654); do not silently extend the Journal observer into trading-state authority or add a new fill-persistence barrier without an explicit architecture decision.
+- [ ] Complete the staged operational Journal integration described in [Journal Integration Roadmap](#harvester-journal-integration). Optional operational evidence must not add blocking I/O to strategy evaluation, market processing, broker-event handling or fill accounting. Preserve the existing required broker-connected PREFLIGHT and pre-order/cancel durability barriers. Process-restart recovery is separate under [#654](https://github.com/45s/coinzilla/issues/654); do not silently extend the Journal observer into trading-state authority or add a new fill-persistence barrier without an explicit architecture decision.
 - [ ] Add actionable health/status reporting for process and each pair without exposing credentials or raw exchange payloads.
 - [ ] Add bounded reconnect/backoff, timeouts, stream liveness/staleness detection, and resource cleanup tests.
 - [ ] Add operator controls for pause/resume/stop and safe behavior when a pair is disabled while orders or inventory exist.
@@ -1551,7 +1551,7 @@ Aggressive work must not delay P0. Start this phase only after Conservative has 
 - [x] Conservative owner decisions are closed and recorded in the canonical specification. No additional Conservative product decisions are pending.
 - [ ] Finalize shared application reservation timing/release rules for submitted, partially filled, cancelled, rejected, expired, and uncertain orders; do not duplicate Conservative strategy policy.
 - [ ] Finalize cross-pair account balance allocation and quote-asset contention behavior.
-- [x] Optional operational Journal evidence integration is implemented; it remains an observer and does not itself restore trading state. See [Journal Operations](./docs/JOURNAL_OPERATIONS.md) and [Journal Evidence Contract](./docs/JOURNAL_EVIDENCE_CONTRACT.md).
+- [x] Optional operational Journal evidence integration is implemented; it remains an observer and does not itself restore trading state. See [Journal Operations](../../apps/harvester/docs/JOURNAL_OPERATIONS.md) and [Journal Evidence Contract](../../apps/harvester/docs/JOURNAL_EVIDENCE_CONTRACT.md).
 - [ ] Resolve the durable execution-fact source and fill/pause persistence contract for #654 without silently changing the Journal observer contract.
 - [ ] Decide whether strategy-specific P/L attribution is required.
 - [ ] Decide operator intervention behavior for unreconcilable exchange/local-state discrepancies.
@@ -1560,7 +1560,7 @@ Aggressive work must not delay P0. Start this phase only after Conservative has 
 
 - Follow repository root guidance and `apps/harvester/AGENTS.md`.
 - Work from `develop` using a short-lived task branch and target PRs to `develop`; do not commit task work directly to `develop` or `main`.
-- **Mandatory:** follow [Trading First](./docs/TRADING_FIRST.md); implement the next missing step in the actual trading loop before any secondary infrastructure work.
+- **Mandatory:** follow [Trading First](../../apps/harvester/docs/TRADING_FIRST.md); implement the next missing step in the actual trading loop before any secondary infrastructure work.
 - Keep durable recovery, comprehensive reconciliation, and optimization separate from operational observability. EventBus/Journal lifecycle logging may proceed without waiting for a Conservative TESTNET cycle.
 - Do not implement unresolved financial/risk behavior by assumption; close the decision first.
 - Do not mark an item complete until implementation, meaningful tests, required checks, and documentation are complete on the target branch.
@@ -1579,635 +1579,635 @@ updated PR head before treating this repair as verified.
 
 ## Historical records archive
 
-The detailed historical audit snapshots, implementation progress reports, incident notes, evidence corrections and completed delivery records have been preserved in [ROADMAP_HISTORY.md](./docs/audits/ROADMAP_HISTORY.md). The original section headings are retained below as compatibility anchors for existing links; the historical bodies live in the archive. These stubs are not current status or implementation guidance.
+The detailed historical audit snapshots, implementation progress reports, incident notes, evidence corrections and completed delivery records have been preserved in [ROADMAP_HISTORY.md](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). The original section headings are retained below as compatibility anchors for existing links; the historical bodies live in the archive. These stubs are not current status or implementation guidance.
 
 ## Historical audit snapshot (superseded by the current implementation status above)
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### Implemented and verified by source inspection
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### Confirmed blockers / gaps found in the audit
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ## Historical P0.7 implementation record — superseded by the canonical Conservative specification
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### P0.7 implementation progress — CI passed; local TESTNET startup confirmed; awaiting first price
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### Historical behavior summary — rules now defined only by the canonical specification
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### Scope A — Remove unnecessary execution-readiness barriers
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### Scope B — Reconcile recovery SELLs without cancelling PENDING orders
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### Scope C — Diagnostics and failure classification
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### Required tests
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### Out of scope for P0.7
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### Acceptance
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ## P0.6 — Fix Binance order lifecycle race and diagnostic errors
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### Problem statement and evidence
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### P0.6.1 — Reproduce and pin down the lifecycle ordering
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### P0.6.2 — Serialize engine state transitions
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### P0.6.3 — Enforce cancellation identity and lifecycle preconditions
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### P0.6.4 — Make Error and AggregateError logging lossless
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### P0.6.5 — Documentation and verification
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### Acceptance criteria
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### Implementation boundaries
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### P0.6 implementation progress — engine transition serialization
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### P0.6 implementation progress — cancellation eligibility
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### P0.6 verification snapshot — 2026-11-03
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### P0.7 ownership-failure diagnostics — 2026-11-03
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### P0.7 ownership correlation comparison — 2026-11-03
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### Order ownership audit — 2026-11-03
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### TESTNET rejected-event evidence — 2026-11-03 16:24
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 #### Additional adapter finding: Binance original client order ID is discarded
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 #### 16:24:48 TRADE event
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 #### Updated diagnosis and required evidence
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### Order identity alignment — 2026-11-03
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ## DDD and Clean Architecture audit follow-up
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### DDD-01 — Audit documentation reconciliation (documentation)
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### DDD-02 — Harvester domain glossary and context map
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### DDD-03 — Portfolio / RecoveryLedger consistency contract
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### DDD-04 — Extract accounting/recovery workflows from bootstrap
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### Startup configuration and read-only policy extraction — 2026-11-08
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### Broker connection lifecycle extraction — 2026-11-08
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### Market subscription coordinator extraction — 2026-11-08
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### Shutdown handler extraction — 2026-11-08
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### User-data subscription/startup gate extraction — 2026-11-08
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### User-data recovery coordinator extraction — 2026-11-08
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### User-data status/recovery handler extraction — 2026-11-08
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### User-data event handler extraction — 2026-11-08
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### Market-data freshness policy extraction — 2026-11-08
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### Market metadata loading extraction — 2026-11-08
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### Account snapshot manager extraction — 2026-11-08
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### Bootstrap resource-cleanup extraction — 2026-11-08
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### DDD-05 — Decompose Conservative Trading Engine incrementally
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### DDD-06 — Executable architecture fitness checks
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### DDD-07 — Strategic boundary review (later, evidence-driven)
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### Conservative next-BUY execution-price correction — 2026-11-03
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### Conservative BUY-completion submission ordering — 2026-11-03
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### Conservative recovery SELL completion reconciliation — 2026-11-03
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### Historical commission and order-type policy decision — 2026-11-03 (superseded)
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### POST-ONLY book-ticker subscription lifecycle regression — 2026-11-04
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ## TESTNET live progress — 2026-11-04 (initial partial snapshot; superseded by later incident record)
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### Runtime observations
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### Later read-only open-orders snapshot
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### Interpretation and remaining proof
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ## TESTNET incident and account snapshot — 2026-11-04 (supersedes earlier partial-progress status)
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### What the run actually demonstrated
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### Source remediation progress — PR #513
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### Incident A — repeated BUY submissions around immediate FILLED acknowledgements
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### Historical Incident B — residual-suppression defect (superseded by canonical sell-through)
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### Account reconciliation — still incomplete
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### Updated acceptance status and execution gate
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### Follow-up source review — conflicting duplicate execution records
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### TESTNET commission configuration change — 2026-11-04
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ## Latest PR #513 review — 2026-11-04
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ## 2026-11-04 TESTNET incident — investigation progress and blockers
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### Evidence established
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### Source changes now made in PR #513
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### Remaining investigation — actual blockers
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### Acceptance blockers before any TESTNET restart
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ## TESTNET incident — account balance audit implementation (2026-11-04)
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ## PR #515 offline follow-up progress — 2026-11-04
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### Deterministic lifecycle acceptance evidence
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ## PR #515 finalization and controlled TESTNET handoff — 2026-11-04
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### Branch synchronization correction — 2026-11-04
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ## Post-PR #515 TESTNET handoff — 2026-11-04
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ## Live reconciliation incident follow-up — 2026-11-04
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### Findings and implementation status
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### SELL 698745 cancellation — strategy path CONFIRMED; raw event identifier NOT REPRODUCED
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### Preserved accounting evidence
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### Remaining evidence / status
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### CI iteration — 2026-11-04
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### Acknowledgement recovery domain-state correction — 2026-11-04
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### Accounting and Journal regression follow-up — 2026-11-04
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### Post-review hardening — 2026-11-04
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### Binance duplicate-fill timestamp parity — 2026-11-05
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ## Automatic startup account audit — 2026-11-05
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ## Journal restart recovery — runtime integration disabled 2026-11-05; forensic investigation resumed 2026-11-09
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ## Durable exchange-write intent barriers — retained P0 safety
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ## Single-writer process ownership — P0, 2026-11-05
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ## P0 — Durable restart recovery (#654; historical PR #606 helper stack, current runtime wiring disabled)
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ## Standalone TESTNET order-cancellation operator tool — 2026-11-05
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ## Scoped development logging — explicitly authorized 2026-11-05
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ## Historical Conservative strategy evidence audit — 2026-11-06 (evidence snapshot; contract superseded)
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ## Conservative audit closure sequence — 2026-11-06
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### Gate 0 — evidence integrity
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### Gate 1 — reconstruct each order
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### Gate 2 — accounting
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### Gate 3 — canonical contract and documentation consolidation (#646)
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### Gate 4 — canonical Conservative regression coverage (#648)
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### Gate 5 — user-data recovery (#626)
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### Gate 6 — release decision
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ## 2026-11-06 original-log verification update
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ## Conservative audit — 2026-11-06 post-CLOSING trade-history update
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ## Audit continuation checkpoint — 2026-11-06 11:57 UTC
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ## Evidence correction — previously supplied balances and open-orders snapshot (2026-11-06)
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### Historical account snapshots from the original Journal
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### Operator-supplied latest open-orders snapshot
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### Corrected evidence classification
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ## Evidence chronology correction — post-CLOSING DOGE/ZRO executions (2026-11-06)
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ## Conservative owner decisions — canonical reference only
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ## Conservative Strategy audit — current implementation gate (2026-11-06)
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### Documentation consistency gate — PASS (2026-11-06)
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### Implementation and regression gate
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### Current CI baseline
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ## Operator workstation lifecycle clarification — 2026-11-06
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ## Historical audit continuation — source-verified residual and restart blockers (2026-11-06; superseded status)
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### Residual sell-through — implementation IN PROGRESS
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### Current audit work ordering
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ## Deferred — process-restart recovery (last roadmap item; not an active audit blocker)
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ## Conservative Strategy audit — canonical authority and current status (2026-11-06)
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ## Conservative accounting conformance follow-up — 2026-11-06
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ## Conservative Strategy — actual DOGE/ZRO outcome conformance (2026-11-06)
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### Execution order
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### Known starting arithmetic (exchange evidence, not yet a full strategy verdict)
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ## 2026-11-06 — actual DOGE/ZRO conformance checkpoint
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ## 2026-11-06 lifecycle audit — partial BUY while recovery SELL is open
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ## Lifecycle audit refinement — partial BUY replacement path (2026-11-06)
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ## 2026-11-06 audit continuation — partial BUY policy regression
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ## 2026-11-06 audit continuation — dust plus subsequent BUY regression
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ## 2026-11-06 audit finding — dust disposition is not durably recorded
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ## 2026-11-06 audit continuation — conflicting partial-BUY lifecycle assertion
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ## 2026-11-06 audit continuation — lifecycle regression precision
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ## Conservative lifecycle audit continuation — 2026-11-06 21:05 +02:00
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ## Conservative audit — F-011 test coverage added (2026-11-06)
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ## Current Conservative audit status — 2026-11-06
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ## Conservative Strategy owner clarification — dust is a retained keep bonus (2026-11-06)
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ## Conservative Strategy implementation audit closure — 2026-11-07
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### CI regression fixes — 2026-11-08
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### Bootstrap composition follow-up — 2026-11-08
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ## Harvester recovery hardening follow-up — 2026-11-08
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### Completed offline recovery regressions
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### Confirmed risks and remaining proof gaps
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ## 2026-11-08 second-disconnect Harvester lifecycle proof — complete
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ## 2026-11-08 F-017 malformed REST-envelope regression follow-up
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ## 2026-11-08 PR #688 account-wide open-orders timeout regression
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ## 2026-11-08 F-016 native broker Error-cause preservation — complete
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ## 2026-11-08 recovery roadmap closeout — PR #719 merged
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ## 2026-11-09 forensic follow-up — November 8 evening session
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ### 2026-11-09 current forensic findings — #654
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ## 2026-11-09 forensic restart-recovery status
 
-> Historical details are preserved in the [Harvester roadmap history archive](./docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
+> Historical details are preserved in the [Harvester roadmap history archive](../../apps/harvester/docs/audits/ROADMAP_HISTORY.md). This heading remains as a compatibility anchor.
 
 ## 2026-11-09 — F-023 failure-classification TDD
 
@@ -2274,7 +2274,7 @@ The owner-approved follow-up separates manual/external orders from orders previo
 
 The initial #957 proposal treated every applicable but locally unvalidated dynamic/account/exchange filter as a readiness blocker. That policy was superseded by merged PR #1020. Keep this historical entry for decision provenance; do not use its fail-closed readiness proposal as the current contract. The current policy preserves those filters as diagnostics without blocking readiness solely because they are present. Supported static rules and complete, well-formed authoritative metadata still fail closed. Binance remains authoritative for constraints Harvester does not evaluate locally.
 
-The current rationale, filter mapping, deliberately excluded order-type-specific filters, limitations and readiness flow are documented in [Exchange trading constraints](docs/exchange-trading-constraints.md).
+The current rationale, filter mapping, deliberately excluded order-type-specific filters, limitations and readiness flow are documented in [Exchange trading constraints](../../apps/harvester/docs/exchange-trading-constraints.md).
 
 ## 2026-11-11 — Unsupported exchange filters no longer block startup
 
@@ -2351,7 +2351,7 @@ The original `coinzilla-archive` source was rechecked independently of the sanit
 
 The task branch preserves the archive replay and digest-chain evidence, the corrected test inventory, and the real Portfolio/RecoveryLedger late-SELL accounting composition in `create-user-data-event-safety-halt.test.js`. The observer now emits a bounded safe validation field for future failures; this does not identify the historical field in the 28 archived errors. The branch was synchronized through PR #1784 and then manually merged with current develop at `c1c715dc1b9b821d87d0a25e903c88c61e91ed3a` in commit `d963dfc2e0eb3fc02cbd9c25b08ae5b92ce61df9`, incorporating #1776 exact-decimal bootstrap/replay corrections.
 
-The detailed evidence, implementation commits, CI state and remaining unknowns are recorded in [the archive re-review](docs/CONSERVATIVE_RECOVERY_ARCHIVE_REVIEW_2026-11-23.md). Continue under #1362 / PR #1761; keep the PR draft and do not run TESTNET/LIVE mutations.
+The detailed evidence, implementation commits, CI state and remaining unknowns are recorded in [the archive re-review](../../apps/harvester/docs/CONSERVATIVE_RECOVERY_ARCHIVE_REVIEW_2026-11-23.md). Continue under #1362 / PR #1761; keep the PR draft and do not run TESTNET/LIVE mutations.
 
 ## 2026-11-23 — continuation after #1776 develop synchronization
 
@@ -2365,7 +2365,7 @@ The detailed evidence, implementation commits, CI state and remaining unknowns a
 
 - #1362 / [PR #1761](https://github.com/45s/coinzilla/pull/1761) remain focused on deterministic Conservative recovery accounting, replay, late-fill safety and serialized shutdown behavior.
 - The 28 historical `HARVESTER_ORDER_HISTORY_RECORD_INVALID` events are separated into [issue #1789](https://github.com/45s/coinzilla/issues/1789). Their 2026-11-22 invalid field, input shape, projection stage and operational impact remain unknown; no root cause is inferred from timestamp correlation.
-- The immutable 2026-11-22 archive investigation remains documented in [the #1789 evidence report](docs/audits/reports/order-history-projection-failures.md). It indexes all 28 visible terminal groups and 58 logger writes represented by repeat counters. The compact-console correction is merged in [PR #1796](https://github.com/45s/coinzilla/pull/1796) as `4adde09fbbfabac10e54d689644e5c473824f65f`; it improves future diagnostics but does not identify the historical invalid inputs. The two large 2026-11-22 structured logs remain inaccessible through the current connector; the database dump remains uninspected.
+- The immutable 2026-11-22 archive investigation remains documented in [the #1789 evidence report](../../apps/harvester/docs/audits/reports/order-history-projection-failures.md). It indexes all 28 visible terminal groups and 58 logger writes represented by repeat counters. The compact-console correction is merged in [PR #1796](https://github.com/45s/coinzilla/pull/1796) as `4adde09fbbfabac10e54d689644e5c473824f65f`; it improves future diagnostics but does not identify the historical invalid inputs. The two large 2026-11-22 structured logs remain inaccessible through the current connector; the database dump remains uninspected.
 - Separate 2026-11-24 follow-up: the compressed TESTNET session was hash-verified and decompressed. It confirms three `order.updated` records for DOGE/ZRO/ADA that omit provider provenance while their accepted submission/fill facts contain it. The committed `develop@3ecc3366` source explains the loss: the registry preserves provenance, but the lifecycle mapper serializes the raw incoming order. This does not establish a shared cause for the 2026-11-22 failures. The focused code fix is implemented in draft PR #1832; it will be reviewed/integrated only after #1826 is integrated.
 - A deterministic offline regression now exercises that lifecycle path with a real `OrderRegistry` and a partial-fill update lacking adapter provenance; it checks both retained registry identity and the published `order.updated` DTO. RED was confirmed on test head `96665d9385334790be50c6ec4ad11c33b6f94bea` (18 passed, 1 expected failure: actual `undefined` vs expected `binanceTestnet`). The focused mapper correction is implemented in draft PR #1832; GREEN passed on code head `00adf1b55f3d5a879991359de95295f570e8046d` (2,722 Harvester tests; 90.59% line / 83.71% branch / 96.07% function coverage; repository quality and dependency audit passed). The external documentation-link check is pending. Review/integration remains after #1826.
 - Keep both archives immutable. No database dump was inspected and no TESTNET/LIVE writes, cancellations, restarts or account mutations were performed.
@@ -2420,7 +2420,7 @@ The detailed evidence, implementation commits, CI state and remaining unknowns a
 
 ## 2026-11-25 — Binance historical order identity conflict (#1851)
 
-- The ZROUSDT and DOGEUSDT startup history scans failed at order persistence because Binance reused clientOrderId values across distinct exchange orders. The sanitized production evidence and its explicit unknowns are preserved in [the incident report](docs/audits/reports/2026-11-25_binance-order-history-identity-conflicts.md).
+- The ZROUSDT and DOGEUSDT startup history scans failed at order persistence because Binance reused clientOrderId values across distinct exchange orders. The sanitized production evidence and its explicit unknowns are preserved in [the incident report](../../apps/harvester/docs/audits/reports/2026-11-25_binance-order-history-identity-conflicts.md).
 - The focused correction is in [PR #1849](https://github.com/45s/coinzilla/pull/1849): exchange-backed identity is scoped by environment, provider, account, market and exchange order ID; pending client identity remains provisional and market-scoped; fills link only by exact exchange order identity; equivalent decimal representations no longer trigger false immutable conflicts.
 - Migration v5 transactionally rebuilds the relational order/fill tables, verifies and retains a pre-v5 backup, preserves row IDs and valid foreign-key relationships, and fails closed on duplicate exchange identities or mismatched existing fill links. Conflict diagnostics retain reconciliation decision, recoverability and incomplete-coverage signals.
 - The persistence contract and audit report are updated. No TESTNET/LIVE writes, production restarts, account mutations or historical-row repairs were performed.
@@ -2432,7 +2432,7 @@ Open Draft [PR #1798](https://github.com/45s/coinzilla/pull/1798) has current he
 
 ## Strategy-neutral production-flow Scenario Runner — issue #1836
 
-Active and incomplete in draft [PR #1837](https://github.com/45s/coinzilla/pull/1837). The Harvester-side architecture note is [Scenario Runner architecture](docs/features/scenario-runner-architecture.md); Dashboard owns the specification and phased plan.
+Active and incomplete in draft [PR #1837](https://github.com/45s/coinzilla/pull/1837). The Harvester-side architecture note is [Scenario Runner architecture](../../apps/harvester/docs/features/scenario-runner-architecture.md); Dashboard owns the specification and phased plan.
 
 - The generic run lifecycle, process adapter, REST routes, WebSocket notifications and preliminary Dashboard workspace exist on the task branch.
 - RS-004-011 currently has only a helper-level adapter around `calculateRecoverySellerProfitability`. It does **not** execute the full production RS strategy/use-case lifecycle and is not an executable scenario. The host derives `executable` only when both the strategy-owned scenario mapping is source-approved and a matching strategy adapter is registered; the runner independently blocks unknown, preliminary and unmapped scenario IDs. The current helper remains `PRELIMINARY` / `executable: false`. The worker-only registry contains a helper-level RS dispatch, but the public host registers no executable RS adapter and continues to block submissions.
@@ -2545,7 +2545,7 @@ The pinned stock query exposes a query-specific `InsufficientPasswordHash::Sanit
 
 ## Bitunix USDT Futures provider — #1805
 
-**Status: IMPLEMENTATION COMPLETE and merged** — [issue #1805](https://github.com/45s/coinzilla/issues/1805) / [PR #1806](https://github.com/45s/coinzilla/pull/1806), merge commit [\`d6e98251363f8713ed1231a2eb4ac548c270eae8\`](https://github.com/45s/coinzilla/commit/d6e98251363f8713ed1231a2eb4ac548c270eae8). The separate LIVE-only Bitunix USDT Futures provider, capability matrix, REST/WS surfaces, gated order/position/TP-SL/account mutations, tests and documentation are implemented. This closes the provider implementation task, **not production readiness**. Bitunix has no Futures TESTNET; automated verification remains offline and LIVE mutation tests are prohibited. The provider remains excluded from Harvester routing and production execution until authoritative snapshot/recovery, private-channel subscription acceptance, complete account-wide fill/fee semantics, and distributed UID/IP pacing are resolved. Other common Spot-shaped methods and unsafe/unverified Futures operations remain explicitly unsupported. See [BROKER_API.md](./BROKER_API.md#bitunix-usdt-futures-provider--implementation-status), the [Futures reference audit](./docs/bitunix-futures-reference-audit.md), and the [scenario catalog](../testing/SCENARIO_CATALOG.md). Implemented: separate Futures provider/config/signing; exact USDT balances; public contract catalog, ticker/mark price, depth and closed REST candles; current/historical positions; position/leverage/margin/trading-setting reads; funding rates and position tiers; canonical order detail/history, bounded canonical fills and the legacy `getMyTrades()` bounded array projection; provider-specific pending orders and TP/SL reads/history; public trade/book-ticker streams and authenticated private observations; gated MARKET/LIMIT create, LIMIT modify, single/cancel-all, position close/close-all, position-level TP/SL place/modify/cancel, and leverage/margin-mode/position-mode mutations. Order and position mutations require explicit opt-in plus authenticated private-session readiness after caller REST reconciliation; account-setting writes have separate opt-in and exposure/order/TP-SL preflight with REST readback. Position-close readiness was tightened so opt-in alone cannot dispatch a close before reconciliation. Remaining limitations: Bitunix Futures is LIVE-only (no TESTNET); private observations have no replay cursor/sequence or authoritative snapshot guarantee; complete account-wide fill history and fee denomination remain unknown; account snapshot/server time and candle WS are unsupported; order-level TP/SL place/modify and isolated-position-margin adjustment remain unsupported for documented safety/protocol reasons. Keep the provider out of production execution and Harvester routing. The detailed operation matrix and remaining acceptance boundaries are maintained in [BROKER_API.md](./BROKER_API.md#bitunix-usdt-futures-provider--implementation-status), the [Futures reference audit](./docs/bitunix-futures-reference-audit.md), and issue #1805.
+**Status: IMPLEMENTATION COMPLETE and merged** — [issue #1805](https://github.com/45s/coinzilla/issues/1805) / [PR #1806](https://github.com/45s/coinzilla/pull/1806), merge commit [\`d6e98251363f8713ed1231a2eb4ac548c270eae8\`](https://github.com/45s/coinzilla/commit/d6e98251363f8713ed1231a2eb4ac548c270eae8). The separate LIVE-only Bitunix USDT Futures provider, capability matrix, REST/WS surfaces, gated order/position/TP-SL/account mutations, tests and documentation are implemented. This closes the provider implementation task, **not production readiness**. Bitunix has no Futures TESTNET; automated verification remains offline and LIVE mutation tests are prohibited. The provider remains excluded from Harvester routing and production execution until authoritative snapshot/recovery, private-channel subscription acceptance, complete account-wide fill/fee semantics, and distributed UID/IP pacing are resolved. Other common Spot-shaped methods and unsafe/unverified Futures operations remain explicitly unsupported. See [BROKER_API.md](../../packages/brokers/BROKER_API.md#bitunix-usdt-futures-provider--implementation-status), the [Futures reference audit](../../packages/brokers/docs/bitunix-futures-reference-audit.md), and the [scenario catalog](../testing/SCENARIO_CATALOG.md). Implemented: separate Futures provider/config/signing; exact USDT balances; public contract catalog, ticker/mark price, depth and closed REST candles; current/historical positions; position/leverage/margin/trading-setting reads; funding rates and position tiers; canonical order detail/history, bounded canonical fills and the legacy `getMyTrades()` bounded array projection; provider-specific pending orders and TP/SL reads/history; public trade/book-ticker streams and authenticated private observations; gated MARKET/LIMIT create, LIMIT modify, single/cancel-all, position close/close-all, position-level TP/SL place/modify/cancel, and leverage/margin-mode/position-mode mutations. Order and position mutations require explicit opt-in plus authenticated private-session readiness after caller REST reconciliation; account-setting writes have separate opt-in and exposure/order/TP-SL preflight with REST readback. Position-close readiness was tightened so opt-in alone cannot dispatch a close before reconciliation. Remaining limitations: Bitunix Futures is LIVE-only (no TESTNET); private observations have no replay cursor/sequence or authoritative snapshot guarantee; complete account-wide fill history and fee denomination remain unknown; account snapshot/server time and candle WS are unsupported; order-level TP/SL place/modify and isolated-position-margin adjustment remain unsupported for documented safety/protocol reasons. Keep the provider out of production execution and Harvester routing. The detailed operation matrix and remaining acceptance boundaries are maintained in [BROKER_API.md](../../packages/brokers/BROKER_API.md#bitunix-usdt-futures-provider--implementation-status), the [Futures reference audit](../../packages/brokers/docs/bitunix-futures-reference-audit.md), and issue #1805.
 
 ### 2026-11-25 audit corrections
 
@@ -2581,7 +2581,7 @@ The fixed, human-operated local LIVE investigation uses the common `Broker` faca
 
 The preflight verifies explicit market-open status and HYPE/USDT identity, exact `minVolume` base quantity and `minPrice` quote notional constraints, the provisional 11 USDT local notional floor, free USDT below 12, and no rows from the symbol-scoped open-order query. It displays that open-order response completeness is not established, the balance is a point-in-time response without an authoritative source timestamp, tick/step remain UNKNOWN, low free USDT does not guarantee exchange rejection, and the 30 USDT limit may fill immediately if accepted. An exclusive marker under ignored `.diagnostics/` is persisted before the single `createOrder()` call. No automatic retry, cancellation, transfer, or second mutation is possible. `OUTCOME_UNKNOWN` remains unknown and requires manual reconciliation.
 
-The agent, tests, CI and scheduled jobs must never invoke the LIVE operator mode. This task does not change the common Broker contract, capability declarations, default mutation gate, Harvester registration, or any issue [#1185](https://github.com/45s/coinzilla)'s production-readiness blocker. Operator instructions are in the [Brokers README](./README.md#one-shot-bitunix-hypeusdt-operator-order-attempt).
+The agent, tests, CI and scheduled jobs must never invoke the LIVE operator mode. This task does not change the common Broker contract, capability declarations, default mutation gate, Harvester registration, or any issue [#1185](https://github.com/45s/coinzilla)'s production-readiness blocker. Operator instructions are in the [Brokers README](../../packages/brokers/README.md#one-shot-bitunix-hypeusdt-operator-order-attempt).
 
 ## User-data session lifecycle test hardening — #1602
 
@@ -2606,7 +2606,7 @@ Tracking: [repository standards issue #1568](https://github.com/45s/coinzilla/is
 
 Tracking: [issue #1446](https://github.com/45s/coinzilla/issues/1446).
 
-**Status: COMPLETE.** The common method/result/error contract and shared Binance/Bitunix offline conformance suite were merged in [PR #1451](https://github.com/45s/coinzilla/pull/1451), merge `e6d3e60aaaa26ad23705564ffc17f786c995b3dd`. Capability-model ownership was subsequently reconciled in [PR #1455](https://github.com/45s/coinzilla/pull/1455): `@coinzilla/entities` owns the single shared value contract; Brokers owns provider-specific declarations/evidence and re-exports the shared class for compatibility. The full method matrix and result/error contract are documented in [BROKER_API.md](./BROKER_API.md). This API completion does not resolve Bitunix's separate Harvester admission blockers in [#1185](https://github.com/45s/coinzilla/issues/1185).
+**Status: COMPLETE.** The common method/result/error contract and shared Binance/Bitunix offline conformance suite were merged in [PR #1451](https://github.com/45s/coinzilla/pull/1451), merge `e6d3e60aaaa26ad23705564ffc17f786c995b3dd`. Capability-model ownership was subsequently reconciled in [PR #1455](https://github.com/45s/coinzilla/pull/1455): `@coinzilla/entities` owns the single shared value contract; Brokers owns provider-specific declarations/evidence and re-exports the shared class for compatibility. The full method matrix and result/error contract are documented in [BROKER_API.md](../../packages/brokers/BROKER_API.md). This API completion does not resolve Bitunix's separate Harvester admission blockers in [#1185](https://github.com/45s/coinzilla/issues/1185).
 
 ### Canonical Binance order-history pagination mode — #1558
 
@@ -2662,7 +2662,7 @@ Decision:
 - Environment selection, account permissions, connectivity, recovery readiness, and other prerequisites are represented separately as metadata/conditions, never as a fourth status.
 - The Brokers public API re-exports the Entities class/constants for compatibility. Entities does not import or depend on Brokers.
 
-The implementation and current provider matrix are specified in [BROKER_API.md](./BROKER_API.md).
+The implementation and current provider matrix are specified in [BROKER_API.md](../../packages/brokers/BROKER_API.md).
 
 ### Delivery phases
 
@@ -2712,13 +2712,13 @@ The implementation and current provider matrix are specified in [BROKER_API.md](
 
 The shared provider declaration uses the canonical `BrokerCapabilities` class from `@coinzilla/entities`; `src/broker/broker-capabilities.js` is a compatibility re-export from `@coinzilla/brokers`. It uses three statuses only: `SUPPORTED`, `UNSUPPORTED`, and `UNKNOWN`; omitted capabilities resolve to `UNKNOWN`. Provider declarations with identity require evidence: supported records require a method and guarantee, while unsupported/unknown records require a reason. Method, guarantee, limitation, reason, and conditions are immutable evidence metadata.
 
-Environment selection is represented separately as `environment.selectedMode` and `environment.supportedModes`. It does not prove account permission, connectivity, or runtime readiness. The shared value preserves the Harvester registry's `contractVersion`/`provider`/environment metadata boundary without making Entities depend on Brokers or Harvester. See [BROKER_API.md](./BROKER_API.md) for the canonical Binance/Bitunix matrix and exact contract.
+Environment selection is represented separately as `environment.selectedMode` and `environment.supportedModes`. It does not prove account permission, connectivity, or runtime readiness. The shared value preserves the Harvester registry's `contractVersion`/`provider`/environment metadata boundary without making Entities depend on Brokers or Harvester. See [BROKER_API.md](../../packages/brokers/BROKER_API.md) for the canonical Binance/Bitunix matrix and exact contract.
 
 The previous four-state Binance declaration is superseded. The table below is retained as historical source evidence only; its old `environment-dependent` status must not be used as the current vocabulary. The current model maps implemented conditional operations to `SUPPORTED` plus explicit conditions.
 
 #### Historical pre-#1446 Binance Spot capability matrix (superseded)
 
-> Historical pre-canonicalization evidence from the four-state declaration. Use [BROKER_API.md](./BROKER_API.md) for current status semantics and provider capability declarations.
+> Historical pre-canonicalization evidence from the four-state declaration. Use [BROKER_API.md](../../packages/brokers/BROKER_API.md) for current status semantics and provider capability declarations.
 
 | Area | Capability | Historical state | Source evidence and precise boundary |
 |---|---|---|---|
@@ -2772,7 +2772,7 @@ This section contains only work owned by `@coinzilla/brokers`. Consumer applicat
 
 **Scope:** compare the exact `BROKER_METHODS` and `BROKER_COMPATIBILITY_METHODS` catalogs in `src/broker/broker-contract.js` against the Binance and Bitunix Spot facades, Bitunix capability declarations, and the Bitunix Spot reference audit.
 
-**Result:** Bitunix implements every common and compatibility method name on its facade. The remaining gaps are unsupported operations or narrower guarantees—not absent JavaScript method declarations. Do not add duplicate method names or treat inherited `CoreBroker` stubs as evidence of support. The canonical method/status matrix remains [BROKER_API.md](./BROKER_API.md).
+**Result:** Bitunix implements every common and compatibility method name on its facade. The remaining gaps are unsupported operations or narrower guarantees—not absent JavaScript method declarations. Do not add duplicate method names or treat inherited `CoreBroker` stubs as evidence of support. The canonical method/status matrix remains [BROKER_API.md](../../packages/brokers/BROKER_API.md).
 
 #### Common Broker operations not yet supported by Bitunix Spot
 
@@ -3557,17 +3557,17 @@ The [Phase 0 broker contract audit](../brokers-websocket-contract.md) records th
 
 ## 14. Mandatory autonomous DDD refactoring execution
 
-**Architecture source of truth:** [Brokers Package Architecture](./ARCHITECTURE.md). It defines the proposed target tree, dependency rules, responsibility map, TDD method, and phase exit criteria. This section tracks execution status; update both documents together when evidence changes.
+**Architecture source of truth:** [Brokers Package Architecture](../../packages/brokers/ARCHITECTURE.md). It defines the proposed target tree, dependency rules, responsibility map, TDD method, and phase exit criteria. This section tracks execution status; update both documents together when evidence changes.
 
 ### DDD documentation and audit status
 
-- [x] Target architecture, dependency rules, and proposed tree documented in [ARCHITECTURE.md](./ARCHITECTURE.md).
+- [x] Target architecture, dependency rules, and proposed tree documented in [ARCHITECTURE.md](../../packages/brokers/ARCHITECTURE.md).
 - [x] Existing user-data recovery vertical slice and current import direction documented.
 - [x] Package-wide responsibility/import and consumer audit is complete: production module imports, dependency direction, state ownership, test/coverage baseline, and both workspace consumers are recorded in ARCHITECTURE.md.
 - [x] Confirmed that the user-data infrastructure adapter slice is merged (PR #605); do not repeat it.
 - [x] Phase 9 slices 1–10 are merged, including complete Binance Infrastructure placement (PR #697) and executable dependency/public API enforcement (PR #704).
 
-**Single implementation tracker:** use [Phase 9 — DDD/TDD architecture refactor](./ROADMAP.md) below for implementation slices, status, and next action. The architecture document defines the target and current baseline; this section must not become a second phase tracker.
+**Single implementation tracker:** use [Phase 9 — DDD/TDD architecture refactor](#brokers-roadmap) below for implementation slices, status, and next action. The architecture document defines the target and current baseline; this section must not become a second phase tracker.
 
 **Current next action:** Phase 9 is complete. Phase 8 remains open because read-only TESTNET account reads and recovery assertions have not passed. PR #720 merged into `develop` at `39f6ab666523cdee937f3003944dbc291f62a52e`; diagnostic PR #721 merged at `07cb9d3caef5232cfaa9c51954de91b3bc1ccd59`. The credential-free GitHub Actions probe confirms that the hosted runner's Spot TESTNET API upgrade is denied with HTTP 451 and Binance's restricted-location eligibility response, while the TESTNET Streams endpoint upgrades successfully with HTTP 101. Do not retry the manual read-only account/recovery workflow on that runner. Do not ask the operator to change location. The hosted Spot TESTNET account API path is paused because the runner receives HTTP 451 with Binance's restricted-location eligibility response. Keep Phase 8 UNVERIFIED/PAUSED until an eligible, authorized environment is independently available. Do not retry the same blocked runner. Continue offline DDD/TDD work, deterministic tests, and CI. Any later read-only account/recovery validation and controlled soak still require separate authorization and must keep both safety flags preserved. Keep order mutation and externally generated user-data events disabled; preserve fail-closed reconciliation.
 
@@ -3662,7 +3662,7 @@ This work is in an open task PR targeting `develop`; do not mark it complete unt
 - The official docs and JKorf Spot socket/authentication implementation agree on the RPC envelope and per-request authentication fields. JKorf's Spot socket methods themselves cover order mutations only; no continuous Spot subscriptions are copied from Futures.
 - Issue [#1185](https://github.com/45s/coinzilla/issues/1185) remains unchanged: this RPC client does not establish source-timestamped account snapshots, fill completeness, order identity, safe mutation semantics, a TESTNET, or continuous push streams. Bitunix trading capability is not established; the current broker implementation does not support order mutations or complete execution lifecycle guarantees.
 
-See the [Bitunix WebSocket RPC contract](../brokers-websocket-contract.md#bitunix-spot-websocket-rpc-client) and [package usage guide](./README.md#bitunix-spot-websocket-rpc).
+See the [Bitunix WebSocket RPC contract](../brokers-websocket-contract.md#bitunix-spot-websocket-rpc-client) and [package usage guide](../../packages/brokers/README.md#bitunix-spot-websocket-rpc).
 
 ## 2026-11-16 — Bitunix Spot broker foundation
 
@@ -3675,7 +3675,7 @@ See the [Bitunix WebSocket RPC contract](../brokers-websocket-contract.md#bituni
 - Bitunix's official API repository confirms that no TESTNET environment is currently provided and that there is no clear plan for one ([BitunixOfficial/open-api#4, maintainer response](https://github.com/BitunixOfficial/open-api/issues/4#issuecomment-3434841476)). Historical note: the earlier audit snapshot recorded the inverse semantics. The current official Spot order docs revalidated 2026-11-20 specify LIMIT `volume` as base quantity and MARKET `volume` as quote quantity; this supersedes the old note. PR #1550 corrects the adapter and introduces generic `quoteQuantity`; no live order submission is performed.
 - Offline tests cover signing, REST transport, lossless account-balance parsing, config, adapters, supported reads, unsupported operations, and exact quantity arithmetic. The first PR CI run exposed four export/assertion expectation mismatches; those were corrected and the suite was expanded. PR #1182 was merged as the initial query-operation foundation; PR [#1183](https://github.com/45s/coinzilla/pull/1183) added canonical order-history filters and fail-closed active-market discovery. On exact PR #1183 head `f7ac16d08a00cfdec7b3b54dec8bfc554254f0fa`, broker/workspace tests and coverage thresholds, syntax/changed-file lint, external documentation links, dependency audit, actionlint, and consumer regression checks passed. Binance TESTNET integration was skipped; no Bitunix live API calls or order mutations were performed.
 - The 2026-11-16 read-side re-audit found no newly documented capability that safely changes the supported surface: order-history pagination/completion semantics, matching-order identity/completeness, depth precision selection, OHLCV volume, source timestamps, and continuous Spot subscriptions remain unresolved. The JKorf Spot `GetUserTradesAsync` implementation also currently targets `order/pending/list` despite its interface documenting `order/deal/list`; it is not valid evidence for fill retrieval. Detailed source findings are tracked in [issue #1185](https://github.com/45s/coinzilla/issues/1185).
-- See the [Bitunix capability contract](../brokers-websocket-contract.md#bitunix-spot-capability-contract) and [package README](./README.md#bitunix-spot-integration).
+- See the [Bitunix capability contract](../brokers-websocket-contract.md#bitunix-spot-capability-contract) and [package README](../../packages/brokers/README.md#bitunix-spot-integration).
 
 **Remaining work before any trading use:** obtain written Bitunix clarification of the single-order versus batch-order quantity units; establish a stable exchange-supported client order identity or authoritative race-safe reconciliation; prove complete per-execution history semantics; establish a documented Spot private order/execution stream or source-timestamp-preserving polling/recovery contract; verify Spot TESTNET or another isolated mutation environment; and add canonical order/account lifecycle support only after the exchange supplies the required facts. Other query mappings remain blocked where the API omits canonical facts (OHLCV volume) or leaves required parameters undefined (depth precision selection).
 
@@ -3844,14 +3844,14 @@ The following comparison resolves what the references actually implement; it doe
 
 **Status: mandatory for every future Bitunix Spot capability task.** Before implementing a requested feature, agents must first audit the matching implementation and tests in [JKorf/Bitunix.Net](https://github.com/JKorf/Bitunix.Net) (primary C# Spot reference), cross-check the available JavaScript/TypeScript implementation in [samanzamani/bitunix-mcp](https://github.com/samanzamani/bitunix-mcp), and verify the wire contract against the [official Bitunix Spot API documentation](https://www.bitunix.com/api-docs/spots/en_us/) and [official Open API repository](https://github.com/BitunixOfficial/open-api).
 
-The detailed, mandatory procedure and direct source/test links live in [packages/brokers/AGENTS.md — Bitunix Spot development](./AGENTS.md#bitunix-spot-development--mandatory-reference-audit). This roadmap is the work/status view; it does not duplicate that engineering rule.
+The detailed, mandatory procedure and direct source/test links live in [packages/brokers/AGENTS.md — Bitunix Spot development](../../packages/brokers/AGENTS.md#bitunix-spot-development--mandatory-reference-audit). This roadmap is the work/status view; it does not duplicate that engineering rule.
 
 The purpose is to translate an already implemented and tested Spot behavior into Coinzilla's JavaScript architecture rather than inventing protocol behavior. The .NET implementation is a reference, not infallible authority: inspect source and fixtures, audit endpoint/parameter/response behavior, compare with official docs, and do not copy defects or Futures-only capabilities. Keep all unresolved guarantees in [issue #1185](https://github.com/45s/coinzilla/issues/1185); reference-project coverage does not itself resolve an exchange-contract blocker or authorize order mutations.
 
 ## Bitunix Spot — external reference implementation audit (2026-11-17)
 
 - [x] Completed a source-and-fixture-level audit of JKorf/Bitunix.Net Spot market, account, trading and socket code; cross-checked the TypeScript MCP and additional StockSharp, Python and Ruby implementations; reviewed Cachy's Futures-only documentation audit and the official Open API demo scope.
-- [x] Added the maintained [Bitunix external implementation reference audit](./docs/BITUNIX_REFERENCE_AUDIT.md), including the full Binance method parity inventory, reference source/test links, third-party defects, official documentation contradictions, and recommendations for safe ports.
+- [x] Added the maintained [Bitunix external implementation reference audit](../../packages/brokers/docs/BITUNIX_REFERENCE_AUDIT.md), including the full Binance method parity inventory, reference source/test links, third-party defects, official documentation contradictions, and recommendations for safe ports.
 - [x] Confirmed JKorf's Spot GetUserTradesAsync implementation calls pending/list despite its interface documenting deal/list; StockSharp and an independent Python client use the documented deal/list endpoint. This does not resolve complete execution-history semantics.
 - [x] Confirmed multiple clients expose Spot order placement, but none resolves the official single-order versus batch-order volume contradiction, missing client-order identity, unknown-outcome reconciliation or lack of TESTNET. Placement/cancellation remain blocked by issue #1185.
 - [x] Identified Bitunix-specific public query extensions. Exchange rates are implemented in PR #1370 and the WebSocket RPC client; token/network metadata is now exposed as a documented WebSocket RPC read. Neither is Binance parity or a new broker-port method.
@@ -3859,7 +3859,7 @@ The purpose is to translate an already implemented and tested Spot behavior into
 - [x] The Bitunix-only exchange-rate extension is merged in [PR #1370](https://github.com/45s/coinzilla/pull/1370) as `55694b837c869878d22346dfd6b0f12c9b0f3269`. It uses the unsigned public `GET /api/spot/v1/common/rate/list`, preserves exact positive decimal strings, freezes returned records, accepts an explicit empty array, and rejects missing or incomplete data. All six required `develop-core` checks passed on exact PR head `0f7fbaa332eea5b45a176a25eae4ba529495893a`.
 - [x] Token/network metadata is already exposed through the Bitunix Spot WebSocket RPC client (merged in PR #1374); a duplicate REST token/network extension remains deferred until a consumer contract requires it. Do not combine it with exchange rates or weaken issue #1185 blockers.
 
-The audit is the detailed evidence source; this roadmap records status and next actions. Future agents must search additional GitHub packages when the primary .NET/TypeScript references do not cover a capability or disagree. The source-discovery rule is in [Brokers AGENTS.md](./AGENTS.md#bitunix-spot-development--mandatory-reference-audit).
+The audit is the detailed evidence source; this roadmap records status and next actions. Future agents must search additional GitHub packages when the primary .NET/TypeScript references do not cover a capability or disagree. The source-discovery rule is in [Brokers AGENTS.md](../../packages/brokers/AGENTS.md#bitunix-spot-development--mandatory-reference-audit).
 
 ## 2026-11-17 — Bitunix Spot deposit-history extension (#1384 / PR #1385)
 
@@ -3891,7 +3891,7 @@ The audit is the detailed evidence source; this roadmap records status and next 
 - Added the Bitunix-only `getMatchingOrderDetails({ orderId, symbol })` read. It sends one signed POST with `stateChanging: false`, validates inputs before I/O, preserves the seven raw fields and decimal/identifier tokens, returns immutable data, and never retries.
 - Explicitly accepts only one object or `data: null`; malformed/missing data, arrays, invalid decimals and invalid timestamps fail closed. No synthetic order identity or semantic normalization is added.
 - This method does not prove fill completeness, quantity denomination or stable/unique execution identity. Keep `getFills()` and `getMyTrades()` unsupported and issue #1185 open; no mutation or trading-readiness status changes.
-- Documentation impact: updated the [Bitunix reference audit](./docs/BITUNIX_REFERENCE_AUDIT.md), [capability contract](../brokers-websocket-contract.md#bitunix-spot-capability-contract), and [package README](./README.md#bitunix-spot-integration).
+- Documentation impact: updated the [Bitunix reference audit](../../packages/brokers/docs/BITUNIX_REFERENCE_AUDIT.md), [capability contract](../brokers-websocket-contract.md#bitunix-spot-capability-contract), and [package README](../../packages/brokers/README.md#bitunix-spot-integration).
 
 Merge verification: the final PR head was synchronized with `develop`; package tests, workspace coverage, JavaScript syntax, Utils tests, dependency audit, and `actionlint` all passed on the exact head. No live API calls or order mutations were performed.
 
@@ -3931,7 +3931,7 @@ Merge verification: the final PR head was synchronized with `develop`; package t
 - Hardened optional `symbol` compatibility validation and retained base+quote identity, duplicate-row rejection, active-market filtering, and the raw Bitunix result shape.
 - Added deterministic offline broker and REST-client regressions for identity, matching/not-found/duplicates, malformed numeric fields, unsafe precision values, unknown/zero/null metadata, inactive pairs, public unsigned requests, malformed catalog data, transport failures and HTTP 429.
 - `getSymbolFilters()` remains **partial**: no official exact `tickSize`, `stepSize`, maximum quantity/notional or depth-precision mapping is established. The consumer adapter remains the canonical mapping boundary for `minPrice` → `MIN_NOTIONAL` and `minVolume` → `MIN_QUANTITY`; this helper remains disconnected from runtime bootstrap. No order execution, reconciliation, or live API acceptance is implied.
-- Updated the Brokers README, capability contract and [Bitunix reference audit](docs/BITUNIX_REFERENCE_AUDIT.md). Root `ROADMAP.md` is unchanged because the umbrella Bitunix priority and #1185 status did not change.
+- Updated the Brokers README, capability contract and [Bitunix reference audit](../../packages/brokers/docs/BITUNIX_REFERENCE_AUDIT.md). Root `ROADMAP.md` is unchanged because the umbrella Bitunix priority and #1185 status did not change.
 
 ## 2026-11-18 — Bitunix local diagnostics runner (#1426)
 
@@ -3955,7 +3955,7 @@ Merge verification: the final PR head was synchronized with `develop`; package t
 - [x] Open Entities coordination issue [#1450](https://github.com/45s/coinzilla/issues/1450) for the legacy public export's compatibility/deprecation decision.
 - [x] Preserve Harvester registry metadata compatibility without importing or moving Harvester application code.
 - [x] Add the Brokers-owned capability value, typed unsupported error, structural method catalog, compatibility method catalog, mutation outcome classification, and initial shared conformance suite.
-- [x] Add the current method/capability matrix and result/error/decimal/timestamp/pagination/lifecycle contract in [BROKER_API.md](./BROKER_API.md).
+- [x] Add the current method/capability matrix and result/error/decimal/timestamp/pagination/lifecycle contract in [BROKER_API.md](../../packages/brokers/BROKER_API.md).
 - [x] Complete the same-contract Binance/Bitunix implementation and offline conformance suite in [PR #1451](https://github.com/45s/coinzilla/pull/1451), merged into `develop` as `e6d3e60aaaa26ad23705564ffc17f786c995b3dd`.
 - [x] Verify the exact PR head: 688 Brokers tests passed; workspace unit tests and coverage passed; JavaScript Syntax/workspace quality, strict changed-file ESLint, actionlint, Harvester targeted tests, Utils tests, and dependency audit passed. Read-only Binance TESTNET integration was skipped by workflow policy.
 - [x] Advisory External Documentation Links workflow completed successfully on the exact PR #1451 head; it is not a required ruleset check.
@@ -4037,7 +4037,7 @@ Merge verification: the final PR head was synchronized with `develop`; package t
 - Harvester remains unregistered and trading remains blocked by [issue #1185](https://github.com/45s/coinzilla/issues/1185). The generic Harvester observation handler is diagnostic-only and cannot create canonical events/fills or satisfy readiness.
 - Read-only only. No live order/funds mutations. TESTNET is not required for offline tests or authenticated read-only verification.
 
-See [the private polling contract](./docs/BITUNIX_SPOT_POLLING.md) and [the Bitunix documentation index](./docs/README.md).
+See [the private polling contract](../../packages/brokers/docs/BITUNIX_SPOT_POLLING.md) and [the Bitunix documentation index](../../packages/brokers/docs/README.md).
 
 ## 2026-11-19 — Bitunix polling recovery delivery (#1516)
 
@@ -4131,7 +4131,7 @@ See [the private polling contract](./docs/BITUNIX_SPOT_POLLING.md) and [the Bitu
 - [x] Both requests reached `BitunixSpotBroker.createOrder()` and Bitunix returned HTTP 200 with outer `success: true`, but nested placement `placeStatus: 0`, `placeCode: 10034`, `placeMsg: 余额不足`, and no order ID.
 - [x] Coinzilla surfaced both as `BITUNIX_REST_EXCHANGE_REJECTED` with mutation outcome `REJECTED`. The harness workflow result `SUCCESS` means evidence capture completed; it does not mean an order was accepted.
 - [x] Published sanitized reports: [BUY report](https://github.com/45s/coinzilla/blob/25eb7e57aa9f1ae79338997897d0d4f189d37bee/packages/brokers/diagnostics/reports/bitunix-health-20261122T011615067Z.json) (commit `25eb7e57aa9f1ae79338997897d0d4f189d37bee`) and [SELL report](https://github.com/45s/coinzilla/blob/32362a40ec2f29b2ae895d0dbede78b3b157f907/packages/brokers/diagnostics/reports/bitunix-health-20261122T013708002Z.json) (commit `32362a40ec2f29b2ae895d0dbede78b3b157f907`).
-- [x] Added the cumulative [Bitunix live order-probe evidence log](./BITUNIX_ORDER_PROBE_LOG.md), including the proven behavior, unresolved protocol questions, and next investigation steps.
+- [x] Added the cumulative [Bitunix live order-probe evidence log](../../packages/brokers/BITUNIX_ORDER_PROBE_LOG.md), including the proven behavior, unresolved protocol questions, and next investigation steps.
 
 **Finding:** Spot LIMIT BUY/SELL dispatch and nested rejection parsing are empirically exercised. The operator confirmed the account lacked the required Spot assets, so both `10034` insufficient-balance rejections were expected. No accepted order or fill has yet been observed. A funded `limit-buy-11-usdt` probe is added: BUY `HYPEUSDT` LIMIT at `30 USDT`, spending up to `11 USDT`; quantity is calculated from live `basePrecision`, with `0.24 USDT` reserved. The script displays the exact order snapshot and accepts only `y/N`. This will test actual acceptance after merge and funding. Broader lifecycle/Harvester blockers remain.
 ## 2026-11-22 — Bitunix accepted-placement reconciliation
@@ -4156,7 +4156,7 @@ See [the private polling contract](./docs/BITUNIX_SPOT_POLLING.md) and [the Bitu
 - **Not production ready:** Bitunix does not document or establish atomic account snapshots, private-event sequence/replay or gap-free recovery, nor private-channel subscription acknowledgements. Complete account-wide fill retention and commission denomination remain unknown. REST pacing is process-local/API-key scoped, not coordinated across processes or keys sharing UID/IP.
 - Do not route this provider to Harvester or production execution until those external guarantees and deployment-level controls are resolved and separately reviewed.
 
-See the [Broker API capability matrix](./BROKER_API.md#bitunix-usdt-futures-provider--implementation-status), [Futures reference audit](./docs/bitunix-futures-reference-audit.md), and [scenario catalog](../testing/SCENARIO_CATALOG.md).
+See the [Broker API capability matrix](../../packages/brokers/BROKER_API.md#bitunix-usdt-futures-provider--implementation-status), [Futures reference audit](../../packages/brokers/docs/bitunix-futures-reference-audit.md), and [scenario catalog](../testing/SCENARIO_CATALOG.md).
 
 
 
@@ -4264,7 +4264,7 @@ PR #920 adds recursive source-event validation before object spread or JSON seri
 
 **Purpose:** provide reliable, auditable journal records and persistence behavior for application and operational history.
 
-Read [the journal agent instructions](./AGENTS.md) and [the domain ownership guide](../engineering/DOMAIN_OWNERSHIP.md).
+Read [the journal agent instructions](../../packages/journal/AGENTS.md) and [the domain ownership guide](../engineering/DOMAIN_OWNERSHIP.md).
 
 ## Architectural direction
 
@@ -4540,7 +4540,7 @@ These requirements apply to every implementation slice above. A roadmap item is 
 
 ## Completed work
 
-- [x] Document the current journal record schema and public API. Versioned schema-v1 metadata is additive; legacy raw event records remain readable. See [README](./README.md).
+- [x] Document the current journal record schema and public API. Versioned schema-v1 metadata is additive; legacy raw event records remain readable. See [README](../../packages/journal/README.md).
 - [x] Verify append/read ordering and behavior after partial write failures.
 - [x] [PR #714](https://github.com/45s/coinzilla/pull/714) merged: a transient file-content sync failure is reported as non-durable; a later flush on the same Journal instance succeeds and durably preserves both the original completed write and the retry record in append order. Journal tests passed 43/43 on exact head `a52630cf4b2db0b5b317db4dd0e103789b64ed90`; all six required offline CI contexts passed. No source change, deduplication, record rewrite, or deletion.
 - [x] Define and test duplicate/replay handling and stable record identity. Stable IDs are required, duplicates fail recovery, and replay is sequential/idempotency-aware.
@@ -4562,7 +4562,7 @@ These requirements apply to every implementation slice above. A roadmap item is 
 
 ## Current contract
 
-The authoritative current behavior is described in [README](./README.md). In summary:
+The authoritative current behavior is described in [README](../../packages/journal/README.md). In summary:
 
 - `record({ event })` recursively validates the source-event graph before append; successful results mean the JSONL write completed but do not claim durability. Serialization failure returns an error, poisons the writer, and is retained for flush/close.
 - `flush()` waits for EventBus delivery and queued writes, then confirms file-content sync only if no source-event serialization or write failure occurred. EventBus subscriber serialization failures are retained in `writeErrors` and prevent durable success.
@@ -4927,7 +4927,7 @@ Remaining unchecked roadmap items are intentionally deferred: sequential subscri
 
 ## AI-agent ownership and workflow
 
-This roadmap is owned by `packages/event-bus/`. Read [the local agent instructions](./AGENTS.md) and the repository's mandatory [AI-agent workflow](../../AI_AGENT_WORKFLOW.md) before changing this package.
+This roadmap is owned by `packages/event-bus/`. Read [the local agent instructions](../../packages/event-bus/AGENTS.md) and the repository's mandatory [AI-agent workflow](../../AI_AGENT_WORKFLOW.md) before changing this package.
 
 Use short-lived task branches from `develop`; do not create permanent per-domain branches. Keep event-bus implementation, tests, and roadmap changes within this domain. Route consumer requests and cross-package contract needs through [the cross-domain request process](../engineering/CROSS_DOMAIN_REQUESTS.md). Mark roadmap items complete only after the focused PR is merged into `develop` and required checks pass.
 
@@ -5037,7 +5037,7 @@ The shared capability merged in [PR #767](https://github.com/45s/coinzilla/pull/
 
 **Purpose:** provide small, domain-neutral helpers used across the workspace.
 
-Read [the utils agent instructions](./AGENTS.md) and [the domain ownership guide](../engineering/DOMAIN_OWNERSHIP.md).
+Read [the utils agent instructions](../../packages/utils/AGENTS.md) and [the domain ownership guide](../engineering/DOMAIN_OWNERSHIP.md).
 
 ## Principles
 
