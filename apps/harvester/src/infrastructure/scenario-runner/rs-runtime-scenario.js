@@ -22,6 +22,7 @@ import {
 } from "../../domain/strategies/recovery-seller/mixed-sell-fill-reconciliation.js"
 import { Portfolio } from "../../domain/portfolio/portfolio.js"
 import { StrategyId } from "../../domain/strategies/strategy-ids.js"
+import { TRADING_ENVIRONMENTS } from "../../domain/trading-environment.js"
 import {
   createLegacyPosition,
   createLegacyPositionAccounting,
@@ -207,7 +208,7 @@ async function resolveRuntimeScenarioConfiguration({ input }) {
   assertRuntimeScenarioConfig({ input })
   const pair = {
     enabled: true,
-    tradingEnvironment: "TESTNET",
+    tradingEnvironment: TRADING_ENVIRONMENTS.BOTH,
     enableVolatilityProtection: input.enableVolatilityProtection,
     externalOrdersPolicy: input.externalOrdersPolicy,
     investment: input.investment,
