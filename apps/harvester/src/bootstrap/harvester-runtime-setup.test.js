@@ -99,7 +99,9 @@ test("catches unexpected deferred replay exceptions and returns a failure result
       stopped: false,
       shutdownRequested: false,
     },
-    logger: { error: (entry) => errors.push(entry) },
+    logger: {
+      error: (entry) => errors.push(entry),
+    },
   })
 
   assert.equal(result.ok, false)
