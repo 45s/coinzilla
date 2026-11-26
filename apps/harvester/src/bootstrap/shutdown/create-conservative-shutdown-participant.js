@@ -1035,8 +1035,10 @@ export function createConservativeShutdownParticipant({
   if (!engine) {
     throw new TypeError("Conservative shutdown participant requires its trading engine")
   }
+
   const stageDiagnostics = new Map()
   const beginShutdown = () => engine.beginShutdown()
+
   const waitUntilSafe = createWaitUntilSafe({
     engine,
     eventPublisher,
@@ -1045,77 +1047,6 @@ export function createConservativeShutdownParticipant({
     logger,
     stageDiagnostics,
   })
-  const isSafeToShutdown = () => engine.getShutdownSafetySnapshot().markets
-    .every((market) => market.status === "SAFE_TO_SHUTDOWN")
-  const getSafetySnapshot = () => {
-    const snapshot = engine.getShutdownSafetySnapshot()
-    return Object.freeze({
-      strategyId: StrategyId.COIN_GRABBER,
-      status: isSafeToShutdown() ? "SAFE_TO_SHUTDOWN" : "BLOCKED",
-      revision: snapshot.revision,
-      markets: snapshot.markets.map((market) => Object.freeze({
-        symbol: market.symbol,
-        status: market.status,
-        blockers: Object.freeze(market.blockers ?? []),
-        stages: Object.freeze({
-          ...(stageDiagnostics.get(market.symbol) ?? {}),
-        }),
-      })),
-    })
-  }
-  return Object.freeze({
-    strategyId: StrategyId.COIN_GRABBER,
-    beginShutdown,
-    waitUntilSafe,
-    isSafeToShutdown,
-    getSafetySnapshot,
-  })
-}
-export function createConservativeShutdownParticipant({
-  engine,
-  eventPublisher,
-  drainUserDataEvents = async () => {},
-  getShutdownBlockers = () => [],
-  logger,
-} = {}) {
-  if (!engine) {
-    throw new TypeError("Conservative shutdown participant requires its trading engine")
-  }
-
-  const stageDiagnostics = new Map()
-  const beginShutdown = () => engine.beginShutdown()
-
-  const waitUntilSafe = async ({ signal } = {}) => {
-    if (typeof engine.waitForShutdownGate === "function") {
-      const stage = "WAIT_FOR_SHUTDOWN_GATE"
-      updateStageDiagnostics({ stageDiagnostics, symbol: "*", stage, status: "STARTED" })
-      try {
-        throwIfShutdownAborted(signal)
-        await awaitWithShutdownSignal(() => engine.waitForShutdownGate(), signal)
-        throwIfShutdownAborted(signal)
-        updateStageDiagnostics({ stageDiagnostics, symbol: "*", stage, status: "COMPLETED" })
-      } catch (error) {
-        updateStageDiagnostics({
-          stageDiagnostics,
-          symbol: "*",
-          stage,
-          status: signal?.aborted ? "ABORTED" : "FAILED",
-          error: signal?.reason ?? error,
-        })
-        throw error
-      }
-    }
-    throwIfShutdownAborted(signal)
-    return waitForConservativeMarkets({
-      engine,
-      eventPublisher,
-      drainUserDataEvents,
-      getShutdownBlockers,
-      logger,
-      signal,
-      stageDiagnostics,
-    })
-  }
 
   const isSafeToShutdown = () => engine.getShutdownSafetySnapshot().markets
     .every((market) => market.status === "SAFE_TO_SHUTDOWN")
