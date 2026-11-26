@@ -31,14 +31,13 @@ function escapeUsername(username) {
 }
 
 function prepareSha256Password(password) {
-  const mapped = password
-    .replace(/[\u00ad\u034f\u1806\u180b-\u180d\u200b-\u200d\u2060\ufe00-\ufe0f\ufeff]/g, "")
-    .replace(/[\u00a0\u1680\u2000-\u200a\u202f\u205f\u3000]/g, " ")
-    .normalize("NFKC")
-  if (/[\p{Cc}\p{Co}\p{Cs}\p{Cn}\p{Zl}\p{Zp}]/u.test(mapped)) {
-    throw new TypeError("MongoDB SCRAM-SHA-256 password contains prohibited SASLprep characters")
+  // Full RFC 4013 SASLprep requires Unicode tables that Node's built-ins do not
+  // expose. Accept printable ASCII only rather than silently applying an
+  // incomplete Unicode preparation algorithm and deriving the wrong SCRAM key.
+  if (typeof password !== "string" || /[^\x20-\x7e]/u.test(password)) {
+    throw new TypeError("MongoDB SCRAM-SHA-256 currently supports printable ASCII passwords only; Unicode SASLprep is not implemented")
   }
-  return mapped
+  return password
 }
 
 function createPasswordDigest({ username, password, mechanism }) {
