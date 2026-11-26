@@ -483,7 +483,10 @@ test("proves shutdown safety independently for every enabled market in the compo
   const calls = []
   const publishedEvents = []
   const infoRecords = []
-  const eventPublisher = createTwoMarketShutdownEventPublisher({ calls, publishedEvents })
+  const eventPublisher = createTwoMarketShutdownEventPublisher({
+    calls,
+    publishedEvents,
+  })
   const broker = makeVolatilityReadyBroker(createBroker(calls), ["BTCUSDT", "ETHUSDT"])
 
   try {
@@ -493,7 +496,10 @@ test("proves shutdown safety independently for every enabled market in the compo
       operationalStateStore,
       brokerAdapterFactory: () => broker,
       eventPublisher,
-      logger: createTwoMarketShutdownLogger({ calls, infoRecords }),
+      logger: createTwoMarketShutdownLogger({
+        calls,
+        infoRecords,
+      }),
     })
     const stopResult = await runtime.stop()
     const processHistory = await operationalStateStore.readAll()
@@ -505,7 +511,10 @@ test("proves shutdown safety independently for every enabled market in the compo
       processHistory,
     })
   } finally {
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
   }
 })
 
