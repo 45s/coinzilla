@@ -16,14 +16,22 @@ import {
 
 const INTERVAL_MS = 60_000
 
-function makeKlineRow({ openTime, closeTime, close = "100" } = {}) {
+function makeKlineRow({
+  openTime,
+  closeTime,
+  open = "100",
+  high = "100.1",
+  low = "99.9",
+  close = "100",
+  volume = "10",
+} = {}) {
   return [
     openTime,
-    "100",
-    "100.1",
-    "99.9",
+    open,
+    high,
+    low,
     close,
-    "10",
+    volume,
     closeTime,
     "1000",
     "10",
@@ -33,14 +41,18 @@ function makeKlineRow({ openTime, closeTime, close = "100" } = {}) {
   ].join(",")
 }
 
-function createCandleSeries({ count = 300, spikeAt = 120 } = {}) {
-  const firstOpenTime = 1_700_000_040_000
+function createCandleSeries({
+  count = 300,
+  spikeAt = 120,
+  symbol = "BTCUSDT",
+  firstOpenTime = 1_700_000_040_000,
+} = {}) {
   const candles = []
 
   for (let index = 0; index < count; index += 1) {
     const openTime = firstOpenTime + index * INTERVAL_MS
     candles.push(Object.freeze({
-      symbol: "BTCUSDT",
+      symbol,
       interval: "1m",
       openTime,
       closeTime: openTime + INTERVAL_MS - 1,
@@ -101,6 +113,50 @@ test("normalizes Binance Spot archive microsecond timestamps to milliseconds", (
   assert.equal(parsed.timestampUnit, "microseconds", "Spot archive timestamps from 2025 onward must be recognized as microseconds.")
   assert.equal(parsed.candles[0].openTime, 1_735_689_600_000, "Microsecond open time must normalize to Unix milliseconds.")
   assert.equal(parsed.candles[0].closeTime, 1_735_689_659_999, "Microsecond close time must normalize to the exact millisecond candle boundary.")
+})
+
+test("joins adjacent monthly Spot archives across the 2025 timestamp-unit boundary", () => {
+  const pre2025OpenTime = Date.parse("2024-12-31T23:59:00.000Z")
+  const post2025OpenTime = Date.parse("2025-01-01T00:00:00.000Z")
+  const pre2025 = parseBinanceSpotKlineCsv({
+    symbol: "BTCUSDT",
+    sourceFile: "BTCUSDT-1m-2024-12.csv",
+    content: [
+      "open_time,open,high,low,close,volume,close_time,quote_volume,trades,taker_base,taker_quote,ignore",
+      makeKlineRow({
+        openTime: pre2025OpenTime,
+        closeTime: pre2025OpenTime + INTERVAL_MS - 1,
+      }),
+    ].join("\n"),
+  })
+  const post2025OpenTimeMicros = post2025OpenTime * 1_000
+  const post2025 = parseBinanceSpotKlineCsv({
+    symbol: "BTCUSDT",
+    sourceFile: "BTCUSDT-1m-2025-01.csv",
+    content: makeKlineRow({
+      openTime: post2025OpenTimeMicros,
+      closeTime: post2025OpenTimeMicros + (INTERVAL_MS - 1) * 1_000,
+    }),
+  })
+
+  assert.equal(pre2025.timestampUnit, "milliseconds")
+  assert.equal(post2025.timestampUnit, "microseconds")
+
+  const merged = mergeAndValidateCandles({
+    symbol: "BTCUSDT",
+    candleGroups: [post2025, pre2025],
+  })
+
+  assert.deepEqual(
+    merged.map(({ openTime }) => openTime),
+    [pre2025OpenTime, post2025OpenTime],
+    "Adjacent monthly archive files must remain contiguous after timestamp normalization.",
+  )
+  assert.equal(
+    merged[1].closeTime,
+    post2025OpenTime + INTERVAL_MS - 1,
+    "The microsecond close time must normalize to the exact millisecond candle boundary.",
+  )
 })
 
 test("merges chronological files and removes identical overlapping candle facts", () => {
@@ -305,6 +361,79 @@ test("runs the offline CLI and writes a reproducible report without network acce
   } finally {
     rmSync(directory, { recursive: true,
 force: true })
+  }
+})
+
+function writeMultiSymbolArchiveInputs(directory) {
+  const inputs = [
+    {
+      symbol: "BTCUSDT",
+      spikeAt: 120,
+    },
+    {
+      symbol: "ETHUSDT",
+      spikeAt: 150,
+    },
+    {
+      symbol: "SOLUSDT",
+      spikeAt: -1,
+    },
+  ]
+  return inputs.map(({ symbol, spikeAt }) => {
+    const inputPath = join(directory, `${symbol}-1m-2023-11-01.csv`)
+    const candles = createCandleSeries({
+      count: 300,
+      spikeAt,
+      symbol,
+      firstOpenTime: Date.UTC(2023, 10, 1),
+    })
+    writeFileSync(inputPath, candles.map((candle) => makeKlineRow(candle)).join("\n"), "utf8")
+    return inputPath
+  })
+}
+
+function assertIndependentMultiSymbolReport(report) {
+  const markets = Object.fromEntries(report.markets.map((market) => [market.symbol, market]))
+  assert.deepEqual(
+    Object.keys(markets).sort(),
+    ["BTCUSDT", "ETHUSDT", "SOLUSDT"],
+    "The CLI must retain one independent report for every supplied symbol.",
+  )
+  assert.equal(report.files.length, 3, "Every symbol input must be represented in the reproducible source manifest.")
+  for (const symbol of ["BTCUSDT", "ETHUSDT", "SOLUSDT"]) {
+    assert.equal(markets[symbol].candleCount, 300, `${symbol} must retain its complete validated history.`)
+    assert.equal(markets[symbol].observationCount, 201, `${symbol} must use its own rolling 100-candle startup window.`)
+    assert.equal(
+      markets[symbol].ratioObservations + markets[symbol].unavailableObservations,
+      markets[symbol].observationCount,
+      `${symbol} observations must be classified independently.`,
+    )
+  }
+  assert.ok(markets.BTCUSDT.protectionEntries > 0, "BTCUSDT's volatility spike must enter protection.")
+  assert.ok(markets.ETHUSDT.protectionEntries > 0, "ETHUSDT's volatility spike must enter protection independently.")
+  assert.equal(markets.SOLUSDT.protectionEntries, 0, "A calm SOLUSDT history must not inherit another symbol's protection state.")
+  assert.ok(
+    report.files.every((file) => /^[a-f0-9]{64}$/.test(file.sha256)),
+    "Each synthetic archive-shaped input must still receive a reproducible SHA-256 source hash.",
+  )
+}
+
+test("replays multiple symbols independently through the offline calibration CLI", () => {
+  const directory = mkdtempSync(join(tmpdir(), "harvester-multi-symbol-volatility-"))
+  const outputPath = join(directory, "multi-symbol-calibration-report.json")
+  try {
+    const inputPaths = writeMultiSymbolArchiveInputs(directory)
+    runCalibrationCli([
+      ...inputPaths.flatMap((inputPath) => ["--input", inputPath]),
+      "--output",
+      outputPath,
+    ])
+    assertIndependentMultiSymbolReport(JSON.parse(readFileSync(outputPath, "utf8")))
+  } finally {
+    rmSync(directory, {
+      recursive: true,
+      force: true,
+    })
   }
 })
 

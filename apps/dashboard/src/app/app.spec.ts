@@ -156,20 +156,29 @@ describe('AppComponent', () => {
     fixture.detectChanges();
 
     const root = fixture.nativeElement as HTMLElement;
-    const ordersButton = Array.from(root.querySelectorAll('button.nav-item'))
+    const brokersButton = Array.from(root.querySelectorAll('button.nav-item'))
+      .find((button) => button.textContent?.includes('Brokers')) as HTMLButtonElement;
+    brokersButton.click();
+    fixture.detectChanges();
+    const ordersButton = Array.from(root.querySelectorAll('button.section-nav-item'))
       .find((button) => button.textContent?.includes('Orders')) as HTMLButtonElement;
     ordersButton.click();
     fixture.detectChanges();
     expect(fixture.nativeElement.textContent).toContain('Connecting to Harvester');
     expect(fixture.nativeElement.textContent).toContain('Orders');
 
-    const fillsButton = Array.from(root.querySelectorAll('button.nav-item'))
+    const historyButton = Array.from(root.querySelectorAll('button.section-nav-item'))
+      .find((button) => button.textContent?.includes('History')) as HTMLButtonElement;
+    historyButton.click();
+    fixture.detectChanges();
+
+    const fillsButton = Array.from(root.querySelectorAll('button.context-subnav-item'))
       .find((button) => button.textContent?.includes('Fills')) as HTMLButtonElement;
     fillsButton.click();
     fixture.detectChanges();
     expect(fixture.nativeElement.textContent).toContain('Fills');
 
-    const commissionsButton = Array.from(root.querySelectorAll('button.nav-item'))
+    const commissionsButton = Array.from(root.querySelectorAll('button.context-subnav-item'))
       .find((button) => button.textContent?.includes('Commissions')) as HTMLButtonElement;
     commissionsButton.click();
     fixture.detectChanges();
@@ -190,7 +199,15 @@ describe('AppComponent', () => {
     const fixture = TestBed.createComponent(AppComponent);
     fixture.detectChanges();
     const root = fixture.nativeElement as HTMLElement;
-    const openOrdersButton = Array.from(root.querySelectorAll('button.nav-item'))
+    const brokersButton = Array.from(root.querySelectorAll('button.nav-item'))
+      .find((button) => button.textContent?.includes('Brokers')) as HTMLButtonElement;
+    brokersButton.click();
+    fixture.detectChanges();
+    const ordersTab = Array.from(root.querySelectorAll('button.section-nav-item'))
+      .find((button) => button.textContent?.includes('Orders')) as HTMLButtonElement;
+    ordersTab.click();
+    fixture.detectChanges();
+    const openOrdersButton = Array.from(root.querySelectorAll('button.context-subnav-item'))
       .find((button) => button.textContent?.includes('Open Orders')) as HTMLButtonElement;
     expect(openOrdersButton).toBeDefined();
     openOrdersButton.click();
@@ -214,7 +231,7 @@ describe('AppComponent', () => {
     fixture.detectChanges();
     const root = fixture.nativeElement as HTMLElement;
     const githubButton = Array.from(root.querySelectorAll('button.nav-item'))
-      .find((button) => button.textContent?.includes('GitHub PRs')) as HTMLButtonElement;
+      .find((button) => button.textContent?.includes('GitHub')) as HTMLButtonElement;
     expect(githubButton).toBeDefined();
     githubButton.click();
     fixture.detectChanges();
@@ -228,7 +245,58 @@ describe('AppComponent', () => {
     fixture.destroy();
   });
 
-  it('offers the existing theme plus six palettes and persists the selected theme', async () => {
+  it('shows section-specific tabs and keeps future destinations visibly unavailable', async () => {
+    await TestBed.configureTestingModule({
+      imports: [AppComponent],
+      providers: [provideHttpClient()],
+    }).compileComponents();
+
+    const fixture = TestBed.createComponent(AppComponent);
+    fixture.detectChanges();
+    const root = fixture.nativeElement as HTMLElement;
+    const brokersButton = Array.from(root.querySelectorAll('button.nav-item'))
+      .find((button) => button.textContent?.includes('Brokers')) as HTMLButtonElement;
+    brokersButton.click();
+    fixture.detectChanges();
+
+    let tabs = Array.from(root.querySelectorAll('.section-nav-item'));
+    expect(tabs.map((tab) => tab.textContent?.trim())).toEqual(['Markets', 'Orders', 'History']);
+
+    const ordersTab = tabs.find((tab) => tab.textContent?.trim() === 'Orders') as HTMLButtonElement;
+    ordersTab.click();
+    fixture.detectChanges();
+    expect(ordersTab.classList.contains('active')).toBe(true);
+    let secondaryTabs = Array.from(root.querySelectorAll('.context-subnav-item'));
+    expect(secondaryTabs.map((tab) => tab.textContent?.trim())).toEqual(['Orders', 'Open Orders', 'Exchanges']);
+    expect(secondaryTabs[0]?.getAttribute('aria-current')).toBe('page');
+
+    const historyTab = tabs.find((tab) => tab.textContent?.trim() === 'History') as HTMLButtonElement;
+    historyTab.click();
+    fixture.detectChanges();
+    expect(historyTab.classList.contains('active')).toBe(true);
+    secondaryTabs = Array.from(root.querySelectorAll('.context-subnav-item'));
+    expect(secondaryTabs.map((tab) => tab.textContent?.trim())).toEqual(['Fills', 'Commissions']);
+    expect(secondaryTabs[0]?.classList.contains('active')).toBe(true);
+    secondaryTabs[1]?.dispatchEvent(new Event('click'));
+    fixture.detectChanges();
+    expect(historyTab.classList.contains('active')).toBe(true);
+    expect(root.querySelectorAll('.context-subnav-item')[1]?.getAttribute('aria-current')).toBe('page');
+
+    const botsButton = Array.from(root.querySelectorAll('button.nav-item'))
+      .find((button) => button.textContent?.includes('Bots')) as HTMLButtonElement;
+    botsButton.click();
+    fixture.detectChanges();
+    tabs = Array.from(root.querySelectorAll('.section-nav-item'));
+    expect(tabs.map((tab) => tab.textContent?.trim())).toEqual([
+      'Operators', 'Orders', 'Positions SOON', 'Portfolio',
+    ]);
+    expect(tabs[2]?.getAttribute('aria-disabled')).toBe('true');
+    expect(root.querySelectorAll('.context-subnav-item')).toHaveLength(0);
+
+    fixture.destroy();
+  });
+
+  it('offers the StarAdmin palette alongside existing themes and persists the selected theme', async () => {
     window.localStorage.removeItem('coinzilla.dashboard.theme');
     await TestBed.configureTestingModule({
       imports: [AppComponent],
@@ -239,32 +307,34 @@ describe('AppComponent', () => {
     fixture.detectChanges();
 
     const select = fixture.nativeElement.querySelector('select[aria-label="Dashboard theme"]') as HTMLSelectElement;
-    expect(select.options.length).toBe(8);
-    expect(Array.from(select.options).map((option) => option.value)).toEqual([
-      'current', 'midnight', 'light', 'oled', 'green', 'arctic', 'warm', 'system',
+    expect(select.value, 'A new Dashboard installation must select StarAdmin automatically.').toBe('staradmin');
+    expect(document.documentElement.dataset['theme'], 'The root document must receive the selected StarAdmin palette.').toBe('staradmin');
+    expect(select.options.length, 'The theme picker must retain all existing themes and add StarAdmin.').toBe(9);
+    expect(Array.from(select.options).map((option) => option.value), 'All existing theme choices must remain available.').toEqual([
+      'staradmin', 'current', 'midnight', 'light', 'oled', 'green', 'arctic', 'warm', 'system',
     ]);
 
     select.value = 'light';
     select.dispatchEvent(new Event('change'));
     fixture.detectChanges();
 
-    expect(document.documentElement.dataset['theme']).toBe('light');
-    expect(window.localStorage.getItem('coinzilla.dashboard.theme')).toBe('light');
+    expect(document.documentElement.dataset['theme'], 'Selecting a theme must update the active document palette.').toBe('light');
+    expect(window.localStorage.getItem('coinzilla.dashboard.theme'), 'The selected palette must persist across page reloads.').toBe('light');
 
     fixture.destroy();
     window.localStorage.removeItem('coinzilla.dashboard.theme');
   });
 
-  it('reads a previously saved theme during component initialization', () => {
+  it('defaults to StarAdmin and reads a previously saved theme during component initialization', () => {
     window.localStorage.setItem('coinzilla.dashboard.theme', 'light');
-    expect(readSavedDashboardTheme(window.localStorage)).toBe('light');
-    expect(readSavedDashboardTheme(undefined)).toBe('current');
+    expect(readSavedDashboardTheme(window.localStorage), 'A previously saved palette must take precedence over the default.').toBe('light');
+    expect(readSavedDashboardTheme(undefined), 'A fresh Dashboard install must use the new StarAdmin design.').toBe('staradmin');
     expect(readSavedDashboardTheme({
       getItem: () => 'not-a-theme',
-    })).toBe('current');
+    }), 'An invalid saved theme must safely fall back to StarAdmin.').toBe('staradmin');
     expect(readSavedDashboardTheme({
       getItem: () => { throw new Error('storage unavailable'); },
-    })).toBe('current');
+    }), 'Unavailable browser storage must safely fall back to StarAdmin.').toBe('staradmin');
     window.localStorage.removeItem('coinzilla.dashboard.theme');
   });
 });

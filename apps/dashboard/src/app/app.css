@@ -378,3 +378,153 @@
   white-space: nowrap;
   border: 0;
 }
+
+
+.section-nav {
+  position: sticky;
+  top: 66px;
+  z-index: 3;
+  display: flex;
+  gap: 26px;
+  overflow-x: auto;
+  padding: 0 34px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel, #fff);
+  scrollbar-width: thin;
+}
+
+.section-nav-item {
+  position: relative;
+  display: inline-flex;
+  min-height: 52px;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 7px;
+  padding: 0 2px;
+  border: 0;
+  background: transparent;
+  color: var(--muted, #7b8190);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.section-nav-item.active {
+  color: var(--accent, #e87532);
+}
+
+.section-nav-item.active::after {
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 3px;
+  border-radius: 3px 3px 0 0;
+  background: var(--accent, #e87532);
+  content: '';
+}
+
+.section-nav-item:focus-visible {
+  outline: 2px solid var(--accent, #e87532);
+  outline-offset: -3px;
+}
+
+.section-nav-item.disabled {
+  color: var(--muted, #9297a1);
+  cursor: default;
+  opacity: 0.65;
+}
+
+.section-nav-item small {
+  font-size: 8px;
+  letter-spacing: 0.7px;
+}
+
+@media (max-width: 900px) {
+  .section-nav {
+    top: 66px;
+    padding: 0 20px;
+  }
+}
+
+@media (max-width: 560px) {
+  .section-nav {
+    top: 58px;
+    gap: 20px;
+    padding: 0 14px;
+  }
+
+  .section-nav-item {
+    min-height: 46px;
+  }
+}
+
+
+.context-subnav {
+  position: sticky;
+  top: 118px;
+  z-index: 2;
+  display: flex;
+  gap: 20px;
+  overflow-x: auto;
+  padding: 0 34px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel-bg, #fff);
+  scrollbar-width: thin;
+}
+
+.context-subnav-item {
+  position: relative;
+  display: inline-flex;
+  min-height: 42px;
+  flex: 0 0 auto;
+  align-items: center;
+  padding: 0 2px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.context-subnav-item.active {
+  color: var(--accent);
+}
+
+.context-subnav-item.active::after {
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: var(--accent);
+  content: '';
+}
+
+.context-subnav-item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -3px;
+}
+
+@media (max-width: 900px) {
+  .context-subnav {
+    top: 118px;
+    padding: 0 20px;
+  }
+}
+
+@media (max-width: 560px) {
+  .context-subnav {
+    top: 104px;
+    gap: 16px;
+    padding: 0 14px;
+  }
+
+  .context-subnav-item {
+    min-height: 38px;
+  }
+}
