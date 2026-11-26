@@ -12,14 +12,14 @@ The public API remains record-oriented. It does not expose MongoDB collections, 
 | --- | --- | --- |
 | Server protocol | OP_MSG; wire-version overlap 13–25 | Legacy OP_QUERY and unsupported OP_MSG sections/flags are not implemented |
 | Server generations | MongoDB 5.0–8.0 protocol generations | No compatibility claim beyond the wire-version range |
-| Topology | Standalone, replica set, sharded/mongos | Single seed only; no SRV, multi-seed discovery or topology monitoring |
+| Topology | Standalone and replica set are the verified targets; sharded/mongos handshake and session handling are implemented but not live-server verified | Single seed only; no SRV, multi-seed discovery or topology monitoring |
 | Transport | TCP and TLS | One socket per provider; no pool or transparent failover |
 | Authentication | No authentication, SCRAM-SHA-256, SCRAM-SHA-1 | No X.509, PLAIN, GSSAPI, AWS or other mechanisms |
 | SCRAM-SHA-256 password preparation | Printable ASCII | Unicode SASLprep is not implemented; non-ASCII/control input is rejected |
 | CRUD | Create, read one/many, shallow update, delete | Only the package's generic record contract |
 | Queries | Exact scalar equality, scalar sort, offset/limit | No operators, projections, aggregation API or user-defined MongoDB queries |
 | BSON | JSON contract plus internal binary/date/int64 and ObjectId decoding | Unsupported BSON types are rejected |
-| Transactions | Multi-document transactions on replica sets/sharded clusters with logical sessions | Standalone transactions are rejected; no nested transactions |
+| Transactions | Replica-set multi-document transactions with logical sessions; sharded transaction path is implemented but remains unverified | Standalone transactions are rejected; no nested transactions |
 | Retry behavior | Bounded retry of ambiguous commit results; non-transactional writes are never replayed and may raise `DatabaseOperationOutcomeUnknownError` if the response is lost | No retryable writes |
 
 The protocol implementation accepts a server when its advertised wire-version range intersects the supported range 13–25. This is a protocol compatibility gate, not a substitute for testing every server patch release. Real-server integration should cover the exact MongoDB versions used in deployment.
@@ -68,7 +68,7 @@ The adapter drains cursor batches with getMore. A failed cursor operation trigge
 
 Standalone MongoDB servers cannot provide multi-document transactions. The provider declares multiDocument: topology-dependent; the public transaction facade delegates to the provider, which checks the connected topology and logical-session support before running the callback. On standalone deployments it throws DatabaseTransactionUnsupportedError without invoking user work.
 
-On supported replica-set and sharded deployments:
+On replica sets (the verified transaction-capable topology):
 
 1. One logical session ID and monotonically increasing transaction number are created per transaction.
 2. The first database command starts a snapshot transaction.
@@ -94,7 +94,7 @@ flowchart TD
   G -->|Retry not sent after earlier ambiguous attempt| H
 ```
 
-The sharded recovery-token requirement follows the [MongoDB Transactions Specification at pinned commit `2f6258c99955394d05babb85e3d3599c2addb02c`](https://github.com/mongodb/specifications/blob/2f6258c99955394d05babb85e3d3599c2addb02c/source/transactions/transactions.md#recoverytoken-field) and the [official Node.js driver's transaction session implementation](https://github.com/mongodb/node-mongodb-native/blob/2ed780df2a57884c3fa597da9ebbb6256ae0a5ea/src/sessions.ts).
+The sharded recovery-token implementation follows the [MongoDB Transactions Specification at pinned commit `2f6258c99955394d05babb85e3d3599c2addb02c`](https://github.com/mongodb/specifications/blob/2f6258c99955394d05babb85e3d3599c2addb02c/source/transactions/transactions.md#recoverytoken-field) and the [official Node.js driver's transaction session implementation](https://github.com/mongodb/node-mongodb-native/blob/2ed780df2a57884c3fa597da9ebbb6256ae0a5ea/src/sessions.ts).
 
 An unknown commit outcome is not a rollback. Application code must reconcile the affected records/state before deciding whether to retry. The provider never automatically replays a transaction callback. A non-transactional create/update/delete whose request was sent but whose response is lost raises `DatabaseOperationOutcomeUnknownError`; the provider does not replay the write. A read timeout or a write rejected before it is sent remains a `DatabaseProviderError`.
 
@@ -137,4 +137,4 @@ The pull-request workflow `.github/workflows/mongodb-integration.yml` starts dis
 
 Both jobs use isolated generated databases and remove their containers even after failure. The integration credentials are test-only values created inside the disposable container.
 
-Sharded/mongos integration, TLS certificate validation against a real server, and other MongoDB server major versions are not covered by this workflow. Those scenarios remain unverified; the wire-version gate alone is not evidence of real-server compatibility.
+Sharded/mongos transaction handling is implemented using the protocol recovery-token contract, but no live sharded-cluster result is available; do not treat it as production-verified support. TLS certificate validation against a real server and other MongoDB server major versions are also unverified. The wire-version gate alone is not evidence of real-server compatibility.
