@@ -57,6 +57,45 @@ test("MongoDB URI parser supports IPv6 seeds and rejects unknown or unsafe optio
   )
 })
 
+
+test("MongoDB URI parser validates credential pairs, host lists, and unsupported topology options", () => {
+  const credentials = parseMongoConnectionString(
+    "mongodb://alice:p%40ss@db.example:27018/app?authSource=admin&tls=true",
+  )
+  assert.equal(credentials.username, "alice")
+  assert.equal(credentials.password, "p@ss")
+  assert.equal(credentials.authSource, "admin")
+  assert.equal(credentials.port, 27018)
+  assert.throws(
+    () => parseMongoConnectionString("mongodb://alice@localhost/app"),
+    /username requires a password/,
+  )
+  assert.throws(
+    () => parseMongoConnectionString("mongodb://localhost,other/app"),
+    /single seed host/,
+  )
+  assert.throws(
+    () => parseMongoConnectionString("mongodb://localhost/app?tls=true&ssl=false"),
+    /both tls and ssl/,
+  )
+  assert.throws(
+    () => parseMongoConnectionString("mongodb://localhost/app?loadBalanced=true"),
+    /load-balanced topology/,
+  )
+  assert.throws(
+    () => parseMongoConnectionString("mongodb://localhost/app?compressors=zlib"),
+    /wire compression/,
+  )
+  assert.throws(
+    () => parseMongoConnectionString("mongodb://localhost/app?readPreference=secondary"),
+    /primary read preference/,
+  )
+  assert.throws(
+    () => parseMongoConnectionString("mongodb://localhost/app?directConnection=maybe"),
+    /directConnection must be a boolean/,
+  )
+})
+
 test("MongoDB handshake detects standalone, replica-set, and sharded topologies", async () => {
   for (const [hello, topology] of [
     [{ isWritablePrimary: true, minWireVersion: 13, maxWireVersion: 17 }, "standalone"],
