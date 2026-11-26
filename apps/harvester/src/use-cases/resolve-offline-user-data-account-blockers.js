@@ -121,6 +121,13 @@ function hasCompleteMarketTradeHistory({ tradeHistory, symbol }) {
     tradeHistory.reconciledOwnedOrderFills === 0
 }
 
+function hasNoUnresolvedOrders(audit) {
+  return Array.isArray(audit.unownedOpenOrders) &&
+    audit.unownedOpenOrders.length === 0 &&
+    Array.isArray(audit.blockedMarkets) &&
+    audit.blockedMarkets.length === 0
+}
+
 function isMarketAuditReady({
     result,
     reconciliation,
@@ -136,10 +143,7 @@ function isMarketAuditReady({
       tradeHistory: audit.tradeHistory,
       symbol,
     }) &&
-    Array.isArray(audit.unownedOpenOrders) &&
-    audit.unownedOpenOrders.length === 0 &&
-    Array.isArray(audit.blockedMarkets) &&
-    audit.blockedMarkets.length === 0 &&
+    hasNoUnresolvedOrders(audit) &&
     Number.isSafeInteger(reconciliation.orderReconciliation?.reconciledOrders)
 }
 
@@ -158,7 +162,12 @@ function validateMarketAuditEvidence({ symbol, audit, accountSnapshotSourceTime 
 function validateMarketAudit({ symbol, result, accountSnapshotSourceTime }) {
   const reconciliation = result?.data?.reconciliation
   const audit = reconciliation?.audit
-  if (!isMarketAuditReady({ result, reconciliation, audit, symbol })) {
+  if (!isMarketAuditReady({
+    result,
+    reconciliation,
+    audit,
+    symbol,
+  })) {
     const cause = result?.errors?.[0]
     throw new Error(
       `${symbol}: ${cause?.message ?? "production account/order/fill reconciliation did not prove READY"}`,
