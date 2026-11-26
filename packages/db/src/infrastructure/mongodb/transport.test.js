@@ -117,7 +117,10 @@ test("MongoDB transport enforces the connection timeout and destroys stalled soc
     socketFactory: () => socket,
   })
 
-  await assert.rejects(transport.connect(), /connection timed out/i)
+  await assert.rejects(
+    transport.connect(),
+    (error) => error.cause?.message === "MongoDB connection timed out",
+  )
   assert.equal(socket.destroyed, true)
   assert.equal(transport.state, "closed")
 })
