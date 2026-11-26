@@ -31,11 +31,13 @@ function validateAccountAudit(audit, blockerIds, configuredMarkets) {
       audit.auditedMarkets.length === 0 ||
       audit.auditedMarkets.some((symbol) => !isText(symbol) || !/^[A-Z0-9]{3,30}$/.test(symbol)) ||
       new Set(audit.auditedMarkets).size !== audit.auditedMarkets.length ||
-      [...audit.auditedMarkets].sort().join("\\0") !== [...configuredMarkets].sort().join("\\0") ||
+      [...audit.auditedMarkets].sort().join("|") !== [...configuredMarkets].sort().join("|") ||
       !Array.isArray(audit.blockerIds) ||
       [...audit.blockerIds].sort().join("\0") !== [...blockerIds].sort().join("\0") ||
       !Array.isArray(origins) ||
       origins.length !== blockerIds.length ||
+      new Set(origins.map(({ blockerId }) => blockerId)).size !== blockerIds.length ||
+      [...origins.map(({ blockerId }) => blockerId)].sort().join("|") !== [...blockerIds].sort().join("|") ||
       origins.some(({ blockerId, producer }) =>
         !blockerIds.includes(blockerId) || producer !== "USER_DATA_EVENT_HANDLER") ||
       !isText(audit.reconciliationId) ||
