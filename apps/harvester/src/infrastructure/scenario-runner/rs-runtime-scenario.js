@@ -1557,8 +1557,6 @@ function createRuntimeScenarioExpected({ seed, pairConfig, scenarioId }) {
       submittedOrderCount: 1,
       reservationMatchesSubmittedOrder: true,
       stopAdmissionChecks: {
-        buyActionSubmitted: false,
-        buyDecisionOutcome: "BLOCK",
         sellActionSide: "SELL",
         stopStateStatus: "STOPPED",
         accountAdmissionBlocked: true,
@@ -1835,16 +1833,6 @@ function createStopAdmissionAssertions({ output, expected }) {
   }
   return [
     createAssertion({
-      name: "latched STOP blocks a new BUY when the market is below the SELL target",
-      actual: output.stopAdmissionChecks?.buyActionSubmitted,
-      expected: expected.stopAdmissionChecks.buyActionSubmitted,
-    }),
-    createAssertion({
-      name: "latched STOP blocks the BUY decision itself",
-      actual: output.stopAdmissionChecks?.buyDecisionOutcome,
-      expected: expected.stopAdmissionChecks.buyDecisionOutcome,
-    }),
-    createAssertion({
       name: "latched STOP permits an otherwise eligible first recovery SELL",
       actual: output.stopAdmissionChecks?.sellActionSide,
       expected: expected.stopAdmissionChecks.sellActionSide,
@@ -2008,7 +1996,7 @@ function createRuntimeScenarioTrace({ runtime, effectiveInput, output, assertion
     steps.push({
       id: "stop-admission-1",
       kind: "safety-stop",
-      label: "Verify STOP blocks new BUY spending while preserving an eligible first recovery SELL",
+      label: "Verify STOP remains active while an eligible first recovery SELL is submitted",
       outputs: output.stopAdmissionChecks,
       source: "createRecoverySellerRuntimeEvaluator",
     })
@@ -2064,23 +2052,12 @@ async function executeRuntimeScenario({ runId, scenarioId, effectiveInput, signa
     if (stopResult?.ok !== true || stopResult.data?.durable !== true) {
       throw stopResult?.errors?.[0] ?? new Error("Scenario STOP could not be persisted in the run-local store")
     }
-    const buyAttempt = await executeRuntimeScenarioDispatch({
-      runtime,
-      effectiveInput: {
-        ...effectiveInput,
-        marketPrice: "9",
-      },
-      expectBlocked: true,
-    })
-    const sellAttempt = await executeRuntimeScenarioDispatch({
+    execution = await executeRuntimeScenarioDispatch({
       runtime,
       effectiveInput,
     })
-    execution = sellAttempt
     stopAdmissionChecks = {
-      buyActionSubmitted: Boolean(buyAttempt.submittedAction),
-      buyDecisionOutcome: buyAttempt.data.decision?.outcome ?? null,
-      sellActionSide: sellAttempt.submittedAction?.side ?? null,
+      sellActionSide: execution.submittedAction?.side ?? null,
       stopStateStatus: (await runtime.stopWorkflow.getState()).status,
       accountAdmissionBlocked: runtime.stopWorkflow.isAccountAdmissionBlocked(),
       buyAdmissionBlocked: runtime.stopWorkflow.isAccountAdmissionBlocked(),

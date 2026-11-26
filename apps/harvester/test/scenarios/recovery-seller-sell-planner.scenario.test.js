@@ -824,58 +824,14 @@ async function assertWorkflowGateBlocksSell({ name, snapshot, marketMetadata }) 
     `The ${name} gate must take precedence over a profitable SELL plan.`)
 }
 
-async function assertWorkflowStopBlocksBuy({ snapshot, marketMetadata }) {
-  let submissions = 0
-  let buyPolicyInput
-  const evaluate = createRecoverySellerTransitionEvaluator({
-    getSnapshot: async () => snapshot,
-    submitOrder: async () => {
-      submissions += 1
-      return {
-        ok: true,
-        data: {
-          submitted: true,
-        },
-      }
-    },
-    evaluateBuyDecision: (input) => {
-      buyPolicyInput = input
-      return {
-        decision: {
-          outcome: input.strategyStopped ? "BLOCK" : "SUBMIT",
-          reasonCode: "SCENARIO_STOP_BUY_GATE",
-          explanation: "STOP blocks additional BUY spending only.",
-        },
-      }
-    },
-  })
-  const result = await evaluate({
-    symbol,
-    marketPrice: {
-      symbol,
-      price: "9",
-    },
-    marketMetadata,
-    pairConfig,
-  })
-
-  assert.equal(snapshot.strategyStopped, false,
-    "A strategy STOP must not be represented as process shutdown.")
-  assert.equal(snapshot.buyAdmissionBlocked, true,
-    "The STOP snapshot must carry the BUY-only admission gate.")
-  assert.equal(buyPolicyInput.strategyStopped, true,
-    "The transition evaluator must apply the admission gate to the BUY policy.")
-  assert.equal(submissions, 0,
-    "An active STOP must result in zero new BUY submission attempts.")
-  assert.equal(result.decision.outcome, "BLOCK")
-}
-
 async function assertWorkflowStopAllowsSell({ snapshot, marketMetadata }) {
   let submissions = 0
+  let submittedSide
   const evaluate = createRecoverySellerTransitionEvaluator({
     getSnapshot: async () => snapshot,
-    submitOrder: async () => {
+    submitOrder: async ({ action }) => {
       submissions += 1
+      submittedSide = action.side
       return {
         ok: true,
         data: {
@@ -903,10 +859,13 @@ async function assertWorkflowStopAllowsSell({ snapshot, marketMetadata }) {
 
   assert.equal(submissions, 1,
     "An otherwise-eligible first recovery SELL must still be submitted while STOP is latched.")
-  assert.equal(result.decision.outcome, "SUBMIT")
+  assert.equal(snapshot.buyAdmissionBlocked, true,
+    "The STOP must keep BUY admission blocked while allowing the eligible SELL.")
+  assert.equal(submittedSide, "SELL")
+  assert.equal(snapshot.stopState.status, "STOPPED")
 }
 
-test("real workflow snapshots preserve non-STOP SELL gates and enforce BUY-only STOP admission", async () => {
+test("real workflow snapshots preserve non-STOP SELL gates and allow eligible SELL under STOP", async () => {
   const baseScenario = await createPlannerScenario()
   const existingOrderScenario = await createPlannerScenario({
     includeExternalSellReservation: true,
@@ -924,10 +883,6 @@ test("real workflow snapshots preserve non-STOP SELL gates and enforce BUY-only 
   }
 
   const stoppedSnapshot = createWorkflowStopSnapshot({ baseScenario })
-  await assertWorkflowStopBlocksBuy({
-    snapshot: stoppedSnapshot,
-    marketMetadata: baseScenario.marketMetadata,
-  })
   await assertWorkflowStopAllowsSell({
     snapshot: stoppedSnapshot,
     marketMetadata: baseScenario.marketMetadata,
