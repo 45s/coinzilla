@@ -9,6 +9,7 @@ import {
 
 const USER_KEY_PREFIX = "__coinzilla_key_"
 const CURSOR_BATCH_SIZE = 1_000
+const MONGO_COLLECTION_PREFIX = "coinzilla_"
 const SCALAR_SORT_RANK = [
   { case: { $in: ["$$fieldType", ["missing", "null"]] }, then: 0 },
   {
@@ -130,6 +131,14 @@ async function runMongoCommand({ command, body, operation, collection }) {
   }
 }
 
+function encodeCollectionName(collection) {
+  const encoded = MONGO_COLLECTION_PREFIX + Buffer.from(collection, "utf8").toString("base64url")
+  if (Buffer.byteLength(encoded, "utf8") > 255) {
+    throw new TypeError("MongoDB collection name exceeds the supported namespace length")
+  }
+  return encoded
+}
+
 function createStoredDocument(record) {
   return {
     _id: record.id,
@@ -206,12 +215,13 @@ function createMongoRecordOperations({ command, databaseName }) {
   async function create({ collection, record }) {
     validateCollectionName(collection)
     const snapshot = JSON.parse(serializeRecord(record))
+    const mongoCollection = encodeCollectionName(collection)
     await runMongoCommand({
       command,
       operation: "create",
       collection,
       body: {
-        insert: collection,
+        insert: mongoCollection,
         documents: [createStoredDocument(snapshot)],
         ordered: true,
         $db: databaseName,
@@ -223,13 +233,15 @@ function createMongoRecordOperations({ command, databaseName }) {
   async function readOne({ collection, id }) {
     validateCollectionName(collection)
     validateRecordIdentifier(id)
+    const mongoCollection = encodeCollectionName(collection)
     const response = await runMongoCommand({
       command,
       operation: "readOne",
       collection,
       body: {
-        find: collection,
+        find: mongoCollection,
         filter: { _id: id },
+        collation: { locale: "simple" },
         projection: { _id: 0, data: 1 },
         limit: 1,
         singleBatch: true,
@@ -250,6 +262,7 @@ function createMongoRecordOperations({ command, databaseName }) {
   async function readMany({ collection, query }) {
     validateCollectionName(collection)
     const normalizedQuery = normalizeReadQuery(query)
+    const mongoCollection = encodeCollectionName(collection)
     const pipeline = [
       { $match: createFilter(normalizedQuery.filter) },
       ...createSortStages(normalizedQuery.sort),
@@ -267,9 +280,10 @@ function createMongoRecordOperations({ command, databaseName }) {
       operation: "readMany",
       collection,
       body: {
-        aggregate: collection,
+        aggregate: mongoCollection,
         pipeline,
         cursor: { batchSize: CURSOR_BATCH_SIZE },
+        collation: { locale: "simple" },
         $db: databaseName,
       },
     })
@@ -290,7 +304,7 @@ function createMongoRecordOperations({ command, databaseName }) {
         collection,
         body: {
           getMore: cursorId,
-          collection,
+          collection: mongoCollection,
           batchSize: CURSOR_BATCH_SIZE,
           $db: databaseName,
         },
@@ -315,6 +329,7 @@ function createMongoRecordOperations({ command, databaseName }) {
     if (Object.keys(snapshot).length === 0) {
       return readOne({ collection, id })
     }
+    const mongoCollection = encodeCollectionName(collection)
     const set = {}
     for (const [field, value] of Object.entries(snapshot)) {
       set[`data.${encodeUserKey(field)}`] = encodeUserValue(value)
@@ -324,9 +339,10 @@ function createMongoRecordOperations({ command, databaseName }) {
       operation: "update",
       collection,
       body: {
-        findAndModify: collection,
+        findAndModify: mongoCollection,
         query: { _id: id },
         update: { $set: set },
+        collation: { locale: "simple" },
         new: true,
         upsert: false,
         fields: { _id: 0, data: 1 },
@@ -339,13 +355,15 @@ function createMongoRecordOperations({ command, databaseName }) {
   async function deleteRecord({ collection, id }) {
     validateCollectionName(collection)
     validateRecordIdentifier(id)
+    const mongoCollection = encodeCollectionName(collection)
     const response = await runMongoCommand({
       command,
       operation: "delete",
       collection,
       body: {
-        delete: collection,
+        delete: mongoCollection,
         deletes: [{ q: { _id: id }, limit: 1 }],
+        collation: { locale: "simple" },
         ordered: true,
         $db: databaseName,
       },
