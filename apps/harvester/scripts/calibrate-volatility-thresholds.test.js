@@ -16,14 +16,22 @@ import {
 
 const INTERVAL_MS = 60_000
 
-function makeKlineRow({ openTime, closeTime, close = "100" } = {}) {
+function makeKlineRow({
+  openTime,
+  closeTime,
+  open = "100",
+  high = "100.1",
+  low = "99.9",
+  close = "100",
+  volume = "10",
+} = {}) {
   return [
     openTime,
-    "100",
-    "100.1",
-    "99.9",
+    open,
+    high,
+    low,
     close,
-    "10",
+    volume,
     closeTime,
     "1000",
     "10",
@@ -33,14 +41,18 @@ function makeKlineRow({ openTime, closeTime, close = "100" } = {}) {
   ].join(",")
 }
 
-function createCandleSeries({ count = 300, spikeAt = 120 } = {}) {
-  const firstOpenTime = 1_700_000_040_000
+function createCandleSeries({
+  count = 300,
+  spikeAt = 120,
+  symbol = "BTCUSDT",
+  firstOpenTime = 1_700_000_040_000,
+} = {}) {
   const candles = []
 
   for (let index = 0; index < count; index += 1) {
     const openTime = firstOpenTime + index * INTERVAL_MS
     candles.push(Object.freeze({
-      symbol: "BTCUSDT",
+      symbol,
       interval: "1m",
       openTime,
       closeTime: openTime + INTERVAL_MS - 1,
@@ -305,6 +317,68 @@ test("runs the offline CLI and writes a reproducible report without network acce
   } finally {
     rmSync(directory, { recursive: true,
 force: true })
+  }
+})
+
+test("replays multiple symbols independently through the offline calibration CLI", () => {
+  const directory = mkdtempSync(join(tmpdir(), "harvester-multi-symbol-volatility-"))
+  const outputPath = join(directory, "multi-symbol-calibration-report.json")
+  const inputs = [
+    { symbol: "BTCUSDT", spikeAt: 120 },
+    { symbol: "ETHUSDT", spikeAt: 150 },
+    { symbol: "SOLUSDT", spikeAt: -1 },
+  ]
+  const inputPaths = []
+
+  try {
+    for (const { symbol, spikeAt } of inputs) {
+      const inputPath = join(directory, `${symbol}-1m-2023-11-01.csv`)
+      const candles = createCandleSeries({
+        count: 300,
+        spikeAt,
+        symbol,
+        firstOpenTime: Date.UTC(2023, 10, 1),
+      })
+      writeFileSync(inputPath, candles.map((candle) => makeKlineRow(candle)).join("\n"), "utf8")
+      inputPaths.push(inputPath)
+    }
+
+    runCalibrationCli([
+      ...inputPaths.flatMap((inputPath) => ["--input", inputPath]),
+      "--output",
+      outputPath,
+    ])
+
+    const report = JSON.parse(readFileSync(outputPath, "utf8"))
+    const markets = Object.fromEntries(report.markets.map((market) => [market.symbol, market]))
+
+    assert.deepEqual(
+      Object.keys(markets).sort(),
+      ["BTCUSDT", "ETHUSDT", "SOLUSDT"],
+      "The CLI must retain one independent report for every supplied symbol.",
+    )
+    assert.equal(report.files.length, 3, "Every symbol input must be represented in the reproducible source manifest.")
+    for (const symbol of ["BTCUSDT", "ETHUSDT", "SOLUSDT"]) {
+      assert.equal(markets[symbol].candleCount, 300, `${symbol} must retain its complete validated history.`)
+      assert.equal(markets[symbol].observationCount, 201, `${symbol} must use its own rolling 100-candle startup window.`)
+      assert.equal(
+        markets[symbol].ratioObservations + markets[symbol].unavailableObservations,
+        markets[symbol].observationCount,
+        `${symbol} observations must be classified independently.`,
+      )
+    }
+    assert.ok(markets.BTCUSDT.protectionEntries > 0, "BTCUSDT's volatility spike must enter protection.")
+    assert.ok(markets.ETHUSDT.protectionEntries > 0, "ETHUSDT's volatility spike must enter protection independently.")
+    assert.equal(markets.SOLUSDT.protectionEntries, 0, "A calm SOLUSDT history must not inherit another symbol's protection state.")
+    assert.ok(
+      report.files.every((file) => /^[a-f0-9]{64}$/.test(file.sha256)),
+      "Each synthetic archive-shaped input must still receive a reproducible SHA-256 source hash.",
+    )
+  } finally {
+    rmSync(directory, {
+      recursive: true,
+      force: true,
+    })
   }
 })
 
