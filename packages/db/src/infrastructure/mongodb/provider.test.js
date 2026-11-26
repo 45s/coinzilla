@@ -532,7 +532,7 @@ test("MongoDB transactions serialize commands and wait for all transaction CRUD 
   const { provider } = createProviderHarness({
     topology: "replicaSet",
     transactionSupported: true,
-    commandHandler: async (body) => {
+    commandHandler: async (body, _callIndex, sequences) => {
       if (body.insert) {
         activeCommands += 1
         maximumConcurrentCommands = Math.max(maximumConcurrentCommands, activeCommands)
