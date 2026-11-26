@@ -199,12 +199,6 @@ function validateAuthoritativeResolutionMetadata(canonicalData) {
   }
 }
 
-function validateLegacyOperatorResolution(canonicalData) {
-  if (!canonicalData.resolvedBy.startsWith("operator:")) {
-    throw new TypeError("Legacy operator-action resolution must retain its operator actor prefix")
-  }
-}
-
 function validateStructuredOperatorIdentity(canonicalData) {
   if (typeof canonicalData.operatorId !== "string" ||
       !/^[A-Za-z0-9][A-Za-z0-9._@-]{2,127}$/.test(canonicalData.operatorId) ||
@@ -272,7 +266,6 @@ export function validateSafetyBlockerResolvedFact({ factType, canonicalData, fac
     return
   }
   if (!hasStructuredOperatorMetadata(canonicalData)) {
-    validateLegacyOperatorResolution(canonicalData)
     return
   }
   validateStructuredOperatorResolution(canonicalData)
