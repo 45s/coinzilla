@@ -6,7 +6,6 @@ import path from "node:path"
 import test from "node:test"
 import { acquireHarvesterProcessLock } from "../process-lock/acquire-harvester-process-lock.js"
 import { createRuntimeShutdownHandler } from "./harvester-process-shutdown.js"
-import { createHarvesterStop } from "../../bootstrap/create-harvester-stop.js"
 
 function createShutdownChildSource({ lockModuleUrl, shutdownModuleUrl } = {}) {
   return `
