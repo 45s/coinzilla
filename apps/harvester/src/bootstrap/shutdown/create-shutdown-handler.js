@@ -1009,9 +1009,10 @@ export function createShutdownHandler(options = {}) {
     now = () => performance.now(),
     runtimeSessionId,
   } = options
-  const strategyShutdownCoordinator = createStrategyShutdownCoordinator({
-    participants: options.strategyShutdownParticipants ?? [],
-  })
+  const strategyShutdownCoordinator = options.strategyShutdownCoordinator ??
+    createStrategyShutdownCoordinator({
+      participants: options.strategyShutdownParticipants ?? [],
+    })
   return createStopHandler({
     options,
     state,
