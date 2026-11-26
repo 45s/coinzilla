@@ -70,4 +70,4 @@ Additional active roadmap pages were reduced to concise owner/status/next-action
 - [Notifiers roadmap history](archive/roadmap-history-2026-11-26.md#root-roadmap) — completed phases and validation records.
 - [Harvester Journal integration history](archive/roadmap-history-2026-11-26.md#root-roadmap) — staged PR-by-PR integration evidence; Step 8 closeout remains open.
 
-The active pages now point to canonical READMEs, contracts, tests, issues, or feature roadmaps instead of repeating completed phase histories. These consolidated archives preserve provenance but are not current task-status authority. The cleanup PR branch currently has 216 Markdown files: the 214-file `develop` tree plus two archive bundles.
+The active pages now point to canonical READMEs, contracts, tests, issues, or feature roadmaps instead of repeating completed phase histories. These consolidated archives preserve provenance but are not current task-status authority. The cleanup PR branch currently has 215 Markdown files: the 214-file `develop` tree plus one consolidated archive bundle.
