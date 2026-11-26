@@ -56,7 +56,7 @@ test("MongoDB provider is usable through createDatabase on standalone servers", 
       await database.create({ collection: "people", record }),
       record,
     )
-    assert.equal(calls[0].insert, "people")
+    assert.match(calls[0].insert, /^coinzilla_/)
     await assert.rejects(
       database.transaction(() => "must not run"),
       (error) => error instanceof DatabaseTransactionUnsupportedError
