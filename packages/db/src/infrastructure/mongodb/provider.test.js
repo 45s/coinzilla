@@ -209,6 +209,7 @@ test("MongoDB provider rejects malformed and looping replica-set primary address
       { topology: "replicaSet", primary: "one.example:27017" },
       { topology: "replicaSet", primary: "two.example:27017" },
       { topology: "replicaSet", primary: "three.example:27017" },
+      { topology: "replicaSet", primary: "four.example:27017" },
     ],
   })
   await assert.rejects(
