@@ -78,7 +78,9 @@ test("host executes the registered production RS runtime scenario in a child pro
     assert.ok(result.output.trace.some((step) => step.source === "createRecoverySellerRuntimeDispatch"))
     assert.ok(result.output.trace.some((step) => step.kind === "simulated-broker"))
 
-    const statuses = updates.map((event) => event.data.status)
+    const statuses = updates
+      .filter((event) => event.data.runId === accepted.runId)
+      .map((event) => event.data.status)
     assert.ok(statuses.indexOf("Running") > statuses.indexOf("Starting"))
     assert.equal(statuses.at(-1), "Completed")
   } finally {

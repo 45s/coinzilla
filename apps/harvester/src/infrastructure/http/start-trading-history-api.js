@@ -6,7 +6,7 @@ import { createBitunixFuturesMarketDataClient } from "./bitunix-futures-market-d
 import { createTradingHistoryQueries } from "../../use-cases/trading-history/queries.js"
 import { startTradingHistoryApiServer } from "./trading-history-api.js"
 import { createScenarioRunnerHost } from "./create-scenario-runner-host.js"
-import { createProcessScenarioAdapter } from "../scenario-runner/create-process-scenario-adapter.js"
+import { createUnavailableScenarioAdapter } from "../scenario-runner/create-unavailable-scenario-adapter.js"
 
 const DEFAULT_API_HOST = "127.0.0.1"
 const DEFAULT_API_PORT = 4201
@@ -174,7 +174,7 @@ export async function startTradingHistoryApi({
   const queries = createQueryFacade({ database })
   const runnerHost = createScenarioRunnerHost({
     eventBus,
-    adapters: [createProcessScenarioAdapter({ strategyId: "RS" })],
+    adapters: [createUnavailableScenarioAdapter({ strategyId: "RS" })],
     sourceRevision: resolveScenarioRunnerSourceRevision({ env }),
   })
   const server = await openApiServer({
