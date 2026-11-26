@@ -63,7 +63,7 @@ test("host executes the registered production RS runtime scenario in a child pro
 
     assert.equal(result.status, "Completed", JSON.stringify(result))
     assert.equal(result.output.source, "production-runtime-evaluator")
-    assert.equal(result.output.fixtureId, "rs-runtime-sell-submission")
+    assert.equal(result.output.scenarioId, "RS-RUNTIME-SELL-SUBMISSION-001")
     assert.equal(result.output.passed, true)
     assert.equal(result.replayProvenance.verified, false,
       "The test-only launcher must not fabricate trusted build provenance.")
