@@ -196,7 +196,10 @@ test("process adapter rejects worker output above its configured size limit", as
     maxOutputBytes: 1024,
     spawnSandboxedWorker: createSimulatedSandboxLauncher({
       maxOutputBytes: 1024,
-      spawn: () => fakeChild,
+      spawn: () => {
+        queueMicrotask(() => fakeChild.emit("message", { type: "ready" }))
+        return fakeChild
+      },
     }),
   })
   await assert.rejects(adapter.execute({
@@ -228,7 +231,10 @@ test("process adapter fails closed when worker termination cannot be confirmed",
     strategyId: "RS",
     terminationGraceMs: 5,
     spawnSandboxedWorker: createSimulatedSandboxLauncher({
-      spawn: () => fakeChild,
+      spawn: () => {
+        queueMicrotask(() => fakeChild.emit("message", { type: "ready" }))
+        return fakeChild
+      },
     }),
   })
 
@@ -290,7 +296,10 @@ test("process adapter requests cooperative cancellation before forced terminatio
     strategyId: "RS",
     terminationGraceMs: 20,
     spawnSandboxedWorker: createSimulatedSandboxLauncher({
-      spawn: () => child,
+      spawn: () => {
+        queueMicrotask(() => child.emit("message", { type: "ready" }))
+        return child
+      },
     }),
   })
   const controller = new AbortController()
@@ -301,6 +310,7 @@ test("process adapter requests cooperative cancellation before forced terminatio
     signal: controller.signal,
   })
 
+  await new Promise((resolve) => setImmediate(resolve))
   controller.abort()
   await assert.rejects(execution, /cancelled/)
   assert.deepEqual(messages.map((message) => message.type), ["execute", "cancel"])
