@@ -332,6 +332,71 @@ test("MongoDB provider rejects invalid operation callbacks and unsupported opera
   await harness.provider.close()
 })
 
+test("MongoDB transaction facade tracks every CRUD operation", async () => {
+  const commands = []
+  const document = {
+    _id: "transaction-record",
+    data: { name: "Ada" },
+  }
+  const harness = createProviderHarness({
+    transactionSupported: true,
+    commandHandler: async (body) => {
+      commands.push(body)
+      if (body.find || body.aggregate) {
+        return {
+          ok: 1,
+          cursor: {
+            id: 0,
+            firstBatch: [document],
+          },
+        }
+      }
+      return {
+        ok: 1,
+        n: 1,
+        nModified: 1,
+      }
+    },
+  })
+  await harness.provider.connect()
+
+  try {
+    const result = await harness.provider.withTransaction(async (transaction) => {
+      await transaction.create({
+        collection: "people",
+        record: { id: "transaction-record", name: "Ada" },
+      })
+      const one = await transaction.readOne({
+        collection: "people",
+        id: "transaction-record",
+      })
+      const many = await transaction.readMany({
+        collection: "people",
+      })
+      await transaction.update({
+        collection: "people",
+        id: "transaction-record",
+        changes: { name: "Ada Lovelace" },
+      })
+      await transaction.delete({
+        collection: "people",
+        id: "transaction-record",
+      })
+      return { one, many }
+    })
+
+    assert.equal(result.one.id, "transaction-record")
+    assert.deepEqual(result.many, [{ id: "transaction-record", name: "Ada" }])
+    assert.ok(commands.some((body) => body.insert))
+    assert.ok(commands.some((body) => body.find))
+    assert.ok(commands.some((body) => body.aggregate))
+    assert.ok(commands.some((body) => body.update))
+    assert.ok(commands.some((body) => body.delete))
+  } finally {
+    await harness.provider.close()
+  }
+})
+
 test("MongoDB provider preserves callback failures when abort is rejected", async () => {
   let abortAttempts = 0
   const harness = createProviderHarness({
