@@ -10,8 +10,8 @@ This is the entry point for Harvester-specific documentation. Repository-wide ru
 
 ## Start here
 
-- [Repository test scenario catalog](../../../docs/testing/SCENARIO_CATALOG.md)
-- [Recovery Seller scenario testing playbook](domain/recovery-seller-scenario-testing.md) — implementation contract for RS scenario design, registry, test mapping, evidence and coverage gaps. — cross-workspace human-readable scenarios with business inputs/outputs, subcases, implementation links, and named test mappings. RS entries intentionally start without scenario-coverage credit from existing tests; see [#1780](https://github.com/45s/coinzilla/issues/1780).
+- [Repository test scenario catalog](../../../docs/testing/SCENARIO_CATALOG.md) — cross-workspace human-readable scenarios with business inputs/outputs, subcases, implementation links, and named test mappings.
+- [Recovery Seller scenario testing playbook](domain/recovery-seller-scenario-testing.md) — implementation contract for RS scenario design, registry, test mapping, evidence and coverage gaps. RS entries intentionally start without scenario-coverage credit from existing tests; see [#1780](https://github.com/45s/coinzilla/issues/1780).
 
 - [Application configuration and Telegram notification profiles](../README.md#configuration) — the named `appConfig` export composed from named modules, including `config/operator-control.js` and `config/notifications-tg-profiles.js`; profile behavior, event overrides, and environment-only credentials.
 - [Repository Configuration Standard](../../../docs/engineering/CONFIGURATION_STANDARD.md) — shared ownership, validation, defaults, environment access, secrets and migration rules.
@@ -46,7 +46,7 @@ Shared deterministic broker/runtime fixtures live in `test/bootstrap/start-harve
 ## Current architecture and domain contracts
 
 - [Application architecture](architecture.md) and [architecture index](architecture/README.md)
-- [Strategy extensibility architecture roadmap](architecture/strategy-extensibility-audit-roadmap.md) — S-1/S-2 boundary decisions and S-4 CG/RS runtime-composition evidence are complete; S-3 future-strategy onboarding template remains.
+- [Strategy extensibility architecture discussion](architecture/strategy-extensibility-audit-roadmap.md) — historical pointer only; the owner-approved direction was implemented in merged PRs #1476 and #1515, and issue #1475 is closed. The full discussion is preserved in the dated archive; use the current Harvester and Recovery Seller roadmaps for active priorities.
 - [SQLite integration blueprint](persistence/sqlite-integration-blueprint.md) — historical source-verified design/audit snapshot; current implementation is governed by the Harvester persistence README.
 - [Harvester ordinary persistence](persistence/README.md) — current relational orders/fills, live-fill, startup history-sync, backup and full JSON export commands and safety contract.
 - [Trading-history persistence roadmap](persistence/trading-history-roadmap.md) — completed Phases 1–3 and planned attribution, analytics and remaining operational hardening.
