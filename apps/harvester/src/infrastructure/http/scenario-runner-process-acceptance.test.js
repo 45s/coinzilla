@@ -53,6 +53,14 @@ test("host executes the registered production RS runtime scenario in a child pro
     assert.equal(result.output.source, "production-runtime-evaluator")
     assert.equal(result.output.fixtureId, "rs-runtime-sell-submission")
     assert.equal(result.output.passed, true)
+    assert.equal(result.replayProvenance.verified, false,
+      "The test-only launcher must not fabricate trusted build provenance.")
+    assert.ok(result.replayProvenance.missing.includes("verified build artifact provenance is unavailable"),
+      "The run must report that immutable build-artifact provenance is not available.")
+    const blockedReplay = host.runner.replay(accepted.runId)
+    assert.equal(blockedReplay.status, "Blocked",
+      "Matching source revision alone must not enable exact replay.")
+    assert.match(blockedReplay.diagnostics[0], /verified build artifact provenance/)
     assert.equal(result.output.output.decision.outcome, "SUBMIT")
     assert.equal(result.output.output.submitted, true)
     assert.ok(result.output.trace.some((step) => step.source === "createRecoverySellerRuntimeDispatch"))

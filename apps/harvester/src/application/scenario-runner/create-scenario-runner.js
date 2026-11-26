@@ -769,7 +769,8 @@ function createBlockedReplay({ context, original, diagnostic }) {
     now: context.now,
     sourceRevision: context.sourceRevision,
     replayOfRunId: original.runId,
-    input: original.input,
+    input: original.replayInput ?? original.input,
+    replayProvenance: context.replayProvenance,
   })
   context.records.set(runId, record)
   notify({
