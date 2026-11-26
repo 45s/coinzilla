@@ -15,6 +15,7 @@
 | Multi-provider execution and market-data routing | [#1339](https://github.com/45s/coinzilla/issues/1339) | Harvester-owned cross-provider backlog; keep provider contracts and routing boundaries explicit. |
 | Relational trading-history startup diagnosis | [#1854](https://github.com/45s/coinzilla/issues/1854) | Diagnostic evidence merged in [PR #1855](https://github.com/45s/coinzilla/pull/1855). The exact operator-database migration failure remains unconfirmed; preserve fail-closed migration behavior. |
 | Binance historical order identity evidence | [#1851](https://github.com/45s/coinzilla/issues/1851) | Identity correction merged in [PR #1849](https://github.com/45s/coinzilla/pull/1849); original historical row pairing remains unproven. |
+| Account-wide safety blocker resolution | [#1828](https://github.com/45s/coinzilla/issues/1828) | Offline operator workflow in [PR #1886](https://github.com/45s/coinzilla/pull/1886): OS-account-authenticated identity, structured durable action metadata, exact idempotent retries and per-blocker readback. Remains offline-only; external evidence provenance and controlled restart/fresh-snapshot acceptance remain open. |
 | Reliability engineering baseline | [#1639](https://github.com/45s/coinzilla/issues/1639) | R0 baseline and incident triage; use the dated report for findings and evidence gaps. |
 | Volatility protection calibration | [#1016](https://github.com/45s/coinzilla/issues/1016) | Multi-symbol synthetic CLI regression is in PR #1871; historical threshold calibration remains outstanding. |
 
