@@ -240,3 +240,18 @@ test("MongoDB record serialization limits surface as input TypeErrors rather tha
     (error) => error instanceof TypeError && /16 MiB/i.test(error.message),
   )
 })
+
+
+test("MongoDB rejects collection names whose encoded namespace exceeds the server limit", async () => {
+  const operations = createMongoRecordOperations({
+    command: async () => ({ ok: 1, n: 1 }),
+    databaseName: "app",
+  })
+  await assert.rejects(
+    operations.create({
+      collection: "c".repeat(200),
+      record: { id: "namespace-limit" },
+    }),
+    /namespace length/i,
+  )
+})
