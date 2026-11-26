@@ -7,6 +7,7 @@ import {
   DatabaseTransactionUnsupportedError,
 } from "../../index.js"
 import { createMongoProvider } from "./provider.js"
+import { runDatabaseProviderConformanceTests } from "../../../test-support/provider-conformance.js"
 
 function createProviderHarness({ topology = "standalone", transactionSupported = false, commandHandler } = {}) {
   const calls = []
@@ -245,4 +246,141 @@ test("MongoDB provider follows replica-set primary discovery and closes the seed
   assert.deepEqual(hosts, [["seed", 27017], ["primary.example", 27018]])
   assert.equal(transports[0].closed, true)
   assert.equal(transports[1].closed, true)
+})
+
+
+function createConformanceMongoServer(store) {
+  function matches(document, filter) {
+    const conditions = filter.$and ?? []
+    return conditions.every((condition) => {
+      const [path, expected] = Object.entries(condition)[0]
+      const key = path.slice("data.".length)
+      const exists = Object.hasOwn(document.data, key)
+      if (expected && expected.$type === 10) {
+        return exists && document.data[key] === null
+      }
+      return exists && document.data[key] === expected
+    })
+  }
+
+  function scalarRank(value) {
+    if (value === undefined || value === null) return 0
+    if (value === false) return 1
+    if (value === true) return 2
+    if (typeof value === "number") return 3
+    if (typeof value === "string") return 4
+    return 5
+  }
+
+  function compareScalar(left, right) {
+    const rank = scalarRank(left) - scalarRank(right)
+    if (rank !== 0) return rank
+    if (left === undefined || left === null) return 0
+    if (typeof left === "number" || typeof left === "string") {
+      return left < right ? -1 : left > right ? 1 : 0
+    }
+    return 0
+  }
+
+  return async function command(body) {
+    const collection = body.insert ?? body.find ?? body.aggregate ?? body.findAndModify ?? body.delete
+    const records = store.get(collection) ?? new Map()
+    store.set(collection, records)
+
+    if (body.insert) {
+      for (const document of body.documents) {
+        if (records.has(document._id)) {
+          return { ok: 1, n: 0, writeErrors: [{ code: 11000, errmsg: "duplicate key" }] }
+        }
+        records.set(document._id, structuredClone(document))
+      }
+      return { ok: 1, n: body.documents.length }
+    }
+
+    if (body.find) {
+      const document = records.get(body.filter._id)
+      return {
+        ok: 1,
+        cursor: {
+          id: 0,
+          firstBatch: document ? [{ data: structuredClone(document.data) }] : [],
+        },
+      }
+    }
+
+    if (body.aggregate) {
+      let documents = [...records.values()].filter((document) => matches(document, body.pipeline[0].$match))
+      const additions = body.pipeline.find((stage) => stage.$addFields)?.$addFields ?? {}
+      const sort = body.pipeline.find((stage) => stage.$sort)?.$sort ?? { _id: 1 }
+      const sortFields = Object.entries(sort).filter(([key]) => key !== "_id")
+      documents.sort((left, right) => {
+        for (const [sortKey, direction] of sortFields) {
+          const fieldPath = additions[sortKey.replace("SortType", "SortValue")]
+          const field = typeof fieldPath === "string" ? fieldPath.slice("$data.".length) : null
+          const comparison = compareScalar(field ? left.data[field] : undefined, field ? right.data[field] : undefined)
+          if (comparison !== 0) return comparison * direction
+        }
+        return left._id < right._id ? -1 : left._id > right._id ? 1 : 0
+      })
+      const skip = body.pipeline.find((stage) => stage.$skip)?.$skip ?? 0
+      const limit = body.pipeline.find((stage) => stage.$limit)?.$limit
+      documents = documents.slice(skip, limit === undefined ? undefined : skip + limit)
+      return {
+        ok: 1,
+        cursor: {
+          id: 0,
+          firstBatch: documents.map((document) => ({ data: structuredClone(document.data) })),
+        },
+      }
+    }
+
+    if (body.findAndModify) {
+      const document = records.get(body.query._id)
+      if (!document) return { ok: 1, value: null }
+      for (const [path, value] of Object.entries(body.update.$set)) {
+        document.data[path.slice("data.".length)] = structuredClone(value)
+      }
+      return { ok: 1, value: { data: structuredClone(document.data) } }
+    }
+
+    if (body.delete) {
+      const removed = records.delete(body.deletes[0].q._id)
+      return { ok: 1, n: Number(removed) }
+    }
+
+    throw new Error(`Unsupported conformance command: ${Object.keys(body)[0]}`)
+  }
+}
+
+const conformanceStores = new Map()
+runDatabaseProviderConformanceTests({
+  name: "MongoDB provider (deterministic protocol fixture)",
+  createDatabase: ({ storageKey }) => {
+    let store = conformanceStores.get(storageKey)
+    if (!store) {
+      store = new Map()
+      conformanceStores.set(storageKey, store)
+    }
+    const command = createConformanceMongoServer(store)
+    return createDatabase({
+      provider: createMongoProvider({
+        host: "mongodb-fixture",
+        databaseName: "conformance",
+        transportFactory: () => ({
+          async connect() {},
+          command: ({ body }) => command(body),
+          async close() {},
+        }),
+        handshake: async () => ({
+          topology: "standalone",
+          transactionSupported: false,
+          sessionsSupported: false,
+          primary: null,
+        }),
+      }),
+    })
+  },
+  cleanupStorage: ({ storageKey }) => {
+    conformanceStores.delete(storageKey)
+  },
 })
