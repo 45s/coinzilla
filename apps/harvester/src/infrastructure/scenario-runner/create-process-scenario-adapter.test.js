@@ -7,12 +7,16 @@ import { createProcessScenarioAdapter } from "./create-process-scenario-adapter.
 
 const defaultWorker = fileURLToPath(new URL("./scenario-worker.js", import.meta.url))
 
-function spawnTestWorker({ workerPath, env, execArgv, stdio }) {
-  return fork(workerPath, [], {
+function spawnTestWorker({ workerPath, env, execArgv }) {
+  const child = fork(workerPath, [], {
     env,
     execArgv,
-    stdio,
+    stdio: ["ignore", "ignore", "pipe", "ipc"],
   })
+  child.stderr?.on("data", (chunk) => {
+    process.stderr.write(`[scenario-worker stderr] ${chunk}`)
+  })
+  return child
 }
 
 const TEST_SANDBOX_PROFILE = Object.freeze({
