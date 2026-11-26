@@ -18,7 +18,6 @@ const CRUD_METHODS = Object.freeze([
   "update",
   "delete",
 ])
-const READ_ONLY_OPERATIONS = new Set(["readOne", "readMany"])
 
 function createTransactionFacade(transaction) {
   const missingMethods = CRUD_METHODS.filter(
@@ -128,17 +127,7 @@ function createProviderNeutralFacade({ database, provider }) {
     if (database.state !== "connected") {
       throw new Error("Database must be connected to execute operations")
     }
-    if (typeof provider.execute === "function") {
-      return provider.execute({ operation, input })
-    }
-    const runTransaction = READ_ONLY_OPERATIONS.has(operation)
-      ? database.readTransaction
-      : database.transaction
-
-    return runTransaction((transaction) => {
-      const context = createTransactionFacade(transaction)
-      return context[operation](input)
-    })
+    return provider.execute({ operation, input })
   }
 
   return Object.freeze({
