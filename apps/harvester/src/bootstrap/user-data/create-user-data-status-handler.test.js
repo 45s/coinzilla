@@ -85,17 +85,27 @@ recoveryRequired: true })
   assert.equal(events[0].name, HARVESTER_EVENT_NAMES.BROKER_STATUS_CHANGED, "The broker status event must use the stable lifecycle name.")
 })
 
-test("a stream reconciliation status cannot clear the application reconciliation gate", () => {
+test("a matching reconciled stream clears transport unsafety but not the application reconciliation gate", () => {
   const { handler, state } = createHandler({
-    state: createState({ requiresReconciliation: true,
-streamUnsafe: true,
-ready: false }),
+    state: createState({
+      requiresReconciliation: true,
+      streamUnsafe: true,
+      ready: false,
+      recoveryGeneration: 5,
+      recoverySubscriptionId: 42,
+      recoveryBrokerGeneration: 7,
+      lastAcknowledgedRecoveryGeneration: 0,
+    }),
   })
-  handler({ type: "reconciled",
-recoveryRequired: false,
-reconciliationRequired: false })
+  handler({
+    type: "reconciled",
+    recoveryRequired: false,
+    reconciliationRequired: false,
+    subscriptionId: 42,
+    recoveryGeneration: 7,
+  })
 
-  assert.equal(state.streamUnsafe, false, "A reconciled stream may clear its transport-unsafe marker.")
+  assert.equal(state.streamUnsafe, false, "A matching current subscription may clear only its transport-unsafe marker.")
   assert.equal(state.requiresReconciliation, true, "Only application reconciliation and acknowledgement may clear the application gate.")
   assert.equal(state.ready, false, "Trading must remain blocked until application recovery completes.")
 })
@@ -334,7 +344,7 @@ test("stores the broker recovery token and refuses terminal completion from a di
   )
 })
 
-test("does not clear the application recovery gate for a different subscription identity", () => {
+test("does not clear transport or application recovery gates for a different subscription identity", () => {
   const state = createState({
     ready: false,
     requiresReconciliation: true,
@@ -343,6 +353,7 @@ test("does not clear the application recovery gate for a different subscription 
     recoveryGeneration: 5,
     lastAcknowledgedRecoveryGeneration: 5,
     recoverySubscriptionId: 42,
+    recoveryBrokerGeneration: 7,
   })
   const fixture = createHandler({ state })
   fixture.handler({
@@ -350,9 +361,10 @@ test("does not clear the application recovery gate for a different subscription 
     recoveryRequired: false,
     reconciliationRequired: false,
     subscriptionId: 41,
+    recoveryGeneration: 7,
   })
 
-  assert.equal(state.streamUnsafe, false)
+  assert.equal(state.streamUnsafe, true, "A different subscription identity cannot certify the current stream as safe.")
   assert.equal(state.requiresReconciliation, true)
   assert.equal(state.ready, false)
 })
