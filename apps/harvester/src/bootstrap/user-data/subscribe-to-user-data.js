@@ -246,7 +246,7 @@ function hasCleanOpenOrdersPreflight(readiness) {
   return openOrders?.completed === true &&
     openOrders.durable === true &&
     openOrders.phase === "PREFLIGHT" &&
-    openOrders.readiness === "READY" &&
+    ["READY", "RECONCILED"].includes(openOrders.readiness) &&
     openOrders.blockReasons?.length === 0 &&
     openOrders.unownedSymbols?.length === 0
 }
