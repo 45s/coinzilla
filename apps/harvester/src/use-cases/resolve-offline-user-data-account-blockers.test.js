@@ -986,3 +986,49 @@ test("fails closed on account balance discrepancies before resolution", async ()
   assert.equal(result.ok, false, "account balance mismatch against Journal must fail closed")
   assert.equal(resolutionCalled, false, "balance discrepancy must be rejected before resolution append")
 })
+
+test("prints application identity for --version without reading recovery evidence", async () => {
+  const output = []
+  let contextRead = false
+  const exitCode = await runRecoveryAccountBlockerCommand({
+    args: ["--version"],
+    readContext: async () => {
+      contextRead = true
+      return "{}"
+    },
+    writeOutput: (value) => output.push(value),
+    writeError: () => {},
+  })
+  assert.equal(exitCode, 0)
+  assert.equal(contextRead, false)
+  assert.match(output[0], /harvester-account-blocker-recovery/)
+  assert.match(output[0], /commit /)
+})
+
+test("authenticates the operator against the current OS account before reading evidence", async () => {
+  const errors = []
+  let contextRead = false
+  const exitCode = await runRecoveryAccountBlockerCommand({
+    args: [
+      "--context",
+      "account-evidence.json",
+      "--operator-id",
+      "operator-7",
+      "--action-id",
+      "action-auth-check-001",
+      "--resolution-reason",
+      resolutionReason,
+      "--cause-fixed",
+    ],
+    getUserInfo: () => ({ username: "different-os-user" }),
+    readContext: async () => {
+      contextRead = true
+      return JSON.stringify(makeContext())
+    },
+    writeOutput: () => {},
+    writeError: (value) => errors.push(value),
+  })
+  assert.equal(exitCode, 1)
+  assert.equal(contextRead, false, "Unauthenticated operator identity must be rejected before evidence access.")
+  assert.match(errors[0], /authenticated operating-system account/)
+})
