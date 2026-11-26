@@ -73,8 +73,10 @@ data: makeAcknowledgement(order) } } },
     onAcknowledgedOrder: async ({ order }) => submitted.push(order),
     onSubmissionFailure: async () => assert.fail("unexpected submission failure"),
   })
-  const result = await execute({ decision,
-marketMetadata })
+  const result = await execute({
+      decision,
+      marketMetadata,
+    })
   assert.equal(result.ok, true)
   assert.equal(submitted.length, 1)
   assert.equal(submitted[0].status, "OPEN")
@@ -717,7 +719,7 @@ marketMetadata })
 })
 
 
-test("does not submit a sibling BUY when the recovery SELL intent is not durable", async () => {
+function createRecoverySellIntentFailureHarness() {
   const failure = new Error("Recovery SELL intent was not committed")
   const calls = []
   let brokerCalls = 0
@@ -745,16 +747,8 @@ test("does not submit a sibling BUY when the recovery SELL intent is not durable
     onDurableSubmissionIntent: async ({ order }) => {
       calls.push(`intent:${order.side}`)
       return order.side === "SELL"
-        ? {
-          ok: false,
-          errors: [failure],
-        }
-        : {
-          ok: true,
-          data: {
-            durable: true,
-          },
-        }
+        ? { ok: false, errors: [failure] }
+        : { ok: true, data: { durable: true } }
     },
     onDurableSubmissionOutcome: async () => {
       assert.fail("A rejected intent must not produce a durable submission outcome")
@@ -767,7 +761,16 @@ test("does not submit a sibling BUY when the recovery SELL intent is not durable
       calls.push(`deferred:${order.side}`)
     },
   })
-  const result = await execute({
+  return {
+    execute,
+    calls,
+    getBrokerCalls: () => brokerCalls,
+  }
+}
+
+test("does not submit a sibling BUY when the recovery SELL intent is not durable", async () => {
+  const harness = createRecoverySellIntentFailureHarness()
+  const result = await harness.execute({
     decision: {
       strategy: "CONSERVATIVE",
       actions: [
@@ -793,12 +796,12 @@ test("does not submit a sibling BUY when the recovery SELL intent is not durable
     },
     marketMetadata,
   })
-
   assert.equal(result.ok, false)
-  assert.deepEqual(calls, ["intent:SELL", "deferred:SELL"])
-  assert.equal(brokerCalls, 0, "Neither sibling order may reach broker I/O after the recovery SELL intent fails.")
+  assert.deepEqual(harness.calls, ["intent:SELL", "deferred:SELL"])
+  assert.equal(harness.getBrokerCalls(), 0)
 })
- 
+
+
 test("does not apply a broker acknowledgement when its durable outcome append fails", async () => {
   let acknowledged = false
   const failureOutcomes = []
@@ -1327,7 +1330,7 @@ test("rejects conflicting registered ownership before broker submission", async 
   assert.deepEqual(deferredSubmission.ownership, conflictingOwnership)
 })
 
-test("persists the registered CG strategy purpose for an ordinary Conservative BUY", async () => {
+function createConservativeBuyDurableFactHarness() {
   const durableFacts = []
   const conservativeOwnership = Object.freeze({
     strategyId: StrategyId.COIN_GRABBER,
@@ -1346,49 +1349,37 @@ test("persists the registered CG strategy purpose for an ordinary Conservative B
     },
     onPendingOrder: async () => ({ ownership: conservativeOwnership }),
     onDurableSubmissionIntent: async ({ purpose, ownership }) => {
-      durableFacts.push({
-        purpose,
-        ownership,
-      })
-      return {
-        ok: true,
-        data: {
-          durable: true,
-        },
-      }
+      durableFacts.push({ purpose, ownership })
+      return { ok: true, data: { durable: true } }
     },
     onDurableSubmissionOutcome: async ({ purpose, ownership }) => {
-      durableFacts.push({
-        purpose,
-        ownership,
-      })
-      return {
-        ok: true,
-        data: { durable: true },
-      }
+      durableFacts.push({ purpose, ownership })
+      return { ok: true, data: { durable: true } }
     },
     onAcknowledgedOrder: async () => {},
     onSubmissionFailure: async () => assert.fail("unexpected failure while persisting a Conservative BUY"),
   })
+  return {
+    durableFacts,
+    conservativeOwnership,
+    execute,
+  }
+}
 
-  const result = await execute({
+test("persists the registered CG strategy purpose for an ordinary Conservative BUY", async () => {
+  const harness = createConservativeBuyDurableFactHarness()
+  const result = await harness.execute({
     decision,
     marketMetadata,
   })
-
-  assert.equal(result.ok, true, "A normal Conservative BUY must retain its registered CG ownership through durable submission.")
+  assert.equal(result.ok, true)
   assert.deepEqual(
-    durableFacts,
+    harness.durableFacts,
     [
-      {
-        purpose: "CONSERVATIVE_BUY",
-        ownership: conservativeOwnership,
-      },
-      {
-        purpose: "CONSERVATIVE_BUY",
-        ownership: conservativeOwnership,
-      },
+      { purpose: "CONSERVATIVE_BUY", ownership: harness.conservativeOwnership },
+      { purpose: "CONSERVATIVE_BUY", ownership: harness.conservativeOwnership },
     ],
-    "Durable intent and outcome must store the same CG purpose and Position attribution.",
   )
 })
+
+
