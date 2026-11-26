@@ -306,3 +306,44 @@ test("process adapter requests cooperative cancellation before forced terminatio
   assert.deepEqual(messages.map((message) => message.type), ["execute", "cancel"])
   assert.deepEqual(killSignals, [], "a cooperative worker exit must not be force-killed")
 })
+
+test("process adapter does not dispatch work when cancellation races worker creation", async () => {
+  const messages = []
+  const child = new EventEmitter()
+  child.exitCode = null
+  child.signalCode = null
+  child.connected = true
+  child.send = (message) => {
+    messages.push(message)
+    if (message.type === "cancel") {
+      child.exitCode = 0
+      queueMicrotask(() => child.emit("close"))
+    }
+    return true
+  }
+  child.kill = () => {
+    child.exitCode = 0
+    queueMicrotask(() => child.emit("close"))
+    return true
+  }
+  const controller = new AbortController()
+  const adapter = createProcessScenarioAdapter({
+    strategyId: "RS",
+    terminationGraceMs: 20,
+    spawnSandboxedWorker: createSimulatedSandboxLauncher({
+      spawn: () => {
+        controller.abort()
+        return child
+      },
+    }),
+  })
+
+  await assert.rejects(adapter.execute({
+    runId: "run-cancel-during-spawn",
+    scenarioId: "RS-004-011",
+    input: null,
+    signal: controller.signal,
+  }), /cancelled/)
+  assert.deepEqual(messages.map((message) => message.type), ["cancel"],
+    "A cancellation observed during worker creation must not be followed by an execute message.")
+})

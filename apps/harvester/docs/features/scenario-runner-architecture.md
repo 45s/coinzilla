@@ -149,3 +149,5 @@ The HTTP adapter assigns malformed submission identity errors an explicit 400/co
 The readiness-failure transition is a named application helper so the lifecycle path stays within the repository's strict function-length limit. API response selection is likewise handled by a dedicated error-message resolver rather than nested conditional expressions.
 
 Terminal execution outcome mapping is kept separate from timeout/cleanup coordination: ordinary completion, cancellation, adapter errors, invalid results and missing readiness each have an explicit status transition, while timeout and unconfirmed-cleanup handling retain their dedicated paths.
+
+The process adapter rechecks cancellation immediately after registering worker lifecycle handlers. If cancellation races the synchronous launcher call, it waits for cleanup and never sends the scenario execution message to the newly created worker.
