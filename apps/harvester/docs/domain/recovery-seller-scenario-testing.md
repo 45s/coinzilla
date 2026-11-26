@@ -1701,7 +1701,7 @@ Required cases:
 
 Core source ownership: mixed SELL allocation/accounting/reconciliation, Portfolio, accounting workflow, record-reconciled use case, persistence boundary.
 
-**Current scenario-suite mapping:** PR #1852 registers `RS-006-003-A/B` as APPLICATION scenarios. They prove two distinct canonical partial SELL Fills are accumulated into one atomic recovery/legacy commit, with exact quote-fee accounting and duplicate terminal replay as a no-op. Both remain TEST-MAPPED; they do not replace the remaining RS-006 REST/stream, conflicting-history, durability-barrier or failure-interleaving cases.
+**Current scenario-suite mapping:** PR #1852 registers `RS-006-003-A/B`, `RS-006-012-A`, `RS-006-016-A` and `RS-006-018-A` as APPLICATION scenarios. They prove two-Fill atomic accounting and replay, no projection publication after durable append failure, fail-closed handling of incomplete terminal history, and accounting of confirmed fills despite a profitability miss. All remain TEST-MAPPED; REST/stream arrival-order conflicts and the remaining persistence/failure interleaving cases are still required.
 
 ### RS-007 — Unknown outcomes and no blind retry (P0)
 

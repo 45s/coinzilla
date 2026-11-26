@@ -485,8 +485,10 @@ RS-002-006-B now maps to an application authorizer/account-allocation regression
 Additional scenario increment: RS-002-020-B maps to an application allocation test proving an owned 60-quote pending BUY commitment is counted once at exact pair-cap equality (20 existing + 60 pending + 20 new = 100). RS-002-020-B is TEST-MAPPED and proves both exact-cap acceptance (20 + 60 pending + 20 = 100) and rejection below the cap (the same 100 exposure exceeds a 99 cap); RS-002-020 is now TEST-MAPPED. RS-002 remains PARTIAL because the wider cap/account-snapshot and order lifecycle matrix is not complete. The authorizer regression passed on code head `8e205239fcde7b610b183d4454dce98815fa6156`; full exact-head CI is pending.
 
 
-### 2026-11-26 — RS-006 multi-Fill application scenario checkpoint
+### 2026-11-26 — RS-006 application scenario checkpoint
 
-- Added `RS-006-003-A`: two canonical partial SELL Fills are staged, allocated and reconciled through the real accounting workflow. Exact recovery/legacy quantity conservation, net quote proceeds after both commissions, durable commit count and post-commit reservation release are asserted.
-- Added `RS-006-003-B`: identical two-Fill terminal replay is classified as duplicate and leaves Portfolio, legacy Position/accounting, OrderRegistry and durable-fact count unchanged.
-- Both subcases are registered as TEST-MAPPED in PR #1852. RS-006 remains PARTIAL; this does not claim full REST/stream ordering, conflicting-history, transaction-barrier or failure-interleaving coverage.
+- `RS-006-003-A/B`: two canonical partial SELL Fills are staged and reconciled together; exact recovery/legacy quantity allocation, quote commissions, one durable commit and duplicate replay no-op are asserted.
+- `RS-006-012-A`: durable append failure preserves both projections and the active SELL reservation.
+- `RS-006-016-A`: incomplete terminal Fill history fails closed without publishing accounting or releasing the reservation.
+- `RS-006-018-A`: confirmed fills are committed even when realized profitability misses `minProfit`.
+- All five subcases are registered as TEST-MAPPED in PR #1852. RS-006 remains PARTIAL; REST/stream ordering/conflict, persistence-barrier and failure-interleaving permutations remain.
