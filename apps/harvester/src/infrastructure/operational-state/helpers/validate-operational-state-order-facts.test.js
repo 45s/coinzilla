@@ -23,7 +23,10 @@ function makeSubmissionIntent(overrides = {}) {
   const clientOrderId = "client-order-1"
   const purpose = overrides.purpose ?? null
   const ownership = purpose === "RECOVERY_SELL" && overrides.strategyId === undefined
-    ? { strategyId: StrategyId.COIN_GRABBER, positionId: "position:cg:test" }
+    ? {
+        strategyId: StrategyId.COIN_GRABBER,
+        positionId: "position:cg:test",
+      }
     : {}
   return {
     factType: "ORDER_SUBMISSION_INTENT",
@@ -44,7 +47,10 @@ function makeSubmissionOutcome(overrides = {}) {
   const clientOrderId = "client-order-1"
   const purpose = overrides.purpose ?? null
   const ownership = purpose === "RECOVERY_SELL" && overrides.strategyId === undefined
-    ? { strategyId: StrategyId.COIN_GRABBER, positionId: "position:cg:test" }
+    ? {
+        strategyId: StrategyId.COIN_GRABBER,
+        positionId: "position:cg:test",
+      }
     : {}
   return {
     factType: "ORDER_SUBMISSION_OUTCOME",
