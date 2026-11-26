@@ -491,4 +491,5 @@ Additional scenario increment: RS-002-020-B maps to an application allocation te
 - `RS-006-012-A`: durable append failure preserves both projections and the active SELL reservation.
 - `RS-006-016-A`: incomplete terminal Fill history fails closed without publishing accounting or releasing the reservation.
 - `RS-006-018-A`: confirmed fills are committed even when realized profitability misses `minProfit`.
-- All five subcases are registered as TEST-MAPPED in PR #1852. RS-006 remains PARTIAL; REST/stream ordering/conflict, persistence-barrier and failure-interleaving permutations remain.
+- `RS-006-014-A/015-A`: identical canonical Fill replay is staged once; conflicting facts for the same Fill identity are rejected without changing staged history. This is domain staging evidence, not end-to-end REST/stream retrieval proof.
+- All seven subcases are registered as TEST-MAPPED in PR #1852. RS-006 remains PARTIAL; full REST/stream ordering/conflict integration, persistence-barrier and failure-interleaving permutations remain.

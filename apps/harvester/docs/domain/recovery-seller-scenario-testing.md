@@ -1701,7 +1701,7 @@ Required cases:
 
 Core source ownership: mixed SELL allocation/accounting/reconciliation, Portfolio, accounting workflow, record-reconciled use case, persistence boundary.
 
-**Current scenario-suite mapping:** PR #1852 registers `RS-006-003-A/B`, `RS-006-012-A`, `RS-006-016-A` and `RS-006-018-A` as APPLICATION scenarios. They prove two-Fill atomic accounting and replay, no projection publication after durable append failure, fail-closed handling of incomplete terminal history, and accounting of confirmed fills despite a profitability miss. All remain TEST-MAPPED; REST/stream arrival-order conflicts and the remaining persistence/failure interleaving cases are still required.
+**Current scenario-suite mapping:** PR #1852 registers `RS-006-003-A/B`, `RS-006-012-A`, `RS-006-016-A` and `RS-006-018-A` as APPLICATION scenarios. They prove two-Fill atomic accounting and replay, no projection publication after durable append failure, fail-closed handling of incomplete terminal history, and accounting of confirmed fills despite a profitability miss. `RS-006-014-A/015-A` additionally prove domain-level exact duplicate staging and rejection of conflicting facts for the same Fill identity. These do not prove the full REST/stream fetch/merge pipeline. All mapped cases remain TEST-MAPPED; full source-order integration and remaining persistence/failure interleavings are still required.
 
 ### RS-007 — Unknown outcomes and no blind retry (P0)
 
