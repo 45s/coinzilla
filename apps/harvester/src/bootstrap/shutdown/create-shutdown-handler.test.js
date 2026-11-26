@@ -6,7 +6,7 @@ import { createStrategyShutdownCoordinator } from "./create-strategy-shutdown-co
 
 const test = (...args) => {
   const [name, ...testArgs] = args
-  return nodeTest(`[create-shutdown-handler.test.js] ${name}`, ...testArgs)
+  return nodeTest(`[create-shutdown-handler.test.js] ${name}`, { timeout: 30_000 }, ...testArgs)
 }
 
 function createState(overrides = {}) {
