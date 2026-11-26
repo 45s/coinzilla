@@ -737,132 +737,176 @@ transactionSupported: true }
 })
 
 
-function createConformanceMongoServer(store) {
-  function matches({ document, filter }) {
-    const conditions = filter.$and ?? []
-    return conditions.every((condition) => {
-      const [path, expected] = Object.entries(condition)[0]
-      const key = path.slice("data.".length)
-      const exists = Object.hasOwn(document.data, key)
-      if (expected && expected.$type === 10) {
-        return exists && document.data[key] === null
-      }
-      return exists && document.data[key] === expected
-    })
-  }
-
-  function scalarRank(value) {
-    if (value === undefined || value === null) {return 0}
-    if (typeof value === "boolean") {return 1}
-    if (typeof value === "number") {return 2}
-    if (typeof value === "string") {return 3}
-    return 4
-  }
-
-  function compareScalar({ left, right }) {
-    const rank = scalarRank(left) - scalarRank(right)
-    if (rank !== 0) {return rank}
-    if (left === undefined || left === null) {return 0}
-    if (typeof left === "number" || typeof left === "string") {
-      if (left < right) { return -1 }
-      if (left > right) { return 1 }
-      return 0
+function matchesConformanceDocument({ document, filter }) {
+  const conditions = filter.$and ?? []
+  return conditions.every((condition) => {
+    const [path, expected] = Object.entries(condition)[0]
+    const key = path.slice("data.".length)
+    const exists = Object.hasOwn(document.data, key)
+    if (expected && expected.$type === 10) {
+      return exists && document.data[key] === null
     }
-    if (typeof left === "boolean") {return Number(left) - Number(right)}
+    return exists && document.data[key] === expected
+  })
+}
+
+function scalarRank(value) {
+  if (value === undefined || value === null) { return 0 }
+  if (typeof value === "boolean") { return 1 }
+  if (typeof value === "number") { return 2 }
+  if (typeof value === "string") { return 3 }
+  return 4
+}
+
+function compareScalar({ left, right }) {
+  const rank = scalarRank(left) - scalarRank(right)
+  if (rank !== 0) { return rank }
+  if (left === undefined || left === null) { return 0 }
+  if (typeof left === "number" || typeof left === "string") {
+    if (left < right) { return -1 }
+    if (left > right) { return 1 }
     return 0
   }
+  if (typeof left === "boolean") { return Number(left) - Number(right) }
+  return 0
+}
 
+function resolveSortField({ expression, isTypeKey }) {
+  if (isTypeKey) {
+    return expression?.$switch?.branches?.[0]?.case?.$in?.[0]?.$type
+  }
+  return expression?.$cond?.[2]?.$ifNull?.[0]
+}
+
+function compareConformanceDocuments({ left, right, sortFields, additions }) {
+  for (const [sortKey, direction] of sortFields) {
+    const expression = additions[sortKey]
+    const isTypeKey = sortKey.includes("SortType")
+    const fieldPath = resolveSortField({ expression, isTypeKey })
+    const field = typeof fieldPath === "string" ? fieldPath.slice("$data.".length) : null
+    const leftValue = field ? left.data[field] : undefined
+    const rightValue = field ? right.data[field] : undefined
+    const comparison = isTypeKey
+      ? scalarRank(leftValue) - scalarRank(rightValue)
+      : compareScalar({ left: leftValue, right: rightValue })
+    if (comparison !== 0) {
+      return comparison * direction
+    }
+  }
+  if (left._id < right._id) { return -1 }
+  if (left._id > right._id) { return 1 }
+  return 0
+}
+
+function sortConformanceDocuments({ documents, pipeline }) {
+  const additions = pipeline.find((stage) => stage.$addFields)?.$addFields ?? {}
+  const sort = pipeline.find((stage) => stage.$sort)?.$sort ?? { _id: 1 }
+  const sortFields = Object.entries(sort).filter(([key]) => key !== "_id")
+  documents.sort((...items) => compareConformanceDocuments({
+    left: items[0],
+    right: items[1],
+    sortFields,
+    additions,
+  }))
+}
+
+function createInsertResult({ records, body, sequences }) {
+  const documents = sequences.find((sequence) => sequence.identifier === "documents")?.documents
+    ?? body.documents
+    ?? []
+  for (const document of documents) {
+    if (records.has(document._id)) {
+      return {
+        ok: 1,
+        n: 0,
+        writeErrors: [{ code: 11000, errmsg: "duplicate key" }],
+      }
+    }
+    records.set(document._id, structuredClone(document))
+  }
+  return { ok: 1, n: documents.length }
+}
+
+function createFindResult({ records, body }) {
+  const document = records.get(body.filter._id)
+  return {
+    ok: 1,
+    cursor: {
+      id: 0,
+      firstBatch: document ? [{
+        _id: document._id,
+        data: structuredClone(document.data),
+      }] : [],
+    },
+  }
+}
+
+function createAggregateResult({ records, body }) {
+  let documents = [...records.values()].filter((document) => matchesConformanceDocument({
+    document,
+    filter: body.pipeline[0].$match,
+  }))
+  sortConformanceDocuments({ documents, pipeline: body.pipeline })
+  const skip = body.pipeline.find((stage) => stage.$skip)?.$skip ?? 0
+  const limit = body.pipeline.find((stage) => stage.$limit)?.$limit
+  documents = documents.slice(skip, limit === undefined ? undefined : skip + limit)
+  return {
+    ok: 1,
+    cursor: {
+      id: 0,
+      firstBatch: documents.map((document) => ({
+        _id: document._id,
+        data: structuredClone(document.data),
+      })),
+    },
+  }
+}
+
+function createUpdateResult({ records, body }) {
+  const document = records.get(body.query._id)
+  if (!document) {
+    return { ok: 1, value: null }
+  }
+  for (const [path, value] of Object.entries(body.update.$set)) {
+    const [root, key] = path.split(".")
+    if (root === "data") {
+      document.data[key] = structuredClone(value)
+    }
+  }
+  return {
+    ok: 1,
+    value: {
+      _id: document._id,
+      data: structuredClone(document.data),
+    },
+  }
+}
+
+function createDeleteResult({ records, body }) {
+  const removed = records.delete(body.deletes[0].q._id)
+  return { ok: 1, n: Number(removed) }
+}
+
+function createConformanceMongoServer(store) {
   return async function command({ body, sequences = [] }) {
     const collection = body.insert ?? body.find ?? body.aggregate ?? body.findAndModify ?? body.delete
     const records = store.get(collection) ?? new Map()
     store.set(collection, records)
-
     if (body.insert) {
-      const documents = sequences.find((sequence) => sequence.identifier === "documents")?.documents ?? body.documents ?? []
-      for (const document of documents) {
-        if (records.has(document._id)) {
-          return { ok: 1,
-n: 0,
-writeErrors: [{ code: 11000,
-errmsg: "duplicate key" }] }
-        }
-        records.set(document._id, structuredClone(document))
-      }
-      return { ok: 1,
-n: documents.length }
+      return createInsertResult({ records, body, sequences })
     }
-
     if (body.find) {
-      const document = records.get(body.filter._id)
-      return {
-        ok: 1,
-        cursor: {
-          id: 0,
-          firstBatch: document ? [{ _id: document._id,
-data: structuredClone(document.data) }] : [],
-        },
-      }
+      return createFindResult({ records, body })
     }
-
     if (body.aggregate) {
-      let documents = [...records.values()].filter((document) => matches({ document,
-filter: body.pipeline[0].$match }))
-      const additions = body.pipeline.find((stage) => stage.$addFields)?.$addFields ?? {}
-      const sort = body.pipeline.find((stage) => stage.$sort)?.$sort ?? { _id: 1 }
-      const sortFields = Object.entries(sort).filter(([key]) => key !== "_id")
-      documents.sort((...items) => {
-        const [left, right] = items
-        for (const [sortKey, direction] of sortFields) {
-          const expression = additions[sortKey]
-          const typeKey = sortKey.includes("SortType")
-          const fieldPath = typeKey
-            ? expression?.$switch?.branches?.[0]?.case?.$in?.[0]?.$type
-            : expression?.$cond?.[2]?.$ifNull?.[0]
-          const field = typeof fieldPath === "string" ? fieldPath.slice("$data.".length) : null
-          const leftValue = field ? left.data[field] : undefined
-          const rightValue = field ? right.data[field] : undefined
-          const comparison = typeKey
-            ? scalarRank(leftValue) - scalarRank(rightValue)
-            : compareScalar({ left: leftValue,
-right: rightValue })
-          if (comparison !== 0) {return comparison * direction}
-        }
-        return left._id < right._id ? -1 : left._id > right._id ? 1 : 0
-      })
-      const skip = body.pipeline.find((stage) => stage.$skip)?.$skip ?? 0
-      const limit = body.pipeline.find((stage) => stage.$limit)?.$limit
-      documents = documents.slice(skip, limit === undefined ? undefined : skip + limit)
-      return {
-        ok: 1,
-        cursor: {
-          id: 0,
-          firstBatch: documents.map((document) => ({ _id: document._id,
-data: structuredClone(document.data) })),
-        },
-      }
+      return createAggregateResult({ records, body })
     }
-
     if (body.findAndModify) {
-      const document = records.get(body.query._id)
-      if (!document) {return { ok: 1,
-value: null }}
-      for (const [path, value] of Object.entries(body.update.$set)) {
-        const [root, key] = path.split(".")
-        if (root === "data") {
-          document.data[key] = structuredClone(value)
-        }
-      }
-      return { ok: 1,
-value: { _id: document._id,
-data: structuredClone(document.data) } }
+      return createUpdateResult({ records, body })
     }
-
     if (body.delete) {
-      const removed = records.delete(body.deletes[0].q._id)
-      return { ok: 1,
-n: Number(removed) }
+      return createDeleteResult({ records, body })
     }
-
     throw new Error(`Unsupported conformance command: ${Object.keys(body)[0]}`)
   }
 }
@@ -910,7 +954,7 @@ test("MongoDB transactions serialize commands and wait for all transaction CRUD 
     topology: "replicaSet",
     transactionSupported: true,
     commandHandler: async (...argumentsList) => {
-      const [body, _callIndex, sequences] = argumentsList
+      const [body, , sequences] = argumentsList
       if (body.insert) {
         activeCommands += 1
         maximumConcurrentCommands = Math.max(maximumConcurrentCommands, activeCommands)
