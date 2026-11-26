@@ -192,7 +192,7 @@ Consumers should branch on the public error class or stable code, not provider e
 
 ### Provider capabilities
 
-Read `database.capabilities` to inspect the provider-neutral capability declaration. The declaration is a frozen snapshot. SQLite reports synchronous callbacks, no nested transactions, file/memory storage and all three query capabilities. MongoDB reports asynchronous callbacks, no nested transactions, server storage and all three query capabilities. MongoDB multi-document transaction support is topology-dependent; standalone deployments reject transactions. The SQLite provider reports:
+Read `database.capabilities` to inspect the provider-neutral capability declaration. The declaration is a frozen snapshot. SQLite reports synchronous callbacks, no nested transactions, file/memory storage and all three query capabilities. MongoDB reports asynchronous callbacks, no nested transactions, server storage and all three query capabilities. MongoDB multi-document transaction support is topology-dependent; standalone deployments reject transactions.
 
 - Transaction callbacks are synchronous; nested transactions are not supported.
 - Exact equality filters, sorting and pagination are supported.
@@ -248,6 +248,8 @@ The adapter uses Node.js built-ins only (`node:net`, `node:tls`, `node:crypto`, 
 **Transactions and capability behavior**
 
 The MongoDB provider declares `transactions.multiDocument: "topology-dependent"`. Standalone servers do not support multi-document transactions; `database.transaction(work)` rejects with `DatabaseTransactionUnsupportedError` before invoking the callback. Replica sets and sharded clusters require logical-session support from the server. The adapter uses one logical session and transaction number for callback operations, starts a snapshot transaction on the first command, and commits with majority write concern.
+
+MongoDB transaction callbacks are asynchronous: await every CRUD operation on the supplied transaction object. Do not start unawaited writes and allow the callback to return, because commit follows callback completion. SQLite callbacks remain synchronous and reject async work.
 
 If commit cannot be confirmed after bounded retries, the provider throws `DatabaseTransactionOutcomeUnknownError`. This means the caller must reconcile the outcome; it must not assume rollback and blindly replay non-idempotent work. Ordinary interrupted CRUD operations are not automatically replayed. A lost connection is surfaced as a provider failure; automatic topology monitoring, reconnect and transparent operation retry are not implemented.
 
