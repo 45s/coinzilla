@@ -957,7 +957,7 @@ async function waitForConservativeMarkets({
     stageDiagnostics,
   })
   throwIfShutdownAborted(signal)
-  let snapshot
+  let snapshot = engine.getShutdownSafetySnapshot()
   let safetyPassCount = 0
 
   while (true) {
@@ -968,7 +968,7 @@ async function waitForConservativeMarkets({
     }
     throwIfShutdownAborted(signal)
     safetyPassCount += 1
-    snapshot = await secureUnsafeMarkets({
+    await secureUnsafeMarkets({
       engine,
       snapshot,
       eventPublisher,
