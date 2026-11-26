@@ -325,3 +325,15 @@ The relational projection is intentionally non-authoritative. It does not contro
 The existing per-session DEBUG/TRACE JSONL files remain the complete diagnostic record, including stack and cause details. The relational mapper stores allowlisted fields and selected history-page diagnostics, redacts credential assignments from searchable messages, and excludes raw payloads and stack traces. The pre-database buffer and database writer are bounded; their dropped/failed counters expose when the relational projection is incomplete. Such failures are reported to the session logs and never block trading or broker-event handling.
 
 At shutdown, the error observer stops accepting new relational records and drains its queue before the relational SQLite connection closes. If the database is unavailable or a write fails, inspect the session DEBUG/TRACE logs; absence of a relational row is not proof that no runtime error occurred.
+
+Rejected order lifecycle summaries omit the broker order ID to prioritize the
+market, side, quantity, price, and concise rejection reason. Example:
+
+```text
+21:45:17 🟡 CG REJECTED LINKUSDT BUY 2 @ 9.244 | Insufficient quote balance
+```
+
+Startup's market-data connected summary reports only the subscription count
+(`Binance market-data stream connected; subscriptions: 5.`). Operator-facing
+console summaries abbreviate Operational State Store as `OSS`; full structured
+records and diagnostic files retain their diagnostic detail.
