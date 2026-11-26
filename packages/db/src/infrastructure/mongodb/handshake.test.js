@@ -15,8 +15,8 @@ test("MongoDB URI parser rejects malformed schemes, fragments, duplicate options
     { value: "mongodb://localhost/app#fragment", expected: /fragments/ },
     { value: "mongodb://localhost/app?tls=maybe", expected: /tls must be true or false/ },
     { value: "mongodb://localhost/app?loadBalanced=maybe", expected: /loadBalanced must be true or false/ },
-    { value: "mongodb://localhost/app?connectTimeoutMS=0", expected: /positive integer/ },
-    { value: "mongodb://localhost/app?socketTimeoutMS=abc", expected: /positive integer/ },
+    { value: "mongodb://localhost/app?connectTimeoutMS=0", expected: /positive safe integer/ },
+    { value: "mongodb://localhost/app?socketTimeoutMS=abc", expected: /positive safe integer/ },
     { value: "mongodb://localhost/app?authSource=admin&authSource=other", expected: /must not be repeated/ },
     { value: "mongodb://localhost/bad%24name", expected: /unsupported character/ },
   ]
