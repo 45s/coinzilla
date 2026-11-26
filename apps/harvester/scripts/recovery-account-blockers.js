@@ -217,6 +217,38 @@ async function executeRecoveryCommand({
   })
 }
 
+function parseCommandArguments({ args, writeError }) {
+  try {
+    return parseRecoveryAccountBlockerArguments(args)
+  } catch (error) {
+    writeError(error.message)
+    return undefined
+  }
+}
+
+function getCommandEarlyExit({ parsed, writeOutput }) {
+  if (parsed.version) {
+    return 0
+  }
+  if (parsed.help) {
+    writeOutput(HELP)
+    return 0
+  }
+  return undefined
+}
+
+function authenticateCommandOperator({ parsed, getUserInfo, writeError }) {
+  try {
+    return authenticateLocalOperator({
+      operatorId: parsed.operatorId,
+      getUserInfo,
+    })
+  } catch (error) {
+    writeError(error.message)
+    return undefined
+  }
+}
+
 export async function runRecoveryAccountBlockerCommand({
   args = process.argv.slice(2),
   env = process.env,
@@ -232,32 +264,22 @@ export async function runRecoveryAccountBlockerCommand({
   runResolution = runOfflineAccountBlockerResolution,
 } = {}) {
   writeOutput(createRecoveryIdentity({ env }))
-  let parsed
-  try {
-    parsed = parseRecoveryAccountBlockerArguments(args)
-  } catch (error) {
-    writeError(error.message)
+  const parsed = parseCommandArguments({ args, writeError })
+  if (!parsed) {
     return 1
   }
-  if (parsed.version) {
-    return 0
+  const earlyExit = getCommandEarlyExit({ parsed, writeOutput })
+  if (earlyExit !== undefined) {
+    return earlyExit
   }
-  if (parsed.help) {
-    writeOutput(HELP)
-    return 0
-  }
-
-  let operatorIdentity
-  try {
-    operatorIdentity = authenticateLocalOperator({
-      operatorId: parsed.operatorId,
-      getUserInfo,
-    })
-  } catch (error) {
-    writeError(error.message)
+  const operatorIdentity = authenticateCommandOperator({
+    parsed,
+    getUserInfo,
+    writeError,
+  })
+  if (!operatorIdentity) {
     return 1
   }
-
   try {
     const summary = await executeRecoveryCommand({
       parsed,
@@ -275,7 +297,6 @@ export async function runRecoveryAccountBlockerCommand({
     return 1
   }
 }
-
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   process.exitCode = await runRecoveryAccountBlockerCommand()
 }
