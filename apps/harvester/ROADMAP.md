@@ -5,18 +5,31 @@
 In progress in [PR #1855](https://github.com/45s/coinzilla/pull/1855), branch
 `fix/harvester/1854-trading-history-persistence-startup`.
 
-A deterministic offline regression now reproduces a relational v5 migration failure when
-two legacy records have distinct client IDs but the same market-scoped exchange order ID.
-The test asserts that the legacy fallback remains available and that the relational migration
-failure is preserved for diagnostics. The existing implementation currently omits the original
-error object/message from the fallback log, so this test-first checkpoint is expected to be RED.
+The 2026-11-26 operator run retained legacy order history but reported relational trading-history
+persistence unavailable, skipped exchange-history synchronization, and did not start the local
+trading-history API. Source confirms that the API requires
+`resources.orderHistoryPersistence.relationalDatabase`; the current compatibility fallback leaves
+that field null after a relational setup/migration failure.
 
-This synthetic collision proves one failure class and a diagnostic gap; it does **not** establish
-that the operator's 2026-11-26 database contains duplicate identities. No production code or
-runtime behavior is changed in this test-only increment. The next increment adds cause-preserving
-diagnostics and the correct Harvester DOGEUSDT history API commands. Preserve fail-closed migration
-behavior and do not repair or rewrite ambiguous persisted order/fill rows.
+- The exact cause in the operator's database remains **unconfirmed**; the supplied startup log
+  contained only a generic error code/name and did not include the original SQLite cause.
+- A deterministic offline regression reproduces a v5 migration failure when two legacy rows have
+  distinct client IDs but duplicate market-scoped exchange order IDs. GitHub Actions RED was
+  observed on test-only head
+  `bc292dbcee1a5bd9426e14b9b893c0adb3fe0bed`: 31 passed / 1 expected failure because the
+  structured failure log omitted the original error object and concrete message. This proves the
+  diagnostic gap and one migration-failure class; it does **not** prove the operator's database
+  contains that duplicate.
+- The implementation now includes the original error object, message, stable code/name and safe
+  typed context/stage in the relational fallback log. Existing fail-closed migration behavior is
+  preserved; no automatic row merge, deletion, repair, database reset, or exchange operation is
+  introduced.
+- The local API contract is loopback port 4201 with versioned `/api/v1/trading/orders` and
+  `/api/v1/trading/fills` routes. The API cannot start while relational persistence is unavailable.
+- Persistence/API operational docs now explain the degraded startup state and provide Bash DOGEUSDT
+  history commands without requiring `jq`.
 
+The diagnostic regression is verified GREEN by the Harvester Targeted Tests workflow. The exact operator-database failure remains unconfirmed until its original migration cause is available; decide any data-specific correction only from that evidence. Keep TESTNET/LIVE exchange writes, account mutation, bot restarts, and destructive database repair out of this task.
 
 ## Binance historical order identity collisions — issue #1851
 
