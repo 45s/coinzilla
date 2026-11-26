@@ -346,6 +346,45 @@ function createAbortAwareFinish({ signal, child, runId, terminationGraceMs, fini
   return finishWithCleanup
 }
 
+function registerExecutionLifecycleHandlers({
+  child,
+  runId,
+  signal,
+  terminationGraceMs,
+  maxOutputBytes,
+  finish,
+  state,
+  onReady,
+  onStarted,
+}) {
+  let messageReceived = false
+  registerWorkerErrorHandler({
+    child,
+    terminationGraceMs,
+    finish,
+  })
+  registerWorkerMessageHandler({
+    child,
+    runId,
+    terminationGraceMs,
+    maxOutputBytes,
+    finish,
+    signal,
+    onReady,
+    onStarted,
+    setMessageReceived: () => {
+      messageReceived = true
+    },
+  })
+  registerWorkerExitHandler({
+    child,
+    signal,
+    finish,
+    isSettled: state.isSettled,
+    hasMessage: () => messageReceived,
+  })
+}
+
 function createExecutionPromise({
   child,
   runId,
@@ -359,7 +398,6 @@ function createExecutionPromise({
   let finishExecution
   const promise = new Promise((...settlers) => {
     const [resolve, reject] = settlers
-    let messageReceived = false
     const state = createExecutionState({
       resolve,
       reject,
@@ -374,30 +412,16 @@ function createExecutionPromise({
       finish: state.finish,
     })
     finishExecution = finish
-    registerWorkerErrorHandler({
-      child,
-      terminationGraceMs,
-      finish,
-    })
-    registerWorkerMessageHandler({
+    registerExecutionLifecycleHandlers({
       child,
       runId,
+      signal,
       terminationGraceMs,
       maxOutputBytes,
       finish,
-      signal,
+      state,
       onReady,
       onStarted,
-      setMessageReceived: () => {
-        messageReceived = true
-      },
-    })
-    registerWorkerExitHandler({
-      child,
-      signal,
-      finish,
-      isSettled: state.isSettled,
-      hasMessage: () => messageReceived,
     })
   })
   return {
