@@ -977,8 +977,8 @@ function registerTransactionTests({ name, createDatabase, capabilities, storageM
   ]
   for (const transactionTest of transactionTests) {
     test(`${name} (${storageMode}): ${transactionTest.description}`, async (context) => {
-      if (!capabilities.transactions.multiDocument) {
-        context.skip("Provider declares multi-document transactions unsupported")
+      if (capabilities.transactions.multiDocument !== true) {
+        context.skip("Provider does not guarantee multi-document transactions for every supported topology")
         return
       }
       await withDatabase({
@@ -1014,7 +1014,7 @@ function registerLifecycleTests({
     })
   })
   test(`${name} (${storageMode}): close waits for active asynchronous transactions`, async (context) => {
-    if (capabilities.transactions.callbackMode === "synchronous" || !capabilities.transactions.multiDocument) {
+    if (capabilities.transactions.callbackMode === "synchronous" || capabilities.transactions.multiDocument !== true) {
       context.skip("Provider cannot keep a multi-document transaction active")
       return
     }
