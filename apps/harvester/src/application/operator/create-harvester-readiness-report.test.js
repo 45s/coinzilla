@@ -258,7 +258,7 @@ requiredHistoryCount: 74 } } }
   inputs.markets[0].priceFresh = false
   inputs.markets[0].bookFresh = false
   inputs.markets[0].blockers = ["MARKET_PRICE_STALE", "MARKET_BOOK_UNAVAILABLE", "VOLATILITY_DATA_UNAVAILABLE"]
-  const market = createHarvesterReadinessReport(inputs).markets[0]
+  const { markets: [market] } = createHarvesterReadinessReport(inputs)
   assert.equal(market.readiness, "BLOCKED", "Incomplete market data must remain blocked.")
   assert.equal(market.checks.find(({ id }) => id === "market.route").status, "BLOCKED", "Provider identity mismatch must be explicit.")
   assert.equal(market.checks.find(({ id }) => id === "market.price").status, "BLOCKED", "A stale price must not be hidden by subscription acknowledgement.")
