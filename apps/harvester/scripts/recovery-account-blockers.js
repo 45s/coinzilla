@@ -60,7 +60,7 @@ function validateParsedArguments(parsed) {
       parsed.resolutionReason.trim() !== parsed.resolutionReason ||
       parsed.resolutionReason.length < 8 ||
       parsed.resolutionReason.length > 512 ||
-      /[\\u0000-\\u001F\\u007F]/.test(parsed.resolutionReason) ||
+      /[\u0000-\u001F\u007F]/.test(parsed.resolutionReason) ||
       parsed.causeFixed !== true) {
     throw new TypeError("Account-blocker recovery requires context, authenticated operator, unique action ID, resolution reason, and --cause-fixed")
   }
