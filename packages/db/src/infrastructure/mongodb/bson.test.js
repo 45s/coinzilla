@@ -65,7 +65,7 @@ test("BSON rejects unsupported values, invalid document keys, and cyclic documen
   for (const document of [
     { value: undefined },
     { value: Number.NaN },
-    { "invalid\\u0000key": true },
+    { "invalid\u0000key": true },
     circular,
   ]) {
     assert.throws(
@@ -78,7 +78,7 @@ test("BSON rejects unsupported values, invalid document keys, and cyclic documen
 
 test("BSON rejects malformed Unicode rather than silently replacing record text", () => {
   assert.throws(
-    () => encodeBsonDocument({ value: "\\ud800" }),
+    () => encodeBsonDocument({ value: "\ud800" }),
     TypeError,
   )
 
