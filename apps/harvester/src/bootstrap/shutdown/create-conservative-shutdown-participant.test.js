@@ -801,14 +801,10 @@ test("bounds repeated late-evidence safety re-evaluations and fails closed", asy
   const calls = []
   const engine = createFakeEngine({ calls })
   const getSnapshot = engine.getShutdownSafetySnapshot
-  const controller = new AbortController()
   let snapshotCalls = 0
   engine.getShutdownSafetySnapshot = () => {
     snapshotCalls += 1
     const snapshot = getSnapshot()
-    if (snapshotCalls === 3) {
-      controller.abort(new Error("Test stop after two complete safety passes"))
-    }
     return {
       ...snapshot,
       markets: snapshot.markets.map((market) => ({
@@ -825,7 +821,7 @@ test("bounds repeated late-evidence safety re-evaluations and fails closed", asy
 
   participant.beginShutdown()
   await assert.rejects(
-    participant.waitUntilSafe({ signal: controller.signal }),
+    participant.waitUntilSafe(),
     (error) => {
       const blockers = getMarketBlockersFromShutdownError({
         error,
@@ -889,17 +885,22 @@ test("does not advance to BUY cancellation or recovery proof after a participant
   const engine = createFakeEngine({ calls })
   let releaseReconciliation
   let markReconciliationStarted
+  let markReconciliationFinished
   const reconciliation = new Promise((resolve) => {
     releaseReconciliation = resolve
   })
   const reconciliationStarted = new Promise((resolve) => {
     markReconciliationStarted = resolve
   })
+  const reconciliationFinished = new Promise((resolve) => {
+    markReconciliationFinished = resolve
+  })
   engine.reconcileOwnedOrders = async ({ symbol }) => {
     calls.push(`reconcile-start:${symbol}`)
     markReconciliationStarted()
     await reconciliation
     calls.push(`reconcile-finish:${symbol}`)
+    markReconciliationFinished()
     return { ok: true }
   }
   engine.getOrders = () => [{
@@ -930,6 +931,7 @@ test("does not advance to BUY cancellation or recovery proof after a participant
 
   await assert.rejects(safety, /participant deadline elapsed/)
   releaseReconciliation()
+  await reconciliationFinished
   const abortedSnapshot = participant.getSafetySnapshot().markets.find(({ symbol }) => symbol === "DOGEUSDT")
   assert.equal(abortedSnapshot.operationStatus, "ABORTED")
   assert.equal(abortedSnapshot.nestedError.message, "participant deadline elapsed")
