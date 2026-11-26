@@ -30,7 +30,7 @@ The provider accepts either uri or connectionString, or explicit connection fiel
 
 - host, port (default 27017)
 - databaseName (default admin)
-- username, password, authSource (defaults to the effective databaseName after URI and explicit-option overrides)
+- username, password, authSource (with a URI, defaults to its path database or admin if no path is supplied; with explicit fields and no URI, defaults to databaseName or admin)
 - authMechanism (SCRAM-SHA-256 or SCRAM-SHA-1)
 - replicaSet
 - directConnection (defaults to false; prevents replica-set primary redirection when true; a replica-set secondary target is rejected because only primary routing is supported)
@@ -40,7 +40,7 @@ The provider accepts either uri or connectionString, or explicit connection fiel
 - connectTimeoutMS (default 10,000)
 - socketTimeoutMS (default 30,000)
 
-Explicit options override URI values. Supported URI options are authSource, tls or ssl (not both), authMechanism, replicaSet, directConnection, readPreference=primary, retryWrites=false, loadBalanced=false, empty compressors, and connection/socket timeouts. Unknown or repeated options are rejected. The URI form is deliberately restricted to one mongodb:// seed. mongodb+srv:// and comma-separated hosts are rejected. Do not place credentials in source control; pass secrets through the runtime's secret/configuration mechanism.
+When a URI supplies a path database, an explicit databaseName option changes the target database but does not change the URI-derived authSource; set authSource explicitly to override it. Explicit options override matching URI values. Supported URI options are authSource, tls or ssl (not both), authMechanism, replicaSet, directConnection, readPreference=primary, retryWrites=false, loadBalanced=false, empty compressors, and connection/socket timeouts. Unknown or repeated options are rejected. The URI form is deliberately restricted to one mongodb:// seed. mongodb+srv:// and comma-separated hosts are rejected. Do not place credentials in source control; pass secrets through the runtime's secret/configuration mechanism.
 
 ## BSON and record mapping
 

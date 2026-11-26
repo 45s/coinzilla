@@ -63,7 +63,7 @@ async function dropDatabase(databaseName, parsed) {
         databaseName,
         username: parsed.username,
         password: parsed.password,
-        authSource: parsed.authSource ?? databaseName,
+        authSource: parsed.authSource,
         authMechanism: parsed.authMechanism,
         replicaSet: parsed.replicaSet,
       })
