@@ -1,6 +1,6 @@
 # Database
 
-`@coinzilla/db` provides a provider-neutral record CRUD API and database lifecycle. The first provider is Node.js' built-in `node:sqlite`; no external SQLite driver, ORM, query builder, or database server is required.
+`@coinzilla/db` provides a provider-neutral record CRUD API and database lifecycle. It includes Node.js' built-in `node:sqlite` provider and a dependency-free MongoDB network provider; no external database driver, BSON package, ORM, or query builder is required.
 
 The package owns generic database infrastructure contracts only. It does not own application schemas, business entities, repositories, or trading concepts.
 
@@ -124,7 +124,7 @@ const page = await database.readMany({
 - `limit` is an optional positive safe integer. `offset` is a non-negative safe integer and defaults to zero.
 - Unsupported query options and non-scalar filter values are rejected with `TypeError`.
 
-The first SQLite provider supports exact equality filters, sorting and pagination. More filter operators must be added to the provider-neutral contract and conformance tests before any provider implements them.
+SQLite and MongoDB support exact equality filters, sorting and pagination. More filter operators must be added to the provider-neutral contract and conformance tests before any provider implements them.
 
 ### Transactions
 
@@ -181,6 +181,8 @@ assert.equal(
 
 - `DatabaseConflictError` identifies a duplicate record identifier. Its stable code is `DB_RECORD_CONFLICT`.
 - `DatabaseProviderError` identifies an underlying provider operation failure. Its stable code is `DB_PROVIDER_OPERATION_FAILED`; the original provider failure is preserved as `cause`.
+- `DatabaseTransactionUnsupportedError` identifies a provider/topology that cannot guarantee the requested multi-document transaction (`DB_TRANSACTION_UNSUPPORTED`).
+- `DatabaseTransactionOutcomeUnknownError` identifies a commit whose final outcome could not be confirmed (`DB_TRANSACTION_OUTCOME_UNKNOWN`); reconcile before retrying application work.
 - Invalid collection names, identifiers, records and queries throw `TypeError`.
 - Missing records are ordinary results (`null` or `false`), not exceptions.
 - If transaction work fails and SQLite rollback also fails, the low-level transaction rejects with an `AggregateError` whose `errors` preserve the work error first and rollback error second; its `cause` is the original work error. A failed rollback can leave the connection inside a native transaction; do not continue using it until the underlying transaction state has been recovered or the connection has been closed.
@@ -190,7 +192,7 @@ Consumers should branch on the public error class or stable code, not provider e
 
 ### Provider capabilities
 
-Read `database.capabilities` to inspect the provider-neutral capability declaration. The declaration is a frozen snapshot. The SQLite provider currently reports:
+Read `database.capabilities` to inspect the provider-neutral capability declaration. The declaration is a frozen snapshot. SQLite reports synchronous callbacks, no nested transactions, file/memory storage and all three query capabilities. MongoDB reports asynchronous callbacks, no nested transactions, server storage and all three query capabilities. MongoDB multi-document transaction support is topology-dependent; standalone deployments reject transactions. The SQLite provider reports:
 
 - Transaction callbacks are synchronous; nested transactions are not supported.
 - Exact equality filters, sorting and pagination are supported.
@@ -201,6 +203,59 @@ A provider passed to `createDatabase({ provider })` implements both `withTransac
 A synchronous provider cannot declare `nestedTransactions: true`; the provider-neutral facade requires asynchronous callbacks to invoke nested transactions safely. The capability validator rejects that incompatible declaration at composition time.
 
 A future provider must declare its own actual guarantees. The package will not silently emulate unsupported transaction, query, or durability guarantees.
+
+## MongoDB provider
+
+The MongoDB adapter is exported as `createMongoProvider`. It implements the same provider-neutral CRUD API; application/domain code does not receive MongoDB collections, BSON documents, sessions, cursors, sockets, commands or native errors.
+
+```js
+import { createDatabase, createMongoProvider } from "@coinzilla/db"
+
+const database = createDatabase({
+  provider: createMongoProvider({
+    uri: process.env.MONGODB_URI,
+    // Optional explicit TLS options; true enables TLS with Node defaults.
+    // tls: true,
+    connectTimeoutMS: 10_000,
+    socketTimeoutMS: 30_000,
+  }),
+})
+
+await database.connect()
+try {
+  await database.create({
+    collection: "users",
+    record: { id: "user-1", name: "Ada" },
+  })
+} finally {
+  await database.close()
+}
+```
+
+The URI parser deliberately accepts a single-seed `mongodb://` URI. `mongodb+srv://`, multi-host seed lists and DNS SRV discovery are rejected rather than silently reduced to one host. Credentials, database name, `authSource`, `authMechanism`, `replicaSet`, TLS and connection/socket timeouts can be supplied in the URI or as explicit provider options. Provider options override parsed URI values.
+
+The adapter uses Node.js built-ins only (`node:net`, `node:tls`, `node:crypto`, `node:buffer`, `node:async_hooks` and timers). It implements BSON and MongoDB OP_MSG internally; it does not add a runtime dependency.
+
+**Supported protocol and deployment scope**
+
+- OP_MSG wire protocol with server wire-version overlap in the range 13–25 (MongoDB 5.0–8.0 protocol generations).
+- Standalone servers, replica sets and sharded clusters reached through a single seed. Replica-set primary redirection is followed; this is not a full topology monitor or failover-aware connection pool.
+- Optional unauthenticated connections, SCRAM-SHA-256 and legacy SCRAM-SHA-1. SCRAM-SHA-256 currently accepts printable ASCII passwords only because complete Unicode SASLprep tables are not available in Node built-ins; unsupported input is rejected rather than prepared incorrectly.
+- TCP and TLS. TLS validation follows Node.js defaults unless explicit TLS options are supplied.
+- JSON record CRUD, exact scalar equality filters, portable scalar sorting, offset/limit pagination, and provider-neutral error mapping.
+- A single multiplexed socket per provider instance, with bounded pending-request and message sizes. This is not a connection pool.
+
+**Transactions and capability behavior**
+
+The MongoDB provider declares `transactions.multiDocument: "topology-dependent"`. Standalone servers do not support multi-document transactions; `database.transaction(work)` rejects with `DatabaseTransactionUnsupportedError` before invoking the callback. Replica sets and sharded clusters require logical-session support from the server. The adapter uses one logical session and transaction number for callback operations, starts a snapshot transaction on the first command, and commits with majority write concern.
+
+If commit cannot be confirmed after bounded retries, the provider throws `DatabaseTransactionOutcomeUnknownError`. This means the caller must reconcile the outcome; it must not assume rollback and blindly replay non-idempotent work. Ordinary interrupted CRUD operations are not automatically replayed. A lost connection is surfaced as a provider failure; automatic topology monitoring, reconnect and transparent operation retry are not implemented.
+
+**Explicit exclusions**
+
+No SRV/multi-seed discovery, connection pooling, topology monitoring/failover, read preference routing, retryable writes, compression, legacy OP_QUERY, change streams, GridFS, client-side encryption, or arbitrary BSON types are promised. The codec supports the JSON record contract and the additional binary/date/integer forms required internally by the protocol. Unsupported BSON types and malformed frames fail explicitly. See [MongoDB provider support and limitations](./docs/mongodb.md) for the exact matrix and operational notes.
+
+The default package tests use deterministic fake transports and do not require MongoDB credentials or a running server. A real-server conformance run is opt-in and must use an isolated test database; no live MongoDB integration result is claimed by the unit tests.
 
 ## Provider conformance tests
 
