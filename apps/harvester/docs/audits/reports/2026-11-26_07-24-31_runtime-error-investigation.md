@@ -152,9 +152,19 @@ Source behavior confirms startup fails closed when `verify()` does not confirm a
 
 ### 5. Fourteen unowned open orders — confirmed external-order safety gate
 
-The terminal capture reports an account-wide open-order snapshot with `orderCount: 14` and `readiness: BLOCKED`. The log explicitly says the unowned orders remain external and untouched.
+The account-wide PREFLIGHT snapshot at `2026-11-26T04:58:12.939Z` records `orderCount: 14`, `readiness: BLOCKED`, and `blockReasons: ["UNOWNED_OPEN_ORDERS:14"]`. The exact broker-order IDs are:
 
-Subsequent user-data events include five `UNKNOWN_OR_EXTERNAL_ORDER_EVENT` filled-order events (LINKUSDT twice, ADAUSDT once, LINEAUSDT twice), five rejected unowned/invalid order updates, and three pair pauses (LINKUSDT, ADAUSDT, LINEAUSDT). These pauses preserve the accepted ownership boundary. The RS LINEAUSDT BUY `725860` was later canceled with reason `ACCOUNT_INTEGRITY_FAILURE` after user-data readiness changed to `EXECUTION_ACCOUNTING_FAILED`; the supplied events establish the sequence but do not prove the exact internal causal edge. Do not adopt, cancel, or assign external orders to CG/RS without authoritative ownership evidence and the approved reconciliation flow.
+| Symbol | Count | Broker order IDs |
+|---|---:|---|
+| ADAUSDT | 1 | `862558` |
+| DOGEUSDT | 4 | `1317237`, `1323350`, `1333893`, `1377298` |
+| LINEAUSDT | 2 | `725632`, `725816` |
+| LINKUSDT | 3 | `2213258`, `3236709`, `3237934` |
+| ZROUSDT | 4 | `1052701`, `919870`, `957563`, `962249` |
+
+The log explicitly says the unowned orders remain external and untouched. Five later unowned filled-order events correspond to IDs `3237934`, `3236709`, `862558`, `725632`, and `725816` (LINKUSDT twice, ADAUSDT once, LINEAUSDT twice). They produce five rejected unowned/invalid order updates and three pair pauses (LINKUSDT, ADAUSDT, LINEAUSDT). These pauses preserve the accepted ownership boundary.
+
+Separately, the RS LINEAUSDT BUY `725860` was later canceled with reason `ACCOUNT_INTEGRITY_FAILURE` after user-data readiness changed to `EXECUTION_ACCOUNTING_FAILED`; the supplied events establish the sequence but do not prove the exact internal causal edge. Do not adopt, cancel, or assign external orders to CG/RS without authoritative ownership evidence and the approved reconciliation flow.
 
 ### 6. Binance bookTicker validation error — confirmed invalid payload; no transport failure established
 
@@ -194,6 +204,16 @@ The structured error at `2026-11-26T05:02:30.216Z` has the same `Recovery Seller
 | 14 unowned open orders | Correctly blocked as external; do not mutate |
 | Non-positive bookTicker best bid | Correctly rejected; no transport failure proven |
 | Shutdown safety phase | Start recorded; completion not established |
+
+### 9. Windows launcher deprecation warning — non-trading issue
+
+The terminal capture emits Node `DEP0190` twice (Node `v26.13.0`) before the Harvester starts:
+
+```text
+DeprecationWarning: Passing args to a child process with shell option true can lead to security vulnerabilities, as the arguments are not escaped, only concatenated.
+```
+
+Source: root `scripts/run-apps.js`, which invokes `spawn(packageManager, commands[name], { shell: process.platform === "win32" })`. This is a Windows launcher warning, not a Harvester trading/runtime failure and not the cause of any broker or strategy error. It is not changed in PR #1858 because changing Windows command resolution/quoting needs a separate cross-platform launcher regression; do not confuse it with the trading errors above.
 
 ## Evidence and safety limits
 
