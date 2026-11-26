@@ -71,6 +71,27 @@ function createTransactionOperation({ provider, lifecycle, readOnly = false }) {
   }
 }
 
+function createProviderOperation({ provider, lifecycle }) {
+  return function execute(input) {
+    if (lifecycle.state !== "connected") {
+      throw new Error(`Database must be connected to execute operations (state: ${lifecycle.state})`)
+    }
+
+    let operation
+    try {
+      operation = Promise.resolve(provider.execute(input))
+    } catch (error) {
+      operation = Promise.reject(error)
+    }
+    lifecycle.activeTransactions.add(operation)
+    operation.then(
+      () => lifecycle.activeTransactions.delete(operation),
+      () => lifecycle.activeTransactions.delete(operation),
+    )
+    return operation
+  }
+}
+
 function createCloseOperation({ provider, lifecycle }) {
   return async function close() {
     if (lifecycle.state === "closed") {
@@ -152,6 +173,7 @@ export function createDatabaseEntity({ provider } = {}) {
       provider,
       lifecycle,
     }),
+    execute: createProviderOperation({ provider, lifecycle }),
     readTransaction: createTransactionOperation({
       provider,
       lifecycle,
