@@ -350,12 +350,14 @@ test("allows an otherwise eligible first recovery SELL while STOP blocks new BUY
     stopState,
   })
 
-  assert.equal(stopState.status, "STOPPED")
+  assert.equal(stopState.status, "STOPPED",
+    "The BUY-admission STOP must remain latched while evaluating the eligible recovery SELL.")
   assert.equal(result.decision.outcome, "SUBMIT",
     "An eligible first recovery SELL must remain available while STOP blocks additional BUY spending.")
   assert.equal(result.stopState.status, "STOPPED",
     "The eligible SELL must not clear or weaken the latched STOP.")
-  assert.equal(result.orderIntent.side, "SELL")
+  assert.equal(result.orderIntent.side, "SELL",
+    "The submitted intent must be a recovery SELL, never a new BUY action.")
 })
 
 test("latches STOP when the recovery cycle state is malformed", () => {
