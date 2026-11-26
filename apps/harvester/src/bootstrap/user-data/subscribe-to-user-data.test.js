@@ -113,6 +113,43 @@ test("post-resolution restart accepts only a fresh durable account and clean ope
   assert.equal(state.ready, false, "Observation-only restart must not reopen trading readiness.")
 })
 
+test("post-resolution restart remains blocked when the account PREFLIGHT snapshot is stale", async () => {
+  const state = createState({
+    accountRecoverySnapshotRequired: true,
+    accountRecoverySnapshotWasRequired: true,
+  })
+  const fixture = createFixture({
+    state,
+    getAccountReadinessSnapshot: () => ({
+      preflight: {
+        completed: true,
+        durable: true,
+        sourceTime: 100,
+        balanceCount: 2,
+      },
+      currentAccount: {
+        sourceTime: 99,
+        balanceCount: 2,
+      },
+      openOrders: {
+        preflight: {
+          completed: true,
+          durable: true,
+          phase: "PREFLIGHT",
+          readiness: "READY",
+          blockReasons: [],
+          unownedSymbols: [],
+        },
+      },
+    }),
+  })
+
+  await assert.rejects(fixture.result, /fresh durable account snapshot and a clean account-wide open-order PREFLIGHT audit/)
+  assert.equal(state.accountRecoverySnapshotRequired, true)
+  assert.equal(state.accountRecoverySnapshotVerified, false)
+  assert.equal(state.ready, false)
+})
+
 test("post-resolution restart remains blocked when PREFLIGHT finds an unowned external order", async () => {
   const state = createState({
     accountRecoverySnapshotRequired: true,
