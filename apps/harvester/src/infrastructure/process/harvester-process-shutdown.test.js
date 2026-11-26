@@ -309,7 +309,7 @@ test("retains all shared resources and the process lock when the final EventBus 
       publish: () => ({ ok: true }),
     },
     eventBus: {
-      flush: async () => ({ ok: false }),
+      flush: async () => ({ ok: false, errors: [] }),
     },
     processLock: {
       release: async () => {
@@ -488,6 +488,57 @@ test("retains the process lock when process logger close fails", async () => {
     await handler("SIGTERM")
     assert.equal(process.exitCode, 1)
     assert.deepEqual(calls, ["logger-close"], "A failed logger close must prevent process-lock release.")
+  } finally {
+    process.exitCode = previousExitCode
+  }
+})
+
+test("retains the process lock when release acknowledgement is ambiguous", async () => {
+  const calls = []
+  const previousExitCode = process.exitCode
+  process.exitCode = 0
+  const handler = createRuntimeShutdownHandler({
+    cleanupTimeoutMs: 100,
+    observabilityCleanupTimeoutMs: 100,
+    runtimeStopTimeoutMs: 100,
+    runtime: {
+      stop: async () => ({
+        ok: true,
+        status: "STOPPED",
+      }),
+    },
+    logger: {
+      system: () => {},
+      error: () => {},
+    },
+    eventPublisher: {
+      publish: () => ({ ok: true }),
+    },
+    eventBus: {
+      flush: async () => ({ ok: true }),
+    },
+    processLock: {
+      release: async () => {
+        calls.push("process-lock-release")
+        return {
+          ok: false,
+          errors: [],
+        }
+      },
+    },
+    closeObservability: async () => [],
+    closeLogger: async () => calls.push("logger-close"),
+    logTelegramNotificationSummary: () => {},
+  })
+
+  try {
+    await handler("SIGTERM")
+    assert.equal(process.exitCode, 1, "An ambiguous lock-release acknowledgement must fail shutdown.")
+    assert.deepEqual(
+      calls,
+      ["logger-close", "process-lock-release"],
+      "The lock release must be attempted only after all earlier cleanup succeeds, and an ambiguous result must not be accepted.",
+    )
   } finally {
     process.exitCode = previousExitCode
   }
