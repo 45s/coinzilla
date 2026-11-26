@@ -956,10 +956,30 @@ function createRuntimeScenarioPartialSellResult({
   }
 }
 
+function createRuntimeScenarioEventState({ orderRegistry }) {
+  return {
+    registry: orderRegistry,
+    unrequestedTerminalOrderClientIds: new Set(),
+    reconciledTerminalOrderClientIds: new Set(),
+    completedOrderTransitions: new Set(),
+    shutdownRecoveryReplanSymbols: new Set(),
+    completedRecoverySellSymbols: new Set(),
+    completedRecoverySellOrdersBySymbol: new Map(),
+    replacementIntents: new Set(),
+    deferredEvaluations: new Set(),
+    trailingBuy: new Map(),
+    buyReferenceOverrides: new Map(),
+    lastBuyPrices: new Map(),
+    buyExecutionTotals: new Map(),
+    sellExecutionTotals: new Map(),
+    processedFillsByOrder: new Map(),
+  }
+}
+
 function createRuntimeScenarioMixedSellReconciler({
   runtime,
   orderRegistry,
-  terminalRegistry,
+  state,
   setTerminalAccountingResult,
 }) {
   return async ({ order: reconciledOrder, canonicalFills }) => {
@@ -973,7 +993,7 @@ function createRuntimeScenarioMixedSellReconciler({
     const allocations = canonicalFills.map((canonicalFill) =>
       createMixedSellFillAllocation({
         fill: canonicalFill,
-        orderRegistry: terminalRegistry,
+        orderRegistry: state.registry,
         recoveryQuantity: "2.49",
         legacyQuantity: "0.01",
       }))
@@ -995,19 +1015,12 @@ function createRuntimeScenarioMixedSellReconciler({
   }
 }
 
-function createRuntimeScenarioEventState({ terminalRegistry }) {
-  return {
-    registry: terminalRegistry,
-    processedFillsByOrder: new Map(),
-    reconciledTerminalOrderClientIds: new Set(),
-  }
-}
-
 function createRuntimeScenarioOrderEventWorkflow({
   runtime,
   eventState,
   fill,
   stagedSellFills,
+  pauses,
   reconcileRecoverySellerMixedSell,
 }) {
   return makeOrderEventWorkflow({
@@ -1016,6 +1029,9 @@ function createRuntimeScenarioOrderEventWorkflow({
       getFills: async () => toResult({
         data: [fill],
       }),
+    },
+    pairs: {
+      [runtime.market.symbol]: runtime.pairConfig,
     },
     eventPublisher: {
       publish: () => toResult({
@@ -1027,16 +1043,37 @@ function createRuntimeScenarioOrderEventWorkflow({
     updateTradingAccounting: async () => toResult({
       data: {
         applied: true,
+        duplicate: false,
       },
     }),
     updateRecoverySellerAccounting: async () => toResult({
       data: {
         applied: true,
+        duplicate: false,
       },
     }),
     recordBuyExecutionFill: () => {},
     recordSellExecutionFill: ({ fill: stagedFill }) => stagedSellFills.push(stagedFill),
-    pause: async () => {},
+    pause: async (input) => pauses.push(input),
+    resolveRecoveryManagedCancellation: () => false,
+    cancelAndReconcileRecoverySells: async () => toResult({
+      data: {},
+    }),
+    evaluateLatestTransition: async () => toResult({
+      data: {},
+    }),
+    getReconciledBuyExecutionPrice: () => "2",
+    assertReconciledSellExecution: () => {},
+    completeRecoveryCycle: async () => toResult({
+      data: {
+        eligible: true,
+        freeQuantity: "0",
+        realizedNetProfit: "0",
+      },
+    }),
+    publishRecoveryCycleNotCompleted: () => {},
+    isStopping: () => false,
+    onUnownedExternalOrderObserved: () => {},
     reconcileRecoverySellerMixedSell,
     latchRecoverySellerStop: async (input) => runtime.stopWorkflow.latch(input),
   })
@@ -1080,9 +1117,6 @@ async function reconcileRuntimeScenarioPartialSell({ runtime, execution }) {
     openOrder,
     partialQuantity,
   })
-  const terminalRegistry = orderRegistry.applyUpdate({
-    order: terminalOrder,
-  }).registry
   const fill = createRuntimeScenarioPartialSellFill({
     runtime,
     terminalOrder,
@@ -1090,14 +1124,15 @@ async function reconcileRuntimeScenarioPartialSell({ runtime, execution }) {
     sellPrice: openOrder.limitPrice.amount,
   })
   const stagedSellFills = []
+  const pauses = []
   let terminalAccountingResult
   const eventState = createRuntimeScenarioEventState({
-    terminalRegistry,
+    orderRegistry,
   })
   const reconcileRecoverySellerMixedSell = createRuntimeScenarioMixedSellReconciler({
     runtime,
     orderRegistry,
-    terminalRegistry,
+    state: eventState,
     setTerminalAccountingResult: (result) => {
       terminalAccountingResult = result
     },
@@ -1107,10 +1142,16 @@ async function reconcileRuntimeScenarioPartialSell({ runtime, execution }) {
     eventState,
     fill,
     stagedSellFills,
+    pauses,
     reconcileRecoverySellerMixedSell,
   })
-  const eventResult = await eventWorkflow.reconcileTerminalOrderFills({
-    order: terminalOrder,
+  const eventResult = await eventWorkflow.processUserDataEventTransition({
+    event: {
+      eventType: "executionReport",
+      executionType: "TRADE",
+      executedOrder: terminalOrder,
+      fill,
+    },
   })
   assertRuntimeScenarioPartialSellReconciled({
     eventResult,
