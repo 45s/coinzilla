@@ -472,6 +472,14 @@ function handleProcessStartedFact({ record, sequence, state }) {
   })
 }
 
+function requireKnownOperationalSession({ record, state, context }) {
+  const session = state.sessions.get(record.runtimeSessionId)
+  if (!session) {
+    throw new Error(`${context} is not associated with a known process session`)
+  }
+  return session
+}
+
 function requireActiveOperationalSession({ record, state, context }) {
   const session = state.sessions.get(record.runtimeSessionId)
   if (!session || session.stopped) {
@@ -531,7 +539,7 @@ function handleSafetyBlockerRaisedFact({ record, state }) {
 }
 
 function handleSafetyBlockerResolvedFact({ record, state }) {
-  requireActiveOperationalSession({
+  requireKnownOperationalSession({
     record,
     state,
     context: "Safety-blocker resolution",

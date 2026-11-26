@@ -2,6 +2,7 @@ import assert from "node:assert/strict"
 import { createHash } from "node:crypto"
 import test from "node:test"
 import { resolveUserDataAccountBlockers } from "./resolve-user-data-account-blockers.js"
+import { recordProcessStopped } from "./record-process-stopped.js"
 
 const sessionId = "operator-resolution-test-session"
 const triggerDigest = "a".repeat(64)
@@ -109,6 +110,7 @@ function makeRecords() {
 function makeStore() {
   const records = makeRecords()
   return {
+    runtimeSessionId: sessionId,
     records,
     readAll: async () => ({
       ok: true,
@@ -278,4 +280,76 @@ test("refuses to resolve account blockers without durable producer provenance", 
 
   assert.equal(result.ok, false)
   assert.equal(store.records.length, 6)
+})
+
+
+test("allows durable blocker resolution after a clean process stop", async () => {
+  const store = makeStore()
+  const stopped = await recordProcessStopped({
+    operationalStateStore: store,
+    reason: "OPERATOR_SHUTDOWN",
+    clean: true,
+  })
+  assert.equal(stopped.ok, true)
+
+  const result = await resolveUserDataAccountBlockers(makeResolutionOptions({
+    store,
+    audit: readyAudit(),
+    actionId: "action-unique-008",
+  }))
+
+  assert.equal(result.ok, true, result.errors?.map(({ message }) => message).join("; "))
+  assert.equal(result.data.durableReadbackVerified, true)
+  assert.equal(result.data.readiness, "BLOCKED")
+  assert.equal(store.records.at(-1).factType, "SAFETY_BLOCKER_RESOLVED")
+})
+
+test("fails closed when durable resolution append fails", async () => {
+  const store = makeStore()
+  store.append = async () => ({
+    ok: false,
+    errors: [new Error("append failed")],
+  })
+  const result = await resolveUserDataAccountBlockers(makeResolutionOptions({
+    store,
+    audit: readyAudit(),
+    actionId: "action-append-failure-001",
+  }))
+  assert.equal(result.ok, false, "append failure must leave resolution unconfirmed")
+})
+
+test("fails closed when append does not confirm durable commitment", async () => {
+  const store = makeStore()
+  store.append = async () => ({
+    ok: true,
+    data: { durable: false },
+  })
+  const result = await resolveUserDataAccountBlockers(makeResolutionOptions({
+    store,
+    audit: readyAudit(),
+    actionId: "action-nondurable-append-001",
+  }))
+  assert.equal(result.ok, false, "a non-durable append cannot resolve an ACCOUNT blocker")
+})
+
+test("fails closed when durable resolution readback fails", async () => {
+  const store = makeStore()
+  const originalReadAll = store.readAll
+  let readCount = 0
+  store.readAll = async () => {
+    readCount += 1
+    if (readCount === 3) {
+      return {
+        ok: false,
+        errors: [new Error("readback failed")],
+      }
+    }
+    return originalReadAll()
+  }
+  const result = await resolveUserDataAccountBlockers(makeResolutionOptions({
+    store,
+    audit: readyAudit(),
+    actionId: "action-readback-failure-001",
+  }))
+  assert.equal(result.ok, false, "resolution requires successful durable projection/readback")
 })
