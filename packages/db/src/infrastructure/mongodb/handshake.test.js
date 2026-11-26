@@ -359,3 +359,15 @@ test("MongoDB handshake rejects load-balanced servers even without a URI flag", 
     /load-balanced topology is not supported/i,
   )
 })
+
+
+test("MongoDB URI parser rejects conflicting TLS aliases and empty read preference", () => {
+  assert.throws(
+    () => parseMongoConnectionString("mongodb://localhost/app?tls=true&ssl=false"),
+    /use tls or ssl, not both/i,
+  )
+  assert.throws(
+    () => parseMongoConnectionString("mongodb://localhost/app?readPreference="),
+    /primary read preference only/i,
+  )
+})
