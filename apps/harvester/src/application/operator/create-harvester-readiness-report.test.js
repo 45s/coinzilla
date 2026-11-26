@@ -79,7 +79,9 @@ test("account-scoped safety blockers block globally while non-account blockers r
 })
 
 test("exposes source, expected condition and source-owned freshness thresholds without leaking account identity", () => {
-  const report = createHarvesterReadinessReport(createInputs())
+  const inputs = structuredClone(createInputs())
+  inputs.readinessInputs.broker.identity.accountId = "private-account-123"
+  const report = createHarvesterReadinessReport(inputs)
   const priceCheck = report.markets[0].checks.find(({ id }) => id === "market.price")
   const volatilityCheck = report.markets[0].checks.find(({ id }) => id === "market.volatility")
 

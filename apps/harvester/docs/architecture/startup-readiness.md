@@ -139,3 +139,6 @@ Startup readiness blocks now use a Harvester-owned `SystemCustomError` with a st
 ## Verification correction
 
 The user-data startup assertions now distinguish the stable structured error codes for unsafe initial events and unsafe deferred activation. A status-handler callback cannot reopen the existing readiness gate while the startup audit is pending.
+
+
+The redaction test deliberately supplies a private account identifier and verifies that the projected report never serializes it. Provider identity comparisons still use the full source identity internally; only diagnostic output is sanitized.
