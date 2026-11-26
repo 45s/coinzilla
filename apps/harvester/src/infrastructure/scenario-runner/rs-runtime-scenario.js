@@ -698,9 +698,10 @@ async function reconcileRuntimeScenarioPartialSell({ runtime, execution, effecti
     throw new Error("Partial SELL scenario cannot find its acknowledged canonical SELL order")
   }
   const partialQuantity = "2.5"
+  const sellPrice = openOrder.limitPrice.amount
   const quoteQuantity = multiplyDecimal({
     left: partialQuantity,
-    right: effectiveInput.marketPrice,
+    right: sellPrice,
   })
   const terminalOrder = new CanonicalOrder({
     clientOrderId: openOrder.clientOrderId,
@@ -733,7 +734,7 @@ async function reconcileRuntimeScenarioPartialSell({ runtime, execution, effecti
     market: runtime.market,
     side: "SELL",
     price: new Money({
-      amount: effectiveInput.marketPrice,
+      amount: sellPrice,
       asset: runtime.quoteAsset,
     }),
     quantity: new Quantity({

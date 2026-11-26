@@ -78,7 +78,7 @@ test("internal RS runtime fixture exercises the production SELL dispatch with a 
     },
   })
 
-  assert.equal(result.fixtureId, "rs-runtime-sell-submission")
+  assert.equal(result.scenarioId, "RS-RUNTIME-SELL-SUBMISSION-001")
   assert.equal(result.source, "production-runtime-evaluator")
   assert.equal(result.passed, true)
   assert.equal(result.output.decision.outcome, "SUBMIT")
@@ -92,15 +92,57 @@ test("internal RS runtime fixture exercises the production SELL dispatch with a 
   assert.ok(result.trace.some((step) => step.kind === "assertion"))
 })
 
+test("production RS submitter records a rejected SELL and invokes the STOP workflow", async () => {
+  const result = await executeRecoverySellerRuntimeScenario({
+    runId: "run-rs-runtime-rejected",
+    scenarioId: "RS-RUNTIME-SELL-REJECTION-001",
+    input: {
+      marketPrice: "12.3",
+    },
+  })
+
+  assert.equal(result.passed, true, JSON.stringify(result.assertions))
+  assert.equal(result.output.submissionRejected, true)
+  assert.equal(result.output.submittedOrders.length, 0)
+  assert.equal(result.output.stopFactAppended, true)
+  assert.ok(result.output.reservedSellCycle,
+    "The unresolved rejected SELL must retain its sole-cycle reservation.")
+})
+
+test("production RS accounting reconciles a profitable partial CANCELED SELL without closing its cycle", async () => {
+  const result = await executeRecoverySellerRuntimeScenario({
+    runId: "run-rs-runtime-partial-cancel",
+    scenarioId: "RS-RUNTIME-SELL-PARTIAL-CANCEL-001",
+    input: {
+      marketPrice: "12.3",
+    },
+  })
+
+  assert.equal(result.passed, true, JSON.stringify(result.assertions))
+  assert.equal(result.output.terminalSell.orderStatus, "CANCELED")
+  assert.equal(result.output.terminalSell.executedQuantity, "2.5")
+  assert.equal(result.output.terminalSell.profitabilityEligible, true)
+  assert.equal(result.output.terminalSell.cycleState.status, "UNRESOLVED")
+  assert.equal(result.output.terminalSell.cycleState.terminalReconciled, true)
+  assert.equal(result.output.reservedSellCycle, null)
+  assert.ok(result.output.simulationFacts.some((fact) =>
+    fact.factType === "RECOVERY_SELLER_MIXED_SELL_RECONCILED"))
+})
+
 test("production RS registry exposes the runtime scenario and keeps the helper-only mapping preliminary", () => {
   const catalog = getRecoverySellerRunnerCatalog()
-  assert.deepEqual(catalog.map((scenario) => scenario.id), ["RS-004-011", "RS-RUNTIME-SELL-SUBMISSION-001"])
+  assert.deepEqual(catalog.map((scenario) => scenario.id), [
+    "RS-004-011",
+    "RS-RUNTIME-SELL-SUBMISSION-001",
+    "RS-RUNTIME-SELL-REJECTION-001",
+    "RS-RUNTIME-SELL-PARTIAL-CANCEL-001",
+  ])
   const runtimeScenario = catalog.find((scenario) => scenario.id === "RS-RUNTIME-SELL-SUBMISSION-001")
   assert.equal(runtimeScenario.executable, false)
   assert.equal(runtimeScenario.executionStatus, "PRELIMINARY")
   assert.equal(runtimeScenario.status, "PARTIAL")
   assert.equal(runtimeScenario.layer, "APPLICATION")
-  assert.ok(runtimeScenario.readinessReasons.some((reason) => reason.includes("partial-fill staging")))
+  assert.ok(runtimeScenario.readinessReasons.some((reason) => reason.includes("under-target FILLED SELL STOP")))
   assert.ok(runtimeScenario.readinessReasons.some((reason) => reason.includes("OS-level sandbox")))
   assert.equal(catalog[0].executable, false)
   assert.equal(catalog[0].executionStatus, "PRELIMINARY")
