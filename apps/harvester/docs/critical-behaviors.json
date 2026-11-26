@@ -1170,73 +1170,28 @@
       "sourceModules": [
         "src/infrastructure/operational-state/helpers/validate-operational-state-lifecycle-facts.js",
         "src/infrastructure/operational-state/project-harvester.js",
+        "src/infrastructure/security/local-operator-identity.js",
         "src/use-cases/record-safety-control-facts.js",
         "src/use-cases/resolve-offline-user-data-account-blockers.js",
         "src/use-cases/resolve-user-data-account-blockers.helpers.js",
-        "src/use-cases/resolve-user-data-account-blockers.js",
-        "src/infrastructure/security/local-operator-identity.js"
+        "src/use-cases/resolve-user-data-account-blockers.js"
       ],
       "integrationRequired": false,
       "tests": [
+        {
+          "path": "src/use-cases/record-safety-control-facts.test.js",
+          "name": "persists authenticated operator metadata and accepts an exact action replay",
+          "kind": "normal"
+        },
         {
           "path": "src/use-cases/record-user-data-blocker-producer.test.js",
           "name": "records the user-data producer on newly raised sticky blockers",
           "kind": "normal"
         },
         {
-          "path": "src/use-cases/resolve-user-data-account-blockers.test.js",
-          "name": "durably resolves account blockers after complete account audit and readback",
-          "kind": "normal"
-        },
-        {
-          "path": "src/use-cases/resolve-user-data-account-blockers.test.js",
-          "name": "fails closed for cause-not-fixed and incomplete account audit",
-          "kind": "failure"
-        },
-        {
-          "path": "src/use-cases/resolve-user-data-account-blockers.test.js",
-          "name": "requires exact user-data blocker origin and full blocker set",
-          "kind": "failure"
-        },
-        {
-          "path": "src/use-cases/resolve-user-data-account-blockers.test.js",
-          "name": "requires audited markets to equal configured markets exactly",
-          "kind": "failure"
-        },
-        {
-          "path": "src/use-cases/resolve-user-data-account-blockers.test.js",
-          "name": "refuses to resolve account blockers without durable producer provenance",
-          "kind": "failure"
-        },
-        {
-          "path": "src/use-cases/resolve-user-data-account-blockers.test.js",
-          "name": "allows durable blocker resolution after a clean process stop",
-          "kind": "normal"
-        },
-        {
           "path": "src/use-cases/resolve-offline-user-data-account-blockers.test.js",
-          "name": "parses explicit offline account blocker resolution confirmation",
-          "kind": "normal"
-        },
-        {
-          "path": "src/use-cases/resolve-offline-user-data-account-blockers.test.js",
-          "name": "runs the production offline account/order/fill audit for every configured market",
-          "kind": "normal"
-        },
-        {
-          "path": "src/use-cases/resolve-offline-user-data-account-blockers.test.js",
-          "name": "fails closed if any configured market is not fully reconciled",
+          "name": "authenticates the operator against the current OS account before reading evidence",
           "kind": "failure"
-        },
-        {
-          "path": "src/use-cases/resolve-offline-user-data-account-blockers.test.js",
-          "name": "requires clean process stop before offline resolution",
-          "kind": "failure"
-        },
-        {
-          "path": "src/use-cases/resolve-offline-user-data-account-blockers.test.js",
-          "name": "durably resolves after clean stop and leaves readiness blocked for restart",
-          "kind": "normal"
         },
         {
           "path": "src/use-cases/resolve-offline-user-data-account-blockers.test.js",
@@ -1250,13 +1205,8 @@
         },
         {
           "path": "src/use-cases/resolve-offline-user-data-account-blockers.test.js",
-          "name": "rejects a legacy action ID without replay-safe metadata",
-          "kind": "failure"
-        },
-        {
-          "path": "src/use-cases/resolve-offline-user-data-account-blockers.test.js",
-          "name": "rejects an unclean process stop before running market audits",
-          "kind": "failure"
+          "name": "durably resolves after clean stop and leaves readiness blocked for restart",
+          "kind": "normal"
         },
         {
           "path": "src/use-cases/resolve-offline-user-data-account-blockers.test.js",
@@ -1265,32 +1215,7 @@
         },
         {
           "path": "src/use-cases/resolve-offline-user-data-account-blockers.test.js",
-          "name": "rejects missing configured-market evidence before running any market audit",
-          "kind": "failure"
-        },
-        {
-          "path": "src/use-cases/resolve-offline-user-data-account-blockers.test.js",
-          "name": "rejects mismatched runtime session and configured-market baseline",
-          "kind": "failure"
-        },
-        {
-          "path": "src/use-cases/resolve-offline-user-data-account-blockers.test.js",
-          "name": "rejects ACCOUNT blockers without verified user-data producer provenance",
-          "kind": "failure"
-        },
-        {
-          "path": "src/use-cases/resolve-user-data-account-blockers.test.js",
-          "name": "fails closed when durable resolution append fails",
-          "kind": "failure"
-        },
-        {
-          "path": "src/use-cases/resolve-user-data-account-blockers.test.js",
-          "name": "fails closed when append does not confirm durable commitment",
-          "kind": "failure"
-        },
-        {
-          "path": "src/use-cases/resolve-user-data-account-blockers.test.js",
-          "name": "fails closed when durable resolution readback fails",
+          "name": "fails closed if any configured market is not fully reconciled",
           "kind": "failure"
         },
         {
@@ -1299,23 +1224,13 @@
           "kind": "failure"
         },
         {
-          "path": "src/use-cases/resolve-user-data-account-blockers.test.js",
-          "name": "does not resolve Recovery Seller STOP when a user-data ACCOUNT blocker is present",
-          "kind": "failure"
+          "path": "src/use-cases/resolve-offline-user-data-account-blockers.test.js",
+          "name": "parses explicit offline account blocker resolution confirmation",
+          "kind": "normal"
         },
         {
-          "path": "src/use-cases/resolve-user-data-account-blockers.test.js",
-          "name": "retries a partially appended multi-blocker action and accepts exact duplicate replay",
-          "kind": "failure"
-        },
-        {
-          "path": "src/use-cases/resolve-user-data-account-blockers.test.js",
-          "name": "rejects reuse of an action ID with a different resolution reason",
-          "kind": "failure"
-        },
-        {
-          "path": "src/use-cases/record-safety-control-facts.test.js",
-          "name": "persists authenticated operator metadata and accepts an exact action replay",
+          "path": "src/use-cases/resolve-offline-user-data-account-blockers.test.js",
+          "name": "prints application identity for --version without reading recovery evidence",
           "kind": "normal"
         },
         {
@@ -1325,12 +1240,97 @@
         },
         {
           "path": "src/use-cases/resolve-offline-user-data-account-blockers.test.js",
-          "name": "prints application identity for --version without reading recovery evidence",
-          "kind": "normal"
+          "name": "rejects a legacy action ID without replay-safe metadata",
+          "kind": "failure"
         },
         {
           "path": "src/use-cases/resolve-offline-user-data-account-blockers.test.js",
-          "name": "authenticates the operator against the current OS account before reading evidence",
+          "name": "rejects ACCOUNT blockers without verified user-data producer provenance",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/resolve-offline-user-data-account-blockers.test.js",
+          "name": "rejects an unclean process stop before running market audits",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/resolve-offline-user-data-account-blockers.test.js",
+          "name": "rejects mismatched runtime session and configured-market baseline",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/resolve-offline-user-data-account-blockers.test.js",
+          "name": "rejects missing configured-market evidence before running any market audit",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/resolve-offline-user-data-account-blockers.test.js",
+          "name": "requires clean process stop before offline resolution",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/resolve-offline-user-data-account-blockers.test.js",
+          "name": "runs the production offline account/order/fill audit for every configured market",
+          "kind": "normal"
+        },
+        {
+          "path": "src/use-cases/resolve-user-data-account-blockers.test.js",
+          "name": "allows durable blocker resolution after a clean process stop",
+          "kind": "normal"
+        },
+        {
+          "path": "src/use-cases/resolve-user-data-account-blockers.test.js",
+          "name": "does not resolve Recovery Seller STOP when a user-data ACCOUNT blocker is present",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/resolve-user-data-account-blockers.test.js",
+          "name": "durably resolves account blockers after complete account audit and readback",
+          "kind": "normal"
+        },
+        {
+          "path": "src/use-cases/resolve-user-data-account-blockers.test.js",
+          "name": "fails closed for cause-not-fixed and incomplete account audit",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/resolve-user-data-account-blockers.test.js",
+          "name": "fails closed when append does not confirm durable commitment",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/resolve-user-data-account-blockers.test.js",
+          "name": "fails closed when durable resolution append fails",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/resolve-user-data-account-blockers.test.js",
+          "name": "fails closed when durable resolution readback fails",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/resolve-user-data-account-blockers.test.js",
+          "name": "refuses to resolve account blockers without durable producer provenance",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/resolve-user-data-account-blockers.test.js",
+          "name": "rejects reuse of an action ID with a different resolution reason",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/resolve-user-data-account-blockers.test.js",
+          "name": "requires audited markets to equal configured markets exactly",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/resolve-user-data-account-blockers.test.js",
+          "name": "requires exact user-data blocker origin and full blocker set",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/resolve-user-data-account-blockers.test.js",
+          "name": "retries a partially appended multi-blocker action and accepts exact duplicate replay",
           "kind": "failure"
         }
       ],
