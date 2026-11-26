@@ -738,7 +738,7 @@ transactionSupported: true }
 
 
 function createConformanceMongoServer(store) {
-  function matches(document, filter) {
+  function matches({ document, filter }) {
     const conditions = filter.$and ?? []
     return conditions.every((condition) => {
       const [path, expected] = Object.entries(condition)[0]
@@ -759,18 +759,20 @@ function createConformanceMongoServer(store) {
     return 4
   }
 
-  function compareScalar(left, right) {
+  function compareScalar({ left, right }) {
     const rank = scalarRank(left) - scalarRank(right)
     if (rank !== 0) {return rank}
     if (left === undefined || left === null) {return 0}
     if (typeof left === "number" || typeof left === "string") {
-      return left < right ? -1 : left > right ? 1 : 0
+      if (left < right) { return -1 }
+      if (left > right) { return 1 }
+      return 0
     }
     if (typeof left === "boolean") {return Number(left) - Number(right)}
     return 0
   }
 
-  return async function command(body, sequences = []) {
+  return async function command({ body, sequences = [] }) {
     const collection = body.insert ?? body.find ?? body.aggregate ?? body.findAndModify ?? body.delete
     const records = store.get(collection) ?? new Map()
     store.set(collection, records)
@@ -803,11 +805,12 @@ data: structuredClone(document.data) }] : [],
     }
 
     if (body.aggregate) {
-      let documents = [...records.values()].filter((document) => matches(document, body.pipeline[0].$match))
+      let documents = [...records.values()].filter((document) => matches({ document, filter: body.pipeline[0].$match }))
       const additions = body.pipeline.find((stage) => stage.$addFields)?.$addFields ?? {}
       const sort = body.pipeline.find((stage) => stage.$sort)?.$sort ?? { _id: 1 }
       const sortFields = Object.entries(sort).filter(([key]) => key !== "_id")
-      documents.sort((left, right) => {
+      documents.sort((...items) => {
+        const [left, right] = items
         for (const [sortKey, direction] of sortFields) {
           const expression = additions[sortKey]
           const typeKey = sortKey.includes("SortType")
@@ -819,7 +822,7 @@ data: structuredClone(document.data) }] : [],
           const rightValue = field ? right.data[field] : undefined
           const comparison = typeKey
             ? scalarRank(leftValue) - scalarRank(rightValue)
-            : compareScalar(leftValue, rightValue)
+            : compareScalar({ left: leftValue, right: rightValue })
           if (comparison !== 0) {return comparison * direction}
         }
         return left._id < right._id ? -1 : left._id > right._id ? 1 : 0
@@ -878,7 +881,7 @@ runDatabaseProviderConformanceTests({
         databaseName: "conformance",
         transportFactory: () => ({
           async connect() {},
-          command: ({ body, sequences }) => command(body, sequences),
+          command: ({ body, sequences }) => command({ body, sequences }),
           async close() {},
         }),
         handshake: async () => ({
@@ -903,7 +906,8 @@ test("MongoDB transactions serialize commands and wait for all transaction CRUD 
   const { provider } = createProviderHarness({
     topology: "replicaSet",
     transactionSupported: true,
-    commandHandler: async (body, _callIndex, sequences) => {
+    commandHandler: async (...argumentsList) => {
+      const [body, _callIndex, sequences] = argumentsList
       if (body.insert) {
         activeCommands += 1
         maximumConcurrentCommands = Math.max(maximumConcurrentCommands, activeCommands)
