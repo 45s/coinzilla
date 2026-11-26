@@ -44,6 +44,7 @@ function createScramServer({
   username,
   mechanism = "SCRAM-SHA-256",
   tamperSignature = false,
+  appendInvalidSignatureCharacters = false,
   startResponse = {},
   continueResponse = {},
   serverFirst = null,
@@ -89,7 +90,7 @@ function createScramServer({
           ok: 1,
           conversationId,
           done: true,
-          payload: Buffer.from(`v=${tamperSignature ? "AAAA" : signature}`),
+          payload: Buffer.from(`v=${tamperSignature ? "AAAA" : `${signature}${appendInvalidSignatureCharacters ? "!!!!" : ""}`}`),
           ...continueResponse,
         }
       }
@@ -167,6 +168,21 @@ test("SCRAM rejects server errors, invalid signatures, and malformed nonces", as
   await assert.rejects(
     authenticateMongoScram({
       command: invalidSignature.command,
+      username: "alice",
+      password: "secret",
+      randomBytes: (length) => Buffer.alloc(length, 1),
+    }),
+    /server signature/i,
+  )
+
+  const malformedSignatureEncoding = createScramServer({
+    username: "alice",
+    password: "secret",
+    appendInvalidSignatureCharacters: true,
+  })
+  await assert.rejects(
+    authenticateMongoScram({
+      command: malformedSignatureEncoding.command,
       username: "alice",
       password: "secret",
       randomBytes: (length) => Buffer.alloc(length, 1),
