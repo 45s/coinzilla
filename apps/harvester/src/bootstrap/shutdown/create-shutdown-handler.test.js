@@ -176,7 +176,19 @@ async function assertClosingAuditTimeout({
   getAuditCalls,
   stopPromise,
 } = {}) {
-  await auditStarted
+  let auditStartTimeout
+  const auditDidStart = await Promise.race([
+    auditStarted.then(() => true),
+    new Promise((resolve) => {
+      auditStartTimeout = setTimeout(() => resolve(false), 100)
+    }),
+  ])
+  clearTimeout(auditStartTimeout)
+  assert.equal(
+    auditDidStart,
+    true,
+    `CLOSING audit must start after strategy safety; observed shutdown calls: ${calls.join(" -> ")}; state: ${fixture.state.status}`,
+  )
   assert.equal(typeof getClosingAuditDeadline(), "function")
   assert.equal(getClosingAuditTimeoutMs(), 25)
   getClosingAuditDeadline()
@@ -229,6 +241,7 @@ test("bounds a pending CLOSING audit phase and retains shared services", async (
       markAuditStarted()
       return pendingAudit
     },
+    logger: { system: (entry) => calls.push(`${entry.shutdownPhase}:${entry.phaseStatus}`) },
     phaseTimeoutMs: 25,
     setTimeoutFn: ({ callback, timeoutMs, phase }) => {
       if (phase === "CLOSING_AUDIT") {
