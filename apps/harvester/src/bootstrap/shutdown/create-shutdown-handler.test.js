@@ -299,7 +299,7 @@ test("bounds a pending CLOSING audit phase and retains shared services", async (
       fixture,
       calls,
       auditStarted,
-      diagnostic: testContext.diagnostic,
+      diagnostic: (message) => testContext.diagnostic(message),
       getClosingAuditDeadline: timeoutFixture.getClosingAuditDeadline,
       getClosingAuditTimeoutMs: timeoutFixture.getClosingAuditTimeoutMs,
       getAuditCalls: timeoutFixture.getAuditCalls,
