@@ -59,6 +59,12 @@ function awaitWithShutdownSignal(operation, signal) {
     .finally(() => signal.removeEventListener("abort", abortHandler))
 }
 
+function getAbortStageStatus(signal) {
+  return signal?.reason?.code === "STRATEGY_SHUTDOWN_PARTICIPANT_TIMEOUT"
+    ? "TIMED_OUT"
+    : "ABORTED"
+}
+
 function throwIfShutdownAborted(signal) {
   if (!signal?.aborted) {
     return
@@ -162,7 +168,7 @@ async function runStage({ stage, operation, signal, symbol = "*", stageDiagnosti
       stageDiagnostics,
       symbol,
       stage,
-      status: signal?.aborted ? "ABORTED" : "FAILED",
+      status: signal?.aborted ? getAbortStageStatus(signal) : "FAILED",
       error: signal?.reason ?? error,
     })
     if (signal?.aborted) {
@@ -564,7 +570,7 @@ async function assessMarketSafety({
   try {
     throwIfShutdownAborted(signal)
   } catch (error) {
-    updateStageDiagnostics({ stageDiagnostics, symbol, stage, status: "ABORTED", error })
+    updateStageDiagnostics({ stageDiagnostics, symbol, stage, status: getAbortStageStatus(signal), error })
     throw error
   }
   blockers.push(...getExternalBlockers({ getShutdownBlockers,
