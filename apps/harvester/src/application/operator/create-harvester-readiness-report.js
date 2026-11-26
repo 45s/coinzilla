@@ -532,9 +532,11 @@ function getUserDataSafetyFacts({ runtime, inputs } = {}) {
   const evidenceAvailable = Boolean(inputs.userData)
   const userDataStatus = userData.status ?? runtimeUserData.status ?? "UNKNOWN"
   const normalizedStatus = normalizeUserDataStatus(userDataStatus)
-  const reconciliationRequired = userData.requiresReconciliation === true ||
+  const reconciliationRequired = userData.preflightComplete !== true && (
+    userData.requiresReconciliation === true ||
     runtimeUserData.requiresReconciliation === true ||
     userDataStatus === "AUTHORITATIVE_RECONCILIATION_REQUIRED"
+  )
   const unsafe = userData.accountingFailed === true ||
     runtimeUserData.accountingFailed === true ||
     userData.streamUnsafe === true ||
