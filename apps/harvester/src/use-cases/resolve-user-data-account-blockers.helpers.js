@@ -40,12 +40,17 @@ export function validateAccountResolutionInput({
   }
 }
 
-function validateAuditStatus(audit) {
+function validateAuditSource(audit) {
   if (audit?.status !== "READY" ||
       audit?.scope !== "ACCOUNT" ||
       audit?.source !== "AUTHORITATIVE_ACCOUNT_RECONCILIATION" ||
-      audit?.allConfiguredMarketsAudited !== true ||
-      audit?.openOrdersReconciled !== true ||
+      audit?.allConfiguredMarketsAudited !== true) {
+    throw new Error("Account-wide reconciliation source or scope is invalid")
+  }
+}
+
+function validateAuditConsistency(audit) {
+  if (audit?.openOrdersReconciled !== true ||
       audit?.fillsReconciled !== true ||
       audit?.balancesReconciled !== true ||
       audit?.accountingConsistent !== true ||
@@ -53,11 +58,16 @@ function validateAuditStatus(audit) {
       audit?.unresolvedOwnedFills !== 0 ||
       audit?.unresolvedExternalOrders !== 0 ||
       audit?.balanceDiscrepancies !== 0) {
-    throw new Error("Account-wide reconciliation did not prove complete zero-discrepancy readiness")
+    throw new Error("Account-wide reconciliation did not prove zero discrepancies")
   }
 }
 
-function validateAuditMarkets(audit, configuredMarkets) {
+function validateAuditStatus(audit) {
+  validateAuditSource(audit)
+  validateAuditConsistency(audit)
+}
+
+function validateAuditMarkets({ audit, configuredMarkets }) {
   const validMarket = (symbol) => isText(symbol) && /^[A-Z0-9]{3,30}$/.test(symbol)
   if (!Array.isArray(audit.auditedMarkets) ||
       audit.auditedMarkets.some((symbol) => !validMarket(symbol)) ||
@@ -67,7 +77,7 @@ function validateAuditMarkets(audit, configuredMarkets) {
   }
 }
 
-function validateAuditBlockers(audit, blockerIds) {
+function validateAuditBlockers({ audit, blockerIds }) {
   const origins = audit.blockerOrigins
   if (!Array.isArray(audit.blockerIds) ||
       [...audit.blockerIds].sort().join("|") !== [...blockerIds].sort().join("|") ||
@@ -82,8 +92,8 @@ function validateAuditBlockers(audit, blockerIds) {
 
 export function validateAccountResolutionAudit({ audit, blockerIds, configuredMarkets }) {
   validateAuditStatus(audit)
-  validateAuditMarkets(audit, configuredMarkets)
-  validateAuditBlockers(audit, blockerIds)
+  validateAuditMarkets({ audit, configuredMarkets })
+  validateAuditBlockers({ audit, blockerIds })
   if (!isText(audit.reconciliationId) ||
       !isText(audit.capturedAt) ||
       !Number.isFinite(Date.parse(audit.capturedAt))) {
@@ -102,7 +112,10 @@ export async function readVerifiedAccountResolutionProjection(store) {
   if (projection?.ok !== true) {
     throw projection?.errors?.[0] ?? new Error("Operational State projection failed")
   }
-  return { records: result.data.records, projection: projection.data }
+  return {
+    records: result.data.records,
+    projection: projection.data,
+  }
 }
 
 export function getActiveAccountResolutionBlockers(projection) {
