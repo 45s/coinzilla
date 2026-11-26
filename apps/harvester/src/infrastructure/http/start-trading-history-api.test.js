@@ -165,3 +165,43 @@ test("preserves the HTTP startup error without closing Harvester's shared databa
   assert.equal(database.closeCalls, 0, "A failed optional API startup must not close Harvester's database.")
   await eventBus.close()
 })
+
+
+test("records the exact build revision on Scenario Runner records", async () => {
+  const database = createDatabase()
+  const eventBus = new EventBus()
+  let serverInput
+  const sourceRevision = "b".repeat(40)
+  const service = await startTradingHistoryApi({
+    database,
+    eventBus,
+    env: {
+      TRADING_MODE: "testnet",
+      COINZILLA_SOURCE_REVISION: sourceRevision,
+    },
+    logger: {
+      info() {},
+    },
+    startServer: async (input) => {
+      serverInput = input
+      return {
+        address: {
+          address: "127.0.0.1",
+          port: 4201,
+        },
+        close: async () => {},
+      }
+    },
+  })
+
+  const blocked = serverInput.scenarioRunner.submit({
+    strategyId: "RS",
+    scenarioId: "not-registered",
+    input: {},
+  })
+
+  assert.equal(blocked.sourceRevision, sourceRevision,
+    "The API composition root must stamp every run with the exact source revision supplied by the deployment.")
+  await service.close()
+  await eventBus.close()
+})
