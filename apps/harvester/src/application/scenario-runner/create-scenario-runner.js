@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto"
 import { redactScenarioEvidence } from "./redact-scenario-evidence.js"
 import {
   SCENARIO_RUN_STATUS,
@@ -5,6 +6,79 @@ import {
 } from "../../domain/scenario-runner/run-status.js"
 
 const TERMINAL = new Set(TERMINAL_SCENARIO_RUN_STATUSES)
+
+function createJsonDigest(value) {
+  return createHash("sha256").update(JSON.stringify(value)).digest("hex")
+}
+
+function createScenarioIdentity({ strategyId, scenarioId }) {
+  return `${strategyId}/${scenarioId}`
+}
+
+function normalizeReplayProvenance({ replayProvenance, sourceRevision }) {
+  const identity = replayProvenance?.identity ?? {}
+  const missing = new Set(replayProvenance?.missing ?? [])
+  const requiredHashes = [
+    ["sourceCommitSha", /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/i],
+    ["sourceTreeSha", /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/i],
+    ["dependencyLockSha256", /^[a-f0-9]{64}$/i],
+    ["buildArtifactSha256", /^[a-f0-9]{64}$/i],
+    ["scenarioRegistrySha256", /^[a-f0-9]{64}$/i],
+  ]
+  for (const [field, pattern] of requiredHashes) {
+    if (typeof identity[field] !== "string" || !pattern.test(identity[field])) {
+      missing.add(`verified ${field} is unavailable`)
+    }
+  }
+  if (typeof identity.runtimeIdentity !== "string" || !identity.runtimeIdentity.trim()) {
+    missing.add("runtime identity is unavailable")
+  }
+  if (replayProvenance?.verified !== true) {
+    missing.add("trusted replay provenance verification is unavailable")
+  }
+  if (sourceRevision && identity.sourceCommitSha !== sourceRevision) {
+    missing.add("active source commit does not match the recorded source revision")
+  }
+  return {
+    verified: missing.size === 0,
+    missing: [...missing],
+    identity: {
+      sourceCommitSha: identity.sourceCommitSha ?? null,
+      sourceTreeSha: identity.sourceTreeSha ?? null,
+      dependencyLockSha256: identity.dependencyLockSha256 ?? null,
+      buildArtifactSha256: identity.buildArtifactSha256 ?? null,
+      runtimeIdentity: identity.runtimeIdentity ?? null,
+      scenarioRegistrySha256: identity.scenarioRegistrySha256 ?? null,
+    },
+  }
+}
+
+function createReplayBlockDiagnostic({ original, context }) {
+  const missing = []
+  if (original.replayProvenance?.verified !== true) {
+    missing.push(...(original.replayProvenance?.missing ?? ["original run provenance is unavailable"]))
+  }
+  if (context.replayProvenance?.verified !== true) {
+    missing.push(...(context.replayProvenance?.missing ?? ["active runtime provenance is unavailable"]))
+  }
+  if (JSON.stringify(original.replayProvenance?.identity) !==
+      JSON.stringify(context.replayProvenance?.identity)) {
+    missing.push("active source/build/runtime/registry provenance differs from the original run")
+  }
+  const originalInput = original.replayInput ?? original.input
+  if (!original.inputSha256 || createJsonDigest(originalInput) !== original.inputSha256) {
+    missing.push("original scenario input identity cannot be verified")
+  }
+  if (original.scenarioIdentity !== createScenarioIdentity({
+    strategyId: original.strategyId,
+    scenarioId: original.scenarioId,
+  })) {
+    missing.push("original strategy/scenario identity cannot be verified")
+  }
+  return missing.length
+    ? `Exact replay is blocked because provenance is incomplete or mismatched: ${[...new Set(missing)].join("; ")}.`
+    : null
+}
 
 function deepFreeze({ value }) {
   if (value && typeof value === "object" && !Object.isFrozen(value)) {
@@ -75,12 +149,16 @@ function createBlockedRecord({
   sourceRevision = null,
   replayOfRunId = null,
   input = null,
+  replayProvenance = null,
 }) {
   const timestamp = now()
   return {
     runId,
     strategyId,
     scenarioId,
+    scenarioIdentity: createScenarioIdentity({ strategyId, scenarioId }),
+    inputSha256: input === null ? null : createJsonDigest(input),
+    replayProvenance: replayProvenance === null ? null : structuredClone(replayProvenance),
     sourceRevision,
     replayOfRunId,
     status: SCENARIO_RUN_STATUS.BLOCKED,
@@ -106,12 +184,16 @@ function createRecord({
   now,
   sourceRevision,
   replayOfRunId = null,
+  replayProvenance,
 }) {
   const timestamp = now()
   const record = {
     runId,
     strategyId,
     scenarioId,
+    scenarioIdentity: createScenarioIdentity({ strategyId, scenarioId }),
+    inputSha256: input === null ? null : createJsonDigest(input),
+    replayProvenance: structuredClone(replayProvenance),
     sourceRevision,
     replayOfRunId,
     status: SCENARIO_RUN_STATUS.ACCEPTED,
@@ -131,6 +213,11 @@ function createRecord({
     value: input === null ? null : structuredClone(input),
     configurable: true,
     writable: true,
+  })
+  Object.defineProperty(record, "replayInput", {
+    value: input === null ? null : structuredClone(input),
+    configurable: false,
+    writable: false,
   })
   return record
 }
@@ -498,6 +585,7 @@ function registerUnsupportedRun({
     sourceRevision: context.sourceRevision,
     replayOfRunId,
     input,
+    replayProvenance: context.replayProvenance,
   })
   context.records.set(runId, record)
   notify({
@@ -591,6 +679,7 @@ function createAcceptedRun({ context, runId, strategyId, scenarioId, input, repl
     now: context.now,
     sourceRevision: context.sourceRevision,
     replayOfRunId,
+    replayProvenance: context.replayProvenance,
   })
   context.records.set(runId, record)
   notify({
@@ -654,6 +743,7 @@ function submitRun({ context, submission, replayOfRunId = null }) {
     scenarioId,
     input,
     replayOfRunId,
+    replayProvenance: context.replayProvenance,
   })
   return scheduleAcceptedRun({
     context,
@@ -718,13 +808,24 @@ function replayRun({ context, runId }) {
       diagnostic: "Exact replay is blocked because the original source revision does not match the active runtime revision.",
     })
   }
+  const provenanceDiagnostic = createReplayBlockDiagnostic({
+    original,
+    context,
+  })
+  if (provenanceDiagnostic) {
+    return createBlockedReplay({
+      context,
+      original,
+      diagnostic: provenanceDiagnostic,
+    })
+  }
   return submitRun({
     context,
     replayOfRunId: original.runId,
     submission: {
       strategyId: original.strategyId,
       scenarioId: original.scenarioId,
-      input: structuredClone(original.input),
+      input: structuredClone(original.replayInput),
     },
   })
 }
@@ -891,6 +992,7 @@ function createRunnerContext({
   validateScenarioInput,
   onUpdate,
   sourceRevision,
+  replayProvenance,
 }) {
   validateRunnerConfiguration({
     adapters,
@@ -904,6 +1006,7 @@ function createRunnerContext({
   return {
     adapters: createAdapterMap({ adapters }),
     sourceRevision,
+    replayProvenance: normalizeReplayProvenance({ replayProvenance, sourceRevision }),
     canExecuteScenario,
     validateScenarioInput,
     records: new Map(),
@@ -976,6 +1079,7 @@ export function createScenarioRunner(options = {}) {
     }),
     onUpdate,
     sourceRevision,
+    replayProvenance,
   } = options
   const context = createRunnerContext({
     adapters,
@@ -988,7 +1092,10 @@ export function createScenarioRunner(options = {}) {
     canExecuteScenario,
     validateScenarioInput,
     onUpdate,
-    sourceRevision: normalizeSourceRevision({ sourceRevision }),
+    sourceRevision: normalizeSourceRevision({
+      sourceRevision: sourceRevision ?? replayProvenance?.identity?.sourceCommitSha,
+    }),
+    replayProvenance,
   })
   return createScenarioRunnerApi({ context })
 }

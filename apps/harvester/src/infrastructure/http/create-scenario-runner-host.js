@@ -1,9 +1,81 @@
+import { createHash } from "node:crypto"
+import { execFileSync } from "node:child_process"
+import { readFileSync } from "node:fs"
+import { resolve } from "node:path"
+import { fileURLToPath } from "node:url"
 import { createScenarioRunner } from "../../application/scenario-runner/create-scenario-runner.js"
 import {
   isValidScenarioInputSchema,
   validateScenarioInput,
 } from "../../application/scenario-runner/validate-scenario-input.js"
 import { getRecoverySellerRunnerCatalog } from "../scenario-runner/rs-scenario-adapter.js"
+
+const REPOSITORY_ROOT = fileURLToPath(new URL("../../../../..", import.meta.url))
+
+function createScenarioReplayProvenance({ sourceRevision, strategyRegistrations, buildProvenanceVerifier, buildProvenance }) {
+  const missing = []
+  const identity = {}
+  let repositoryHead
+  try {
+    repositoryHead = execFileSync("git", ["rev-parse", "HEAD"], {
+      cwd: REPOSITORY_ROOT,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim()
+    identity.sourceTreeSha = execFileSync("git", ["rev-parse", "HEAD^{tree}"], {
+      cwd: REPOSITORY_ROOT,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim()
+    const status = execFileSync("git", ["status", "--porcelain"], {
+      cwd: REPOSITORY_ROOT,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim()
+    if (status) {
+      missing.push("source checkout is not clean")
+    }
+  } catch {
+    missing.push("immutable Git commit/tree and clean-checkout provenance are unavailable")
+  }
+  const expectedRevision = sourceRevision ?? process.env.COINZILLA_SOURCE_REVISION ?? repositoryHead
+  if (!expectedRevision || !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/i.test(expectedRevision)) {
+    missing.push("full immutable source commit SHA is unavailable")
+  } else if (repositoryHead && expectedRevision.toLowerCase() !== repositoryHead.toLowerCase()) {
+    missing.push("supplied source revision does not match the checked-out commit")
+  }
+  identity.sourceCommitSha = repositoryHead ?? expectedRevision ?? null
+  try {
+    identity.dependencyLockSha256 = createHash("sha256")
+      .update(readFileSync(resolve(REPOSITORY_ROOT, "pnpm-lock.yaml")))
+      .digest("hex")
+  } catch {
+    missing.push("dependency lockfile provenance is unavailable")
+  }
+  identity.runtimeIdentity = `${process.version}|${process.platform}|${process.arch}`
+  identity.scenarioRegistrySha256 = createHash("sha256")
+    .update(JSON.stringify(strategyRegistrations))
+    .digest("hex")
+  let buildVerified = false
+  try {
+    buildVerified = typeof buildProvenanceVerifier === "function" &&
+      buildProvenanceVerifier(buildProvenance) === true &&
+      typeof buildProvenance?.artifactSha256 === "string" &&
+      /^[a-f0-9]{64}$/i.test(buildProvenance.artifactSha256)
+  } catch {
+    buildVerified = false
+  }
+  if (buildVerified) {
+    identity.buildArtifactSha256 = buildProvenance.artifactSha256.toLowerCase()
+  } else {
+    missing.push("verified build artifact provenance is unavailable")
+  }
+  return {
+    verified: missing.length === 0,
+    missing,
+    identity,
+  }
+}
 
 function publishScenarioRunUpdate({ eventBus, run }) {
   try {
@@ -209,6 +281,8 @@ export function createScenarioRunnerHost({
   scenarioCatalog = getRecoverySellerRunnerCatalog(),
   strategyRegistrations,
   sourceRevision = null,
+  buildProvenance,
+  buildProvenanceVerifier,
 } = {}) {
   if (!Array.isArray(adapters)) {
     throw new TypeError("Scenario Runner host adapters must be an array")
@@ -223,9 +297,16 @@ export function createScenarioRunnerHost({
     adapters: registeredAdapters,
     strategyRegistrations: resolvedRegistrations,
   })
+  const replayProvenance = createScenarioReplayProvenance({
+    sourceRevision,
+    strategyRegistrations: resolvedRegistrations,
+    buildProvenance,
+    buildProvenanceVerifier,
+  })
   const runner = createScenarioRunner({
     adapters: registeredAdapters,
-    sourceRevision,
+    sourceRevision: replayProvenance.identity.sourceCommitSha,
+    replayProvenance,
     canExecuteScenario: ({ strategyId, scenarioId }) => catalog.some((strategy) =>
       strategy.strategyId === strategyId &&
       strategy.scenarios.some((scenario) =>
