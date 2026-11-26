@@ -1197,6 +1197,11 @@
           "path": "src/use-cases/resolve-user-data-account-blockers.test.js",
           "name": "requires audited markets to equal configured markets exactly",
           "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/resolve-user-data-account-blockers.test.js",
+          "name": "refuses to resolve account blockers without durable producer provenance",
+          "kind": "failure"
         }
       ],
       "runtimeStatus": "offline-only",
