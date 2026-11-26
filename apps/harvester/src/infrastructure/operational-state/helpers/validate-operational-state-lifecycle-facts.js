@@ -143,24 +143,75 @@ export function validateSafetyBlockerRaisedFact({ factType, canonicalData, factI
 }
 
 export function validateSafetyBlockerResolvedFact({ factType, canonicalData, factId }) {
-  if (factType === "SAFETY_BLOCKER_RESOLVED") {
-    const allowedFields = new Set(["blockerId", "resolvedBy", "resolution", "evidenceDigest"])
-    if (Object.keys(canonicalData).some((key) => !allowedFields.has(key))) {
-      throw new TypeError("Safety-blocker resolution contains unsupported fields")
+  if (factType !== "SAFETY_BLOCKER_RESOLVED") {
+    return
+  }
+  const allowedFields = new Set([
+    "blockerId",
+    "resolvedBy",
+    "resolution",
+    "evidenceDigest",
+    "operatorId",
+    "operatorAuthMethod",
+    "actionId",
+    "resolutionReason",
+    "actionBlockerIds",
+  ])
+  if (Object.keys(canonicalData).some((key) => !allowedFields.has(key))) {
+    throw new TypeError("Safety-blocker resolution contains unsupported fields")
+  }
+  if (typeof canonicalData.blockerId !== "string" ||
+      !SHA256_PATTERN.test(canonicalData.blockerId) ||
+      factId !== `safety-blocker-resolved:${canonicalData.blockerId}`) {
+    throw new TypeError("Safety-blocker resolution factId must match its blocker identity")
+  }
+  requireNonEmptyString({
+    value: canonicalData.resolvedBy,
+    field: "data.resolvedBy",
+    maxLength: MAX_FACT_ID_LENGTH,
+  })
+  if (!["AUTHORITATIVE_RECONCILIATION", "OPERATOR_ACTION"].includes(canonicalData.resolution)) {
+    throw new TypeError("Safety-blocker resolution must identify authoritative reconciliation or operator action")
+  }
+  if (typeof canonicalData.evidenceDigest !== "string" || !SHA256_PATTERN.test(canonicalData.evidenceDigest)) {
+    throw new TypeError("Safety-blocker resolution evidenceDigest must be a SHA-256 digest")
+  }
+  const operatorFields = [
+    canonicalData.operatorId,
+    canonicalData.operatorAuthMethod,
+    canonicalData.actionId,
+    canonicalData.resolutionReason,
+    canonicalData.actionBlockerIds,
+  ]
+  if (canonicalData.resolution === "AUTHORITATIVE_RECONCILIATION") {
+    if (!canonicalData.resolvedBy.startsWith("reconciliation:") ||
+        operatorFields.some((value) => value !== undefined)) {
+      throw new TypeError("Authoritative reconciliation facts must not contain operator-action metadata")
     }
-    if (typeof canonicalData.blockerId !== "string" || !SHA256_PATTERN.test(canonicalData.blockerId) ||
-        factId !== `safety-blocker-resolved:${  canonicalData.blockerId}`) {
-      throw new TypeError("Safety-blocker resolution factId must match its blocker identity")
-    }
-    requireNonEmptyString({ value: canonicalData.resolvedBy,
-field: "data.resolvedBy",
-maxLength: MAX_FACT_ID_LENGTH })
-    if (!["AUTHORITATIVE_RECONCILIATION", "OPERATOR_ACTION"].includes(canonicalData.resolution)) {
-      throw new TypeError("Safety-blocker resolution must identify authoritative reconciliation or operator action")
-    }
-    if (typeof canonicalData.evidenceDigest !== "string" || !SHA256_PATTERN.test(canonicalData.evidenceDigest)) {
-      throw new TypeError("Safety-blocker resolution evidenceDigest must be a SHA-256 digest")
-    }
+    return
+  }
+  const expectedResolvedBy = `operator:${canonicalData.operatorId}:${canonicalData.actionId}`
+  if (typeof canonicalData.operatorId !== "string" ||
+      !/^[A-Za-z0-9][A-Za-z0-9._@-]{2,127}$/.test(canonicalData.operatorId) ||
+      canonicalData.operatorAuthMethod !== "OS_ACCOUNT" ||
+      typeof canonicalData.actionId !== "string" ||
+      !/^[A-Za-z0-9][A-Za-z0-9._:@-]{7,127}$/.test(canonicalData.actionId) ||
+      typeof canonicalData.resolutionReason !== "string" ||
+      canonicalData.resolutionReason.trim() !== canonicalData.resolutionReason ||
+      canonicalData.resolutionReason.length < 8 ||
+      canonicalData.resolutionReason.length > 512 ||
+      /[\\u0000-\\u001F\\u007F]/.test(canonicalData.resolutionReason) ||
+      canonicalData.resolvedBy !== expectedResolvedBy ||
+      !Array.isArray(canonicalData.actionBlockerIds) ||
+      canonicalData.actionBlockerIds.length === 0 ||
+      canonicalData.actionBlockerIds.length > 64 ||
+      canonicalData.actionBlockerIds.some((blockerId) =>
+        typeof blockerId !== "string" || !SHA256_PATTERN.test(blockerId)
+      ) ||
+      new Set(canonicalData.actionBlockerIds).size !== canonicalData.actionBlockerIds.length ||
+      canonicalData.actionBlockerIds.join("\\0") !== [...canonicalData.actionBlockerIds].sort().join("\\0") ||
+      !canonicalData.actionBlockerIds.includes(canonicalData.blockerId)) {
+    throw new TypeError("Operator-action resolution requires canonical identity, action, reason, and blocker-set metadata")
   }
 }
 
