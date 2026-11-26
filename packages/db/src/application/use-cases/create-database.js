@@ -206,7 +206,15 @@ export function createDatabase(options = {}) {
   })
 
   if (!hasProvider) {
-    return database
+    return Object.freeze({
+      connect: database.connect,
+      transaction: database.transaction,
+      readTransaction: database.readTransaction,
+      close: database.close,
+      get state() {
+        return database.state
+      },
+    })
   }
 
   return createProviderNeutralFacade({
