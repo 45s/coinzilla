@@ -456,12 +456,17 @@ function createConformanceMongoServer(store) {
         for (const [sortKey, direction] of sortFields) {
           const expression = additions[sortKey]
           const fieldPath = expression?.$ifNull?.[0]
-          const [field, property] = typeof fieldPath === "string"
-            ? fieldPath.slice("$sortData.".length).split(".")
+          const [root, field, property] = typeof fieldPath === "string"
+            ? fieldPath.slice(1).split(".")
             : []
           const fallback = expression?.$ifNull?.[1]
-          const leftValue = field ? left.sortData[field]?.[property] ?? fallback : undefined
-          const rightValue = field ? right.sortData[field]?.[property] ?? fallback : undefined
+          const readSortValue = (document) => {
+            if (root === "sortData") return document.sortData[field]?.[property] ?? fallback
+            if (root === "data") return document.data[field] ?? fallback
+            return undefined
+          }
+          const leftValue = readSortValue(left)
+          const rightValue = readSortValue(right)
           const comparison = compareScalar(leftValue, rightValue)
           if (comparison !== 0) return comparison * direction
         }
