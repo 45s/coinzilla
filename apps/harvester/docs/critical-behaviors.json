@@ -1159,6 +1159,21 @@
           "path": "src/use-cases/create-recovery-seller-stop-workflow.test.js",
           "name": "does not restore Recovery Seller STOP from a user-data blocker with the same reason",
           "kind": "failure"
+        },
+        {
+          "path": "src/bootstrap/start-harvester.test.js",
+          "name": "allows only an observation-only restart after account resolution and verifies a fresh durable PREFLIGHT snapshot pair",
+          "kind": "integration"
+        },
+        {
+          "path": "src/bootstrap/user-data/subscribe-to-user-data.test.js",
+          "name": "post-resolution restart accepts only a fresh durable account and clean open-order PREFLIGHT pair",
+          "kind": "normal"
+        },
+        {
+          "path": "src/bootstrap/user-data/subscribe-to-user-data.test.js",
+          "name": "post-resolution restart remains blocked when PREFLIGHT finds an unowned external order",
+          "kind": "failure"
         }
       ],
       "runtimeStatus": "active",
@@ -1167,7 +1182,8 @@
         "The final admission gate reads current blocker state on every check; a runtime STOP closes admission before its durable append is awaited and remains closed on persistence failure.",
         "A restored account blocker prevents trading readiness/activation; explicit durable resolution is required before admission can reopen.",
         "Market-scoped ownership and strategy pauses remain scoped to the affected symbol; ADR-0008's Recovery Seller SELL exception never bypasses an account blocker.",
-        "External open orders are never adopted or cancelled by this gate; IGNORE and BLOCK retain their ADR-0004 per-market semantics."
+        "External open orders are never adopted or cancelled by this gate; IGNORE and BLOCK retain their ADR-0004 per-market semantics.",
+        "After user-data ACCOUNT resolution, restart remains observation-only and requires a fresh durable account PREFLIGHT snapshot plus a clean account-wide open-order PREFLIGHT audit; this verification never reopens trading or clears Recovery Seller STOP."
       ]
     },
     {
