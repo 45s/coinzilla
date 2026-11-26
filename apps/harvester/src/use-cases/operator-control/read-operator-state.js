@@ -178,14 +178,21 @@ async function readOperatorSnapshot({ engine, getRuntimeSnapshot, actor, operati
   }
 }
 
+function getOperatorReadinessState(status) {
+  if (status === "HEALTHY") {
+    return "READY"
+  }
+  if (status === "OBSERVATION_ONLY") {
+    return "TRADING_DISABLED"
+  }
+  if (status === "DEGRADED") {
+    return "DEGRADED"
+  }
+  return "BLOCKED"
+}
+
 function createOperatorStatus({ runtime, markets, readinessReport }) {
-  const state = readinessReport.status === "HEALTHY"
-    ? "READY"
-    : readinessReport.status === "OBSERVATION_ONLY"
-      ? "TRADING_DISABLED"
-      : readinessReport.status === "DEGRADED"
-        ? "DEGRADED"
-        : "BLOCKED"
+  const state = getOperatorReadinessState(readinessReport.status)
   return toResult({
     data: Object.freeze({
       observedAt: runtime.observedAt,

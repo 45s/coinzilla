@@ -1,6 +1,6 @@
 import { isMarketDataFresh, MARKET_DATA_MAX_AGE_MS } from "../domain/market/is-market-data-fresh.js"
 import { BROKER_PORT_METHODS } from "../application/ports/broker.port.js"
-import { defaultLogger, toResult } from "@coinzilla/utils"
+import { defaultLogger, SystemCustomError, toResult } from "@coinzilla/utils"
 import { StrategyId } from "../domain/strategies/strategy-ids.js"
 import { createStrategyLogger } from "../application/logging/create-strategy-logger.js"
 import { createHarvesterReadinessReport } from "../application/operator/create-harvester-readiness-report.js"
@@ -1189,26 +1189,37 @@ async function synchronizeStartupExchangeHistory({ startup, portfolio, resources
 }
 
 function logHarvesterReadinessCheck({ logger, check, symbol } = {}) {
-  const label = check.status === "PASS"
-    ? "PASS"
-    : check.status === "WARNING"
-      ? "WARN"
-      : check.status === "NOT_APPLICABLE"
-        ? "SKIP"
-        : "FAIL"
-  const writer = label === "FAIL"
-    ? logger.error
-    : label === "WARN"
-      ? logger.warn
-      : logger.system ?? logger.info
+  let label = "FAIL"
+  if (check.status === "PASS") {
+    label = "PASS"
+  } else if (check.status === "WARNING") {
+    label = "WARN"
+  } else if (check.status === "NOT_APPLICABLE") {
+    label = "SKIP"
+  }
+  let writer = logger.error
+  if (label === "WARN") {
+    writer = logger.warn
+  } else if (label !== "FAIL") {
+    writer = logger.system ?? logger.info
+  }
+  const subject = symbol ? `${symbol} ` : ""
   writer?.call(logger, {
-    message: `[HEALTH] [${label}] ${symbol ? `${symbol} ` : ""}${check.id}`,
+    message: `[HEALTH] [${label}] ${subject}${check.id}`,
     component: "harvester-startup-readiness",
     scope: check.scope,
     code: check.code,
-    observed: check.details,
-    diagnosis: check.message,
-    operatorAction: check.remediation,
+    severity: check.severity,
+    evidenceState: check.evidenceState,
+    sourceOfTruth: check.sourceOfTruth,
+    observedAt: check.observedAt,
+    expected: check.expected,
+    observed: check.observed,
+    diagnosis: check.diagnosis,
+    possibleCauses: check.possibleCauses,
+    recovery: check.recovery,
+    impact: check.impact,
+    operatorAction: check.operatorAction,
     blocksTrading: check.blocksTrading,
   })
 }
@@ -1275,16 +1286,22 @@ async function runHarvesterStartupReadinessAudit({
   return report
 }
 
+class HarvesterStartupReadinessBlockedError extends SystemCustomError {
+  constructor({ blockers = [] } = {}) {
+    const safeBlockers = blockers.filter((code) => /^[A-Z0-9_]{1,80}$/.test(code))
+    super(`Harvester startup readiness blocked: ${safeBlockers.join(", ")}`, {
+      code: "HARVESTER_STARTUP_READINESS_BLOCKED",
+      context: {
+        blockerCount: safeBlockers.length,
+        blockerCodes: safeBlockers.join(","),
+      },
+      retryable: false,
+    })
+  }
+}
+
 function createStartupReadinessBlockedError({ report, blockers = report.runtimeBlockers } = {}) {
-  const error = new Error(
-    `Harvester startup readiness blocked: ${blockers.join(", ")}`,
-  )
-  error.name = "HarvesterStartupReadinessBlockedError"
-  error.code = "HARVESTER_STARTUP_READINESS_BLOCKED"
-  error.context = Object.freeze({
-    blockers: Object.freeze([...blockers]),
-  })
-  return error
+  return new HarvesterStartupReadinessBlockedError({ blockers })
 }
 
 async function startHarvesterPreflightServices({ startup,

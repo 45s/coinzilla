@@ -129,3 +129,8 @@ The startup boundary requires the full source-backed evidence set. A later opera
 ## Operator read-model evidence
 
 The report distinguishes the full startup boundary from later operator reads. Startup-only checks remain blocking when their required inputs are missing during startup. Outside startup, unavailable startup-only provenance is reported as `NOT_APPLICABLE`, while the existing user-data gate and engine-provided market blockers remain authoritative for live trading admission.
+
+
+## Structured startup diagnostics
+
+Startup readiness blocks now use a Harvester-owned `SystemCustomError` with a stable code and flat, sanitized context. User-data unsafe and reconciliation failures also retain stable codes. The terminal logger emits the check's expected condition, observed evidence, source, severity, possible causes, recovery outcome and operator action without exposing credentials or account identifiers.

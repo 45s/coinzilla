@@ -102,6 +102,19 @@ async function waitForUserDataEventQueue({ state }) {
   }
 }
 
+class HarvesterUserDataStartupUnsafeError extends SystemCustomError {
+  constructor({ tradingModeLabel, code, message, status } = {}) {
+    super(message, {
+      code,
+      context: {
+        tradingModeLabel,
+        status: status ?? "UNKNOWN",
+      },
+      retryable: false,
+    })
+  }
+}
+
 class HarvesterAccountSafetyBlockerActiveError extends SystemCustomError {
   constructor({ tradingModeLabel, blocker } = {}) {
     super(
@@ -121,14 +134,20 @@ class HarvesterAccountSafetyBlockerActiveError extends SystemCustomError {
 
 function assertTradingStartupSafety({ state, tradingModeLabel, getAccountSafetyBlocker }) {
   if (state.accountingFailed || UNSAFE_USER_DATA_STARTUP_STATUSES.has(state.status)) {
-    throw new Error(
-      `Conservative ${tradingModeLabel} startup blocked: user-data stream is not in a safe state`,
-    )
+    throw new HarvesterUserDataStartupUnsafeError({
+      tradingModeLabel,
+      code: "HARVESTER_USER_DATA_STARTUP_UNSAFE",
+      message: `Conservative ${tradingModeLabel} startup blocked: user-data stream is not in a safe state`,
+      status: state.status,
+    })
   }
   if (state.requiresReconciliation) {
-    throw new Error(
-      `Conservative ${tradingModeLabel} startup blocked: user-data stream reconciliation is required`,
-    )
+    throw new HarvesterUserDataStartupUnsafeError({
+      tradingModeLabel,
+      code: "HARVESTER_USER_DATA_RECONCILIATION_REQUIRED",
+      message: `Conservative ${tradingModeLabel} startup blocked: user-data stream reconciliation is required`,
+      status: state.status,
+    })
   }
   const blocker = getAccountSafetyBlocker?.()
   if (blocker?.scope === "ACCOUNT") {

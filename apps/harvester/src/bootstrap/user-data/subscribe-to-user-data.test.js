@@ -103,7 +103,7 @@ test("fails closed when accounting has already become unsafe during subscription
 
   await assert.rejects(
     fixture.result,
-    /Cannot enable Conservative trading after an unowned or invalid user-data event/,
+    (error) => error.code === "HARVESTER_USER_DATA_STARTUP_UNSAFE" && error.context?.status === fixture.state.status,
     "An unsafe event observed before ownership initialization must block trading startup.",
   )
   assert.equal(fixture.state.ready, false, "Unsafe startup must leave trading readiness closed.")
