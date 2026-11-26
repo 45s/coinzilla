@@ -556,3 +556,67 @@ test("MongoDB transactions reject synchronous callbacks that start unawaited CRU
     await database.close()
   }
 })
+
+
+test("MongoDB commit treats an explicit write concern rejection as a confirmed provider failure", async () => {
+  const { provider, calls } = createProviderHarness({
+    topology: "replicaSet",
+    transactionSupported: true,
+    commandHandler: async (body) => {
+      if (body.commitTransaction) {
+        return {
+          ok: 1,
+          writeConcernError: { code: 79, errmsg: "invalid write concern" },
+          errorLabels: [],
+        }
+      }
+      return { ok: 1, n: 1 }
+    },
+  })
+  const database = createDatabase({ provider })
+  await database.connect()
+
+  try {
+    await assert.rejects(
+      database.transaction((transaction) => transaction.create({
+        collection: "people",
+        record: { id: "known-commit-failure" },
+      })),
+      (error) => error.code === "DB_PROVIDER_OPERATION_FAILED",
+    )
+    assert.equal(calls.filter((body) => body.commitTransaction === 1).length, 1)
+  } finally {
+    await database.close()
+  }
+})
+
+test("MongoDB preserves an ambiguous commit outcome after a lost reply and a later NoSuchTransaction", async () => {
+  let commitAttempts = 0
+  const { provider, calls } = createProviderHarness({
+    topology: "replicaSet",
+    transactionSupported: true,
+    commandHandler: async (body) => {
+      if (body.commitTransaction) {
+        commitAttempts += 1
+        if (commitAttempts === 1) throw new Error("reply lost after commit request")
+        return { ok: 0, code: 251, errmsg: "NoSuchTransaction" }
+      }
+      return { ok: 1, n: 1 }
+    },
+  })
+  const database = createDatabase({ provider })
+  await database.connect()
+
+  try {
+    await assert.rejects(
+      database.transaction((transaction) => transaction.create({
+        collection: "people",
+        record: { id: "uncertain-commit" },
+      })),
+      (error) => error instanceof DatabaseTransactionOutcomeUnknownError,
+    )
+    assert.equal(calls.filter((body) => body.commitTransaction === 1).length, 3)
+  } finally {
+    await database.close()
+  }
+})
