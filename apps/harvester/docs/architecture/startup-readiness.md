@@ -142,3 +142,8 @@ The user-data startup assertions now distinguish the stable structured error cod
 
 
 The redaction test deliberately supplies a private account identifier and verifies that the projected report never serializes it. Provider identity comparisons still use the full source identity internally; only diagnostic output is sanitized.
+
+
+## Startup failure preservation
+
+Market-data and candle-history startup failures trigger a best-effort readiness report, but a secondary diagnostic failure is logged separately and never replaces the original startup exception. The original broker, market-data or candle-history failure remains the error rethrown to the existing lifecycle owner.
