@@ -127,6 +127,9 @@ fallback: 10_000 }),
     socketTimeoutMS: firstDefined({ primary: options.socketTimeoutMS,
 secondary: parsed.socketTimeoutMS,
 fallback: 30_000 }),
+    transportFactory: options.transportFactory,
+    handshake: options.handshake,
+    randomBytes: options.randomBytes,
   }
 }
 
