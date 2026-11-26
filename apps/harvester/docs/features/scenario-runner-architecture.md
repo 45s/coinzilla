@@ -233,3 +233,14 @@ active provenance are complete and identical. Missing build attestation, dirty s
 unknown tree/dependencies or a changed runtime/registry blocks replay with explicit
 missing-provenance diagnostics. The original unredacted input snapshot is retained
 internally for replay; exported run evidence remains redacted.
+
+
+## Application composition and fail-closed process registration — 2026-11-26
+
+The trading-history API now constructs the Recovery Seller process adapter and passes
+it to the production Scenario Runner host. The adapter has no launcher configured in
+the current environment, so its OS-sandbox attestation is false and the host keeps the
+partial RS runtime scenario non-executable. This makes the production registry visible
+through the real API composition boundary without silently falling back to an in-process
+or worker-only sandbox. A test-only launcher may exercise the worker protocol, but it
+does not change production readiness.
