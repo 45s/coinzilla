@@ -47,6 +47,7 @@ import { recordProcessStopped } from "../use-cases/record-process-stopped.js"
 import { recordSafetyBlockerRaised, recordStrategyMarketControl } from "../use-cases/record-safety-control-facts.js"
 import { projectHarvesterOperationalState } from "../infrastructure/operational-state/project-harvester.js"
 import { prepareTelegramOperatorControl } from "./operator-control/prepare-telegram-operator-control.js"
+import { createAuthoritativeAccountBlockerReconciliation } from "./operator-control/create-authoritative-account-blocker-reconciliation.js"
 import { HARVESTER_EVENT_NAMES } from "../application/events/event-names.js"
 import { createAccountRuntimeRegistry } from "../application/providers/account-runtime-registry.js"
 import { resolveBinanceProviderIdentity } from "../domain/provider-identity.js"
@@ -1128,6 +1129,8 @@ async function startHarvesterUserDataServices({
     getAccountSafetyBlocker: () => getHarvesterAccountSafetyBlocker({
       userDataState: resources.userDataState,
       recoverySellerStopWorkflow: startup.recoverySellerStopWorkflow,
+      reconcileAccount,
+      configuredMarkets: startup.executionSymbols,
     }),
     resumeDeferredStrategyEvaluations: accountSnapshots.resumeDeferredStrategyEvaluations,
     deferTradingActivation: startup.tradingEnabled === true,
@@ -1417,7 +1420,24 @@ async function startHarvesterPreflightServices({ startup,
       resources,
     })
     activateTradingEngine()
-    await startup.operatorControlLifecycle.start({
+    const reconcileAccount = startup.orderHistoryPersistence && startup.providerIdentity
+    ? createAuthoritativeAccountBlockerReconciliation({
+      broker: resources.broker,
+      accountSnapshotManager: startup.accountSnapshotManagerRef.current,
+      operationalStateStore: startup.operationalStateStore,
+      orderHistoryPersistence: startup.orderHistoryPersistence,
+      configuredMarkets: startup.executionSymbols,
+      marketMetadata: portfolio.marketMetadata,
+      providerIdentity: startup.providerIdentity,
+      environment: startup.tradingMode,
+      getRuntimeSnapshot: accountSnapshots.getOperatorRuntimeSnapshot,
+      getMarketSnapshots: () => resources.tradingEngine.getOperatorMarketSnapshots(),
+      hasCanonicalOwnershipReconciliation: () => resources.hasCanonicalOwnershipReconciliation === true,
+      getPortfolio: portfolio.getPortfolio,
+      now: startup.now,
+    })
+    : undefined
+  await startup.operatorControlLifecycle.start({
       engine: resources.tradingEngine,
       eventPublisher: startup.eventPublisher,
       getRuntimeSnapshot: accountSnapshots.getOperatorRuntimeSnapshot,
