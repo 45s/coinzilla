@@ -172,6 +172,7 @@ test("bounds a pending CLOSING audit phase and retains shared services", async (
   let resolveAudit
   let markAuditStarted
   let closingAuditDeadline
+  let closingAuditTimeoutMs
   const auditStarted = new Promise((resolve) => {
     markAuditStarted = resolve
   })
@@ -188,6 +189,7 @@ test("bounds a pending CLOSING audit phase and retains shared services", async (
     setTimeoutFn: (callback, timeoutMs, phase) => {
       if (phase === "CLOSING_ACCOUNT_AUDIT") {
         closingAuditDeadline = callback
+        closingAuditTimeoutMs = timeoutMs
       }
       return `fake-deadline:${phase}`
     },
@@ -198,6 +200,7 @@ test("bounds a pending CLOSING audit phase and retains shared services", async (
   try {
     await auditStarted
     assert.equal(typeof closingAuditDeadline, "function", "The CLOSING account audit must have an explicit deadline.")
+    assert.equal(closingAuditTimeoutMs, 25, "The CLOSING audit deadline must use the configured bounded timeout.")
     closingAuditDeadline()
     await assert.rejects(
       stopPromise,
