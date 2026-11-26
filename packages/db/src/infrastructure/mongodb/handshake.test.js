@@ -19,6 +19,7 @@ test("MongoDB URI parser reads credentials, database, authentication source, and
       authMechanism: undefined,
       tls: true,
       replicaSet: undefined,
+      directConnection: false,
       connectTimeoutMS: 4000,
       socketTimeoutMS: 30000,
     },
@@ -33,6 +34,26 @@ test("MongoDB URI parser rejects unsupported SRV and multi-host discovery instea
   assert.throws(
     () => parseMongoConnectionString("mongodb://one:27017,two:27017/app"),
     /single seed host/i,
+  )
+})
+
+
+test("MongoDB URI parser supports IPv6 seeds and rejects unknown or unsafe options", () => {
+  assert.equal(
+    parseMongoConnectionString("mongodb://[::1]:27017/app?directConnection=true").host,
+    "::1",
+  )
+  assert.equal(
+    parseMongoConnectionString("mongodb://localhost/app?directConnection=true").directConnection,
+    true,
+  )
+  assert.throws(
+    () => parseMongoConnectionString("mongodb://localhost/app?serverSelectionTimeoutMS=5000"),
+    /option serverSelectionTimeoutMS is not supported/i,
+  )
+  assert.throws(
+    () => parseMongoConnectionString("mongodb://localhost/app?retryWrites=true"),
+    /retryable writes are not supported/i,
   )
 })
 
