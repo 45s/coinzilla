@@ -16,7 +16,8 @@ class FakeSocket extends EventEmitter {
     queueMicrotask(() => this.emit("connect"))
   }
 
-  write(message, callback) {
+  write(...argumentsList) {
+    const [message, callback] = argumentsList
     this.writes.push(Buffer.from(message))
     callback?.()
     this.respond?.(this, decodeOpMsg(message), this.writes.length)
@@ -72,7 +73,8 @@ test("MongoDB transport opens a real TCP socket without a custom socket factory"
       }))
     })
   })
-  await new Promise((resolve, reject) => {
+  await new Promise((...handlers) => {
+    const [resolve, reject] = handlers
     server.once("error", reject)
     server.listen(0, "127.0.0.1", resolve)
   })
@@ -103,7 +105,8 @@ $db: "admin" } }),
 test("MongoDB transport correlates concurrent OP_MSG replies by responseTo", async () => {
   const pending = []
   const { transport } = createFakeTransport({
-    respond: (socket, request) => {
+    respond: (...argumentsList) => {
+      const [socket, request] = argumentsList
       pending.push(request)
       if (pending.length === 2) {
         for (const item of pending.reverse()) {
@@ -131,7 +134,8 @@ request: "second" })
 
 test("MongoDB transport handles fragmented frames without losing bytes", async () => {
   const { transport } = createFakeTransport({
-    respond: (socket, request) => {
+    respond: (...argumentsList) => {
+      const [socket, request] = argumentsList
       const response = encodeOpMsg({
         requestId: 90,
         responseTo: request.requestId,
@@ -247,7 +251,8 @@ timeoutMS: 0 }),
 
 test("MongoDB transport rejects unsupported streaming responses", async () => {
   const { transport } = createFakeTransport({
-    respond: (socket, request) => {
+    respond: (...argumentsList) => {
+      const [socket, request] = argumentsList
       socket.emit("data", encodeOpMsg({
         requestId: 90,
         responseTo: request.requestId,
@@ -271,7 +276,8 @@ test("MongoDB transport fails closed when socket writes fail", async () => {
   const { transport } = fake
   await transport.connect()
   const { socket } = fake
-  socket.write = (_frame, callback) => {
+  socket.write = (...argumentsList) => {
+    const [_frame, callback] = argumentsList
     callback(new Error("write failed"))
     return false
   }
@@ -308,7 +314,8 @@ test("MongoDB transport does not mark a synchronously rejected write as outcome-
 test("MongoDB TLS transport waits for secureConnect rather than plain connect", async () => {
   class TlsSocket extends EventEmitter {
     setNoDelay() {}
-    write(_frame, callback) {
+    write(...argumentsList) {
+      const [_frame, callback] = argumentsList
       callback?.()
       return true
     }
