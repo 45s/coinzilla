@@ -1,3 +1,5 @@
+import { execFileSync } from "node:child_process"
+import { fileURLToPath } from "node:url"
 import { defaultLogger, SystemCustomError } from "@coinzilla/utils"
 import { createTradingHistoryQueryRepository } from "../persistence/trading-history-query-repository.js"
 import { createBitunixFuturesMarketDataClient } from "./bitunix-futures-market-data.js"
@@ -78,13 +80,36 @@ function validateApiDependencies({ database, eventBus, environment }) {
   }
 }
 
+const HARVESTER_REPOSITORY_ROOT = fileURLToPath(new URL("../../../../..", import.meta.url))
+const GIT_COMMIT_SHA_PATTERN = /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/i
+
 function resolveScenarioRunnerSourceRevision({ env } = {}) {
-  const sourceRevision = env.COINZILLA_SOURCE_REVISION
-  if (typeof sourceRevision !== "string" ||
-      !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/i.test(sourceRevision)) {
+  const configuredRevision = env.COINZILLA_SOURCE_REVISION
+  if (configuredRevision !== undefined) {
+    return typeof configuredRevision === "string" && GIT_COMMIT_SHA_PATTERN.test(configuredRevision)
+      ? configuredRevision.toLowerCase()
+      : null
+  }
+  try {
+    const sourceRevision = execFileSync("git", [
+      "-C", HARVESTER_REPOSITORY_ROOT, "rev-parse", "--verify", "HEAD",
+    ], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim()
+    if (!GIT_COMMIT_SHA_PATTERN.test(sourceRevision)) {
+      return null
+    }
+    const worktreeStatus = execFileSync("git", [
+      "-C", HARVESTER_REPOSITORY_ROOT, "status", "--porcelain", "--untracked-files=all",
+    ], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim()
+    return worktreeStatus ? null : sourceRevision.toLowerCase()
+  } catch {
     return null
   }
-  return sourceRevision.toLowerCase()
 }
 
 function createQueryFacade({ database }) {

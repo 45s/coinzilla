@@ -175,3 +175,6 @@ The Harvester API composition root reads the non-secret build metadata variable 
 
 
 The Dashboard exposes the replay command only for terminal, previously executed runs. The UI displays the original source SHA and the `replayOfRunId` relationship; a blocked replay remains visible with its server-provided reason.
+
+
+When `COINZILLA_SOURCE_REVISION` is absent, Harvester attempts to resolve `HEAD` from the repository's own Git metadata and accepts it only when the worktree is clean. If Git metadata is unavailable, the checkout is dirty, or the supplied build SHA is malformed, the revision is unknown and replay remains blocked. This prevents a dirty local working tree from being misrepresented as the code identified by its HEAD commit.
