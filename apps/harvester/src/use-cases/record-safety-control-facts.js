@@ -133,37 +133,49 @@ function isRecoverySellerStopBlocker(raisedFact) {
     raisedFact.data.reason === "RECOVERY_SELLER_UNEXPECTED_CONDITION"
 }
 
-function validateOperatorActionMetadata({
-  blockerId,
-  resolvedBy,
-  operatorIdentity,
-  operatorId,
-  actionId,
-  resolutionReason,
-  actionBlockerIds,
-}) {
+function validateOperatorActionIdentity({ operatorIdentity, operatorId, actionId, resolvedBy }) {
   const expectedResolvedBy = `operator:${operatorId}:${actionId}`
-  if (!isAuthenticatedLocalOperatorIdentity(operatorIdentity) ||
-      operatorIdentity.operatorId !== operatorId ||
-      operatorIdentity.authMethod !== "OS_ACCOUNT" ||
-      !LOCAL_OPERATOR_ID_PATTERN.test(operatorId ?? "") ||
-      typeof actionId !== "string" ||
-      !/^[A-Za-z0-9][A-Za-z0-9._:@-]{7,127}$/.test(actionId) ||
-      typeof resolutionReason !== "string" ||
-      resolutionReason.trim() !== resolutionReason ||
-      resolutionReason.length < 8 ||
-      resolutionReason.length > 512 ||
-      hasControlCharacters(resolutionReason) ||
-      resolvedBy !== expectedResolvedBy ||
-      !Array.isArray(actionBlockerIds) ||
-      actionBlockerIds.length === 0 ||
-      actionBlockerIds.length > 256 ||
-      actionBlockerIds.some((id) => typeof id !== "string" || !/^[a-f0-9]{64}$/.test(id)) ||
-      new Set(actionBlockerIds).size !== actionBlockerIds.length ||
-      [...actionBlockerIds].sort().join("|") !== actionBlockerIds.join("|") ||
-      !actionBlockerIds.includes(blockerId)) {
-    throw new TypeError("Operator blocker resolution requires authenticated identity, unique action ID, reason, and exact blocker set")
+  const authenticated = isAuthenticatedLocalOperatorIdentity(operatorIdentity)
+  const validOperator = authenticated &&
+    operatorIdentity.operatorId === operatorId &&
+    operatorIdentity.authMethod === "OS_ACCOUNT" &&
+    LOCAL_OPERATOR_ID_PATTERN.test(operatorId ?? "")
+  const validAction = typeof actionId === "string" &&
+    /^[A-Za-z0-9][A-Za-z0-9._:@-]{7,127}$/.test(actionId) &&
+    resolvedBy === expectedResolvedBy
+  if (!validOperator || !validAction) {
+    throw new TypeError("Operator blocker resolution requires an authenticated OS identity and unique action ID")
   }
+}
+
+function validateOperatorActionReason(resolutionReason) {
+  const validReason = typeof resolutionReason === "string" &&
+    resolutionReason.trim() === resolutionReason &&
+    resolutionReason.length >= 8 &&
+    resolutionReason.length <= 512 &&
+    !hasControlCharacters(resolutionReason)
+  if (!validReason) {
+    throw new TypeError("Operator blocker resolution requires a printable 8-512 character reason")
+  }
+}
+
+function validateOperatorActionBlockerSet({ blockerId, actionBlockerIds }) {
+  const validBlockerIds = Array.isArray(actionBlockerIds) &&
+    actionBlockerIds.length > 0 &&
+    actionBlockerIds.length <= 256 &&
+    actionBlockerIds.every((id) => typeof id === "string" && /^[a-f0-9]{64}$/.test(id))
+  const canonicalBlockerIds = validBlockerIds &&
+    new Set(actionBlockerIds).size === actionBlockerIds.length &&
+    [...actionBlockerIds].sort().join("|") === actionBlockerIds.join("|")
+  if (!canonicalBlockerIds || !actionBlockerIds.includes(blockerId)) {
+    throw new TypeError("Operator blocker resolution requires the exact canonical target blocker set")
+  }
+}
+
+function validateOperatorActionMetadata(options) {
+  validateOperatorActionIdentity(options)
+  validateOperatorActionReason(options.resolutionReason)
+  validateOperatorActionBlockerSet(options)
 }
 
 function validateRecoverySellerStopAction({ resolvedBy, operatorIdentity, operatorId, actionId, resolutionReason, actionBlockerIds }) {
