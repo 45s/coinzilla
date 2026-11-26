@@ -392,7 +392,10 @@ test("rejects exchange fills that are not durably represented in the Journal", a
     },
     resolveBlockers: async () => {
       resolutionCalled = true
-      return { ok: true, data: {} }
+      return {
+        ok: true,
+        data: {},
+      }
     },
   })
 
