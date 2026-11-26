@@ -23,6 +23,7 @@ test("returns immutable ownership for a matching Recovery Seller submission", ()
     {
       strategyId: StrategyId.RECOVERY_SELLER,
       positionId: "position-1",
+      purpose: "RECOVERY_SELL",
       cycleId: "cycle-1",
     },
     "A valid Recovery Seller submission must retain its exact strategy, Position, and cycle identity.",
@@ -94,6 +95,7 @@ test("accepts a Conservative recovery SELL with exact CG Position ownership and 
     {
       strategyId: StrategyId.COIN_GRABBER,
       positionId: "position:cg:dogeusdt",
+      purpose: "RECOVERY_SELL",
     },
     "A valid Conservative recovery SELL must preserve CG strategy and Position identity without being relabeled as RS.",
   )
