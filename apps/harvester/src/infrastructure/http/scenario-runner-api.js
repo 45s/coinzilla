@@ -62,6 +62,16 @@ function logScenarioRunnerFailure({ logger, error }) {
   }
 }
 
+function resolveErrorMessage({ error, status }) {
+  if (status >= 500) {
+    return "Scenario Runner request failed."
+  }
+  if (error instanceof Error) {
+    return error.message
+  }
+  return "Scenario Runner request is invalid."
+}
+
 function sendError({ response, status, code, message }) {
   sendJson({
     response,
@@ -294,9 +304,10 @@ async function handleScenarioRunnerRoutes({ request, response, pathname, runner,
         error,
         status,
       }),
-      message: status >= 500
-        ? "Scenario Runner request failed."
-        : error instanceof Error ? error.message : "Scenario Runner request is invalid.",
+      message: resolveErrorMessage({
+        error,
+        status,
+      }),
     })
   }
   return true

@@ -314,6 +314,16 @@ async function finishTimedOutExecution({ context, record, adapter }) {
   return null
 }
 
+function failUnstartedExecution({ context, record }) {
+  transitionRun({
+    record,
+    status: SCENARIO_RUN_STATUS.FAILED,
+    now: context.now,
+    onUpdate: context.onUpdate,
+    diagnostic: "Strategy adapter completed without confirming isolated worker readiness.",
+  })
+}
+
 async function finishExecution({ context, record, adapter, result }) {
   if (result.kind === "timeout") {
     const cleanupFailure = await finishTimedOutExecution({
@@ -348,12 +358,9 @@ async function finishExecution({ context, record, adapter, result }) {
       diagnostic: result.error instanceof Error ? result.error.message : "Scenario execution failed.",
     })
   } else if (record.status === SCENARIO_RUN_STATUS.STARTING) {
-    transitionRun({
+    failUnstartedExecution({
+      context,
       record,
-      status: SCENARIO_RUN_STATUS.FAILED,
-      now: context.now,
-      onUpdate: context.onUpdate,
-      diagnostic: "Strategy adapter completed without confirming isolated worker readiness.",
     })
   } else if (!result.output || typeof result.output !== "object") {
     transitionRun({
