@@ -174,6 +174,8 @@ reason: "STOPPING" } })
             symbol,
             errors: processed.errors,
           })
+        } else {
+          intakeState.hasFreshWebSocketBook = true
         }
         return processed
       })
@@ -210,10 +212,9 @@ reason: "STOPPING" } })
       event: priceEvent,
       sourceIdentity,
     })
+    let freshWebSocketPriceEvent = false
     try {
-      if (isMarketPriceFresh(createMarketPrice({ priceEvent: sourcedPriceEvent }))) {
-        intakeState.hasFreshWebSocketPrice = true
-      }
+      freshWebSocketPriceEvent = isMarketPriceFresh(createMarketPrice({ priceEvent: sourcedPriceEvent }))
     } catch {
       // The trading engine reports malformed events through its normal result.
     }
@@ -229,6 +230,10 @@ reason: "STOPPING" } })
           reportPriceError({ symbol,
 errors: processed.errors })
         } else {
+          if (freshWebSocketPriceEvent) {
+            intakeState.hasFreshWebSocketPrice = true
+            intakeState.initialPriceSeeded = false
+          }
           logMarketPriceEvaluation({ logger,
 symbol,
 priceEvent: sourcedPriceEvent,
@@ -283,6 +288,9 @@ async function subscribeToBookTicker({
   marketPriceIntake,
 }) {
   const intakeState = marketPriceIntake.get(symbol) ?? {}
+  intakeState.bookSubscriptionReady = false
+  intakeState.hasFreshWebSocketBook = false
+  intakeState.bookSourceIdentity = null
   marketPriceIntake.set(symbol, intakeState)
   let result
   try {
@@ -308,6 +316,8 @@ async function subscribeToBookTicker({
     symbol,
     unsubscribe: result.data.unsubscribe,
   })
+  intakeState.bookSubscriptionReady = true
+  intakeState.bookSourceIdentity = sourceIdentity
   logSystem({
     logger,
     message: "Book ticker subscribed",
@@ -374,6 +384,7 @@ function registerMarketPriceSubscription({ data,
     unsubscribe: data.unsubscribe,
   })
   intakeState.marketPriceSubscriptionReady = true
+  intakeState.marketPriceSourceIdentity = data.sourceIdentity ?? null
   logSystem({
     logger,
     message: "Market data subscribed",
@@ -381,6 +392,16 @@ function registerMarketPriceSubscription({ data,
     symbol,
     stream: data.stream ?? null,
   })
+}
+
+function resetMarketPriceIntakeState({ marketPriceIntake, symbol } = {}) {
+  const intakeState = marketPriceIntake.get(symbol) ?? {}
+  intakeState.hasFreshWebSocketPrice = false
+  intakeState.initialPriceSeeded = false
+  intakeState.marketPriceSourceIdentity = null
+  intakeState.latestWebSocketPriceTask = null
+  marketPriceIntake.set(symbol, intakeState)
+  return intakeState
 }
 
 async function subscribeToMarketPrice({
@@ -400,10 +421,8 @@ async function subscribeToMarketPrice({
   subscriptions,
   marketPriceIntake,
 }) {
-  const intakeState = marketPriceIntake.get(symbol) ?? {}
-  intakeState.hasFreshWebSocketPrice = false
-  intakeState.latestWebSocketPriceTask = null
-  marketPriceIntake.set(symbol, intakeState)
+  const intakeState = resetMarketPriceIntakeState({ marketPriceIntake,
+symbol })
   const handler = createMarketPriceHandler({
     symbol,
     pairConfig,
@@ -435,6 +454,7 @@ async function subscribeToMarketPrice({
       eventPublisher,
       brokerName,
       providerInstanceId,
+      sourceIdentity,
     },
     logger,
     symbol,
@@ -598,6 +618,12 @@ async function subscribeToEnabledMarket({
 }) {
   const intakeState = context.marketPriceIntake.get(symbol) ?? {}
   intakeState.marketPriceSubscriptionReady = false
+  intakeState.bookSubscriptionReady = false
+  intakeState.hasFreshWebSocketPrice = false
+  intakeState.hasFreshWebSocketBook = false
+  intakeState.initialPriceSeeded = false
+  intakeState.marketPriceSourceIdentity = null
+  intakeState.bookSourceIdentity = null
   context.marketPriceIntake.set(symbol, intakeState)
   let resolvedSource
   let initialError
@@ -703,7 +729,8 @@ async function processInitialMarketPrice({ context,
   reportPriceError,
   symbol,
   pairConfig,
-  priceEvent }) {
+  priceEvent,
+  intakeState }) {
   const processed = await context.processMarketPrice({
     symbol,
     priceEvent,
@@ -715,6 +742,7 @@ async function processInitialMarketPrice({ context,
       errors: processed.errors })
     return
   }
+  intakeState.initialPriceSeeded = true
   logMarketPriceEvaluation({
     logger: context.logger,
     symbol,
@@ -758,7 +786,8 @@ async function seedMissingInitialPrices({ context,
   reportPriceError,
   symbol,
   pairConfig,
-  priceEvent })
+  priceEvent,
+  intakeState })
     } catch (error) {
       failedSymbols.push(symbol)
       context.logger.error?.({

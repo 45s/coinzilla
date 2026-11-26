@@ -15,6 +15,7 @@
 - [ADR-0008 — Strategy safety pause cancels owned BUYs](decisions/0008-strategy-safety-pause-cancels-owned-buys.md) — strategy-originated pause, current-process BUY cancellation, durable incomplete blocker, and RECOVERY_SELL exception.
 - [ADR-0007 — Initialize an empty Operational State Store on startup](decisions/0007-initialize-empty-operational-state-ledger.md) — first-start genesis creation for missing/empty directories; existing or damaged ledgers remain protected by verification and fail-closed rules.
 - [ADR-0001 — Application-owned durable facts for process-restart recovery](decisions/0001-application-owned-recovery-facts.md) — accepted contract, durable fact producers/barriers and offline candidate Portfolio/RecoveryLedger/OrderRegistry projection are merged in PR #1055; candidate restoration remains disabled pending projection/invariant parity, account-wide reconciliation readiness and Step 9 crash/restart proof.
+- [Startup readiness diagnostics — issue #1860](startup-readiness.md) — source-to-test traceability, readiness scopes, and safety invariants for the integrated startup report.
 - [Broker–Harvester trading flow](BROKER_HARVESTER_TRADING_FLOW.md) — visual interaction and startup paths.
 - [Broker–Harvester trading flow (text)](BROKER_HARVESTER_TRADING_FLOW_TEXT.md) — accessible text representation and detailed sequence.
 

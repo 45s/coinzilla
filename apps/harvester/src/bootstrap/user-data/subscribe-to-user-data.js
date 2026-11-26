@@ -102,6 +102,19 @@ async function waitForUserDataEventQueue({ state }) {
   }
 }
 
+class HarvesterUserDataStartupUnsafeError extends SystemCustomError {
+  constructor({ tradingModeLabel, code, message, status } = {}) {
+    super(message, {
+      code,
+      context: {
+        tradingModeLabel,
+        status: status ?? "UNKNOWN",
+      },
+      retryable: false,
+    })
+  }
+}
+
 class HarvesterAccountSafetyBlockerActiveError extends SystemCustomError {
   constructor({ tradingModeLabel, blocker } = {}) {
     super(
@@ -121,14 +134,20 @@ class HarvesterAccountSafetyBlockerActiveError extends SystemCustomError {
 
 function assertTradingStartupSafety({ state, tradingModeLabel, getAccountSafetyBlocker }) {
   if (state.accountingFailed || UNSAFE_USER_DATA_STARTUP_STATUSES.has(state.status)) {
-    throw new Error(
-      `Conservative ${tradingModeLabel} startup blocked: user-data stream is not in a safe state`,
-    )
+    throw new HarvesterUserDataStartupUnsafeError({
+      tradingModeLabel,
+      code: "HARVESTER_USER_DATA_STARTUP_UNSAFE",
+      message: `Conservative ${tradingModeLabel} startup blocked: user-data stream is not in a safe state`,
+      status: state.status,
+    })
   }
   if (state.requiresReconciliation) {
-    throw new Error(
-      `Conservative ${tradingModeLabel} startup blocked: user-data stream reconciliation is required`,
-    )
+    throw new HarvesterUserDataStartupUnsafeError({
+      tradingModeLabel,
+      code: "HARVESTER_USER_DATA_RECONCILIATION_REQUIRED",
+      message: `Conservative ${tradingModeLabel} startup blocked: user-data stream reconciliation is required`,
+      status: state.status,
+    })
   }
   const blocker = getAccountSafetyBlocker?.()
   if (blocker?.scope === "ACCOUNT") {
@@ -139,7 +158,7 @@ function assertTradingStartupSafety({ state, tradingModeLabel, getAccountSafetyB
   }
 }
 
-function activateTradingEngine({
+async function activateTradingEngine({
   state,
   logger,
   tradingModeLabel,
@@ -147,6 +166,7 @@ function activateTradingEngine({
   getAccountSnapshot,
   resumeDeferredStrategyEvaluations,
 }) {
+  state.tradingActivationDeferred = false
   logSystem({
     logger,
     message: `Conservative ${tradingModeLabel} startup checks passed; current account audit is complete`,
@@ -156,7 +176,7 @@ function activateTradingEngine({
   state.requiresReconciliation = false
   state.ready = true
   state.status = "READY"
-  resumeDeferredStrategyEvaluations()
+  await resumeDeferredStrategyEvaluations()
   logSystem({
     logger,
     message: `Conservative ${tradingModeLabel} trading engine activated`,
@@ -189,6 +209,87 @@ function logUserDataSubscriptionEstablished(logger) {
   })
 }
 
+async function completeReadOnlyUserDataPreflight({ state, publishOpenOrdersSnapshot } = {}) {
+  await publishOpenOrdersSnapshot({ phase: "PREFLIGHT" })
+  await waitForUserDataEventQueue({ state })
+  state.preflightComplete = true
+}
+
+async function completeTradingUserDataPreflight({
+  state,
+  publishOpenOrdersSnapshot,
+  tradingModeLabel,
+  getAccountSafetyBlocker,
+} = {}) {
+  if (state.accountingFailed) {
+    throw new HarvesterUserDataStartupUnsafeError({
+      tradingModeLabel,
+      code: "HARVESTER_USER_DATA_STARTUP_UNSAFE",
+      message: "Cannot enable Conservative trading after an unowned or invalid user-data event before order ownership was initialized",
+      status: state.status,
+    })
+  }
+  await publishOpenOrdersSnapshot({ phase: "PREFLIGHT" })
+  await waitForUserDataEventQueue({ state })
+  assertTradingStartupSafety({
+    state,
+    tradingModeLabel,
+    getAccountSafetyBlocker,
+  })
+  state.preflightComplete = true
+}
+
+function createDeferredTradingActivation({
+  userDataSubscription,
+  state,
+  logger,
+  tradingModeLabel,
+  enabledSymbols,
+  getAccountSnapshot,
+  getAccountSafetyBlocker,
+  resumeDeferredStrategyEvaluations,
+} = {}) {
+  let activated = false
+  return Object.freeze({
+    subscription: userDataSubscription,
+    activateTrading: async () => {
+      if (activated) {
+        return Object.freeze({ activated: true,
+alreadyActivated: true })
+      }
+      await waitForUserDataEventQueue({ state })
+      assertTradingStartupSafety({
+        state,
+        tradingModeLabel,
+        getAccountSafetyBlocker,
+      })
+      try {
+        await activateTradingEngine({
+          state,
+          logger,
+          tradingModeLabel,
+          enabledSymbols,
+          getAccountSnapshot,
+          resumeDeferredStrategyEvaluations,
+        })
+      } catch (error) {
+        state.ready = false
+        state.tradingActivationDeferred = true
+        state.status = "STARTUP_READINESS_AUDIT_PENDING"
+        throw error
+      }
+      activated = true
+      return Object.freeze({ activated: true,
+alreadyActivated: false })
+    },
+  })
+}
+
+/**
+ * Subscribe to broker user-data delivery and complete the authoritative account audit gate.
+ * The caller owns failure cleanup; this module owns subscription evidence and
+ * the PREFLIGHT account/open-order checks that must precede trading readiness.
+ */
 export async function subscribeToUserData({
   broker, brokerName, eventPublisher, logger, state,
   tradingMode, tradingEnabled, enabledSymbols, trackedOrders = [],
@@ -196,10 +297,11 @@ export async function subscribeToUserData({
   publishAccountSnapshot, publishOpenOrdersSnapshot, getAccountSnapshot,
   getAccountSafetyBlocker,
   resumeDeferredStrategyEvaluations,
+  deferTradingActivation = false,
 } = {}) {
   const tradingModeLabel = tradingMode === "live" ? "LIVE" : "TESTNET"
+  state.tradingActivationDeferred = deferTradingActivation === true
   logUserDataSubscriptionStarting(logger)
-
   const userDataSubscription = await createUserDataSubscription({
     broker,
     brokerName,
@@ -212,30 +314,33 @@ export async function subscribeToUserData({
   })
   onSubscriptionEstablished?.(userDataSubscription)
   logUserDataSubscriptionEstablished(logger)
-
   markUserDataReconciliationRequired(state)
-
-  await publishInitialAccountSnapshot({
-    state,
-    publishAccountSnapshot,
-  })
-
+  await publishInitialAccountSnapshot({ state,
+publishAccountSnapshot })
   if (!tradingEnabled) {
-    await publishOpenOrdersSnapshot({ phase: "PREFLIGHT" })
+    await completeReadOnlyUserDataPreflight({ state,
+publishOpenOrdersSnapshot })
     return userDataSubscription
   }
-  if (state.accountingFailed) {
-    throw new Error(
-      "Cannot enable Conservative trading after an unowned or invalid user-data event before order ownership was initialized",
-    )
+  await completeTradingUserDataPreflight({
+    state,
+    publishOpenOrdersSnapshot,
+    tradingModeLabel,
+    getAccountSafetyBlocker,
+  })
+  if (deferTradingActivation) {
+    return createDeferredTradingActivation({
+      userDataSubscription,
+      state,
+      logger,
+      tradingModeLabel,
+      enabledSymbols,
+      getAccountSnapshot,
+      getAccountSafetyBlocker,
+      resumeDeferredStrategyEvaluations,
+    })
   }
-
-  await publishOpenOrdersSnapshot({ phase: "PREFLIGHT" })
-  await waitForUserDataEventQueue({ state })
-  assertTradingStartupSafety({ state,
-tradingModeLabel,
-getAccountSafetyBlocker })
-  activateTradingEngine({
+  await activateTradingEngine({
     state,
     logger,
     tradingModeLabel,

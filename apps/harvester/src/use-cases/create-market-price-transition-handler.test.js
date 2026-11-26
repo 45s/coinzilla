@@ -27,6 +27,7 @@ function createState({
   const state = {
     prices: new Map(),
     marketPriceEventIds: new Map(),
+    deferredEvaluations: new Set(),
     lastBuyPrices: new Map(),
     buyReferenceOverrides: new Map(),
     lastAdjustmentPrices: new Map(),
@@ -252,10 +253,6 @@ test("commits a fresh price before delegating an eligible active BUY to trailing
 
 const evaluationOnlyScenarios = [
   {
-    name: "broker readiness is closed",
-    canTrade: false,
-  },
-  {
     name: "the strategy market is paused",
     paused: true,
   },
@@ -294,8 +291,31 @@ for (const scenario of evaluationOnlyScenarios) {
       true,
       `The accepted price must still reach normal strategy evaluation when ${scenario.name}.`,
     )
+    assert.equal(
+      harness.state.deferredEvaluations.has("DOGEUSDT"),
+      false,
+      "Market-local pause and strategy fallback paths must not create a global deferred replay.",
+    )
   })
 }
+
+
+test("queues an accepted price without consuming it while global trading readiness is closed", async () => {
+  const harness = createHarness({ canTrade: false })
+  const result = await harness.handler({
+    symbol: "DOGEUSDT",
+    priceEvent: validPriceEvent,
+  })
+
+  assert.equal(result.ok, true, "A valid price accepted during closed readiness must be retained without becoming a processing error.")
+  assert.deepEqual(result.data, {
+    deferred: true,
+    reason: "TRADING_NOT_READY",
+    symbol: "DOGEUSDT",
+  })
+  assert.equal(harness.trace.includes("evaluate"), false, "The transition must not be consumed while the global gate is closed.")
+  assert.equal(harness.state.deferredEvaluations.has("DOGEUSDT"), true, "The existing deferred-evaluation queue must retain the symbol for activation replay.")
+})
 
 test("returns a validation error for a malformed price before allocating an event identity", async () => {
   const harness = createHarness()

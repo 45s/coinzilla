@@ -40,6 +40,7 @@ function createDurableRecoveryAcknowledgementFixture({ broker }) {
           acknowledgementCount += 1
           handlers.onStatus({
             type: "reconciled",
+              recoveryGeneration: 1,
             subscriptionId: 17,
             recoveryRequired: false,
             reconciliationRequired: false,
@@ -87,6 +88,8 @@ function installRecoverySnapshotReplay({ broker }) {
           counters.acknowledgements += 1
           handlers.onStatus({
             type: "reconciled",
+              subscriptionId: 17,
+              recoveryGeneration: 1,
             recoveryRequired: false,
             reconciliationRequired: false,
           })
@@ -164,6 +167,7 @@ test("starts application reconciliation on transport recovery and acknowledges o
   assert.equal(result.userDataReady, true, "The startup PREFLIGHT audit must complete before user-data readiness is exposed.")
   broker.emitUserDataStatus({
     type: "recovered",
+      recoveryGeneration: 1,
     subscriptionId: 17,
     recoveryRequired: true,
     reconciliationRequired: true,
@@ -189,6 +193,7 @@ test("starts application reconciliation on transport recovery and acknowledges o
 
   broker.emitUserDataStatus({
     type: "recovered",
+      recoveryGeneration: 1,
     subscriptionId: 17,
     recoveryRequired: true,
     reconciliationRequired: true,
@@ -216,6 +221,7 @@ test("repeats recovery snapshots when a user-data event arrives during REST audi
   })
   broker.emitUserDataStatus({
     type: "recovered",
+      recoveryGeneration: 1,
     subscriptionId: 17,
     recoveryRequired: true,
     reconciliationRequired: true,
@@ -312,6 +318,7 @@ test("keeps recovery blocked and does not acknowledge when the fresh account sna
 
   broker.emitUserDataStatus({
     type: "recovered",
+      recoveryGeneration: 1,
     subscriptionId: 17,
     recoveryRequired: true,
     reconciliationRequired: true,
@@ -349,6 +356,7 @@ test("does not acknowledge a stale recovery after a newer disconnect", async () 
   })
   broker.emitUserDataStatus({
     type: "recovered",
+      recoveryGeneration: 1,
     subscriptionId: 17,
     recoveryRequired: true,
     reconciliationRequired: true,

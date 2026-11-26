@@ -472,7 +472,9 @@ test("logs safe correlation details for an external execution without closing gl
   assert.ok(journalEvents.some((event) => event.name === "execution.unowned_order"), "The Journal must record the external execution as unowned.")
   assert.ok(journalEvents.some((event) =>
     event.name === "account.open_orders_captured" && event.data.phase === "RECOVERY"), "The external execution correlation flow must include its recovery account snapshot.")
-  assert.deepEqual(errors, [], "External execution isolation must not publish a global user-data readiness error.")
+  const globalReadinessErrors = errors.filter((entry) =>
+    entry.component === "harvester-startup-readiness" && entry.scope === "RUNTIME")
+  assert.deepEqual(globalReadinessErrors, [], "External execution isolation must not publish a global user-data readiness error.")
   assert.equal(result.userDataReady, true, "A market-local external execution must leave global user-data readiness open.")
   assert.equal(result.userDataStatus, "READY", "Global user-data status must remain READY when an external execution is isolated to one market.")
   await result.stop()
