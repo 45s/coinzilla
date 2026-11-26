@@ -173,3 +173,8 @@ The operator read use case now isolates runtime snapshot retrieval, engine marke
 
 
 The startup diagnostic fallback logger now uses the existing logger interface and sanitizes error codes before writing them. The original startup exception remains the one propagated to lifecycle cleanup.
+
+
+## Candle-history execution boundaries
+
+Historical retrieval, historical validation, buffered-event replay, live open-candle handling, live closed-candle handling and bounded gap backfill are separate functions. The service still owns its 65-second live-candle freshness threshold and remains the authority for volatility-history readiness.
