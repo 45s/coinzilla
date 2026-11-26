@@ -19,7 +19,7 @@ function getParticipantSnapshot(participant) {
   }
 }
 
-function getPendingParticipantWait(activeParticipantWaits, strategyId, now) {
+function getPendingParticipantWait({ activeParticipantWaits, strategyId, now } = {}) {
   const pending = activeParticipantWaits.get(strategyId)
   if (!pending) {
     return undefined
@@ -93,10 +93,34 @@ function createNestedErrorSummary(error) {
   })
 }
 
+function getStrategyBlockerIdentity(participant) {
+  return participant?.strategyId ?? "UNKNOWN_STRATEGY"
+}
+
+function getStrategyBlockerReason({ reason, error } = {}) {
+  return reason ?? error?.code ?? "STRATEGY_SHUTDOWN_PARTICIPANT_FAILED"
+}
+
+function getStrategyBlockerErrorDetails(error) {
+  return {
+    message: error?.message ?? "Strategy shutdown participant did not prove safety",
+    cause: createNestedErrorSummary(error?.cause),
+    operation: error?.operation ?? "waitUntilSafe",
+    pendingOperation: error?.pendingOperation === true,
+    timeoutMs: error?.timeoutMs,
+    elapsedMs: error?.elapsedMs,
+  }
+}
+
+function getSafetySnapshotMarkets(safetySnapshot) {
+  return safetySnapshot?.markets ?? []
+}
+
 function createStrategyBlocker({ participant, error, reason, status } = {}) {
-  const strategyId = participant?.strategyId ?? "UNKNOWN_STRATEGY"
-  const blockerReason = reason ?? error?.code ?? "STRATEGY_SHUTDOWN_PARTICIPANT_FAILED"
+  const strategyId = getStrategyBlockerIdentity(participant)
+  const blockerReason = getStrategyBlockerReason({ reason, error })
   const safetySnapshot = getParticipantSnapshot(participant)
+  const errorDetails = getStrategyBlockerErrorDetails(error)
   return Object.freeze({
     strategyId,
     status: resolveStrategyBlockerStatus({
@@ -105,17 +129,11 @@ function createStrategyBlocker({ participant, error, reason, status } = {}) {
       status,
     }),
     reason: blockerReason,
-    message: error?.message ?? "Strategy shutdown participant did not prove safety",
-    cause: createNestedErrorSummary(error?.cause),
-    operation: error?.operation ?? "waitUntilSafe",
-    pendingOperation: error?.pendingOperation === true,
-    timeoutMs: error?.timeoutMs,
-    elapsedMs: error?.elapsedMs,
+    ...errorDetails,
     safetySnapshot,
-    markets: safetySnapshot?.markets ?? [],
+    markets: getSafetySnapshotMarkets(safetySnapshot),
   })
 }
-
 function createParticipantTimeoutError({ participant, timeoutMs, now, startedAt } = {}) {
   const error = new Error("Strategy shutdown participant exceeded its safety deadline")
   error.code = "STRATEGY_SHUTDOWN_PARTICIPANT_TIMED_OUT"
@@ -275,6 +293,80 @@ function createParticipantAbortPromise({ signal, participantController, abortSta
   }
 }
 
+function resolveParticipantWaitOutcome({ outcome, timeoutState, abortState, participant } = {}) {
+  if (timeoutState.error) {
+    throw timeoutState.error
+  }
+  if (abortState.reason) {
+    throw abortState.reason
+  }
+  if (outcome.status !== "fulfilled") {
+    throw outcome.reason
+  }
+  if (outcome.value?.ok !== true) {
+    throw createParticipantResultError({
+      participant,
+      result: outcome.value,
+    })
+  }
+  return outcome.value
+}
+
+function isParticipantSafeToShutdown(participant) {
+  try {
+    return participant.isSafeToShutdown() === true
+  } catch (error) {
+    error.code ??= "STRATEGY_SHUTDOWN_SAFETY_CHECK_FAILED"
+    error.status ??= "FAILED"
+    error.operation ??= "isSafeToShutdown"
+    throw error
+  }
+}
+
+async function waitForParticipantSafetyProof({
+  participant,
+  participantController,
+  activeParticipantWaits,
+  timeoutMs,
+  now,
+  timeoutPromise,
+  abortPromise,
+  timeoutState,
+  abortState,
+} = {}) {
+  let safetyProofAttempts = 0
+  while (true) {
+    const participantPromise = createParticipantWaitPromise({
+      participant,
+      participantController,
+      activeParticipantWaits,
+      timeoutMs,
+      now,
+    })
+    const outcome = await Promise.race([
+      participantPromise,
+      timeoutPromise,
+      abortPromise,
+    ])
+    const result = resolveParticipantWaitOutcome({
+      outcome,
+      timeoutState,
+      abortState,
+      participant,
+    })
+    safetyProofAttempts += 1
+    if (isParticipantSafeToShutdown(participant)) {
+      return result
+    }
+    if (safetyProofAttempts >= MAX_STRATEGY_SHUTDOWN_SAFETY_PROOF_ATTEMPTS) {
+      throw createSafetyReevaluationLimitError({
+        participant,
+        attempts: safetyProofAttempts,
+      })
+    }
+  }
+}
+
 async function waitForParticipantWithDeadline({
   participant,
   signal,
@@ -313,56 +405,18 @@ async function waitForParticipantWithDeadline({
     participantController,
     abortState,
   })
-  let safetyProofAttempts = 0
   try {
-    while (true) {
-      const participantPromise = createParticipantWaitPromise({
-        participant,
-        participantController,
-        activeParticipantWaits,
-        timeoutMs,
-        now,
-      })
-      const outcome = await Promise.race([
-        participantPromise,
-        timeout.promise,
-        abort.promise,
-      ])
-      if (timeoutState.error) {
-        throw timeoutState.error
-      }
-      if (abortState.reason) {
-        throw abortState.reason
-      }
-      if (outcome.status !== "fulfilled") {
-        throw outcome.reason
-      }
-      if (outcome.value?.ok !== true) {
-        throw createParticipantResultError({
-          participant,
-          result: outcome.value,
-        })
-      }
-      safetyProofAttempts += 1
-      let safe
-      try {
-        safe = participant.isSafeToShutdown() === true
-      } catch (error) {
-        error.code ??= "STRATEGY_SHUTDOWN_SAFETY_CHECK_FAILED"
-        error.status ??= "FAILED"
-        error.operation ??= "isSafeToShutdown"
-        throw error
-      }
-      if (safe) {
-        return outcome.value
-      }
-      if (safetyProofAttempts >= MAX_STRATEGY_SHUTDOWN_SAFETY_PROOF_ATTEMPTS) {
-        throw createSafetyReevaluationLimitError({
-          participant,
-          attempts: safetyProofAttempts,
-        })
-      }
-    }
+    return await waitForParticipantSafetyProof({
+      participant,
+      participantController,
+      activeParticipantWaits,
+      timeoutMs,
+      now,
+      timeoutPromise: timeout.promise,
+      abortPromise: abort.promise,
+      timeoutState,
+      abortState,
+    })
   } finally {
     if (timeout.timeoutHandle !== undefined) {
       clearTimeoutFn(timeout.timeoutHandle)
@@ -370,11 +424,10 @@ async function waitForParticipantWithDeadline({
     abort.removeAbortListener()
   }
 }
-
-function getPendingParticipantOperations(activeParticipantWaits, now) {
+function getPendingParticipantOperations({ activeParticipantWaits, now } = {}) {
   return Object.freeze(
-    [...activeParticipantWaits.entries()].map(([strategyId]) =>
-      getPendingParticipantWait(activeParticipantWaits, strategyId, now)),
+    [...activeParticipantWaits.keys()].map((strategyId) =>
+      getPendingParticipantWait({ activeParticipantWaits, strategyId, now })),
   )
 }
 
@@ -398,7 +451,7 @@ async function waitForStrategyShutdownParticipants({
       activeParticipantWaits,
       now,
     })))
-  const strategyBlockers = results.flatMap((result, index) => {
+  const strategyBlockers = [...results.entries()].flatMap(([index, result]) => {
     if (result.status === "fulfilled") {
       return []
     }
@@ -412,7 +465,7 @@ async function waitForStrategyShutdownParticipants({
       message: "Harvester shutdown was incomplete: strategy shutdown safety could not be proven for every enabled strategy",
       code: "STRATEGY_SHUTDOWN_SAFETY_UNPROVEN",
       strategyBlockers,
-      pendingOperations: getPendingParticipantOperations(activeParticipantWaits, now),
+      pendingOperations: getPendingParticipantOperations({ activeParticipantWaits, now }),
       shutdownRequestedAt,
       now,
     })
@@ -430,7 +483,7 @@ function resolveBeginShutdownResults({
   shutdownRequestedAt,
   now,
 } = {}) {
-  const strategyBlockers = results.flatMap((result, index) => {
+  const strategyBlockers = [...results.entries()].flatMap(([index, result]) => {
     if (result.status === "fulfilled") {
       return []
     }
@@ -445,7 +498,7 @@ function resolveBeginShutdownResults({
       message: "Strategy shutdown could not begin for every enabled strategy",
       code: "STRATEGY_SHUTDOWN_BEGIN_FAILED",
       strategyBlockers,
-      pendingOperations: getPendingParticipantOperations(activeParticipantWaits, now),
+      pendingOperations: getPendingParticipantOperations({ activeParticipantWaits, now }),
       shutdownRequestedAt,
       now,
     })
@@ -512,23 +565,18 @@ function createBeginShutdownOperation({
   }
 }
 
-export function createStrategyShutdownCoordinator({
-  participants = [],
-  timeoutMs = DEFAULT_STRATEGY_SHUTDOWN_TIMEOUT_MS,
-  now = Date.now,
-  setTimeoutFn = setTimeout,
-  clearTimeoutFn = clearTimeout,
-} = {}) {
+function validateStrategyShutdownCoordinator({ participants, timeoutMs } = {}) {
   if (!Array.isArray(participants)) {
     throw new TypeError("Strategy shutdown participants must be an array")
   }
-  if (participants.some((participant) =>
+  const hasInvalidParticipant = participants.some((participant) =>
     !participant ||
     typeof participant.strategyId !== "string" ||
     participant.strategyId.trim().length === 0 ||
     typeof participant.beginShutdown !== "function" ||
     typeof participant.waitUntilSafe !== "function" ||
-    typeof participant.isSafeToShutdown !== "function")) {
+    typeof participant.isSafeToShutdown !== "function")
+  if (hasInvalidParticipant) {
     throw new TypeError("Every strategy shutdown participant must expose identity and lifecycle operations")
   }
   const strategyIds = participants.map((participant) => participant.strategyId)
@@ -538,48 +586,47 @@ export function createStrategyShutdownCoordinator({
   if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0) {
     throw new TypeError("Strategy shutdown timeoutMs must be a positive safe integer")
   }
-  const activeParticipantWaits = new Map()
-  let shutdownRequestedAt = null
-  let beginPromise = null
-  let beginCompleted = false
-  let beginError = null
+}
 
-  const beginShutdown = () => {
-    if (beginPromise) {
-      return beginPromise
+function createBeginShutdownHandler({ participants, state, now } = {}) {
+  return () => {
+    if (state.beginPromise) {
+      return state.beginPromise
     }
-    shutdownRequestedAt = now()
+    state.shutdownRequestedAt = now()
     const operation = createBeginShutdownOperation({
       participants,
-      activeParticipantWaits,
-      shutdownRequestedAt,
+      activeParticipantWaits: state.activeParticipantWaits,
+      shutdownRequestedAt: state.shutdownRequestedAt,
       now,
     })
-    beginPromise = operation.promise
-    beginCompleted = operation.completed
-    beginError = operation.error ?? null
-    if (!beginCompleted) {
-      beginPromise.then(
+    state.beginPromise = operation.promise
+    state.beginCompleted = operation.completed
+    state.beginError = operation.error ?? null
+    if (!state.beginCompleted) {
+      state.beginPromise.then(
         () => {
-          beginCompleted = true
+          state.beginCompleted = true
         },
         (error) => {
-          beginCompleted = true
-          beginError = error
+          state.beginCompleted = true
+          state.beginError = error
         },
       )
     }
-    beginPromise.catch(() => {})
-    return beginPromise
+    state.beginPromise.catch(() => {})
+    return state.beginPromise
   }
+}
 
-  const waitUntilSafe = async ({ signal } = {}) => {
+function createWaitUntilSafeHandler({ participants, state, timeoutMs, setTimeoutFn, clearTimeoutFn, now, beginShutdown } = {}) {
+  return async ({ signal } = {}) => {
     const pendingBegin = beginShutdown()
-    if (!beginCompleted) {
+    if (!state.beginCompleted) {
       await pendingBegin
     }
-    if (beginError) {
-      throw beginError
+    if (state.beginError) {
+      throw state.beginError
     }
     return waitForStrategyShutdownParticipants({
       participants,
@@ -587,24 +634,31 @@ export function createStrategyShutdownCoordinator({
       timeoutMs,
       setTimeoutFn,
       clearTimeoutFn,
-      activeParticipantWaits,
-      shutdownRequestedAt,
+      activeParticipantWaits: state.activeParticipantWaits,
+      shutdownRequestedAt: state.shutdownRequestedAt,
       now,
     })
   }
+}
 
-  const isSafeToShutdown = () => activeParticipantWaits.size === 0 &&
-    participants.every((participant) => {
-      try {
-        return participant.isSafeToShutdown() === true
-      } catch {
-        return false
-      }
-    })
+function createSafetyPredicate({ participants, state } = {}) {
+  return () => state.activeParticipantWaits.size === 0 && participants.every((participant) => {
+    try {
+      return participant.isSafeToShutdown() === true
+    } catch {
+      return false
+    }
+  })
+}
 
-  const getSafetySnapshot = () => Object.freeze(participants.map((participant) => {
+function createSafetySnapshotGetter({ participants, state, now } = {}) {
+  return () => Object.freeze(participants.map((participant) => {
     const snapshot = getParticipantSnapshot(participant)
-    const pending = getPendingParticipantWait(activeParticipantWaits, participant.strategyId, now)
+    const pending = getPendingParticipantWait({
+      activeParticipantWaits: state.activeParticipantWaits,
+      strategyId: participant.strategyId,
+      now,
+    })
     if (!pending) {
       return snapshot
     }
@@ -619,11 +673,36 @@ export function createStrategyShutdownCoordinator({
       elapsedMs: pending.elapsedMs,
     })
   }))
+}
 
+export function createStrategyShutdownCoordinator({
+  participants = [],
+  timeoutMs = DEFAULT_STRATEGY_SHUTDOWN_TIMEOUT_MS,
+  now = Date.now,
+  setTimeoutFn = setTimeout,
+  clearTimeoutFn = clearTimeout,
+} = {}) {
+  validateStrategyShutdownCoordinator({ participants, timeoutMs })
+  const state = {
+    activeParticipantWaits: new Map(),
+    shutdownRequestedAt: null,
+    beginPromise: null,
+    beginCompleted: false,
+    beginError: null,
+  }
+  const beginShutdown = createBeginShutdownHandler({ participants, state, now })
   return Object.freeze({
     beginShutdown,
-    waitUntilSafe,
-    isSafeToShutdown,
-    getSafetySnapshot,
+    waitUntilSafe: createWaitUntilSafeHandler({
+      participants,
+      state,
+      timeoutMs,
+      setTimeoutFn,
+      clearTimeoutFn,
+      now,
+      beginShutdown,
+    }),
+    isSafeToShutdown: createSafetyPredicate({ participants, state }),
+    getSafetySnapshot: createSafetySnapshotGetter({ participants, state, now }),
   })
 }
