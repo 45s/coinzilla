@@ -39,7 +39,13 @@ asset: baseAsset }),
   })
 }
 
-function makeFill({ tradeId, quantity = "1", executedAt = 10, clientOrderId = "h-dogeusdt-order-1", brokerOrderId = "broker-order-1" } = {}) {
+function makeFill({
+  tradeId,
+  quantity = "1",
+  executedAt = 10,
+  clientOrderId = "h-dogeusdt-order-1",
+  brokerOrderId = "broker-order-1",
+} = {}) {
   return new Fill({
     tradeId: String(tradeId),
     brokerOrderId,
@@ -61,7 +67,14 @@ asset: quoteAsset }),
   })
 }
 
-function makeWorkflow({ fills = [], processedFills = [], brokerResult, brokerError, applyResult = toResult({ data: { applied: true } }), onTerminalOrderReconciled } = {}) {
+function makeWorkflow({
+  fills = [],
+  processedFills = [],
+  brokerResult,
+  brokerError,
+  applyResult = toResult({ data: { applied: true } }),
+  onTerminalOrderReconciled,
+} = {}) {
   const calls = { broker: [],
 pauses: [],
 applied: [] }
