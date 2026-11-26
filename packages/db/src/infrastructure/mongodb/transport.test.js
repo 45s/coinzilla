@@ -53,8 +53,10 @@ function createFakeTransport({ respond, timeoutMS = 100 } = {}) {
   }
 }
 
-test("MongoDB transport opens a real TCP socket without a custom socket factory", async () => {
+test("MongoDB transport opens a real TCP socket without a custom socket factory", { timeout: 5000 }, async () => {
+  let serverSocket
   const server = net.createServer((socket) => {
+    serverSocket = socket
     let buffer = Buffer.alloc(0)
     socket.on("data", (chunk) => {
       buffer = Buffer.concat([buffer, chunk])
@@ -63,7 +65,7 @@ test("MongoDB transport opens a real TCP socket without a custom socket factory"
       if (buffer.length < messageLength) return
       const request = decodeOpMsg(buffer.subarray(0, messageLength))
       buffer = buffer.subarray(messageLength)
-      socket.write(encodeOpMsg({
+      socket.end(encodeOpMsg({
         requestId: 91,
         responseTo: request.requestId,
         body: { ok: 1 },
@@ -90,6 +92,8 @@ test("MongoDB transport opens a real TCP socket without a custom socket factory"
       { ok: 1 },
     )
   } finally {
+    server.closeAllConnections?.()
+    serverSocket?.destroy()
     await transport.close()
     await new Promise((resolve) => server.close(resolve))
   }
