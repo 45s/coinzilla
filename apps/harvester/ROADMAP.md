@@ -2334,3 +2334,12 @@ Active and incomplete in draft [PR #1837](https://github.com/45s/coinzilla/pull/
 The process-worker lifecycle and RS input validator were decomposed into focused helpers to satisfy strict changed-file function-length, parameter and complexity policies without suppressions. This is a behavior-preserving refactor; cancellation/termination ordering, output limits, fail-closed sandbox requirements and exact decimal validation remain unchanged.
 
 The application runner now retains its execution slot and history record when an adapter reports `cleanupConfirmed: false`. History pruning skips these records, and the cancel endpoint retries the adapter; only an explicit `true` releases capacity. Normal execution cleanup failures are FAILED (not misreported as TIMED_OUT), while timeout cleanup failures remain TIMED_OUT. The behavior is covered by offline capacity/retry tests.
+
+### 2026-11-26 — Scenario Runner lifecycle and API audit
+
+- The run lifecycle no longer reports `Running` merely because an execution promise was scheduled. The adapter must signal `onStarted` after its worker has been created and the configured sandbox profile is verified; an adapter that returns output without this signal fails closed.
+- The process adapter rechecks the AbortSignal after worker creation and before dispatch. A cancellation that races the launcher's synchronous spawn call sends cooperative cancellation but never sends the execute request.
+- The runner preserves the original validated execution input for the worker while public run snapshots and history remain recursively redacted.
+- Scenario Runner REST errors now preserve explicit 4xx/capacity outcomes, classify unexpected failures as HTTP 500, return a generic browser-safe message and log only safe error metadata.
+- Exact-head targeted Harvester tests, workspace unit tests, test coverage and Repository Quality passed at implementation checkpoint `8dadd5bab3686e91621934557e7ffda83849bbe5`; External Documentation Links was still running at the time of this note.
+- Remaining release gates are unchanged: no production OS sandbox launcher is wired, no full production RS flow is registered, run history is in-memory, exact-revision replay/debug provenance is incomplete, and end-to-end acceptance is outstanding. PR #1837 remains Draft and unmerged.

@@ -42,7 +42,7 @@ test("RS helper catalog labels the unmerged registry candidate as preliminary an
   assert.equal(scenario.status, "PRELIMINARY", "the registry proposal is not merged into develop")
   assert.equal(scenario.executionStatus, "PRELIMINARY", "helper-only execution must be labelled preliminary")
   assert.equal(scenario.executable, false, "helper-only execution must not be advertised as a full scenario")
-  assert.ok(scenario.readinessReasons.some((reason) => reason.includes("unmerged PR #1823")))
+  assert.ok(scenario.readinessReasons.some((reason) => reason.includes("replacement Draft PR #1852")))
   assert.ok(scenario.readinessReasons.some((reason) => reason.includes("full Recovery Seller strategy lifecycle")))
 })
 
