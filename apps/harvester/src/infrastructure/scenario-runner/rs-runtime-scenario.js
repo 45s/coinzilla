@@ -31,6 +31,7 @@ import { createRecoverySellerAccountingWorkflow } from "../../use-cases/create-r
 import { createRecoverySellerActionAuthorizer } from "../../use-cases/create-recovery-seller-action-authorizer.js"
 import { createRecoverySellerOrderSubmitter } from "../../use-cases/create-recovery-seller-order-submitter.js"
 import { createRecoverySellerStopWorkflow } from "../../use-cases/create-recovery-seller-stop-workflow.js"
+import { makeOrderEventWorkflow } from "../../use-cases/order-event-workflow.js"
 import { recordOrderSubmissionIntent } from "../../use-cases/record-order-submission-intent.js"
 import { recordOrderSubmissionOutcome } from "../../use-cases/record-order-submission-outcome.js"
 const RUNTIME_PAIR_CONFIG = Object.freeze({
@@ -762,20 +763,73 @@ async function reconcileRuntimeScenarioPartialSell({ runtime, execution, effecti
     reconciliation,
     allocation,
   })
-  const result = await runtime.seed.workflow.reconcileTerminalMixedSell({
-    reconciliation: staged.reconciliation,
-    terminalOrder,
-    canonicalFills: [fill],
-    canonicalFillAllocations: [allocation],
-    minProfit: "0.2",
+  const stagedSellFills = []
+  let terminalAccountingResult
+  const eventState = {
+    registry: terminalRegistry,
+    processedFillsByOrder: new Map(),
+    reconciledTerminalOrderClientIds: new Set(),
+  }
+  const eventWorkflow = makeOrderEventWorkflow({
+    state: eventState,
+    broker: {
+      getFills: async () => toResult({ data: [fill] }),
+    },
+    eventPublisher: {
+      publish: () => toResult({ data: { accepted: true } }),
+    },
+    updateTradingAccounting: async () => toResult({ data: { applied: true } }),
+    updateRecoverySellerAccounting: async () => toResult({ data: { applied: true } }),
+    recordBuyExecutionFill: () => {},
+    recordSellExecutionFill: ({ fill: stagedFill }) => stagedSellFills.push(stagedFill),
+    pause: async () => {},
+    reconcileRecoverySellerMixedSell: async ({ order: reconciledOrder, canonicalFills }) => {
+      const currentOpenOrder = orderRegistry.getOrder({
+        clientOrderId: reconciledOrder.clientOrderId,
+      })
+      const currentReconciliation = createMixedSellFillReconciliation({
+        order: currentOpenOrder,
+        orderRegistry,
+      })
+      let currentStaged = currentReconciliation
+      const currentAllocations = canonicalFills.map((canonicalFill) =>
+        createMixedSellFillAllocation({
+          fill: canonicalFill,
+          orderRegistry: terminalRegistry,
+          recoveryQuantity: "2.49",
+          legacyQuantity: "0.01",
+        }))
+      for (const currentAllocation of currentAllocations) {
+        currentStaged = stageMixedSellFillAllocation({
+          reconciliation: currentStaged,
+          allocation: currentAllocation,
+        }).reconciliation
+      }
+      terminalAccountingResult = await runtime.seed.workflow.reconcileTerminalMixedSell({
+        reconciliation: currentStaged,
+        terminalOrder: reconciledOrder,
+        canonicalFills,
+        canonicalFillAllocations: currentAllocations,
+        minProfit: "0.2",
+      })
+      return terminalAccountingResult
+    },
+    latchRecoverySellerStop: async (input) => runtime.stopWorkflow.latch(input),
   })
-  if (result?.ok !== true) {
-    throw result?.errors?.[0] ?? new Error("Production Recovery Seller partial SELL reconciliation failed")
+  const eventResult = await eventWorkflow.reconcileTerminalOrderFills({
+    order: terminalOrder,
+  })
+  if (eventResult?.ok !== true || terminalAccountingResult?.ok !== true) {
+    throw eventResult?.errors?.[0] ??
+      terminalAccountingResult?.errors?.[0] ??
+      new Error("Production Recovery Seller order-event reconciliation failed")
   }
   return {
     orderStatus: terminalOrder.status,
     executedQuantity: terminalOrder.executedQuantity.amount,
-    profitabilityEligible: result.data.profitability?.eligible === true,
+    eventWorkflowReconciled: eventState.reconciledTerminalOrderClientIds.has(terminalOrder.clientOrderId),
+    eventFillStaged: stagedSellFills.length === 1,
+    profitabilityEligible: terminalAccountingResult.data.profitability?.eligible === true,
     cycleState: runtime.seed.workflow.getCycleStateForMarket({
       marketId: runtime.market.id,
     }),
