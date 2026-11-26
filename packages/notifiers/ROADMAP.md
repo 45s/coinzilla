@@ -21,4 +21,4 @@ Telegram transport, provider-oriented layout, reliability hardening, EventBus in
 - Implementation and tests: package source
 - Task status: GitHub Issues/PRs
 
-Detailed phases, decisions, validation records, and historical delivery notes are preserved in [ROADMAP_HISTORY_2026-11-26.md](./ROADMAP_HISTORY_2026-11-26.md).
+Detailed phases, decisions, validation records, and historical delivery notes are preserved in [ROADMAP_HISTORY_2026-11-26.md](../../docs/archive/roadmap-history-2026-11-26.md#notifiers-roadmap).
