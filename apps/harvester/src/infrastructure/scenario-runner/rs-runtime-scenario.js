@@ -174,7 +174,7 @@ async function resolveRuntimeScenarioConfiguration({ input }) {
     appConfig,
     env: {
       NODE_ENV: "test",
-      TRADING_MODE: "TESTNET",
+      TRADING_MODE: "testnet",
     },
     executionRoutes: [{
       strategyId: StrategyId.RECOVERY_SELLER,
