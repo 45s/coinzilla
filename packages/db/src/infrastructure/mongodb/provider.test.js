@@ -87,7 +87,10 @@ function createPrimaryDiscoveryHarness({
       return primaryResponses[index]
     },
   })
-  return { provider, attempts }
+  return {
+    provider,
+    attempts,
+  }
 }
 
 function assertMongoProviderOptionRejected({ options, expected }) {
@@ -150,8 +153,14 @@ expected: /randomBytes/ },
 })
 
 test("MongoDB provider normalizes TLS enablement and disabled TLS options", () => {
-  assert.doesNotThrow(() => createMongoProvider({ host: "localhost", tls: true }))
-  assert.doesNotThrow(() => createMongoProvider({ host: "localhost", tls: false }))
+  assert.doesNotThrow(() => createMongoProvider({
+    host: "localhost",
+    tls: true,
+  }))
+  assert.doesNotThrow(() => createMongoProvider({
+    host: "localhost",
+    tls: false,
+  }))
   assert.doesNotThrow(() => createMongoProvider({
     host: "localhost",
     tls: { rejectUnauthorized: false },
@@ -161,8 +170,14 @@ test("MongoDB provider normalizes TLS enablement and disabled TLS options", () =
 test("MongoDB provider parses IPv6 and hostname primary redirects", async () => {
   const ipv6 = createPrimaryDiscoveryHarness({
     primaryResponses: [
-      { topology: "replicaSet", primary: "[::1]:27018" },
-      { topology: "replicaSet", primary: null },
+      {
+        topology: "replicaSet",
+        primary: "[::1]:27018",
+      },
+      {
+        topology: "replicaSet",
+        primary: null,
+      },
     ],
   })
   await ipv6.provider.connect()
@@ -174,7 +189,10 @@ test("MongoDB provider parses IPv6 and hostname primary redirects", async () => 
 
   const hostname = createPrimaryDiscoveryHarness({
     primaryResponses: [
-      { topology: "replicaSet", primary: "primary.example" },
+      {
+        topology: "replicaSet",
+        primary: "primary.example",
+      },
       { topology: "replicaSet", primary: null },
     ],
   })
@@ -186,16 +204,37 @@ test("MongoDB provider parses IPv6 and hostname primary redirects", async () => 
 
 test("MongoDB provider rejects malformed and looping replica-set primary addresses", async () => {
   const invalidPrimaries = [
-    { primary: 42, expected: /non-empty string/ },
-    { primary: "[::1", expected: /IPv6 address is invalid/ },
-    { primary: "[::1]:0", expected: /port is invalid/ },
-    { primary: "localhost:65536", expected: /port is invalid/ },
-    { primary: "localhost:abc", expected: /port is invalid/ },
-    { primary: "seed:27017", expected: /current non-primary seed/ },
+    {
+      primary: 42,
+      expected: /non-empty string/,
+    },
+    {
+      primary: "[::1",
+      expected: /IPv6 address is invalid/,
+    },
+    {
+      primary: "[::1]:0",
+      expected: /port is invalid/,
+    },
+    {
+      primary: "localhost:65536",
+      expected: /port is invalid/,
+    },
+    {
+      primary: "localhost:abc",
+      expected: /port is invalid/,
+    },
+    {
+      primary: "seed:27017",
+      expected: /current non-primary seed/,
+    },
   ]
   for (const invalid of invalidPrimaries) {
     const harness = createPrimaryDiscoveryHarness({
-      primaryResponses: [{ topology: "replicaSet", primary: invalid.primary }],
+      primaryResponses: [{
+        topology: "replicaSet",
+        primary: invalid.primary,
+      }],
     })
     await assert.rejects(
       harness.provider.connect(),
@@ -206,10 +245,22 @@ test("MongoDB provider rejects malformed and looping replica-set primary address
 
   const redirectLoop = createPrimaryDiscoveryHarness({
     primaryResponses: [
-      { topology: "replicaSet", primary: "one.example:27017" },
-      { topology: "replicaSet", primary: "two.example:27017" },
-      { topology: "replicaSet", primary: "three.example:27017" },
-      { topology: "replicaSet", primary: "four.example:27017" },
+      {
+        topology: "replicaSet",
+        primary: "one.example:27017",
+      },
+      {
+        topology: "replicaSet",
+        primary: "two.example:27017",
+      },
+      {
+        topology: "replicaSet",
+        primary: "three.example:27017",
+      },
+      {
+        topology: "replicaSet",
+        primary: "four.example:27017",
+      },
     ],
   })
   await assert.rejects(
@@ -349,15 +400,25 @@ test("MongoDB transaction command queue rejects commands after the first failure
     topology: "replicaSet",
     transactionSupported: true,
     commandHandler: (body) => body.insert
-      ? { ok: 0, code: 123, errmsg: "first transaction command failed" }
+      ? {
+          ok: 0,
+          code: 123,
+          errmsg: "first transaction command failed",
+        }
       : { ok: 1 },
   })
   await harness.provider.connect()
   await assert.rejects(
     harness.provider.withTransaction(async (transaction) => {
       await Promise.all([
-        transaction.create({ collection: "people", record: { id: "one" } }),
-        transaction.create({ collection: "people", record: { id: "two" } }),
+        transaction.create({
+          collection: "people",
+          record: { id: "one" },
+        }),
+        transaction.create({
+          collection: "people",
+          record: { id: "two" },
+        }),
       ])
     }),
     (error) => error instanceof DatabaseProviderError
