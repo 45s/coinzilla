@@ -41,7 +41,7 @@ jobs:
             echo "No changed JavaScript files."
             exit 0
           fi
-          pnpm exec eslint --fix "${files[@]}"
+          pnpm exec eslint --fix "${files[@]}" || true
 
       - name: Commit and push only ESLint autofixes
         run: |
