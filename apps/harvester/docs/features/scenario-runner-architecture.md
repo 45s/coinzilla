@@ -226,10 +226,10 @@ containment.
 
 The runtime scenario registry now includes three deterministic application-level
 cases: authorized SELL submission, rejected SELL submission with a durable STOP latch,
-and a profitable partial CANCELED SELL. The partial-terminal case uses the production
-`makeOrderEventWorkflow.reconcileTerminalOrderFills` path to stage the canonical SELL
-fill, reconcile complete terminal fill history, and invoke the production mixed-SELL
-accounting workflow. It asserts that the cycle remains `UNRESOLVED`, terminal
+and a profitable partial CANCELED SELL. The partial-terminal case uses the full production
+`makeOrderEventWorkflow.processUserDataEventTransition` path to apply the terminal order
+update, stage the canonical SELL fill, reconcile complete terminal fill history, and
+invoke the production mixed-SELL accounting workflow. It asserts that the cycle remains `UNRESOLVED`, terminal
 reconciliation is committed, profitability is preserved, and the sole-SELL reservation
 is released. Broker, fill-history, STOP persistence and clock inputs remain run-local
 simulation boundaries; this does not establish live exchange integration or OS-level
