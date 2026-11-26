@@ -3,7 +3,7 @@
 **Owner:** `@coinzilla/utils`  
 **Last reviewed:** 2026-11-26
 
-> The previous roadmap, including completed API migrations, detailed reuse inventory, audit notes, and validation logs, is preserved in [Utils roadmap history](../../docs/archive/roadmaps/UTILS_ROADMAP_HISTORY_2026-11-26.md).
+> The previous roadmap, including completed API migrations, detailed reuse inventory, audit notes, and validation logs, is preserved in [Utils roadmap history](../../ROADMAP_HISTORY_2026-11-26.md).
 
 ## Current position
 
