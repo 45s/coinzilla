@@ -31,17 +31,12 @@ export class DatabaseProviderError extends SystemCustomError {
 }
 
 export class DatabaseTransactionUnsupportedError extends SystemCustomError {
-  constructor({ topology, cause } = {}) {
-    const context = {
-      operation: "transaction",
-    }
-    if (topology !== undefined) {
-      context.topology = topology
-    }
-
+  constructor({ cause } = {}) {
     super("Multi-document transactions are not supported by this database provider", {
       code: "DB_TRANSACTION_UNSUPPORTED",
-      context,
+      context: {
+        operation: "transaction",
+      },
       cause,
     })
   }

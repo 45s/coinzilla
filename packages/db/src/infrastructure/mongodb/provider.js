@@ -327,9 +327,7 @@ function createTransactionRunner({ state, randomBytes }) {
       throw new Error("MongoDB provider must be connected before starting a transaction")
     }
     if (!state.handshake?.transactionSupported) {
-      throw new DatabaseTransactionUnsupportedError({
-        topology: state.handshake?.topology ?? "unknown",
-      })
+      throw new DatabaseTransactionUnsupportedError()
     }
 
     const session = createSession({ state, randomBytes })
