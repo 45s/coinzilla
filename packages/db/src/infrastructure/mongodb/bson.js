@@ -1,0 +1,326 @@
+const MAX_BSON_DOCUMENT_SIZE = 16 * 1024 * 1024
+const INT32_MIN = -2 ** 31
+const INT32_MAX = 2 ** 31 - 1
+const INT64_MIN = -(2n ** 63n)
+const INT64_MAX = (2n ** 63n) - 1n
+
+function assertDocument(value, ancestors) {
+  if (value === null || typeof value !== "object" || Array.isArray(value) || Buffer.isBuffer(value) || value instanceof Date) {
+    throw new TypeError("BSON documents must be plain objects")
+  }
+  const prototype = Object.getPrototypeOf(value)
+  if (prototype !== Object.prototype && prototype !== null) {
+    throw new TypeError("BSON documents must be plain objects")
+  }
+  if (ancestors.has(value)) {
+    throw new TypeError("BSON documents must not contain circular references")
+  }
+}
+
+function encodeCString(value) {
+  if (typeof value !== "string" || value.includes("\0")) {
+    throw new TypeError("BSON document keys must be strings without null bytes")
+  }
+  return Buffer.from(value + "\0", "utf8")
+}
+
+function encodeString(value) {
+  const bytes = Buffer.from(value, "utf8")
+  const result = Buffer.allocUnsafe(4 + bytes.length + 1)
+  result.writeInt32LE(bytes.length + 1, 0)
+  bytes.copy(result, 4)
+  result[result.length - 1] = 0
+  return result
+}
+
+function encodeInt64(value) {
+  const integer = typeof value === "bigint" ? value : BigInt(value)
+  if (integer < INT64_MIN || integer > INT64_MAX) {
+    throw new TypeError("BSON integer is outside the signed 64-bit range")
+  }
+  const result = Buffer.allocUnsafe(8)
+  result.writeBigInt64LE(integer)
+  return result
+}
+
+function encodeElement(value, ancestors) {
+  if (value === null) {
+    return { type: 0x0A, bytes: Buffer.alloc(0) }
+  }
+  if (typeof value === "string") {
+    return { type: 0x02, bytes: encodeString(value) }
+  }
+  if (typeof value === "boolean") {
+    return { type: 0x08, bytes: Buffer.from([Number(value)]) }
+  }
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) {
+      throw new TypeError("BSON numbers must be finite")
+    }
+    if (Number.isSafeInteger(value) && value >= INT32_MIN && value <= INT32_MAX) {
+      const bytes = Buffer.allocUnsafe(4)
+      bytes.writeInt32LE(value)
+      return { type: 0x10, bytes }
+    }
+    if (Number.isSafeInteger(value)) {
+      return { type: 0x12, bytes: encodeInt64(value) }
+    }
+    const bytes = Buffer.allocUnsafe(8)
+    bytes.writeDoubleLE(value)
+    return { type: 0x01, bytes }
+  }
+  if (typeof value === "bigint") {
+    return { type: 0x12, bytes: encodeInt64(value) }
+  }
+  if (Buffer.isBuffer(value)) {
+    const bytes = Buffer.allocUnsafe(5 + value.length)
+    bytes.writeInt32LE(value.length, 0)
+    bytes[4] = 0
+    value.copy(bytes, 5)
+    return { type: 0x05, bytes }
+  }
+  if (value instanceof Date) {
+    const timestamp = value.getTime()
+    if (!Number.isFinite(timestamp)) {
+      throw new TypeError("BSON dates must be valid")
+    }
+    return { type: 0x09, bytes: encodeInt64(timestamp) }
+  }
+  if (Array.isArray(value)) {
+    if (ancestors.has(value)) {
+      throw new TypeError("BSON documents must not contain circular references")
+    }
+    ancestors.add(value)
+    const entries = []
+    for (let index = 0; index < value.length; index += 1) {
+      if (!Object.hasOwn(value, index)) {
+        throw new TypeError("BSON arrays must not be sparse")
+      }
+      entries.push([String(index), value[index]])
+    }
+    const bytes = encodeDocumentEntries(entries, ancestors)
+    ancestors.delete(value)
+    return { type: 0x04, bytes }
+  }
+  assertDocument(value, ancestors)
+  ancestors.add(value)
+  const entries = []
+  for (const key of Reflect.ownKeys(value)) {
+    if (typeof key !== "string") {
+      throw new TypeError("BSON document keys must be strings")
+    }
+    const descriptor = Object.getOwnPropertyDescriptor(value, key)
+    if (!descriptor.enumerable || !Object.hasOwn(descriptor, "value")) {
+      throw new TypeError("BSON documents must contain enumerable data properties")
+    }
+    entries.push([key, descriptor.value])
+  }
+  const bytes = encodeDocumentEntries(entries, ancestors)
+  ancestors.delete(value)
+  return { type: 0x03, bytes }
+}
+
+function encodeDocumentEntries(entries, ancestors) {
+  const elements = []
+  for (const [key, value] of entries) {
+    const element = encodeElement(value, ancestors)
+    elements.push(Buffer.from([element.type]), encodeCString(key), element.bytes)
+  }
+  const size = 5 + elements.reduce((total, part) => total + part.length, 0)
+  if (size > MAX_BSON_DOCUMENT_SIZE) {
+    throw new TypeError("BSON document exceeds the 16 MiB document limit")
+  }
+  const result = Buffer.allocUnsafe(size)
+  result.writeInt32LE(size, 0)
+  let offset = 4
+  for (const part of elements) {
+    part.copy(result, offset)
+    offset += part.length
+  }
+  result[offset] = 0
+  return result
+}
+
+/**
+ * Encode a plain document using the BSON subset needed by the database provider.
+ * Supported values are JSON scalars/containers plus Buffer, Date and signed 64-bit integers.
+ */
+export function encodeBsonDocument(document) {
+  const ancestors = new Set()
+  assertDocument(document, ancestors)
+  ancestors.add(document)
+  const entries = []
+  for (const key of Reflect.ownKeys(document)) {
+    if (typeof key !== "string") {
+      throw new TypeError("BSON document keys must be strings")
+    }
+    const descriptor = Object.getOwnPropertyDescriptor(document, key)
+    if (!descriptor.enumerable || !Object.hasOwn(descriptor, "value")) {
+      throw new TypeError("BSON documents must contain enumerable data properties")
+    }
+    entries.push([key, descriptor.value])
+  }
+  const result = encodeDocumentEntries(entries, ancestors)
+  ancestors.delete(document)
+  return result
+}
+
+function assertRange(buffer, offset, length, end, label) {
+  if (!Number.isSafeInteger(length) || length < 0 || offset + length > end || offset + length > buffer.length) {
+    throw new TypeError(`Invalid or truncated BSON ${label}`)
+  }
+}
+
+function readCString(buffer, state) {
+  const end = buffer.indexOf(0, state.offset)
+  if (end < 0 || end >= state.end) {
+    throw new TypeError("Invalid BSON cstring")
+  }
+  const value = buffer.toString("utf8", state.offset, end)
+  state.offset = end + 1
+  return value
+}
+
+function readString(buffer, state) {
+  assertRange(buffer, state.offset, 4, state.end, "string length")
+  const length = buffer.readInt32LE(state.offset)
+  state.offset += 4
+  if (length < 1) {
+    throw new TypeError("Invalid BSON string length")
+  }
+  assertRange(buffer, state.offset, length, state.end, "string")
+  if (buffer[state.offset + length - 1] !== 0) {
+    throw new TypeError("BSON string is missing its terminator")
+  }
+  const value = buffer.toString("utf8", state.offset, state.offset + length - 1)
+  state.offset += length
+  return value
+}
+
+function readDocument(buffer, state, asArray = false) {
+  assertRange(buffer, state.offset, 4, state.end, "document length")
+  const start = state.offset
+  const length = buffer.readInt32LE(start)
+  if (length < 5 || length > MAX_BSON_DOCUMENT_SIZE) {
+    throw new TypeError("Invalid BSON document length")
+  }
+  assertRange(buffer, start, length, state.end, "document")
+  const end = start + length
+  if (buffer[end - 1] !== 0) {
+    throw new TypeError("BSON document is missing its terminator")
+  }
+  const document = {}
+  const arrayValues = []
+  state.offset += 4
+  const childState = { offset: state.offset, end: end - 1 }
+  while (childState.offset < childState.end) {
+    const type = buffer[childState.offset]
+    childState.offset += 1
+    const key = readCString(buffer, childState)
+    const value = readValue(buffer, childState, type)
+    if (asArray) {
+      const index = Number(key)
+      if (!Number.isSafeInteger(index) || index < 0 || String(index) !== key || index !== arrayValues.length) {
+        throw new TypeError("BSON array indexes must be contiguous and ordered")
+      }
+      arrayValues.push(value)
+    } else {
+      Object.defineProperty(document, key, {
+        value,
+        enumerable: true,
+        configurable: true,
+        writable: true,
+      })
+    }
+  }
+  if (childState.offset !== end - 1) {
+    throw new TypeError("BSON document elements exceed the declared length")
+  }
+  state.offset = end
+  return asArray ? arrayValues : document
+}
+
+function readInt64(buffer, state) {
+  assertRange(buffer, state.offset, 8, state.end, "int64")
+  const value = buffer.readBigInt64LE(state.offset)
+  state.offset += 8
+  return value >= BigInt(Number.MIN_SAFE_INTEGER) && value <= BigInt(Number.MAX_SAFE_INTEGER)
+    ? Number(value)
+    : value
+}
+
+function readValue(buffer, state, type) {
+  if (type === 0x01) {
+    assertRange(buffer, state.offset, 8, state.end, "double")
+    const value = buffer.readDoubleLE(state.offset)
+    state.offset += 8
+    return value
+  }
+  if (type === 0x02) {
+    return readString(buffer, state)
+  }
+  if (type === 0x03 || type === 0x04) {
+    return readDocument(buffer, state, type === 0x04)
+  }
+  if (type === 0x05) {
+    assertRange(buffer, state.offset, 5, state.end, "binary header")
+    const length = buffer.readInt32LE(state.offset)
+    const subtype = buffer[state.offset + 4]
+    state.offset += 5
+    if (length < 0 || subtype !== 0) {
+      throw new TypeError("Only generic BSON binary subtype 0 is supported")
+    }
+    assertRange(buffer, state.offset, length, state.end, "binary value")
+    const value = Buffer.from(buffer.subarray(state.offset, state.offset + length))
+    state.offset += length
+    return value
+  }
+  if (type === 0x07) {
+    assertRange(buffer, state.offset, 12, state.end, "ObjectId")
+    const value = buffer.toString("hex", state.offset, state.offset + 12)
+    state.offset += 12
+    return value
+  }
+  if (type === 0x08) {
+    assertRange(buffer, state.offset, 1, state.end, "boolean")
+    const value = buffer[state.offset]
+    state.offset += 1
+    if (value !== 0 && value !== 1) {
+      throw new TypeError("Invalid BSON boolean")
+    }
+    return value === 1
+  }
+  if (type === 0x09) {
+    const value = readInt64(buffer, state)
+    return new Date(value)
+  }
+  if (type === 0x0A) {
+    return null
+  }
+  if (type === 0x10) {
+    assertRange(buffer, state.offset, 4, state.end, "int32")
+    const value = buffer.readInt32LE(state.offset)
+    state.offset += 4
+    return value
+  }
+  if (type === 0x11) {
+    return readInt64(buffer, state)
+  }
+  if (type === 0x12) {
+    return readInt64(buffer, state)
+  }
+  throw new TypeError(`Unsupported BSON element type 0x${type.toString(16)}`)
+}
+
+/** Decode one BSON document and reject trailing or malformed bytes. */
+export function decodeBsonDocument(buffer) {
+  if (!Buffer.isBuffer(buffer)) {
+    throw new TypeError("BSON input must be a Buffer")
+  }
+  const state = { offset: 0, end: buffer.length }
+  const document = readDocument(buffer, state)
+  if (state.offset !== buffer.length) {
+    throw new TypeError("BSON input contains trailing bytes")
+  }
+  return document
+}
