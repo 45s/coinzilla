@@ -521,6 +521,7 @@ test("preserves originating strategy and Position ownership in durable submissio
   assert.deepEqual(mapOrderSubmissionRequestedData({
     order: {
       ...canonicalOrderFacts,
+      side: "SELL",
       status: "PENDING",
     },
     ownership,
@@ -529,7 +530,7 @@ test("preserves originating strategy and Position ownership in durable submissio
     data: {
       clientOrderId: "h-DOGEUSDT-1",
       symbol: "DOGEUSDT",
-      side: "BUY",
+      side: "SELL",
       type: "LIMIT_MAKER",
       price: "99.9500",
       quantity: "1.00",
