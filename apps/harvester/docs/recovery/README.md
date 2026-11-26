@@ -159,3 +159,32 @@ This fixture represents a trading-enabled Journal session with a complete PREFLI
 PR #1047 delivered the read-only orchestration and guarded confirmation use cases. PR #1053 adds the offline JSON context adapter, explicit audit-only/confirmation CLI modes, canonical entity construction, and end-to-end tests using the production account audit and filesystem Operational State Store. No exchange write, broker connection, startup replay, Telegram command or runtime readiness wiring is introduced.
 
 Steps 8 and 9 remain separate gates: candidate-state restoration behind closed readiness, then crash/restart and restart-twice verification. Unattended restart readiness remains disabled.
+
+
+## Offline user-data ACCOUNT blocker resolution
+
+This is the explicit operator workflow for a user-data ACCOUNT safety blocker. It is separate from one-market coverage confirmation and is only available after the Harvester process has been cleanly stopped.
+
+From `apps/harvester`, run:
+
+```sh
+OPERATIONAL_STATE_DIRECTORY=/absolute/path/to/existing/operational-state \\
+  pnpm run recovery:account-blockers -- \\
+    --context ./recovery-evidence/account-wide.json \\
+    --operator-id operator-7 \\
+    --action-id account-resolution-2026-11-26-001 \\
+    --cause-fixed
+```
+
+The command requires an existing, durable Operational State Store and the `runtimeSessionId` of the latest cleanly stopped process. It derives the configured market universe from that session's durable configuration baseline; the evidence bundle cannot narrow the market list. It refuses legacy/unknown-producer ACCOUNT blockers and Recovery Seller STOP.
+
+The account-wide evidence bundle reuses the one-market contract above, with these root fields:
+
+- `configuredMarkets`: exact configured symbols from the durable configuration baseline.
+- `journalRecords`, `markets`, `assets`: one shared canonical Journal/account/market identity set.
+- `exchange.currentAccountSnapshot`, `exchange.openOrders`, `exchange.ownedOrderHistory`: one shared account snapshot and complete account-wide order evidence.
+- `marketsEvidence`: an object keyed by every configured symbol. Each entry contains its own reviewed `coverage` and `tradeHistory` bundle; the trade-history scope must be exactly that market.
+
+The command runs the existing production `reconcileRecoveredMarketState()` / `auditRecoveredAccountState()` audit for every configured market against the same account snapshot and order evidence. It appends resolution facts only when every market is READY, every configured market's history is complete from its reviewed coverage boundary, and the account-wide balance/order/reservation audit has no unresolved owned or external orders, fills, or discrepancies. Any missing market, incomplete history, unknown ownership, inconsistent accounting, or non-durable store leaves all blockers active.
+
+This command is offline: it does not connect to an exchange, place/cancel/replace orders, restart Harvester, clear live process flags, or enable trading. A successful result means only that durable resolution facts were committed and read back. **Trading remains blocked until a controlled restart and a fresh authoritative account snapshot pass startup admission.** Recovery Seller STOP is never cleared by this path.
