@@ -54,6 +54,7 @@ This is a plain data object, not a chainable query builder. New operators or nes
 - A synchronous callback provider cannot declare nested transactions because the facade's nested transaction call is asynchronous; capability validation rejects that incompatible declaration.
 - Provider-native connections, SQL, statements, result objects and driver errors stay inside infrastructure.
 - Provider capabilities must state the actual query, transaction and storage guarantees. Unsupported guarantees must not be silently emulated.
+- `readMany` sorting has one portable JSON order: missing/null, false, true, numbers, strings, then arrays/objects by compact JSON text. Equal sort values use record ID ascending as a stable tie-breaker, even for descending sorts.
 - The standard capability declaration describes transaction callback mode/nesting/multi-document guarantees, equality filtering/sorting/pagination, and supported storage modes (`file`, `memory`, `server`). The reusable conformance suite executes every declared storage mode with isolated keys; file/server modes must prove persistence across a new connection.
 
 The original `createDatabase({ adapter })` lifecycle facade and `createSqliteDatabase(...)` low-level SQL/migration API remain available for compatibility and infrastructure use.
