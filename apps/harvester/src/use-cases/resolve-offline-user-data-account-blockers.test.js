@@ -724,7 +724,7 @@ test("rejects a legacy action ID without replay-safe metadata", async () => {
   })
 
   assert.equal(result.ok, false)
-  assert.match(result.errors[0].message, /legacy resolution history without replay-safe metadata/)
+  assert.match(result.errors[0].message, /structured operator-action resolution metadata/)
   assert.equal(auditCalls, 0)
 })
 
