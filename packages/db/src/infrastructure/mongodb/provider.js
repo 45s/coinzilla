@@ -542,6 +542,9 @@ export function createMongoProvider(options = {}) {
       })
       let operationCount = 0
       const readContext = Object.freeze({
+        create() {
+          throw new Error("MongoDB read transaction cannot execute mutations")
+        },
         readOne(input) {
           operationCount += 1
           if (operationCount > 1) {
@@ -555,6 +558,12 @@ export function createMongoProvider(options = {}) {
             throw new Error("MongoDB read transaction supports one provider-neutral read operation")
           }
           return operations.readMany(input)
+        },
+        update() {
+          throw new Error("MongoDB read transaction cannot execute mutations")
+        },
+        delete() {
+          throw new Error("MongoDB read transaction cannot execute mutations")
         },
       })
       return work(readContext)
