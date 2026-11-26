@@ -310,6 +310,8 @@ export function createMongoTransport({
           }
         })
       } catch (error) {
+        // A synchronous write throw means the frame was not accepted by the socket.
+        entry.sent = false
         failConnection(createRequestError("MongoDB socket write failed", error))
         socket?.destroy()
       }
