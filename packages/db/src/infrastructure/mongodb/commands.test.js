@@ -190,3 +190,24 @@ test("MongoDB provider failures are normalized without hiding their causes", asy
       && error.cause === nativeError,
   )
 })
+
+
+test("MongoDB readMany kills an outstanding cursor when fetching a later batch fails", async () => {
+  const transportError = new Error("getMore failed")
+  const stub = createCommandStub([
+    { ok: 1, cursor: { id: 12, firstBatch: [] } },
+    transportError,
+    { ok: 1, cursorsKilled: [12] },
+  ])
+  const operations = createMongoRecordOperations({
+    command: stub.command,
+    databaseName: "app",
+  })
+
+  await assert.rejects(
+    operations.readMany({ collection: "people" }),
+    (error) => error instanceof DatabaseProviderError && error.cause === transportError,
+  )
+  assert.equal(stub.calls[2].killCursors, "coinzilla_cGVvcGxl")
+  assert.deepEqual(stub.calls[2].cursors, [12])
+})
