@@ -22,6 +22,7 @@ class MongoCommandError extends Error {
     this.codeName = response.codeName
     this.errorLabels = response.errorLabels ?? []
     this.response = response
+    this.outcomeUnknown = response.outcomeUnknown === true
   }
 
   hasErrorLabel(label) {
@@ -111,6 +112,7 @@ async function runMongoCommand({ command, body, sequences, operation, collection
         $db: body.$db,
       },
       sequences,
+      operation,
     })
     if (!response || Number(response.ok) !== 1) {
       throw new MongoCommandError(response ?? {})
@@ -122,9 +124,13 @@ async function runMongoCommand({ command, body, sequences, operation, collection
       })
     }
     if (response.writeConcernError) {
+      const writeConcernError = response.writeConcernError
       throw new MongoCommandError({
-        ...response.writeConcernError,
+        ...writeConcernError,
         errorLabels: response.errorLabels,
+        outcomeUnknown: writeConcernError.code === 64
+          || writeConcernError.codeName === "WriteConcernTimeout"
+          || writeConcernError.errInfo?.wtimeout === true,
       })
     }
     return response
