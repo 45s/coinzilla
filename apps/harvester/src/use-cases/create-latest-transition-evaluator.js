@@ -42,11 +42,15 @@ function canEvaluateShutdownRecoveryThroughManagedPause({ state, symbol, shutdow
   })
 }
 
-function getEvaluationEntryGateResult({ dependencies, symbol, shutdownRecoveryOnly } = {}) {
-  const { state, hasBlockingOpenOrdersForSymbol, isStopping, canTrade } = dependencies
+function getEvaluationGateResult({ dependencies, symbol, shutdownRecoveryOnly } = {}) {
+  const { state, hasBlockingOpenOrdersForSymbol, isStopping, canTrade, isMarketPriceFresh } = dependencies
   if (state.shutdownBuyGate === true && !shutdownRecoveryOnly) {
-    return toResult({ data: { skipped: true,
-reason: "CONSERVATIVE_SHUTDOWN_BUY_GATE_ACTIVE" } })
+    return toResult({
+      data: {
+        skipped: true,
+        reason: "CONSERVATIVE_SHUTDOWN_BUY_GATE_ACTIVE",
+      },
+    })
   }
   const recoveryManagedPause = canEvaluateShutdownRecoveryThroughManagedPause({
     state,
@@ -55,12 +59,12 @@ reason: "CONSERVATIVE_SHUTDOWN_BUY_GATE_ACTIVE" } })
   })
   if (state.paused.has(symbol) && !recoveryManagedPause) {
     return toResult({ data: { skipped: true,
-reason: "PAIR_PAUSED" } })
+      reason: "PAIR_PAUSED" } })
   }
   if (hasBlockingOpenOrdersForSymbol({ symbol })) {
     state.deferredEvaluations.add(symbol)
     return toResult({ data: { skipped: true,
-reason: "UNOWNED_OPEN_ORDER" } })
+      reason: "UNOWNED_OPEN_ORDER" } })
   }
   if (shutdownRecoveryOnly && isStopping?.() !== true) {
     return toResult({ error: new Error("Shutdown recovery SELL evaluation requires the stopping state") })
@@ -68,43 +72,17 @@ reason: "UNOWNED_OPEN_ORDER" } })
   if (!canTrade({ symbol }) && !shutdownRecoveryOnly) {
     state.deferredEvaluations.add(symbol)
     return toResult({ data: { skipped: true,
-reason: "TRADING_NOT_READY" } })
+      reason: "TRADING_NOT_READY" } })
   }
   state.deferredEvaluations.delete(symbol)
-  return null
-}
-
-function getFreshMarketPriceGateResult({ dependencies, symbol } = {}) {
-  const { state, isMarketPriceFresh } = dependencies
   const marketPrice = state.prices.get(symbol)
-  if (!marketPrice) {
-    return toResult({ data: { skipped: true,
-reason: "NO_MARKET_PRICE" } })
-  }
+  if (!marketPrice) {return toResult({ data: { skipped: true,
+    reason: "NO_MARKET_PRICE" } })}
   if (!isMarketPriceFresh(marketPrice)) {
     return toResult({ data: { skipped: true,
-reason: "STALE_MARKET_PRICE" } })
+      reason: "STALE_MARKET_PRICE" } })
   }
   return { marketPrice }
-}
-
-function getEvaluationGateResult({ dependencies, symbol, shutdownRecoveryOnly } = {}) {
-  const entryGateResult = getEvaluationEntryGateResult({
-    dependencies,
-    symbol,
-    shutdownRecoveryOnly,
-  })
-  if (entryGateResult) {
-    return entryGateResult
-  }
-  const priceGateResult = getFreshMarketPriceGateResult({ dependencies,
-symbol })
-  if (!priceGateResult.marketPrice) {
-    return priceGateResult
-  }
-  // Market metadata, book freshness and volatility are enforced at the final engine submission boundary.
-  // Keeping them there preserves replacement-specific outcomes and safe structured diagnostics.
-  return { marketPrice: priceGateResult.marketPrice }
 }
 
 function createEvaluationInputs({

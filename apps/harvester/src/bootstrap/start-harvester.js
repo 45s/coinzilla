@@ -743,10 +743,19 @@ function createHarvesterMarketReadinessInputs({ startup, resources, account, acc
 
 function createHarvesterReadinessConfiguration({ startup } = {}) {
   const enabledMarkets = startup.enabledSymbols ?? Object.keys(startup.pairs ?? {})
+  const executionRoutes = Array.isArray(startup.executionRoutes) ? startup.executionRoutes : []
+  const hasOnlyRecoverySellerRoutes = executionRoutes.length > 0 &&
+    executionRoutes.every((route) => route.strategyId === "RS_recoverySeller")
+  const marketSnapshotRequired = !hasOnlyRecoverySellerRoutes
+  const conservativeMarkets = marketSnapshotRequired
+    ? enabledMarkets.filter((symbol) => startup.marketPriceStrategyIds?.[symbol] !== "RS_recoverySeller")
+    : []
   return Object.freeze({
     validated: typeof startup.configurationFingerprint === "string" &&
       startup.configurationFingerprint.length > 0,
     enabledMarkets: Object.freeze([...enabledMarkets]),
+    conservativeMarkets: Object.freeze([...conservativeMarkets]),
+    marketSnapshotRequired,
   })
 }
 
@@ -1301,7 +1310,7 @@ function logHarvesterReadinessCheck({ logger, check, symbol } = {}) {
 function logHarvesterReadinessReport({ logger, report } = {}) {
   const summaryWriter = logger.system ?? logger.info
   summaryWriter?.call(logger, {
-    message: "[HARVESTER] Startup readiness audit",
+    message: "[HARVESTER] Startup Preflight Summary — readiness audit",
     component: "harvester-startup-readiness",
     observedAt: report.observedAt,
   })

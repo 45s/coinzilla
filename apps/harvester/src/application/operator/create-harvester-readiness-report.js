@@ -1354,7 +1354,15 @@ blockers }),
   })
 }
 
-function resolveReportStatus({ runtime, runtimeBlockers, enabledMarkets, readyMarkets, blockedMarkets, warnings } = {}) {
+function resolveReportStatus({
+  runtime,
+  runtimeBlockers,
+  enabledMarkets,
+  readyMarkets,
+  blockedMarkets,
+  warnings,
+  marketSnapshotRequired = true,
+} = {}) {
   if (runtimeBlockers.length > 0) {
     return "BLOCKED"
   }
@@ -1362,7 +1370,7 @@ function resolveReportStatus({ runtime, runtimeBlockers, enabledMarkets, readyMa
     return "OBSERVATION_ONLY"
   }
   if (enabledMarkets.length === 0 || readyMarkets.length === 0) {
-    return "BLOCKED"
+    return marketSnapshotRequired === false ? "DEGRADED" : "BLOCKED"
   }
   if (blockedMarkets.length > 0 || warnings.length > 0) {
     return "DEGRADED"
@@ -1410,11 +1418,31 @@ function createRuntimeReadinessChecks({ runtime, readinessInputs, marketCount, o
   })
   const enabledMarkets = readinessInputs.configuration?.enabledMarkets
   const configuredMarketsExist = Array.isArray(enabledMarkets) && enabledMarkets.length > 0
-  const snapshotsMissing = readinessInputs.marketSnapshotAvailable === false ||
+  const marketSnapshotRequired = readinessInputs.configuration?.marketSnapshotRequired !== false
+  const snapshotsMissing = marketSnapshotRequired && (
+    readinessInputs.marketSnapshotAvailable === false ||
     (configuredMarketsExist && marketCount === 0)
+  )
   if (snapshotsMissing) {
     checks.push(createEngineSnapshotCheck({ readinessInputs,
 observedAt }))
+  }
+  if (!marketSnapshotRequired && configuredMarketsExist) {
+    checks.push(createCheck({
+      id: "runtime.conservative-market-snapshot",
+      scope: "RUNTIME",
+      status: "WARNING",
+      code: "CONSERVATIVE_MARKET_SNAPSHOT_NOT_APPLICABLE",
+      message: "No Conservative execution route is configured; the Conservative engine market snapshot is not required. Existing non-Conservative strategy admission remains authoritative.",
+      expected: "A Conservative engine market snapshot when a Conservative execution route is enabled.",
+      remediation: "Use the existing strategy-owned readiness and safety diagnostics for non-Conservative routes; do not infer Conservative engine readiness.",
+      observedAt,
+      blocksTrading: false,
+      details: {
+        enabledMarkets,
+        marketSnapshotRequired: false,
+      },
+    }))
   }
   if (readinessInputs.startupFailure) {
     checks.push(createStartupFailureCheck({
@@ -1500,6 +1528,7 @@ marketReports })
     readyMarkets: facts.readyMarkets,
     blockedMarkets: facts.blockedMarkets,
     warnings: facts.warnings,
+    marketSnapshotRequired: readinessInputs.configuration?.marketSnapshotRequired !== false,
   })
   const summary = createReportSummary({
     runtimeChecks,

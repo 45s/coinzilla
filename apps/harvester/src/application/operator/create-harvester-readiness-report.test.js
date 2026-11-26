@@ -291,3 +291,18 @@ restorationEnabled: false }
   assert.equal(JSON.stringify(report).includes("private-account-id"), false, "Private account identifiers must never appear in diagnostics.")
   assert.equal(Object.isFrozen(report), true, "The readiness report must be an immutable projection.")
 })
+
+test("reports non-Conservative-only market scope without blocking its existing strategy gate", () => {
+  const inputs = createInputs()
+  inputs.readinessInputs.configuration.marketSnapshotRequired = false
+  inputs.readinessInputs.marketSnapshotAvailable = true
+  inputs.markets = []
+
+  const report = createHarvesterReadinessReport(inputs)
+  const scopeCheck = report.checks.find(({ id }) => id === "runtime.conservative-market-snapshot")
+
+  assert.equal(report.status, "DEGRADED", "A Conservative snapshot must not be claimed when only non-Conservative routes are configured.")
+  assert.equal(report.runtimeBlockers.length, 0, "A missing Conservative engine snapshot must not globally block a non-Conservative-only runtime.")
+  assert.equal(scopeCheck.status, "WARNING", "The report must explicitly disclose that Conservative engine evidence is not applicable.")
+  assert.equal(scopeCheck.blocksTrading, false, "The warning must not replace the existing non-Conservative strategy admission gate.")
+})

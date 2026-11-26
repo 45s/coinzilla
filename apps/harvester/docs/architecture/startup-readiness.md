@@ -47,7 +47,7 @@ The report is a read-only projection of current runtime, account, user-data, mar
 - `NOT_APPLICABLE`: the capability is disabled or not required by the effective configuration.
 - Unknown or failed-to-read evidence is never converted to PASS.
 
-Account/runtime blockers remain distinct from market-local blockers. A market-local blocker must not be broadened to another market. Under ADR-0004, an unowned order remains external and untouched; `IGNORE` may permit the market to continue, while `BLOCK` is scoped to the affected symbol.
+Account/runtime blockers remain distinct from market-local blockers. A Conservative engine market snapshot is required only when a Conservative execution route is configured. For a runtime containing only non-Conservative routes, the report marks that Conservative snapshot as not applicable and reports a non-blocking degraded status; it does not claim those routes passed the Conservative audit or replace their existing strategy-owned admission checks. A market-local blocker must not be broadened to another market. Under ADR-0004, an unowned order remains external and untouched; `IGNORE` may permit the market to continue, while `BLOCK` is scoped to the affected symbol.
 
 Health, trading enablement, operator authorization and restart-recovery permission remain separate. In particular, a verified connection or healthy report does not grant trading authorization, and a prior process never becomes restored by this report.
 

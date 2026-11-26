@@ -49,7 +49,6 @@
     "server": "node scripts/run-apps.js server",
     "client": "node scripts/run-apps.js client",
     "app": "node scripts/run-apps.js app",
-    "harvester": "pnpm --filter @coinzilla/harvester start",
     "server:prod": "pnpm --filter @coinzilla/harvester start",
     "client:prod": "pnpm --filter @coinzilla/dashboard build",
     "app:prod": "node scripts/run-apps.js app:prod",
