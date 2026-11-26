@@ -104,6 +104,8 @@ async function startTelegramOperatorAdapter({
   getAccountSnapshot,
   getOpenOrders,
   recoverySellerStopWorkflow,
+  reconcileAccount,
+  configuredMarkets,
 } = {}) {
   if (getAdapter()) {
     return createTelegramAdapterStartedResult(true)
@@ -118,6 +120,8 @@ async function startTelegramOperatorAdapter({
     getAccountSnapshot,
     getOpenOrders,
     recoverySellerStopWorkflow,
+    reconcileAccount,
+    configuredMarkets,
   })
   setOperator(operator)
   try {
