@@ -169,6 +169,7 @@ function createShutdown(input = {}) {
 }
 async function waitForAuditStartOrShutdownFailure({ auditStarted, stopPromise } = {}) {
   let auditStartTimeout
+  console.log("CLOSING audit diagnostic: entering wait")
   const outcome = await Promise.race([
     auditStarted.then(() => ({ status: "audit-started" })),
     stopPromise.then(
@@ -176,7 +177,10 @@ async function waitForAuditStartOrShutdownFailure({ auditStarted, stopPromise } 
       (error) => ({ status: "shutdown-rejected-before-audit", error }),
     ),
     new Promise((resolve) => {
-      auditStartTimeout = setTimeout(() => resolve({ status: "audit-start-timeout" }), 100)
+      auditStartTimeout = setTimeout(() => {
+        console.log("CLOSING audit diagnostic: wait timer fired")
+        resolve({ status: "audit-start-timeout" })
+      }, 100)
     }),
   ])
   clearTimeout(auditStartTimeout)
@@ -282,7 +286,9 @@ test("bounds a pending CLOSING audit phase and retains shared services", async (
   const calls = []
   const timeoutFixture = createClosingAuditTimeoutFixture({ calls })
   const { fixture, auditStarted } = timeoutFixture
+  console.log("CLOSING audit diagnostic: before stop")
   const stopPromise = fixture.stop()
+  console.log("CLOSING audit diagnostic: after stop")
   let retryStopPromise
 
   try {
