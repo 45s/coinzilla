@@ -961,11 +961,34 @@ function createScenarioRunnerApi({ context }) {
 }
 
 export function createScenarioRunner(options = {}) {
-  const context = createRunnerContext({
-    ...options,
-    sourceRevision: normalizeSourceRevision({
-      sourceRevision: options.sourceRevision,
+  const {
+    adapters = [],
+    createRunId = () => crypto.randomUUID(),
+    now = () => new Date().toISOString(),
+    timeoutMs = 30_000,
+    maxStoredRuns = 100,
+    maxConcurrentRuns = 2,
+    maxQueuedRuns = 10,
+    canExecuteScenario = () => true,
+    validateScenarioInput = () => ({
+      valid: true,
+      errors: [],
     }),
+    onUpdate,
+    sourceRevision,
+  } = options
+  const context = createRunnerContext({
+    adapters,
+    createRunId,
+    now,
+    timeoutMs,
+    maxStoredRuns,
+    maxConcurrentRuns,
+    maxQueuedRuns,
+    canExecuteScenario,
+    validateScenarioInput,
+    onUpdate,
+    sourceRevision: normalizeSourceRevision({ sourceRevision }),
   })
   return createScenarioRunnerApi({ context })
 }
