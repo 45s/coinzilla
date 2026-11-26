@@ -21,7 +21,10 @@
     "src/use-cases/fetch-account-trade-history.js",
     "src/use-cases/create-user-data-event-transition.js",
     "src/domain/strategies/strategy-ids.js",
-    "src/use-cases/create-conservative-shutdown-safety.js"
+    "src/use-cases/create-conservative-shutdown-safety.js",
+    "src/use-cases/record-safety-control-facts.js",
+    "src/use-cases/resolve-user-data-account-blockers.js",
+    "src/use-cases/resolve-user-data-account-blockers.helpers.js"
   ],
   "behaviors": [
     {
