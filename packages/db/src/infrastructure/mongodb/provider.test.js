@@ -774,7 +774,7 @@ test("MongoDB provider rejects database names beyond the portable 63-byte limit"
   )
 })
 
-test("MongoDB URI authSource defaults to the effective databaseName after an explicit override", async () => {
+test("MongoDB URI authSource defaults to the URI database when databaseName is explicitly overridden", async () => {
   let handshakeOptions
   const provider = createMongoProvider({
     uri: "mongodb://alice:secret@localhost/original",
@@ -806,8 +806,8 @@ test("MongoDB URI authSource defaults to the effective databaseName after an exp
     )
     assert.equal(
       handshakeOptions.authSource,
-      "override",
-      "The default authentication database must follow the effective databaseName when the URI has no explicit authSource",
+      "original",
+      "The URI database remains the default authentication database when databaseName overrides only the target database",
     )
   } finally {
     await provider.close()
