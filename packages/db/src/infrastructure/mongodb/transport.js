@@ -64,6 +64,7 @@ export function createMongoTransport({
   let connectPromise = null
   let connectResolve = null
   let connectReject = null
+  let connectTimer = null
   let receiveBuffer = Buffer.alloc(0)
   let connectTimer = null
   let nextRequestId = 1
@@ -278,16 +279,22 @@ export function createMongoTransport({
       state = "closed"
       return
     }
+    const wasConnecting = state === "connecting"
     state = "closing"
+    clearTimeout(connectTimer)
+    connectTimer = null
     rejectPending(new Error("MongoDB transport closed"))
+    if (wasConnecting) {
+      connectReject?.(new Error("MongoDB transport closed during connection setup"))
+    }
     const activeSocket = socket
     socket = null
+    connectResolve = null
+    connectReject = null
     activeSocket?.destroy()
     state = "closed"
     receiveBuffer = Buffer.alloc(0)
     connectPromise = null
-    connectResolve = null
-    connectReject = null
   }
 
   return Object.freeze({
