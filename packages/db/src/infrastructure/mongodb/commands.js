@@ -153,6 +153,18 @@ function readStoredDocument(document) {
   return decodeUserValue(document.data)
 }
 
+function decodeStoredRecord({ document, operation, collection }) {
+  try {
+    return readStoredDocument(document)
+  } catch (error) {
+    throw new DatabaseProviderError({
+      operation,
+      collection,
+      cause: error,
+    })
+  }
+}
+
 function createFilter(filter) {
   const conditions = Object.entries(filter).map(([field, value]) => {
     const path = `data.${encodeUserKey(field)}`
@@ -256,7 +268,7 @@ function createMongoRecordOperations({ command, databaseName }) {
       })
     }
     const document = response.cursor.firstBatch[0]
-    return document ? readStoredDocument(document) : null
+    return document ? decodeStoredRecord({ document, operation: "readOne", collection }) : null
   }
 
   async function readMany({ collection, query }) {
@@ -295,7 +307,11 @@ function createMongoRecordOperations({ command, databaseName }) {
         cause: new Error("MongoDB aggregate response omitted cursor.firstBatch"),
       })
     }
-    const records = cursor.firstBatch.map(readStoredDocument)
+    const records = cursor.firstBatch.map((document) => decodeStoredRecord({
+      document,
+      operation: "readMany",
+      collection,
+    }))
     let cursorId = cursor.id
     while (!isCursorExhausted(cursorId)) {
       const next = await runMongoCommand({
@@ -316,7 +332,11 @@ function createMongoRecordOperations({ command, databaseName }) {
           cause: new Error("MongoDB getMore response omitted cursor.nextBatch"),
         })
       }
-      records.push(...next.cursor.nextBatch.map(readStoredDocument))
+      records.push(...next.cursor.nextBatch.map((document) => decodeStoredRecord({
+        document,
+        operation: "readMany",
+        collection,
+      })))
       cursorId = next.cursor.id
     }
     return records
@@ -349,7 +369,11 @@ function createMongoRecordOperations({ command, databaseName }) {
         $db: databaseName,
       },
     })
-    return response.value ? readStoredDocument(response.value) : null
+    return response.value ? decodeStoredRecord({
+      document: response.value,
+      operation: "update",
+      collection,
+    }) : null
   }
 
   async function deleteRecord({ collection, id }) {
