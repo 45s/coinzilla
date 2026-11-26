@@ -69,3 +69,16 @@ test("quoteDepthLevelNumbers does not rewrite bracket-shaped text or escaped pro
   assert.equal(parsed.asks[0][0], 'literal [1,2] and "bids":[[3,4]]')
   assert.equal(parsed.asks[0][1], "0.123456789012345678")
 })
+
+test("quoteDepthLevelNumbers scans former catastrophic-backtracking prefixes in linear passes", () => {
+  const malformedTokens = [
+    `0.${"000.".repeat(2_000)}x`,
+    `0E${"000E".repeat(2_000)}x`,
+    `0${" 0".repeat(2_000)}x`,
+  ]
+
+  for (const token of malformedTokens) {
+    const source = `{"asks":[[${token}]],"bids":[]}`
+    assert.throws(() => JSON.parse(quoteDepthLevelNumbers({ text: source })), SyntaxError)
+  }
+})
