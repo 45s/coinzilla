@@ -197,6 +197,36 @@ test("production RS accounting durably stops after a profitable partial CANCELED
     fact.factType === "RECOVERY_SELLER_MIXED_SELL_RECONCILED"))
 })
 
+test("production RS accounting durably stops after a fully FILLED SELL misses the profitability target", async () => {
+  const result = await executeRecoverySellerRuntimeScenario({
+    runId: "run-rs-runtime-filled-under-target",
+    scenarioId: "RS-RUNTIME-SELL-FILLED-UNDER-TARGET-001",
+    input: {
+      marketPrice: "12.3",
+    },
+  })
+
+  assert.equal(result.passed, true, JSON.stringify(result.assertions))
+  assert.equal(result.output.terminalSell.orderStatus, "FILLED",
+    "The simulated broker lifecycle must report the complete SELL as FILLED.")
+  assert.equal(result.output.terminalSell.executedQuantity, "55",
+    "The FILLED SELL must reconcile its complete 55-unit original quantity.")
+  assert.equal(result.output.terminalSell.profitabilityEligible, false,
+    "The realized quote proceeds after the canonical commission must miss the approved target.")
+  assert.equal(result.output.terminalSell.cycleState.status, "UNRESOLVED",
+    "An under-target FILLED SELL must not close the Recovery Seller cycle.")
+  assert.equal(result.output.terminalSell.cycleState.terminalReconciled, true,
+    "The full canonical fill and terminal order facts must reconcile before STOP is accepted.")
+  assert.equal(result.output.terminalSell.eventFillStaged, true,
+    "The production user-data transition must stage the canonical SELL fill exactly once.")
+  assert.equal(result.output.terminalSell.eventWorkflowFailedClosed, true,
+    "The terminal event must fail closed after the adverse profitability outcome.")
+  assert.equal(result.output.terminalSell.stopFactAppended, true,
+    "The adverse FILLED SELL must durably append the account-wide STOP fact.")
+  assert.equal(result.output.reservedSellCycle, null,
+    "Canonical terminal accounting releases the completed order reservation while account STOP remains active.")
+})
+
 test("production RS registry exposes the runtime scenario and keeps the helper-only mapping preliminary", () => {
   const catalog = getRecoverySellerRunnerCatalog()
   assert.deepEqual(catalog.map((scenario) => scenario.id), [

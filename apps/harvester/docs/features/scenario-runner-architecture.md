@@ -268,3 +268,8 @@ partial RS runtime scenario non-executable. This makes the production registry v
 through the real API composition boundary without silently falling back to an in-process
 or worker-only sandbox. A test-only launcher may exercise the worker protocol, but it
 does not change production readiness.
+
+
+## Under-target FILLED SELL runtime scenario — in progress
+
+The next production-flow scenario exercises a fully FILLED canonical SELL whose actual quote-asset commission leaves realized profitability below the configured absolute quote-asset target. It must run through the production user-data event transition and mixed-SELL accounting workflow, reconcile the complete fill exactly once, leave the cycle UNRESOLVED, durably latch account-wide STOP, and fail the terminal event closed. This scenario is not considered implemented or verified until its test-first RED/GREEN cycle and exact-head CI evidence are recorded.
