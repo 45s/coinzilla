@@ -150,6 +150,28 @@ function resolveStrategyExchangeFilters({ marketMetadata }) {
   }
 }
 
+function getAggregateActiveSellQuantity({ activeOrders, symbol } = {}) {
+  return activeOrders
+    .filter((order) =>
+      order?.market?.symbol === symbol &&
+      order.side === "SELL" &&
+      ["PENDING", "OPEN", "PARTIALLY_FILLED", "UNKNOWN"].includes(order.status))
+    .reduce((total, order) => {
+      const remainingQuantity = order.remainingQuantity?.amount
+      assertDecimalString({
+        value: remainingQuantity,
+        field: "active owned SELL remainingQuantity",
+      })
+      if (compareDecimal({ left: remainingQuantity, right: "0" }) < 0) {
+        throw new RangeError("Active owned SELL remainingQuantity cannot be negative")
+      }
+      return addDecimal({
+        left: total,
+        right: remainingQuantity,
+      })
+    }, "0")
+}
+
 function resolveStrategyActiveOrderFlags({
   activeOrders,
   symbol,
@@ -164,6 +186,10 @@ function resolveStrategyActiveOrderFlags({
       activeOrders,
       symbol,
       side: "SELL",
+    }),
+    aggregateActiveSellQuantity: getAggregateActiveSellQuantity({
+      activeOrders,
+      symbol,
     }),
     hasUnacknowledgedRecoverySell: activeOrders.some((order) =>
       order?.market?.symbol === symbol &&
@@ -587,6 +613,19 @@ function createRecoverySellDecision({
   context,
   accounting,
 }) {
+  const sellableInventory = maxDecimal({
+    left: "0",
+    right: subtractDecimal({
+      left: accounting.activeQuantity,
+      right: accounting.keepQuantity,
+    }),
+  })
+  if (compareDecimal({
+    left: context.aggregateActiveSellQuantity,
+    right: sellableInventory,
+  }) > 0) {
+    throw new Error("Aggregate active Conservative recovery SELL commitments exceed sellable Position inventory")
+  }
   if (context.hasActiveSell || !hasSellableInventory({
     activeQuantity: accounting.activeQuantity,
     keepQuantity: accounting.keepQuantity,
