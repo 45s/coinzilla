@@ -10,7 +10,7 @@ const MAX_SOCKET_BUFFERED_BYTES = 64 * 1024 * 1024
 const MORE_TO_COME = 2
 
 function validateOptions({ host, port, connectTimeoutMS, socketTimeoutMS }) {
-  if (typeof host !== "string" || host.trim() === "") {
+  if (typeof host !== "string" || host.trim() === "" || host !== host.trim()) {
     throw new TypeError("MongoDB host must be a non-empty string")
   }
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
@@ -54,8 +54,11 @@ export function createMongoTransport({
   socketFactory,
 } = {}) {
   validateOptions({ host, port, connectTimeoutMS, socketTimeoutMS })
-  if (tlsOptions !== null && typeof tlsOptions !== "object") {
+  if (tlsOptions !== null && (typeof tlsOptions !== "object" || Array.isArray(tlsOptions))) {
     throw new TypeError("MongoDB TLS options must be an object")
+  }
+  if (socketFactory !== undefined && typeof socketFactory !== "function") {
+    throw new TypeError("MongoDB socketFactory must be a function")
   }
 
   const pending = new Map()
@@ -188,6 +191,11 @@ export function createMongoTransport({
           tlsOptions,
           socketFactory,
         })
+        if (!socket || typeof socket.on !== "function"
+          || typeof socket.write !== "function"
+          || typeof socket.destroy !== "function") {
+          throw new TypeError("MongoDB socketFactory returned an invalid socket")
+        }
       } catch (error) {
         failConnection(error)
         return
@@ -263,11 +271,13 @@ export function createMongoTransport({
       try {
         socket.write(frame, (error) => {
           if (error) {
-            settleRequest(requestId, createRequestError("MongoDB socket write failed", error))
+            failConnection(createRequestError("MongoDB socket write failed", error))
+            socket?.destroy()
           }
         })
       } catch (error) {
-        settleRequest(requestId, createRequestError("MongoDB socket write failed", error))
+        failConnection(createRequestError("MongoDB socket write failed", error))
+        socket?.destroy()
       }
     })
   }
