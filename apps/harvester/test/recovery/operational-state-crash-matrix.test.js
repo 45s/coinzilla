@@ -257,13 +257,27 @@ async function verifyCrashBoundaryFill({ directory, store, pending, acknowledged
     quantity: "0.02",
     quoteQuantity: "2",
     price: "100",
-    commissions: [new Commission({
-      amount: new Money({ amount: "0.001", asset: feeAsset }),
-      quoteValue: new Money({ amount: "0.02", asset: quoteAsset }),
-    })],
+    commissions: [
+      new Commission({
+        amount: new Money({
+          amount: "0.001",
+          asset: feeAsset,
+        }),
+        quoteValue: new Money({
+          amount: "0.02",
+          asset: quoteAsset,
+        }),
+      }),
+    ],
   })
-  await applyFill({ store, fill })
-  const duplicate = await recordExecutionFill({ operationalStateStore: store, fill })
+  await applyFill({
+    store,
+    fill,
+  })
+  const duplicate = await recordExecutionFill({
+    operationalStateStore: store,
+    fill,
+  })
   assert.equal(duplicate.ok, true, duplicate.errors?.map(({ message }) => message).join("; "))
   assert.equal(duplicate.data.durable, true)
   assert.equal(duplicate.data.duplicate, true, "A duplicate delivery must resolve to the original durable fill fact.")
@@ -297,8 +311,16 @@ test("reopens the real append-only ledger across duplicate fill delivery and two
   const directory = await createDirectory(t)
   const store = createStore(directory)
   const baseline = await initializeProcess(store)
-  const { pending, acknowledged } = await recordCrashBoundaryIntentAndAcknowledgement({ directory, store })
-  await verifyCrashBoundaryFill({ directory, store, pending, acknowledged })
+  const { pending, acknowledged } = await recordCrashBoundaryIntentAndAcknowledgement({
+    directory,
+    store,
+  })
+  await verifyCrashBoundaryFill({
+    directory,
+    store,
+    pending,
+    acknowledged,
+  })
   await recordRestartProcessStart({
     directory,
     runtimeSessionId: "crash-matrix-process-2",
