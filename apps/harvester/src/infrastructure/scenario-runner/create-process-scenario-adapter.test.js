@@ -395,3 +395,62 @@ test("process worker rejects dangerous Node APIs and does not inherit Harvester 
     rmSync(directory, { recursive: true, force: true })
   }
 })
+
+
+test("process adapter waits for an explicit worker-ready handshake before dispatch", async () => {
+  const messages = []
+  const child = new EventEmitter()
+  child.exitCode = null
+  child.signalCode = null
+  child.send = (message) => {
+    messages.push(message)
+    if (message.type === "execute") {
+      queueMicrotask(() => child.emit("message", {
+        runId: "run-worker-ready",
+        ok: true,
+        output: { ready: true },
+      }))
+    }
+    return true
+  }
+  child.kill = () => {
+    child.exitCode = 0
+    queueMicrotask(() => child.emit("close"))
+    return true
+  }
+  const adapter = createProcessScenarioAdapter({
+    strategyId: "example",
+    spawnSandboxedWorker: createSimulatedSandboxLauncher({
+      spawn: () => child,
+    }),
+  })
+  let started = false
+  const execution = adapter.execute({
+    runId: "run-worker-ready",
+    scenarioId: "scenario",
+    input: null,
+    onStarted: () => {
+      started = true
+    },
+  })
+
+  assert.equal(started, false,
+    "The runner must remain Starting until the child confirms its worker bootstrap is ready.")
+  assert.deepEqual(messages, [],
+    "The parent must not dispatch scenario code before receiving the worker-ready handshake.")
+
+  child.emit("message", { type: "ready" })
+  const result = await execution
+
+  assert.equal(started, true,
+    "The process adapter must signal Running only after the worker-ready handshake.")
+  assert.deepEqual(messages, [{
+    type: "execute",
+    runId: "run-worker-ready",
+    strategyId: "example",
+    scenarioId: "scenario",
+    input: null,
+  }], "The parent must dispatch exactly once and only after readiness is confirmed.")
+  assert.deepEqual(result, { ready: true },
+    "The adapter must return the result produced after the readiness handshake.")
+})
