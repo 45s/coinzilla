@@ -50,11 +50,21 @@ function validateAuditSource(audit) {
 }
 
 function validateAuditConsistency(audit) {
+  validateAuditCompleteness(audit)
+  validateAuditZeroDiscrepancies(audit)
+}
+
+function validateAuditCompleteness(audit) {
   if (audit?.openOrdersReconciled !== true ||
       audit?.fillsReconciled !== true ||
       audit?.balancesReconciled !== true ||
-      audit?.accountingConsistent !== true ||
-      audit?.unresolvedOwnedOrders !== 0 ||
+      audit?.accountingConsistent !== true) {
+    throw new Error("Account-wide reconciliation is incomplete")
+  }
+}
+
+function validateAuditZeroDiscrepancies(audit) {
+  if (audit?.unresolvedOwnedOrders !== 0 ||
       audit?.unresolvedOwnedFills !== 0 ||
       audit?.unresolvedExternalOrders !== 0 ||
       audit?.balanceDiscrepancies !== 0) {
@@ -92,8 +102,14 @@ function validateAuditBlockers({ audit, blockerIds }) {
 
 export function validateAccountResolutionAudit({ audit, blockerIds, configuredMarkets }) {
   validateAuditStatus(audit)
-  validateAuditMarkets({ audit, configuredMarkets })
-  validateAuditBlockers({ audit, blockerIds })
+  validateAuditMarkets({
+    audit,
+    configuredMarkets,
+  })
+  validateAuditBlockers({
+    audit,
+    blockerIds,
+  })
   if (!isText(audit.reconciliationId) ||
       !isText(audit.capturedAt) ||
       !Number.isFinite(Date.parse(audit.capturedAt))) {
