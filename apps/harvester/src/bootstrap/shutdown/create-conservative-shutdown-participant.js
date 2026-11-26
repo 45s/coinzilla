@@ -38,6 +38,27 @@ function createRecoveryPriceRefreshFailure({ symbol, error } = {}) {
   }
 }
 
+function awaitWithShutdownSignal(operation, signal) {
+  throwIfShutdownAborted(signal)
+  const operationPromise = Promise.resolve().then(operation)
+  if (!signal) {
+    return operationPromise
+  }
+
+  let abortHandler
+  const abortPromise = new Promise((resolve, reject) => {
+    abortHandler = () => reject(
+      signal.reason ?? new Error("Strategy shutdown participant operation was aborted"),
+    )
+    signal.addEventListener("abort", abortHandler, { once: true })
+    if (signal.aborted) {
+      abortHandler()
+    }
+  })
+  return Promise.race([operationPromise, abortPromise])
+    .finally(() => signal.removeEventListener("abort", abortHandler))
+}
+
 function throwIfShutdownAborted(signal) {
   if (!signal?.aborted) {
     return
@@ -117,7 +138,7 @@ async function runStage({ stage, operation, signal, symbol = "*", stageDiagnosti
   updateStageDiagnostics({ stageDiagnostics, symbol, stage, status: "STARTED" })
   try {
     throwIfShutdownAborted(signal)
-    const result = await operation()
+    const result = await awaitWithShutdownSignal(operation, signal)
     throwIfShutdownAborted(signal)
     if (result?.ok === true) {
       updateStageDiagnostics({ stageDiagnostics, symbol, stage, status: "COMPLETED" })
@@ -160,7 +181,7 @@ async function drainUserData(drainUserDataEvents, signal, {
   updateStageDiagnostics({ stageDiagnostics, symbol, stage, status: "STARTED" })
   try {
     throwIfShutdownAborted(signal)
-    const result = await drainUserDataEvents()
+    const result = await awaitWithShutdownSignal(drainUserDataEvents, signal)
     throwIfShutdownAborted(signal)
     if (result?.ok === false) {
       const { errors: resultErrors, error: resultError } = result
@@ -217,7 +238,7 @@ async function flushJournal(eventPublisher, signal, {
       }
     }
 
-    const result = await eventPublisher.flush()
+    const result = await awaitWithShutdownSignal(() => eventPublisher.flush(), signal)
     throwIfShutdownAborted(signal)
     if (result?.ok === true && result?.durable === true) {
       updateStageDiagnostics({ stageDiagnostics, symbol, stage, status: "COMPLETED" })
@@ -482,7 +503,10 @@ async function auditRecoverySellCoverage({ engine, symbol, blockers, signal, sta
 
   try {
     throwIfShutdownAborted(signal)
-    const result = await engine.auditShutdownRecoverySellCoverage({ symbols: [symbol] })
+    const result = await awaitWithShutdownSignal(
+      () => engine.auditShutdownRecoverySellCoverage({ symbols: [symbol] }),
+      signal,
+    )
     throwIfShutdownAborted(signal)
     if (result?.ok === true && result.data?.covered === true) {
       updateStageDiagnostics({ stageDiagnostics, symbol, stage, status: "COMPLETED" })
@@ -546,13 +570,16 @@ async function assessMarketSafety({
   blockers.push(...getExternalBlockers({ getShutdownBlockers,
     symbol }))
 
-  const safety = await engine.auditShutdownSafety({
-    symbol,
-    reconciliationComplete,
-    journalDurable,
-    coverageResult,
-    externalBlockers: blockers,
-  })
+  const safety = await awaitWithShutdownSignal(
+    () => engine.auditShutdownSafety({
+      symbol,
+      reconciliationComplete,
+      journalDurable,
+      coverageResult,
+      externalBlockers: blockers,
+    }),
+    signal,
+  )
   throwIfShutdownAborted(signal)
   updateStageDiagnostics({
     stageDiagnostics,
@@ -865,7 +892,7 @@ export function createConservativeShutdownParticipant({
       updateStageDiagnostics({ stageDiagnostics, symbol: "*", stage, status: "STARTED" })
       try {
         throwIfShutdownAborted(signal)
-        await engine.waitForShutdownGate()
+        await awaitWithShutdownSignal(() => engine.waitForShutdownGate(), signal)
         throwIfShutdownAborted(signal)
         updateStageDiagnostics({ stageDiagnostics, symbol: "*", stage, status: "COMPLETED" })
       } catch (error) {

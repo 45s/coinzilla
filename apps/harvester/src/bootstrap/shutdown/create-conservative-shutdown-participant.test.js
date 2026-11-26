@@ -924,9 +924,9 @@ test("does not advance to BUY cancellation or recovery proof after a participant
   assert.deepEqual(pendingSnapshot.missingEvidence, ["LATE_ORDER_EXECUTION_EVIDENCE"])
 
   controller.abort(new Error("participant deadline elapsed"))
-  releaseReconciliation()
 
   await assert.rejects(safety, /participant deadline elapsed/)
+  releaseReconciliation()
   const abortedSnapshot = participant.getSafetySnapshot().markets.find(({ symbol }) => symbol === "DOGEUSDT")
   assert.equal(abortedSnapshot.operationStatus, "ABORTED")
   assert.equal(abortedSnapshot.nestedError.message, "participant deadline elapsed")
