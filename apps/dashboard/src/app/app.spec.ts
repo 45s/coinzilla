@@ -239,8 +239,10 @@ describe('AppComponent', () => {
     fixture.detectChanges();
 
     const select = fixture.nativeElement.querySelector('select[aria-label="Dashboard theme"]') as HTMLSelectElement;
+    expect(select.value, 'A new Dashboard installation must select StarAdmin automatically.').toBe('staradmin');
+    expect(document.documentElement.dataset['theme'], 'The root document must receive the selected StarAdmin palette.').toBe('staradmin');
     expect(select.options.length, 'The theme picker must retain all existing themes and add StarAdmin.').toBe(9);
-    expect(Array.from(select.options).map((option) => option.value)).toEqual([
+    expect(Array.from(select.options).map((option) => option.value), 'All existing theme choices must remain available.').toEqual([
       'staradmin', 'current', 'midnight', 'light', 'oled', 'green', 'arctic', 'warm', 'system',
     ]);
 
@@ -248,8 +250,8 @@ describe('AppComponent', () => {
     select.dispatchEvent(new Event('change'));
     fixture.detectChanges();
 
-    expect(document.documentElement.dataset['theme']).toBe('light');
-    expect(window.localStorage.getItem('coinzilla.dashboard.theme')).toBe('light');
+    expect(document.documentElement.dataset['theme'], 'Selecting a theme must update the active document palette.').toBe('light');
+    expect(window.localStorage.getItem('coinzilla.dashboard.theme'), 'The selected palette must persist across page reloads.').toBe('light');
 
     fixture.destroy();
     window.localStorage.removeItem('coinzilla.dashboard.theme');
@@ -257,7 +259,7 @@ describe('AppComponent', () => {
 
   it('defaults to StarAdmin and reads a previously saved theme during component initialization', () => {
     window.localStorage.setItem('coinzilla.dashboard.theme', 'light');
-    expect(readSavedDashboardTheme(window.localStorage)).toBe('light');
+    expect(readSavedDashboardTheme(window.localStorage), 'A previously saved palette must take precedence over the default.').toBe('light');
     expect(readSavedDashboardTheme(undefined), 'A fresh Dashboard install must use the new StarAdmin design.').toBe('staradmin');
     expect(readSavedDashboardTheme({
       getItem: () => 'not-a-theme',
