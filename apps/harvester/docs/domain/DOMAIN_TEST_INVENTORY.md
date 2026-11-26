@@ -395,7 +395,6 @@ The from-scratch RS scenario registry now maps two application authorizer cases 
 
 Both named tests are included in `config.targetedTestFiles`. They passed Harvester Targeted Tests and Harvester Unit Tests on exact code head `a3aec5c456f88fa85126fef6a3086c52f2ffff17`. They prove these specific account-allocation boundaries only; they do not establish the full order-event partial-fill lifecycle, all account-snapshot authorization boundaries, or complete RS-002 coverage. RS-002-006 and RS-002 remain PARTIAL; no scenario is promoted to VERIFIED solely by test mapping.
 
-
 ## RS-006 application scenario checkpoint — 2026-11-26
 
 - Registered cases: `RS-006-003-A/B`, `RS-006-012-A`, `RS-006-014-A`, `RS-006-015-A`, `RS-006-016-A` and `RS-006-018-A`.

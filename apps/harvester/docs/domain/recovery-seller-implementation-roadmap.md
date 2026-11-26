@@ -484,7 +484,6 @@ RS-002-006-B now maps to an application authorizer/account-allocation regression
 
 Additional scenario increment: RS-002-020-B maps to an application allocation test proving an owned 60-quote pending BUY commitment is counted once at exact pair-cap equality (20 existing + 60 pending + 20 new = 100). RS-002-020-B is TEST-MAPPED and proves both exact-cap acceptance (20 + 60 pending + 20 = 100) and rejection below the cap (the same 100 exposure exceeds a 99 cap); RS-002-020 is now TEST-MAPPED. RS-002 remains PARTIAL because the wider cap/account-snapshot and order lifecycle matrix is not complete. The authorizer regression passed on code head `8e205239fcde7b610b183d4454dce98815fa6156`; full exact-head CI is pending.
 
-
 ### 2026-11-26 — RS-006 application scenario checkpoint
 
 - `RS-006-003-A/B`: two canonical partial SELL Fills are staged and reconciled together; exact recovery/legacy quantity allocation, quote commissions, one durable commit and duplicate replay no-op are asserted.
