@@ -141,6 +141,7 @@ function attachSharedOperatorRecoveryAcknowledgement(broker) {
         acknowledgeRecovery: () => {
           handlers.onStatus({
             type: "reconciled",
+              recoveryGeneration: 1,
             subscriptionId: 17,
             recoveryRequired: false,
             reconciliationRequired: false,
@@ -233,6 +234,7 @@ async function assertOperatorPauseSurvivesReconnect({ fixture, broker }) {
   })
   broker.emitUserDataStatus({
     type: "recovered",
+      recoveryGeneration: 1,
     subscriptionId: 17,
     recoveryRequired: true,
     reconciliationRequired: true,

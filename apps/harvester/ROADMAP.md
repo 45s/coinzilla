@@ -2416,3 +2416,12 @@ The initial inventory contains 18 scenarios across 16 categories: 15 TEST-MAPPED
 - Full production RS adapter composition remains blocked by the independent terminal-SELL/STOP accounting defect in [issue #1842](https://github.com/45s/coinzilla) and by the absence of a trusted OS-level sandbox launcher. Public RS scenarios remain non-executable.
 - Maintained Markdown style findings from the first full-workspace quality run were corrected: normalized blank lines, final newlines and list separation in the modified roadmaps, architecture and instruction/index documents.
 - In-memory run history is accepted for the MVP; durable persistence is deferred and is not a blocker.
+
+## Startup readiness diagnostics — issue #1860
+
+Implemented on [PR #1861](https://github.com/45s/coinzilla/pull/1861): a shared immutable readiness projection now covers startup and authorized operator status/market queries. Startup keeps the existing user-data trading gate closed until PREFLIGHT, market-data and candle-history evidence is sampled; runtime/account blockers remain global while market-local book, metadata and volatility blockers remain scoped to their market. Existing engine admission guards remain authoritative, external orders remain unowned, and process restoration remains disabled.
+
+The branch has been synchronized with current `develop`. Exact-head Harvester tests, coverage, lint and required workflows remain the completion gate.
+The readiness report, market prerequisites and operator query projection were decomposed into focused functions to satisfy the repository's strict complexity and function-size rules without weakening lint policy.
+Accepted market-price events received while the global gate is closed are retained without running or consuming the strategy transition, then replayed through the engine's existing deferred-evaluation queue after activation; startup awaits replay completion, and market-local pause state is not broadened into a global replay.
+Per-market book freshness, metadata and volatility remain enforced at the final engine submission boundary; the operator readiness projection reports those blockers without masking the engine's precise submission/replacement diagnostics.

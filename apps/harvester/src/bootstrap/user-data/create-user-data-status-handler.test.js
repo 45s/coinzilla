@@ -17,6 +17,7 @@ const createState = (overrides = {}) => ({
   lastReportedRecoveredGeneration: -1,
   startupComplete: true,
   pendingRecovery: false,
+  tradingActivationDeferred: false,
   initialAccountSnapshotReady: true,
   ...overrides,
 })
@@ -50,6 +51,27 @@ logs,
 actions }
 }
 
+test("does not let an early stream status bypass the deferred startup readiness audit", () => {
+  const { handler, state, actions } = createHandler({
+    state: createState({
+      tradingActivationDeferred: true,
+      initialAccountSnapshotReady: true,
+      ready: false,
+    }),
+  })
+  handler({ type: "connected" })
+
+  assert.equal(state.ready, false, "A connected stream must not open the existing trading gate while startup readiness is deferred.")
+  assert.equal(state.status, "STARTUP_READINESS_AUDIT_PENDING", "The status must explain why readiness remains closed.")
+  assert.equal(actions.resumptions, 0, "Deferred strategy evaluations must not resume before the startup report passes.")
+
+  state.tradingActivationDeferred = false
+  handler({ type: "connected" })
+  assert.equal(state.ready, true, "The existing user-data readiness gate may open after the explicit startup activation boundary.")
+  assert.equal(actions.resumptions, 1, "Deferred strategy evaluations may resume only after explicit activation.")
+})
+
+
 test("a transport disconnect invalidates recovery generation and closes readiness", () => {
   const { handler, state, events } = createHandler()
   handler({ type: "connectionClosed",
@@ -63,17 +85,27 @@ recoveryRequired: true })
   assert.equal(events[0].name, HARVESTER_EVENT_NAMES.BROKER_STATUS_CHANGED, "The broker status event must use the stable lifecycle name.")
 })
 
-test("a stream reconciliation status cannot clear the application reconciliation gate", () => {
+test("a matching reconciled stream clears transport unsafety but not the application reconciliation gate", () => {
   const { handler, state } = createHandler({
-    state: createState({ requiresReconciliation: true,
-streamUnsafe: true,
-ready: false }),
+    state: createState({
+      requiresReconciliation: true,
+      streamUnsafe: true,
+      ready: false,
+      recoveryGeneration: 5,
+      recoverySubscriptionId: 42,
+      recoveryBrokerGeneration: 7,
+      lastAcknowledgedRecoveryGeneration: 0,
+    }),
   })
-  handler({ type: "reconciled",
-recoveryRequired: false,
-reconciliationRequired: false })
+  handler({
+    type: "reconciled",
+    recoveryRequired: false,
+    reconciliationRequired: false,
+    subscriptionId: 42,
+    recoveryGeneration: 7,
+  })
 
-  assert.equal(state.streamUnsafe, false, "A reconciled stream may clear its transport-unsafe marker.")
+  assert.equal(state.streamUnsafe, false, "A matching current subscription may clear only its transport-unsafe marker.")
   assert.equal(state.requiresReconciliation, true, "Only application reconciliation and acknowledgement may clear the application gate.")
   assert.equal(state.ready, false, "Trading must remain blocked until application recovery completes.")
 })
@@ -312,7 +344,7 @@ test("stores the broker recovery token and refuses terminal completion from a di
   )
 })
 
-test("does not clear the application recovery gate for a different subscription identity", () => {
+test("does not clear transport or application recovery gates for a different subscription identity", () => {
   const state = createState({
     ready: false,
     requiresReconciliation: true,
@@ -321,6 +353,7 @@ test("does not clear the application recovery gate for a different subscription 
     recoveryGeneration: 5,
     lastAcknowledgedRecoveryGeneration: 5,
     recoverySubscriptionId: 42,
+    recoveryBrokerGeneration: 7,
   })
   const fixture = createHandler({ state })
   fixture.handler({
@@ -328,25 +361,29 @@ test("does not clear the application recovery gate for a different subscription 
     recoveryRequired: false,
     reconciliationRequired: false,
     subscriptionId: 41,
+    recoveryGeneration: 7,
   })
 
-  assert.equal(state.streamUnsafe, false)
+  assert.equal(state.streamUnsafe, true, "A different subscription identity cannot certify the current stream as safe.")
   assert.equal(state.requiresReconciliation, true)
   assert.equal(state.ready, false)
 })
 
 
 
-test("logs concise user-data stream lifecycle transitions once and suppresses duplicate notifications", () => {
-  const { handler, state, logs } = createHandler()
-  const disconnected = { type: "connectionClosed",
-reason: "connection_lost",
-recoveryRequired: true }
+function emitDuplicateUserDataLifecycleTransitions({ handler, state } = {}) {
+  const disconnected = {
+    type: "connectionClosed",
+    reason: "connection_lost",
+    recoveryRequired: true,
+  }
   handler(disconnected)
   handler(disconnected)
-  handler({ type: "terminated",
-reason: "connection_lost",
-recoveryRequired: true })
+  handler({
+    type: "terminated",
+    reason: "connection_lost",
+    recoveryRequired: true,
+  })
   handler({ type: "recovering",
 attempt: 1,
 recoveryRequired: true })
@@ -373,36 +410,53 @@ recoveryRequired: true })
   }
   handler(restored)
   handler(restored)
+}
 
+function getUserDataLifecycleLogProjection({ logs } = {}) {
+  return logs.info.map(({ message, reason, attempt, subscriptionId, recoveryGeneration }) => ({
+    message,
+    reason,
+    attempt,
+    subscriptionId,
+    recoveryGeneration,
+  }))
+}
+
+test("logs concise user-data stream lifecycle transitions once and suppresses duplicate notifications", () => {
+  const { handler, state, logs } = createHandler()
+  emitDuplicateUserDataLifecycleTransitions({ handler,
+state })
   assert.deepEqual(
-    logs.info.map(({ message, reason, attempt, subscriptionId, recoveryGeneration }) => ({
-      message,
-reason,
-attempt,
-subscriptionId,
-recoveryGeneration,
-    })),
+    getUserDataLifecycleLogProjection({ logs }),
     [
-      { message: "User-data stream disconnected",
-reason: "connection_lost",
-attempt: undefined,
-subscriptionId: undefined,
-recoveryGeneration: undefined },
-      { message: "User-data stream reconnecting",
-reason: undefined,
-attempt: 1,
-subscriptionId: undefined,
-recoveryGeneration: undefined },
-      { message: "User-data stream reconnected",
-reason: undefined,
-attempt: 1,
-subscriptionId: 42,
-recoveryGeneration: 7 },
-      { message: "User-data stream subscription restored",
-reason: undefined,
-attempt: undefined,
-subscriptionId: 42,
-recoveryGeneration: 7 },
+      {
+        message: "User-data stream disconnected",
+        reason: "connection_lost",
+        attempt: undefined,
+        subscriptionId: undefined,
+        recoveryGeneration: undefined,
+      },
+      {
+        message: "User-data stream reconnecting",
+        reason: undefined,
+        attempt: 1,
+        subscriptionId: undefined,
+        recoveryGeneration: undefined,
+      },
+      {
+        message: "User-data stream reconnected",
+        reason: undefined,
+        attempt: 1,
+        subscriptionId: 42,
+        recoveryGeneration: 7,
+      },
+      {
+        message: "User-data stream subscription restored",
+        reason: undefined,
+        attempt: undefined,
+        subscriptionId: 42,
+        recoveryGeneration: 7,
+      },
     ],
     "Only genuine disconnect, reconnect, reconnected, and restored transitions must be logged; duplicate status deliveries must not repeat them.",
   )

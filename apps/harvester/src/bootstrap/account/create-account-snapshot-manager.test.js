@@ -44,6 +44,22 @@ function createFixtureEventPublisher({ state }) {
   }
 }
 
+function createFixtureMarket() {
+  const baseAsset = new Asset({ id: "asset:BTC",
+code: "BTC" })
+  const quoteAsset = new Asset({ id: "asset:USDT",
+code: "USDT" })
+  const market = new Market({
+    venue: "binance",
+    symbol: "BTCUSDT",
+    baseAsset,
+    quoteAsset,
+  })
+  return { baseAsset,
+quoteAsset,
+market }
+}
+
 const createFixture = ({
   accountSnapshots = [],
   accountSnapshotError,
@@ -61,20 +77,7 @@ const createFixture = ({
   logger = {},
   monotonicNow,
 } = {}) => {
-  const baseAsset = new Asset({
-    id: "asset:BTC",
-    code: "BTC",
-  })
-  const quoteAsset = new Asset({
-    id: "asset:USDT",
-    code: "USDT",
-  })
-  const market = new Market({
-    venue: "binance",
-    symbol: "BTCUSDT",
-    baseAsset,
-    quoteAsset,
-  })
+  const { baseAsset, quoteAsset, market } = createFixtureMarket()
   const state = {
     accountSnapshots,
     accountSnapshotError,
@@ -162,77 +165,57 @@ test("captures configured-asset balances and durably publishes the account audit
   assert.equal(fixture.publishedEvents[0].data.phase, "PREFLIGHT", "The account audit event must retain its requested lifecycle phase.")
   assert.equal(fixture.publishedEvents[0].data.balances.length, 2, "The audit must include both configured market assets.")
   assert.equal(fixture.getFlushCount(), 1, "The account audit must be durably flushed before the call resolves.")
+  assert.deepEqual(fixture.manager.getReadinessSnapshot().preflight, {
+    completed: true,
+    durable: true,
+    sourceTime: 100,
+    balanceCount: 2,
+  }, "The readiness source must expose the completed durable PREFLIGHT boundary without exposing balances.")
 })
 
 
-function createThirdAssetCommissionFixture() {
-  const {market} = createFixture()
-  const bnb = new Asset({
-    id: "asset:BNB",
-    code: "BNB",
+function createCommissionAssetBalance({ asset, amount } = {}) {
+  return new Balance({
+    free: new Quantity({ amount,
+asset }),
+    locked: new Quantity({ amount: "0",
+asset }),
   })
-  const xrp = new Asset({
-    id: "asset:XRP",
-    code: "XRP",
-  })
-  const fixture = createFixture({
-    accountSnapshots: [
-      createAccountSnapshot({
-        market,
-        sourceTime: 100,
-        extraBalances: [
-          new Balance({
-            free: new Quantity({
-              amount: "1",
-              asset: bnb,
-            }),
-            locked: new Quantity({
-              amount: "0",
-              asset: bnb,
-            }),
-          }),
-          new Balance({
-            free: new Quantity({
-              amount: "25",
-              asset: xrp,
-            }),
-            locked: new Quantity({
-              amount: "0",
-              asset: xrp,
-            }),
-          }),
-        ],
-      }),
-      createAccountSnapshot({
-        market,
-        sourceTime: 200,
-        extraBalances: [
-          new Balance({
-            free: new Quantity({
-              amount: "0.9999",
-              asset: bnb,
-            }),
-            locked: new Quantity({
-              amount: "0",
-              asset: bnb,
-            }),
-          }),
-          new Balance({
-            free: new Quantity({
-              amount: "25",
-              asset: xrp,
-            }),
-            locked: new Quantity({
-              amount: "0",
-              asset: xrp,
-            }),
-          }),
-        ],
-      }),
+}
+
+function createCommissionAssetSnapshot({ market, sourceTime, bnb, xrp, bnbAmount } = {}) {
+  return createAccountSnapshot({
+    market,
+    sourceTime,
+    extraBalances: [
+      createCommissionAssetBalance({ asset: bnb,
+amount: bnbAmount }),
+      createCommissionAssetBalance({ asset: xrp,
+amount: "25" }),
     ],
   })
+}
+
+function createThirdAssetCommissionFixture() {
+  const { market } = createFixtureMarket()
+  const bnb = new Asset({ id: "asset:BNB",
+code: "BNB" })
+  const xrp = new Asset({ id: "asset:XRP",
+code: "XRP" })
+  const accountSnapshots = [
+    createCommissionAssetSnapshot({ market,
+sourceTime: 100,
+bnb,
+xrp,
+bnbAmount: "1" }),
+    createCommissionAssetSnapshot({ market,
+sourceTime: 200,
+bnb,
+xrp,
+bnbAmount: "0.9999" }),
+  ]
   return {
-    fixture,
+    fixture: createFixture({ accountSnapshots }),
     bnb,
     xrp,
   }
@@ -309,87 +292,79 @@ test("fails closed when an actual commission asset has no PREFLIGHT balance", as
   assert.equal(fixture.publishedEvents.length, 1)
 })
 
-test("captures Portfolio and active-order baselines at the account snapshot boundary", async () => {
-  const fixtureMarket = createFixture().market
+function createPartialActiveOrder({ market, side, clientOrderId, price, originalQuantity, executedQuantity } = {}) {
+  return new CanonicalOrder({
+    clientOrderId,
+    brokerOrderId: `${clientOrderId}-broker`,
+    market,
+    side,
+    type: "LIMIT",
+    limitPrice: new Money({ amount: price,
+asset: market.quoteAsset }),
+    originalQuantity: new Quantity({ amount: originalQuantity,
+asset: market.baseAsset }),
+    executedQuantity: new Quantity({ amount: executedQuantity,
+asset: market.baseAsset }),
+    status: "PARTIALLY_FILLED",
+  })
+}
+
+function createPortfolioAndActiveOrderBaseline({ market } = {}) {
   const portfolioFill = new Fill({
     tradeId: "snapshot-baseline-buy-fill",
     brokerOrderId: "snapshot-baseline-buy-order",
-    market: fixtureMarket,
+    market,
     side: "BUY",
-    price: new Money({
-      amount: "10",
-      asset: fixtureMarket.quoteAsset
-    }),
-    quantity: new Quantity({
-      amount: "10",
-      asset: fixtureMarket.baseAsset
-    }),
-    quoteQuantity: new Money({
-      amount: "100",
-      asset: fixtureMarket.quoteAsset
-    }),
+    price: new Money({ amount: "10",
+asset: market.quoteAsset }),
+    quantity: new Quantity({ amount: "10",
+asset: market.baseAsset }),
+    quoteQuantity: new Money({ amount: "100",
+asset: market.quoteAsset }),
     commissions: [],
     commissionStatus: "COMPLETE",
   })
-  const {portfolio} = new Portfolio().applyFill({ fill: portfolioFill,
-strategyId: StrategyId.COIN_GRABBER })
-  const activeBuyOrder = new CanonicalOrder({
-    clientOrderId: "snapshot-baseline-active-buy",
-    brokerOrderId: "snapshot-baseline-active-buy-broker",
-    market: fixtureMarket,
-    side: "BUY",
-    type: "LIMIT",
-    limitPrice: new Money({
-      amount: "50",
-      asset: fixtureMarket.quoteAsset
-    }),
-    originalQuantity: new Quantity({
-      amount: "3",
-      asset: fixtureMarket.baseAsset
-    }),
-    executedQuantity: new Quantity({
-      amount: "1",
-      asset: fixtureMarket.baseAsset
-    }),
-    status: "PARTIALLY_FILLED",
+  const { portfolio } = new Portfolio().applyFill({
+    fill: portfolioFill,
+    strategyId: StrategyId.COIN_GRABBER,
   })
-  const activeSellOrder = new CanonicalOrder({
-    clientOrderId: "snapshot-baseline-active-sell",
-    brokerOrderId: "snapshot-baseline-active-sell-broker",
-    market: fixtureMarket,
-    side: "SELL",
-    type: "LIMIT",
-    limitPrice: new Money({
-      amount: "11",
-      asset: fixtureMarket.quoteAsset
+  const activeOrders = [
+    createPartialActiveOrder({
+      market,
+      side: "BUY",
+      clientOrderId: "snapshot-baseline-active-buy",
+      price: "50",
+      originalQuantity: "3",
+      executedQuantity: "1",
     }),
-    originalQuantity: new Quantity({
-      amount: "5",
-      asset: fixtureMarket.baseAsset
+    createPartialActiveOrder({
+      market,
+      side: "SELL",
+      clientOrderId: "snapshot-baseline-active-sell",
+      price: "11",
+      originalQuantity: "5",
+      executedQuantity: "2",
     }),
-    executedQuantity: new Quantity({
-      amount: "2",
-      asset: fixtureMarket.baseAsset
-    }),
-    status: "PARTIALLY_FILLED",
-  })
+  ]
+  return { portfolio,
+activeOrders }
+}
+
+test("captures Portfolio and active-order baselines at the account snapshot boundary", async () => {
+  const fixtureMarket = createFixtureMarket().market
+  const { portfolio, activeOrders } = createPortfolioAndActiveOrderBaseline({ market: fixtureMarket })
   const fixture = createFixture({
-    accountSnapshots: [createAccountSnapshot({
-      market: fixtureMarket,
-      sourceTime: 100
-    })],
+    accountSnapshots: [createAccountSnapshot({ market: fixtureMarket,
+sourceTime: 100 })],
     portfolio,
-    activeOrders: [activeBuyOrder, activeSellOrder],
+    activeOrders,
   })
-
   const snapshot = await fixture.manager.refreshAccountSnapshot()
-
   assert.equal(snapshot.getQuoteCashFlowBaseline({ assetId: fixtureMarket.quoteAsset.id }), "-100", "The quote cash-flow baseline must reflect the Portfolio BUY already represented by the exchange snapshot.")
   assert.equal(snapshot.getPortfolioBaseQuantityBaseline({ assetId: fixtureMarket.baseAsset.id }), "10", "The total Portfolio base baseline must include active and retained free quantities at snapshot time.")
   assert.equal(snapshot.getCommittedQuoteBalanceBaseline({ assetId: fixtureMarket.quoteAsset.id }), "100", "The BUY commitment baseline must equal the remaining two units multiplied by the exact 50 quote limit price.")
   assert.equal(snapshot.getCommittedBaseBalanceBaseline({ assetId: fixtureMarket.baseAsset.id }), "3", "The SELL commitment baseline must equal the remaining three units of the partially filled SELL order.")
 })
-
 test("rejects an account snapshot that omits a configured market asset", async () => {
   const fixture = createFixture({
     accountSnapshots: [{
@@ -529,6 +504,12 @@ test("records unowned open orders as blocked without adopting them", async () =>
   assert.equal(fixture.publishedEvents[0].data.readiness, "BLOCKED", "An unowned open order must be recorded as blocked in the audit event.")
   assert.deepEqual(fixture.manager.getAccountSnapshot(), undefined, "An open-order audit must not manufacture an account balance snapshot.")
   assert.equal(fixture.getFlushCount(), 1, "The open-order audit must be durably flushed before startup continues.")
+  const readiness = fixture.manager.getReadinessSnapshot()
+  assert.equal(readiness.openOrders.completed, true, "The report source must expose the completed open-order audit.")
+  assert.equal(readiness.openOrders.durable, true, "The report source must expose the existing durability acknowledgement.")
+  assert.equal(readiness.openOrders.orderCount, 1, "The report source must expose a count, not raw order records.")
+  assert.deepEqual(readiness.openOrders.unownedSymbols, ["BTCUSDT"], "The report source must expose only affected symbols.")
+  assert.equal(JSON.stringify(readiness.openOrders).includes("manual-order-1"), false, "The report source must not expose external order identifiers.")
 })
 
 

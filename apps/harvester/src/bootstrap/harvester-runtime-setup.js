@@ -5,6 +5,8 @@ export function createHarvesterUserDataState() {
     shutdownRequested: false,
     marketIntakeStopped: false,
     ready: false,
+    preflightComplete: false,
+    tradingActivationDeferred: false,
     initialAccountSnapshotReady: false,
     requiresReconciliation: false,
     streamUnsafe: false,
@@ -32,6 +34,8 @@ export function getHarvesterOperatorRuntimeSnapshot({
   brokerName,
   tradingEnabled,
   tradingMode,
+  startupBoundary = false,
+  readinessInputs = {},
 } = {}) {
   const observedAt = now()
   const lastEventAt = userDataState.lastStatusEventAt
@@ -39,6 +43,9 @@ export function getHarvesterOperatorRuntimeSnapshot({
     observedAt,
     startedAt: runtimeStartedAt,
     runtimeState: userDataState.stopped ? "STOPPING" : "RUNNING",
+    startupComplete: userDataState.startupComplete === true,
+    startupBoundary: startupBoundary === true,
+    readinessInputs,
     broker: brokerName,
     tradingEnabled,
     tradingMode,
@@ -53,19 +60,36 @@ export function getHarvesterOperatorRuntimeSnapshot({
   })
 }
 
-export function resumeHarvesterDeferredStrategyEvaluations({
+export async function resumeHarvesterDeferredStrategyEvaluations({
   tradingEngine,
   userDataState,
   logger,
 } = {}) {
-  if (!tradingEngine || !userDataState.ready || userDataState.stopped || userDataState.shutdownRequested) {return}
-  void tradingEngine.resumeDeferredEvaluations().then((result) => {
-    if (!result.ok) {logger.error?.({ message: "deferred strategy evaluation failed",
-      errors: result.errors })}
-  }).catch((error) => {
-    logger.error?.({ message: "deferred strategy evaluation failed",
-      error })
-  })
+  if (!tradingEngine || !userDataState.ready || userDataState.stopped || userDataState.shutdownRequested) {
+    return {
+      ok: true,
+      data: { skipped: true },
+    }
+  }
+  try {
+    const result = await tradingEngine.resumeDeferredEvaluations()
+    if (!result.ok) {
+      logger.error?.({
+        message: "deferred strategy evaluation failed",
+        errors: result.errors,
+      })
+    }
+    return result
+  } catch (error) {
+    logger.error?.({
+      message: "deferred strategy evaluation failed",
+      error,
+    })
+    return {
+      ok: false,
+      errors: [error],
+    }
+  }
 }
 
 export async function drainHarvesterUserDataEvents({ userDataState } = {}) {

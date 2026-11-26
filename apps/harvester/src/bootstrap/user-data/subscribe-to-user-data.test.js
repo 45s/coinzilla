@@ -7,6 +7,7 @@ const test = (...args) => nodeTest(`[subscribe-to-user-data.test.js] ${args[0]}`
 
 const createState = (overrides = {}) => ({
   ready: false,
+  preflightComplete: false,
   initialAccountSnapshotReady: false,
   requiresReconciliation: false,
   accountingFailed: false,
@@ -15,7 +16,7 @@ const createState = (overrides = {}) => ({
   ...overrides,
 })
 
-const createFixture = ({ tradingEnabled = false, tradingMode = "testnet", state = createState(), subscribe, onEvent = () => {}, onObservation = () => {}, publishAccountSnapshot, publishOpenOrdersSnapshot, getAccountSafetyBlocker, logger = {} } = {}) => {
+const createFixture = ({ tradingEnabled = false, tradingMode = "testnet", state = createState(), subscribe, onEvent = () => {}, onObservation = () => {}, publishAccountSnapshot, publishOpenOrdersSnapshot, getAccountSafetyBlocker, deferTradingActivation = false, resumeDeferredStrategyEvaluations, logger = {} } = {}) => {
   const calls = []
   const events = []
   const subscription = { disconnect: async () => calls.push("disconnect") }
@@ -49,7 +50,8 @@ data: subscription }
     },
     getAccountSnapshot: () => ({ sourceTime: 100 }),
     getAccountSafetyBlocker,
-    resumeDeferredStrategyEvaluations: () => calls.push("resume"),
+    deferTradingActivation,
+    resumeDeferredStrategyEvaluations: resumeDeferredStrategyEvaluations ?? (() => calls.push("resume")),
   })
   return { result,
 state,
@@ -101,7 +103,7 @@ test("fails closed when accounting has already become unsafe during subscription
 
   await assert.rejects(
     fixture.result,
-    /Cannot enable Conservative trading after an unowned or invalid user-data event/,
+    (error) => error.code === "HARVESTER_USER_DATA_STARTUP_UNSAFE" && error.context?.status === fixture.state.status,
     "An unsafe event observed before ownership initialization must block trading startup.",
   )
   assert.equal(fixture.state.ready, false, "Unsafe startup must leave trading readiness closed.")
@@ -248,4 +250,69 @@ test("rejects trading startup while an account-scoped safety blocker is active",
   )
   assert.equal(fixture.state.ready, false)
   assert.equal(fixture.calls.includes("resume"), false)
+})
+
+
+test("defers the existing user-data trading gate until the startup readiness audit completes", async () => {
+  const fixture = createFixture({ tradingEnabled: true,
+deferTradingActivation: true })
+  const setup = await fixture.result
+
+  assert.equal(setup.subscription, fixture.subscription, "Bootstrap must retain the live user-data subscription while trading remains gated.")
+  assert.equal(typeof setup.activateTrading, "function", "Bootstrap must receive the explicit activation continuation.")
+  assert.equal(fixture.state.ready, false, "PREFLIGHT completion alone must not open the trading gate before market readiness is audited.")
+  assert.equal(fixture.state.preflightComplete, true, "The completed PREFLIGHT and queued-event drain must remain observable without opening trading.")
+  assert.deepEqual(fixture.calls, ["subscribe", "account:PREFLIGHT", "orders:PREFLIGHT"], "Deferred setup must not resume strategy evaluation before the readiness audit.")
+
+  await setup.activateTrading()
+
+  assert.equal(fixture.state.ready, true, "The existing user-data readiness flag remains the authoritative trading gate after activation.")
+  assert.deepEqual(fixture.calls, ["subscribe", "account:PREFLIGHT", "orders:PREFLIGHT", "resume"], "Deferred strategy evaluations must resume only after explicit activation.")
+})
+
+
+test("waits for deferred strategy replay before completing trading activation", async () => {
+  let releaseReplay
+  let signalReplayStarted
+  let replayStarted = false
+  let activationCompleted = false
+  const replay = new Promise((resolve) => { releaseReplay = resolve })
+  const replayStartedSignal = new Promise((resolve) => { signalReplayStarted = resolve })
+  const fixture = createFixture({
+    tradingEnabled: true,
+    deferTradingActivation: true,
+    resumeDeferredStrategyEvaluations: async () => {
+      replayStarted = true
+      signalReplayStarted()
+      await replay
+    },
+  })
+  const setup = await fixture.result
+  const activation = setup.activateTrading().then(() => {
+    activationCompleted = true
+  })
+
+  await replayStartedSignal
+  assert.equal(replayStarted, true, "Activation must begin draining deferred strategy evaluations.")
+  assert.equal(activationCompleted, false, "Startup activation must not complete while deferred evaluation replay is still running.")
+  assert.equal(fixture.state.ready, true, "The authoritative gate opens only after readiness checks have passed.")
+
+  releaseReplay()
+  await activation
+  assert.equal(activationCompleted, true, "Activation completes after the deferred evaluation queue has drained.")
+})
+
+test("revalidates user-data safety before deferred trading activation", async () => {
+  const fixture = createFixture({ tradingEnabled: true,
+deferTradingActivation: true })
+  const setup = await fixture.result
+  fixture.state.accountingFailed = true
+
+  await assert.rejects(
+    setup.activateTrading(),
+    (error) => error.code === "HARVESTER_USER_DATA_STARTUP_UNSAFE",
+    "An unsafe event received after PREFLIGHT must prevent the delayed activation.",
+  )
+  assert.equal(fixture.state.ready, false, "A failed activation revalidation must leave the authoritative trading gate closed.")
+  assert.equal(fixture.calls.includes("resume"), false, "Deferred strategy evaluations must not resume after failed revalidation.")
 })
