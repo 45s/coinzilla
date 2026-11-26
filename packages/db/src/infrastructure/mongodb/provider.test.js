@@ -640,6 +640,45 @@ test("MongoDB commit treats an explicit write concern rejection as a confirmed p
   }
 })
 
+
+test("MongoDB retries only ambiguous write-concern timeouts and reports exhaustion", async () => {
+  let attempts = 0
+  const { provider, calls } = createProviderHarness({
+    topology: "replicaSet",
+    transactionSupported: true,
+    commandHandler: async (body) => {
+      if (body.commitTransaction) {
+        attempts += 1
+        return {
+          ok: 1,
+          writeConcernError: {
+            code: 64,
+            codeName: "WriteConcernTimeout",
+            errmsg: "replication acknowledgement timed out",
+          },
+        }
+      }
+      return { ok: 1, n: 1 }
+    },
+  })
+  const database = createDatabase({ provider })
+  await database.connect()
+
+  try {
+    await assert.rejects(
+      database.transaction((transaction) => transaction.create({
+        collection: "people",
+        record: { id: "write-concern-timeout" },
+      })),
+      (error) => error instanceof DatabaseTransactionOutcomeUnknownError,
+    )
+    assert.equal(attempts, 3)
+    assert.equal(calls.filter((body) => body.commitTransaction === 1).length, 3)
+  } finally {
+    await database.close()
+  }
+})
+
 test("MongoDB preserves an ambiguous commit outcome after a lost reply and a later NoSuchTransaction", async () => {
   let commitAttempts = 0
   const { provider, calls } = createProviderHarness({
