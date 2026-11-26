@@ -139,3 +139,7 @@ The worker dispatcher validates the typed execution envelope and resolves a stra
 All host-level strategy adapters, including non-process test adapters, must obey the same readiness contract. Adapter fixtures signal `onStarted` only when their simulated worker boundary is ready; a completed promise without that signal is a failed execution, not a successful run.
 
 The runner captures the original validated execution input before deleting its private handoff reference. Public run snapshots retain the recursively redacted input; only the adapter receives the isolated execution copy. Startup-state refactoring must preserve this separation.
+
+## REST error classification — 2026-11-26
+
+The Scenario Runner REST boundary preserves explicit client validation and capacity statuses. Unexpected runner or infrastructure exceptions are logged server-side and returned as HTTP 500 with a stable internal-error code and a generic message; implementation details and internal paths are not exposed to browser callers.

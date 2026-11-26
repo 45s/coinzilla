@@ -629,3 +629,56 @@ test("Scenario Runner API rejects untrusted browser origins before accepting a r
   assert.equal(submissions, 0,
     "a cross-origin browser request must not enqueue scenario execution")
 })
+
+test("Scenario Runner API sanitizes unexpected internal failures as server errors", async () => {
+  const runner = createRunnerFake()
+  runner.submit = () => {
+    throw new Error("internal worker path /srv/private/scenario-worker.js")
+  }
+  const response = responseRecorder()
+
+  await handleScenarioRunnerRequest({
+    request: createRequest({
+      method: "POST",
+      url: "/api/v1/scenario-runner/runs",
+      body: JSON.stringify({
+        strategyId: "RS",
+        scenarioId: "scenario",
+        input: {},
+      }),
+    }),
+    response,
+    pathname: "/api/v1/scenario-runner/runs",
+    runner,
+  })
+
+  const body = JSON.parse(response.body)
+  assert.equal(response.status, 500,
+    "Unexpected runner failures must be reported as server errors, not invalid client requests.")
+  assert.equal(body.error.code, "SCENARIO_RUNNER_INTERNAL_ERROR")
+  assert.equal(body.error.message, "Scenario Runner request failed.")
+  assert.equal(response.body.includes("/srv/private"), false,
+    "Internal paths and error details must not be exposed to browser clients.")
+})
+
+test("Scenario Runner API identifies malformed runner submissions as client errors", async () => {
+  const host = createScenarioRunnerHost()
+  const response = responseRecorder()
+
+  await handleScenarioRunnerRequest({
+    request: createRequest({
+      method: "POST",
+      url: "/api/v1/scenario-runner/runs",
+      body: JSON.stringify({
+        input: {},
+      }),
+    }),
+    response,
+    pathname: "/api/v1/scenario-runner/runs",
+    runner: host.runner,
+  })
+
+  assert.equal(response.status, 400,
+    "A malformed strategy/scenario submission must remain a client error.")
+  assert.equal(JSON.parse(response.body).error.code, "SCENARIO_RUNNER_SUBMISSION_INVALID")
+})
