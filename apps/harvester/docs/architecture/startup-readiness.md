@@ -160,3 +160,8 @@ The recovery-generation transition now clears `streamUnsafe` and `requiresReconc
 
 
 Market-price subscription setup now delegates the per-symbol intake reset to a small helper. The subscription lifecycle remains responsible for installing the handler, awaiting the broker acknowledgement and registering the subscription; readiness still requires an actual accepted price event or initial seed.
+
+
+## Engine market projection decomposition
+
+The operator market projection now separates market-data facts, pause/ownership facts, volatility facts and output shaping. The existing engine-owned blocker codes remain the source of truth for live market admission; the readiness report only projects them and adds startup-boundary diagnostics when those inputs are available.
