@@ -368,7 +368,7 @@ test("MongoDB provider preserves callback failures when abort is rejected", asyn
 test("MongoDB provider retries close after a transport cleanup failure", async () => {
   const harness = createProviderHarness()
   await harness.provider.connect()
-  const transport = harness.transports[0]
+  const [transport] = harness.transports
   const originalClose = transport.close.bind(transport)
   let closeAttempts = 0
   transport.close = async () => {
@@ -1184,7 +1184,7 @@ transactionSupported: true }
 function matchesConformanceDocument({ document, filter }) {
   const conditions = filter.$and ?? []
   return conditions.every((condition) => {
-    const [path, expected] = Object.entries(condition)[0]
+    const [[path, expected]] = Object.entries(condition)
     const key = path.slice("data.".length)
     const exists = Object.hasOwn(document.data, key)
     if (expected && expected.$type === 10) {
