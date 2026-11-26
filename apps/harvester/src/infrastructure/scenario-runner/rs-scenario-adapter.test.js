@@ -124,6 +124,8 @@ test("production RS accounting reconciles a profitable partial CANCELED SELL wit
   assert.equal(result.output.terminalSell.profitabilityEligible, true)
   assert.equal(result.output.terminalSell.cycleState.status, "UNRESOLVED")
   assert.equal(result.output.terminalSell.cycleState.terminalReconciled, true)
+  assert.equal(result.output.terminalSell.eventFillStaged, true)
+  assert.equal(result.output.terminalSell.eventWorkflowReconciled, true)
   assert.equal(result.output.reservedSellCycle, null)
   assert.ok(result.output.simulationFacts.some((fact) =>
     fact.factType === "RECOVERY_SELLER_MIXED_SELL_RECONCILED"))
