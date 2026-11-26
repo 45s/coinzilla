@@ -1,6 +1,6 @@
 # Database roadmap
 
-**Owner:** Database Infrastructure  
+**Owner:** Database Infrastructure
 **Scope:** `packages/db/`
 
 ## Current position
