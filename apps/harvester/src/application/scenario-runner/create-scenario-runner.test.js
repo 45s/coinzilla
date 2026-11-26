@@ -597,10 +597,26 @@ test("runner fails closed when an adapter completes without confirming worker re
 })
 
 
-test("runner records the exact source revision and replays the original scenario input on that revision", async () => {
+function createCompleteReplayProvenance() {
+  return {
+    verified: true,
+    missing: [],
+    identity: {
+      sourceCommitSha: "a".repeat(40),
+      sourceTreeSha: "b".repeat(40),
+      dependencyLockSha256: "c".repeat(64),
+      buildArtifactSha256: "d".repeat(64),
+      runtimeIdentity: "node-v24.22.3-linux-x64",
+      scenarioRegistrySha256: "e".repeat(64),
+    },
+  }
+}
+
+test("runner records complete immutable provenance and replays the original scenario input only when it matches", async () => {
   const receivedInputs = []
   let runSequence = 0
-  const sourceRevision = "a".repeat(40)
+  const replayProvenance = createCompleteReplayProvenance()
+  const sourceRevision = replayProvenance.identity.sourceCommitSha
   const adapter = {
     strategyId: "example",
     execute: ({ input, onStarted }) => {
@@ -613,6 +629,7 @@ test("runner records the exact source revision and replays the original scenario
   const runner = createScenarioRunner({
     adapters: [adapter],
     sourceRevision,
+    replayProvenance,
     createRunId: () => `run-replay-${++runSequence}`,
   })
   const original = runner.submit({
@@ -627,6 +644,10 @@ test("runner records the exact source revision and replays the original scenario
 
   assert.equal(completedOriginal.sourceRevision, sourceRevision,
     "Every run must record the exact source revision supplied by its owning runtime.")
+  assert.deepEqual(completedOriginal.replayProvenance, replayProvenance,
+    "Every run must retain the complete verified source, dependency, build, runtime and registry provenance.")
+  assert.equal(typeof completedOriginal.inputSha256, "string",
+    "Every run must retain a digest of its exact unredacted input snapshot.")
   const replay = runner.replay(original.runId)
   const completedReplay = await runner.waitForRun(replay.runId)
 
@@ -650,7 +671,7 @@ test("runner records the exact source revision and replays the original scenario
   ], "The adapter must receive the same original input for the initial run and its replay.")
 })
 
-test("runner blocks exact replay when the source revision is unknown", async () => {
+test("runner blocks exact replay when immutable build and dependency provenance is unavailable", async () => {
   const runner = createScenarioRunner({
     adapters: [createAdapter()],
     createRunId: (() => {
@@ -669,6 +690,6 @@ test("runner blocks exact replay when the source revision is unknown", async () 
 
   assert.equal(replay.status, SCENARIO_RUN_STATUS.BLOCKED,
     "The runner must not silently replay with current code when the original source revision is unknown.")
-  assert.match(replay.diagnostics[0], /source revision.*unknown/i,
-    "A blocked replay must explain that exact source provenance is unavailable.")
+  assert.match(replay.diagnostics[0], /provenance.*(incomplete|unavailable)|source revision.*unknown/i,
+    "A blocked replay must explain which exact source provenance is unavailable.")
 })

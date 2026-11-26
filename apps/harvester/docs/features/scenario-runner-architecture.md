@@ -219,3 +219,15 @@ uses a simulated attestation and therefore does not establish OS containment.
 The runtime scenario currently proves the authorized SELL-submission success path only.
 Rejection, partial-fill/terminal reconciliation, injected infrastructure failures and
 safety-stop cases remain unregistered and must not be inferred from the success case.
+
+
+## Exact replay provenance gate — 2026-11-26
+
+A matching commit SHA alone is not sufficient for exact replay. Each run now records an
+immutable digest of its original input and scenario identity plus a provenance snapshot
+covering source commit/tree, clean-checkout state, dependency lock, build artifact,
+runtime identity and scenario registry. Replay is allowed only when the original and
+active provenance are complete and identical. Missing build attestation, dirty source,
+unknown tree/dependencies or a changed runtime/registry blocks replay with explicit
+missing-provenance diagnostics. The original unredacted input snapshot is retained
+internally for replay; exported run evidence remains redacted.
