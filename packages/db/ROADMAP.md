@@ -46,7 +46,7 @@ The public CRUD API remains provider-independent. MongoDB collections, BSON, com
 
 **Remaining acceptance work:** complete the final adversarial protocol/authentication and lifecycle review; inspect the corrected exact-head package test result when available; run package tests, coverage and lint when a runnable checkout is available; and verify command semantics against the MongoDB server versions, topologies and authentication modes used in deployment. No live-server result is claimed.
 
-Supported protocol generations, topology/authentication limits, BSON subset, transaction guarantees and explicit exclusions are documented in [MongoDB provider support and limitations](./docs/mongodb.md). The roadmap remains in progress until the implementation PR is merged and all required validation passes on its exact final head.
+Supported protocol generations, topology/authentication limits, BSON subset, transaction guarantees and explicit exclusions are documented in [MongoDB provider support and limitations](./docs/mongodb.md). The roadmap remains in progress until the implementation PR is merged and all required validation passes on its exact final head. Client-side logical-session pooling and `endSessions` cleanup are explicitly deferred; the initial provider relies on server-side idle-session expiry.
 
 ### Official-source review finding — BSON Timestamp
 

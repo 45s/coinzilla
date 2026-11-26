@@ -106,6 +106,7 @@ An unknown commit outcome is not a rollback. Application code must reconcile the
 - Per-command timeouts reject that command. They do not replay the command.
 - Provider-neutral database shutdown waits for active transactions and in-flight CRUD operations before closing the transport.
 - There is no automatic reconnect, server discovery refresh, heartbeat monitor or transparent failover. On connection loss, treat the operation as failed/ambiguous according to the operation and reconcile before retrying non-idempotent work.
+- Each transaction currently creates a fresh logical session ID. There is no client-side session pool or `endSessions` cleanup; idle sessions are reaped by MongoDB according to `logicalSessionTimeoutMinutes`. A bounded session pool and explicit shutdown cleanup are a documented follow-up for high transaction volume.
 
 ## Testing
 

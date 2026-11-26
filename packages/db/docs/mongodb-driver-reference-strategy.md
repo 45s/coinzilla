@@ -31,6 +31,18 @@ The inspected official driver is a complete general-purpose driver, not a minima
 
 It also has optional peer integrations for compression, encryption, Kerberos, AWS/GCP authentication and SOCKS. Copying the package would bring a much larger API and operational surface, and its BSON, SASL preparation and URI behavior depend on separate packages. That would violate the no-third-party-runtime-dependency requirement and expand scope beyond the package's JSON record contract.
 
+The exact dependency versions below are resolved by the driver's [pinned `package-lock.json`](https://github.com/mongodb/node-mongodb-native/blob/2ed780df2a57884c3fa597da9ebbb6256ae0a5ea/package-lock.json), rather than inferred from semver ranges:
+
+| Runtime package | Locked version | License | Runtime dependency closure |
+|---|---:|---|---|
+| `bson` | `7.3.2` | Apache-2.0 | None |
+| `@mongodb-js/saslprep` | `1.5.0` | MIT | `sparse-bitfield@3.0.3` (MIT) → `memory-pager@1.5.0` (MIT) |
+| `mongodb-connection-string-url` | `7.0.2` | Apache-2.0 | `whatwg-url@14.2.0` (MIT) → `tr46@5.1.1` (MIT) and `webidl-conversions@7.0.0` (BSD-2-Clause); `tr46` uses `punycode@2.3.1` (MIT) |
+
+The lockfile also contains `@types/whatwg-url` for type tooling; it is not a runtime dependency. Optional peer integrations are not part of this locked runtime closure. All packages in the table remain excluded from Coinzilla's runtime dependency graph.
+
+
+
 The official driver also contains substantial functionality that this provider intentionally does not promise: public MongoClient/Db/Collection/Cursor APIs, connection pooling, server discovery and monitoring, broad authentication integrations, compression, change streams, GridFS, client-side encryption, retryable writes and compatibility paths for features outside our declared support matrix.
 
 ## Reference-source map
@@ -39,7 +51,7 @@ The following official-driver areas are the first places to inspect. Paths are p
 
 | Concern in our provider | Existing Coinzilla code | Official driver reference | Review focus |
 |---|---|---|---|
-| BSON codec | `src/infrastructure/mongodb/bson.js` | [`src/bson.ts`](https://github.com/mongodb/node-mongodb-native/blob/2ed780df2a57884c3fa597da9ebbb6256ae0a5ea/src/bson.ts), and the separately maintained [`mongodb/js-bson`](https://github.com/mongodb/js-bson) project | The driver wrapper delegates to the BSON package; inspect the actual codec separately. Compare length validation, nested values, numeric boundaries, malformed input and resource limits. Do not import the BSON package. |
+| BSON codec | `src/infrastructure/mongodb/bson.js` | [`src/bson.ts`](https://github.com/mongodb/node-mongodb-native/blob/2ed780df2a57884c3fa597da9ebbb6256ae0a5ea/src/bson.ts), and the separately maintained [`mongodb/js-bson` v7.3.2 at [pinned commit `9cd2e68c8d0ceeabbec116533fb57dac32aee209`](https://github.com/mongodb/js-bson/tree/9cd2e68c8d0ceeabbec116533fb57dac32aee209) | The driver wrapper delegates to the BSON package; inspect the actual codec separately. Compare length validation, nested values, numeric boundaries, malformed input and resource limits. Do not import the BSON package. |
 | Wire framing and request/response handling | `wire-protocol.js`, `transport.js` | [`src/cmap/connection.ts`](https://github.com/mongodb/node-mongodb-native/blob/2ed780df2a57884c3fa597da9ebbb6256ae0a5ea/src/cmap/connection.ts), [`src/cmap/commands.ts`](https://github.com/mongodb/node-mongodb-native/blob/2ed780df2a57884c3fa597da9ebbb6256ae0a5ea/src/cmap/commands.ts), [`src/cmap/connect.ts`](https://github.com/mongodb/node-mongodb-native/blob/2ed780df2a57884c3fa597da9ebbb6256ae0a5ea/src/cmap/connect.ts) | Message boundaries, correlation, socket lifecycle, cancellation, timeouts, write dispatch and cleanup. Keep our smaller one-socket model. |
 | Handshake and topology facts | `handshake.js` | [`src/cmap/handshake/`](https://github.com/mongodb/node-mongodb-native/tree/2ed780df2a57884c3fa597da9ebbb6256ae0a5ea/src/cmap/handshake), [`src/sdam/`](https://github.com/mongodb/node-mongodb-native/tree/2ed780df2a57884c3fa597da9ebbb6256ae0a5ea/src/sdam) | Required hello fields, wire-version negotiation, primary/secondary behavior and topology distinctions. Do not import the full SDAM monitor/selection subsystem. |
 | SCRAM authentication | `scram.js` | [`src/cmap/auth/`](https://github.com/mongodb/node-mongodb-native/tree/2ed780df2a57884c3fa597da9ebbb6256ae0a5ea/src/cmap/auth) | Nonce validation, mechanism negotiation, proof construction, server signature verification and failure handling. The official driver's SASLprep dependency is not available to us; preserve our explicit ASCII restriction unless a separately justified, dependency-free implementation is added and tested. |
@@ -50,7 +62,7 @@ The following official-driver areas are the first places to inspect. Paths are p
 
 ## Source-review finding — BSON Timestamp signedness
 
-The pinned driver delegates BSON serialization/deserialization to the separate `mongodb/js-bson` project, so `src/bson.ts` alone is not the codec implementation. Inspection of `js-bson` at commit [`c9922e971af774d260bb529cf2c405def8036633`](https://github.com/mongodb/js-bson/commit/c9922e971af774d260bb529cf2c405def8036633) confirmed that BSON Timestamp is unsigned: its deserializer reads two unsigned 32-bit fields and constructs an unsigned Timestamp value ([deserializer.ts](https://github.com/mongodb/js-bson/blob/c9922e971af774d260bb529cf2c405def8036633/src/parser/deserializer.ts), [timestamp.ts](https://github.com/mongodb/js-bson/blob/c9922e971af774d260bb529cf2c405def8036633/src/timestamp.ts)).
+The pinned driver delegates BSON serialization/deserialization to the separate `mongodb/js-bson` project, so `src/bson.ts` alone is not the codec implementation. Inspection of the exact locked `bson@7.3.2` source at commit [`9cd2e68c8d0ceeabbec116533fb57dac32aee209`](https://github.com/mongodb/js-bson/commit/9cd2e68c8d0ceeabbec116533fb57dac32aee209) confirmed that BSON Timestamp is unsigned: its deserializer reads two unsigned 32-bit fields and constructs an unsigned Timestamp value ([deserializer.ts](https://github.com/mongodb/js-bson/blob/9cd2e68c8d0ceeabbec116533fb57dac32aee209/src/parser/deserializer.ts), [timestamp.ts](https://github.com/mongodb/js-bson/blob/9cd2e68c8d0ceeabbec116533fb57dac32aee209/src/timestamp.ts)).
 
 The Coinzilla decoder previously routed BSON type `0x11` through `Buffer.readBigInt64LE`, interpreting values with the high bit set as negative. A test-first regression was committed in `73494aa26b6059428ecf61a9584f273ecc88cc7a` for a timestamp above `2^63 - 1`. The correction uses Node's `readBigUInt64LE` and retains precision by returning a Number only within the safe-integer range, otherwise BigInt. This is a specification-informed local fix; no upstream source was copied, so the attribution ledger remains empty.
 
@@ -124,6 +136,8 @@ flowchart TD
 ```
 
 ## Explicit non-goals
+
+- Do not implement a client-side logical-session pool or `endSessions` cleanup in this initial provider. Each transaction uses a fresh logical session ID; MongoDB reaps idle sessions using `logicalSessionTimeoutMinutes`. A bounded session pool and shutdown cleanup remain a separately scoped lifecycle improvement.
 
 - Do not vendor the entire official driver or its `src/`, `test/`, build system, public types or package structure.
 - Do not add the official driver's runtime dependencies or copy dependency code without a separate dependency/license review.
