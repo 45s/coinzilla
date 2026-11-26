@@ -15,6 +15,7 @@
     "src/infrastructure/operational-state/project-harvester.js",
     "src/infrastructure/process-lock/",
     "src/infrastructure/process/",
+    "src/infrastructure/security/local-operator-identity.js",
     "src/use-cases/collect-owned-order-snapshots.js",
     "src/use-cases/conservative-trading-engine.js",
     "src/use-cases/create-conservative-shutdown-safety.js",
