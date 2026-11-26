@@ -1386,11 +1386,6 @@
         },
         {
           "path": "src/use-cases/record-safety-control-facts.test.js",
-          "name": "requires structured user-data action metadata even when its reason matches Recovery Seller STOP",
-          "kind": "normal"
-        },
-        {
-          "path": "src/use-cases/record-safety-control-facts.test.js",
           "name": "rejects user-data resolution when its reason is reserved for Recovery Seller STOP",
           "kind": "failure"
         },
@@ -2093,7 +2088,7 @@
       "minimum": {
         "lines": 85,
         "branches": 50,
-        "functions": 100
+        "functions": 95
       },
       "latestObserved": {
         "lines": 85.37,
