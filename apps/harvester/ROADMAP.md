@@ -58,7 +58,6 @@ In review in [PR #1849](https://github.com/45s/coinzilla/pull/1849). The 2026-11
 
 Integration prerequisite #1828 was addressed by merged [PR #1833](https://github.com/45s/coinzilla/pull/1833), merge commit `3a5d6c5aa284c5f84f8c935ce9570e626bf7dc31`. All six required workflows passed on exact head `709d131b3f1b124e7f968281616e20ae7159c626`. Issue #1828 remains open for the broader producer/restoration/durable-resolution matrix. No exchange writes, cancellations, account mutations or Harvester restarts are authorized or required.
 
-
 ## Account-scoped STOP admission — issue #1828
 
 The confirmed account-scoped admission bypass is fixed and integrated through [PR #1833](https://github.com/45s/coinzilla/pull/1833), merge commit `3a5d6c5aa284c5f84f8c935ce9570e626bf7dc31`. All six required workflows passed on exact head `709d131b3f1b124e7f968281616e20ae7159c626`. The in-memory account block latches before durable persistence, remains fail-closed on persistence failure, deduplicates concurrent latches and is checked at the shared final submission gate. Issue #1828 remains open for broader producer, restoration and durable-resolution acceptance; this merge does not close the parent issue.
@@ -2304,7 +2303,6 @@ The detailed evidence, implementation commits, CI state and remaining unknowns a
 - Migration v5 transactionally rebuilds the relational order/fill tables, verifies and retains a pre-v5 backup, preserves row IDs and valid foreign-key relationships, and fails closed on duplicate exchange identities or mismatched existing fill links. Conflict diagnostics retain reconciliation decision, recoverability and incomplete-coverage signals.
 - The persistence contract and audit report are updated. No TESTNET/LIVE writes, production restarts, account mutations or historical-row repairs were performed.
 - Issue #1851 remains open only for the unavailable original SQLite rows and exact conflicting price pair; regression fixture prices and prior-order IDs are explicitly synthetic, not recovered production facts. Do not infer the per-symbol old-row/new-row pairing.
-
 
 ## Conservative scenario registry and runner — issue #1797
 
