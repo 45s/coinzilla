@@ -23,7 +23,7 @@ Feature branch: `fix/harvester/incident-1856-ownership-shutdown-safety`
 - Shared ownership validation now covers CG Position-scoped ownership and RS Position/cycle-scoped ownership, including strategy, purpose, side and identity checks.
 - CG pending-order registration now preserves the originating Position identity and returns the exact registered ownership. Durable Journal `ORDER_SUBMISSION_REQUESTED` facts include that ownership; Operational State Store intent remains a separate durable boundary before broker placement.
 - Conflicting supplied ownership metadata is rejected before broker I/O. The registered ownership is used for subsequent durable intent/outcome processing.
-- Local order registration is reported as `PENDING`, not `SUBMITTED`. Failed intent handling remains fail-closed and prevents the sibling BUY from reaching broker I/O.
+- Local order registration is reported as `PENDING`, not `SUBMITTED`. Failed durable intent handling removes the unsubmitted PENDING registration, emits the deferral, and latches the affected symbol with `ORDER_INTENT_NOT_DURABLE`; a regression proves a later tick does not allocate another client order ID or call the broker.
 - Conservative active SELL aggregation includes PENDING/UNKNOWN reservations and is checked against net sellable inventory after commissions and `keepQuantity`.
 - Strategy shutdown participant waits are single-flight. Timeout/abort retains the underlying operation in a shared pending map; retries cannot overlap it and safety cannot be reported while it remains pending.
 - Shutdown phases have bounded deadlines and abort signals. Pending phases are exposed in diagnostics and block overlapping retries.

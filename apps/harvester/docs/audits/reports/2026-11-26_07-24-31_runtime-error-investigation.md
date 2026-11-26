@@ -55,6 +55,17 @@ TypeError: Recovery Seller submission ownership must match the Recovery Seller s
 
 The structured result identifies `strategyId: CG_coinGrabber`, while the rejected decision is a recovery SELL. The submission result is `ok: false`, with `submittedOrders: []` and `activeOrdersAfter: []`. Therefore the console's `SUBMITTED #pending` lifecycle line is not proof that these rejected SELLs reached Binance. The rejection happens while validating/persisting the durable intent, before broker placement.
 
+The full session journal quantifies the effect:
+
+- 151 `order.submission_requested` events.
+- 143 `order.submission_deferred` events, all with reason `DURABLE_SUBMISSION_INTENT_NOT_COMMITTED`, all **SELL** orders: DOGEUSDT 50, LINKUSDT 38, ADAUSDT 29, ZROUSDT 26.
+- 8 `order.submitted` events, all **BUY** orders. Four BUY fills were applied once; the other four orders later reached cancellation/filled terminal states.
+- 50 `execution.duplicate_fill` records refer to those same four fill IDs and are marked duplicate; they did not create 50 additional fills.
+
+So the 143 failed SELL requests did not reach Binance. They did, however, repeatedly allocate new client-order IDs because the develop runtime did not latch the affected market after the first durable-intent failure.
+
+PR #1858's current branch addresses that retry loop too: `createSubmissionLifecycleCallbacks` removes the unsubmitted PENDING registration and latches the per-symbol `ORDER_INTENT_NOT_DURABLE` pause. The regression in `conservative-trading-engine.test.js` sends a second market tick and asserts no second durable-intent call or broker placement occurs while the pause remains active.
+
 This is distinct from the RS market-price bug below. PR #1858 already contains CG/RS-aware submission ownership validation and regression tests in:
 
 - `apps/harvester/src/domain/orders/recovery-seller-submission-ownership.js`
@@ -143,7 +154,7 @@ Source behavior confirms startup fails closed when `verify()` does not confirm a
 
 The terminal capture reports an account-wide open-order snapshot with `orderCount: 14` and `readiness: BLOCKED`. The log explicitly says the unowned orders remain external and untouched.
 
-Subsequent user-data events include `UNKNOWN_OR_EXTERNAL_ORDER_EVENT` pauses and rejected unowned order updates for LINKUSDT, ADAUSDT and LINEAUSDT. These pauses preserve the accepted ownership boundary. Do not adopt, cancel, or assign these orders to CG/RS without authoritative ownership evidence and the approved reconciliation flow.
+Subsequent user-data events include five `UNKNOWN_OR_EXTERNAL_ORDER_EVENT` filled-order events (LINKUSDT twice, ADAUSDT once, LINEAUSDT twice), five rejected unowned/invalid order updates, and three pair pauses (LINKUSDT, ADAUSDT, LINEAUSDT). These pauses preserve the accepted ownership boundary. The RS LINEAUSDT BUY `725860` was later canceled with reason `ACCOUNT_INTEGRITY_FAILURE` after user-data readiness changed to `EXECUTION_ACCOUNTING_FAILED`; the supplied events establish the sequence but do not prove the exact internal causal edge. Do not adopt, cancel, or assign external orders to CG/RS without authoritative ownership evidence and the approved reconciliation flow.
 
 ### 6. Binance bookTicker validation error — confirmed invalid payload; no transport failure established
 
@@ -176,7 +187,7 @@ The structured error at `2026-11-26T05:02:30.216Z` has the same `Recovery Seller
 
 | Finding | Disposition |
 |---|---|
-| CG recovery SELL rejected by RS-only ownership validation | Fix present on PR #1858 with regression tests |
+| CG recovery SELL rejected by RS-only ownership validation; repeated intent failures | Fix present on PR #1858 with regression tests; retry loop is also blocked by per-symbol `ORDER_INTENT_NOT_DURABLE` pause and a second-tick regression |
 | RS LINEAUSDT BUY sent into CG trailing-BUY path | Fixed on PR #1858 commit `f1389824`, regression added; not yet runtime-verified |
 | SQLite v5 version/name mismatch | Failure class confirmed; exact DB row/local diff still required; no destructive repair |
 | Operational State Store verification failure | Cause unavailable in supplied files; preserve fail-closed behavior |
