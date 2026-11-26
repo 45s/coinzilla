@@ -524,7 +524,7 @@ test("a smaller verified Spot remainder is the only legacy quantity added to the
     spotTotalQuantity: "1.005",
     quantityStepSize: "0.001",
   })
-  evaluateRecoverySellerSellDecision({
+  const result = evaluateRecoverySellerSellDecision({
     pairConfig,
     marketMetadata: scenario.marketMetadata,
     cycleState: scenario.cycleState,
@@ -847,7 +847,7 @@ async function assertWorkflowStopAllowsSell({ snapshot, marketMetadata }) {
       },
     }),
   })
-  const result = await evaluate({
+  await evaluate({
     symbol,
     marketPrice: {
       symbol,
