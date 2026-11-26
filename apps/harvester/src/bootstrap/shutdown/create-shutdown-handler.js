@@ -79,17 +79,8 @@ function createPendingPhaseError({ phase, pending, now } = {}) {
   return error
 }
 
-function createPhaseRunner({
-  logger,
-  now,
-  shutdownRequestedAt,
-  shutdownCorrelationId,
-  phaseTimeoutMs = DEFAULT_SHUTDOWN_PHASE_TIMEOUT_MS,
-  setTimeoutFn = ({ callback, timeoutMs }) => setTimeout(callback, timeoutMs),
-  clearTimeoutFn = (handle) => clearTimeout(handle),
-  pendingPhaseOperations = new Map(),
-} = {}) {
-  const logPhase = ({ phase, status, durationMs, failureReason } = {}) => {
+function createPhaseLogger({ logger, now, shutdownRequestedAt, shutdownCorrelationId } = {}) {
+  return ({ phase, status, durationMs, failureReason } = {}) => {
     logSystem({
       logger,
       message: `Harvester shutdown phase ${status.toLowerCase()}`,
@@ -101,21 +92,27 @@ function createPhaseRunner({
       ...(failureReason ? { failureReason } : {}),
     })
   }
-  const isPhaseFailure = (result) =>
-    result?.ok === false || (Array.isArray(result) && result.length > 0)
-  const getPhaseFailureReason = (result) => {
-    const firstError = result?.errors?.[0]
-    const candidates = [
-      result?.failure?.stage,
-      result?.data?.findings?.[0]?.reason,
-      firstError?.recoveryFailure?.stage,
-      firstError?.code,
-      firstError?.name,
-    ]
-    return candidates.find((candidate) => typeof candidate === "string" && candidate.length > 0) ??
-      "PHASE_RESULT_FAILED"
-  }
-  const getPendingOperationsSnapshot = () => Object.freeze(
+}
+
+function isPhaseFailureResult(result) {
+  return result?.ok === false || (Array.isArray(result) && result.length > 0)
+}
+
+function getPhaseFailureReason(result) {
+  const firstError = result?.errors?.[0]
+  const candidates = [
+    result?.failure?.stage,
+    result?.data?.findings?.[0]?.reason,
+    firstError?.recoveryFailure?.stage,
+    firstError?.code,
+    firstError?.name,
+  ]
+  return candidates.find((candidate) => typeof candidate === "string" && candidate.length > 0) ??
+    "PHASE_RESULT_FAILED"
+}
+
+function getPendingPhaseOperationsSnapshot({ pendingPhaseOperations, now } = {}) {
+  return Object.freeze(
     [...pendingPhaseOperations.entries()].map(([phase, pending]) => Object.freeze({
       phase,
       status: "PENDING",
@@ -125,19 +122,127 @@ function createPhaseRunner({
       elapsedMs: Math.max(0, now() - pending.startedAt),
     })),
   )
+}
+
+function createPhaseTimeout({ phase, timeoutMs, startedAt, controller, now, setTimeoutFn } = {}) {
+  if (timeoutMs === null) {
+    return {
+      promise: null,
+      timeoutHandle: undefined,
+      getError: () => undefined,
+    }
+  }
+  let timeoutHandle
+  let timeoutError
+  const promise = new Promise((resolve) => {
+    timeoutHandle = setTimeoutFn({
+      phase,
+      timeoutMs,
+      callback: () => {
+        const error = createPhaseTimeoutError({
+          phase,
+          timeoutMs,
+          elapsedMs: Math.max(0, now() - startedAt),
+        })
+        timeoutError = error
+        controller.abort(error)
+        resolve({
+          status: "timed_out",
+          error,
+        })
+      },
+    })
+  })
+  return {
+    promise,
+    timeoutHandle,
+    getError: () => timeoutError,
+  }
+}
+
+function createPhaseOperationPromise({ operation, controller } = {}) {
+  return Promise.resolve()
+    .then(() => operation({ signal: controller.signal }))
+    .then(
+      (value) => ({
+        status: "fulfilled",
+        value,
+      }),
+      (reason) => ({
+        status: "rejected",
+        reason,
+      }),
+    )
+}
+
+function trackPendingPhaseOperation({ pendingPhaseOperations, phase, operationPromise, startedAt, timeoutMs } = {}) {
+  pendingPhaseOperations.set(phase, {
+    operationPromise,
+    startedAt,
+    timeoutMs,
+  })
+  operationPromise.then(() => {
+    if (pendingPhaseOperations.get(phase)?.operationPromise === operationPromise) {
+      pendingPhaseOperations.delete(phase)
+    }
+  })
+}
+
+function resolvePhaseOutcome({ outcome, timeoutError, isFailure, phase, startedAt, now, logPhase } = {}) {
+  if (timeoutError) {
+    throw timeoutError
+  }
+  if (outcome.status === "timed_out") {
+    throw outcome.error
+  }
+  if (outcome.status === "rejected") {
+    throw outcome.reason
+  }
+  const failed = isFailure(outcome.value)
+  logPhase({
+    phase,
+    status: failed ? "FAILED" : "COMPLETED",
+    durationMs: Math.max(0, now() - startedAt),
+    ...(failed ? { failureReason: getPhaseFailureReason(outcome.value) } : {}),
+  })
+  return outcome.value
+}
+
+function getPhaseErrorStatus(error) {
+  if (error?.code === "SHUTDOWN_PHASE_TIMEOUT") {
+    return "TIMED_OUT"
+  }
+  if (error?.code === "SHUTDOWN_PHASE_STILL_RUNNING") {
+    return "PENDING"
+  }
+  return "FAILED"
+}
+
+function createPhaseRunner({
+  logger,
+  now,
+  shutdownRequestedAt,
+  shutdownCorrelationId,
+  phaseTimeoutMs = DEFAULT_SHUTDOWN_PHASE_TIMEOUT_MS,
+  setTimeoutFn = ({ callback, timeoutMs }) => setTimeout(callback, timeoutMs),
+  clearTimeoutFn = (handle) => clearTimeout(handle),
+  pendingPhaseOperations = new Map(),
+} = {}) {
+  const logPhase = createPhaseLogger({
+    logger,
+    now,
+    shutdownRequestedAt,
+    shutdownCorrelationId,
+  })
   const runPhase = async ({
     phase,
     operation,
-    isFailure = isPhaseFailure,
+    isFailure = isPhaseFailureResult,
     timeoutMs = phaseTimeoutMs,
   } = {}) => {
     const existing = pendingPhaseOperations.get(phase)
     if (existing) {
-      const error = createPendingPhaseError({
-        phase,
-        pending: existing,
-        now,
-      })
+      const error = createPendingPhaseError({ phase, pending: existing, now })
       logPhase({
         phase,
         status: "PENDING",
@@ -148,104 +253,60 @@ function createPhaseRunner({
     }
     const startedAt = now()
     const controller = new AbortController()
-    let timeoutHandle
-    let timeoutError
-    const timeoutPromise = timeoutMs === null
-      ? null
-      : new Promise((resolve) => {
-        timeoutHandle = setTimeoutFn({
-          phase,
-          timeoutMs,
-          callback: () => {
-            const error = createPhaseTimeoutError({
-              phase,
-              timeoutMs,
-              elapsedMs: Math.max(0, now() - startedAt),
-            })
-            timeoutError = error
-            controller.abort(error)
-            resolve({
-              status: "timed_out",
-              error,
-            })
-          },
-        })
-      })
-    const operationPromise = Promise.resolve()
-      .then(() => operation({ signal: controller.signal }))
-      .then(
-        (value) => ({
-          status: "fulfilled",
-          value,
-        }),
-        (reason) => ({
-          status: "rejected",
-          reason,
-        }),
-      )
-    pendingPhaseOperations.set(phase, {
+    const timeout = createPhaseTimeout({
+      phase,
+      timeoutMs,
+      startedAt,
+      controller,
+      now,
+      setTimeoutFn,
+    })
+    const operationPromise = createPhaseOperationPromise({ operation, controller })
+    trackPendingPhaseOperation({
+      pendingPhaseOperations,
+      phase,
       operationPromise,
       startedAt,
       timeoutMs,
     })
-    operationPromise.then(() => {
-      if (pendingPhaseOperations.get(phase)?.operationPromise === operationPromise) {
-        pendingPhaseOperations.delete(phase)
-      }
-    })
-    logPhase({
-      phase,
-      status: "STARTED",
-    })
+    logPhase({ phase, status: "STARTED" })
     try {
-      const outcome = timeoutPromise
-        ? await Promise.race([operationPromise, timeoutPromise])
+      const outcome = timeout.promise
+        ? await Promise.race([operationPromise, timeout.promise])
         : await operationPromise
-      if (timeoutError) {
-        throw timeoutError
-      }
-      if (outcome.status === "timed_out") {
-        throw outcome.error
-      }
-      if (outcome.status === "rejected") {
-        throw outcome.reason
-      }
-      const failed = isFailure(outcome.value)
-      logPhase({
+      return resolvePhaseOutcome({
+        outcome,
+        timeoutError: timeout.getError(),
+        isFailure,
         phase,
-        status: failed ? "FAILED" : "COMPLETED",
-        durationMs: Math.max(0, now() - startedAt),
-        ...(failed ? { failureReason: getPhaseFailureReason(outcome.value) } : {}),
+        startedAt,
+        now,
+        logPhase,
       })
-      return outcome.value
     } catch (error) {
-      let status = "FAILED"
-      if (error?.code === "SHUTDOWN_PHASE_TIMEOUT") {
-        status = "TIMED_OUT"
-      } else if (error?.code === "SHUTDOWN_PHASE_STILL_RUNNING") {
-        status = "PENDING"
-      }
       logPhase({
         phase,
-        status,
+        status: getPhaseErrorStatus(error),
         durationMs: Math.max(0, now() - startedAt),
         failureReason: getSafeFailureReason(error),
       })
       throw error
     } finally {
-      if (timeoutHandle !== undefined) {
-        clearTimeoutFn(timeoutHandle)
+      if (timeout.timeoutHandle !== undefined) {
+        clearTimeoutFn(timeout.timeoutHandle)
       }
     }
   }
   return {
     logPhase,
-    isPhaseFailure,
+    isPhaseFailure: isPhaseFailureResult,
     runPhase,
-    getPendingOperationsSnapshot,
+    getPendingOperationsSnapshot: () => getPendingPhaseOperationsSnapshot({
+      pendingPhaseOperations,
+      now,
+    }),
   }
 }
-
 async function runShutdownPhaseSafely({ context, phaseRunner, logShutdownFailure: recordShutdownFailure, options }) {
   const {
     phase,
