@@ -663,7 +663,7 @@
         },
         {
           "path": "test/recovery/operational-state-crash-matrix.test.js",
-          "name": "reopens the real append-only ledger after intent, acknowledgement, and fill crash boundaries",
+          "name": "reopens the real append-only ledger across duplicate fill delivery and two unclean process restarts",
           "kind": "integration"
         },
         {

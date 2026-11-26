@@ -85,8 +85,20 @@ export const scenarios = [
     relatedRequirements: ["CON-SPEC-7.1"],
     relatedCriticalBehaviors: [],
     relatedSourceFiles: ["src/use-cases/restore-harvester-operational-state.js"],
-    coverageStatus: "UNSUPPORTED",
-    coverageReason: "The active Conservative specification explicitly excludes runtime state reconstruction. start-harvester.js performs a separate prior-history safety gate, inventoried as CON-PERSIST-003; full restoration acceptance gates remain tracked by #654.",
+    relatedExistingTests: [
+      {
+        path: "test/recovery/operational-state-crash-matrix.test.js",
+        name: "reopens the real append-only ledger across duplicate fill delivery and two unclean process restarts",
+        kind: "integration",
+      },
+      {
+        path: "test/recovery/startup-history-gate.test.js",
+        name: "keeps default Conservative restart observation-only when prior process history exists",
+        kind: "normal",
+      },
+    ],
+    coverageStatus: "TEST-MAPPED",
+    coverageReason: "Mapped offline crash/restart tests prove the candidate remains reconciliation-required and runtime restoration remains disabled; they do not reconstruct Portfolio, RecoveryLedger, OrderRegistry, or resume orders.",
   }),
   createScenarioDefinition({
     id: "CON-PERSIST-003",
@@ -144,8 +156,24 @@ export const scenarios = [
       "src/bootstrap/start-harvester.js",
       "src/infrastructure/operational-state/project-harvester.js",
     ],
-    relatedExistingTests: [],
-    coverageStatus: "MISSING",
-    coverageReason: "The local assertOperationalStateCanStart guard implements this gate, but start-harvester.test.js has no prior-session history cases. Add deterministic tests for unclean, observation-only, and single RS STOP restart histories.",
+    relatedExistingTests: [
+      {
+        path: "test/recovery/startup-history-gate.test.js",
+        name: "keeps default Conservative restart observation-only when prior process history exists",
+        kind: "normal",
+      },
+      {
+        path: "test/recovery/startup-history-gate.test.js",
+        name: "rejects recovery-enabled restart before broker connection when prior process session is unclean",
+        kind: "failure",
+      },
+      {
+        path: "test/recovery/startup-history-gate.test.js",
+        name: "allows a clean observation-only restart without enabling trading",
+        kind: "normal",
+      },
+    ],
+    coverageStatus: "TEST-MAPPED",
+    coverageReason: "Mapped tests prove default recovery-disabled observation-only restart, rejection of unclean recovery-enabled history before broker connection, and acceptance of a clean observation-only session. The single account-level RS STOP latch case is tracked in open PR #1867 and remains pending its merge; this does not complete #654.",
   }),
 ]
