@@ -218,28 +218,20 @@ function getPhaseErrorStatus(error) {
   return "FAILED"
 }
 
-function createPhaseRunner({
-  logger,
+function createRunPhase({
+  pendingPhaseOperations,
+  phaseTimeoutMs,
   now,
-  shutdownRequestedAt,
-  shutdownCorrelationId,
-  phaseTimeoutMs = DEFAULT_SHUTDOWN_PHASE_TIMEOUT_MS,
-  setTimeoutFn = ({ callback, timeoutMs }) => setTimeout(callback, timeoutMs),
-  clearTimeoutFn = (handle) => clearTimeout(handle),
-  pendingPhaseOperations = new Map(),
+  setTimeoutFn,
+  clearTimeoutFn,
+  logPhase,
 } = {}) {
-  const logPhase = createPhaseLogger({
-    logger,
-    now,
-    shutdownRequestedAt,
-    shutdownCorrelationId,
-  })
-  const runPhase = async ({
+  return async function runPhase({
     phase,
     operation,
     isFailure = isPhaseFailureResult,
     timeoutMs = phaseTimeoutMs,
-  } = {}) => {
+  } = {}) {
     const existing = pendingPhaseOperations.get(phase)
     if (existing) {
       const error = createPendingPhaseError({ phase, pending: existing, now })
@@ -297,6 +289,32 @@ function createPhaseRunner({
       }
     }
   }
+}
+
+function createPhaseRunner({
+  logger,
+  now,
+  shutdownRequestedAt,
+  shutdownCorrelationId,
+  phaseTimeoutMs = DEFAULT_SHUTDOWN_PHASE_TIMEOUT_MS,
+  setTimeoutFn = ({ callback, timeoutMs }) => setTimeout(callback, timeoutMs),
+  clearTimeoutFn = (handle) => clearTimeout(handle),
+  pendingPhaseOperations = new Map(),
+} = {}) {
+  const logPhase = createPhaseLogger({
+    logger,
+    now,
+    shutdownRequestedAt,
+    shutdownCorrelationId,
+  })
+  const runPhase = createRunPhase({
+    pendingPhaseOperations,
+    phaseTimeoutMs,
+    now,
+    setTimeoutFn,
+    clearTimeoutFn,
+    logPhase,
+  })
   return {
     logPhase,
     isPhaseFailure: isPhaseFailureResult,
