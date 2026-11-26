@@ -10,6 +10,10 @@ process.on("message", (request) => {
   const keepAlive = setInterval(() => {}, 1000)
   process.once("SIGTERM", () => exitAfterGracePeriod({ keepAlive }))
   process.send?.({
+    type: "started",
+    runId: request.runId,
+  })
+  process.send?.({
     runId: request.runId,
     ok: true,
     output: {
