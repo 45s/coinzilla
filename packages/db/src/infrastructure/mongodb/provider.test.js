@@ -442,7 +442,7 @@ function createConformanceMongoServer(store) {
         ok: 1,
         cursor: {
           id: 0,
-          firstBatch: document ? [{ data: structuredClone(document.data) }] : [],
+          firstBatch: document ? [{ _id: document._id, data: structuredClone(document.data) }] : [],
         },
       }
     }
@@ -454,9 +454,15 @@ function createConformanceMongoServer(store) {
       const sortFields = Object.entries(sort).filter(([key]) => key !== "_id")
       documents.sort((left, right) => {
         for (const [sortKey, direction] of sortFields) {
-          const fieldPath = additions[sortKey.replace("SortType", "SortValue")]
-          const field = typeof fieldPath === "string" ? fieldPath.slice("$data.".length) : null
-          const comparison = compareScalar(field ? left.data[field] : undefined, field ? right.data[field] : undefined)
+          const expression = additions[sortKey]
+          const fieldPath = expression?.$ifNull?.[0]
+          const [field, property] = typeof fieldPath === "string"
+            ? fieldPath.slice("$sortData.".length).split(".")
+            : []
+          const fallback = expression?.$ifNull?.[1]
+          const leftValue = field ? left.sortData[field]?.[property] ?? fallback : undefined
+          const rightValue = field ? right.sortData[field]?.[property] ?? fallback : undefined
+          const comparison = compareScalar(leftValue, rightValue)
           if (comparison !== 0) return comparison * direction
         }
         return left._id < right._id ? -1 : left._id > right._id ? 1 : 0
@@ -468,7 +474,7 @@ function createConformanceMongoServer(store) {
         ok: 1,
         cursor: {
           id: 0,
-          firstBatch: documents.map((document) => ({ data: structuredClone(document.data) })),
+          firstBatch: documents.map((document) => ({ _id: document._id, data: structuredClone(document.data) })),
         },
       }
     }
@@ -477,9 +483,14 @@ function createConformanceMongoServer(store) {
       const document = records.get(body.query._id)
       if (!document) return { ok: 1, value: null }
       for (const [path, value] of Object.entries(body.update.$set)) {
-        document.data[path.slice("data.".length)] = structuredClone(value)
+        const [root, key] = path.split(".")
+        if (root === "data") {
+          document.data[key] = structuredClone(value)
+        } else if (root === "sortData") {
+          document.sortData[key] = structuredClone(value)
+        }
       }
-      return { ok: 1, value: { data: structuredClone(document.data) } }
+      return { ok: 1, value: { _id: document._id, data: structuredClone(document.data) } }
     }
 
     if (body.delete) {
