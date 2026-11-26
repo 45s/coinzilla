@@ -310,13 +310,22 @@ function resolveStrategyRegistrations({ strategyRegistrations, scenarioCatalog }
   }]
 }
 
-function canExecuteCatalogScenario({ catalog, strategyId, scenarioId }) {
+function canExecuteCatalogScenario({
+        catalog,
+        strategyId,
+        scenarioId,
+      }) {
   return catalog.some((strategy) => strategy.strategyId === strategyId &&
     strategy.scenarios.some((scenario) =>
       scenario.id === scenarioId && scenario.executable === true))
 }
 
-function validateCatalogScenarioInput({ catalog, strategyId, scenarioId, input }) {
+function validateCatalogScenarioInput({
+        catalog,
+        strategyId,
+        scenarioId,
+        input,
+      }) {
   const strategy = catalog.find((item) => item.strategyId === strategyId)
   const scenario = strategy?.scenarios.find((item) => item.id === scenarioId)
   if (!scenario?.inputSchema) {
