@@ -299,7 +299,7 @@ test("MongoDB transport does not mark a synchronously rejected write as outcome-
       operation: "create",
     }),
     (error) => error.outcomeUnknown === false
-      && error.cause?.message === "write rejected before send",
+      && error.cause?.cause?.message === "write rejected before send",
   )
   assert.equal(transport.state, "closed")
   assert.equal(transport.pendingRequestCount, 0)
