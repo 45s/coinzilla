@@ -410,7 +410,7 @@ async function runResolutionWorkflow(options) {
     actionId,
     resolutionReason,
   })
-  const blockers = targets.blockers
+  const { blockers } = targets
   const marketAudits = await auditAllConfiguredMarkets({
     context,
     configuredMarkets,
