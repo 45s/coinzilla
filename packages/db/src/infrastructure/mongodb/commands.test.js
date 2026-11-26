@@ -501,7 +501,7 @@ test("MongoDB reads reject malformed encoded user field names", async () => {
 })
 
 
-test("MongoDB updates store only changed user data and sorting reads the current value", async () => {
+test("MongoDB updates store only changed encoded user data", async () => {
   const stub = createCommandStub([{
     ok: 1,
     value: {
