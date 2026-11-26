@@ -90,10 +90,10 @@ describe('GitHubPullRequestsComponent', () => {
     root.querySelector<HTMLButtonElement>('[aria-label="Set green color for Review"]')?.click();
     fixture.detectChanges();
 
-    expect(root.querySelector('.label-name-input')?.getAttribute('value')).toBe('Review');
-    expect(root.querySelector('.label-definition .label-chip')?.getAttribute('data-color')).toBe('green');
+    expect(root.querySelector<HTMLInputElement>('.label-name-input')?.value).toBe('Review');
+    expect(root.querySelector<HTMLButtonElement>('[aria-label="Set green color for Review"]')?.getAttribute('aria-pressed')).toBe('true');
     expect(root.querySelector('.assignment-editor')).toBeNull();
-    expect(root.querySelector('.label-definition .danger')?.getAttribute('aria-label')).toBe('Delete Review');
+    expect(root.querySelector('.delete-label-button')?.getAttribute('aria-label')).toBe('Delete Review');
   });
 
   it('keeps a refresh action available in the viewport while browsing the PR list', () => {
