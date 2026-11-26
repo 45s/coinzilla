@@ -83,21 +83,67 @@ function createStageBlocker({ stage, error } = {}) {
   return `${stage}:${reason}${details.length > 0 ? `:${details.join(":")}` : ""}`
 }
 
-async function runStage({ stage, operation, signal } = {}) {
+function updateStageDiagnostics({
+  stageDiagnostics,
+  symbol = "*",
+  stage,
+  status,
+  error,
+} = {}) {
+  if (!(stageDiagnostics instanceof Map)) {
+    return
+  }
+  const previous = stageDiagnostics.get(symbol) ?? {}
+  const errorDetails = error
+    ? Object.freeze({
+      name: error.name ?? "Error",
+      code: error.code ?? null,
+      message: error.message ?? String(error),
+    })
+    : null
+  stageDiagnostics.set(symbol, Object.freeze({
+    lastSuccessfulStep: status === "COMPLETED"
+      ? stage
+      : previous.lastSuccessfulStep ?? null,
+    currentOperation: status === "COMPLETED" ? null : stage,
+    operationStatus: status,
+    lastError: status === "FAILED" || status === "ABORTED"
+      ? errorDetails
+      : null,
+  }))
+}
+
+async function runStage({ stage, operation, signal, symbol = "*", stageDiagnostics } = {}) {
+  updateStageDiagnostics({ stageDiagnostics, symbol, stage, status: "STARTED" })
   throwIfShutdownAborted(signal)
   try {
     const result = await operation()
     throwIfShutdownAborted(signal)
     if (result?.ok === true) {
+      updateStageDiagnostics({ stageDiagnostics, symbol, stage, status: "COMPLETED" })
       return []
     }
     const errors = Array.isArray(result?.errors) ? result.errors : []
+    updateStageDiagnostics({
+      stageDiagnostics,
+      symbol,
+      stage,
+      status: "FAILED",
+      error: errors[0] ?? new Error(`${stage} returned an unsuccessful result`),
+    })
     if (errors.length > 0) {
       return errors.map((error) => createStageBlocker({ stage,
         error }))
     }
     return [`${stage}:UNCONFIRMED`]
   } catch (error) {
+    updateStageDiagnostics({
+      stageDiagnostics,
+      symbol,
+      stage,
+      status: signal?.aborted ? "ABORTED" : "FAILED",
+      error: signal?.reason ?? error,
+    })
     if (signal?.aborted) {
       throw signal.reason ?? error
     }
@@ -106,7 +152,12 @@ async function runStage({ stage, operation, signal } = {}) {
   }
 }
 
-async function drainUserData(drainUserDataEvents, signal) {
+async function drainUserData(drainUserDataEvents, signal, {
+  symbol = "*",
+  stageDiagnostics,
+} = {}) {
+  const stage = "USER_DATA_DRAIN"
+  updateStageDiagnostics({ stageDiagnostics, symbol, stage, status: "STARTED" })
   throwIfShutdownAborted(signal)
   try {
     const result = await drainUserDataEvents()
@@ -119,6 +170,8 @@ async function drainUserData(drainUserDataEvents, signal) {
       } else if (resultError) {
         errors = [resultError]
       }
+      const failure = errors[0] ?? new Error("USER_DATA_DRAIN returned an unsuccessful result")
+      updateStageDiagnostics({ stageDiagnostics, symbol, stage, status: "FAILED", error: failure })
       if (errors.length > 0) {
         return errors.map((error) => createStageBlocker({
           stage: "USER_DATA_DRAIN",
@@ -127,8 +180,16 @@ async function drainUserData(drainUserDataEvents, signal) {
       }
       return ["USER_DATA_DRAIN:UNCONFIRMED"]
     }
+    updateStageDiagnostics({ stageDiagnostics, symbol, stage, status: "COMPLETED" })
     return []
   } catch (error) {
+    updateStageDiagnostics({
+      stageDiagnostics,
+      symbol,
+      stage,
+      status: signal?.aborted ? "ABORTED" : "FAILED",
+      error: signal?.reason ?? error,
+    })
     if (signal?.aborted) {
       throw signal.reason ?? error
     }
@@ -139,10 +200,17 @@ async function drainUserData(drainUserDataEvents, signal) {
   }
 }
 
-async function flushJournal(eventPublisher, signal) {
+async function flushJournal(eventPublisher, signal, {
+  symbol = "*",
+  stageDiagnostics,
+} = {}) {
+  const stage = "JOURNAL_FLUSH"
+  updateStageDiagnostics({ stageDiagnostics, symbol, stage, status: "STARTED" })
   throwIfShutdownAborted(signal)
   try {
     if (typeof eventPublisher?.flush !== "function") {
+      const error = new Error("JOURNAL_FLUSH_UNAVAILABLE")
+      updateStageDiagnostics({ stageDiagnostics, symbol, stage, status: "FAILED", error })
       return {
         durable: false,
         blockers: ["JOURNAL_FLUSH_UNAVAILABLE"],
@@ -152,6 +220,7 @@ async function flushJournal(eventPublisher, signal) {
     const result = await eventPublisher.flush()
     throwIfShutdownAborted(signal)
     if (result?.ok === true && result?.durable === true) {
+      updateStageDiagnostics({ stageDiagnostics, symbol, stage, status: "COMPLETED" })
       return {
         durable: true,
         blockers: [],
@@ -159,6 +228,13 @@ async function flushJournal(eventPublisher, signal) {
     }
 
     const errors = Array.isArray(result?.errors) ? result.errors : []
+    updateStageDiagnostics({
+      stageDiagnostics,
+      symbol,
+      stage,
+      status: "FAILED",
+      error: errors[0] ?? new Error("Journal flush did not confirm durability"),
+    })
     if (errors.length > 0) {
       return {
         durable: false,
@@ -174,6 +250,13 @@ async function flushJournal(eventPublisher, signal) {
       blockers: ["JOURNAL_NOT_DURABLE"],
     }
   } catch (error) {
+    updateStageDiagnostics({
+      stageDiagnostics,
+      symbol,
+      stage,
+      status: signal?.aborted ? "ABORTED" : "FAILED",
+      error: signal?.reason ?? error,
+    })
     if (signal?.aborted) {
       throw signal.reason ?? error
     }
@@ -215,16 +298,21 @@ function createMarketSafetyError({ symbol, blockers } = {}) {
   return error
 }
 
-async function collectStageBlockers({ blockers, reconciliationBlockers, stage, operation, signal } = {}) {
+async function collectStageBlockers({ blockers, reconciliationBlockers, stage, operation, signal, symbol, stageDiagnostics } = {}) {
   const stageBlockers = await runStage({ stage,
     operation,
-    signal })
+    signal,
+    symbol,
+    stageDiagnostics })
   blockers.push(...stageBlockers)
   reconciliationBlockers?.push(...stageBlockers)
 }
 
-async function collectDrainBlockers({ blockers, reconciliationBlockers, drainUserDataEvents, signal } = {}) {
-  const drainBlockers = await drainUserData(drainUserDataEvents, signal)
+async function collectDrainBlockers({ blockers, reconciliationBlockers, drainUserDataEvents, signal, symbol, stageDiagnostics } = {}) {
+  const drainBlockers = await drainUserData(drainUserDataEvents, signal, {
+    symbol,
+    stageDiagnostics,
+  })
   blockers.push(...drainBlockers)
   reconciliationBlockers?.push(...drainBlockers)
 }
@@ -236,6 +324,7 @@ async function reconcileOwnedOrders({
   reconciliationBlockers,
   drainUserDataEvents,
   signal,
+  stageDiagnostics,
 } = {}) {
   await collectStageBlockers({
     blockers,
@@ -243,12 +332,16 @@ async function reconcileOwnedOrders({
     stage: "OWNED_ORDER_RECONCILIATION",
     operation: () => engine.reconcileOwnedOrders({ symbol }),
     signal,
+    symbol,
+    stageDiagnostics,
   })
   await collectDrainBlockers({
     blockers,
     reconciliationBlockers,
     drainUserDataEvents,
     signal,
+    symbol,
+    stageDiagnostics,
   })
 
   await collectStageBlockers({
@@ -257,12 +350,16 @@ async function reconcileOwnedOrders({
     stage: "OWNED_BUY_CANCELLATION",
     operation: () => engine.cancelOwnedBuyOrdersForShutdown({ symbol }),
     signal,
+    symbol,
+    stageDiagnostics,
   })
   await collectDrainBlockers({
     blockers,
     reconciliationBlockers,
     drainUserDataEvents,
     signal,
+    symbol,
+    stageDiagnostics,
   })
 
   await collectStageBlockers({
@@ -271,12 +368,16 @@ async function reconcileOwnedOrders({
     stage: "FINAL_OWNED_ORDER_RECONCILIATION",
     operation: () => engine.reconcileOwnedOrders({ symbol }),
     signal,
+    symbol,
+    stageDiagnostics,
   })
   await collectDrainBlockers({
     blockers,
     reconciliationBlockers,
     drainUserDataEvents,
     signal,
+    symbol,
+    stageDiagnostics,
   })
 }
 
@@ -287,6 +388,7 @@ async function reconcileRecoverySells({
   reconciliationBlockers,
   drainUserDataEvents,
   signal,
+  stageDiagnostics,
 } = {}) {
   if (blockers.length > 0) {
     return
@@ -296,6 +398,8 @@ async function reconcileRecoverySells({
   const recoveryBlockers = await runStage({
     stage: "RECOVERY_SELL_RECONCILIATION",
     signal,
+    symbol,
+    stageDiagnostics,
     operation: async () => {
       const result = await engine.reconcileRecoverySellsForShutdown({ symbols: [symbol] })
       throwIfShutdownAborted(signal)
@@ -341,16 +445,22 @@ async function reconcileRecoverySells({
     stage: "POST_RECOVERY_OWNED_ORDER_RECONCILIATION",
     operation: () => engine.reconcileOwnedOrders({ symbol }),
     signal,
+    symbol,
+    stageDiagnostics,
   })
   await collectDrainBlockers({
     blockers,
     reconciliationBlockers,
     drainUserDataEvents,
     signal,
+    symbol,
+    stageDiagnostics,
   })
 }
 
-async function auditRecoverySellCoverage({ engine, symbol, blockers, signal } = {}) {
+async function auditRecoverySellCoverage({ engine, symbol, blockers, signal, stageDiagnostics } = {}) {
+  const stage = "RECOVERY_SELL_COVERAGE"
+  updateStageDiagnostics({ stageDiagnostics, symbol, stage, status: "STARTED" })
   throwIfShutdownAborted(signal)
   const unavailable = {
     ok: false,
@@ -367,8 +477,16 @@ async function auditRecoverySellCoverage({ engine, symbol, blockers, signal } = 
     const result = await engine.auditShutdownRecoverySellCoverage({ symbols: [symbol] })
     throwIfShutdownAborted(signal)
     if (result?.ok === true && result.data?.covered === true) {
+      updateStageDiagnostics({ stageDiagnostics, symbol, stage, status: "COMPLETED" })
       return result
     }
+    updateStageDiagnostics({
+      stageDiagnostics,
+      symbol,
+      stage,
+      status: "FAILED",
+      error: result?.errors?.[0] ?? new Error("Recovery SELL coverage was not confirmed"),
+    })
 
     const findings = result?.data?.findings ?? []
     if (findings.length > 0) {
@@ -379,6 +497,13 @@ async function auditRecoverySellCoverage({ engine, symbol, blockers, signal } = 
     }
     return result
   } catch (error) {
+    updateStageDiagnostics({
+      stageDiagnostics,
+      symbol,
+      stage,
+      status: signal?.aborted ? "ABORTED" : "FAILED",
+      error: signal?.reason ?? error,
+    })
     if (signal?.aborted) {
       throw signal.reason ?? error
     }
@@ -400,7 +525,10 @@ async function assessMarketSafety({
   getShutdownBlockers,
   logger,
   signal,
+  stageDiagnostics,
 } = {}) {
+  const stage = "SHUTDOWN_SAFETY_AUDIT"
+  updateStageDiagnostics({ stageDiagnostics, symbol, stage, status: "STARTED" })
   throwIfShutdownAborted(signal)
   blockers.push(...getExternalBlockers({ getShutdownBlockers,
     symbol }))
@@ -413,6 +541,13 @@ async function assessMarketSafety({
     externalBlockers: blockers,
   })
   throwIfShutdownAborted(signal)
+  updateStageDiagnostics({
+    stageDiagnostics,
+    symbol,
+    stage,
+    status: safety?.ok === true ? "COMPLETED" : "FAILED",
+    error: safety?.errors?.[0],
+  })
   if (safety?.ok !== true) {
     const error = safety?.errors?.[0] ?? new Error("Conservative market safety assessment failed")
     logger?.error?.({
@@ -466,6 +601,7 @@ async function secureMarket({
   symbol,
   initialDrainBlockers,
   signal,
+  stageDiagnostics,
 } = {}) {
   const blockers = [...initialDrainBlockers]
   const reconciliationBlockers = [...initialDrainBlockers]
@@ -476,6 +612,7 @@ async function secureMarket({
     reconciliationBlockers,
     drainUserDataEvents,
     signal,
+    stageDiagnostics,
   })
 
   await reconcileRecoverySells({
@@ -485,14 +622,19 @@ async function secureMarket({
     reconciliationBlockers,
     drainUserDataEvents,
     signal,
+    stageDiagnostics,
   })
   const coverageResult = await auditRecoverySellCoverage({
     engine,
     symbol,
     blockers,
     signal,
+    stageDiagnostics,
   })
-  const journal = await flushJournal(eventPublisher, signal)
+  const journal = await flushJournal(eventPublisher, signal, {
+    symbol,
+    stageDiagnostics,
+  })
   blockers.push(...journal.blockers)
 
   return assessMarketSafety({
@@ -505,6 +647,7 @@ async function secureMarket({
     getShutdownBlockers,
     logger,
     signal,
+    stageDiagnostics,
   })
 }
 
@@ -550,6 +693,7 @@ async function secureUnsafeMarket({
   symbol,
   initialDrainBlockers,
   signal,
+  stageDiagnostics,
 } = {}) {
   try {
     throwIfShutdownAborted(signal)
@@ -562,6 +706,7 @@ async function secureUnsafeMarket({
       symbol,
       initialDrainBlockers,
       signal,
+      stageDiagnostics,
     })
     return {
       symbol,
@@ -588,6 +733,7 @@ async function secureUnsafeMarkets({
   logger,
   initialDrainBlockers,
   signal,
+  stageDiagnostics,
 } = {}) {
   const unsafeMarkets = initialDrainBlockers.length > 0
     ? snapshot.markets
@@ -601,6 +747,7 @@ async function secureUnsafeMarkets({
     symbol,
     initialDrainBlockers,
     signal,
+    stageDiagnostics,
   })))
   const failedMarkets = results
     .filter(({ result }) => result.ok !== true)
@@ -630,14 +777,20 @@ async function waitForConservativeMarkets({
   getShutdownBlockers,
   logger,
   signal,
+  stageDiagnostics = new Map(),
 } = {}) {
   throwIfShutdownAborted(signal)
   await runStage({
     stage: "INITIAL_OWNED_BUY_CANCELLATION",
     operation: () => engine.cancelOwnedBuyOrdersForShutdown(),
     signal,
+    symbol: "*",
+    stageDiagnostics,
   })
-  const initialDrainBlockers = await drainUserData(drainUserDataEvents, signal)
+  const initialDrainBlockers = await drainUserData(drainUserDataEvents, signal, {
+    symbol: "*",
+    stageDiagnostics,
+  })
   throwIfShutdownAborted(signal)
   let snapshot = engine.getShutdownSafetySnapshot()
   let safetyPassCount = 0
@@ -659,6 +812,7 @@ async function waitForConservativeMarkets({
       logger,
       initialDrainBlockers,
       signal,
+      stageDiagnostics,
     })
     throwIfShutdownAborted(signal)
     if (snapshot.markets.every((market) => market.status === "SAFE_TO_SHUTDOWN")) {
@@ -688,6 +842,7 @@ export function createConservativeShutdownParticipant({
     throw new TypeError("Conservative shutdown participant requires its trading engine")
   }
 
+  const stageDiagnostics = new Map()
   const beginShutdown = () => engine.beginShutdown()
 
   const waitUntilSafe = async ({ signal } = {}) => {
@@ -702,17 +857,50 @@ export function createConservativeShutdownParticipant({
       getShutdownBlockers,
       logger,
       signal,
+      stageDiagnostics,
     })
   }
 
   const isSafeToShutdown = () => engine.getShutdownSafetySnapshot().markets
     .every((market) => market.status === "SAFE_TO_SHUTDOWN")
 
+  const getSafetySnapshot = () => {
+    const snapshot = engine.getShutdownSafetySnapshot()
+    const orders = typeof engine.getOrders === "function" ? engine.getOrders() : []
+    return Object.freeze({
+      ...snapshot,
+      markets: Object.freeze(snapshot.markets.map((market) => {
+        const marketStages = stageDiagnostics.get(market.symbol) ?? {}
+        const globalStages = stageDiagnostics.get("*") ?? {}
+        const pendingOrders = orders
+          .filter((order) =>
+            order.market?.symbol === market.symbol &&
+            ["PENDING", "UNKNOWN", "OPEN", "PARTIALLY_FILLED", "NEW", "PARTIAL"].includes(order.status))
+          .map((order) => Object.freeze({
+            clientOrderId: order.clientOrderId,
+            brokerOrderId: order.brokerOrderId ?? null,
+            side: order.side,
+            status: order.status,
+            remainingQuantity: order.remainingQuantity?.amount ?? null,
+          }))
+        return Object.freeze({
+          ...market,
+          lastSuccessfulStep: marketStages.lastSuccessfulStep ?? globalStages.lastSuccessfulStep ?? null,
+          currentOperation: marketStages.currentOperation ?? globalStages.currentOperation ?? null,
+          operationStatus: marketStages.operationStatus ?? globalStages.operationStatus ?? null,
+          missingEvidence: Object.freeze([...market.blockers]),
+          pendingOrders: Object.freeze(pendingOrders),
+          nestedError: marketStages.lastError ?? globalStages.lastError ?? null,
+        })
+      })),
+    })
+  }
+
   return Object.freeze({
     strategyId: StrategyId.COIN_GRABBER,
     beginShutdown,
     waitUntilSafe,
     isSafeToShutdown,
-    getSafetySnapshot: () => engine.getShutdownSafetySnapshot(),
+    getSafetySnapshot,
   })
 }
