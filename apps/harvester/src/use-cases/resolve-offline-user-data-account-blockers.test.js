@@ -605,47 +605,53 @@ test("CLI returns nonzero when durable resolution is not confirmed", async () =>
   assert.equal(errors.length, 0)
 })
 
-test("rejects an action ID already present in durable resolution history", async () => {
-  const store = makeStore()
-  const read = await store.readAll()
+function makePriorResolvedActionRecords({ records }) {
   const priorEvidenceDigest = "e".repeat(64)
   const priorBlockerId = createHash("sha256")
     .update(["ACCOUNT", "", "ACCOUNTING_INTEGRITY_FAILURE", priorEvidenceDigest].join("\0"))
     .digest("hex")
+  return [
+    fact({
+      sequence: 6,
+      factType: "SAFETY_BLOCKER_RAISED",
+      data: {
+        blockerId: priorBlockerId,
+        producer: "USER_DATA_EVENT_HANDLER",
+        scope: "ACCOUNT",
+        symbol: null,
+        reason: "ACCOUNTING_INTEGRITY_FAILURE",
+        evidenceDigest: priorEvidenceDigest,
+      },
+      factId: `safety-blocker-raised:${priorBlockerId}`,
+    }),
+    fact({
+      sequence: 7,
+      factType: "PROCESS_STOPPED",
+      data: {
+        reason: "OPERATOR_SHUTDOWN",
+        clean: true,
+      },
+      factId: `process-stopped:${runtimeSessionId}`,
+    }),
+    fact({
+      sequence: 8,
+      factType: "SAFETY_BLOCKER_RESOLVED",
+      data: {
+        blockerId: priorBlockerId,
+        resolvedBy: "operator:prior-operator:action-unique-012",
+        resolution: "OPERATOR_ACTION",
+        evidenceDigest: "d".repeat(64),
+      },
+      factId: `safety-blocker-resolved:${priorBlockerId}`,
+    }),
+  ]
+}
+
+async function makeStoreWithPriorResolvedAction() {
+  const store = makeStore()
+  const read = await store.readAll()
   const records = read.data.records.filter((record) => record.factType !== "PROCESS_STOPPED")
-  records.push(fact({
-    sequence: 6,
-    factType: "SAFETY_BLOCKER_RAISED",
-    data: {
-      blockerId: priorBlockerId,
-      producer: "USER_DATA_EVENT_HANDLER",
-      scope: "ACCOUNT",
-      symbol: null,
-      reason: "ACCOUNTING_INTEGRITY_FAILURE",
-      evidenceDigest: priorEvidenceDigest,
-    },
-    factId: `safety-blocker-raised:${priorBlockerId}`,
-  }))
-  records.push(fact({
-    sequence: 7,
-    factType: "PROCESS_STOPPED",
-    data: {
-      reason: "OPERATOR_SHUTDOWN",
-      clean: true,
-    },
-    factId: `process-stopped:${runtimeSessionId}`,
-  }))
-  records.push(fact({
-    sequence: 8,
-    factType: "SAFETY_BLOCKER_RESOLVED",
-    data: {
-      blockerId: priorBlockerId,
-      resolvedBy: "operator:prior-operator:action-unique-012",
-      resolution: "OPERATOR_ACTION",
-      evidenceDigest: "d".repeat(64),
-    },
-    factId: `safety-blocker-resolved:${priorBlockerId}`,
-  }))
+  records.push(...makePriorResolvedActionRecords({ records }))
   store.readAll = async () => ({
     ok: true,
     data: {
@@ -653,6 +659,11 @@ test("rejects an action ID already present in durable resolution history", async
       records,
     },
   })
+  return store
+}
+
+test("rejects an action ID already present in durable resolution history", async () => {
+  const store = await makeStoreWithPriorResolvedAction()
   let auditCalls = 0
   const result = await runOfflineAccountBlockerResolution({
     context: makeContext(),
@@ -710,8 +721,8 @@ test("rejects an unclean process stop before running market audits", async () =>
   assert.equal(auditCalls, 0)
 })
 
-test("fails closed for incomplete or contradictory market audit evidence", async () => {
-  const scenarios = [
+function makeAuditFailureScenarios() {
+  const first = [
     {
       name: "incomplete trade history",
       mutate: ({ audit }) => {
@@ -747,6 +758,8 @@ test("fails closed for incomplete or contradictory market audit evidence", async
         audit.sourceTime += 1
       },
     },
+  ]
+  const second = [
     {
       name: "missing balance coverage",
       mutate: ({ audit }) => {
@@ -772,32 +785,46 @@ test("fails closed for incomplete or contradictory market audit evidence", async
       },
     },
   ]
+  return [...first, ...second]
+}
 
+async function runAuditFailureScenario({ scenario, index }) {
+  let resolutionCalled = false
+  const result = await runOfflineAccountBlockerResolution({
+    context: makeContext(),
+    operationalStateStore: makeStore(),
+    operatorId: "operator-7",
+    actionId: `action-unique-${String(index + 20).padStart(3, "0")}`,
+    causeFixed: true,
+    reconcileMarket: async ({ context }) => {
+      const reconciliation = readyMarketAudit(context.symbol)
+      scenario.mutate({
+        audit: reconciliation.data.reconciliation.audit,
+        reconciliation: reconciliation.data.reconciliation,
+      })
+      return reconciliation
+    },
+    resolveBlockers: async () => {
+      resolutionCalled = true
+      return {
+        ok: true,
+        data: {},
+      }
+    },
+  })
+  return {
+    result,
+    resolutionCalled,
+  }
+}
+
+test("fails closed for incomplete or contradictory market audit evidence", async () => {
+  const scenarios = makeAuditFailureScenarios()
   for (const [index, scenario] of scenarios.entries()) {
-    let resolutionCalled = false
-    const result = await runOfflineAccountBlockerResolution({
-      context: makeContext(),
-      operationalStateStore: makeStore(),
-      operatorId: "operator-7",
-      actionId: `action-unique-${String(index + 20).padStart(3, "0")}`,
-      causeFixed: true,
-      reconcileMarket: async ({ context }) => {
-        const reconciliation = readyMarketAudit(context.symbol)
-        scenario.mutate({
-          audit: reconciliation.data.reconciliation.audit,
-          reconciliation: reconciliation.data.reconciliation,
-        })
-        return reconciliation
-      },
-      resolveBlockers: async () => {
-        resolutionCalled = true
-        return {
-          ok: true,
-          data: {},
-        }
-      },
+    const { result, resolutionCalled } = await runAuditFailureScenario({
+      scenario,
+      index,
     })
-
     assert.equal(result.ok, false, `${scenario.name} must fail closed before resolution`)
     assert.equal(resolutionCalled, false, `${scenario.name} must not append resolution facts`)
   }
