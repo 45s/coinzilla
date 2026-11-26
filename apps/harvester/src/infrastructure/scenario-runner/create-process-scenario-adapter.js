@@ -267,11 +267,27 @@ function registerWorkerMessageHandler({
   finish,
   setMessageReceived,
   signal,
+  onReady,
 }) {
-  child.once("message", (message) => {
+  let readyReceived = false
+  const handleMessage = (message) => {
+    if (message?.type === "ready") {
+      if (!readyReceived) {
+        readyReceived = true
+        onReady()
+      }
+      return
+    }
+    child.off("message", handleMessage)
     setMessageReceived()
     void handleWorkerMessage({
-      message,
+      message: readyReceived
+        ? message
+        : {
+          runId,
+          ok: false,
+          error: "Scenario worker returned a result before confirming readiness",
+        },
       runId,
       child,
       terminationGraceMs,
@@ -279,7 +295,8 @@ function registerWorkerMessageHandler({
       finish,
       signal,
     })
-  })
+  }
+  child.on("message", handleMessage)
 }
 
 function registerWorkerExitHandler({ child, signal, finish, isSettled, hasMessage }) {
