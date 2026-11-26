@@ -205,6 +205,34 @@ test("provider composition requires atomic single-operation execution", () => {
 })
 
 
+
+test("provider composition requires the explicit read transaction port", () => {
+  const provider = createProvider({
+    capabilities: {
+      transactions: {
+        callbackMode: "synchronous",
+        nestedTransactions: false,
+        multiDocument: true,
+      },
+      queries: {
+        equalityFilters: true,
+        sorting: true,
+        pagination: true,
+      },
+      storage: {
+        modes: ["memory"],
+      },
+    },
+  })
+  delete provider.withReadTransaction
+
+  assert.throws(
+    () => createDatabase({ provider }),
+    /withReadTransaction/,
+    "A provider-neutral database must expose its explicit read transaction boundary",
+  )
+})
+
 test("provider composition rejects non-JSON capability declarations with their original cause", () => {
   const capabilities = {
     transactions: {
