@@ -3,42 +3,42 @@
 **Scope:** current Harvester priorities only. Issue threads own task details and status; domain specifications and ADRs own behavior.
 **Last reviewed:** 2026-11-26
 
-> The pre-cleanup roadmap snapshot, including historical delivery notes and older plans, is preserved in [ROADMAP_HISTORY_2026-11-26](../../docs/archive/domain-roadmap-history-2026-11-26.md#harvester-roadmap). Earlier extracted history remains in [ROADMAP_HISTORY](docs/audits/ROADMAP_HISTORY.md).
+> Historical delivery notes and the pre-cleanup roadmap are preserved in [the consolidated roadmap archive](../../docs/archive/domain-roadmap-history-2026-11-26.md#harvester-roadmap). Earlier extracted history remains in [the audit roadmap history](docs/audits/ROADMAP_HISTORY.md).
 
-## Current safety and correctness priorities
+## Current priorities
 
-| Priority / area | Canonical issue | Current note |
+| Priority / area | Canonical issue | Current status |
 | --- | --- | --- |
-| Recovery Seller terminal SELL lifecycle | [#1842](https://github.com/45s/coinzilla/issues/1842) | Keep production composition blocked until terminal reconciliation and STOP semantics are fixed and covered. |
-| Trading-history relational startup failure | [#1854](https://github.com/45s/coinzilla/issues/1854) | Resolve startup failure before expanding dependent flows. |
-| Binance order-history identity collisions | [#1851](https://github.com/45s/coinzilla/issues/1851) | Preserve exact order identity; avoid ambiguous history reconciliation. |
-| Trading-history WebSocket large-frame crash | [#1826](https://github.com/45s/coinzilla/issues/1826) | Correct frame handling and add regression coverage. |
-| Conservative recovery SELL idempotency | [#1827](https://github.com/45s/coinzilla/issues/1827) | Fail closed on duplicate/replayed lifecycle evidence. |
-| Account-scoped STOP admission | [#1828](https://github.com/45s/coinzilla/issues/1828) | Enforce durable account-wide stop admission. |
-| Conservative correctness and scenario coverage | [#1763](https://github.com/45s/coinzilla/issues/1763) | Track phased implementation and exact-head verification. |
-| Multi-provider execution and market-data routing | [#1339](https://github.com/45s/coinzilla/issues/1339) | Harvester-owned cross-provider backlog. |
+| Conservative ownership and shutdown incident | [#1856](https://github.com/45s/coinzilla/issues/1856) | Fix merged in [PR #1858](https://github.com/45s/coinzilla/pull/1858). Issue remains open for historical exchange-identity and original-runtime evidence; do not claim the old run's final STOP/process/lock outcome without its evidence. |
+| Conservative exhaustive scenario coverage | [#1763](https://github.com/45s/coinzilla/issues/1763) | Active source-mapped scenario matrix and exact-head evidence. |
+| Recovery Seller terminal SELL acceptance | [#1842](https://github.com/45s/coinzilla/issues/1842) | Core transition/STOP fix is in merged [PR #1837](https://github.com/45s/coinzilla/pull/1837); issue remains open for acceptance. Keep execution fail-closed until the remaining scenario and isolation gates pass. |
+| Multi-provider execution and market-data routing | [#1339](https://github.com/45s/coinzilla/issues/1339) | Harvester-owned cross-provider backlog; keep provider contracts and routing boundaries explicit. |
+| Relational trading-history startup diagnosis | [#1854](https://github.com/45s/coinzilla/issues/1854) | Diagnostic evidence merged in [PR #1855](https://github.com/45s/coinzilla/pull/1855). The exact operator-database migration failure remains unconfirmed; preserve fail-closed migration behavior. |
+| Binance historical order identity evidence | [#1851](https://github.com/45s/coinzilla/issues/1851) | Identity correction merged in [PR #1849](https://github.com/45s/coinzilla/pull/1849); original historical row pairing remains unproven. |
 
 ## Scenario Runner / GC Strategy Lab
 
-[PR #1837](https://github.com/45s/coinzilla/pull/1837) remains Draft and unmerged. The current implementation includes production-workflow scenario slices, but the public registry is not executable or production-ready.
+Foundation [PR #1837](https://github.com/45s/coinzilla/pull/1837) is merged. It does **not** make the Scenario Runner production-ready or executable.
 
-Do not compose or enable production execution until:
-- the independent terminal SELL/STOP contract in [#1842](https://github.com/45s/coinzilla/issues/1842) is fixed and regression-tested;
-- full event-transition, under-target FILLED STOP, and infrastructure-failure scenarios are covered;
-- trusted platform OS-level sandboxing is available and verified;
-- exact-head tests, coverage, lint, and required CI pass.
+The current [Runner roadmap](../../apps/dashboard/docs/features/gc-strategy-lab/RUNNER_ROADMAP.md) remains the feature-specific plan. Keep execution blocked until:
+- full user-data event transition and terminal reconciliation scenarios are composed;
+- under-target FILLED SELL STOP and general infrastructure-failure scenarios are covered;
+- a trusted OS-level sandbox and matching attestation are available and verified;
+- source/build/runtime/input replay provenance and exact-head checks are complete.
 
-In-memory run history is accepted for the MVP; durable persistence is deferred. No real broker/exchange access, credentials, live account state, or production persistence is authorized for scenario runs.
+Current scenarios use simulated infrastructure and run-local state. No real broker/exchange access, credentials, live account state, or production persistence is authorized.
 
-## Recently merged work — verify, do not duplicate
+## Recently merged fixes — follow up only through their open acceptance/evidence issues
 
-- Startup readiness diagnostics: [PR #1861](https://github.com/45s/coinzilla/pull/1861) merged. Exact-head Harvester tests, coverage, lint, and required workflows remain the completion gate.
-- Follow the [Conservative Domain Specification](docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md) for current strategy behavior.
-- Follow the accepted Harvester ADRs and architecture/domain documents for decisions and contracts.
+- [#1826](https://github.com/45s/coinzilla/issues/1826) — WebSocket large-frame handling; [PR #1830](https://github.com/45s/coinzilla/pull/1830) merged and issue closed.
+- [#1827](https://github.com/45s/coinzilla/issues/1827) — recovery SELL idempotency implementation merged in [PR #1831](https://github.com/45s/coinzilla/pull/1831); issue remains open for historical incident evidence.
+- [#1828](https://github.com/45s/coinzilla/issues/1828) — account-scoped STOP admission fix merged in [PR #1833](https://github.com/45s/coinzilla/pull/1833); broader producer/restoration/durable-resolution acceptance remains open.
+- [#1749](https://github.com/45s/coinzilla/issues/1749) — owned BUY cancellation on safety pause merged in [PR #1755](https://github.com/45s/coinzilla/pull/1755); issue closed.
+- [#1747](https://github.com/45s/coinzilla/issues/1747) — guarded local reset and DEV-only archive merged in [PR #1748](https://github.com/45s/coinzilla/pull/1748); issue closed.
 
-## Roadmap rules
+## Canonical behavior and documentation
 
-- Keep active entries short: priority, current blocker, issue link.
-- Detailed phased plans live in the owning issue or a narrowly scoped implementation plan.
-- Completed implementation narratives and old checkpoints belong in history, not the active roadmap.
-- Never use this roadmap as the source of truth for strategy rules, API contracts, or acceptance evidence.
+- Follow the [Conservative Domain Specification](docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md) for strategy behavior.
+- Follow accepted Harvester ADRs and architecture/domain documents for decisions and contracts.
+- Keep detailed implementation plans in the owning issue or scoped plan; this page is only the active priority index.
+- Never use this roadmap as authority for strategy rules, API contracts, or acceptance evidence.
