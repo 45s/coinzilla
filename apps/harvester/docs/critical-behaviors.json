@@ -23,7 +23,7 @@
     "src/use-cases/fetch-account-trade-history.js",
     "src/use-cases/reconcile-terminal-order-fills.js",
     "src/use-cases/record-safety-control-facts.js",
-    "src/use-cases/resolve-offline-user-data-blockers.js",
+    "src/use-cases/resolve-offline-user-data-account-blockers.js",
     "src/use-cases/resolve-user-data-account-blockers.helpers.js",
     "src/use-cases/resolve-user-data-account-blockers.js",
     "src/use-cases/restore-harvester-operational-state.js"
