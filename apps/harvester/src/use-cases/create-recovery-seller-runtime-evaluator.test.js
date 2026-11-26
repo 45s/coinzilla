@@ -153,13 +153,22 @@ test("builds the runtime snapshot from canonical market, account and stop state"
 
   assert.equal(result.ok, true, "The runtime evaluator must return the shared result contract.")
   assert.equal(result.data.decision.outcome, "WAIT", "The runtime wrapper must preserve the pure BUY policy decision.")
-  assert.equal(snapshotInput.marketMetadata, marketMetadata)
-  assert.equal(snapshotInput.pairConfig, pairConfig)
-  assert.equal(snapshotInput.accountSnapshot, accountSnapshot)
-  assert.equal(snapshotInput.strategyStopped, false)
-  assert.equal(snapshotInput.marketPaused, false)
-  assert.equal(snapshotInput.reconciliationComplete, true)
-  assert.equal(snapshotInput.stopState, stopState)
+  assert.equal(snapshotInput.marketMetadata, marketMetadata,
+    "The runtime snapshot must use the configured canonical market metadata.")
+  assert.equal(snapshotInput.pairConfig, pairConfig,
+    "The runtime snapshot must preserve the configured Recovery Seller pair policy.")
+  assert.equal(snapshotInput.accountSnapshot, accountSnapshot,
+    "The runtime snapshot must use the authoritative account-balance snapshot.")
+  assert.equal(snapshotInput.strategyStopped, false,
+    "A running process must not be marked stopped by account-admission state.")
+  assert.equal(snapshotInput.marketPaused, false,
+    "An unpaused market must remain eligible for runtime evaluation.")
+  assert.equal(snapshotInput.reconciliationComplete, true,
+    "Fresh market data and no blockers must produce a reconciled snapshot.")
+  assert.equal(snapshotInput.stopState, stopState,
+    "The runtime snapshot must carry the canonical account STOP state.")
+  assert.equal(snapshotInput.buyAdmissionBlocked, false,
+    "A RUNNING STOP state and clear admission latch must allow BUY admission.")
 })
 
 test("fails closed for stopped, paused or unreconciled runtime state", async () => {
