@@ -50,7 +50,7 @@ Supported protocol generations, topology/authentication limits, BSON subset, tra
 
 ### Official-source review finding — BSON Timestamp
 
-A source-level comparison with the official driver and its separate `mongodb/js-bson` dependency found a signedness defect in our BSON decoder: BSON Timestamp (type `0x11`) is unsigned 64-bit, but the previous implementation decoded it using a signed int64 read. A regression test was committed first (`73494aa26b6059428ecf61a9584f273ecc88cc7a`), followed by the unsigned decoder correction. See [the official-driver reference strategy](./docs/mongodb-driver-reference-strategy.md) for the pinned source evidence and review method. This is an independently implemented fix, not copied upstream code.
+A source-level comparison with the official driver and its separate `mongodb/js-bson` dependency found a signedness defect in our BSON decoder: BSON Timestamp (type `0x11`) is unsigned 64-bit, but the previous implementation decoded it using a signed int64 read. A regression test was committed first (`73494aa26b6059428ecf61a9584f273ecc88cc7a`), followed by the unsigned decoder correction. See [the official-driver reference strategy](./docs/mongodb-driver-reference-strategy.md) for the pinned source evidence and review method. This is an independently implemented fix, not copied upstream code. A second SCRAM review added strict Base64 validation for server signatures after demonstrating that Node's permissive decoder ignores invalid trailing characters; the test-first regression is `32dad94bfaab85e559cb6a34cb97b2802b8a3afe`.
 
 ### Audit conclusion
 

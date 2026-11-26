@@ -74,6 +74,27 @@ function assertCommandSucceeded(response, stage) {
   }
 }
 
+function decodeBase64(value) {
+  if (typeof value !== "string") {
+    throw new TypeError("MongoDB SCRAM server signature must be base64 text")
+  }
+  const unpadded = value.replace(/=+$/u, "")
+  const padding = value.length - unpadded.length
+  if (!/^[A-Za-z0-9+/]*$/u.test(unpadded)
+    || padding > 2
+    || (padding > 0 && value.length % 4 !== 0)
+    || (padding === 1 && unpadded.length % 4 !== 3)
+    || (padding === 2 && unpadded.length % 4 !== 2)
+    || unpadded.length % 4 === 1) {
+    throw new TypeError("MongoDB SCRAM server signature is not valid base64")
+  }
+  const decoded = Buffer.from(value, "base64")
+  if (decoded.toString("base64").replace(/=+$/u, "") !== unpadded) {
+    throw new TypeError("MongoDB SCRAM server signature is not canonical base64")
+  }
+  return decoded
+}
+
 function verifyServerSignature({ payload, expectedSignature }) {
   const attributes = parseAttributes(payload.toString("utf8"))
   if (attributes.has("e")) {
@@ -82,7 +103,7 @@ function verifyServerSignature({ payload, expectedSignature }) {
   if (!attributes.has("v")) {
     throw new Error("MongoDB SCRAM server final message omitted its signature")
   }
-  const actualSignature = Buffer.from(attributes.get("v"), "base64")
+  const actualSignature = decodeBase64(attributes.get("v"))
   if (actualSignature.length !== expectedSignature.length
     || !timingSafeEqual(actualSignature, expectedSignature)) {
     throw new Error("MongoDB SCRAM server signature verification failed")

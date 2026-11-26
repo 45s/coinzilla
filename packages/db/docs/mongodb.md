@@ -42,6 +42,10 @@ The provider accepts either uri or connectionString, or explicit connection fiel
 
 When a URI supplies a path database, an explicit databaseName option changes the target database but does not change the URI-derived authSource; set authSource explicitly to override it. Explicit options override matching URI values. Supported URI options are authSource, tls or ssl (not both), authMechanism, replicaSet, directConnection, readPreference=primary, retryWrites=false, loadBalanced=false, empty compressors, and connection/socket timeouts. Unknown or repeated options are rejected. The URI form is deliberately restricted to one mongodb:// seed. mongodb+srv:// and comma-separated hosts are rejected. Do not place credentials in source control; pass secrets through the runtime's secret/configuration mechanism.
 
+## Authentication behavior
+
+SCRAM-SHA-256 and SCRAM-SHA-1 are supported. SCRAM-SHA-256 passwords must be printable ASCII because full Unicode SASLprep is not implemented. Usernames must be printable ASCII. The server-final proof is checked using strict Base64 alphabet/padding validation and a canonical round-trip before constant-time signature comparison; Node's permissive Base64 decoder must not silently ignore malformed characters.
+
 ## BSON and record mapping
 
 The public record contract remains JSON-only. The codec supports strings, finite numbers, booleans, null, nested plain documents, dense arrays and the internal binary/date/signed-int64 forms. BSON Timestamp (type 0x11) is decoded as an unsigned 64-bit integer, returned as a Number when safe and otherwise as BigInt. Document nesting is limited to 100 levels. ObjectId values decode to their hexadecimal string representation. The provider rejects malformed lengths, truncated values, unsupported BSON element types, sparse arrays, accessors, non-plain objects, circular structures and documents above the 16 MiB BSON limit.

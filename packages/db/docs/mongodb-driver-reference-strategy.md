@@ -54,6 +54,8 @@ The pinned driver delegates BSON serialization/deserialization to the separate `
 
 The Coinzilla decoder previously routed BSON type `0x11` through `Buffer.readBigInt64LE`, interpreting values with the high bit set as negative. A test-first regression was committed in `73494aa26b6059428ecf61a9584f273ecc88cc7a` for a timestamp above `2^63 - 1`. The correction uses Node's `readBigUInt64LE` and retains precision by returning a Number only within the safe-integer range, otherwise BigInt. This is a specification-informed local fix; no upstream source was copied, so the attribution ledger remains empty.
 
+A second review found that Node's `Buffer.from(value, "base64")` silently ignores invalid trailing characters. That behavior could allow a malformed SCRAM server-final signature such as a valid proof followed by punctuation to decode to the expected bytes. A test-first regression was committed in `32dad94bfaab85e559cb6a34cb97b2802b8a3afe`; the local fix now validates the Base64 alphabet, padding shape and canonical round-trip before the existing constant-time comparison. This is protocol-input hardening, not copied upstream code.
+
 ## Porting workflow — required for every candidate
 
 1. **Name the concrete gap.** Identify the current Coinzilla function, its public contract, observed defect or missing edge case, and a regression test that demonstrates the requirement. Do not port code merely because the official driver has it.
