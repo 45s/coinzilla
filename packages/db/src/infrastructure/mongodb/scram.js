@@ -135,13 +135,17 @@ export async function authenticateMongoScram({
 
   const serverFirst = startResponse.payload.toString("utf8")
   const serverAttributes = parseAttributes(serverFirst)
+  if (serverAttributes.has("m")) {
+    throw new Error("MongoDB SCRAM server requested an unsupported mandatory extension")
+  }
   const serverNonce = serverAttributes.get("r")
   if (typeof serverNonce !== "string" || !serverNonce.startsWith(nonce) || serverNonce.length <= nonce.length) {
     throw new Error("MongoDB SCRAM server nonce does not extend the client nonce")
   }
   const saltValue = serverAttributes.get("s")
   const salt = Buffer.from(saltValue ?? "", "base64")
-  if (!saltValue || salt.length === 0 || salt.length > 1024) {
+  const canonicalSalt = salt.toString("base64").replace(/=+$/, "")
+  if (!saltValue || salt.length === 0 || salt.length > 1024 || canonicalSalt !== saltValue.replace(/=+$/, "")) {
     throw new Error("MongoDB SCRAM server supplied an invalid salt")
   }
   const iterations = Number(serverAttributes.get("i"))
@@ -185,7 +189,12 @@ export async function authenticateMongoScram({
     },
   })
   assertCommandSucceeded(continueResponse, "continue")
+  let finalRounds = 0
   while (!continueResponse.done) {
+    finalRounds += 1
+    if (finalRounds > 2) {
+      throw new Error("MongoDB SCRAM server exceeded the supported continuation rounds")
+    }
     continueResponse = await command({
       body: {
         saslContinue: 1,
