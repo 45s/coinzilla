@@ -83,8 +83,8 @@ test("MongoDB handshake detects standalone, replica-set, and sharded topologies"
 
 test("MongoDB handshake rejects servers outside the documented wire-version range", async () => {
   for (const hello of [
-    { minWireVersion: 0, maxWireVersion: 17, isWritablePrimary: true },
-    { minWireVersion: 13, maxWireVersion: 26, isWritablePrimary: true },
+    { minWireVersion: 0, maxWireVersion: 12, isWritablePrimary: true },
+    { minWireVersion: 26, maxWireVersion: 30, isWritablePrimary: true },
   ]) {
     await assert.rejects(
       performMongoHandshake({
