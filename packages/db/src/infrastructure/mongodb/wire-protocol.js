@@ -102,7 +102,7 @@ function readSequence(buffer, state) {
 
 /** Decode one complete MongoDB OP_MSG frame. */
 export function decodeOpMsg(message) {
-  if (!Buffer.isBuffer(message) || message.length < HEADER_SIZE + 5) {
+  if (!Buffer.isBuffer(message) || message.length < HEADER_SIZE + 10) {
     throw new TypeError("MongoDB OP_MSG frame is truncated")
   }
   const length = message.readInt32LE(0)
@@ -124,6 +124,9 @@ export function decodeOpMsg(message) {
     const kind = message[state.offset]
     state.offset += 1
     if (kind === 0) {
+      if (state.offset + 4 > state.end) {
+        throw new TypeError("Truncated BSON body in MongoDB OP_MSG")
+      }
       if (body !== undefined) {
         throw new TypeError("MongoDB OP_MSG must contain exactly one body section")
       }
