@@ -40,10 +40,14 @@ async function collectAccountResolutionAudit(options) {
   if (blockers.some(({ evidenceDigest: trigger }) => trigger === evidenceDigest)) {
     throw new Error("Resolution evidence must be independent from blocker-triggering evidence")
   }
-  return { blockers, blockerIds, evidenceDigest }
+  return {
+    blockers,
+    blockerIds,
+    evidenceDigest,
+  }
 }
 
-async function appendAccountBlockerResolutions(options, blockers, evidenceDigest) {
+async function appendAccountBlockerResolutions({ options, blockers, evidenceDigest }) {
   for (const blocker of blockers) {
     const result = await recordSafetyBlockerResolved({
       operationalStateStore: options.operationalStateStore,
@@ -55,7 +59,9 @@ async function appendAccountBlockerResolutions(options, blockers, evidenceDigest
     if (result?.ok !== true || result.data?.durable !== true) {
       return result?.ok === false
         ? result
-        : toResult({ error: new Error(`Resolution was not durable for blocker ${blocker.blockerId}`) })
+        : toResult({
+          error: new Error(`Resolution was not durable for blocker ${blocker.blockerId}`),
+        })
     }
   }
   return undefined
@@ -82,11 +88,11 @@ export async function resolveUserDataAccountBlockers(options = {}) {
     if (audit?.ok === false) {
       return audit
     }
-    const appendResult = await appendAccountBlockerResolutions(
+    const appendResult = await appendAccountBlockerResolutions({
       options,
-      audit.blockers,
-      audit.evidenceDigest,
-    )
+      blockers: audit.blockers,
+      evidenceDigest: audit.evidenceDigest,
+    })
     if (appendResult) {
       return appendResult
     }
