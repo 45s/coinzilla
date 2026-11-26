@@ -104,7 +104,8 @@ test("returns an authorized immutable runtime status with explicit readiness and
     result.data.markets,
     { configured: 2,
 enabled: 1,
-blocked: 1 },
+blocked: 1,
+ready: 0 },
     "The status summary must count configured, enabled, and blocked markets from the same snapshot.",
   )
   assert.equal(result.data.userData.ageMs, 500, "The status must preserve the age of the last user-data status event.")

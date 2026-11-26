@@ -1490,6 +1490,131 @@ function getSafeStartupErrorCode({ error, fallbackCode } = {}) {
   return fallbackCode
 }
 
+async function reportHarvesterStartupFailure({ startup, resources, accountSnapshots, startupError, component, fallbackCode } = {}) {
+  try {
+    await runHarvesterStartupReadinessAudit({
+      startup,
+      resources,
+      accountSnapshots,
+      startupFailure: {
+        component,
+        code: getSafeStartupErrorCode({ error: startupError, fallbackCode }),
+      },
+    })
+  } catch (diagnosticError) {
+    const logger = startup.logger
+    const writer = logger?.system ?? logger?.error ?? logger?.info
+    writer?.call(logger, {
+      message: "[HEALTH] Startup readiness diagnostics could not complete after the original startup failure.",
+      component: "harvester-startup-readiness",
+      startupComponent: component,
+      startupErrorCode: getSafeStartupErrorCode({ error: startupError, fallbackCode }),
+      diagnosticErrorCode: getSafeStartupErrorCode({
+        error: diagnosticError,
+        fallbackCode: "READINESS_DIAGNOSTIC_FAILED",
+      }),
+    })
+  }
+}
+
+async function startHarvesterCandleHistory({ resources, marketDataPairs } = {}) {
+  await resources.candleHistoryService.start({
+    pairs: marketDataPairs,
+    subscriptions: resources.subscriptions,
+  })
+}
+
+async function activateHarvesterTrading({ startup, resources, report } = {}) {
+  if (startup.tradingEnabled !== true) {
+    return
+  }
+  if (report.runtimeBlockers.length > 0) {
+    throw createStartupReadinessBlockedError({ report })
+  }
+  if (typeof resources.activateTrading !== "function") {
+    throw createStartupReadinessBlockedError({
+      report,
+      blockers: ["TRADING_ACTIVATION_UNAVAILABLE"],
+    })
+  }
+  await resources.activateTrading()
+  resources.lastReportedUserDataReady = resources.userDataState.ready
+  publishInitialUserDataReadiness({
+    lastReportedUserDataReady: resources.lastReportedUserDataReady,
+    eventPublisher: startup.eventPublisher,
+    brokerName: startup.brokerName,
+    userDataState: resources.userDataState,
+  })
+}
+
+async function startHarvesterMarketServices({ startup, portfolio, resources, freshness, accountSnapshots } = {}) {
+  const marketDataPairs = getHarvesterMarketDataPairs({ startup })
+  try {
+    await subscribeHarvesterMarketData({
+      startup,
+      portfolio,
+      resources,
+      marketDataPairs,
+      freshness,
+    })
+  } catch (startupError) {
+    await reportHarvesterStartupFailure({
+      startup,
+      resources,
+      accountSnapshots,
+      startupError,
+      component: "MARKET_DATA",
+      fallbackCode: "MARKET_DATA_SUBSCRIPTION_FAILED",
+    })
+    throw startupError
+  }
+  try {
+    await startHarvesterCandleHistory({ resources, marketDataPairs })
+  } catch (startupError) {
+    await reportHarvesterStartupFailure({
+      startup,
+      resources,
+      accountSnapshots,
+      startupError,
+      component: "CANDLE_HISTORY",
+      fallbackCode: "CANDLE_HISTORY_STARTUP_FAILED",
+    })
+    throw startupError
+  }
+  const report = await runHarvesterStartupReadinessAudit({
+    startup,
+    resources,
+    accountSnapshots,
+  })
+  await activateHarvesterTrading({ startup, resources, report })
+}
+
+async function unsubscribeMarketDataEntries(entries) {
+  const errors = []
+  for (let index = entries.length - 1; index >= 0; index -= 1) {
+    const entry = entries[index]
+    const unsubscribe = typeof entry === "function" ? entry : entry?.unsubscribe
+    if (typeof unsubscribe !== "function") {
+      errors.push(new TypeError("Market-data subscription must expose unsubscribe()"))
+      continue
+    }
+    try {
+      await unsubscribe.call(entry)
+      entries.splice(index, 1)
+    } catch (error) {
+      errors.push(error)
+    }
+  }
+  return errors
+}
+
+async function stopHarvesterMarketDataSubscriptions({ resources } = {}) {
+  resources.userDataState.marketIntakeStopped = true
+  const bookErrors = await unsubscribeMarketDataEntries(resources.bookSubscriptions)
+  const marketErrors = await unsubscribeMarketDataEntries(resources.subscriptions)
+  return [...bookErrors, ...marketErrors]
+}
+
 function createHarvesterMarketDataLifecycleStarter({ state, startServices }) {
   return async function start() {
     if (state.stopped) {
@@ -1984,6 +2109,52 @@ async function createHarvesterRuntimeComponents({ startup, portfolio }) {
     marketDataLifecycle,
     activateTradingEngine,
   }
+}
+
+export async function startHarvester(options = {}) {
+  const startup = await createHarvesterStartupContext({ options })
+  const portfolio = createHarvesterPortfolioContext({ startup })
+  ensureHarvesterMarketDataProviderIdentities({
+    startup,
+    portfolio,
+  })
+  const components = await createHarvesterRuntimeComponents({
+    startup,
+    portfolio,
+  })
+  await startHarvesterServices({
+    startup,
+    portfolio,
+    ...components,
+  })
+  const completeStartup = () => {
+    if (components.resources.userDataState.startupComplete) {
+      return
+    }
+    components.resources.userDataState.startupComplete = true
+    startPendingUserDataRecovery({
+      userDataState: components.resources.userDataState,
+      startUserDataRecovery: components.recoveryRuntime.startUserDataRecovery,
+    })
+  }
+  if (!startup.deferMarketDataStart) {
+    completeStartup()
+  }
+  const stop = createHarvesterRuntimeStop({
+    startup,
+    resources: components.resources,
+    accountSnapshots: components.accountSnapshots,
+    userDataEvents: components.userDataEvents,
+    marketDataLifecycle: components.marketDataLifecycle,
+  })
+  return createHarvesterRuntimeResult({
+    startup,
+    portfolio,
+    resources: components.resources,
+    stop,
+    marketDataLifecycle: components.marketDataLifecycle,
+    completeStartup,
+  })
 }
 
 function resolveStrategyMarketDataPairs({

@@ -88,85 +88,6 @@ reason: "STALE_MARKET_PRICE" } })
   return { marketPrice }
 }
 
-function getMarketMetadataGateResult({ dependencies, symbol } = {}) {
-  const { state, getCurrentMarketMetadata } = dependencies
-  const metadata = typeof getCurrentMarketMetadata === "function"
-    ? getCurrentMarketMetadata({ symbol })
-    : null
-  if (metadata?.market) {
-    return { metadata }
-  }
-  state.deferredEvaluations.add(symbol)
-  return toResult({ data: { deferred: true,
-reason: "MARKET_METADATA_UNAVAILABLE" } })
-}
-
-function getMarketBookGateResult({ dependencies, symbol, metadata } = {}) {
-  const { state, isMarketBookFresh, pairs } = dependencies
-  const orderType = metadata.orderType ?? pairs?.[symbol]?.orderType ?? "LIMIT_MAKER"
-  if (orderType !== "LIMIT_MAKER") {
-    return null
-  }
-  const marketBook = state.books.get(symbol)
-  if (marketBook && typeof isMarketBookFresh === "function" && isMarketBookFresh(marketBook)) {
-    return null
-  }
-  state.deferredEvaluations.add(symbol)
-  return toResult({
-    data: {
-      deferred: true,
-      reason: marketBook ? "MARKET_BOOK_STALE" : "MARKET_BOOK_UNAVAILABLE",
-    },
-  })
-}
-
-function hasReadyVolatilityProtection({ status, protection } = {}) {
-  return status?.isReady === true &&
-    status.isFresh === true &&
-    Array.isArray(status.blockers) &&
-    status.blockers.length === 0 &&
-    Number.isSafeInteger(status.historyCount) &&
-    Number.isSafeInteger(status.requiredHistoryCount) &&
-    status.historyCount >= status.requiredHistoryCount &&
-    protection !== null &&
-    typeof protection === "object"
-}
-
-function getMarketVolatilityGateResult({ dependencies, symbol } = {}) {
-  const { state, getVolatilityData, isVolatilityProtectionEnabledForSymbol } = dependencies
-  if (isVolatilityProtectionEnabledForSymbol?.(symbol) !== true) {
-    return null
-  }
-  const snapshot = getVolatilityData?.({ symbol })
-  const status = snapshot?.ok === true ? snapshot.data?.status : null
-  const protection = state.volatilityProtection?.get(symbol)
-  if (hasReadyVolatilityProtection({ status,
-protection })) {
-    return null
-  }
-  state.deferredEvaluations.add(symbol)
-  return toResult({ data: { deferred: true,
-reason: "VOLATILITY_PROTECTION_NOT_READY" } })
-}
-
-function getMarketPrerequisiteGateResult({ dependencies, symbol } = {}) {
-  const metadataResult = getMarketMetadataGateResult({ dependencies,
-symbol })
-  if (metadataResult?.ok === false || metadataResult?.data?.deferred) {
-    return metadataResult
-  }
-  const bookResult = getMarketBookGateResult({
-    dependencies,
-    symbol,
-    metadata: metadataResult.metadata,
-  })
-  if (bookResult) {
-    return bookResult
-  }
-  return getMarketVolatilityGateResult({ dependencies,
-symbol })
-}
-
 function getEvaluationGateResult({ dependencies, symbol, shutdownRecoveryOnly } = {}) {
   const entryGateResult = getEvaluationEntryGateResult({
     dependencies,
@@ -176,18 +97,12 @@ function getEvaluationGateResult({ dependencies, symbol, shutdownRecoveryOnly } 
   if (entryGateResult) {
     return entryGateResult
   }
-  const priceGateResult = getFreshMarketPriceGateResult({ dependencies,
-symbol })
-  if (priceGateResult?.data || priceGateResult?.errors || priceGateResult?.error) {
+  const priceGateResult = getFreshMarketPriceGateResult({ dependencies, symbol })
+  if (!priceGateResult.marketPrice) {
     return priceGateResult
   }
-  if (!shutdownRecoveryOnly) {
-    const prerequisiteResult = getMarketPrerequisiteGateResult({ dependencies,
-symbol })
-    if (prerequisiteResult) {
-      return prerequisiteResult
-    }
-  }
+  // Market metadata, book freshness and volatility are enforced at the final engine submission boundary.
+  // Keeping them there preserves replacement-specific outcomes and safe structured diagnostics.
   return { marketPrice: priceGateResult.marketPrice }
 }
 
