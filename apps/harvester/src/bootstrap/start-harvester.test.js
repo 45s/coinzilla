@@ -391,6 +391,7 @@ test("captures the CLOSING account-wide open-order set before broker disconnect 
 
 function createTwoMarketShutdownEventPublisher({ calls, publishedEvents } = {}) {
   let lastPublishedEvent
+  let failNextFlush = false
   return {
     publish(event) {
       publishedEvents.push(event)
@@ -403,7 +404,19 @@ function createTwoMarketShutdownEventPublisher({ calls, publishedEvents } = {}) 
       }
       return { ok: true }
     },
+    failNextFlush() {
+      failNextFlush = true
+    },
     flush: async () => {
+      if (failNextFlush) {
+        failNextFlush = false
+        calls.push("journal-flush-failed")
+        return {
+          ok: false,
+          durable: false,
+          errors: [new Error("Journal fsync failed")],
+        }
+      }
       calls.push(["flush", lastPublishedEvent?.name ?? "undefined", lastPublishedEvent?.data?.phase ?? ""].join(":"))
       return {
         ok: true,
@@ -510,6 +523,54 @@ test("proves shutdown safety independently for every enabled market in the compo
       stopResult,
       processHistory,
     })
+  } finally {
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
+  }
+})
+
+test("fails closed before teardown when composed Journal durability cannot be proven", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-multimarket-journal-failure-"))
+  const operationalStateStore = createFileOperationalStateStore({
+    directory,
+    runtimeSessionId: "multimarket-journal-failure",
+  })
+  const initialized = await operationalStateStore.initialize()
+  assert.equal(initialized.ok, true, "The durable process-state fixture must initialize.")
+  const calls = []
+  const publishedEvents = []
+  const infoRecords = []
+  const eventPublisher = createTwoMarketShutdownEventPublisher({
+    calls,
+    publishedEvents,
+  })
+  const broker = makeVolatilityReadyBroker(createBroker(calls), ["BTCUSDT", "ETHUSDT"])
+
+  try {
+    const runtime = await startHarvesterForTest({
+      loadConfig: async () => createTwoMarketStartupConfig(),
+      env: binanceEnv,
+      operationalStateStore,
+      brokerAdapterFactory: () => broker,
+      eventPublisher,
+      logger: createTwoMarketShutdownLogger({
+        calls,
+        infoRecords,
+      }),
+    })
+    eventPublisher.failNextFlush()
+    await assert.rejects(runtime.stop())
+    assert.ok(calls.includes("journal-flush-failed"), "The injected Journal durability failure must be observed.")
+    for (const symbol of ["BTCUSDT", "ETHUSDT"]) {
+      assert.equal(calls.includes("unsubscribe:" + symbol), false, "A market feed must remain connected after failed Journal durability.")
+    }
+    assert.equal(calls.includes("unsubscribe:user-data"), false, "User-data intake must remain connected after failed Journal durability.")
+    assert.equal(calls.includes("disconnect"), false, "The broker must remain connected after failed Journal durability.")
+    const processHistory = await operationalStateStore.readAll()
+    assert.equal(processHistory.ok, true, "The durable process-state history must remain readable.")
+    assert.equal(processHistory.data.records.some((record) => record.factType === "PROCESS_STOPPED"), false, "Failed shutdown must never append PROCESS_STOPPED.")
   } finally {
     await rm(directory, {
       recursive: true,
