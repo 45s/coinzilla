@@ -1202,7 +1202,7 @@ async function startHarvesterUserDataServices({
     onSubscriptionEstablished: (subscription) => { resources.userDataSubscription = subscription },
     publishAccountSnapshot: accountSnapshots.publishAccountSnapshot,
     publishOpenOrdersSnapshot: accountSnapshots.publishOpenOrdersSnapshot,
-    getAccountReadinessSnapshot: accountSnapshots.getReadinessSnapshot,
+    getAccountReadinessSnapshot: accountSnapshots.getAccountReadinessSnapshot,
     getAccountSnapshot: portfolio.getAccountSnapshot,
     getAccountSafetyBlocker: () => getHarvesterAccountSafetyBlocker({
       userDataState: resources.userDataState,
