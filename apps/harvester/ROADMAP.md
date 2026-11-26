@@ -255,7 +255,7 @@ Do not claim 100% correctness from line/branch coverage. Completion means every 
 
 ## Trading-history real-time notifications (#1643)
 
-**Complete in merged [PR #1641](https://github.com/45s/coinzilla/pull/1641)**, merge commit `a86b8c95d8ec900c7053355424cbcc344b616e0a`. All seven required workflows passed on exact head `c60a850d847bba6aae1e7fdcdc2439ff4e2603eb`; issue #1643 is closed. Order/fill history observers publish resource-only invalidations only after relational upserts succeed. Notifications remain best-effort and in-memory; REST snapshots remain authoritative, with reconnect resynchronization.
+**Complete in merged [PR #1641](https://github.com/45s/coinzilla/pull/1641)**, merge commit `a86b8c95d8ec900c7053355424cbcc344b616e0a`. All required checks passed on exact head `c60a850d847bba6aae1e7fdcdc2439ff4e2603eb`; the advisory External Documentation Links workflow also passed; issue #1643 is closed. Order/fill history observers publish resource-only invalidations only after relational upserts succeed. Notifications remain best-effort and in-memory; REST snapshots remain authoritative, with reconnect resynchronization.
 
 ## Critical trading reliability initiative (#1639)
 
@@ -346,7 +346,7 @@ The temporary `harvester_processes` process-ID smoke-test row and its obsolete p
 
 1. Filtered account snapshot history only with explicit provenance and completeness semantics.
 2. Offline, idempotent historical imports from verified source evidence.
-3. **Versioned trading-history query API and Dashboard consumer — COMPLETE (#1635, #1634; merged PR #1636).** Existing orders, individual fills and commission facts are exposed through Harvester-owned application queries and an authenticated in-process `/api/v1` HTTP listener. The Angular Dashboard consumes the same versioned contract for read-only Orders, Fills and Commissions pages. Harvester owns the shared database connection and listener lifecycle; no separate API process, schema changes, sessions/errors tables, trading controls or exchange operations. All seven required workflows passed on exact head `38e26aca14e8c146ea974dbf42fe133524ad83c6`; issues #1634 and #1635 are closed.
+3. **Versioned trading-history query API and Dashboard consumer — COMPLETE (#1635, #1634; merged PR #1636).** Existing orders, individual fills and commission facts are exposed through Harvester-owned application queries and an authenticated in-process `/api/v1` HTTP listener. The Angular Dashboard consumes the same versioned contract for read-only Orders, Fills and Commissions pages. Harvester owns the shared database connection and listener lifecycle; no separate API process, schema changes, sessions/errors tables, trading controls or exchange operations. All required checks passed on exact head `38e26aca14e8c146ea974dbf42fe133524ad83c6`; the advisory External Documentation Links workflow also passed; issues #1634 and #1635 are closed.
 
 **Explicit exclusions from #1554/#1556:** no account-wide or delisted-market history completeness claim, account snapshots as a history source, strategy-cycle lifecycle, PnL/analytics, equity/drawdown snapshots, process-restart restoration/adoption, Journal replay, new providers, `sessions`/`errors` tables, broker order-mutation behavior changes, Journal semantics changes, ADR-0001 rewrite, or exchange operations.
 
