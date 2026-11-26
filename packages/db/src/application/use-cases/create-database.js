@@ -153,8 +153,11 @@ function createProviderNeutralFacade({ database, provider }) {
       return database.close()
     },
     transaction(work) {
-      if (transactionScope.getStore()?.active) {
-        throw new Error("Nested database transactions are not supported")
+      const activeScope = transactionScope.getStore()
+      if (activeScope) {
+        throw new Error(activeScope.active
+          ? "Nested database transactions are not supported"
+          : "Database transaction callback has already completed")
       }
       if (typeof work !== "function") {
         throw new TypeError("A transaction callback is required")
