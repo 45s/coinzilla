@@ -10,27 +10,34 @@ owner: db
 
 The accepted architecture is recorded in [ADR-0001](./docs/decisions/0001-provider-neutral-record-crud-api.md); see the [local documentation index](./docs/README.md).
 
-`@coinzilla/db` provides a provider-neutral record CRUD and transaction API. Node.js built-in `node:sqlite` and the dependency-free MongoDB wire-protocol adapter are concrete providers. The package owns generic persistence infrastructure contracts only; application domains own their business entities, schemas and repository interfaces.
+`@coinzilla/db` provides a provider-neutral record CRUD and transaction API. Node.js built-in `node:sqlite` is the first concrete provider. The package owns generic persistence infrastructure contracts only; application domains own their business entities, schemas and repository interfaces.
 
 ## Dependency-free MongoDB provider — #1865
 
-**Status: In progress.** Implementation PR [#1868](https://github.com/45s/coinzilla/pull/1868) targets develop. Assessment and scope are recorded separately in [PR #1866](https://github.com/45s/coinzilla/pull/1866).
+**Status: In progress.** Implementation PR [#1868](https://github.com/45s/coinzilla/pull/1868) targets `develop`. Assessment and scope are recorded separately in [PR #1866](https://github.com/45s/coinzilla/pull/1866).
 
-The provider is implemented as an infrastructure adapter under src/infrastructure/mongodb/ and is exported through the package entry point. The current implementation includes:
+### Current implementation
+
+The provider is implemented as an infrastructure adapter under `src/infrastructure/mongodb/` and is exported through the package entry point.
 
 - Bounded BSON encoding/decoding for the JSON record contract and internal binary/date/int64 values.
-- OP_MSG framing and document-sequence decoding.
-- TCP/TLS transport with request correlation, bounded pending requests, command timeouts and socket cleanup.
+- OP_MSG framing, response correlation and document-sequence handling.
+- TCP/TLS transport with bounded pending requests, socket buffering, command timeouts and cleanup.
 - Single-seed hello negotiation, topology detection and replica-set primary redirection.
-- SCRAM-SHA-256 and SCRAM-SHA-1 authentication using node:crypto.
+- SCRAM-SHA-256 and SCRAM-SHA-1 authentication using `node:crypto`.
 - Provider-neutral CRUD/query command mapping, cursor batch draining, duplicate/error normalization and topology-dependent transaction handling.
-- Commit retry for unknown commit results and an explicit unknown-outcome error.
+- Replica-set/sharded transactions with logical sessions, snapshot reads, majority commit, abort handling and explicit ambiguous commit outcomes; standalone multi-document transactions fail explicitly.
+- In-flight CRUD and transactions participate in provider shutdown draining.
+- Deterministic fake-transport tests, shared provider-conformance coverage and opt-in real-server integration tests through `MONGODB_URI`.
 
 The public CRUD API remains provider-independent. MongoDB collections, BSON, commands, sessions, cursors, sockets and native errors remain inside infrastructure. No MongoDB driver, BSON package or other external runtime dependency is added.
 
-**Remaining acceptance work:** complete the final adversarial protocol/authentication and lifecycle review; run package tests, coverage and lint on the exact PR head when a runnable checkout is available; and verify command semantics against real MongoDB server versions, topologies and authentication modes. In-flight CRUD now participates in close-time draining. Deterministic fake transports cover protocol and provider unit behavior; the shared provider-conformance suite runs against a deterministic fixture by default and against a real server when `MONGODB_URI` is set. No live-server result is claimed. CI remains deferred as requested and must not pause implementation.
+**Current verification:** the preceding exact-head GitHub run reported failures in DB tests, DB coverage and changed-file ESLint. The test log identified deterministic SCRAM nonce fixtures that supplied fewer than the required 24 bytes and stale handshake/wire-version assertion expectations. These test-fixture/assertion issues were corrected in commit `b4ed871e1e3d17fd1300dc7952fafb96b6ac082d`; no post-correction result is claimed. No local test, coverage, lint or live MongoDB result is claimed. CI remains deferred as an implementation gate, but relevant test failures must still be corrected.
+
+**Remaining acceptance work:** complete the final adversarial protocol/authentication and lifecycle review; inspect the corrected exact-head package test result when available; run package tests, coverage and lint when a runnable checkout is available; and verify command semantics against the MongoDB server versions, topologies and authentication modes used in deployment. No live-server result is claimed.
 
 Supported protocol generations, topology/authentication limits, BSON subset, transaction guarantees and explicit exclusions are documented in [MongoDB provider support and limitations](./docs/mongodb.md). The roadmap remains in progress until the implementation PR is merged and all required validation passes on its exact final head.
+
 
 ## Application-owned relational schema infrastructure — #1486
 
@@ -120,7 +127,7 @@ The following core delivery steps were completed by merged PR #1353:
 
 - No ORM, query builder, schema generator or universal SQL abstraction.
 - No trading, Harvester, Journal, Operational State Store, order, fill, execution or portfolio entities/repositories/schemas.
-- No speculative PostgreSQL adapter implementation; MongoDB is tracked separately by #1865.
+- No speculative PostgreSQL or MongoDB adapter implementation.
 - No consumer integration in this task. A real application's repository contract remains owned by that application's bounded context and its roadmap.
 
 ## Provider-neutral API contract
@@ -211,9 +218,9 @@ Application domains own their business entities, schemas, repository interfaces,
    - Applications decide schedules, retention/rotation, encryption, off-site storage, deployment paths, version compatibility, permissions, restore drills, and operational runbooks. Do not move those policies into this package.
 
 3. **Additional providers**
+   - The dependency-free MongoDB provider is now an approved, tracked initiative under [issue #1865](https://github.com/45s/coinzilla/issues/1865); see the scope, phases and acceptance gates above.
    - PostgreSQL remains deferred until measured deployment topology, concurrent writers, availability, dataset size or query requirements justify it.
-   - MongoDB implementation status and acceptance gates are tracked above under #1865.
-   - Any future adapter must pass the provider conformance suite and declare actual capability differences. Do not claim portability for guarantees a provider cannot provide.
+   - Every new adapter must pass the provider-conformance suite and declare actual capability differences. Do not claim portability for guarantees a provider cannot provide.
 
 ## Completion policy
 
