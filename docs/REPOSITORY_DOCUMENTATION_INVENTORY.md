@@ -1,8 +1,8 @@
 # Repository documentation inventory
 
 **Purpose:** current navigation and cleanup register—not a historical checkpoint ledger.
-**Last tree audit:** `develop` at `f46c198cc4d5f4adfaf0a8ca9364fea1cc72f2b5` (2026-11-26).
-**Tracked Markdown files:** 213 at this tree snapshot.
+**Last tree audit:** `develop` at `aa75d2c198e8464facde66658c815fcb0c19c508` (2026-11-26).
+**Tracked Markdown files:** 214 at this tree snapshot.
 **Policy:** [Documentation Governance](DOCUMENTATION_GOVERNANCE.md).
 
 > The previous detailed inventory and dated recursive checkpoints are preserved in [REPOSITORY_DOCUMENTATION_INVENTORY_2026-11-26](archive/roadmap-history-2026-11-26.md#inventory). This page is the current entry point; counts must be refreshed from the recursive Git tree when the inventory is audited again.
@@ -70,4 +70,4 @@ Additional active roadmap pages were reduced to concise owner/status/next-action
 - [Notifiers roadmap history](archive/roadmap-history-2026-11-26.md#root-roadmap) — completed phases and validation records.
 - [Harvester Journal integration history](archive/roadmap-history-2026-11-26.md#root-roadmap) — staged PR-by-PR integration evidence; Step 8 closeout remains open.
 
-The active pages now point to canonical READMEs, contracts, tests, issues, or feature roadmaps instead of repeating completed phase histories. These snapshots preserve provenance but are not current task-status authority.
+The active pages now point to canonical READMEs, contracts, tests, issues, or feature roadmaps instead of repeating completed phase histories. These consolidated archives preserve provenance but are not current task-status authority. The cleanup PR branch currently has 216 Markdown files: the 214-file `develop` tree plus two archive bundles.
