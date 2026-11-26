@@ -156,20 +156,24 @@ describe('AppComponent', () => {
     fixture.detectChanges();
 
     const root = fixture.nativeElement as HTMLElement;
-    const ordersButton = Array.from(root.querySelectorAll('button.nav-item'))
+    const brokersButton = Array.from(root.querySelectorAll('button.nav-item'))
+      .find((button) => button.textContent?.includes('Brokers')) as HTMLButtonElement;
+    brokersButton.click();
+    fixture.detectChanges();
+    const ordersButton = Array.from(root.querySelectorAll('button.section-nav-item'))
       .find((button) => button.textContent?.includes('Orders')) as HTMLButtonElement;
     ordersButton.click();
     fixture.detectChanges();
     expect(fixture.nativeElement.textContent).toContain('Connecting to Harvester');
     expect(fixture.nativeElement.textContent).toContain('Orders');
 
-    const fillsButton = Array.from(root.querySelectorAll('button.nav-item'))
+    const fillsButton = Array.from(root.querySelectorAll('button.section-nav-item'))
       .find((button) => button.textContent?.includes('Fills')) as HTMLButtonElement;
     fillsButton.click();
     fixture.detectChanges();
     expect(fixture.nativeElement.textContent).toContain('Fills');
 
-    const commissionsButton = Array.from(root.querySelectorAll('button.nav-item'))
+    const commissionsButton = Array.from(root.querySelectorAll('button.section-nav-item'))
       .find((button) => button.textContent?.includes('Commissions')) as HTMLButtonElement;
     commissionsButton.click();
     fixture.detectChanges();
@@ -190,7 +194,11 @@ describe('AppComponent', () => {
     const fixture = TestBed.createComponent(AppComponent);
     fixture.detectChanges();
     const root = fixture.nativeElement as HTMLElement;
-    const openOrdersButton = Array.from(root.querySelectorAll('button.nav-item'))
+    const brokersButton = Array.from(root.querySelectorAll('button.nav-item'))
+      .find((button) => button.textContent?.includes('Brokers')) as HTMLButtonElement;
+    brokersButton.click();
+    fixture.detectChanges();
+    const openOrdersButton = Array.from(root.querySelectorAll('button.section-nav-item'))
       .find((button) => button.textContent?.includes('Open Orders')) as HTMLButtonElement;
     expect(openOrdersButton).toBeDefined();
     openOrdersButton.click();
@@ -214,7 +222,7 @@ describe('AppComponent', () => {
     fixture.detectChanges();
     const root = fixture.nativeElement as HTMLElement;
     const githubButton = Array.from(root.querySelectorAll('button.nav-item'))
-      .find((button) => button.textContent?.includes('GitHub PRs')) as HTMLButtonElement;
+      .find((button) => button.textContent?.includes('GitHub')) as HTMLButtonElement;
     expect(githubButton).toBeDefined();
     githubButton.click();
     fixture.detectChanges();
@@ -224,6 +232,39 @@ describe('AppComponent', () => {
     expect(root.textContent).toContain('GitHub PRs');
     expect(root.textContent).toContain('PUBLIC READ ONLY');
     request.flush([]);
+
+    fixture.destroy();
+  });
+
+  it('shows section-specific tabs and keeps future destinations visibly unavailable', async () => {
+    await TestBed.configureTestingModule({
+      imports: [AppComponent],
+      providers: [provideHttpClient()],
+    }).compileComponents();
+
+    const fixture = TestBed.createComponent(AppComponent);
+    fixture.detectChanges();
+    const root = fixture.nativeElement as HTMLElement;
+    const brokersButton = Array.from(root.querySelectorAll('button.nav-item'))
+      .find((button) => button.textContent?.includes('Brokers')) as HTMLButtonElement;
+    brokersButton.click();
+    fixture.detectChanges();
+
+    let tabs = Array.from(root.querySelectorAll('.section-nav-item'));
+    expect(tabs.map((tab) => tab.textContent?.trim())).toEqual([
+      'Markets', 'Orders', 'Fills', 'Commissions', 'Open Orders', 'Exchanges', 'History SOON',
+    ]);
+    expect(tabs.at(-1)?.getAttribute('aria-disabled')).toBe('true');
+
+    const botsButton = Array.from(root.querySelectorAll('button.nav-item'))
+      .find((button) => button.textContent?.includes('Bots')) as HTMLButtonElement;
+    botsButton.click();
+    fixture.detectChanges();
+    tabs = Array.from(root.querySelectorAll('.section-nav-item'));
+    expect(tabs.map((tab) => tab.textContent?.trim())).toEqual([
+      'Operators', 'Orders', 'Positions SOON', 'Portfolio',
+    ]);
+    expect(tabs[2]?.getAttribute('aria-disabled')).toBe('true');
 
     fixture.destroy();
   });
