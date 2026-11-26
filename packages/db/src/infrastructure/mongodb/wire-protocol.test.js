@@ -188,7 +188,7 @@ body: { ping: 1 } }),
     () => encodeOpMsg({ requestId: 1,
 body: { ping: 1 },
 sequences: {} }),
-    /sequences must be an array/,
+    /sequence documents must be an array/,
   )
   assert.throws(
     () => encodeOpMsg({
