@@ -948,7 +948,7 @@ function registerCrudAndQueryTests(options) {
   registerQueryTests(options)
 }
 
-function registerTransactionTests({ name, createDatabase, storageMode, cleanupStorage }) {
+function registerTransactionTests({ name, createDatabase, capabilities, storageMode, cleanupStorage }) {
   registerStandardTest({
     name,
     description: "missing updates and deletes use non-exception results",
@@ -957,38 +957,38 @@ function registerTransactionTests({ name, createDatabase, storageMode, cleanupSt
     storageMode,
     cleanupStorage,
   })
-  registerStandardTest({
-    name,
-    description: "transaction failures roll back every record change",
-    createDatabase,
-    verify: verifyRollback,
-    storageMode,
-    cleanupStorage,
-  })
-  registerStandardTest({
-    name,
-    description: "successful transactions commit all record changes",
-    createDatabase,
-    verify: verifyCommit,
-    storageMode,
-    cleanupStorage,
-  })
-  registerStandardTest({
-    name,
-    description: "transaction callbacks follow the declared callback mode",
-    createDatabase,
-    verify: verifyTransactionCallbackMode,
-    storageMode,
-    cleanupStorage,
-  })
-  registerStandardTest({
-    name,
-    description: "nested transaction behavior matches the declared capability",
-    createDatabase,
-    verify: verifyNestedTransactions,
-    storageMode,
-    cleanupStorage,
-  })
+  const transactionTests = [
+    {
+      description: "transaction failures roll back every record change",
+      verify: verifyRollback,
+    },
+    {
+      description: "successful transactions commit all record changes",
+      verify: verifyCommit,
+    },
+    {
+      description: "transaction callbacks follow the declared callback mode",
+      verify: verifyTransactionCallbackMode,
+    },
+    {
+      description: "nested transaction behavior matches the declared capability",
+      verify: verifyNestedTransactions,
+    },
+  ]
+  for (const transactionTest of transactionTests) {
+    test(`${name} (${storageMode}): ${transactionTest.description}`, async (context) => {
+      if (!capabilities.transactions.multiDocument) {
+        context.skip("Provider declares multi-document transactions unsupported")
+        return
+      }
+      await withDatabase({
+        createDatabase,
+        callback: transactionTest.verify,
+        storageMode,
+        cleanupStorage,
+      })
+    })
+  }
   registerStandardTest({
     name,
     description: "provider capabilities are exposed as an immutable snapshot",
@@ -1014,8 +1014,8 @@ function registerLifecycleTests({
     })
   })
   test(`${name} (${storageMode}): close waits for active asynchronous transactions`, async (context) => {
-    if (capabilities.transactions.callbackMode === "synchronous") {
-      context.skip("Synchronous providers cannot keep an asynchronous transaction callback active")
+    if (capabilities.transactions.callbackMode === "synchronous" || !capabilities.transactions.multiDocument) {
+      context.skip("Provider cannot keep a multi-document transaction active")
       return
     }
     await withDatabase({
