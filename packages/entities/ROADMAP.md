@@ -1,163 +1,20 @@
 # Entities roadmap
 
----
-status: active
-type: roadmap
-owner: entities
----
+**Owner:** Entities domain  
+**Scope:** `packages/entities/`
 
-## Priority execution plan — current develop direction (2026-11-21)
+## Active direction
 
-### IMPORTANT — preserve canonical financial and broker contracts
+- Preserve canonical financial, broker, order, execution, and event contracts. Treat compatibility and serialization as correctness requirements.
+- Keep entities exchange-neutral; exchange-specific behavior belongs in broker adapters.
+- Keep validation and shared helpers aligned with the canonical [shared utility policy](../../docs/engineering/SHARED_UTILITIES_POLICY.md); avoid restoring removed utility APIs or duplicating validation logic.
+- Extend contracts only when a real consumer requires a documented field or behavior. Add consumer-facing regression tests for contract changes.
+- Continue package maintenance and lint/test compliance; defer speculative entities and broad refactors.
 
-1. **Strengthen cross-package contract conformance for financial values and execution facts.**
-   - **Why:** Entities is the shared language for Money, Quantity, Balance, Fill, Commission, Order, Market and broker outcomes. A subtle contract mismatch can corrupt accounting or reconciliation in every consumer.
-   - **Do:** maintain exact decimal-string invariants, immutable values, explicit fee asset identity and COMPLETE/PARTIAL/UNKNOWN fee semantics. Add consumer contract cases for partial fills, duplicate/conflicting trade IDs, unknown order outcomes, locked/free balances and missing commission data.
-   - **Verify:** test values at precision/scale boundaries, negative Money versus non-negative Quantity, malformed IDs, unsupported values and serialization round trips. Never convert financial values through JavaScript Number.
+## Canonical sources
 
-2. **Keep Entities independent of infrastructure and application packages.**
-   - **Why:** importing logging, file-system or event infrastructure into shared value objects would make every consumer inherit unrelated dependencies and weaken dependency direction.
-   - **Do:** review imports and public exports; replace broad utility imports with narrowly scoped pure decimal/result helpers where practical. Keep exchange-specific parsing and strategy policy outside Entities.
-   - **Verify:** add an architecture test that rejects imports from Brokers, Harvester, Journal, Event Bus, DB and infrastructure modules. Run package and workspace tests after each import change.
+- Contract and package usage: [README](./README.md)
+- Current interfaces, schemas, and tests: package source
+- Task status and consumer requirements: GitHub Issues/PRs
 
-3. **Establish package-owned coverage and contract-test gates — COMPLETE in merged PR #1578.**
-   - **Why:** the workspace aggregate can hide a weak shared package behind the coverage of other packages. Entities contracts are high leverage and need their own regression signal.
-   - **Do:** measure production-source coverage by package and enforce a package-scoped threshold without counting imported Utils implementation files. [PR #1578](https://github.com/45s/coinzilla/pull/1578) adds `test:coverage` with 90% lines, 85% branches and 85% functions, based on the observed Entities source coverage report.
-   - **Verify:** the required Workspace test coverage matrix must run this package command and prove it passes on the exact PR head. Node's test runner exits non-zero when a configured threshold is missed. Mark complete only after exact-head CI is green and the PR is merged.
-
-### Coverage command
-
-- `pnpm --filter @coinzilla/entities run test:coverage` measures only Entities production source (`src/**/*.js`, excluding tests and imported packages) and enforces 90% lines, 85% branches and 85% functions.
-- The required workspace coverage matrix invokes this command once. The matrix-completeness guard verifies the package remains included and retains both `test` and `test:coverage` scripts.
-- **Measured on PR #1578 exact head `32dc8a094691d08754a3874b0719135b0c441bc5`:** 156 tests passed; production-source coverage was 96.33% lines, 94.33% branches and 95.40% functions. The configured gate is therefore below the measured baseline and passed without adding tests solely to inflate coverage.
-- This gate is complete: [PR #1578](https://github.com/45s/coinzilla/pull/1578) merged as `2979bcde1556103c351760281c375010e3655b51`; exact-head Unit Tests, Test Coverage, JavaScript Syntax, Dependency Audit, Harvester Targeted Tests and External Documentation Links all passed.
-
-### DEFERRED — only with a demonstrated contract need
-
-4. **Add new domain entities or expand existing contracts only for a real consumer.**
-   - **Why:** speculative abstractions increase coupling and make canonical contracts harder to evolve.
-   - **Do:** document the owning bounded context, invariants, compatibility and migration path before adding a public value/entity.
-   - **Verify:** add focused domain tests and consumer migration tests; preserve backward compatibility unless a deliberate versioned change is approved.
-
-**Owner:** `packages/entities/`
-**Purpose:** maintain small, exchange-neutral domain contracts shared by applications and adapters.
-
-Read [the entity agent instructions](./AGENTS.md) and [the domain ownership guide](../../docs/engineering/DOMAIN_OWNERSHIP.md).
-
-### Completed maintenance — ESLint compliance
-
-- [x] **Package ESLint cleanup — COMPLETE / superseded by the workspace gate.** [Issue #1228](https://github.com/45s/coinzilla/issues/1228) is closed. The required full-workspace `pnpm lint` gate checks every in-scope JavaScript file and fails on errors or warnings; progressive strict changed-file enforcement adds tighter thresholds for new and modified files. No package ESLint cleanup remains outstanding. Fix future findings in the PR that introduces them.
-
-## Principles
-
-- Stable canonical identity; do not infer asset identity from exchange symbols.
-- Exact decimal representations for financial amounts and increments.
-- Immutable, explicit value contracts with validation at construction/boundaries.
-- Preserve existing public behavior unless a migration is deliberately designed.
-- No exchange SDK dependencies or venue-specific payload fields in shared entities.
-
-## Roadmap
-
-- [x] **FR-008 — Asset and Market identity.** Stable Asset identity and explicit Market base/quote assets; symbol remains opaque. Implemented in `@coinzilla/entities` and integrated into `develop` via PR #295; delimiter-containing venue symbols are preserved as opaque metadata (PR #303).
-- [x] **FR-009 — Exact Money and Quantity.** Implemented immutable `Money` and `Quantity` values using validated, canonical decimal strings and explicit `Asset` identity. Money supports signed values; Quantity is non-negative. Numeric JavaScript inputs and scientific notation are rejected. Integrated into `develop` via PR #299.
-- [x] **FR-010 — Canonical Order lifecycle.** Implemented immutable `CanonicalOrder` with client/broker identity, canonical Market, exact limit price and quantities, derived remaining quantity, normalized lifecycle including `UNKNOWN`, and optional timestamps. Integrated into `develop` via PR #300.
-- [x] **FR-011 — Fill.** Implemented immutable, independently identifiable execution records with stable market-scoped trade identity, canonical order identity, exact base/quote quantities and execution price, optional maker/taker role, and optional execution timestamp. Integrated into `develop` via PR #301.
-- [x] **FR-012 — Commission.** Implemented immutable Commission values backed by exact non-negative `Money`, with explicit fee asset identity and zero/one/multiple fee entries on Fill. `COMPLETE`, `PARTIAL`, and `UNKNOWN` collection semantics prevent unknown or incomplete fees from being interpreted as zero. Integrated into `develop` via PR #302.
-- [x] **FR-013 — Balance.** Implemented immutable Balance values with exact free and locked quantities, canonical asset identity, and total derived using decimal-string arithmetic. Integrated into `develop` via PR #306.
-- [x] **FR-014 — TradingRules.** Implemented immutable, exchange-neutral Market-scoped price/quantity/notional constraints with explicit supported, unsupported, dynamic, and unknown states. Integrated into `develop` via PR #307.
-- [x] **FR-015 — Broker capability contracts.** Implemented immutable exchange-neutral capability snapshots with explicit supported, unsupported, and unknown states. Extended in PR #1455 to serve as the sole shared contract for evidence-backed provider declarations (provider/product/environment identity and generic method/guarantee/limitation/reason/condition metadata, including separate native `SUBSCRIBE_USER_DATA` and polling `OBSERVE_USER_DATA` delivery capabilities) while preserving the original capability-only value shape. Brokers re-exports and populates this Entities contract; no parallel capability model remains.
-- [x] **FR-016 — Broker result contracts.** Implemented immutable normalized success, failure, incomplete, and unknown-outcome envelopes. Integrated into `develop` via PR #309.
-
-### FR-009 contract boundary
-
-- Both value types require an existing canonical `Asset` instance; ticker strings alone are not sufficient identity.
-- Amounts are decimal strings only, trimmed and canonicalized without floating-point conversion. Leading integer zeros and trailing fractional zeros are removed; negative zero becomes `0`.
-- Plain decimal notation is accepted. Exponent notation, non-finite values, malformed syntax, and unsupported precision are rejected.
-- Maximum supported precision is 256 total digits and 100 fractional digits, matching the supported decimal arithmetic bounds.
-- `Money` permits negative values for losses, adjustments, and deltas. `Quantity` represents a magnitude and rejects negative values.
-- Both entities are immutable and expose independent `value` snapshots containing the canonical amount and an Asset snapshot. They intentionally provide no arithmetic methods.
-- Existing `Coin`, `Order`, and `ExecutedOrder` behavior is unchanged.
-
-### FR-010 contract boundary
-
-- `CanonicalOrder` is the new exchange-neutral order snapshot; the existing Number-based `Order` and `ExecutedOrder` remain unchanged for compatibility and are not used as the canonical strategy contract.
-- `clientOrderId` is the stable client-side identity and is required for an order intent. `brokerOrderId` is absent until acknowledged by the broker.
-- The order references a canonical `Market`, `Quantity` values in its base Asset, and an optional `Money` limit price in its quote Asset.
-- Original and executed quantities are exact, non-negative quantities. Remaining quantity is derived exactly as original minus executed; executed quantity cannot exceed original quantity.
-- Lifecycle statuses are exchange-neutral: `PENDING`, `OPEN`, `PARTIALLY_FILLED`, `FILLED`, `CANCELED`, `REJECTED`, `EXPIRED`, and `UNKNOWN`. `UNKNOWN` is unresolved, not a terminal success/failure state.
-- `OPEN` has no execution; `PARTIALLY_FILLED` has both executed and remaining quantity; `FILLED` has no remaining quantity. `PENDING` has no broker ID and no execution.
-- Optional timestamps are non-negative safe-integer Unix epoch milliseconds. Missing timestamps remain absent; they are never fabricated.
-- Value snapshots contain only canonical Coinzilla contracts and no exchange-specific fields. Lifecycle changes produce a new immutable snapshot.
-
-### FR-011 contract boundary
-
-- A Fill is an immutable execution fact, not an order or order-status snapshot.
-- `tradeId` is the broker-provided stable execution identifier; canonical `id` is scoped by the canonical `Market` identity so trade IDs from different markets cannot collide.
-- `brokerOrderId` is required; `clientOrderId` is optional when the source does not provide it.
-- `Market`, base-asset `Quantity`, quote-asset `Money` price, and quote-asset `Money` quote quantity are explicit contracts. No exchange symbol parsing or asset inference occurs.
-- Quantity, price, and quote quantity must be strictly positive. The actual quote quantity is preserved independently; it is not recomputed from price and base quantity.
-- Liquidity role is `MAKER`, `TAKER`, or `UNKNOWN`; missing information defaults to `UNKNOWN`, never an inferred value.
-- Execution time is an optional non-negative safe-integer Unix epoch millisecond timestamp. Missing time remains absent.
-- Commission facts are deliberately excluded and belong to FR-012.
-
-### FR-012 contract boundary
-
-- `Commission` is an immutable fee value containing an exact `Money` amount; the Money asset identifies the fee denomination explicitly.
-- Commission amounts are non-negative. Zero is valid, although a confirmed zero-fee fill is represented by an empty commission list with `COMPLETE` status.
-- A Fill's `commissions` is an immutable array of Commission values and may contain entries denominated in different assets.
-- `COMPLETE` means the collection is authoritative; an empty list explicitly means no commission was charged.
-- `PARTIAL` means one or more commission entries are known, but the collection is incomplete.
-- `UNKNOWN` means commission information is unavailable; its collection must be empty. Missing status defaults to `UNKNOWN`.
-- Consumers must not treat `PARTIAL` or `UNKNOWN` commission information as zero when calculating realized profitability.
-
-### FR-013 contract boundary
-
-- `Balance` represents one canonical Asset and requires explicit free and locked `Quantity` values.
-- Free and locked quantities must use the same canonical Asset ID; matching display codes are not sufficient.
-- Total is derived exactly as free plus locked using decimal-string integer arithmetic, never JavaScript floating-point arithmetic. It cannot be supplied inconsistently by a caller.
-- All three quantities are immutable `Quantity` values in the same Asset. Zero free, locked, or total balances are valid.
-- The value snapshot includes the canonical Asset identity and independent free, locked, and total quantity snapshots.
-
-### FR-014 contract boundary
-
-- `TradingRules` is scoped to one canonical `Market`; it contains exchange-neutral constraints and no venue-specific filter names or payloads.
-- Each constraint has a stable type and an explicit `SUPPORTED`, `UNSUPPORTED`, `DYNAMIC`, or `UNKNOWN` status. A missing constraint is not evidence that the venue does not enforce it.
-- Supported price and notional constraints use exact quote-asset `Money`; supported quantity constraints use exact base-asset `Quantity`.
-- Supported constraints require a value. Unsupported, dynamic, and unknown constraints must not carry a fabricated static value.
-- Increment constraints must be greater than zero; all supported values must be non-negative. When both minimum and maximum bounds are supported, minimum cannot exceed maximum.
-- Constraint types are unique within a snapshot. Constraint arrays and records are immutable; value snapshots are independent.
-
-### FR-015 contract boundary
-
-- `BrokerCapabilities` is the single immutable exchange-neutral capability value used by Entities and Brokers. It owns the capability vocabulary, three statuses, validation, lookup and serialization. Optional provider-declaration metadata identifies the provider/product/environment and documents implementation evidence; it contains no exchange wire payloads or protocol-specific DTOs.
-- The shared vocabulary covers account/market reads, order and trade reads, limit/market placement, cancellation, market-price subscriptions, user-data subscriptions, and trading-rule reads.
-- Each reported capability has an explicit `SUPPORTED`, `UNSUPPORTED`, or `UNKNOWN` status. An omitted capability is `UNKNOWN`, never assumed unsupported or supported.
-- Capability types are unique within a snapshot. The status lookup validates the requested vocabulary and returns `UNKNOWN` for unreported capabilities.
-- Capability discovery is descriptive only; it does not imply that an operation is currently authorized, healthy, or safe to execute. Runtime permission and recovery state remain separate concerns.
-
-### FR-016 contract boundary
-
-- `BrokerResult` is a venue-neutral result envelope with `SUCCESS`, `FAILURE`, `INCOMPLETE`, and `UNKNOWN` statuses.
-- `SUCCESS` contains no errors and may optionally carry data, including successful operations with no payload.
-- `FAILURE` is a definitive unsuccessful result: it requires one or more errors and carries no data.
-- `INCOMPLETE` carries partial data and one or more errors describing what is missing or incomplete.
-- `UNKNOWN` represents an unresolved operation outcome, requires one or more errors, and carries no data. It must not be treated as a definitive failure or blindly retried, especially for state-changing operations.
-- `ok` is true only for `SUCCESS`; incomplete and unknown outcomes are not successes.
-- The result envelope and error collection are immutable. The generic data payload is opaque and remains owned by the caller; its own immutability is defined by its payload contract.
-
-## Completion policy
-
-An item is complete only after its focused tests pass, its PR is merged into `develop`, and affected consumers are identified. Do not implement multiple FR contracts in one broad PR. Coordinate consumer migrations through cross-domain requests.
-
-## Completed — coordinated Utils validation API removal ([#1508](https://github.com/45s/coinzilla/issues/1508), [PR #1509](https://github.com/45s/coinzilla/pull/1509))
-
-- The legacy `Validator` facade was removed and `Coin`/`Order` no longer import it.
-- **Correction completed:** PR #1509 replaced those calls with handwritten checks rather than using the shared `ensure` API, contrary to the shared-utilities policy. This was corrected in [#1511](https://github.com/45s/coinzilla/issues/1511) and merged as [PR #1512](https://github.com/45s/coinzilla/pull/1512).
-- PR #1512 uses `ensure` for generic checks while keeping domain constraints in Entities and preserving accepted values and existing domain `Error` classes/messages.
-- **Verification:** PR #1512 merged as `38204fa5cb90bd3ce9f838d5f0c525aacf2a5695`; exact PR head `3ca2a9721421404c109bc2153cfa32c10645a76b` passed Entities tests (153/153), strict changed-file ESLint, workspace ESLint, the six required `develop-core` CI contexts, and Harvester Targeted Tests. The original API-removal verification from PR #1509 (`ab77568acfcd286560270aaac325bf65301efb0c`) remains historical.
-
-## Shared utility reuse
-
-- [x] Delegate exact decimal canonicalization to `normalizeDecimalString` in `@coinzilla/utils`.
-- [x] Delegate decimal subtraction to `subtractDecimal` in `@coinzilla/utils`.
-- [x] Preserve the Entities package's structured `toResult` API and field-specific validation messages.
+Detailed prior execution plan, FR-009–FR-016 contract notes, and completed maintenance history are preserved in [ROADMAP_HISTORY_2026-11-26.md](./ROADMAP_HISTORY_2026-11-26.md).
