@@ -87,11 +87,48 @@ async function appendAccountBlockerResolutions({ options, blockers, blockerIds, 
   return undefined
 }
 
-async function verifyAccountResolutionReadback(store) {
-  const readback = await readVerifiedAccountResolutionProjection(store)
+async function verifyAccountResolutionReadback({
+  operationalStateStore,
+  blockerIds,
+  operatorId,
+  actionId,
+  resolutionReason,
+  evidenceDigest,
+}) {
+  const readback = await readVerifiedAccountResolutionProjection(operationalStateStore)
   const remaining = getActiveAccountResolutionBlockers(readback.projection)
   if (remaining.length > 0) {
     return toResult({ error: new Error("Durable readback still contains unresolved ACCOUNT safety blockers") })
+  }
+  const actionBlockerIds = [...blockerIds].sort()
+  const actionFacts = readback.records.filter((record) =>
+    record.factType === "SAFETY_BLOCKER_RESOLVED" &&
+    record.data?.actionId === actionId
+  )
+  for (const blockerId of actionBlockerIds) {
+    const fact = actionFacts.find((record) => record.data?.blockerId === blockerId)
+    if (!fact ||
+        fact.data.operatorId !== operatorId ||
+        fact.data.operatorAuthMethod !== "OS_ACCOUNT" ||
+        fact.data.resolutionReason !== resolutionReason ||
+        fact.data.resolvedBy !== `operator:${operatorId}:${actionId}` ||
+        fact.data.evidenceDigest !== evidenceDigest ||
+        !Array.isArray(fact.data.actionBlockerIds) ||
+        fact.data.actionBlockerIds.join("|") !== actionBlockerIds.join("|")) {
+      return toResult({
+        error: new Error(`Durable readback did not confirm exact resolution metadata for blocker ${blockerId}`),
+      })
+    }
+  }
+  const conflictingResolution = readback.records.find((record) =>
+    record.factType === "SAFETY_BLOCKER_RESOLVED" &&
+    actionBlockerIds.includes(record.data?.blockerId) &&
+    record.data?.actionId !== actionId
+  )
+  if (conflictingResolution) {
+    return toResult({
+      error: new Error("Durable readback found a target blocker resolved by a different action"),
+    })
   }
   return undefined
 }
@@ -117,7 +154,14 @@ export async function resolveUserDataAccountBlockers(options = {}) {
     if (appendResult) {
       return appendResult
     }
-    const readbackResult = await verifyAccountResolutionReadback(options.operationalStateStore)
+    const readbackResult = await verifyAccountResolutionReadback({
+      operationalStateStore: options.operationalStateStore,
+      blockerIds: audit.blockerIds,
+      operatorId: options.operatorId,
+      actionId: options.actionId,
+      resolutionReason: options.resolutionReason,
+      evidenceDigest: audit.evidenceDigest,
+    })
     if (readbackResult) {
       return readbackResult
     }
