@@ -1701,6 +1701,8 @@ Required cases:
 
 Core source ownership: mixed SELL allocation/accounting/reconciliation, Portfolio, accounting workflow, record-reconciled use case, persistence boundary.
 
+**Current scenario-suite mapping:** PR #1852 registers `RS-006-003-A/B` as APPLICATION scenarios. They prove two distinct canonical partial SELL Fills are accumulated into one atomic recovery/legacy commit, with exact quote-fee accounting and duplicate terminal replay as a no-op. Both remain TEST-MAPPED; they do not replace the remaining RS-006 REST/stream, conflicting-history, durability-barrier or failure-interleaving cases.
+
 ### RS-007 — Unknown outcomes and no blind retry (P0)
 
 **Business question:** when broker outcome is unknown, does RS preserve original identity/commitment and reconcile without resubmitting?

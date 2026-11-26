@@ -748,6 +748,8 @@ At `20.00 USDT/ZRO`, recovery receives `20.00 USDT` (profit `+10.00`), legacy re
 
 **Remaining:** two-or-more canonical fills; stream-first and REST-first; duplicate cross-channel delivery; incomplete fill history; base/quote/mixed/third-asset fee behavior; commit failure at each persistence boundary; registry publication failure; durable transaction barrier; reservation and STOP effects.
 
+**New application scenario mapping (PR #1852):** `RS-006-003-A/B` now run two canonical partial SELL Fills through the real accounting workflow, verify exact recovery/legacy allocation and quote-fee totals, and prove identical terminal replay is a no-op. Both are TEST-MAPPED only; RS-006 remains PARTIAL pending the other multi-Fill, REST/stream conflict, durability and failure-boundary cases.
+
 ### RS-007 — Unknown submission outcome preserves identity and forbids blind retry
 
 **Status:** PARTIAL — the new cycle-state test proves state-level identity retention and replacement rejection only. The broker/application no-retry behavior is not proved by this test.

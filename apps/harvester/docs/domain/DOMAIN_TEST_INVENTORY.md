@@ -394,3 +394,11 @@ The from-scratch RS scenario registry now maps two application authorizer cases 
 - **RS-002-020-B — TEST-MAPPED:** `RS-002-020-B: counts an owned pending BUY commitment exactly once at the pair investment cap`. Existing recovery exposure 20 + owned pending commitment 60 + proposed BUY 20 is accepted at exact 100 cap equality and deferred at a 99 cap with `PAIR_INVESTMENT_LIMIT`, proving the pending commitment is included exactly once.
 
 Both named tests are included in `config.targetedTestFiles`. They passed Harvester Targeted Tests and Harvester Unit Tests on exact code head `a3aec5c456f88fa85126fef6a3086c52f2ffff17`. They prove these specific account-allocation boundaries only; they do not establish the full order-event partial-fill lifecycle, all account-snapshot authorization boundaries, or complete RS-002 coverage. RS-002-006 and RS-002 remain PARTIAL; no scenario is promoted to VERIFIED solely by test mapping.
+
+
+## RS-006-003 multi-Fill application scenario — 2026-11-26
+
+- Added registry record `RS-006-003` with application subcases `RS-006-003-A/B` in the new RS scenario registry.
+- `RS-006-003-A` runs two canonical partial SELL Fills through the real Recovery Seller accounting workflow. It asserts exact 5.00 recovery / 0.01 legacy base allocation, 10.497 net quote proceeds after both quote commissions, one durable terminal commit, and reservation release only after both projections commit.
+- `RS-006-003-B` replays the identical two-Fill terminal boundary and asserts duplicate classification, stable Portfolio/legacy/registry snapshots, and no second durable append.
+- Both records are `TEST-MAPPED`, not `VERIFIED`; RS-006 remains PARTIAL because the remaining REST/stream ordering, conflicting-history, persistence-barrier and failure-interleaving cases are not all covered by this increment.

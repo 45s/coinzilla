@@ -4,6 +4,7 @@ import { recoverySellerProfitabilityAllGatesScenario } from "../scenarios/profit
 import { recoverySellerMixedSellPlanningScenarios } from "../scenarios/mixed-sell-planning.js"
 import { recoverySellerSharedMarketVolatilityScenario } from "../scenarios/shared-market-volatility-gate.js"
 import { recoverySellerSharedQuoteReservationScenario } from "../scenarios/shared-account-quote-reservation.js"
+import { recoverySellerMixedSellFillAccountingScenarios } from "../scenarios/mixed-sell-fill-accounting.js"
 import { RS_CONFIG_FIELD_IDS } from "./config-fields.js"
 import { RS_DECISION_IDS } from "./decisions.js"
 import { RS_DOMAIN_RULE_IDS } from "./domain-rules.js"
@@ -29,6 +30,7 @@ export {
   recoverySellerMixedSellPlanningScenarios,
   recoverySellerSharedMarketVolatilityScenario,
   recoverySellerSharedQuoteReservationScenario,
+  recoverySellerMixedSellFillAccountingScenarios,
 }
 
 export const recoverySellerScenarioRegistry = Object.freeze([
@@ -37,5 +39,6 @@ export const recoverySellerScenarioRegistry = Object.freeze([
   ...recoverySellerMixedSellPlanningScenarios,
   recoverySellerSharedMarketVolatilityScenario,
   recoverySellerSharedQuoteReservationScenario,
+  ...recoverySellerMixedSellFillAccountingScenarios,
   recoverySellerProfitabilityAllGatesScenario,
 ])

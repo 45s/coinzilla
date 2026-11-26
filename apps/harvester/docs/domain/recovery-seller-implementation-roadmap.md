@@ -483,3 +483,10 @@ Canonical fill accounting now distinguishes RS ownership, explicit CG ownership,
 RS-002-006-B now maps to an application authorizer/account-allocation regression for a registered partial RS BUY: the remaining quote commitment is reserved and an unfunded additional BUY defers. Both tests are TEST-MAPPED and passed in Harvester Targeted Tests and Harvester Unit Tests on exact code head `a3aec5c456f88fa85126fef6a3086c52f2ffff17`. RS-002-006 and RS-002 remain PARTIAL because broader runtime/order-event partial-fill lifecycle proof and other BUY accounting boundaries remain outstanding. No scenario is VERIFIED from this mapping alone.
 
 Additional scenario increment: RS-002-020-B maps to an application allocation test proving an owned 60-quote pending BUY commitment is counted once at exact pair-cap equality (20 existing + 60 pending + 20 new = 100). RS-002-020-B is TEST-MAPPED and proves both exact-cap acceptance (20 + 60 pending + 20 = 100) and rejection below the cap (the same 100 exposure exceeds a 99 cap); RS-002-020 is now TEST-MAPPED. RS-002 remains PARTIAL because the wider cap/account-snapshot and order lifecycle matrix is not complete. The authorizer regression passed on code head `8e205239fcde7b610b183d4454dce98815fa6156`; full exact-head CI is pending.
+
+
+### 2026-11-26 — RS-006 multi-Fill application scenario checkpoint
+
+- Added `RS-006-003-A`: two canonical partial SELL Fills are staged, allocated and reconciled through the real accounting workflow. Exact recovery/legacy quantity conservation, net quote proceeds after both commissions, durable commit count and post-commit reservation release are asserted.
+- Added `RS-006-003-B`: identical two-Fill terminal replay is classified as duplicate and leaves Portfolio, legacy Position/accounting, OrderRegistry and durable-fact count unchanged.
+- Both subcases are registered as TEST-MAPPED in PR #1852. RS-006 remains PARTIAL; this does not claim full REST/stream ordering, conflicting-history, transaction-barrier or failure-interleaving coverage.
