@@ -7,7 +7,6 @@ import {
   isAuthenticatedLocalOperatorIdentity,
   LOCAL_OPERATOR_ID_PATTERN,
 } from "../infrastructure/security/local-operator-identity.js"
-import { runOfflineMarketRecovery } from "../../scripts/recovery-market-context.js"
 
 function sameStringSet({ left, right }) {
   return Array.isArray(left) &&
@@ -434,9 +433,12 @@ async function runResolutionWorkflow(options) {
 
 export async function runOfflineAccountBlockerResolution(options = {}) {
   try {
+    if (typeof options.reconcileMarket !== "function") {
+      throw new TypeError("Offline account resolution requires an injected offline market audit adapter")
+    }
     return await runResolutionWorkflow({
       ...options,
-      reconcileMarket: options.reconcileMarket ?? runOfflineMarketRecovery,
+      reconcileMarket: options.reconcileMarket,
       resolveBlockers: options.resolveBlockers ?? resolveUserDataAccountBlockers,
     })
   } catch (error) {
