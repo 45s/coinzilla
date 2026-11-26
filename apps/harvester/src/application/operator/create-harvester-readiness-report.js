@@ -301,7 +301,13 @@ function createBrokerCapabilitiesCheck({ inputs, runtime, observedAt } = {}) {
     details: {
       required: Array.isArray(capabilities.required) ? capabilities.required : [],
       missing,
-      validationScope: "Structural BrokerPort methods only; exchange account permissions are not inferred.",
+      exchangeRequired,
+      exchangeValidation: exchangeRequired.length === 0
+        ? "NOT_CONFIGURED"
+        : exchangeValidated
+          ? "PASS"
+          : "FAIL",
+      validationScope: "Structural BrokerPort methods and only explicitly configured provider capabilities; no broader exchange permissions are inferred.",
     },
   })
 }

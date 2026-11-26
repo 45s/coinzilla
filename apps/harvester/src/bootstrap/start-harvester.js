@@ -583,20 +583,10 @@ reason: "TRADING_ENGINE_NOT_READY" } })
   return context
 }
 
-async function createHarvesterRuntimeResources({ startup } = {}) {
-  const broker = await connectBroker({
-    brokerAdapterFactory: startup.brokerAdapterFactory,
-    env: startup.env,
-    providerIdentity: startup.providerIdentity,
-    brokerName: startup.brokerName,
-    tradingMode: startup.tradingMode,
-    eventPublisher: startup.eventPublisher,
-    logger: startup.logger,
-    requiredCapabilities: startup.requiredCapabilities,
-    onBrokerConnected: startup.onBrokerConnected,
-  })
-  const resources = {
-    broker,
+function createHarvesterRuntimeResources() {
+  return {
+    broker: undefined,
+    brokerConnection: undefined,
     subscriptions: [],
     marketPriceIntake: new Map(),
     bookSubscriptions: [],
@@ -607,27 +597,74 @@ async function createHarvesterRuntimeResources({ startup } = {}) {
     tradingEngine: undefined,
     hasCanonicalOwnershipReconciliation: false,
   }
-  resources.candleHistoryService = createHarvesterCandleHistoryService({
-    createCandleHistoryService,
-    broker,
-    logger: startup.logger,
-    now: startup.now,
-    getTradingEngine: () => resources.tradingEngine,
-    getMarketDataBroker: startup.getMarketDataBroker,
-    marketDataSources: startup.marketDataSources,
-    marketDataProviderTypes: startup.marketDataProviderTypes,
-    marketDataProviderIdentities: startup.marketDataProviderIdentities,
-  })
-  return resources
 }
 
-function createHarvesterBrokerCapabilitySnapshot({ broker } = {}) {
+async function connectHarvesterRuntimeBroker({ startup, resources } = {}) {
+  const startedAt = startup.now()
+  try {
+    resources.broker = await connectBroker({
+      brokerAdapterFactory: startup.brokerAdapterFactory,
+      env: startup.env,
+      providerIdentity: startup.providerIdentity,
+      brokerName: startup.brokerName,
+      tradingMode: startup.tradingMode,
+      eventPublisher: startup.eventPublisher,
+      logger: startup.logger,
+      requiredCapabilities: startup.requiredCapabilities,
+      onBrokerConnected: startup.onBrokerConnected,
+    })
+    const connectedAt = startup.now()
+    resources.brokerConnection = Object.freeze({
+      connected: true,
+      startedAt,
+      connectedAt,
+      elapsedMs: Math.max(0, connectedAt - startedAt),
+      errorCode: null,
+      requiredExchangeCapabilities: Object.freeze([...(startup.requiredCapabilities ?? [])]),
+      exchangeCapabilitiesValidated: (startup.requiredCapabilities ?? []).length > 0,
+    })
+    resources.candleHistoryService = createHarvesterCandleHistoryService({
+      createCandleHistoryService,
+      broker: resources.broker,
+      logger: startup.logger,
+      now: startup.now,
+      getTradingEngine: () => resources.tradingEngine,
+      getMarketDataBroker: startup.getMarketDataBroker,
+      marketDataSources: startup.marketDataSources,
+      marketDataProviderTypes: startup.marketDataProviderTypes,
+      marketDataProviderIdentities: startup.marketDataProviderIdentities,
+    })
+  } catch (error) {
+    const failedAt = startup.now()
+    resources.brokerConnection = Object.freeze({
+      connected: false,
+      startedAt,
+      connectedAt: null,
+      failedAt,
+      elapsedMs: Math.max(0, failedAt - startedAt),
+      errorCode: getSafeStartupErrorCode(error, "BROKER_CONNECTION_FAILED"),
+      requiredExchangeCapabilities: Object.freeze([...(startup.requiredCapabilities ?? [])]),
+      exchangeCapabilitiesValidated: false,
+    })
+    throw error
+  }
+}
+
+function createHarvesterBrokerCapabilitySnapshot({
+  broker,
+  requiredExchangeCapabilities = [],
+  exchangeCapabilitiesValidated = false,
+} = {}) {
   const required = [...BROKER_PORT_METHODS]
   const missing = required.filter((method) => typeof broker?.[method] !== "function")
   return Object.freeze({
     validated: Boolean(broker) && missing.length === 0,
     required: Object.freeze(required),
     missing: Object.freeze(missing),
+    exchangeRequired: Object.freeze([...requiredExchangeCapabilities]),
+    exchangeValidated: requiredExchangeCapabilities.length === 0
+      ? null
+      : exchangeCapabilitiesValidated === true,
   })
 }
 
@@ -732,14 +769,18 @@ function createHarvesterReadinessInputs({ startup, portfolio, resources } = {}) 
   const subscription = resources.userDataSubscription
   return Object.freeze({
     configuration: Object.freeze({
-      validated: true,
+      validated: typeof startup.configurationFingerprint === "string" &&
+        startup.configurationFingerprint.length > 0,
       enabledMarkets: Object.freeze([...enabledMarkets]),
     }),
     broker: Object.freeze({
-      connected: Boolean(resources.broker),
+      connected: resources.brokerConnection?.connected === true,
       identity: accountIdentity,
+      connection: resources.brokerConnection ?? null,
       capabilities: createHarvesterBrokerCapabilitySnapshot({
         broker: resources.broker,
+        requiredExchangeCapabilities: startup.requiredCapabilities ?? [],
+        exchangeCapabilitiesValidated: resources.brokerConnection?.exchangeCapabilitiesValidated === true,
       }),
     }),
     account,
@@ -1900,8 +1941,41 @@ function ensureHarvesterMarketDataProviderIdentities({ startup, portfolio }) {
   ))
 }
 
+function createHarvesterStartupFailureSnapshotReader({ startup, portfolio, resources }) {
+  return {
+    getOperatorRuntimeSnapshot: ({ startupBoundary = false } = {}) => getHarvesterOperatorRuntimeSnapshot({
+      now: startup.now,
+      runtimeStartedAt: startup.runtimeStartedAt,
+      userDataState: resources.userDataState,
+      brokerName: startup.brokerName,
+      tradingEnabled: startup.tradingEnabled,
+      tradingMode: startup.tradingMode,
+      startupBoundary,
+      readinessInputs: createHarvesterReadinessInputs({ startup, portfolio, resources }),
+    }),
+  }
+}
+
 async function createHarvesterRuntimeComponents({ startup, portfolio }) {
-  const resources = await createHarvesterRuntimeResources({ startup })
+  const resources = createHarvesterRuntimeResources()
+  try {
+    await connectHarvesterRuntimeBroker({ startup, resources })
+  } catch (startupError) {
+    const accountSnapshots = createHarvesterStartupFailureSnapshotReader({
+      startup,
+      portfolio,
+      resources,
+    })
+    await reportHarvesterStartupFailure({
+      startup,
+      resources,
+      accountSnapshots,
+      startupError,
+      component: "BROKER",
+      fallbackCode: "BROKER_CONNECTION_FAILED",
+    })
+    throw startupError
+  }
   const accountSnapshots = createHarvesterAccountSnapshotRuntime({
     startup,
     portfolio,

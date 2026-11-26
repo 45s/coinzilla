@@ -178,3 +178,8 @@ The startup diagnostic fallback logger now uses the existing logger interface an
 ## Candle-history execution boundaries
 
 Historical retrieval, historical validation, buffered-event replay, live open-candle handling, live closed-candle handling and bounded gap backfill are separate functions. The service still owns its 65-second live-candle freshness threshold and remains the authority for volatility-history readiness.
+
+
+## Broker connection evidence
+
+Broker connection diagnostics measure the existing `connectBroker` handshake using the injected startup clock and preserve a sanitized failure code if connection fails. The capability check distinguishes the structural `BROKER_PORT_METHODS` contract from additional exchange capability requirements explicitly configured through the existing provider connection path; no unconfigured exchange permission is claimed.
