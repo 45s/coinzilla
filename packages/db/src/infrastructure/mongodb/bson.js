@@ -1,4 +1,5 @@
 const MAX_BSON_DOCUMENT_SIZE = 16 * 1024 * 1024
+const MAX_BSON_NESTING_DEPTH = 100
 const INT32_MIN = -2 ** 31
 const INT32_MAX = 2 ** 31 - 1
 const INT64_MIN = -(2n ** 63n)
@@ -60,7 +61,7 @@ function encodeInt64(value) {
   return result
 }
 
-function encodeElement(value, ancestors) {
+function encodeElement(value, ancestors, depth) {
   if (value === null) {
     return { type: 0x0A, bytes: Buffer.alloc(0) }
   }
@@ -116,7 +117,7 @@ function encodeElement(value, ancestors) {
       }
       entries.push([String(index), value[index]])
     }
-    const bytes = encodeDocumentEntries(entries, ancestors)
+    const bytes = encodeDocumentEntries(entries, ancestors, depth + 1)
     ancestors.delete(value)
     return { type: 0x04, bytes }
   }
@@ -133,15 +134,18 @@ function encodeElement(value, ancestors) {
     }
     entries.push([key, descriptor.value])
   }
-  const bytes = encodeDocumentEntries(entries, ancestors)
+  const bytes = encodeDocumentEntries(entries, ancestors, depth + 1)
   ancestors.delete(value)
   return { type: 0x03, bytes }
 }
 
-function encodeDocumentEntries(entries, ancestors) {
+function encodeDocumentEntries(entries, ancestors, depth = 0) {
+  if (depth > MAX_BSON_NESTING_DEPTH) {
+    throw new TypeError("BSON document nesting depth exceeds the supported limit")
+  }
   const elements = []
   for (const [key, value] of entries) {
-    const element = encodeElement(value, ancestors)
+    const element = encodeElement(value, ancestors, depth)
     elements.push(Buffer.from([element.type]), encodeCString(key), element.bytes)
   }
   const size = 5 + elements.reduce((total, part) => total + part.length, 0)
@@ -178,7 +182,7 @@ export function encodeBsonDocument(document) {
     }
     entries.push([key, descriptor.value])
   }
-  const result = encodeDocumentEntries(entries, ancestors)
+  const result = encodeDocumentEntries(entries, ancestors, 0)
   ancestors.delete(document)
   return result
 }
@@ -223,7 +227,10 @@ function readString(buffer, state) {
   return value
 }
 
-function readDocument(buffer, state, asArray = false) {
+function readDocument(buffer, state, asArray = false, depth = 0) {
+  if (depth > MAX_BSON_NESTING_DEPTH) {
+    throw new TypeError("BSON document nesting depth exceeds the supported limit")
+  }
   assertRange(buffer, state.offset, 4, state.end, "document length")
   const start = state.offset
   const length = buffer.readInt32LE(start)
@@ -243,7 +250,7 @@ function readDocument(buffer, state, asArray = false) {
     const type = buffer[childState.offset]
     childState.offset += 1
     const key = readCString(buffer, childState)
-    const value = readValue(buffer, childState, type)
+    const value = readValue(buffer, childState, type, depth)
     if (asArray) {
       const index = Number(key)
       if (!Number.isSafeInteger(index) || index < 0 || String(index) !== key || index !== arrayValues.length) {
@@ -275,7 +282,7 @@ function readInt64(buffer, state) {
     : value
 }
 
-function readValue(buffer, state, type) {
+function readValue(buffer, state, type, depth) {
   if (type === 0x01) {
     assertRange(buffer, state.offset, 8, state.end, "double")
     const value = buffer.readDoubleLE(state.offset)
@@ -286,7 +293,7 @@ function readValue(buffer, state, type) {
     return readString(buffer, state)
   }
   if (type === 0x03 || type === 0x04) {
-    return readDocument(buffer, state, type === 0x04)
+    return readDocument(buffer, state, type === 0x04, depth + 1)
   }
   if (type === 0x05) {
     assertRange(buffer, state.offset, 5, state.end, "binary header")
