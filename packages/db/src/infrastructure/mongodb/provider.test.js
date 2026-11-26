@@ -311,6 +311,42 @@ test("MongoDB provider isolates concurrent transactions and drains them before c
   assert.equal(database.state, "closed")
 })
 
+
+test("MongoDB directConnection rejects a replica-set secondary instead of silently redirecting", async () => {
+  const transports = []
+  const provider = createMongoProvider({
+    uri: "mongodb://secondary:27017/app?directConnection=true",
+    transportFactory: (options) => {
+      const transport = {
+        options,
+        closed: false,
+        async connect() {},
+        async command() {
+          return { ok: 1 }
+        },
+        async close() {
+          this.closed = true
+        },
+      }
+      transports.push(transport)
+      return transport
+    },
+    handshake: async () => ({
+      topology: "replicaSet",
+      primary: "primary.example:27017",
+      transactionSupported: true,
+    }),
+  })
+
+  await assert.rejects(
+    provider.connect(),
+    (error) => error.cause?.message.includes("directConnection target is not the writable"),
+  )
+  assert.equal(transports.length, 1)
+  assert.equal(transports[0].closed, true)
+  await provider.close()
+})
+
 test("MongoDB provider follows replica-set primary discovery and closes the seed socket", async () => {
   const hosts = []
   const transports = []
