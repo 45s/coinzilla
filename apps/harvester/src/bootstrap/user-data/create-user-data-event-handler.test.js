@@ -47,6 +47,44 @@ state,
 actions }
 }
 
+function createExecutionPendingRecoveryState() {
+  const state = createState({
+    recoveryGeneration: 0,
+    recoveryBrokerGeneration: null,
+    recoverySubscriptionId: null,
+    lastAcknowledgedRecoveryGeneration: -1,
+    lastReportedRecoveredGeneration: -1,
+    startupComplete: true,
+  })
+  const statusHandler = createUserDataStatusHandler({
+    state,
+    isStopped: () => false,
+    eventPublisher: { publish: () => ({ ok: true }) },
+    brokerName: "binance",
+    logger: {},
+    tradingEnabled: true,
+    startUserDataRecovery: () => {},
+    cancelOwnedBuysAfterAccountingFailure: async () => {},
+    resumeDeferredStrategyEvaluations: () => {},
+  })
+  statusHandler({
+    type: "recovered",
+    subscriptionId: 42,
+    recoveryGeneration: 7,
+    recoveryRequired: true,
+    reconciliationRequired: true,
+  })
+  statusHandler({
+    type: "executionPending",
+    subscriptionId: 42,
+    recoveryGeneration: 7,
+    recoveryRequired: false,
+    reconciliationRequired: false,
+    executionPending: true,
+  })
+  return state
+}
+
 function makeUnownedExecutionEngine() {
   return {
     processUserDataEvent: async () => ({
@@ -247,40 +285,7 @@ test("contains observer failures without rolling back a valid event", async () =
  
 
 test("keeps a queued owned BUY fill in recovery mode across executionPending with false broker flags", async () => {
-  const state = createState({
-    recoveryGeneration: 0,
-    recoveryBrokerGeneration: null,
-    recoverySubscriptionId: null,
-    lastAcknowledgedRecoveryGeneration: -1,
-    lastReportedRecoveredGeneration: -1,
-    startupComplete: true,
-  })
-  const statusHandler = createUserDataStatusHandler({
-    state,
-    isStopped: () => false,
-    eventPublisher: { publish: () => ({ ok: true }) },
-    brokerName: "binance",
-    logger: {},
-    tradingEnabled: true,
-    startUserDataRecovery: () => {},
-    cancelOwnedBuysAfterAccountingFailure: async () => {},
-    resumeDeferredStrategyEvaluations: () => {},
-  })
-  statusHandler({
-    type: "recovered",
-    subscriptionId: 42,
-    recoveryGeneration: 7,
-    recoveryRequired: true,
-    reconciliationRequired: true,
-  })
-  statusHandler({
-    type: "executionPending",
-    subscriptionId: 42,
-    recoveryGeneration: 7,
-    recoveryRequired: false,
-    reconciliationRequired: false,
-    executionPending: true,
-  })
+  const state = createExecutionPendingRecoveryState()
 
   let receivedRecoveryMode
   let exchangeMutationCount = 0
