@@ -210,8 +210,6 @@ describe('framework-independent Scenario Runner application', () => {
 
     expect(gateway.submit).not.toHaveBeenCalled();
   });
-});
-
 
   it('replays a terminal run through the gateway and refreshes the replay record', async () => {
     const replayRecord = run({
@@ -234,3 +232,5 @@ describe('framework-independent Scenario Runner application', () => {
     expect(snapshot.run.runId).toBe('run-2');
     expect(snapshot.run.replayOfRunId).toBe('run-1');
   });
+
+});
