@@ -142,7 +142,7 @@ test("MongoDB readMany builds exact-null filters and portable sort pagination st
 })
 
 
-test("MongoDB update refreshes portable sort metadata for changed JSON values", async () => {
+test("MongoDB updates shallow-merge JSON values without storing derived sort metadata", async () => {
   const stub = createCommandStub([{
     ok: 1,
     value: {
@@ -166,10 +166,9 @@ test("MongoDB update refreshes portable sort metadata for changed JSON values", 
     }),
     { id: "person-1", rank: [1, 2] },
   )
-  assert.deepEqual(
-    stub.calls[0].update.$set["sortData.__coinzilla_key_cmFuaw"],
-    { rank: 5, value: "[1,2]" },
-  )
+  assert.deepEqual(stub.calls[0].update.$set, {
+    "data.__coinzilla_key_cmFuaw": [1, 2],
+  })
 })
 
 test("MongoDB empty updates delegate to readOne without issuing a mutation", async () => {
