@@ -36,22 +36,29 @@ Feature branch: `fix/harvester/incident-1856-ownership-shutdown-safety`
 - Durable `PROCESS_STOPPED` has its own 30-second deadline and pending-append guard. Runtime completion, durable STOPPED, OS process exit and process-lock release remain distinct.
 - `JOURNAL_OPERATIONS.md` documents the separate Operational State Store, Journal, legacy order-history and relational trading-history responsibilities, startup audit/readiness distinction, shutdown phase deadlines and fail-closed durability behavior.
 
-### Verification status
+### Verification status — implementation head `2edbea47c1a61ad64287ba67e9967330db697264`
 
-- RED evidence: [targeted run 45764611291](https://github.com/45s/coinzilla/actions/runs/45764611291) on test head `2937f1f` failed the new coordinator single-flight regression because a timed-out participant operation was not retained. The coordinator now tracks the active operation by strategy and reports a `PENDING` blocker.
-- The first CLOSING-audit timeout run failed in fixture setup because trading was enabled without a strategy participant; it did not reach the timeout assertion. The fixture now supplies an explicit safe participant.
-- Two Conservative shutdown safety tests failed during an intermediate refactor. That refactor was reverted; the original safety flow was restored, retaining only parameter-shape/formatting changes and removal of the redundant snapshot assignment.
-- Repository Quality failed strict lint on the earlier head. Formatting and function refactors are being completed; do not treat that earlier failure as evidence about the latest head.
-- The process-stop timeout regression, the corrected CLOSING-audit regression, the ownership conflict regression and the durable ownership DTO regression are now in the targeted suite. Exact latest-head test and lint outcomes remain unconfirmed until their workflows complete.
+All six required GitHub Actions workflows passed on this exact implementation head:
 
-### Evidence boundaries and remaining work
+- Harvester Targeted Tests, including configured Conservative regressions and scenario execution — [run 45816570329](https://github.com/45s/coinzilla/actions/runs/45816570329).
+- Workspace Unit Tests, including the complete Harvester package suite — [run 45816570297](https://github.com/45s/coinzilla/actions/runs/45816570297).
+- Workspace Test Coverage, including Harvester critical-module floors — [run 45816570288](https://github.com/45s/coinzilla/actions/runs/45816570288).
+- Repository Quality: zero-warning workspace ESLint, strict changed-file ESLint, JavaScript syntax, actionlint and repository policy checks — [run 45816570362](https://github.com/45s/coinzilla/actions/runs/45816570362).
+- Dependency Audit — [run 45816570255](https://github.com/45s/coinzilla/actions/runs/45816570255).
+- External Documentation Links — [run 45816570338](https://github.com/45s/coinzilla/actions/runs/45816570338).
 
-- DOGE client IDs `...-12`, `...-14`, `...-18`, `...-20`, and `...-22` remain **UNKNOWN** until canonical client-order-ID exchange reconciliation establishes each outcome. The preserved incident trace does not prove acknowledgements, fills or cancellations for each ID.
-- The duplicate DOGE BUY trade event was applied once; its repeat was classified as duplicate with zero accounting delta. This supports idempotent duplicate-event handling for that trade, but does not prove exactly-once accounting for every fill/commission path.
-- `readiness=BLOCKED` was the captured unowned-order audit classification. With `externalOrdersPolicy: ignore`, those orders remain external and untouched; engine activation is distinct from the user-data `canTrade` gate. Complete, stale and incomplete account-wide snapshot readiness gates still require exact-head tests.
-- The relational trading-history warning is not evidence that Journal or Operational State Store durability failed. PR #1855 improves diagnostics; the exact operator database cause remains unconfirmed.
-- No source/test evidence establishes `DYNAMIC_PRICE_BAND` or `OPEN_ORDER_COUNT_PER_MARKET` as a cause of this incident.
-- Remaining work: complete exact-head offline CG/RS submission and persistence tests; exactly-once fill/commission accounting; DOGE ID reconciliation where historical evidence permits; startup readiness tests; shutdown integration/concurrency/restart tests; final lint/test verification; and issue/PR acceptance-checklist reconciliation. Do not treat the incident as operationally resolved.
+A new process-boundary integration regression starts a real child Node process, acquires a real Harvester process-lock file, runs the successful shutdown handler, verifies natural child-process exit, verifies the lock file was removed, and reacquires the lock from the parent. It passed in the Harvester unit-test job on the exact implementation head. Existing integration tests separately verify the runtime STOPPED contract, durable Journal shutdown ordering, and lock retention whenever runtime shutdown is unproven.
+
+### Evidence boundaries and remaining operational unknowns
+
+- The original nine ZRO/DOGE client IDs were local PENDING registrations followed by durable-intent validation failure, an empty `submittedOrders` result, and no broker acknowledgement or broker order ID. The calls failed before broker placement. This does not constitute an exchange-side lookup for a pre-existing order with a matching client ID.
+- A separate 2026-11-26 session contains 143 SELL `order.submission_deferred` records, all `DURABLE_SUBMISSION_INTENT_NOT_COMMITTED`, and no SELL broker submissions. Its four unique BUY fills were each applied once; 50 repeated delivery records were marked duplicate with zero accounting delta.
+- The 14 account-wide unowned orders remain external and untouched under `externalOrdersPolicy: ignore`. The `readiness=BLOCKED` text is the ownership-audit classification; engine activation and the user-data `canTrade` gate are separate states. Snapshot freshness, malformed/incomplete snapshot, open-order audit and durability failure paths have deterministic tests.
+- Relational trading-history fallback is documented and tested in merged [PR #1855](https://github.com/45s/coinzilla/pull/1855) under separate issue [#1854](https://github.com/45s/coinzilla/issues/1854). The optional history projection may be unavailable and startup history synchronization must be reported as SKIPPED; it is never a substitute for Journal or the conditionally required Operational State Store. The operator database's exact migration cause remains unconfirmed.
+- The original dirty-worktree runtime trace ends after `STRATEGY_SHUTDOWN_SAFETY` starts. It cannot prove that historical process reached durable STOPPED, exited, or released its lock. The new offline child-process regression proves the current successful process-shutdown boundary; it does not retroactively establish the outcome of that historical run.
+- No TESTNET/LIVE order, cancellation, account mutation, database repair, or runtime restart was performed. These actions are not authorized by this incident.
+
+**Implementation status:** source defects, deterministic regressions, documentation and exact-head CI are complete for PR #1858. Keep issue #1856 open for the historical exchange-identity and original-runtime evidence that cannot be established from the supplied logs. Do not weaken ownership, readiness, persistence or shutdown safety to close those evidence gaps.
 
 ## Scenario Runner / GC Strategy Lab — current status (2026-11-26)
 
