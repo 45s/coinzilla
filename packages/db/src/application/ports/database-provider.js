@@ -12,17 +12,19 @@
  * @property {() => Promise<void>|void} connect
  * @property {() => Promise<void>|void} close
  * @property {(work: (transaction: unknown) => unknown) => Promise<unknown>|unknown} withTransaction
+ * @property {(input: {operation: "create"|"readOne"|"readMany"|"update"|"delete", input: object}) => unknown|Promise<unknown>} execute
  * @property {(work: (transaction: unknown) => unknown) => Promise<unknown>|unknown} [withReadTransaction]
  *
  * @typedef {object} DatabaseCapabilities
- * @property {{callbackMode: "synchronous"|"asynchronous", nestedTransactions: boolean}} transactions
+ * @property {{callbackMode: "synchronous"|"asynchronous", nestedTransactions: boolean, multiDocument: boolean}} transactions
  * @property {{equalityFilters: boolean, sorting: boolean, pagination: boolean}} queries
  * @property {{modes: Array<"file"|"memory"|"server">}} storage
  *
  * @typedef {DatabaseAdapter & {
  *   capabilities: DatabaseCapabilities,
  *   withTransaction: (work: (transaction: DatabaseTransaction) => unknown) => Promise<unknown>|unknown,
- *   withReadTransaction: (work: (transaction: DatabaseTransaction) => unknown) => Promise<unknown>|unknown
+ *   withReadTransaction: (work: (transaction: DatabaseTransaction) => unknown) => Promise<unknown>|unknown,
+ *   execute: (input: {operation: string, input: object}) => unknown|Promise<unknown>
  * }} DatabaseProvider
  */
 export {}
