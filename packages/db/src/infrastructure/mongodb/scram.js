@@ -31,11 +31,8 @@ function escapeUsername(username) {
 }
 
 function prepareSha256Password(password) {
-  // Full RFC 4013 SASLprep requires Unicode tables that Node's built-ins do not
-  // expose. Accept printable ASCII only rather than silently applying an
-  // incomplete Unicode preparation algorithm and deriving the wrong SCRAM key.
-  if (typeof password !== "string" || /[^\x20-\x7e]/u.test(password)) {
-    throw new TypeError("MongoDB SCRAM-SHA-256 currently supports printable ASCII passwords only; Unicode SASLprep is not implemented")
+  if (!/^[\\x20-\\x7e]*$/.test(password)) {
+    throw new TypeError("MongoDB SCRAM-SHA-256 passwords must contain printable ASCII only")
   }
   return password
 }
