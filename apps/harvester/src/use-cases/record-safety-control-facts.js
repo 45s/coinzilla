@@ -79,7 +79,7 @@ function validateSafetyBlockerRaisedData({ producer, scope, symbol, reason, evid
 
 export async function recordSafetyBlockerRaised({
   operationalStateStore,
-  producer,
+  producer = "USER_DATA_EVENT_HANDLER",
   scope,
   symbol = null,
   reason,
