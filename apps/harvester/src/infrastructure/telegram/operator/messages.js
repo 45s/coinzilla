@@ -59,6 +59,7 @@ interaction })) {
     symbol: parsed.symbol,
     userId,
     requestId: `telegram:${update.update_id}:${message.date ?? "0"}:${userId}`,
+    causeFixed: parsed.causeFixed,
     chatId: message.chat.id,
     signal,
     interaction,
