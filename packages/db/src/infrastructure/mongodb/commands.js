@@ -217,13 +217,19 @@ function createSortStages(sort) {
         branches: [
           { case: { $in: [typeExpression, ["missing", "null"]] }, then: 0 },
           { case: { $eq: [typeExpression, "bool"] }, then: 1 },
-          { case: { $in: [typeExpression, ["int", "long", "double", "decimal"]] }, then: 2 },
-          { case: { $eq: [typeExpression, "string"] }, then: 3 },
+          { case: { $in: [typeExpression, ["int", "long", "double", "decimal"]] }, then: 3 },
+          { case: { $eq: [typeExpression, "string"] }, then: 4 },
         ],
-        default: 4,
+        default: 5,
       },
     }
-    additions[valueKey] = { $ifNull: [fieldPath, null] }
+    additions[valueKey] = {
+      $cond: [
+        { $in: [typeExpression, ["array", "object"]] },
+        null,
+        { $ifNull: [fieldPath, null] },
+      ],
+    }
     const sortDirection = direction === "asc" ? 1 : -1
     ordering[typeKey] = sortDirection
     ordering[valueKey] = sortDirection
