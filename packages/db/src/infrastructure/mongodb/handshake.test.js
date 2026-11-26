@@ -96,6 +96,108 @@ test("MongoDB URI parser validates credential pairs, host lists, and unsupported
   )
 })
 
+
+test("MongoDB handshake advertises credentials and negotiates the server-supported SCRAM mechanism", async () => {
+  const calls = []
+  const transport = {
+    async command({ body }) {
+      calls.push(body)
+      if (body.hello === 1) {
+        return {
+          ok: 1,
+          minWireVersion: 13,
+          maxWireVersion: 25,
+          isWritablePrimary: true,
+          saslSupportedMechs: ["SCRAM-SHA-1"],
+        }
+      }
+      return {
+        ok: 0,
+        errmsg: "intentional authentication stop",
+        code: 18,
+      }
+    },
+  }
+
+  await assert.rejects(
+    performMongoHandshake({
+      transport,
+      databaseName: "app",
+      username: "alice",
+      password: "secret",
+      authSource: "admin",
+    }),
+    /intentional authentication stop/,
+  )
+  assert.equal(calls[0].saslSupportedMechs, "admin.alice")
+  assert.equal(calls[1].mechanism, "SCRAM-SHA-1")
+  assert.equal(calls[1].$db, "admin")
+})
+
+test("MongoDB handshake rejects a requested mechanism not advertised by the server", async () => {
+  const transport = {
+    async command({ body }) {
+      if (body.hello === 1) {
+        return {
+          ok: 1,
+          minWireVersion: 13,
+          maxWireVersion: 25,
+          isWritablePrimary: true,
+          saslSupportedMechs: ["SCRAM-SHA-1"],
+        }
+      }
+      throw new Error("Authentication must not start")
+    },
+  }
+
+  await assert.rejects(
+    performMongoHandshake({
+      transport,
+      username: "alice",
+      password: "secret",
+      authMechanism: "SCRAM-SHA-256",
+    }),
+    /does not support SCRAM-SHA-256/,
+  )
+})
+
+test("MongoDB handshake rejects replica-set mismatches and secondaries without a primary address", async () => {
+  await assert.rejects(
+    performMongoHandshake({
+      transport: {
+        async command() {
+          return {
+            ok: 1,
+            minWireVersion: 13,
+            maxWireVersion: 25,
+            isWritablePrimary: true,
+            setName: "actual",
+          }
+        },
+      },
+      replicaSet: "expected",
+    }),
+    /does not match requested replica set/,
+  )
+
+  await assert.rejects(
+    performMongoHandshake({
+      transport: {
+        async command() {
+          return {
+            ok: 1,
+            minWireVersion: 13,
+            maxWireVersion: 25,
+            isWritablePrimary: false,
+            setName: "replica",
+          }
+        },
+      },
+    }),
+    /did not advertise a writable primary/,
+  )
+})
+
 test("MongoDB handshake detects standalone, replica-set, and sharded topologies", async () => {
   for (const [hello, topology] of [
     [{ isWritablePrimary: true, minWireVersion: 13, maxWireVersion: 17 }, "standalone"],
