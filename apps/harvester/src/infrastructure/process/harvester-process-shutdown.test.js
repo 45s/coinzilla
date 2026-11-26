@@ -278,3 +278,44 @@ test("retains the real process lock when durable PROCESS_STOPPED acknowledgement
     })
   }
 })
+
+test("marks shutdown incomplete when the event bus rejects its final flush", async () => {
+  const calls = []
+  const previousExitCode = process.exitCode
+  process.exitCode = 0
+  const handler = createRuntimeShutdownHandler({
+    runtime: {
+      stop: async () => ({ ok: true, status: "STOPPED" }),
+    },
+    logger: {
+      system: (message) => calls.push(message),
+      error: ({ message, errors }) => calls.push({ message, errors }),
+    },
+    eventPublisher: {
+      publish: () => ({ ok: true }),
+    },
+    eventBus: {
+      flush: async () => ({ ok: false }),
+    },
+    closeObservability: async () => {
+      calls.push("observability-close")
+      return []
+    },
+    closeLogger: async () => calls.push("logger-close"),
+    logTelegramNotificationSummary: () => {},
+  })
+
+  try {
+    await handler("SIGTERM")
+    assert.equal(process.exitCode, 1, "An unconfirmed final event-bus flush must fail shutdown.")
+    assert.equal(
+      calls.some((entry) => entry?.message === "Telegram notification shutdown was incomplete."),
+      true,
+      "Shutdown diagnostics must report the failed final event-bus flush.",
+    )
+    assert.ok(calls.includes("observability-close"), "Observability cleanup must still run after the runtime has stopped.")
+    assert.ok(calls.includes("logger-close"), "The process logger must close after cleanup.")
+  } finally {
+    process.exitCode = previousExitCode
+  }
+})
