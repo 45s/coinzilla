@@ -190,6 +190,7 @@
     "operational-state:diagnose": "node scripts/diagnose-operational-state.js",
     "operational-state:reset:dev": "node --env-file=.env.development scripts/reset-operational-state.js",
     "archive:push": "node --env-file=.env.development scripts/archive-testnet-session.js",
-    "archive:debug": "node --env-file=.env.development scripts/archive-debug-session.js"
+    "archive:debug": "node --env-file=.env.development scripts/archive-debug-session.js",
+    "scenarios:conservative": "node scripts/run-conservative-scenarios.js"
   }
 }

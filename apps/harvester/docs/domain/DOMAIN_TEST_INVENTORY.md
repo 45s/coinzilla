@@ -404,3 +404,16 @@ Both named tests are included in `config.targetedTestFiles`. They passed Harvest
 - `RS-006-016-A` proves incomplete terminal Fill history cannot publish accounting or release the reservation.
 - `RS-006-018-A` proves confirmed execution facts are committed even when realized profitability misses `minProfit`.
 - Seven subcases are `TEST-MAPPED`, not `VERIFIED`; RS-006-014/015 cover domain-level duplicate/conflict staging only, not full REST/stream retrieval ordering. RS-006 remains PARTIAL because the end-to-end source merge, complete persistence-barrier and failure-interleaving permutations remain.
+
+## Executable Conservative scenario system — issue #1797
+
+The scenario-definition and reporting workstream is tracked in [#1797](https://github.com/45s/coinzilla/issues/1797), under parent audit [#1763](https://github.com/45s/coinzilla/issues/1763).
+
+- Definitions: `test/scenarios/conservative/` (18 stable `CON-*` scenarios across 16 categories).
+- Shared tooling: `test/scenarios/shared/` (schema, loader, mapped-test runner, assertions and reporter).
+- Critical behavior ownership: `docs/critical-behaviors.json` (reused, not duplicated).
+- Runner: `pnpm --filter @coinzilla/harvester scenarios:conservative`.
+- Reports: `reports/conservative-scenarios/` (inventory, results and coverage JSON).
+- CI: the existing Harvester Targeted Tests workflow conditionally runs the scenario suite when related paths change and uploads the generated reports.
+
+The initial inventory has 15 TEST-MAPPED, one PARTIAL, one MISSING (CON-PERSIST-003) and one UNSUPPORTED (runtime restoration) scenario. TEST-MAPPED and PARTIAL are not VERIFIED. Unmapped-test reporting is scoped to the named test set in the critical behavior registry, not every Harvester test file.
