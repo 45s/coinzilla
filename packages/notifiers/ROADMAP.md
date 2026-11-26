@@ -1,6 +1,6 @@
 # Notifiers roadmap
 
-**Owner:** Notifiers domain  
+**Owner:** Notifiers domain
 **Scope:** `packages/notifiers/`
 
 ## Current position
