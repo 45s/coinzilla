@@ -283,21 +283,45 @@ function createMongoRecordOperations({ command, databaseName }) {
         $db: databaseName,
       },
     })
-    if (!Array.isArray(response.cursor?.firstBatch)) {
+    if (!response.cursor) {
       throw new DatabaseProviderError({
         operation: "readOne",
         collection,
-        cause: new Error("MongoDB find response omitted cursor.firstBatch"),
+        cause: new Error("MongoDB find response omitted its cursor"),
       })
     }
-    if (!isValidCursorId(response.cursor.id)) {
+    const cursorId = response.cursor.id
+    if (!isValidCursorId(cursorId)) {
       throw new DatabaseProviderError({
         operation: "readOne",
         collection,
         cause: new Error("MongoDB find response contained an invalid cursor id"),
       })
     }
-    if (!isCursorExhausted(response.cursor.id)) {
+    if (!Array.isArray(response.cursor.firstBatch)) {
+      if (!isCursorExhausted(cursorId)) {
+        try {
+          await runMongoCommand({
+            command,
+            operation: "readOne",
+            collection,
+            body: {
+              killCursors: mongoCollection,
+              cursors: [cursorId],
+              $db: databaseName,
+            },
+          })
+        } catch {
+          // Preserve the malformed-response error; connection cleanup owns any remaining cursor.
+        }
+      }
+      throw new DatabaseProviderError({
+        operation: "readOne",
+        collection,
+        cause: new Error("MongoDB find response omitted cursor.firstBatch"),
+      })
+    }
+    if (!isCursorExhausted(cursorId)) {
       try {
         await runMongoCommand({
           command,
@@ -305,7 +329,7 @@ function createMongoRecordOperations({ command, databaseName }) {
           collection,
           body: {
             killCursors: mongoCollection,
-            cursors: [response.cursor.id],
+            cursors: [cursorId],
             $db: databaseName,
           },
         })
@@ -346,11 +370,11 @@ function createMongoRecordOperations({ command, databaseName }) {
       },
     })
     const cursor = response.cursor
-    if (!cursor || !Array.isArray(cursor.firstBatch)) {
+    if (!cursor) {
       throw new DatabaseProviderError({
         operation: "readMany",
         collection,
-        cause: new Error("MongoDB aggregate response omitted cursor.firstBatch"),
+        cause: new Error("MongoDB aggregate response omitted its cursor"),
       })
     }
     let cursorId = cursor.id
@@ -359,6 +383,29 @@ function createMongoRecordOperations({ command, databaseName }) {
         operation: "readMany",
         collection,
         cause: new Error("MongoDB aggregate response contained an invalid cursor id"),
+      })
+    }
+    if (!Array.isArray(cursor.firstBatch)) {
+      if (!isCursorExhausted(cursorId)) {
+        try {
+          await runMongoCommand({
+            command,
+            operation: "readMany",
+            collection,
+            body: {
+              killCursors: mongoCollection,
+              cursors: [cursorId],
+              $db: databaseName,
+            },
+          })
+        } catch {
+          // Preserve the malformed-response error; connection cleanup owns any remaining cursor.
+        }
+      }
+      throw new DatabaseProviderError({
+        operation: "readMany",
+        collection,
+        cause: new Error("MongoDB aggregate response omitted cursor.firstBatch"),
       })
     }
     const records = []
