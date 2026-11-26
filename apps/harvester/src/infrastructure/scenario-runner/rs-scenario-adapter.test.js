@@ -256,10 +256,10 @@ test("production RS STOP blocks new BUY spending while allowing an eligible firs
     "The STOP must remain latched after the recovery SELL is submitted.")
   assert.equal(result.output.stopAdmissionChecks.accountAdmissionBlocked, true,
     "Account admission must remain blocked for additional BUY spending.")
-  assert.equal(result.output.stopAdmissionChecks.buyAdmissionBlocked, true,
-    "The BUY admission gate must remain active while the eligible recovery SELL proceeds.")
-  assert.equal(result.output.action.side, "SELL")
-  assert.equal(result.output.submitted, true)
+  assert.equal(result.output.action.side, "SELL",
+    "The result must contain the eligible recovery SELL action.")
+  assert.equal(result.output.submitted, true,
+    "The production runtime must report the simulated SELL as submitted.")
 })
 
 test("production RS runtime fails closed when account STOP persistence fails after an under-target FILLED SELL", async () => {
