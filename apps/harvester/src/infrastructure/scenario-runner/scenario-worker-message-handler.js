@@ -11,6 +11,10 @@ export function createScenarioWorkerMessageHandler({ dispatch, send, disconnect 
     }
     activeExecution = execution
     try {
+      send({
+        type: "started",
+        runId: request.runId,
+      })
       const output = await dispatch({
         request,
         signal: controller.signal,
