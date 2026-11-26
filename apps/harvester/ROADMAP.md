@@ -886,6 +886,7 @@ Example: configured step `0.5%`, reference ATR `1.0%`, current ATR `1.5%`; coeff
 
 9. **[ ] Step 9 — Prove crash/restart behavior, then consider controlled TESTNET validation.**
    - Run the full crash-point matrix, duplicate/reordered event tests, missing-record/session tests, legacy-session tests, and restart-twice idempotency tests.
+   - [~] Extend the ADR-0001 durable-fact matrix with third-asset commission quote-value restoration, duplicate fill fact idempotency, and two consecutive unclean process-session starts. The candidate must preserve exact Portfolio/RecoveryLedger state, remain reconciliation-required, and keep runtime restoration disabled. This is offline evidence only; Step 8 parity/account-wide readiness and the rest of Step 9 remain open.
    - Verify no duplicate order, fill, reservation, cost-basis reset, or retained-inventory sale.
    - Review evidence and approve a separate small, bounded TESTNET plan before any exchange-connected validation. Live trading remains out of scope.
 

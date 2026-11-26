@@ -4,7 +4,7 @@ import { mkdtemp, rm } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import test from "node:test"
-import { Asset, CanonicalOrder, Fill, Market, Money, Quantity } from "@coinzilla/entities"
+import { Asset, CanonicalOrder, Commission, Fill, Market, Money, Quantity } from "@coinzilla/entities"
 import { createPositionId } from "../../src/domain/portfolio/position.js"
 import { Portfolio } from "../../src/domain/portfolio/portfolio.js"
 import { RecoveryLedger } from "../../src/domain/strategies/conservative/recovery-ledger.js"
@@ -25,6 +25,8 @@ const baseAsset = new Asset({ id: "asset:BTC",
 code: "BTC" })
 const quoteAsset = new Asset({ id: "asset:USDT",
 code: "USDT" })
+const feeAsset = new Asset({ id: "asset:BNB",
+code: "BNB" })
 const market = new Market({ venue: "binance",
 symbol: "BTCUSDT",
 baseAsset,
@@ -67,7 +69,26 @@ appConfig })
     tradingEnabled: true,
   })
   assert.equal(started.ok, true, started.errors?.map(({ message }) => message).join("; "))
+  return baseline.data
 }
+
+async function recordRestartProcessStart({ directory, runtimeSessionId, baseline }) {
+  const operationalStateStore = createStore(directory, runtimeSessionId)
+  const initialized = await operationalStateStore.initializeIfEmpty()
+  assert.equal(initialized.ok, true, initialized.errors?.map(({ message }) => message).join("; "))
+  assert.equal(initialized.data.ready, true)
+  assert.equal(initialized.data.initialized, false, "A restart must verify the existing ledger, never create a new genesis.")
+  const started = await recordProcessStarted({
+    operationalStateStore,
+    configurationFingerprint: baseline.fingerprint,
+    strategyName: baseline.strategyName,
+    markets: baseline.markets,
+    tradingEnabled: true,
+  })
+  assert.equal(started.ok, true, started.errors?.map(({ message }) => message).join("; "))
+  return operationalStateStore
+}
+
 const readCandidate = (...candidateArguments) => {
   const [directory, runtimeSessionId] = candidateArguments;
   return restoreHarvesterOperationalState({
@@ -115,7 +136,7 @@ const acknowledge = ({ clientOrderId, side, quantity, price }) =>
     status: "FILLED",
     executedQuantity: quantity,
   })
-const makeFill = ({ tradeId, clientOrderId, brokerOrderId, side, quantity, quoteQuantity, price }) =>
+const makeFill = ({ tradeId, clientOrderId, brokerOrderId, side, quantity, quoteQuantity, price, commissions = [] }) =>
   new Fill({
     tradeId,
     clientOrderId,
@@ -134,7 +155,7 @@ asset: quoteAsset }),
     liquidityRole: "MAKER",
     executedAt: 1_700_000_000_010,
     commissionStatus: "COMPLETE",
-    commissions: [],
+    commissions,
   })
 const persistOrder = async ({
   store,
@@ -236,30 +257,83 @@ async function verifyCrashBoundaryFill({ directory, store, pending, acknowledged
     quantity: "0.02",
     quoteQuantity: "2",
     price: "100",
+    commissions: [new Commission({
+      amount: new Money({ amount: "0.001", asset: feeAsset }),
+      quoteValue: new Money({ amount: "0.02", asset: quoteAsset }),
+    })],
   })
-  await applyFill({ store,
-    fill })
+  await applyFill({ store, fill })
+  const duplicate = await recordExecutionFill({ operationalStateStore: store, fill })
+  assert.equal(duplicate.ok, true, duplicate.errors?.map(({ message }) => message).join("; "))
+  assert.equal(duplicate.data.durable, true)
+  assert.equal(duplicate.data.duplicate, true, "A duplicate delivery must resolve to the original durable fill fact.")
   const afterFill = await readCandidate(directory, "crash-reader-after-fill")
   assert.equal(afterFill.ok, true, afterFill.errors?.map(({ message }) => message).join("; "))
   const filledOrder = afterFill.data.orderRegistry.getOrder({ clientOrderId: pending.clientOrderId })
   assert.equal(filledOrder.status, "UNKNOWN", "A durable fill does not prove current exchange order status.")
   assert.equal(filledOrder.executedQuantity.amount, "0.02", "The exact executed quantity must survive the fill crash boundary.")
-  assert.equal(afterFill.data.portfolio.getPosition({ marketId: market.id }).baseQuantity.amount, "0.02", "The candidate Portfolio must restore the exact filled base quantity.")
-  assert.equal(afterFill.data.portfolio.getPosition({ marketId: market.id }).spent.amount, "2", "The candidate Portfolio must restore the exact quote cost.")
-  assert.equal(afterFill.data.recoveryLedgers.get(market.id).buyCost, "2", "The RecoveryLedger must restore the exact BUY cost.")
+  const position = afterFill.data.portfolio.getPosition({ marketId: market.id })
+  assert.equal(position.baseQuantity.amount, "0.02")
+  assert.equal(position.spent.amount, "2.02", "The exact third-asset commission quote value must survive restart projection.")
+  const recoveryLedger = afterFill.data.recoveryLedgers.get(market.id)
+  assert.equal(recoveryLedger.buyCost, "2.02", "RecoveryLedger cost must include the same historical commission valuation.")
+  assert.equal(recoveryLedger.appliedFillIds.length, 1, "The durable fill identity must be applied exactly once.")
   assert.equal(afterFill.data.requiresExchangeReconciliation, true, "The filled offline candidate must still require exchange reconciliation.")
+  assert.equal(afterFill.data.restorationEnabled, false)
+
+  const afterRepeatedReplay = await readCandidate(directory, "crash-reader-after-duplicate-fill")
+  assert.equal(afterRepeatedReplay.ok, true, afterRepeatedReplay.errors?.map(({ message }) => message).join("; "))
+  const repeatedPosition = afterRepeatedReplay.data.portfolio.getPosition({ marketId: market.id })
+  assert.equal(repeatedPosition.baseQuantity.amount, position.baseQuantity.amount)
+  assert.equal(repeatedPosition.spent.amount, position.spent.amount)
+  assert.deepEqual(
+    afterRepeatedReplay.data.recoveryLedgers.get(market.id).appliedFillIds,
+    recoveryLedger.appliedFillIds,
+    "Repeated candidate replay must not duplicate the fill in RecoveryLedger.",
+  )
 }
 
-test("reopens the real append-only ledger after intent, acknowledgement, and fill crash boundaries", async (t) => {
+test("reopens the real append-only ledger across duplicate fill delivery and two unclean process restarts", async (t) => {
   const directory = await createDirectory(t)
   const store = createStore(directory)
-  await initializeProcess(store)
-  const { pending, acknowledged } = await recordCrashBoundaryIntentAndAcknowledgement({ directory,
-    store })
-  await verifyCrashBoundaryFill({ directory,
-    store,
-    pending,
-    acknowledged })
+  const baseline = await initializeProcess(store)
+  const { pending, acknowledged } = await recordCrashBoundaryIntentAndAcknowledgement({ directory, store })
+  await verifyCrashBoundaryFill({ directory, store, pending, acknowledged })
+  await recordRestartProcessStart({
+    directory,
+    runtimeSessionId: "crash-matrix-process-2",
+    baseline,
+  })
+  const secondRestartStore = await recordRestartProcessStart({
+    directory,
+    runtimeSessionId: "crash-matrix-process-3",
+    baseline,
+  })
+  const recovered = await readCandidate(directory, "crash-reader-after-two-restarts")
+  assert.equal(recovered.ok, true, recovered.errors?.map(({ message }) => message).join("; "))
+  assert.equal(recovered.data.requiresExchangeReconciliation, true)
+  assert.equal(recovered.data.restorationEnabled, false)
+  assert.equal(recovered.data.orderRegistry.getOrder({ clientOrderId: pending.clientOrderId }).status, "UNKNOWN")
+  assert.equal(recovered.data.portfolio.getPosition({ marketId: market.id }).baseQuantity.amount, "0.02")
+  assert.equal(recovered.data.portfolio.getPosition({ marketId: market.id }).spent.amount, "2.02")
+  assert.equal(recovered.data.recoveryLedgers.get(market.id).buyCost, "2.02")
+  assert.equal(recovered.data.recoveryLedgers.get(market.id).appliedFillIds.length, 1)
+  const history = await secondRestartStore.readAll()
+  assert.equal(history.ok, true)
+  const processStarts = history.data.records
+    .filter((record) => record.factType === "PROCESS_STARTED")
+    .map((record) => record.runtimeSessionId)
+    .sort()
+  assert.deepEqual(processStarts, [
+    "crash-matrix-process-1",
+    "crash-matrix-process-2",
+    "crash-matrix-process-3",
+  ])
+  assert.equal(
+    history.data.records.filter((record) => record.factType === "PROCESS_STOPPED").length,
+    0,
+    "Unclean process sessions must remain visible; offline projection must not invent clean STOPPED facts.",
+  )
 })
 
 async function createRecoveryCycleOrdersAndFills({
