@@ -684,7 +684,7 @@ test("keeps user-data and broker services alive when post-market-drain safety ca
 
   await assert.rejects(fixture.stop(), (error) => {
     assert.equal(error.code, "STRATEGY_SHUTDOWN_SAFETY_UNPROVEN", "An unproven final strategy state must retain the coordinator's safety failure classification.")
-    assert.ok(error.errors.includes(failure), "The original market-recovery blocker must remain available to the caller.")
+    assert.ok(error.shutdownDiagnostics.strategyBlockers.some(({ message }) => message === failure.message), "The original market-recovery blocker must remain available to the caller.")
     return true
   }, "A failed final safety proof must reject shutdown with its original blocker.")
 
