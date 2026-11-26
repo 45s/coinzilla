@@ -419,3 +419,43 @@ test("reports empty markets when a failed participant omits its optional safety 
     "A missing optional snapshot must not hide the strategy failure or fabricate market blockers.",
   )
 })
+
+
+test("preserves an unknown safety snapshot when a participant snapshot provider throws", async () => {
+  const snapshotFailure = Object.assign(new Error("Safety snapshot read failed"), {
+    code: "SAFETY_SNAPSHOT_FAILED",
+  })
+  const resultFailure = new Error("Strategy recovery evidence is unavailable")
+  const coordinator = createStrategyShutdownCoordinator({
+    participants: [{
+      strategyId: "CONSERVATIVE",
+      beginShutdown() {},
+      waitUntilSafe: async () => ({
+        ok: false,
+        errors: [resultFailure],
+      }),
+      isSafeToShutdown: () => false,
+      getSafetySnapshot: () => {
+        throw snapshotFailure
+      },
+    }],
+  })
+
+  await assert.rejects(
+    coordinator.waitUntilSafe(),
+    (error) => {
+      const [blocker] = error.shutdownDiagnostics.strategyBlockers
+      assert.deepEqual(blocker.safetySnapshot, {
+        status: "UNKNOWN",
+        error: {
+          name: "Error",
+          message: snapshotFailure.message,
+          code: snapshotFailure.code,
+        },
+      })
+      assert.deepEqual(blocker.markets, [])
+      return true
+    },
+    "A failing snapshot provider must remain visible as UNKNOWN without hiding the strategy blocker.",
+  )
+})
