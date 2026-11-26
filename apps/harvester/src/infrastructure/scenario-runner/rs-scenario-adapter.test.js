@@ -247,6 +247,8 @@ test("production RS STOP blocks new BUY spending while allowing an eligible firs
   assert.equal(result.passed, true, JSON.stringify(result.assertions))
   assert.equal(result.output.stopAdmissionChecks.buyActionSubmitted, false,
     "The lower-price dispatch must not submit a new BUY while STOP is latched.")
+  assert.equal(result.output.stopAdmissionChecks.buyDecisionOutcome, "BLOCK",
+    "The BUY decision itself must be blocked by the latched STOP.")
   assert.equal(result.output.stopAdmissionChecks.sellActionSide, "SELL",
     "The higher-price dispatch must still submit an eligible first recovery SELL.")
   assert.equal(result.output.stopAdmissionChecks.stopStateStatus, "STOPPED",

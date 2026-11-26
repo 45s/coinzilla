@@ -1364,7 +1364,7 @@ function assertRuntimeScenarioTerminalSellReconciled({
   }
   throw eventResult?.errors?.[0] ??
     terminalAccountingResult?.errors?.[0] ??
-    new Error("Production Recovery Seller terminal SELL did not fail closed with a durable account STOP")
+    new Error("Production Recovery Seller terminal SELL did not fail closed with the expected account STOP persistence outcome")
 }
 
 function resolveSubmittedRuntimeSellOrder({ runtime, execution }) {
@@ -1558,6 +1558,7 @@ function createRuntimeScenarioExpected({ seed, pairConfig, scenarioId }) {
       reservationMatchesSubmittedOrder: true,
       stopAdmissionChecks: {
         buyActionSubmitted: false,
+        buyDecisionOutcome: "BLOCK",
         sellActionSide: "SELL",
         stopStateStatus: "STOPPED",
         accountAdmissionBlocked: true,
@@ -1839,6 +1840,11 @@ function createStopAdmissionAssertions({ output, expected }) {
       expected: expected.stopAdmissionChecks.buyActionSubmitted,
     }),
     createAssertion({
+      name: "latched STOP blocks the BUY decision itself",
+      actual: output.stopAdmissionChecks?.buyDecisionOutcome,
+      expected: expected.stopAdmissionChecks.buyDecisionOutcome,
+    }),
+    createAssertion({
       name: "latched STOP permits an otherwise eligible first recovery SELL",
       actual: output.stopAdmissionChecks?.sellActionSide,
       expected: expected.stopAdmissionChecks.sellActionSide,
@@ -2073,6 +2079,7 @@ async function executeRuntimeScenario({ runId, scenarioId, effectiveInput, signa
     execution = sellAttempt
     stopAdmissionChecks = {
       buyActionSubmitted: Boolean(buyAttempt.submittedAction),
+      buyDecisionOutcome: buyAttempt.data.decision?.outcome ?? null,
       sellActionSide: sellAttempt.submittedAction?.side ?? null,
       stopStateStatus: (await runtime.stopWorkflow.getState()).status,
       accountAdmissionBlocked: runtime.stopWorkflow.isAccountAdmissionBlocked(),
