@@ -140,7 +140,7 @@ test("exits the child process only after Journal shutdown and real process-lock 
     })
     assert.equal(exit.code, 0, `The child must exit successfully after shutdown; stderr: ${stderr}`)
     assert.equal(exit.signal, null, "The child must exit naturally rather than being killed by a signal.")
-    assert.equal(stdout, "SHUTDOWN_COMPLETE\\n", "The shutdown handler must resolve before the child exits.")
+    assert.equal(stdout, "SHUTDOWN_COMPLETE\n", "The shutdown handler must resolve before the child exits.")
     await assert.rejects(
       readFile(lockPath, "utf8"),
       { code: "ENOENT" },
