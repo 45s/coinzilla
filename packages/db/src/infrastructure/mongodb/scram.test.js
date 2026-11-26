@@ -103,6 +103,24 @@ test("SCRAM-SHA-1 uses MongoDB's legacy password digest", async () => {
   })
 })
 
+
+test("SCRAM-SHA-256 rejects passwords outside its documented printable-ASCII subset", async () => {
+  const command = createScramServer({
+    username: "alice",
+    password: "pässword",
+  })
+
+  await assert.rejects(
+    authenticateMongoScram({
+      command: command.command,
+      username: "alice",
+      password: "pässword",
+      randomBytes: () => Buffer.from("client-nonce"),
+    }),
+    /printable ASCII only/,
+  )
+})
+
 test("SCRAM rejects an invalid server signature and malformed nonce", async () => {
   const invalidSignature = createScramServer({
     username: "alice",
