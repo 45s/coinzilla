@@ -660,7 +660,7 @@ The Command Center roadmap is complete; this section is intentionally a pointer 
 
 ## High-volatility protection — issue #1016
 
-**Status: PROTECTION IMPLEMENTED; regression matrix, exact-head CI, candle-stream freshness correction (PR #1049), and local offline calibration CLI (PR #1046) are merged; representative historical threshold calibration remains open.** This is the immediate Harvester safety priority. The canonical behavior and delivery contract are in [Volatility Protection](./docs/volatility-protection.md).
+**Status: PROTECTION IMPLEMENTED; regression matrix, exact-head CI, candle-stream freshness correction (PR #1049), and local offline calibration CLI (PR #1046) are merged; deterministic multi-symbol CLI regression is in PR #1871; representative historical threshold calibration remains open.** This is the immediate Harvester safety priority. The canonical behavior and delivery contract are in [Volatility Protection](./docs/volatility-protection.md).
 
 - Per-market protection; one volatile pair must not stop another.
 - Use completed 1-minute UTC candles, ATR(14) with Wilder smoothing, NATR, and a current/reference ratio against the previous 60 completed NATR observations.
@@ -683,7 +683,8 @@ The Command Center roadmap is complete; this section is intentionally a pointer 
 7. [x] Correct the candle-stream freshness window to one interval plus five seconds, add quiet-stream regressions, and synchronize the contract/docs — merged [PR #1049](https://github.com/45s/coinzilla/pull/1049). Initial ratio-threshold validation against representative offline history remains open.
 8. [x] Synchronize living documentation and roadmaps with merged implementation and remaining calibration work.
 9. [x] Add the local-only offline calibration CLI, exact runtime metric/state replay, CSV validation and candidate-threshold options — merged [PR #1046](https://github.com/45s/coinzilla/pull/1046) at `6d103fb044939f9bab9cde766a548957f3948f4e`; all required exact-head checks passed.
-10. [ ] Run the analyzer against representative multi-symbol historical data, review threshold trade-offs and accept or revise the provisional values. This is not complete until real archive data has been analyzed.
+10. [x] Add deterministic three-symbol synthetic CLI regression proving per-market report/state isolation — PR #1871. This is regression evidence only, not historical threshold acceptance.
+11. [ ] Run the analyzer against representative multi-symbol historical data, review threshold trade-offs and accept or revise the provisional values. This remains open until verified official archive data has been analyzed.
 
 ---
 

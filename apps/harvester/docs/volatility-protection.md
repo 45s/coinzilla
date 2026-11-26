@@ -1,6 +1,6 @@
 # Harvester Volatility Protection
 
-- Status: **Protection implementation, regression matrix, freshness correction (PR #1049), and local offline calibration CLI (PR #1046) merged; representative historical threshold calibration outstanding**
+- Status: **Protection implementation, regression matrix, freshness correction (PR #1049), and local offline calibration CLI (PR #1046) merged; deterministic multi-symbol CLI regression in PR #1871; representative historical threshold calibration outstanding**
 - Tracking: [Harvester high-volatility protection #1016](https://github.com/45s/coinzilla/issues/1016)
 - Related implementation: [Harvester candle history and ATR/NATR measurements PR #1037](https://github.com/45s/coinzilla/pull/1037) (data collection only)
 - Related follow-up: [ATR-based adaptive price step #1013](https://github.com/45s/coinzilla/pull/1013)
@@ -268,7 +268,7 @@ Volatility state is process-local in the first implementation. It is not a subst
 7. [x] **Candle-stream freshness correction:** one 1-minute interval plus a 5-second grace, with quiet-stream regressions — merged [PR #1049](https://github.com/45s/coinzilla/pull/1049).
 8. [x] **Documentation and offline calibration CLI:** runtime contract synchronized; local-only analyzer, CSV validation and candidate-threshold options merged in [PR #1046](https://github.com/45s/coinzilla/pull/1046). Exact-head CI passed; no exchange operations were performed.
 9. [ ] **Historical calibration:** run the analyzer against representative multi-symbol offline Spot market history, review threshold trade-offs, and accept or revise the provisional warning/protection/recovery thresholds before treating them as production-calibrated.
-   - [x] Add deterministic three-symbol CLI regression coverage for independent BTCUSDT, ETHUSDT and SOLUSDT protection replays. This proves multi-symbol grouping/state isolation only; the inputs are synthetic and are not historical calibration evidence.
+   - [x] Add deterministic three-symbol CLI regression coverage for independent BTCUSDT, ETHUSDT and SOLUSDT protection replays — [PR #1871](https://github.com/45s/coinzilla/pull/1871). This proves multi-symbol grouping/state isolation only; the inputs are synthetic and are not historical calibration evidence.
    - [ ] Complete the historical threshold review using verified official Spot archive CSVs and a report containing source hashes, time windows, per-symbol percentiles, threshold frequencies and protection-state occupancy.
 
 ## 10. Offline historical threshold calibration
