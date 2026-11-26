@@ -192,7 +192,7 @@ Consumers should branch on the public error class or stable code, not provider e
 
 ### Provider capabilities
 
-Read `database.capabilities` to inspect the provider-neutral capability declaration. The declaration is a frozen snapshot. SQLite reports synchronous callbacks, no nested transactions, file/memory storage and all three query capabilities. MongoDB reports asynchronous callbacks, no nested transactions, server storage and all three query capabilities. MongoDB multi-document transaction support is topology-dependent; standalone deployments reject transactions.
+Read `database.capabilities` to inspect the provider-neutral capability declaration. The declaration is a frozen snapshot. SQLite reports synchronous callbacks, no nested transactions, file/memory storage and all three query capabilities. MongoDB reports asynchronous callbacks, no nested transactions, server storage and all three query capabilities. MongoDB multi-document transaction support is topology-dependent; standalone deployments reject transactions. The following transaction-callback and locking details are SQLite-specific:
 
 - Transaction callbacks are synchronous; nested transactions are not supported.
 - Exact equality filters, sorting and pagination are supported.
@@ -531,7 +531,7 @@ The accepted architecture decision is recorded in [ADR-0001](./docs/decisions/00
 
 - Domain owns provider-independent record/query contracts, database error classification, lifecycle invariants and migration identity.
 - Application owns provider composition and provider-neutral CRUD orchestration.
-- Infrastructure owns concrete adapters. `infrastructure/sqlite/` owns `node:sqlite`, SQL, prepared statements, JSON storage, transaction mechanics and migration persistence.
+- Infrastructure owns concrete adapters. `infrastructure/sqlite/` owns `node:sqlite`, SQL, prepared statements, JSON storage, transaction mechanics and migration persistence. `infrastructure/mongodb/` owns BSON, OP_MSG, TCP/TLS, authentication, topology, sessions, MongoDB commands and MongoDB error translation.
 - Consumers own their business entities, aggregate invariants, schemas and repository interfaces. Do not add application-specific repositories or schemas here.
 
 Dependency direction is inward: infrastructure implements the application-facing provider port; application depends on provider-neutral contracts; domain policy does not import database drivers or SQL.
