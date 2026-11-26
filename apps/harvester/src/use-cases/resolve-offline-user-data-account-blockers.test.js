@@ -1033,3 +1033,25 @@ test("authenticates the operator against the current OS account before reading e
   assert.equal(contextRead, false, "Unauthenticated operator identity must be rejected before evidence access.")
   assert.match(errors[0], /authenticated operating-system account/)
 })
+
+test("rejects a caller-forged operator identity object", async () => {
+  let marketAuditCalled = false
+  const result = await runOfflineAccountBlockerResolution({
+    context: makeContext(),
+    operationalStateStore: makeStore(),
+    operatorId: "operator-7",
+    operatorIdentity: {
+      operatorId: "operator-7",
+      authMethod: "OS_ACCOUNT",
+    },
+    actionId: "action-forged-identity-001",
+    resolutionReason,
+    causeFixed: true,
+    reconcileMarket: async ({ context }) => {
+      marketAuditCalled = true
+      return readyMarketAudit(context.symbol)
+    },
+  })
+  assert.equal(result.ok, false)
+  assert.equal(marketAuditCalled, false, "A caller-forged identity must be rejected before exchange evidence reconciliation.")
+})
