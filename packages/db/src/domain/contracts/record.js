@@ -1,5 +1,20 @@
 const FIELD_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/
 
+function assertWellFormedUnicode(value, label) {
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index)
+    if (code >= 0xd800 && code <= 0xdbff) {
+      const next = value.charCodeAt(index + 1)
+      if (next < 0xdc00 || next > 0xdfff) {
+        throw new TypeError(`${label} must contain well-formed Unicode`)
+      }
+      index += 1
+    } else if (code >= 0xdc00 && code <= 0xdfff) {
+      throw new TypeError(`${label} must contain well-formed Unicode`)
+    }
+  }
+}
+
 function readOwnDescriptors({ value, label }) {
   try {
     return {
@@ -72,6 +87,7 @@ function cloneJsonObject({ value, ancestors, label }) {
     if (typeof key !== "string") {
       throw new TypeError(`${label} must not contain symbol keys`)
     }
+    assertWellFormedUnicode(key, label)
 
     const descriptor = descriptors[key]
     if (!descriptor.enumerable || !Object.hasOwn(descriptor, "value")) {
@@ -94,7 +110,11 @@ function cloneJsonObject({ value, ancestors, label }) {
 }
 
 function cloneJsonValue({ value, ancestors, label }) {
-  if (value === null || typeof value === "string" || typeof value === "boolean") {
+  if (typeof value === "string") {
+    assertWellFormedUnicode(value, label)
+    return value
+  }
+  if (value === null || typeof value === "boolean") {
     return value
   }
   if (typeof value === "number" && Number.isFinite(value)) {
@@ -139,6 +159,7 @@ export function validateCollectionName(collection) {
   if (typeof collection !== "string" || collection.trim() === "" || collection !== collection.trim()) {
     throw new TypeError("Collection name must be a non-empty string without surrounding whitespace")
   }
+  assertWellFormedUnicode(collection, "Collection name")
 
   return collection
 }
@@ -147,6 +168,7 @@ export function validateRecordIdentifier(identifier) {
   if (typeof identifier !== "string" || identifier.trim() === "" || identifier !== identifier.trim()) {
     throw new TypeError("Record identifier must be a non-empty string without surrounding whitespace")
   }
+  assertWellFormedUnicode(identifier, "Record identifier")
 
   return identifier
 }
