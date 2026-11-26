@@ -123,7 +123,10 @@ parsed }),
   })
 
   test("MongoDB native provider correlates concurrent CRUD operations", async () => {
-    const databaseName = databaseNameForKey({ storageKey: randomUUID(), parsed })
+    const databaseName = databaseNameForKey({
+      storageKey: randomUUID(),
+      parsed,
+    })
     const database = createDatabase({
       provider: createMongoProvider({
         uri: connectionString,
@@ -131,10 +134,13 @@ parsed }),
       }),
     })
     await database.connect()
-    const records = Array.from({ length: 12 }, (_, index) => ({
-      id: `concurrent-${index}`,
-      sequence: index,
-    }))
+    const records = Array.from({ length: 12 }, (...values) => {
+      const [, index] = values
+      return {
+        id: `concurrent-${index}`,
+        sequence: index,
+      }
+    })
 
     try {
       await Promise.all(records.map((record) => database.create({
@@ -148,7 +154,10 @@ parsed }),
       assert.deepEqual(results, records)
     } finally {
       await database.close()
-      await dropDatabase({ databaseName, parsed })
+      await dropDatabase({
+        databaseName,
+        parsed,
+      })
     }
   })
 
