@@ -231,38 +231,42 @@ test("MongoDB OP_MSG encoder rejects invalid sequences and configured size limit
 })
 
 test("MongoDB OP_MSG decoder rejects malformed document sequence boundaries and identifiers", () => {
+  const bodySection = Buffer.concat([Buffer.from([0]), encodeBsonDocument({ ok: 1 })])
+  const sequenceFrame = (sequence) => decodeOpMsg(createFrame({
+    payload: Buffer.concat([bodySection, sequence]),
+  }))
   assert.throws(
-    () => decodeOpMsg(createFrame({ payload: Buffer.from([1]) })),
+    () => sequenceFrame(Buffer.from([1])),
     /Truncated MongoDB document sequence size/,
   )
 
   const invalidIdentifier = Buffer.from([1, 7, 0, 0, 0, 0x61, 0x62, 0x63])
   assert.throws(
-    () => decodeOpMsg(createFrame({ payload: invalidIdentifier })),
+    () => sequenceFrame(invalidIdentifier),
     /Invalid MongoDB document sequence identifier/,
   )
 
   const invalidUtf8 = Buffer.from([1, 6, 0, 0, 0, 0xff, 0])
   assert.throws(
-    () => decodeOpMsg(createFrame({ payload: invalidUtf8 })),
+    () => sequenceFrame(invalidUtf8),
     /invalid UTF-8/,
   )
 
   const emptyIdentifier = Buffer.from([1, 5, 0, 0, 0, 0])
   assert.throws(
-    () => decodeOpMsg(createFrame({ payload: emptyIdentifier })),
+    () => sequenceFrame(emptyIdentifier),
     /must not be empty/,
   )
 
   const truncatedDocument = Buffer.from([1, 7, 0, 0, 0, 0x78, 0, 0xaa])
   assert.throws(
-    () => decodeOpMsg(createFrame({ payload: truncatedDocument })),
+    () => sequenceFrame(truncatedDocument),
     /Truncated BSON document/,
   )
 
   const invalidDocumentLength = Buffer.from([1, 10, 0, 0, 0, 0x78, 0, 4, 0, 0, 0])
   assert.throws(
-    () => decodeOpMsg(createFrame({ payload: invalidDocumentLength })),
+    () => sequenceFrame(invalidDocumentLength),
     /Invalid BSON document/,
   )
 })
