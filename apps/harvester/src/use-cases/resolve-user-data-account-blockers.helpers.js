@@ -184,30 +184,56 @@ export function getActiveAccountResolutionBlockers(projection) {
   return blockers
 }
 
-function validateFirstActionFact({ first, operatorId, actionId, resolutionReason }) {
+function validateActionBlockerSet(first) {
+  const blockerIds = first?.actionBlockerIds
+  const validBlockers = Array.isArray(blockerIds) &&
+    blockerIds.length > 0 &&
+    blockerIds.length <= 256 &&
+    blockerIds.every((id) => /^[a-f0-9]{64}$/.test(id))
+  const canonicalBlockers = validBlockers &&
+    new Set(blockerIds).size === blockerIds.length &&
+    [...blockerIds].sort().join("|") === blockerIds.join("|")
+  if (!canonicalBlockers) {
+    throw new Error("Operator action ID was already used with a different blocker set")
+  }
+}
+
+function validateActionIdentity({ first, operatorId, actionId }) {
   const expectedResolvedBy = `operator:${operatorId}:${actionId}`
-  const validBlockerIds = Array.isArray(first?.actionBlockerIds) &&
-    first.actionBlockerIds.length > 0 &&
-    first.actionBlockerIds.length <= 256 &&
-    first.actionBlockerIds.every((id) => /^[a-f0-9]{64}$/.test(id)) &&
-    new Set(first.actionBlockerIds).size === first.actionBlockerIds.length &&
-    [...first.actionBlockerIds].sort().join("|") === first.actionBlockerIds.join("|")
   const validIdentity = first?.operatorId === operatorId &&
     first.operatorAuthMethod === "OS_ACCOUNT" &&
     first.actionId === actionId &&
     first.resolvedBy === expectedResolvedBy
+  if (!validIdentity) {
+    throw new Error("Operator action ID was already used with a different operator identity")
+  }
+}
+
+function validateActionReasonAndEvidence({ first, resolutionReason }) {
   const validAction = first?.resolution === "OPERATOR_ACTION" &&
     first.resolutionReason === resolutionReason &&
     /^[a-f0-9]{64}$/.test(first.evidenceDigest ?? "")
-  if (!validBlockerIds || !validIdentity || !validAction) {
-    throw new Error("Operator action ID was already used with different identity, reason, evidence, or blocker set")
+  if (!validAction) {
+    throw new Error("Operator action ID was already used with a different reason or evidence")
   }
+}
+
+function validateFirstActionFact({ first, operatorId, actionId, resolutionReason }) {
+  validateActionBlockerSet(first)
+  validateActionIdentity({
+    first,
+    operatorId,
+    actionId,
+  })
+  validateActionReasonAndEvidence({
+    first,
+    resolutionReason,
+  })
   return first
 }
 
 function validateActionFactConsistency({ actionFacts, first }) {
-  for (const record of actionFacts) {
-    const data = record.data
+  for (const { data } of actionFacts) {
     const sameIdentity = data.operatorId === first.operatorId &&
       data.operatorAuthMethod === first.operatorAuthMethod &&
       data.actionId === first.actionId &&
