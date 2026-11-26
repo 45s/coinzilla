@@ -981,7 +981,11 @@ test("stages streamed RS SELL fills for complete terminal mixed-SELL reconciliat
 })
 
 
-function createTerminalRecoverySellerOrderEventFixture() {
+function createTerminalRecoverySellerOrderEventFixture({
+  terminalStatus = "FILLED",
+  executedQuantity = "1",
+  fillQuantity = "1",
+} = {}) {
   const previousOrder = makeOrder({
     side: "SELL",
     status: "OPEN",
@@ -992,15 +996,15 @@ function createTerminalRecoverySellerOrderEventFixture() {
   })
   const terminalOrder = makeOrder({
     side: "SELL",
-    status: "FILLED",
+    status: terminalStatus,
     quantity: "1",
-    executedQuantity: "1",
+    executedQuantity,
     clientOrderId: previousOrder.clientOrderId,
     brokerOrderId: previousOrder.brokerOrderId,
   })
   const fill = makeFill({
     side: "SELL",
-    quantity: "1",
+    quantity: fillQuantity,
     quoteQuantity: "100",
     clientOrderId: terminalOrder.clientOrderId,
     brokerOrderId: terminalOrder.brokerOrderId,
@@ -1031,6 +1035,10 @@ function createTerminalRecoverySellerOrderEventFixture() {
         },
       })
     },
+    latchRecoverySellerStop: async (input) => {
+      calls.recoverySellerStops.push(input)
+      return toResult({ data: { durable: true } })
+    },
   })
   return {
     terminalOrder,
@@ -1040,6 +1048,38 @@ function createTerminalRecoverySellerOrderEventFixture() {
     mixedSellReconciliations,
   }
 }
+
+test("durably stops after profitable partial CANCELED and EXPIRED Recovery Seller SELLs", async () => {
+  for (const terminalStatus of ["CANCELED", "EXPIRED"]) {
+    const {
+      terminalOrder,
+      workflow,
+      calls,
+      mixedSellReconciliations,
+    } = createTerminalRecoverySellerOrderEventFixture({
+      terminalStatus,
+      executedQuantity: "0.5",
+      fillQuantity: "0.5",
+    })
+    const result = await workflow.processUserDataEventTransition({
+      event: {
+        eventType: "executionReport",
+        executedOrder: terminalOrder,
+      },
+    })
+
+    assert.equal(mixedSellReconciliations.length, 1,
+      `${terminalStatus} must reconcile canonical fills before the STOP decision.`)
+    assert.equal(result.ok, false,
+      `A profitable partial ${terminalStatus} SELL must not complete the Recovery Seller transition.`)
+    assert.equal(calls.recoverySellerStops.length, 1,
+      `A partial ${terminalStatus} SELL must durably latch account-wide STOP.`)
+    assert.equal(calls.recoverySellerStops[0].reason, "RS_TERMINAL_SELL_NOT_FILLED_STOP")
+    assert.equal(calls.recoverySellerStops[0].order, terminalOrder)
+    assert.equal(calls.pauses[0].reason, "RS_TERMINAL_SELL_NOT_FILLED_STOP")
+    assert.deepEqual(calls.completedCycles, [])
+  }
+})
 
 test("routes terminal RS SELL fill history through mixed accounting without Conservative completion", async () => {
   const {
@@ -1257,6 +1297,10 @@ test("routes a zero-fill REJECTED RS SELL through terminal mixed accounting with
         },
       })
     },
+    latchRecoverySellerStop: async (input) => {
+      calls.recoverySellerStops.push(input)
+      return toResult({ data: { durable: true } })
+    },
   })
   const result = await workflow.processUserDataEventTransition({
     event: {
@@ -1265,7 +1309,10 @@ test("routes a zero-fill REJECTED RS SELL through terminal mixed accounting with
     },
   })
 
-  assert.equal(result.ok, true, "A zero-fill REJECTED RS SELL must be a reconciled terminal lifecycle event.")
+  assert.equal(result.ok, false, "A zero-fill REJECTED RS SELL must reconcile facts but fail the terminal transition and latch STOP.")
+  assert.equal(calls.recoverySellerStops.length, 1)
+  assert.equal(calls.recoverySellerStops[0].reason, "RS_TERMINAL_SELL_NOT_FILLED_STOP")
+  assert.equal(calls.pauses[0].reason, "RS_TERMINAL_SELL_NOT_FILLED_STOP")
   assert.equal(mixedSellReconciliations.length, 1)
   assert.deepEqual(mixedSellReconciliations[0].canonicalFills, [])
   assert.deepEqual(calls.completedCycles, [],

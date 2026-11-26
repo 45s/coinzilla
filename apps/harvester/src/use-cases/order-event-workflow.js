@@ -145,6 +145,15 @@ async function reconcileRecoverySellerTerminalSell({
       error: new Error("Recovery Seller FILLED SELL did not meet the approved realized-profitability threshold"),
     })
   }
+  if (result?.ok === true && order.status !== "FILLED") {
+    return pauseAndLatchRecoverySellerTerminalFailure({
+      pause,
+      latchRecoverySellerStop,
+      order,
+      reason: "RS_TERMINAL_SELL_NOT_FILLED_STOP",
+      error: new Error(`Recovery Seller terminal SELL ended as ${order.status}; the cycle remains unresolved`),
+    })
+  }
   if (result?.ok === true) {
     return result
   }

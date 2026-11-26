@@ -417,3 +417,11 @@ The scenario-definition and reporting workstream is tracked in [#1797](https://g
 - CI: the existing Harvester Targeted Tests workflow conditionally runs the scenario suite when related paths change and uploads the generated reports.
 
 The initial inventory has 15 TEST-MAPPED, one PARTIAL, one MISSING (CON-PERSIST-003) and one UNSUPPORTED (runtime restoration) scenario. TEST-MAPPED and PARTIAL are not VERIFIED. Unmapped-test reporting is scoped to the named test set in the critical behavior registry, not every Harvester test file.
+
+
+### 2026-11-26 — Recovery Seller non-FILLED terminal SELL STOP regression
+
+- `src/use-cases/order-event-workflow.test.js` verifies that profitable partial CANCELED and EXPIRED SELLs reconcile canonical fills first, then fail the terminal transition, durably latch account-wide STOP with `RS_TERMINAL_SELL_NOT_FILLED_STOP`, and pause the affected market.
+- The zero-fill REJECTED SELL regression verifies the same fail-closed transition without fabricating an execution fill.
+- Fully FILLED profitable SELL behavior remains the success path; under-target FILLED SELLs retain their distinct profitability STOP.
+- This application-boundary coverage supplements the Recovery Seller domain specification; it does not count as the independent from-scratch scenario suite tracked by #1780.
