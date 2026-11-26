@@ -13,6 +13,7 @@
 - **Contextual navigation refinement — PR #1877 / Issue #1877:** keep the five-item persistent sidebar; reduce Brokers to Markets / Orders / History, with Open Orders / Exchanges nested under Orders and Fills / Commissions under History. Keep the Bots tabs Operators / Orders / Positions / Portfolio. Preserve all existing pages.
 
 - **Theme surface contrast regression — Issue #1876:** ensure shared feature surfaces, controls and tables resolve the selected palette's semantic tokens, including System mode in both OS color schemes.
+- **Markets theme consistency — Issue #1878 / PR #1879:** replace feature-level fixed dark neutral colors with active Dashboard theme tokens so the Markets page honors StarAdmin Warm Light and all selectable palettes. Presentation-only; no market-data or trading behavior changes.
 
 ## Canonical sources
 
