@@ -3,6 +3,7 @@ import test from "node:test"
 
 import {
   DatabaseConflictError,
+  DatabaseOperationOutcomeUnknownError,
   DatabaseProviderError,
 } from "../../domain/errors/database-errors.js"
 import { createMongoRecordOperations } from "./commands.js"
@@ -652,4 +653,98 @@ cursorsKilled: [12] },
   )
   assert.equal(stub.calls[1].killCursors, "coinzilla_cGVvcGxl")
   assert.deepEqual(stub.calls[1].cursors, [12])
+})
+test("MongoDB record operations reject invalid factory configuration", () => {
+  assert.throws(
+    () => createMongoRecordOperations({ command: null, databaseName: "app" }),
+    /command function/,
+  )
+  assert.throws(
+    () => createMongoRecordOperations({ command: async () => ({ ok: 1 }), databaseName: "" }),
+    /database name/,
+  )
+})
+
+test("MongoDB record decoding rejects missing, malformed, and non-canonical encoded user keys", async () => {
+  const prefix = "__coinzilla_key_"
+  for (const key of ["id", `${prefix}!`, `${prefix}Zh`]) {
+    const stub = createCommandStub([{
+      ok: 1,
+      cursor: {
+        id: 0,
+        firstBatch: [{ _id: "one", data: { [key]: "one" } }],
+      },
+    }])
+    const operations = createMongoRecordOperations({
+      command: stub.command,
+      databaseName: "app",
+    })
+    await assert.rejects(
+      operations.readOne({ collection: "people", id: "one" }),
+      (error) => error instanceof DatabaseProviderError
+        && error.cause?.message.includes("encoded MongoDB user key"),
+    )
+  }
+})
+
+test("MongoDB record decoding rejects mismatched stored identifiers", async () => {
+  const stub = createCommandStub([{
+    ok: 1,
+    cursor: {
+      id: 0,
+      firstBatch: [{
+        _id: "envelope-id",
+        data: { __coinzilla_key_aWQ: "different-id" },
+      }],
+    },
+  }])
+  const operations = createMongoRecordOperations({
+    command: stub.command,
+    databaseName: "app",
+  })
+  await assert.rejects(
+    operations.readOne({ collection: "people", id: "envelope-id" }),
+    (error) => error instanceof DatabaseProviderError
+      && error.cause?.message.includes("does not match its document envelope"),
+  )
+})
+
+test("MongoDB write concern timeouts preserve ambiguous write outcomes", async () => {
+  const stub = createCommandStub([{
+    ok: 1,
+    writeConcernError: {
+      code: 64,
+      codeName: "WriteConcernTimeout",
+      errmsg: "write concern timed out",
+    },
+  }])
+  const operations = createMongoRecordOperations({
+    command: stub.command,
+    databaseName: "app",
+  })
+  await assert.rejects(
+    operations.create({
+      collection: "people",
+      record: { id: "one" },
+    }),
+    (error) => error instanceof DatabaseOperationOutcomeUnknownError
+      && error.context.operation === "create",
+  )
+})
+
+test("MongoDB cursor cleanup preserves the original read failure when killCursors fails", async () => {
+  const stub = createCommandStub([
+    { ok: 1, cursor: { id: 12, firstBatch: "malformed" } },
+    new Error("killCursors failed"),
+  ])
+  const operations = createMongoRecordOperations({
+    command: stub.command,
+    databaseName: "app",
+  })
+  await assert.rejects(
+    operations.readMany({ collection: "people" }),
+    (error) => error instanceof DatabaseProviderError
+      && error.cause?.message.includes("cursor.firstBatch"),
+  )
+  assert.equal(stub.calls[1].killCursors, "coinzilla_cGVvcGxl")
 })
