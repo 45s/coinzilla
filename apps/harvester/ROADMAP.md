@@ -1,9 +1,70 @@
 # Harvester Roadmap
 
+## Harvester Conservative ownership and shutdown incident — issue #1856
+
+Implementation in progress in draft [PR #1858](https://github.com/45s/coinzilla/pull/1858),
+branch `fix/harvester/incident-1856-ownership-shutdown-safety`. The original issue body remains
+the durable runtime-evidence record; this entry tracks confirmed source findings and implementation.
+
+### Confirmed source findings
+
+- The durable submission ownership validator was RS-only. It rejected valid CG Conservative
+  recovery SELL ownership even though both strategies share the submission-intent and order
+  registry infrastructure.
+- The local order-registration callback logged `SUBMITTED` while the canonical order was still
+  `PENDING`, before the Operational State Store intent and broker placement were confirmed.
+- A failed durable submission intent removed its local PENDING registration but did not latch a
+  market pause. Later market events could therefore re-evaluate the same SELL decision and allocate
+  fresh client order IDs.
+- Conservative strategy evaluation suppressed a new SELL when any active SELL existed, but did
+  not verify the aggregate remaining quantity of all active owned SELL orders against net sellable
+  Position inventory after base-asset commissions and `keepQuantity`.
+- The shutdown coordinator previously awaited strategy participants without a participant-level
+  deadline or an abort signal. A participant that never settled could leave shutdown waiting
+  without a terminal participant result.
+
+### Implementation recorded on PR #1858
+
+- Introduces strict strategy-aware ownership validation: CG Position-scoped ownership and RS
+  Position/cycle-scoped ownership remain distinct; purpose, side, identifiers and cross-strategy
+  combinations are validated.
+- Carries the ownership returned by local pending-order registration into the durable submission
+  intent and subsequent outcome.
+- Latches `ORDER_INTENT_NOT_DURABLE` after a failed durable intent, removes the local unsubmitted
+  PENDING record and prevents later market ticks from creating replacement client IDs.
+- Labels local registration as `PENDING`, not `SUBMITTED`, with explicit pre-broker diagnostics.
+- Verifies aggregate owned SELL reservations, including PENDING and UNKNOWN orders, against net
+  sellable inventory after commissions and `keepQuantity`.
+- Adds bounded strategy-participant shutdown outcomes, cancellation signals, stage tracking,
+  pending-order identities, last-successful-step diagnostics and a shutdown-handler integration
+  regression for retained services.
+- Documents the separate Operational State Store, Journal, legacy order-history and relational
+  trading-history responsibilities, plus the startup open-order audit contract and shutdown
+  milestones.
+
+### Evidence boundaries and remaining work
+
+- The DOGE client IDs `...-12`, `...-14`, `...-18`, `...-20`, and `...-22` remain
+  UNKNOWN until canonical client-order-ID exchange reconciliation establishes their outcomes.
+  The incident trace does not prove acknowledgements, fills or cancellations for each ID.
+- The account-wide `readiness=BLOCKED` value is the captured unowned-order audit classification.
+  With `externalOrdersPolicy: ignore`, those orders remain external and untouched; engine
+  activation is distinct from the user-data `canTrade` gate. Required snapshot, persistence and
+  user-data readiness failures still block.
+- The relational trading-history warning is not evidence that Journal or Operational State Store
+  durability failed. PR #1855 improves diagnostics; the exact operator database cause remains
+  unconfirmed.
+- No source/test evidence currently establishes `DYNAMIC_PRICE_BAND` or
+  `OPEN_ORDER_COUNT_PER_MARKET` as a cause of this incident.
+- Targeted offline tests, integration/concurrency/restart coverage, exact-head CI verification,
+  final issue/PR checklist reconciliation and review readiness remain outstanding. Do not treat
+  this incident as operationally resolved.
+
 ## Relational trading-history startup failure — issue #1854
 
-In progress in [PR #1855](https://github.com/45s/coinzilla/pull/1855), branch
-`fix/harvester/1854-trading-history-persistence-startup`.
+Diagnostic implementation complete in merged [PR #1855](https://github.com/45s/coinzilla/pull/1855).
+The exact operator-database migration failure remains unconfirmed; the merged change improves the
+failure evidence and preserves fail-closed migration behavior.
 
 The 2026-11-26 operator run retained legacy order history but reported relational trading-history
 persistence unavailable, skipped exchange-history synchronization, and did not start the local
