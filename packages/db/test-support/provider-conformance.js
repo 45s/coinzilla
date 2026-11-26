@@ -370,6 +370,22 @@ async function createScalarSortRecords(database) {
       id: "string-2",
       rank: "2",
     },
+    {
+      id: "array-2",
+      rank: [2],
+    },
+    {
+      id: "array-1",
+      rank: [1],
+    },
+    {
+      id: "array-1-tie",
+      rank: [1],
+    },
+    {
+      id: "object",
+      rank: { a: 1 },
+    },
   ]
 
   for (const record of records) {
@@ -394,8 +410,8 @@ async function verifyScalarSortAscending(database) {
   })
   assert.deepEqual(
     ascending.map((record) => record.id),
-    ["missing", "null", "false", "true", "number-2", "number-10", "string-10", "string-2"],
-    "Ascending scalar sorting must order null/missing, booleans, numbers, and strings consistently",
+    ["missing", "null", "false", "true", "number-2", "number-10", "string-10", "string-2", "array-1", "array-1-tie", "array-2", "object"],
+    "Ascending sorting must order null/missing, booleans, numbers, strings, arrays and objects consistently",
   )
 }
 
@@ -413,8 +429,8 @@ async function verifyScalarSortDescending(database) {
   })
   assert.deepEqual(
     descending.map((record) => record.id),
-    ["string-2", "string-10", "number-10", "number-2", "true", "false", "missing", "null"],
-    "Descending scalar sorting must reverse value/type order while keeping the identifier tie-breaker ascending",
+    ["object", "array-2", "array-1", "array-1-tie", "string-2", "string-10", "number-10", "number-2", "true", "false", "missing", "null"],
+    "Descending sorting must reverse value/type order while keeping the identifier tie-breaker ascending",
   )
 }
 
@@ -944,7 +960,7 @@ function registerQueryTests({ name, createDatabase, capabilities, storageMode, c
       verify: verifySorting,
     },
     {
-      description: "sorting uses portable JSON scalar ordering",
+      description: "sorting uses portable JSON value ordering",
       capability: "sorting",
       verify: verifyScalarSortOrdering,
     },
