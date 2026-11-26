@@ -98,7 +98,7 @@ function mapMongoError({ error, operation, collection }) {
   })
 }
 
-async function runMongoCommand({ command, body, operation, collection }) {
+async function runMongoCommand({ command, body, sequences, operation, collection }) {
   try {
     const response = await command({
       body: {
@@ -234,10 +234,13 @@ function createMongoRecordOperations({ command, databaseName }) {
       collection,
       body: {
         insert: mongoCollection,
-        documents: [createStoredDocument(snapshot)],
         ordered: true,
         $db: databaseName,
       },
+      sequences: [{
+        identifier: "documents",
+        documents: [createStoredDocument(snapshot)],
+      }],
     })
     return snapshot
   }
