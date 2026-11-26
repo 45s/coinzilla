@@ -277,16 +277,28 @@ test("MongoDB provider coalesces connects and makes close idempotent", async () 
     harness.provider.connect(),
   ])
   assert.equal(harness.transports.length, 1)
+  await harness.provider.connect()
   await Promise.all([
     harness.provider.close(),
     harness.provider.close(),
   ])
   assert.equal(harness.transports[0].closed, true)
   await assert.rejects(harness.provider.connect(), /closed/)
+  await harness.provider.close()
 })
 
 test("MongoDB provider rejects invalid operation callbacks and unsupported operations", async () => {
   const harness = createProviderHarness({ transactionSupported: true })
+  await assert.rejects(
+    harness.provider.execute({
+      operation: "create",
+      input: {
+        collection: "people",
+        record: { id: "before-connect" },
+      },
+    }),
+    /must be connected/,
+  )
   await harness.provider.connect()
   await assert.rejects(
     harness.provider.withTransaction(null),
@@ -512,6 +524,21 @@ id: "one" })
         await transaction.readMany({ collection: "people" })
       }),
       /one provider-neutral read operation/,
+    )
+    await assert.rejects(
+      provider.withReadTransaction((transaction) => transaction.create({
+        collection: "people",
+        record: { id: "one" },
+      })),
+      /cannot execute mutations/,
+    )
+    await assert.rejects(
+      provider.withReadTransaction((transaction) => transaction.update({
+        collection: "people",
+        id: "one",
+        changes: { name: "Ada" },
+      })),
+      /cannot execute mutations/,
     )
     await assert.rejects(
       provider.withReadTransaction((transaction) => transaction.delete({
