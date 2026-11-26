@@ -52,11 +52,10 @@ function validateEvidenceContext({ context, configuredMarkets }) {
   }
 }
 
-function validateActiveUserDataAccountBlockers({ projection, blockerIds }) {
+function getActiveUserDataAccountBlockers(projection) {
   const blockers = (projection.stickySafetyBlockers ?? [])
     .filter(({ scope }) => scope === "ACCOUNT")
   if (blockers.length === 0 ||
-      !sameStringSet(blockers.map(({ blockerId }) => blockerId), blockerIds) ||
       blockers.some(({ producer }) => producer !== "USER_DATA_EVENT_HANDLER")) {
     throw new Error("Active ACCOUNT blockers are not exclusively user-data sourced")
   }
@@ -94,9 +93,11 @@ function validateMarketAudit({ symbol, result, accountSnapshotSourceTime }) {
       audit.accountSnapshot?.sourceTime !== accountSnapshotSourceTime ||
       !Number.isSafeInteger(audit.balancesChecked) ||
       audit.balancesChecked <= 0) {
-    const error = result?.errors?.[0] ?? new Error(`Account-wide reconciliation did not prove ${symbol} READY`)
-    error.message = `${symbol}: ${error.message}`
-    throw error
+    const cause = result?.errors?.[0]
+    throw new Error(
+      `${symbol}: ${cause?.message ?? "account-wide reconciliation did not prove READY"}`,
+      { cause },
+    )
   }
   return {
     symbol,
@@ -190,12 +191,7 @@ export async function runOfflineAccountBlockerResolution({
       runtimeSessionId: context.runtimeSessionId,
     })
     validateEvidenceContext({ context, configuredMarkets })
-    const blockers = validateActiveUserDataAccountBlockers({
-      projection: projection.data,
-      blockerIds: (projection.data.stickySafetyBlockers ?? [])
-        .filter(({ scope }) => scope === "ACCOUNT")
-        .map(({ blockerId }) => blockerId),
-    })
+    const blockers = getActiveUserDataAccountBlockers(projection.data)
     const blockerIds = blockers.map(({ blockerId }) => blockerId).sort()
     const marketAudits = await auditAllConfiguredMarkets({
       context,
