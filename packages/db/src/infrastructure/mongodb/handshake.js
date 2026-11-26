@@ -89,7 +89,8 @@ export function parseMongoConnectionString(connectionString) {
   if (/[\\/\\\\."$*<>:|?]/u.test(databaseName) || databaseName.includes("\0")) {
     throw new TypeError("MongoDB database name contains an unsupported character")
   }
-  if (parseBooleanOption({ value: url.searchParams.get("loadBalanced"), name: "loadBalanced" })) {
+  if (parseBooleanOption({ value: url.searchParams.get("loadBalanced"),
+name: "loadBalanced" })) {
     throw new TypeError("MongoDB load-balanced topology is not supported")
   }
   if (url.searchParams.has("compressors") && url.searchParams.get("compressors") !== "") {
@@ -98,7 +99,8 @@ export function parseMongoConnectionString(connectionString) {
   if (url.searchParams.has("readPreference") && url.searchParams.get("readPreference") !== "primary") {
     throw new TypeError("MongoDB provider supports primary read preference only")
   }
-  if (parseBooleanOption({ value: url.searchParams.get("retryWrites"), name: "retryWrites" })) {
+  if (parseBooleanOption({ value: url.searchParams.get("retryWrites"),
+name: "retryWrites" })) {
     throw new TypeError("MongoDB retryable writes are not supported")
   }
   const authSource = url.searchParams.get("authSource") ?? databaseName
@@ -125,11 +127,17 @@ export function parseMongoConnectionString(connectionString) {
     databaseName,
     authSource,
     authMechanism: url.searchParams.get("authMechanism") ?? undefined,
-    tls: parseBooleanOption({ value: tlsValue, name: "tls" }),
+    tls: parseBooleanOption({ value: tlsValue,
+name: "tls" }),
     replicaSet: url.searchParams.get("replicaSet") ?? undefined,
-    directConnection: parseBooleanOption({ value: url.searchParams.get("directConnection"), name: "directConnection" }),
-    connectTimeoutMS: parsePositiveInteger({ value: url.searchParams.get("connectTimeoutMS"), name: "connectTimeoutMS", fallback: 10_000 }),
-    socketTimeoutMS: parsePositiveInteger({ value: url.searchParams.get("socketTimeoutMS"), name: "socketTimeoutMS", fallback: 30_000 }),
+    directConnection: parseBooleanOption({ value: url.searchParams.get("directConnection"),
+name: "directConnection" }),
+    connectTimeoutMS: parsePositiveInteger({ value: url.searchParams.get("connectTimeoutMS"),
+name: "connectTimeoutMS",
+fallback: 10_000 }),
+    socketTimeoutMS: parsePositiveInteger({ value: url.searchParams.get("socketTimeoutMS"),
+name: "socketTimeoutMS",
+fallback: 30_000 }),
   }
 }
 
@@ -211,7 +219,8 @@ export async function performMongoHandshake({
   const hello = await transport.command({
     body: helloCommand,
   })
-  assertCommandSucceeded({ response: hello, commandName: "hello" })
+  assertCommandSucceeded({ response: hello,
+commandName: "hello" })
   if (hello.serviceId !== undefined) {
     throw new Error("MongoDB load-balanced topology is not supported")
   }

@@ -157,7 +157,8 @@ export async function authenticateMongoScram({
       $db: authSource,
     },
   })
-  assertCommandSucceeded({ response: startResponse, stage: "start" })
+  assertCommandSucceeded({ response: startResponse,
+stage: "start" })
   if (startResponse.done) {
     throw new Error("MongoDB SCRAM server completed authentication before client proof")
   }

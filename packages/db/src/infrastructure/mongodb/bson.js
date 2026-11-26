@@ -71,14 +71,17 @@ function encodeNumber(value) {
   if (Number.isSafeInteger(value) && value >= INT32_MIN && value <= INT32_MAX) {
     const bytes = Buffer.allocUnsafe(4)
     bytes.writeInt32LE(value)
-    return { type: 0x10, bytes }
+    return { type: 0x10,
+bytes }
   }
   if (Number.isSafeInteger(value)) {
-    return { type: 0x12, bytes: encodeInt64(value) }
+    return { type: 0x12,
+bytes: encodeInt64(value) }
   }
   const bytes = Buffer.allocUnsafe(8)
   bytes.writeDoubleLE(value)
-  return { type: 0x01, bytes }
+  return { type: 0x01,
+bytes }
 }
 
 function encodeBinary(value) {
@@ -87,7 +90,8 @@ function encodeBinary(value) {
   bytes.writeInt32LE(binary.bytes.length, 0)
   bytes[4] = binary.subtype
   binary.bytes.copy(bytes, 5)
-  return { type: 0x05, bytes }
+  return { type: 0x05,
+bytes }
 }
 
 function encodeDate(value) {
@@ -95,24 +99,29 @@ function encodeDate(value) {
   if (!Number.isFinite(timestamp)) {
     throw new TypeError("BSON dates must be valid")
   }
-  return { type: 0x09, bytes: encodeInt64(timestamp) }
+  return { type: 0x09,
+bytes: encodeInt64(timestamp) }
 }
 
 function encodePrimitive(value) {
   if (value === null) {
-    return { type: 0x0A, bytes: Buffer.alloc(0) }
+    return { type: 0x0A,
+bytes: Buffer.alloc(0) }
   }
   if (typeof value === "string") {
-    return { type: 0x02, bytes: encodeString(value) }
+    return { type: 0x02,
+bytes: encodeString(value) }
   }
   if (typeof value === "boolean") {
-    return { type: 0x08, bytes: Buffer.from([Number(value)]) }
+    return { type: 0x08,
+bytes: Buffer.from([Number(value)]) }
   }
   if (typeof value === "number") {
     return encodeNumber(value)
   }
   if (typeof value === "bigint") {
-    return { type: 0x12, bytes: encodeInt64(value) }
+    return { type: 0x12,
+bytes: encodeInt64(value) }
   }
   if (Buffer.isBuffer(value) || value instanceof BsonBinary) {
     return encodeBinary(value)
@@ -150,18 +159,25 @@ function encodeArrayElement({ value, ancestors, depth }) {
     }
     entries.push([String(index), value[index]])
   }
-  const bytes = encodeDocumentEntries({ entries, ancestors, depth: depth + 1 })
+  const bytes = encodeDocumentEntries({ entries,
+ancestors,
+depth: depth + 1 })
   ancestors.delete(value)
-  return { type: 0x04, bytes }
+  return { type: 0x04,
+bytes }
 }
 
 function encodeObjectElement({ value, ancestors, depth }) {
-  assertDocument({ value, ancestors })
+  assertDocument({ value,
+ancestors })
   ancestors.add(value)
   const entries = collectDocumentEntries({ document: value })
-  const bytes = encodeDocumentEntries({ entries, ancestors, depth: depth + 1 })
+  const bytes = encodeDocumentEntries({ entries,
+ancestors,
+depth: depth + 1 })
   ancestors.delete(value)
-  return { type: 0x03, bytes }
+  return { type: 0x03,
+bytes }
 }
 
 function encodeElement({ value, ancestors, depth }) {
@@ -170,8 +186,12 @@ function encodeElement({ value, ancestors, depth }) {
     return primitive
   }
   return Array.isArray(value)
-    ? encodeArrayElement({ value, ancestors, depth })
-    : encodeObjectElement({ value, ancestors, depth })
+    ? encodeArrayElement({ value,
+ancestors,
+depth })
+    : encodeObjectElement({ value,
+ancestors,
+depth })
 }
 
 function encodeDocumentEntries({ entries, ancestors, depth = 0 }) {
@@ -209,10 +229,13 @@ depth })
  */
 export function encodeBsonDocument(document) {
   const ancestors = new Set()
-  assertDocument({ value: document, ancestors })
+  assertDocument({ value: document,
+ancestors })
   ancestors.add(document)
   const entries = collectDocumentEntries({ document })
-  const result = encodeDocumentEntries({ entries, ancestors, depth: 0 })
+  const result = encodeDocumentEntries({ entries,
+ancestors,
+depth: 0 })
   ancestors.delete(document)
   return result
 }
