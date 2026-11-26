@@ -305,7 +305,7 @@ test("MongoDB transport fails closed when socket writes fail", async () => {
   await transport.connect()
   const { socket } = fake
   socket.write = (...argumentsList) => {
-    const callback = argumentsList[1]
+    const [, callback] = argumentsList
     callback(new Error("write failed"))
     return false
   }
@@ -343,7 +343,7 @@ test("MongoDB TLS transport waits for secureConnect rather than plain connect", 
   class TlsSocket extends EventEmitter {
     setNoDelay() {}
     write(...argumentsList) {
-      const [_frame, callback] = argumentsList
+      const [, callback] = argumentsList
       callback?.()
       return true
     }
