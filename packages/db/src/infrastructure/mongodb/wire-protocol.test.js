@@ -63,10 +63,12 @@ test("OP_MSG rejects truncated, oversized, and unsupported messages", () => {
 
 
 test("OP_MSG rejects unknown required flag bits", () => {
-  const message = encodeOpMsg({
-    requestId: 3,
-    flags: 4,
-    body: { ping: 1 },
-  })
-  assert.throws(() => decodeOpMsg(message), /unsupported.*flag/i)
+  assert.throws(
+    () => encodeOpMsg({
+      requestId: 3,
+      flags: 4,
+      body: { ping: 1 },
+    }),
+    /unsupported.*flag/i,
+  )
 })
