@@ -364,21 +364,16 @@ test("MongoDB handshake rejects replica-set mismatches and secondaries without a
   )
 })
 
-test("MongoDB handshake detects standalone, replica-set, and sharded topologies", async () => {
-  for (const [hello, topology] of [
+test("MongoDB handshake exposes only standalone and replica-set support", async () => {
+  for (const [hello, topology, transactionSupported] of [
     [{ isWritablePrimary: true,
 minWireVersion: 13,
-maxWireVersion: 17 }, "standalone"],
+maxWireVersion: 17 }, "standalone", false],
     [{ isWritablePrimary: true,
 setName: "rs0",
 minWireVersion: 13,
 maxWireVersion: 21,
-logicalSessionTimeoutMinutes: 30 }, "replicaSet"],
-    [{ isWritablePrimary: true,
-msg: "isdbgrid",
-minWireVersion: 13,
-maxWireVersion: 25,
-logicalSessionTimeoutMinutes: 30 }, "sharded"],
+logicalSessionTimeoutMinutes: 30 }, "replicaSet", true],
   ]) {
     const commands = []
     const result = await performMongoHandshake({
@@ -393,6 +388,7 @@ logicalSessionTimeoutMinutes: 30 }, "sharded"],
     })
 
     assert.equal(result.topology, topology)
+    assert.equal(result.transactionSupported, transactionSupported)
     assert.equal(commands[0].hello, 1)
     assert.equal(commands[0].$db, "admin")
   }
