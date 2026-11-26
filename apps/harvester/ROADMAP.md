@@ -112,6 +112,10 @@ The remaining engine-suite oracle cleanup is not complete. [#1772](https://githu
 
 **Next:** decompose the 33 overlong test/helper functions into cohesive, lint-compliant units, then correct the SELL Fill default and remaining financial comparisons. Do not suppress ESLint, weaken policy, or change production behavior. Phase 2 remains in progress until the exact financial oracles are corrected or a narrower evidence-backed disposition is agreed.
 
+### Phase 5–6 checkpoint — 2026-11-26
+
+Open [PR #1844](https://github.com/45s/coinzilla/pull/1844) adds the composed Conservative SELL-accounting scenario and initial BUY/SELL strategy-evaluation composition. Current head `b7b8780d274a968a0e90ba4688e7a23914bfeed2` is 24 commits ahead / 0 behind current `develop`; all six required workflows passed on that exact head. PR #1844 remains open for owner review and is not merged, so this evidence is not yet part of `develop`. Issue #1763 remains open for the later state-machine, event-ordering/idempotency, fail-closed, inventory/market-constraint, application-integration, replay and source-to-test closure phases. Do not mark the initiative complete based on this increment.
+
 ### Small-PR operating protocol
 
 For each slice:
