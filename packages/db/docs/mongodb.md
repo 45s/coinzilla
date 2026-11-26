@@ -94,6 +94,8 @@ flowchart TD
   G -->|Retry not sent after earlier ambiguous attempt| H
 ```
 
+The sharded recovery-token requirement follows the [MongoDB Transactions Specification at pinned commit `2f6258c99955394d05babb85e3d3599c2addb02c`](https://github.com/mongodb/specifications/blob/2f6258c99955394d05babb85e3d3599c2addb02c/source/transactions/transactions.md#recoverytoken-field) and the [official Node.js driver's transaction session implementation](https://github.com/mongodb/node-mongodb-native/blob/2ed780df2a57884c3fa597da9ebbb6256ae0a5ea/src/sessions.ts).
+
 An unknown commit outcome is not a rollback. Application code must reconcile the affected records/state before deciding whether to retry. The provider never automatically replays a transaction callback. A non-transactional create/update/delete whose request was sent but whose response is lost raises `DatabaseOperationOutcomeUnknownError`; the provider does not replay the write. A read timeout or a write rejected before it is sent remains a `DatabaseProviderError`.
 
 ## Lifecycle and failure behavior

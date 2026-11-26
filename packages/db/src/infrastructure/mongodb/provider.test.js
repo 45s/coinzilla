@@ -217,13 +217,15 @@ test("MongoDB sharded commit retries with the latest recovery token", async () =
     { shard: "shard-3", generation: 3 },
   ]
   let commitAttempts = 0
-  const { provider, calls } = createProviderHarness({
+  const commitTokens = []
+  const { provider } = createProviderHarness({
     topology: "sharded",
     transactionSupported: true,
     commandHandler: async (body) => {
       if (body.insert) return { ok: 1, n: 1, recoveryToken: recoveryTokens[0] }
       if (body.commitTransaction === 1) {
         commitAttempts += 1
+        commitTokens.push(body.recoveryToken)
         if (commitAttempts === 1) {
           return {
             ok: 1,
@@ -244,10 +246,9 @@ test("MongoDB sharded commit retries with the latest recovery token", async () =
       collection: "people",
       record: { id: "sharded-commit-retry" },
     }))
-    const commits = calls.filter((body) => body.commitTransaction === 1)
-    assert.equal(commits.length, 2)
-    assert.deepEqual(commits[0].recoveryToken, recoveryTokens[0])
-    assert.deepEqual(commits[1].recoveryToken, recoveryTokens[1])
+    assert.equal(commitTokens.length, 2)
+    assert.deepEqual(commitTokens[0], recoveryTokens[0])
+    assert.deepEqual(commitTokens[1], recoveryTokens[1])
   } finally {
     await database.close()
   }
