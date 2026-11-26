@@ -11,7 +11,7 @@
 | --- | --- | --- |
 | Conservative ownership and shutdown incident | [#1856](https://github.com/45s/coinzilla/issues/1856) | Fix merged in [PR #1858](https://github.com/45s/coinzilla/pull/1858). Issue remains open for historical exchange-identity and original-runtime evidence; do not claim the old run's final STOP/process/lock outcome without its evidence. |
 | Conservative exhaustive scenario coverage | [#1763](https://github.com/45s/coinzilla/issues/1763) | Active source-mapped scenario matrix and exact-head evidence. |
-| Recovery Seller terminal SELL acceptance | [#1842](https://github.com/45s/coinzilla/issues/1842) | Core transition/STOP fix is in merged [PR #1837](https://github.com/45s/coinzilla/pull/1837); issue remains open for acceptance. Keep execution fail-closed until the remaining scenario and isolation gates pass. |
+| Recovery Seller terminal SELL acceptance | [#1842](https://github.com/45s/coinzilla/issues/1842) | Confirmed non-FILLED terminal SELL STOP gap is under implementation in [PR #1875](https://github.com/45s/coinzilla/pull/1875); retain fail-closed execution until exact-head tests and remaining scenario/isolation gates pass. |
 | Multi-provider execution and market-data routing | [#1339](https://github.com/45s/coinzilla/issues/1339) | Harvester-owned cross-provider backlog; keep provider contracts and routing boundaries explicit. |
 | Relational trading-history startup diagnosis | [#1854](https://github.com/45s/coinzilla/issues/1854) | Diagnostic evidence merged in [PR #1855](https://github.com/45s/coinzilla/pull/1855). The exact operator-database migration failure remains unconfirmed; preserve fail-closed migration behavior. |
 | Binance historical order identity evidence | [#1851](https://github.com/45s/coinzilla/issues/1851) | Identity correction merged in [PR #1849](https://github.com/45s/coinzilla/pull/1849); original historical row pairing remains unproven. |
@@ -54,3 +54,5 @@ Current scenarios use simulated infrastructure and run-local state. No real brok
 - Follow accepted Harvester ADRs and architecture/domain documents for decisions and contracts.
 - Keep detailed implementation plans in the owning issue or scoped plan; this page is only the active priority index.
 - Never use this roadmap as authority for strategy rules, API contracts, or acceptance evidence.
+
+- Recovery Seller non-FILLED terminal SELLs require a durable account STOP after canonical fill reconciliation. Partial CANCELED/EXPIRED and zero-fill REJECTED outcomes remain unresolved under the account-wide STOP; canonical terminal accounting may release the terminal order reservation after all fills are reconciled. Profitable partial proceeds do not relax the STOP rule.

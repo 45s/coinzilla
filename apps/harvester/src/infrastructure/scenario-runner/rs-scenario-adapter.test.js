@@ -173,7 +173,7 @@ test("production RS submitter records a rejected SELL and invokes the STOP workf
     "The unresolved rejected SELL must retain its sole-cycle reservation.")
 })
 
-test("production RS accounting reconciles a profitable partial CANCELED SELL without closing its cycle", async () => {
+test("production RS accounting durably stops after a profitable partial CANCELED SELL", async () => {
   const result = await executeRecoverySellerRuntimeScenario({
     runId: "run-rs-runtime-partial-cancel",
     scenarioId: "RS-RUNTIME-SELL-PARTIAL-CANCEL-001",
@@ -189,8 +189,10 @@ test("production RS accounting reconciles a profitable partial CANCELED SELL wit
   assert.equal(result.output.terminalSell.cycleState.status, "UNRESOLVED")
   assert.equal(result.output.terminalSell.cycleState.terminalReconciled, true)
   assert.equal(result.output.terminalSell.eventFillStaged, true)
-  assert.equal(result.output.terminalSell.eventWorkflowReconciled, true)
-  assert.equal(result.output.reservedSellCycle, null)
+  assert.equal(result.output.terminalSell.eventWorkflowFailedClosed, true)
+  assert.equal(result.output.terminalSell.stopFactAppended, true)
+  assert.equal(result.output.reservedSellCycle, null,
+    "Canonical terminal accounting releases the terminal order reservation; account STOP remains active.")
   assert.ok(result.output.simulationFacts.some((fact) =>
     fact.factType === "RECOVERY_SELLER_MIXED_SELL_RECONCILED"))
 })
