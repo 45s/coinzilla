@@ -75,3 +75,4 @@ process.on("message", async (message) => {
   })
   process.disconnect?.()
 })
+\nprocess.send?.({ type: "ready" })\n
