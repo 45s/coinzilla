@@ -332,6 +332,41 @@ test("providers can reject multi-document transactions while retaining single-op
   }
 })
 
+
+test("provider composition accepts topology-dependent transaction guarantees", async () => {
+  const capabilities = {
+    transactions: {
+      callbackMode: "asynchronous",
+      nestedTransactions: false,
+      multiDocument: "topology-dependent",
+    },
+    queries: {
+      equalityFilters: true,
+      sorting: true,
+      pagination: true,
+    },
+    storage: {
+      modes: ["server"],
+    },
+  }
+  const provider = createProvider({ capabilities })
+  const database = createDatabase({ provider })
+  await database.connect()
+
+  try {
+    assert.equal(
+      database.capabilities.transactions.multiDocument,
+      "topology-dependent",
+    )
+    assert.equal(
+      await database.transaction(() => "delegated"),
+      undefined,
+    )
+  } finally {
+    await database.close()
+  }
+})
+
 test("provider composition rejects missing and array capability declarations", () => {
   for (const capabilities of [null, [], "not-an-object"]) {
     assert.throws(
