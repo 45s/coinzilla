@@ -499,6 +499,35 @@ function confirmWorkerExecutionStarted({ signal, onStarted }) {
   return true
 }
 
+function dispatchScenarioExecution({
+  child,
+  execution,
+  runId,
+  strategyId,
+  scenarioId,
+  input,
+  terminationGraceMs,
+}) {
+  try {
+    child.send({
+      type: "execute",
+      runId,
+      strategyId,
+      scenarioId,
+      input,
+    })
+  } catch (error) {
+    void terminateChild({
+      child,
+      graceMs: terminationGraceMs,
+    }).then(() => execution.fail({
+      error,
+    })).catch((cleanupError) => execution.fail({
+      error: cleanupError,
+      preserveChild: true,
+    }))
+  }
+}
 function createWorkerExecutor({
   strategyId,
   spawnSandboxedWorker,
@@ -531,28 +560,21 @@ function createWorkerExecutor({
       terminationGraceMs,
       maxOutputBytes,
       onReady: () => {
-        if (signal?.aborted) {
+        if (!confirmWorkerReadiness({
+          signal,
+          onStarted,
+        })) {
           return
         }
-        try {
-          child.send({
-            type: "execute",
-            runId,
-            strategyId,
-            scenarioId,
-            input,
-          })
-        } catch (error) {
-          void terminateChild({
-            child,
-            graceMs: terminationGraceMs,
-          }).then(() => execution.fail({
-            error,
-          })).catch((cleanupError) => execution.fail({
-            error: cleanupError,
-            preserveChild: true,
-          }))
-        }
+        dispatchScenarioExecution({
+          child,
+          execution,
+          runId,
+          strategyId,
+          scenarioId,
+          input,
+          terminationGraceMs,
+        })
       },
       onStarted: () => {
         confirmWorkerExecutionStarted({

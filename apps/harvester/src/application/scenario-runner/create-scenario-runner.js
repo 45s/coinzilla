@@ -920,40 +920,18 @@ function createRunnerContext({
   }
 }
 
-export function createScenarioRunner({
-  adapters = [],
-  createRunId = () => crypto.randomUUID(),
-  now = () => new Date().toISOString(),
-  timeoutMs = 30_000,
-  maxStoredRuns = 100,
-  maxConcurrentRuns = 2,
-  maxQueuedRuns = 10,
-  canExecuteScenario = () => true,
-  validateScenarioInput = () => ({
-    valid: true,
-    errors: [],
-  }),
-  onUpdate,
-  sourceRevision = null,
-} = {}) {
-  if (sourceRevision !== null && sourceRevision !== undefined &&
-      (typeof sourceRevision !== "string" || !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/i.test(sourceRevision))) {
+function normalizeSourceRevision({ sourceRevision }) {
+  if (sourceRevision === null || sourceRevision === undefined) {
+    return null
+  }
+  if (typeof sourceRevision !== "string" ||
+      !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/i.test(sourceRevision)) {
     throw new TypeError("Scenario Runner source revision must be a full Git commit SHA")
   }
-  const normalizedSourceRevision = sourceRevision?.toLowerCase() ?? null
-  const context = createRunnerContext({
-    adapters,
-    createRunId,
-    now,
-    timeoutMs,
-    maxStoredRuns,
-    maxConcurrentRuns,
-    maxQueuedRuns,
-    canExecuteScenario,
-    validateScenarioInput,
-    onUpdate,
-    sourceRevision: normalizedSourceRevision,
-  })
+  return sourceRevision.toLowerCase()
+}
+
+function createScenarioRunnerApi({ context }) {
   return Object.freeze({
     submit: (submission) => submitRun({
       context,
@@ -980,4 +958,14 @@ export function createScenarioRunner({
       context,
     }),
   })
+}
+
+export function createScenarioRunner(options = {}) {
+  const context = createRunnerContext({
+    ...options,
+    sourceRevision: normalizeSourceRevision({
+      sourceRevision: options.sourceRevision,
+    }),
+  })
+  return createScenarioRunnerApi({ context })
 }

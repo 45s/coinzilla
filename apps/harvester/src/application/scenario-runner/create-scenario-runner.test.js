@@ -618,7 +618,10 @@ test("runner records the exact source revision and replays the original scenario
   const original = runner.submit({
     strategyId: "example",
     scenarioId: "scenario-original",
-    input: { market: "ZROUSDT", investment: "100" },
+    input: {
+      market: "ZROUSDT",
+      investment: "100",
+    },
   })
   const completedOriginal = await runner.waitForRun(original.runId)
 
@@ -636,8 +639,14 @@ test("runner records the exact source revision and replays the original scenario
   assert.deepEqual(completedReplay.input, completedOriginal.input,
     "A replay must reuse the original validated input snapshot rather than current scenario defaults.")
   assert.deepEqual(receivedInputs, [
-    { market: "ZROUSDT", investment: "100" },
-    { market: "ZROUSDT", investment: "100" },
+    {
+      market: "ZROUSDT",
+      investment: "100",
+    },
+    {
+      market: "ZROUSDT",
+      investment: "100",
+    },
   ], "The adapter must receive the same original input for the initial run and its replay.")
 })
 

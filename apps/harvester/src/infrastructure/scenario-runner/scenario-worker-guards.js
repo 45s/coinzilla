@@ -70,7 +70,8 @@ function installModuleGuards() {
   }
   if (typeof Module.registerHooks === "function") {
     Module.registerHooks({
-      resolve(specifier, context, nextResolve) {
+      resolve(...hookArguments) {
+        const [specifier, context, nextResolve] = hookArguments
         const normalized = specifier.replace(/^node:/, "")
         if (forbiddenModules.has(normalized) && !isNodeInternalParent({
           identifier: context.parentURL,

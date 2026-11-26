@@ -243,7 +243,10 @@ test("derives the source revision from a clean Git checkout when build metadata 
     startServer: async (input) => {
       serverInput = input
       return {
-        address: { address: "127.0.0.1", port: 4201 },
+        address: {
+          address: "127.0.0.1",
+          port: 4201,
+        },
         close: async () => {},
       }
     },

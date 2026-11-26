@@ -21,4 +21,5 @@ process.on("message", (request) => {
     },
   })
 })
-\nprocess.send?.({ type: "ready" })\n
+
+process.send?.({ type: "ready" })
