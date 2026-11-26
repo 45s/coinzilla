@@ -749,20 +749,6 @@ async function reconcileRuntimeScenarioPartialSell({ runtime, execution, effecti
     commissions: [],
     commissionStatus: "COMPLETE",
   })
-  const reconciliation = createMixedSellFillReconciliation({
-    order: openOrder,
-    orderRegistry,
-  })
-  const allocation = createMixedSellFillAllocation({
-    fill,
-    orderRegistry: terminalRegistry,
-    recoveryQuantity: "2.49",
-    legacyQuantity: "0.01",
-  })
-  const staged = stageMixedSellFillAllocation({
-    reconciliation,
-    allocation,
-  })
   const stagedSellFills = []
   let terminalAccountingResult
   const eventState = {
