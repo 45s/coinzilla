@@ -4,8 +4,6 @@ import { fork } from "node:child_process"
 import { fileURLToPath } from "node:url"
 import { createScenarioRunnerHost } from "./create-scenario-runner-host.js"
 import { createProcessScenarioAdapter } from "../scenario-runner/create-process-scenario-adapter.js"
-import { getRecoverySellerRunnerCatalog } from "../scenario-runner/rs-scenario-adapter.js"
-
 const TEST_WORKER_PATH = fileURLToPath(new URL(
   "../../../test/scenarios/recovery-seller/rs-runtime-worker-fixture.js",
   import.meta.url,
@@ -31,13 +29,28 @@ function createTestSandboxLauncher() {
 }
 
 test("host executes the test-only RS runtime fixture through a real process worker", async () => {
-  const scenario = getRecoverySellerRunnerCatalog()[0]
-  const testOnlyScenario = {
-    ...scenario,
+  const scenario = {
+    id: "RS-TEST-ONLY-RUNTIME-DISPATCH",
+    name: "Test-only production runtime dispatch through simulated infrastructure",
+    layer: "APPLICATION",
     status: "TEST_ONLY",
     executionStatus: "EXECUTABLE",
     executable: true,
     readinessReasons: [],
+    inputSchema: {
+      type: "object",
+      required: ["marketPrice"],
+      additionalProperties: false,
+      properties: {
+        marketPrice: {
+          type: "string",
+          pattern: "^(?:0|[1-9][0-9]*)(?:[.][0-9]+)?$",
+        },
+      },
+    },
+    input: {
+      marketPrice: "12.3",
+    },
   }
   const adapter = createProcessScenarioAdapter({
     strategyId: "RS",
@@ -46,7 +59,7 @@ test("host executes the test-only RS runtime fixture through a real process work
   const updates = []
   const host = createScenarioRunnerHost({
     adapters: [adapter],
-    scenarioCatalog: [testOnlyScenario],
+    scenarioCatalog: [scenario],
     eventBus: {
       publish: (event) => updates.push(event),
     },
