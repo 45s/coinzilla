@@ -21,4 +21,4 @@
 - Public API and implementation: package source and tests
 - Task status: GitHub Issues/PRs
 
-The previous detailed delivery record and contract notes are preserved in [ROADMAP_HISTORY_2026-11-26.md](./ROADMAP_HISTORY_2026-11-26.md).
+The previous detailed delivery record and contract notes are preserved in [ROADMAP_HISTORY_2026-11-26.md](../../docs/archive/roadmap-history-2026-11-26.md#database-roadmap).
