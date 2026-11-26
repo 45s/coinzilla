@@ -19,6 +19,20 @@ function spawnTestWorker({ workerPath, env, execArgv }) {
   return child
 }
 
+function assertWorkerExecutionStarted({
+  started,
+  messages,
+  expectedExecuteMessage,
+  result,
+}) {
+  assertWorkerExecutionStarted({
+    started,
+    messages,
+    expectedExecuteMessage,
+    result,
+  })
+}
+
 const TEST_SANDBOX_PROFILE = Object.freeze({
   networkAccess: "deny",
   filesystemAccess: "read-only-allowlisted-runtime",
