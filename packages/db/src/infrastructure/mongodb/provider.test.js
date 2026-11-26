@@ -686,3 +686,14 @@ test("MongoDB directConnection rejects a replica-set secondary instead of enabli
   await assert.rejects(provider.connect(), /directConnection.*writable.*primary/i)
   assert.equal(transports[0].closed, true)
 })
+
+
+test("MongoDB provider rejects passwords configured without a username", () => {
+  assert.throws(
+    () => createMongoProvider({
+      host: "localhost",
+      password: "secret",
+    }),
+    /password requires a username/i,
+  )
+})
