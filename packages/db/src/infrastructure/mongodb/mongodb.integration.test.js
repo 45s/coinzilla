@@ -45,6 +45,24 @@ port: 27017 }
     }
 }
 
+async function dropDatabaseOnCurrentServer({ transport, databaseName, handshake }) {
+  if (handshake.primary && handshake.topology === "replicaSet") {
+    return {
+      redirect: parsePrimaryAddress(handshake.primary),
+    }
+  }
+  const response = await transport.command({
+    body: {
+      dropDatabase: 1,
+      $db: databaseName,
+    },
+  })
+  if (Number(response.ok) !== 1) {
+    throw new Error(`MongoDB test database cleanup failed: ${response.errmsg ?? "unknown error"}`)
+  }
+  return { redirect: null }
+}
+
 async function dropDatabase({ databaseName, parsed }) {
   let {host} = parsed
   let {port} = parsed
@@ -68,21 +86,17 @@ async function dropDatabase({ databaseName, parsed }) {
         authMechanism: parsed.authMechanism,
         replicaSet: parsed.replicaSet,
       })
-      if (!handshake.primary || handshake.topology !== "replicaSet") {
-        const response = await transport.command({
-          body: {
-            dropDatabase: 1,
-            $db: databaseName,
-          },
-        })
-        if (Number(response.ok) !== 1) {
-          throw new Error(`MongoDB test database cleanup failed: ${response.errmsg ?? "unknown error"}`)
-        }
+      const { redirect } = await dropDatabaseOnCurrentServer({
+        transport,
+        databaseName,
+        handshake,
+      })
+      if (!redirect) {
         return
       }
       await transport.close()
       transport = null
-      ;({ host, port } = parsePrimaryAddress(handshake.primary))
+      ;({ host, port } = redirect)
     }
     throw new Error("MongoDB integration cleanup exceeded replica-set primary redirects")
   } finally {
