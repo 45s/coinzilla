@@ -556,6 +556,7 @@ test("drains market work after safety is proven and before Binance disconnects",
     strategyId: "CONSERVATIVE",
     calls,
   })
+  let marketTaskDrained = false
   let bookTaskDrained = false
   const marketTask = {
     then(resolve) {
@@ -700,7 +701,6 @@ test("keeps user-data and broker services alive when post-market-drain safety ca
       blockers: safe ? [] : ["RECOVERY_SELL_COVERAGE_UNVERIFIED"],
     }),
   }
-  let marketTaskDrained = false
   const marketPriceIntake = new Map([
     ["DOGEUSDT", {
       latestWebSocketPriceTask: createMarketDrainTask({

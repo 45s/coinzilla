@@ -1,5 +1,7 @@
 # Harvester Roadmap
 
+The shutdown-handler regression fixture declares the market-task drain latch in the test that consumes it and removes the unused latch from the separate post-drain safety test; production shutdown behavior is unchanged.
+
 ## Harvester Conservative ownership and shutdown incident — issue #1856
 
 - CI follow-up: lifecycle test doubles now return the explicit `{ ok: true, status: "STOPPED" }` runtime-stop contract; ADA replay assertions retain the existing AggregateError contract emitted by the runtime shutdown boundary. No production shutdown behavior was relaxed.
