@@ -157,7 +157,7 @@ test("persists authenticated operator metadata and accepts an exact action repla
     evidenceDigest: "a".repeat(64),
   })
   assert.equal(raised.ok, true)
-  const blockerId = raised.data.record.data.blockerId
+  const { blockerId } = raised.data.record.data
   const operatorId = "operator-7"
   const actionId = "action-metadata-001"
   const resolutionReason = "Verified the account-wide root cause was fixed."
