@@ -636,7 +636,8 @@ test("CLI returns nonzero when durable resolution is not confirmed", async () =>
   })
 
   assert.equal(exitCode, 1)
-  assert.equal(errors.length, 1)
+  assert.equal(errors.length, 0)
+  assert.equal(JSON.parse(output[1]).ok, false)
 })
 
 function makePriorResolvedActionRecords() {
