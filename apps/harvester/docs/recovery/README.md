@@ -160,7 +160,6 @@ PR #1047 delivered the read-only orchestration and guarded confirmation use case
 
 Steps 8 and 9 remain separate gates: candidate-state restoration behind closed readiness, then crash/restart and restart-twice verification. Unattended restart readiness remains disabled.
 
-
 ## Offline user-data ACCOUNT blocker resolution
 
 This is the explicit operator workflow for a user-data ACCOUNT safety blocker. It is separate from one-market coverage confirmation and is only available after the Harvester process has been cleanly stopped.
