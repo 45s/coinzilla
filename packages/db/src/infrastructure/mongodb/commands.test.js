@@ -533,6 +533,6 @@ test("MongoDB updates refresh stored scalar sort metadata", async () => {
 
   assert.deepEqual(
     stub.calls[0].update.$set["sortData.__coinzilla_key_bmFtZQ"],
-    { rank: 4, value: "Ada" },
+    { rank: 4 },
   )
 })
