@@ -138,7 +138,10 @@ function createRuntime({
   })
   return {
     evaluate,
-    input: { symbol, state },
+    input: {
+      symbol,
+      state,
+    },
     getSnapshotInput: () => capture.snapshotInput,
     getBuyDecisionInput: () => capture.buyDecisionInput,
   }
