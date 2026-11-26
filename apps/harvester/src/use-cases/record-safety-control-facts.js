@@ -62,6 +62,7 @@ reason },
  */
 export async function recordSafetyBlockerRaised({
   operationalStateStore,
+  producer,
   scope,
   symbol = null,
   reason,
@@ -91,6 +92,7 @@ operation: "recordSafetyBlockerRaised" })
         factId: `safety-blocker-raised:${  blockerId}`,
         factType: "SAFETY_BLOCKER_RAISED",
         data: { blockerId,
+          ...(producer === undefined ? {} : { producer }),
 scope,
 symbol,
 reason,
