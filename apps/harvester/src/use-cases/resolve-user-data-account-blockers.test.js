@@ -89,6 +89,7 @@ function makeBlockerRecord() {
     factType: "SAFETY_BLOCKER_RAISED",
     data: {
       blockerId,
+      producer: "USER_DATA_EVENT_HANDLER",
       scope: "ACCOUNT",
       symbol: null,
       reason: "ACCOUNTING_INTEGRITY_FAILURE",
