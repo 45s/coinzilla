@@ -2354,7 +2354,7 @@ The application runner now retains its execution slot and history record when an
 
 ### 2026-11-26 — Scenario Runner lifecycle and API audit
 
-- The run lifecycle no longer reports `Running` merely because an execution promise was scheduled. The adapter must signal `onStarted` after its worker has been created and the configured sandbox profile is verified; an adapter that returns output without this signal fails closed.
+- The process adapter now uses a two-stage worker handshake: `ready` confirms trusted adapter loading, Node guard installation, dispatcher construction and IPC listener registration; `started` is emitted after the execute request is received and immediately before strategy dispatch. Only `started` invokes `onStarted` and transitions the run to `Running`; results before readiness/start fail closed.
 - The process adapter rechecks the AbortSignal after worker creation and before dispatch. A cancellation that races the launcher's synchronous spawn call sends cooperative cancellation but never sends the execute request.
 - The runner preserves the original validated execution input for the worker while public run snapshots and history remain recursively redacted.
 - Scenario Runner REST errors now preserve explicit 4xx/capacity outcomes, classify unexpected failures as HTTP 500, return a generic browser-safe message and log only safe error metadata.
@@ -2374,3 +2374,12 @@ The application runner now retains its execution slot and history record when an
 The scenario-definition and reporting workstream is tracked separately from the active domain-test implementation in [#1763](https://github.com/45s/coinzilla/issues/1763). Child issue [#1797](https://github.com/45s/coinzilla/issues/1797) owns the stable `CON-*` inventory, validated registry, mapped-test runner, and JSON reports. The existing Harvester Targeted Tests workflow runs the suite conditionally when related paths change and uploads its reports. It reuses `docs/critical-behaviors.json` and the repository scenario methodology; it does not duplicate critical-behavior ownership or change production trading behavior.
 
 The initial inventory contains 18 scenarios across 16 categories: 15 TEST-MAPPED, one PARTIAL configuration scenario, one MISSING startup-history-gate scenario (CON-PERSIST-003), and one UNSUPPORTED runtime-restoration scenario. TEST-MAPPED is a mapping state, not proof of assertion-level coverage. Runtime restoration remains unsupported by the active Conservative specification.
+
+
+### 2026-11-26 — Worker protocol and regression corrections
+
+- A RED regression proved that the process adapter previously marked a run `Running` on child creation/bootstrap, before the worker accepted its execute request. The worker now sends distinct `ready` and `started` IPC acknowledgements; only `started` advances the lifecycle.
+- A real child-process regression exposed that the ESM module guard blocked Node's own internal IPC resolution for `child_process`. The guard now permits only Node-internal parent modules to load their own built-ins while still blocking direct application imports; it does not weaken the OS-sandbox gate.
+- A refactor had removed `createScenarioRunner` option defaults and caused broad runner/host/API regressions. The public factory's defaults were restored.
+- The merged PR #1852 registry remains test-only and is not a production runtime catalogue.
+- Full RS adapter work remains gated by the independent terminal-SELL/STOP accounting defect in [issue #1842](https://github.com/45s/coinzilla/issues/1842), plus the trusted OS-level launcher. Keep all public RS scenarios non-executable.

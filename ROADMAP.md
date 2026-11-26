@@ -228,7 +228,7 @@ Open Draft [PR #1837](https://github.com/45s/coinzilla/pull/1837) is the active 
 
 PR #1837 has an initial same-revision replay path (full source SHA, original run relationship, original validated input and explicit blocked outcome on unknown/mismatched revision) and Node-level worker defense-in-depth/child-worker acceptance. The production RS adapter remains helper-only and preliminary; it does not execute the full RS use-case lifecycle. No trusted OS-level sandbox launcher is registered, and the Node guards are not an OS security boundary. In-memory history is accepted for this MVP and is not a blocker.
 
-Keep PR #1837 Draft and unmerged until the real production RS adapter is composed from current production use cases, the merged registry is consumed without duplicating its test-only authority, the end-to-end simulation isolation path is proven, and exact-head CI passes. No real broker/exchange access, credentials, live account state or production persistence are authorized.
+Keep PR #1837 Draft and unmerged until the real production RS adapter is composed from current production use cases, the merged registry is consumed without duplicating its test-only authority, the end-to-end simulation isolation path is proven, and exact-head CI passes. The adapter must not be composed around the independent terminal-SELL/STOP accounting defect tracked in [issue #1842](https://github.com/45s/coinzilla); that production contract must be fixed and regression-tested first. In-memory run history is accepted for this MVP; durable persistence is deferred. No real broker/exchange access, credentials, live account state or production persistence are authorized.
 
 ## Release readiness — develop to main
 

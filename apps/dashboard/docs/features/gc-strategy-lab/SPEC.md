@@ -240,7 +240,7 @@ Each injected event is validated, displayed in the event log, and processed by t
 
 - Provide starter presets for representative success, existing-order, dust/minimum-filter, filter-unavailable, price-boundary, rejection and partial-fill cases as supported by the evaluator.
 - The selected scenario definition is the immutable starting point. Playground configuration/input edits exist only in the current run-local working copy; there is no save-over or save-as-new action for Playground changes.
-- Reloading the scenario restores its original configuration and inputs. Run-result history is persisted separately under the approved bounded retention policy; it does not persist modified scenario definitions.
+- Reloading the scenario restores its original configuration and inputs. Run-result history is retained in-memory for the current MVP; durable persistence and bounded retention are deferred and are not blockers. History does not persist modified scenario definitions.
 - Reset clears the run's simulation state/history and returns to the selected scenario's original starting state; it does not alter real runtime state.
 
 ## 7. Production execution reuse and simulation boundary
