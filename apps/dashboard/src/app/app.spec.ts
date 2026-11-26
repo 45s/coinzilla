@@ -167,13 +167,13 @@ describe('AppComponent', () => {
     expect(fixture.nativeElement.textContent).toContain('Connecting to Harvester');
     expect(fixture.nativeElement.textContent).toContain('Orders');
 
-    const fillsButton = Array.from(root.querySelectorAll('button.section-nav-item'))
+    const fillsButton = Array.from(root.querySelectorAll('button.context-subnav-item'))
       .find((button) => button.textContent?.includes('Fills')) as HTMLButtonElement;
     fillsButton.click();
     fixture.detectChanges();
     expect(fixture.nativeElement.textContent).toContain('Fills');
 
-    const commissionsButton = Array.from(root.querySelectorAll('button.section-nav-item'))
+    const commissionsButton = Array.from(root.querySelectorAll('button.context-subnav-item'))
       .find((button) => button.textContent?.includes('Commissions')) as HTMLButtonElement;
     commissionsButton.click();
     fixture.detectChanges();
@@ -198,7 +198,7 @@ describe('AppComponent', () => {
       .find((button) => button.textContent?.includes('Brokers')) as HTMLButtonElement;
     brokersButton.click();
     fixture.detectChanges();
-    const openOrdersButton = Array.from(root.querySelectorAll('button.section-nav-item'))
+    const openOrdersButton = Array.from(root.querySelectorAll('button.context-subnav-item'))
       .find((button) => button.textContent?.includes('Open Orders')) as HTMLButtonElement;
     expect(openOrdersButton).toBeDefined();
     openOrdersButton.click();
