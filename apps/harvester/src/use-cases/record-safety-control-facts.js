@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto"
 import { toResult } from "@coinzilla/utils"
 import {
+  hasControlCharacters,
   isAuthenticatedLocalOperatorIdentity,
   LOCAL_OPERATOR_ID_PATTERN,
 } from "../infrastructure/security/local-operator-identity.js"
@@ -166,7 +167,7 @@ function validateSafetyBlockerResolution({
       resolutionReason.trim() !== resolutionReason ||
       resolutionReason.length < 8 ||
       resolutionReason.length > 512 ||
-      /[\u0000-\u001F\u007F]/.test(resolutionReason) ||
+      hasControlCharacters(resolutionReason) ||
       resolvedBy !== expectedResolvedBy ||
       !Array.isArray(actionBlockerIds) ||
       actionBlockerIds.length === 0 ||
