@@ -185,6 +185,15 @@ function createTransactionCommand({ transport, session }) {
       operation,
       transaction: true,
     })
+    if (session.topology === "sharded" && Number(response?.ok) === 1) {
+      if (!isPlainDocument(response.recoveryToken)) {
+        throw new DatabaseProviderError({
+          operation: "transaction",
+          cause: new TypeError("Sharded MongoDB transaction response omitted a valid recoveryToken"),
+        })
+      }
+      session.recoveryToken = response.recoveryToken
+    }
     if (!response || Number(response.ok) !== 1
       || (Array.isArray(response.writeErrors) && response.writeErrors.length > 0)
       || response.writeConcernError) {
@@ -219,6 +228,14 @@ function createTransactionCommand({ transport, session }) {
   return runSessionCommand
 }
 
+function isPlainDocument(value) {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return false
+  }
+  const prototype = Object.getPrototypeOf(value)
+  return prototype === Object.prototype || prototype === null
+}
+
 function createSession({ state, randomBytes }) {
   state.nextTransactionNumber += 1n
   return {
@@ -226,6 +243,8 @@ function createSession({ state, randomBytes }) {
       id: new BsonBinary(randomBytes(16), 4),
     },
     txnNumber: state.nextTransactionNumber,
+    topology: state.handshake?.topology,
+    recoveryToken: undefined,
     started: false,
   }
 }
@@ -254,8 +273,11 @@ async function commitMongoTransaction({ transport, session }) {
     lsid: session.lsid,
     txnNumber: session.txnNumber,
     autocommit: false,
-    writeConcern: { w: "majority" },
+    writeConcern: { w: "majority", wtimeout: 10000 },
     $db: "admin",
+  }
+  if (session.recoveryToken !== undefined) {
+    body.recoveryToken = session.recoveryToken
   }
   let ambiguous = false
   let lastError
@@ -308,15 +330,17 @@ async function commitMongoTransaction({ transport, session }) {
 }
 
 async function abortMongoTransaction({ transport, session }) {
-  const response = await transport.command({
-    body: {
-      abortTransaction: 1,
-      lsid: session.lsid,
-      txnNumber: session.txnNumber,
-      autocommit: false,
-      $db: "admin",
-    },
-  })
+  const body = {
+    abortTransaction: 1,
+    lsid: session.lsid,
+    txnNumber: session.txnNumber,
+    autocommit: false,
+    $db: "admin",
+  }
+  if (session.recoveryToken !== undefined) {
+    body.recoveryToken = session.recoveryToken
+  }
+  const response = await transport.command({ body })
   if (Number(response?.ok) !== 1) {
     throw createServerCommandError(response)
   }

@@ -73,9 +73,10 @@ On supported replica-set and sharded deployments:
 1. One logical session ID and monotonically increasing transaction number are created per transaction.
 2. The first database command starts a snapshot transaction.
 3. Every callback operation uses that session and transaction number with autocommit: false.
-4. A callback failure triggers abort. If abort also fails, both errors are preserved.
-5. A successful callback commits with majority write concern. A commit frame rejected before dispatch is reported as a provider failure, not an unknown outcome; if a prior attempt may have reached the server, later failures cannot erase that ambiguity.
-6. Commit attempts are bounded. If the final result cannot be confirmed, DatabaseTransactionOutcomeUnknownError is thrown.
+4. On sharded deployments, every successful transaction command must return a recovery token; the provider tracks the latest token and forwards it with commit or abort.
+5. A callback failure triggers abort. If abort also fails, both errors are preserved.
+6. A successful callback commits with majority write concern and a bounded 10-second write-concern timeout. A commit frame rejected before dispatch is reported as a provider failure, not an unknown outcome; if a prior attempt may have reached the server, later failures cannot erase that ambiguity.
+7. Commit attempts are bounded. If the final result cannot be confirmed, DatabaseTransactionOutcomeUnknownError is thrown.
 
 An unknown commit outcome is not a rollback. Application code must reconcile the affected records/state before deciding whether to retry. The provider never automatically replays a transaction callback. A non-transactional create/update/delete whose request was sent but whose response is lost raises `DatabaseOperationOutcomeUnknownError`; the provider does not replay the write. A read timeout or a write rejected before it is sent remains a `DatabaseProviderError`.
 
