@@ -7,7 +7,7 @@ const CHECKSUM_PRESENT = 1
 const MORE_TO_COME = 2
 const SUPPORTED_FLAGS = MORE_TO_COME
 
-function validateMessageIdentifier(value, label) {
+function validateMessageIdentifier({ value, label }) {
   if (!Number.isInteger(value) || value < 0 || value > 0x7fffffff) {
     throw new TypeError(`${label} must be a non-negative 31-bit integer`)
   }
@@ -22,7 +22,10 @@ function encodeDocumentSequence({ identifier, documents }) {
   }
   const encodedDocuments = documents.map(encodeBsonDocument)
   const name = Buffer.from(`${identifier  }\0`, "utf8")
-  const size = 4 + name.length + encodedDocuments.reduce((total, item) => total + item.length, 0)
+  let size = 4 + name.length
+  for (const document of encodedDocuments) {
+    size += document.length
+  }
   const section = Buffer.allocUnsafe(size)
   section.writeInt32LE(size, 0)
   let offset = 4
@@ -37,8 +40,8 @@ function encodeDocumentSequence({ identifier, documents }) {
 
 /** Encode a MongoDB OP_MSG request or response. */
 export function encodeOpMsg({ requestId, responseTo = 0, flags = 0, body, sequences = [] }) {
-  validateMessageIdentifier(requestId, "requestId")
-  validateMessageIdentifier(responseTo, "responseTo")
+  validateMessageIdentifier({ value: requestId, label: "requestId" })
+  validateMessageIdentifier({ value: responseTo, label: "responseTo" })
   if (!Number.isInteger(flags) || flags < 0 || flags > 0xffffffff || (flags & ~SUPPORTED_FLAGS) !== 0) {
     throw new TypeError("MongoDB OP_MSG contains unsupported flag bits")
   }
@@ -65,7 +68,7 @@ export function encodeOpMsg({ requestId, responseTo = 0, flags = 0, body, sequen
   return message
 }
 
-function readSequence(buffer, state) {
+function readSequence({ buffer, state }) {
   if (state.offset + 4 > state.end) {
     throw new TypeError("Truncated MongoDB document sequence size")
   }
@@ -158,7 +161,7 @@ end: message.length }
       if (body === undefined) {
         throw new TypeError("MongoDB OP_MSG body section must precede document sequences")
       }
-      const sequence = readSequence(message, state)
+      const sequence = readSequence({ buffer: message, state })
       if (Object.hasOwn(sequences, sequence.identifier)) {
         throw new TypeError("MongoDB OP_MSG contains a duplicate sequence identifier")
       }
@@ -172,8 +175,8 @@ end: message.length }
   }
   const requestId = message.readInt32LE(4)
   const responseTo = message.readInt32LE(8)
-  validateMessageIdentifier(requestId, "requestId")
-  validateMessageIdentifier(responseTo, "responseTo")
+  validateMessageIdentifier({ value: requestId, label: "requestId" })
+  validateMessageIdentifier({ value: responseTo, label: "responseTo" })
   return {
     requestId,
     responseTo,
