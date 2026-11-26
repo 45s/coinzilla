@@ -495,3 +495,122 @@ test("MongoDB transport enforces the queued write-buffer bound before writing", 
   assert.equal(socket.writes.length, 0)
   await transport.close()
 })
+test("MongoDB transport validates options and command arguments", async () => {
+  const invalidOptions = [
+    { options: { host: "" }, expected: /host/ },
+    { options: { host: " localhost" }, expected: /host/ },
+    { options: { host: "localhost", port: 0 }, expected: /port/ },
+    { options: { host: "localhost", connectTimeoutMS: 0 }, expected: /connectTimeoutMS/ },
+    { options: { host: "localhost", socketTimeoutMS: 0 }, expected: /socketTimeoutMS/ },
+    { options: { host: "localhost", tls: true }, expected: /TLS options/ },
+    { options: { host: "localhost", socketFactory: "invalid" }, expected: /socketFactory/ },
+  ]
+  for (const invalid of invalidOptions) {
+    assert.throws(() => createMongoTransport(invalid.options), invalid.expected)
+  }
+
+  const fake = createFakeTransport()
+  await fake.transport.connect()
+  await assert.rejects(
+    fake.transport.command({ body: { ping: 1 }, transaction: "false" }),
+    /transaction command flag/,
+  )
+  await assert.rejects(
+    fake.transport.command({ body: { ping: 1 }, timeoutMS: 0 }),
+    /command timeout/,
+  )
+  await assert.rejects(
+    fake.transport.command({ body: null }),
+    /BSON document/,
+  )
+  await fake.transport.close()
+})
+
+test("MongoDB transport bounds pending requests and socket write buffering", async () => {
+  const pendingTransport = createFakeTransport()
+  await pendingTransport.transport.connect()
+  pendingTransport.socket.write = () => true
+  const pending = Array.from({ length: 128 }, () => pendingTransport.transport.command({
+    body: { ping: 1 },
+    timeoutMS: 30_000,
+  }))
+  await assert.rejects(
+    pendingTransport.transport.command({ body: { ping: 1 } }),
+    /pending request limit/,
+  )
+  await pendingTransport.transport.close()
+  await Promise.allSettled(pending)
+
+  const bufferedTransport = createFakeTransport()
+  await bufferedTransport.transport.connect()
+  bufferedTransport.socket.writableLength = 64 * 1024 * 1024
+  await assert.rejects(
+    bufferedTransport.transport.command({ body: { ping: 1 } }),
+    /write buffer limit/,
+  )
+  await bufferedTransport.transport.close()
+})
+
+test("MongoDB transport handles asynchronous write failures and exhaust responses", async () => {
+  const writeFailure = createFakeTransport()
+  await writeFailure.transport.connect()
+  writeFailure.socket.write = (...argumentsList) => {
+    const [, callback] = argumentsList
+    callback(new Error("asynchronous write failure"))
+    return false
+  }
+  await assert.rejects(
+    writeFailure.transport.command({
+      body: { insert: "records" },
+      operation: "create",
+    }),
+    (error) => error.outcomeUnknown === true,
+  )
+  assert.equal(writeFailure.transport.state, "closed")
+
+  const exhaust = createFakeTransport()
+  await exhaust.transport.connect()
+  exhaust.socket.respond = (request) => encodeOpMsg({
+    requestId: 99,
+    responseTo: request.requestId,
+    flags: 2,
+    body: { ok: 1 },
+  })
+  await assert.rejects(
+    exhaust.transport.command({
+      body: { insert: "records" },
+      operation: "create",
+    }),
+    /exhaust\/streaming responses are not supported/,
+  )
+  await exhaust.transport.close()
+})
+
+test("MongoDB transport closes idle and connecting sockets and rejects factory failures", async () => {
+  const idle = createFakeTransport()
+  await idle.transport.close()
+  assert.equal(idle.transport.state, "closed")
+  await assert.rejects(idle.transport.connect(), /while closed/)
+
+  const connecting = createFakeTransport()
+  const connection = connecting.transport.connect()
+  await connecting.transport.close()
+  await assert.rejects(connection, /closed during connection setup/)
+
+  const factoryFailure = createMongoTransport({
+    host: "localhost",
+    socketFactory() {
+      throw new Error("factory failure")
+    },
+  })
+  await assert.rejects(factoryFailure.connect(), /connection failed/)
+
+  const invalidFactory = createMongoTransport({
+    host: "localhost",
+    socketFactory() {
+      return {}
+    },
+  })
+  await assert.rejects(invalidFactory.connect(), /invalid socket/)
+})
+
