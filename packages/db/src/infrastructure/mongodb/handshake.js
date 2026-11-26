@@ -52,6 +52,33 @@ export function parseMongoConnectionString(connectionString) {
   } catch (error) {
     throw new TypeError("MongoDB connection string is invalid", { cause: error })
   }
+  if (url.hash !== "") {
+    throw new TypeError("MongoDB URI fragments are not supported")
+  }
+  const supportedOptions = new Set([
+    "authSource",
+    "tls",
+    "ssl",
+    "authMechanism",
+    "replicaSet",
+    "connectTimeoutMS",
+    "socketTimeoutMS",
+    "loadBalanced",
+    "compressors",
+    "readPreference",
+    "retryWrites",
+    "directConnection",
+  ])
+  const seenOptions = new Set()
+  for (const key of url.searchParams.keys()) {
+    if (!supportedOptions.has(key)) {
+      throw new TypeError(`MongoDB URI option ${key} is not supported`)
+    }
+    if (seenOptions.has(key)) {
+      throw new TypeError(`MongoDB URI option ${key} must not be repeated`)
+    }
+    seenOptions.add(key)
+  }
   const databaseName = decodeURIComponent(url.pathname.slice(1)) || "admin"
   if (databaseName.includes("/")) {
     throw new TypeError("MongoDB URI must contain one database name")
@@ -80,6 +107,7 @@ export function parseMongoConnectionString(connectionString) {
     authMechanism: url.searchParams.get("authMechanism") ?? undefined,
     tls: parseBooleanOption(tlsValue, "tls"),
     replicaSet: url.searchParams.get("replicaSet") ?? undefined,
+    directConnection: parseBooleanOption(url.searchParams.get("directConnection"), "directConnection"),
     connectTimeoutMS: parsePositiveInteger(
       url.searchParams.get("connectTimeoutMS"),
       "connectTimeoutMS",
