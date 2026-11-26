@@ -59,7 +59,7 @@ storedKey,
 serverKey }
 }
 
-function assertCommandSucceeded(response, stage) {
+function assertCommandSucceeded({ response, stage }) {
   if (!response || Number(response.ok) !== 1) {
     const message = response?.errmsg ?? "MongoDB authentication command failed"
     throw new Error(`MongoDB SCRAM ${stage} failed: ${message}`, {
@@ -157,7 +157,7 @@ export async function authenticateMongoScram({
       $db: authSource,
     },
   })
-  assertCommandSucceeded(startResponse, "start")
+  assertCommandSucceeded({ response: startResponse, stage: "start" })
   if (startResponse.done) {
     throw new Error("MongoDB SCRAM server completed authentication before client proof")
   }
