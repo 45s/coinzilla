@@ -52,27 +52,56 @@ describe('GitHubPullRequestsComponent', () => {
     expect(loadOpenPullRequests).toHaveBeenCalledTimes(1);
   });
 
-  it('Scenario 09/10/11/15 — creates, assigns and persists local labels without another GitHub request', () => {
+  it('Scenario 09/10/11/15 — creates, directly assigns and persists local labels without another GitHub request', () => {
     const root = fixture.nativeElement as HTMLElement;
     const name = root.querySelector('.label-create input') as HTMLInputElement;
     name.value = 'Codex';
     name.dispatchEvent(new Event('input'));
-    const add = Array.from(root.querySelectorAll('button')).find((button) => button.textContent?.includes('Add label'));
-    add?.click();
+    root.querySelector<HTMLButtonElement>('.label-create button')?.click();
     fixture.detectChanges();
 
-    const assignment = root.querySelector('.assignment-editor summary') as HTMLElement;
-    assignment.click();
-    fixture.detectChanges();
-    const checkbox = root.querySelector('.assignment-option input') as HTMLInputElement;
-    checkbox.checked = true;
-    checkbox.dispatchEvent(new Event('change'));
+    const assignment = root.querySelector<HTMLButtonElement>('.assignment-chip');
+    expect(assignment).toBeDefined();
+    assignment?.click();
     fixture.detectChanges();
 
+    expect(assignment?.getAttribute('aria-pressed')).toBe('true');
     expect(root.textContent).toContain('Codex');
     expect(JSON.parse(window.localStorage.getItem('coinzilla.dashboard.github-pr-labels.v1') ?? '{}').assignments)
       .toEqual({ '45s/coinzilla#1824': [expect.any(String)] });
     expect(loadOpenPullRequests).toHaveBeenCalledTimes(1);
+  });
+
+  it('allows label names and colors to be edited directly without a separate rename action', () => {
+    const root = fixture.nativeElement as HTMLElement;
+    const name = root.querySelector('.label-create input') as HTMLInputElement;
+    name.value = 'Codex';
+    name.dispatchEvent(new Event('input'));
+    root.querySelector<HTMLButtonElement>('.label-create button')?.click();
+    fixture.detectChanges();
+
+    const renameInput = root.querySelector<HTMLInputElement>('.label-name-input');
+    expect(renameInput).toBeDefined();
+    if (!renameInput) return;
+    renameInput.value = 'Review';
+    renameInput.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    root.querySelector<HTMLButtonElement>('[aria-label="Set green color for Review"]')?.click();
+    fixture.detectChanges();
+
+    expect(root.querySelector('.label-name-input')?.getAttribute('value')).toBe('Review');
+    expect(root.querySelector('.label-definition .label-chip')?.getAttribute('data-color')).toBe('green');
+    expect(root.querySelector('.assignment-editor')).toBeNull();
+    expect(root.querySelector('.label-definition .danger')?.getAttribute('aria-label')).toBe('Delete Review');
+  });
+
+  it('keeps a refresh action available in the viewport while browsing the PR list', () => {
+    const root = fixture.nativeElement as HTMLElement;
+    const refresh = root.querySelector<HTMLButtonElement>('.floating-refresh-button');
+    expect(refresh).toBeDefined();
+    refresh?.click();
+    expect(loadOpenPullRequests).toHaveBeenCalledTimes(2);
   });
 
   it('Scenario 17 — displays the explicit empty state when no open PRs exist', async () => {
