@@ -149,8 +149,6 @@ properties: Object.freeze({
         pattern: "^(?:BLOCK|IGNORE)$",
       }),
     }),
-
-    }),
   }),
   input: Object.freeze({
     marketPrice: "12.3",
