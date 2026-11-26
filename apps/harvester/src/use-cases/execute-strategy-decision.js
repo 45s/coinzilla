@@ -377,7 +377,9 @@ async function deferRegisteredSubmission({ context, candidate, errors, reason } 
       purpose,
       ...getOwnershipMetadata({ ownership }),
       registered: true,
-      reason: reason ?? "DURABLE_SUBMISSION_INTENT_NOT_COMMITTED",
+      reason: reason ?? "ORDER_INTENT_NOT_DURABLE",
+      errors,
+      error: errors?.[0],
     })
     return toResult({
       errors: errors?.length

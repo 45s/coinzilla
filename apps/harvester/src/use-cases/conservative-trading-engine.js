@@ -1538,7 +1538,7 @@ function createSubmissionLifecycleCallbacks({
   logger,
 } = {}) {
   return {
-    onSubmissionDeferred: async ({ order, registered, reason } = {}) => {
+    onSubmissionDeferred: async ({ order, registered, reason, errors, error } = {}) => {
       if (registered) {
         publishSubmissionDeferral({
           eventPublisher,
@@ -1550,6 +1550,13 @@ function createSubmissionLifecycleCallbacks({
           throw new Error("Cannot remove a pending order deferred before broker submission")
         }
         state.registry = removal.registry
+        if (reason === "ORDER_INTENT_NOT_DURABLE") {
+          await pause({
+            symbol: order.market.symbol,
+            reason: "ORDER_INTENT_NOT_DURABLE",
+            error: error ?? errors?.[0] ?? new Error("Durable order-submission intent was not committed"),
+          })
+        }
       }
       state.deferredEvaluations.add(order.market.symbol)
     },

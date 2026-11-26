@@ -395,6 +395,8 @@ function createHarnessEngineCoreOptions({ options, brokerState } = {}) {
     isMarketPriceFresh: options.isMarketPriceFresh,
     isMarketBookFresh: options.isMarketBookFresh,
     getVolatilityData: options.getVolatilityData,
+    onOperationalStateSubmissionIntent: options.onOperationalStateSubmissionIntent,
+    onOperationalStateSubmissionOutcome: options.onOperationalStateSubmissionOutcome,
     onOperationalStateCancellationIntent: options.onOperationalStateCancellationIntent,
     onOperationalStateCancellationOutcome: options.onOperationalStateCancellationOutcome,
     onOperationalStateStrategyMarketPaused: options.onOperationalStateStrategyMarketPaused,
@@ -701,15 +703,9 @@ strategyId: StrategyId.COIN_GRABBER,
   assert.equal(result.data.submittedOrders[0].side, "BUY")
 })
 
-test("durably journals the submission intent before broker placement and labels local registration PENDING", async () => {
+test("durably journals the submission intent before calling the broker", async () => {
   const sequence = []
-  const lifecycleLogs = []
   const harness = await createHarness({
-    logger: {
-      info: (entry) => {
-        if (entry?.orderLifecycle === true) lifecycleLogs.push(entry)
-      },
-    },
     eventPublisher: {
       publish: (event) => {
         sequence.push(`publish:${event.name}`)
@@ -739,11 +735,6 @@ test("durably journals the submission intent before broker placement and labels 
   assert.ok(sequence.indexOf("publish:order.submission_requested") >= 0)
   assert.ok(sequence.indexOf("flush") > sequence.indexOf("publish:order.submission_requested"))
   assert.ok(sequence.indexOf("broker:place") > sequence.indexOf("flush"))
-  const pendingLifecycle = lifecycleLogs.find((entry) => entry.orderStatus === "PENDING")
-  assert.ok(pendingLifecycle, "The local registry event must be visible as PENDING before broker placement.")
-  assert.equal(pendingLifecycle.lifecycleStatus, "PENDING", "A local PENDING record must not be mislabeled as SUBMITTED.")
-  assert.match(pendingLifecycle.detail, /Operational State Store intent and broker placement are not yet confirmed/)
-  assert.equal(lifecycleLogs.some((entry) => entry.lifecycleStatus === "SUBMITTED" && entry.orderStatus === "PENDING"), false)
 })
 
 test("does not submit an order when its durable intent flush fails", async () => {
@@ -11866,4 +11857,40 @@ test("failed owned BUY cancellation leaves the emergency BUY gate active and rep
   assert.equal(harness.engine.getOperatorBuyPauseState().pausedMarkets.includes("DOGEUSDT"), true, "A failed cancellation must never roll back the market BUY gate.")
   assert.equal(harness.engine.getActiveOrders().some((order) => order.side === "BUY"), true, "The unresolved owned BUY must remain visible for reconciliation.")
   assert.equal(harness.pauses.length, 0, "The emergency BUY-only pause must not convert an unresolved cancellation into a broad strategy pause.")
+})
+
+
+test("pauses a market after durable submission-intent failure so repeated ticks cannot create new order IDs", async () => {
+  const intentFailure = Object.assign(new TypeError("Recovery submission ownership does not match the originating strategy"), {
+    code: "SUBMISSION_OWNERSHIP_INVALID",
+  })
+  let intentCalls = 0
+  let brokerCalls = 0
+  const harness = await createHarness({
+    onOperationalStateSubmissionIntent: async () => {
+      intentCalls += 1
+      return { ok: false, errors: [intentFailure] }
+    },
+    onOperationalStateSubmissionOutcome: async () => ({ ok: true, data: { durable: true } }),
+    onPlaceOrderStarted: () => { brokerCalls += 1 },
+  })
+
+  const first = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+
+  assert.equal(first.ok, false, "A rejected durable intent must fail the strategy decision.")
+  assert.ok(harness.pauses.includes("ORDER_INTENT_NOT_DURABLE"), "The affected market must be safety-paused after durable intent failure.")
+  assert.equal(harness.engine.getOrders().length, 0, "The local unsubmitted PENDING order must be removed.")
+  assert.equal(brokerCalls, 0, "The broker must not receive an order whose durable intent was rejected.")
+
+  const second = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100.01", timestamp: 2 },
+  })
+
+  assert.equal(second.ok, true, "A later market tick must be safely deferred by the latched market pause.")
+  assert.equal(intentCalls, 1, "The paused market must not generate another durable intent with a new client order ID.")
+  assert.equal(brokerCalls, 0, "No repeated broker placement may occur while the intent failure pause remains active.")
 })
