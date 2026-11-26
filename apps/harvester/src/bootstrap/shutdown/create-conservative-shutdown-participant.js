@@ -603,6 +603,54 @@ function recordRecoverySellCoverageResult({
   return result
 }
 
+function createBlockedRecoverySellCoverageResult({ symbol, stageDiagnostics, stage } = {}) {
+  updateStageDiagnostics({
+    stageDiagnostics,
+    symbol,
+    stage,
+    status: "BLOCKED",
+    error: new Error("Prior reconciliation blockers prevent recovery SELL coverage verification"),
+  })
+  return {
+    ok: false,
+    data: {
+      covered: false,
+      findings: [],
+    },
+  }
+}
+
+function handleRecoverySellCoverageError({
+  error,
+  blockers,
+  signal,
+  symbol,
+  stageDiagnostics,
+  stage,
+} = {}) {
+  updateStageDiagnostics({
+    stageDiagnostics,
+    symbol,
+    stage,
+    status: signal?.aborted ? getAbortStageStatus(signal) : "FAILED",
+    error: signal?.reason ?? error,
+  })
+  if (signal?.aborted) {
+    throw signal.reason ?? error
+  }
+  blockers.push(createStageBlocker({
+    stage,
+    error,
+  }))
+  return {
+    ok: false,
+    data: {
+      covered: false,
+      findings: [],
+    },
+  }
+}
+
 async function auditRecoverySellCoverage({
   engine,
   symbol,
@@ -617,27 +665,19 @@ async function auditRecoverySellCoverage({
     stage,
     status: "STARTED",
   })
-  const unavailable = {
-    ok: false,
-    data: {
-      covered: false,
-      findings: [],
-    },
-  }
   if (blockers.length > 0) {
-    updateStageDiagnostics({
-      stageDiagnostics,
+    return createBlockedRecoverySellCoverageResult({
       symbol,
+      stageDiagnostics,
       stage,
-      status: "BLOCKED",
-      error: new Error("Prior reconciliation blockers prevent recovery SELL coverage verification"),
     })
-    return unavailable
   }
   try {
     throwIfShutdownAborted(signal)
     const result = await awaitWithShutdownSignal({
-      operation: () => engine.auditShutdownRecoverySellCoverage({ symbols: [symbol] }),
+      operation: () => engine.auditShutdownRecoverySellCoverage({
+        symbols: [symbol],
+      }),
       signal,
     })
     throwIfShutdownAborted(signal)
@@ -649,21 +689,14 @@ async function auditRecoverySellCoverage({
       stage,
     })
   } catch (error) {
-    updateStageDiagnostics({
-      stageDiagnostics,
-      symbol,
-      stage,
-      status: signal?.aborted ? "ABORTED" : "FAILED",
-      error: signal?.reason ?? error,
-    })
-    if (signal?.aborted) {
-      throw signal.reason ?? error
-    }
-    blockers.push(createStageBlocker({
-      stage: "RECOVERY_SELL_COVERAGE",
+    return handleRecoverySellCoverageError({
       error,
-    }))
-    return unavailable
+      blockers,
+      signal,
+      symbol,
+      stageDiagnostics,
+      stage,
+    })
   }
 }
 
