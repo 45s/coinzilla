@@ -227,7 +227,7 @@ test("SCRAM propagates server authentication errors", async () => {
   )
 })
 
-test("SCRAM rejects missing callbacks, credentials, authentication sources, and malformed response fields", async () => {
+test("SCRAM rejects missing callbacks, credentials, and authentication sources", async () => {
   await assert.rejects(
     authenticateMongoScram({
       command: null,
@@ -261,10 +261,16 @@ test("SCRAM rejects missing callbacks, credentials, authentication sources, and 
     }),
     /authentication source/,
   )
+})
 
+test("SCRAM rejects malformed server conversation response fields", async () => {
   const missingConversation = {
     async command() {
-      return { ok: 1, done: false, payload: Buffer.alloc(0) }
+      return {
+        ok: 1,
+        done: false,
+        payload: Buffer.alloc(0),
+      }
     },
   }
   await assert.rejects(
@@ -278,7 +284,12 @@ test("SCRAM rejects missing callbacks, credentials, authentication sources, and 
 
   const nonBinaryPayload = {
     async command() {
-      return { ok: 1, conversationId: 1, done: false, payload: "not-binary" }
+      return {
+        ok: 1,
+        conversationId: 1,
+        done: false,
+        payload: "not-binary",
+      }
     },
   }
   await assert.rejects(
@@ -292,7 +303,12 @@ test("SCRAM rejects missing callbacks, credentials, authentication sources, and 
 
   const completedAtStart = {
     async command() {
-      return { ok: 1, conversationId: 1, done: true, payload: Buffer.alloc(0) }
+      return {
+        ok: 1,
+        conversationId: 1,
+        done: true,
+        payload: Buffer.alloc(0),
+      }
     },
   }
   await assert.rejects(
@@ -304,6 +320,7 @@ test("SCRAM rejects missing callbacks, credentials, authentication sources, and 
     /before client proof/,
   )
 })
+
 
 test("SCRAM rejects unsupported mechanisms, malformed salt, and unsafe iteration counts", async () => {
   await assert.rejects(
