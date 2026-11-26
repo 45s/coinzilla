@@ -60,3 +60,13 @@ test("OP_MSG rejects truncated, oversized, and unsupported messages", () => {
   badOpcode.writeInt32LE(1, 12)
   assert.throws(() => decodeOpMsg(badOpcode), TypeError)
 })
+
+
+test("OP_MSG rejects unknown required flag bits", () => {
+  const message = encodeOpMsg({
+    requestId: 3,
+    flags: 4,
+    body: { ping: 1 },
+  })
+  assert.throws(() => decodeOpMsg(message), /unsupported.*flag/i)
+})
