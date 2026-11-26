@@ -530,22 +530,22 @@ randomBytes })
         throw new TypeError("MongoDB transaction callbacks must await asynchronous CRUD operations")
       }
     } catch (error) {
+      let transactionError = error
       try {
         await transactionOperations.drain()
       } catch (drainError) {
-        if (error !== drainError && error?.cause !== drainError) {
-          error = new AggregateError(
-            [error, drainError],
+        if (transactionError !== drainError && transactionError?.cause !== drainError) {
+          transactionError = new AggregateError(
+            [transactionError, drainError],
             "MongoDB transaction callback and pending command both failed",
-            { cause: error },
+            { cause: transactionError },
           )
         }
       }
-      if (error === command.failure()) {
-        error = error?.code === 11000 || error?.code === 11001
-          ? new DatabaseConflictError({ cause: error })
-          : new DatabaseProviderError({ operation: "transaction",
-cause: error })
+      if (transactionError === command.failure()) {
+        transactionError = transactionError?.code === 11000 || transactionError?.code === 11001
+          ? new DatabaseConflictError({ cause: transactionError })
+          : new DatabaseProviderError({ operation: "transaction", cause: transactionError })
       }
       if (session.started) {
         await abortMongoTransaction({
@@ -553,7 +553,7 @@ cause: error })
           session,
         })
       }
-      throw error
+      throw transactionError
     }
 
     if (session.started) {
@@ -693,7 +693,8 @@ export function createMongoProvider(options = {}) {
       return
     }
     if (state.lifecycle === "connecting") {
-      return state.connectPromise
+      await state.connectPromise
+      return
     }
     if (state.lifecycle === "closing" || state.lifecycle === "closed") {
       throw new Error(`Cannot connect MongoDB provider while ${state.lifecycle}`)
@@ -708,13 +709,14 @@ export function createMongoProvider(options = {}) {
         })
         state.lifecycle = "connected"
       } catch (error) {
+        let connectionError = error
         try {
           await state.transport?.close()
         } catch (closeError) {
-          error = new AggregateError(
-            [error, closeError],
+          connectionError = new AggregateError(
+            [connectionError, closeError],
             "MongoDB provider connection and cleanup failed",
-            { cause: error },
+            { cause: connectionError },
           )
         }
         state.transport = null
@@ -722,7 +724,7 @@ export function createMongoProvider(options = {}) {
         state.lifecycle = "idle"
         throw new DatabaseProviderError({
           operation: "connect",
-          cause: error,
+          cause: connectionError,
         })
       }
     })()
@@ -750,7 +752,8 @@ export function createMongoProvider(options = {}) {
       return
     }
     if (state.lifecycle === "closing" && state.closePromise) {
-      return state.closePromise
+      await state.closePromise
+      return
     }
     state.lifecycle = "closing"
     state.closePromise = (async () => {
@@ -768,7 +771,7 @@ export function createMongoProvider(options = {}) {
         })
       }
     })()
-    return state.closePromise
+    await state.closePromise
   }
 
   async function withReadTransaction(work) {
