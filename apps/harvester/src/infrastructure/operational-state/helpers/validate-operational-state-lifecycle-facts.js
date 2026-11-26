@@ -210,7 +210,7 @@ export function validateSafetyBlockerResolvedFact({ factType, canonicalData, fac
       canonicalData.resolutionReason.trim() !== canonicalData.resolutionReason ||
       canonicalData.resolutionReason.length < 8 ||
       canonicalData.resolutionReason.length > 512 ||
-      /[\\u0000-\\u001F\\u007F]/.test(canonicalData.resolutionReason) ||
+      /[\u0000-\u001F\u007F]/.test(canonicalData.resolutionReason) ||
       canonicalData.resolvedBy !== expectedResolvedBy ||
       !Array.isArray(canonicalData.actionBlockerIds) ||
       canonicalData.actionBlockerIds.length === 0 ||
