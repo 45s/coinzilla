@@ -9,7 +9,7 @@ import {
   Quantity,
   TradingRules,
 } from "@coinzilla/entities"
-import { addDecimal, compareDecimal, multiplyDecimal, subtractDecimal } from "@coinzilla/utils"
+import { addDecimal, compareDecimal, multiplyDecimal, subtractDecimal, toResult } from "@coinzilla/utils"
 import { validateScenarioInput as validateInput } from "../../application/scenario-runner/validate-scenario-input.js"
 import { AccountSnapshot } from "../../domain/account/account-snapshot.js"
 import { allocateOrderCommitments } from "../../domain/orders/allocate-order-commitments.js"
@@ -31,6 +31,7 @@ import { createRecoverySellerAccountingWorkflow } from "../../use-cases/create-r
 import { createRecoverySellerActionAuthorizer } from "../../use-cases/create-recovery-seller-action-authorizer.js"
 import { createRecoverySellerOrderSubmitter } from "../../use-cases/create-recovery-seller-order-submitter.js"
 import { createRecoverySellerStopWorkflow } from "../../use-cases/create-recovery-seller-stop-workflow.js"
+import { makeOrderEventWorkflow } from "../../use-cases/order-event-workflow.js"
 import { recordOrderSubmissionIntent } from "../../use-cases/record-order-submission-intent.js"
 import { recordOrderSubmissionOutcome } from "../../use-cases/record-order-submission-outcome.js"
 const RUNTIME_PAIR_CONFIG = Object.freeze({
