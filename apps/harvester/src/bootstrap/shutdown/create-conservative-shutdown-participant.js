@@ -1054,7 +1054,7 @@ async function waitForConservativeMarkets({
       }
     }
   }
-  throwForUnsafeConservativeMarkets({
+  return throwForUnsafeConservativeMarkets({
     failedMarkets: createSafetyReevaluationLimitFailures({ snapshot }),
   })
 }
