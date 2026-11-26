@@ -34,18 +34,18 @@ test("returns immutable ownership for a matching Recovery Seller submission", ()
   )
 })
 
-test("rejects ownership metadata from a different strategy", () => {
+test("rejects ownership metadata from a strategy outside the supported CG and RS strategies", () => {
   assert.throws(
     () => validateRecoverySellerSubmissionOwnership({
       order: recoverySellerSellOrder,
       purpose: "RECOVERY_SELL",
       ownership: {
         ...recoverySellerOwnership,
-        strategyId: StrategyId.COIN_GRABBER,
+        strategyId: "UNREGISTERED_STRATEGY",
       },
     }),
-    /Recovery Seller strategy and purpose/,
-    "A submission owned by another strategy must not be persisted as Recovery Seller activity.",
+    /strategy and purpose/,
+    "A submission owned by an unsupported strategy must not be persisted as CG or RS activity.",
   )
 })
 
@@ -72,5 +72,56 @@ test("rejects Recovery Seller ownership metadata for an unowned submission", () 
     }),
     /Unowned order submissions/,
     "An unowned submission must not acquire Recovery Seller ownership metadata.",
+  )
+})
+
+
+const conservativeOwnership = Object.freeze({
+  strategyId: StrategyId.COIN_GRABBER,
+  purpose: "RECOVERY_SELL",
+  positionId: "position:cg:dogeusdt",
+})
+
+test("accepts a Conservative recovery SELL with exact CG Position ownership and no RS cycle identity", () => {
+  const ownership = validateRecoverySellerSubmissionOwnership({
+    order: recoverySellerSellOrder,
+    purpose: "RECOVERY_SELL",
+    ownership: conservativeOwnership,
+  })
+
+  assert.deepEqual(
+    ownership,
+    {
+      strategyId: StrategyId.COIN_GRABBER,
+      positionId: "position:cg:dogeusdt",
+    },
+    "A valid Conservative recovery SELL must preserve CG strategy and Position identity without being relabeled as RS.",
+  )
+  assert.equal(Object.isFrozen(ownership), true, "Normalized CG ownership must be immutable before durable persistence.")
+})
+
+test("rejects a recovery SELL when strategy ownership is missing", () => {
+  assert.throws(
+    () => validateRecoverySellerSubmissionOwnership({
+      order: recoverySellerSellOrder,
+      purpose: "RECOVERY_SELL",
+    }),
+    /explicit strategy.*Position/i,
+    "A recovery SELL without explicit originating strategy and Position ownership must fail closed.",
+  )
+})
+
+test("rejects Conservative ownership when it carries an RS-only cycle identity", () => {
+  assert.throws(
+    () => validateRecoverySellerSubmissionOwnership({
+      order: recoverySellerSellOrder,
+      purpose: "RECOVERY_SELL",
+      ownership: {
+        ...conservativeOwnership,
+        cycleId: "rs-cycle-1",
+      },
+    }),
+    /cycle|ownership/i,
+    "A CG Position must not acquire an RS cycle identity through shared submission infrastructure.",
   )
 })

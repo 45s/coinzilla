@@ -145,6 +145,22 @@ A price-filter or fee-valuation failure is not dust; it is a blocked/unsafe deci
 
 ## 5. SELL order lifecycle
 
+### Shared CG/RS submission ownership and durable intent
+
+The shared submission-intent use case must validate the originating strategy rather than treating every `RECOVERY_SELL` as a Recovery Seller order. Purpose and strategy identity are separate, explicit facts:
+
+| Originating strategy | Allowed recovery purpose | Required ownership |
+| --- | --- | --- |
+| `CG_coinGrabber` | `RECOVERY_SELL` (SELL only) | `strategyId`, non-empty `positionId`; no RS `cycleId` |
+| `RS_recoverySeller` | `RECOVERY_BUY` (BUY only), `RECOVERY_SELL` (SELL only) | `strategyId`, non-empty `positionId`, non-empty `cycleId` |
+
+The durable intent stores the canonical order's market/provider/account identity, client order ID, side/type, exact decimal price/quantity, purpose, and the normalized originating strategy/Position identity. RS cycle identity is stored only for RS. Shared infrastructure must never rewrite CG as RS or infer ownership from a symbol, client-order-ID prefix, broker order ID, or a matching purpose string.
+
+Validation is fail-closed: a recovery purpose requires explicit ownership; strategy and purpose must be a supported combination; purpose must match the canonical order side; Position identity is mandatory; RS cycle identity is mandatory and CG cycle identity is forbidden. Missing, malformed, unknown-strategy, mismatched-purpose, wrong-side, and cross-strategy metadata is rejected before durable append or broker placement. An ordinary purpose-null order may be unowned only when no ownership object is supplied.
+
+A durable intent must be committed before the broker placement side effect. If intent persistence fails, remove the local unsubmitted PENDING registration, retain the market safety pause, and do not call the broker. A PENDING lifecycle log is not an exchange acknowledgement. A transport timeout or ambiguous broker outcome remains UNKNOWN under the original client order identity; reconcile that identity and complete canonical order/fill history before any retry or replacement. See the [Recovery Seller Domain Specification](recovery-seller-domain-specification.md) for RS cycle ownership and lifecycle rules.
+
+
 ### Partial SELL with no new BUY
 
 When an acknowledged SELL is OPEN or PARTIALLY_FILLED and no new BUY fill has occurred:
