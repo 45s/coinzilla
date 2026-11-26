@@ -11,8 +11,7 @@ owner: harvester
 > **Canonical authority:** all Conservative Strategy rules are defined exclusively in [CONSERVATIVE_DOMAIN_SPECIFICATION.md](./domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md). This plan tracks documentation, implementation, and verification work; it is not a second behavior baseline.
 
 
-**Status:** Active  
-**Owner:** Harvester  
+**Status at supersession:** Superseded on 2026-11-09  
 **Strategy:** Conservative standing-order accumulation and capital recovery
 
 ## Direction
@@ -21,14 +20,14 @@ Conservative is the strategy Harvester is intended to execute. Preserve its esta
 
 A difference in current Harvester code is an implementation gap by default—not a reason to redesign the strategy. Discuss only a concrete ambiguity that cannot be resolved from the behavior contract or would materially change financial exposure.
 
-## Current state
+## State recorded at supersession
 
 - **D0 — Domain documentation:** one canonical specification is authoritative. The glossary, accounting matrix, Portfolio notes, and strategy guide are reference/evidence documents only; the old behavior baseline is superseded.
 - **Existing domain:** Portfolio, RecoveryLedger, fill identity, recovery planning, and completion logic already exist.
 - **Integration:** existing Harvester engine/application/broker work is preserved; do not rebuild it.
 - **TESTNET:** verify only after the specific strategy lifecycle is implemented and covered by offline tests.
 
-## Delivery steps
+## Original delivery steps (historical)
 
 ### D0 — Establish one authoritative specification
 

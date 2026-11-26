@@ -1,6 +1,10 @@
 # Scenario Runner phased implementation roadmap
 
-**Tracking:** Issue #1836 · PR #1837 · Initial adapter: RS · Strategy-neutral core
+**Tracking:** Issue #1836 · [PR #1837](https://github.com/45s/coinzilla/pull/1837) (merged foundation) · Initial adapter: RS · Strategy-neutral core
+
+## Current status — 2026-11-26
+
+The Scenario Runner foundation is merged, but production execution remains fail-closed. The current catalogue is not executable without a trusted OS sandbox and matching attestation; remaining user-data event-transition, under-target FILLED STOP, infrastructure-failure, complete replay-provenance and acceptance coverage is tracked below. The merged foundation is not production readiness.
 
 ## Approved branch-only refactoring and agent preflight
 
@@ -87,7 +91,7 @@ A cross-document audit found that the Dashboard agent instructions still require
 
 - Task branch: `docs/dashboard/gc-strategy-lab-spec`.
 - The task branch is synchronized with current `develop` (0 commits behind); exact head and CI evidence are maintained in [issue #1836](https://github.com/45s/coinzilla/issues/1836) and [PR #1837](https://github.com/45s/coinzilla/pull/1837).
-- PR #1837 remains Draft and unmerged. The full approved MVP is not complete; production-flow, production-safe catalogue, OS isolation, replay provenance, trace/report, configuration and E2E gates remain applicable. Durable history is deferred and is not an MVP blocker.
+- PR #1837 is merged. The full approved MVP is not complete; production-flow, production-safe catalogue, OS isolation, replay provenance, trace/report, configuration and E2E gates remain applicable. The production catalogue is still non-executable without a trusted OS sandbox and matching attestation. Durable history is deferred and is not an MVP blocker.
 - Do not claim CI success from a superseded head; all required checks must pass on the final exact head.
 
 ## Strategy-neutral Harvester registration — 2026-11-25

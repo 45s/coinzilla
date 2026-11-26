@@ -16,6 +16,6 @@
 - [Recovery Seller Domain Scenario Testing Playbook](recovery-seller-scenario-testing.md) — detailed AI-agent contract for RS scenario matrices, schemas, financial oracles, test layers, file trees, evidence and issue synchronization.
 - [Recovery Seller Runtime Flows](recovery-seller-runtime-flows.md) — source-verified startup/event entry points, decision flows, order/fill lifecycle schemas and current implementation gaps.
 - [Recovery Seller Runtime Audit — 2026-11-25](../audits/reports/2026-11-25_17-15-00_recovery-seller-runtime-audit.md) — historical findings and verification boundary for source baseline `ebeaf346fbaa44ae75ba6fd9256bfdd1ba01d765`.
-- [Recovery Seller Implementation Roadmap](recovery-seller-implementation-roadmap.md) — six phases from the CG reuse audit through concurrent integration and offline lifecycle verification.
+- [Recovery Seller Implementation Roadmap](recovery-seller-implementation-roadmap.md) — RS-1–RS-5 implementation and offline acceptance are complete; remaining scenario-coverage, terminal-SELL/STOP and operator-resolution gates stay tracked here and in their GitHub issues. It does not authorize exchange sessions.
 
 Other documents may explain or verify behavior, but must link to the canonical specification rather than define competing strategy rules.

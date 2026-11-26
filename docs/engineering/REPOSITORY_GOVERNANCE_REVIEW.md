@@ -4,7 +4,7 @@
 **Type:** Maintenance procedure
 **Owner:** Repository maintainer
 **Cadence:** Monthly, plus after material CI or GitHub-settings changes
-**Tracking:** [Repository engineering initiative #1568](https://github.com/45s/coinzilla/issues/1568)
+**Origin:** [Repository engineering initiative #1568](https://github.com/45s/coinzilla/issues/1568) (closed); live review records are the monthly issues created by the workflow
 
 This procedure keeps repository governance aligned with the actual GitHub configuration and current source. The scheduled [Governance Drift Review workflow](../../.github/workflows/governance-drift-review.yml) opens one review issue per month; the issue is the evidence record and must be completed against live settings.
 

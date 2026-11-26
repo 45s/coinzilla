@@ -13,7 +13,7 @@ This index is the entry point for maintained repository documentation. The gover
 - [Documentation Governance](DOCUMENTATION_GOVERNANCE.md) — the documentation vision and maintenance contract
 - [Repository governance drift review](engineering/REPOSITORY_GOVERNANCE_REVIEW.md) — monthly evidence-based review of rulesets, CI, workflow supply chain, security and package matrices
 - [Markdown style standard](MARKDOWN_STYLE.md) — consistent formatting and authoring conventions
-- [Repository documentation inventory](REPOSITORY_DOCUMENTATION_INVENTORY.md) — frozen 97-file baseline plus subsequent recursive checkpoints (179 tracked Markdown/MDX files on `develop` at `0f827ba`; 94 under Harvester and 85 elsewhere)
+- [Repository documentation inventory](REPOSITORY_DOCUMENTATION_INVENTORY.md) — current canonical-source map; 214 tracked Markdown files on `develop` at `aa75d2c` (2026-11-26), plus one consolidated archive file on the cleanup PR branch
 
 ## Repository-wide engineering
 
