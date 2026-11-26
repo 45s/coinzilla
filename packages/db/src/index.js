@@ -7,3 +7,4 @@ export {
   DatabaseTransactionOutcomeUnknownError,
   DatabaseTransactionUnsupportedError,
 } from "./domain/errors/database-errors.js"
+export { createMongoProvider } from "./infrastructure/mongodb/provider.js"
