@@ -335,7 +335,10 @@ function createMultiFillAccountingScenarioFixture() {
       clientOrderId: openSellOrder.clientOrderId,
       market: scenarioMarket,
       side: "SELL",
-      price: new Money({ amount: "2.1", asset: scenarioQuoteAsset }),
+      price: new Money({
+        amount: "2.1",
+        asset: scenarioQuoteAsset,
+      }),
       quantity: new Quantity({
         amount: "2.51",
         asset: scenarioBaseAsset,
