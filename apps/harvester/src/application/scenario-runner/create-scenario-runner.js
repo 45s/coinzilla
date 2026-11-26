@@ -389,13 +389,6 @@ function startExecution({ context, record, adapter }) {
     controller,
     adapter,
   })
-  delete record.executionInput
-  transitionRun({
-    record,
-    status: SCENARIO_RUN_STATUS.STARTING,
-    now: context.now,
-    onUpdate: context.onUpdate,
-  })
   const race = createExecutionRace({
     adapter,
     record,
@@ -411,6 +404,13 @@ function startExecution({ context, record, adapter }) {
         })
       }
     },
+  })
+  delete record.executionInput
+  transitionRun({
+    record,
+    status: SCENARIO_RUN_STATUS.STARTING,
+    now: context.now,
+    onUpdate: context.onUpdate,
   })
   const completion = race.promise.then((result) => finishExecution({
     context,
