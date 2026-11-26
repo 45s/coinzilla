@@ -33,10 +33,10 @@ export function parseMongoConnectionString(connectionString) {
   if (typeof connectionString !== "string" || connectionString.trim() === "") {
     throw new TypeError("MongoDB connection string must be a non-empty string")
   }
-  if (connectionString.startsWith("mongodb+srv://")) {
+  if (/^mongodb\\+srv:\\/\\//i.test(connectionString)) {
     throw new TypeError("MongoDB SRV discovery is not supported; provide a mongodb:// seed URI")
   }
-  if (!connectionString.startsWith("mongodb://")) {
+  if (!/^mongodb:\\/\\//i.test(connectionString)) {
     throw new TypeError("MongoDB connection string must use mongodb://")
   }
   const authority = connectionString.slice("mongodb://".length).split(/[/?#]/, 1)[0]
@@ -52,10 +52,25 @@ export function parseMongoConnectionString(connectionString) {
     throw new TypeError("MongoDB connection string is invalid", { cause: error })
   }
   const databaseName = decodeURIComponent(url.pathname.slice(1)) || "admin"
+  if (databaseName.includes("/")) {
+    throw new TypeError("MongoDB URI must contain one database name")
+  }
+  if (url.searchParams.get("loadBalanced") === "true") {
+    throw new TypeError("MongoDB load-balanced topology is not supported")
+  }
+  if (url.searchParams.has("compressors") && url.searchParams.get("compressors") !== "") {
+    throw new TypeError("MongoDB wire compression is not supported")
+  }
+  if (url.searchParams.get("readPreference") && url.searchParams.get("readPreference") !== "primary") {
+    throw new TypeError("MongoDB provider supports primary read preference only")
+  }
+  if (url.searchParams.get("retryWrites") === "true") {
+    throw new TypeError("MongoDB retryable writes are not supported")
+  }
   const authSource = url.searchParams.get("authSource") ?? databaseName
   const tlsValue = url.searchParams.get("tls") ?? url.searchParams.get("ssl")
   return {
-    host: url.hostname,
+    host: url.hostname.replace(/^\\[|\\]$/g, ""),
     port: url.port === "" ? 27017 : Number(url.port),
     username: url.username === "" ? undefined : decodeURIComponent(url.username),
     password: url.password === "" ? undefined : decodeURIComponent(url.password),
