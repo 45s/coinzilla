@@ -3,7 +3,6 @@ import test from "node:test"
 
 import {
   DatabaseConflictError,
-  DatabaseOperationOutcomeUnknownError,
   DatabaseProviderError,
 } from "../../domain/errors/database-errors.js"
 import { createMongoRecordOperations } from "./commands.js"
