@@ -2,6 +2,7 @@ import nodeTest from "node:test"
 import assert from "node:assert/strict"
 import { createUserDataEventHandler } from "./create-user-data-event-handler.js"
 import { createUserDataStatusHandler } from "./create-user-data-status-handler.js"
+import { getHarvesterAccountSafetyBlocker } from "../harvester-runtime-setup.js"
 
 const test = (...args) => nodeTest(`[create-user-data-event-handler.test.js] ${args[0]}`, ...args.slice(1))
 
@@ -44,6 +45,71 @@ observations: [] }
   return { handler,
 state,
 actions }
+}
+
+function createExecutionPendingRecoveryState() {
+  const state = createState({
+    recoveryGeneration: 0,
+    recoveryBrokerGeneration: null,
+    recoverySubscriptionId: null,
+    lastAcknowledgedRecoveryGeneration: -1,
+    lastReportedRecoveredGeneration: -1,
+    startupComplete: true,
+  })
+  const statusHandler = createUserDataStatusHandler({
+    state,
+    isStopped: () => false,
+    eventPublisher: { publish: () => ({ ok: true }) },
+    brokerName: "binance",
+    logger: {},
+    tradingEnabled: true,
+    startUserDataRecovery: () => {},
+    cancelOwnedBuysAfterAccountingFailure: async () => {},
+    resumeDeferredStrategyEvaluations: () => {},
+  })
+  statusHandler({
+    type: "recovered",
+    subscriptionId: 42,
+    recoveryGeneration: 7,
+    recoveryRequired: true,
+    reconciliationRequired: true,
+  })
+  statusHandler({
+    type: "executionPending",
+    subscriptionId: 42,
+    recoveryGeneration: 7,
+    recoveryRequired: false,
+    reconciliationRequired: false,
+    executionPending: true,
+  })
+  return state
+}
+
+function makeUnownedExecutionEngine() {
+  return {
+    processUserDataEvent: async () => ({
+      ok: false,
+      failure: {
+        category: "OWNERSHIP_INTEGRITY",
+        stage: "FILL_ORDER_IDENTITY",
+        retryable: false,
+      },
+      errors: [new Error("unowned execution")],
+    }),
+    getOrders: () => [],
+  }
+}
+
+function makeUnownedExecutionEvent() {
+  return {
+    eventType: "executionReport",
+    executionType: "TRADE",
+    executedOrder: {
+      brokerOrderId: "external-order",
+      clientOrderId: "manual-order",
+      side: "BUY",
+    },
+  }
 }
 
 test("serializes a valid order event, notifies the observer, and restores readiness", async () => {
@@ -219,40 +285,7 @@ test("contains observer failures without rolling back a valid event", async () =
  
 
 test("keeps a queued owned BUY fill in recovery mode across executionPending with false broker flags", async () => {
-  const state = createState({
-    recoveryGeneration: 0,
-    recoveryBrokerGeneration: null,
-    recoverySubscriptionId: null,
-    lastAcknowledgedRecoveryGeneration: -1,
-    lastReportedRecoveredGeneration: -1,
-    startupComplete: true,
-  })
-  const statusHandler = createUserDataStatusHandler({
-    state,
-    isStopped: () => false,
-    eventPublisher: { publish: () => ({ ok: true }) },
-    brokerName: "binance",
-    logger: {},
-    tradingEnabled: true,
-    startUserDataRecovery: () => {},
-    cancelOwnedBuysAfterAccountingFailure: async () => {},
-    resumeDeferredStrategyEvaluations: () => {},
-  })
-  statusHandler({
-    type: "recovered",
-    subscriptionId: 42,
-    recoveryGeneration: 7,
-    recoveryRequired: true,
-    reconciliationRequired: true,
-  })
-  statusHandler({
-    type: "executionPending",
-    subscriptionId: 42,
-    recoveryGeneration: 7,
-    recoveryRequired: false,
-    reconciliationRequired: false,
-    executionPending: true,
-  })
+  const state = createExecutionPendingRecoveryState()
 
   let receivedRecoveryMode
   let exchangeMutationCount = 0
@@ -339,8 +372,10 @@ retryable: false },
     engine,
     onSafetyBlockerRaised: async (blocker) => {
       blockers.push(blocker)
-      return { ok: true,
-data: { durable: true } }
+      return {
+        ok: true,
+        data: { durable: true },
+      }
     },
   })
   handler({
@@ -364,6 +399,118 @@ data: { durable: true } }
   assert.equal(blockers[0].symbol, "BTCUSDT")
   assert.equal(blockers[0].reason, "FILL_ORDER_IDENTITY")
   assert.equal(blockers[0].evidence.executionType, "TRADE", "The evidence must distinguish a trade from a passive order update.")
+})
+
+
+test("persists an account-scoped blocker for an unowned execution without a market symbol", async () => {
+  const blockers = []
+  const { handler, state, actions } = createHandler({
+    engine: makeUnownedExecutionEngine(),
+    onSafetyBlockerRaised: async (blocker) => {
+      blockers.push(blocker)
+      return { ok: true,
+data: { durable: true } }
+    },
+  })
+
+  handler({ event: makeUnownedExecutionEvent() })
+  await state.eventQueue
+
+  assert.equal(state.accountingFailed, true, "An unowned execution without a market identity must close account readiness.")
+  assert.equal(actions.cancellations, 1, "The existing owned-BUY safety halt must still run.")
+  assert.equal(blockers.length, 1, "The account-scoped execution failure must append exactly one sticky blocker.")
+  assert.equal(blockers[0].scope, "ACCOUNT", "A blocker without a trustworthy market identity must be account-scoped.")
+  assert.equal(blockers[0].symbol, null, "An account-scoped blocker must not invent a market symbol.")
+  assert.equal(blockers[0].reason, "FILL_ORDER_IDENTITY", "The durable blocker must retain the originating failure stage.")
+  assert.equal(blockers[0].evidence.symbol, null, "The durable evidence must preserve the missing market identity.")
+  assert.equal(blockers[0].evidence.brokerOrderId, "external-order", "The durable evidence must retain the observed exchange order identity.")
+  assert.equal(getHarvesterAccountSafetyBlocker({ userDataState: state })?.scope, "ACCOUNT", "The live submission gate must see the account blocker while the user-data state is unsafe.")
+})
+
+
+test("persists an account-scoped blocker for terminal accounting failure without a market symbol", async () => {
+  const blockers = []
+  const engine = {
+    processUserDataEvent: async () => ({
+      ok: false,
+      failure: {
+        category: "ACCOUNTING_INTEGRITY",
+        stage: "FILL_ACCOUNTING",
+        retryable: false,
+      },
+      errors: [new Error("terminal accounting failure")],
+    }),
+    getOrders: () => [],
+  }
+  const { handler, state } = createHandler({
+    engine,
+    onSafetyBlockerRaised: async (blocker) => {
+      blockers.push(blocker)
+      return {
+        ok: true,
+        data: { durable: true },
+      }
+    },
+  })
+
+  handler({ event: makeUnownedExecutionEvent() })
+  await state.eventQueue
+
+  assert.equal(blockers.length, 1, "A terminal accounting failure must append one sticky blocker.")
+  assert.equal(blockers[0].scope, "ACCOUNT", "A terminal accounting failure without market identity must be account-scoped.")
+  assert.equal(blockers[0].symbol, null, "The account blocker must not invent a market symbol.")
+  assert.equal(blockers[0].reason, "FILL_ACCOUNTING", "The durable blocker must preserve the terminal accounting failure stage.")
+  assert.equal(getHarvesterAccountSafetyBlocker({ userDataState: state })?.scope, "ACCOUNT", "The live gate must observe the terminal accounting blocker.")
+})
+
+test("keeps the account gate closed while account blocker persistence is pending and after it fails", async () => {
+  let resolvePersistence
+  let signalPersistenceStarted
+  const persistenceStarted = new Promise((resolve) => { signalPersistenceStarted = resolve })
+  const persistence = new Promise((resolve) => { resolvePersistence = resolve })
+  const logs = []
+  const { handler, state, actions } = createHandler({
+    engine: makeUnownedExecutionEngine(),
+    logger: { error: (entry) => { logs.push(entry) } },
+    onSafetyBlockerRaised: async () => {
+      signalPersistenceStarted()
+      return persistence
+    },
+  })
+
+  handler({ event: makeUnownedExecutionEvent() })
+  await persistenceStarted
+
+  assert.equal(state.accountingFailed, true, "The in-memory account blocker must latch before durable persistence settles.")
+  assert.equal(getHarvesterAccountSafetyBlocker({ userDataState: state })?.scope, "ACCOUNT", "The final admission gate must remain account-blocked while the append is pending.")
+
+  resolvePersistence({
+    ok: false,
+    data: { durable: false },
+    errors: [new Error("journal unavailable")],
+  })
+  await state.eventQueue
+
+  assert.equal(getHarvesterAccountSafetyBlocker({ userDataState: state })?.scope, "ACCOUNT", "A failed durable append must not reopen account admission.")
+  assert.equal(actions.cancellations, 1, "Owned BUY cancellation must still run after the append failure.")
+  assert.equal(logs.some(({ message }) => message === "terminal user-data safety blocker could not be durably committed"), true, "A non-durable blocker append must be logged explicitly.")
+})
+
+test("keeps the account gate closed when account blocker persistence throws", async () => {
+  const logs = []
+  const persistenceError = new Error("journal unavailable")
+  const { handler, state, actions } = createHandler({
+    engine: makeUnownedExecutionEngine(),
+    logger: { error: (entry) => { logs.push(entry) } },
+    onSafetyBlockerRaised: async () => { throw persistenceError },
+  })
+
+  handler({ event: makeUnownedExecutionEvent() })
+  await state.eventQueue
+
+  assert.equal(getHarvesterAccountSafetyBlocker({ userDataState: state })?.scope, "ACCOUNT", "A thrown durable append must not reopen account admission.")
+  assert.equal(actions.cancellations, 1, "Owned BUY cancellation must still run after the append throws.")
+  assert.equal(logs.some(({ message, error }) => message === "terminal user-data safety blocker append failed" && error === persistenceError), true, "A thrown blocker append must be logged with its original error.")
 })
 
 test("does not raise an account-wide sticky blocker for an unowned NEW order report", async () => {
