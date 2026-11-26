@@ -66,7 +66,7 @@ const invalidCapabilities = [
       transactions: {
         callbackMode: "synchronous",
         nestedTransactions: true,
-      multiDocument: true,
+        multiDocument: true,
       },
       queries: {
         equalityFilters: true,

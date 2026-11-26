@@ -249,7 +249,6 @@ test("MongoDB transport does not mark a synchronously rejected write as outcome-
   assert.equal(transport.pendingRequestCount, 0)
 })
 
-
 test("MongoDB TLS transport waits for secureConnect rather than plain connect", async () => {
   class TlsSocket extends EventEmitter {
     setNoDelay() {}
