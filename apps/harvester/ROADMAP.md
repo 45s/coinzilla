@@ -684,7 +684,7 @@ The Command Center roadmap is complete; this section is intentionally a pointer 
 8. [x] Synchronize living documentation and roadmaps with merged implementation and remaining calibration work.
 9. [x] Add the local-only offline calibration CLI, exact runtime metric/state replay, CSV validation and candidate-threshold options — merged [PR #1046](https://github.com/45s/coinzilla/pull/1046) at `6d103fb044939f9bab9cde766a548957f3948f4e`; all required exact-head checks passed.
 10. [x] Add deterministic three-symbol synthetic CLI regression proving per-market report/state isolation — PR #1871. This is regression evidence only, not historical threshold acceptance.
-10. [ ] Run the analyzer against representative multi-symbol historical data, review threshold trade-offs and accept or revise the provisional values. This is not complete until real archive data has been analyzed.
+11. [ ] Run the analyzer against representative multi-symbol historical data, review threshold trade-offs and accept or revise the provisional values. This is not complete until real archive data has been analyzed.
 
 ---
 
