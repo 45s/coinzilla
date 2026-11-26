@@ -236,7 +236,12 @@ export async function executeRecoverySellerRunnerScenario({
     })
   }
   if (RECOVERY_SELLER_RUNTIME_SCENARIOS.some((scenario) => scenario.id === scenarioId)) {
-    return executeRecoverySellerRuntimeScenario({ runId, scenarioId, input, signal })
+    return executeRecoverySellerRuntimeScenario({
+      runId,
+      scenarioId,
+      input,
+      signal,
+    })
   }
   throw new Error(`RS scenario "${scenarioId}" is not supported by the current isolated adapter.`)
 }
