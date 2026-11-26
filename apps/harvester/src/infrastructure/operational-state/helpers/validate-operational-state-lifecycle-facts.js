@@ -148,7 +148,7 @@ export function validateSafetyBlockerRaisedFact({ factType, canonicalData, factI
     reason })
 }
 
-const SAFETY_BLOCKER_RESOLVED_FIELDS = new Set([
+const SAFETY_BLOCKER_RESOLVED_FIELDS = Object.freeze([
   "blockerId",
   "resolvedBy",
   "resolution",
@@ -256,7 +256,7 @@ export function validateSafetyBlockerResolvedFact({ factType, canonicalData, fac
   if (factType !== "SAFETY_BLOCKER_RESOLVED") {
     return
   }
-  if (Object.keys(canonicalData).some((key) => !SAFETY_BLOCKER_RESOLVED_FIELDS.has(key))) {
+  if (Object.keys(canonicalData).some((key) => !SAFETY_BLOCKER_RESOLVED_FIELDS.includes(key))) {
     throw new TypeError("Safety-blocker resolution contains unsupported fields")
   }
   validateResolvedBlockerIdentity({
