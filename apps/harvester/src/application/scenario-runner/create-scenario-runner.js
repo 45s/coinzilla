@@ -66,18 +66,29 @@ function transitionRun({ record, status, now, diagnostic, onUpdate }) {
   return true
 }
 
-function createBlockedRecord({ runId, strategyId, scenarioId, diagnostic, now }) {
+function createBlockedRecord({
+  runId,
+  strategyId,
+  scenarioId,
+  diagnostic,
+  now,
+  sourceRevision = null,
+  replayOfRunId = null,
+  input = null,
+}) {
   const timestamp = now()
   return {
     runId,
     strategyId,
     scenarioId,
+    sourceRevision,
+    replayOfRunId,
     status: SCENARIO_RUN_STATUS.BLOCKED,
     createdAt: timestamp,
     updatedAt: timestamp,
     startedAt: null,
     completedAt: timestamp,
-    input: null,
+    input: redactScenarioEvidence(input),
     output: null,
     diagnostics: [redactScenarioEvidence(diagnostic)],
     transitions: [{
@@ -87,12 +98,22 @@ function createBlockedRecord({ runId, strategyId, scenarioId, diagnostic, now })
   }
 }
 
-function createRecord({ runId, strategyId, scenarioId, input, now }) {
+function createRecord({
+  runId,
+  strategyId,
+  scenarioId,
+  input,
+  now,
+  sourceRevision,
+  replayOfRunId = null,
+}) {
   const timestamp = now()
   const record = {
     runId,
     strategyId,
     scenarioId,
+    sourceRevision,
+    replayOfRunId,
     status: SCENARIO_RUN_STATUS.ACCEPTED,
     createdAt: timestamp,
     updatedAt: timestamp,
@@ -465,6 +486,8 @@ function registerUnsupportedRun({
   strategyId,
   scenarioId,
   diagnostic = "No registered strategy adapter is available for this run.",
+  replayOfRunId = null,
+  input = null,
 }) {
   const record = createBlockedRecord({
     runId,
@@ -472,6 +495,9 @@ function registerUnsupportedRun({
     scenarioId,
     diagnostic,
     now: context.now,
+    sourceRevision: context.sourceRevision,
+    replayOfRunId,
+    input,
   })
   context.records.set(runId, record)
   notify({
@@ -535,7 +561,7 @@ function resolveExecutableAdapter({ context, strategyId, scenarioId }) {
   }
 }
 
-function registerUnexecutableSubmission({ context, runId, strategyId, scenarioId, adapter }) {
+function registerUnexecutableSubmission({ context, runId, strategyId, scenarioId, adapter, replayOfRunId = null, input = null }) {
   if (!pruneHistory({ context })) {
     throw createCapacityError()
   }
@@ -548,10 +574,12 @@ function registerUnexecutableSubmission({ context, runId, strategyId, scenarioId
     strategyId,
     scenarioId,
     ...(diagnostic ? { diagnostic } : {}),
+    replayOfRunId,
+    input,
   })
 }
 
-function createAcceptedRun({ context, runId, strategyId, scenarioId, input }) {
+function createAcceptedRun({ context, runId, strategyId, scenarioId, input, replayOfRunId = null }) {
   if (!pruneHistory({ context })) {
     throw createCapacityError()
   }
@@ -561,6 +589,8 @@ function createAcceptedRun({ context, runId, strategyId, scenarioId, input }) {
     scenarioId,
     input,
     now: context.now,
+    sourceRevision: context.sourceRevision,
+    replayOfRunId,
   })
   context.records.set(runId, record)
   notify({
@@ -585,7 +615,7 @@ function scheduleAcceptedRun({ context, record, adapter }) {
   })
 }
 
-function submitRun({ context, submission }) {
+function submitRun({ context, submission, replayOfRunId = null }) {
   const { strategyId, scenarioId, input } = validateSubmission({ submission })
   const runId = context.createRunId()
   if (context.records.has(runId)) {
@@ -603,6 +633,8 @@ function submitRun({ context, submission }) {
       strategyId,
       scenarioId,
       adapter,
+      replayOfRunId,
+      input,
     })
   }
   const validation = context.validateScenarioInput({
@@ -621,11 +653,79 @@ function submitRun({ context, submission }) {
     strategyId,
     scenarioId,
     input,
+    replayOfRunId,
   })
   return scheduleAcceptedRun({
     context,
     record,
     adapter,
+  })
+}
+
+
+function createBlockedReplay({ context, original, diagnostic }) {
+  if (!pruneHistory({ context })) {
+    throw createCapacityError()
+  }
+  const runId = context.createRunId()
+  if (context.records.has(runId)) {
+    throw new Error("Scenario Runner duplicate run ID")
+  }
+  const record = createBlockedRecord({
+    runId,
+    strategyId: original.strategyId,
+    scenarioId: original.scenarioId,
+    diagnostic,
+    now: context.now,
+    sourceRevision: context.sourceRevision,
+    replayOfRunId: original.runId,
+    input: original.input,
+  })
+  context.records.set(runId, record)
+  notify({
+    record,
+    onUpdate: context.onUpdate,
+  })
+  return snapshot({ record })
+}
+
+function replayRun({ context, runId }) {
+  const original = context.records.get(runId)
+  if (!original) {
+    throw new Error("Scenario Runner original run does not exist")
+  }
+  if (!TERMINAL.has(original.status)) {
+    throw new Error("Scenario Runner can replay only a terminal run")
+  }
+  if (original.status === SCENARIO_RUN_STATUS.BLOCKED) {
+    return createBlockedReplay({
+      context,
+      original,
+      diagnostic: "Exact replay is blocked because the original run never executed.",
+    })
+  }
+  if (!original.sourceRevision || !context.sourceRevision) {
+    return createBlockedReplay({
+      context,
+      original,
+      diagnostic: "Exact replay is blocked because the original or active runtime source revision is unknown.",
+    })
+  }
+  if (original.sourceRevision !== context.sourceRevision) {
+    return createBlockedReplay({
+      context,
+      original,
+      diagnostic: "Exact replay is blocked because the original source revision does not match the active runtime revision.",
+    })
+  }
+  return submitRun({
+    context,
+    replayOfRunId: original.runId,
+    submission: {
+      strategyId: original.strategyId,
+      scenarioId: original.scenarioId,
+      input: structuredClone(original.input),
+    },
   })
 }
 
@@ -790,6 +890,7 @@ function createRunnerContext({
   canExecuteScenario,
   validateScenarioInput,
   onUpdate,
+  sourceRevision,
 }) {
   validateRunnerConfiguration({
     adapters,
@@ -802,6 +903,7 @@ function createRunnerContext({
   })
   return {
     adapters: createAdapterMap({ adapters }),
+    sourceRevision,
     canExecuteScenario,
     validateScenarioInput,
     records: new Map(),
@@ -832,7 +934,13 @@ export function createScenarioRunner({
     errors: [],
   }),
   onUpdate,
+  sourceRevision = null,
 } = {}) {
+  if (sourceRevision !== null && sourceRevision !== undefined &&
+      (typeof sourceRevision !== "string" || !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/i.test(sourceRevision))) {
+    throw new TypeError("Scenario Runner source revision must be a full Git commit SHA")
+  }
+  const normalizedSourceRevision = sourceRevision?.toLowerCase() ?? null
   const context = createRunnerContext({
     adapters,
     createRunId,
@@ -844,6 +952,7 @@ export function createScenarioRunner({
     canExecuteScenario,
     validateScenarioInput,
     onUpdate,
+    sourceRevision: normalizedSourceRevision,
   })
   return Object.freeze({
     submit: (submission) => submitRun({
@@ -860,6 +969,10 @@ export function createScenarioRunner({
     }),
     listRuns: () => listRuns({ context }),
     waitForRun: (runId) => waitForRun({
+      context,
+      runId,
+    }),
+    replay: (runId) => replayRun({
       context,
       runId,
     }),

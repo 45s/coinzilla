@@ -155,3 +155,10 @@ The process adapter rechecks cancellation immediately after registering worker l
 After installing abort handling, the adapter checks the signal again before readiness notification or dispatch. This closes the race where cancellation occurs inside the trusted launcher's synchronous spawn call: the worker receives cooperative cancellation and is never sent an execute request.
 
 Worker startup preconditions and readiness notification are named helpers: the execution path rejects unverified isolation before spawning, and the post-spawn readiness helper rechecks cancellation before any execute message is sent.
+
+
+## Original-revision replay — initial implementation boundary
+
+Every run record carries the full source commit SHA supplied by the Harvester composition root, plus an optional `replayOfRunId`. The runner exposes replay only for terminal runs and reuses the original recorded input snapshot. Replay is allowed only when both the original and active runtime source revisions are known and identical. Unknown, unavailable, or mismatched revisions produce a queryable `Blocked` run with an explicit diagnostic; the runner never silently substitutes current code. A blocked/non-executed original cannot be replayed.
+
+The current implementation deliberately does not perform arbitrary Git checkout or load historical code into a running Harvester process. Run history remains in-memory as approved for this MVP, so this first replay capability is same-process and same-revision only. The runtime composition root must supply a trusted full Git SHA; absent provenance disables replay rather than weakening the guarantee. Cross-process historical replay and source artifact retention remain future work.

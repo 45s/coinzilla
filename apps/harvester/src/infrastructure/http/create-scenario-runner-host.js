@@ -208,6 +208,7 @@ export function createScenarioRunnerHost({
   adapters = [],
   scenarioCatalog = getRecoverySellerRunnerCatalog(),
   strategyRegistrations,
+  sourceRevision = null,
 } = {}) {
   if (!Array.isArray(adapters)) {
     throw new TypeError("Scenario Runner host adapters must be an array")
@@ -224,6 +225,7 @@ export function createScenarioRunnerHost({
   })
   const runner = createScenarioRunner({
     adapters: registeredAdapters,
+    sourceRevision,
     canExecuteScenario: ({ strategyId, scenarioId }) => catalog.some((strategy) =>
       strategy.strategyId === strategyId &&
       strategy.scenarios.some((scenario) =>
