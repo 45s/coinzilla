@@ -6,6 +6,64 @@ import {
   performMongoHandshake,
 } from "./handshake.js"
 
+test("MongoDB URI parser rejects malformed schemes, fragments, duplicate options, and invalid option values", () => {
+  const invalidUris = [
+    { value: null, expected: /non-empty string/ },
+    { value: "", expected: /non-empty string/ },
+    { value: "http://localhost/app", expected: /mongodb:\/\// },
+    { value: "mongodb://", expected: /invalid|host/i },
+    { value: "mongodb://localhost/app#fragment", expected: /fragments/ },
+    { value: "mongodb://localhost/app?tls=maybe", expected: /tls must be true or false/ },
+    { value: "mongodb://localhost/app?loadBalanced=maybe", expected: /loadBalanced must be true or false/ },
+    { value: "mongodb://localhost/app?connectTimeoutMS=0", expected: /positive integer/ },
+    { value: "mongodb://localhost/app?socketTimeoutMS=abc", expected: /positive integer/ },
+    { value: "mongodb://localhost/app?authSource=admin&authSource=other", expected: /must not be repeated/ },
+    { value: "mongodb://localhost/bad%24name", expected: /unsupported character/ },
+  ]
+  for (const invalidUri of invalidUris) {
+    assert.throws(
+      () => parseMongoConnectionString(invalidUri.value),
+      invalidUri.expected,
+    )
+  }
+})
+
+test("MongoDB handshake validates transport, database, server response, and configured credentials", async () => {
+  await assert.rejects(
+    performMongoHandshake({ transport: null }),
+    /requires a connected command transport/,
+  )
+  await assert.rejects(
+    performMongoHandshake({
+      transport: { async command() { return { ok: 1 } } },
+      databaseName: "",
+    }),
+    /database name must be a non-empty string/,
+  )
+  await assert.rejects(
+    performMongoHandshake({
+      transport: { async command() { return { ok: 0, errmsg: "hello failed" } } },
+    }),
+    /hello failed/,
+  )
+  await assert.rejects(
+    performMongoHandshake({
+      transport: {
+        async command() {
+          return {
+            ok: 1,
+            minWireVersion: 13,
+            maxWireVersion: 25,
+            isWritablePrimary: true,
+          }
+        },
+      },
+      username: "alice",
+    }),
+    /password must be a string/,
+  )
+})
+
 test("MongoDB URI parser reads credentials, database, authentication source, and timeouts", () => {
   assert.deepEqual(
     parseMongoConnectionString("mongodb://alice:p%40ss@db.example:27018/app?authSource=admin&tls=true&connectTimeoutMS=4000"),
