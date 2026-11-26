@@ -254,7 +254,7 @@ test("does not overlap a retry with a timed-out participant operation that ignor
 
   await assert.rejects(
     coordinator.waitUntilSafe(),
-    /STRATEGY_SHUTDOWN_SAFETY_UNPROVEN/,
+    (error) => error.code === "STRATEGY_SHUTDOWN_SAFETY_UNPROVEN",
     "The first uncooperative participant operation must time out without proving shutdown safety.",
   )
   assert.equal(waitCount, 1, "The initial shutdown attempt must start exactly one participant operation.")
