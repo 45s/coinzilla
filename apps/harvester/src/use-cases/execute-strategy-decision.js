@@ -433,6 +433,14 @@ async function getPostRegistrationSubmissionDeferral({ context, candidate } = {}
   }
 }
 
+function hasConflictingSubmissionOwnership({ candidate, registeredOwnership } = {}) {
+  if (candidate === undefined || registeredOwnership === undefined) {
+    return false
+  }
+  return ["strategyId", "positionId", "purpose", "cycleId"].some((field) =>
+    candidate[field] !== undefined && candidate[field] !== registeredOwnership[field])
+}
+
 async function preparePendingSubmission({ context, candidate } = {}) {
   const { pendingOrder, purpose, ownership } = candidate
   const initialDeferral = context.getSubmissionDeferral({
@@ -456,11 +464,10 @@ async function preparePendingSubmission({ context, candidate } = {}) {
     ? await pendingResult
     : pendingResult
   const registeredOwnership = registration?.ownership
-  if (ownership !== undefined && registeredOwnership !== undefined &&
-      (ownership.strategyId !== registeredOwnership.strategyId ||
-       ownership.positionId !== registeredOwnership.positionId ||
-       ownership.purpose !== registeredOwnership.purpose ||
-       ownership.cycleId !== registeredOwnership.cycleId)) {
+  if (hasConflictingSubmissionOwnership({
+    candidate: ownership,
+    registeredOwnership,
+  })) {
     throw new TypeError("Pending order registration returned conflicting strategy ownership")
   }
   const submissionCandidate = registeredOwnership === undefined
