@@ -250,10 +250,10 @@ function createUncooperativeParticipantHarness() {
   }
   const coordinator = createStrategyShutdownCoordinator({
     timeoutMs: 25,
-    setTimeoutFn: () => {
+    setTimeoutFn: (callback) => {
       state.timerCalls += 1
       if (state.timerCalls === 1) {
-        state.releaseTimeout?.()
+        callback()
       }
       return "fake-deadline"
     },
