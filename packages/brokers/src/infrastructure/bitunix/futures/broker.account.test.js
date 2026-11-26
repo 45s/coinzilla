@@ -1,5 +1,4 @@
 import assert from "node:assert/strict"
-import { createHash } from "node:crypto"
 import test from "node:test"
 
 import { Balance } from "@coinzilla/entities"
@@ -21,9 +20,6 @@ const credentials = {
   apiSecret: "bitunix-futures-account-test-secret",
 }
 
-function sha256(value) {
-  return createHash("sha256").update(value).digest("hex")
-}
 
 test("Bitunix Futures account reads sign the request and preserve exact available and locked balances", async () => {
   const requests = []
@@ -68,8 +64,7 @@ test("Bitunix Futures account reads sign the request and preserve exact availabl
   assert.equal(requests[0].options.headers["api-key"], credentials.apiKey, "private Futures requests must identify the API key")
   assert.equal(requests[0].options.headers.nonce, "nonce-futures-account", "the signed request must use the injected nonce")
   assert.equal(requests[0].options.headers.timestamp, "1700000000000", "the signed request must use the injected millisecond timestamp")
-  const digest = sha256(`nonce-futures-account1700000000000${credentials.apiKey}marginCoinUSDT`)
-  assert.equal(requests[0].options.headers.sign, sha256(`${digest}${credentials.apiSecret}`), "Futures REST signatures must follow the official double-SHA256 query canonicalization")
+  assert.equal(requests[0].options.headers.sign, "8402a27e21632ea1e2c1780a71cd8d1d42b5bc860c9547310bc7111ce443083a", "Futures REST signatures must match the independently generated official double-SHA256 test vector")
   assert.equal(result.data.length, 1, "the requested USDT margin account must produce one canonical balance")
   assert.ok(result.data[0] instanceof Balance, "account balances must use the shared Balance entity")
   assert.equal(result.data[0].free.amount, "1.200000000000000001", "available balance must retain its exact decimal string")
