@@ -1,6 +1,11 @@
 import { toResult } from "@coinzilla/utils"
 import { projectHarvesterOperationalState } from "../infrastructure/operational-state/project-harvester.js"
 import { resolveUserDataAccountBlockers } from "./resolve-user-data-account-blockers.js"
+import { getAccountResolutionTargetBlockers } from "./resolve-user-data-account-blockers.helpers.js"
+import {
+  isAuthenticatedLocalOperatorIdentity,
+  LOCAL_OPERATOR_ID_PATTERN,
+} from "../infrastructure/security/local-operator-identity.js"
 import { runOfflineMarketRecovery } from "../../scripts/recovery-market-context.js"
 
 function sameStringSet({ left, right }) {
@@ -77,16 +82,6 @@ function validateEvidenceContext({ context, configuredMarkets }) {
       })) {
     throw new TypeError("Account evidence bundle must cover the exact configured markets and shared account/order evidence")
   }
-}
-
-function getActiveUserDataAccountBlockers(projection) {
-  const blockers = (projection.stickySafetyBlockers ?? [])
-    .filter(({ scope }) => scope === "ACCOUNT")
-  if (blockers.length === 0 ||
-      blockers.some(({ producer }) => producer !== "USER_DATA_EVENT_HANDLER")) {
-    throw new Error("Active ACCOUNT blockers are not exclusively user-data sourced")
-  }
-  return blockers
 }
 
 function createMarketEvidenceContext({ context, symbol }) {
@@ -250,9 +245,12 @@ function validateAccountAuditSet({ configuredMarkets, marketAudits, context }) {
 
 function createAccountAudit({
   blockers,
+  blockerIds,
   configuredMarkets,
   operatorId,
+  operatorIdentity,
   actionId,
+  resolutionReason,
   context,
   marketAudits,
 }) {
@@ -261,7 +259,6 @@ function createAccountAudit({
     marketAudits,
     context,
   })
-  const blockerIds = blockers.map(({ blockerId }) => blockerId).sort()
   return {
     status: "READY",
     scope: "ACCOUNT",
@@ -280,6 +277,11 @@ function createAccountAudit({
     unresolvedExternalOrders: 0,
     balanceDiscrepancies: 0,
     blockerIds,
+    actionBlockerIds: blockerIds,
+    operatorId,
+    operatorAuthMethod: operatorIdentity.authMethod,
+    actionId,
+    resolutionReason,
     blockerOrigins: blockers.map(({ blockerId, producer }) => ({
       blockerId,
       producer,
@@ -290,13 +292,26 @@ function createAccountAudit({
   }
 }
 
-function validateResolutionRequest({ operatorId, actionId, causeFixed }) {
+function validateResolutionRequest({
+  operatorId,
+  operatorIdentity,
+  actionId,
+  resolutionReason,
+  causeFixed,
+}) {
   if (causeFixed !== true ||
-      typeof operatorId !== "string" ||
-      operatorId.trim() === "" ||
+      !LOCAL_OPERATOR_ID_PATTERN.test(operatorId ?? "") ||
+      !isAuthenticatedLocalOperatorIdentity(operatorIdentity) ||
+      operatorIdentity.operatorId !== operatorId ||
+      operatorIdentity.authMethod !== "OS_ACCOUNT" ||
       typeof actionId !== "string" ||
-      actionId.trim() === "") {
-    throw new TypeError("Offline account resolution requires operator identity, unique action ID, and causeFixed=true")
+      !/^[A-Za-z0-9][A-Za-z0-9._:@-]{7,127}$/.test(actionId) ||
+      typeof resolutionReason !== "string" ||
+      resolutionReason.trim() !== resolutionReason ||
+      resolutionReason.length < 8 ||
+      resolutionReason.length > 512 ||
+      /[\\u0000-\\u001F\\u007F]/.test(resolutionReason)) {
+    throw new TypeError("Offline account resolution requires authenticated operator identity, unique action ID, resolution reason, and causeFixed=true")
   }
 }
 
@@ -322,18 +337,24 @@ async function resolveAuditedAccountBlockers({
   operationalStateStore,
   context,
   operatorId,
+  operatorIdentity,
   actionId,
+  resolutionReason,
   causeFixed,
   configuredMarkets,
   blockers,
+  blockerIds,
   marketAudits,
   resolveBlockers,
 }) {
   const audit = createAccountAudit({
     blockers,
+    blockerIds,
     configuredMarkets,
     operatorId,
+    operatorIdentity,
     actionId,
+    resolutionReason,
     context,
     marketAudits,
   })
@@ -341,7 +362,9 @@ async function resolveAuditedAccountBlockers({
     operationalStateStore,
     reconcileAccount: async () => toResult({ data: audit }),
     operatorId,
+    operatorIdentity,
     actionId,
+    resolutionReason,
     causeFixed,
     configuredMarkets,
   })
@@ -356,26 +379,21 @@ async function runResolutionWorkflow(options) {
     context,
     operationalStateStore,
     operatorId,
+    operatorIdentity,
     actionId,
+    resolutionReason,
     causeFixed,
     reconcileMarket,
     resolveBlockers,
   } = options
   validateResolutionRequest({
     operatorId,
+    operatorIdentity,
     actionId,
+    resolutionReason,
     causeFixed,
   })
   const state = await readVerifiedOperationalProjection(operationalStateStore)
-  const actionSuffix = `:${actionId}`
-  const actionAlreadyUsed = state.records.some((record) =>
-    record.factType === "SAFETY_BLOCKER_RESOLVED" &&
-    typeof record.data?.resolvedBy === "string" &&
-    record.data.resolvedBy.endsWith(actionSuffix)
-  )
-  if (actionAlreadyUsed) {
-    throw new Error("Operator action ID has already been used in a durable blocker resolution")
-  }
   const configuredMarkets = validateStoppedSession({
     records: state.records,
     runtimeSessionId: context.runtimeSessionId,
@@ -384,7 +402,14 @@ async function runResolutionWorkflow(options) {
     context,
     configuredMarkets,
   })
-  const blockers = getActiveUserDataAccountBlockers(state.projection)
+  const targets = getAccountResolutionTargetBlockers({
+    records: state.records,
+    projection: state.projection,
+    operatorId,
+    actionId,
+    resolutionReason,
+  })
+  const blockers = targets.blockers
   const marketAudits = await auditAllConfiguredMarkets({
     context,
     configuredMarkets,
@@ -394,10 +419,13 @@ async function runResolutionWorkflow(options) {
     operationalStateStore,
     context,
     operatorId,
+    operatorIdentity,
     actionId,
+    resolutionReason,
     causeFixed,
     configuredMarkets,
     blockers,
+    blockerIds: targets.blockerIds,
     marketAudits,
     resolveBlockers,
   })
