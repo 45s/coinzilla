@@ -958,11 +958,6 @@ test("keeps every shared service alive and reports incomplete shutdown when a st
   const strategyShutdownCoordinator = createStrategyShutdownCoordinator({
     participants: [participant],
     timeoutMs: 10,
-    setTimeoutFn: (callback) => {
-      callback()
-      return "fake-deadline"
-    },
-    clearTimeoutFn: () => {},
   })
   const fixture = createShutdown({
     calls,
