@@ -105,7 +105,7 @@ function assertProviderOptions(options) {
   }
   if (options.username !== undefined && (typeof options.username !== "string"
     || options.username.length === 0
-    || !/^[\\x20-\\x7e]+$/.test(options.username))) {
+    || !/^[\x20-\x7e]+$/.test(options.username))) {
     throw new TypeError("MongoDB provider username must be a non-empty string")
   }
   if (options.username !== undefined && typeof options.password !== "string") {
