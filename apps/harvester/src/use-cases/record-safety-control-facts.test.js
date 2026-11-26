@@ -135,3 +135,21 @@ reason: "FILL_RECONCILIATION_FAILED",
   })
   assert.equal(result.ok, false, "Safety recorders must never initialize a missing ledger.")
 })
+
+test("persists the user-data producer identity on safety blocker facts", async (t) => {
+  const operationalStateStore = await createStore(t)
+  const raised = await recordSafetyBlockerRaised({
+    operationalStateStore,
+    scope: "ACCOUNT",
+    symbol: null,
+    reason: "ACCOUNTING_INTEGRITY_FAILURE",
+    evidenceDigest: "a".repeat(64),
+  })
+
+  assert.equal(raised.ok, true, raised.errors?.map(({ message }) => message).join("; "))
+  assert.equal(
+    raised.data.record.data.producer,
+    "USER_DATA_EVENT_HANDLER",
+    "A durable ACCOUNT blocker must retain the producer needed for safe operator resolution.",
+  )
+})
