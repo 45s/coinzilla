@@ -94,7 +94,7 @@ function validateScenarioInput({ schema, defaults, input }) {
 
 const RUNTIME_SCENARIO_READINESS_REASONS = Object.freeze([
   "Scenario infrastructure uses a run-local simulated broker and in-memory operational store; it does not prove durable production account or STOP state.",
-  "Production user-data event handling, under-target FILLED SELL STOP and general infrastructure-failure scenarios are not yet composed into this adapter.",
+  "Full user-data event transition dispatch, an under-target FILLED SELL STOP runtime scenario and general infrastructure-failure scenarios are not yet composed into this adapter.",
   "No trusted OS-level sandbox launcher is available; the host must continue to fail closed.",
 ])
 
@@ -1110,7 +1110,7 @@ function createRuntimeScenarioTerminalTraceStep({ output }) {
   return {
     id: "terminal-1",
     kind: "order-lifecycle",
-    label: "Reconcile a profitable partial CANCELED SELL through production accounting",
+    label: "Reconcile a profitable partial CANCELED SELL through production order-event and accounting workflows",
     inputs: {
       orderStatus: output.terminalSell.orderStatus,
       executedQuantity: output.terminalSell.executedQuantity,
@@ -1120,7 +1120,7 @@ function createRuntimeScenarioTerminalTraceStep({ output }) {
       terminalReconciled: output.terminalSell.cycleState?.terminalReconciled,
       profitabilityEligible: output.terminalSell.profitabilityEligible,
     },
-    source: "createRecoverySellerAccountingWorkflow.reconcileTerminalMixedSell",
+    source: "makeOrderEventWorkflow.reconcileTerminalOrderFills → createRecoverySellerAccountingWorkflow.reconcileTerminalMixedSell",
   }
 }
 
