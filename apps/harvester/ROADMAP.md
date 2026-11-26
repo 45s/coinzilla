@@ -660,7 +660,7 @@ The Command Center roadmap is complete; this section is intentionally a pointer 
 
 ## High-volatility protection — issue #1016
 
-**Status: PROTECTION IMPLEMENTED; regression matrix, exact-head CI, candle-stream freshness correction (PR #1049), and local offline calibration CLI (PR #1046) are merged; deterministic multi-symbol CLI regression is in PR #1871; representative historical threshold calibration remains open.** This is the immediate Harvester safety priority. The canonical behavior and delivery contract are in [Volatility Protection](./docs/volatility-protection.md).
+**Status: PROTECTION IMPLEMENTED; regression matrix, exact-head CI, candle-stream freshness correction (PR #1049), and local offline calibration CLI (PR #1046) are merged; representative historical threshold calibration remains open.** This is the immediate Harvester safety priority. The canonical behavior and delivery contract are in [Volatility Protection](./docs/volatility-protection.md).
 
 - Per-market protection; one volatile pair must not stop another.
 - Use completed 1-minute UTC candles, ATR(14) with Wilder smoothing, NATR, and a current/reference ratio against the previous 60 completed NATR observations.
@@ -684,7 +684,7 @@ The Command Center roadmap is complete; this section is intentionally a pointer 
 8. [x] Synchronize living documentation and roadmaps with merged implementation and remaining calibration work.
 9. [x] Add the local-only offline calibration CLI, exact runtime metric/state replay, CSV validation and candidate-threshold options — merged [PR #1046](https://github.com/45s/coinzilla/pull/1046) at `6d103fb044939f9bab9cde766a548957f3948f4e`; all required exact-head checks passed.
 10. [x] Add deterministic three-symbol synthetic CLI regression proving per-market report/state isolation — PR #1871. This is regression evidence only, not historical threshold acceptance.
-11. [ ] Run the analyzer against representative multi-symbol historical data, review threshold trade-offs and accept or revise the provisional values. This remains open until verified official archive data has been analyzed.
+10. [ ] Run the analyzer against representative multi-symbol historical data, review threshold trade-offs and accept or revise the provisional values. This is not complete until real archive data has been analyzed.
 
 ---
 
@@ -887,6 +887,9 @@ Example: configured step `0.5%`, reference ATR `1.0%`, current ATR `1.5%`; coeff
 
 9. **[ ] Step 9 — Prove crash/restart behavior, then consider controlled TESTNET validation.**
    - Run the full crash-point matrix, duplicate/reordered event tests, missing-record/session tests, legacy-session tests, and restart-twice idempotency tests.
+   - [~] Extend the ADR-0001 durable-fact matrix with third-asset commission quote-value restoration, duplicate fill fact idempotency, and two consecutive unclean process-session starts. The candidate must preserve exact Portfolio/RecoveryLedger state, remain reconciliation-required, and keep runtime restoration disabled. This is offline evidence only; Step 8 parity/account-wide readiness and the rest of Step 9 remain open.
+   - [~] Map CON-PERSIST-002/003 to executable prior-session tests: default recovery-disabled observation-only startup, fail-closed recovery-enabled unclean history, and clean observation-only restart. The single RS STOP-latch startup case is mapped to the existing persisted account STOP regression; PR #1867 separately hardens non-recovery startup for unresolved blockers. Step 8 parity/account-wide readiness and remaining Step 9 gates remain open.
+   - [~] Extend durable crash/restart evidence with a partial BUY fill before restart, final BUY fill after restart, duplicate-fill idempotency, two unclean process starts, and a cancellation/fill race with an unknown cancellation outcome. Full Portfolio and RecoveryLedger projections are compared against canonical accounting; the race preserves broker identity and executed quantity while requiring reconciliation. The candidate remains restoration-disabled; the full Step 9 matrix remains open.
    - Verify no duplicate order, fill, reservation, cost-basis reset, or retained-inventory sale.
    - Review evidence and approve a separate small, bounded TESTNET plan before any exchange-connected validation. Live trading remains out of scope.
 
