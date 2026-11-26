@@ -208,8 +208,8 @@ export async function performMongoHandshake({
   const maxWireVersion = Number(hello.maxWireVersion ?? 0)
   if (!Number.isSafeInteger(minWireVersion)
     || !Number.isSafeInteger(maxWireVersion)
-    || minWireVersion < MIN_SUPPORTED_WIRE_VERSION
-    || maxWireVersion > MAX_SUPPORTED_WIRE_VERSION
+    || maxWireVersion < MIN_SUPPORTED_WIRE_VERSION
+    || minWireVersion > MAX_SUPPORTED_WIRE_VERSION
     || maxWireVersion < minWireVersion) {
     throw new Error(
       `MongoDB wire protocol version range ${minWireVersion}-${maxWireVersion} is not supported; supported range is ${MIN_SUPPORTED_WIRE_VERSION}-${MAX_SUPPORTED_WIRE_VERSION}`,
