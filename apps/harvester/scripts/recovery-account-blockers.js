@@ -134,6 +134,8 @@ export async function runRecoveryAccountBlockerCommand({
     message: "Offline account blocker recovery CLI failed",
     error: value,
   }),
+  createStore = createResolutionStore,
+  runResolution = runOfflineAccountBlockerResolution,
 } = {}) {
   try {
     const parsed = parseRecoveryAccountBlockerArguments(args)
@@ -143,8 +145,8 @@ export async function runRecoveryAccountBlockerCommand({
     }
     const contextPath = path.resolve(cwd, parsed.contextPath)
     const context = JSON.parse(await readContext(contextPath, "utf8"))
-    const operationalStateStore = createResolutionStore({ context, env })
-    const result = await runOfflineAccountBlockerResolution({
+    const operationalStateStore = createStore({ context, env })
+    const result = await runResolution({
       context,
       operationalStateStore,
       operatorId: parsed.operatorId,
