@@ -265,14 +265,22 @@ describe('AppComponent', () => {
     const ordersTab = tabs.find((tab) => tab.textContent?.trim() === 'Orders') as HTMLButtonElement;
     ordersTab.click();
     fixture.detectChanges();
+    expect(ordersTab.classList.contains('active')).toBe(true);
     let secondaryTabs = Array.from(root.querySelectorAll('.context-subnav-item'));
     expect(secondaryTabs.map((tab) => tab.textContent?.trim())).toEqual(['Orders', 'Open Orders', 'Exchanges']);
+    expect(secondaryTabs[0]?.getAttribute('aria-current')).toBe('page');
 
     const historyTab = tabs.find((tab) => tab.textContent?.trim() === 'History') as HTMLButtonElement;
     historyTab.click();
     fixture.detectChanges();
+    expect(historyTab.classList.contains('active')).toBe(true);
     secondaryTabs = Array.from(root.querySelectorAll('.context-subnav-item'));
     expect(secondaryTabs.map((tab) => tab.textContent?.trim())).toEqual(['Fills', 'Commissions']);
+    expect(secondaryTabs[0]?.classList.contains('active')).toBe(true);
+    secondaryTabs[1]?.dispatchEvent(new Event('click'));
+    fixture.detectChanges();
+    expect(historyTab.classList.contains('active')).toBe(true);
+    expect(root.querySelectorAll('.context-subnav-item')[1]?.getAttribute('aria-current')).toBe('page');
 
     const botsButton = Array.from(root.querySelectorAll('button.nav-item'))
       .find((button) => button.textContent?.includes('Bots')) as HTMLButtonElement;
