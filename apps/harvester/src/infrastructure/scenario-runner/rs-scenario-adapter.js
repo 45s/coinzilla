@@ -3,7 +3,7 @@ import { compareDecimal } from "@coinzilla/utils"
 import { calculateRecoverySellerProfitability } from "../../domain/strategies/recovery-seller/calculate-profitability.js"
 import {
   executeRecoverySellerRuntimeScenario,
-  RECOVERY_SELLER_RUNTIME_SCENARIO,
+  RECOVERY_SELLER_RUNTIME_SCENARIOS,
 } from "./rs-runtime-scenario.js"
 
 const DECIMAL_STRING_SCHEMA = Object.freeze({
@@ -158,7 +158,7 @@ function createAssertion({ name, actual, expected }) {
 
 
 export function getRecoverySellerRunnerCatalog() {
-  return Object.freeze([SCENARIO, RECOVERY_SELLER_RUNTIME_SCENARIO])
+  return Object.freeze([SCENARIO, ...RECOVERY_SELLER_RUNTIME_SCENARIOS])
 }
 
 function assertScenarioNotAborted({ signal }) {
@@ -235,8 +235,8 @@ export async function executeRecoverySellerRunnerScenario({
       signal,
     })
   }
-  if (scenarioId === RECOVERY_SELLER_RUNTIME_SCENARIO.id) {
-    return executeRecoverySellerRuntimeScenario({ runId, input, signal })
+  if (RECOVERY_SELLER_RUNTIME_SCENARIOS.some((scenario) => scenario.id === scenarioId)) {
+    return executeRecoverySellerRuntimeScenario({ runId, scenarioId, input, signal })
   }
   throw new Error(`RS scenario "${scenarioId}" is not supported by the current isolated adapter.`)
 }
