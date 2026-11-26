@@ -690,7 +690,7 @@ data: { [key]: "one" } }],
       operations.readOne({ collection: "people",
 id: "one" }),
       (error) => error instanceof DatabaseProviderError
-        && /provider encoding|base64url/i.test(error.cause?.message ?? ""),
+        && /provider encoding|base64url|encoded MongoDB user key/i.test(error.cause?.message ?? ""),
     )
   }
 })
