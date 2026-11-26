@@ -384,7 +384,7 @@ async function waitForStrategyShutdownParticipants({
   })
   if (strategyBlockers.length > 0) {
     throw createStrategyShutdownError({
-      message: "Strategy shutdown safety could not be proven for every enabled strategy",
+      message: "Harvester shutdown was incomplete: strategy shutdown safety could not be proven for every enabled strategy",
       code: "STRATEGY_SHUTDOWN_SAFETY_UNPROVEN",
       strategyBlockers,
       pendingOperations: getPendingParticipantOperations(activeParticipantWaits, now),
